@@ -285,7 +285,10 @@ export function buildGrid(panel, numSteps = 8){
       note,
       reason
     });
-    playNote(instrument, note, w);
+    const slotMeta = (step >= 0)
+      ? { slotIndex: step, col: step, step, index: step, source: reason || 'loopgrid:playCurrent' }
+      : {};
+    playNote(instrument, note, w, slotMeta);
   };
 
   // Listen for note changes from the visual module to provide audio feedback.
@@ -452,7 +455,13 @@ export function buildGrid(panel, numSteps = 8){
       reason: 'play:sequencerSchedule'
     });
     lgDbg(2, '__sequencerSchedule', { col, when, instrument, note });
-    playNote(instrument, note, when);
+    playNote(instrument, note, when, {
+      slotIndex: col,
+      col,
+      step: col,
+      index: col,
+      source: 'loopgrid:sequencer',
+    });
   };
  
   return panel;

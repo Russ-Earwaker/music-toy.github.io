@@ -1612,6 +1612,11 @@ body.advanced-controls-disabled [data-adv] {
   opacity: 1;
 }
 
+.art-lasers-drag-area.is-board-draw-armed {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .art-firework-handle-btn {
   position: absolute;
   pointer-events: none;
@@ -1716,6 +1721,13 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   stroke-linecap: round;
   filter: drop-shadow(0 0 2px currentColor);
   transition: opacity 120ms ease;
+}
+
+.art-laser-draw-preview {
+  opacity: 0.86;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 6px currentColor);
+  pointer-events: none;
 }
 
 .art-toy-panel[data-controls-visible='1'] .art-laser-guide.is-active-firework {
@@ -1959,6 +1971,14 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   gap: 10px;
 }
 
+.art-line-draw-hint {
+  color: rgba(212, 232, 255, 0.9);
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
 .art-line-color-btn {
   --c-btn-size: 112px;
   width: 112px;
@@ -2028,6 +2048,29 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-line-clear-btn {
   margin-top: 2px;
+}
+
+.art-line-clear-all-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.art-line-clear-all-btn {
+  --c-btn-size: 88px;
+}
+
+.art-line-clear-all-label {
+  margin-top: 4px;
+  font-size: 20px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: rgba(232, 244, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .art-hs-picker {

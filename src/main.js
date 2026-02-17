@@ -2538,10 +2538,11 @@ function handleArtTriggerVisuals(trigger) {
     return false;
   }
   const slot = Math.trunc(Number(trigger.slotIndex)) % 8;
-  const triggerNow = Number.isFinite(Number(trigger.timestamp))
-    ? Number(trigger.timestamp)
-    : (performance?.now?.() ?? Date.now());
-  const dedupeKey = `${artId}|${slot}`;
+  // Use local receipt time for dedupe. Incoming trigger timestamps can be in
+  // different units (AudioContext seconds vs performance milliseconds).
+  const triggerNow = (performance?.now?.() ?? Date.now());
+  const dedupeToyKey = String(trigger?.toyId || trigger?.panelId || 'unknown');
+  const dedupeKey = `${artId}|${slot}|${dedupeToyKey}`;
   const lastHit = Number(g_recentArtSlotTriggers.get(dedupeKey) || 0);
   if (Number.isFinite(lastHit) && (triggerNow - lastHit) >= 0 && (triggerNow - lastHit) < ART_SLOT_TRIGGER_DEDUPE_MS) {
     artTriggerDbg('drop:dedupe', {
@@ -2582,7 +2583,8 @@ function handleArtTriggerVisuals(trigger) {
 
   // Keep existing behavior: toy:note is mainly an internal reliability hook.
   // External flashes continue to come from scheduler/playhead paths.
-  const allowExternalFlash = !(sourceIsToyNote && !internalActive);
+  const allowToyNoteExternal = !!window.__NOTE_SCHEDULER_ENABLED;
+  const allowExternalFlash = !(sourceIsToyNote && !internalActive && !allowToyNoteExternal);
   if (allowExternalFlash) {
     try {
       if (art) {
@@ -4987,6 +4989,17 @@ function panelHasNotesAtColumn(panel, col){
   }
 
   if (type === 'drawgrid'){
+    try {
+      const pat = panel.__seqPatternActive || panel.__seqPattern;
+      const c = Array.isArray(pat?.cols) ? pat.cols[col] : null;
+      if (c && c.active && Array.isArray(c.nodes) && c.nodes.length) {
+        const disabled = new Set(Array.isArray(c.disabled) ? c.disabled : []);
+        for (const row of c.nodes) {
+          if (typeof row === 'number' && !Number.isNaN(row) && !disabled.has(row)) return true;
+        }
+        return false;
+      }
+    } catch {}
     try {
       const st = panel.__drawToy?.getState?.();
       const active = st?.nodes?.active;
@@ -8073,7 +8086,9 @@ function scheduler(){
                 try { toy.__chainJustActivated = false; } catch {}
                 continue;
               }
-              if (hasNotesAtCol) {
+              const useToyNoteDrivenArt = !!window.__NOTE_SCHEDULER_ENABLED
+                && (toy?.dataset?.toy === 'drawgrid' || toy?.dataset?.toy === 'loopgrid' || toy?.dataset?.toy === 'loopgrid-drum');
+              if (hasNotesAtCol && !useToyNoteDrivenArt) {
                 pulseToyBorder(toy);
                 // First-pass: if this toy lives inside an Art Toy, flash the Art Toy.
                 flashOwningArtToyForPanel(toy, 'scheduler:step', { col, slotIndex: col });

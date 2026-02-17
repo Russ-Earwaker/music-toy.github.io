@@ -2002,6 +2002,13 @@ function setupLaserTrails(panel) {
   const guidesLayer = document.createElementNS(svgNS, 'g');
   guidesLayer.setAttribute('class', 'art-laser-guides');
   layer.appendChild(guidesLayer);
+  const drawPreviewPath = document.createElementNS(svgNS, 'path');
+  drawPreviewPath.setAttribute('class', 'art-laser-draw-preview');
+  drawPreviewPath.setAttribute('fill', 'none');
+  drawPreviewPath.setAttribute('stroke-linecap', 'round');
+  drawPreviewPath.setAttribute('stroke-linejoin', 'round');
+  drawPreviewPath.style.display = 'none';
+  guidesLayer.appendChild(drawPreviewPath);
   const beamsLayer = document.createElementNS(svgNS, 'g');
   beamsLayer.setAttribute('class', 'art-laser-beams');
   layer.appendChild(beamsLayer);
@@ -2051,6 +2058,7 @@ function setupLaserTrails(panel) {
     drawingTargetPath: false,
     startedTargetPath: false,
   }));
+  const slotAwaitingBoardDraw = new Set();
   const activeSlots = new Set();
   const PANEL_PX = 220;
   const HANDLE_SIZE_PX = 62;
@@ -2354,14 +2362,60 @@ function setupLaserTrails(panel) {
         return { baseMode: 'opaque', beatMode: 'pulse-thicken' };
     }
   };
+  const isSlotAwaitingBoardDraw = (slot) => slotAwaitingBoardDraw.has(normalizeSlot(slot));
+  const setSlotAwaitingBoardDraw = (slot, awaiting) => {
+    const i = normalizeSlot(slot);
+    if (awaiting) slotAwaitingBoardDraw.add(i);
+    else slotAwaitingBoardDraw.delete(i);
+  };
   const syncActiveStateFlags = () => {
     panel.dataset.hasActiveLasers = activeSlots.size > 0 ? '1' : '0';
   };
+  const isBoardDrawArmed = () => {
+    if (panel.dataset.controlsVisible !== '1') return false;
+    if (selectedColorSlot == null) return false;
+    return isSlotAwaitingBoardDraw(selectedColorSlot);
+  };
   const syncDragArea = () => {
-    dragAreaEl.style.left = `${dragArea.x.toFixed(2)}px`;
-    dragAreaEl.style.top = `${dragArea.y.toFixed(2)}px`;
-    dragAreaEl.style.width = `${dragArea.w.toFixed(2)}px`;
-    dragAreaEl.style.height = `${dragArea.h.toFixed(2)}px`;
+    const armed = isBoardDrawArmed();
+    const viewX = armed ? AREA_MIN_X : dragArea.x;
+    const viewY = armed ? AREA_MIN_Y : dragArea.y;
+    const viewW = armed ? TOTAL_LIMIT_W : dragArea.w;
+    const viewH = armed ? TOTAL_LIMIT_H : dragArea.h;
+    dragAreaEl.style.left = `${viewX.toFixed(2)}px`;
+    dragAreaEl.style.top = `${viewY.toFixed(2)}px`;
+    dragAreaEl.style.width = `${viewW.toFixed(2)}px`;
+    dragAreaEl.style.height = `${viewH.toFixed(2)}px`;
+    dragAreaEl.classList.toggle('is-board-draw-armed', armed);
+  };
+  const syncDrawPreview = (slot, { visible = false } = {}) => {
+    const i = normalizeSlot(slot);
+    if (!visible) {
+      drawPreviewPath.style.display = 'none';
+      return;
+    }
+    const points = getSlotPath(i, { allowDraft: true });
+    if (!Array.isArray(points) || !points.length) {
+      drawPreviewPath.style.display = 'none';
+      return;
+    }
+    const pathPoints = points.length >= 2 ? points : [
+      { x: points[0].x, y: points[0].y },
+      { x: points[0].x, y: points[0].y },
+    ];
+    const fxId = clampFxId(panel?.dataset?.laserFx);
+    const profile = getFxProfile(fxId);
+    const width = Math.max(1.2, getLaserBaseWidth(fxId) * laserStrokeMultiplier);
+    drawPreviewPath.setAttribute('d', buildLaserPath(pathPoints));
+    drawPreviewPath.setAttribute('stroke', palette[i % palette.length]);
+    if (profile.baseMode === 'none') {
+      drawPreviewPath.setAttribute('stroke-width', '1.4');
+      drawPreviewPath.style.strokeDasharray = '2.8 6.2';
+    } else {
+      drawPreviewPath.setAttribute('stroke-width', String(width));
+      drawPreviewPath.style.strokeDasharray = 'none';
+    }
+    drawPreviewPath.style.display = '';
   };
   const setHandleIconFacing = (handle, facingAngleRad) => {
     if (!handle) return;
@@ -2376,6 +2430,9 @@ function setupLaserTrails(panel) {
     const pos = kind === 'target' ? targets[i] : emitters[i];
     const handle = kind === 'target' ? targetHandleEls[i] : sourceHandleEls[i];
     if (!handle || !pos) return;
+    const hiddenForRedraw = isSlotAwaitingBoardDraw(i);
+    handle.style.display = hiddenForRedraw ? 'none' : '';
+    if (hiddenForRedraw) return;
     handle.style.left = `${(pos.x - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
     handle.style.top = `${(pos.y - HANDLE_SIZE_PX * 0.5).toFixed(2)}px`;
     if (kind === 'target') {
@@ -2394,6 +2451,10 @@ function setupLaserTrails(panel) {
     const i = normalizeSlot(slot);
     const guide = guideEls[i];
     if (!guide) return;
+    if (isSlotAwaitingBoardDraw(i)) {
+      guide.style.display = 'none';
+      return;
+    }
     const points = getSlotPath(i);
     guide.setAttribute('d', buildLaserPath(points));
     const fxId = clampFxId(panel?.dataset?.laserFx);
@@ -2405,6 +2466,10 @@ function setupLaserTrails(panel) {
     const i = normalizeSlot(slot);
     const beam = baseBeamEls[i];
     if (!beam) return;
+    if (isSlotAwaitingBoardDraw(i)) {
+      beam.style.display = 'none';
+      return;
+    }
     const points = getSlotPath(i);
     beam.setAttribute('d', buildLaserPath(points));
     beam.setAttribute('stroke', palette[i % palette.length]);
@@ -2427,6 +2492,12 @@ function setupLaserTrails(panel) {
     const i = normalizeSlot(slot);
     const handle = rotateHandleEls[i];
     if (!handle) return;
+    const hiddenForRedraw = isSlotAwaitingBoardDraw(i);
+    handle.style.display = hiddenForRedraw ? 'none' : '';
+    if (hiddenForRedraw) {
+      handle.classList.remove('is-visible');
+      return;
+    }
     const source = emitters[i];
     const points = getSlotPath(i);
     if (!source || !points.length) return;
@@ -2554,6 +2625,7 @@ function setupLaserTrails(panel) {
 
   const randomizeAnchorsWithinArea = (area = dragArea) => {
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      setSlotAwaitingBoardDraw(i, false);
       generateWindyPath(i, area);
     }
   };
@@ -2769,7 +2841,7 @@ function setupLaserTrails(panel) {
     const tick = () => {
       if (!panel.isConnected) return;
       if (selectedColorSlot == null || normalizeSlot(selectedColorSlot) !== i) return;
-      if (!isScenePlaying()) spawnLaser(i, PREVIEW_LOOP_VELOCITY);
+      if (!isScenePlaying() && !isSlotAwaitingBoardDraw(i)) spawnLaser(i, PREVIEW_LOOP_VELOCITY);
       previewLoopTimer = setTimeout(tick, 760);
     };
     tick();
@@ -2791,6 +2863,7 @@ function setupLaserTrails(panel) {
       if (!Number.isFinite(n)) return;
       laserStrokeMultiplier = Math.max(0.2, n);
       syncAllBaseBeams();
+      if (boardDrawSlot != null) syncDrawPreview(boardDrawSlot, { visible: true });
     },
     onCommit: () => markSceneDirtySafe(),
   });
@@ -2844,6 +2917,7 @@ function setupLaserTrails(panel) {
       { x: sx, y: sy },
       { x: sx, y: sy },
     ]);
+    setSlotAwaitingBoardDraw(i, true);
     alignAnchorsFromPath(i);
     fitDragAreaToAnchors();
     syncHandle(i, 'source');
@@ -2851,6 +2925,8 @@ function setupLaserTrails(panel) {
     syncGuide(i);
     syncBaseBeam(i);
     syncRotationHandle(i);
+    syncDrawPreview(i, { visible: false });
+    try { refreshCustomizeUi(); } catch {}
     markSceneDirtySafe();
   };
 
@@ -2867,6 +2943,7 @@ function setupLaserTrails(panel) {
     customisePanel.classList.toggle('is-open', nextOpen);
     if (nextOpen) {
       try { refreshCustomizeUi(); } catch {}
+      syncDragArea();
       return;
     }
     selectedColorSlot = null;
@@ -2874,6 +2951,7 @@ function setupLaserTrails(panel) {
     pickerTitle.hidden = true;
     stopPreviewLoop();
     try { refreshCustomizeUi(); } catch {}
+    syncDragArea();
   };
 
   closeCustomizeUi = () => {
@@ -2888,6 +2966,7 @@ function setupLaserTrails(panel) {
       pickerTitle.hidden = true;
       stopPreviewLoop();
       refreshCustomizeUi();
+      syncDragArea();
       return;
     }
     selectedColorSlot = i;
@@ -2896,6 +2975,7 @@ function setupLaserTrails(panel) {
     pickerApi.setColor(palette[i]);
     if (openMenu) setCustomiseOpen(true);
     refreshCustomizeUi();
+    syncDragArea();
     startPreviewLoopForSlot(i);
   };
 
@@ -2956,6 +3036,7 @@ function setupLaserTrails(panel) {
       pickerTitle.hidden = true;
       stopPreviewLoop();
       syncSelectedHandleHighlight();
+      syncDragArea();
       return;
     }
     if (selectedColorSlot != null && !active.includes(normalizeSlot(selectedColorSlot))) {
@@ -2967,6 +3048,7 @@ function setupLaserTrails(panel) {
     for (const i of active) {
       const row = document.createElement('div');
       row.className = 'art-line-color-row';
+      const awaitingDraw = isSlotAwaitingBoardDraw(i);
 
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -2987,27 +3069,157 @@ function setupLaserTrails(panel) {
       });
       row.appendChild(btn);
 
-      const clearBtn = document.createElement('button');
-      clearBtn.type = 'button';
-      clearBtn.className = 'c-btn art-line-clear-btn';
-      clearBtn.setAttribute('aria-label', `Clear line ${i + 1}`);
-      clearBtn.title = `Clear line ${i + 1}`;
-      clearBtn.style.setProperty('--c-btn-size', '66px');
-      clearBtn.style.setProperty('--accent', '#f87171');
-      clearBtn.innerHTML = BUTTON_ICON_HTML;
-      const clearCore = clearBtn.querySelector('.c-btn-core');
-      if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
-      clearBtn.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        clearSlotLine(i);
-      });
-      row.appendChild(clearBtn);
+      if (awaitingDraw) {
+        const helper = document.createElement('div');
+        helper.className = 'art-line-draw-hint';
+        helper.textContent = selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i
+          ? 'Draw'
+          : 'Select to draw a line';
+        row.appendChild(helper);
+      } else {
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'c-btn art-line-clear-btn';
+        clearBtn.setAttribute('aria-label', `Clear line ${i + 1}`);
+        clearBtn.title = `Clear line ${i + 1}`;
+        clearBtn.style.setProperty('--c-btn-size', '66px');
+        clearBtn.style.setProperty('--accent', '#f87171');
+        clearBtn.innerHTML = BUTTON_ICON_HTML;
+        const clearCore = clearBtn.querySelector('.c-btn-core');
+        if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
+        clearBtn.addEventListener('pointerdown', (ev) => {
+          if (ev.button != null && ev.button !== 0) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          clearSlotLine(i);
+        });
+        row.appendChild(clearBtn);
+      }
 
       lineButtonsHost.appendChild(row);
     }
+
+    const clearAllRow = document.createElement('div');
+    clearAllRow.className = 'art-line-color-row art-line-clear-all-row';
+    const clearAllBtn = document.createElement('button');
+    clearAllBtn.type = 'button';
+    clearAllBtn.className = 'c-btn art-line-clear-btn art-line-clear-all-btn';
+    clearAllBtn.setAttribute('aria-label', 'Clear all lines');
+    clearAllBtn.title = 'Clear All Lines';
+    clearAllBtn.style.setProperty('--c-btn-size', '88px');
+    clearAllBtn.style.setProperty('--accent', '#f87171');
+    clearAllBtn.innerHTML = BUTTON_ICON_HTML;
+    const clearAllCore = clearAllBtn.querySelector('.c-btn-core');
+    if (clearAllCore) clearAllCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
+    clearAllBtn.addEventListener('pointerdown', (ev) => {
+      if (ev.button != null && ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      for (const slot of active) clearSlotLine(slot);
+    });
+    clearAllRow.appendChild(clearAllBtn);
+    const clearAllLabel = document.createElement('div');
+    clearAllLabel.className = 'art-line-clear-all-label';
+    clearAllLabel.textContent = 'Clear All';
+    clearAllRow.appendChild(clearAllLabel);
+    lineButtonsHost.appendChild(clearAllRow);
+
     syncSelectedHandleHighlight();
+    syncDragArea();
   };
+
+  let boardDrawPointerId = null;
+  let boardDrawSlot = null;
+  let boardDrawMoved = false;
+  const beginBoardDraw = (ev) => {
+    if (!panel.isConnected) return;
+    if (panel.dataset.controlsVisible !== '1') return;
+    if (ev.button != null && ev.button !== 0) return;
+    if (selectedColorSlot == null) return;
+    const slot = normalizeSlot(selectedColorSlot);
+    if (!isSlotAwaitingBoardDraw(slot)) return;
+    if (!isClientPointInsideDragArea(ev.clientX, ev.clientY)) return;
+    const pt = clientToPanelPoint(ev.clientX, ev.clientY);
+    if (!pt) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    boardDrawPointerId = ev.pointerId;
+    boardDrawSlot = slot;
+    boardDrawMoved = false;
+    const px = clampAnchorX(pt.x);
+    const py = clampAnchorY(pt.y);
+    emitters[slot].x = px;
+    emitters[slot].y = py;
+    targets[slot].x = px;
+    targets[slot].y = py;
+    slotPaths[slot] = [{ x: px, y: py }];
+    dragAreaEl.classList.add('is-dragging');
+    syncDrawPreview(slot, { visible: true });
+  };
+  const moveBoardDraw = (ev) => {
+    if (boardDrawPointerId == null || boardDrawSlot == null) return;
+    if (ev.pointerId !== boardDrawPointerId) return;
+    const pt = clientToPanelPoint(ev.clientX, ev.clientY);
+    if (!pt) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const points = getSlotPath(boardDrawSlot, { allowDraft: true });
+    const prev = points.length ? points[points.length - 1] : null;
+    appendPathPoint(boardDrawSlot, pt.x, pt.y, 1.6);
+    syncDrawPreview(boardDrawSlot, { visible: true });
+    const next = points.length ? points[points.length - 1] : null;
+    if (prev && next && Math.hypot(next.x - prev.x, next.y - prev.y) > 0.1) boardDrawMoved = true;
+  };
+  const endBoardDraw = (ev) => {
+    if (boardDrawPointerId == null || boardDrawSlot == null) return;
+    if (ev.pointerId !== boardDrawPointerId) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const slot = boardDrawSlot;
+    boardDrawPointerId = null;
+    boardDrawSlot = null;
+    dragAreaEl.classList.remove('is-dragging');
+    syncDrawPreview(slot, { visible: false });
+    const releasePt = clientToPanelPoint(ev.clientX, ev.clientY);
+    if (releasePt) {
+      const beforeLen = getSlotPath(slot, { allowDraft: true }).length;
+      appendPathPoint(slot, releasePt.x, releasePt.y, 1.6);
+      const afterLen = getSlotPath(slot, { allowDraft: true }).length;
+      if (afterLen > beforeLen) boardDrawMoved = true;
+    }
+    const points = getSlotPath(slot, { allowDraft: true });
+    if (boardDrawMoved && points.length >= 2) {
+      setSlotPath(slot, points, { lockEndpoints: false });
+      alignAnchorsFromPath(slot);
+      setSlotAwaitingBoardDraw(slot, false);
+      fitDragAreaToAnchors();
+      syncHandle(slot, 'source');
+      syncHandle(slot, 'target');
+      syncGuide(slot);
+      syncBaseBeam(slot);
+      syncRotationHandle(slot);
+      try { refreshCustomizeUi(); } catch {}
+      markSceneDirtySafe();
+      return;
+    }
+    const first = points.length ? points[0] : emitters[slot];
+    const sx = clampAnchorX(first?.x);
+    const sy = clampAnchorY(first?.y);
+    emitters[slot].x = sx;
+    emitters[slot].y = sy;
+    targets[slot].x = sx;
+    targets[slot].y = sy;
+    setSlotPath(slot, [
+      { x: sx, y: sy },
+      { x: sx, y: sy },
+    ]);
+    alignAnchorsFromPath(slot);
+  };
+  panel.addEventListener('pointerdown', beginBoardDraw, true);
+  dragAreaEl.addEventListener('pointerdown', beginBoardDraw, true);
+  document.addEventListener('pointermove', moveBoardDraw, true);
+  document.addEventListener('pointerup', endBoardDraw, true);
+  document.addEventListener('pointercancel', endBoardDraw, true);
 
   // Keep customise UI lifecycle aligned with the standard art controls visibility.
   try {
@@ -3274,10 +3486,15 @@ function setupLaserTrails(panel) {
     if (!rect || rect.width < 1 || rect.height < 1) return false;
     const scaleX = rect.width / PANEL_PX;
     const scaleY = rect.height / PANEL_PX;
-    const left = rect.left + dragArea.x * scaleX;
-    const top = rect.top + dragArea.y * scaleY;
-    const right = left + dragArea.w * scaleX;
-    const bottom = top + dragArea.h * scaleY;
+    const armed = isBoardDrawArmed();
+    const areaX = armed ? AREA_MIN_X : dragArea.x;
+    const areaY = armed ? AREA_MIN_Y : dragArea.y;
+    const areaW = armed ? TOTAL_LIMIT_W : dragArea.w;
+    const areaH = armed ? TOTAL_LIMIT_H : dragArea.h;
+    const left = rect.left + areaX * scaleX;
+    const top = rect.top + areaY * scaleY;
+    const right = left + areaW * scaleX;
+    const bottom = top + areaH * scaleY;
     return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
   };
 
@@ -3590,6 +3807,7 @@ function setupLaserTrails(panel) {
       lineColors: palette.map((c) => String(c || '#7bf6ff')),
       lineThickness: Number(laserStrokeMultiplier) || 1,
       activeSlots: activeSlotsSorted,
+      pendingDrawSlots: Array.from(slotAwaitingBoardDraw.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b),
       fx: clampFxId(panel?.dataset?.laserFx),
       controlsVisible: panel.dataset.controlsVisible === '1',
     };
@@ -3646,6 +3864,13 @@ function setupLaserTrails(panel) {
         else setSlotInactive(i);
       }
     }
+    slotAwaitingBoardDraw.clear();
+    if (Array.isArray(state.pendingDrawSlots)) {
+      for (const s of state.pendingDrawSlots) {
+        const i = normalizeSlot(s);
+        if (activeSlots.has(i)) setSlotAwaitingBoardDraw(i, true);
+      }
+    }
     if (state.fx != null) setFx(state.fx, { announce: false });
     else if (panel?.dataset?.laserFx != null) setFx(panel.dataset.laserFx, { announce: false });
     fitDragAreaToAnchors();
@@ -3660,6 +3885,7 @@ function setupLaserTrails(panel) {
   panel.onArtTrigger = (trigger = null) => {
     const slot = normalizeSlot(trigger?.slotIndex);
     setSlotActive(slot);
+    if (isSlotAwaitingBoardDraw(slot)) return true;
     spawnLaser(slot, trigger?.velocity ?? null);
     return true;
   };
@@ -3667,6 +3893,7 @@ function setupLaserTrails(panel) {
   panel.flash = (meta = null) => {
     const slot = normalizeSlot(meta?.slotIndex);
     setSlotActive(slot);
+    if (isSlotAwaitingBoardDraw(slot)) return;
     spawnLaser(slot, meta?.velocity ?? null);
   };
 }

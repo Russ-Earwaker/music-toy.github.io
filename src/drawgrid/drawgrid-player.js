@@ -233,7 +233,13 @@ export function connectDrawGridToPlayer(panel) {
     if (midiNote === undefined) return;
     try { resumeAudioContextIfNeeded?.().catch?.(() => {}); } catch {}
     const when = (ensureAudioContext()?.currentTime ?? 0) + 0.01;
-    playNote(instrument, midiToName(midiNote), when);
+    playNote(instrument, midiToName(midiNote), when, {
+      slotIndex: col,
+      col,
+      step: col,
+      index: col,
+      source: 'drawgrid:node-toggle',
+    });
   });
 
   panel.addEventListener('toy-instrument', (e) => {
@@ -255,7 +261,13 @@ export function connectDrawGridToPlayer(panel) {
     const midiNote = notePalette[row];
     if (midiNote === undefined) return;
     try { await resumeAudioContextIfNeeded(); } catch {}
-    playNote(instrument, midiToName(midiNote));
+    playNote(instrument, midiToName(midiNote), undefined, {
+      slotIndex: col,
+      col,
+      step: col,
+      index: col,
+      source: 'drawgrid:preview-drag',
+    });
   }
 
   panel.addEventListener('drawgrid:node-drag-end', (e) => {
@@ -470,7 +482,14 @@ export function connectDrawGridToPlayer(panel) {
         }
       } catch {}
 
-      playNote(pat.instrument || instrument, midiToName(midiNote), when);
+      playNote(pat.instrument || instrument, midiToName(midiNote), when, {
+        slotIndex: col,
+        col,
+        step: col,
+        index: col,
+        row,
+        source: 'drawgrid:sequencer',
+      });
     }
   };
 }

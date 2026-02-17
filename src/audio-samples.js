@@ -379,7 +379,23 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
   const vel = Math.max(0.001, Math.min(1.0, velocity));
   try{
     if (toyId && toyId !== 'master') {
-      window.dispatchEvent(new CustomEvent('toy:note', { detail: { toyId: String(toyId), instrument: id, note: resolvedNote } }));
+      const slotIndex = Number.isFinite(Number(options?.slotIndex)) ? Math.trunc(Number(options.slotIndex)) : null;
+      const col = Number.isFinite(Number(options?.col)) ? Math.trunc(Number(options.col)) : null;
+      const step = Number.isFinite(Number(options?.step)) ? Math.trunc(Number(options.step)) : null;
+      const index = Number.isFinite(Number(options?.index)) ? Math.trunc(Number(options.index)) : null;
+      window.dispatchEvent(new CustomEvent('toy:note', {
+        detail: {
+          toyId: String(toyId),
+          instrument: id,
+          note: resolvedNote,
+          slotIndex,
+          col,
+          step,
+          index,
+          velocity: Number.isFinite(Number(velocity)) ? Number(velocity) : null,
+          when: Number.isFinite(Number(t)) ? Number(t) : null,
+        }
+      }));
     }
   }catch{}
 
