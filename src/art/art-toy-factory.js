@@ -1276,17 +1276,28 @@ function setupFireworks(panel) {
       const randomBtn = document.createElement('button');
       randomBtn.type = 'button';
       randomBtn.className = 'c-btn art-line-empty-action-btn';
-      randomBtn.setAttribute('aria-label', 'Randomize art toy');
-      randomBtn.title = 'Random All';
+      randomBtn.setAttribute('aria-label', 'Randomize art toy music');
+      randomBtn.title = 'Random Music';
       randomBtn.innerHTML = BUTTON_ICON_HTML;
       const randomCore = randomBtn.querySelector('.c-btn-core');
-      if (randomCore) randomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandom.png')");
+      if (randomCore) randomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomNotes.png')");
       randomBtn.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        const randomActionBtn = panel.querySelector(`[data-action="artToy:randomAll"][data-art-toy-id="${panel.id}"]`)
-          || panel.querySelector(`[data-action="artToy:randomAll"]`);
+        const randomActionBtn = panel.querySelector(`[data-action="artToy:randomMusic"][data-art-toy-id="${panel.id}"]`)
+          || panel.querySelector(`[data-action="artToy:randomMusic"]`);
         try { randomActionBtn?.click?.(); } catch {}
+        const selectFirstActive = () => {
+          const activeSorted = Array.from(activeSlots.values())
+            .map((s) => normalizeSlot(s))
+            .sort((a, b) => a - b);
+          if (!activeSorted.length) return false;
+          try { selectLineForCustomise(activeSorted[0], { openMenu: false }); } catch {}
+          return true;
+        };
+        if (selectFirstActive()) return;
+        setTimeout(() => { try { selectFirstActive(); } catch {} }, 0);
+        setTimeout(() => { try { selectFirstActive(); } catch {} }, 60);
       });
       emptyActions.appendChild(randomBtn);
       const enterBtn = document.createElement('button');
@@ -2998,17 +3009,28 @@ function setupLaserTrails(panel) {
       const randomBtn = document.createElement('button');
       randomBtn.type = 'button';
       randomBtn.className = 'c-btn art-line-empty-action-btn';
-      randomBtn.setAttribute('aria-label', 'Randomize art toy');
-      randomBtn.title = 'Random All';
+      randomBtn.setAttribute('aria-label', 'Randomize art toy music');
+      randomBtn.title = 'Random Music';
       randomBtn.innerHTML = BUTTON_ICON_HTML;
       const randomCore = randomBtn.querySelector('.c-btn-core');
-      if (randomCore) randomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandom.png')");
+      if (randomCore) randomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomNotes.png')");
       randomBtn.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        const randomActionBtn = panel.querySelector(`[data-action="artToy:randomAll"][data-art-toy-id="${panel.id}"]`)
-          || panel.querySelector(`[data-action="artToy:randomAll"]`);
+        const randomActionBtn = panel.querySelector(`[data-action="artToy:randomMusic"][data-art-toy-id="${panel.id}"]`)
+          || panel.querySelector(`[data-action="artToy:randomMusic"]`);
         try { randomActionBtn?.click?.(); } catch {}
+        const selectFirstActive = () => {
+          const activeSorted = Array.from(activeSlots.values())
+            .map((s) => normalizeSlot(s))
+            .sort((a, b) => a - b);
+          if (!activeSorted.length) return false;
+          try { selectLineForCustomise(activeSorted[0], { openMenu: false }); } catch {}
+          return true;
+        };
+        if (selectFirstActive()) return;
+        setTimeout(() => { try { selectFirstActive(); } catch {} }, 0);
+        setTimeout(() => { try { selectFirstActive(); } catch {} }, 60);
       });
       emptyActions.appendChild(randomBtn);
 
@@ -3770,9 +3792,25 @@ function setupLaserTrails(panel) {
   }
 
   panel.onArtRandomMusic = () => {
-    activateAllSlots();
-    fitDragAreaToAnchors();
-    syncAllHandles();
+    const ensureFirstLineSelected = () => {
+      const activeSorted = Array.from(activeSlots.values())
+        .map((s) => normalizeSlot(s))
+        .sort((a, b) => a - b);
+      if (!activeSorted.length) return false;
+      try { selectLineForCustomise(activeSorted[0], { openMenu: false }); } catch {}
+      return true;
+    };
+    if (activeSlots.size === 0) {
+      activateAllSlots();
+      for (let i = 0; i < ART_SLOT_COUNT; i++) clearSlotLine(i);
+      if (!ensureFirstLineSelected()) {
+        setTimeout(() => { try { ensureFirstLineSelected(); } catch {} }, 0);
+        setTimeout(() => { try { ensureFirstLineSelected(); } catch {} }, 60);
+      }
+    } else {
+      fitDragAreaToAnchors();
+      syncAllHandles();
+    }
     markSceneDirtySafe();
   };
 
