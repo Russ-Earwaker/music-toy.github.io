@@ -3116,6 +3116,9 @@ function setupLaserTrails(panel) {
       ev.preventDefault();
       ev.stopPropagation();
       for (const slot of active) clearSlotLine(slot);
+      if (active.length) {
+        try { selectLineForCustomise(active[0], { openMenu: false }); } catch {}
+      }
     });
     clearAllRow.appendChild(clearAllBtn);
     const clearAllLabel = document.createElement('div');
@@ -3135,6 +3138,8 @@ function setupLaserTrails(panel) {
     if (!panel.isConnected) return;
     if (panel.dataset.controlsVisible !== '1') return;
     if (ev.button != null && ev.button !== 0) return;
+    const eventTarget = ev?.target;
+    if (eventTarget?.closest?.('.art-laser-handle-btn')) return;
     if (selectedColorSlot == null) return;
     const slot = normalizeSlot(selectedColorSlot);
     if (!isSlotAwaitingBoardDraw(slot)) return;
@@ -3198,7 +3203,15 @@ function setupLaserTrails(panel) {
       syncGuide(slot);
       syncBaseBeam(slot);
       syncRotationHandle(slot);
-      try { refreshCustomizeUi(); } catch {}
+      const activeSorted = Array.from(activeSlots.values())
+        .map((s) => normalizeSlot(s))
+        .sort((a, b) => a - b);
+      const nextUndrawn = activeSorted.find((s) => s !== slot && isSlotAwaitingBoardDraw(s));
+      if (Number.isFinite(nextUndrawn)) {
+        try { selectLineForCustomise(nextUndrawn, { openMenu: false }); } catch {}
+      } else {
+        try { refreshCustomizeUi(); } catch {}
+      }
       markSceneDirtySafe();
       return;
     }

@@ -2004,6 +2004,28 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   box-shadow:
     0 0 0 4px var(--selected-ring),
     0 10px 22px rgba(0, 0, 0, 0.45);
+  animation: art-line-selected-ring-pulse 920ms ease-in-out infinite;
+}
+
+@keyframes art-line-selected-ring-pulse {
+  0% {
+    filter: brightness(1.12) saturate(1.14);
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--selected-ring) 72%, transparent),
+      0 10px 22px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    filter: brightness(1.34) saturate(1.28);
+    box-shadow:
+      0 0 0 5px color-mix(in srgb, var(--selected-ring) 96%, white),
+      0 12px 26px rgba(0, 0, 0, 0.5);
+  }
+  100% {
+    filter: brightness(1.12) saturate(1.14);
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--selected-ring) 72%, transparent),
+      0 10px 22px rgba(0, 0, 0, 0.4);
+  }
 }
 
 .art-line-color-empty {
