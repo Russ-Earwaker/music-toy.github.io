@@ -1,113 +1,55 @@
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990904-9qpd5s_r47kyjtr', hasNote: true, note: 'F2', fallbackCol: 2, resolvedSlot: 2}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990904-9qpd5s_r47kyjtr', hasNote: true, note: 'F2', slotFromDetail: 2, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990904-9qpd5s', toyId: 'audiotoy_drawgrid-1771343990904-9qpd5s_r47kyjtr', slot: 2, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990904-9qpd5s', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 3, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990904-9qpd5s', toyId: 'drawgrid-1771343990904-9qpd5s', slot: 3, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990904-9qpd5s', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 4, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990904-9qpd5s', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 5, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990904-9qpd5s_r47kyjtr', hasNote: true, note: 'G2', fallbackCol: 5, resolvedSlot: 5}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990904-9qpd5s_r47kyjtr', hasNote: true, note: 'G2', slotFromDetail: 5, col: null, …}
-main.js:2514 [ArtTrigger] drop:dedupe {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990904-9qpd5s', toyId: 'audiotoy_drawgrid-1771343990904-9qpd5s_r47kyjtr', slot: 5, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990904-9qpd5s', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 6, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990904-9qpd5s', toyId: 'drawgrid-1771343990904-9qpd5s', slot: 6, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990904-9qpd5s', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 7, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990904-9qpd5s', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 0, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'F2', fallbackCol: 0, resolvedSlot: 0}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'F2', slotFromDetail: 0, col: null, …}
-main.js:2514 [ArtTrigger] drop:dedupe {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', slot: 0, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990829-qql1xx', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 0, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'drawgrid-1771343990829-qql1xx', slot: 0, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'G2', fallbackCol: 0, resolvedSlot: 0}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'G2', slotFromDetail: 0, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', slot: 0, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990829-qql1xx', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 1, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'drawgrid-1771343990829-qql1xx', slot: 1, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'G2', fallbackCol: 1, resolvedSlot: 1}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'G2', slotFromDetail: 1, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', slot: 1, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990829-qql1xx', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 2, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'drawgrid-1771343990829-qql1xx', slot: 2, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'D#2', fallbackCol: 2, resolvedSlot: 2}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'D#2', slotFromDetail: 2, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', slot: 2, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990829-qql1xx', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 3, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'drawgrid-1771343990829-qql1xx', slot: 3, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'F2', fallbackCol: 3, resolvedSlot: 3}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'F2', slotFromDetail: 3, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', slot: 3, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990829-qql1xx', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 4, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'drawgrid-1771343990829-qql1xx', slot: 4, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990829-qql1xx', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 5, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990829-qql1xx', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 6, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'F2', fallbackCol: 6, resolvedSlot: 6}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', hasNote: true, note: 'F2', slotFromDetail: 6, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'audiotoy_drawgrid-1771343990829-qql1xx_td8dmqqq', slot: 6, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990829-qql1xx', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 7, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'drawgrid-1771343990829-qql1xx', slot: 7, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990829-qql1xx', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 0, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990829-qql1xx', toyId: 'drawgrid-1771343990829-qql1xx', slot: 0, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990874-tzfwlo', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 0, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', hasNote: true, note: 'F2', fallbackCol: 0, resolvedSlot: 0}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', hasNote: true, note: 'F2', slotFromDetail: 0, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990874-tzfwlo', toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', slot: 0, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990874-tzfwlo', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 1, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990874-tzfwlo', toyId: 'drawgrid-1771343990874-tzfwlo', slot: 1, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990874-tzfwlo', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 2, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990874-tzfwlo', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 3, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990874-tzfwlo', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 4, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990874-tzfwlo', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 5, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990874-tzfwlo', toyId: 'drawgrid-1771343990874-tzfwlo', slot: 5, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', hasNote: true, note: 'F2', fallbackCol: 5, resolvedSlot: 5}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', hasNote: true, note: 'F2', slotFromDetail: 5, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990874-tzfwlo', toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', slot: 5, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990874-tzfwlo', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 6, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990874-tzfwlo', toyId: 'drawgrid-1771343990874-tzfwlo', slot: 6, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', hasNote: true, note: 'G2', fallbackCol: 6, resolvedSlot: 6}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', hasNote: true, note: 'G2', slotFromDetail: 6, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990874-tzfwlo', toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', slot: 6, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', hasNote: true, note: 'G2', fallbackCol: 6, resolvedSlot: 6}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', hasNote: true, note: 'G2', slotFromDetail: 6, col: null, …}
-main.js:2514 [ArtTrigger] drop:dedupe {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990874-tzfwlo', toyId: 'audiotoy_drawgrid-1771343990874-tzfwlo_48ur22q3', slot: 6, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990874-tzfwlo', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 7, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990874-tzfwlo', toyId: 'drawgrid-1771343990874-tzfwlo', slot: 7, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990874-tzfwlo', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 0, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'F2', fallbackCol: 7, resolvedSlot: 7}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'F2', slotFromDetail: 7, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', slot: 7, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990889-n1rfv6', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 0, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'drawgrid-1771343990889-n1rfv6', slot: 0, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990889-n1rfv6', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 1, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'drawgrid-1771343990889-n1rfv6', slot: 1, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'G2', fallbackCol: 1, resolvedSlot: 1}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'G2', slotFromDetail: 1, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', slot: 1, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990889-n1rfv6', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 2, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'drawgrid-1771343990889-n1rfv6', slot: 2, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'G2', fallbackCol: 2, resolvedSlot: 2}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'G2', slotFromDetail: 2, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', slot: 2, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990889-n1rfv6', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 3, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990889-n1rfv6', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 4, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'drawgrid-1771343990889-n1rfv6', slot: 4, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'G2', fallbackCol: 4, resolvedSlot: 4}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'G2', slotFromDetail: 4, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', slot: 4, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990889-n1rfv6', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 5, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990889-n1rfv6', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 6, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'drawgrid-1771343990889-n1rfv6', slot: 6, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'G2', fallbackCol: 6, resolvedSlot: 6}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'G2', slotFromDetail: 6, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', slot: 6, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'F2', fallbackCol: 6, resolvedSlot: 6}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', hasNote: true, note: 'F2', slotFromDetail: 6, col: null, …}
-main.js:2514 [ArtTrigger] drop:dedupe {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'audiotoy_drawgrid-1771343990889-n1rfv6_jn1i341z', slot: 6, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990889-n1rfv6', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 7, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'drawgrid-1771343990889-n1rfv6', slot: 7, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990889-n1rfv6', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 0, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990889-n1rfv6', toyId: 'drawgrid-1771343990889-n1rfv6', slot: 0, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990904-9qpd5s', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 0, hasNotesAtCol: false, …}
-main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771343990904-9qpd5s', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771343989412-5vy79z', col: 1, hasNotesAtCol: true, …}
-main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990904-9qpd5s', toyId: 'drawgrid-1771343990904-9qpd5s', slot: 1, …}
-main.js:2514 [ArtTrigger] toy:note:fallback-slot {toyId: 'audiotoy_drawgrid-1771343990904-9qpd5s_r47kyjtr', hasNote: true, note: 'G2', fallbackCol: 1, resolvedSlot: 1}
-main.js:2514 [ArtTrigger] toy:note:route {toyId: 'audiotoy_drawgrid-1771343990904-9qpd5s_r47kyjtr', hasNote: true, note: 'G2', slotFromDetail: 1, col: null, …}
-main.js:2514 [ArtTrigger] accept {source: 'toy:note', artId: 'art-laserTrails-1771343989412-5vy79z', panelId: 'drawgrid-1771343990904-9qpd5s', toyId: 'audiotoy_drawgrid-1771343990904-9qpd5s_r47kyjtr', slot: 1, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994910-khs526_woiunrts', hasNote: true, note: 'D#4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994910-khs526', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 0, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994910-khs526', toyId: 'drawgrid-1771344994910-khs526', slot: 0, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994910-khs526', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 1, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994910-khs526', toyId: 'drawgrid-1771344994910-khs526', slot: 1, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994910-khs526_woiunrts', hasNote: true, note: 'D#4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994910-khs526', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 2, hasNotesAtCol: false, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994910-khs526', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 3, hasNotesAtCol: false, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994910-khs526', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 4, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994910-khs526', toyId: 'drawgrid-1771344994910-khs526', slot: 4, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994910-khs526_woiunrts', hasNote: true, note: 'F4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994910-khs526', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 5, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994910-khs526', toyId: 'drawgrid-1771344994910-khs526', slot: 5, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994910-khs526_woiunrts', hasNote: true, note: 'G4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994910-khs526', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 6, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994910-khs526', toyId: 'drawgrid-1771344994910-khs526', slot: 6, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994910-khs526_woiunrts', hasNote: true, note: 'G4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994910-khs526_woiunrts', hasNote: true, note: 'A#4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994910-khs526', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 7, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994910-khs526', toyId: 'drawgrid-1771344994910-khs526', slot: 7, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994910-khs526', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 0, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994910-khs526', toyId: 'drawgrid-1771344994910-khs526', slot: 0, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994943-a4u6av_x53odf3o', hasNote: true, note: 'F4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994943-a4u6av', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 0, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] drop:dedupe {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994943-a4u6av', toyId: 'drawgrid-1771344994943-a4u6av', slot: 0, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994943-a4u6av', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 1, hasNotesAtCol: false, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994943-a4u6av', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 2, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994943-a4u6av', toyId: 'drawgrid-1771344994943-a4u6av', slot: 2, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994943-a4u6av_x53odf3o', hasNote: true, note: 'F4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994943-a4u6av', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 3, hasNotesAtCol: false, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994943-a4u6av', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 4, hasNotesAtCol: false, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994943-a4u6av', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 5, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994943-a4u6av', toyId: 'drawgrid-1771344994943-a4u6av', slot: 5, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994943-a4u6av_x53odf3o', hasNote: true, note: 'G4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994943-a4u6av', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 6, hasNotesAtCol: false, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994943-a4u6av', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 7, hasNotesAtCol: false, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994943-a4u6av', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 0, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994943-a4u6av', toyId: 'drawgrid-1771344994943-a4u6av', slot: 0, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994962-ezsqes', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 0, hasNotesAtCol: false, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994962-ezsqes', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 1, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994962-ezsqes', toyId: 'drawgrid-1771344994962-ezsqes', slot: 1, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994962-ezsqes_mtrciltd', hasNote: true, note: 'G4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994962-ezsqes', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 2, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994962-ezsqes', toyId: 'drawgrid-1771344994962-ezsqes', slot: 2, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994962-ezsqes_mtrciltd', hasNote: true, note: 'G4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994962-ezsqes', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 3, hasNotesAtCol: false, …}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994962-ezsqes', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 4, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994962-ezsqes', toyId: 'drawgrid-1771344994962-ezsqes', slot: 4, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994962-ezsqes_mtrciltd', hasNote: true, note: 'D#4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994962-ezsqes', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 5, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994962-ezsqes', toyId: 'drawgrid-1771344994962-ezsqes', slot: 5, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994962-ezsqes_mtrciltd', hasNote: true, note: 'D#4', slotFromDetail: null, detail: {…}}
+main.js:2514 [ArtTrigger] scheduler:step:probe {toyId: 'drawgrid-1771344994962-ezsqes', toyType: 'drawgrid', ownerArtToyId: 'art-laserTrails-1771344993415-dh6ecs', col: 6, hasNotesAtCol: true, …}
+main.js:2514 [ArtTrigger] accept {source: 'scheduler:step', artId: 'art-laserTrails-1771344993415-dh6ecs', panelId: 'drawgrid-1771344994962-ezsqes', toyId: 'drawgrid-1771344994962-ezsqes', slot: 6, …}
+main.js:2514 [ArtTrigger] toy:note:drop:strict {toyId: 'audiotoy_drawgrid-1771344994962-ezsqes_mtrciltd', hasNote: true, note: 'D#4', slotFromDetail: null, detail: {…}}

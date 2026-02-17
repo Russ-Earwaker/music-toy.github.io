@@ -8058,6 +8058,21 @@ function scheduler(){
                   source: 'scheduler:step',
                 });
               }
+              const suppressTransitionArtTrigger = !!toy.__chainJustActivated;
+              if (suppressTransitionArtTrigger) {
+                if (artTriggerDbgEnabled()) {
+                  artTriggerDbg('scheduler:step:drop:chain-just-activated', {
+                    toyId: toy.id,
+                    toyType: toy?.dataset?.toy || null,
+                    ownerArtToyId: toy?.dataset?.artOwnerId || null,
+                    col,
+                    hasNotesAtCol,
+                    phase01: info?.phase01 ?? null,
+                  });
+                }
+                try { toy.__chainJustActivated = false; } catch {}
+                continue;
+              }
               if (hasNotesAtCol) {
                 pulseToyBorder(toy);
                 // First-pass: if this toy lives inside an Art Toy, flash the Art Toy.
