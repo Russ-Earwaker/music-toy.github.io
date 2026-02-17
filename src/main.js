@@ -2650,8 +2650,23 @@ try {
       const d = e?.detail || {};
       const toyId = d.toyId;
       if (!toyId || toyId === 'master') return;
+      let slotFromDetail = null;
+      for (const candidate of [d.slotIndex, d.col, d.step, d.index]) {
+        const n = Number(candidate);
+        if (!Number.isFinite(n)) continue;
+        slotFromDetail = Math.trunc(n);
+        break;
+      }
+      if (!Number.isFinite(slotFromDetail)) {
+        try {
+          const panel = resolveToyPanelByToyId(toyId);
+          const n = Number(panel?.__mtLastSequencerCol);
+          if (Number.isFinite(n)) slotFromDetail = Math.trunc(n);
+        } catch {}
+      }
       artFlashDbg('toy:note', {
         toyId,
+        slotIndex: Number.isFinite(slotFromDetail) ? slotFromDetail : null,
         internal: !!g_artInternal?.active,
         artToyId: g_artInternal?.artToyId || null,
         zoom: !!window.__mtZoomGesturing,
@@ -2661,6 +2676,10 @@ try {
       try {
         g_artTriggerRouter?.routeFromToyId?.(toyId, {
           source: 'toy:note',
+          slotIndex: Number.isFinite(slotFromDetail) ? slotFromDetail : null,
+          col: d.col,
+          step: d.step,
+          index: d.index,
           note: d.note,
           velocity: d.velocity,
           timestamp: d.when ?? d.at ?? null,
@@ -3229,6 +3248,60 @@ function ensureDefaultInternalToyExistsInHost(artToyId) {
   }
 }
 
+function getInternalArtUiKeepoutRect(artToyId) {
+  const home = getInternalHomeAnchorForArtToy(artToyId);
+  const ax = Number.isFinite(home?.x) ? home.x : 240;
+  const ay = Number.isFinite(home?.y) ? home.y : 180;
+  const artType = String(getArtToyPanelById(artToyId)?.dataset?.artToy || '').toLowerCase();
+  if (artType === 'lasertrails' || artType === 'lasers') {
+    return {
+      left: ax - 660,
+      top: ay - 320,
+      right: ax + 980,
+      bottom: ay + 640,
+    };
+  }
+  // Keepout region that covers the internal mirror panel plus its common control
+  // footprint (header controls, volume, and art customisation area).
+  return {
+    left: ax - 560,
+    top: ay - 180,
+    right: ax + 680,
+    bottom: ay + 560,
+  };
+}
+
+function rectsOverlap(a, b) {
+  if (!a || !b) return false;
+  return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+}
+
+function fitInternalSpawnCenterOutsideUiKeepout(artToyId, centerX, centerY, width, height, margin = 32) {
+  const w = Math.max(1, Number(width) || 380);
+  const h = Math.max(1, Number(height) || 320);
+  const keepout = getInternalArtUiKeepoutRect(artToyId);
+  const hw = w * 0.5;
+  const hh = h * 0.5;
+  const makeRect = (cx, cy) => ({
+    left: cx - hw - margin,
+    top: cy - hh - margin,
+    right: cx + hw + margin,
+    bottom: cy + hh + margin,
+  });
+
+  let cx = Number.isFinite(centerX) ? centerX : 0;
+  let cy = Number.isFinite(centerY) ? centerY : 0;
+  if (!rectsOverlap(makeRect(cx, cy), keepout)) return { x: cx, y: cy };
+
+  // Preferred fallback: place to the right of the art UI footprint.
+  cx = keepout.right + hw + margin;
+  if (!rectsOverlap(makeRect(cx, cy), keepout)) return { x: cx, y: cy };
+
+  // Secondary fallback: place below keepout if needed.
+  cy = keepout.bottom + hh + margin;
+  return { x: cx, y: cy };
+}
+
 function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
   if (!artToyId) return null;
   const wanted = Math.max(1, Math.trunc(Number(count) || 4));
@@ -3271,9 +3344,21 @@ function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
   if (needed > 0) {
     try { artPanel.dataset.internalBootstrapped = '1'; } catch {}
     const size = pickToyPanelSize(kind) || {};
-    const stepX = Math.max(160, (Number(size.width) || 380) + CHAIN_SPAWN_GAP);
-    const centerY = 0;
-    const startX = 0;
+    const spawnW = Math.max(240, Number(size.width) || 380);
+    const spawnH = Math.max(200, Number(size.height) || 320);
+    const stepX = Math.max(spawnW + CHAIN_SPAWN_GAP, spawnW + 40);
+    let centerY = 0;
+    let startX = 0;
+    // Sequence layout rule:
+    // - First toy centered on the art anchor X
+    // - Entire chain sits above the full art UI keepout region
+    // - Subsequent toys spaced to avoid overlap
+    const home = getInternalHomeAnchorForArtToy(artToyId);
+    const ax = Number.isFinite(home?.x) ? home.x : 240;
+    const keepout = getInternalArtUiKeepoutRect(artToyId);
+    const marginY = 44;
+    startX = ax;
+    centerY = keepout.top - (spawnH * 0.5) - marginY;
     for (let i = 0; i < needed; i++) {
       const index = panels.length + i;
       try {
@@ -3405,21 +3490,13 @@ function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
   const kind = pickDefaultInternalToyKindForArtToy(artToyId);
   const homeAnchor = getInternalHomeAnchorForArtToy(artToyId);
   const expectedSize = pickToyPanelSize(kind);
-
-  // Keep first default toy separate from the internal home anchor so the anchor
-  // remains visible and usable as an explicit destination.
-  const offsetX = Math.max(220, (Number(expectedSize?.width) || 380) * 0.5 + 96);
-  let centerX = (Number.isFinite(homeAnchor?.x) ? homeAnchor.x : 240) + offsetX;
-  let centerY = Number.isFinite(homeAnchor?.y) ? homeAnchor.y : 180;
-  // Enforce a minimum center-to-center separation from the anchor ghost.
-  const minSep = Math.max(260, (Number(expectedSize?.width) || 380) * 0.45 + getInternalHomeGhostSize() * 0.5 + 60);
+  const spawnW = Math.max(240, Number(expectedSize?.width) || 380);
+  const spawnH = Math.max(200, Number(expectedSize?.height) || 320);
   const ax = Number.isFinite(homeAnchor?.x) ? homeAnchor.x : 240;
-  const ay = Number.isFinite(homeAnchor?.y) ? homeAnchor.y : 180;
-  const d = Math.hypot(centerX - ax, centerY - ay);
-  if (!Number.isFinite(d) || d < minSep) {
-    centerX = ax + minSep;
-    centerY = ay;
-  }
+  const keepout = getInternalArtUiKeepoutRect(artToyId);
+  // First toy in sequence: above art UI footprint, aligned to the anchor.
+  let centerX = ax;
+  let centerY = keepout.top - (spawnH * 0.5) - 44;
 
   try {
     const p = createToyPanelAt(kind, {
@@ -7652,6 +7729,7 @@ function scheduler(){
                 console.log('[chain][debug] first step', { id: toy.id, toy: toy.dataset?.toy, col, phase01: info.phase01 });
               }
               try {
+                toy.__mtLastSequencerCol = col;
                 toy.__sequencerStep(col);
               } catch (e) {
                 console.warn(`Sequencer step failed for ${toy.id}`, e);
