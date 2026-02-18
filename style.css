@@ -1987,6 +1987,8 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   border: none;
   background: transparent;
   cursor: pointer;
+  position: relative;
+  transition: transform 140ms ease, filter 140ms ease;
 }
 
 .art-line-color-btn .c-btn-core {
@@ -1999,32 +2001,85 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-line-color-btn.is-selected {
   --selected-ring: color-mix(in srgb, var(--accent) 72%, white);
-  filter: brightness(1.2) saturate(1.18);
-  transform: scale(1.04);
+  filter: none;
+  transform: scale(1.05);
   box-shadow:
     0 0 0 4px var(--selected-ring),
-    0 10px 22px rgba(0, 0, 0, 0.45);
-  animation: art-line-selected-ring-pulse 920ms ease-in-out infinite;
+    0 0 0 8px rgba(255, 255, 255, 0.92),
+    0 12px 24px rgba(0, 0, 0, 0.45);
+  animation: art-line-selected-ring-pulse 2200ms ease-in-out infinite;
+}
+
+.art-line-color-btn.is-selected::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border-radius: 999px;
+  border: 2px dashed rgba(255, 255, 255, 0.95);
+  pointer-events: none;
+  opacity: 0.82;
+  animation: art-line-selected-dash-spin 3000ms linear infinite;
 }
 
 @keyframes art-line-selected-ring-pulse {
   0% {
-    filter: brightness(1.12) saturate(1.14);
     box-shadow:
-      0 0 0 4px color-mix(in srgb, var(--selected-ring) 72%, transparent),
-      0 10px 22px rgba(0, 0, 0, 0.4);
+      0 0 0 4px color-mix(in srgb, var(--selected-ring) 78%, transparent),
+      0 0 0 8px rgba(255, 255, 255, 0.9),
+      0 10px 20px rgba(0, 0, 0, 0.38);
   }
   50% {
-    filter: brightness(1.34) saturate(1.28);
     box-shadow:
       0 0 0 5px color-mix(in srgb, var(--selected-ring) 96%, white),
-      0 12px 26px rgba(0, 0, 0, 0.5);
+      0 0 0 10px rgba(255, 255, 255, 1),
+      0 14px 28px rgba(0, 0, 0, 0.46);
   }
   100% {
-    filter: brightness(1.12) saturate(1.14);
     box-shadow:
-      0 0 0 4px color-mix(in srgb, var(--selected-ring) 72%, transparent),
-      0 10px 22px rgba(0, 0, 0, 0.4);
+      0 0 0 4px color-mix(in srgb, var(--selected-ring) 78%, transparent),
+      0 0 0 8px rgba(255, 255, 255, 0.9),
+      0 10px 20px rgba(0, 0, 0, 0.38);
+  }
+}
+
+.art-line-color-btn.is-note-hit {
+  transform: scale(1.11);
+}
+
+.art-line-color-btn.is-note-hit:not(.is-selected) {
+  filter: brightness(2.0) saturate(1.55);
+}
+
+.art-line-color-btn.is-selected.is-note-hit {
+  transform: scale(1.14);
+  filter: brightness(1.35) saturate(1.45);
+  animation:
+    art-line-selected-ring-pulse 2200ms ease-in-out infinite,
+    art-line-selected-note-hit 320ms ease-out 1;
+}
+
+@keyframes art-line-selected-note-hit {
+  0% {
+    box-shadow:
+      0 0 0 5px color-mix(in srgb, var(--selected-ring) 98%, white),
+      0 0 0 10px rgba(255, 255, 255, 1),
+      0 0 22px 4px color-mix(in srgb, var(--accent) 75%, white),
+      0 14px 28px rgba(0, 0, 0, 0.48);
+  }
+  100% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--selected-ring) 78%, transparent),
+      0 0 0 8px rgba(255, 255, 255, 0.9),
+      0 10px 20px rgba(0, 0, 0, 0.38);
+  }
+}
+
+@keyframes art-line-selected-dash-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
   }
 }
 

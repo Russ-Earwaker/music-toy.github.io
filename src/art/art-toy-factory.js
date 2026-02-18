@@ -397,6 +397,7 @@ function setupFireworks(panel) {
   let setCustomiseOpen = () => {};
   let selectLineForCustomise = () => {};
   let syncSelectedHandleHighlight = () => {};
+  let pulseColorButtonHit = () => {};
   let fireworkBurstSizeMultiplier = 1;
   const syncActiveStateFlags = () => {
     panel.dataset.hasActiveFireworks = activeSlots.size > 0 ? '1' : '0';
@@ -1176,6 +1177,38 @@ function setupFireworks(panel) {
   const lineButtonsHost = document.createElement('div');
   lineButtonsHost.className = 'art-line-color-buttons';
   customisePanel.appendChild(lineButtonsHost);
+  const colorButtonHitUntilBySlot = new Map();
+  const colorButtonHitTimerBySlot = new Map();
+  const applyColorButtonHitState = (slot) => {
+    const i = normalizeSlot(slot);
+    const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+    if (!btn) return;
+    const until = Number(colorButtonHitUntilBySlot.get(i) || 0);
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    btn.classList.toggle('is-note-hit', until > now);
+  };
+  pulseColorButtonHit = (slot) => {
+    const i = normalizeSlot(slot);
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const until = now + 320;
+    colorButtonHitUntilBySlot.set(i, until);
+    const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+    if (btn) {
+      btn.classList.remove('is-note-hit');
+      // Restart animation for rapid retriggers.
+      void btn.offsetWidth;
+      btn.classList.add('is-note-hit');
+    }
+    try { clearTimeout(colorButtonHitTimerBySlot.get(i)); } catch {}
+    colorButtonHitTimerBySlot.set(i, setTimeout(() => {
+      const latestUntil = Number(colorButtonHitUntilBySlot.get(i) || 0);
+      const checkNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (latestUntil > checkNow) return;
+      colorButtonHitUntilBySlot.delete(i);
+      applyColorButtonHitState(i);
+      colorButtonHitTimerBySlot.delete(i);
+    }, 340));
+  };
 
   const pickerTitle = document.createElement('div');
   pickerTitle.className = 'art-line-style-subhead';
@@ -1341,7 +1374,9 @@ function setupFireworks(panel) {
       const colorCore = btn.querySelector('.c-btn-core');
       if (colorCore) colorCore.style.setProperty('--c-btn-icon-url', 'none');
       btn.classList.toggle('is-selected', selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i);
-      btn.addEventListener('click', (ev) => {
+      applyColorButtonHitState(i);
+      btn.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
         ev.preventDefault();
         ev.stopPropagation();
         selectLineForCustomise(i, { openMenu: false });
@@ -1974,6 +2009,7 @@ function setupFireworks(panel) {
   panel.onArtTrigger = (trigger = null) => {
     const slot = normalizeSlot(trigger?.slotIndex);
     setSlotActive(slot);
+    try { pulseColorButtonHit(slot); } catch {}
     spawnBurst(slot, trigger?.velocity ?? null);
     return true;
   };
@@ -1981,6 +2017,7 @@ function setupFireworks(panel) {
   panel.flash = (meta = null) => {
     const slot = normalizeSlot(meta?.slotIndex);
     setSlotActive(slot);
+    try { pulseColorButtonHit(slot); } catch {}
     spawnBurst(slot, meta?.velocity ?? null);
   };
 }
@@ -2065,6 +2102,7 @@ function setupLaserTrails(panel) {
   let selectLineForCustomise = () => {};
   let syncSelectedHandleHighlight = () => {};
   let paintLineButtonColor = () => {};
+  let pulseColorButtonHit = () => {};
   const drawStateBySlot = Array.from({ length: ART_SLOT_COUNT }, () => ({
     drawingTargetPath: false,
     startedTargetPath: false,
@@ -2888,6 +2926,38 @@ function setupLaserTrails(panel) {
   const lineButtonsHost = document.createElement('div');
   lineButtonsHost.className = 'art-line-color-buttons';
   customisePanel.appendChild(lineButtonsHost);
+  const colorButtonHitUntilBySlot = new Map();
+  const colorButtonHitTimerBySlot = new Map();
+  const applyColorButtonHitState = (slot) => {
+    const i = normalizeSlot(slot);
+    const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+    if (!btn) return;
+    const until = Number(colorButtonHitUntilBySlot.get(i) || 0);
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    btn.classList.toggle('is-note-hit', until > now);
+  };
+  pulseColorButtonHit = (slot) => {
+    const i = normalizeSlot(slot);
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const until = now + 320;
+    colorButtonHitUntilBySlot.set(i, until);
+    const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+    if (btn) {
+      btn.classList.remove('is-note-hit');
+      // Restart animation for rapid retriggers.
+      void btn.offsetWidth;
+      btn.classList.add('is-note-hit');
+    }
+    try { clearTimeout(colorButtonHitTimerBySlot.get(i)); } catch {}
+    colorButtonHitTimerBySlot.set(i, setTimeout(() => {
+      const latestUntil = Number(colorButtonHitUntilBySlot.get(i) || 0);
+      const checkNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (latestUntil > checkNow) return;
+      colorButtonHitUntilBySlot.delete(i);
+      applyColorButtonHitState(i);
+      colorButtonHitTimerBySlot.delete(i);
+    }, 340));
+  };
 
   const pickerTitle = document.createElement('div');
   pickerTitle.className = 'art-line-style-subhead';
@@ -3084,7 +3154,9 @@ function setupLaserTrails(panel) {
       const colorCore = btn.querySelector('.c-btn-core');
       if (colorCore) colorCore.style.setProperty('--c-btn-icon-url', 'none');
       btn.classList.toggle('is-selected', selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i);
-      btn.addEventListener('click', (ev) => {
+      applyColorButtonHitState(i);
+      btn.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
         ev.preventDefault();
         ev.stopPropagation();
         selectLineForCustomise(i, { openMenu: false });
@@ -3936,6 +4008,7 @@ function setupLaserTrails(panel) {
   panel.onArtTrigger = (trigger = null) => {
     const slot = normalizeSlot(trigger?.slotIndex);
     setSlotActive(slot);
+    try { pulseColorButtonHit(slot); } catch {}
     if (isSlotAwaitingBoardDraw(slot)) return true;
     spawnLaser(slot, trigger?.velocity ?? null);
     return true;
@@ -3944,6 +4017,7 @@ function setupLaserTrails(panel) {
   panel.flash = (meta = null) => {
     const slot = normalizeSlot(meta?.slotIndex);
     setSlotActive(slot);
+    try { pulseColorButtonHit(slot); } catch {}
     if (isSlotAwaitingBoardDraw(slot)) return;
     spawnLaser(slot, meta?.velocity ?? null);
   };
