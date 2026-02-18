@@ -2467,11 +2467,63 @@ function setupLaserTrails(panel) {
       });
     } catch {}
   };
+  const logLaserSizeMetrics = (reason = 'manual') => {
+    try {
+      const fxId = clampFxId(panel?.dataset?.laserFx);
+      const widthWorld = Math.max(1.2, getLaserBaseWidth(fxId) * laserStrokeMultiplier);
+      const panelRect = panel.getBoundingClientRect?.();
+      const panelScreenW = Math.max(1, Number(panelRect?.width) || 1);
+      const worldToScreen = panelScreenW / 220;
+      const widthScreen = widthWorld * worldToScreen;
+      const slots = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+      let totalLen = 0;
+      let pathCount = 0;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const slot of slots) {
+        const pts = getSlotPath(slot);
+        if (!Array.isArray(pts) || pts.length < 2) continue;
+        pathCount += 1;
+        for (let i = 0; i < pts.length; i++) {
+          const p = pts[i];
+          const x = Number(p?.x) || 0;
+          const y = Number(p?.y) || 0;
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+          if (i > 0) {
+            const prev = pts[i - 1];
+            totalLen += Math.hypot(x - (Number(prev?.x) || 0), y - (Number(prev?.y) || 0));
+          }
+        }
+      }
+      const boundsWorld = pathCount
+        ? { w: Number((maxX - minX).toFixed(2)), h: Number((maxY - minY).toFixed(2)) }
+        : { w: 0, h: 0 };
+      console.log('[ArtSize][LightPaths]', {
+        reason,
+        panelId: panel.id,
+        fxId,
+        activeSlots: slots.length,
+        pathCount,
+        totalPathLenWorld: Number(totalLen.toFixed(2)),
+        boundsWorld,
+        strokeWidthWorld: Number(widthWorld.toFixed(3)),
+        strokeWidthScreen: Number(widthScreen.toFixed(3)),
+        worldToScreen: Number(worldToScreen.toFixed(4)),
+      });
+    } catch {}
+  };
   try {
     panel.__debugLaserDrawArea = logLaserDrawAreaDebug;
+    panel.__debugLaserSizeMetrics = logLaserSizeMetrics;
     if (window.__MT_DEBUG_STICKER_DRAW_AREA || window.__MT_DEBUG_ART_DRAW_AREA) {
       requestAnimationFrame(() => logLaserDrawAreaDebug('init'));
       setTimeout(() => logLaserDrawAreaDebug('post-timeout'), 120);
+    }
+    if (window.__MT_DEBUG_ART_SIZE) {
+      requestAnimationFrame(() => logLaserSizeMetrics('init'));
+      setTimeout(() => logLaserSizeMetrics('post-timeout'), 120);
     }
   } catch {}
   const syncDrawPreview = (slot, { visible = false } = {}) => {
@@ -3921,6 +3973,7 @@ function setupLaserTrails(panel) {
       syncAllHandles();
     }
     try { if (window.__MT_DEBUG_STICKER_DRAW_AREA || window.__MT_DEBUG_ART_DRAW_AREA) requestAnimationFrame(() => logLaserDrawAreaDebug('random-music')); } catch {}
+    try { if (window.__MT_DEBUG_ART_SIZE) requestAnimationFrame(() => logLaserSizeMetrics('random-music')); } catch {}
     markSceneDirtySafe();
   };
 
@@ -3935,6 +3988,7 @@ function setupLaserTrails(panel) {
       setFx(next);
     }
     try { if (window.__MT_DEBUG_STICKER_DRAW_AREA || window.__MT_DEBUG_ART_DRAW_AREA) requestAnimationFrame(() => logLaserDrawAreaDebug('random-all')); } catch {}
+    try { if (window.__MT_DEBUG_ART_SIZE) requestAnimationFrame(() => logLaserSizeMetrics('random-all')); } catch {}
     markSceneDirtySafe();
   };
 
@@ -4133,8 +4187,13 @@ function setupSticker(panel) {
     return d;
   };
 
-  // Keep sticker stroke weight visually aligned with the Light Paths defaults.
-  const getBaseStrokeWidth = () => Math.max(1.2, 2.2 * (Number(stickerStrokeMultiplier) || 1));
+  // Sticker needs an additional visual gain to match the perceived beam weight of Light Paths.
+  const STICKER_BASE_STROKE_WIDTH = 5.4;
+  const STICKER_STROKE_MATCH_MULTIPLIER = 2.4; // tweak here if you want closer/thicker parity
+  const getBaseStrokeWidth = () => Math.max(
+    1.2,
+    STICKER_BASE_STROKE_WIDTH * (Number(stickerStrokeMultiplier) || 1) * STICKER_STROKE_MATCH_MULTIPLIER
+  );
   const getSlotStrokeWidth = () => getBaseStrokeWidth();
   const hasSlotDrawing = (slot) => drawingState.hasSlotStrokes(normalizeSlot(slot));
 
@@ -4619,11 +4678,64 @@ function setupSticker(panel) {
       });
     } catch {}
   };
+  const logStickerSizeMetrics = (reason = 'manual') => {
+    try {
+      const widthWorld = getSlotStrokeWidth(0);
+      const panelRect = panel.getBoundingClientRect?.();
+      const panelScreenW = Math.max(1, Number(panelRect?.width) || 1);
+      const worldToScreen = panelScreenW / 220;
+      const widthScreen = widthWorld * worldToScreen;
+      const slots = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+      let totalLen = 0;
+      let strokeCount = 0;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const slot of slots) {
+        const strokes = drawingState.getSlotStrokes(slot);
+        if (!Array.isArray(strokes)) continue;
+        for (const stroke of strokes) {
+          if (!Array.isArray(stroke) || stroke.length < 2) continue;
+          strokeCount += 1;
+          for (let i = 0; i < stroke.length; i++) {
+            const p = stroke[i];
+            const x = Number(p?.x) || 0;
+            const y = Number(p?.y) || 0;
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+            if (i > 0) {
+              const prev = stroke[i - 1];
+              totalLen += Math.hypot(x - (Number(prev?.x) || 0), y - (Number(prev?.y) || 0));
+            }
+          }
+        }
+      }
+      const boundsWorld = strokeCount
+        ? { w: Number((maxX - minX).toFixed(2)), h: Number((maxY - minY).toFixed(2)) }
+        : { w: 0, h: 0 };
+      console.log('[ArtSize][Sticker]', {
+        reason,
+        panelId: panel.id,
+        activeSlots: slots.length,
+        strokeCount,
+        totalPathLenWorld: Number(totalLen.toFixed(2)),
+        boundsWorld,
+        strokeWidthWorld: Number(widthWorld.toFixed(3)),
+        strokeWidthScreen: Number(widthScreen.toFixed(3)),
+        worldToScreen: Number(worldToScreen.toFixed(4)),
+      });
+    } catch {}
+  };
   try {
     panel.__debugStickerDrawArea = logStickerDrawAreaDebug;
+    panel.__debugStickerSizeMetrics = logStickerSizeMetrics;
     if (window.__MT_DEBUG_STICKER_DRAW_AREA) {
       requestAnimationFrame(() => logStickerDrawAreaDebug('init'));
       setTimeout(() => logStickerDrawAreaDebug('post-timeout'), 120);
+    }
+    if (window.__MT_DEBUG_ART_SIZE) {
+      requestAnimationFrame(() => logStickerSizeMetrics('init'));
+      setTimeout(() => logStickerSizeMetrics('post-timeout'), 120);
     }
   } catch {}
 
@@ -4699,24 +4811,69 @@ function setupSticker(panel) {
     fitDragAreaToDrawings();
     syncDragArea();
     try { if (window.__MT_DEBUG_STICKER_DRAW_AREA) requestAnimationFrame(() => logStickerDrawAreaDebug('random-music')); } catch {}
+    try { if (window.__MT_DEBUG_ART_SIZE) requestAnimationFrame(() => logStickerSizeMetrics('random-music')); } catch {}
     markSceneDirtySafe();
   };
 
   const randomStroke = () => {
-    const points = [];
-    const area = RANDOM_TOP_LEFT_QUARTER;
-    const startX = clampX(area.x + 18 + Math.random() * Math.max(1, area.w - 36));
-    const startY = clampY(area.y + 18 + Math.random() * Math.max(1, area.h - 36));
-    appendStrokePoint(points, startX, startY, 0);
-    let x = startX;
-    let y = startY;
-    const steps = 12 + Math.floor(Math.random() * 15);
-    for (let k = 0; k < steps; k++) {
-      x = clampX(x + (Math.random() - 0.5) * 38);
-      y = clampY(y + (Math.random() - 0.5) * 38);
-      appendStrokePoint(points, x, y, 0.8);
+    const area = {
+      x: AREA_MIN_X,
+      y: AREA_MIN_Y,
+      w: TOTAL_LIMIT_W,
+      h: TOTAL_LIMIT_H,
+    };
+    const margin = 26;
+    const x0 = area.x + margin;
+    const y0 = area.y + margin;
+    const x1 = area.x + area.w - margin;
+    const y1 = area.y + area.h - margin;
+    const rand = (a, b) => a + Math.random() * Math.max(1, b - a);
+    const edgeBandX = Math.max(24, area.w * 0.12);
+    const edgeBandY = Math.max(24, area.h * 0.12);
+    const edges = ['left', 'right', 'top', 'bottom'];
+    const opposite = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
+    const edgeA = edges[Math.floor(Math.random() * edges.length)];
+    const edgeB = opposite[edgeA];
+    const pickEdgePoint = (edge) => {
+      if (edge === 'left') return { x: rand(x0, x0 + edgeBandX), y: rand(y0, y1) };
+      if (edge === 'right') return { x: rand(x1 - edgeBandX, x1), y: rand(y0, y1) };
+      if (edge === 'top') return { x: rand(x0, x1), y: rand(y0, y0 + edgeBandY) };
+      return { x: rand(x0, x1), y: rand(y1 - edgeBandY, y1) };
+    };
+
+    const a = pickEdgePoint(edgeA);
+    const b = pickEdgePoint(edgeB);
+    const sx = a.x;
+    const sy = a.y;
+    const tx = b.x;
+    const ty = b.y;
+    const len = Math.max(1, Math.hypot(tx - sx, ty - sy));
+    const dirX = (tx - sx) / len;
+    const dirY = (ty - sy) / len;
+    const normalX = -dirY;
+    const normalY = dirX;
+    const turns = 0.8 + Math.random() * 1.4;
+    const phaseA = Math.random() * Math.PI * 2;
+    const phaseB = Math.random() * Math.PI * 2;
+    const bend = Math.min(190, Math.max(34, len * (0.15 + Math.random() * 0.24)));
+    const pointSpacing = 32 + Math.random() * 18;
+    const steps = Math.max(8, Math.min(28, Math.round(len / pointSpacing)));
+
+    const points = [{ x: sx, y: sy }];
+    for (let s = 1; s < steps; s++) {
+      const t = s / steps;
+      const baseX = sx + (tx - sx) * t;
+      const baseY = sy + (ty - sy) * t;
+      const envelope = Math.sin(Math.PI * t);
+      const waveA = Math.sin((t * Math.PI * 2 * turns) + phaseA) * bend * envelope;
+      const waveB = Math.sin((t * Math.PI * 2 * (turns * 0.5)) + phaseB) * bend * 0.38 * envelope;
+      const wave = waveA + waveB;
+      points.push({
+        x: clampX(baseX + normalX * wave),
+        y: clampY(baseY + normalY * wave),
+      });
     }
-    if (points.length < 2) appendStrokePoint(points, clampX(startX + 1), clampY(startY + 1), 0);
+    points.push({ x: tx, y: ty });
     return points;
   };
 
@@ -4733,6 +4890,7 @@ function setupSticker(panel) {
     refreshCustomizeUi();
     syncDragArea();
     try { if (window.__MT_DEBUG_STICKER_DRAW_AREA) requestAnimationFrame(() => logStickerDrawAreaDebug('random-all')); } catch {}
+    try { if (window.__MT_DEBUG_ART_SIZE) requestAnimationFrame(() => logStickerSizeMetrics('random-all')); } catch {}
     markSceneDirtySafe();
   };
 
