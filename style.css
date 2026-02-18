@@ -1783,7 +1783,7 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-sticker-draw-area {
   position: absolute;
-  inset: 8px;
+  inset: 0;
   border: 2px dashed rgba(122, 176, 255, 0.44);
   background: rgba(70, 120, 255, 0.05);
   border-radius: 14px;
@@ -1803,6 +1803,8 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 }
 
 .art-toy-panel.art-toy-sticker {
+  border-radius: 14px;
+  overflow: visible;
   box-shadow: none;
 }
 

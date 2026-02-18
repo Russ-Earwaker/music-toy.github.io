@@ -928,10 +928,10 @@ function setupFireworks(panel) {
     syncFxUi();
   } catch {}
   const syncDragArea = () => {
-    dragAreaEl.style.left = `${dragArea.x.toFixed(2)}px`;
-    dragAreaEl.style.top = `${dragArea.y.toFixed(2)}px`;
-    dragAreaEl.style.width = `${dragArea.w.toFixed(2)}px`;
-    dragAreaEl.style.height = `${dragArea.h.toFixed(2)}px`;
+    dragAreaEl.style.left = `${AREA_MIN_X.toFixed(2)}px`;
+    dragAreaEl.style.top = `${AREA_MIN_Y.toFixed(2)}px`;
+    dragAreaEl.style.width = `${TOTAL_LIMIT_W.toFixed(2)}px`;
+    dragAreaEl.style.height = `${TOTAL_LIMIT_H.toFixed(2)}px`;
   };
   const syncHandle = (slot) => {
     const handle = handleEls[slot];
@@ -2428,17 +2428,52 @@ function setupLaserTrails(panel) {
     return isSlotAwaitingBoardDraw(selectedColorSlot);
   };
   const syncDragArea = () => {
-    const armed = isBoardDrawArmed();
-    const viewX = armed ? AREA_MIN_X : dragArea.x;
-    const viewY = armed ? AREA_MIN_Y : dragArea.y;
-    const viewW = armed ? TOTAL_LIMIT_W : dragArea.w;
-    const viewH = armed ? TOTAL_LIMIT_H : dragArea.h;
-    dragAreaEl.style.left = `${viewX.toFixed(2)}px`;
-    dragAreaEl.style.top = `${viewY.toFixed(2)}px`;
-    dragAreaEl.style.width = `${viewW.toFixed(2)}px`;
-    dragAreaEl.style.height = `${viewH.toFixed(2)}px`;
-    dragAreaEl.classList.toggle('is-board-draw-armed', armed);
+    dragAreaEl.style.left = `${AREA_MIN_X.toFixed(2)}px`;
+    dragAreaEl.style.top = `${AREA_MIN_Y.toFixed(2)}px`;
+    dragAreaEl.style.width = `${TOTAL_LIMIT_W.toFixed(2)}px`;
+    dragAreaEl.style.height = `${TOTAL_LIMIT_H.toFixed(2)}px`;
+    dragAreaEl.classList.toggle('is-board-draw-armed', isBoardDrawArmed());
   };
+  const logLaserDrawAreaDebug = (reason = 'manual') => {
+    try {
+      const pr = panel.getBoundingClientRect?.();
+      const dr = dragAreaEl.getBoundingClientRect?.();
+      const ratio = (pr && dr && pr.width > 0 && pr.height > 0)
+        ? {
+          x: Number((dr.width / pr.width).toFixed(3)),
+          y: Number((dr.height / pr.height).toFixed(3)),
+        }
+        : null;
+      console.log('[LightPaths][draw-area]', {
+        reason,
+        panelId: panel.id,
+        panelStyleSize: {
+          w: panel.style?.width || null,
+          h: panel.style?.height || null,
+        },
+        panelOffset: {
+          w: Number(panel.offsetWidth || 0),
+          h: Number(panel.offsetHeight || 0),
+        },
+        panelRect: pr ? { w: Number(pr.width.toFixed(2)), h: Number(pr.height.toFixed(2)) } : null,
+        drawRect: dr ? { w: Number(dr.width.toFixed(2)), h: Number(dr.height.toFixed(2)) } : null,
+        ratio,
+        styles: {
+          left: dragAreaEl.style.left,
+          top: dragAreaEl.style.top,
+          width: dragAreaEl.style.width,
+          height: dragAreaEl.style.height,
+        },
+      });
+    } catch {}
+  };
+  try {
+    panel.__debugLaserDrawArea = logLaserDrawAreaDebug;
+    if (window.__MT_DEBUG_STICKER_DRAW_AREA || window.__MT_DEBUG_ART_DRAW_AREA) {
+      requestAnimationFrame(() => logLaserDrawAreaDebug('init'));
+      setTimeout(() => logLaserDrawAreaDebug('post-timeout'), 120);
+    }
+  } catch {}
   const syncDrawPreview = (slot, { visible = false } = {}) => {
     const i = normalizeSlot(slot);
     if (!visible) {
@@ -3885,6 +3920,7 @@ function setupLaserTrails(panel) {
       fitDragAreaToAnchors();
       syncAllHandles();
     }
+    try { if (window.__MT_DEBUG_STICKER_DRAW_AREA || window.__MT_DEBUG_ART_DRAW_AREA) requestAnimationFrame(() => logLaserDrawAreaDebug('random-music')); } catch {}
     markSceneDirtySafe();
   };
 
@@ -3898,6 +3934,7 @@ function setupLaserTrails(panel) {
       if (next === currentFxId) next = (next + 1 + Math.floor(Math.random() * (LASER_FX.length - 1))) % LASER_FX.length;
       setFx(next);
     }
+    try { if (window.__MT_DEBUG_STICKER_DRAW_AREA || window.__MT_DEBUG_ART_DRAW_AREA) requestAnimationFrame(() => logLaserDrawAreaDebug('random-all')); } catch {}
     markSceneDirtySafe();
   };
 
@@ -4045,8 +4082,35 @@ function setupSticker(panel) {
   hitLayer.setAttribute('preserveAspectRatio', 'none');
   panel.appendChild(hitLayer);
 
+  const AREA_MIN_X = -94;
+  const AREA_MIN_Y = 74;
+  const MAX_DRAG_SPAN = 1600;
+  const AREA_MAX_X = AREA_MIN_X + MAX_DRAG_SPAN;
+  const AREA_MAX_Y = AREA_MIN_Y + MAX_DRAG_SPAN;
+  const TOTAL_LIMIT_W = Math.max(1, AREA_MAX_X - AREA_MIN_X);
+  const TOTAL_LIMIT_H = Math.max(1, AREA_MAX_Y - AREA_MIN_Y);
+  const RANDOM_TOP_LEFT_QUARTER = {
+    x: AREA_MIN_X,
+    y: AREA_MIN_Y,
+    w: TOTAL_LIMIT_W * 0.75,
+    h: TOTAL_LIMIT_H * 0.75,
+  };
+  const dragArea = {
+    x: AREA_MIN_X,
+    y: AREA_MIN_Y,
+    w: 384,
+    h: 276,
+  };
+  const INITIAL_DRAG_W = dragArea.w;
+  const INITIAL_DRAG_H = dragArea.h;
   const drawAreaEl = document.createElement('div');
   drawAreaEl.className = 'art-sticker-draw-area';
+  // Use explicit geometry (not inset) so no upstream style can collapse this area.
+  drawAreaEl.style.inset = 'auto';
+  drawAreaEl.style.left = `${dragArea.x}px`;
+  drawAreaEl.style.top = `${dragArea.y}px`;
+  drawAreaEl.style.width = `${dragArea.w}px`;
+  drawAreaEl.style.height = `${dragArea.h}px`;
   panel.appendChild(drawAreaEl);
 
   const palette = ['#7bf6ff', '#86efac', '#fde047', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fca5a5', '#a7f3d0'];
@@ -4058,9 +4122,8 @@ function setupSticker(panel) {
   let setCustomiseOpen = () => {};
   let pulseColorButtonHit = () => {};
 
-  const DRAW_MARGIN = 8;
-  const clampX = (x) => Math.max(DRAW_MARGIN, Math.min(220 - DRAW_MARGIN, Number(x) || 0));
-  const clampY = (y) => Math.max(DRAW_MARGIN, Math.min(220 - DRAW_MARGIN, Number(y) || 0));
+  const clampX = (x) => Math.max(AREA_MIN_X, Math.min(AREA_MAX_X, Number(x) || 0));
+  const clampY = (y) => Math.max(AREA_MIN_Y, Math.min(AREA_MAX_Y, Number(y) || 0));
 
   const pointsToPath = (points) => {
     if (!Array.isArray(points) || points.length < 2) return '';
@@ -4070,7 +4133,8 @@ function setupSticker(panel) {
     return d;
   };
 
-  const getBaseStrokeWidth = () => Math.max(1, 1.4 * (Number(stickerStrokeMultiplier) || 1));
+  // Keep sticker stroke weight visually aligned with the Light Paths defaults.
+  const getBaseStrokeWidth = () => Math.max(1.2, 2.2 * (Number(stickerStrokeMultiplier) || 1));
   const getSlotStrokeWidth = () => getBaseStrokeWidth();
   const hasSlotDrawing = (slot) => drawingState.hasSlotStrokes(normalizeSlot(slot));
 
@@ -4127,6 +4191,8 @@ function setupSticker(panel) {
     const i = normalizeSlot(slot);
     drawingState.clearSlot(i);
     renderSlot(i);
+    fitDragAreaToDrawings();
+    syncDragArea();
     try { refreshCustomizeUi(); } catch {}
     markSceneDirtySafe();
   };
@@ -4134,6 +4200,8 @@ function setupSticker(panel) {
   const clearAllDrawings = () => {
     drawingState.clearAll();
     renderAll();
+    fitDragAreaToDrawings();
+    syncDragArea();
     try { refreshCustomizeUi(); } catch {}
     markSceneDirtySafe();
   };
@@ -4159,11 +4227,25 @@ function setupSticker(panel) {
     }
   };
 
-  const clientToPanelPoint = (clientX, clientY) => {
-    const rect = panel.getBoundingClientRect();
+  const getDrawAreaRect = () => {
+    const rect = drawAreaEl.getBoundingClientRect();
     if (!rect || rect.width < 1 || rect.height < 1) return null;
-    const x = clampX(((clientX - rect.left) / rect.width) * 220);
-    const y = clampY(((clientY - rect.top) / rect.height) * 220);
+    return rect;
+  };
+
+  const isClientPointInsideDrawArea = (clientX, clientY) => {
+    const rect = getDrawAreaRect();
+    if (!rect) return false;
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+  };
+
+  const clientToPanelPoint = (clientX, clientY) => {
+    const rect = getDrawAreaRect();
+    if (!rect) return null;
+    const rx = (clientX - rect.left) / rect.width;
+    const ry = (clientY - rect.top) / rect.height;
+    const x = clampX(AREA_MIN_X + rx * TOTAL_LIMIT_W);
+    const y = clampY(AREA_MIN_Y + ry * TOTAL_LIMIT_H);
     return { x, y };
   };
 
@@ -4185,6 +4267,34 @@ function setupSticker(panel) {
   drawPreviewPath.style.display = 'none';
   hitLayer.appendChild(drawPreviewPath);
 
+  const fitDragAreaToDrawings = () => {
+    const coords = [];
+    for (const slot of activeSlots) {
+      const strokes = drawingState.getSlotStrokes(slot);
+      for (const stroke of strokes) {
+        for (const pt of stroke) {
+          coords.push({ x: clampX(pt?.x), y: clampY(pt?.y) });
+        }
+      }
+    }
+    if (!coords.length) {
+      dragArea.x = AREA_MIN_X;
+      dragArea.y = AREA_MIN_Y;
+      dragArea.w = INITIAL_DRAG_W;
+      dragArea.h = INITIAL_DRAG_H;
+      return;
+    }
+    const pad = 28;
+    const maxX = Math.max(...coords.map((p) => p.x));
+    const maxY = Math.max(...coords.map((p) => p.y));
+    const right = Math.min(AREA_MAX_X, maxX + pad);
+    const bottom = Math.min(AREA_MAX_Y, maxY + pad);
+    dragArea.x = AREA_MIN_X;
+    dragArea.y = AREA_MIN_Y;
+    dragArea.w = Math.max(INITIAL_DRAG_W, right - AREA_MIN_X);
+    dragArea.h = Math.max(INITIAL_DRAG_H, bottom - AREA_MIN_Y);
+  };
+
   const syncDrawPreview = (slot, points, visible) => {
     if (!visible || !Array.isArray(points) || points.length < 2) {
       drawPreviewPath.style.display = 'none';
@@ -4202,6 +4312,10 @@ function setupSticker(panel) {
     const armed = panel.dataset.controlsVisible === '1'
       && selectedColorSlot != null
       && activeSlots.has(normalizeSlot(selectedColorSlot));
+    drawAreaEl.style.left = `${AREA_MIN_X.toFixed(2)}px`;
+    drawAreaEl.style.top = `${AREA_MIN_Y.toFixed(2)}px`;
+    drawAreaEl.style.width = `${TOTAL_LIMIT_W.toFixed(2)}px`;
+    drawAreaEl.style.height = `${TOTAL_LIMIT_H.toFixed(2)}px`;
     drawAreaEl.classList.toggle('is-board-draw-armed', armed);
     drawAreaEl.style.pointerEvents = armed ? 'auto' : 'none';
   };
@@ -4471,6 +4585,48 @@ function setupSticker(panel) {
   } catch {}
   setCustomiseOpen(panel.dataset.controlsVisible === '1');
 
+  // Runtime geometry debug for Sticker draw-area sizing.
+  const logStickerDrawAreaDebug = (reason = 'manual') => {
+    try {
+      const pr = panel.getBoundingClientRect?.();
+      const dr = drawAreaEl.getBoundingClientRect?.();
+      const ratio = (pr && dr && pr.width > 0 && pr.height > 0)
+        ? {
+          x: Number((dr.width / pr.width).toFixed(3)),
+          y: Number((dr.height / pr.height).toFixed(3)),
+        }
+        : null;
+      console.log('[Sticker][draw-area]', {
+        reason,
+        panelId: panel.id,
+        panelStyleSize: {
+          w: panel.style?.width || null,
+          h: panel.style?.height || null,
+        },
+        panelOffset: {
+          w: Number(panel.offsetWidth || 0),
+          h: Number(panel.offsetHeight || 0),
+        },
+        panelRect: pr ? { w: Number(pr.width.toFixed(2)), h: Number(pr.height.toFixed(2)) } : null,
+        drawRect: dr ? { w: Number(dr.width.toFixed(2)), h: Number(dr.height.toFixed(2)) } : null,
+        ratio,
+        styles: {
+          left: drawAreaEl.style.left,
+          top: drawAreaEl.style.top,
+          width: drawAreaEl.style.width,
+          height: drawAreaEl.style.height,
+        },
+      });
+    } catch {}
+  };
+  try {
+    panel.__debugStickerDrawArea = logStickerDrawAreaDebug;
+    if (window.__MT_DEBUG_STICKER_DRAW_AREA) {
+      requestAnimationFrame(() => logStickerDrawAreaDebug('init'));
+      setTimeout(() => logStickerDrawAreaDebug('post-timeout'), 120);
+    }
+  } catch {}
+
   let boardDrawPointerId = null;
   let boardDrawSlot = null;
   let boardDrawMoved = false;
@@ -4482,7 +4638,7 @@ function setupSticker(panel) {
     if (ev.button != null && ev.button !== 0) return;
     const slot = normalizeSlot(selectedColorSlot);
     if (!activeSlots.has(slot)) return;
-    if (!drawAreaEl.contains(ev.target) && ev.target !== drawAreaEl && ev.target !== panel) return;
+    if (!isClientPointInsideDrawArea(ev.clientX, ev.clientY)) return;
     const pt = clientToPanelPoint(ev.clientX, ev.clientY);
     if (!pt) return;
     ev.preventDefault();
@@ -4523,6 +4679,8 @@ function setupSticker(panel) {
     if (boardDrawMoved && boardDrawPoints.length >= 2) {
       drawingState.addSlotStroke(slot, boardDrawPoints);
       renderSlot(slot);
+      fitDragAreaToDrawings();
+      syncDragArea();
       markSceneDirtySafe();
     }
     boardDrawPoints = [];
@@ -4538,21 +4696,24 @@ function setupSticker(panel) {
 
   panel.onArtRandomMusic = () => {
     activateAllSlots();
+    fitDragAreaToDrawings();
     syncDragArea();
+    try { if (window.__MT_DEBUG_STICKER_DRAW_AREA) requestAnimationFrame(() => logStickerDrawAreaDebug('random-music')); } catch {}
     markSceneDirtySafe();
   };
 
   const randomStroke = () => {
     const points = [];
-    const startX = clampX(30 + Math.random() * 160);
-    const startY = clampY(30 + Math.random() * 160);
+    const area = RANDOM_TOP_LEFT_QUARTER;
+    const startX = clampX(area.x + 18 + Math.random() * Math.max(1, area.w - 36));
+    const startY = clampY(area.y + 18 + Math.random() * Math.max(1, area.h - 36));
     appendStrokePoint(points, startX, startY, 0);
     let x = startX;
     let y = startY;
     const steps = 12 + Math.floor(Math.random() * 15);
     for (let k = 0; k < steps; k++) {
-      x = clampX(x + (Math.random() - 0.5) * 22);
-      y = clampY(y + (Math.random() - 0.5) * 22);
+      x = clampX(x + (Math.random() - 0.5) * 38);
+      y = clampY(y + (Math.random() - 0.5) * 38);
       appendStrokePoint(points, x, y, 0.8);
     }
     if (points.length < 2) appendStrokePoint(points, clampX(startX + 1), clampY(startY + 1), 0);
@@ -4568,8 +4729,10 @@ function setupSticker(panel) {
       drawingState.setSlotStrokes(slot, strokes);
     }
     renderAll();
+    fitDragAreaToDrawings();
     refreshCustomizeUi();
     syncDragArea();
+    try { if (window.__MT_DEBUG_STICKER_DRAW_AREA) requestAnimationFrame(() => logStickerDrawAreaDebug('random-all')); } catch {}
     markSceneDirtySafe();
   };
 
@@ -4610,6 +4773,7 @@ function setupSticker(panel) {
     drawingState.importState({ strokesBySlot: state.strokesBySlot });
     selectedColorSlot = state.selectedColorSlot == null ? null : normalizeSlot(state.selectedColorSlot);
     renderAll();
+    fitDragAreaToDrawings();
     if (typeof state.controlsVisible === 'boolean') setBaseArtToyControlsVisible(panel, state.controlsVisible);
     refreshCustomizeUi();
     syncDragArea();
@@ -4617,6 +4781,7 @@ function setupSticker(panel) {
   };
 
   renderAll();
+  fitDragAreaToDrawings();
   syncActiveDataset();
   syncDragArea();
 
