@@ -3549,7 +3549,7 @@ function getInternalArtUiKeepoutRect(artToyId) {
   const ax = Number.isFinite(home?.x) ? home.x : 240;
   const ay = Number.isFinite(home?.y) ? home.y : 180;
   const artType = String(getArtToyPanelById(artToyId)?.dataset?.artToy || '').toLowerCase();
-  if (artType === 'lasertrails' || artType === 'lasers') {
+  if (artType === 'lasertrails' || artType === 'lasers' || artType === 'sticker') {
     return {
       left: ax - 660,
       top: ay - 320,

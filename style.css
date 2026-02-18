@@ -1743,6 +1743,69 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   box-shadow: none;
 }
 
+.art-sticker-layer,
+.art-sticker-hit-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  border-radius: inherit;
+}
+
+.art-sticker-path {
+  opacity: 0.9;
+  filter: drop-shadow(0 0 2px currentColor);
+}
+
+.art-sticker-path-hit {
+  opacity: 0.95;
+  filter: drop-shadow(0 0 9px currentColor) brightness(1.35);
+  animation: art-sticker-hit 220ms ease-out forwards;
+}
+
+@keyframes art-sticker-hit {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.art-sticker-draw-preview {
+  opacity: 0.95;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 7px currentColor);
+  pointer-events: none;
+}
+
+.art-sticker-draw-area {
+  position: absolute;
+  inset: 8px;
+  border: 2px dashed rgba(122, 176, 255, 0.44);
+  background: rgba(70, 120, 255, 0.05);
+  border-radius: 14px;
+  opacity: 0;
+  transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
+  pointer-events: none;
+}
+
+.art-toy-panel[data-controls-visible='1'][data-has-active-sticker='1'] .art-sticker-draw-area,
+.art-sticker-draw-area.is-dragging,
+.art-sticker-draw-area.is-board-draw-armed {
+  opacity: 1;
+}
+
+.art-sticker-draw-area.is-board-draw-armed {
+  pointer-events: auto;
+}
+
+.art-toy-panel.art-toy-sticker {
+  box-shadow: none;
+}
+
 /* Internal-board visual home anchor: art-toy ghost marker (non-interactive). */
 .internal-art-anchor-ghost {
   opacity: 1;
