@@ -4631,12 +4631,13 @@ function resetArtToyToDefaultState(artToyId) {
   if (!artToyId) return false;
   const artPanel = getArtToyPanelById(artToyId);
   if (!artPanel) return false;
-
-  try {
-    if (g_artInternal?.active && g_artInternal?.artToyId === artToyId) {
-      exitInternalBoardImmediate();
-    }
-  } catch {}
+  const isActiveInternalTarget = !!(g_artInternal?.active && g_artInternal?.artToyId === artToyId);
+  let mirrorPanel = null;
+  if (isActiveInternalTarget) {
+    try {
+      mirrorPanel = document.querySelector(`.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artToyId))}"]`);
+    } catch {}
+  }
 
   try {
     const owned = getInternalPanelsForArtToy(artToyId);
@@ -4645,30 +4646,46 @@ function resetArtToyToDefaultState(artToyId) {
     }
   } catch {}
 
-  try {
-    stopInternalArtAnchorSync(artToyId);
-    const sel = `.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artToyId))}"]`;
-    document.querySelectorAll(sel).forEach((el) => {
-      try { el.remove(); } catch {}
-    });
-  } catch {}
+  // Keep internal-board session alive when clearing from inside the toy.
+  // External clear keeps existing teardown behavior.
+  if (!isActiveInternalTarget) {
+    try {
+      stopInternalArtAnchorSync(artToyId);
+      const sel = `.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(String(artToyId))}"]`;
+      document.querySelectorAll(sel).forEach((el) => {
+        try { el.remove(); } catch {}
+      });
+    } catch {}
 
-  try {
-    delete artPanel.dataset.internalBootstrapped;
-    delete artPanel.dataset.internalHomeX;
-    delete artPanel.dataset.internalHomeY;
-    delete artPanel.dataset.internalHomeScale;
-    delete artPanel.dataset.pendingRandMusic;
-    delete artPanel.dataset.pendingRandAll;
-  } catch {}
+    try {
+      delete artPanel.dataset.internalBootstrapped;
+      delete artPanel.dataset.internalHomeX;
+      delete artPanel.dataset.internalHomeY;
+      delete artPanel.dataset.internalHomeScale;
+      delete artPanel.dataset.pendingRandMusic;
+      delete artPanel.dataset.pendingRandAll;
+    } catch {}
+  }
 
   try { artPanel.classList.remove('flash'); } catch {}
+  try { mirrorPanel?.classList?.remove?.('flash'); } catch {}
   try { artPanel.onArtClear?.(); } catch {}
-  try {
-    artPanel.querySelectorAll('.art-firework-spark, .art-firework-core, .art-firework-dot, .art-firework-ring, .art-firework-star, .art-laser-path').forEach((node) => {
-      try { node.remove(); } catch {}
-    });
-  } catch {}
+  try { mirrorPanel?.onArtClear?.(); } catch {}
+  const clearTransientNodes = (root) => {
+    if (!root?.querySelectorAll) return;
+    try {
+      root.querySelectorAll('.art-firework-spark, .art-firework-core, .art-firework-dot, .art-firework-ring, .art-firework-star, .art-laser-path').forEach((node) => {
+        try { node.remove(); } catch {}
+      });
+    } catch {}
+  };
+  clearTransientNodes(artPanel);
+  clearTransientNodes(mirrorPanel);
+
+  // In internal mode, keep the board open and immediately restore one default toy.
+  if (isActiveInternalTarget) {
+    try { ensureDefaultInternalToyChainExistsInHost(artToyId, 1); } catch {}
+  }
 
   try { window.Persistence?.markDirty?.(); } catch {}
   return true;
