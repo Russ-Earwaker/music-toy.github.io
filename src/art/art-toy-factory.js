@@ -4940,6 +4940,11 @@ function setupSticker(panel) {
       else setSlotInactive(i);
     }
     if (selectedColorSlot != null && !activeSlots.has(normalizeSlot(selectedColorSlot))) selectedColorSlot = null;
+    if (selectedColorSlot == null && panel.dataset.controlsVisible === '1' && activeSlots.size > 0) {
+      const first = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b)[0];
+      if (Number.isFinite(first)) selectedColorSlot = first;
+    }
+    renderAll();
     syncDragArea();
     syncAllShapeHandles();
   };

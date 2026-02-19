@@ -2753,6 +2753,8 @@ try {
             }
             const placed = moveChainIntoArtToy(panel, targetArt);
             if (placed) {
+              try { syncArtToySlotsFromInternalNotes(targetArt.id); } catch {}
+              try { requestAnimationFrame(() => syncArtToySlotsFromInternalNotes(targetArt.id)); } catch {}
               try { targetArt.flash?.(); } catch {}
               try { setBaseArtToyControlsVisible(targetArt, true); } catch {}
             }
