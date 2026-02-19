@@ -197,8 +197,12 @@ function installArtToyControls(panel) {
   randMusicBtn.dataset.artToyId = panel.id;
   controlsHost.appendChild(randMusicBtn);
 
-  // Fireworks + Laser Trails: current effect preview + picker grid.
-  if (panel?.dataset?.artToy === ART_TYPES.FIREWORKS || panel?.dataset?.artToy === ART_TYPES.LASER_TRAILS) {
+  // Fireworks + Light Paths + Sticker: current effect preview + picker grid.
+  if (
+    panel?.dataset?.artToy === ART_TYPES.FIREWORKS
+    || panel?.dataset?.artToy === ART_TYPES.LASER_TRAILS
+    || panel?.dataset?.artToy === ART_TYPES.STICKER
+  ) {
     const fxShell = document.createElement('div');
     fxShell.className = 'art-toy-fx-shell';
     fxShell.dataset.open = '0';
@@ -208,9 +212,10 @@ function installArtToyControls(panel) {
     const fxCurrent = document.createElement('button');
     fxCurrent.type = 'button';
     fxCurrent.className = 'art-toy-fx-current';
-    fxCurrent.setAttribute('aria-label', 'Choose firework effect');
-    fxCurrent.setAttribute('aria-haspopup', 'true');
-    fxCurrent.setAttribute('aria-expanded', 'false');
+    fxCurrent.setAttribute('aria-label', 'Choose art effect');
+    fxCurrent.setAttribute('aria-haspopup', 'false');
+    fxCurrent.setAttribute('aria-expanded', 'true');
+    fxCurrent.tabIndex = -1;
     fxCurrent.title = 'Current Effect';
 
     const fxStage = document.createElement('span');
@@ -220,7 +225,7 @@ function installArtToyControls(panel) {
 
     const fxGrid = document.createElement('div');
     fxGrid.className = 'art-toy-fx-grid';
-    fxGrid.hidden = true;
+    fxGrid.hidden = false;
     fxShell.appendChild(fxGrid);
 
     controlsHost.appendChild(fxShell);
@@ -849,12 +854,11 @@ function setupFireworks(panel) {
       tick();
     };
 
-    const setFxPickerOpen = (open) => {
+    const setFxPickerOpen = () => {
       if (!fxShell || !fxGrid) return;
-      const isOpen = !!open;
-      fxShell.dataset.open = isOpen ? '1' : '0';
-      if (fxCurrentBtn) fxCurrentBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      fxGrid.hidden = !isOpen;
+      fxShell.dataset.open = '1';
+      if (fxCurrentBtn) fxCurrentBtn.setAttribute('aria-expanded', 'true');
+      fxGrid.hidden = false;
     };
 
     const fxById = new Map(FIREWORK_FX.map((fx) => [fx.id, fx]));
@@ -865,7 +869,6 @@ function setupFireworks(panel) {
         fxCurrentBtn.title = `Effect: ${fxName}`;
         fxCurrentBtn.setAttribute('aria-label', `Current firework effect: ${fxName}`);
       }
-      if (fxCurrentStage) fxCurrentStage.dataset.fxId = String(fxId);
       for (const card of fxCards) {
         const selected = card.dataset.fxId === String(fxId);
         card.classList.toggle('is-selected', selected);
@@ -894,37 +897,11 @@ function setupFireworks(panel) {
           ev.preventDefault();
           ev.stopPropagation();
           setFx(fx.id);
-          setFxPickerOpen(false);
         });
       }
     }
 
-    if (fxCurrentBtn) {
-      fxCurrentBtn.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        setFxPickerOpen(fxShell?.dataset?.open !== '1');
-      });
-    }
-
-    if (fxCurrentStage) {
-      addPreviewLoop(fxCurrentStage, () => clampFxId(panel?.dataset?.fireworkFx));
-    }
-
-    const onDocPointerDownClosePicker = (ev) => {
-      if (!panel.isConnected) {
-        document.removeEventListener('pointerdown', onDocPointerDownClosePicker, true);
-        return;
-      }
-      if (!fxShell || fxShell.dataset.open !== '1') return;
-      const t = ev?.target;
-      if (t && fxShell.contains(t)) return;
-      setFxPickerOpen(false);
-    };
-    document.addEventListener('pointerdown', onDocPointerDownClosePicker, true);
-
-    // Always start collapsed.
-    setFxPickerOpen(false);
+    setFxPickerOpen(true);
     syncFxUi();
   } catch {}
   const syncDragArea = () => {
@@ -1292,6 +1269,8 @@ function setupFireworks(panel) {
 
   refreshCustomizeUi = () => {
     const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    const fxShell = getBaseArtToyControlsHost(panel)?.querySelector?.('.art-toy-fx-shell');
+    if (fxShell) fxShell.hidden = active.length === 0;
     customisePanel.classList.toggle('is-empty-lines', active.length === 0);
     lineButtonsHost.innerHTML = '';
     if (!active.length) {
@@ -3152,6 +3131,8 @@ function setupLaserTrails(panel) {
   refreshCustomizeUi = () => {
     if (!lineButtonsHost) return;
     const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    const fxShell = getBaseArtToyControlsHost(panel)?.querySelector?.('.art-toy-fx-shell');
+    if (fxShell) fxShell.hidden = active.length === 0;
     customisePanel.classList.toggle('is-empty-lines', active.length === 0);
     lineButtonsHost.innerHTML = '';
     if (!active.length) {
@@ -3433,6 +3414,11 @@ function setupLaserTrails(panel) {
     const fxCurrentStage = fxShell?.querySelector?.('.art-toy-fx-stage-current') || null;
     const fxGrid = fxShell?.querySelector?.('.art-toy-fx-grid') || null;
     const fxCards = [];
+    try {
+      if (fxShell && customisePanel && !customisePanel.contains(fxShell)) {
+        customisePanel.insertBefore(fxShell, lineButtonsTitle);
+      }
+    } catch {}
 
     const previewLines = new WeakMap();
     const PREVIEW_CAP = 24;
@@ -3612,12 +3598,11 @@ function setupLaserTrails(panel) {
       };
       tick();
     };
-    const setFxPickerOpen = (open) => {
+    const setFxPickerOpen = () => {
       if (!fxShell || !fxGrid) return;
-      const isOpen = !!open;
-      fxShell.dataset.open = isOpen ? '1' : '0';
-      if (fxCurrentBtn) fxCurrentBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-      fxGrid.hidden = !isOpen;
+      fxShell.dataset.open = '1';
+      if (fxCurrentBtn) fxCurrentBtn.setAttribute('aria-expanded', 'true');
+      fxGrid.hidden = false;
     };
     const fxById = new Map(LASER_FX.map((fx) => [fx.id, fx]));
     syncFxUi = () => {
@@ -3627,7 +3612,6 @@ function setupLaserTrails(panel) {
         fxCurrentBtn.title = `Laser: ${fxName}`;
         fxCurrentBtn.setAttribute('aria-label', `Current laser effect: ${fxName}`);
       }
-      if (fxCurrentStage) fxCurrentStage.dataset.fxId = String(fxId);
       for (const card of fxCards) {
         card.classList.toggle('is-selected', card.dataset.fxId === String(fxId));
       }
@@ -3652,26 +3636,10 @@ function setupLaserTrails(panel) {
           ev.preventDefault();
           ev.stopPropagation();
           setFx(fx.id);
-          setFxPickerOpen(false);
         });
       }
     }
-    if (fxCurrentBtn) {
-      fxCurrentBtn.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        setFxPickerOpen(fxShell?.dataset?.open !== '1');
-      });
-    }
-    if (fxCurrentStage) addPreviewLoop(fxCurrentStage, () => clampFxId(panel?.dataset?.laserFx));
-    document.addEventListener('pointerdown', (ev) => {
-      if (!panel.isConnected) return;
-      if (!fxShell || fxShell.dataset.open !== '1') return;
-      const t = ev?.target;
-      if (t && fxShell.contains(t)) return;
-      setFxPickerOpen(false);
-    }, true);
-    setFxPickerOpen(false);
+    setFxPickerOpen(true);
     syncFxUi();
   } catch {}
 
@@ -4166,18 +4134,53 @@ function setupSticker(panel) {
   drawAreaEl.style.width = `${dragArea.w}px`;
   drawAreaEl.style.height = `${dragArea.h}px`;
   panel.appendChild(drawAreaEl);
+  const handlesLayer = document.createElement('div');
+  handlesLayer.className = 'art-fireworks-handles art-sticker-handles';
+  panel.appendChild(handlesLayer);
 
   const palette = ['#7bf6ff', '#86efac', '#fde047', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fca5a5', '#a7f3d0'];
   const drawingState = createArtDrawingState({ slotCount: ART_SLOT_COUNT });
+  const slotShapes = Array.from({ length: ART_SLOT_COUNT }, () => []);
   const activeSlots = new Set();
+  const slotHandleEls = Array.from({ length: ART_SLOT_COUNT }, () => null);
   let selectedColorSlot = null;
   let stickerStrokeMultiplier = 5;
   let refreshCustomizeUi = () => {};
   let setCustomiseOpen = () => {};
   let pulseColorButtonHit = () => {};
+  const STICKER_FX = Object.freeze([
+    { id: 0, key: 'lineFlash', name: 'Line Flash' },
+    { id: 1, key: 'lineStatic', name: 'Line Static' },
+    { id: 2, key: 'square', name: 'Square' },
+    { id: 3, key: 'circle', name: 'Circle' },
+    { id: 4, key: 'triangle', name: 'Triangle' },
+    { id: 5, key: 'pentagon', name: 'Pentagon' },
+  ]);
+  const clampStickerFxId = (v) => {
+    const n = Math.trunc(Number(v));
+    return Number.isFinite(n) && n >= 0 && n < STICKER_FX.length ? n : 0;
+  };
+  const isShapeFx = (fxId) => clampStickerFxId(fxId) >= 2;
+  const shapeKindForFx = (fxId) => {
+    const id = clampStickerFxId(fxId);
+    if (id === 2) return 'square';
+    if (id === 3) return 'circle';
+    if (id === 4) return 'triangle';
+    if (id === 5) return 'pentagon';
+    return null;
+  };
+  let currentFxId = 0;
 
   const clampX = (x) => Math.max(AREA_MIN_X, Math.min(AREA_MAX_X, Number(x) || 0));
   const clampY = (y) => Math.max(AREA_MIN_Y, Math.min(AREA_MAX_Y, Number(y) || 0));
+  const setStickerFx = (nextId, { announce = true } = {}) => {
+    currentFxId = clampStickerFxId(nextId);
+    panel.dataset.stickerFx = String(currentFxId);
+    try { panel.__syncStickerFxUi?.(); } catch {}
+    try { refreshCustomizeUi(); } catch {}
+    if (announce) markSceneDirtySafe();
+  };
+  setStickerFx(0, { announce: false });
 
   const pointsToPath = (points) => {
     if (!Array.isArray(points) || points.length < 2) return '';
@@ -4195,11 +4198,16 @@ function setupSticker(panel) {
     STICKER_BASE_STROKE_WIDTH * (Number(stickerStrokeMultiplier) || 1) * STICKER_STROKE_MATCH_MULTIPLIER
   );
   const getSlotStrokeWidth = () => getBaseStrokeWidth();
-  const hasSlotDrawing = (slot) => drawingState.hasSlotStrokes(normalizeSlot(slot));
+  const hasSlotDrawing = (slot) => {
+    const i = normalizeSlot(slot);
+    const strokes = drawingState.hasSlotStrokes(i);
+    const shapes = Array.isArray(slotShapes[i]) && slotShapes[i].length > 0;
+    return strokes || shapes;
+  };
 
   const renderSlot = (slot) => {
     const i = normalizeSlot(slot);
-    const oldNodes = layer.querySelectorAll(`path[data-slot="${i}"]`);
+    const oldNodes = layer.querySelectorAll(`[data-slot="${i}"]`);
     oldNodes.forEach((n) => { try { n.remove(); } catch {} });
     const strokes = drawingState.getSlotStrokes(i);
     const width = getSlotStrokeWidth(i);
@@ -4217,6 +4225,49 @@ function setupSticker(panel) {
       path.setAttribute('stroke-linejoin', 'round');
       layer.appendChild(path);
     }
+    const shapes = Array.isArray(slotShapes[i]) ? slotShapes[i] : [];
+    for (let si = 0; si < shapes.length; si++) {
+      const shape = shapes[si];
+      const cx = Number(shape?.x) || 0;
+      const cy = Number(shape?.y) || 0;
+      const size = Math.max(12, Number(shape?.size) || 52);
+      const half = size * 0.5;
+      const rot = Number(shape?.rot) || 0;
+      const kind = String(shape?.kind || '');
+      if (kind === 'circle') {
+        const node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        node.setAttribute('data-slot', String(i));
+        node.setAttribute('cx', String(cx));
+        node.setAttribute('cy', String(cy));
+        node.setAttribute('r', String(half));
+        node.setAttribute('fill', palette[i]);
+        node.setAttribute('stroke', palette[i]);
+        node.setAttribute('stroke-width', String(width));
+        node.setAttribute('stroke-linecap', 'butt');
+        node.setAttribute('stroke-linejoin', 'miter');
+        node.setAttribute('paint-order', 'stroke');
+        layer.appendChild(node);
+        continue;
+      }
+      const sides = kind === 'triangle' ? 3 : (kind === 'pentagon' ? 5 : 4);
+      const pts = [];
+      for (let k = 0; k < sides; k++) {
+        const a = rot + (-Math.PI * 0.5) + ((Math.PI * 2 * k) / sides);
+        const x = cx + Math.cos(a) * half;
+        const y = cy + Math.sin(a) * half;
+        pts.push(`${x.toFixed(2)},${y.toFixed(2)}`);
+      }
+      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      poly.setAttribute('data-slot', String(i));
+      poly.setAttribute('points', pts.join(' '));
+      poly.setAttribute('fill', palette[i]);
+      poly.setAttribute('stroke', palette[i]);
+      poly.setAttribute('stroke-width', String(width));
+      poly.setAttribute('stroke-linecap', 'butt');
+      poly.setAttribute('stroke-linejoin', 'miter');
+      poly.setAttribute('paint-order', 'stroke');
+      layer.appendChild(poly);
+    }
   };
 
   const renderAll = () => {
@@ -4228,14 +4279,18 @@ function setupSticker(panel) {
   };
 
   const setSlotActive = (slot) => {
-    activeSlots.add(normalizeSlot(slot));
+    const i = normalizeSlot(slot);
+    activeSlots.add(i);
     syncActiveDataset();
+    syncShapeHandle();
     try { refreshCustomizeUi(); } catch {}
   };
 
   const setSlotInactive = (slot) => {
-    activeSlots.delete(normalizeSlot(slot));
+    const i = normalizeSlot(slot);
+    activeSlots.delete(i);
     syncActiveDataset();
+    syncShapeHandle();
     try { refreshCustomizeUi(); } catch {}
   };
 
@@ -4249,7 +4304,9 @@ function setupSticker(panel) {
   const clearSlotDrawing = (slot) => {
     const i = normalizeSlot(slot);
     drawingState.clearSlot(i);
+    slotShapes[i] = [];
     renderSlot(i);
+    syncShapeHandle();
     fitDragAreaToDrawings();
     syncDragArea();
     try { refreshCustomizeUi(); } catch {}
@@ -4258,17 +4315,332 @@ function setupSticker(panel) {
 
   const clearAllDrawings = () => {
     drawingState.clearAll();
+    for (let i = 0; i < ART_SLOT_COUNT; i++) slotShapes[i] = [];
     renderAll();
+    syncShapeHandle();
     fitDragAreaToDrawings();
     syncDragArea();
     try { refreshCustomizeUi(); } catch {}
     markSceneDirtySafe();
   };
 
+  const placeShapeAtSlot = (slot, x, y, kind) => {
+    const i = normalizeSlot(slot);
+    if (!kind) return;
+    const list = Array.isArray(slotShapes[i]) ? slotShapes[i] : (slotShapes[i] = []);
+    const shape = {
+      kind: String(kind),
+      x: clampX(x),
+      y: clampY(y),
+      size: Math.max(26, getSlotStrokeWidth(i) * 4.4),
+      rot: 0,
+    };
+    list.push(shape);
+    renderSlot(i);
+    syncShapeHandle();
+    fitDragAreaToDrawings();
+    syncDragArea();
+    markSceneDirtySafe();
+    return shape;
+  };
+
+  const trashBtn = document.createElement('button');
+  trashBtn.type = 'button';
+  trashBtn.className = 'c-btn art-sticker-trash-btn';
+  trashBtn.setAttribute('aria-label', 'Delete sticker shape');
+  trashBtn.title = 'Delete Shape';
+  trashBtn.style.setProperty('--c-btn-size', '62px');
+  trashBtn.style.setProperty('--accent', '#9f2c2c');
+  trashBtn.innerHTML = BUTTON_ICON_HTML;
+  const trashCore = trashBtn.querySelector('.c-btn-core');
+  if (trashCore) trashCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonTrash.png')");
+  panel.appendChild(trashBtn);
+
+  const isClientPointInsideStickerTrash = (clientX, clientY) => {
+    const rect = trashBtn.getBoundingClientRect();
+    if (!rect || rect.width < 1 || rect.height < 1) return false;
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+  };
+
+  const setStickerTrashArmed = (armed) => {
+    trashBtn.classList.toggle('is-armed', !!armed);
+  };
+  let stickerShapeDragging = false;
+  const setStickerShapeDragging = (active) => {
+    stickerShapeDragging = !!active;
+    trashBtn.style.display = '';
+    if (!stickerShapeDragging) setStickerTrashArmed(false);
+  };
+
+  const getSelectedShapeList = () => {
+    if (selectedColorSlot == null) return [];
+    const i = normalizeSlot(selectedColorSlot);
+    const list = Array.isArray(slotShapes[i]) ? slotShapes[i] : [];
+    return list;
+  };
+  const getSelectedStrokeList = () => {
+    if (selectedColorSlot == null) return [];
+    const i = normalizeSlot(selectedColorSlot);
+    const list = drawingState.getSlotStrokes(i);
+    return Array.isArray(list) ? list : [];
+  };
+  const cloneStrokePoints = (stroke) => {
+    if (!Array.isArray(stroke)) return [];
+    return stroke.map((p) => ({
+      x: Number(p?.x) || 0,
+      y: Number(p?.y) || 0,
+    }));
+  };
+  const getStrokeHandlePoint = (stroke) => {
+    if (!Array.isArray(stroke) || !stroke.length) return null;
+    if (stroke.length === 1) {
+      return {
+        x: Number(stroke[0]?.x) || 0,
+        y: Number(stroke[0]?.y) || 0,
+      };
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < stroke.length; i++) {
+      const p = stroke[i];
+      const x = Number(p?.x) || 0;
+      const y = Number(p?.y) || 0;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+    return {
+      x: (minX + maxX) * 0.5,
+      y: (minY + maxY) * 0.5,
+    };
+  };
+
+  const clearShapeHandlesDom = () => {
+    try { handlesLayer.innerHTML = ''; } catch {}
+  };
+
+  const syncShapeHandle = () => {
+    if (stickerShapeDragging) return;
+    clearShapeHandlesDom();
+    setStickerTrashArmed(false);
+    const selected = selectedColorSlot != null ? normalizeSlot(selectedColorSlot) : null;
+    const visible = panel.dataset.controlsVisible === '1' && selected != null;
+    trashBtn.style.display = '';
+    if (!visible) return;
+    const list = getSelectedShapeList();
+    const strokeList = getSelectedStrokeList();
+    const setHandlePos = (btn, x, y) => {
+      const size = 62;
+      btn.style.left = `${(Number(x) - size * 0.5).toFixed(2)}px`;
+      btn.style.top = `${(Number(y) - size * 0.5).toFixed(2)}px`;
+    };
+    for (let si = 0; si < list.length; si++) {
+      const shape = list[si];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'c-btn art-firework-handle-btn art-sticker-handle-btn is-active-firework';
+      btn.setAttribute('aria-label', `Move sticker shape ${selected + 1}`);
+      btn.title = `Move Sticker Shape ${selected + 1}`;
+      btn.style.setProperty('--c-btn-size', '62px');
+      btn.innerHTML = BUTTON_ICON_HTML;
+      const core = btn.querySelector('.c-btn-core');
+      if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonDrag.png')");
+      btn.dataset.shapeIndex = String(si);
+      setHandlePos(btn, Number(shape?.x) || 0, Number(shape?.y) || 0);
+      handlesLayer.appendChild(btn);
+
+      let dragging = false;
+      let pid = null;
+      let onMove = null;
+      let onEnd = null;
+      const detachDocDrag = () => {
+        if (onMove) document.removeEventListener('pointermove', onMove, true);
+        if (onEnd) {
+          document.removeEventListener('pointerup', onEnd, true);
+          document.removeEventListener('pointercancel', onEnd, true);
+        }
+      };
+      btn.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
+        if (panel.dataset.controlsVisible !== '1') return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        dragging = true;
+        pid = ev.pointerId;
+        setStickerShapeDragging(true);
+        try { btn.setPointerCapture(ev.pointerId); } catch {}
+        if (onMove) return;
+        onMove = (mv) => {
+          if (!dragging) return;
+          if (pid != null && mv.pointerId !== pid) return;
+          const pt = clientToPanelPoint(mv.clientX, mv.clientY);
+          if (!pt) return;
+          mv.preventDefault();
+          mv.stopPropagation();
+          shape.x = clampX(pt.x);
+          shape.y = clampY(pt.y);
+          renderSlot(selected);
+          setHandlePos(btn, shape.x, shape.y);
+          setStickerTrashArmed(isClientPointInsideStickerTrash(mv.clientX, mv.clientY));
+          markSceneDirtySafe();
+        };
+        onEnd = (up) => {
+          if (!dragging) return;
+          if (pid != null && up.pointerId !== pid) return;
+          const dropOnTrash = isClientPointInsideStickerTrash(up.clientX, up.clientY);
+          dragging = false;
+          pid = null;
+          try { btn.releasePointerCapture(up.pointerId); } catch {}
+          detachDocDrag();
+          onMove = null;
+          onEnd = null;
+          if (dropOnTrash) {
+            const idx = list.indexOf(shape);
+            if (idx >= 0) list.splice(idx, 1);
+            renderSlot(selected);
+            fitDragAreaToDrawings();
+            syncDragArea();
+            markSceneDirtySafe();
+          }
+          setStickerShapeDragging(false);
+          syncShapeHandle();
+        };
+        document.addEventListener('pointermove', onMove, true);
+        document.addEventListener('pointerup', onEnd, true);
+        document.addEventListener('pointercancel', onEnd, true);
+      });
+      slotHandleEls[selected] = btn;
+    }
+    for (let si = 0; si < strokeList.length; si++) {
+      const stroke = strokeList[si];
+      const center = getStrokeHandlePoint(stroke);
+      if (!center) continue;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'c-btn art-firework-handle-btn art-sticker-handle-btn is-active-firework';
+      btn.setAttribute('aria-label', `Move sticker line ${selected + 1}`);
+      btn.title = `Move Sticker Line ${selected + 1}`;
+      btn.style.setProperty('--c-btn-size', '62px');
+      btn.innerHTML = BUTTON_ICON_HTML;
+      const core = btn.querySelector('.c-btn-core');
+      if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonDrag.png')");
+      btn.dataset.strokeIndex = String(si);
+      setHandlePos(btn, center.x, center.y);
+      handlesLayer.appendChild(btn);
+
+      let dragging = false;
+      let pid = null;
+      let dragStartPt = null;
+      let strokeStart = [];
+      let onMove = null;
+      let onEnd = null;
+      const detachDocDrag = () => {
+        if (onMove) document.removeEventListener('pointermove', onMove, true);
+        if (onEnd) {
+          document.removeEventListener('pointerup', onEnd, true);
+          document.removeEventListener('pointercancel', onEnd, true);
+        }
+      };
+      btn.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
+        if (panel.dataset.controlsVisible !== '1') return;
+        const pt = clientToPanelPoint(ev.clientX, ev.clientY);
+        if (!pt) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        dragging = true;
+        pid = ev.pointerId;
+        dragStartPt = { x: pt.x, y: pt.y };
+        strokeStart = cloneStrokePoints(stroke);
+        setStickerShapeDragging(true);
+        try { btn.setPointerCapture(ev.pointerId); } catch {}
+        if (onMove) return;
+        onMove = (mv) => {
+          if (!dragging) return;
+          if (pid != null && mv.pointerId !== pid) return;
+          const nextPt = clientToPanelPoint(mv.clientX, mv.clientY);
+          if (!nextPt || !dragStartPt) return;
+          mv.preventDefault();
+          mv.stopPropagation();
+          const dx = nextPt.x - dragStartPt.x;
+          const dy = nextPt.y - dragStartPt.y;
+          for (let pi = 0; pi < stroke.length; pi++) {
+            const base = strokeStart[pi] || stroke[pi];
+            stroke[pi].x = clampX((Number(base?.x) || 0) + dx);
+            stroke[pi].y = clampY((Number(base?.y) || 0) + dy);
+          }
+          renderSlot(selected);
+          const nextCenter = getStrokeHandlePoint(stroke);
+          if (nextCenter) setHandlePos(btn, nextCenter.x, nextCenter.y);
+          setStickerTrashArmed(isClientPointInsideStickerTrash(mv.clientX, mv.clientY));
+          markSceneDirtySafe();
+        };
+        onEnd = (up) => {
+          if (!dragging) return;
+          if (pid != null && up.pointerId !== pid) return;
+          const dropOnTrash = isClientPointInsideStickerTrash(up.clientX, up.clientY);
+          dragging = false;
+          pid = null;
+          dragStartPt = null;
+          strokeStart = [];
+          try { btn.releasePointerCapture(up.pointerId); } catch {}
+          detachDocDrag();
+          onMove = null;
+          onEnd = null;
+          if (dropOnTrash) {
+            const idx = strokeList.indexOf(stroke);
+            if (idx >= 0) strokeList.splice(idx, 1);
+            drawingState.setSlotStrokes(selected, strokeList);
+            renderSlot(selected);
+            fitDragAreaToDrawings();
+            syncDragArea();
+            markSceneDirtySafe();
+          }
+          setStickerShapeDragging(false);
+          syncShapeHandle();
+        };
+        document.addEventListener('pointermove', onMove, true);
+        document.addEventListener('pointerup', onEnd, true);
+        document.addEventListener('pointercancel', onEnd, true);
+      });
+    }
+  };
+  const syncAllShapeHandles = () => {
+    syncShapeHandle();
+  };
+  const logStickerTrashDebug = (reason = 'manual') => {
+    try {
+      const pr = panel.getBoundingClientRect?.();
+      const tr = trashBtn.getBoundingClientRect?.();
+      const cs = getComputedStyle(trashBtn);
+      console.log('[Sticker][trash]', {
+        reason,
+        panelId: panel.id,
+        panelRect: pr ? { w: Number(pr.width.toFixed(2)), h: Number(pr.height.toFixed(2)) } : null,
+        trashRect: tr ? { x: Number(tr.left.toFixed(2)), y: Number(tr.top.toFixed(2)), w: Number(tr.width.toFixed(2)), h: Number(tr.height.toFixed(2)) } : null,
+        display: cs?.display,
+        visibility: cs?.visibility,
+        opacity: cs?.opacity,
+        zIndex: cs?.zIndex,
+      });
+    } catch {}
+  };
+  try {
+    panel.__debugStickerTrash = logStickerTrashDebug;
+    if (window.__MT_DEBUG_STICKER_TRASH) {
+      requestAnimationFrame(() => logStickerTrashDebug('init'));
+      setTimeout(() => logStickerTrashDebug('post-timeout'), 120);
+    }
+  } catch {}
+
   const emitHit = (slot) => {
     const i = normalizeSlot(slot);
     const strokes = drawingState.getSlotStrokes(i);
-    if (!strokes.length) return;
+    const shapes = Array.isArray(slotShapes[i]) ? slotShapes[i] : [];
+    if (!strokes.length && !shapes.length) return;
     const width = Math.max(1.4, getSlotStrokeWidth(i) * 1.22);
     for (let si = 0; si < strokes.length; si++) {
       const d = pointsToPath(strokes[si]);
@@ -4283,6 +4655,43 @@ function setupSticker(panel) {
       p.setAttribute('stroke-linejoin', 'round');
       hitLayer.appendChild(p);
       setTimeout(() => { try { p.remove(); } catch {} }, 260);
+    }
+    for (let si = 0; si < shapes.length; si++) {
+      const shape = shapes[si];
+      const cx = Number(shape?.x) || 0;
+      const cy = Number(shape?.y) || 0;
+      const size = Math.max(12, Number(shape?.size) || 52);
+      const half = size * 0.5;
+      const rot = Number(shape?.rot) || 0;
+      const kind = String(shape?.kind || '');
+      let node = null;
+      if (kind === 'circle') {
+        node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        node.setAttribute('cx', String(cx));
+        node.setAttribute('cy', String(cy));
+        node.setAttribute('r', String(half));
+      } else {
+        const sides = kind === 'triangle' ? 3 : (kind === 'pentagon' ? 5 : 4);
+        const pts = [];
+        for (let k = 0; k < sides; k++) {
+          const a = rot + (-Math.PI * 0.5) + ((Math.PI * 2 * k) / sides);
+          const x = cx + Math.cos(a) * half;
+          const y = cy + Math.sin(a) * half;
+          pts.push(`${x.toFixed(2)},${y.toFixed(2)}`);
+        }
+        node = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        node.setAttribute('points', pts.join(' '));
+      }
+      if (!node) continue;
+      node.setAttribute('class', 'art-sticker-path-hit');
+      node.setAttribute('fill', palette[i]);
+      node.setAttribute('stroke', palette[i]);
+      node.setAttribute('stroke-width', String(width));
+      node.setAttribute('stroke-linecap', 'butt');
+      node.setAttribute('stroke-linejoin', 'miter');
+      node.setAttribute('paint-order', 'stroke');
+      hitLayer.appendChild(node);
+      setTimeout(() => { try { node.remove(); } catch {} }, 260);
     }
   };
 
@@ -4334,6 +4743,14 @@ function setupSticker(panel) {
         for (const pt of stroke) {
           coords.push({ x: clampX(pt?.x), y: clampY(pt?.y) });
         }
+      }
+      const shapes = Array.isArray(slotShapes[slot]) ? slotShapes[slot] : [];
+      for (const shape of shapes) {
+        const cx = clampX(shape?.x);
+        const cy = clampY(shape?.y);
+        const half = Math.max(8, (Number(shape?.size) || 48) * 0.5);
+        coords.push({ x: clampX(cx - half), y: clampY(cy - half) });
+        coords.push({ x: clampX(cx + half), y: clampY(cy + half) });
       }
     }
     if (!coords.length) {
@@ -4387,6 +4804,7 @@ function setupSticker(panel) {
     }
     if (selectedColorSlot != null && !activeSlots.has(normalizeSlot(selectedColorSlot))) selectedColorSlot = null;
     syncDragArea();
+    syncAllShapeHandles();
   };
 
   const customisePanel = document.createElement('div');
@@ -4498,6 +4916,7 @@ function setupSticker(panel) {
       pickerTitle.hidden = true;
       refreshCustomizeUi();
       syncDragArea();
+      syncAllShapeHandles();
       return;
     }
     selectedColorSlot = i;
@@ -4506,10 +4925,13 @@ function setupSticker(panel) {
     pickerApi.setColor(palette[i]);
     refreshCustomizeUi();
     syncDragArea();
+    syncAllShapeHandles();
   };
 
   refreshCustomizeUi = () => {
     const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    const fxShell = getBaseArtToyControlsHost(panel)?.querySelector?.('.art-toy-fx-shell');
+    if (fxShell) fxShell.hidden = active.length === 0;
     customisePanel.classList.toggle('is-empty-lines', active.length === 0);
     lineButtonsHost.innerHTML = '';
     if (!active.length) {
@@ -4559,6 +4981,7 @@ function setupSticker(panel) {
       empty.appendChild(emptyActions);
       lineButtonsHost.appendChild(empty);
       syncDragArea();
+      syncAllShapeHandles();
       return;
     }
     if (selectedColorSlot != null && !active.includes(normalizeSlot(selectedColorSlot))) {
@@ -4593,9 +5016,11 @@ function setupSticker(panel) {
       if (!hasSlotDrawing(i)) {
         const helper = document.createElement('div');
         helper.className = 'art-line-draw-hint';
-        helper.textContent = selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i
-          ? 'Draw'
-          : 'Select to draw';
+        const selected = selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i;
+        const shapeMode = isShapeFx(currentFxId);
+        helper.textContent = selected
+          ? (shapeMode ? 'Tap to place shape' : 'Draw')
+          : (shapeMode ? 'Select to place shape' : 'Select to draw');
         row.appendChild(helper);
       } else {
         const clearBtn = document.createElement('button');
@@ -4619,6 +5044,7 @@ function setupSticker(panel) {
       lineButtonsHost.appendChild(row);
     }
     syncDragArea();
+    syncAllShapeHandles();
   };
 
   setCustomiseOpen = (open) => {
@@ -4627,13 +5053,119 @@ function setupSticker(panel) {
     customisePanel.classList.toggle('is-open', nextOpen);
     if (nextOpen) {
       try { refreshCustomizeUi(); } catch {}
+      syncAllShapeHandles();
       return;
     }
     selectedColorSlot = null;
     pickerWrap.hidden = true;
     pickerTitle.hidden = true;
     try { refreshCustomizeUi(); } catch {}
+    syncAllShapeHandles();
   };
+
+  try {
+    const controlsHost = getBaseArtToyControlsHost(panel);
+    const fxShell = controlsHost?.querySelector?.('.art-toy-fx-shell') || null;
+    const fxCurrentBtn = fxShell?.querySelector?.('.art-toy-fx-current') || null;
+    const fxCurrentStage = fxShell?.querySelector?.('.art-toy-fx-stage-current') || null;
+    const fxGrid = fxShell?.querySelector?.('.art-toy-fx-grid') || null;
+    const fxCards = [];
+    const makePreviewNode = (stage, fxId) => {
+      if (!stage) return;
+      const id = clampStickerFxId(fxId);
+      const tone = palette[id % palette.length];
+      if (id <= 1) {
+        const line = document.createElement('span');
+        line.className = 'art-laser-preview-line';
+        line.style.background = tone;
+        line.style.left = '50%';
+        line.style.top = '50%';
+        line.style.width = '44px';
+        line.style.height = '4px';
+        line.style.opacity = id === 0 ? '1' : '0.72';
+        line.style.filter = `drop-shadow(0 0 ${id === 0 ? 12 : 6}px ${tone})`;
+        stage.appendChild(line);
+        if (id === 0) {
+          try { line.animate([{ opacity: 0.25 }, { opacity: 1 }, { opacity: 0.25 }], { duration: 560, easing: 'ease-out' }); } catch {}
+        }
+        setTimeout(() => { try { line.remove(); } catch {} }, 760);
+        return;
+      }
+      const shape = document.createElement('span');
+      shape.style.position = 'absolute';
+      shape.style.left = '50%';
+      shape.style.top = '50%';
+      shape.style.width = '26px';
+      shape.style.height = '26px';
+      shape.style.transform = 'translate(-50%, -50%)';
+      shape.style.boxSizing = 'border-box';
+      shape.style.filter = `drop-shadow(0 0 8px ${tone})`;
+      shape.style.background = tone;
+      if (id === 3) shape.style.borderRadius = '999px';
+      else if (id === 4) shape.style.clipPath = 'polygon(50% 8%, 8% 92%, 92% 92%)';
+      else if (id === 5) shape.style.clipPath = 'polygon(50% 4%, 95% 34%, 78% 90%, 22% 90%, 5% 34%)';
+      stage.appendChild(shape);
+      setTimeout(() => { try { shape.remove(); } catch {} }, 760);
+    };
+    const addPreviewLoop = (stage, fxResolver) => {
+      if (!stage) return;
+      let timer = 0;
+      const tick = () => {
+        if (!panel.isConnected || !stage.isConnected) {
+          if (timer) clearTimeout(timer);
+          return;
+        }
+        const nextId = typeof fxResolver === 'function' ? fxResolver() : fxResolver;
+        makePreviewNode(stage, nextId);
+        timer = setTimeout(tick, 700);
+      };
+      tick();
+    };
+    const setFxPickerOpen = () => {
+      if (!fxShell || !fxGrid) return;
+      fxShell.dataset.open = '1';
+      if (fxCurrentBtn) fxCurrentBtn.setAttribute('aria-expanded', 'true');
+      fxGrid.hidden = false;
+    };
+    const syncFxUi = () => {
+      const fxId = clampStickerFxId(currentFxId);
+      const fxName = STICKER_FX.find((fx) => fx.id === fxId)?.name || 'Effect';
+      if (fxCurrentBtn) {
+        fxCurrentBtn.title = `Style: ${fxName}`;
+        fxCurrentBtn.setAttribute('aria-label', `Current sticker style: ${fxName}`);
+      }
+      for (const card of fxCards) {
+        const selected = card.dataset.fxId === String(fxId);
+        card.classList.toggle('is-selected', selected);
+      }
+    };
+    try { panel.__syncStickerFxUi = syncFxUi; } catch {}
+    if (fxGrid && STICKER_FX.length) {
+      fxGrid.innerHTML = '';
+      for (const fx of STICKER_FX) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'art-toy-fx-card';
+        card.dataset.fxId = String(fx.id);
+        card.title = fx.name;
+        card.setAttribute('aria-label', `Select ${fx.name} sticker style`);
+        const stage = document.createElement('span');
+        stage.className = 'art-toy-fx-stage';
+        stage.dataset.fxId = String(fx.id);
+        card.appendChild(stage);
+        fxGrid.appendChild(card);
+        fxCards.push(card);
+        addPreviewLoop(stage, fx.id);
+        card.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          setStickerFx(fx.id);
+        });
+      }
+    }
+    setFxPickerOpen(true);
+    syncFxUi();
+  } catch {}
 
   try {
     const controlsVisMo = new MutationObserver(() => {
@@ -4743,16 +5275,33 @@ function setupSticker(panel) {
   let boardDrawSlot = null;
   let boardDrawMoved = false;
   let boardDrawPoints = [];
+  let shapePlacePointerId = null;
+  let shapePlaceSlot = null;
+  let shapePlaceShape = null;
 
   const beginBoardDraw = (ev) => {
     if (panel.dataset.controlsVisible !== '1') return;
     if (selectedColorSlot == null) return;
     if (ev.button != null && ev.button !== 0) return;
+    const eventTarget = ev?.target;
+    if (eventTarget?.closest?.('.art-sticker-handle-btn')) return;
     const slot = normalizeSlot(selectedColorSlot);
     if (!activeSlots.has(slot)) return;
     if (!isClientPointInsideDrawArea(ev.clientX, ev.clientY)) return;
     const pt = clientToPanelPoint(ev.clientX, ev.clientY);
     if (!pt) return;
+    const shapeKind = shapeKindForFx(currentFxId);
+    if (shapeKind) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const placed = placeShapeAtSlot(slot, pt.x, pt.y, shapeKind);
+      shapePlacePointerId = ev.pointerId;
+      shapePlaceSlot = slot;
+      shapePlaceShape = placed || null;
+      setStickerShapeDragging(true);
+      setStickerTrashArmed(isClientPointInsideStickerTrash(ev.clientX, ev.clientY));
+      return;
+    }
     ev.preventDefault();
     ev.stopPropagation();
     boardDrawPointerId = ev.pointerId;
@@ -4766,6 +5315,20 @@ function setupSticker(panel) {
   };
 
   const moveBoardDraw = (ev) => {
+    if (shapePlacePointerId != null && shapePlaceShape) {
+      if (ev.pointerId !== shapePlacePointerId) return;
+      const pt = clientToPanelPoint(ev.clientX, ev.clientY);
+      if (!pt) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      shapePlaceShape.x = clampX(pt.x);
+      shapePlaceShape.y = clampY(pt.y);
+      renderSlot(shapePlaceSlot);
+      syncShapeHandle();
+      setStickerTrashArmed(isClientPointInsideStickerTrash(ev.clientX, ev.clientY));
+      markSceneDirtySafe();
+      return;
+    }
     if (boardDrawPointerId == null || boardDrawSlot == null) return;
     if (ev.pointerId !== boardDrawPointerId) return;
     const pt = clientToPanelPoint(ev.clientX, ev.clientY);
@@ -4777,6 +5340,29 @@ function setupSticker(panel) {
   };
 
   const endBoardDraw = (ev) => {
+    if (shapePlacePointerId != null && shapePlaceShape) {
+      if (ev.pointerId !== shapePlacePointerId) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const dropOnTrash = isClientPointInsideStickerTrash(ev.clientX, ev.clientY);
+      const slot = shapePlaceSlot;
+      const shape = shapePlaceShape;
+      shapePlacePointerId = null;
+      shapePlaceSlot = null;
+      shapePlaceShape = null;
+      if (dropOnTrash && slot != null) {
+        const list = Array.isArray(slotShapes[slot]) ? slotShapes[slot] : [];
+        const idx = list.indexOf(shape);
+        if (idx >= 0) list.splice(idx, 1);
+      }
+      setStickerShapeDragging(false);
+      renderSlot(slot);
+      fitDragAreaToDrawings();
+      syncDragArea();
+      syncShapeHandle();
+      markSceneDirtySafe();
+      return;
+    }
     if (boardDrawPointerId == null || boardDrawSlot == null) return;
     if (ev.pointerId !== boardDrawPointerId) return;
     ev.preventDefault();
@@ -4793,6 +5379,7 @@ function setupSticker(panel) {
       renderSlot(slot);
       fitDragAreaToDrawings();
       syncDragArea();
+      syncAllShapeHandles();
       markSceneDirtySafe();
     }
     boardDrawPoints = [];
@@ -4810,6 +5397,7 @@ function setupSticker(panel) {
     activateAllSlots();
     fitDragAreaToDrawings();
     syncDragArea();
+    syncAllShapeHandles();
     try { if (window.__MT_DEBUG_STICKER_DRAW_AREA) requestAnimationFrame(() => logStickerDrawAreaDebug('random-music')); } catch {}
     try { if (window.__MT_DEBUG_ART_SIZE) requestAnimationFrame(() => logStickerSizeMetrics('random-music')); } catch {}
     markSceneDirtySafe();
@@ -4879,19 +5467,52 @@ function setupSticker(panel) {
 
   panel.onArtRandomAll = () => {
     if (!activeSlots.size) activateAllSlots();
-    for (const slot of activeSlots) {
-      const count = 1 + Math.floor(Math.random() * 3);
-      const strokes = [];
-      for (let i = 0; i < count; i++) strokes.push(randomStroke());
-      drawingState.setSlotStrokes(slot, strokes);
+    if (isShapeFx(currentFxId)) {
+      const kind = shapeKindForFx(currentFxId);
+      for (const slot of activeSlots) {
+        const count = 1 + Math.floor(Math.random() * 3);
+        slotShapes[slot] = [];
+        drawingState.setSlotStrokes(slot, []);
+        for (let i = 0; i < count; i++) {
+          const pts = randomStroke();
+          if (!pts.length) continue;
+          const p = pts[Math.floor(Math.random() * pts.length)] || pts[0];
+          placeShapeAtSlot(slot, Number(p?.x) || AREA_MIN_X, Number(p?.y) || AREA_MIN_Y, kind);
+        }
+      }
+    } else {
+      for (const slot of activeSlots) {
+        const count = 1 + Math.floor(Math.random() * 3);
+        const strokes = [];
+        slotShapes[slot] = [];
+        for (let i = 0; i < count; i++) strokes.push(randomStroke());
+        drawingState.setSlotStrokes(slot, strokes);
+      }
     }
     renderAll();
     fitDragAreaToDrawings();
     refreshCustomizeUi();
     syncDragArea();
+    syncAllShapeHandles();
     try { if (window.__MT_DEBUG_STICKER_DRAW_AREA) requestAnimationFrame(() => logStickerDrawAreaDebug('random-all')); } catch {}
     try { if (window.__MT_DEBUG_ART_SIZE) requestAnimationFrame(() => logStickerSizeMetrics('random-all')); } catch {}
     markSceneDirtySafe();
+  };
+
+  panel.onArtClear = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) setSlotInactive(i);
+    selectedColorSlot = null;
+    pickerWrap.hidden = true;
+    pickerTitle.hidden = true;
+    drawingState.clearAll();
+    for (let i = 0; i < ART_SLOT_COUNT; i++) slotShapes[i] = [];
+    renderAll();
+    fitDragAreaToDrawings();
+    syncDragArea();
+    syncAllShapeHandles();
+    try { refreshCustomizeUi(); } catch {}
+    markSceneDirtySafe();
+    return true;
   };
 
   panel.getArtToyPersistState = () => ({
@@ -4901,6 +5522,16 @@ function setupSticker(panel) {
     palette: palette.slice(0, ART_SLOT_COUNT),
     lineThickness: Number(stickerStrokeMultiplier) || 1,
     strokesBySlot: drawingState.exportState().strokesBySlot,
+    shapesBySlot: slotShapes.map((list) => (Array.isArray(list)
+      ? list.map((s) => ({
+        kind: String(s?.kind || ''),
+        x: Number(s?.x) || 0,
+        y: Number(s?.y) || 0,
+        size: Number(s?.size) || 52,
+        rot: Number(s?.rot) || 0,
+      }))
+      : [])),
+    fx: clampStickerFxId(currentFxId),
     selectedColorSlot: selectedColorSlot == null ? null : normalizeSlot(selectedColorSlot),
     controlsVisible: panel.dataset.controlsVisible === '1',
   });
@@ -4929,12 +5560,28 @@ function setupSticker(panel) {
       }
     }
     drawingState.importState({ strokesBySlot: state.strokesBySlot });
+    if (Array.isArray(state.shapesBySlot)) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const list = Array.isArray(state.shapesBySlot[i]) ? state.shapesBySlot[i] : [];
+        slotShapes[i] = list.map((s) => ({
+          kind: String(s?.kind || ''),
+          x: clampX(s?.x),
+          y: clampY(s?.y),
+          size: Math.max(12, Number(s?.size) || 52),
+          rot: Number(s?.rot) || 0,
+        }));
+      }
+    } else {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) slotShapes[i] = [];
+    }
+    if (state.fx != null) setStickerFx(state.fx, { announce: false });
     selectedColorSlot = state.selectedColorSlot == null ? null : normalizeSlot(state.selectedColorSlot);
     renderAll();
     fitDragAreaToDrawings();
     if (typeof state.controlsVisible === 'boolean') setBaseArtToyControlsVisible(panel, state.controlsVisible);
     refreshCustomizeUi();
     syncDragArea();
+    syncAllShapeHandles();
     return true;
   };
 
@@ -4942,12 +5589,13 @@ function setupSticker(panel) {
   fitDragAreaToDrawings();
   syncActiveDataset();
   syncDragArea();
+  syncAllShapeHandles();
 
   panel.onArtTrigger = (trigger = null) => {
     const slot = normalizeSlot(trigger?.slotIndex);
     setSlotActive(slot);
     try { pulseColorButtonHit(slot); } catch {}
-    emitHit(slot);
+    if (currentFxId !== 1) emitHit(slot);
     return true;
   };
 
@@ -4955,7 +5603,7 @@ function setupSticker(panel) {
     const slot = normalizeSlot(meta?.slotIndex);
     setSlotActive(slot);
     try { pulseColorButtonHit(slot); } catch {}
-    emitHit(slot);
+    if (currentFxId !== 1) emitHit(slot);
   };
 }
 

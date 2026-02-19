@@ -1808,6 +1808,36 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   box-shadow: none;
 }
 
+.art-sticker-trash-btn {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 24;
+  --c-btn-size: 62px;
+  width: 62px;
+  height: 62px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: block;
+  --c-btn-bg: rgba(104, 108, 118, 0.92);
+}
+
+.art-sticker-trash-btn.is-armed {
+  --c-btn-bg: rgba(159, 44, 44, 0.95);
+}
+
+.art-sticker-trash-btn.is-armed .c-btn-core::before {
+  transform: translate(-50%, -50%) scale(1.04);
+  filter: brightness(1.14);
+}
+
+.art-sticker-trash-btn.is-armed .c-btn-core::after {
+  transform: translate(-50%, -50%) scale(1.08);
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55)) brightness(1.08);
+}
+
 /* Internal-board visual home anchor: art-toy ghost marker (non-interactive). */
 .internal-art-anchor-ghost {
   opacity: 1;
@@ -2341,6 +2371,9 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-toy-fx-shell {
   position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   margin-left: 44px;
   top: 37px;
   z-index: 4;
@@ -2365,6 +2398,14 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   width: 136px;
   height: 136px;
   border-radius: 16px;
+  cursor: default;
+  display: none;
+}
+
+.art-toy-fx-card {
+  width: 136px;
+  height: 136px;
+  border-radius: 16px;
 }
 
 .art-toy-fx-current:hover,
@@ -2375,6 +2416,9 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 .art-toy-fx-current:active,
 .art-toy-fx-card:active {
   transform: translateY(1px) scale(0.98);
+}
+.art-toy-fx-current:active {
+  transform: none;
 }
 
 .art-toy-fx-stage {
@@ -2414,18 +2458,23 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 }
 
 .art-toy-fx-grid {
-  position: absolute;
-  top: 0;
-  left: calc(100% + 10px);
-  display: grid;
-  grid-template-columns: repeat(3, 68px);
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   gap: 8px;
   padding: 10px;
   border-radius: 12px;
   border: 1px solid rgba(133, 178, 255, 0.35);
   background: rgba(6, 10, 24, 0.94);
   box-shadow: 0 18px 34px rgba(0, 0, 0, 0.6);
-  z-index: 30;
+  z-index: 1;
+}
+
+.art-toy-fx-card .art-toy-fx-stage {
+  width: 122px;
+  height: 122px;
+  border-radius: 13px;
 }
 
 .art-toy-fx-grid[hidden] {
