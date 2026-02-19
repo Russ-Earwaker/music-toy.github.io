@@ -4248,6 +4248,8 @@ function setupSticker(panel) {
   const syncStickerLayerDimming = () => {
     const { main, dimmed } = ensureStickerLayerBuckets();
     const selected = selectedColorSlot == null ? null : normalizeSlot(selectedColorSlot);
+    const flipbookPlaybackActive = !!stickerFlipbookMode && !!document.querySelector('.toy-panel.toy-playing');
+    dimmed.setAttribute('opacity', flipbookPlaybackActive ? '0' : '0.34');
     const groups = layer.querySelectorAll('g[data-slot]');
     for (const g of groups) {
       const slot = normalizeSlot(g.getAttribute('data-slot'));
