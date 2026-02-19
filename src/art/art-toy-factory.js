@@ -4968,6 +4968,17 @@ function setupSticker(panel) {
     },
   });
   customisePanel.appendChild(thicknessControlApi.root);
+  const randomArtBtn = document.createElement('button');
+  randomArtBtn.type = 'button';
+  randomArtBtn.className = 'c-btn art-line-empty-action-btn art-sticker-random-art-btn';
+  randomArtBtn.setAttribute('aria-label', 'Randomize sticker art');
+  randomArtBtn.title = 'Random Art';
+  randomArtBtn.style.setProperty('--c-btn-size', '144px');
+  randomArtBtn.innerHTML = BUTTON_ICON_HTML;
+  const randomArtCore = randomArtBtn.querySelector('.c-btn-core');
+  if (randomArtCore) randomArtCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomArt.png')");
+  customisePanel.appendChild(randomArtBtn);
+  try { customisePanel.insertBefore(randomArtBtn, thicknessControlApi.root); } catch {}
   const canvasEmptyPrompt = document.createElement('div');
   canvasEmptyPrompt.className = 'art-sticker-empty-prompt';
   canvasEmptyPrompt.style.left = `${(AREA_MIN_X + 10).toFixed(2)}px`;
@@ -5255,6 +5266,7 @@ function setupSticker(panel) {
     canvasEmptyPrompt.hidden = true;
     canvasDrawPrompt.hidden = true;
     selectedColorSlot = null;
+    renderAll();
     pickerWrap.hidden = true;
     pickerTitle.hidden = true;
     try { refreshCustomizeUi(); } catch {}
@@ -5746,8 +5758,9 @@ function setupSticker(panel) {
     return points;
   };
 
-  panel.onArtRandomAll = () => {
-    if (!activeSlots.size) activateAllSlots();
+  const randomizeStickerArt = ({ ensureActive = false } = {}) => {
+    if (ensureActive && !activeSlots.size) activateAllSlots();
+    if (!activeSlots.size) return false;
     if (isShapeFx(currentFxId)) {
       const kind = shapeKindForFx(currentFxId);
       for (const slot of activeSlots) {
@@ -5787,6 +5800,18 @@ function setupSticker(panel) {
     try { if (window.__MT_DEBUG_STICKER_DRAW_AREA) requestAnimationFrame(() => logStickerDrawAreaDebug('random-all')); } catch {}
     try { if (window.__MT_DEBUG_ART_SIZE) requestAnimationFrame(() => logStickerSizeMetrics('random-all')); } catch {}
     markSceneDirtySafe();
+    return true;
+  };
+
+  randomArtBtn.addEventListener('pointerdown', (ev) => {
+    if (ev.button != null && ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    randomizeStickerArt({ ensureActive: false });
+  });
+
+  panel.onArtRandomAll = () => {
+    randomizeStickerArt({ ensureActive: true });
   };
 
   panel.onArtClear = () => {

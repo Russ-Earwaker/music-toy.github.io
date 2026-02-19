@@ -1942,6 +1942,13 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   gap: 12px;
 }
 
+.art-sticker-random-art-btn {
+  --c-btn-size: 144px;
+  width: 144px;
+  height: 144px;
+  margin: 0 0 10px 0;
+}
+
 .art-toy-panel:not([data-controls-visible='1']) .art-sticker-empty-prompt {
   display: none !important;
 }
