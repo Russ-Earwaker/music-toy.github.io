@@ -4228,10 +4228,16 @@ function setupSticker(panel) {
     const shapes = Array.isArray(slotShapes[i]) && slotShapes[i].length > 0;
     return strokes || shapes;
   };
+  const getSlotDisplayOpacity = (slot) => {
+    const i = normalizeSlot(slot);
+    if (selectedColorSlot == null) return 1;
+    return normalizeSlot(selectedColorSlot) === i ? 1 : 0.34;
+  };
 
   const renderSlot = (slot) => {
     const i = normalizeSlot(slot);
     syncStrokeStylesForSlot(i);
+    const slotOpacity = getSlotDisplayOpacity(i);
     const oldNodes = layer.querySelectorAll(`[data-slot="${i}"]`);
     oldNodes.forEach((n) => { try { n.remove(); } catch {} });
     const strokes = drawingState.getSlotStrokes(i);
@@ -4246,6 +4252,7 @@ function setupSticker(panel) {
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', strokeStyle.color);
       path.setAttribute('stroke-width', String(strokeStyle.width));
+      path.setAttribute('opacity', String(slotOpacity));
       path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('stroke-linejoin', 'round');
       layer.appendChild(path);
@@ -4270,6 +4277,7 @@ function setupSticker(panel) {
         node.setAttribute('fill', shapeColor);
         node.setAttribute('stroke', shapeColor);
         node.setAttribute('stroke-width', String(shapeWidth));
+        node.setAttribute('opacity', String(slotOpacity));
         node.setAttribute('stroke-linecap', 'butt');
         node.setAttribute('stroke-linejoin', 'miter');
         node.setAttribute('paint-order', 'stroke');
@@ -4290,6 +4298,7 @@ function setupSticker(panel) {
       poly.setAttribute('fill', shapeColor);
       poly.setAttribute('stroke', shapeColor);
       poly.setAttribute('stroke-width', String(shapeWidth));
+      poly.setAttribute('opacity', String(slotOpacity));
       poly.setAttribute('stroke-linecap', 'butt');
       poly.setAttribute('stroke-linejoin', 'miter');
       poly.setAttribute('paint-order', 'stroke');
@@ -4869,6 +4878,7 @@ function setupSticker(panel) {
   const lineButtonsTitle = document.createElement('div');
   lineButtonsTitle.className = 'art-line-style-subhead art-line-style-subhead-active-lines';
   lineButtonsTitle.textContent = 'Active Lines';
+  lineButtonsTitle.hidden = true;
   customisePanel.appendChild(lineButtonsTitle);
 
   const lineButtonsHost = document.createElement('div');
@@ -4879,6 +4889,10 @@ function setupSticker(panel) {
   noteLayerPanel.className = 'art-sticker-note-layer-panel';
   noteLayerPanel.style.left = `${(AREA_MIN_X + TOTAL_LIMIT_W + 12).toFixed(2)}px`;
   noteLayerPanel.style.top = `${AREA_MIN_Y.toFixed(2)}px`;
+  const noteLayerTitle = document.createElement('div');
+  noteLayerTitle.className = 'art-sticker-note-layer-title';
+  noteLayerTitle.textContent = 'Note Layers';
+  noteLayerPanel.appendChild(noteLayerTitle);
   panel.appendChild(noteLayerPanel);
 
   const noteButtonHitUntilBySlot = new Map();
@@ -4952,12 +4966,14 @@ function setupSticker(panel) {
     const i = normalizeSlot(slot);
     if (selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i) {
       selectedColorSlot = null;
+      renderAll();
       refreshCustomizeUi();
       syncDragArea();
       syncAllShapeHandles();
       return;
     }
     selectedColorSlot = i;
+    renderAll();
     refreshCustomizeUi();
     syncDragArea();
     syncAllShapeHandles();
@@ -4966,6 +4982,7 @@ function setupSticker(panel) {
   const refreshNoteLayerUi = () => {
     const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
     noteLayerPanel.innerHTML = '';
+    noteLayerPanel.appendChild(noteLayerTitle);
     noteLayerPanel.hidden = panel.dataset.controlsVisible !== '1' || active.length === 0;
     if (noteLayerPanel.hidden) return;
     for (const slot of active) {
@@ -4974,16 +4991,16 @@ function setupSticker(panel) {
 
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'c-btn art-line-color-btn art-sticker-note-btn';
+      btn.className = 'c-btn art-sticker-note-btn';
       btn.dataset.noteSlot = String(slot);
       btn.title = `Select Note ${slot + 1}`;
       btn.setAttribute('aria-label', `Select note layer ${slot + 1}`);
       btn.style.setProperty('--c-btn-size', '88px');
-      btn.style.setProperty('--accent', '#60a5fa');
       btn.innerHTML = BUTTON_ICON_HTML;
       const core = btn.querySelector('.c-btn-core');
-      if (core) core.style.setProperty('--c-btn-icon-url', 'none');
+      if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_NoteLayer.png')");
       btn.classList.toggle('is-selected', selectedColorSlot != null && normalizeSlot(selectedColorSlot) === slot);
+      btn.classList.toggle('is-dimmed', selectedColorSlot != null && normalizeSlot(selectedColorSlot) !== slot);
       applyNoteButtonHitState(slot);
       btn.addEventListener('pointerdown', (ev) => {
         if (ev.button != null && ev.button !== 0) return;
@@ -4993,23 +5010,25 @@ function setupSticker(panel) {
       });
       row.appendChild(btn);
 
-      const clearBtn = document.createElement('button');
-      clearBtn.type = 'button';
-      clearBtn.className = 'c-btn art-line-clear-btn art-sticker-note-clear-btn';
-      clearBtn.setAttribute('aria-label', `Clear note ${slot + 1} drawings`);
-      clearBtn.title = `Clear Note ${slot + 1}`;
-      clearBtn.style.setProperty('--c-btn-size', '58px');
-      clearBtn.style.setProperty('--accent', '#f87171');
-      clearBtn.innerHTML = BUTTON_ICON_HTML;
-      const clearCore = clearBtn.querySelector('.c-btn-core');
-      if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
-      clearBtn.addEventListener('pointerdown', (ev) => {
-        if (ev.button != null && ev.button !== 0) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        clearSlotDrawing(slot);
-      });
-      row.appendChild(clearBtn);
+      if (hasSlotDrawing(slot)) {
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'c-btn art-line-clear-btn art-sticker-note-clear-btn';
+        clearBtn.setAttribute('aria-label', `Clear note ${slot + 1} drawings`);
+        clearBtn.title = `Clear Note ${slot + 1}`;
+        clearBtn.style.setProperty('--c-btn-size', '58px');
+        clearBtn.style.setProperty('--accent', '#f87171');
+        clearBtn.innerHTML = BUTTON_ICON_HTML;
+        const clearCore = clearBtn.querySelector('.c-btn-core');
+        if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
+        clearBtn.addEventListener('pointerdown', (ev) => {
+          if (ev.button != null && ev.button !== 0) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          clearSlotDrawing(slot);
+        });
+        row.appendChild(clearBtn);
+      }
       noteLayerPanel.appendChild(row);
     }
   };
@@ -5073,6 +5092,7 @@ function setupSticker(panel) {
     }
     if (selectedColorSlot != null && !active.includes(normalizeSlot(selectedColorSlot))) {
       selectedColorSlot = null;
+      renderAll();
     }
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
       const row = document.createElement('div');

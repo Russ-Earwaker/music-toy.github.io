@@ -1859,8 +1859,31 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   gap: 8px;
 }
 
+.art-sticker-note-layer-title {
+  color: rgba(214, 235, 255, 0.92);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
 .art-sticker-note-btn {
   --c-btn-size: 88px;
+  transition: transform 140ms ease, filter 140ms ease;
+}
+
+.art-sticker-note-btn.is-dimmed {
+  filter: brightness(0.45) saturate(0.65);
+}
+
+.art-sticker-note-btn.is-selected {
+  filter: brightness(1.2) saturate(1.15);
+}
+
+.art-sticker-note-btn.is-note-hit {
+  filter: brightness(1.86) saturate(1.55) !important;
+  transform: scale(1.12);
 }
 
 .art-sticker-note-clear-btn {
