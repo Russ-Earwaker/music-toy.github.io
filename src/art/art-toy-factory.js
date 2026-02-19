@@ -1191,7 +1191,7 @@ function setupFireworks(panel) {
 
   const pickerTitle = document.createElement('div');
   pickerTitle.className = 'art-line-style-subhead';
-  pickerTitle.textContent = 'Line Color';
+  pickerTitle.textContent = 'Color';
   pickerTitle.hidden = true;
   customisePanel.appendChild(pickerTitle);
 
@@ -2988,7 +2988,7 @@ function setupLaserTrails(panel) {
 
   const lineButtonsTitle = document.createElement('div');
   lineButtonsTitle.className = 'art-line-style-subhead art-line-style-subhead-active-lines';
-  lineButtonsTitle.textContent = 'Active Lines';
+  lineButtonsTitle.textContent = 'Paint Color';
   customisePanel.appendChild(lineButtonsTitle);
 
   const lineButtonsHost = document.createElement('div');
@@ -4141,9 +4141,12 @@ function setupSticker(panel) {
   const palette = ['#7bf6ff', '#86efac', '#fde047', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fca5a5', '#a7f3d0'];
   const drawingState = createArtDrawingState({ slotCount: ART_SLOT_COUNT });
   const slotShapes = Array.from({ length: ART_SLOT_COUNT }, () => []);
+  const slotStrokeStyles = Array.from({ length: ART_SLOT_COUNT }, () => []);
   const activeSlots = new Set();
   const slotHandleEls = Array.from({ length: ART_SLOT_COUNT }, () => null);
-  let selectedColorSlot = null;
+  let selectedColorSlot = null; // note-layer selection
+  let selectedPaintIndex = 0;
+  let selectedPaintColor = palette[0];
   let stickerStrokeMultiplier = 5;
   let refreshCustomizeUi = () => {};
   let setCustomiseOpen = () => {};
@@ -4193,11 +4196,32 @@ function setupSticker(panel) {
   // Sticker needs an additional visual gain to match the perceived beam weight of Light Paths.
   const STICKER_BASE_STROKE_WIDTH = 5.4;
   const STICKER_STROKE_MATCH_MULTIPLIER = 2.4; // tweak here if you want closer/thicker parity
-  const getBaseStrokeWidth = () => Math.max(
+  const getPlacementStrokeWidth = () => Math.max(
     1.2,
     STICKER_BASE_STROKE_WIDTH * (Number(stickerStrokeMultiplier) || 1) * STICKER_STROKE_MATCH_MULTIPLIER
   );
-  const getSlotStrokeWidth = () => getBaseStrokeWidth();
+  const getStrokeStyleAt = (slot, strokeIndex) => {
+    const i = normalizeSlot(slot);
+    const list = Array.isArray(slotStrokeStyles[i]) ? slotStrokeStyles[i] : [];
+    const style = list[strokeIndex] || null;
+    return {
+      color: String(style?.color || palette[i] || selectedPaintColor || '#7bf6ff'),
+      width: Math.max(1.2, Number(style?.width) || getPlacementStrokeWidth()),
+    };
+  };
+  const syncStrokeStylesForSlot = (slot) => {
+    const i = normalizeSlot(slot);
+    const strokes = drawingState.getSlotStrokes(i);
+    const styles = Array.isArray(slotStrokeStyles[i]) ? slotStrokeStyles[i] : (slotStrokeStyles[i] = []);
+    const count = Array.isArray(strokes) ? strokes.length : 0;
+    while (styles.length < count) {
+      styles.push({
+        color: String(palette[i] || selectedPaintColor || '#7bf6ff'),
+        width: getPlacementStrokeWidth(),
+      });
+    }
+    if (styles.length > count) styles.length = count;
+  };
   const hasSlotDrawing = (slot) => {
     const i = normalizeSlot(slot);
     const strokes = drawingState.hasSlotStrokes(i);
@@ -4207,20 +4231,21 @@ function setupSticker(panel) {
 
   const renderSlot = (slot) => {
     const i = normalizeSlot(slot);
+    syncStrokeStylesForSlot(i);
     const oldNodes = layer.querySelectorAll(`[data-slot="${i}"]`);
     oldNodes.forEach((n) => { try { n.remove(); } catch {} });
     const strokes = drawingState.getSlotStrokes(i);
-    const width = getSlotStrokeWidth(i);
     for (let si = 0; si < strokes.length; si++) {
       const d = pointsToPath(strokes[si]);
       if (!d) continue;
+      const strokeStyle = getStrokeStyleAt(i, si);
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('class', 'art-sticker-path');
       path.setAttribute('data-slot', String(i));
       path.setAttribute('d', d);
       path.setAttribute('fill', 'none');
-      path.setAttribute('stroke', palette[i]);
-      path.setAttribute('stroke-width', String(width));
+      path.setAttribute('stroke', strokeStyle.color);
+      path.setAttribute('stroke-width', String(strokeStyle.width));
       path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('stroke-linejoin', 'round');
       layer.appendChild(path);
@@ -4234,15 +4259,17 @@ function setupSticker(panel) {
       const half = size * 0.5;
       const rot = Number(shape?.rot) || 0;
       const kind = String(shape?.kind || '');
+      const shapeColor = String(shape?.color || palette[i] || selectedPaintColor || '#7bf6ff');
+      const shapeWidth = Math.max(1.2, Number(shape?.strokeWidth) || getPlacementStrokeWidth());
       if (kind === 'circle') {
         const node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         node.setAttribute('data-slot', String(i));
         node.setAttribute('cx', String(cx));
         node.setAttribute('cy', String(cy));
         node.setAttribute('r', String(half));
-        node.setAttribute('fill', palette[i]);
-        node.setAttribute('stroke', palette[i]);
-        node.setAttribute('stroke-width', String(width));
+        node.setAttribute('fill', shapeColor);
+        node.setAttribute('stroke', shapeColor);
+        node.setAttribute('stroke-width', String(shapeWidth));
         node.setAttribute('stroke-linecap', 'butt');
         node.setAttribute('stroke-linejoin', 'miter');
         node.setAttribute('paint-order', 'stroke');
@@ -4260,9 +4287,9 @@ function setupSticker(panel) {
       const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       poly.setAttribute('data-slot', String(i));
       poly.setAttribute('points', pts.join(' '));
-      poly.setAttribute('fill', palette[i]);
-      poly.setAttribute('stroke', palette[i]);
-      poly.setAttribute('stroke-width', String(width));
+      poly.setAttribute('fill', shapeColor);
+      poly.setAttribute('stroke', shapeColor);
+      poly.setAttribute('stroke-width', String(shapeWidth));
       poly.setAttribute('stroke-linecap', 'butt');
       poly.setAttribute('stroke-linejoin', 'miter');
       poly.setAttribute('paint-order', 'stroke');
@@ -4304,6 +4331,7 @@ function setupSticker(panel) {
   const clearSlotDrawing = (slot) => {
     const i = normalizeSlot(slot);
     drawingState.clearSlot(i);
+    slotStrokeStyles[i] = [];
     slotShapes[i] = [];
     renderSlot(i);
     syncShapeHandle();
@@ -4315,7 +4343,10 @@ function setupSticker(panel) {
 
   const clearAllDrawings = () => {
     drawingState.clearAll();
-    for (let i = 0; i < ART_SLOT_COUNT; i++) slotShapes[i] = [];
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      slotShapes[i] = [];
+      slotStrokeStyles[i] = [];
+    }
     renderAll();
     syncShapeHandle();
     fitDragAreaToDrawings();
@@ -4332,7 +4363,9 @@ function setupSticker(panel) {
       kind: String(kind),
       x: clampX(x),
       y: clampY(y),
-      size: Math.max(26, getSlotStrokeWidth(i) * 4.4),
+      size: Math.max(26, getPlacementStrokeWidth() * 4.4),
+      color: selectedPaintColor,
+      strokeWidth: getPlacementStrokeWidth(),
       rot: 0,
     };
     list.push(shape);
@@ -4593,6 +4626,10 @@ function setupSticker(panel) {
           if (dropOnTrash) {
             const idx = strokeList.indexOf(stroke);
             if (idx >= 0) strokeList.splice(idx, 1);
+            if (idx >= 0) {
+              const styleList = Array.isArray(slotStrokeStyles[selected]) ? slotStrokeStyles[selected] : [];
+              if (idx < styleList.length) styleList.splice(idx, 1);
+            }
             drawingState.setSlotStrokes(selected, strokeList);
             renderSlot(selected);
             fitDragAreaToDrawings();
@@ -4641,16 +4678,16 @@ function setupSticker(panel) {
     const strokes = drawingState.getSlotStrokes(i);
     const shapes = Array.isArray(slotShapes[i]) ? slotShapes[i] : [];
     if (!strokes.length && !shapes.length) return;
-    const width = Math.max(1.4, getSlotStrokeWidth(i) * 1.22);
     for (let si = 0; si < strokes.length; si++) {
       const d = pointsToPath(strokes[si]);
       if (!d) continue;
+      const style = getStrokeStyleAt(i, si);
       const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       p.setAttribute('class', 'art-sticker-path-hit');
       p.setAttribute('d', d);
       p.setAttribute('fill', 'none');
-      p.setAttribute('stroke', palette[i]);
-      p.setAttribute('stroke-width', String(width));
+      p.setAttribute('stroke', style.color);
+      p.setAttribute('stroke-width', String(Math.max(1.4, style.width * 1.22)));
       p.setAttribute('stroke-linecap', 'round');
       p.setAttribute('stroke-linejoin', 'round');
       hitLayer.appendChild(p);
@@ -4664,6 +4701,8 @@ function setupSticker(panel) {
       const half = size * 0.5;
       const rot = Number(shape?.rot) || 0;
       const kind = String(shape?.kind || '');
+      const shapeColor = String(shape?.color || palette[i] || selectedPaintColor || '#7bf6ff');
+      const shapeWidth = Math.max(1.4, (Number(shape?.strokeWidth) || getPlacementStrokeWidth()) * 1.22);
       let node = null;
       if (kind === 'circle') {
         node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -4684,9 +4723,9 @@ function setupSticker(panel) {
       }
       if (!node) continue;
       node.setAttribute('class', 'art-sticker-path-hit');
-      node.setAttribute('fill', palette[i]);
-      node.setAttribute('stroke', palette[i]);
-      node.setAttribute('stroke-width', String(width));
+      node.setAttribute('fill', shapeColor);
+      node.setAttribute('stroke', shapeColor);
+      node.setAttribute('stroke-width', String(shapeWidth));
       node.setAttribute('stroke-linecap', 'butt');
       node.setAttribute('stroke-linejoin', 'miter');
       node.setAttribute('paint-order', 'stroke');
@@ -4780,8 +4819,8 @@ function setupSticker(panel) {
     const i = normalizeSlot(slot);
     drawPreviewPath.style.display = '';
     drawPreviewPath.setAttribute('d', pointsToPath(points));
-    drawPreviewPath.setAttribute('stroke', palette[i]);
-    drawPreviewPath.setAttribute('stroke-width', String(getSlotStrokeWidth(i)));
+    drawPreviewPath.setAttribute('stroke', String(selectedPaintColor || palette[i] || '#7bf6ff'));
+    drawPreviewPath.setAttribute('stroke-width', String(getPlacementStrokeWidth()));
   };
 
   const syncDragArea = () => {
@@ -4822,7 +4861,6 @@ function setupSticker(panel) {
       const n = Number(next);
       if (!Number.isFinite(n)) return;
       stickerStrokeMultiplier = Math.max(0.2, n);
-      renderAll();
       markSceneDirtySafe();
     },
   });
@@ -4837,34 +4875,40 @@ function setupSticker(panel) {
   lineButtonsHost.className = 'art-line-color-buttons';
   customisePanel.appendChild(lineButtonsHost);
 
-  const colorButtonHitUntilBySlot = new Map();
-  const colorButtonHitTimerBySlot = new Map();
-  const applyColorButtonHitState = (slot) => {
+  const noteLayerPanel = document.createElement('div');
+  noteLayerPanel.className = 'art-sticker-note-layer-panel';
+  noteLayerPanel.style.left = `${(AREA_MIN_X + TOTAL_LIMIT_W + 12).toFixed(2)}px`;
+  noteLayerPanel.style.top = `${AREA_MIN_Y.toFixed(2)}px`;
+  panel.appendChild(noteLayerPanel);
+
+  const noteButtonHitUntilBySlot = new Map();
+  const noteButtonHitTimerBySlot = new Map();
+  const applyNoteButtonHitState = (slot) => {
     const i = normalizeSlot(slot);
-    const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+    const btn = noteLayerPanel.querySelector(`button[data-note-slot="${i}"]`);
     if (!btn) return;
-    const until = Number(colorButtonHitUntilBySlot.get(i) || 0);
+    const until = Number(noteButtonHitUntilBySlot.get(i) || 0);
     const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     btn.classList.toggle('is-note-hit', until > now);
   };
   pulseColorButtonHit = (slot) => {
     const i = normalizeSlot(slot);
     const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    colorButtonHitUntilBySlot.set(i, now + 320);
-    const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+    noteButtonHitUntilBySlot.set(i, now + 320);
+    const btn = noteLayerPanel.querySelector(`button[data-note-slot="${i}"]`);
     if (btn) {
       btn.classList.remove('is-note-hit');
       void btn.offsetWidth;
       btn.classList.add('is-note-hit');
     }
-    try { clearTimeout(colorButtonHitTimerBySlot.get(i)); } catch {}
-    colorButtonHitTimerBySlot.set(i, setTimeout(() => {
-      const latestUntil = Number(colorButtonHitUntilBySlot.get(i) || 0);
+    try { clearTimeout(noteButtonHitTimerBySlot.get(i)); } catch {}
+    noteButtonHitTimerBySlot.set(i, setTimeout(() => {
+      const latestUntil = Number(noteButtonHitUntilBySlot.get(i) || 0);
       const checkNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       if (latestUntil > checkNow) return;
-      colorButtonHitUntilBySlot.delete(i);
-      applyColorButtonHitState(i);
-      colorButtonHitTimerBySlot.delete(i);
+      noteButtonHitUntilBySlot.delete(i);
+      applyNoteButtonHitState(i);
+      noteButtonHitTimerBySlot.delete(i);
     }, 340));
   };
 
@@ -4885,24 +4929,20 @@ function setupSticker(panel) {
 
   const pickerApi = createArtHueSatPicker({
     size: 296,
-    color: palette[0],
+    color: selectedPaintColor,
     onChange: ({ hex } = {}) => {
-      if (selectedColorSlot == null) return;
-      const i = normalizeSlot(selectedColorSlot);
       const c = String(hex || '').trim();
       if (!/^#([0-9a-f]{6})$/i.test(c)) return;
-      palette[i] = c;
-      renderSlot(i);
-      const btn = lineButtonsHost.querySelector(`button[data-slot="${i}"]`);
+      selectedPaintColor = c;
+      palette[selectedPaintIndex] = c;
+      const btn = lineButtonsHost.querySelector(`button[data-color-index="${selectedPaintIndex}"]`);
       if (btn) btn.style.setProperty('--accent', c);
     },
     onCommit: ({ hex } = {}) => {
-      if (selectedColorSlot == null) return;
-      const i = normalizeSlot(selectedColorSlot);
       const c = String(hex || '').trim();
       if (!/^#([0-9a-f]{6})$/i.test(c)) return;
-      palette[i] = c;
-      renderSlot(i);
+      selectedPaintColor = c;
+      palette[selectedPaintIndex] = c;
       markSceneDirtySafe();
     },
   });
@@ -4912,20 +4952,66 @@ function setupSticker(panel) {
     const i = normalizeSlot(slot);
     if (selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i) {
       selectedColorSlot = null;
-      pickerWrap.hidden = true;
-      pickerTitle.hidden = true;
       refreshCustomizeUi();
       syncDragArea();
       syncAllShapeHandles();
       return;
     }
     selectedColorSlot = i;
-    pickerWrap.hidden = false;
-    pickerTitle.hidden = false;
-    pickerApi.setColor(palette[i]);
     refreshCustomizeUi();
     syncDragArea();
     syncAllShapeHandles();
+  };
+
+  const refreshNoteLayerUi = () => {
+    const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    noteLayerPanel.innerHTML = '';
+    noteLayerPanel.hidden = panel.dataset.controlsVisible !== '1' || active.length === 0;
+    if (noteLayerPanel.hidden) return;
+    for (const slot of active) {
+      const row = document.createElement('div');
+      row.className = 'art-sticker-note-row';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'c-btn art-line-color-btn art-sticker-note-btn';
+      btn.dataset.noteSlot = String(slot);
+      btn.title = `Select Note ${slot + 1}`;
+      btn.setAttribute('aria-label', `Select note layer ${slot + 1}`);
+      btn.style.setProperty('--c-btn-size', '88px');
+      btn.style.setProperty('--accent', '#60a5fa');
+      btn.innerHTML = BUTTON_ICON_HTML;
+      const core = btn.querySelector('.c-btn-core');
+      if (core) core.style.setProperty('--c-btn-icon-url', 'none');
+      btn.classList.toggle('is-selected', selectedColorSlot != null && normalizeSlot(selectedColorSlot) === slot);
+      applyNoteButtonHitState(slot);
+      btn.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        selectLineForCustomise(slot);
+      });
+      row.appendChild(btn);
+
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'c-btn art-line-clear-btn art-sticker-note-clear-btn';
+      clearBtn.setAttribute('aria-label', `Clear note ${slot + 1} drawings`);
+      clearBtn.title = `Clear Note ${slot + 1}`;
+      clearBtn.style.setProperty('--c-btn-size', '58px');
+      clearBtn.style.setProperty('--accent', '#f87171');
+      clearBtn.innerHTML = BUTTON_ICON_HTML;
+      const clearCore = clearBtn.querySelector('.c-btn-core');
+      if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
+      clearBtn.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        clearSlotDrawing(slot);
+      });
+      row.appendChild(clearBtn);
+      noteLayerPanel.appendChild(row);
+    }
   };
 
   refreshCustomizeUi = () => {
@@ -4980,69 +5066,44 @@ function setupSticker(panel) {
       emptyActions.appendChild(enterBtn);
       empty.appendChild(emptyActions);
       lineButtonsHost.appendChild(empty);
+      refreshNoteLayerUi();
       syncDragArea();
       syncAllShapeHandles();
       return;
     }
     if (selectedColorSlot != null && !active.includes(normalizeSlot(selectedColorSlot))) {
       selectedColorSlot = null;
-      pickerWrap.hidden = true;
-      pickerTitle.hidden = true;
     }
-    for (const i of active) {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
       const row = document.createElement('div');
       row.className = 'art-line-color-row';
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'c-btn art-line-color-btn';
-      btn.dataset.slot = String(i);
-      btn.title = `Edit Sticker ${i + 1}`;
-      btn.setAttribute('aria-label', `Edit sticker ${i + 1} color`);
+      btn.dataset.colorIndex = String(i);
+      btn.title = `Pick color ${i + 1}`;
+      btn.setAttribute('aria-label', `Pick paint color ${i + 1}`);
       btn.style.setProperty('--c-btn-size', '112px');
       btn.style.setProperty('--accent', palette[i]);
       btn.innerHTML = BUTTON_ICON_HTML;
       const colorCore = btn.querySelector('.c-btn-core');
       if (colorCore) colorCore.style.setProperty('--c-btn-icon-url', 'none');
-      btn.classList.toggle('is-selected', selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i);
-      applyColorButtonHitState(i);
+      btn.classList.toggle('is-selected', selectedPaintIndex === i);
       btn.addEventListener('pointerdown', (ev) => {
         if (ev.button != null && ev.button !== 0) return;
         ev.preventDefault();
         ev.stopPropagation();
-        selectLineForCustomise(i);
+        selectedPaintIndex = i;
+        selectedPaintColor = String(palette[i] || '#7bf6ff');
+        pickerWrap.hidden = false;
+        pickerTitle.hidden = false;
+        pickerApi.setColor(selectedPaintColor);
+        refreshCustomizeUi();
       });
       row.appendChild(btn);
-
-      if (!hasSlotDrawing(i)) {
-        const helper = document.createElement('div');
-        helper.className = 'art-line-draw-hint';
-        const selected = selectedColorSlot != null && normalizeSlot(selectedColorSlot) === i;
-        const shapeMode = isShapeFx(currentFxId);
-        helper.textContent = selected
-          ? (shapeMode ? 'Tap to place shape' : 'Draw')
-          : (shapeMode ? 'Select to place shape' : 'Select to draw');
-        row.appendChild(helper);
-      } else {
-        const clearBtn = document.createElement('button');
-        clearBtn.type = 'button';
-        clearBtn.className = 'c-btn art-line-clear-btn';
-        clearBtn.setAttribute('aria-label', `Clear sticker ${i + 1}`);
-        clearBtn.title = `Clear sticker ${i + 1}`;
-        clearBtn.style.setProperty('--c-btn-size', '66px');
-        clearBtn.style.setProperty('--accent', '#f87171');
-        clearBtn.innerHTML = BUTTON_ICON_HTML;
-        const clearCore = clearBtn.querySelector('.c-btn-core');
-        if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
-        clearBtn.addEventListener('pointerdown', (ev) => {
-          if (ev.button != null && ev.button !== 0) return;
-          ev.preventDefault();
-          ev.stopPropagation();
-          clearSlotDrawing(i);
-        });
-        row.appendChild(clearBtn);
-      }
       lineButtonsHost.appendChild(row);
     }
+    refreshNoteLayerUi();
     syncDragArea();
     syncAllShapeHandles();
   };
@@ -5212,7 +5273,7 @@ function setupSticker(panel) {
   };
   const logStickerSizeMetrics = (reason = 'manual') => {
     try {
-      const widthWorld = getSlotStrokeWidth(0);
+      const widthWorld = getPlacementStrokeWidth();
       const panelRect = panel.getBoundingClientRect?.();
       const panelScreenW = Math.max(1, Number(panelRect?.width) || 1);
       const worldToScreen = panelScreenW / 220;
@@ -5376,6 +5437,11 @@ function setupSticker(panel) {
     if (release) appendStrokePoint(boardDrawPoints, release.x, release.y, 1.5);
     if (boardDrawMoved && boardDrawPoints.length >= 2) {
       drawingState.addSlotStroke(slot, boardDrawPoints);
+      const styleList = Array.isArray(slotStrokeStyles[slot]) ? slotStrokeStyles[slot] : (slotStrokeStyles[slot] = []);
+      styleList.push({
+        color: String(selectedPaintColor || palette[slot] || '#7bf6ff'),
+        width: getPlacementStrokeWidth(),
+      });
       renderSlot(slot);
       fitDragAreaToDrawings();
       syncDragArea();
@@ -5395,9 +5461,14 @@ function setupSticker(panel) {
 
   panel.onArtRandomMusic = () => {
     activateAllSlots();
+    if (selectedColorSlot == null) {
+      const first = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b)[0];
+      if (Number.isFinite(first)) selectedColorSlot = first;
+    }
     fitDragAreaToDrawings();
     syncDragArea();
     syncAllShapeHandles();
+    try { refreshCustomizeUi(); } catch {}
     try { if (window.__MT_DEBUG_STICKER_DRAW_AREA) requestAnimationFrame(() => logStickerDrawAreaDebug('random-music')); } catch {}
     try { if (window.__MT_DEBUG_ART_SIZE) requestAnimationFrame(() => logStickerSizeMetrics('random-music')); } catch {}
     markSceneDirtySafe();
@@ -5472,6 +5543,7 @@ function setupSticker(panel) {
       for (const slot of activeSlots) {
         const count = 1 + Math.floor(Math.random() * 3);
         slotShapes[slot] = [];
+        slotStrokeStyles[slot] = [];
         drawingState.setSlotStrokes(slot, []);
         for (let i = 0; i < count; i++) {
           const pts = randomStroke();
@@ -5484,8 +5556,16 @@ function setupSticker(panel) {
       for (const slot of activeSlots) {
         const count = 1 + Math.floor(Math.random() * 3);
         const strokes = [];
+        const styles = [];
         slotShapes[slot] = [];
-        for (let i = 0; i < count; i++) strokes.push(randomStroke());
+        for (let i = 0; i < count; i++) {
+          strokes.push(randomStroke());
+          styles.push({
+            color: palette[slot],
+            width: getPlacementStrokeWidth(),
+          });
+        }
+        slotStrokeStyles[slot] = styles;
         drawingState.setSlotStrokes(slot, strokes);
       }
     }
@@ -5505,7 +5585,10 @@ function setupSticker(panel) {
     pickerWrap.hidden = true;
     pickerTitle.hidden = true;
     drawingState.clearAll();
-    for (let i = 0; i < ART_SLOT_COUNT; i++) slotShapes[i] = [];
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      slotShapes[i] = [];
+      slotStrokeStyles[i] = [];
+    }
     renderAll();
     fitDragAreaToDrawings();
     syncDragArea();
@@ -5522,17 +5605,27 @@ function setupSticker(panel) {
     palette: palette.slice(0, ART_SLOT_COUNT),
     lineThickness: Number(stickerStrokeMultiplier) || 1,
     strokesBySlot: drawingState.exportState().strokesBySlot,
+    strokeStylesBySlot: slotStrokeStyles.map((list) => (Array.isArray(list)
+      ? list.map((s) => ({
+        color: String(s?.color || '#7bf6ff'),
+        width: Math.max(1.2, Number(s?.width) || getPlacementStrokeWidth()),
+      }))
+      : [])),
     shapesBySlot: slotShapes.map((list) => (Array.isArray(list)
       ? list.map((s) => ({
         kind: String(s?.kind || ''),
         x: Number(s?.x) || 0,
         y: Number(s?.y) || 0,
         size: Number(s?.size) || 52,
+        color: String(s?.color || '#7bf6ff'),
+        strokeWidth: Math.max(1.2, Number(s?.strokeWidth) || getPlacementStrokeWidth()),
         rot: Number(s?.rot) || 0,
       }))
       : [])),
     fx: clampStickerFxId(currentFxId),
     selectedColorSlot: selectedColorSlot == null ? null : normalizeSlot(selectedColorSlot),
+    selectedPaintIndex: selectedPaintIndex,
+    selectedPaintColor: String(selectedPaintColor || '#7bf6ff'),
     controlsVisible: panel.dataset.controlsVisible === '1',
   });
 
@@ -5560,6 +5653,22 @@ function setupSticker(panel) {
       }
     }
     drawingState.importState({ strokesBySlot: state.strokesBySlot });
+    if (Array.isArray(state.strokeStylesBySlot)) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const list = Array.isArray(state.strokeStylesBySlot[i]) ? state.strokeStylesBySlot[i] : [];
+        slotStrokeStyles[i] = list.map((s) => ({
+          color: String(s?.color || palette[i] || '#7bf6ff'),
+          width: Math.max(1.2, Number(s?.width) || getPlacementStrokeWidth()),
+        }));
+      }
+    } else {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const strokes = drawingState.getSlotStrokes(i);
+        slotStrokeStyles[i] = Array.isArray(strokes)
+          ? strokes.map(() => ({ color: palette[i], width: getPlacementStrokeWidth() }))
+          : [];
+      }
+    }
     if (Array.isArray(state.shapesBySlot)) {
       for (let i = 0; i < ART_SLOT_COUNT; i++) {
         const list = Array.isArray(state.shapesBySlot[i]) ? state.shapesBySlot[i] : [];
@@ -5568,6 +5677,8 @@ function setupSticker(panel) {
           x: clampX(s?.x),
           y: clampY(s?.y),
           size: Math.max(12, Number(s?.size) || 52),
+          color: String(s?.color || palette[i] || '#7bf6ff'),
+          strokeWidth: Math.max(1.2, Number(s?.strokeWidth) || getPlacementStrokeWidth()),
           rot: Number(s?.rot) || 0,
         }));
       }
@@ -5576,6 +5687,19 @@ function setupSticker(panel) {
     }
     if (state.fx != null) setStickerFx(state.fx, { announce: false });
     selectedColorSlot = state.selectedColorSlot == null ? null : normalizeSlot(state.selectedColorSlot);
+    if (state.selectedPaintIndex != null) {
+      const n = Math.trunc(Number(state.selectedPaintIndex));
+      if (Number.isFinite(n)) selectedPaintIndex = Math.max(0, Math.min(ART_SLOT_COUNT - 1, n));
+    }
+    if (state.selectedPaintColor != null) {
+      const c = String(state.selectedPaintColor || '').trim();
+      if (/^#([0-9a-f]{6})$/i.test(c)) {
+        selectedPaintColor = c;
+        palette[selectedPaintIndex] = c;
+      }
+    } else {
+      selectedPaintColor = String(palette[selectedPaintIndex] || '#7bf6ff');
+    }
     renderAll();
     fitDragAreaToDrawings();
     if (typeof state.controlsVisible === 'boolean') setBaseArtToyControlsVisible(panel, state.controlsVisible);
