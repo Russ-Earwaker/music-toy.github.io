@@ -1793,13 +1793,31 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 }
 
 .art-toy-panel[data-controls-visible='1'][data-has-active-sticker='1'] .art-sticker-draw-area,
+.art-toy-panel[data-controls-visible='1'][data-has-active-sticker='0'] .art-sticker-draw-area,
 .art-sticker-draw-area.is-dragging,
-.art-sticker-draw-area.is-board-draw-armed {
+.art-sticker-draw-area.is-board-draw-armed,
+.art-sticker-draw-area.is-collapsed-empty {
   opacity: 1;
 }
 
 .art-sticker-draw-area.is-board-draw-armed {
   pointer-events: auto;
+}
+
+.art-sticker-draw-area.is-music-drop-hover {
+  opacity: 1;
+  border-style: solid;
+  border-width: 3px;
+}
+
+.art-sticker-draw-area.is-music-drop-valid {
+  border-color: rgba(74, 222, 128, 0.98);
+  background: rgba(16, 120, 55, 0.22);
+}
+
+.art-sticker-draw-area.is-music-drop-invalid {
+  border-color: rgba(248, 113, 113, 0.98);
+  background: rgba(120, 24, 24, 0.24);
 }
 
 .art-toy-panel.art-toy-sticker {
@@ -1810,18 +1828,22 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-sticker-trash-btn {
   position: absolute;
-  right: 8px;
-  top: 8px;
+  left: 0;
+  top: 0;
   z-index: 24;
-  --c-btn-size: 62px;
-  width: 62px;
-  height: 62px;
+  --c-btn-size: 124px;
+  width: 124px;
+  height: 124px;
   padding: 0;
   border: none;
   background: transparent;
   cursor: pointer;
-  display: block;
+  display: none;
   --c-btn-bg: rgba(104, 108, 118, 0.92);
+}
+
+.art-toy-panel[data-controls-visible='1'][data-has-active-sticker='1'] .art-sticker-trash-btn {
+  display: block;
 }
 
 .art-sticker-trash-btn.is-armed {
@@ -1851,6 +1873,15 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   border: 1px solid rgba(147, 197, 255, 0.35);
   background: linear-gradient(160deg, rgba(9, 16, 36, 0.95), rgba(8, 12, 28, 0.96));
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.48);
+}
+
+.art-toy-panel:not([data-controls-visible='1']) .art-sticker-note-layer-panel,
+.art-toy-panel[data-has-active-sticker='0'] .art-sticker-note-layer-panel {
+  display: none !important;
+}
+
+.art-toy-panel[data-art-toy='sticker'][data-has-active-sticker='0'] .art-toy-fx-shell {
+  display: none !important;
 }
 
 .art-sticker-note-row {
@@ -1888,6 +1919,59 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 
 .art-sticker-note-clear-btn {
   --c-btn-size: 58px;
+}
+
+.art-sticker-empty-prompt {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: rgba(214, 235, 255, 0.92);
+}
+
+.art-sticker-empty-text {
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.art-sticker-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.art-toy-panel:not([data-controls-visible='1']) .art-sticker-empty-prompt {
+  display: none !important;
+}
+
+.art-toy-panel[data-has-active-sticker='1'] .art-sticker-empty-prompt {
+  display: none !important;
+}
+
+.art-sticker-draw-prompt {
+  position: absolute;
+  z-index: 5;
+  color: rgba(214, 235, 255, 0.92);
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.art-toy-panel:not([data-controls-visible='1']) .art-sticker-draw-prompt {
+  display: none !important;
+}
+
+.art-sticker-collapsed-hint {
+  position: absolute;
+  z-index: 5;
+  color: rgba(214, 235, 255, 0.92);
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 /* Internal-board visual home anchor: art-toy ghost marker (non-interactive). */

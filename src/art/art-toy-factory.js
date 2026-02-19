@@ -4228,18 +4228,42 @@ function setupSticker(panel) {
     const shapes = Array.isArray(slotShapes[i]) && slotShapes[i].length > 0;
     return strokes || shapes;
   };
-  const getSlotDisplayOpacity = (slot) => {
-    const i = normalizeSlot(slot);
-    if (selectedColorSlot == null) return 1;
-    return normalizeSlot(selectedColorSlot) === i ? 1 : 0.34;
+  const ensureStickerLayerBuckets = () => {
+    let main = layer.querySelector('g[data-sticker-layer-role="main"]');
+    let dimmed = layer.querySelector('g[data-sticker-layer-role="dimmed"]');
+    if (!main) {
+      main = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      main.setAttribute('data-sticker-layer-role', 'main');
+      layer.appendChild(main);
+    }
+    if (!dimmed) {
+      dimmed = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      dimmed.setAttribute('data-sticker-layer-role', 'dimmed');
+      dimmed.setAttribute('opacity', '0.34');
+      layer.appendChild(dimmed);
+    }
+    return { main, dimmed };
+  };
+  const syncStickerLayerDimming = () => {
+    const { main, dimmed } = ensureStickerLayerBuckets();
+    const selected = selectedColorSlot == null ? null : normalizeSlot(selectedColorSlot);
+    const groups = layer.querySelectorAll('g[data-slot]');
+    for (const g of groups) {
+      const slot = normalizeSlot(g.getAttribute('data-slot'));
+      const target = (selected != null && slot !== selected) ? dimmed : main;
+      if (g.parentNode !== target) target.appendChild(g);
+      g.removeAttribute('opacity');
+    }
+    dimmed.hidden = selected == null;
   };
 
   const renderSlot = (slot) => {
     const i = normalizeSlot(slot);
     syncStrokeStylesForSlot(i);
-    const slotOpacity = getSlotDisplayOpacity(i);
     const oldNodes = layer.querySelectorAll(`[data-slot="${i}"]`);
     oldNodes.forEach((n) => { try { n.remove(); } catch {} });
+    const slotGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    slotGroup.setAttribute('data-slot', String(i));
     const strokes = drawingState.getSlotStrokes(i);
     for (let si = 0; si < strokes.length; si++) {
       const d = pointsToPath(strokes[si]);
@@ -4247,15 +4271,13 @@ function setupSticker(panel) {
       const strokeStyle = getStrokeStyleAt(i, si);
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('class', 'art-sticker-path');
-      path.setAttribute('data-slot', String(i));
       path.setAttribute('d', d);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', strokeStyle.color);
       path.setAttribute('stroke-width', String(strokeStyle.width));
-      path.setAttribute('opacity', String(slotOpacity));
       path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('stroke-linejoin', 'round');
-      layer.appendChild(path);
+      slotGroup.appendChild(path);
     }
     const shapes = Array.isArray(slotShapes[i]) ? slotShapes[i] : [];
     for (let si = 0; si < shapes.length; si++) {
@@ -4270,18 +4292,16 @@ function setupSticker(panel) {
       const shapeWidth = Math.max(1.2, Number(shape?.strokeWidth) || getPlacementStrokeWidth());
       if (kind === 'circle') {
         const node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        node.setAttribute('data-slot', String(i));
         node.setAttribute('cx', String(cx));
         node.setAttribute('cy', String(cy));
         node.setAttribute('r', String(half));
         node.setAttribute('fill', shapeColor);
         node.setAttribute('stroke', shapeColor);
         node.setAttribute('stroke-width', String(shapeWidth));
-        node.setAttribute('opacity', String(slotOpacity));
         node.setAttribute('stroke-linecap', 'butt');
         node.setAttribute('stroke-linejoin', 'miter');
         node.setAttribute('paint-order', 'stroke');
-        layer.appendChild(node);
+        slotGroup.appendChild(node);
         continue;
       }
       const sides = kind === 'triangle' ? 3 : (kind === 'pentagon' ? 5 : 4);
@@ -4293,17 +4313,17 @@ function setupSticker(panel) {
         pts.push(`${x.toFixed(2)},${y.toFixed(2)}`);
       }
       const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-      poly.setAttribute('data-slot', String(i));
       poly.setAttribute('points', pts.join(' '));
       poly.setAttribute('fill', shapeColor);
       poly.setAttribute('stroke', shapeColor);
       poly.setAttribute('stroke-width', String(shapeWidth));
-      poly.setAttribute('opacity', String(slotOpacity));
       poly.setAttribute('stroke-linecap', 'butt');
       poly.setAttribute('stroke-linejoin', 'miter');
       poly.setAttribute('paint-order', 'stroke');
-      layer.appendChild(poly);
+      slotGroup.appendChild(poly);
     }
+    if (slotGroup.childNodes.length) layer.appendChild(slotGroup);
+    syncStickerLayerDimming();
   };
 
   const renderAll = () => {
@@ -4391,7 +4411,9 @@ function setupSticker(panel) {
   trashBtn.className = 'c-btn art-sticker-trash-btn';
   trashBtn.setAttribute('aria-label', 'Delete sticker shape');
   trashBtn.title = 'Delete Shape';
-  trashBtn.style.setProperty('--c-btn-size', '62px');
+  trashBtn.style.setProperty('--c-btn-size', '124px');
+  trashBtn.style.left = `${(AREA_MIN_X + TOTAL_LIMIT_W - 188).toFixed(2)}px`;
+  trashBtn.style.top = `${(AREA_MIN_Y - (124 * 0.65)).toFixed(2)}px`;
   trashBtn.style.setProperty('--accent', '#9f2c2c');
   trashBtn.innerHTML = BUTTON_ICON_HTML;
   const trashCore = trashBtn.querySelector('.c-btn-core');
@@ -4410,7 +4432,7 @@ function setupSticker(panel) {
   let stickerShapeDragging = false;
   const setStickerShapeDragging = (active) => {
     stickerShapeDragging = !!active;
-    trashBtn.style.display = '';
+    trashBtn.style.display = panel.dataset.controlsVisible === '1' ? '' : 'none';
     if (!stickerShapeDragging) setStickerTrashArmed(false);
   };
 
@@ -4470,7 +4492,7 @@ function setupSticker(panel) {
     setStickerTrashArmed(false);
     const selected = selectedColorSlot != null ? normalizeSlot(selectedColorSlot) : null;
     const visible = panel.dataset.controlsVisible === '1' && selected != null;
-    trashBtn.style.display = '';
+    trashBtn.style.display = panel.dataset.controlsVisible === '1' ? '' : 'none';
     if (!visible) return;
     const list = getSelectedShapeList();
     const strokeList = getSelectedStrokeList();
@@ -4832,16 +4854,83 @@ function setupSticker(panel) {
     drawPreviewPath.setAttribute('stroke-width', String(getPlacementStrokeWidth()));
   };
 
+  const PANEL_PX = 220;
+  const currentDropArea = {
+    x: AREA_MIN_X,
+    y: AREA_MIN_Y,
+    w: TOTAL_LIMIT_W,
+    h: TOTAL_LIMIT_H,
+  };
+  let collapsedHintEl = null;
   const syncDragArea = () => {
+    const controlsVisible = panel.dataset.controlsVisible === '1';
+    const hasActive = activeSlots.size > 0;
+    const collapsedEmpty = !controlsVisible && !hasActive;
     const armed = panel.dataset.controlsVisible === '1'
       && selectedColorSlot != null
       && activeSlots.has(normalizeSlot(selectedColorSlot));
+    const areaW = collapsedEmpty ? (TOTAL_LIMIT_W * 0.5) : TOTAL_LIMIT_W;
+    const areaH = collapsedEmpty ? (TOTAL_LIMIT_H * 0.5) : TOTAL_LIMIT_H;
+    currentDropArea.x = AREA_MIN_X;
+    currentDropArea.y = AREA_MIN_Y;
+    currentDropArea.w = areaW;
+    currentDropArea.h = areaH;
     drawAreaEl.style.left = `${AREA_MIN_X.toFixed(2)}px`;
     drawAreaEl.style.top = `${AREA_MIN_Y.toFixed(2)}px`;
-    drawAreaEl.style.width = `${TOTAL_LIMIT_W.toFixed(2)}px`;
-    drawAreaEl.style.height = `${TOTAL_LIMIT_H.toFixed(2)}px`;
+    drawAreaEl.style.width = `${areaW.toFixed(2)}px`;
+    drawAreaEl.style.height = `${areaH.toFixed(2)}px`;
     drawAreaEl.classList.toggle('is-board-draw-armed', armed);
+    drawAreaEl.classList.toggle('is-collapsed-empty', collapsedEmpty);
     drawAreaEl.style.pointerEvents = armed ? 'auto' : 'none';
+    if (collapsedHintEl) {
+      collapsedHintEl.hidden = !collapsedEmpty;
+      collapsedHintEl.style.left = `${(AREA_MIN_X + 14).toFixed(2)}px`;
+      collapsedHintEl.style.top = `${(AREA_MIN_Y + 14).toFixed(2)}px`;
+    }
+  };
+  panel.isArtMusicDropPoint = (clientX, clientY) => {
+    const panelRect = panel.getBoundingClientRect?.();
+    if (!panelRect || panelRect.width < 1 || panelRect.height < 1) return false;
+    const scaleX = panelRect.width / PANEL_PX;
+    const scaleY = panelRect.height / PANEL_PX;
+    const left = panelRect.left + currentDropArea.x * scaleX;
+    const top = panelRect.top + currentDropArea.y * scaleY;
+    const right = left + currentDropArea.w * scaleX;
+    const bottom = top + currentDropArea.h * scaleY;
+    return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
+  };
+  panel.onArtMusicDropHover = ({ active = false, valid = true } = {}) => {
+    const isActive = !!active;
+    drawAreaEl.classList.toggle('is-music-drop-hover', isActive);
+    drawAreaEl.classList.toggle('is-music-drop-valid', isActive && !!valid);
+    drawAreaEl.classList.toggle('is-music-drop-invalid', isActive && !valid);
+  };
+  panel.onArtMusicDropReject = () => {
+    try {
+      drawAreaEl.animate(
+        [
+          { transform: 'translateX(0px)' },
+          { transform: 'translateX(-8px)' },
+          { transform: 'translateX(8px)' },
+          { transform: 'translateX(-6px)' },
+          { transform: 'translateX(6px)' },
+          { transform: 'translateX(0px)' },
+        ],
+        { duration: 320, easing: 'ease-out' }
+      );
+    } catch {}
+    try {
+      if (collapsedHintEl) {
+        collapsedHintEl.animate(
+          [
+            { transform: 'scale(1)' },
+            { transform: 'scale(1.24)' },
+            { transform: 'scale(1)' },
+          ],
+          { duration: 360, easing: 'ease-out' }
+        );
+      }
+    } catch {}
   };
 
   panel.onArtSetActiveSlots = (slots = []) => {
@@ -4874,6 +4963,63 @@ function setupSticker(panel) {
     },
   });
   customisePanel.appendChild(thicknessControlApi.root);
+  const canvasEmptyPrompt = document.createElement('div');
+  canvasEmptyPrompt.className = 'art-sticker-empty-prompt';
+  canvasEmptyPrompt.style.left = `${(AREA_MIN_X + 10).toFixed(2)}px`;
+  canvasEmptyPrompt.style.top = `${(AREA_MIN_Y + 10).toFixed(2)}px`;
+  canvasEmptyPrompt.hidden = true;
+  const canvasEmptyText = document.createElement('div');
+  canvasEmptyText.className = 'art-sticker-empty-text';
+  canvasEmptyText.textContent = 'Drag music toys here or add music with:';
+  canvasEmptyPrompt.appendChild(canvasEmptyText);
+  const canvasEmptyActions = document.createElement('div');
+  canvasEmptyActions.className = 'art-sticker-empty-actions';
+  const emptyRandomBtn = document.createElement('button');
+  emptyRandomBtn.type = 'button';
+  emptyRandomBtn.className = 'c-btn art-line-empty-action-btn';
+  emptyRandomBtn.setAttribute('aria-label', 'Randomize art toy music');
+  emptyRandomBtn.title = 'Random Music';
+  emptyRandomBtn.innerHTML = BUTTON_ICON_HTML;
+  const emptyRandomCore = emptyRandomBtn.querySelector('.c-btn-core');
+  if (emptyRandomCore) emptyRandomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomNotes.png')");
+  emptyRandomBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const randomActionBtn = panel.querySelector(`[data-action="artToy:randomMusic"][data-art-toy-id="${panel.id}"]`)
+      || panel.querySelector(`[data-action="artToy:randomMusic"]`);
+    try { randomActionBtn?.click?.(); } catch {}
+  });
+  canvasEmptyActions.appendChild(emptyRandomBtn);
+  const emptyEnterBtn = document.createElement('button');
+  emptyEnterBtn.type = 'button';
+  emptyEnterBtn.className = 'c-btn art-line-empty-action-btn art-line-empty-enter-btn';
+  emptyEnterBtn.setAttribute('aria-label', 'Enter internal view');
+  emptyEnterBtn.title = 'Enter';
+  emptyEnterBtn.innerHTML = BUTTON_ICON_HTML;
+  const emptyEnterCore = emptyEnterBtn.querySelector('.c-btn-core');
+  if (emptyEnterCore) emptyEnterCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonEnter.png')");
+  emptyEnterBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const enterActionBtn = panel.querySelector(`[data-action="artToy:music"][data-art-toy-id="${panel.id}"]`)
+      || panel.querySelector(`[data-action="artToy:music"]`);
+    try { enterActionBtn?.click?.(); } catch {}
+  });
+  canvasEmptyActions.appendChild(emptyEnterBtn);
+  canvasEmptyPrompt.appendChild(canvasEmptyActions);
+  panel.appendChild(canvasEmptyPrompt);
+  const canvasDrawPrompt = document.createElement('div');
+  canvasDrawPrompt.className = 'art-sticker-draw-prompt';
+  canvasDrawPrompt.style.left = `${(AREA_MIN_X + 10).toFixed(2)}px`;
+  canvasDrawPrompt.style.top = `${(AREA_MIN_Y + 10).toFixed(2)}px`;
+  canvasDrawPrompt.textContent = 'Draw';
+  canvasDrawPrompt.hidden = true;
+  panel.appendChild(canvasDrawPrompt);
+  collapsedHintEl = document.createElement('div');
+  collapsedHintEl.className = 'art-sticker-collapsed-hint';
+  collapsedHintEl.textContent = 'Give me music';
+  collapsedHintEl.hidden = true;
+  panel.appendChild(collapsedHintEl);
 
   const lineButtonsTitle = document.createElement('div');
   lineButtonsTitle.className = 'art-line-style-subhead art-line-style-subhead-active-lines';
@@ -5035,56 +5181,20 @@ function setupSticker(panel) {
 
   refreshCustomizeUi = () => {
     const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    const hasActive = active.length > 0;
+    const hasAnyArt = active.some((slot) => hasSlotDrawing(slot));
+    const controlsVisible = panel.dataset.controlsVisible === '1';
     const fxShell = getBaseArtToyControlsHost(panel)?.querySelector?.('.art-toy-fx-shell');
-    if (fxShell) fxShell.hidden = active.length === 0;
-    customisePanel.classList.toggle('is-empty-lines', active.length === 0);
+    if (fxShell) fxShell.hidden = !hasActive;
+    canvasEmptyPrompt.hidden = !(controlsVisible && !hasActive && !hasAnyArt);
+    canvasDrawPrompt.hidden = !(controlsVisible && hasActive && !hasAnyArt);
+    customisePanel.hidden = !controlsVisible || !hasActive;
+    customisePanel.classList.toggle('is-empty-lines', !hasActive);
     lineButtonsHost.innerHTML = '';
-    if (!active.length) {
+    if (!hasActive) {
       selectedColorSlot = null;
       pickerWrap.hidden = true;
       pickerTitle.hidden = true;
-      const empty = document.createElement('div');
-      empty.className = 'art-line-color-empty';
-      const emptyText = document.createElement('div');
-      emptyText.className = 'art-line-color-empty-text';
-      emptyText.textContent = 'Add some music with:';
-      empty.appendChild(emptyText);
-      const emptyActions = document.createElement('div');
-      emptyActions.className = 'art-line-color-empty-actions';
-      const randomBtn = document.createElement('button');
-      randomBtn.type = 'button';
-      randomBtn.className = 'c-btn art-line-empty-action-btn';
-      randomBtn.setAttribute('aria-label', 'Randomize art toy music');
-      randomBtn.title = 'Random Music';
-      randomBtn.innerHTML = BUTTON_ICON_HTML;
-      const randomCore = randomBtn.querySelector('.c-btn-core');
-      if (randomCore) randomCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomNotes.png')");
-      randomBtn.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const randomActionBtn = panel.querySelector(`[data-action="artToy:randomMusic"][data-art-toy-id="${panel.id}"]`)
-          || panel.querySelector(`[data-action="artToy:randomMusic"]`);
-        try { randomActionBtn?.click?.(); } catch {}
-      });
-      emptyActions.appendChild(randomBtn);
-      const enterBtn = document.createElement('button');
-      enterBtn.type = 'button';
-      enterBtn.className = 'c-btn art-line-empty-action-btn art-line-empty-enter-btn';
-      enterBtn.setAttribute('aria-label', 'Enter internal view');
-      enterBtn.title = 'Enter';
-      enterBtn.innerHTML = BUTTON_ICON_HTML;
-      const enterCore = enterBtn.querySelector('.c-btn-core');
-      if (enterCore) enterCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonEnter.png')");
-      enterBtn.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const enterActionBtn = panel.querySelector(`[data-action="artToy:music"][data-art-toy-id="${panel.id}"]`)
-          || panel.querySelector(`[data-action="artToy:music"]`);
-        try { enterActionBtn?.click?.(); } catch {}
-      });
-      emptyActions.appendChild(enterBtn);
-      empty.appendChild(emptyActions);
-      lineButtonsHost.appendChild(empty);
       refreshNoteLayerUi();
       syncDragArea();
       syncAllShapeHandles();
@@ -5130,13 +5240,15 @@ function setupSticker(panel) {
 
   setCustomiseOpen = (open) => {
     const nextOpen = !!open;
-    customisePanel.hidden = !nextOpen;
+    customisePanel.hidden = !nextOpen || activeSlots.size === 0;
     customisePanel.classList.toggle('is-open', nextOpen);
     if (nextOpen) {
       try { refreshCustomizeUi(); } catch {}
       syncAllShapeHandles();
       return;
     }
+    canvasEmptyPrompt.hidden = true;
+    canvasDrawPrompt.hidden = true;
     selectedColorSlot = null;
     pickerWrap.hidden = true;
     pickerTitle.hidden = true;
@@ -5256,6 +5368,79 @@ function setupSticker(panel) {
     controlsVisMo.observe(panel, { attributes: true, attributeFilter: ['data-controls-visible'] });
   } catch {}
   setCustomiseOpen(panel.dataset.controlsVisible === '1');
+
+  let outsideTapCandidate = false;
+  let outsideTapPointerId = null;
+  let outsideTapStartX = 0;
+  let outsideTapStartY = 0;
+  let outsideTapMoved = false;
+  const OUTSIDE_TAP_SLOP_PX = 6;
+
+  const resetOutsideTap = () => {
+    outsideTapCandidate = false;
+    outsideTapPointerId = null;
+    outsideTapStartX = 0;
+    outsideTapStartY = 0;
+    outsideTapMoved = false;
+  };
+
+  const removeOutsideTapListeners = () => {
+    document.removeEventListener('pointerdown', onDocPointerDownHideExtras, true);
+    document.removeEventListener('pointermove', onDocPointerMoveHideExtras, true);
+    document.removeEventListener('pointerup', onDocPointerUpHideExtras, true);
+    document.removeEventListener('pointercancel', onDocPointerCancelHideExtras, true);
+  };
+
+  const onDocPointerDownHideExtras = (ev) => {
+    if (!panel.isConnected) {
+      removeOutsideTapListeners();
+      return;
+    }
+    resetOutsideTap();
+    if (panel.dataset.controlsVisible !== '1') return;
+    const target = ev?.target;
+    if (target && panel.contains(target)) return;
+    if (isClientPointInsideDrawArea(ev.clientX, ev.clientY)) return;
+    outsideTapCandidate = true;
+    outsideTapPointerId = ev.pointerId;
+    outsideTapStartX = ev.clientX;
+    outsideTapStartY = ev.clientY;
+  };
+
+  const onDocPointerMoveHideExtras = (ev) => {
+    if (!outsideTapCandidate) return;
+    if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
+    const dx = ev.clientX - outsideTapStartX;
+    const dy = ev.clientY - outsideTapStartY;
+    if ((dx * dx + dy * dy) > (OUTSIDE_TAP_SLOP_PX * OUTSIDE_TAP_SLOP_PX)) {
+      outsideTapMoved = true;
+    }
+  };
+
+  const onDocPointerUpHideExtras = (ev) => {
+    if (!outsideTapCandidate) return;
+    if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
+    const target = ev?.target;
+    const endedOutsidePanel = !(target && panel.contains(target));
+    const endedOutsideArea = !isClientPointInsideDrawArea(ev.clientX, ev.clientY);
+    const shouldHide = !outsideTapMoved && endedOutsidePanel && endedOutsideArea;
+    resetOutsideTap();
+    if (!shouldHide) return;
+    if (!panel.isConnected) return;
+    if (panel.dataset.controlsVisible !== '1') return;
+    setBaseArtToyControlsVisible(panel, false);
+  };
+
+  const onDocPointerCancelHideExtras = (ev) => {
+    if (!outsideTapCandidate) return;
+    if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
+    resetOutsideTap();
+  };
+
+  document.addEventListener('pointerdown', onDocPointerDownHideExtras, true);
+  document.addEventListener('pointermove', onDocPointerMoveHideExtras, true);
+  document.addEventListener('pointerup', onDocPointerUpHideExtras, true);
+  document.addEventListener('pointercancel', onDocPointerCancelHideExtras, true);
 
   // Runtime geometry debug for Sticker draw-area sizing.
   const logStickerDrawAreaDebug = (reason = 'manual') => {

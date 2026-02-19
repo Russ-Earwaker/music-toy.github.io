@@ -604,7 +604,17 @@ function isPointOverTrash(x, y) {
 function beginPanelDrag({ panel, pointerId } = {}) {
   if (!panel) return;
   ensureDock();
-  state.panelDrag = { panel, pointerId: pointerId ?? null, hovering: false };
+  let chainPanels = [panel];
+  try {
+    const list = window.__mtArtToys?.collectChainPanelsForMove?.(panel);
+    if (Array.isArray(list) && list.length) chainPanels = list;
+  } catch {}
+  const startPositions = chainPanels.map((p) => ({
+    panel: p,
+    left: Number.parseFloat(p?.style?.left || '') || Number(p?.offsetLeft) || 0,
+    top: Number.parseFloat(p?.style?.top || '') || Number(p?.offsetTop) || 0,
+  }));
+  state.panelDrag = { panel, pointerId: pointerId ?? null, hovering: false, startPositions };
   setPanelDragActive(true);
   setTrashArmed(true);
   setTrashHover(false);
@@ -621,7 +631,7 @@ function updatePanelDrag({ clientX, clientY } = {}) {
     setTrashHover(hovering);
   }
   // Update art-toy drop highlight while dragging a music toy.
-  try { window.__mtArtToys?.updateDropHover?.(clientX, clientY); } catch {}
+  try { window.__mtArtToys?.probeDropForPanel?.(state.panelDrag.panel, clientX, clientY); } catch {}
 }
 
 function resolveRemoveHandler(panel) {
@@ -646,6 +656,7 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
   setPanelDragActive(false);
   setTrashArmed(false);
   try { window.__mtArtToys?.clearDropHover?.(); } catch {}
+  const startPositions = Array.isArray(state.panelDrag?.startPositions) ? state.panelDrag.startPositions : [];
   state.panelDrag = null;
 
   // Priority 1: trash delete
@@ -662,8 +673,20 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
   // Priority 2: drop onto an Art Toy (moves the entire chain into the art toy's internal container)
   if (hasPoint) {
     try {
-      const placed = !!window.__mtArtToys?.tryPlaceChainFromPanel?.(panel, clientX, clientY);
+      const result = window.__mtArtToys?.tryPlaceChainFromPanel?.(panel, clientX, clientY);
+      const placed = !!(result && (result.placed === true || result === true));
       if (placed) return true;
+      const rejected = !!(result && result.rejected === true);
+      if (rejected && startPositions.length) {
+        for (const pos of startPositions) {
+          try {
+            if (!pos?.panel) continue;
+            pos.panel.style.left = `${Number(pos.left || 0)}px`;
+            pos.panel.style.top = `${Number(pos.top || 0)}px`;
+          } catch {}
+        }
+        return true;
+      }
     } catch (err) {
       console.warn('[ToySpawner] art drop failed', err);
     }

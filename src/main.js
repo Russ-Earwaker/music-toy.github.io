@@ -33,6 +33,7 @@ import './zoom-overlay.js';
 import './toy-spawner.js';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
+import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';
 import './board-tap-dots.js';
 import { initAudioAssets, cancelScheduledToySources, triggerInstrument } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog, getInstrumentEntries as getInstrumentCatalogEntries } from './instrument-catalog.js';
@@ -2321,6 +2322,25 @@ function findArtToyAtClientPoint(clientX, clientY) {
     return el.closest?.('.art-toy-panel') || null;
 }
 
+function findArtToyDropTargetAtClientPoint(clientX, clientY) {
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+    // Fast path: regular hit testing.
+    const direct = findArtToyAtClientPoint(clientX, clientY);
+    if (direct) return direct;
+    // Fallback for overflow drop areas that can be visually outside the panel box
+    // and/or use pointer-events:none overlays.
+    try {
+      const all = Array.from(document.querySelectorAll('.art-toy-panel'));
+      for (let i = all.length - 1; i >= 0; i--) {
+        const art = all[i];
+        if (!art || !art.isConnected) continue;
+        if (typeof art.isArtMusicDropPoint !== 'function') continue;
+        if (art.isArtMusicDropPoint(clientX, clientY)) return art;
+      }
+    } catch {}
+    return null;
+}
+
 function collectChainPanelsForMove(startPanel) {
     const start = (typeof startPanel === 'string') ? document.getElementById(startPanel) : startPanel;
     if (!start || !start.classList?.contains('toy-panel')) return [];
@@ -2348,6 +2368,28 @@ function collectChainPanelsForMove(startPanel) {
 
     visit(head);
     return out;
+}
+
+function chainHasAnyNotes(startPanel) {
+    try {
+        const panels = collectChainPanelsForMove(startPanel);
+        return panels.some((p) => panelHasAnyNotes(p));
+    } catch {}
+    return false;
+}
+
+function probeArtDropForPanel(startPanel, clientX, clientY) {
+    const targetArt = findArtToyDropTargetAtClientPoint(clientX, clientY);
+    if (!targetArt) return { targetArt: null, canDrop: false, hasNotes: false };
+    let pointAccepted = true;
+    try {
+        if (typeof targetArt.isArtMusicDropPoint === 'function') {
+            pointAccepted = !!targetArt.isArtMusicDropPoint(clientX, clientY);
+        }
+    } catch {}
+    if (!pointAccepted) return { targetArt: null, canDrop: false, hasNotes: false };
+    const hasNotes = chainHasAnyNotes(startPanel);
+    return { targetArt, canDrop: !!hasNotes, hasNotes: !!hasNotes };
 }
 
 function setPanelInternalToArtToy(panel, artToyId) {
@@ -2394,23 +2436,37 @@ function moveChainIntoArtToy(startPanel, artPanel) {
 
 // Drag-hover feedback for Art Toys (used while dragging music toys).
 let g_artDropHoverEl = null;
-function setArtDropHoverEl(nextEl) {
+let g_artDropHoverValid = null;
+function setArtDropHoverEl(nextEl, valid = null) {
     const el = nextEl && nextEl.classList?.contains('art-toy-panel') ? nextEl : null;
-    if (el === g_artDropHoverEl) return;
+    const isValid = valid == null ? null : !!valid;
+    if (el === g_artDropHoverEl && isValid === g_artDropHoverValid) return;
     artFlashDbg('drop-hover:set', {
       prevId: g_artDropHoverEl?.id || null,
       nextId: el?.id || null,
+      valid: isValid,
       internal: !!g_artInternal?.active,
       zoom: !!window.__mtZoomGesturing,
       gesture: !!window.__GESTURE_ACTIVE,
       tween: !!window.__camTweenLock,
     });
-    try { g_artDropHoverEl?.classList?.remove('is-drop-target'); } catch {}
+    try {
+      g_artDropHoverEl?.classList?.remove('is-drop-target', 'is-drop-target-valid', 'is-drop-target-invalid');
+      g_artDropHoverEl?.onArtMusicDropHover?.({ active: false });
+    } catch {}
     g_artDropHoverEl = el;
-    try { g_artDropHoverEl?.classList?.add('is-drop-target'); } catch {}
+    g_artDropHoverValid = isValid;
+    try {
+      if (g_artDropHoverEl) {
+        g_artDropHoverEl.classList.add('is-drop-target');
+        if (isValid === true) g_artDropHoverEl.classList.add('is-drop-target-valid');
+        if (isValid === false) g_artDropHoverEl.classList.add('is-drop-target-invalid');
+        g_artDropHoverEl.onArtMusicDropHover?.({ active: true, valid: isValid !== false });
+      }
+    } catch {}
 }
 function clearArtDropHoverEl() {
-    setArtDropHoverEl(null);
+    setArtDropHoverEl(null, null);
 }
 
 // Shared art trigger routing:
@@ -2676,20 +2732,31 @@ try {
     window.__mtArtToys = Object.assign(window.__mtArtToys || {}, {
         updateDropHover(clientX, clientY) {
             const targetArt = findArtToyAtClientPoint(clientX, clientY);
-            setArtDropHoverEl(targetArt);
+            setArtDropHoverEl(targetArt, true);
             return !!targetArt;
+        },
+        probeDropForPanel(panel, clientX, clientY) {
+            const probe = probeArtDropForPanel(panel, clientX, clientY);
+            setArtDropHoverEl(probe.targetArt, probe.targetArt ? probe.canDrop : null);
+            return probe;
         },
         clearDropHover() {
             clearArtDropHoverEl();
         },
         tryPlaceChainFromPanel(panel, clientX, clientY) {
-            const targetArt = findArtToyAtClientPoint(clientX, clientY);
-            if (!targetArt) return false;
+            const probe = probeArtDropForPanel(panel, clientX, clientY);
+            const targetArt = probe.targetArt;
+            if (!targetArt) return { placed: false, rejected: false, targetArt: null };
+            if (!probe.canDrop) {
+              try { targetArt.onArtMusicDropReject?.({ hasNotes: false }); } catch {}
+              return { placed: false, rejected: true, targetArt };
+            }
             const placed = moveChainIntoArtToy(panel, targetArt);
             if (placed) {
               try { targetArt.flash?.(); } catch {}
+              try { setBaseArtToyControlsVisible(targetArt, true); } catch {}
             }
-            return placed;
+            return { placed: !!placed, rejected: !placed, targetArt };
         },
         emitTriggerFromPanel(panel, payload = {}) {
             return g_artTriggerRouter?.routeFromPanel?.(panel, payload) || null;
