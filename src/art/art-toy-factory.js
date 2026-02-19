@@ -4148,6 +4148,7 @@ function setupSticker(panel) {
   let selectedPaintIndex = 0;
   let selectedPaintColor = palette[0];
   let stickerStrokeMultiplier = 5;
+  let stickerFlipbookMode = false;
   let refreshCustomizeUi = () => {};
   let setCustomiseOpen = () => {};
   let pulseColorButtonHit = () => {};
@@ -4954,6 +4955,50 @@ function setupSticker(panel) {
   customisePanel.hidden = true;
   panel.appendChild(customisePanel);
 
+  const topActions = document.createElement('div');
+  topActions.className = 'art-sticker-top-actions';
+  customisePanel.appendChild(topActions);
+
+  const randomArtBtn = document.createElement('button');
+  randomArtBtn.type = 'button';
+  randomArtBtn.className = 'c-btn art-sticker-random-art-btn';
+  randomArtBtn.setAttribute('aria-label', 'Randomize sticker art');
+  randomArtBtn.title = 'Random Art';
+  randomArtBtn.style.setProperty('--c-btn-size', '144px');
+  randomArtBtn.style.width = '144px';
+  randomArtBtn.style.height = '144px';
+  randomArtBtn.innerHTML = BUTTON_ICON_HTML;
+  const randomArtCore = randomArtBtn.querySelector('.c-btn-core');
+  if (randomArtCore) randomArtCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomArt.png')");
+  topActions.appendChild(randomArtBtn);
+
+  const flipbookBtn = document.createElement('button');
+  flipbookBtn.type = 'button';
+  flipbookBtn.className = 'c-btn art-sticker-random-art-btn art-sticker-flipbook-btn';
+  flipbookBtn.setAttribute('aria-label', 'Toggle flip book mode');
+  flipbookBtn.title = 'Flip Book';
+  flipbookBtn.style.setProperty('--c-btn-size', '144px');
+  flipbookBtn.style.width = '144px';
+  flipbookBtn.style.height = '144px';
+  flipbookBtn.setAttribute('aria-pressed', 'false');
+  flipbookBtn.innerHTML = BUTTON_ICON_HTML;
+  const flipbookCore = flipbookBtn.querySelector('.c-btn-core');
+  if (flipbookCore) flipbookCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonFlipbook.png')");
+  const syncFlipbookBtn = () => {
+    flipbookBtn.classList.toggle('is-active', !!stickerFlipbookMode);
+    flipbookBtn.setAttribute('aria-pressed', stickerFlipbookMode ? 'true' : 'false');
+  };
+  flipbookBtn.addEventListener('pointerdown', (ev) => {
+    if (ev.button != null && ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    stickerFlipbookMode = !stickerFlipbookMode;
+    syncFlipbookBtn();
+    markSceneDirtySafe();
+  });
+  topActions.appendChild(flipbookBtn);
+  syncFlipbookBtn();
+
   const thicknessControlApi = createArtLineThicknessControl({
     title: 'Line Thickness',
     value: stickerStrokeMultiplier,
@@ -4968,17 +5013,6 @@ function setupSticker(panel) {
     },
   });
   customisePanel.appendChild(thicknessControlApi.root);
-  const randomArtBtn = document.createElement('button');
-  randomArtBtn.type = 'button';
-  randomArtBtn.className = 'c-btn art-line-empty-action-btn art-sticker-random-art-btn';
-  randomArtBtn.setAttribute('aria-label', 'Randomize sticker art');
-  randomArtBtn.title = 'Random Art';
-  randomArtBtn.style.setProperty('--c-btn-size', '144px');
-  randomArtBtn.innerHTML = BUTTON_ICON_HTML;
-  const randomArtCore = randomArtBtn.querySelector('.c-btn-core');
-  if (randomArtCore) randomArtCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandomArt.png')");
-  customisePanel.appendChild(randomArtBtn);
-  try { customisePanel.insertBefore(randomArtBtn, thicknessControlApi.root); } catch {}
   const canvasEmptyPrompt = document.createElement('div');
   canvasEmptyPrompt.className = 'art-sticker-empty-prompt';
   canvasEmptyPrompt.style.left = `${(AREA_MIN_X + 10).toFixed(2)}px`;
@@ -5861,6 +5895,7 @@ function setupSticker(panel) {
     selectedColorSlot: selectedColorSlot == null ? null : normalizeSlot(selectedColorSlot),
     selectedPaintIndex: selectedPaintIndex,
     selectedPaintColor: String(selectedPaintColor || '#7bf6ff'),
+    flipbookMode: !!stickerFlipbookMode,
     controlsVisible: panel.dataset.controlsVisible === '1',
   });
 
@@ -5935,6 +5970,8 @@ function setupSticker(panel) {
     } else {
       selectedPaintColor = String(palette[selectedPaintIndex] || '#7bf6ff');
     }
+    stickerFlipbookMode = !!state.flipbookMode;
+    try { syncFlipbookBtn(); } catch {}
     renderAll();
     fitDragAreaToDrawings();
     if (typeof state.controlsVisible === 'boolean') setBaseArtToyControlsVisible(panel, state.controlsVisible);
@@ -5953,6 +5990,16 @@ function setupSticker(panel) {
   panel.onArtTrigger = (trigger = null) => {
     const slot = normalizeSlot(trigger?.slotIndex);
     setSlotActive(slot);
+    if (stickerFlipbookMode) {
+      try {
+        if (document.querySelector('.toy-panel.toy-playing')) {
+          selectedColorSlot = slot;
+          renderAll();
+          refreshCustomizeUi();
+          syncAllShapeHandles();
+        }
+      } catch {}
+    }
     try { pulseColorButtonHit(slot); } catch {}
     if (currentFxId !== 1) emitHit(slot);
     return true;
@@ -5961,6 +6008,16 @@ function setupSticker(panel) {
   panel.flash = (meta = null) => {
     const slot = normalizeSlot(meta?.slotIndex);
     setSlotActive(slot);
+    if (stickerFlipbookMode) {
+      try {
+        if (document.querySelector('.toy-panel.toy-playing')) {
+          selectedColorSlot = slot;
+          renderAll();
+          refreshCustomizeUi();
+          syncAllShapeHandles();
+        }
+      } catch {}
+    }
     try { pulseColorButtonHit(slot); } catch {}
     if (currentFxId !== 1) emitHit(slot);
   };
