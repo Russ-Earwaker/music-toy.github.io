@@ -1530,6 +1530,10 @@ function setupFireworks(panel) {
       removeOutsideTapListeners();
       return;
     }
+    if (getNowMs() < suppressOutsideTapHideUntil) {
+      resetOutsideTap();
+      return;
+    }
     resetOutsideTap();
     if (panel.dataset.controlsVisible !== '1') return;
     const target = ev?.target;
@@ -1552,6 +1556,10 @@ function setupFireworks(panel) {
   };
 
   const onDocPointerUpHideExtras = (ev) => {
+    if (getNowMs() < suppressOutsideTapHideUntil) {
+      resetOutsideTap();
+      return;
+    }
     if (!outsideTapCandidate) return;
     if (outsideTapPointerId != null && ev.pointerId !== outsideTapPointerId) return;
     const target = ev?.target;
@@ -4154,6 +4162,7 @@ function setupSticker(panel) {
   const STICKER_RANDOMIZATION_MODE = Object.freeze({
     NORMAL: 'normal',
     SEQUENTIAL_LINES: 'sequentialLines',
+    STICK_MAN_POSES: 'stickManPoses',
   });
   let stickerRandomizationMode = STICKER_RANDOMIZATION_MODE.NORMAL;
   const STICKER_LAYER_PLAY_ORDER = Object.freeze({
@@ -4202,6 +4211,7 @@ function setupSticker(panel) {
   };
   const normalizeRandomizationMode = (v) => {
     const key = String(v || '').trim();
+    if (key === STICKER_RANDOMIZATION_MODE.STICK_MAN_POSES) return STICKER_RANDOMIZATION_MODE.STICK_MAN_POSES;
     if (key === STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES) return STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES;
     return STICKER_RANDOMIZATION_MODE.NORMAL;
   };
@@ -5253,6 +5263,7 @@ function setupSticker(panel) {
   randomModeSelect.innerHTML = [
     `<option value="${STICKER_RANDOMIZATION_MODE.NORMAL}">Normal randomisation</option>`,
     `<option value="${STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES}">Sequential lines</option>`,
+    `<option value="${STICKER_RANDOMIZATION_MODE.STICK_MAN_POSES}">Stick man poses</option>`,
   ].join('');
   randomModeSelect.value = stickerRandomizationMode;
   randomModeSelect.addEventListener('change', (ev) => {
@@ -5373,6 +5384,23 @@ function setupSticker(panel) {
     syncAllShapeHandles();
     markSceneDirtySafe();
   });
+  let suppressOutsideTapHideUntil = 0;
+  const getNowMs = () => ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+  const armOutsideTapHideSuppression = (ms = 520) => {
+    suppressOutsideTapHideUntil = getNowMs() + Math.max(0, Number(ms) || 0);
+  };
+  const bindSelectOutsideTapSuppression = (sel) => {
+    if (!sel) return;
+    const arm = () => armOutsideTapHideSuppression(620);
+    sel.addEventListener('pointerdown', arm, true);
+    sel.addEventListener('mousedown', arm, true);
+    sel.addEventListener('click', arm, true);
+    sel.addEventListener('focus', arm, true);
+    sel.addEventListener('change', arm, true);
+    sel.addEventListener('keydown', arm, true);
+  };
+  bindSelectOutsideTapSuppression(noteLayerPlayOrderSelect);
+  bindSelectOutsideTapSuppression(randomModeSelect);
   const syncPlayOrderSelectVisualScale = (reason = 'sync') => {
     try {
       const rect = panel.getBoundingClientRect();
@@ -6122,7 +6150,119 @@ function setupSticker(panel) {
   const randomizeStickerArt = ({ ensureActive = false } = {}) => {
     if (ensureActive && !activeSlots.size) activateAllSlots();
     if (!activeSlots.size) return false;
-    if (stickerRandomizationMode === STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES) {
+    if (stickerRandomizationMode === STICKER_RANDOMIZATION_MODE.STICK_MAN_POSES) {
+      // Stick-man random generation tuning values:
+      // - Change lengths/radius below to tune proportions.
+      // - Change angle limits/probabilities to tune pose behavior.
+      const STICKMAN_CFG = Object.freeze({
+        headRadius: 38, // tweak: circle radius
+        bodyLength: 250, // tweak: torso line length
+        armLength: 120, // tweak: arm line length
+        legLength: 150, // tweak: leg line length
+        armAnchorBodyRatio: 0.25, // arms attach 1/4 down the body
+        defaultBodyDeg: 90, // body points downward in screen coords
+        nearDefaultChance: 0.70, // 70% near upright-ish
+        nearDefaultRangeDeg: 30, // within +/- 30 deg of default
+        fullBodyRangeDeg: 180, // otherwise full 360 around default
+        headRangeDeg: 90, // head direction range around "top of body"
+        legMaxOffsetDeg: 180, // max relative angle offset between legs
+      });
+      const degToRad = (d) => (Number(d) || 0) * (Math.PI / 180);
+      const rand = (a, b) => a + Math.random() * (b - a);
+      const unit = (a) => ({ x: Math.cos(a), y: Math.sin(a) });
+      const add = (p, v, s = 1) => ({ x: p.x + (v.x * s), y: p.y + (v.y * s) });
+      const clampPoint = (p) => ({ x: clampX(p.x), y: clampY(p.y) });
+      const fitPointsToArea = (points) => {
+        if (!Array.isArray(points) || !points.length) return points;
+        let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+        for (const p of points) {
+          const x = Number(p?.x) || 0;
+          const y = Number(p?.y) || 0;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+        let dx = 0; let dy = 0;
+        if (minX < AREA_MIN_X) dx += (AREA_MIN_X - minX);
+        if (maxX > AREA_MAX_X) dx -= (maxX - AREA_MAX_X);
+        if (minY < AREA_MIN_Y) dy += (AREA_MIN_Y - minY);
+        if (maxY > AREA_MAX_Y) dy -= (maxY - AREA_MAX_Y);
+        return points.map((p) => clampPoint({ x: p.x + dx, y: p.y + dy }));
+      };
+      const buildStickman = () => {
+        const center = {
+          x: rand(AREA_MIN_X + 180, AREA_MAX_X - 180),
+          y: rand(AREA_MIN_Y + 180, AREA_MAX_Y - 180),
+        };
+        const defaultBody = degToRad(STICKMAN_CFG.defaultBodyDeg);
+        const nearDefault = Math.random() < STICKMAN_CFG.nearDefaultChance;
+        const bodyOffsetDeg = nearDefault
+          ? rand(-STICKMAN_CFG.nearDefaultRangeDeg, STICKMAN_CFG.nearDefaultRangeDeg)
+          : rand(-STICKMAN_CFG.fullBodyRangeDeg, STICKMAN_CFG.fullBodyRangeDeg);
+        const bodyAngle = defaultBody + degToRad(bodyOffsetDeg);
+        const bodyDir = unit(bodyAngle);
+        const neck = clampPoint(center);
+        const pelvis = clampPoint(add(neck, bodyDir, STICKMAN_CFG.bodyLength));
+        const shoulder = clampPoint(add(neck, bodyDir, STICKMAN_CFG.bodyLength * STICKMAN_CFG.armAnchorBodyRatio));
+
+        // Head orientation: around the top of the torso (reverse body direction), +/- headRange/2
+        const headAngle = bodyAngle + Math.PI + degToRad(rand(-STICKMAN_CFG.headRangeDeg * 0.5, STICKMAN_CFG.headRangeDeg * 0.5));
+        const headDir = unit(headAngle);
+        const headCenter = clampPoint(add(neck, headDir, STICKMAN_CFG.headRadius));
+
+        // Arms: full relative range around body orientation.
+        const arm1Angle = bodyAngle + degToRad(rand(-180, 180));
+        const arm2Angle = bodyAngle + degToRad(rand(-180, 180));
+        const handA = clampPoint(add(shoulder, unit(arm1Angle), STICKMAN_CFG.armLength));
+        const handB = clampPoint(add(shoulder, unit(arm2Angle), STICKMAN_CFG.armLength));
+
+        // Legs: second leg constrained by max offset from first.
+        const leg1Angle = bodyAngle + degToRad(rand(-180, 180));
+        const leg2Angle = leg1Angle + degToRad(rand(-STICKMAN_CFG.legMaxOffsetDeg, STICKMAN_CFG.legMaxOffsetDeg));
+        const footA = clampPoint(add(pelvis, unit(leg1Angle), STICKMAN_CFG.legLength));
+        const footB = clampPoint(add(pelvis, unit(leg2Angle), STICKMAN_CFG.legLength));
+
+        const fitted = fitPointsToArea([neck, pelvis, shoulder, headCenter, handA, handB, footA, footB]);
+        return {
+          neck: fitted[0],
+          pelvis: fitted[1],
+          shoulder: fitted[2],
+          headCenter: fitted[3],
+          handA: fitted[4],
+          handB: fitted[5],
+          footA: fitted[6],
+          footB: fitted[7],
+        };
+      };
+      for (const slot of activeSlots) {
+        const pose = buildStickman();
+        const w = getPlacementStrokeWidth();
+        slotShapes[slot] = [{
+          kind: 'circle',
+          x: pose.headCenter.x,
+          y: pose.headCenter.y,
+          size: STICKMAN_CFG.headRadius * 2,
+          color: palette[slot],
+          strokeWidth: w,
+          rot: 0,
+        }];
+        slotStrokeStyles[slot] = [
+          { color: palette[slot], width: w }, // body
+          { color: palette[slot], width: w }, // arm A
+          { color: palette[slot], width: w }, // arm B
+          { color: palette[slot], width: w }, // leg A
+          { color: palette[slot], width: w }, // leg B
+        ];
+        drawingState.setSlotStrokes(slot, [
+          [pose.neck, pose.pelvis],
+          [pose.shoulder, pose.handA],
+          [pose.shoulder, pose.handB],
+          [pose.pelvis, pose.footA],
+          [pose.pelvis, pose.footB],
+        ]);
+      }
+    } else if (stickerRandomizationMode === STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES) {
       const slots = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
       const marginX = 84;
       const startX = clampX(AREA_MIN_X + marginX);
