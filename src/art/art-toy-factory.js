@@ -2076,7 +2076,8 @@ function setupLaserTrails(panel) {
     { x: Number(source.x) || 0, y: Number(source.y) || 0 },
     { x: Number(targets[i].x) || 0, y: Number(targets[i].y) || 0 },
   ]));
-  const palette = ['#7bf6ff', '#86efac', '#fde047', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fca5a5', '#a7f3d0'];
+  const palette = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#007aff', '#5856d6', '#ffffff', '#000000'];
+  const OLD_STICKER_PASTEL_PALETTE = ['#7bf6ff', '#86efac', '#fde047', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fca5a5', '#a7f3d0'];
   const active = [];
   const ACTIVE_CAP = 56;
   const sourceHandleEls = [];
@@ -4146,7 +4147,7 @@ function setupSticker(panel) {
   handlesLayer.className = 'art-fireworks-handles art-sticker-handles';
   panel.appendChild(handlesLayer);
 
-  const palette = ['#7bf6ff', '#86efac', '#fde047', '#f9a8d4', '#c4b5fd', '#67e8f9', '#fca5a5', '#a7f3d0'];
+  const palette = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#007aff', '#5856d6', '#ffffff', '#000000'];
   const drawingState = createArtDrawingState({ slotCount: ART_SLOT_COUNT });
   const slotShapes = Array.from({ length: ART_SLOT_COUNT }, () => []);
   const slotStrokeStyles = Array.from({ length: ART_SLOT_COUNT }, () => []);
@@ -4179,27 +4180,32 @@ function setupSticker(panel) {
   let setCustomiseOpen = () => {};
   let pulseColorButtonHit = () => {};
   const STICKER_FX = Object.freeze([
-    { id: 0, key: 'lineFlash', name: 'Line Flash' },
-    { id: 1, key: 'lineStatic', name: 'Line Static' },
-    { id: 2, key: 'square', name: 'Square' },
-    { id: 3, key: 'circle', name: 'Circle' },
-    { id: 4, key: 'triangle', name: 'Triangle' },
-    { id: 5, key: 'pentagon', name: 'Pentagon' },
+    { id: 0, key: 'lineFlash', name: 'Line Flash', category: 'line', lineVariant: 'solid', emitsHit: true },
+    { id: 1, key: 'lineStatic', name: 'Line Static', category: 'line', lineVariant: 'solid', emitsHit: false, hiddenFromMain: true },
+    { id: 2, key: 'square', name: 'Square', category: 'shape', shapeKind: 'square' },
+    { id: 3, key: 'circle', name: 'Circle', category: 'shape', shapeKind: 'circle' },
+    { id: 4, key: 'triangle', name: 'Triangle', category: 'shape', shapeKind: 'triangle' },
+    { id: 5, key: 'pentagon', name: 'Pentagon', category: 'shape', shapeKind: 'pentagon' },
+    { id: 6, key: 'lineDashed', name: 'Line Dashed', category: 'line', lineVariant: 'dashed', emitsHit: true, libraryOnly: true },
+    { id: 7, key: 'burstRing', name: 'Burst Ring', category: 'shape', shapeKind: 'ring', libraryOnly: true },
+    { id: 8, key: 'burstStar', name: 'Burst Star', category: 'shape', shapeKind: 'star8', libraryOnly: true },
+    { id: 9, key: 'burstCross', name: 'Burst Cross', category: 'shape', shapeKind: 'burstCross', libraryOnly: true },
+    { id: 10, key: 'linePulse', name: 'Line Pulse', category: 'line', lineVariant: 'solid', emitsHit: true, libraryOnly: true },
   ]);
+  const getStickerFxMeta = (fxId) => STICKER_FX.find((fx) => fx.id === clampStickerFxId(fxId)) || STICKER_FX[0];
   const clampStickerFxId = (v) => {
     const n = Math.trunc(Number(v));
     return Number.isFinite(n) && n >= 0 && n < STICKER_FX.length ? n : 0;
   };
-  const isShapeFx = (fxId) => clampStickerFxId(fxId) >= 2;
-  const shapeKindForFx = (fxId) => {
-    const id = clampStickerFxId(fxId);
-    if (id === 2) return 'square';
-    if (id === 3) return 'circle';
-    if (id === 4) return 'triangle';
-    if (id === 5) return 'pentagon';
-    return null;
-  };
+  const isShapeFx = (fxId) => getStickerFxMeta(fxId)?.category === 'shape';
+  const shapeKindForFx = (fxId) => String(getStickerFxMeta(fxId)?.shapeKind || '');
+  const lineVariantForFx = (fxId) => String(getStickerFxMeta(fxId)?.lineVariant || 'solid');
+  const stickerFxEmitsHit = (fxId) => getStickerFxMeta(fxId)?.emitsHit !== false;
   let currentFxId = 0;
+  const stickerMainFxIds = [0, 2, 3, 4, 5];
+  const stickerLibraryFxIds = STICKER_FX
+    .filter((fx) => fx && fx.hiddenFromMain !== true)
+    .map((fx) => fx.id);
 
   const clampX = (x) => Math.max(AREA_MIN_X, Math.min(AREA_MAX_X, Number(x) || 0));
   const clampY = (y) => Math.max(AREA_MIN_Y, Math.min(AREA_MAX_Y, Number(y) || 0));
@@ -4369,6 +4375,7 @@ function setupSticker(panel) {
     return {
       color: String(style?.color || palette[i] || selectedPaintColor || '#7bf6ff'),
       width: Math.max(1.2, Number(style?.width) || getPlacementStrokeWidth()),
+      variant: String(style?.variant || 'solid'),
     };
   };
   const syncStrokeStylesForSlot = (slot) => {
@@ -4380,6 +4387,7 @@ function setupSticker(panel) {
       styles.push({
         color: String(palette[i] || selectedPaintColor || '#7bf6ff'),
         width: getPlacementStrokeWidth(),
+        variant: 'solid',
       });
     }
     if (styles.length > count) styles.length = count;
@@ -4484,6 +4492,7 @@ function setupSticker(panel) {
       path.setAttribute('stroke-width', String(strokeStyle.width));
       path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('stroke-linejoin', 'round');
+      if (strokeStyle.variant === 'dashed') path.setAttribute('stroke-dasharray', `${(strokeStyle.width * 0.7).toFixed(2)} ${(strokeStyle.width * 1.6).toFixed(2)}`);
       slotGroup.appendChild(path);
     }
     const shapes = Array.isArray(slotShapes[i]) ? slotShapes[i] : [];
@@ -4509,6 +4518,57 @@ function setupSticker(panel) {
         node.setAttribute('stroke-linejoin', 'miter');
         node.setAttribute('paint-order', 'stroke');
         slotGroup.appendChild(node);
+        continue;
+      }
+      if (kind === 'ring') {
+        const node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        node.setAttribute('cx', String(cx));
+        node.setAttribute('cy', String(cy));
+        node.setAttribute('r', String(half));
+        node.setAttribute('fill', 'none');
+        node.setAttribute('stroke', shapeColor);
+        node.setAttribute('stroke-width', String(Math.max(shapeWidth, half * 0.24)));
+        node.setAttribute('stroke-linecap', 'round');
+        node.setAttribute('stroke-linejoin', 'round');
+        slotGroup.appendChild(node);
+        continue;
+      }
+      if (kind === 'burstCross') {
+        const node = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        const mk = (x1, y1, x2, y2) => {
+          const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          l.setAttribute('x1', x1.toFixed(2));
+          l.setAttribute('y1', y1.toFixed(2));
+          l.setAttribute('x2', x2.toFixed(2));
+          l.setAttribute('y2', y2.toFixed(2));
+          l.setAttribute('stroke', shapeColor);
+          l.setAttribute('stroke-width', String(Math.max(shapeWidth, half * 0.26)));
+          l.setAttribute('stroke-linecap', 'round');
+          node.appendChild(l);
+        };
+        mk(cx - half, cy, cx + half, cy);
+        mk(cx, cy - half, cx, cy + half);
+        mk(cx - (half * 0.72), cy - (half * 0.72), cx + (half * 0.72), cy + (half * 0.72));
+        mk(cx + (half * 0.72), cy - (half * 0.72), cx - (half * 0.72), cy + (half * 0.72));
+        slotGroup.appendChild(node);
+        continue;
+      }
+      if (kind === 'star8') {
+        const pts = [];
+        for (let k = 0; k < 16; k++) {
+          const r = (k % 2 === 0) ? half : (half * 0.46);
+          const a = rot + (-Math.PI * 0.5) + ((Math.PI * 2 * k) / 16);
+          pts.push(`${(cx + Math.cos(a) * r).toFixed(2)},${(cy + Math.sin(a) * r).toFixed(2)}`);
+        }
+        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('points', pts.join(' '));
+        poly.setAttribute('fill', shapeColor);
+        poly.setAttribute('stroke', shapeColor);
+        poly.setAttribute('stroke-width', String(shapeWidth));
+        poly.setAttribute('stroke-linecap', 'butt');
+        poly.setAttribute('stroke-linejoin', 'miter');
+        poly.setAttribute('paint-order', 'stroke');
+        slotGroup.appendChild(poly);
         continue;
       }
       const sides = kind === 'triangle' ? 3 : (kind === 'pentagon' ? 5 : 4);
@@ -4616,18 +4676,20 @@ function setupSticker(panel) {
     markSceneDirtySafe();
   };
 
-  const placeShapeAtSlot = (slot, x, y, kind) => {
+  const placeShapeAtSlot = (slot, x, y, kind, colorOverride = null, widthOverride = null, rotOverride = null) => {
     const i = normalizeSlot(slot);
     if (!kind) return;
     const list = Array.isArray(slotShapes[i]) ? slotShapes[i] : (slotShapes[i] = []);
+    const shapeColor = String(colorOverride || selectedPaintColor || palette[i] || '#7bf6ff');
+    const shapeWidth = Math.max(1.2, Number(widthOverride) || getPlacementStrokeWidth());
     const shape = {
       kind: String(kind),
       x: clampX(x),
       y: clampY(y),
-      size: Math.max(26, getPlacementStrokeWidth() * 4.4),
-      color: selectedPaintColor,
-      strokeWidth: getPlacementStrokeWidth(),
-      rot: 0,
+      size: Math.max(26, shapeWidth * 4.4),
+      color: shapeColor,
+      strokeWidth: shapeWidth,
+      rot: Number.isFinite(Number(rotOverride)) ? Number(rotOverride) : 0,
     };
     list.push(shape);
     renderSlot(i);
@@ -4953,6 +5015,7 @@ function setupSticker(panel) {
       p.setAttribute('stroke-width', String(Math.max(1.4, style.width * 1.22)));
       p.setAttribute('stroke-linecap', 'round');
       p.setAttribute('stroke-linejoin', 'round');
+      if (style.variant === 'dashed') p.setAttribute('stroke-dasharray', `${(style.width * 0.9).toFixed(2)} ${(style.width * 1.9).toFixed(2)}`);
       hitLayer.appendChild(p);
       setTimeout(() => { try { p.remove(); } catch {} }, 260);
     }
@@ -4967,18 +5030,20 @@ function setupSticker(panel) {
       const shapeColor = String(shape?.color || palette[i] || selectedPaintColor || '#7bf6ff');
       const shapeWidth = Math.max(1.4, (Number(shape?.strokeWidth) || getPlacementStrokeWidth()) * 1.22);
       let node = null;
-      if (kind === 'circle') {
+      if (kind === 'circle' || kind === 'ring') {
         node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         node.setAttribute('cx', String(cx));
         node.setAttribute('cy', String(cy));
         node.setAttribute('r', String(half));
       } else {
-        const sides = kind === 'triangle' ? 3 : (kind === 'pentagon' ? 5 : 4);
+        const sides = kind === 'triangle' ? 3 : (kind === 'pentagon' ? 5 : (kind === 'star8' ? 8 : 4));
         const pts = [];
-        for (let k = 0; k < sides; k++) {
-          const a = rot + (-Math.PI * 0.5) + ((Math.PI * 2 * k) / sides);
-          const x = cx + Math.cos(a) * half;
-          const y = cy + Math.sin(a) * half;
+        const steps = kind === 'star8' ? 16 : sides;
+        for (let k = 0; k < steps; k++) {
+          const rr = kind === 'star8' ? ((k % 2 === 0) ? half : (half * 0.46)) : half;
+          const a = rot + (-Math.PI * 0.5) + ((Math.PI * 2 * k) / steps);
+          const x = cx + Math.cos(a) * rr;
+          const y = cy + Math.sin(a) * rr;
           pts.push(`${x.toFixed(2)},${y.toFixed(2)}`);
         }
         node = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -4986,9 +5051,9 @@ function setupSticker(panel) {
       }
       if (!node) continue;
       node.setAttribute('class', 'art-sticker-path-hit');
-      node.setAttribute('fill', shapeColor);
+      node.setAttribute('fill', kind === 'ring' ? 'none' : shapeColor);
       node.setAttribute('stroke', shapeColor);
-      node.setAttribute('stroke-width', String(shapeWidth));
+      node.setAttribute('stroke-width', String(kind === 'ring' ? Math.max(shapeWidth, half * 0.24) : shapeWidth));
       node.setAttribute('stroke-linecap', 'butt');
       node.setAttribute('stroke-linejoin', 'miter');
       node.setAttribute('paint-order', 'stroke');
@@ -5084,6 +5149,12 @@ function setupSticker(panel) {
     drawPreviewPath.setAttribute('d', pointsToPath(points));
     drawPreviewPath.setAttribute('stroke', String(selectedPaintColor || palette[i] || '#7bf6ff'));
     drawPreviewPath.setAttribute('stroke-width', String(getPlacementStrokeWidth()));
+    if (lineVariantForFx(currentFxId) === 'dashed') {
+      const w = getPlacementStrokeWidth();
+      drawPreviewPath.setAttribute('stroke-dasharray', `${(w * 0.7).toFixed(2)} ${(w * 1.6).toFixed(2)}`);
+    } else {
+      drawPreviewPath.removeAttribute('stroke-dasharray');
+    }
   };
 
   const PANEL_PX = 220;
@@ -5669,22 +5740,27 @@ function setupSticker(panel) {
     const fxCurrentStage = fxShell?.querySelector?.('.art-toy-fx-stage-current') || null;
     const fxGrid = fxShell?.querySelector?.('.art-toy-fx-grid') || null;
     const fxCards = [];
+    const fxLibraryCards = [];
+    let fxMoreBtn = null;
+    let fxLibrary = null;
     const makePreviewNode = (stage, fxId) => {
       if (!stage) return;
-      const id = clampStickerFxId(fxId);
+      const meta = getStickerFxMeta(fxId);
+      const id = meta.id;
       const tone = palette[id % palette.length];
-      if (id <= 1) {
+      if (meta.category === 'line') {
         const line = document.createElement('span');
         line.className = 'art-laser-preview-line';
         line.style.background = tone;
         line.style.left = '50%';
         line.style.top = '50%';
-        line.style.width = '44px';
-        line.style.height = '4px';
-        line.style.opacity = id === 0 ? '1' : '0.72';
-        line.style.filter = `drop-shadow(0 0 ${id === 0 ? 12 : 6}px ${tone})`;
+        line.style.width = meta.key === 'linePulse' ? '48px' : '44px';
+        line.style.height = meta.key === 'linePulse' ? '5px' : '4px';
+        line.style.opacity = meta.emitsHit === false ? '0.72' : '1';
+        if (meta.lineVariant === 'dashed') line.style.borderTop = `3px dashed ${tone}`;
+        line.style.filter = `drop-shadow(0 0 ${meta.emitsHit === false ? 6 : 12}px ${tone})`;
         stage.appendChild(line);
-        if (id === 0) {
+        if (meta.emitsHit !== false) {
           try { line.animate([{ opacity: 0.25 }, { opacity: 1 }, { opacity: 0.25 }], { duration: 560, easing: 'ease-out' }); } catch {}
         }
         setTimeout(() => { try { line.remove(); } catch {} }, 760);
@@ -5700,9 +5776,18 @@ function setupSticker(panel) {
       shape.style.boxSizing = 'border-box';
       shape.style.filter = `drop-shadow(0 0 8px ${tone})`;
       shape.style.background = tone;
-      if (id === 3) shape.style.borderRadius = '999px';
-      else if (id === 4) shape.style.clipPath = 'polygon(50% 8%, 8% 92%, 92% 92%)';
-      else if (id === 5) shape.style.clipPath = 'polygon(50% 4%, 95% 34%, 78% 90%, 22% 90%, 5% 34%)';
+      if (meta.shapeKind === 'circle') shape.style.borderRadius = '999px';
+      else if (meta.shapeKind === 'triangle') shape.style.clipPath = 'polygon(50% 8%, 8% 92%, 92% 92%)';
+      else if (meta.shapeKind === 'pentagon') shape.style.clipPath = 'polygon(50% 4%, 95% 34%, 78% 90%, 22% 90%, 5% 34%)';
+      else if (meta.shapeKind === 'ring') {
+        shape.style.background = 'transparent';
+        shape.style.borderRadius = '999px';
+        shape.style.border = `5px solid ${tone}`;
+      } else if (meta.shapeKind === 'star8') {
+        shape.style.clipPath = 'polygon(50% 0%,60% 30%,95% 5%,70% 40%,100% 50%,70% 60%,95% 95%,60% 70%,50% 100%,40% 70%,5% 95%,30% 60%,0% 50%,30% 40%,5% 5%,40% 30%)';
+      } else if (meta.shapeKind === 'burstCross') {
+        shape.style.clipPath = 'polygon(45% 0%,55% 0%,55% 45%,100% 45%,100% 55%,55% 55%,55% 100%,45% 100%,45% 55%,0% 55%,0% 45%,45% 45%)';
+      }
       stage.appendChild(shape);
       setTimeout(() => { try { shape.remove(); } catch {} }, 760);
     };
@@ -5726,22 +5811,19 @@ function setupSticker(panel) {
       if (fxCurrentBtn) fxCurrentBtn.setAttribute('aria-expanded', 'true');
       fxGrid.hidden = false;
     };
-    const syncFxUi = () => {
-      const fxId = clampStickerFxId(currentFxId);
-      const fxName = STICKER_FX.find((fx) => fx.id === fxId)?.name || 'Effect';
-      if (fxCurrentBtn) {
-        fxCurrentBtn.title = `Style: ${fxName}`;
-        fxCurrentBtn.setAttribute('aria-label', `Current sticker style: ${fxName}`);
-      }
-      for (const card of fxCards) {
-        const selected = card.dataset.fxId === String(fxId);
-        card.classList.toggle('is-selected', selected);
-      }
+    const toggleFxLibrary = (open = null) => {
+      if (!fxLibrary) return;
+      const next = (open == null) ? fxLibrary.hidden : !open;
+      fxLibrary.hidden = !!next;
+      if (fxMoreBtn) fxMoreBtn.classList.toggle('is-active', !fxLibrary.hidden);
     };
-    try { panel.__syncStickerFxUi = syncFxUi; } catch {}
-    if (fxGrid && STICKER_FX.length) {
+    const buildMainFxGrid = () => {
+      if (!fxGrid) return;
       fxGrid.innerHTML = '';
-      for (const fx of STICKER_FX) {
+      fxCards.length = 0;
+      for (const fxId of stickerMainFxIds) {
+        const fx = getStickerFxMeta(fxId);
+        if (!fx || fx.hiddenFromMain) continue;
         const card = document.createElement('button');
         card.type = 'button';
         card.className = 'art-toy-fx-card';
@@ -5759,8 +5841,85 @@ function setupSticker(panel) {
           ev.preventDefault();
           ev.stopPropagation();
           setStickerFx(fx.id);
+          toggleFxLibrary(false);
         });
       }
+      if (fxMoreBtn) fxGrid.appendChild(fxMoreBtn);
+    };
+    const buildFxLibrary = () => {
+      if (!fxShell) return;
+      if (!fxLibrary) {
+        fxLibrary = document.createElement('div');
+        fxLibrary.className = 'art-sticker-fx-library';
+        fxLibrary.hidden = true;
+        fxShell.appendChild(fxLibrary);
+      }
+      fxLibrary.innerHTML = '';
+      fxLibraryCards.length = 0;
+      for (const fxId of stickerLibraryFxIds) {
+        const fx = getStickerFxMeta(fxId);
+        if (!fx) continue;
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'art-toy-fx-card art-sticker-fx-library-card';
+        card.dataset.fxId = String(fx.id);
+        card.title = fx.name;
+        card.setAttribute('aria-label', `Select ${fx.name} from library`);
+        const stage = document.createElement('span');
+        stage.className = 'art-toy-fx-stage';
+        stage.dataset.fxId = String(fx.id);
+        card.appendChild(stage);
+        fxLibrary.appendChild(card);
+        fxLibraryCards.push(card);
+        addPreviewLoop(stage, fx.id);
+        card.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const selectedFx = fx.id;
+          const replaceIdx = Math.max(0, stickerMainFxIds.indexOf(clampStickerFxId(currentFxId)));
+          if (!stickerMainFxIds.includes(selectedFx)) {
+            stickerMainFxIds[replaceIdx] = selectedFx;
+          }
+          buildMainFxGrid();
+          setStickerFx(selectedFx);
+          toggleFxLibrary(false);
+        });
+      }
+    };
+    const syncFxUi = () => {
+      const fxId = clampStickerFxId(currentFxId);
+      const fxName = STICKER_FX.find((fx) => fx.id === fxId)?.name || 'Effect';
+      if (fxCurrentBtn) {
+        fxCurrentBtn.title = `Style: ${fxName}`;
+        fxCurrentBtn.setAttribute('aria-label', `Current sticker style: ${fxName}`);
+      }
+      for (const card of fxCards) {
+        const selected = card.dataset.fxId === String(fxId);
+        card.classList.toggle('is-selected', selected);
+      }
+      for (const card of fxLibraryCards) {
+        const selected = card.dataset.fxId === String(fxId);
+        card.classList.toggle('is-selected', selected);
+      }
+    };
+    try { panel.__syncStickerFxUi = syncFxUi; } catch {}
+    if (fxGrid) {
+      fxMoreBtn = document.createElement('button');
+      fxMoreBtn.type = 'button';
+      fxMoreBtn.className = 'art-toy-fx-card art-sticker-fx-more-btn';
+      fxMoreBtn.title = 'More styles';
+      fxMoreBtn.setAttribute('aria-label', 'Open more sticker styles');
+      const label = document.createElement('span');
+      label.className = 'art-sticker-fx-more-label';
+      label.textContent = 'MORE';
+      fxMoreBtn.appendChild(label);
+      fxMoreBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        toggleFxLibrary();
+      });
+      buildMainFxGrid();
+      buildFxLibrary();
     }
     setFxPickerOpen(true);
     syncFxUi();
@@ -6052,6 +6211,7 @@ function setupSticker(panel) {
       styleList.push({
         color: String(selectedPaintColor || palette[slot] || '#7bf6ff'),
         width: getPlacementStrokeWidth(),
+        variant: lineVariantForFx(currentFxId),
       });
       renderSlot(slot);
       fitDragAreaToDrawings();
@@ -6267,11 +6427,11 @@ function setupSticker(panel) {
           rot: 0,
         }];
         slotStrokeStyles[slot] = [
-          { color: palette[slot], width: w }, // body
-          { color: palette[slot], width: w }, // arm A
-          { color: palette[slot], width: w }, // arm B
-          { color: palette[slot], width: w }, // leg A
-          { color: palette[slot], width: w }, // leg B
+          { color: palette[slot], width: w, variant: 'solid' }, // body
+          { color: palette[slot], width: w, variant: 'solid' }, // arm A
+          { color: palette[slot], width: w, variant: 'solid' }, // arm B
+          { color: palette[slot], width: w, variant: 'solid' }, // leg A
+          { color: palette[slot], width: w, variant: 'solid' }, // leg B
         ];
         drawingState.setSlotStrokes(slot, [
           [pose.neck, pose.pelvis],
@@ -6296,6 +6456,7 @@ function setupSticker(panel) {
         slotStrokeStyles[slot] = [{
           color: palette[slot],
           width: getPlacementStrokeWidth(),
+          variant: lineVariantForFx(currentFxId),
         }];
         drawingState.setSlotStrokes(slot, [[
           { x: startX, y },
@@ -6313,7 +6474,16 @@ function setupSticker(panel) {
           const pts = randomStroke();
           if (!pts.length) continue;
           const p = pts[Math.floor(Math.random() * pts.length)] || pts[0];
-          placeShapeAtSlot(slot, Number(p?.x) || AREA_MIN_X, Number(p?.y) || AREA_MIN_Y, kind);
+          const randomColor = palette[Math.floor(Math.random() * palette.length)] || palette[slot] || '#ffffff';
+          placeShapeAtSlot(
+            slot,
+            Number(p?.x) || AREA_MIN_X,
+            Number(p?.y) || AREA_MIN_Y,
+            kind,
+            randomColor,
+            getPlacementStrokeWidth(),
+            (Math.random() * Math.PI * 2)
+          );
         }
       }
     } else {
@@ -6327,6 +6497,7 @@ function setupSticker(panel) {
           styles.push({
             color: palette[slot],
             width: getPlacementStrokeWidth(),
+            variant: lineVariantForFx(currentFxId),
           });
         }
         slotStrokeStyles[slot] = styles;
@@ -6389,6 +6560,7 @@ function setupSticker(panel) {
       ? list.map((s) => ({
         color: String(s?.color || '#7bf6ff'),
         width: Math.max(1.2, Number(s?.width) || getPlacementStrokeWidth()),
+        variant: String(s?.variant || 'solid'),
       }))
       : [])),
     shapesBySlot: slotShapes.map((list) => (Array.isArray(list)
@@ -6429,6 +6601,14 @@ function setupSticker(panel) {
         const c = String(state.palette[i] || '').trim();
         if (/^#([0-9a-f]{6})$/i.test(c)) palette[i] = c;
       }
+      // Migration: replace legacy Sticker pastel defaults with the new bold default palette.
+      const loaded = palette.slice(0, ART_SLOT_COUNT).map((c) => String(c || '').toLowerCase());
+      const legacy = OLD_STICKER_PASTEL_PALETTE.map((c) => String(c || '').toLowerCase());
+      const isLegacyDefault = loaded.length === legacy.length && loaded.every((c, idx) => c === legacy[idx]);
+      if (isLegacyDefault) {
+        const next = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#007aff', '#5856d6', '#ffffff', '#000000'];
+        for (let i = 0; i < Math.min(ART_SLOT_COUNT, next.length); i++) palette[i] = next[i];
+      }
     }
     if (state.lineThickness != null) {
       const n = Number(state.lineThickness);
@@ -6444,13 +6624,14 @@ function setupSticker(panel) {
         slotStrokeStyles[i] = list.map((s) => ({
           color: String(s?.color || palette[i] || '#7bf6ff'),
           width: Math.max(1.2, Number(s?.width) || getPlacementStrokeWidth()),
+          variant: String(s?.variant || 'solid'),
         }));
       }
     } else {
       for (let i = 0; i < ART_SLOT_COUNT; i++) {
         const strokes = drawingState.getSlotStrokes(i);
         slotStrokeStyles[i] = Array.isArray(strokes)
-          ? strokes.map(() => ({ color: palette[i], width: getPlacementStrokeWidth() }))
+          ? strokes.map(() => ({ color: palette[i], width: getPlacementStrokeWidth(), variant: 'solid' }))
           : [];
       }
     }
@@ -6543,7 +6724,7 @@ function setupSticker(panel) {
       } catch {}
     }
     try { pulseColorButtonHit(slot); } catch {}
-    if (currentFxId !== 1) emitHit(slot);
+    if (stickerFxEmitsHit(currentFxId)) emitHit(slot);
     return true;
   };
 
@@ -6563,7 +6744,7 @@ function setupSticker(panel) {
       } catch {}
     }
     try { pulseColorButtonHit(slot); } catch {}
-    if (currentFxId !== 1) emitHit(slot);
+    if (stickerFxEmitsHit(currentFxId)) emitHit(slot);
   };
 
   try {

@@ -2721,6 +2721,51 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   box-shadow: 0 0 0 2px rgba(68, 226, 151, 0.36), 0 10px 22px rgba(0, 0, 0, 0.46), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
+.art-sticker-fx-more-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.art-sticker-fx-more-label {
+  font: 800 22px/1.1 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  color: rgba(222, 239, 255, 0.96);
+  text-shadow: 0 2px 10px rgba(76, 167, 255, 0.35);
+}
+
+.art-sticker-fx-more-btn.is-active {
+  border-color: rgba(120, 241, 182, 0.95);
+  box-shadow: 0 0 0 2px rgba(68, 226, 151, 0.36), 0 10px 22px rgba(0, 0, 0, 0.46), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.art-sticker-fx-library {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 10px);
+  width: calc(136px * 4 + 8px * 3 + 20px);
+  max-height: calc(136px * 2 + 8px * 1 + 20px);
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(4, 136px);
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(133, 178, 255, 0.35);
+  background: rgba(6, 10, 24, 0.96);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.64);
+  z-index: 6;
+}
+
+.art-sticker-fx-library[hidden] {
+  display: none !important;
+}
+
+.art-sticker-fx-library-card {
+  width: 136px;
+  height: 136px;
+}
+
 .art-toy-music-btn {
   position: absolute;
   left: 50%;
