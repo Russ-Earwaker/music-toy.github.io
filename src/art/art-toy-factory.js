@@ -4149,6 +4149,8 @@ function setupSticker(panel) {
   let selectedPaintColor = palette[0];
   let stickerStrokeMultiplier = 5;
   let stickerFlipbookMode = false;
+  let flipbookPlaybackSlot = null;
+  let transportIsPlaying = false;
   let refreshCustomizeUi = () => {};
   let setCustomiseOpen = () => {};
   let pulseColorButtonHit = () => {};
@@ -4232,6 +4234,7 @@ function setupSticker(panel) {
   const ensureStickerLayerBuckets = () => {
     let main = layer.querySelector('g[data-sticker-layer-role="main"]');
     let dimmed = layer.querySelector('g[data-sticker-layer-role="dimmed"]');
+    let hidden = layer.querySelector('g[data-sticker-layer-role="hidden"]');
     if (!main) {
       main = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       main.setAttribute('data-sticker-layer-role', 'main');
@@ -4243,21 +4246,49 @@ function setupSticker(panel) {
       dimmed.setAttribute('opacity', '0.34');
       layer.appendChild(dimmed);
     }
-    return { main, dimmed };
+    if (!hidden) {
+      hidden = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      hidden.setAttribute('data-sticker-layer-role', 'hidden');
+      hidden.setAttribute('opacity', '0');
+      layer.appendChild(hidden);
+    }
+    return { main, dimmed, hidden };
   };
   const syncStickerLayerDimming = () => {
-    const { main, dimmed } = ensureStickerLayerBuckets();
+    const { main, dimmed, hidden } = ensureStickerLayerBuckets();
+    const sortedActive = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
     const selected = selectedColorSlot == null ? null : normalizeSlot(selectedColorSlot);
-    const flipbookPlaybackActive = !!stickerFlipbookMode && !!document.querySelector('.toy-panel.toy-playing');
-    dimmed.setAttribute('opacity', flipbookPlaybackActive ? '0' : '0.34');
+    const flipbookPlaybackActive = !!stickerFlipbookMode && !!transportIsPlaying;
+    const flipbookAtRestActive = !!stickerFlipbookMode && !flipbookPlaybackActive;
+    const hasSelected = selected != null;
+    if (!flipbookPlaybackActive) flipbookPlaybackSlot = null;
+    const currentSlot = flipbookPlaybackActive
+      ? (flipbookPlaybackSlot == null ? null : normalizeSlot(flipbookPlaybackSlot))
+      : (hasSelected ? selected : (sortedActive.length ? sortedActive[0] : null));
+    let previousSlot = null;
+    if (flipbookAtRestActive && currentSlot != null && sortedActive.length > 1) {
+      const idx = sortedActive.indexOf(currentSlot);
+      if (idx >= 0) previousSlot = sortedActive[(idx - 1 + sortedActive.length) % sortedActive.length];
+    }
+    const showAllNormalLayers = !stickerFlipbookMode && !!transportIsPlaying;
+    dimmed.setAttribute('opacity', flipbookAtRestActive ? '0.34' : '0.34');
     const groups = layer.querySelectorAll('g[data-slot]');
     for (const g of groups) {
       const slot = normalizeSlot(g.getAttribute('data-slot'));
-      const target = (selected != null && slot !== selected) ? dimmed : main;
+      let target = main;
+      if (stickerFlipbookMode) {
+        if (currentSlot == null) target = hidden;
+        else if (slot === currentSlot) target = main;
+        else if (flipbookAtRestActive && previousSlot != null && slot === previousSlot) target = dimmed;
+        else target = hidden;
+      } else {
+        target = showAllNormalLayers ? main : ((selected != null && slot !== selected) ? dimmed : main);
+      }
       if (g.parentNode !== target) target.appendChild(g);
       g.removeAttribute('opacity');
     }
-    dimmed.hidden = selected == null;
+    dimmed.hidden = stickerFlipbookMode ? !flipbookAtRestActive : (selected == null || showAllNormalLayers);
+    hidden.hidden = !stickerFlipbookMode;
   };
 
   const renderSlot = (slot) => {
@@ -4332,6 +4363,23 @@ function setupSticker(panel) {
   const renderAll = () => {
     for (let i = 0; i < ART_SLOT_COUNT; i++) renderSlot(i);
   };
+  try { transportIsPlaying = !!document.querySelector('.toy-panel.toy-playing'); } catch { transportIsPlaying = false; }
+  try {
+    document.addEventListener('transport:play', () => {
+      transportIsPlaying = true;
+      flipbookPlaybackSlot = null;
+      renderAll();
+      try { refreshCustomizeUi(); } catch {}
+      syncAllShapeHandles();
+    }, true);
+    document.addEventListener('transport:pause', () => {
+      transportIsPlaying = false;
+      flipbookPlaybackSlot = null;
+      renderAll();
+      try { refreshCustomizeUi(); } catch {}
+      syncAllShapeHandles();
+    }, true);
+  } catch {}
 
   const syncActiveDataset = () => {
     panel.dataset.hasActiveSticker = activeSlots.size > 0 ? '1' : '0';
@@ -4995,7 +5043,15 @@ function setupSticker(panel) {
     ev.preventDefault();
     ev.stopPropagation();
     stickerFlipbookMode = !stickerFlipbookMode;
+    flipbookPlaybackSlot = null;
+    if (stickerFlipbookMode && selectedColorSlot == null) {
+      const first = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b)[0];
+      if (Number.isFinite(first)) selectedColorSlot = first;
+    }
     syncFlipbookBtn();
+    renderAll();
+    try { refreshCustomizeUi(); } catch {}
+    syncAllShapeHandles();
     markSceneDirtySafe();
   });
   topActions.appendChild(flipbookBtn);
@@ -5973,6 +6029,7 @@ function setupSticker(panel) {
       selectedPaintColor = String(palette[selectedPaintIndex] || '#7bf6ff');
     }
     stickerFlipbookMode = !!state.flipbookMode;
+    flipbookPlaybackSlot = null;
     try { syncFlipbookBtn(); } catch {}
     renderAll();
     fitDragAreaToDrawings();
@@ -5994,7 +6051,8 @@ function setupSticker(panel) {
     setSlotActive(slot);
     if (stickerFlipbookMode) {
       try {
-        if (document.querySelector('.toy-panel.toy-playing')) {
+        if (transportIsPlaying) {
+          flipbookPlaybackSlot = slot;
           selectedColorSlot = slot;
           renderAll();
           refreshCustomizeUi();
@@ -6012,7 +6070,8 @@ function setupSticker(panel) {
     setSlotActive(slot);
     if (stickerFlipbookMode) {
       try {
-        if (document.querySelector('.toy-panel.toy-playing')) {
+        if (transportIsPlaying) {
+          flipbookPlaybackSlot = slot;
           selectedColorSlot = slot;
           renderAll();
           refreshCustomizeUi();
@@ -6023,6 +6082,16 @@ function setupSticker(panel) {
     try { pulseColorButtonHit(slot); } catch {}
     if (currentFxId !== 1) emitHit(slot);
   };
+
+  try {
+    const playStateObs = new MutationObserver(() => {
+      if (!transportIsPlaying) flipbookPlaybackSlot = null;
+      renderAll();
+      try { refreshCustomizeUi(); } catch {}
+      syncAllShapeHandles();
+    });
+    playStateObs.observe(panel, { attributes: true, attributeFilter: ['class'] });
+  } catch {}
 }
 
 function setupVisualForType(panel, type) {
