@@ -6166,6 +6166,9 @@ function setupSticker(panel) {
         fullBodyRangeDeg: 180, // otherwise full 360 around default
         headRangeDeg: 90, // head direction range around "top of body"
         legMaxOffsetDeg: 180, // max relative angle offset between legs
+        centerStepMax: 95, // tweak: max center movement from previous layer (px)
+        centerStepJitter: 28, // tweak: extra local jitter on center step (px)
+        orientationStepDeg: 22, // tweak: max body orientation change from previous layer (deg)
       });
       const degToRad = (d) => (Number(d) || 0) * (Math.PI / 180);
       const rand = (a, b) => a + Math.random() * (b - a);
@@ -6190,17 +6193,28 @@ function setupSticker(panel) {
         if (maxY > AREA_MAX_Y) dy -= (maxY - AREA_MAX_Y);
         return points.map((p) => clampPoint({ x: p.x + dx, y: p.y + dy }));
       };
-      const buildStickman = () => {
-        const center = {
-          x: rand(AREA_MIN_X + 180, AREA_MAX_X - 180),
-          y: rand(AREA_MIN_Y + 180, AREA_MAX_Y - 180),
-        };
+      const buildStickman = (seed = null) => {
+        const prevCenter = seed?.center || null;
+        const center = prevCenter
+          ? clampPoint({
+            x: prevCenter.x + rand(-STICKMAN_CFG.centerStepMax, STICKMAN_CFG.centerStepMax) + rand(-STICKMAN_CFG.centerStepJitter, STICKMAN_CFG.centerStepJitter),
+            y: prevCenter.y + rand(-STICKMAN_CFG.centerStepMax, STICKMAN_CFG.centerStepMax) + rand(-STICKMAN_CFG.centerStepJitter, STICKMAN_CFG.centerStepJitter),
+          })
+          : {
+            x: rand(AREA_MIN_X + 180, AREA_MAX_X - 180),
+            y: rand(AREA_MIN_Y + 180, AREA_MAX_Y - 180),
+          };
         const defaultBody = degToRad(STICKMAN_CFG.defaultBodyDeg);
         const nearDefault = Math.random() < STICKMAN_CFG.nearDefaultChance;
-        const bodyOffsetDeg = nearDefault
-          ? rand(-STICKMAN_CFG.nearDefaultRangeDeg, STICKMAN_CFG.nearDefaultRangeDeg)
-          : rand(-STICKMAN_CFG.fullBodyRangeDeg, STICKMAN_CFG.fullBodyRangeDeg);
-        const bodyAngle = defaultBody + degToRad(bodyOffsetDeg);
+        const seededBody = Number.isFinite(seed?.bodyAngle) ? Number(seed.bodyAngle) : null;
+        const bodyOffsetDeg = seededBody == null
+          ? (nearDefault
+            ? rand(-STICKMAN_CFG.nearDefaultRangeDeg, STICKMAN_CFG.nearDefaultRangeDeg)
+            : rand(-STICKMAN_CFG.fullBodyRangeDeg, STICKMAN_CFG.fullBodyRangeDeg))
+          : rand(-STICKMAN_CFG.orientationStepDeg, STICKMAN_CFG.orientationStepDeg);
+        const bodyAngle = seededBody == null
+          ? (defaultBody + degToRad(bodyOffsetDeg))
+          : (seededBody + degToRad(bodyOffsetDeg));
         const bodyDir = unit(bodyAngle);
         const neck = clampPoint(center);
         const pelvis = clampPoint(add(neck, bodyDir, STICKMAN_CFG.bodyLength));
@@ -6225,6 +6239,8 @@ function setupSticker(panel) {
 
         const fitted = fitPointsToArea([neck, pelvis, shoulder, headCenter, handA, handB, footA, footB]);
         return {
+          center,
+          bodyAngle,
           neck: fitted[0],
           pelvis: fitted[1],
           shoulder: fitted[2],
@@ -6235,8 +6251,11 @@ function setupSticker(panel) {
           footB: fitted[7],
         };
       };
-      for (const slot of activeSlots) {
-        const pose = buildStickman();
+      const slots = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+      let poseSeed = null;
+      for (const slot of slots) {
+        const pose = buildStickman(poseSeed);
+        poseSeed = { center: pose.center, bodyAngle: pose.bodyAngle };
         const w = getPlacementStrokeWidth();
         slotShapes[slot] = [{
           kind: 'circle',
