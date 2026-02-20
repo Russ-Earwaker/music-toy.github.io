@@ -1868,6 +1868,8 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 430px;
+  box-sizing: border-box;
   padding: 10px;
   border-radius: 12px;
   border: 1px solid rgba(147, 197, 255, 0.35);
@@ -1897,6 +1899,85 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   letter-spacing: 0.3px;
   text-transform: uppercase;
   margin-bottom: 6px;
+}
+
+.art-sticker-play-order-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+  min-width: 0;
+  width: 100%;
+}
+
+.art-sticker-play-order-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: rgba(214, 235, 255, 0.88);
+  font-size: 22px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.35px;
+}
+
+.art-sticker-note-layer-panel .art-sticker-play-order-select {
+  width: 100%;
+  min-width: 0;
+  min-height: clamp(52px, calc(52px / var(--toy-scale, 1)), 80px) !important;
+  height: clamp(52px, calc(52px / var(--toy-scale, 1)), 80px) !important;
+  border-radius: 10px;
+  border: 1px solid rgba(147, 197, 255, 0.4);
+  background: rgba(10, 18, 34, 0.96);
+  color: rgba(230, 243, 255, 0.95);
+  padding: 0 clamp(14px, calc(14px / var(--toy-scale, 1)), 24px) !important;
+  font-size: clamp(22px, calc(22px / var(--toy-scale, 1)), 30px) !important;
+  line-height: 1 !important;
+  font-weight: 700;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+}
+
+.art-sticker-note-layer-panel .art-sticker-play-order-select:focus-visible {
+  border-color: rgba(147, 197, 255, 0.8);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+.art-sticker-random-mode-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.art-sticker-random-mode-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.art-sticker-random-mode-select {
+  width: 100%;
+  min-height: 46px;
+  height: 46px;
+  border-radius: 10px;
+  border: 1px solid rgba(147, 197, 255, 0.4);
+  background: rgba(10, 18, 34, 0.96);
+  color: rgba(230, 243, 255, 0.95);
+  padding: 0 12px;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+}
+
+.art-sticker-random-mode-select:focus-visible {
+  border-color: rgba(147, 197, 255, 0.8);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
 .art-sticker-note-btn {

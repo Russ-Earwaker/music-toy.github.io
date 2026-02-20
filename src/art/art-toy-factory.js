@@ -4151,6 +4151,21 @@ function setupSticker(panel) {
   let stickerFlipbookMode = false;
   let flipbookPlaybackSlot = null;
   let transportIsPlaying = false;
+  const STICKER_RANDOMIZATION_MODE = Object.freeze({
+    NORMAL: 'normal',
+    SEQUENTIAL_LINES: 'sequentialLines',
+  });
+  let stickerRandomizationMode = STICKER_RANDOMIZATION_MODE.NORMAL;
+  const STICKER_LAYER_PLAY_ORDER = Object.freeze({
+    SEQUENCE: 'sequence',
+    NOTE_POSITION: 'notePosition',
+    PITCH: 'pitch',
+  });
+  let stickerLayerPlayOrder = STICKER_LAYER_PLAY_ORDER.NOTE_POSITION;
+  let stickerSequenceCursor = 0;
+  const stickerPitchToSlot = new Map();
+  const stickerPitchValueByKey = new Map();
+  const stickerSlotToPitch = Array.from({ length: ART_SLOT_COUNT }, () => null);
   let refreshCustomizeUi = () => {};
   let setCustomiseOpen = () => {};
   let pulseColorButtonHit = () => {};
@@ -4179,6 +4194,140 @@ function setupSticker(panel) {
 
   const clampX = (x) => Math.max(AREA_MIN_X, Math.min(AREA_MAX_X, Number(x) || 0));
   const clampY = (y) => Math.max(AREA_MIN_Y, Math.min(AREA_MAX_Y, Number(y) || 0));
+  const normalizeLayerPlayOrder = (v) => {
+    const key = String(v || '').trim();
+    if (key === STICKER_LAYER_PLAY_ORDER.SEQUENCE) return STICKER_LAYER_PLAY_ORDER.SEQUENCE;
+    if (key === STICKER_LAYER_PLAY_ORDER.PITCH) return STICKER_LAYER_PLAY_ORDER.PITCH;
+    return STICKER_LAYER_PLAY_ORDER.NOTE_POSITION;
+  };
+  const normalizeRandomizationMode = (v) => {
+    const key = String(v || '').trim();
+    if (key === STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES) return STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES;
+    return STICKER_RANDOMIZATION_MODE.NORMAL;
+  };
+  const extractPitchClass = (note) => {
+    const raw = String(note || '').trim();
+    if (!raw) return null;
+    const m = raw.match(/^([A-Ga-g])([#b]?)(-?\d+)?/);
+    if (!m) return null;
+    const base = String(m[1] || '').toUpperCase();
+    const accidental = String(m[2] || '');
+    const key = `${base}${accidental}`;
+    const flatToSharp = {
+      Db: 'C#',
+      Eb: 'D#',
+      Gb: 'F#',
+      Ab: 'G#',
+      Bb: 'A#',
+      Cb: 'B',
+      Fb: 'E',
+      'E#': 'F',
+      'B#': 'C',
+    };
+    return flatToSharp[key] || key;
+  };
+  const pitchClassToSemitone = (pitchClass) => {
+    const key = String(pitchClass || '').trim().toUpperCase();
+    const map = {
+      C: 0, 'C#': 1, DB: 1, D: 2, 'D#': 3, EB: 3, E: 4, F: 5, 'F#': 6, GB: 6,
+      G: 7, 'G#': 8, AB: 8, A: 9, 'A#': 10, BB: 10, B: 11,
+    };
+    return Number.isFinite(map[key]) ? map[key] : null;
+  };
+  const parseNotePitch = (note) => {
+    const raw = String(note || '').trim();
+    if (!raw) return null;
+    if (/^midi:-?\d+$/i.test(raw)) {
+      const midi = Number(raw.split(':')[1]);
+      if (!Number.isFinite(midi)) return null;
+      return { key: `midi:${Math.trunc(midi)}`, value: Math.trunc(midi) };
+    }
+    const m = raw.match(/^([A-Ga-g])([#b]?)(-?\d+)?/);
+    if (!m) return null;
+    const pc = extractPitchClass(raw);
+    const semitone = pitchClassToSemitone(pc);
+    if (!Number.isFinite(semitone)) return null;
+    const octaveRaw = m[3];
+    const octave = Number.isFinite(Number(octaveRaw)) ? Number(octaveRaw) : 4;
+    const midi = Math.trunc(((octave + 1) * 12) + semitone);
+    return { key: `midi:${midi}`, value: midi };
+  };
+  const remapPitchAssignments = (activeSorted) => {
+    const sorted = Array.isArray(activeSorted)
+      ? activeSorted.map((s) => normalizeSlot(s)).sort((a, b) => a - b)
+      : Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    stickerPitchToSlot.clear();
+    for (let i = 0; i < ART_SLOT_COUNT; i++) stickerSlotToPitch[i] = null;
+    if (!sorted.length) return;
+    const ranked = Array.from(stickerPitchValueByKey.entries())
+      .filter((entry) => Number.isFinite(Number(entry?.[1])))
+      .sort((a, b) => Number(b[1]) - Number(a[1]));
+    const limit = Math.min(sorted.length, ranked.length);
+    for (let i = 0; i < limit; i++) {
+      const key = String(ranked[i][0] || '');
+      const slot = sorted[i];
+      stickerPitchToSlot.set(key, slot);
+      stickerSlotToPitch[slot] = key;
+    }
+  };
+  const setPitchAssignment = (slot, pitchClass) => {
+    const i = normalizeSlot(slot);
+    const pitch = String(pitchClass || '').trim();
+    if (!pitch) return;
+    const parsed = parseNotePitch(pitch);
+    if (parsed) stickerPitchValueByKey.set(parsed.key, parsed.value);
+    const prevPitch = stickerSlotToPitch[i];
+    if (prevPitch) stickerPitchToSlot.delete(prevPitch);
+    const prevSlot = stickerPitchToSlot.get(pitch);
+    if (Number.isFinite(prevSlot)) stickerSlotToPitch[normalizeSlot(prevSlot)] = null;
+    stickerSlotToPitch[i] = pitch;
+    stickerPitchToSlot.set(pitch, i);
+  };
+  const clearPitchAssignmentForSlot = (slot) => {
+    const i = normalizeSlot(slot);
+    const prevPitch = stickerSlotToPitch[i];
+    if (prevPitch) {
+      stickerPitchToSlot.delete(prevPitch);
+      stickerPitchValueByKey.delete(prevPitch);
+    }
+    stickerSlotToPitch[i] = null;
+  };
+  const cleanupPitchAssignments = () => {
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      if (!activeSlots.has(i)) clearPitchAssignmentForSlot(i);
+    }
+    for (const [key] of Array.from(stickerPitchValueByKey.entries())) {
+      if (!String(key || '').trim()) stickerPitchValueByKey.delete(key);
+    }
+    remapPitchAssignments();
+  };
+  const resolveTriggerSlotForPlayOrder = (trigger = null) => {
+    const activeSorted = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+    const fallbackSlot = normalizeSlot(trigger?.slotIndex);
+    const noteText = String(trigger?.note || '').trim();
+    if (stickerLayerPlayOrder === STICKER_LAYER_PLAY_ORDER.SEQUENCE) {
+      if (!noteText) return null;
+      const idx = Math.max(0, Math.trunc(Number(stickerSequenceCursor) || 0)) % ART_SLOT_COUNT;
+      const slot = idx;
+      stickerSequenceCursor = (idx + 1) % ART_SLOT_COUNT;
+      return slot;
+    }
+    if (!activeSorted.length) return fallbackSlot;
+    if (stickerLayerPlayOrder === STICKER_LAYER_PLAY_ORDER.PITCH) {
+      cleanupPitchAssignments();
+      const parsed = parseNotePitch(noteText);
+      if (!parsed) return null;
+      stickerPitchValueByKey.set(parsed.key, parsed.value);
+      remapPitchAssignments(activeSorted);
+      const mappedSlot = stickerPitchToSlot.get(parsed.key);
+      if (Number.isFinite(mappedSlot) && activeSlots.has(normalizeSlot(mappedSlot))) {
+        return normalizeSlot(mappedSlot);
+      }
+      return activeSorted[0];
+    }
+    if (activeSlots.has(fallbackSlot)) return fallbackSlot;
+    return activeSorted[0];
+  };
   const setStickerFx = (nextId, { announce = true } = {}) => {
     currentFxId = clampStickerFxId(nextId);
     panel.dataset.stickerFx = String(currentFxId);
@@ -4259,36 +4408,50 @@ function setupSticker(panel) {
     const sortedActive = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
     const selected = selectedColorSlot == null ? null : normalizeSlot(selectedColorSlot);
     const flipbookPlaybackActive = !!stickerFlipbookMode && !!transportIsPlaying;
-    const flipbookAtRestActive = !!stickerFlipbookMode && !flipbookPlaybackActive;
+    const sequenceFlipbookMode = !!stickerFlipbookMode
+      && stickerLayerPlayOrder === STICKER_LAYER_PLAY_ORDER.SEQUENCE;
     const hasSelected = selected != null;
     if (!flipbookPlaybackActive) flipbookPlaybackSlot = null;
     const currentSlot = flipbookPlaybackActive
       ? (flipbookPlaybackSlot == null ? null : normalizeSlot(flipbookPlaybackSlot))
       : (hasSelected ? selected : (sortedActive.length ? sortedActive[0] : null));
     let previousSlot = null;
-    if (flipbookAtRestActive && currentSlot != null && sortedActive.length > 1) {
+    if (
+      !flipbookPlaybackActive
+      && sequenceFlipbookMode
+      && hasSelected
+      && currentSlot != null
+      && sortedActive.length > 1
+    ) {
       const idx = sortedActive.indexOf(currentSlot);
       if (idx >= 0) previousSlot = sortedActive[(idx - 1 + sortedActive.length) % sortedActive.length];
     }
-    const showAllNormalLayers = !stickerFlipbookMode && !!transportIsPlaying;
-    dimmed.setAttribute('opacity', flipbookAtRestActive ? '0.34' : '0.34');
+    const nonSeqMode = !sequenceFlipbookMode;
+    const showAllForeground = !flipbookPlaybackActive && nonSeqMode && !hasSelected;
+    const showSelectedWithDimBackground = !flipbookPlaybackActive && nonSeqMode && hasSelected;
+    const showSequencePreviousBackground = !flipbookPlaybackActive && sequenceFlipbookMode && hasSelected && previousSlot != null;
+    dimmed.setAttribute('opacity', (showSelectedWithDimBackground || showSequencePreviousBackground) ? '0.34' : '0');
     const groups = layer.querySelectorAll('g[data-slot]');
     for (const g of groups) {
       const slot = normalizeSlot(g.getAttribute('data-slot'));
       let target = main;
-      if (stickerFlipbookMode) {
+      if (flipbookPlaybackActive) {
+        if (currentSlot != null && slot === currentSlot) target = main;
+        else target = hidden;
+      } else if (sequenceFlipbookMode) {
         if (currentSlot == null) target = hidden;
         else if (slot === currentSlot) target = main;
-        else if (flipbookAtRestActive && previousSlot != null && slot === previousSlot) target = dimmed;
+        else if (showSequencePreviousBackground && slot === previousSlot) target = dimmed;
         else target = hidden;
       } else {
-        target = showAllNormalLayers ? main : ((selected != null && slot !== selected) ? dimmed : main);
+        if (showAllForeground) target = main;
+        else target = (selected != null && slot !== selected) ? dimmed : main;
       }
       if (g.parentNode !== target) target.appendChild(g);
       g.removeAttribute('opacity');
     }
-    dimmed.hidden = stickerFlipbookMode ? !flipbookAtRestActive : (selected == null || showAllNormalLayers);
-    hidden.hidden = !stickerFlipbookMode;
+    dimmed.hidden = !(showSelectedWithDimBackground || showSequencePreviousBackground);
+    hidden.hidden = !(flipbookPlaybackActive || sequenceFlipbookMode);
   };
 
   const renderSlot = (slot) => {
@@ -4368,6 +4531,7 @@ function setupSticker(panel) {
     document.addEventListener('transport:play', () => {
       transportIsPlaying = true;
       flipbookPlaybackSlot = null;
+      stickerSequenceCursor = 0;
       renderAll();
       try { refreshCustomizeUi(); } catch {}
       syncAllShapeHandles();
@@ -4375,6 +4539,7 @@ function setupSticker(panel) {
     document.addEventListener('transport:pause', () => {
       transportIsPlaying = false;
       flipbookPlaybackSlot = null;
+      stickerSequenceCursor = 0;
       renderAll();
       try { refreshCustomizeUi(); } catch {}
       syncAllShapeHandles();
@@ -4385,25 +4550,31 @@ function setupSticker(panel) {
     panel.dataset.hasActiveSticker = activeSlots.size > 0 ? '1' : '0';
   };
 
-  const setSlotActive = (slot) => {
+  const setSlotActive = (slot, { refresh = true } = {}) => {
     const i = normalizeSlot(slot);
     activeSlots.add(i);
     syncActiveDataset();
     syncShapeHandle();
-    try { refreshCustomizeUi(); } catch {}
+    if (refresh) {
+      try { refreshCustomizeUi(); } catch {}
+    }
   };
 
-  const setSlotInactive = (slot) => {
+  const setSlotInactive = (slot, { refresh = true } = {}) => {
     const i = normalizeSlot(slot);
     activeSlots.delete(i);
+    clearPitchAssignmentForSlot(i);
     syncActiveDataset();
     syncShapeHandle();
-    try { refreshCustomizeUi(); } catch {}
+    if (refresh) {
+      try { refreshCustomizeUi(); } catch {}
+    }
   };
 
   const activateAllSlots = () => {
     activeSlots.clear();
     for (let i = 0; i < ART_SLOT_COUNT; i++) activeSlots.add(i);
+    cleanupPitchAssignments();
     syncActiveDataset();
     try { refreshCustomizeUi(); } catch {}
   };
@@ -5071,6 +5242,27 @@ function setupSticker(panel) {
     },
   });
   customisePanel.appendChild(thicknessControlApi.root);
+
+  const randomModeWrap = document.createElement('div');
+  randomModeWrap.className = 'art-sticker-random-mode-wrap';
+  const randomModeLabel = document.createElement('label');
+  randomModeLabel.className = 'art-sticker-random-mode-label art-line-style-subhead';
+  randomModeLabel.textContent = 'Randomisation';
+  const randomModeSelect = document.createElement('select');
+  randomModeSelect.className = 'art-sticker-random-mode-select';
+  randomModeSelect.innerHTML = [
+    `<option value="${STICKER_RANDOMIZATION_MODE.NORMAL}">Normal randomisation</option>`,
+    `<option value="${STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES}">Sequential lines</option>`,
+  ].join('');
+  randomModeSelect.value = stickerRandomizationMode;
+  randomModeSelect.addEventListener('change', (ev) => {
+    stickerRandomizationMode = normalizeRandomizationMode(ev?.target?.value);
+    markSceneDirtySafe();
+  });
+  randomModeLabel.appendChild(randomModeSelect);
+  randomModeWrap.appendChild(randomModeLabel);
+  customisePanel.appendChild(randomModeWrap);
+
   const canvasEmptyPrompt = document.createElement('div');
   canvasEmptyPrompt.className = 'art-sticker-empty-prompt';
   canvasEmptyPrompt.style.left = `${(AREA_MIN_X + 10).toFixed(2)}px`;
@@ -5147,6 +5339,69 @@ function setupSticker(panel) {
   noteLayerTitle.className = 'art-sticker-note-layer-title';
   noteLayerTitle.textContent = 'Note Layers';
   noteLayerPanel.appendChild(noteLayerTitle);
+  const noteLayerPlayOrderWrap = document.createElement('div');
+  noteLayerPlayOrderWrap.className = 'art-sticker-play-order-wrap';
+  const noteLayerPlayOrderLabel = document.createElement('label');
+  noteLayerPlayOrderLabel.className = 'art-sticker-play-order-label';
+  noteLayerPlayOrderLabel.textContent = 'Layer Play Order';
+  const noteLayerPlayOrderSelect = document.createElement('select');
+  noteLayerPlayOrderSelect.className = 'art-sticker-play-order-select';
+  noteLayerPlayOrderSelect.style.setProperty('min-width', '0');
+  noteLayerPlayOrderSelect.style.setProperty('max-width', '100%');
+  noteLayerPlayOrderSelect.style.setProperty('height', '48px');
+  noteLayerPlayOrderSelect.style.setProperty('min-height', '48px');
+  noteLayerPlayOrderSelect.style.setProperty('font-size', '18px');
+  noteLayerPlayOrderSelect.style.setProperty('font-weight', '700');
+  noteLayerPlayOrderSelect.style.setProperty('padding', '0 14px');
+  noteLayerPlayOrderSelect.style.setProperty('line-height', '1');
+  noteLayerPlayOrderSelect.innerHTML = [
+    `<option value="${STICKER_LAYER_PLAY_ORDER.SEQUENCE}">Play in sequence</option>`,
+    `<option value="${STICKER_LAYER_PLAY_ORDER.NOTE_POSITION}">Play by note position</option>`,
+    `<option value="${STICKER_LAYER_PLAY_ORDER.PITCH}">Play by pitch</option>`,
+  ].join('');
+  noteLayerPlayOrderLabel.appendChild(noteLayerPlayOrderSelect);
+  noteLayerPlayOrderWrap.appendChild(noteLayerPlayOrderLabel);
+  noteLayerPanel.appendChild(noteLayerPlayOrderWrap);
+  noteLayerPlayOrderSelect.value = stickerLayerPlayOrder;
+  noteLayerPlayOrderSelect.addEventListener('change', (ev) => {
+    const nextMode = normalizeLayerPlayOrder(ev?.target?.value);
+    if (nextMode === stickerLayerPlayOrder) return;
+    stickerLayerPlayOrder = nextMode;
+    stickerSequenceCursor = 0;
+    renderAll();
+    try { refreshCustomizeUi(); } catch {}
+    syncAllShapeHandles();
+    markSceneDirtySafe();
+  });
+  const syncPlayOrderSelectVisualScale = (reason = 'sync') => {
+    try {
+      const rect = panel.getBoundingClientRect();
+      const ow = Number(panel.offsetWidth) || 1;
+      const scaleX = rect.width > 0 ? (rect.width / ow) : 1;
+      const safeScale = Number.isFinite(scaleX) && scaleX > 0.001 ? scaleX : 1;
+      const fs = Math.max(18, Math.min(24, 18 / safeScale));
+      const h = Math.max(48, Math.min(72, 48 / safeScale));
+      const padX = Math.max(14, Math.min(22, 14 / safeScale));
+      noteLayerPlayOrderSelect.style.transform = 'none';
+      noteLayerPlayOrderSelect.style.width = '100%';
+      noteLayerPlayOrderSelect.style.maxWidth = '100%';
+      noteLayerPlayOrderSelect.style.height = `${h.toFixed(2)}px`;
+      noteLayerPlayOrderSelect.style.minHeight = `${h.toFixed(2)}px`;
+      noteLayerPlayOrderSelect.style.fontSize = `${fs.toFixed(2)}px`;
+      noteLayerPlayOrderSelect.style.padding = `0 ${padX.toFixed(2)}px`;
+      if (window.__MT_DEBUG_STICKER_DROPDOWN === true) {
+        // eslint-disable-next-line no-console
+        console.log('[Sticker][play-order-select]', {
+          reason,
+          panelOffsetWidth: ow,
+          panelRectWidth: Number(rect.width.toFixed(2)),
+          scaleX: Number(safeScale.toFixed(4)),
+          computed: { fs: Number(fs.toFixed(2)), h: Number(h.toFixed(2)), padX: Number(padX.toFixed(2)) },
+          selectWidth: noteLayerPlayOrderSelect.style.width,
+        });
+      }
+    } catch {}
+  };
   panel.appendChild(noteLayerPanel);
 
   const noteButtonHitUntilBySlot = new Map();
@@ -5237,8 +5492,11 @@ function setupSticker(panel) {
     const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
     noteLayerPanel.innerHTML = '';
     noteLayerPanel.appendChild(noteLayerTitle);
+    noteLayerPanel.appendChild(noteLayerPlayOrderWrap);
     noteLayerPanel.hidden = panel.dataset.controlsVisible !== '1' || active.length === 0;
     if (noteLayerPanel.hidden) return;
+    noteLayerPlayOrderSelect.value = stickerLayerPlayOrder;
+    syncPlayOrderSelectVisualScale('refresh-note-layer-ui');
     for (const slot of active) {
       const row = document.createElement('div');
       row.className = 'art-sticker-note-row';
@@ -5286,6 +5544,16 @@ function setupSticker(panel) {
       noteLayerPanel.appendChild(row);
     }
   };
+  const syncNoteLayerButtonStates = () => {
+    const selectedNorm = selectedColorSlot == null ? null : normalizeSlot(selectedColorSlot);
+    const btns = noteLayerPanel.querySelectorAll('button[data-note-slot]');
+    btns.forEach((btn) => {
+      const slot = normalizeSlot(btn.getAttribute('data-note-slot'));
+      btn.classList.toggle('is-selected', selectedNorm != null && selectedNorm === slot);
+      btn.classList.toggle('is-dimmed', selectedNorm != null && selectedNorm !== slot);
+    });
+    try { noteLayerPlayOrderSelect.value = stickerLayerPlayOrder; } catch {}
+  };
 
   refreshCustomizeUi = () => {
     const active = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
@@ -5298,6 +5566,7 @@ function setupSticker(panel) {
     canvasDrawPrompt.hidden = !(controlsVisible && hasActive && !hasAnyArt);
     customisePanel.hidden = !controlsVisible || !hasActive;
     customisePanel.classList.toggle('is-empty-lines', !hasActive);
+    randomModeSelect.value = stickerRandomizationMode;
     lineButtonsHost.innerHTML = '';
     if (!hasActive) {
       selectedColorSlot = null;
@@ -5853,7 +6122,28 @@ function setupSticker(panel) {
   const randomizeStickerArt = ({ ensureActive = false } = {}) => {
     if (ensureActive && !activeSlots.size) activateAllSlots();
     if (!activeSlots.size) return false;
-    if (isShapeFx(currentFxId)) {
+    if (stickerRandomizationMode === STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES) {
+      const slots = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
+      const marginX = 84;
+      const startX = clampX(AREA_MIN_X + marginX);
+      const endX = clampX(AREA_MAX_X - marginX);
+      const usableH = Math.max(0, (AREA_MAX_Y - AREA_MIN_Y) - 160);
+      const stepY = slots.length > 1 ? (usableH / (slots.length - 1)) : 0;
+      const baseY = AREA_MIN_Y + 80;
+      for (let idx = 0; idx < slots.length; idx++) {
+        const slot = slots[idx];
+        const y = clampY(baseY + (stepY * idx));
+        slotShapes[slot] = [];
+        slotStrokeStyles[slot] = [{
+          color: palette[slot],
+          width: getPlacementStrokeWidth(),
+        }];
+        drawingState.setSlotStrokes(slot, [[
+          { x: startX, y },
+          { x: endX, y },
+        ]]);
+      }
+    } else if (isShapeFx(currentFxId)) {
       const kind = shapeKindForFx(currentFxId);
       for (const slot of activeSlots) {
         const count = 1 + Math.floor(Math.random() * 3);
@@ -5908,7 +6198,11 @@ function setupSticker(panel) {
 
   panel.onArtClear = () => {
     for (let i = 0; i < ART_SLOT_COUNT; i++) setSlotInactive(i);
+    stickerPitchToSlot.clear();
+    stickerPitchValueByKey.clear();
+    for (let i = 0; i < ART_SLOT_COUNT; i++) stickerSlotToPitch[i] = null;
     selectedColorSlot = null;
+    stickerSequenceCursor = 0;
     pickerWrap.hidden = true;
     pickerTitle.hidden = true;
     drawingState.clearAll();
@@ -5954,6 +6248,10 @@ function setupSticker(panel) {
     selectedPaintIndex: selectedPaintIndex,
     selectedPaintColor: String(selectedPaintColor || '#7bf6ff'),
     flipbookMode: !!stickerFlipbookMode,
+    randomizationMode: stickerRandomizationMode,
+    layerPlayOrder: stickerLayerPlayOrder,
+    pitchToSlotMap: Array.from(stickerPitchToSlot.entries()).map(([pitch, slot]) => [String(pitch || ''), normalizeSlot(slot)]),
+    pitchValueByKey: Array.from(stickerPitchValueByKey.entries()).map(([k, v]) => [String(k || ''), Number(v) || 0]),
     controlsVisible: panel.dataset.controlsVisible === '1',
   });
 
@@ -6029,6 +6327,29 @@ function setupSticker(panel) {
       selectedPaintColor = String(palette[selectedPaintIndex] || '#7bf6ff');
     }
     stickerFlipbookMode = !!state.flipbookMode;
+    stickerRandomizationMode = normalizeRandomizationMode(state.randomizationMode);
+    stickerLayerPlayOrder = normalizeLayerPlayOrder(state.layerPlayOrder);
+    stickerSequenceCursor = 0;
+    stickerPitchToSlot.clear();
+    stickerPitchValueByKey.clear();
+    for (let i = 0; i < ART_SLOT_COUNT; i++) stickerSlotToPitch[i] = null;
+    if (Array.isArray(state.pitchValueByKey)) {
+      for (const entry of state.pitchValueByKey) {
+        if (!Array.isArray(entry) || entry.length < 2) continue;
+        const key = String(entry[0] || '').trim();
+        const val = Number(entry[1]);
+        if (!key || !Number.isFinite(val)) continue;
+        stickerPitchValueByKey.set(key, val);
+      }
+    } else if (Array.isArray(state.pitchToSlotMap)) {
+      for (const entry of state.pitchToSlotMap) {
+        if (!Array.isArray(entry) || entry.length < 1) continue;
+        const parsed = parseNotePitch(entry[0]);
+        if (!parsed) continue;
+        stickerPitchValueByKey.set(parsed.key, parsed.value);
+      }
+    }
+    remapPitchAssignments(Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b));
     flipbookPlaybackSlot = null;
     try { syncFlipbookBtn(); } catch {}
     renderAll();
@@ -6045,17 +6366,19 @@ function setupSticker(panel) {
   syncActiveDataset();
   syncDragArea();
   syncAllShapeHandles();
+  try { requestAnimationFrame(() => syncPlayOrderSelectVisualScale('post-init-raf')); } catch {}
 
   panel.onArtTrigger = (trigger = null) => {
-    const slot = normalizeSlot(trigger?.slotIndex);
-    setSlotActive(slot);
+    const slot = resolveTriggerSlotForPlayOrder(trigger);
+    if (slot == null) return false;
+    setSlotActive(slot, { refresh: false });
     if (stickerFlipbookMode) {
       try {
         if (transportIsPlaying) {
           flipbookPlaybackSlot = slot;
           selectedColorSlot = slot;
           renderAll();
-          refreshCustomizeUi();
+          syncNoteLayerButtonStates();
           syncAllShapeHandles();
         }
       } catch {}
@@ -6066,15 +6389,16 @@ function setupSticker(panel) {
   };
 
   panel.flash = (meta = null) => {
-    const slot = normalizeSlot(meta?.slotIndex);
-    setSlotActive(slot);
+    const slot = resolveTriggerSlotForPlayOrder(meta);
+    if (slot == null) return;
+    setSlotActive(slot, { refresh: false });
     if (stickerFlipbookMode) {
       try {
         if (transportIsPlaying) {
           flipbookPlaybackSlot = slot;
           selectedColorSlot = slot;
           renderAll();
-          refreshCustomizeUi();
+          syncNoteLayerButtonStates();
           syncAllShapeHandles();
         }
       } catch {}
@@ -6089,6 +6413,7 @@ function setupSticker(panel) {
       renderAll();
       try { refreshCustomizeUi(); } catch {}
       syncAllShapeHandles();
+      syncPlayOrderSelectVisualScale('panel-class-mutation');
     });
     playStateObs.observe(panel, { attributes: true, attributeFilter: ['class'] });
   } catch {}
