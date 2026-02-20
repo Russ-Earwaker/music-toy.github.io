@@ -2692,6 +2692,14 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   pointer-events: none;
 }
 
+.art-sticker-preview-line-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .art-toy-fx-grid {
   position: relative;
   display: flex;
@@ -2743,13 +2751,13 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   position: absolute;
   left: 0;
   top: calc(100% + 10px);
-  width: calc(136px * 4 + 8px * 3 + 20px);
+  width: calc(136px * 6 + 8px * 5 + 24px);
   max-height: none;
   overflow: visible;
-  display: grid;
-  grid-template-columns: repeat(4, 136px);
-  gap: 8px;
-  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
   border-radius: 12px;
   border: 1px solid rgba(133, 178, 255, 0.35);
   background: rgba(6, 10, 24, 0.96);
@@ -2764,6 +2772,28 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 .art-sticker-fx-library-card {
   width: 136px;
   height: 136px;
+}
+
+.art-sticker-fx-library-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.art-sticker-fx-library-title {
+  margin: 0;
+  padding: 0 2px;
+  font: 800 20px/1.1 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(217, 236, 255, 0.96);
+  text-shadow: 0 2px 10px rgba(76, 167, 255, 0.24);
+}
+
+.art-sticker-fx-library-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 136px);
+  gap: 8px;
 }
 
 .art-toy-music-btn {

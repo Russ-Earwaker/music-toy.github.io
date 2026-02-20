@@ -6367,25 +6367,52 @@ function setupSticker(panel) {
           }
         }
       };
-      if (meta.category === 'line') {
-        const line = document.createElement('span');
-        line.className = 'art-laser-preview-line';
-        line.style.background = tone;
-        line.style.left = '50%';
-        line.style.top = '50%';
-        line.style.width = meta.key === 'linePulse' ? '48px' : '44px';
-        line.style.height = meta.key === 'linePulse' ? '5px' : '4px';
-        line.style.opacity = meta.emitsHit === false ? '0.72' : '1';
-        if (meta.lineVariant === 'dashed') line.style.borderTop = `3px dashed ${tone}`;
-        line.style.filter = `drop-shadow(0 0 ${meta.emitsHit === false ? 6 : 12}px ${tone})`;
-        stage.appendChild(line);
-        if (meta.emitsHit !== false) {
-          try { line.animate([{ opacity: 0.25 }, { opacity: 1 }, { opacity: 0.25 }], { duration: 560, easing: 'ease-out' }); } catch {}
+      const spawnWavyLinePreview = () => {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 120 120');
+        svg.setAttribute('preserveAspectRatio', 'none');
+        svg.classList.add('art-sticker-preview-line-svg');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        // Shared path for all line previews: wavy line from top-left to bottom-right.
+        path.setAttribute('d', 'M 10 18 C 24 14, 33 36, 46 40 C 62 46, 70 64, 86 74 C 98 82, 106 96, 112 108');
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', tone);
+        const thickness = meta.key === 'linePulse' ? 6 : 5;
+        path.setAttribute('stroke-width', String(thickness));
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-linejoin', 'round');
+        if (meta.lineVariant === 'dashed') {
+          path.setAttribute('stroke-dasharray', `${(thickness * 0.9).toFixed(2)} ${(thickness * 1.75).toFixed(2)}`);
         }
-        setTimeout(() => { try { line.remove(); } catch {} }, 760);
+        path.style.filter = `drop-shadow(0 0 ${meta.emitsHit === false ? 7 : 12}px ${tone})`;
+        svg.appendChild(path);
+        stage.appendChild(svg);
+        try {
+          if (meta.emitsHit === false) {
+            path.animate(
+              [{ opacity: 0.62 }, { opacity: 0.74 }, { opacity: 0.62 }],
+              { duration: 700, easing: 'ease-in-out' }
+            );
+          } else {
+            path.animate(
+              [{ opacity: 0.34 }, { opacity: 1 }, { opacity: 0.34 }],
+              { duration: 620, easing: 'ease-out' }
+            );
+            if (meta.lineVariant === 'dashed') {
+              path.animate(
+                [{ strokeDashoffset: '0' }, { strokeDashoffset: '-16' }],
+                { duration: 620, easing: 'linear' }
+              );
+            }
+          }
+        } catch {}
+        setTimeout(() => { try { svg.remove(); } catch {} }, 760);
+      };
+      if (meta.category === 'line') {
+        spawnWavyLinePreview();
         return;
       }
-      if (meta.key && String(meta.key).startsWith('fw')) {
+      if (meta.category === 'burst') {
         spawnBurstPreview();
         return;
       }
@@ -6393,11 +6420,11 @@ function setupSticker(panel) {
       shape.style.position = 'absolute';
       shape.style.left = '50%';
       shape.style.top = '50%';
-      shape.style.width = '26px';
-      shape.style.height = '26px';
+      shape.style.width = '78px';
+      shape.style.height = '78px';
       shape.style.transform = 'translate(-50%, -50%)';
       shape.style.boxSizing = 'border-box';
-      shape.style.filter = `drop-shadow(0 0 8px ${tone})`;
+      shape.style.filter = `drop-shadow(0 0 10px ${tone})`;
       shape.style.background = tone;
       if (meta.shapeKind === 'circle') shape.style.borderRadius = '999px';
       else if (meta.shapeKind === 'triangle') shape.style.clipPath = 'polygon(50% 8%, 8% 92%, 92% 92%)';
@@ -6405,7 +6432,7 @@ function setupSticker(panel) {
       else if (meta.shapeKind === 'ring') {
         shape.style.background = 'transparent';
         shape.style.borderRadius = '999px';
-        shape.style.border = `5px solid ${tone}`;
+        shape.style.border = `8px solid ${tone}`;
       } else if (meta.shapeKind === 'star8') {
         shape.style.clipPath = 'polygon(50% 0%,60% 30%,95% 5%,70% 40%,100% 50%,70% 60%,95% 95%,60% 70%,50% 100%,40% 70%,5% 95%,30% 60%,0% 50%,30% 40%,5% 5%,40% 30%)';
       } else if (meta.shapeKind === 'burstCross') {
@@ -6478,33 +6505,64 @@ function setupSticker(panel) {
       }
       fxLibrary.innerHTML = '';
       fxLibraryCards.length = 0;
-      for (const fxId of stickerLibraryFxIds) {
-        const fx = getStickerFxMeta(fxId);
-        if (!fx) continue;
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'art-toy-fx-card art-sticker-fx-library-card';
-        card.dataset.fxId = String(fx.id);
-        card.title = fx.name;
-        card.setAttribute('aria-label', `Select ${fx.name} from library`);
-        const stage = document.createElement('span');
-        stage.className = 'art-toy-fx-stage';
-        stage.dataset.fxId = String(fx.id);
-        card.appendChild(stage);
-        fxLibrary.appendChild(card);
-        fxLibraryCards.push(card);
-        addPreviewLoop(stage, fx.id);
-        card.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const selectedFx = fx.id;
-          const replaceIdx = Math.max(0, stickerMainFxIds.indexOf(clampStickerFxId(currentFxId)));
-          if (!stickerMainFxIds.includes(selectedFx)) {
-            stickerMainFxIds[replaceIdx] = selectedFx;
-          }
-          buildMainFxGrid();
-          setStickerFx(selectedFx);
-        });
+      const groups = [
+        {
+          key: 'line',
+          title: 'Line Types',
+          ids: stickerLibraryFxIds.filter((fxId) => getStickerFxMeta(fxId)?.category === 'line'),
+        },
+        {
+          key: 'shape',
+          title: 'Shape Types',
+          ids: stickerLibraryFxIds.filter((fxId) => getStickerFxMeta(fxId)?.category === 'shape'),
+        },
+        {
+          key: 'burst',
+          title: 'Burst Effects',
+          ids: stickerLibraryFxIds.filter((fxId) => getStickerFxMeta(fxId)?.category === 'burst'),
+        },
+      ];
+      for (const group of groups) {
+        if (!Array.isArray(group.ids) || !group.ids.length) continue;
+        const section = document.createElement('section');
+        section.className = 'art-sticker-fx-library-section';
+        section.dataset.group = group.key;
+        const title = document.createElement('h4');
+        title.className = 'art-sticker-fx-library-title';
+        title.textContent = group.title;
+        section.appendChild(title);
+        const list = document.createElement('div');
+        list.className = 'art-sticker-fx-library-grid';
+        section.appendChild(list);
+        for (const fxId of group.ids) {
+          const fx = getStickerFxMeta(fxId);
+          if (!fx) continue;
+          const card = document.createElement('button');
+          card.type = 'button';
+          card.className = 'art-toy-fx-card art-sticker-fx-library-card';
+          card.dataset.fxId = String(fx.id);
+          card.title = fx.name;
+          card.setAttribute('aria-label', `Select ${fx.name} from library`);
+          const stage = document.createElement('span');
+          stage.className = 'art-toy-fx-stage';
+          stage.dataset.fxId = String(fx.id);
+          card.appendChild(stage);
+          list.appendChild(card);
+          fxLibraryCards.push(card);
+          addPreviewLoop(stage, fx.id);
+          card.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const selectedFx = fx.id;
+            const replaceIdx = Math.max(0, stickerMainFxIds.indexOf(clampStickerFxId(currentFxId)));
+            if (!stickerMainFxIds.includes(selectedFx)) {
+              stickerMainFxIds[replaceIdx] = selectedFx;
+            }
+            buildMainFxGrid();
+            setStickerFx(selectedFx);
+          });
+        }
+        fxLibrary.appendChild(section);
       }
     };
     const syncFxUi = () => {
