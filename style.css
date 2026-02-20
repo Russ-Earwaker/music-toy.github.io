@@ -2744,8 +2744,8 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   left: 0;
   top: calc(100% + 10px);
   width: calc(136px * 4 + 8px * 3 + 20px);
-  max-height: calc(136px * 2 + 8px * 1 + 20px);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   display: grid;
   grid-template-columns: repeat(4, 136px);
   gap: 8px;

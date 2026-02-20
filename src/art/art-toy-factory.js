@@ -4113,6 +4113,14 @@ function setupSticker(panel) {
   hitLayer.setAttribute('preserveAspectRatio', 'none');
   panel.appendChild(hitLayer);
 
+  const burstLayer = document.createElement('div');
+  burstLayer.className = 'art-fireworks-layer art-sticker-burst-layer';
+  panel.appendChild(burstLayer);
+
+  const burstGlowLayer = document.createElement('div');
+  burstGlowLayer.className = 'art-fireworks-active-glows art-sticker-burst-glows';
+  panel.appendChild(burstGlowLayer);
+
   const AREA_MIN_X = -94;
   const AREA_MIN_Y = 74;
   const MAX_DRAG_SPAN = 1600;
@@ -4150,13 +4158,19 @@ function setupSticker(panel) {
   const palette = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#007aff', '#5856d6', '#ffffff', '#000000'];
   const drawingState = createArtDrawingState({ slotCount: ART_SLOT_COUNT });
   const slotShapes = Array.from({ length: ART_SLOT_COUNT }, () => []);
+  const slotBursts = Array.from({ length: ART_SLOT_COUNT }, () => []);
   const slotStrokeStyles = Array.from({ length: ART_SLOT_COUNT }, () => []);
   const activeSlots = new Set();
   const slotHandleEls = Array.from({ length: ART_SLOT_COUNT }, () => null);
+  const burstParticles = [];
+  const BURST_PARTICLE_CAP = 280;
   let selectedColorSlot = null; // note-layer selection
   let selectedPaintIndex = 0;
   let selectedPaintColor = palette[0];
   let stickerStrokeMultiplier = 5;
+  const STICKER_THICKNESS_MIN = 0.6;
+  const STICKER_THICKNESS_MAX = 8;
+  const STICKER_BURST_MIN_SIZE = 16;
   let stickerFlipbookMode = false;
   let flipbookPlaybackSlot = null;
   let transportIsPlaying = false;
@@ -4187,10 +4201,24 @@ function setupSticker(panel) {
     { id: 4, key: 'triangle', name: 'Triangle', category: 'shape', shapeKind: 'triangle' },
     { id: 5, key: 'pentagon', name: 'Pentagon', category: 'shape', shapeKind: 'pentagon' },
     { id: 6, key: 'lineDashed', name: 'Line Dashed', category: 'line', lineVariant: 'dashed', emitsHit: true, libraryOnly: true },
-    { id: 7, key: 'burstRing', name: 'Burst Ring', category: 'shape', shapeKind: 'ring', libraryOnly: true },
-    { id: 8, key: 'burstStar', name: 'Burst Star', category: 'shape', shapeKind: 'star8', libraryOnly: true },
-    { id: 9, key: 'burstCross', name: 'Burst Cross', category: 'shape', shapeKind: 'burstCross', libraryOnly: true },
+    { id: 7, key: 'burstRing', name: 'FW Ring', category: 'burst', burstType: 'ring', libraryOnly: true },
+    { id: 8, key: 'burstStar', name: 'FW Star', category: 'burst', burstType: 'star', libraryOnly: true },
+    { id: 9, key: 'burstCrackle', name: 'FW Crackle', category: 'burst', burstType: 'crackle', libraryOnly: true },
     { id: 10, key: 'linePulse', name: 'Line Pulse', category: 'line', lineVariant: 'solid', emitsHit: true, libraryOnly: true },
+    // Light Paths library set
+    { id: 11, key: 'laserSolidPulse', name: 'LP Solid Pulse', category: 'line', lineVariant: 'solid', emitsHit: true, libraryOnly: true },
+    { id: 12, key: 'laserSoftPulse', name: 'LP Soft Pulse', category: 'line', lineVariant: 'solid', emitsHit: true, libraryOnly: true },
+    { id: 13, key: 'laserBurstThin', name: 'LP Burst Thin', category: 'line', lineVariant: 'dashed', emitsHit: true, libraryOnly: true },
+    { id: 14, key: 'laserRunner', name: 'LP Runner', category: 'line', lineVariant: 'dashed', emitsHit: true, libraryOnly: true },
+    { id: 15, key: 'laserSolidRunner', name: 'LP Solid + Runner', category: 'line', lineVariant: 'solid', emitsHit: true, libraryOnly: true },
+    { id: 16, key: 'laserSoftRunner', name: 'LP Soft + Runner', category: 'line', lineVariant: 'solid', emitsHit: true, libraryOnly: true },
+    // Bursts library set
+    { id: 17, key: 'fwClassic', name: 'FW Classic', category: 'burst', burstType: 'classic', libraryOnly: true },
+    { id: 18, key: 'fwPalm', name: 'FW Palm', category: 'burst', burstType: 'palm', libraryOnly: true },
+    { id: 19, key: 'fwCrackle', name: 'FW Crackle', category: 'burst', burstType: 'crackle', libraryOnly: true },
+    { id: 20, key: 'fwFlower', name: 'FW Flower', category: 'burst', burstType: 'flower', libraryOnly: true },
+    { id: 21, key: 'fwRing', name: 'FW Ring', category: 'burst', burstType: 'ring', libraryOnly: true },
+    { id: 22, key: 'fwStar', name: 'FW Star', category: 'burst', burstType: 'star', libraryOnly: true },
   ]);
   const getStickerFxMeta = (fxId) => STICKER_FX.find((fx) => fx.id === clampStickerFxId(fxId)) || STICKER_FX[0];
   const clampStickerFxId = (v) => {
@@ -4198,7 +4226,9 @@ function setupSticker(panel) {
     return Number.isFinite(n) && n >= 0 && n < STICKER_FX.length ? n : 0;
   };
   const isShapeFx = (fxId) => getStickerFxMeta(fxId)?.category === 'shape';
+  const isBurstFx = (fxId) => getStickerFxMeta(fxId)?.category === 'burst';
   const shapeKindForFx = (fxId) => String(getStickerFxMeta(fxId)?.shapeKind || '');
+  const burstTypeForFx = (fxId) => String(getStickerFxMeta(fxId)?.burstType || '');
   const lineVariantForFx = (fxId) => String(getStickerFxMeta(fxId)?.lineVariant || 'solid');
   const stickerFxEmitsHit = (fxId) => getStickerFxMeta(fxId)?.emitsHit !== false;
   let currentFxId = 0;
@@ -4209,6 +4239,386 @@ function setupSticker(panel) {
 
   const clampX = (x) => Math.max(AREA_MIN_X, Math.min(AREA_MAX_X, Number(x) || 0));
   const clampY = (y) => Math.max(AREA_MIN_Y, Math.min(AREA_MAX_Y, Number(y) || 0));
+  const trackBurstParticleEl = (el) => {
+    if (!el) return;
+    burstParticles.push(el);
+    while (burstParticles.length > BURST_PARTICLE_CAP) {
+      const old = burstParticles.shift();
+      try { old?.remove?.(); } catch {}
+    }
+  };
+  const burstFxIdFromType = (type) => {
+    const key = String(type || '').toLowerCase();
+    if (key === 'palm') return 1;
+    if (key === 'crackle') return 2;
+    if (key === 'flower') return 3;
+    if (key === 'ring') return 4;
+    if (key === 'star') return 5;
+    return 0;
+  };
+  const spawnStickerBurstFx = ({ x = 0, y = 0, tone = '#7bf6ff', type = 'classic', size = 16 } = {}) => {
+    const anchorX = Number(x) || 0;
+    const anchorY = Number(y) || 0;
+    const amp = Math.max(0.2, Number(size) || 16) / 16;
+    const fxId = burstFxIdFromType(type);
+    const FIREWORK_EFFECT_SCALE = 2;
+
+    const spawnCoreFlash = (scale = 1, life = 260) => {
+      try {
+        const glow = document.createElement('span');
+        glow.className = 'art-firework-core';
+        glow.style.left = `${Math.round(anchorX)}px`;
+        glow.style.top = `${Math.round(anchorY)}px`;
+        glow.style.background = tone;
+        burstLayer.appendChild(glow);
+        trackBurstParticleEl(glow);
+        const anim = glow.animate(
+          [
+            { transform: `translate(-50%, -50%) scale(${0.15 * FIREWORK_EFFECT_SCALE * scale})`, opacity: 0.98 },
+            { transform: `translate(-50%, -50%) scale(${2.0 * FIREWORK_EFFECT_SCALE * scale})`, opacity: 0.22, offset: 0.45 },
+            { transform: `translate(-50%, -50%) scale(${2.6 * FIREWORK_EFFECT_SCALE * scale})`, opacity: 0 },
+          ],
+          { duration: life, easing: 'ease-out' }
+        );
+        anim.addEventListener('finish', () => { try { glow.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { glow.remove(); } catch {} }, { once: true });
+      } catch {}
+    };
+
+    const spawnCoreFadeOut = (scale = 1, life = 340) => {
+      try {
+        const glow = document.createElement('span');
+        glow.className = 'art-firework-core';
+        glow.style.left = `${Math.round(anchorX)}px`;
+        glow.style.top = `${Math.round(anchorY)}px`;
+        glow.style.background = tone;
+        burstLayer.appendChild(glow);
+        trackBurstParticleEl(glow);
+        const fullScale = 2.6 * FIREWORK_EFFECT_SCALE * Math.max(0.05, Number(scale) || 1);
+        const anim = glow.animate(
+          [
+            { transform: `translate(-50%, -50%) scale(${fullScale})`, opacity: 1 },
+            { transform: `translate(-50%, -50%) scale(${fullScale})`, opacity: 0.95, offset: 0.22 },
+            { transform: `translate(-50%, -50%) scale(${fullScale * 0.92})`, opacity: 0 },
+          ],
+          { duration: life, easing: 'ease-out' }
+        );
+        anim.addEventListener('finish', () => { try { glow.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { glow.remove(); } catch {} }, { once: true });
+      } catch {}
+    };
+
+    const spawnLineSpark = ({ angle = 0, dist = 60, life = 520, width = 10, height = 64, gravity = 0, opacity = 1, scale0 = 0.25, scale1 = 1 } = {}) => {
+      const spark = document.createElement('span');
+      spark.className = 'art-firework-spark';
+      spark.style.left = `${Math.round(anchorX)}px`;
+      spark.style.top = `${Math.round(anchorY)}px`;
+      spark.style.background = tone;
+      spark.style.width = `${Math.max(2, width)}px`;
+      spark.style.height = `${Math.max(6, height)}px`;
+      burstLayer.appendChild(spark);
+      trackBurstParticleEl(spark);
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      const dy2 = dy + gravity;
+      try {
+        const anim = spark.animate(
+          [
+            { transform: `translate(-50%, -50%) rotate(${angle}rad) scale(${scale0})`, opacity },
+            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${angle}rad) scale(${scale1})`, opacity: opacity * 0.95, offset: 0.55 },
+            { transform: `translate(calc(-50% + ${dx * 1.15}px), calc(-50% + ${dy2 * 1.18}px)) rotate(${angle}rad) scale(${scale1 * 0.7})`, opacity: 0 },
+          ],
+          { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' }
+        );
+        anim.addEventListener('finish', () => { try { spark.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { spark.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { spark.remove(); } catch {} }, life + 50);
+      }
+    };
+
+    const spawnDotSpark = ({ angle = 0, dist = 60, life = 520, size: dotSize = 8, gravity = 0, flicker = false } = {}) => {
+      const dot = document.createElement('span');
+      dot.className = 'art-firework-dot';
+      dot.style.left = `${Math.round(anchorX)}px`;
+      dot.style.top = `${Math.round(anchorY)}px`;
+      dot.style.background = tone;
+      dot.style.width = `${Math.max(2, dotSize)}px`;
+      dot.style.height = `${Math.max(2, dotSize)}px`;
+      burstLayer.appendChild(dot);
+      trackBurstParticleEl(dot);
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      const dy2 = dy + gravity;
+      const keyframes = [
+        { transform: 'translate(-50%, -50%) scale(0.35)', opacity: 1 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`, opacity: 0.96, offset: 0.58 },
+        { transform: `translate(calc(-50% + ${dx * 1.12}px), calc(-50% + ${dy2 * 1.16}px)) scale(0.55)`, opacity: 0 },
+      ];
+      try {
+        const anim = dot.animate(keyframes, { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' });
+        anim.addEventListener('finish', () => { try { dot.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { dot.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { dot.remove(); } catch {} }, life + 50);
+      }
+      if (flicker) {
+        try { dot.classList.add('is-flicker'); } catch {}
+      }
+    };
+
+    const spawnRing = ({
+      life = 520,
+      scale0 = 0.2,
+      scale1 = 2.7,
+      thickness = 3,
+      burstIn = null,
+      lingerUntil = null,
+      lingerOpacity = 0.28
+    } = {}) => {
+      const ring = document.createElement('span');
+      ring.className = 'art-firework-ring';
+      ring.style.left = `${Math.round(anchorX)}px`;
+      ring.style.top = `${Math.round(anchorY)}px`;
+      ring.style.color = tone;
+      ring.style.setProperty('--ring-thickness', `${thickness}px`);
+      burstLayer.appendChild(ring);
+      trackBurstParticleEl(ring);
+      try {
+        const hasBurst = Number.isFinite(burstIn) && burstIn > 0 && burstIn < 1;
+        const hasLinger = Number.isFinite(lingerUntil) && lingerUntil > 0 && lingerUntil < 1;
+        const burstOffset = hasBurst ? Math.max(0.12, Math.min(0.72, Number(burstIn))) : 0.35;
+        const lingerOffset = hasLinger ? Math.max(burstOffset + 0.08, Math.min(0.96, Number(lingerUntil))) : 0.78;
+        const lingerA = Math.max(0, Math.min(0.9, Number(lingerOpacity) || 0));
+        const keyframes = hasBurst || hasLinger
+          ? [
+              { transform: `translate(-50%, -50%) scale(${scale0})`, opacity: 0.95 },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0.62, offset: burstOffset },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: lingerA, offset: lingerOffset },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0 },
+            ]
+          : [
+              { transform: `translate(-50%, -50%) scale(${scale0})`, opacity: 0.9 },
+              { transform: `translate(-50%, -50%) scale(${scale1})`, opacity: 0 },
+            ];
+        const anim = ring.animate(keyframes, { duration: life, easing: 'ease-out' });
+        anim.addEventListener('finish', () => { try { ring.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { ring.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { ring.remove(); } catch {} }, life + 50);
+      }
+    };
+
+    const spawnStar = ({
+      angle = 0,
+      dist = 60,
+      life = 540,
+      size: starSize = 14,
+      spin = 1,
+      gravity = 0,
+      burstOffset = 0.6,
+      startScale = 0.5,
+      burstScale = 1,
+      endScale = 0.7
+    } = {}) => {
+      const star = document.createElement('span');
+      star.className = 'art-firework-star';
+      star.style.left = `${Math.round(anchorX)}px`;
+      star.style.top = `${Math.round(anchorY)}px`;
+      star.style.background = tone;
+      star.style.width = `${Math.max(6, starSize)}px`;
+      star.style.height = `${Math.max(6, starSize)}px`;
+      burstLayer.appendChild(star);
+      trackBurstParticleEl(star);
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      const dy2 = dy + gravity;
+      const outOffset = Math.max(0.16, Math.min(0.72, Number(burstOffset) || 0.6));
+      const s0 = Math.max(0.1, Number(startScale) || 0.5);
+      const sb = Math.max(0.1, Number(burstScale) || 1);
+      const se = Math.max(0.1, Number(endScale) || 0.7);
+      try {
+        const anim = star.animate(
+          [
+            { transform: `translate(-50%, -50%) rotate(0deg) scale(${s0})`, opacity: 1 },
+            { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${180 * spin}deg) scale(${sb})`, opacity: 0.92, offset: outOffset },
+            { transform: `translate(calc(-50% + ${dx * 1.08}px), calc(-50% + ${dy2 * 1.08}px)) rotate(${360 * spin}deg) scale(${se})`, opacity: 0 },
+          ],
+          { duration: life, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' }
+        );
+        anim.addEventListener('finish', () => { try { star.remove(); } catch {} }, { once: true });
+        anim.addEventListener('cancel', () => { try { star.remove(); } catch {} }, { once: true });
+      } catch {
+        setTimeout(() => { try { star.remove(); } catch {} }, life + 50);
+      }
+    };
+
+    if (fxId === 0) {
+      spawnCoreFadeOut(0.54 * amp * 2, 360);
+      return;
+    }
+    if (fxId === 4) {
+      const RING_SIZE_SCALE = 2 / 3;
+      spawnRing({
+        life: 760 + Math.random() * 220,
+        scale0: 0.25 * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE * amp * 2,
+        scale1: (2.5 + Math.random() * 0.8) * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE * amp * 2,
+        thickness: 3,
+        burstIn: 0.24,
+        lingerUntil: 0.9,
+        lingerOpacity: 0.34
+      });
+      spawnRing({
+        life: 860 + Math.random() * 260,
+        scale0: 0.16 * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE * amp * 2,
+        scale1: (1.9 + Math.random() * 0.7) * FIREWORK_EFFECT_SCALE * RING_SIZE_SCALE * amp * 2,
+        thickness: 2,
+        burstIn: 0.28,
+        lingerUntil: 0.92,
+        lingerOpacity: 0.28
+      });
+      return;
+    }
+
+    if (fxId !== 5) spawnCoreFlash(1.0, 240);
+
+    if (fxId === 1) {
+      const sparkCount = 22;
+      for (let i = 0; i < sparkCount; i++) {
+        const angle = ((Math.PI * 2) / sparkCount) * i + (Math.random() - 0.5) * 0.35;
+        const dist = (32 + Math.random() * 62) * amp * FIREWORK_EFFECT_SCALE;
+        const life = 760 + Math.random() * 360;
+        spawnLineSpark({ angle, dist, life, width: 10, height: 86, gravity: 38 * amp * FIREWORK_EFFECT_SCALE, scale0: 0.22, scale1: 1.05 });
+      }
+      return;
+    }
+    if (fxId === 2) {
+      const CRACKLE_SIZE_SCALE = 2;
+      const sparkCount = 28;
+      for (let i = 0; i < sparkCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = (18 + Math.random() * 44) * amp * FIREWORK_EFFECT_SCALE * CRACKLE_SIZE_SCALE;
+        const life = 420 + Math.random() * 220;
+        spawnDotSpark({
+          angle,
+          dist,
+          life,
+          size: (7 + Math.random() * 4) * CRACKLE_SIZE_SCALE,
+          gravity: 18 * amp * FIREWORK_EFFECT_SCALE * CRACKLE_SIZE_SCALE,
+          flicker: true
+        });
+        const delay = 90 + Math.random() * 220;
+        setTimeout(() => {
+          try {
+            const microCount = 4 + Math.floor(Math.random() * 4);
+            for (let m = 0; m < microCount; m++) {
+              const a2 = angle + (Math.random() - 0.5) * 0.9;
+              const d2 = (8 + Math.random() * 16) * amp * FIREWORK_EFFECT_SCALE * CRACKLE_SIZE_SCALE;
+              spawnDotSpark({
+                angle: a2,
+                dist: d2,
+                life: 220 + Math.random() * 160,
+                size: (5 + Math.random() * 3) * CRACKLE_SIZE_SCALE,
+                gravity: 10 * amp * FIREWORK_EFFECT_SCALE * CRACKLE_SIZE_SCALE,
+                flicker: true
+              });
+            }
+          } catch {}
+        }, delay);
+      }
+      return;
+    }
+    if (fxId === 3) {
+      const petals = 8;
+      const perPetal = 6;
+      for (let p = 0; p < petals; p++) {
+        const baseA = ((Math.PI * 2) / petals) * p;
+        for (let k = 0; k < perPetal; k++) {
+          const a = baseA + (Math.random() - 0.5) * 0.24;
+          const dist = (26 + k * (10 + Math.random() * 4)) * amp * FIREWORK_EFFECT_SCALE;
+          const life = 540 + Math.random() * 240;
+          spawnDotSpark({ angle: a, dist, life, size: 6 + Math.random() * 3, gravity: 0, flicker: false });
+        }
+      }
+      return;
+    }
+    if (fxId === 5) {
+      spawnStar({
+        angle: 0,
+        dist: 0,
+        life: 620,
+        size: 120,
+        spin: 2.6,
+        gravity: 8 * amp * FIREWORK_EFFECT_SCALE,
+        burstOffset: 0.18,
+        startScale: 0.2,
+        burstScale: 1.4,
+        endScale: 0.46
+      });
+      const impactCount = 12;
+      for (let i = 0; i < impactCount; i++) {
+        const impactAngle = (Math.PI * 2 * i) / impactCount + (Math.random() - 0.5) * 0.14;
+        const impactDist = (42 + Math.random() * 26) * amp * FIREWORK_EFFECT_SCALE;
+        spawnStar({
+          angle: impactAngle,
+          dist: impactDist,
+          life: 300 + Math.random() * 90,
+          size: 10 + Math.random() * 7,
+          spin: (Math.random() < 0.5 ? -1 : 1) * (2.1 + Math.random() * 1.4),
+          gravity: 12 * amp * FIREWORK_EFFECT_SCALE,
+          burstOffset: 0.16,
+          startScale: 0.34,
+          burstScale: 1.65,
+          endScale: 0.42
+        });
+      }
+      const arms = 5;
+      const waves = 5;
+      const spawnWindowMs = 300;
+      const waveStepMs = Math.round(spawnWindowMs / Math.max(1, waves - 1));
+      const baseAngle = Math.random() * Math.PI * 2;
+      const angularVelocity = 0.86;
+      for (let w = 0; w < waves; w++) {
+        const delay = w * waveStepMs;
+        setTimeout(() => {
+          const waveT = w / Math.max(1, waves - 1);
+          const burstBoost = delay < 200
+            ? (3.9 - (delay / 200) * 1.9)
+            : Math.max(1.0, 1.7 - ((delay - 200) / Math.max(1, spawnWindowMs - 200)) * 0.7);
+          const earlyBoost = (1.85 - (waveT * 0.75)) * burstBoost;
+          const finalScale = 0.5 + (waveT * 0.22);
+          for (let a = 0; a < arms; a++) {
+            const angle = baseAngle + ((Math.PI * 2) / arms) * a + (w * angularVelocity);
+            const dist = (26 + w * 7 + Math.random() * 14) * amp * FIREWORK_EFFECT_SCALE * earlyBoost;
+            const life = 920 + Math.random() * 260;
+            spawnStar({
+              angle,
+              dist,
+              life,
+              size: 12 + Math.random() * 9,
+              spin: 1.1 + Math.random() * 0.9,
+              gravity: 26 * amp * FIREWORK_EFFECT_SCALE,
+              burstOffset: 0.2 + (waveT * 0.08),
+              startScale: 0.38,
+              burstScale: 2.0,
+              endScale: finalScale
+            });
+          }
+        }, delay);
+      }
+      return;
+    }
+
+    const sparkCount = 52;
+    for (let i = 0; i < sparkCount; i++) {
+      const angle = ((Math.PI * 2) / sparkCount) * i + (Math.random() - 0.5) * 0.42;
+      const dist = (30 + Math.random() * 76) * amp * FIREWORK_EFFECT_SCALE;
+      const life = 520 + Math.random() * 280;
+      const w = 7 + Math.random() * 5;
+      const h = 64 + Math.random() * 22;
+      spawnLineSpark({ angle, dist, life, width: w, height: h, gravity: 18 * amp * FIREWORK_EFFECT_SCALE, scale0: 0.18, scale1: 1.05 });
+    }
+  };
   const normalizeLayerPlayOrder = (v) => {
     const key = String(v || '').trim();
     if (key === STICKER_LAYER_PLAY_ORDER.SEQUENCE) return STICKER_LAYER_PLAY_ORDER.SEQUENCE;
@@ -4368,6 +4778,13 @@ function setupSticker(panel) {
     1.2,
     STICKER_BASE_STROKE_WIDTH * (Number(stickerStrokeMultiplier) || 1) * STICKER_STROKE_MATCH_MULTIPLIER
   );
+  const getBurstPlacementSize = () => {
+    const value = Number(stickerStrokeMultiplier) || STICKER_THICKNESS_MIN;
+    const tRaw = (value - STICKER_THICKNESS_MIN) / Math.max(0.0001, STICKER_THICKNESS_MAX - STICKER_THICKNESS_MIN);
+    const t = Math.max(0, Math.min(1, tRaw));
+    // At slider min: 1x base size. At slider max: 2x base size.
+    return STICKER_BURST_MIN_SIZE * (1 + t);
+  };
   const getStrokeStyleAt = (slot, strokeIndex) => {
     const i = normalizeSlot(slot);
     const list = Array.isArray(slotStrokeStyles[i]) ? slotStrokeStyles[i] : [];
@@ -4396,7 +4813,8 @@ function setupSticker(panel) {
     const i = normalizeSlot(slot);
     const strokes = drawingState.hasSlotStrokes(i);
     const shapes = Array.isArray(slotShapes[i]) && slotShapes[i].length > 0;
-    return strokes || shapes;
+    const bursts = Array.isArray(slotBursts[i]) && slotBursts[i].length > 0;
+    return strokes || shapes || bursts;
   };
   const ensureStickerLayerBuckets = () => {
     let main = layer.querySelector('g[data-sticker-layer-role="main"]');
@@ -4470,6 +4888,28 @@ function setupSticker(panel) {
     }
     dimmed.hidden = !(showSelectedWithDimBackground || showSequencePreviousBackground);
     hidden.hidden = !(flipbookPlaybackActive || sequenceFlipbookMode);
+  };
+  const syncBurstAnchorGlows = () => {
+    try { burstGlowLayer.innerHTML = ''; } catch {}
+    for (let i = 0; i < ART_SLOT_COUNT; i++) {
+      const bursts = Array.isArray(slotBursts[i]) ? slotBursts[i] : [];
+      for (let bi = 0; bi < bursts.length; bi++) {
+        const b = bursts[bi];
+        const bx = Number(b?.x) || 0;
+        const by = Number(b?.y) || 0;
+        const br = Math.max(10, Number(b?.size) || 18);
+        const glow = document.createElement('span');
+        glow.className = 'art-firework-active-glow is-active-firework';
+        glow.style.left = `${Math.round(bx - 90)}px`;
+        glow.style.top = `${Math.round(by - 90)}px`;
+        glow.style.width = '180px';
+        glow.style.height = '180px';
+        glow.style.color = String(b?.color || palette[i] || selectedPaintColor || '#7bf6ff');
+        glow.style.opacity = '0.12';
+        glow.style.filter = `blur(${Math.max(8, br * 0.8).toFixed(1)}px) saturate(1.08)`;
+        burstGlowLayer.appendChild(glow);
+      }
+    }
   };
 
   const renderSlot = (slot) => {
@@ -4591,6 +5031,7 @@ function setupSticker(panel) {
     }
     if (slotGroup.childNodes.length) layer.appendChild(slotGroup);
     syncStickerLayerDimming();
+    syncBurstAnchorGlows();
   };
 
   const renderAll = () => {
@@ -4654,6 +5095,7 @@ function setupSticker(panel) {
     drawingState.clearSlot(i);
     slotStrokeStyles[i] = [];
     slotShapes[i] = [];
+    slotBursts[i] = [];
     renderSlot(i);
     syncShapeHandle();
     fitDragAreaToDrawings();
@@ -4666,8 +5108,11 @@ function setupSticker(panel) {
     drawingState.clearAll();
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
       slotShapes[i] = [];
+      slotBursts[i] = [];
       slotStrokeStyles[i] = [];
     }
+    try { burstLayer.innerHTML = ''; } catch {}
+    burstParticles.length = 0;
     renderAll();
     syncShapeHandle();
     fitDragAreaToDrawings();
@@ -4698,6 +5143,24 @@ function setupSticker(panel) {
     syncDragArea();
     markSceneDirtySafe();
     return shape;
+  };
+  const placeBurstAtSlot = (slot, x, y, burstType, colorOverride = null, sizeOverride = null) => {
+    const i = normalizeSlot(slot);
+    const list = Array.isArray(slotBursts[i]) ? slotBursts[i] : (slotBursts[i] = []);
+    const burst = {
+      type: String(burstType || 'classic'),
+      x: clampX(x),
+      y: clampY(y),
+      size: Math.max(10, Number(sizeOverride) || getBurstPlacementSize()),
+      color: String(colorOverride || selectedPaintColor || palette[i] || '#7bf6ff'),
+    };
+    list.push(burst);
+    renderSlot(i);
+    syncShapeHandle();
+    fitDragAreaToDrawings();
+    syncDragArea();
+    markSceneDirtySafe();
+    return burst;
   };
 
   const trashBtn = document.createElement('button');
@@ -4790,6 +5253,7 @@ function setupSticker(panel) {
     if (!visible) return;
     const list = getSelectedShapeList();
     const strokeList = getSelectedStrokeList();
+    const burstList = Array.isArray(slotBursts[selected]) ? slotBursts[selected] : [];
     const setHandlePos = (btn, x, y) => {
       const size = 62;
       btn.style.left = `${(Number(x) - size * 0.5).toFixed(2)}px`;
@@ -4969,6 +5433,82 @@ function setupSticker(panel) {
         document.addEventListener('pointercancel', onEnd, true);
       });
     }
+    for (let bi = 0; bi < burstList.length; bi++) {
+      const burst = burstList[bi];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'c-btn art-firework-handle-btn art-sticker-handle-btn is-active-firework';
+      btn.setAttribute('aria-label', `Move sticker burst ${selected + 1}`);
+      btn.title = `Move Sticker Burst ${selected + 1}`;
+      btn.style.setProperty('--c-btn-size', '62px');
+      btn.innerHTML = BUTTON_ICON_HTML;
+      const core = btn.querySelector('.c-btn-core');
+      if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonDrag.png')");
+      btn.dataset.burstIndex = String(bi);
+      setHandlePos(btn, Number(burst?.x) || 0, Number(burst?.y) || 0);
+      handlesLayer.appendChild(btn);
+
+      let dragging = false;
+      let pid = null;
+      let onMove = null;
+      let onEnd = null;
+      const detachDocDrag = () => {
+        if (onMove) document.removeEventListener('pointermove', onMove, true);
+        if (onEnd) {
+          document.removeEventListener('pointerup', onEnd, true);
+          document.removeEventListener('pointercancel', onEnd, true);
+        }
+      };
+      btn.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
+        if (panel.dataset.controlsVisible !== '1') return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        dragging = true;
+        pid = ev.pointerId;
+        setStickerShapeDragging(true);
+        try { btn.setPointerCapture(ev.pointerId); } catch {}
+        if (onMove) return;
+        onMove = (mv) => {
+          if (!dragging) return;
+          if (pid != null && mv.pointerId !== pid) return;
+          const pt = clientToPanelPoint(mv.clientX, mv.clientY);
+          if (!pt) return;
+          mv.preventDefault();
+          mv.stopPropagation();
+          burst.x = clampX(pt.x);
+          burst.y = clampY(pt.y);
+          renderSlot(selected);
+          setHandlePos(btn, burst.x, burst.y);
+          setStickerTrashArmed(isClientPointInsideStickerTrash(mv.clientX, mv.clientY));
+          markSceneDirtySafe();
+        };
+        onEnd = (up) => {
+          if (!dragging) return;
+          if (pid != null && up.pointerId !== pid) return;
+          const dropOnTrash = isClientPointInsideStickerTrash(up.clientX, up.clientY);
+          dragging = false;
+          pid = null;
+          try { btn.releasePointerCapture(up.pointerId); } catch {}
+          detachDocDrag();
+          onMove = null;
+          onEnd = null;
+          if (dropOnTrash) {
+            const idx = burstList.indexOf(burst);
+            if (idx >= 0) burstList.splice(idx, 1);
+            renderSlot(selected);
+            fitDragAreaToDrawings();
+            syncDragArea();
+            markSceneDirtySafe();
+          }
+          setStickerShapeDragging(false);
+          syncShapeHandle();
+        };
+        document.addEventListener('pointermove', onMove, true);
+        document.addEventListener('pointerup', onEnd, true);
+        document.addEventListener('pointercancel', onEnd, true);
+      });
+    }
   };
   const syncAllShapeHandles = () => {
     syncShapeHandle();
@@ -5002,7 +5542,8 @@ function setupSticker(panel) {
     const i = normalizeSlot(slot);
     const strokes = drawingState.getSlotStrokes(i);
     const shapes = Array.isArray(slotShapes[i]) ? slotShapes[i] : [];
-    if (!strokes.length && !shapes.length) return;
+    const bursts = Array.isArray(slotBursts[i]) ? slotBursts[i] : [];
+    if (!strokes.length && !shapes.length && !bursts.length) return;
     for (let si = 0; si < strokes.length; si++) {
       const d = pointsToPath(strokes[si]);
       if (!d) continue;
@@ -5059,6 +5600,16 @@ function setupSticker(panel) {
       node.setAttribute('paint-order', 'stroke');
       hitLayer.appendChild(node);
       setTimeout(() => { try { node.remove(); } catch {} }, 260);
+    }
+    for (let bi = 0; bi < bursts.length; bi++) {
+      const b = bursts[bi];
+      spawnStickerBurstFx({
+        x: Number(b?.x) || 0,
+        y: Number(b?.y) || 0,
+        tone: String(b?.color || palette[i] || selectedPaintColor || '#7bf6ff'),
+        type: String(b?.type || 'classic'),
+        size: Math.max(10, Number(b?.size) || 16),
+      });
     }
   };
 
@@ -5118,6 +5669,14 @@ function setupSticker(panel) {
         const half = Math.max(8, (Number(shape?.size) || 48) * 0.5);
         coords.push({ x: clampX(cx - half), y: clampY(cy - half) });
         coords.push({ x: clampX(cx + half), y: clampY(cy + half) });
+      }
+      const bursts = Array.isArray(slotBursts[slot]) ? slotBursts[slot] : [];
+      for (const b of bursts) {
+        const bx = clampX(b?.x);
+        const by = clampY(b?.y);
+        const r = Math.max(10, Number(b?.size) || 16);
+        coords.push({ x: clampX(bx - r), y: clampY(by - r) });
+        coords.push({ x: clampX(bx + r), y: clampY(by + r) });
       }
     }
     if (!coords.length) {
@@ -5312,13 +5871,13 @@ function setupSticker(panel) {
   const thicknessControlApi = createArtLineThicknessControl({
     title: 'Line Thickness',
     value: stickerStrokeMultiplier,
-    min: 0.6,
-    max: 8,
+    min: STICKER_THICKNESS_MIN,
+    max: STICKER_THICKNESS_MAX,
     step: 0.1,
     onInput: (next) => {
       const n = Number(next);
       if (!Number.isFinite(n)) return;
-      stickerStrokeMultiplier = Math.max(0.2, n);
+      stickerStrokeMultiplier = Math.max(STICKER_THICKNESS_MIN, Math.min(STICKER_THICKNESS_MAX, n));
       markSceneDirtySafe();
     },
   });
@@ -5748,6 +6307,66 @@ function setupSticker(panel) {
       const meta = getStickerFxMeta(fxId);
       const id = meta.id;
       const tone = palette[id % palette.length];
+      const spawnBurstPreview = () => {
+        const count = 8 + Math.floor(Math.random() * 8);
+        for (let i = 0; i < count; i++) {
+          const dot = document.createElement('span');
+          dot.style.position = 'absolute';
+          dot.style.left = '50%';
+          dot.style.top = '50%';
+          dot.style.width = `${3 + Math.random() * 3}px`;
+          dot.style.height = dot.style.width;
+          dot.style.borderRadius = '999px';
+          dot.style.background = tone;
+          dot.style.opacity = '0.95';
+          dot.style.filter = `drop-shadow(0 0 6px ${tone})`;
+          stage.appendChild(dot);
+          const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.35;
+          const dist = 16 + Math.random() * 22;
+          const dx = Math.cos(angle) * dist;
+          const dy = Math.sin(angle) * dist;
+          try {
+            const anim = dot.animate(
+              [
+                { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 1 },
+                { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`, opacity: 0.95, offset: 0.56 },
+                { transform: `translate(calc(-50% + ${dx * 1.2}px), calc(-50% + ${dy * 1.2}px)) scale(0.8)`, opacity: 0 },
+              ],
+              { duration: 620, easing: 'cubic-bezier(0.18, 0.72, 0.14, 1)' }
+            );
+            anim.addEventListener('finish', () => { try { dot.remove(); } catch {} }, { once: true });
+            anim.addEventListener('cancel', () => { try { dot.remove(); } catch {} }, { once: true });
+          } catch {
+            setTimeout(() => { try { dot.remove(); } catch {} }, 680);
+          }
+        }
+        if (meta.key === 'fwRing') {
+          const ring = document.createElement('span');
+          ring.style.position = 'absolute';
+          ring.style.left = '50%';
+          ring.style.top = '50%';
+          ring.style.width = '14px';
+          ring.style.height = '14px';
+          ring.style.border = `2px solid ${tone}`;
+          ring.style.borderRadius = '999px';
+          ring.style.transform = 'translate(-50%, -50%)';
+          ring.style.filter = `drop-shadow(0 0 7px ${tone})`;
+          stage.appendChild(ring);
+          try {
+            const a = ring.animate(
+              [
+                { transform: 'translate(-50%, -50%) scale(0.3)', opacity: 0.95 },
+                { transform: 'translate(-50%, -50%) scale(2)', opacity: 0 },
+              ],
+              { duration: 620, easing: 'ease-out' }
+            );
+            a.addEventListener('finish', () => { try { ring.remove(); } catch {} }, { once: true });
+            a.addEventListener('cancel', () => { try { ring.remove(); } catch {} }, { once: true });
+          } catch {
+            setTimeout(() => { try { ring.remove(); } catch {} }, 680);
+          }
+        }
+      };
       if (meta.category === 'line') {
         const line = document.createElement('span');
         line.className = 'art-laser-preview-line';
@@ -5764,6 +6383,10 @@ function setupSticker(panel) {
           try { line.animate([{ opacity: 0.25 }, { opacity: 1 }, { opacity: 0.25 }], { duration: 560, easing: 'ease-out' }); } catch {}
         }
         setTimeout(() => { try { line.remove(); } catch {} }, 760);
+        return;
+      }
+      if (meta.key && String(meta.key).startsWith('fw')) {
+        spawnBurstPreview();
         return;
       }
       const shape = document.createElement('span');
@@ -5813,8 +6436,8 @@ function setupSticker(panel) {
     };
     const toggleFxLibrary = (open = null) => {
       if (!fxLibrary) return;
-      const next = (open == null) ? fxLibrary.hidden : !open;
-      fxLibrary.hidden = !!next;
+      const nextHidden = (open == null) ? !fxLibrary.hidden : !open;
+      fxLibrary.hidden = !!nextHidden;
       if (fxMoreBtn) fxMoreBtn.classList.toggle('is-active', !fxLibrary.hidden);
     };
     const buildMainFxGrid = () => {
@@ -5841,7 +6464,6 @@ function setupSticker(panel) {
           ev.preventDefault();
           ev.stopPropagation();
           setStickerFx(fx.id);
-          toggleFxLibrary(false);
         });
       }
       if (fxMoreBtn) fxGrid.appendChild(fxMoreBtn);
@@ -5882,7 +6504,6 @@ function setupSticker(panel) {
           }
           buildMainFxGrid();
           setStickerFx(selectedFx);
-          toggleFxLibrary(false);
         });
       }
     };
@@ -6121,6 +6742,13 @@ function setupSticker(panel) {
     if (!isClientPointInsideDrawArea(ev.clientX, ev.clientY)) return;
     const pt = clientToPanelPoint(ev.clientX, ev.clientY);
     if (!pt) return;
+    const burstType = burstTypeForFx(currentFxId);
+    if (burstType) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      placeBurstAtSlot(slot, pt.x, pt.y, burstType, selectedPaintColor, getBurstPlacementSize());
+      return;
+    }
     const shapeKind = shapeKindForFx(currentFxId);
     if (shapeKind) {
       ev.preventDefault();
@@ -6433,6 +7061,7 @@ function setupSticker(panel) {
           { color: palette[slot], width: w, variant: 'solid' }, // leg A
           { color: palette[slot], width: w, variant: 'solid' }, // leg B
         ];
+        slotBursts[slot] = [];
         drawingState.setSlotStrokes(slot, [
           [pose.neck, pose.pelvis],
           [pose.shoulder, pose.handA],
@@ -6453,6 +7082,7 @@ function setupSticker(panel) {
         const slot = slots[idx];
         const y = clampY(baseY + (stepY * idx));
         slotShapes[slot] = [];
+        slotBursts[slot] = [];
         slotStrokeStyles[slot] = [{
           color: palette[slot],
           width: getPlacementStrokeWidth(),
@@ -6463,11 +7093,35 @@ function setupSticker(panel) {
           { x: endX, y },
         ]]);
       }
+    } else if (isBurstFx(currentFxId)) {
+      const burstType = burstTypeForFx(currentFxId) || 'classic';
+      for (const slot of activeSlots) {
+        const count = 1 + Math.floor(Math.random() * 3);
+        slotShapes[slot] = [];
+        slotStrokeStyles[slot] = [];
+        drawingState.setSlotStrokes(slot, []);
+        slotBursts[slot] = [];
+        for (let i = 0; i < count; i++) {
+          const pts = randomStroke();
+          if (!pts.length) continue;
+          const p = pts[Math.floor(Math.random() * pts.length)] || pts[0];
+          const randomColor = palette[Math.floor(Math.random() * palette.length)] || palette[slot] || '#ffffff';
+          placeBurstAtSlot(
+            slot,
+            Number(p?.x) || AREA_MIN_X,
+            Number(p?.y) || AREA_MIN_Y,
+            burstType,
+            randomColor,
+            getBurstPlacementSize()
+          );
+        }
+      }
     } else if (isShapeFx(currentFxId)) {
       const kind = shapeKindForFx(currentFxId);
       for (const slot of activeSlots) {
         const count = 1 + Math.floor(Math.random() * 3);
         slotShapes[slot] = [];
+        slotBursts[slot] = [];
         slotStrokeStyles[slot] = [];
         drawingState.setSlotStrokes(slot, []);
         for (let i = 0; i < count; i++) {
@@ -6492,6 +7146,7 @@ function setupSticker(panel) {
         const strokes = [];
         const styles = [];
         slotShapes[slot] = [];
+        slotBursts[slot] = [];
         for (let i = 0; i < count; i++) {
           strokes.push(randomStroke());
           styles.push({
@@ -6538,8 +7193,11 @@ function setupSticker(panel) {
     drawingState.clearAll();
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
       slotShapes[i] = [];
+      slotBursts[i] = [];
       slotStrokeStyles[i] = [];
     }
+    try { burstLayer.innerHTML = ''; } catch {}
+    burstParticles.length = 0;
     renderAll();
     fitDragAreaToDrawings();
     syncDragArea();
@@ -6572,6 +7230,15 @@ function setupSticker(panel) {
         color: String(s?.color || '#7bf6ff'),
         strokeWidth: Math.max(1.2, Number(s?.strokeWidth) || getPlacementStrokeWidth()),
         rot: Number(s?.rot) || 0,
+      }))
+      : [])),
+    burstsBySlot: slotBursts.map((list) => (Array.isArray(list)
+      ? list.map((b) => ({
+        type: String(b?.type || 'classic'),
+        x: Number(b?.x) || 0,
+        y: Number(b?.y) || 0,
+        size: Math.max(8, Number(b?.size) || 16),
+        color: String(b?.color || '#7bf6ff'),
       }))
       : [])),
     fx: clampStickerFxId(currentFxId),
@@ -6613,7 +7280,7 @@ function setupSticker(panel) {
     if (state.lineThickness != null) {
       const n = Number(state.lineThickness);
       if (Number.isFinite(n)) {
-        stickerStrokeMultiplier = Math.max(0.2, n);
+        stickerStrokeMultiplier = Math.max(STICKER_THICKNESS_MIN, Math.min(STICKER_THICKNESS_MAX, n));
         try { thicknessControlApi?.setValue?.(stickerStrokeMultiplier); } catch {}
       }
     }
@@ -6650,6 +7317,20 @@ function setupSticker(panel) {
       }
     } else {
       for (let i = 0; i < ART_SLOT_COUNT; i++) slotShapes[i] = [];
+    }
+    if (Array.isArray(state.burstsBySlot)) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const list = Array.isArray(state.burstsBySlot[i]) ? state.burstsBySlot[i] : [];
+        slotBursts[i] = list.map((b) => ({
+          type: String(b?.type || 'classic'),
+          x: clampX(b?.x),
+          y: clampY(b?.y),
+          size: Math.max(8, Number(b?.size) || 16),
+          color: String(b?.color || palette[i] || '#7bf6ff'),
+        }));
+      }
+    } else {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) slotBursts[i] = [];
     }
     if (state.fx != null) setStickerFx(state.fx, { announce: false });
     selectedColorSlot = state.selectedColorSlot == null ? null : normalizeSlot(state.selectedColorSlot);
