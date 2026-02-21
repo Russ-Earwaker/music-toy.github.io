@@ -52,6 +52,18 @@ export function createBeatSwarmSpawnerRuntime({ getLayerEl, onSpawn } = {}) {
     }
   };
 
+  const setEnabled = (selectorFn) => {
+    if (typeof selectorFn !== 'function') return false;
+    for (let i = 0; i < activeEntries.length; i++) {
+      const entry = activeEntries[i];
+      const next = !!selectorFn(entry, i);
+      entry.state.enabled = next;
+      const def = typeDefs.get(entry.type);
+      try { def?.onEnabledChange?.(entry, next); } catch {}
+    }
+    return true;
+  };
+
   const exit = () => {
     if (!running) return true;
     running = false;
@@ -63,6 +75,7 @@ export function createBeatSwarmSpawnerRuntime({ getLayerEl, onSpawn } = {}) {
     registerType,
     enter,
     update,
+    setEnabled,
     exit,
     isActive: () => running,
     getActiveEntries: () => Array.from(activeEntries),
@@ -144,16 +157,19 @@ export function registerLoopgridSpawnerType(runtime, { flashDecay = 3.2 } = {}) 
       if (!hasNotes) {
         panel.style.display = 'none';
         entry.state.hasContent = false;
+        entry.state.enabled = false;
         return;
       }
 
       entry.state.hasContent = true;
+      entry.state.enabled = true;
       panel.classList.add('beat-swarm-rhythm-spawner');
       panel.style.visibility = 'hidden';
       panel.style.pointerEvents = 'none';
       createProxy(entry, steps);
 
       const onPlayCol = (ev) => {
+        if (!entry.state.enabled) return;
         const col = Number(ev?.detail?.col);
         if (!Number.isFinite(col)) return;
         const idx = Math.max(0, Math.min(7, Math.trunc(col)));
@@ -181,6 +197,7 @@ export function registerLoopgridSpawnerType(runtime, { flashDecay = 3.2 } = {}) 
     update: (entry, { dt }) => {
       if (!entry.state.hasContent) return;
       syncProxyGeometry(entry);
+      entry.state.proxyEl?.classList?.toggle?.('is-disabled', !entry.state.enabled);
       const flash = entry.state.flash;
       const cubes = entry.state.cubeEls;
       if (Array.isArray(flash) && Array.isArray(cubes)) {
@@ -189,6 +206,11 @@ export function registerLoopgridSpawnerType(runtime, { flashDecay = 3.2 } = {}) 
           cubes[i].style.setProperty('--bs-flash', `${flash[i].toFixed(3)}`);
         }
       }
+    },
+    onEnabledChange: (entry, enabled) => {
+      const proxy = entry?.state?.proxyEl;
+      if (!proxy) return;
+      proxy.classList.toggle('is-disabled', !enabled);
     },
     teardown: (entry) => {
       const panel = entry.panel;
@@ -211,4 +233,3 @@ export function registerLoopgridSpawnerType(runtime, { flashDecay = 3.2 } = {}) 
     },
   });
 }
-

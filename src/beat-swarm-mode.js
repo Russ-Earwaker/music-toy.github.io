@@ -38,7 +38,6 @@ const ENEMY_CAP = 120;
 const ENEMY_ACCEL = 680;
 const ENEMY_MAX_SPEED = 260;
 const ENEMY_HIT_RADIUS = 20;
-const ENEMY_MAX_HP = 2;
 const PICKUP_COLLECT_RADIUS_PX = 46;
 const PROJECTILE_SPEED = 1100;
 const PROJECTILE_HIT_RADIUS_PX = 24;
@@ -54,6 +53,11 @@ const weaponDefs = Object.freeze({
 const equippedWeapons = new Set();
 let lastBeatIndex = null;
 let spawnerRuntime = null;
+const difficultyConfig = Object.seal({
+  initialEnabledSpawnerCount: 1,
+  enemySpeedMultiplier: 0.5,
+  enemyHealth: 2,
+});
 
 let rafId = 0;
 let lastFrameTs = 0;
@@ -204,8 +208,8 @@ function spawnEnemyAt(clientX, clientY) {
     vx: 0,
     vy: 0,
     el,
-    hp: ENEMY_MAX_HP,
-    maxHp: ENEMY_MAX_HP,
+    hp: Math.max(1, Number(difficultyConfig.enemyHealth) || 1),
+    maxHp: Math.max(1, Number(difficultyConfig.enemyHealth) || 1),
     hpFillEl: hpFill,
   });
 }
@@ -229,6 +233,7 @@ function spawnPickup(weaponId, worldX, worldY) {
   if (!enemyLayerEl || !weaponDefs[weaponId]) return;
   const el = document.createElement('div');
   el.className = `beat-swarm-pickup is-${weaponId}`;
+  el.setAttribute('data-weapon', weaponId);
   enemyLayerEl.appendChild(el);
   pickups.push({ weaponId, wx: worldX, wy: worldY, el });
 }
@@ -316,6 +321,19 @@ function updateBeatWeapons(centerWorld) {
   fireWeaponsOnBeat(centerWorld);
 }
 
+function configureInitialSpawnerEnablement() {
+  const count = Math.max(0, Math.trunc(Number(difficultyConfig.initialEnabledSpawnerCount) || 0));
+  if (!spawnerRuntime?.setEnabled) return;
+  let enabledSoFar = 0;
+  spawnerRuntime.setEnabled((entry) => {
+    if (entry?.type !== 'loopgrid') return true;
+    if (!entry?.state?.hasContent) return false;
+    const on = enabledSoFar < count;
+    if (on) enabledSoFar += 1;
+    return on;
+  });
+}
+
 function updateEnemies(dt) {
   if (!enemies.length) return;
   const centerWorld = getViewportCenterWorld();
@@ -327,13 +345,15 @@ function updateEnemies(dt) {
     const dx = centerWorld.x - e.wx;
     const dy = centerWorld.y - e.wy;
     const d = Math.hypot(dx, dy) || 0.0001;
-    const ax = (dx / d) * ENEMY_ACCEL;
-    const ay = (dy / d) * ENEMY_ACCEL;
+    const speedMult = Math.max(0.05, Number(difficultyConfig.enemySpeedMultiplier) || 1);
+    const ax = (dx / d) * ENEMY_ACCEL * speedMult;
+    const ay = (dy / d) * ENEMY_ACCEL * speedMult;
     e.vx += ax * dt;
     e.vy += ay * dt;
     const speed = Math.hypot(e.vx, e.vy);
-    if (speed > ENEMY_MAX_SPEED) {
-      const k = ENEMY_MAX_SPEED / speed;
+    const maxSpeed = ENEMY_MAX_SPEED * speedMult;
+    if (speed > maxSpeed) {
+      const k = maxSpeed / speed;
       e.vx *= k;
       e.vy *= k;
     }
@@ -634,6 +654,7 @@ export function enterBeatSwarmMode() {
   spawnStarterPickups(getViewportCenterWorld());
   lastBeatIndex = null;
   try { spawnerRuntime?.enter?.(); } catch {}
+  try { configureInitialSpawnerEnablement(); } catch {}
   bindInput();
   startTick();
   try { window.__MT_ANCHOR?.center?.(); } catch {}

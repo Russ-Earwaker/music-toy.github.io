@@ -3251,6 +3251,11 @@ body.internal-board-active #board-main {
   pointer-events: none;
 }
 
+.beat-swarm-rhythm-proxy.is-disabled {
+  opacity: 0.32 !important;
+  filter: saturate(0.35) brightness(0.72);
+}
+
 .beat-swarm-rhythm-cube {
   --bs-flash: 0;
   width: 100%;
@@ -3308,26 +3313,60 @@ body.internal-board-active #board-main {
 
 .beat-swarm-pickup {
   position: fixed;
-  width: 30px;
-  height: 30px;
-  margin-left: -15px;
-  margin-top: -15px;
+  width: 60px;
+  height: 60px;
+  margin-left: -30px;
+  margin-top: -30px;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.65);
   box-shadow: 0 0 16px rgba(255, 255, 255, 0.32);
   transform: translate(-9999px, -9999px);
+  overflow: hidden;
+}
+
+.beat-swarm-pickup::before,
+.beat-swarm-pickup::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .beat-swarm-pickup.is-laser {
   background: #58d2ff;
 }
 
+.beat-swarm-pickup.is-laser::before {
+  width: 34px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(230, 248, 255, 0.95);
+  box-shadow: 0 0 10px rgba(230, 248, 255, 0.7);
+}
+
 .beat-swarm-pickup.is-projectile {
   background: #f2c861;
 }
 
+.beat-swarm-pickup.is-projectile::before {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 247, 212, 0.95);
+  box-shadow: 0 0 10px rgba(255, 247, 212, 0.6);
+}
+
 .beat-swarm-pickup.is-explosion {
   background: #ff9164;
+}
+
+.beat-swarm-pickup.is-explosion::before {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 231, 210, 0.9);
+  background: rgba(255, 231, 210, 0.08);
 }
 
 .beat-swarm-projectile {
