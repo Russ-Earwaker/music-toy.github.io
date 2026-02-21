@@ -31,6 +31,7 @@ import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
+import { BeatSwarmMode } from './beat-swarm-mode.js';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';
@@ -2170,6 +2171,17 @@ function __artRandLog(...args) {
     // eslint-disable-next-line no-console
     console.log('[ArtRand]', ...args);
   } catch {}
+}
+
+function getGameCatalog() {
+    return [
+        {
+            type: 'beat-swarm',
+            name: 'Beat Swarm',
+            description: 'Pilot a center-locked ship through the scene.',
+            action: () => BeatSwarmMode.enter(),
+        },
+    ];
 }
 
 function __dumpDrawgridNotes(panel) {
@@ -6800,6 +6812,11 @@ try {
                 getCatalog: () => getArtCatalog(),
                 create: createArtToyAt,
                 remove: destroyArtToyPanel,
+            });
+        }
+        if (typeof window.ToySpawner.configureGame === 'function') {
+            window.ToySpawner.configureGame({
+                getCatalog: () => getGameCatalog(),
             });
         }
     }

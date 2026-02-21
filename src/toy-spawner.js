@@ -9,6 +9,7 @@ const state = {
   dock: null,
   toggle: null,
   artToggle: null,
+  gameToggle: null,
   menu: null,
   listHost: null,
   trash: null,
@@ -21,6 +22,11 @@ const state = {
     remove: () => false,
   },
   configArt: {
+    getCatalog: () => [],
+    create: () => null,
+    remove: () => false,
+  },
+  configGame: {
     getCatalog: () => [],
     create: () => null,
     remove: () => false,
@@ -44,6 +50,7 @@ const OVERVIEW_ICON_OUT = "url('./assets/UI/T_ButtonOverviewZoomOut.png')";
 const OVERVIEW_ICON_IN = "url('./assets/UI/T_ButtonOverviewZoomIn.png')";
 const FOCUS_CLOSE_ICON = "url('./assets/UI/T_ButtonClose.png')";
 const ART_MENU_ICON = "url('./assets/UI/T_ButtonArtMenu.png')";
+const GAME_MENU_ICON = "url('./assets/UI/T_ButtonGameMenu.png')";
 
 function dbg(...args) {
   try {
@@ -82,21 +89,31 @@ function updateOverviewToggleUI(nextState) {
 
 function updatePaletteToggleUI() {
   const isArt = state.activePalette === 'art';
+  const isGame = state.activePalette === 'game';
+  const isMusic = !isArt && !isGame;
   if (state.toggle) {
-    state.toggle.classList.toggle('is-active', !isArt && state.open);
-    state.toggle.setAttribute('aria-pressed', (!isArt && state.open) ? 'true' : 'false');
+    state.toggle.classList.toggle('is-active', isMusic && state.open);
+    state.toggle.setAttribute('aria-pressed', (isMusic && state.open) ? 'true' : 'false');
   }
   if (state.artToggle) {
     state.artToggle.classList.toggle('is-active', isArt && state.open);
     state.artToggle.setAttribute('aria-pressed', (isArt && state.open) ? 'true' : 'false');
   }
+  if (state.gameToggle) {
+    state.gameToggle.classList.toggle('is-active', isGame && state.open);
+    state.gameToggle.setAttribute('aria-pressed', (isGame && state.open) ? 'true' : 'false');
+  }
 }
 
 function setActivePalette(palette) {
-  const next = palette === 'art' ? 'art' : 'music';
+  const next = palette === 'art'
+    ? 'art'
+    : (palette === 'game' ? 'game' : 'music');
   if (state.activePalette === next && state.config) return;
   state.activePalette = next;
-  state.config = next === 'art' ? state.configArt : state.configMusic;
+  state.config = next === 'art'
+    ? state.configArt
+    : (next === 'game' ? state.configGame : state.configMusic);
   dbg('setActivePalette', next, { open: state.open });
   if (state.open) renderCatalog();
   updatePaletteToggleUI();
@@ -187,6 +204,19 @@ function ensureDock() {
   artToggle.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
   artToggle.style.setProperty('--c-btn-bg', 'rgba(176, 82, 144, 0.88)');
 
+  const gameToggle = document.createElement('button');
+  gameToggle.type = 'button';
+  gameToggle.className = 'toy-spawner-game c-btn';
+  gameToggle.setAttribute('aria-label', 'Game Menu');
+  gameToggle.title = 'Game Menu';
+  gameToggle.dataset.helpLabel = 'Open the Game menu';
+  gameToggle.dataset.helpPosition = 'left';
+  gameToggle.innerHTML = BUTTON_ICON_HTML;
+  const gameCore = gameToggle.querySelector('.c-btn-core');
+  if (gameCore) gameCore.style.setProperty('--c-btn-icon-url', GAME_MENU_ICON);
+  gameToggle.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
+  gameToggle.style.setProperty('--c-btn-bg', 'rgba(72, 132, 77, 0.9)');
+
   const overview = document.createElement('button');
   overview.type = 'button';
   overview.id = 'overview-mode-button';
@@ -222,12 +252,13 @@ function ensureDock() {
   list.className = 'toy-spawner-list';
   menu.appendChild(list);
 
-  dock.append(trash, toggle, artToggle, overview, help, menu);
+  dock.append(trash, toggle, artToggle, gameToggle, overview, help, menu);
   document.body.appendChild(dock);
 
   state.dock = dock;
   state.toggle = toggle;
   state.artToggle = artToggle;
+  state.gameToggle = gameToggle;
   state.menu = menu;
   state.listHost = list;
   state.trash = trash;
@@ -254,6 +285,11 @@ function ensureDock() {
 
   artToggle.addEventListener('click', () => {
     setActivePalette('art');
+    setMenuOpen(!state.open);
+  });
+
+  gameToggle.addEventListener('click', () => {
+    setActivePalette('game');
     setMenuOpen(!state.open);
   });
 
@@ -310,7 +346,7 @@ function renderCatalog() {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'toy-spawner-item';
-    card.dataset.toyType = entry.type;
+    card.dataset.toyType = String(entry.type || '');
 
     const nameEl = document.createElement('div');
     nameEl.className = 'toy-spawner-name';
@@ -323,13 +359,16 @@ function renderCatalog() {
     card.append(nameEl, descEl);
 
     const isDisabled = !!entry.disabled;
+    const isActionOnly = typeof entry.action === 'function';
     if (isDisabled) {
       card.disabled = true;
       card.classList.add('is-disabled');
       card.setAttribute('aria-disabled', 'true');
       card.tabIndex = -1;
     } else {
-      card.addEventListener('pointerdown', (event) => startDrag(event, entry, card));
+      if (!isActionOnly) {
+        card.addEventListener('pointerdown', (event) => startDrag(event, entry, card));
+      }
       card.addEventListener('click', (event) => {
         if (state.justSpawned) {
           state.justSpawned = false;
@@ -337,7 +376,7 @@ function renderCatalog() {
           return;
         }
         event.preventDefault();
-        const created = spawnAtDefault(entry);
+        const created = isActionOnly ? invokeEntryAction(entry) : spawnAtDefault(entry);
         state.justSpawned = false;
         if (created) setMenuOpen(false);
       });
@@ -350,7 +389,7 @@ function safeCatalog() {
   try {
     const items = state.config.getCatalog?.() || [];
     if (!Array.isArray(items)) return [];
-    const filtered = items.filter((item) => item && item.type && item.name);
+    const filtered = items.filter((item) => item && item.name && (item.type || typeof item.action === 'function'));
     if (!filtered.length) {
       dbg('catalog empty', state.activePalette, { rawCount: items.length });
     }
@@ -358,6 +397,17 @@ function safeCatalog() {
   } catch (err) {
     console.warn('[ToySpawner] catalog failed', err);
     return [];
+  }
+}
+
+function invokeEntryAction(entry) {
+  if (!entry || typeof entry.action !== 'function') return false;
+  try {
+    const result = entry.action();
+    return result !== false;
+  } catch (err) {
+    console.warn('[ToySpawner] action failed', err);
+    return false;
   }
 }
 
@@ -720,6 +770,19 @@ function configureArt(options) {
   }
 }
 
+function configureGame(options) {
+  state.configGame = Object.assign({}, state.configGame, options || {});
+  dbg('configure(game)', {
+    hasCatalog: typeof state.configGame.getCatalog === 'function',
+    hasCreate: typeof state.configGame.create === 'function',
+    hasRemove: typeof state.configGame.remove === 'function',
+  });
+  if (state.activePalette === 'game') {
+    state.config = state.configGame;
+    if (state.open) renderCatalog();
+  }
+}
+
 function triggerTrashErrorFeedback() {
   if (!state.trash) return;
   state.trash.classList.remove('trash-empty-error');
@@ -811,6 +874,7 @@ export const ToySpawner = {
   close: () => setMenuOpen(false),
   configure,
   configureArt,
+  configureGame,
   beginPanelDrag,
   updatePanelDrag,
   endPanelDrag,

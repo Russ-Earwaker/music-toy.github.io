@@ -2987,6 +2987,7 @@ body.internal-board-active #board-main {
 
 .toy-spawner-toggle,
 .toy-spawner-art,
+.toy-spawner-game,
 .toy-spawner-trash,
 .toy-spawner-help,
 .toy-spawner-overview {
@@ -3002,6 +3003,9 @@ body.internal-board-active #board-main {
 }
 .toy-spawner-art {
   --c-btn-bg: rgba(176, 82, 144, 0.88);
+}
+.toy-spawner-game {
+  --c-btn-bg: rgba(72, 132, 77, 0.9);
 }
 .toy-spawner-overview {
   --c-btn-bg: rgba(96, 82, 176, 0.9);
@@ -3185,10 +3189,114 @@ body.internal-board-active #board-main {
 
 .toy-spawner-toggle:focus-visible,
 .toy-spawner-trash:focus-visible,
+.toy-spawner-game:focus-visible,
 .toy-spawner-help:focus-visible,
 .toy-spawner-overview:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
+}
+
+.beat-swarm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 860;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.beat-swarm-overlay:active {
+  cursor: grabbing;
+}
+
+.beat-swarm-ship-wrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 38px;
+  height: 38px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.beat-swarm-ship {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(180deg, #d7f3ff 0%, #89d6ff 100%);
+  clip-path: polygon(50% 0%, 100% 100%, 50% 78%, 0% 100%);
+  filter: drop-shadow(0 0 7px rgba(137, 214, 255, 0.9));
+}
+
+.beat-swarm-joystick {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 138px;
+  height: 138px;
+  margin-left: -69px;
+  margin-top: -69px;
+  border-radius: 50%;
+  border: 2px solid rgba(166, 228, 255, 0.55);
+  background: radial-gradient(circle at 50% 50%, rgba(166, 228, 255, 0.12) 0%, rgba(166, 228, 255, 0.04) 60%, rgba(166, 228, 255, 0.02) 100%);
+  box-shadow: 0 0 0 1px rgba(10, 20, 30, 0.35) inset, 0 8px 22px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.beat-swarm-joystick.is-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.beat-swarm-joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin-left: -23px;
+  margin-top: -23px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, rgba(225, 247, 255, 0.95) 0%, rgba(124, 205, 242, 0.95) 66%, rgba(92, 160, 196, 0.95) 100%);
+  border: 1px solid rgba(9, 24, 34, 0.35);
+  box-shadow: 0 7px 14px rgba(0, 0, 0, 0.35), 0 0 14px rgba(124, 205, 242, 0.45);
+  transform: translate(0px, 0px);
+}
+
+#beat-swarm-exit {
+  position: fixed;
+  left: auto;
+  right: 14px;
+  bottom: 14px;
+  z-index: 861;
+  width: calc(var(--side-icon-size) * 1.1);
+  height: calc(var(--side-icon-size) * 1.1);
+  --c-btn-size: calc(var(--side-icon-size) * 1.1);
+  --c-btn-bg: rgba(169, 52, 52, 0.94);
+}
+
+body.beat-swarm-active .toy-spawner-dock .toy-spawner-toggle,
+body.beat-swarm-active .toy-spawner-dock .toy-spawner-art,
+body.beat-swarm-active .toy-spawner-dock .toy-spawner-game,
+body.beat-swarm-active .toy-spawner-dock .toy-spawner-overview,
+body.beat-swarm-active .toy-spawner-dock .toy-spawner-trash {
+  display: none !important;
+}
+
+body.beat-swarm-active .toy-spawner-dock .toy-spawner-help {
+  order: -100;
+}
+
+body.beat-swarm-active .toy-spawner-dock .toy-spawner-menu {
+  display: none !important;
+}
+
+body.beat-swarm-active .anchor-mini-btn {
+  display: none !important;
 }
 
 .toy-spawner-menu {

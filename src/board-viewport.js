@@ -668,6 +668,10 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   }
 
   function handleWheel(e) {
+    if (window.__beatSwarmActive) {
+      e.preventDefault();
+      return;
+    }
     if (window.__toyFocused) return;
     if (window.__tutorialZoomLock) {
       e.preventDefault();
@@ -721,6 +725,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   window.addEventListener('wheel', handleWheel, { passive: false });
 
   window.panTo = (nx, ny) => {
+    if (window.__beatSwarmActive) return;
     if (window.__toyFocused) return;
     const targetX = Number(nx);
     const targetY = Number(ny);
@@ -734,10 +739,12 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     scheduleNotify({ ...getZoomState(), committed: true });
   };
   window.panBy = (dx, dy) => {
+    if (window.__beatSwarmActive) return;
     if (window.__toyFocused) return;
     applyTransform({ x: x + Number(dx || 0), y: y + Number(dy || 0) });
   };
   window.zoomAt = (clientX, clientY, factor) => {
+    if (window.__beatSwarmActive) return;
     if (window.__toyFocused) return;
     return zoomAt(clientX, clientY, factor, { commit: true, delayMs: 0 });
   }
@@ -750,6 +757,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   }
 
   window.setBoardScale = (sc) => {
+    if (window.__beatSwarmActive) return;
     cancelWheelCommit();
     const scaleValue = clampScale(Number(sc) || 1);
     const rect = getRect(stage);
@@ -764,6 +772,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     animateTo(scaleValue, nextX, nextY);
   };
   window.resetBoardView = () => {
+    if (window.__beatSwarmActive) return;
     applyTransform({ scale: 1, x: 0, y: 0 }, { commit: true, delayMs: 0 });
     scheduleNotify({ ...getZoomState(), committed: true });
   };

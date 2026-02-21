@@ -183,6 +183,10 @@ function __mtBindBoardGestures() {
   }
 
   function onDown(e) {
+    if (window.__beatSwarmActive) {
+      e.preventDefault();
+      return;
+    }
     const onInteractive = e.target.closest('.toy-panel, button, a, input, select, textarea');
     if (window.gFocusedToy && !onInteractive) {
       // Per user request, do not exit focus mode when clicking on non-interactive
