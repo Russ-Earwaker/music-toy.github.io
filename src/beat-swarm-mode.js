@@ -1,4 +1,5 @@
 import { getZoomState } from './zoom/ZoomCoordinator.js';
+import { createBeatSwarmSpawnerRuntime, registerLoopgridSpawnerType } from './beat-swarm/spawner-runtime.js';
 
 const OVERLAY_ID = 'beat-swarm-overlay';
 
@@ -15,6 +16,8 @@ let overlayEl = null;
 let exitBtn = null;
 let joystickEl = null;
 let joystickKnobEl = null;
+let spawnerLayerEl = null;
+let enemyLayerEl = null;
 
 let dragPointerId = null;
 let dragStartX = 0;
@@ -25,6 +28,12 @@ let dragNowY = 0;
 let velocityX = 0;
 let velocityY = 0;
 let shipFacingDeg = 0;
+const enemies = [];
+const ENEMY_CAP = 120;
+const ENEMY_ACCEL = 680;
+const ENEMY_MAX_SPEED = 260;
+const ENEMY_HIT_RADIUS = 20;
+let spawnerRuntime = null;
 
 let rafId = 0;
 let lastFrameTs = 0;
@@ -41,14 +50,28 @@ function ensureUi() {
       <div class="beat-swarm-ship-wrap" aria-hidden="true">
         <div class="beat-swarm-ship"></div>
       </div>
+      <div class="beat-swarm-spawner-layer" aria-hidden="true"></div>
+      <div class="beat-swarm-enemy-layer" aria-hidden="true"></div>
       <div class="beat-swarm-joystick" aria-hidden="true">
         <div class="beat-swarm-joystick-knob"></div>
       </div>
     `;
     document.body.appendChild(overlayEl);
   }
+  spawnerLayerEl = overlayEl.querySelector('.beat-swarm-spawner-layer');
+  enemyLayerEl = overlayEl.querySelector('.beat-swarm-enemy-layer');
   joystickEl = overlayEl.querySelector('.beat-swarm-joystick');
   joystickKnobEl = overlayEl.querySelector('.beat-swarm-joystick-knob');
+  if (!spawnerRuntime) {
+    spawnerRuntime = createBeatSwarmSpawnerRuntime({
+      getLayerEl: () => spawnerLayerEl,
+      onSpawn: ({ point }) => {
+        if (!point) return;
+        spawnEnemyAt(point.x, point.y);
+      },
+    });
+    registerLoopgridSpawnerType(spawnerRuntime);
+  }
 
   exitBtn = document.getElementById('beat-swarm-exit');
   if (!exitBtn) {
@@ -74,6 +97,76 @@ function applyCameraDelta(dx, dy) {
   const nextX = x - dx;
   const nextY = y - dy;
   try { window.__setBoardViewportNow?.(s, nextX, nextY); } catch {}
+}
+
+function getViewportCenterClient() {
+  return { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 };
+}
+
+function removeEnemy(enemy) {
+  if (!enemy) return;
+  try { enemy.el?.remove?.(); } catch {}
+}
+
+function clearEnemies() {
+  while (enemies.length) {
+    removeEnemy(enemies.pop());
+  }
+}
+
+function spawnEnemyAt(clientX, clientY) {
+  if (!enemyLayerEl) return;
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
+  if (enemies.length >= ENEMY_CAP) {
+    const old = enemies.shift();
+    removeEnemy(old);
+  }
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-enemy';
+  enemyLayerEl.appendChild(el);
+  enemies.push({
+    x: clientX,
+    y: clientY,
+    vx: 0,
+    vy: 0,
+    el,
+  });
+}
+
+function updateEnemies(dt) {
+  if (!enemies.length) return;
+  const center = getViewportCenterClient();
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    const dx = center.x - e.x;
+    const dy = center.y - e.y;
+    const d = Math.hypot(dx, dy) || 0.0001;
+    const ax = (dx / d) * ENEMY_ACCEL;
+    const ay = (dy / d) * ENEMY_ACCEL;
+    e.vx += ax * dt;
+    e.vy += ay * dt;
+    const s = Math.hypot(e.vx, e.vy);
+    if (s > ENEMY_MAX_SPEED) {
+      const k = ENEMY_MAX_SPEED / s;
+      e.vx *= k;
+      e.vy *= k;
+    }
+    e.x += e.vx * dt;
+    e.y += e.vy * dt;
+    if (d <= ENEMY_HIT_RADIUS) {
+      removeEnemy(e);
+      enemies.splice(i, 1);
+      continue;
+    }
+    if (e.x < -80 || e.y < -80 || e.x > window.innerWidth + 80 || e.y > window.innerHeight + 80) {
+      removeEnemy(e);
+      enemies.splice(i, 1);
+      continue;
+    }
+    if (e.el) {
+      e.el.style.transform = `translate(${e.x}px, ${e.y}px)`;
+    }
+  }
 }
 
 function setJoystickVisible(show) {
@@ -169,6 +262,8 @@ function tick(nowMs) {
   if (speed > 0.01) {
     applyCameraDelta(velocityX * dt, velocityY * dt);
   }
+  updateEnemies(dt);
+  try { spawnerRuntime?.update?.(dt); } catch {}
   updateShipFacing(dt, input.x, input.y);
   rafId = requestAnimationFrame(tick);
 }
@@ -252,7 +347,11 @@ export function enterBeatSwarmMode() {
   try { window.ToySpawner?.close?.(); } catch {}
   if (overlayEl) overlayEl.hidden = false;
   if (exitBtn) exitBtn.hidden = false;
+  if (spawnerLayerEl) spawnerLayerEl.hidden = false;
+  if (enemyLayerEl) enemyLayerEl.hidden = false;
   setJoystickVisible(false);
+  clearEnemies();
+  try { spawnerRuntime?.enter?.(); } catch {}
   bindInput();
   startTick();
   try { window.__MT_ANCHOR?.center?.(); } catch {}
@@ -269,9 +368,13 @@ export function exitBeatSwarmMode() {
   document.body.classList.remove('beat-swarm-active');
   if (overlayEl) overlayEl.hidden = true;
   if (exitBtn) exitBtn.hidden = true;
+  if (spawnerLayerEl) spawnerLayerEl.hidden = true;
+  if (enemyLayerEl) enemyLayerEl.hidden = true;
   setJoystickVisible(false);
   stopTick();
   unbindInput();
+  try { spawnerRuntime?.exit?.(); } catch {}
+  clearEnemies();
   return true;
 }
 
