@@ -38,6 +38,8 @@ const ENEMY_CAP = 120;
 const ENEMY_ACCEL = 680;
 const ENEMY_MAX_SPEED = 260;
 const ENEMY_HIT_RADIUS = 20;
+const ENEMY_SPAWN_START_SCALE = 0.2;
+const ENEMY_SPAWN_DURATION = 0.58;
 const PICKUP_COLLECT_RADIUS_PX = 46;
 const PROJECTILE_SPEED = 1100;
 const PROJECTILE_HIT_RADIUS_PX = 24;
@@ -202,6 +204,12 @@ function spawnEnemyAt(clientX, clientY) {
   hpWrap.appendChild(hpFill);
   el.appendChild(hpWrap);
   enemyLayerEl.appendChild(el);
+  const s0 = worldToScreen({ x: w.x, y: w.y });
+  if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)) {
+    el.style.transform = `translate(${s0.x}px, ${s0.y}px) scale(${ENEMY_SPAWN_START_SCALE})`;
+  } else {
+    el.style.transform = `translate(-9999px, -9999px) scale(${ENEMY_SPAWN_START_SCALE})`;
+  }
   enemies.push({
     wx: w.x,
     wy: w.y,
@@ -211,6 +219,8 @@ function spawnEnemyAt(clientX, clientY) {
     hp: Math.max(1, Number(difficultyConfig.enemyHealth) || 1),
     maxHp: Math.max(1, Number(difficultyConfig.enemyHealth) || 1),
     hpFillEl: hpFill,
+    spawnT: 0,
+    spawnDur: ENEMY_SPAWN_DURATION,
   });
 }
 
@@ -255,12 +265,18 @@ function addLaserEffect(fromW, toW) {
   effects.push({ kind: 'laser', ttl: LASER_TTL, from: { ...fromW }, to: { ...toW }, el });
 }
 
-function addExplosionEffect(centerW) {
+function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD) {
   if (!enemyLayerEl) return;
   const el = document.createElement('div');
   el.className = 'beat-swarm-fx-explosion';
   enemyLayerEl.appendChild(el);
-  effects.push({ kind: 'explosion', ttl: EXPLOSION_TTL, at: { ...centerW }, el });
+  effects.push({
+    kind: 'explosion',
+    ttl: EXPLOSION_TTL,
+    at: { ...centerW },
+    radiusWorld: Math.max(1, Number(radiusWorld) || EXPLOSION_RADIUS_WORLD),
+    el,
+  });
 }
 
 function spawnProjectile(fromW, toEnemy, damage) {
@@ -285,8 +301,9 @@ function spawnProjectile(fromW, toEnemy, damage) {
 function fireWeaponsOnBeat(centerWorld) {
   if (!centerWorld) return;
   if (equippedWeapons.has('explosion')) {
-    addExplosionEffect(centerWorld);
-    const r2 = EXPLOSION_RADIUS_WORLD * EXPLOSION_RADIUS_WORLD;
+    const blastRadius = Math.max(1, Number(EXPLOSION_RADIUS_WORLD) || 1);
+    addExplosionEffect(centerWorld, blastRadius);
+    const r2 = blastRadius * blastRadius;
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
       const dx = e.wx - centerWorld.x;
@@ -334,6 +351,18 @@ function configureInitialSpawnerEnablement() {
   });
 }
 
+function getEnemySpawnScale(enemy) {
+  const dur = Math.max(0.001, Number(enemy?.spawnDur) || 0.14);
+  const t = Math.max(0, Math.min(1, (Number(enemy?.spawnT) || 0) / dur));
+  if (t <= 0.72) {
+    const u = t / 0.72;
+    const eased = 1 - Math.pow(1 - u, 3);
+    return ENEMY_SPAWN_START_SCALE + ((1.1 - ENEMY_SPAWN_START_SCALE) * eased); // 0.2 -> 1.1 quickly
+  }
+  const v = (t - 0.72) / 0.28;
+  return 1.1 - (0.1 * v); // settle from 1.1 -> 1.0
+}
+
 function updateEnemies(dt) {
   if (!enemies.length) return;
   const centerWorld = getViewportCenterWorld();
@@ -376,7 +405,9 @@ function updateEnemies(dt) {
       continue;
     }
     if (e.el) {
-      e.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+      e.spawnT = Math.min(Number(e.spawnDur) || 0.14, (Number(e.spawnT) || 0) + dt);
+      const spawnScale = getEnemySpawnScale(e);
+      e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${spawnScale.toFixed(3)})`;
     }
   }
 }
@@ -457,6 +488,12 @@ function updatePickupsAndCombat(dt) {
     } else if (fx.kind === 'explosion') {
       const c = worldToScreen({ x: fx.at.x, y: fx.at.y });
       if (!c) continue;
+      const pxRadius = Math.max(18, (Number(fx.radiusWorld) || EXPLOSION_RADIUS_WORLD) * Math.max(0.001, scale || 1));
+      const pxSize = pxRadius * 2;
+      fx.el.style.width = `${pxSize}px`;
+      fx.el.style.height = `${pxSize}px`;
+      fx.el.style.marginLeft = `${-pxRadius}px`;
+      fx.el.style.marginTop = `${-pxRadius}px`;
       fx.el.style.transform = `translate(${c.x}px, ${c.y}px)`;
       fx.el.style.opacity = `${Math.max(0, Math.min(1, fx.ttl / EXPLOSION_TTL))}`;
     }

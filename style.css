@@ -3277,6 +3277,39 @@ body.internal-board-active #board-main {
   transform: scale(1.06);
 }
 
+@keyframes beat-swarm-spawn-pop {
+  0% {
+    transform: scale(1);
+    filter: brightness(1) saturate(1);
+    box-shadow:
+      0 4px 10px rgba(11, 20, 44, 0.55),
+      0 0 18px rgba(106, 203, 255, 0.45);
+  }
+  45% {
+    transform: scale(1.17);
+    filter: brightness(2.6) saturate(0.2);
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.95),
+      0 0 34px rgba(255, 255, 255, 0.92);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1) saturate(1);
+    box-shadow:
+      0 4px 10px rgba(11, 20, 44, 0.55),
+      0 0 18px rgba(106, 203, 255, 0.45);
+  }
+}
+
+.beat-swarm-rhythm-cube.is-spawn {
+  animation: beat-swarm-spawn-pop 220ms cubic-bezier(0.18, 0.84, 0.22, 1);
+  will-change: transform, filter, box-shadow;
+}
+
+.beat-swarm-rhythm-proxy.is-disabled .beat-swarm-rhythm-cube.is-spawn {
+  animation: none;
+}
+
 .beat-swarm-enemy {
   position: fixed;
   width: 42px;

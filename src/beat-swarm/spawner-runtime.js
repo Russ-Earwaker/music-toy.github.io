@@ -180,7 +180,9 @@ export function registerLoopgridSpawnerType(runtime, { flashDecay = 3.2 } = {}) 
         const cube = entry.state.cubeEls?.[idx];
         if (cube) {
           cube.classList.add('is-hit');
+          cube.classList.add('is-spawn');
           setTimeout(() => { try { cube.classList.remove('is-hit'); } catch {} }, 140);
+          setTimeout(() => { try { cube.classList.remove('is-spawn'); } catch {} }, 220);
         }
 
         const pt = getCubeClientPoint(panel, idx);
