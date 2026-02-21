@@ -4159,6 +4159,7 @@ function setupSticker(panel) {
   const drawingState = createArtDrawingState({ slotCount: ART_SLOT_COUNT });
   const slotShapes = Array.from({ length: ART_SLOT_COUNT }, () => []);
   const slotBursts = Array.from({ length: ART_SLOT_COUNT }, () => []);
+  const slotSpecials = Array.from({ length: ART_SLOT_COUNT }, () => []);
   const slotStrokeStyles = Array.from({ length: ART_SLOT_COUNT }, () => []);
   const activeSlots = new Set();
   const slotHandleEls = Array.from({ length: ART_SLOT_COUNT }, () => null);
@@ -4200,7 +4201,6 @@ function setupSticker(panel) {
   const STICKER_RANDOMIZATION_MODE = Object.freeze({
     NORMAL: 'normal',
     SEQUENTIAL_LINES: 'sequentialLines',
-    STICK_MAN_POSES: 'stickManPoses',
   });
   let stickerRandomizationMode = STICKER_RANDOMIZATION_MODE.NORMAL;
   const STICKER_LAYER_PLAY_ORDER = Object.freeze({
@@ -4228,6 +4228,8 @@ function setupSticker(panel) {
     { id: 7, key: 'dottedRunner', name: 'Dotted + Runner', category: 'line', lineVariant: 'dashed', emitsHit: true },
     { id: 18, key: 'lightning', name: 'Lightning', category: 'line', lineVariant: 'solid', emitsHit: true },
     { id: 19, key: 'lightningRunner', name: 'Lightning + Runner', category: 'line', lineVariant: 'solid', emitsHit: true },
+    // Special brushes
+    { id: 20, key: 'specialStickman', name: 'Stick Man', category: 'special', specialKind: 'stickman', emitsHit: true },
     // Shape set
     { id: 8, key: 'square', name: 'Square', category: 'shape', shapeKind: 'square' },
     { id: 9, key: 'circle', name: 'Circle', category: 'shape', shapeKind: 'circle' },
@@ -4248,8 +4250,10 @@ function setupSticker(panel) {
   };
   const isShapeFx = (fxId) => getStickerFxMeta(fxId)?.category === 'shape';
   const isBurstFx = (fxId) => getStickerFxMeta(fxId)?.category === 'burst';
+  const isSpecialFx = (fxId) => getStickerFxMeta(fxId)?.category === 'special';
   const shapeKindForFx = (fxId) => String(getStickerFxMeta(fxId)?.shapeKind || '');
   const burstTypeForFx = (fxId) => String(getStickerFxMeta(fxId)?.burstType || '');
+  const specialKindForFx = (fxId) => String(getStickerFxMeta(fxId)?.specialKind || '');
   const lineVariantForFx = (fxId) => String(getStickerFxMeta(fxId)?.lineVariant || 'solid');
   const stickerFxEmitsHit = (fxId) => getStickerFxMeta(fxId)?.emitsHit !== false;
   const getStickerLineProfile = (fxKeyRaw) => {
@@ -4665,7 +4669,6 @@ function setupSticker(panel) {
   };
   const normalizeRandomizationMode = (v) => {
     const key = String(v || '').trim();
-    if (key === STICKER_RANDOMIZATION_MODE.STICK_MAN_POSES) return STICKER_RANDOMIZATION_MODE.STICK_MAN_POSES;
     if (key === STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES) return STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES;
     return STICKER_RANDOMIZATION_MODE.NORMAL;
   };
@@ -4866,7 +4869,8 @@ function setupSticker(panel) {
     const strokes = drawingState.hasSlotStrokes(i);
     const shapes = Array.isArray(slotShapes[i]) && slotShapes[i].length > 0;
     const bursts = Array.isArray(slotBursts[i]) && slotBursts[i].length > 0;
-    return strokes || shapes || bursts;
+    const specials = Array.isArray(slotSpecials[i]) && slotSpecials[i].length > 0;
+    return strokes || shapes || bursts || specials;
   };
   const ensureStickerLayerBuckets = () => {
     let main = layer.querySelector('g[data-sticker-layer-role="main"]');
@@ -5093,6 +5097,45 @@ function setupSticker(panel) {
       poly.setAttribute('paint-order', 'stroke');
       slotGroup.appendChild(poly);
     }
+    const specials = Array.isArray(slotSpecials[i]) ? slotSpecials[i] : [];
+    for (let si = 0; si < specials.length; si++) {
+      const s = specials[si];
+      if (String(s?.kind || '') !== 'stickman') continue;
+      const color = String(s?.color || palette[i] || selectedPaintColor || '#7bf6ff');
+      const sw = Math.max(1.2, Number(s?.strokeWidth) || getPlacementStrokeWidth());
+      const linePoints = [
+        [s?.neck, s?.pelvis],
+        [s?.shoulder, s?.handA],
+        [s?.shoulder, s?.handB],
+        [s?.pelvis, s?.footA],
+        [s?.pelvis, s?.footB],
+      ];
+      for (const pair of linePoints) {
+        const a = pair[0] || null;
+        const b = pair[1] || null;
+        if (!a || !b) continue;
+        const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        l.setAttribute('x1', String(Number(a.x) || 0));
+        l.setAttribute('y1', String(Number(a.y) || 0));
+        l.setAttribute('x2', String(Number(b.x) || 0));
+        l.setAttribute('y2', String(Number(b.y) || 0));
+        l.setAttribute('stroke', color);
+        l.setAttribute('stroke-width', String(sw));
+        l.setAttribute('stroke-linecap', 'round');
+        l.setAttribute('stroke-linejoin', 'round');
+        slotGroup.appendChild(l);
+      }
+      const head = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      head.setAttribute('cx', String(Number(s?.headCenter?.x) || 0));
+      head.setAttribute('cy', String(Number(s?.headCenter?.y) || 0));
+      head.setAttribute('r', String(Math.max(6, Number(s?.headRadius) || 24)));
+      head.setAttribute('fill', color);
+      head.setAttribute('stroke', color);
+      head.setAttribute('stroke-width', String(sw));
+      head.setAttribute('stroke-linecap', 'round');
+      head.setAttribute('stroke-linejoin', 'round');
+      slotGroup.appendChild(head);
+    }
     if (slotGroup.childNodes.length) layer.appendChild(slotGroup);
     syncStickerLayerDimming();
     syncBurstAnchorGlows();
@@ -5160,6 +5203,7 @@ function setupSticker(panel) {
     slotStrokeStyles[i] = [];
     slotShapes[i] = [];
     slotBursts[i] = [];
+    slotSpecials[i] = [];
     renderSlot(i);
     syncShapeHandle();
     fitDragAreaToDrawings();
@@ -5173,6 +5217,7 @@ function setupSticker(panel) {
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
       slotShapes[i] = [];
       slotBursts[i] = [];
+      slotSpecials[i] = [];
       slotStrokeStyles[i] = [];
     }
     try { burstLayer.innerHTML = ''; } catch {}
@@ -5207,6 +5252,83 @@ function setupSticker(panel) {
     syncDragArea();
     markSceneDirtySafe();
     return shape;
+  };
+  const createStickmanSpecial = (slot, x, y, colorOverride = null, widthOverride = null) => {
+    const i = normalizeSlot(slot);
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const degToRad = (d) => (Number(d) || 0) * (Math.PI / 180);
+    const unit = (a) => ({ x: Math.cos(a), y: Math.sin(a) });
+    const add = (p, v, s = 1) => ({ x: p.x + (v.x * s), y: p.y + (v.y * s) });
+    const center = { x: clampX(x), y: clampY(y) };
+    const strokeWidth = Math.max(1.2, Number(widthOverride) || getPlacementStrokeWidth());
+    // Match randomization "Stick man poses" default proportions.
+    const headRadius = 38;
+    const bodyLength = 250;
+    const armLength = 120;
+    const legLength = 150;
+    const baseBody = degToRad(90);
+    const nearDefault = Math.random() < 0.7;
+    const bodyAngle = baseBody + degToRad(nearDefault ? rand(-30, 30) : rand(-180, 180));
+    const bodyDir = unit(bodyAngle);
+    const neck = center;
+    const pelvis = { x: clampX(add(neck, bodyDir, bodyLength).x), y: clampY(add(neck, bodyDir, bodyLength).y) };
+    const shoulder = { x: clampX(add(neck, bodyDir, bodyLength * 0.25).x), y: clampY(add(neck, bodyDir, bodyLength * 0.25).y) };
+    const headAngle = bodyAngle + Math.PI + degToRad(rand(-45, 45));
+    const headCenter = { x: clampX(add(neck, unit(headAngle), headRadius).x), y: clampY(add(neck, unit(headAngle), headRadius).y) };
+    const arm1 = bodyAngle + degToRad(rand(-180, 180));
+    const arm2 = bodyAngle + degToRad(rand(-180, 180));
+    const handA = { x: clampX(add(shoulder, unit(arm1), armLength).x), y: clampY(add(shoulder, unit(arm1), armLength).y) };
+    const handB = { x: clampX(add(shoulder, unit(arm2), armLength).x), y: clampY(add(shoulder, unit(arm2), armLength).y) };
+    const leg1 = bodyAngle + degToRad(rand(-180, 180));
+    const leg2 = leg1 + degToRad(rand(-180, 180));
+    const footA = { x: clampX(add(pelvis, unit(leg1), legLength).x), y: clampY(add(pelvis, unit(leg1), legLength).y) };
+    const footB = { x: clampX(add(pelvis, unit(leg2), legLength).x), y: clampY(add(pelvis, unit(leg2), legLength).y) };
+    return {
+      kind: 'stickman',
+      color: String(colorOverride || selectedPaintColor || palette[i] || '#7bf6ff'),
+      strokeWidth,
+      headRadius,
+      neck,
+      pelvis,
+      shoulder,
+      headCenter,
+      handA,
+      handB,
+      footA,
+      footB,
+    };
+  };
+  const translateStickmanSpecial = (special, dx, dy) => {
+    if (!special || String(special.kind || '') !== 'stickman') return;
+    const apply = (p) => {
+      if (!p || typeof p !== 'object') return p;
+      return { x: clampX((Number(p.x) || 0) + dx), y: clampY((Number(p.y) || 0) + dy) };
+    };
+    special.neck = apply(special.neck);
+    special.pelvis = apply(special.pelvis);
+    special.shoulder = apply(special.shoulder);
+    special.headCenter = apply(special.headCenter);
+    special.handA = apply(special.handA);
+    special.handB = apply(special.handB);
+    special.footA = apply(special.footA);
+    special.footB = apply(special.footB);
+  };
+  const getStickmanHandlePoint = (special) => {
+    const p = special?.neck || special?.shoulder || special?.pelvis || special?.headCenter;
+    return p ? { x: Number(p.x) || 0, y: Number(p.y) || 0 } : null;
+  };
+  const placeSpecialAtSlot = (slot, x, y, specialKind, colorOverride = null, widthOverride = null) => {
+    const i = normalizeSlot(slot);
+    const list = Array.isArray(slotSpecials[i]) ? slotSpecials[i] : (slotSpecials[i] = []);
+    if (String(specialKind || '') !== 'stickman') return null;
+    const special = createStickmanSpecial(i, x, y, colorOverride, widthOverride);
+    list.push(special);
+    renderSlot(i);
+    syncShapeHandle();
+    fitDragAreaToDrawings();
+    syncDragArea();
+    markSceneDirtySafe();
+    return special;
   };
   const placeBurstAtSlot = (slot, x, y, burstType, colorOverride = null, sizeOverride = null) => {
     const i = normalizeSlot(slot);
@@ -5269,6 +5391,11 @@ function setupSticker(panel) {
     const list = drawingState.getSlotStrokes(i);
     return Array.isArray(list) ? list : [];
   };
+  const getSelectedSpecialList = () => {
+    if (selectedColorSlot == null) return [];
+    const i = normalizeSlot(selectedColorSlot);
+    return Array.isArray(slotSpecials[i]) ? slotSpecials[i] : [];
+  };
   const cloneStrokePoints = (stroke) => {
     if (!Array.isArray(stroke)) return [];
     return stroke.map((p) => ({
@@ -5318,6 +5445,7 @@ function setupSticker(panel) {
     const list = getSelectedShapeList();
     const strokeList = getSelectedStrokeList();
     const burstList = Array.isArray(slotBursts[selected]) ? slotBursts[selected] : [];
+    const specialList = getSelectedSpecialList();
     const setHandlePos = (btn, x, y) => {
       const size = 62;
       btn.style.left = `${(Number(x) - size * 0.5).toFixed(2)}px`;
@@ -5573,6 +5701,96 @@ function setupSticker(panel) {
         document.addEventListener('pointercancel', onEnd, true);
       });
     }
+    for (let spi = 0; spi < specialList.length; spi++) {
+      const special = specialList[spi];
+      if (String(special?.kind || '') !== 'stickman') continue;
+      const center = getStickmanHandlePoint(special);
+      if (!center) continue;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'c-btn art-firework-handle-btn art-sticker-handle-btn is-active-firework';
+      btn.setAttribute('aria-label', `Move sticker special ${selected + 1}`);
+      btn.title = `Move Sticker Special ${selected + 1}`;
+      btn.style.setProperty('--c-btn-size', '62px');
+      btn.innerHTML = BUTTON_ICON_HTML;
+      const core = btn.querySelector('.c-btn-core');
+      if (core) core.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonDrag.png')");
+      btn.dataset.specialIndex = String(spi);
+      setHandlePos(btn, center.x, center.y);
+      handlesLayer.appendChild(btn);
+
+      let dragging = false;
+      let pid = null;
+      let dragStartPt = null;
+      let specialStart = null;
+      let onMove = null;
+      let onEnd = null;
+      const detachDocDrag = () => {
+        if (onMove) document.removeEventListener('pointermove', onMove, true);
+        if (onEnd) {
+          document.removeEventListener('pointerup', onEnd, true);
+          document.removeEventListener('pointercancel', onEnd, true);
+        }
+      };
+      btn.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return;
+        if (panel.dataset.controlsVisible !== '1') return;
+        const pt = clientToPanelPoint(ev.clientX, ev.clientY);
+        if (!pt) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        dragging = true;
+        pid = ev.pointerId;
+        dragStartPt = { x: pt.x, y: pt.y };
+        specialStart = JSON.parse(JSON.stringify(special));
+        setStickerShapeDragging(true);
+        try { btn.setPointerCapture(ev.pointerId); } catch {}
+        if (onMove) return;
+        onMove = (mv) => {
+          if (!dragging) return;
+          if (pid != null && mv.pointerId !== pid) return;
+          const nextPt = clientToPanelPoint(mv.clientX, mv.clientY);
+          if (!nextPt || !dragStartPt || !specialStart) return;
+          mv.preventDefault();
+          mv.stopPropagation();
+          const dx = nextPt.x - dragStartPt.x;
+          const dy = nextPt.y - dragStartPt.y;
+          Object.assign(special, JSON.parse(JSON.stringify(specialStart)));
+          translateStickmanSpecial(special, dx, dy);
+          renderSlot(selected);
+          const nextCenter = getStickmanHandlePoint(special);
+          if (nextCenter) setHandlePos(btn, nextCenter.x, nextCenter.y);
+          setStickerTrashArmed(isClientPointInsideStickerTrash(mv.clientX, mv.clientY));
+          markSceneDirtySafe();
+        };
+        onEnd = (up) => {
+          if (!dragging) return;
+          if (pid != null && up.pointerId !== pid) return;
+          const dropOnTrash = isClientPointInsideStickerTrash(up.clientX, up.clientY);
+          dragging = false;
+          pid = null;
+          dragStartPt = null;
+          specialStart = null;
+          try { btn.releasePointerCapture(up.pointerId); } catch {}
+          detachDocDrag();
+          onMove = null;
+          onEnd = null;
+          if (dropOnTrash) {
+            const idx = specialList.indexOf(special);
+            if (idx >= 0) specialList.splice(idx, 1);
+            renderSlot(selected);
+            fitDragAreaToDrawings();
+            syncDragArea();
+            markSceneDirtySafe();
+          }
+          setStickerShapeDragging(false);
+          syncShapeHandle();
+        };
+        document.addEventListener('pointermove', onMove, true);
+        document.addEventListener('pointerup', onEnd, true);
+        document.addEventListener('pointercancel', onEnd, true);
+      });
+    }
   };
   const syncAllShapeHandles = () => {
     syncShapeHandle();
@@ -5607,7 +5825,8 @@ function setupSticker(panel) {
     const strokes = drawingState.getSlotStrokes(i);
     const shapes = Array.isArray(slotShapes[i]) ? slotShapes[i] : [];
     const bursts = Array.isArray(slotBursts[i]) ? slotBursts[i] : [];
-    if (!strokes.length && !shapes.length && !bursts.length) return;
+    const specials = Array.isArray(slotSpecials[i]) ? slotSpecials[i] : [];
+    if (!strokes.length && !shapes.length && !bursts.length && !specials.length) return;
     const spawnStrokeTransientPath = ({
       d,
       color,
@@ -5899,6 +6118,40 @@ function setupSticker(panel) {
         size: Math.max(10, Number(b?.size) || 16),
       });
     }
+    for (let si = 0; si < specials.length; si++) {
+      const s = specials[si];
+      if (String(s?.kind || '') !== 'stickman') continue;
+      const color = String(s?.color || palette[i] || selectedPaintColor || '#7bf6ff');
+      const sw = Math.max(1.4, Number(s?.strokeWidth) || getPlacementStrokeWidth());
+      const mk = (a, b) => {
+        if (!a || !b) return;
+        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p.setAttribute('class', 'art-sticker-path-hit');
+        p.setAttribute('d', `M ${(Number(a.x) || 0).toFixed(2)} ${(Number(a.y) || 0).toFixed(2)} L ${(Number(b.x) || 0).toFixed(2)} ${(Number(b.y) || 0).toFixed(2)}`);
+        p.setAttribute('fill', 'none');
+        p.setAttribute('stroke', color);
+        p.setAttribute('stroke-width', String(sw * 1.12));
+        p.setAttribute('stroke-linecap', 'round');
+        p.setAttribute('stroke-linejoin', 'round');
+        hitLayer.appendChild(p);
+        setTimeout(() => { try { p.remove(); } catch {} }, 260);
+      };
+      mk(s?.neck, s?.pelvis);
+      mk(s?.shoulder, s?.handA);
+      mk(s?.shoulder, s?.handB);
+      mk(s?.pelvis, s?.footA);
+      mk(s?.pelvis, s?.footB);
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('class', 'art-sticker-path-hit');
+      c.setAttribute('cx', String(Number(s?.headCenter?.x) || 0));
+      c.setAttribute('cy', String(Number(s?.headCenter?.y) || 0));
+      c.setAttribute('r', String(Math.max(6, Number(s?.headRadius) || 24)));
+      c.setAttribute('fill', 'none');
+      c.setAttribute('stroke', color);
+      c.setAttribute('stroke-width', String(sw * 1.12));
+      hitLayer.appendChild(c);
+      setTimeout(() => { try { c.remove(); } catch {} }, 260);
+    }
   };
 
   const getDrawAreaRect = () => {
@@ -5965,6 +6218,22 @@ function setupSticker(panel) {
         const r = Math.max(10, Number(b?.size) || 16);
         coords.push({ x: clampX(bx - r), y: clampY(by - r) });
         coords.push({ x: clampX(bx + r), y: clampY(by + r) });
+      }
+      const specials = Array.isArray(slotSpecials[slot]) ? slotSpecials[slot] : [];
+      for (const s of specials) {
+        if (String(s?.kind || '') !== 'stickman') continue;
+        const pts = [s?.neck, s?.pelvis, s?.shoulder, s?.headCenter, s?.handA, s?.handB, s?.footA, s?.footB];
+        const hr = Math.max(6, Number(s?.headRadius) || 24);
+        for (const p of pts) {
+          const px = clampX(p?.x);
+          const py = clampY(p?.y);
+          coords.push({ x: px, y: py });
+        }
+        const hc = s?.headCenter || null;
+        if (hc) {
+          coords.push({ x: clampX((Number(hc.x) || 0) - hr), y: clampY((Number(hc.y) || 0) - hr) });
+          coords.push({ x: clampX((Number(hc.x) || 0) + hr), y: clampY((Number(hc.y) || 0) + hr) });
+        }
       }
     }
     if (!coords.length) {
@@ -6188,7 +6457,6 @@ function setupSticker(panel) {
   randomModeSelect.innerHTML = [
     `<option value="${STICKER_RANDOMIZATION_MODE.NORMAL}">Normal randomisation</option>`,
     `<option value="${STICKER_RANDOMIZATION_MODE.SEQUENTIAL_LINES}">Sequential lines</option>`,
-    `<option value="${STICKER_RANDOMIZATION_MODE.STICK_MAN_POSES}">Stick man poses</option>`,
   ].join('');
   randomModeSelect.value = stickerRandomizationMode;
   randomModeSelect.addEventListener('change', (ev) => {
@@ -6868,6 +7136,55 @@ function setupSticker(panel) {
         spawnBurstPreview();
         return;
       }
+      if (meta.category === 'special' && meta.specialKind === 'stickman') {
+        const toneStroke = tone;
+        const mkLine = (x1, y1, x2, y2, w = 4) => {
+          const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          l.setAttribute('x1', String(x1));
+          l.setAttribute('y1', String(y1));
+          l.setAttribute('x2', String(x2));
+          l.setAttribute('y2', String(y2));
+          l.setAttribute('stroke', toneStroke);
+          l.setAttribute('stroke-width', String(w));
+          l.setAttribute('stroke-linecap', 'round');
+          return l;
+        };
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 120 120');
+        svg.setAttribute('preserveAspectRatio', 'none');
+        svg.style.position = 'absolute';
+        svg.style.inset = '0';
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.filter = `drop-shadow(0 0 10px ${toneStroke})`;
+        const body = mkLine(58, 32, 60, 74, 4.2);
+        const armA = mkLine(59, 44, 38, 59, 4.2);
+        const armB = mkLine(59, 44, 82, 57, 4.2);
+        const legA = mkLine(60, 74, 44, 102, 4.2);
+        const legB = mkLine(60, 74, 82, 100, 4.2);
+        const head = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        head.setAttribute('cx', '58');
+        head.setAttribute('cy', '22');
+        head.setAttribute('r', '11');
+        head.setAttribute('fill', toneStroke);
+        head.setAttribute('stroke', toneStroke);
+        head.setAttribute('stroke-width', '4.2');
+        svg.appendChild(body);
+        svg.appendChild(armA);
+        svg.appendChild(armB);
+        svg.appendChild(legA);
+        svg.appendChild(legB);
+        svg.appendChild(head);
+        stage.appendChild(svg);
+        try {
+          svg.animate(
+            [{ opacity: 0.55 }, { opacity: 1, offset: 0.3 }, { opacity: 0.55 }],
+            { duration: 760, easing: 'ease-in-out' }
+          );
+        } catch {}
+        setTimeout(() => { try { svg.remove(); } catch {} }, 820);
+        return;
+      }
       const shape = document.createElement('span');
       shape.style.position = 'absolute';
       shape.style.left = '50%';
@@ -6985,6 +7302,11 @@ function setupSticker(panel) {
           key: 'burst',
           title: 'Burst Effects',
           ids: stickerLibraryFxIds.filter((fxId) => getStickerFxMeta(fxId)?.category === 'burst'),
+        },
+        {
+          key: 'special',
+          title: 'Special Brushes',
+          ids: stickerLibraryFxIds.filter((fxId) => getStickerFxMeta(fxId)?.category === 'special'),
         },
       ];
       for (const group of groups) {
@@ -7255,6 +7577,9 @@ function setupSticker(panel) {
   let shapePlacePointerId = null;
   let shapePlaceSlot = null;
   let shapePlaceShape = null;
+  let specialPlacePointerId = null;
+  let specialPlaceSlot = null;
+  let specialPlaceItem = null;
 
   const beginBoardDraw = (ev) => {
     if (panel.dataset.controlsVisible !== '1') return;
@@ -7286,6 +7611,18 @@ function setupSticker(panel) {
       setStickerTrashArmed(isClientPointInsideStickerTrash(ev.clientX, ev.clientY));
       return;
     }
+    const specialKind = specialKindForFx(currentFxId);
+    if (specialKind) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const placed = placeSpecialAtSlot(slot, pt.x, pt.y, specialKind, selectedPaintColor, getPlacementStrokeWidth());
+      specialPlacePointerId = ev.pointerId;
+      specialPlaceSlot = slot;
+      specialPlaceItem = placed || null;
+      setStickerShapeDragging(true);
+      setStickerTrashArmed(isClientPointInsideStickerTrash(ev.clientX, ev.clientY));
+      return;
+    }
     ev.preventDefault();
     ev.stopPropagation();
     boardDrawPointerId = ev.pointerId;
@@ -7299,6 +7636,22 @@ function setupSticker(panel) {
   };
 
   const moveBoardDraw = (ev) => {
+    if (specialPlacePointerId != null && specialPlaceItem) {
+      if (ev.pointerId !== specialPlacePointerId) return;
+      const pt = clientToPanelPoint(ev.clientX, ev.clientY);
+      if (!pt) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const handle = getStickmanHandlePoint(specialPlaceItem);
+      if (handle) {
+        translateStickmanSpecial(specialPlaceItem, pt.x - handle.x, pt.y - handle.y);
+      }
+      renderSlot(specialPlaceSlot);
+      syncShapeHandle();
+      setStickerTrashArmed(isClientPointInsideStickerTrash(ev.clientX, ev.clientY));
+      markSceneDirtySafe();
+      return;
+    }
     if (shapePlacePointerId != null && shapePlaceShape) {
       if (ev.pointerId !== shapePlacePointerId) return;
       const pt = clientToPanelPoint(ev.clientX, ev.clientY);
@@ -7324,6 +7677,29 @@ function setupSticker(panel) {
   };
 
   const endBoardDraw = (ev) => {
+    if (specialPlacePointerId != null && specialPlaceItem) {
+      if (ev.pointerId !== specialPlacePointerId) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const dropOnTrash = isClientPointInsideStickerTrash(ev.clientX, ev.clientY);
+      const slot = specialPlaceSlot;
+      const item = specialPlaceItem;
+      specialPlacePointerId = null;
+      specialPlaceSlot = null;
+      specialPlaceItem = null;
+      if (dropOnTrash && slot != null) {
+        const list = Array.isArray(slotSpecials[slot]) ? slotSpecials[slot] : [];
+        const idx = list.indexOf(item);
+        if (idx >= 0) list.splice(idx, 1);
+      }
+      setStickerShapeDragging(false);
+      renderSlot(slot);
+      fitDragAreaToDrawings();
+      syncDragArea();
+      syncShapeHandle();
+      markSceneDirtySafe();
+      return;
+    }
     if (shapePlacePointerId != null && shapePlaceShape) {
       if (ev.pointerId !== shapePlacePointerId) return;
       ev.preventDefault();
@@ -7588,6 +7964,7 @@ function setupSticker(panel) {
           { color: palette[slot], width: w, variant: 'solid' }, // leg B
         ];
         slotBursts[slot] = [];
+        slotSpecials[slot] = [];
         drawingState.setSlotStrokes(slot, [
           [pose.neck, pose.pelvis],
           [pose.shoulder, pose.handA],
@@ -7609,6 +7986,7 @@ function setupSticker(panel) {
         const y = clampY(baseY + (stepY * idx));
         slotShapes[slot] = [];
         slotBursts[slot] = [];
+        slotSpecials[slot] = [];
         slotStrokeStyles[slot] = [{
           color: palette[slot],
           width: getPlacementStrokeWidth(),
@@ -7628,6 +8006,7 @@ function setupSticker(panel) {
         slotStrokeStyles[slot] = [];
         drawingState.setSlotStrokes(slot, []);
         slotBursts[slot] = [];
+        slotSpecials[slot] = [];
         for (let i = 0; i < count; i++) {
           const pts = randomStroke();
           if (!pts.length) continue;
@@ -7643,12 +8022,37 @@ function setupSticker(panel) {
           );
         }
       }
+    } else if (isSpecialFx(currentFxId)) {
+      const specialKind = specialKindForFx(currentFxId);
+      for (const slot of activeSlots) {
+        const count = 1 + Math.floor(Math.random() * 2);
+        slotShapes[slot] = [];
+        slotBursts[slot] = [];
+        slotSpecials[slot] = [];
+        slotStrokeStyles[slot] = [];
+        drawingState.setSlotStrokes(slot, []);
+        for (let i = 0; i < count; i++) {
+          const pts = randomStroke();
+          if (!pts.length) continue;
+          const p = pts[Math.floor(Math.random() * pts.length)] || pts[0];
+          const randomColor = palette[Math.floor(Math.random() * palette.length)] || palette[slot] || '#ffffff';
+          placeSpecialAtSlot(
+            slot,
+            Number(p?.x) || AREA_MIN_X,
+            Number(p?.y) || AREA_MIN_Y,
+            specialKind,
+            randomColor,
+            getPlacementStrokeWidth()
+          );
+        }
+      }
     } else if (isShapeFx(currentFxId)) {
       const kind = shapeKindForFx(currentFxId);
       for (const slot of activeSlots) {
         const count = 1 + Math.floor(Math.random() * 3);
         slotShapes[slot] = [];
         slotBursts[slot] = [];
+        slotSpecials[slot] = [];
         slotStrokeStyles[slot] = [];
         drawingState.setSlotStrokes(slot, []);
         for (let i = 0; i < count; i++) {
@@ -7674,6 +8078,7 @@ function setupSticker(panel) {
         const styles = [];
         slotShapes[slot] = [];
         slotBursts[slot] = [];
+        slotSpecials[slot] = [];
         for (let i = 0; i < count; i++) {
           strokes.push(randomStroke());
           styles.push({
@@ -7722,6 +8127,7 @@ function setupSticker(panel) {
     for (let i = 0; i < ART_SLOT_COUNT; i++) {
       slotShapes[i] = [];
       slotBursts[i] = [];
+      slotSpecials[i] = [];
       slotStrokeStyles[i] = [];
     }
     try { burstLayer.innerHTML = ''; } catch {}
@@ -7768,6 +8174,22 @@ function setupSticker(panel) {
         y: Number(b?.y) || 0,
         size: Math.max(8, Number(b?.size) || 16),
         color: String(b?.color || '#7bf6ff'),
+      }))
+      : [])),
+    specialsBySlot: slotSpecials.map((list) => (Array.isArray(list)
+      ? list.map((s) => ({
+        kind: String(s?.kind || ''),
+        color: String(s?.color || '#7bf6ff'),
+        strokeWidth: Math.max(1.2, Number(s?.strokeWidth) || getPlacementStrokeWidth()),
+        headRadius: Math.max(6, Number(s?.headRadius) || 24),
+        neck: { x: Number(s?.neck?.x) || 0, y: Number(s?.neck?.y) || 0 },
+        pelvis: { x: Number(s?.pelvis?.x) || 0, y: Number(s?.pelvis?.y) || 0 },
+        shoulder: { x: Number(s?.shoulder?.x) || 0, y: Number(s?.shoulder?.y) || 0 },
+        headCenter: { x: Number(s?.headCenter?.x) || 0, y: Number(s?.headCenter?.y) || 0 },
+        handA: { x: Number(s?.handA?.x) || 0, y: Number(s?.handA?.y) || 0 },
+        handB: { x: Number(s?.handB?.x) || 0, y: Number(s?.handB?.y) || 0 },
+        footA: { x: Number(s?.footA?.x) || 0, y: Number(s?.footA?.y) || 0 },
+        footB: { x: Number(s?.footB?.x) || 0, y: Number(s?.footB?.y) || 0 },
       }))
       : [])),
     fx: clampStickerFxId(currentFxId),
@@ -7861,6 +8283,27 @@ function setupSticker(panel) {
       }
     } else {
       for (let i = 0; i < ART_SLOT_COUNT; i++) slotBursts[i] = [];
+    }
+    if (Array.isArray(state.specialsBySlot)) {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) {
+        const list = Array.isArray(state.specialsBySlot[i]) ? state.specialsBySlot[i] : [];
+        slotSpecials[i] = list.map((s) => ({
+          kind: String(s?.kind || ''),
+          color: String(s?.color || palette[i] || '#7bf6ff'),
+          strokeWidth: Math.max(1.2, Number(s?.strokeWidth) || getPlacementStrokeWidth()),
+          headRadius: Math.max(6, Number(s?.headRadius) || 24),
+          neck: { x: clampX(s?.neck?.x), y: clampY(s?.neck?.y) },
+          pelvis: { x: clampX(s?.pelvis?.x), y: clampY(s?.pelvis?.y) },
+          shoulder: { x: clampX(s?.shoulder?.x), y: clampY(s?.shoulder?.y) },
+          headCenter: { x: clampX(s?.headCenter?.x), y: clampY(s?.headCenter?.y) },
+          handA: { x: clampX(s?.handA?.x), y: clampY(s?.handA?.y) },
+          handB: { x: clampX(s?.handB?.x), y: clampY(s?.handB?.y) },
+          footA: { x: clampX(s?.footA?.x), y: clampY(s?.footA?.y) },
+          footB: { x: clampX(s?.footB?.x), y: clampY(s?.footB?.y) },
+        }));
+      }
+    } else {
+      for (let i = 0; i < ART_SLOT_COUNT; i++) slotSpecials[i] = [];
     }
     if (state.fx != null) setStickerFx(state.fx, { announce: false });
     selectedColorSlot = state.selectedColorSlot == null ? null : normalizeSlot(state.selectedColorSlot);
