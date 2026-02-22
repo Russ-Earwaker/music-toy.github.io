@@ -27,8 +27,9 @@ const SWARM_ARENA_RUBBER_DAMP_QUAD = 0.0028;
 const SWARM_ARENA_SLINGSHOT_IMPULSE = 860;
 const SWARM_RELEASE_POST_FIRE_BORDER_SCALE = 0.2;
 const SWARM_RELEASE_POST_FIRE_DURATION = 0.55;
-const SWARM_RELEASE_BEAT_MULTIPLIER_STEP = 10.0; // +10x force per charged beat level
 const SWARM_RELEASE_BEAT_LEVEL_MAX = 3; // three pip levels
+const SWARM_RELEASE_MULTIPLIER_BASE = 2.0; // doubled default force
+const SWARM_RELEASE_MULTIPLIER_AT_MAX = 31.0; // keep level-3 feel
 const SWARM_RELEASE_POST_FIRE_SPEED_SCALE = 1.8; // extra max-speed scale per beat level during launch assist
 const SWARM_RELEASE_BOUNCE_RESTITUTION = 0.9;
 const SWARM_RELEASE_BOUNCE_MIN_SPEED = 180;
@@ -39,8 +40,8 @@ let exitBtn = null;
 let joystickEl = null;
 let joystickKnobEl = null;
 let resistanceEl = null;
-let resistancePipEls = [];
 let reactiveArrowEl = null;
+let thrustFxEl = null;
 let spawnerLayerEl = null;
 let enemyLayerEl = null;
 let arenaRingEl = null;
@@ -292,7 +293,8 @@ function restoreBeatSwarmState(state) {
 
 function getReleaseBeatMultiplier() {
   const activeLevel = postReleaseAssistTimer > 0 ? lastLaunchBeatLevel : releaseBeatLevel;
-  return 1 + (Math.max(0, Math.min(SWARM_RELEASE_BEAT_LEVEL_MAX, activeLevel)) * SWARM_RELEASE_BEAT_MULTIPLIER_STEP);
+  const t = Math.max(0, Math.min(1, activeLevel / Math.max(1, SWARM_RELEASE_BEAT_LEVEL_MAX)));
+  return SWARM_RELEASE_MULTIPLIER_BASE + ((SWARM_RELEASE_MULTIPLIER_AT_MAX - SWARM_RELEASE_MULTIPLIER_BASE) * t);
 }
 
 function getReleaseSpeedCap() {
@@ -317,6 +319,7 @@ function ensureUi() {
       <div class="beat-swarm-enemy-layer" aria-hidden="true"></div>
       <div class="beat-swarm-resistance" aria-hidden="true"></div>
       <div class="beat-swarm-reactive-arrow" aria-hidden="true"></div>
+      <div class="beat-swarm-thrust-fx" aria-hidden="true"></div>
       <div class="beat-swarm-joystick" aria-hidden="true">
         <div class="beat-swarm-joystick-knob"></div>
       </div>
@@ -326,14 +329,8 @@ function ensureUi() {
   spawnerLayerEl = overlayEl.querySelector('.beat-swarm-spawner-layer');
   enemyLayerEl = overlayEl.querySelector('.beat-swarm-enemy-layer');
   resistanceEl = overlayEl.querySelector('.beat-swarm-resistance');
-  if (resistanceEl && !resistanceEl.querySelector('.beat-swarm-resist-pips')) {
-    const pips = document.createElement('div');
-    pips.className = 'beat-swarm-resist-pips';
-    pips.innerHTML = '<span class="beat-swarm-resist-pip"></span><span class="beat-swarm-resist-pip"></span><span class="beat-swarm-resist-pip"></span>';
-    resistanceEl.appendChild(pips);
-  }
-  resistancePipEls = resistanceEl ? Array.from(resistanceEl.querySelectorAll('.beat-swarm-resist-pip')) : [];
   reactiveArrowEl = overlayEl.querySelector('.beat-swarm-reactive-arrow');
+  thrustFxEl = overlayEl.querySelector('.beat-swarm-thrust-fx');
   joystickEl = overlayEl.querySelector('.beat-swarm-joystick');
   joystickKnobEl = overlayEl.querySelector('.beat-swarm-joystick-knob');
   if (!arenaRingEl && enemyLayerEl) {
@@ -843,12 +840,6 @@ function updateArenaVisual(scale = 1, showLimit = false) {
 
 function setResistanceVisual(visible, angleDeg = 0, strength = 0) {
   if (!resistanceEl) return;
-  const multiplierPips = releaseForcePrimed ? Math.max(0, Math.min(3, Math.floor(releaseBeatLevel))) : 0;
-  if (Array.isArray(resistancePipEls)) {
-    for (let i = 0; i < resistancePipEls.length; i++) {
-      resistancePipEls[i].classList.toggle('is-on', i < multiplierPips);
-    }
-  }
   if (!visible || !(strength > 0.001)) {
     resistanceEl.classList.remove('is-visible');
     resistanceEl.style.opacity = '0';
@@ -859,6 +850,24 @@ function setResistanceVisual(visible, angleDeg = 0, strength = 0) {
   resistanceEl.style.opacity = `${(0.24 + 0.72 * s).toFixed(3)}`;
   resistanceEl.style.setProperty('--bs-resist-thickness', `${(2 + 8 * s).toFixed(2)}px`);
   resistanceEl.style.setProperty('--bs-resist-rotation', `${angleDeg.toFixed(2)}deg`);
+}
+
+function setThrustFxVisual(visible) {
+  if (!thrustFxEl) return;
+  if (!visible) {
+    thrustFxEl.classList.remove('is-visible', 'is-full');
+    thrustFxEl.style.opacity = '0';
+    return;
+  }
+  const lvl = Math.max(0, Math.min(SWARM_RELEASE_BEAT_LEVEL_MAX, lastLaunchBeatLevel));
+  const t = lvl / Math.max(1, SWARM_RELEASE_BEAT_LEVEL_MAX);
+  const len = 18 + (70 * t);
+  const width = 5 + (8 * t);
+  thrustFxEl.classList.add('is-visible');
+  thrustFxEl.classList.toggle('is-full', lvl >= SWARM_RELEASE_BEAT_LEVEL_MAX);
+  thrustFxEl.style.opacity = `${(0.35 + (0.55 * t)).toFixed(3)}`;
+  thrustFxEl.style.setProperty('--bs-thrust-len', `${len.toFixed(2)}px`);
+  thrustFxEl.style.setProperty('--bs-thrust-width', `${width.toFixed(2)}px`);
 }
 
 function getReactiveReleaseImpulse(outsideN = 0, pushCharge = 0) {
@@ -887,6 +896,7 @@ function setReactiveArrowVisual(visible, angleDeg = 0, impulse = 0) {
   reactiveArrowEl.style.opacity = `${(0.24 + (0.74 * t)).toFixed(3)}`;
   reactiveArrowEl.style.setProperty('--bs-reactive-arrow-len', `${len.toFixed(2)}px`);
   reactiveArrowEl.style.setProperty('--bs-reactive-arrow-angle', `${angleDeg.toFixed(2)}deg`);
+  if (thrustFxEl) thrustFxEl.style.setProperty('--bs-reactive-arrow-angle', `${angleDeg.toFixed(2)}deg`);
   reactiveArrowEl.classList.toggle('is-full-charge', releaseBeatLevel >= SWARM_RELEASE_BEAT_LEVEL_MAX);
 }
 
@@ -1076,6 +1086,7 @@ function tick(nowMs) {
   lastFrameTs = now;
   postReleaseAssistTimer = Math.max(0, postReleaseAssistTimer - dt);
   if (postReleaseAssistTimer <= 0) lastLaunchBeatLevel = 0;
+  setThrustFxVisual(postReleaseAssistTimer > 0);
 
   const input = getInputVector();
   if (input.mag > 0.0001) {
@@ -1168,6 +1179,7 @@ function onPointerDown(ev) {
   postReleaseAssistTimer = 0;
   outerForceContinuousSeconds = 0;
   releaseForcePrimed = false;
+  setThrustFxVisual(false);
   setJoystickCenter(dragStartX, dragStartY);
   setJoystickKnob(0, 0);
   setJoystickVisible(true);
@@ -1224,6 +1236,7 @@ function onPointerUp(ev) {
   releaseForcePrimed = false;
   setJoystickVisible(false);
   setReactiveArrowVisual(false);
+  setThrustFxVisual(false);
   ev.preventDefault();
 }
 
@@ -1265,6 +1278,7 @@ export function enterBeatSwarmMode(options = null) {
   if (spawnerLayerEl) spawnerLayerEl.hidden = false;
   if (enemyLayerEl) enemyLayerEl.hidden = false;
   setJoystickVisible(false);
+  setThrustFxVisual(false);
   clearEnemies();
   clearPickups();
   clearProjectiles();
@@ -1314,6 +1328,7 @@ export function exitBeatSwarmMode() {
   if (spawnerLayerEl) spawnerLayerEl.hidden = true;
   if (enemyLayerEl) enemyLayerEl.hidden = true;
   setJoystickVisible(false);
+  setThrustFxVisual(false);
   stopTick();
   unbindInput();
   try { spawnerRuntime?.exit?.(); } catch {}

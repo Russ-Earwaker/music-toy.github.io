@@ -3310,41 +3310,9 @@ body.internal-board-active #board-main {
   opacity: 1;
 }
 
-.beat-swarm-resist-pips {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
+.beat-swarm-resist-pips,
 .beat-swarm-resist-pip {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 1px solid rgba(176, 224, 255, 0.65);
-  background: rgba(176, 224, 255, 0.2);
-  box-shadow: 0 0 4px rgba(176, 224, 255, 0.35);
-}
-
-.beat-swarm-resist-pip:nth-child(1) {
-  left: 52px;
-  top: 11px;
-}
-
-.beat-swarm-resist-pip:nth-child(2) {
-  left: 63px;
-  top: 22px;
-}
-
-.beat-swarm-resist-pip:nth-child(3) {
-  left: 66px;
-  top: 38px;
-}
-
-.beat-swarm-resist-pip.is-on {
-  background: rgba(176, 224, 255, 0.98);
-  border-color: rgba(226, 244, 255, 0.96);
-  box-shadow: 0 0 10px rgba(176, 224, 255, 0.95);
+  display: none !important;
 }
 
 .beat-swarm-reactive-arrow {
@@ -3425,6 +3393,57 @@ body.internal-board-active #board-main {
   animation:
     beat-swarm-reactive-arrow-full 560ms ease-in-out infinite,
     beat-swarm-reactive-arrow-pulse 180ms ease-out;
+}
+
+.beat-swarm-thrust-fx {
+  --bs-thrust-len: 20px;
+  --bs-thrust-width: 6px;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: var(--bs-thrust-len);
+  height: var(--bs-thrust-width);
+  margin-left: -2px;
+  margin-top: calc(var(--bs-thrust-width) * -0.5);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 246, 230, 0.96) 0%,
+    rgba(155, 220, 255, 0.9) 40%,
+    rgba(84, 168, 255, 0.42) 78%,
+    rgba(84, 168, 255, 0) 100%
+  );
+  filter: drop-shadow(0 0 9px rgba(155, 220, 255, 0.75));
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: 0 50%;
+  transform: rotate(calc(var(--bs-reactive-arrow-angle, 0deg) + 180deg));
+}
+
+.beat-swarm-thrust-fx::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  width: calc(var(--bs-thrust-width) * 0.9);
+  height: calc(var(--bs-thrust-width) * 0.9);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 248, 234, 0.95);
+  box-shadow: 0 0 10px rgba(255, 248, 234, 0.72);
+}
+
+.beat-swarm-thrust-fx.is-visible {
+  opacity: 1;
+}
+
+.beat-swarm-thrust-fx.is-full {
+  animation: beat-swarm-thrust-flicker 160ms ease-in-out infinite;
+}
+
+@keyframes beat-swarm-thrust-flicker {
+  0%, 100% { filter: drop-shadow(0 0 9px rgba(155, 220, 255, 0.75)); }
+  50% { filter: drop-shadow(0 0 16px rgba(194, 236, 255, 0.95)); }
 }
 
 .beat-swarm-rhythm-proxy {
