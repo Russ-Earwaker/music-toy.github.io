@@ -1,9 +1,10 @@
 import { getZoomState } from './zoom/ZoomCoordinator.js';
 import { screenToWorld, worldToScreen } from './board-viewport.js';
 import { createBeatSwarmSpawnerRuntime, registerLoopgridSpawnerType } from './beat-swarm/spawner-runtime.js';
-import { getLoopInfo, isRunning } from './audio-core.js';
+import { getLoopInfo, isRunning, start as startTransport } from './audio-core.js';
 
 const OVERLAY_ID = 'beat-swarm-overlay';
+const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
 
 // Beat Swarm movement tuning.
 const SWARM_MAX_SPEED = 920; // px/sec
@@ -12,14 +13,47 @@ const SWARM_DECEL = 2.8; // release damping
 const SWARM_TURN_WEIGHT = 0.35; // lower = heavier directional change
 const SWARM_JOYSTICK_RADIUS = 70; // px
 const SWARM_STOP_EPS = 8; // px/sec
+const SWARM_CAMERA_TARGET_SCALE = 0.5; // smaller = further out
+const SWARM_ARENA_RADIUS_WORLD = 1100;
+const SWARM_ARENA_RESIST_RANGE_WORLD = SWARM_ARENA_RADIUS_WORLD * 0.25; // reduced outer band by half
+const SWARM_ARENA_INWARD_ACCEL_WORLD = 380;
+const SWARM_ARENA_OUTWARD_BRAKE_WORLD = 1800;
+const SWARM_ARENA_OUTWARD_CANCEL_WORLD = 2400;
+const SWARM_ARENA_EDGE_BRAKE_WORLD = 3400;
+const SWARM_ARENA_OUTER_SOFT_BUFFER_WORLD = 120;
+const SWARM_ARENA_RUBBER_K_WORLD = 7.5;
+const SWARM_ARENA_RUBBER_DAMP_LINEAR = 2.1;
+const SWARM_ARENA_RUBBER_DAMP_QUAD = 0.0028;
+const SWARM_ARENA_SLINGSHOT_IMPULSE = 860;
+const SWARM_RELEASE_POST_FIRE_BORDER_SCALE = 0.2;
+const SWARM_RELEASE_POST_FIRE_DURATION = 0.55;
+const SWARM_RELEASE_BEAT_MULTIPLIER_STEP = 10.0; // +10x force per charged beat level
+const SWARM_RELEASE_BEAT_LEVEL_MAX = 3; // three pip levels
+const SWARM_RELEASE_POST_FIRE_SPEED_SCALE = 1.8; // extra max-speed scale per beat level during launch assist
+const SWARM_RELEASE_BOUNCE_RESTITUTION = 0.9;
+const SWARM_RELEASE_BOUNCE_MIN_SPEED = 180;
 
 let active = false;
 let overlayEl = null;
 let exitBtn = null;
 let joystickEl = null;
 let joystickKnobEl = null;
+let resistanceEl = null;
+let resistancePipEls = [];
+let reactiveArrowEl = null;
 let spawnerLayerEl = null;
 let enemyLayerEl = null;
+let arenaRingEl = null;
+let arenaCoreEl = null;
+let arenaLimitEl = null;
+let arenaCenterWorld = null;
+let barrierPushingOut = false;
+let barrierPushCharge = 0;
+let releaseBeatLevel = 0;
+let lastLaunchBeatLevel = 0;
+let postReleaseAssistTimer = 0;
+let outerForceContinuousSeconds = 0;
+let releaseForcePrimed = false;
 
 let dragPointerId = null;
 let dragStartX = 0;
@@ -64,6 +98,209 @@ const difficultyConfig = Object.seal({
 let rafId = 0;
 let lastFrameTs = 0;
 
+function safeSessionStorage() {
+  try { return window.sessionStorage; } catch { return null; }
+}
+
+function captureBeatSwarmState() {
+  const z = getZoomState();
+  const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
+  const x = Number.isFinite(z?.targetX) ? z.targetX : (Number.isFinite(z?.currentX) ? z.currentX : 0);
+  const y = Number.isFinite(z?.targetY) ? z.targetY : (Number.isFinite(z?.currentY) ? z.currentY : 0);
+  return {
+    active: !!active,
+    viewport: { scale, x, y },
+    velocity: { x: velocityX, y: velocityY },
+    shipFacingDeg,
+    releaseBeatLevel,
+    lastLaunchBeatLevel,
+    postReleaseAssistTimer,
+    outerForceContinuousSeconds,
+    releaseForcePrimed,
+    arenaCenterWorld: arenaCenterWorld ? { x: arenaCenterWorld.x, y: arenaCenterWorld.y } : null,
+    equippedWeapons: Array.from(equippedWeapons),
+    enemies: enemies.map((e) => ({
+      wx: Number(e.wx) || 0,
+      wy: Number(e.wy) || 0,
+      vx: Number(e.vx) || 0,
+      vy: Number(e.vy) || 0,
+      hp: Number(e.hp) || 1,
+      maxHp: Number(e.maxHp) || 1,
+      spawnT: Number(e.spawnT) || 0,
+      spawnDur: Number(e.spawnDur) || ENEMY_SPAWN_DURATION,
+    })),
+    pickups: pickups.map((p) => ({
+      weaponId: p.weaponId,
+      wx: Number(p.wx) || 0,
+      wy: Number(p.wy) || 0,
+    })),
+    projectiles: projectiles.map((p) => ({
+      wx: Number(p.wx) || 0,
+      wy: Number(p.wy) || 0,
+      vx: Number(p.vx) || 0,
+      vy: Number(p.vy) || 0,
+      ttl: Number(p.ttl) || 0,
+      damage: Number(p.damage) || 1,
+    })),
+    effects: effects.map((fx) => ({
+      kind: fx.kind,
+      ttl: Number(fx.ttl) || 0,
+      from: fx.from ? { x: Number(fx.from.x) || 0, y: Number(fx.from.y) || 0 } : null,
+      to: fx.to ? { x: Number(fx.to.x) || 0, y: Number(fx.to.y) || 0 } : null,
+      at: fx.at ? { x: Number(fx.at.x) || 0, y: Number(fx.at.y) || 0 } : null,
+      radiusWorld: Number(fx.radiusWorld) || EXPLOSION_RADIUS_WORLD,
+    })),
+  };
+}
+
+function persistBeatSwarmState() {
+  const ss = safeSessionStorage();
+  if (!ss) return;
+  try { ss.setItem(BEAT_SWARM_STATE_KEY, JSON.stringify(captureBeatSwarmState())); } catch {}
+}
+
+function clearBeatSwarmPersistedState() {
+  const ss = safeSessionStorage();
+  if (!ss) return;
+  try { ss.removeItem(BEAT_SWARM_STATE_KEY); } catch {}
+}
+
+function consumeBeatSwarmPersistedState() {
+  const ss = safeSessionStorage();
+  if (!ss) return null;
+  try {
+    const raw = ss.getItem(BEAT_SWARM_STATE_KEY);
+    if (!raw) return null;
+    ss.removeItem(BEAT_SWARM_STATE_KEY);
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function spawnEnemyFromState(state) {
+  if (!enemyLayerEl || !state) return;
+  if (enemies.length >= ENEMY_CAP) {
+    const old = enemies.shift();
+    removeEnemy(old);
+  }
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-enemy';
+  const hpWrap = document.createElement('div');
+  hpWrap.className = 'beat-swarm-enemy-hp';
+  const hpFill = document.createElement('div');
+  hpFill.className = 'beat-swarm-enemy-hp-fill';
+  hpWrap.appendChild(hpFill);
+  el.appendChild(hpWrap);
+  enemyLayerEl.appendChild(el);
+  const e = {
+    wx: Number(state.wx) || 0,
+    wy: Number(state.wy) || 0,
+    vx: Number(state.vx) || 0,
+    vy: Number(state.vy) || 0,
+    el,
+    hp: Math.max(1, Number(state.hp) || 1),
+    maxHp: Math.max(1, Number(state.maxHp) || 1),
+    hpFillEl: hpFill,
+    spawnT: Math.max(0, Number(state.spawnT) || 0),
+    spawnDur: Math.max(0.001, Number(state.spawnDur) || ENEMY_SPAWN_DURATION),
+  };
+  enemies.push(e);
+  updateEnemyHealthUi(e);
+}
+
+function restoreBeatSwarmState(state) {
+  if (!state || typeof state !== 'object') return;
+  const vp = state.viewport;
+  if (vp && Number.isFinite(vp.scale) && Number.isFinite(vp.x) && Number.isFinite(vp.y)) {
+    try { window.__setBoardViewportNow?.(vp.scale, vp.x, vp.y); } catch {}
+  }
+  velocityX = Number(state?.velocity?.x) || 0;
+  velocityY = Number(state?.velocity?.y) || 0;
+  shipFacingDeg = Number(state.shipFacingDeg) || 0;
+  barrierPushingOut = false;
+  barrierPushCharge = 0;
+  releaseBeatLevel = Math.max(0, Math.min(SWARM_RELEASE_BEAT_LEVEL_MAX, Math.floor(Number(state.releaseBeatLevel) || 0)));
+  lastLaunchBeatLevel = Math.max(0, Math.min(SWARM_RELEASE_BEAT_LEVEL_MAX, Math.floor(Number(state.lastLaunchBeatLevel) || 0)));
+  postReleaseAssistTimer = Math.max(0, Number(state.postReleaseAssistTimer) || 0);
+  outerForceContinuousSeconds = Math.max(0, Number(state.outerForceContinuousSeconds) || 0);
+  releaseForcePrimed = !!state.releaseForcePrimed;
+  arenaCenterWorld = state.arenaCenterWorld
+    ? { x: Number(state.arenaCenterWorld.x) || 0, y: Number(state.arenaCenterWorld.y) || 0 }
+    : getViewportCenterWorld();
+
+  equippedWeapons.clear();
+  for (const id of Array.isArray(state.equippedWeapons) ? state.equippedWeapons : []) {
+    if (weaponDefs[id]) equippedWeapons.add(id);
+  }
+
+  clearEnemies();
+  clearPickups();
+  clearProjectiles();
+  clearEffects();
+
+  for (const e of Array.isArray(state.enemies) ? state.enemies : []) {
+    spawnEnemyFromState(e);
+  }
+  for (const p of Array.isArray(state.pickups) ? state.pickups : []) {
+    if (weaponDefs[p?.weaponId]) {
+      spawnPickup(p.weaponId, Number(p.wx) || 0, Number(p.wy) || 0);
+    }
+  }
+  for (const p of Array.isArray(state.projectiles) ? state.projectiles : []) {
+    if (!enemyLayerEl) continue;
+    const el = document.createElement('div');
+    el.className = 'beat-swarm-projectile';
+    enemyLayerEl.appendChild(el);
+    projectiles.push({
+      wx: Number(p.wx) || 0,
+      wy: Number(p.wy) || 0,
+      vx: Number(p.vx) || 0,
+      vy: Number(p.vy) || 0,
+      ttl: Math.max(0, Number(p.ttl) || 0),
+      damage: Math.max(1, Number(p.damage) || 1),
+      el,
+    });
+  }
+  for (const fx of Array.isArray(state.effects) ? state.effects : []) {
+    if (!enemyLayerEl || !fx || !fx.kind) continue;
+    const el = document.createElement('div');
+    if (fx.kind === 'laser') {
+      el.className = 'beat-swarm-fx-laser';
+      enemyLayerEl.appendChild(el);
+      effects.push({
+        kind: 'laser',
+        ttl: Math.max(0, Number(fx.ttl) || 0),
+        from: fx.from ? { x: Number(fx.from.x) || 0, y: Number(fx.from.y) || 0 } : { x: 0, y: 0 },
+        to: fx.to ? { x: Number(fx.to.x) || 0, y: Number(fx.to.y) || 0 } : { x: 0, y: 0 },
+        el,
+      });
+    } else if (fx.kind === 'explosion') {
+      el.className = 'beat-swarm-fx-explosion';
+      enemyLayerEl.appendChild(el);
+      effects.push({
+        kind: 'explosion',
+        ttl: Math.max(0, Number(fx.ttl) || 0),
+        at: fx.at ? { x: Number(fx.at.x) || 0, y: Number(fx.at.y) || 0 } : { x: 0, y: 0 },
+        radiusWorld: Math.max(1, Number(fx.radiusWorld) || EXPLOSION_RADIUS_WORLD),
+        el,
+      });
+    }
+  }
+}
+
+function getReleaseBeatMultiplier() {
+  const activeLevel = postReleaseAssistTimer > 0 ? lastLaunchBeatLevel : releaseBeatLevel;
+  return 1 + (Math.max(0, Math.min(SWARM_RELEASE_BEAT_LEVEL_MAX, activeLevel)) * SWARM_RELEASE_BEAT_MULTIPLIER_STEP);
+}
+
+function getReleaseSpeedCap() {
+  const lvl = Math.max(0, Math.min(SWARM_RELEASE_BEAT_LEVEL_MAX, lastLaunchBeatLevel));
+  const scale = 1 + (lvl * SWARM_RELEASE_POST_FIRE_SPEED_SCALE);
+  return SWARM_MAX_SPEED * Math.max(1, scale);
+}
+
 function ensureUi() {
   if (overlayEl && exitBtn) return;
   overlayEl = document.getElementById(OVERLAY_ID);
@@ -78,6 +315,8 @@ function ensureUi() {
       </div>
       <div class="beat-swarm-spawner-layer" aria-hidden="true"></div>
       <div class="beat-swarm-enemy-layer" aria-hidden="true"></div>
+      <div class="beat-swarm-resistance" aria-hidden="true"></div>
+      <div class="beat-swarm-reactive-arrow" aria-hidden="true"></div>
       <div class="beat-swarm-joystick" aria-hidden="true">
         <div class="beat-swarm-joystick-knob"></div>
       </div>
@@ -86,8 +325,32 @@ function ensureUi() {
   }
   spawnerLayerEl = overlayEl.querySelector('.beat-swarm-spawner-layer');
   enemyLayerEl = overlayEl.querySelector('.beat-swarm-enemy-layer');
+  resistanceEl = overlayEl.querySelector('.beat-swarm-resistance');
+  if (resistanceEl && !resistanceEl.querySelector('.beat-swarm-resist-pips')) {
+    const pips = document.createElement('div');
+    pips.className = 'beat-swarm-resist-pips';
+    pips.innerHTML = '<span class="beat-swarm-resist-pip"></span><span class="beat-swarm-resist-pip"></span><span class="beat-swarm-resist-pip"></span>';
+    resistanceEl.appendChild(pips);
+  }
+  resistancePipEls = resistanceEl ? Array.from(resistanceEl.querySelectorAll('.beat-swarm-resist-pip')) : [];
+  reactiveArrowEl = overlayEl.querySelector('.beat-swarm-reactive-arrow');
   joystickEl = overlayEl.querySelector('.beat-swarm-joystick');
   joystickKnobEl = overlayEl.querySelector('.beat-swarm-joystick-knob');
+  if (!arenaRingEl && enemyLayerEl) {
+    arenaRingEl = document.createElement('div');
+    arenaRingEl.className = 'beat-swarm-arena-ring';
+    enemyLayerEl.appendChild(arenaRingEl);
+  }
+  if (!arenaCoreEl && enemyLayerEl) {
+    arenaCoreEl = document.createElement('div');
+    arenaCoreEl.className = 'beat-swarm-arena-core';
+    enemyLayerEl.appendChild(arenaCoreEl);
+  }
+  if (!arenaLimitEl && enemyLayerEl) {
+    arenaLimitEl = document.createElement('div');
+    arenaLimitEl.className = 'beat-swarm-arena-limit-ring';
+    enemyLayerEl.appendChild(arenaLimitEl);
+  }
   if (!spawnerRuntime) {
     spawnerRuntime = createBeatSwarmSpawnerRuntime({
       getLayerEl: () => spawnerLayerEl,
@@ -133,6 +396,21 @@ function getViewportCenterWorld() {
   const c = getViewportCenterClient();
   const w = screenToWorld({ x: c.x, y: c.y });
   return (w && Number.isFinite(w.x) && Number.isFinite(w.y)) ? w : { x: 0, y: 0 };
+}
+
+function applyBeatSwarmCameraScaleWithRetry() {
+  const apply = () => {
+    try {
+      const z = getZoomState();
+      const x = Number.isFinite(z?.targetX) ? z.targetX : (Number.isFinite(z?.currentX) ? z.currentX : 0);
+      const y = Number.isFinite(z?.targetY) ? z.targetY : (Number.isFinite(z?.currentY) ? z.currentY : 0);
+      const nextScale = Math.max(0.3, Math.min(1, Number(SWARM_CAMERA_TARGET_SCALE) || 0.6));
+      window.__setBoardViewportNow?.(nextScale, x, y);
+    } catch {}
+  };
+  apply();
+  setTimeout(apply, 140);
+  setTimeout(apply, 320);
 }
 
 function removeEnemy(enemy) {
@@ -335,6 +613,20 @@ function updateBeatWeapons(centerWorld) {
   const beatIndex = Math.floor(((now - loopStart) / beatLen) + 1e-6);
   if (beatIndex === lastBeatIndex) return;
   lastBeatIndex = beatIndex;
+  if (active && outerForceContinuousSeconds >= beatLen) {
+    if (!releaseForcePrimed) {
+      releaseForcePrimed = true;
+      barrierPushCharge = 1;
+      releaseBeatLevel = 0;
+      pulseReactiveArrowCharge();
+    } else {
+      const nextLevel = Math.min(SWARM_RELEASE_BEAT_LEVEL_MAX, Math.max(0, releaseBeatLevel) + 1);
+      if (nextLevel > releaseBeatLevel) {
+        releaseBeatLevel = nextLevel;
+        pulseReactiveArrowCharge();
+      }
+    }
+  }
   fireWeaponsOnBeat(centerWorld);
 }
 
@@ -518,6 +810,228 @@ function setJoystickKnob(dx, dy) {
   joystickKnobEl.style.transform = `translate(${dx}px, ${dy}px)`;
 }
 
+function updateArenaVisual(scale = 1, showLimit = false) {
+  if (!arenaRingEl || !arenaCoreEl || !arenaCenterWorld) return;
+  const s = worldToScreen({ x: arenaCenterWorld.x, y: arenaCenterWorld.y });
+  if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) {
+    arenaRingEl.style.opacity = '0';
+    arenaCoreEl.style.opacity = '0';
+    if (arenaLimitEl) arenaLimitEl.style.opacity = '0';
+    return;
+  }
+  const rPx = Math.max(140, SWARM_ARENA_RADIUS_WORLD * Math.max(0.001, scale || 1));
+  const dPx = rPx * 2;
+  arenaRingEl.style.opacity = '1';
+  arenaRingEl.style.width = `${dPx}px`;
+  arenaRingEl.style.height = `${dPx}px`;
+  arenaRingEl.style.marginLeft = `${-rPx}px`;
+  arenaRingEl.style.marginTop = `${-rPx}px`;
+  arenaRingEl.style.transform = `translate(${s.x}px, ${s.y}px)`;
+  arenaCoreEl.style.opacity = '1';
+  arenaCoreEl.style.transform = `translate(${s.x}px, ${s.y}px)`;
+  if (arenaLimitEl) {
+    const rLimitPx = Math.max(150, (SWARM_ARENA_RADIUS_WORLD + SWARM_ARENA_RESIST_RANGE_WORLD) * Math.max(0.001, scale || 1));
+    const dLimitPx = rLimitPx * 2;
+    arenaLimitEl.style.opacity = showLimit ? '1' : '0';
+    arenaLimitEl.style.width = `${dLimitPx}px`;
+    arenaLimitEl.style.height = `${dLimitPx}px`;
+    arenaLimitEl.style.marginLeft = `${-rLimitPx}px`;
+    arenaLimitEl.style.marginTop = `${-rLimitPx}px`;
+    arenaLimitEl.style.transform = `translate(${s.x}px, ${s.y}px)`;
+  }
+}
+
+function setResistanceVisual(visible, angleDeg = 0, strength = 0) {
+  if (!resistanceEl) return;
+  const multiplierPips = releaseForcePrimed ? Math.max(0, Math.min(3, Math.floor(releaseBeatLevel))) : 0;
+  if (Array.isArray(resistancePipEls)) {
+    for (let i = 0; i < resistancePipEls.length; i++) {
+      resistancePipEls[i].classList.toggle('is-on', i < multiplierPips);
+    }
+  }
+  if (!visible || !(strength > 0.001)) {
+    resistanceEl.classList.remove('is-visible');
+    resistanceEl.style.opacity = '0';
+    return;
+  }
+  const s = Math.max(0, Math.min(1, strength));
+  resistanceEl.classList.add('is-visible');
+  resistanceEl.style.opacity = `${(0.24 + 0.72 * s).toFixed(3)}`;
+  resistanceEl.style.setProperty('--bs-resist-thickness', `${(2 + 8 * s).toFixed(2)}px`);
+  resistanceEl.style.setProperty('--bs-resist-rotation', `${angleDeg.toFixed(2)}deg`);
+}
+
+function getReactiveReleaseImpulse(outsideN = 0, pushCharge = 0) {
+  const effectivePush = releaseForcePrimed ? 1 : Math.max(0, Math.min(1, pushCharge));
+  const effectiveOutside = releaseForcePrimed ? 1 : Math.max(0, Math.min(1, outsideN));
+  const base = SWARM_ARENA_SLINGSHOT_IMPULSE
+    * (0.5 + (effectivePush * 1.25) + (effectiveOutside * 0.65));
+  return base * getReleaseBeatMultiplier();
+}
+
+function setReactiveArrowVisual(visible, angleDeg = 0, impulse = 0) {
+  if (!reactiveArrowEl) return;
+  const multiplierPips = releaseForcePrimed ? Math.max(0, Math.min(3, Math.floor(releaseBeatLevel))) : 0;
+  reactiveArrowEl.classList.toggle('is-primed', !!releaseForcePrimed);
+  reactiveArrowEl.style.setProperty('--bs-reactive-arrow-thickness', `${(3 + (multiplierPips * 2)).toFixed(2)}px`);
+  if (!visible || !(impulse > 0.001)) {
+    reactiveArrowEl.classList.remove('is-visible');
+    reactiveArrowEl.classList.remove('is-full-charge');
+    reactiveArrowEl.style.opacity = '0';
+    return;
+  }
+  const maxImpulse = getReactiveReleaseImpulse(1, 1);
+  const t = Math.max(0, Math.min(1, impulse / Math.max(1, maxImpulse)));
+  const len = 26 + (160 * t);
+  reactiveArrowEl.classList.add('is-visible');
+  reactiveArrowEl.style.opacity = `${(0.24 + (0.74 * t)).toFixed(3)}`;
+  reactiveArrowEl.style.setProperty('--bs-reactive-arrow-len', `${len.toFixed(2)}px`);
+  reactiveArrowEl.style.setProperty('--bs-reactive-arrow-angle', `${angleDeg.toFixed(2)}deg`);
+  reactiveArrowEl.classList.toggle('is-full-charge', releaseBeatLevel >= SWARM_RELEASE_BEAT_LEVEL_MAX);
+}
+
+function pulseReactiveArrowCharge() {
+  if (!reactiveArrowEl) return;
+  reactiveArrowEl.classList.remove('is-beat-pulse');
+  void reactiveArrowEl.offsetWidth;
+  reactiveArrowEl.classList.add('is-beat-pulse');
+}
+
+function applyArenaBoundaryResistance(dt, input, centerWorld, scale) {
+  if (!arenaCenterWorld || !centerWorld) {
+    barrierPushingOut = false;
+    barrierPushCharge = 0;
+    setResistanceVisual(false);
+    setReactiveArrowVisual(false);
+    return false;
+  }
+  const dx = centerWorld.x - arenaCenterWorld.x;
+  const dy = centerWorld.y - arenaCenterWorld.y;
+  const dist = Math.hypot(dx, dy) || 0;
+  const outside = Math.max(0, dist - SWARM_ARENA_RADIUS_WORLD);
+  if (!(outside > 0.0001) || !(dist > 0.0001)) {
+    barrierPushingOut = false;
+    barrierPushCharge = 0;
+    setResistanceVisual(false);
+    setReactiveArrowVisual(false);
+    return false;
+  }
+
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const outsideN = Math.max(0, Math.min(1, outside / Math.max(1, SWARM_ARENA_RESIST_RANGE_WORLD)));
+  const worldToScreenScale = Math.max(0.001, scale || 1);
+  const borderScale = postReleaseAssistTimer > 0 ? SWARM_RELEASE_POST_FIRE_BORDER_SCALE * 0.2 : 1;
+  const baseInward = SWARM_ARENA_INWARD_ACCEL_WORLD * borderScale * (outsideN * outsideN) * worldToScreenScale * dt;
+  velocityX -= nx * baseInward;
+  velocityY -= ny * baseInward;
+  const maxDist = SWARM_ARENA_RADIUS_WORLD + SWARM_ARENA_RESIST_RANGE_WORLD;
+  const edgeBand = Math.max(1, SWARM_ARENA_RESIST_RANGE_WORLD * 0.35);
+  const nearEdgeN = Math.max(0, Math.min(1, (dist - (maxDist - edgeBand)) / edgeBand));
+  const softStartDist = Math.max(SWARM_ARENA_RADIUS_WORLD, maxDist - SWARM_ARENA_OUTER_SOFT_BUFFER_WORLD);
+  const nearLimitN = Math.max(0, Math.min(1, (dist - softStartDist) / Math.max(1, (maxDist - softStartDist))));
+
+  let inputOut = 0;
+  if (input && input.mag > 0.0001) {
+    inputOut = Math.max(0, (input.x * nx) + (input.y * ny));
+  }
+
+  const radialBefore = (velocityX * nx) + (velocityY * ny);
+  const radialOut = Math.max(0, radialBefore);
+
+  // Rubber-band response:
+  // spring grows with stretch, and damping grows with outward speed so faster
+  // outward motion is cushioned harder instead of hard-stopping.
+  if (outside > 0) {
+    const springAccel = SWARM_ARENA_RUBBER_K_WORLD * borderScale * outside * worldToScreenScale;
+    const dampAccel = borderScale * ((SWARM_ARENA_RUBBER_DAMP_LINEAR * radialOut) + (SWARM_ARENA_RUBBER_DAMP_QUAD * radialOut * radialOut));
+    const inward = (springAccel + dampAccel) * dt;
+    velocityX -= nx * inward;
+    velocityY -= ny * inward;
+  }
+
+  const radialAfterRubber = (velocityX * nx) + (velocityY * ny);
+  const radialOutAfterRubber = Math.max(0, radialAfterRubber);
+  if (radialOutAfterRubber > 0 && nearEdgeN > 0) {
+    const edgeBrake = (SWARM_ARENA_EDGE_BRAKE_WORLD * 2 * borderScale * (nearEdgeN * nearEdgeN) * (1 + (2.4 * nearLimitN)))
+      * worldToScreenScale * dt;
+    const remove = Math.min(radialOutAfterRubber, edgeBrake);
+    velocityX -= nx * remove;
+    velocityY -= ny * remove;
+  }
+  if (inputOut > 0.0001) {
+    barrierPushingOut = true;
+    barrierPushCharge = Math.min(1, barrierPushCharge + (dt * (0.75 + (outsideN * 1.8) + (inputOut * 1.1))));
+    if (radialBefore > 0) {
+      const brake = borderScale * (SWARM_ARENA_OUTWARD_BRAKE_WORLD + (SWARM_ARENA_OUTWARD_CANCEL_WORLD * outsideN * inputOut))
+        * worldToScreenScale * dt;
+      const nextRad = Math.max(0, radialBefore - brake);
+      const remove = radialBefore - nextRad;
+      velocityX -= nx * remove;
+      velocityY -= ny * remove;
+    }
+    const inAngle = (Math.atan2(input.y, input.x) * 180 / Math.PI) + 90;
+    setResistanceVisual(true, inAngle, outsideN * inputOut);
+    const releaseDirAngle = (Math.atan2(-input.y, -input.x) * 180 / Math.PI);
+    const releaseImpulse = getReactiveReleaseImpulse(outsideN, barrierPushCharge);
+    setReactiveArrowVisual(true, releaseDirAngle, releaseImpulse);
+    return true;
+  }
+
+  barrierPushingOut = false;
+  barrierPushCharge = Math.max(0, barrierPushCharge - (dt * 1.4));
+  setResistanceVisual(false);
+  setReactiveArrowVisual(false);
+  return true;
+}
+
+function enforceArenaOuterLimit(centerWorld, scale, dt) {
+  if (!arenaCenterWorld || !centerWorld) return centerWorld;
+  const dx = centerWorld.x - arenaCenterWorld.x;
+  const dy = centerWorld.y - arenaCenterWorld.y;
+  const dist = Math.hypot(dx, dy) || 0;
+  const maxDist = SWARM_ARENA_RADIUS_WORLD + SWARM_ARENA_RESIST_RANGE_WORLD;
+  if (!(dist > maxDist) || !(dist > 0.0001)) return centerWorld;
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const worldToScreenScale = Math.max(0.001, scale || 1);
+
+  // Safety non-penetration correction: never allow visual center beyond outer limit.
+  const cx = arenaCenterWorld.x + (nx * maxDist);
+  const cy = arenaCenterWorld.y + (ny * maxDist);
+  applyCameraDelta((cx - centerWorld.x) * worldToScreenScale, (cy - centerWorld.y) * worldToScreenScale);
+
+  const radial = (velocityX * nx) + (velocityY * ny);
+  if (radial > 0) {
+    velocityX -= nx * radial;
+    velocityY -= ny * radial;
+  }
+  return { x: cx, y: cy };
+}
+
+function applyLaunchInnerCircleBounce(centerWorld, scale) {
+  if (!arenaCenterWorld || !centerWorld) return centerWorld;
+  if (!(postReleaseAssistTimer > 0) || dragPointerId != null) return centerWorld;
+  const dx = centerWorld.x - arenaCenterWorld.x;
+  const dy = centerWorld.y - arenaCenterWorld.y;
+  const dist = Math.hypot(dx, dy) || 0;
+  const r = SWARM_ARENA_RADIUS_WORLD;
+  if (!(dist >= r) || !(dist > 0.0001)) return centerWorld;
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const radial = (velocityX * nx) + (velocityY * ny);
+  if (radial <= SWARM_RELEASE_BOUNCE_MIN_SPEED) return centerWorld;
+  const worldToScreenScale = Math.max(0.001, scale || 1);
+  const cx = arenaCenterWorld.x + (nx * r);
+  const cy = arenaCenterWorld.y + (ny * r);
+  applyCameraDelta((cx - centerWorld.x) * worldToScreenScale, (cy - centerWorld.y) * worldToScreenScale);
+  const rx = velocityX - (2 * radial * nx);
+  const ry = velocityY - (2 * radial * ny);
+  velocityX = rx * SWARM_RELEASE_BOUNCE_RESTITUTION;
+  velocityY = ry * SWARM_RELEASE_BOUNCE_RESTITUTION;
+  return { x: cx, y: cy };
+}
+
 function getInputVector() {
   if (dragPointerId == null) return { x: 0, y: 0, mag: 0 };
   let dx = dragNowX - dragStartX;
@@ -560,6 +1074,8 @@ function tick(nowMs) {
   if (!lastFrameTs) lastFrameTs = now;
   const dt = Math.max(0.001, Math.min(0.05, (now - lastFrameTs) / 1000));
   lastFrameTs = now;
+  postReleaseAssistTimer = Math.max(0, postReleaseAssistTimer - dt);
+  if (postReleaseAssistTimer <= 0) lastLaunchBeatLevel = 0;
 
   const input = getInputVector();
   if (input.mag > 0.0001) {
@@ -586,15 +1102,36 @@ function tick(nowMs) {
     }
   }
 
+  const z = getZoomState();
+  const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
+  const centerWorld = getViewportCenterWorld();
+  const outsideForceActive = applyArenaBoundaryResistance(dt, input, centerWorld, scale);
+  if (outsideForceActive) {
+    outerForceContinuousSeconds += dt;
+  } else {
+    outerForceContinuousSeconds = 0;
+    releaseForcePrimed = false;
+    releaseBeatLevel = 0;
+  }
+  updateArenaVisual(scale);
+
   const speed = Math.hypot(velocityX, velocityY);
-  if (speed > SWARM_MAX_SPEED) {
-    const k = SWARM_MAX_SPEED / speed;
+  const maxSpeedNow = postReleaseAssistTimer > 0 ? getReleaseSpeedCap() : SWARM_MAX_SPEED;
+  if (speed > maxSpeedNow) {
+    const k = maxSpeedNow / speed;
     velocityX *= k;
     velocityY *= k;
   }
   if (speed > 0.01) {
     applyCameraDelta(velocityX * dt, velocityY * dt);
   }
+  let centerWorldAfterMove = getViewportCenterWorld();
+  centerWorldAfterMove = applyLaunchInnerCircleBounce(centerWorldAfterMove, scale);
+  centerWorldAfterMove = enforceArenaOuterLimit(centerWorldAfterMove, scale, dt);
+  const outsideMain = arenaCenterWorld
+    ? (Math.hypot(centerWorldAfterMove.x - arenaCenterWorld.x, centerWorldAfterMove.y - arenaCenterWorld.y) > SWARM_ARENA_RADIUS_WORLD)
+    : false;
+  updateArenaVisual(scale, outsideMain);
   updateEnemies(dt);
   updatePickupsAndCombat(dt);
   try { spawnerRuntime?.update?.(dt); } catch {}
@@ -623,6 +1160,14 @@ function onPointerDown(ev) {
   dragStartY = ev.clientY;
   dragNowX = ev.clientX;
   dragNowY = ev.clientY;
+  setReactiveArrowVisual(false);
+  barrierPushingOut = false;
+  barrierPushCharge = 0;
+  releaseBeatLevel = 0;
+  lastLaunchBeatLevel = 0;
+  postReleaseAssistTimer = 0;
+  outerForceContinuousSeconds = 0;
+  releaseForcePrimed = false;
   setJoystickCenter(dragStartX, dragStartY);
   setJoystickKnob(0, 0);
   setJoystickVisible(true);
@@ -642,8 +1187,43 @@ function onPointerUp(ev) {
   if (!active) return;
   if (dragPointerId == null || ev.pointerId !== dragPointerId) return;
   try { overlayEl?.releasePointerCapture?.(dragPointerId); } catch {}
+  if (arenaCenterWorld && barrierPushingOut && barrierPushCharge > 0.02) {
+    const centerWorld = getViewportCenterWorld();
+    const dx = centerWorld.x - arenaCenterWorld.x;
+    const dy = centerWorld.y - arenaCenterWorld.y;
+    const dist = Math.hypot(dx, dy) || 0;
+    if (dist > SWARM_ARENA_RADIUS_WORLD) {
+      const nx = dx / Math.max(0.0001, dist);
+      const ny = dy / Math.max(0.0001, dist);
+      const outside = Math.max(0, dist - SWARM_ARENA_RADIUS_WORLD);
+      const outsideN = Math.max(0, Math.min(1, outside / Math.max(1, SWARM_ARENA_RESIST_RANGE_WORLD)));
+      const impulse = getReactiveReleaseImpulse(outsideN, barrierPushCharge);
+      const inputDx = dragNowX - dragStartX;
+      const inputDy = dragNowY - dragStartY;
+      const inputLen = Math.hypot(inputDx, inputDy) || 0;
+      if (inputLen > 0.0001) {
+        const ux = inputDx / inputLen;
+        const uy = inputDy / inputLen;
+        // Fire in the opposite direction to current joystick direction.
+        velocityX -= ux * impulse;
+        velocityY -= uy * impulse;
+      } else {
+        // Fallback if joystick vector is lost at release time.
+        velocityX -= nx * impulse;
+        velocityY -= ny * impulse;
+      }
+      lastLaunchBeatLevel = releaseBeatLevel;
+      postReleaseAssistTimer = SWARM_RELEASE_POST_FIRE_DURATION;
+    }
+  }
   dragPointerId = null;
+  barrierPushingOut = false;
+  barrierPushCharge = 0;
+  // Keep charge level for active launch; reset when launch assist ends.
+  outerForceContinuousSeconds = 0;
+  releaseForcePrimed = false;
   setJoystickVisible(false);
+  setReactiveArrowVisual(false);
   ev.preventDefault();
 }
 
@@ -669,8 +1249,9 @@ function unbindInput() {
   window.removeEventListener('wheel', onWheel, { capture: true });
 }
 
-export function enterBeatSwarmMode() {
+export function enterBeatSwarmMode(options = null) {
   if (active) return true;
+  const restoreState = options && typeof options === 'object' ? options.restoreState : null;
   ensureUi();
   active = true;
   dragPointerId = null;
@@ -688,13 +1269,35 @@ export function enterBeatSwarmMode() {
   clearPickups();
   clearProjectiles();
   clearEffects();
-  spawnStarterPickups(getViewportCenterWorld());
+  arenaCenterWorld = null;
+  barrierPushingOut = false;
+  barrierPushCharge = 0;
+  releaseBeatLevel = 0;
+  lastLaunchBeatLevel = 0;
+  postReleaseAssistTimer = 0;
+  outerForceContinuousSeconds = 0;
+  releaseForcePrimed = false;
+  if (!restoreState) {
+    spawnStarterPickups(getViewportCenterWorld());
+  }
   lastBeatIndex = null;
   try { spawnerRuntime?.enter?.(); } catch {}
   try { configureInitialSpawnerEnablement(); } catch {}
   bindInput();
   startTick();
-  try { window.__MT_ANCHOR?.center?.(); } catch {}
+  if (!restoreState) {
+    try { window.__MT_ANCHOR?.center?.(); } catch {}
+    applyBeatSwarmCameraScaleWithRetry();
+    arenaCenterWorld = getViewportCenterWorld();
+    updateArenaVisual((Number(getZoomState?.()?.targetScale) || Number(getZoomState?.()?.currentScale) || 1));
+    setResistanceVisual(false);
+    setReactiveArrowVisual(false);
+  } else {
+    restoreBeatSwarmState(restoreState);
+    applyBeatSwarmCameraScaleWithRetry();
+    setReactiveArrowVisual(false);
+  }
+  persistBeatSwarmState();
   return true;
 }
 
@@ -718,8 +1321,22 @@ export function exitBeatSwarmMode() {
   clearPickups();
   clearProjectiles();
   clearEffects();
+  arenaCenterWorld = null;
+  barrierPushingOut = false;
+  barrierPushCharge = 0;
+  releaseBeatLevel = 0;
+  lastLaunchBeatLevel = 0;
+  postReleaseAssistTimer = 0;
+  outerForceContinuousSeconds = 0;
+  releaseForcePrimed = false;
+  if (arenaRingEl) arenaRingEl.style.opacity = '0';
+  if (arenaCoreEl) arenaCoreEl.style.opacity = '0';
+  if (arenaLimitEl) arenaLimitEl.style.opacity = '0';
+  setResistanceVisual(false);
+  setReactiveArrowVisual(false);
   equippedWeapons.clear();
   lastBeatIndex = null;
+  clearBeatSwarmPersistedState();
   return true;
 }
 
@@ -736,3 +1353,30 @@ export const BeatSwarmMode = {
 try {
   window.BeatSwarmMode = Object.assign(window.BeatSwarmMode || {}, BeatSwarmMode);
 } catch {}
+
+function installBeatSwarmPersistence() {
+  const persistIfActive = () => {
+    if (!active) return;
+    persistBeatSwarmState();
+  };
+  try {
+    window.addEventListener('beforeunload', persistIfActive, { capture: true });
+    window.addEventListener('pagehide', persistIfActive, { capture: true });
+  } catch {}
+
+  const restore = consumeBeatSwarmPersistedState();
+  if (!restore?.active) return;
+  const doRestore = () => {
+    try { enterBeatSwarmMode({ restoreState: restore }); } catch {}
+    try {
+      if (!isRunning?.()) startTransport?.();
+    } catch {}
+  };
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(doRestore, 0);
+  } else {
+    window.addEventListener('DOMContentLoaded', doRestore, { once: true });
+  }
+}
+
+installBeatSwarmPersistence();
