@@ -6169,7 +6169,20 @@ function initToyChaining(panel) {
         setTimeout(() => {
             if (!newPanel.isConnected) return; // Guard against panel being removed before init
 
+            // Do not bootstrap drawgrid while the panel is still pinned to the
+            // temporary copied height from spawn placement.
+            if (!overviewActiveAtCreate) {
+                newPanel.style.height = '';
+            }
             initializeNewToy(newPanel);
+            try {
+                newPanel.__drawToy?.refreshLayout?.('chain-post-init');
+                newPanel.__dgRefreshLayout?.('chain-post-init');
+            } catch {}
+            try {
+                sourcePanel.__drawToy?.refreshLayout?.('chain-parent-post-link');
+                sourcePanel.__dgRefreshLayout?.('chain-parent-post-link');
+            } catch {}
             initToyChaining(newPanel); // Give the new toy its own extend button
             // If Overview is active, apply overview decorations to include this newly created toy
             // (shield, collapsed header/footer behavior, outline sync, etc.)
@@ -6274,6 +6287,10 @@ function initToyChaining(panel) {
                 // Let the layout return to natural height so unfocused chained toys
                 // don't retain the old header/footer space.
                 newPanel.style.height = '';
+                try {
+                    newPanel.__drawToy?.refreshLayout?.('chain-finalize-height-clear');
+                    newPanel.__dgRefreshLayout?.('chain-finalize-height-clear');
+                } catch {}
 
                 // Always persist at least once for chained toys so their position is saved,
                 // regardless of whether the helper actually moved them.
@@ -6299,7 +6316,17 @@ function initToyChaining(panel) {
                 };
                 focusNew();
                 // Reinforce once more on the next frame to override any existing focus state.
-                raf(() => focusNew());
+                raf(() => {
+                    focusNew();
+                    try {
+                        newPanel.__drawToy?.refreshLayout?.('chain-post-focus');
+                        newPanel.__dgRefreshLayout?.('chain-post-focus');
+                    } catch {}
+                    try {
+                        sourcePanel.__drawToy?.refreshLayout?.('chain-source-post-focus');
+                        sourcePanel.__dgRefreshLayout?.('chain-source-post-focus');
+                    } catch {}
+                });
             };
 
             const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));

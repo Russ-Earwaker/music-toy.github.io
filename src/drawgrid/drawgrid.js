@@ -6958,10 +6958,21 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       HY,
     },
   }));
+  function refreshLayout(reason = 'external') {
+    try { layout(true); } catch {}
+    try { ensureSizeReady({ force: true }); } catch {}
+    try { markStaticDirty(`refresh:${reason}`); } catch {}
+    try { __dgForceFullDrawNext = true; } catch {}
+    try { __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 3); } catch {}
+    try { scheduleGhostIfEmpty({ initialDelay: 0 }); } catch {}
+    try { ensureRenderLoopRunning(); } catch {}
+  }
+
   const api = {
     panel,
     startGhostGuide,
     stopGhostGuide,
+    refreshLayout,
     __inboundNonEmpty: () => inboundWasNonEmpty(),
     clear: clearDrawgridInternal,
     getState: captureState,
@@ -6980,6 +6991,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     panel.__dgPerfWarmup = () => {
       try { layout(true); } catch {}
       try { clearAndRedrawFromStrokes(null, 'perf-warmup'); } catch {}
+    };
+    panel.__dgRefreshLayout = (reason = 'panel-hook') => {
+      try { refreshLayout(reason); } catch {}
     };
   } catch {}
 
