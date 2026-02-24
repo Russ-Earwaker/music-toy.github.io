@@ -268,8 +268,6 @@ const AUTO_ZOOM_SPIKE_QUEUE = [
   'warmupSettle',
   'runP3l2Short',
   'warmupSettle',
-  'runP3l2ShortGap900',
-  'warmupSettle',
   'runP3fShort2',
   'dgAdaptiveOn',
   'dgForceTierAuto',

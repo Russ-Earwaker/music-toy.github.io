@@ -216,6 +216,37 @@ From latest **Auto: Current Focus** (P6c extreme zoom, multi-toy):
 
 ---
 
+### 2.10 DrawGrid overlay + zoom-tail hardening (Feb 24 2026)
+
+**Status: COMPLETE / LOCKED IN**
+
+**What changed**
+
+* Removed noisy NoParticles isolate from **Auto: Current Focus** (kept for manual diagnostics only).
+* Added **Auto: Zoom Spike Probe** in Perf Lab (P3fShort -> P3lShort -> P3l2Short -> P3fShort2) for zoom-tail analysis.
+* Reduced unnecessary overlay work:
+  * node flashes no longer force overlay-core dirty/clear passes
+  * static colorized overlay strokes no longer re-mark flash dirty every frame
+  * UI-refresh flash/tutorial clears are skipped when those layers are already empty
+* Added zoom commit coalescing in DrawGrid commit path:
+  * global commit min-gap guard
+  * stricter anchor-off commit min-gap path
+
+**Where**
+
+* src/drawgrid/drawgrid.js
+* src/perf/perf-lab.js
+
+**How verified**
+
+* Focus runs show improved baseline nonScript ranges around mid/high 60ms with stable p95 in many runs.
+* Zoom Spike Probe shows large reduction for commit-spam anchor-on tails after coalescing.
+* Anchor-off commit-spam improved materially after anchor-off-specific min-gap.
+
+**Conclusion**
+
+> DrawGrid now has a practical zoom-tail probe and commit-spam mitigation that improved tail behavior in repeated runs.
+
 ## 3. Investigated and Rejected âŒ
 
 ### 3.1 Frame-skipping / modulo updates
@@ -262,6 +293,12 @@ From latest **Auto: Current Focus** (P6c extreme zoom, multi-toy):
 > DrawGrid Focus is Ã¢â‚¬Å“good enoughÃ¢â‚¬Â. Lock it in and move on.
 
 ---
+
+### 3.8 Anchor-off commit gap = 900ms (A/B)
+
+* Tested via P3l2Short vs P3l2ShortGap900 in the same Auto: Zoom Spike Probe batch.
+* Result: slight average change but no reliable p95/p99 improvement.
+* Rejected as default; keep current anchor-off coalescing baseline (700ms default path).
 
 ## 4. Key Learnings ðŸ§ 
 
@@ -383,6 +420,13 @@ This is enough to justify building â€œpressure-firstâ€ solutions rather
 
 ## 6. Next Steps ðŸŽ¯
 
+
+### Current active focus (Feb 24 2026)
+
+1. Keep current DrawGrid overlay + commit coalescing behavior as baseline (no new regressions).
+2. Use Auto: Zoom Spike Probe when tail spikes reappear; use Auto: Current Focus for baseline throughput tracking.
+3. Shift major optimization effort back to multi-toy/LoopGrid nonScript reduction.
+
 ### âœ… DrawGrid Focus â€” DONE
 
 Remove DrawGrid Focus from the active optimisation list.
@@ -499,5 +543,6 @@ If not, itâ€™s rejected.
 ## 8. One-Paragraph Handoff Summary (Updated)
 
 > DrawGrid Focus performance is now stable and bounded. Resize churn has been eliminated, pressure-DPR is verified to engage, and gesture-time backing-store DPR reduction removes compositor stalls without affecting perceived smoothness. Long-tail p99 spikes (>100ms) are gone; p99 now aligns with p95. Overlays incur a known, bounded cost and are no longer a structural risk. Further DrawGrid Focus micro-optimisation was intentionally stopped to avoid regression risk. The performance effort now moves outward to multi-toy scenes, particle load under pressure, and mobile GPU limits.
+
 
 
