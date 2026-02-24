@@ -6494,7 +6494,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
               } catch {}
             }
           }
-          if (fctx?.canvas) {
+          if (fctx?.canvas && !panel.__dgFlashLayerEmpty) {
             const flashSurface = getActiveFlashCanvas();
             const __flashDpr = __dgGetCanvasDprFromCss(flashSurface, cssW, paintDpr);
             R.resetCtx(fctx);
@@ -6509,7 +6509,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             });
             markFlashLayerCleared();
           }
-          if (tutorialCtx?.canvas) {
+          if (tutorialCtx?.canvas && !panel.__dgTutorialLayerEmpty) {
             R.resetCtx(tutorialCtx);
             R.withLogicalSpace(tutorialCtx, () => {
               const active = getActiveTutorialCanvas();
@@ -6675,6 +6675,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             __dbgOverlaySpecialCount = specialStrokes.length;
             __dbgOverlayColorizedCount = colorized.length;
             __dbgOverlayHasPreview = !!(cur && previewGid);
+            const hasDynamicOverlayStroke = (specialStrokes.length > 0) || !!(cur && previewGid);
             FD.layerDebugLog('overlay-strokes', {
               panelId: panel?.id || null,
               singleCanvas: !!DG_SINGLE_CANVAS,
@@ -6684,7 +6685,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
               hasPreview: !!(cur && previewGid),
               flashVisible: flashCanvas?.style?.display || null,
             });
-            markFlashLayerActive();
+            if (hasDynamicOverlayStroke || panel.__dgFlashLayerEmpty) {
+              markFlashLayerActive();
+            } else {
+              // Keep static colorized overlays visible without forcing per-frame dirty churn.
+              panel.__dgFlashLayerEmpty = false;
+            }
             R.withOverlayClip(fctx, gridArea, !!panel.__dgFlashOverlayOutOfGrid, () => {
             fctx.save();
             // Draw animated strokes in logical space once (avoid per-stroke reset/transform).
