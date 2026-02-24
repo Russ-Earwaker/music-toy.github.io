@@ -5447,6 +5447,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       // Extra throttling for "idle" panels when lots of toys are visible.
       const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
       const totalPanels = Math.max(visiblePanels, Number(globalDrawgridState?.totalCount) || 0);
+      const perfLoadShedEnabled = !!(
+        (typeof window !== 'undefined' && window.__PERF_LOAD_SHED === true) ||
+        (typeof window !== 'undefined' && window.__PERF_LAB_RUN_CONTEXT === 'auto')
+      );
       const gesturing = __dgIsGesturing();
       const gestureMoving = !!(gesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
       const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
@@ -5539,7 +5543,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       __dgCurrentQualityProfile = qProfile;
       const hasAnyNotes = !!(currentMap && currentMap.active && currentMap.active.some(Boolean));
       const disableOverlayCore = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_CORE_OFF);
-      const overlayLoadShed = !isPrimaryFocused && totalPanels >= 24;
+      const overlayLoadShed = perfLoadShedEnabled && !isPrimaryFocused && totalPanels >= 24;
       try { panel.__dgOverlayLoadShed = !!overlayLoadShed; } catch {}
       const zoomForOverlay = Number.isFinite(boardScale) ? boardScale : 1;
       const overlayFlashesEnabled = !disableOverlayCore && !overlayLoadShed && (qProfile?.allowOverlaySpecials ?? true);
@@ -5714,7 +5718,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const disableOverlays = !!(typeof window !== 'undefined' && window.__PERF_DG_DISABLE_OVERLAYS);
       // IMPORTANT: do not disable overlays based on gesture state.
       // If overlays need to scale back, that should be driven by generic pressure (FPS-based) systems.
-      const disableOverlaysEffective = disableOverlays || overlayLoadShed;
+      const disableOverlaysEffective = disableOverlays;
 
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
@@ -5725,7 +5729,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (allowOverlayDraw && !disableOverlayStrokes) {
         hasOverlayStrokes = hasOverlayStrokesCached();
       }
-      if (overlayLoadShed && !isInteracting) hasOverlayStrokes = false;
       // Safety: if cache says no overlay but we have special strokes, don't clear overlays.
       // BUT: treating *committed* special/colorize strokes as "live overlay" forces a full-canvas
       // clear + composite every frame (very expensive). We only treat overlay strokes as "live"
@@ -6102,6 +6105,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         if (!needsFullDraw) doFullDraw = false;
       }
       if (doFullDraw && isTrulyIdle && canDrawAnything && !__dgNeedsUIRefresh && !__dgFrontSwapNextDraw && !__hydrationJustApplied && !(Number.isFinite(__dgForceFullDrawUntil) && nowTs < __dgForceFullDrawUntil)) {
+        doFullDraw = false;
+      }
+      // Heavy multi-toy load-shed: once static layers are painted, avoid non-forced
+      // full static redraws on non-primary panels. This preserves cadence while
+      // preventing repeated grid/nodes repaints from dominating tail latency.
+      if (overlayLoadShed && !isPrimaryFocused && doFullDraw && !forceFullDraw && panel.__dgGridHasPainted) {
         doFullDraw = false;
       }
       let __dgUpdateStart = null;
