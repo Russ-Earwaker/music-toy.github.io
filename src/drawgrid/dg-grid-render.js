@@ -309,13 +309,20 @@ export function createDgGridRender({ state, deps } = {}) {
 
     d.R.resetCtx(s.gctx);
     const __blitStart = __perfOn ? performance.now() : 0;
+    const gridAlpha = Number.isFinite(s.gridVisibilityAlpha) ? Math.max(0, Math.min(1, s.gridVisibilityAlpha)) : 1;
     d.R.withDeviceSpace(s.gctx, () => {
       s.gctx.clearRect(0, 0, surfacePxW, surfacePxH);
-      if (cache.canvas) s.gctx.drawImage(cache.canvas, 0, 0, surfacePxW, surfacePxH);
+      if (cache.canvas && gridAlpha > 0.001) {
+        s.gctx.save();
+        s.gctx.globalAlpha = gridAlpha;
+        s.gctx.drawImage(cache.canvas, 0, 0, surfacePxW, surfacePxH);
+        s.gctx.restore();
+      }
     });
     d.dgGridAlphaLog('drawGrid:blit', s.gctx, {
       cacheKey,
       cacheHit: cache.key === cacheKey,
+      gridAlpha,
     });
     if (d.DG_SINGLE_CANVAS && s.gridFrontCtx?.canvas) {
       const frontSurface = s.gridFrontCtx.canvas;

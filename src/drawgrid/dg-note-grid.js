@@ -15,12 +15,15 @@ export function createDgNoteGrid({ state, deps } = {}) {
 
   function drawNoteLabelsTo(ctx, nodes) {
     if (!ctx) return;
+    const fadeAlpha = Math.max(0, Math.min(1, Number.isFinite(s.gridVisibilityAlpha) ? s.gridVisibilityAlpha : 0));
+    if (fadeAlpha <= 0.001) return;
     d.__dgWithLogicalSpace(ctx, () => {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.font = '600 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * fadeAlpha})`;
+      ctx.font = '600 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
-      const labelY = Math.round((s.cssH || 0) - 10);
+      ctx.textBaseline = 'middle';
+      const gridBottomY = Math.round((s.gridArea?.y || 0) + (s.topPad || 0) + ((s.rows || 0) * (s.ch || 0)));
+      const labelY = Math.round((gridBottomY + (s.cssH || 0)) * 0.5);
 
       for (let c = 0; c < s.cols; c++) {
         if (!nodes[c] || nodes[c].size === 0) continue;
@@ -46,6 +49,8 @@ export function createDgNoteGrid({ state, deps } = {}) {
     if (!ctx) return;
     if (typeof s.dragScaleHighlightCol !== 'number' || s.dragScaleHighlightCol < 0 || s.dragScaleHighlightCol >= s.cols) return;
     if (s.cw <= 0 || s.ch <= 0) return;
+    const fadeAlpha = Math.max(0, Math.min(1, Number.isFinite(s.gridVisibilityAlpha) ? s.gridVisibilityAlpha : 0));
+    if (fadeAlpha <= 0.001) return;
     const noteGridY = s.gridArea.y + s.topPad;
     const colX = s.gridArea.x + s.dragScaleHighlightCol * s.cw;
     const activeRow = (s.draggedNode && s.draggedNode.col === s.dragScaleHighlightCol) ? s.draggedNode.row : null;
@@ -59,11 +64,13 @@ export function createDgNoteGrid({ state, deps } = {}) {
       const pitchClass = ((midi % 12) + 12) % 12;
       if (!pentatonicPitchClasses.has(pitchClass)) continue;
       const y = noteGridY + r * s.ch;
-      const alpha = (activeRow === r) ? 0.6 : 0.35;
+      const alpha = ((activeRow === r) ? 0.6 : 0.35) * fadeAlpha;
       ctx.fillStyle = `rgba(90, 200, 255, ${alpha})`;
       ctx.fillRect(colX, y, s.cw, s.ch);
       ctx.lineWidth = strokeWidth;
-      ctx.strokeStyle = activeRow === r ? 'rgba(160, 240, 255, 0.95)' : 'rgba(130, 220, 255, 0.85)';
+      ctx.strokeStyle = activeRow === r
+        ? `rgba(160, 240, 255, ${0.95 * fadeAlpha})`
+        : `rgba(130, 220, 255, ${0.85 * fadeAlpha})`;
       ctx.strokeRect(colX, y, s.cw, s.ch);
     }
     ctx.restore();
@@ -73,8 +80,8 @@ export function createDgNoteGrid({ state, deps } = {}) {
     const next = (typeof col === 'number' && col >= 0 && col < s.cols) ? col : null;
     if (s.dragScaleHighlightCol === next) return;
     s.dragScaleHighlightCol = next;
-    d.drawGrid();
-    d.drawNodes(s.currentMap?.nodes || null);
+    d.markStaticDirty?.('drag-scale-highlight');
+    d.ensureRenderLoopRunning?.();
   }
 
   return {

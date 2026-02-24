@@ -4207,6 +4207,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     get __dgLastGoodCh() { return __dgLastGoodCh; },
     get __dgProbeDidFirstDraw() { return __dgProbeDidFirstDraw; },
     set __dgProbeDidFirstDraw(v) { __dgProbeDidFirstDraw = v; },
+    get gridVisibilityAlpha() { return __dgGridVisibilityAlpha; },
   };
 
   const dgGridRenderDeps = {
@@ -4353,6 +4354,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     get strokes() { return strokes; },
     get dragScaleHighlightCol() { return dragScaleHighlightCol; },
     get draggedNode() { return draggedNode; },
+    get pendingNodeTap() { return pendingNodeTap; },
+    get gridVisibilityAlpha() { return __dgGridVisibilityAlpha; },
     get flashes() { return flashes; },
     get tutorialHighlightMode() { return getTutorialHighlightMode(); },
     get wrap() { return wrap; },
@@ -4414,14 +4417,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     get dragScaleHighlightCol() { return dragScaleHighlightCol; },
     set dragScaleHighlightCol(v) { dragScaleHighlightCol = v; },
     get draggedNode() { return draggedNode; },
+    get gridVisibilityAlpha() { return __dgGridVisibilityAlpha; },
   };
 
   const dgNoteGridDeps = {
     __dgWithLogicalSpace,
     midiToName,
     buildPalette,
-    drawGrid,
-    drawNodes,
+    markStaticDirty,
+    ensureRenderLoopRunning,
   };
 
   const noteGrid = createDgNoteGrid({
@@ -4859,6 +4863,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     __dgBumpNodesRev,
     resumeTutorialHighlightAfterDraw,
     finishLine,
+    markStaticDirty,
+    ensureRenderLoopRunning,
   };
 
   const { onPointerDown, onPointerMove, onPointerUp } = createDgInputHandlers({
@@ -5002,6 +5008,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let __dgPlayheadModeWanted = null;
   let __dgPlayheadModeWantedSince = 0;
   let __dgLowFpsMode = false;
+  let __dgGridVisibilityAlpha = 0;
+  let __dgGridFadeLastTs = 0;
+  try { panel.__dgGridVisibilityAlpha = __dgGridVisibilityAlpha; } catch {}
   const DG_PARTICLE_ZOOM_THROTTLE_WARN_MS = 250;
   const DG_PARTICLE_POKE_GRACE_MS = 220;
   const DG_PLAYHEAD_MODE_MIN_MS = 650;
@@ -5060,6 +5069,31 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         ? performance.now()
         : null;
       const nowTs = performance?.now?.() ?? Date.now();
+      let __dgGridFadeDirty = false;
+      try {
+        if (!Number.isFinite(__dgGridFadeLastTs) || __dgGridFadeLastTs <= 0) __dgGridFadeLastTs = nowTs;
+        const dtMs = Math.max(0, Math.min(32, nowTs - __dgGridFadeLastTs));
+        __dgGridFadeLastTs = nowTs;
+        const fadeInMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_GRID_DRAG_FADE_IN_MS) && window.__DG_GRID_DRAG_FADE_IN_MS > 20)
+          ? window.__DG_GRID_DRAG_FADE_IN_MS
+          : 90;
+        const fadeOutMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_GRID_DRAG_FADE_OUT_MS) && window.__DG_GRID_DRAG_FADE_OUT_MS > 40)
+          ? window.__DG_GRID_DRAG_FADE_OUT_MS
+          : 360;
+        const prev = Number.isFinite(__dgGridVisibilityAlpha) ? __dgGridVisibilityAlpha : 0;
+        const target = (draggedNode || pendingNodeTap) ? 1 : 0;
+        const dur = (target > prev) ? fadeInMs : fadeOutMs;
+        let next = prev;
+        if (dur <= 1) next = target;
+        else {
+          const step = dtMs / dur;
+          if (target > prev) next = Math.min(target, prev + step);
+          else if (target < prev) next = Math.max(target, prev - step);
+        }
+        if (Math.abs(next - prev) >= 0.001) __dgGridFadeDirty = true;
+        __dgGridVisibilityAlpha = Math.max(0, Math.min(1, next));
+        try { panel.__dgGridVisibilityAlpha = __dgGridVisibilityAlpha; } catch {}
+      } catch {}
 
       // --- Toy performance contract (scene-level gating) ------------------
       // IMPORTANT: We do NOT use frame-modulo throttling anymore.
@@ -5979,7 +6013,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         const __ensureSizeDt = performance.now() - __ensureSizeStart;
         try { window.__PerfFrameProf?.mark?.('drawgrid.ensureSize', __ensureSizeDt); } catch {}
       }
-      if ((skipFrame || throttleFrame) && panel.__dgGridHasPainted) {
+      if ((skipFrame || throttleFrame) && panel.__dgGridHasPainted && !__dgGridFadeDirty) {
         rafId = requestAnimationFrame(renderLoop);
         return;
       }
@@ -5998,6 +6032,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       // If we need perf headroom, we reduce detail (particles / playhead detail), not frames.
       let doFullDraw = !!panel.__dgStaticDirty;
       let forceFullDraw = false;
+      if (__dgGridFadeDirty) {
+        doFullDraw = true;
+        forceFullDraw = true;
+      }
       if (__dgForceFullDrawNext) {
         __dgForceFullDrawNext = false;
         doFullDraw = true;
@@ -6104,7 +6142,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           getTutorialHighlightMode() !== 'none';
         if (!needsFullDraw) doFullDraw = false;
       }
-      if (doFullDraw && isTrulyIdle && canDrawAnything && !__dgNeedsUIRefresh && !__dgFrontSwapNextDraw && !__hydrationJustApplied && !(Number.isFinite(__dgForceFullDrawUntil) && nowTs < __dgForceFullDrawUntil)) {
+      if (doFullDraw && !forceFullDraw && isTrulyIdle && canDrawAnything && !__dgNeedsUIRefresh && !__dgFrontSwapNextDraw && !__hydrationJustApplied && !(Number.isFinite(__dgForceFullDrawUntil) && nowTs < __dgForceFullDrawUntil)) {
         doFullDraw = false;
       }
       // Heavy multi-toy load-shed: once static layers are painted, avoid non-forced
@@ -6807,7 +6845,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
 
     if (DG_SINGLE_CANVAS && canDrawAnything && panel.__dgSingleCompositeDirty) {
-      if (drawing || __dgSkipSwapsDuringDrag) {
+      const suppressCompositeForLiveInk = !!(__dgSkipSwapsDuringDrag || cur);
+      if (suppressCompositeForLiveInk) {
         // Defer composite while the user is actively drawing; otherwise it can
         // overwrite the live front-buffer stroke with stale back content.
         __dgNeedsUIRefresh = true;

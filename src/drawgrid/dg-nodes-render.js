@@ -597,7 +597,6 @@ export function createDgNodesRender({ state, deps } = {}) {
           nodeCount: nodeCoords.length,
         });
         const __drawStart = __perfOn ? performance.now() : 0;
-        d.renderDragScaleBlueHints(s.nctx);
         s.nctx.lineWidth = 3;
         const colsMap = new Map();
         for (const node of nodeCoords) {
@@ -724,13 +723,16 @@ export function createDgNodesRender({ state, deps } = {}) {
       if (blockCache.canvas.width !== surfacePxW) blockCache.canvas.width = surfacePxW;
       if (blockCache.canvas.height !== surfacePxH) blockCache.canvas.height = surfacePxH;
       if (!blockCache.ctx) blockCache.ctx = blockCache.canvas.getContext('2d');
-      const blockKey = `${cacheKey}|blocks`;
+      const fadeAlpha = Math.max(0, Math.min(1, Number.isFinite(s.gridVisibilityAlpha) ? s.gridVisibilityAlpha : 0));
+      const fadeBucket = Math.round(fadeAlpha * 1000);
+      const blockKey = `${cacheKey}|blocks|a:${fadeBucket}`;
       if (blockCache.key !== blockKey && blockCache.ctx) {
         const __blocksBuildStart = __perfOn ? performance.now() : 0;
         blockCache.key = blockKey;
         d.R.resetCtx(blockCache.ctx);
         d.R.withLogicalSpace(blockCache.ctx, () => {
           blockCache.ctx.clearRect(0, 0, width, height);
+          d.renderDragScaleBlueHints(blockCache.ctx);
           for (const node of nodeCoords) {
             const colActive = s.currentMap?.active?.[node.col] ?? true;
             const nodeOn = colActive && !node.disabled;

@@ -48,6 +48,9 @@ export function createDgInputHandlers({ state, deps } = {}) {
       const cellY = s.gridArea.y + s.topPad + node.row * s.ch;
       if (p.x >= cellX && p.x <= cellX + s.cw && p.y >= cellY && p.y <= cellY + s.ch) {
         s.pendingNodeTap = { col: node.col, row: node.row, x: p.x, y: p.y, group: node.group ?? null };
+        d.setDragScaleHighlight?.(node.col);
+        d.markStaticDirty?.('node-grab:start');
+        d.ensureRenderLoopRunning?.();
         d.setDrawingState(true); // capture move/up
         try { s.paint.setPointerCapture?.(e.pointerId); } catch {}
         e.preventDefault?.();
@@ -240,16 +243,9 @@ export function createDgInputHandlers({ state, deps } = {}) {
           s.panel.dispatchEvent(new CustomEvent('drawgrid:node-drag', { detail: { col, row: newRow, group: gid } }));
         } catch {}
 
-        // Redraw only the nodes canvas; the blue line on the paint canvas is untouched.
-        d.drawNodes(s.currentMap.nodes);
-        d.drawGrid();
-        // We just redrew static layers, so treat them as clean.
-        s.panel.__dgStaticDirty = false;
-        d.__dgMarkSingleCanvasDirty(s.panel);
-        if (s.DG_SINGLE_CANVAS && s.isPanelVisible) {
-          try { d.compositeSingleCanvas(); } catch {}
-          s.panel.__dgSingleCompositeDirty = false;
-        }
+        // Let RAF handle redraw so grid/text/hints stay in sync with fade alpha.
+        d.markStaticDirty?.('node-drag:move');
+        d.ensureRenderLoopRunning?.();
       } else if (s.dragScaleHighlightCol === null) {
         d.setDragScaleHighlight(s.draggedNode.col);
       }
