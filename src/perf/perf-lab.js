@@ -268,6 +268,8 @@ const AUTO_ZOOM_SPIKE_QUEUE = [
   'warmupSettle',
   'runP3l2Short',
   'warmupSettle',
+  'runP3l2ShortGap900',
+  'warmupSettle',
   'runP3fShort2',
   'dgAdaptiveOn',
   'dgForceTierAuto',
@@ -4932,6 +4934,23 @@ async function runP3l2Short() {
   }
 }
 
+async function runP3l2ShortGap900() {
+  // Anchor-OFF commit-spam with stricter DrawGrid coalescing for A/B.
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  const prevGap = window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS_ANCHOR_OFF;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3l2ShortGap900'; } catch {}
+  try { window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS_ANCHOR_OFF = 900; } catch {}
+  try {
+    await runP3l2();
+  } finally {
+    try { window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS_ANCHOR_OFF = prevGap; } catch {}
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
+}
+
 
 async function runP3l3() {
   const panZoom = makePanZoomCommitSpamScript({
@@ -6110,6 +6129,7 @@ try {
     runP3l2,
     runP3lShort,
     runP3l2Short,
+    runP3l2ShortGap900,
     runP3l3,
     runP3l4,
     runP3l5,

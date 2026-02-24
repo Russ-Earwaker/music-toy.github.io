@@ -3499,16 +3499,29 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
     if (z.phase === 'commit') {
       const __commitNow = nowMs();
-      const __commitMinGapMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS))
+      const __commitMinGapBaseMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS))
         ? Math.max(0, window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS | 0)
         : 320;
+      const __anchorDisabled = (() => {
+        try {
+          if (typeof window !== 'undefined' && window.__MT_ANCHOR_DISABLED === true) return true;
+          if (typeof localStorage !== 'undefined') return localStorage.getItem('mt_anchor_enabled') === '0';
+        } catch {}
+        return false;
+      })();
+      const __commitMinGapAnchorOffMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS_ANCHOR_OFF))
+        ? Math.max(0, window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS_ANCHOR_OFF | 0)
+        : Math.max(__commitMinGapBaseMs, 700);
+      const __commitMinGapMs = __anchorDisabled ? __commitMinGapAnchorOffMs : __commitMinGapBaseMs;
       const __canRunHeavyCommit = !__dgLastToyZoomCommitTs || ((__commitNow - __dgLastToyZoomCommitTs) >= __commitMinGapMs);
       if (!__canRunHeavyCommit) {
         // Coalesce commit-spam bursts: keep visuals correct, defer heavy resnap/redraw work.
         __dgNeedsUIRefresh = true;
         __dgFrontSwapNextDraw = true;
         __dgForceFullDrawNext = true;
-        __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 2);
+        // Anchor-OFF commitspam is the worst tail case; keep coalesced fallback lighter.
+        const __coalescedFrames = __anchorDisabled ? 1 : 2;
+        __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, __coalescedFrames);
         zoomGestureActive = false;
         zoomMode = 'idle';
         lastCommittedScale = boardScale;
@@ -3518,6 +3531,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
               panelId: panel?.id || null,
               gapMs: __commitNow - __dgLastToyZoomCommitTs,
               minGapMs: __commitMinGapMs,
+              anchorDisabled: __anchorDisabled,
             });
           }
         } catch {}
