@@ -37,11 +37,11 @@ export function createDgQuality({ panel, nowMs }) {
   const TIER_MAP = {
     // maxDprMul = hard cap on final DPR relative to device DPR (after adaptiveCap).
     // This is the main “reduce pixel cost” lever for nonScript time.
-    3:  { resScale: 1.0, allowParticles: true,  allowOverlaySpecials: true,  allowPlayheadExtras: true,  desiredDrawHz: 60, maxDprMul: 1.00 },
-    2:  { resScale: 0.9, allowParticles: true,  allowOverlaySpecials: true,  allowPlayheadExtras: true,  desiredDrawHz: 60, particleMul: 0.7, overlaySpecialMul: 0.7, maxDprMul: 0.92 },
-    1:  { resScale: 0.8, allowParticles: true,  allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 30, particleMul: 0.22, maxDprMul: 0.75 },
-    0:  { resScale: 0.7, allowParticles: false, allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 15, maxDprMul: 0.62 },
-    '-1': { resScale: 0.6, allowParticles: false, allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 10, maxDprMul: 0.55 },
+    3:  { resScale: 1.0, allowParticles: true,  allowOverlaySpecials: true,  allowPlayheadExtras: true,  desiredDrawHz: 60, maxDprMul: 1.00, overlayMaxDprMul: 1.00 },
+    2:  { resScale: 0.9, allowParticles: true,  allowOverlaySpecials: true,  allowPlayheadExtras: true,  desiredDrawHz: 60, particleMul: 0.7, overlaySpecialMul: 0.7, maxDprMul: 0.92, overlayMaxDprMul: 0.86 },
+    1:  { resScale: 0.8, allowParticles: true,  allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 30, particleMul: 0.22, maxDprMul: 0.75, overlayMaxDprMul: 0.68 },
+    0:  { resScale: 0.7, allowParticles: false, allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 15, maxDprMul: 0.62, overlayMaxDprMul: 0.56 },
+    '-1': { resScale: 0.6, allowParticles: false, allowOverlaySpecials: false, allowPlayheadExtras: false, desiredDrawHz: 10, maxDprMul: 0.55, overlayMaxDprMul: 0.50 },
   };
 
   function setTier(tier, reason = 'external') {
@@ -103,6 +103,7 @@ export function createDgQuality({ panel, nowMs }) {
       allowPlayheadExtras: !!p.allowPlayheadExtras,
       desiredDrawHz: p.desiredDrawHz || 60,
       maxDprMul: Number.isFinite(p.maxDprMul) ? p.maxDprMul : 1.0,
+      overlayMaxDprMul: Number.isFinite(p.overlayMaxDprMul) ? p.overlayMaxDprMul : (Number.isFinite(p.maxDprMul) ? p.maxDprMul : 1.0),
       particleMul: Number.isFinite(p.particleMul) ? p.particleMul : 1.0,
       overlaySpecialMul: Number.isFinite(p.overlaySpecialMul) ? p.overlaySpecialMul : 1.0,
     };

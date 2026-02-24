@@ -139,6 +139,9 @@ function computePerfTraceSummary() {
 
 const AUTO_GENERIC_QUEUE = [
   'traceOff',
+  'dgTierAutoOn',
+  'dgForceTierAuto',
+  'dgAdaptiveOff',
   // Mixed
   'buildP6',
   'runP6a',
@@ -151,39 +154,45 @@ const AUTO_GENERIC_QUEUE = [
 ];
 
 // Current focus for this cycle:
-//   - prove shared “base music toy” plumbing on DrawGrid first
-//   - then validate LoopGrid (Simple Rhythm) with the same quality/tiers hooks
+//   - DrawGrid multi-toy regression guardrails (P3f stress)
+//   - verify tier pressure levers move cost in the expected direction
 //
 // IMPORTANT:
-// Keep this queue SHORT so it never *feels* like it’s looping.
+// Keep this queue SHORT so it never *feels* like it's looping.
 // If you want deep A/B sweeps, add them to AUTO_FOCUS_MICRO_QUEUE instead.
 const AUTO_FOCUS_QUEUE = [
-  'traceDprOn',
+  // Keep focus apples-to-apples (trace off during perf measurement).
+  'traceOff',
+  'dgTierAutoOn',
+  'dgForceTierAuto',
+  'dgAdaptiveOn',
 
-  // --- DrawGrid: “base toy” proof run (fast, representative) --------------
-  'buildP3Focus',
+  // --- DrawGrid: multi-toy baseline ---------------------------------------
+  'buildP3',
   'warmupFirstAppearance',
   'warmupSettle',
   'runP3fShort',
   'warmupSettle',
-
-  // --- LoopGrid / Simple Rhythm: validate tiers + DPR plumbing ------------
-  'buildP4',
-  'warmupFirstAppearance',
-  'warmupSettle',
-  'lgForceTierAuto',
-  'runP4b',
+  // Repeat once to expose run-to-run noise before toggles.
+  'runP3fShort',
   'warmupSettle',
 
-  // Signal: tier ceiling vs floor (keep it to ONE pass each)
-  // NOTE: LoopGrid tier ids are 0..4 (0 = full-fat).
-  'lgForceTier0',
-  'runP4b',
+  // --- Adaptive DPR A/B: verify resize-churn stabilization -----------------
+  'dgAdaptiveOff',
+  'runP3fShort',
   'warmupSettle',
-  'lgForceTier3',
-  'runP4b',
+  'dgAdaptiveOn',
+  'runP3fShort',
   'warmupSettle',
-  'lgForceTierAuto',
+
+  // --- Isolation checks for current P3f bottlenecks ------------------------
+  'runP3fNoOverlaysShort',
+  'warmupSettle',
+  'runP3fNoParticlesShort',
+
+  // Cleanup: return to default for subsequent manual runs.
+  'dgAdaptiveOn',
+  'dgForceTierAuto',
 ];
 
 // Validation focus: same intent as AUTO_FOCUS_QUEUE but with more toys (stronger pressure signal).
@@ -1037,7 +1046,7 @@ function ensureUI() {
         clear: true,
         save: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        notes: 'Current Focus: BaseMusicToy refactor — extract shared toy lifecycle from DrawGrid, then apply to LoopGrid (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
+        notes: 'Current Focus: DrawGrid P3f adaptive-DPR stabilization A/B (adaptive ON/OFF) plus overlay/particle isolates (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
         queue: AUTO_FOCUS_QUEUE,
         runId: 'autoFocus',
       });
@@ -1616,6 +1625,9 @@ async function runAuto(config = {}) {
     setStatus('Auto-run: ' + queue.length + ' tests');
     const __prevCtx = window.__PERF_LAB_RUN_CONTEXT;
     const __prevRunTag = window.__PERF_RUN_TAG;
+    const __prevRunTagParts = (window.__PERF_RUN_TAG_PARTS && typeof window.__PERF_RUN_TAG_PARTS === 'object')
+      ? { ...window.__PERF_RUN_TAG_PARTS }
+      : null;
     const __prevTraceMarks = window.__PERF_TRACE_MARKS;
     const __prevTraceLongMs = window.__PERF_TRACE_LONG_MS;
     const __prevTapDotsSim = window.__PERF_TAP_DOTS_SIM;
@@ -1623,8 +1635,13 @@ async function runAuto(config = {}) {
     const __prevTrace = (window.__PERF_TRACE && typeof window.__PERF_TRACE === 'object') ? { ...window.__PERF_TRACE } : null;
     let __prevParticles = null;
     const __prevGestureAutoLock = window.__PERF_GESTURE_AUTO_LOCK;
+    const __prevDgAdaptiveEnabled = window.__DG_ADAPTIVE_DPR_ENABLED;
+    const __prevDgAdaptiveAllowSingle = window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE;
+    const __prevDgTierAuto = window.__DG_TIER_AUTO;
+    const __prevDgForceTier = window.__DG_FORCE_TIER;
     window.__PERF_LAB_RUN_CONTEXT = 'auto';
     if (cfg.runTag != null) window.__PERF_RUN_TAG = String(cfg.runTag);
+    try { window.__PERF_RUN_TAG_PARTS = {}; } catch {}
     if (cfg.traceMarks != null) window.__PERF_TRACE_MARKS = !!cfg.traceMarks;
     if (Number.isFinite(cfg.traceLongMs)) window.__PERF_TRACE_LONG_MS = Number(cfg.traceLongMs);
     if (cfg.tapDotsSim != null) window.__PERF_TAP_DOTS_SIM = !!cfg.tapDotsSim;
@@ -1656,6 +1673,11 @@ async function runAuto(config = {}) {
     } finally {
       window.__PERF_LAB_RUN_CONTEXT = __prevCtx;
       window.__PERF_RUN_TAG = __prevRunTag;
+      if (__prevRunTagParts && typeof __prevRunTagParts === 'object') {
+        try { window.__PERF_RUN_TAG_PARTS = { ...__prevRunTagParts }; } catch {}
+      } else {
+        try { delete window.__PERF_RUN_TAG_PARTS; } catch {}
+      }
       window.__PERF_TRACE_MARKS = __prevTraceMarks;
       window.__PERF_TRACE_LONG_MS = __prevTraceLongMs;
       if (typeof __prevTapDotsSim === 'undefined') {
@@ -1671,6 +1693,26 @@ async function runAuto(config = {}) {
       }
       window.__PERF_DISABLE_CHAIN_UI = __prevChainUiFreeze;
       window.__PERF_GESTURE_AUTO_LOCK = __prevGestureAutoLock;
+      if (typeof __prevDgAdaptiveEnabled === 'undefined') {
+        try { delete window.__DG_ADAPTIVE_DPR_ENABLED; } catch {}
+      } else {
+        window.__DG_ADAPTIVE_DPR_ENABLED = __prevDgAdaptiveEnabled;
+      }
+      if (typeof __prevDgAdaptiveAllowSingle === 'undefined') {
+        try { delete window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE; } catch {}
+      } else {
+        window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = __prevDgAdaptiveAllowSingle;
+      }
+      if (typeof __prevDgTierAuto === 'undefined') {
+        try { delete window.__DG_TIER_AUTO; } catch {}
+      } else {
+        window.__DG_TIER_AUTO = __prevDgTierAuto;
+      }
+      if (typeof __prevDgForceTier === 'undefined') {
+        try { delete window.__DG_FORCE_TIER; } catch {}
+      } else {
+        window.__DG_FORCE_TIER = __prevDgForceTier;
+      }
       if (__prevTrace) {
         try { window.__PERF_TRACE = { ...__prevTrace }; } catch {}
       }
@@ -2368,6 +2410,42 @@ async function runVariant(label, step, statusText) {
 
   // Mirror runVariantPlaying(): capture perf flags so bundles self-verify trace state.
   try {
+    let dgPlayheadSeparateEffectiveKnown = 0;
+    let dgPlayheadSeparateEffectiveOn = 0;
+    let dgTierKnown = 0;
+    let dgTierM1 = 0;
+    let dgTier0 = 0;
+    let dgTier1 = 0;
+    let dgTier2 = 0;
+    let dgTier3 = 0;
+    let dgOverlayLoadShedKnown = 0;
+    let dgOverlayLoadShedOn = 0;
+    let dgAdaptiveVisibilityOkKnown = 0;
+    let dgAdaptiveVisibilityOkOn = 0;
+    try {
+      const panels = Array.from(document.querySelectorAll('.toy-panel'));
+      for (const p of panels) {
+        if (!p || p.__dgUseSeparatePlayhead === undefined) continue;
+        dgPlayheadSeparateEffectiveKnown++;
+        if (p.__dgUseSeparatePlayhead) dgPlayheadSeparateEffectiveOn++;
+        if (p.__dgOverlayLoadShed !== undefined) {
+          dgOverlayLoadShedKnown++;
+          if (p.__dgOverlayLoadShed) dgOverlayLoadShedOn++;
+        }
+        if (p.__dgAdaptiveVisibilityOk !== undefined) {
+          dgAdaptiveVisibilityOkKnown++;
+          if (p.__dgAdaptiveVisibilityOk) dgAdaptiveVisibilityOkOn++;
+        }
+        const t = Number(p.__dgQualityTier);
+        if (!Number.isFinite(t)) continue;
+        dgTierKnown++;
+        if (t <= -1) dgTierM1++;
+        else if (t === 0) dgTier0++;
+        else if (t === 1) dgTier1++;
+        else if (t === 2) dgTier2++;
+        else dgTier3++;
+      }
+    } catch {}
     result.flags = {
       traceCanvasResize: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceCanvasResize),
       traceDomInRaf: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceDomInRaf),
@@ -2391,6 +2469,19 @@ async function runVariant(label, step, statusText) {
       traceMarks: !!window.__PERF_TRACE_MARKS,
       tapDotsSim: !!window.__PERF_TAP_DOTS_SIM,
       playheadSeparateCanvas: !!window.__DG_PLAYHEAD_SEPARATE_CANVAS,
+      dgPlayheadSeparateEffectiveKnown,
+      dgPlayheadSeparateEffectiveOn,
+      dgTierKnown,
+      dgTierM1,
+      dgTier0,
+      dgTier1,
+      dgTier2,
+      dgTier3,
+      dgOverlayLoadShedKnown,
+      dgOverlayLoadShedOn,
+      dgAdaptiveVisibilityOkKnown,
+      dgAdaptiveVisibilityOkOn,
+      dgTotalCount: Math.max(0, Number(window.__DRAWGRID_GLOBAL?.totalCount) || 0),
       dgSingleCanvas: !!window.__DG_SINGLE_CANVAS,
       runTag: String(window.__PERF_RUN_TAG || ''),
     };
@@ -2682,6 +2773,42 @@ async function runVariantPlaying(label, step, statusText) {
       result.particleToggles = { ...(window.__PERF_PARTICLES || {}) };
       result.particleTempPatch = window.__PERF_PARTICLES__TEMP_PATCH || null;
       result.playing = true;
+      let dgPlayheadSeparateEffectiveKnown = 0;
+      let dgPlayheadSeparateEffectiveOn = 0;
+      let dgTierKnown = 0;
+      let dgTierM1 = 0;
+      let dgTier0 = 0;
+      let dgTier1 = 0;
+      let dgTier2 = 0;
+      let dgTier3 = 0;
+      let dgOverlayLoadShedKnown = 0;
+      let dgOverlayLoadShedOn = 0;
+      let dgAdaptiveVisibilityOkKnown = 0;
+      let dgAdaptiveVisibilityOkOn = 0;
+      try {
+        const panels = Array.from(document.querySelectorAll('.toy-panel'));
+        for (const p of panels) {
+          if (!p || p.__dgUseSeparatePlayhead === undefined) continue;
+          dgPlayheadSeparateEffectiveKnown++;
+          if (p.__dgUseSeparatePlayhead) dgPlayheadSeparateEffectiveOn++;
+          if (p.__dgOverlayLoadShed !== undefined) {
+            dgOverlayLoadShedKnown++;
+            if (p.__dgOverlayLoadShed) dgOverlayLoadShedOn++;
+          }
+          if (p.__dgAdaptiveVisibilityOk !== undefined) {
+            dgAdaptiveVisibilityOkKnown++;
+            if (p.__dgAdaptiveVisibilityOk) dgAdaptiveVisibilityOkOn++;
+          }
+          const t = Number(p.__dgQualityTier);
+          if (!Number.isFinite(t)) continue;
+          dgTierKnown++;
+          if (t <= -1) dgTierM1++;
+          else if (t === 0) dgTier0++;
+          else if (t === 1) dgTier1++;
+          else if (t === 2) dgTier2++;
+          else dgTier3++;
+        }
+      } catch {}
       result.flags = {
         // Perf trace toggles (demon hunting)
         traceCanvasResize: !!(window.__PERF_TRACE && window.__PERF_TRACE.traceCanvasResize),
@@ -2707,6 +2834,19 @@ async function runVariantPlaying(label, step, statusText) {
         traceMarks: !!window.__PERF_TRACE_MARKS,
         tapDotsSim: !!window.__PERF_TAP_DOTS_SIM,
         playheadSeparateCanvas: !!window.__DG_PLAYHEAD_SEPARATE_CANVAS,
+        dgPlayheadSeparateEffectiveKnown,
+        dgPlayheadSeparateEffectiveOn,
+        dgTierKnown,
+        dgTierM1,
+        dgTier0,
+        dgTier1,
+        dgTier2,
+        dgTier3,
+        dgOverlayLoadShedKnown,
+        dgOverlayLoadShedOn,
+        dgAdaptiveVisibilityOkKnown,
+        dgAdaptiveVisibilityOkOn,
+        dgTotalCount: Math.max(0, Number(window.__DRAWGRID_GLOBAL?.totalCount) || 0),
         dgSingleCanvas: !!window.__DG_SINGLE_CANVAS,
         runTag: String(window.__PERF_RUN_TAG || ''),
       };
@@ -4109,21 +4249,27 @@ async function autoPauseDom() {
 
 async function runP3fPlayheadSeparateOff() {
   const prev = window.__DG_PLAYHEAD_SEPARATE_CANVAS;
+  const prevForce = window.__DG_PLAYHEAD_SEPARATE_CANVAS_FORCE;
   const prevTag = window.__PERF_RUN_TAG;
   try { window.__DG_PLAYHEAD_SEPARATE_CANVAS = false; } catch {}
+  try { window.__DG_PLAYHEAD_SEPARATE_CANVAS_FORCE = true; } catch {}
   try { window.__PERF_RUN_TAG = 'P3fPlayheadSeparateOff'; } catch {}
   await runP3f();
   try { window.__DG_PLAYHEAD_SEPARATE_CANVAS = prev; } catch {}
+  try { window.__DG_PLAYHEAD_SEPARATE_CANVAS_FORCE = prevForce; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
 }
 
 async function runP3fPlayheadSeparateOn() {
   const prev = window.__DG_PLAYHEAD_SEPARATE_CANVAS;
+  const prevForce = window.__DG_PLAYHEAD_SEPARATE_CANVAS_FORCE;
   const prevTag = window.__PERF_RUN_TAG;
   try { window.__DG_PLAYHEAD_SEPARATE_CANVAS = true; } catch {}
+  try { window.__DG_PLAYHEAD_SEPARATE_CANVAS_FORCE = true; } catch {}
   try { window.__PERF_RUN_TAG = 'P3fPlayheadSeparateOn'; } catch {}
   await runP3f();
   try { window.__DG_PLAYHEAD_SEPARATE_CANVAS = prev; } catch {}
+  try { window.__DG_PLAYHEAD_SEPARATE_CANVAS_FORCE = prevForce; } catch {}
   try { window.__PERF_RUN_TAG = prevTag; } catch {}
 }
 
@@ -6120,6 +6266,7 @@ try {
       dgAdaptiveOff: async function dgAdaptiveOff() {
         // Force DrawGrid adaptive DPR OFF (for A/B comparisons).
         try { window.__DG_ADAPTIVE_DPR_ENABLED = false; } catch {}
+        try { __perfSetRunTagPart('dgAdaptive', 'dgAdaptiveOff'); } catch {}
         try { console.log('[PerfLab] DrawGrid adaptive DPR OFF'); } catch {}
         try { syncUiFromState(); } catch {}
       },
@@ -6128,6 +6275,7 @@ try {
         try { window.__DG_ADAPTIVE_DPR_ENABLED = true; } catch {}
         // Allow engagement even with a single visible DrawGrid (focus runs).
         try { window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE = true; } catch {}
+        try { __perfSetRunTagPart('dgAdaptive', 'dgAdaptiveOn'); } catch {}
         try { console.log('[PerfLab] DrawGrid adaptive DPR ON'); } catch {}
         try { syncUiFromState(); } catch {}
       },

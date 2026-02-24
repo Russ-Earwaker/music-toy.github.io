@@ -15,6 +15,8 @@ export function createDgBackSync({ state, deps } = {}) {
   // Cache gate instance (avoid per-frame allocations).
   let __overlayGate = null;
   let __overlayGateKey = '';
+  let __auxGate = null;
+  let __auxGateKey = '';
 
   function ensureBackVisualsFreshFromFront() {
     try {
@@ -38,6 +40,10 @@ export function createDgBackSync({ state, deps } = {}) {
         (Number.isFinite(s.__dgTierMaxDprMul) && s.__dgTierMaxDprMul > 0) ? s.__dgTierMaxDprMul :
         (s.__dgTierProfile && Number.isFinite(s.__dgTierProfile.maxDprMul) && s.__dgTierProfile.maxDprMul > 0) ? s.__dgTierProfile.maxDprMul :
         null;
+      const overlayTierMaxDprMul =
+        (Number.isFinite(s.__dgOverlayTierMaxDprMul) && s.__dgOverlayTierMaxDprMul > 0) ? s.__dgOverlayTierMaxDprMul :
+        (s.__dgTierProfile && Number.isFinite(s.__dgTierProfile.overlayMaxDprMul) && s.__dgTierProfile.overlayMaxDprMul > 0) ? s.__dgTierProfile.overlayMaxDprMul :
+        tierMaxDprMul;
 
       // Aux layer DPR: never exceed paintScale, but can drop below it smoothly.
       const auxDprRaw = deviceDpr * visualMul * pressureMul * autoMul;
@@ -70,7 +76,7 @@ export function createDgBackSync({ state, deps } = {}) {
       const overlayEd = computeEffectiveDpr({
         deviceDpr,
         rawDpr: overlayDprRaw,
-        maxDprMul: tierMaxDprMul,
+        maxDprMul: overlayTierMaxDprMul,
       });
       const overlayScale = clampDprForBackingStore({
         logicalW: logicalWidth,
@@ -87,6 +93,12 @@ export function createDgBackSync({ state, deps } = {}) {
       const overlayStableFrames = (Number.isFinite(window.__DG_OVERLAY_RESIZE_STABLE_FRAMES) && window.__DG_OVERLAY_RESIZE_STABLE_FRAMES >= 1)
         ? (window.__DG_OVERLAY_RESIZE_STABLE_FRAMES|0)
         : 6;
+      const auxQuantPx = (Number.isFinite(window.__DG_AUX_DPR_QUANT_PX) && window.__DG_AUX_DPR_QUANT_PX >= 8)
+        ? (window.__DG_AUX_DPR_QUANT_PX|0)
+        : 48;
+      const auxStableFrames = (Number.isFinite(window.__DG_AUX_RESIZE_STABLE_FRAMES) && window.__DG_AUX_RESIZE_STABLE_FRAMES >= 1)
+        ? (window.__DG_AUX_RESIZE_STABLE_FRAMES|0)
+        : 8;
 
       // Shared overlay resize gate: quantize + stable-frame gating + big-jump immediate apply.
       // Cache instance to avoid allocations; behaviour is still per-canvas via pending fields.
@@ -103,6 +115,18 @@ export function createDgBackSync({ state, deps } = {}) {
         __overlayGateKey = gateKey;
       }
       const overlayGate = __overlayGate;
+      const auxGateKey = auxQuantPx + '|' + auxStableFrames;
+      if (!__auxGate || __auxGateKey !== auxGateKey) {
+        __auxGate = createOverlayResizeGate({
+          quantStepPx: auxQuantPx,
+          stableFrames: auxStableFrames,
+          bigJumpSteps: 2,
+          cachePrefix: '__dg',
+          stateKey: '__dgAux',
+        });
+        __auxGateKey = auxGateKey;
+      }
+      const auxGate = __auxGate;
 
       const isOverlayLayer = (c) => (c === s.flashCanvas) || (c === s.flashBackCanvas) || (c === s.ghostCanvas) || (c === s.ghostBackCanvas) || (c === s.tutorialCanvas) || (c === s.tutorialBackCanvas) || (c === s.playheadCanvas);
       const isOverlayDormant = (c) => {
@@ -159,9 +183,10 @@ export function createDgBackSync({ state, deps } = {}) {
         // Cache DPR used for this backing store (useful for debug and for ctx reset helpers).
         try { canvas.__dgBackingDpr = dpr; } catch {}
 
-        if (!isOverlayLayer(canvas)) {
-          // Non-overlay layers: don't accumulate pending state.
+        if (!isOverlayLayer(canvas) && isPaintLayer(canvas)) {
+          // Paint/front layers are not gated; keep pending counters clear.
           try { canvas.__dgPendingN = 0; } catch {}
+          try { canvas.__dgAuxPendingN = 0; } catch {}
         }
 
         {
@@ -175,11 +200,13 @@ export function createDgBackSync({ state, deps } = {}) {
             cachePrefix: '__bm',
             alsoCachePrefixes: ['__dg'],
             skipCssSync: true,
-            gate: isOverlayLayer(canvas) ? overlayGate.gate : null,
+            gate: isOverlayLayer(canvas)
+              ? overlayGate.gate
+              : (isPaintLayer(canvas) ? null : auxGate.gate),
           });
 
           // If the overlay gate decided "not yet", skip any post-resize bookkeeping.
-          if (r && r.gated && r.resized === false && isOverlayLayer(canvas)) {
+          if (r && r.gated && r.resized === false && !isPaintLayer(canvas)) {
             continue;
           }
 

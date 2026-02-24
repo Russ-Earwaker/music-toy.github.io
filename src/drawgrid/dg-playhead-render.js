@@ -28,13 +28,20 @@ export function createDgPlayheadRender({ state, deps } = {}) {
     const playheadFrontCtx = s.playheadFrontCtx;
     const fctx = s.fctx;
     const DG_SINGLE_CANVAS = !!d.DG_SINGLE_CANVAS;
+    const hasPlayheadOverride = (typeof window !== 'undefined' && (
+      window.__DG_PLAYHEAD_SEPARATE_CANVAS === false ||
+      window.__DG_PLAYHEAD_SEPARATE_CANVAS_FORCE === true
+    ));
+    const useSeparatePlayheadResolved = hasPlayheadOverride
+      ? !!window.__DG_PLAYHEAD_SEPARATE_CANVAS
+      : (panel && panel.__dgUseSeparatePlayhead !== undefined ? !!panel.__dgUseSeparatePlayhead : true);
 
     if (typeof window !== 'undefined' && window.__DG_PLAYHEAD_TRACE) {
       try {
         if (!panel.__dgPlayheadTraceLastTs || (performance.now() - panel.__dgPlayheadTraceLastTs) > 500) {
           panel.__dgPlayheadTraceLastTs = performance.now();
           const info = d.getLoopInfo();
-          const useSeparatePlayhead = !!(typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS);
+          const useSeparatePlayhead = useSeparatePlayheadResolved;
           const wantsPlayhead = !!(info && d.isRunning() && isActiveInChain);
           const playheadLayer = useSeparatePlayhead
             ? 'playhead'
@@ -99,7 +106,7 @@ export function createDgPlayheadRender({ state, deps } = {}) {
         const probablyStale = isActiveInChain && phaseJustWrapped;
 
         const playheadSimpleOnly = s.__dgPlayheadSimpleMode;
-        const useSeparatePlayhead = !!(typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS);
+        const useSeparatePlayhead = useSeparatePlayheadResolved;
         const playheadFpsHint = d.readHeaderFpsHint();
         const playheadFps = Number.isFinite(playheadFpsHint) ? playheadFpsHint : 60;
 

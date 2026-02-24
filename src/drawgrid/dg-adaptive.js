@@ -4,10 +4,11 @@ import { getAdaptiveFrameBudget } from '../baseMusicToy/index.js';
 // Shared global state across all drawgrid instances (keeps counts for LOD decisions).
 const globalDrawgridState = (() => {
   if (typeof window !== 'undefined') {
-    window.__DRAWGRID_GLOBAL = window.__DRAWGRID_GLOBAL || { visibleCount: 0 };
+    window.__DRAWGRID_GLOBAL = window.__DRAWGRID_GLOBAL || { visibleCount: 0, totalCount: 0 };
+    if (!Number.isFinite(window.__DRAWGRID_GLOBAL.totalCount)) window.__DRAWGRID_GLOBAL.totalCount = 0;
     return window.__DRAWGRID_GLOBAL;
   }
-  return { visibleCount: 0 };
+  return { visibleCount: 0, totalCount: 0 };
 })();
 
 const DG_ADAPTIVE_SHARED_MIN_MS = 900;

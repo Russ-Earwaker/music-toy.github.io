@@ -476,6 +476,7 @@ let __dgLastLayoutKey = '';
 let __dgHydrationPendingRedraw = false;
 let __dgAdaptivePaintDpr = null;
 let __dgAdaptivePaintLastTs = 0;
+let __dgAdaptivePaintHoldUntilTs = 0;
 let __dgLastZoomCommitTs = 0;
 // Per-panel (multi-instance safe) dirty helpers.
 // We store the actual dirty flags on the panel object so multiple draw toys don't fight.
@@ -617,6 +618,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     panel,
     nowMs: () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()),
   });
+  let __dgCurrentQualityProfile = null;
   try {
     // Debug hook: window.__DG_SET_TIER(panelElOrId, tier)
     panel.__dgSetQualityTier = (tier, reason = 'manual') => dgQuality.setTier(tier, reason);
@@ -756,8 +758,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   });
   dgVisibleCounter.setPanelVisible(panel, isPanelVisible);
   try {
+    if (!panel.__dgGlobalCounted) {
+      globalDrawgridState.totalCount = Math.max(0, Number(globalDrawgridState.totalCount) || 0) + 1;
+      panel.__dgGlobalCounted = true;
+    }
+  } catch {}
+  try {
     panel.addEventListener('toy:remove', () => {
       try { dgVisibleCounter?.clearPanel?.(panel); } catch {}
+      try {
+        if (panel.__dgGlobalCounted) {
+          globalDrawgridState.totalCount = Math.max(0, (Number(globalDrawgridState.totalCount) || 0) - 1);
+          panel.__dgGlobalCounted = false;
+        }
+      } catch {}
     }, { once: true });
   } catch {}
 
@@ -954,7 +968,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { if (typeof window !== 'undefined') window.__DG_SINGLE_CANVAS = DG_SINGLE_CANVAS; } catch {}
   try {
     if (typeof window !== 'undefined' && window.__DG_PLAYHEAD_SEPARATE_CANVAS === undefined) {
-      // Perf default: keep playhead on its own canvas to reduce full-panel invalidation during pan/zoom.
+      // Default policy value (not a forced override by itself).
       window.__DG_PLAYHEAD_SEPARATE_CANVAS = true;
     }
   } catch {}
@@ -1982,12 +1996,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   function updateFlatLayerVisibility() {
     const flat = !!(typeof window !== 'undefined' && window.__PERF_DRAWGRID_FLAT_LAYERS);
-    // Default to separating the playhead canvas (perf lever), but allow explicit override.
-    // - If user sets window.__DG_PLAYHEAD_SEPARATE_CANVAS = true/false, respect it.
-    // - Otherwise default to true.
-    const separatePlayhead = (typeof window !== 'undefined' && (window.__DG_PLAYHEAD_SEPARATE_CANVAS === true || window.__DG_PLAYHEAD_SEPARATE_CANVAS === false))
+    // Default to separating the playhead canvas, but allow per-panel auto mode.
+    // Explicit window override always wins.
+    const hasPlayheadOverride = (typeof window !== 'undefined' && (
+      window.__DG_PLAYHEAD_SEPARATE_CANVAS === false ||
+      window.__DG_PLAYHEAD_SEPARATE_CANVAS_FORCE === true
+    ));
+    const separatePlayhead = hasPlayheadOverride
       ? !!window.__DG_PLAYHEAD_SEPARATE_CANVAS
-      : true;
+      : (panel.__dgUseSeparatePlayhead !== undefined ? !!panel.__dgUseSeparatePlayhead : true);
     const transportRunning = (typeof isRunning === 'function') && isRunning();
     const lastTransportRunning = !!panel.__dgLastTransportRunning;
     const ghostEmpty = !!panel.__dgGhostLayerEmpty;
@@ -3851,6 +3868,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       get usingBackBuffers() { return usingBackBuffers; },
       get DG_SINGLE_CANVAS() { return DG_SINGLE_CANVAS; },
       get zoomGestureMoving() { return zoomGestureMoving; },
+      get __dgTierProfile() { return __dgCurrentQualityProfile; },
+      get __dgTierMaxDprMul() { return __dgCurrentQualityProfile?.maxDprMul ?? null; },
+      get __dgOverlayTierMaxDprMul() { return __dgCurrentQualityProfile?.overlayMaxDprMul ?? null; },
       get gridFrontCtx() { return gridFrontCtx; },
       get gridBackCtx() { return gridBackCtx; },
       get nodesFrontCtx() { return nodesFrontCtx; },
@@ -5426,9 +5446,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
       // Extra throttling for "idle" panels when lots of toys are visible.
       const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
+      const totalPanels = Math.max(visiblePanels, Number(globalDrawgridState?.totalCount) || 0);
       const gesturing = __dgIsGesturing();
       const gestureMoving = !!(gesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
       const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
+      const isPrimaryFocused = panel.classList?.contains('toy-focused');
       const isZoomed = panel.classList?.contains('toy-zoomed');
       const isInteracting = !!(__dgDrawingActive || draggedNode || (cur && previewGid));
 
@@ -5447,24 +5469,35 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       try {
         const autoEnabled = (typeof window !== 'undefined') ? (window.__DG_TIER_AUTO ?? true) : false;
         const forcedReason = panel.__dgQualityTierReason;
+        const forcedReasonStr = (forcedReason == null) ? '' : String(forcedReason);
         const isExternallyForced =
-          !!forcedReason && forcedReason !== 'auto' && forcedReason !== 'auto-fps';
+          !!forcedReason &&
+          forcedReasonStr !== 'auto' &&
+          forcedReasonStr !== 'auto-fps' &&
+          !forcedReasonStr.startsWith('vis:');
 
         if (autoEnabled && !isExternallyForced) {
           // Convert pressure (≈ how much DPR we’re allowed) into a tier target.
           // Higher pressureMul = healthier FPS headroom.
-          const pm = Number.isFinite(pressureMul) ? pressureMul : 1.0;
+          const rawPm = Number.isFinite(pressureMul) ? pressureMul : 1.0;
+          const prevPm = Number.isFinite(panel.__dgAutoPressureSmoothed) ? panel.__dgAutoPressureSmoothed : rawPm;
+          const alphaDown = 0.35;
+          const alphaUp = 0.12;
+          const alpha = (rawPm < prevPm) ? alphaDown : alphaUp;
+          const pm = prevPm + ((rawPm - prevPm) * alpha);
+          panel.__dgAutoPressureSmoothed = pm;
           let targetTier = 3;
           if (pm <= 0.55) targetTier = -1;
           else if (pm <= 0.64) targetTier = 0;
           else if (pm <= 0.74) targetTier = 1;
-          else if (pm <= 0.88) targetTier = 2;
+          else if (pm <= 0.93) targetTier = 2;
           else targetTier = 3;
+          panel.__dgAutoTierVisibleCap = null;
 
           const now = nowTs || (performance?.now?.() ?? Date.now());
           const curTier = (typeof dgQuality.getTier === 'function') ? dgQuality.getTier() : (panel.__dgQualityTier ?? 3);
           const lastChange = Number.isFinite(panel.__dgAutoTierLastChangeTs) ? panel.__dgAutoTierLastChangeTs : 0;
-          const minHoldMs = 900; // don’t flap
+          const minHoldMs = 1200; // don't flap / reduce resize churn
 
           // Upgrade hysteresis: require sustained “healthy” pressure before moving up.
           const candTier = Number.isFinite(panel.__dgAutoTierCandidate) ? panel.__dgAutoTierCandidate : null;
@@ -5497,15 +5530,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
           // Re-read in case we just changed something.
           pressureMul = __dgGetPressureDprMul();
+        } else {
+          panel.__dgAutoPressureSmoothed = Number.isFinite(pressureMul) ? pressureMul : 1.0;
         }
       } catch {}
 
       const qProfile = dgQuality.getProfile({ isFocused, isInteracting });
+      __dgCurrentQualityProfile = qProfile;
       const hasAnyNotes = !!(currentMap && currentMap.active && currentMap.active.some(Boolean));
       const disableOverlayCore = !!(typeof window !== 'undefined' && window.__PERF_DG_OVERLAY_CORE_OFF);
+      const overlayLoadShed = !isPrimaryFocused && totalPanels >= 24;
+      try { panel.__dgOverlayLoadShed = !!overlayLoadShed; } catch {}
       const zoomForOverlay = Number.isFinite(boardScale) ? boardScale : 1;
-      const overlayFlashesEnabled = !disableOverlayCore && (qProfile?.allowOverlaySpecials ?? true);
-      const overlayBurstsEnabled = !disableOverlayCore && (qProfile?.allowOverlaySpecials ?? true) && zoomForOverlay > 0.45 && !__dgLowFpsMode;
+      const overlayFlashesEnabled = !disableOverlayCore && !overlayLoadShed && (qProfile?.allowOverlaySpecials ?? true);
+      const overlayBurstsEnabled = !disableOverlayCore && !overlayLoadShed && (qProfile?.allowOverlaySpecials ?? true) && zoomForOverlay > 0.45 && !__dgLowFpsMode;
       const noteEffectCounts = noteEffects.getCounts();
       const flashRecentlyActive = (() => {
         const until = panel.__dgFlashActiveUntil;
@@ -5522,6 +5560,32 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         return false;
       })();
       const transportRunning = (typeof isRunning === 'function') && isRunning();
+      // Auto mode for playhead layer count: in heavy multi-toy pressure, fold playhead
+      // into existing overlay layers to reduce compositor surfaces.
+      try {
+        const hasPlayheadOverride = (typeof window !== 'undefined' && (
+          window.__DG_PLAYHEAD_SEPARATE_CANVAS === false ||
+          window.__DG_PLAYHEAD_SEPARATE_CANVAS_FORCE === true
+        ));
+        if (!hasPlayheadOverride) {
+          const autoPlayheadMaxVisible = (typeof window !== 'undefined' && Number.isFinite(window.__DG_PLAYHEAD_AUTO_SEPARATE_MAX_VISIBLE))
+            ? Math.max(1, window.__DG_PLAYHEAD_AUTO_SEPARATE_MAX_VISIBLE | 0)
+            : 10;
+          const overVisibleCap = visiblePanels >= autoPlayheadMaxVisible;
+          const disableSeparatePlayhead =
+            ((DG_SINGLE_CANVAS === true) && visiblePanels >= 4) ||
+            !!__dgLowFpsMode ||
+            overVisibleCap ||
+            ((visiblePanels >= 10) && pressureMul <= 0.94) ||
+            ((visiblePanels >= 16) && pressureMul <= 0.985) ||
+            ((qProfile?.allowPlayheadExtras === false) && visiblePanels >= 8);
+          const nextSeparate = !disableSeparatePlayhead;
+          if (panel.__dgUseSeparatePlayhead !== nextSeparate) {
+            panel.__dgUseSeparatePlayhead = nextSeparate;
+            updateFlatLayerVisibility();
+          }
+        }
+      } catch {}
       const hasChainLink = panel.dataset.nextToyId || panel.dataset.prevToyId;
       const isChained = !!hasChainLink;
       const isActiveInChain = isChained ? (panel.dataset.chainActive === 'true') : true;
@@ -5576,23 +5640,58 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
       const desiredDpr = __dgCapDprForBackingStore(cssW, cssH, desiredDprRaw, __dgAdaptivePaintDpr);
       const nowAdaptiveTs = nowTs || (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+      const adaptiveMaxVisible = (typeof window !== 'undefined' && Number.isFinite(window.__DG_ADAPTIVE_DPR_MAX_VISIBLE))
+        ? Math.max(1, window.__DG_ADAPTIVE_DPR_MAX_VISIBLE | 0)
+        : 12;
+      const adaptiveAllowLowFpsMulti = !!(typeof window !== 'undefined' && window.__DG_ADAPTIVE_DPR_ALLOW_LOWFPS_MULTI);
+      const adaptiveVisibilityOk = !!(
+        isPrimaryFocused ||
+        visiblePanels <= adaptiveMaxVisible ||
+        (adaptiveAllowLowFpsMulti && __dgLowFpsMode)
+      );
+      try { panel.__dgAdaptiveVisibilityOk = adaptiveVisibilityOk; } catch {}
+      const adaptiveDelta = Number.isFinite(desiredDpr) ? (desiredDpr - paintDpr) : 0;
+      const adaptiveLowerDelta = (typeof window !== 'undefined' && Number.isFinite(window.__DG_ADAPTIVE_DPR_LOWER_DELTA_MIN) && window.__DG_ADAPTIVE_DPR_LOWER_DELTA_MIN > 0)
+        ? window.__DG_ADAPTIVE_DPR_LOWER_DELTA_MIN
+        : 0.18;
+      const adaptiveRaiseDelta = (typeof window !== 'undefined' && Number.isFinite(window.__DG_ADAPTIVE_DPR_RAISE_DELTA_MIN) && window.__DG_ADAPTIVE_DPR_RAISE_DELTA_MIN > 0)
+        ? window.__DG_ADAPTIVE_DPR_RAISE_DELTA_MIN
+        : 0.26;
+      const adaptiveLowerCooldownMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_ADAPTIVE_DPR_COOLDOWN_MS) && window.__DG_ADAPTIVE_DPR_COOLDOWN_MS >= 120)
+        ? (window.__DG_ADAPTIVE_DPR_COOLDOWN_MS | 0)
+        : 420;
+      const adaptiveRaiseCooldownMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_ADAPTIVE_DPR_RAISE_COOLDOWN_MS) && window.__DG_ADAPTIVE_DPR_RAISE_COOLDOWN_MS >= 160)
+        ? (window.__DG_ADAPTIVE_DPR_RAISE_COOLDOWN_MS | 0)
+        : 900;
+      const adaptiveHoldMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_ADAPTIVE_DPR_HOLD_MS) && window.__DG_ADAPTIVE_DPR_HOLD_MS >= 200)
+        ? (window.__DG_ADAPTIVE_DPR_HOLD_MS | 0)
+        : 1400;
+      const adaptiveLowerWanted = adaptiveDelta <= -adaptiveLowerDelta;
+      const adaptiveRaiseWanted = adaptiveDelta >= adaptiveRaiseDelta;
       const canAdjustDpr =
         !gesturing &&
         !HY.inCommitWindow(nowAdaptiveTs) &&
-        __dgStableFramesAfterCommit >= 2 &&
+        __dgStableFramesAfterCommit >= 3 &&
         (nowAdaptiveTs - (__dgLastZoomCommitTs || 0)) > 800 &&
         cssW > 0 &&
         cssH > 0;
       if (typeof window !== 'undefined' && (window.__DG_ADAPTIVE_DPR_ENABLED ?? false)) {
+        const canLowerNow = adaptiveLowerWanted && (nowAdaptiveTs - __dgAdaptivePaintLastTs) > adaptiveLowerCooldownMs;
+        const canRaiseNow =
+          adaptiveRaiseWanted &&
+          (nowAdaptiveTs - __dgAdaptivePaintLastTs) > adaptiveRaiseCooldownMs &&
+          nowAdaptiveTs >= (__dgAdaptivePaintHoldUntilTs || 0);
         if (
           canAdjustDpr &&
+          adaptiveVisibilityOk &&
           (visiblePanels >= 4 || __dgLowFpsMode || (typeof window !== 'undefined' && window.__DG_ADAPTIVE_DPR_ALLOW_SINGLE)) &&
           Number.isFinite(desiredDpr) &&
-          Math.abs(desiredDpr - paintDpr) >= 0.15 &&
-          (nowAdaptiveTs - __dgAdaptivePaintLastTs) > 240
+          (canLowerNow || canRaiseNow)
         ) {
           __dgAdaptivePaintLastTs = nowAdaptiveTs;
           __dgAdaptivePaintDpr = desiredDpr;
+          if (canLowerNow) __dgAdaptivePaintHoldUntilTs = nowAdaptiveTs + adaptiveHoldMs;
+          else __dgAdaptivePaintHoldUntilTs = 0;
           try {
             resizeSurfacesFor(cssW, cssH, desiredDpr, 'adaptivePaintDpr');
           } catch {}
@@ -5615,7 +5714,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const disableOverlays = !!(typeof window !== 'undefined' && window.__PERF_DG_DISABLE_OVERLAYS);
       // IMPORTANT: do not disable overlays based on gesture state.
       // If overlays need to scale back, that should be driven by generic pressure (FPS-based) systems.
-      const disableOverlaysEffective = disableOverlays;
+      const disableOverlaysEffective = disableOverlays || overlayLoadShed;
 
       // Overlays (notes, playhead, flashes) respect visibility & hydrations guard,
       // but are otherwise always on - they're core UX.
@@ -5626,6 +5725,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (allowOverlayDraw && !disableOverlayStrokes) {
         hasOverlayStrokes = hasOverlayStrokesCached();
       }
+      if (overlayLoadShed && !isInteracting) hasOverlayStrokes = false;
       // Safety: if cache says no overlay but we have special strokes, don't clear overlays.
       // BUT: treating *committed* special/colorize strokes as "live overlay" forces a full-canvas
       // clear + composite every frame (very expensive). We only treat overlay strokes as "live"
