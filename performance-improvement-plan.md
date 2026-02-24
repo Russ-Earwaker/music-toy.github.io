@@ -474,6 +474,11 @@ This table exists to remove ambiguity during implementation. Each tier explicitl
 6. **Mobile Safari / low-end GPU validation**
 
    * Confirm pressure-DPR + gesture-DPR hold up on weaker devices.
+7. **Zoom-specific perf validation (after current efforts)**
+
+   * Add a dedicated Perf Lab zoom test matrix (pan-only, zoom-only, pan+zoom mixed).
+   * Track p95/p99 plus `frame.nonScript` and DrawGrid buckets during camera motion.
+   * Include A/B checks with adaptive DPR ON/OFF and with overlays/particles isolates.
 
 ---
 

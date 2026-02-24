@@ -2734,6 +2734,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // the wrong logical space and appear to "scale up" relative to the animated overlay.
   let __dgLastZoomDonePaintDpr = null;
   let __lastZoomMotionTs = 0;
+  let __dgLastFrameCamSample = null;
+  let __dgFrameCamMotionTs = 0;
   P.initDrawgridParticles();
   dgField = particleState.field;
   P.installParticleResizeObserver();
@@ -5481,12 +5483,32 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       // Extra throttling for "idle" panels when lots of toys are visible.
       const visiblePanels = Math.max(0, Number(globalDrawgridState?.visibleCount) || 0);
       const totalPanels = Math.max(visiblePanels, Number(globalDrawgridState?.totalCount) || 0);
+      let frameCamMoving = false;
+      try {
+        if (frameCam) {
+          const camScale = Number.isFinite(frameCam.scale) ? frameCam.scale : null;
+          const camX = Number.isFinite(frameCam.x) ? frameCam.x : null;
+          const camY = Number.isFinite(frameCam.y) ? frameCam.y : null;
+          const prevCam = __dgLastFrameCamSample;
+          if (Number.isFinite(camScale) && Number.isFinite(camX) && Number.isFinite(camY)) {
+            if (prevCam) {
+              const moved =
+                Math.abs(camScale - prevCam.scale) > 0.0005 ||
+                Math.abs(camX - prevCam.x) > 0.08 ||
+                Math.abs(camY - prevCam.y) > 0.08;
+              if (moved) __dgFrameCamMotionTs = nowTs;
+            }
+            __dgLastFrameCamSample = { scale: camScale, x: camX, y: camY };
+          }
+        }
+        frameCamMoving = !!(__dgFrameCamMotionTs && (nowTs - __dgFrameCamMotionTs) < ZOOM_STALL_MS);
+      } catch {}
       const perfLoadShedEnabled = !!(
         (typeof window !== 'undefined' && window.__PERF_LOAD_SHED === true) ||
         (typeof window !== 'undefined' && window.__PERF_LAB_RUN_CONTEXT === 'auto')
       );
       const gesturing = __dgIsGesturing();
-      const gestureMoving = !!(gesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
+      const gestureMoving = !!((gesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS) || frameCamMoving);
       const isFocused = panel.classList?.contains('toy-focused') || panel.classList?.contains('focused');
       const isPrimaryFocused = panel.classList?.contains('toy-focused');
       const isZoomed = panel.classList?.contains('toy-zoomed');
@@ -5550,8 +5572,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
               panel.__dgAutoTierCandidateSince = 0;
             }
           } else if (targetTier > curTier) {
-            // Recover slowly: require 2s of stability at the better tier.
-            if (candTier !== targetTier) {
+            // Recover slowly and only when motion is settled.
+            // This avoids tier/DPR upshift churn while panning/zooming, which can
+            // amplify raster/composite cost and create isolate noise in perf runs.
+            if (gestureMoving) {
+              panel.__dgAutoTierCandidate = null;
+              panel.__dgAutoTierCandidateSince = 0;
+            } else if (candTier !== targetTier) {
               panel.__dgAutoTierCandidate = targetTier;
               panel.__dgAutoTierCandidateSince = now;
             } else if ((now - candSince) >= 2000 && (now - lastChange) >= minHoldMs) {
@@ -5645,7 +5672,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         isZoomed,
       });
       const zoomGesturing = (typeof window !== 'undefined' && window.__mtZoomGesturing === true);
-      const zoomGestureMoving = !!(zoomGesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS);
+      const zoomGestureMoving = !!((zoomGesturing && __lastZoomMotionTs && (nowTs - __lastZoomMotionTs) < ZOOM_STALL_MS) || frameCamMoving);
       const deviceDpr = Math.max(1, Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
       const gestureMul = __dgComputeGestureBackingMul(zoomGestureMoving);
       const visualMul = __dgComputeVisualBackingMul(Number.isFinite(boardScale) ? boardScale : 1) * gestureMul;
@@ -5708,6 +5735,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const adaptiveRaiseWanted = adaptiveDelta >= adaptiveRaiseDelta;
       const canAdjustDpr =
         !gesturing &&
+        !frameCamMoving &&
         !HY.inCommitWindow(nowAdaptiveTs) &&
         __dgStableFramesAfterCommit >= 3 &&
         (nowAdaptiveTs - (__dgLastZoomCommitTs || 0)) > 800 &&
@@ -5825,7 +5853,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       }
       // overlayActive is used as a general "is there overlay content?" signal.
       // Do not include overlayTransport here, otherwise transport forces overlays even when empty.
-      overlayActive = !!(allowOverlayDraw && (overlayCoreWanted || hasNodeFlash));
+      overlayActive = !!(allowOverlayDraw && overlayCoreWanted);
 
       let overlayCoreActive = allowOverlayDrawHeavy && overlayCoreWanted;
       let overlayCompositeNeeded = false;
@@ -5845,7 +5873,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         panel.__dgFlashLayerEmpty &&
         !overlayActive &&
         !overlayTransport &&
-        !hasNodeFlash &&
         !__dgNeedsUIRefresh &&
         !panel.__dgFlashOverlayOutOfGrid
       ) {
@@ -5965,8 +5992,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         if (!disableParticles && cssW > 0 && cssH > 0) {
           const x = 0;
           const y = 0;
-          const w = Math.max(0, cssW);
-          const h = Math.max(0, cssH);
+          const clipW = (particleCanvas && Number.isFinite(particleCanvas.clientWidth) && particleCanvas.clientWidth > 0)
+            ? particleCanvas.clientWidth
+            : cssW;
+          const clipH = (particleCanvas && Number.isFinite(particleCanvas.clientHeight) && particleCanvas.clientHeight > 0)
+            ? particleCanvas.clientHeight
+            : cssH;
+          const w = Math.max(0, clipW);
+          const h = Math.max(0, clipH);
           const key = `${Math.round(w)}|${Math.round(h)}`;
           if (panel.__dgParticleClipKey !== key) {
             panel.__dgParticleClipKey = key;
@@ -6078,15 +6111,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         }
       } catch {}
 
-      const overlayFxWanted = hasOverlayFx || (overlayFlashesEnabled && hasNodeFlash);
+      const overlayFxWanted = hasOverlayFx;
       overlayActive = allowOverlayDraw && (overlayFxWanted || overlayTransport || hasOverlayStrokesLive || (cur && previewGid));
       allowOverlayDrawHeavy = allowOverlayDrawHeavy && (
         overlayFxWanted ||
         overlayTransport ||
         hasOverlayStrokesLive ||
         (cur && previewGid) ||
-        __dgNeedsUIRefresh ||
-        hasNodeFlash
+        __dgNeedsUIRefresh
       );
       overlayCoreWanted = (overlayFxWanted || hasOverlayStrokesLive || (cur && previewGid));
       overlayCoreActive = allowOverlayDrawHeavy && overlayCoreWanted;
@@ -6107,14 +6139,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         const freezeOverlayDuringGesture =
           (typeof window === 'undefined') ? true : (window.__DG_FREEZE_OVERLAY_DURING_GESTURE !== false);
         const overlayNeedsRealtime =
-          overlayTransport || hasOverlayStrokesLive || (cur && previewGid) || __dgNeedsUIRefresh || hasNodeFlash;
+          overlayTransport || hasOverlayStrokesLive || (cur && previewGid) || __dgNeedsUIRefresh;
         if (freezeOverlayDuringGesture && zoomGestureMoving && !forceFullDraw && !overlayNeedsRealtime) {
           allowOverlayDrawHeavy = false;
           overlayCoreActive = false;
         }
       } catch {}
 
-      const needsFx = overlayCoreActive || __dgNeedsUIRefresh || hasNodeFlash;
+      const needsFx = overlayCoreActive || __dgNeedsUIRefresh;
       // IMPORTANT: overlayDirty must mean “we need to re-render overlay core”.
       // A layer being *non-empty* is NOT “dirty” — cached layers should be allowed to persist
       // without forcing expensive overlay redraw every frame.
@@ -6123,8 +6155,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       } catch {}
       const overlayDirtyBase =
         !!panel.__dgOverlayDirty ||
-        __dgNeedsUIRefresh ||
-        hasNodeFlash;
+        __dgNeedsUIRefresh;
       const overlayNeedsFirstPaint =
         !!overlayCoreWanted && !panel.__dgOverlayCorePainted;
       const overlayDirty = overlayDirtyBase || overlayNeedsFirstPaint;
@@ -6133,7 +6164,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       }
       if (DG_SINGLE_CANVAS && canDrawAnything) {
         const needsFullDraw =
-          panel.__dgSingleCompositeDirty ||
+          panel.__dgStaticDirty ||
           __dgNeedsUIRefresh ||
           __dgFrontSwapNextDraw ||
           __hydrationJustApplied ||
@@ -6567,14 +6598,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         const __overlayClearDt = performance.now() - __overlayClearStart;
         try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.clear', __overlayClearDt); } catch {}
       }
-
-        if (hasNodeFlash && overlayFlashesEnabled) {
-          markFlashLayerActive();
-          R.withOverlayClip(fctx, gridArea, false, () => {
-            __dgWithLogicalSpaceDpr(R, fctx, __flashDpr, () => {
-            });
-          });
-        }
 
       // Animate special stroke paint (hue cycling).
       // Draw animated special strokes into flashCanvas, then mask with current paint alpha.

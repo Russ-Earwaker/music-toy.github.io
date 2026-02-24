@@ -154,8 +154,9 @@ const AUTO_GENERIC_QUEUE = [
 ];
 
 // Current focus for this cycle:
-//   - DrawGrid multi-toy regression guardrails (P3f stress)
-//   - verify tier pressure levers move cost in the expected direction
+//   - Single-batch DrawGrid focus triad on one shared scene build:
+//     baseline -> overlays isolated -> baseline repeat
+//   - Designed to replace "run Auto Generic multiple times" for this focus check.
 //
 // IMPORTANT:
 // Keep this queue SHORT so it never *feels* like it's looping.
@@ -167,28 +168,16 @@ const AUTO_FOCUS_QUEUE = [
   'dgForceTierAuto',
   'dgAdaptiveOn',
 
-  // --- DrawGrid: multi-toy baseline ---------------------------------------
+  // Build/warm once, then run all focus variants back-to-back.
   'buildP3',
   'warmupFirstAppearance',
   'warmupSettle',
   'runP3fShort',
   'warmupSettle',
-  // Repeat once to expose run-to-run noise before toggles.
-  'runP3fShort',
-  'warmupSettle',
-
-  // --- Adaptive DPR A/B: verify resize-churn stabilization -----------------
-  'dgAdaptiveOff',
-  'runP3fShort',
-  'warmupSettle',
-  'dgAdaptiveOn',
-  'runP3fShort',
-  'warmupSettle',
-
-  // --- Isolation checks for current P3f bottlenecks ------------------------
   'runP3fNoOverlaysShort',
   'warmupSettle',
-  'runP3fNoParticlesShort',
+  // End with baseline repeat to reveal immediate drift/noise in same batch.
+  'runP3fShort2',
 
   // Cleanup: return to default for subsequent manual runs.
   'dgAdaptiveOn',
@@ -1046,7 +1035,7 @@ function ensureUI() {
         clear: true,
         save: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        notes: 'Current Focus: DrawGrid P3f adaptive-DPR stabilization A/B (adaptive ON/OFF) plus overlay/particle isolates (edit AUTO_FOCUS_QUEUE in perf-lab.js)',
+        notes: 'Current Focus (single batch): P3f baseline + no-overlays + no-particles (+ baseline repeat) on one shared build/warmup.',
         queue: AUTO_FOCUS_QUEUE,
         runId: 'autoFocus',
       });
@@ -4104,17 +4093,13 @@ async function runP3fNoParticlesShort() {
   const prevDur = window.__PERF_LAB_DURATION_MS;
   const prevTag = window.__PERF_RUN_TAG;
   const prevNoParticles = window.__PERF_DG_DISABLE_PARTICLES;
-  const prevParticleDbg = window.__PERF_PARTICLE_DBG;
   try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
   try { window.__PERF_RUN_TAG = 'P3fNoParticlesShort'; } catch {}
   try {
     window.__PERF_DG_DISABLE_PARTICLES = true;
-    // Keep true for consistency with existing perf scripts (some paths gate on this).
-    window.__PERF_PARTICLE_DBG = true;
     await runP3f();
   } finally {
     window.__PERF_DG_DISABLE_PARTICLES = prevNoParticles;
-    window.__PERF_PARTICLE_DBG = prevParticleDbg;
     try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
     try { window.__PERF_RUN_TAG = prevTag; } catch {}
   }
@@ -4125,16 +4110,13 @@ async function runP3fNoParticlesShort2() {
   const prevDur = window.__PERF_LAB_DURATION_MS;
   const prevTag = window.__PERF_RUN_TAG;
   const prevNoParticles = window.__PERF_DG_DISABLE_PARTICLES;
-  const prevParticleDbg = window.__PERF_PARTICLE_DBG;
   try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
   try { window.__PERF_RUN_TAG = 'P3fNoParticlesShort2'; } catch {}
   try {
     window.__PERF_DG_DISABLE_PARTICLES = true;
-    window.__PERF_PARTICLE_DBG = true;
     await runP3f();
   } finally {
     window.__PERF_DG_DISABLE_PARTICLES = prevNoParticles;
-    window.__PERF_PARTICLE_DBG = prevParticleDbg;
     try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
     try { window.__PERF_RUN_TAG = prevTag; } catch {}
   }
