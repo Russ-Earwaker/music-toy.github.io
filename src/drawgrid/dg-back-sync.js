@@ -15,8 +15,6 @@ export function createDgBackSync({ state, deps } = {}) {
   // Cache gate instance (avoid per-frame allocations).
   let __overlayGate = null;
   let __overlayGateKey = '';
-  let __auxGate = null;
-  let __auxGateKey = '';
 
   function ensureBackVisualsFreshFromFront() {
     try {
@@ -29,8 +27,23 @@ export function createDgBackSync({ state, deps } = {}) {
       // cost ("frame.nonScript") without changing CSS size/layout.
       const deviceDpr = (Number.isFinite(window?.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
       const toyScale = (Number.isFinite(s.panel?.__dgLastToyScale) && s.panel.__dgLastToyScale > 0) ? s.panel.__dgLastToyScale : 1;
-      const visualMul = d.__dgComputeVisualBackingMul(toyScale);
-      const pressureMul = d.__dgGetPressureDprMul();
+      const visualMulRaw = d.__dgComputeVisualBackingMul(toyScale);
+      const pressureMulRaw = d.__dgGetPressureDprMul();
+      const globalDg = (typeof window !== 'undefined') ? window.__DRAWGRID_GLOBAL : null;
+      const totalPanels = Math.max(
+        Number.isFinite(globalDg?.totalCount) ? globalDg.totalCount : 0,
+        Number.isFinite(globalDg?.visibleCount) ? globalDg.visibleCount : 0
+      );
+      const freezeNonPaintResizes = (typeof window !== 'undefined' && window.__DG_FREEZE_NONPAINT_RESIZES_HEAVY === false)
+        ? false
+        : (totalPanels >= 24);
+      const isPrimaryFocused = !!(s.panel?.classList?.contains?.('toy-focused'));
+      const freezeVisualDpr = totalPanels >= 24 && !isPrimaryFocused;
+      const visualMul = freezeVisualDpr ? 1 : visualMulRaw;
+      const freezePressureDpr = totalPanels >= 24;
+      const pressureMul = freezePressureDpr ? 1 : pressureMulRaw;
+      try { if (s.panel) s.panel.__dgPressureDprFrozen = !!freezePressureDpr; } catch {}
+      try { if (s.panel) s.panel.__dgVisualDprFrozen = !!freezeVisualDpr; } catch {}
       const autoMul = d.__dgGetAutoQualityMul();
 
       // Tier hard clamp (pixels-first lever). We keep this deliberately generic:
@@ -93,12 +106,6 @@ export function createDgBackSync({ state, deps } = {}) {
       const overlayStableFrames = (Number.isFinite(window.__DG_OVERLAY_RESIZE_STABLE_FRAMES) && window.__DG_OVERLAY_RESIZE_STABLE_FRAMES >= 1)
         ? (window.__DG_OVERLAY_RESIZE_STABLE_FRAMES|0)
         : 6;
-      const auxQuantPx = (Number.isFinite(window.__DG_AUX_DPR_QUANT_PX) && window.__DG_AUX_DPR_QUANT_PX >= 8)
-        ? (window.__DG_AUX_DPR_QUANT_PX|0)
-        : 48;
-      const auxStableFrames = (Number.isFinite(window.__DG_AUX_RESIZE_STABLE_FRAMES) && window.__DG_AUX_RESIZE_STABLE_FRAMES >= 1)
-        ? (window.__DG_AUX_RESIZE_STABLE_FRAMES|0)
-        : 8;
 
       // Shared overlay resize gate: quantize + stable-frame gating + big-jump immediate apply.
       // Cache instance to avoid allocations; behaviour is still per-canvas via pending fields.
@@ -115,18 +122,6 @@ export function createDgBackSync({ state, deps } = {}) {
         __overlayGateKey = gateKey;
       }
       const overlayGate = __overlayGate;
-      const auxGateKey = auxQuantPx + '|' + auxStableFrames;
-      if (!__auxGate || __auxGateKey !== auxGateKey) {
-        __auxGate = createOverlayResizeGate({
-          quantStepPx: auxQuantPx,
-          stableFrames: auxStableFrames,
-          bigJumpSteps: 2,
-          cachePrefix: '__dg',
-          stateKey: '__dgAux',
-        });
-        __auxGateKey = auxGateKey;
-      }
-      const auxGate = __auxGate;
 
       const isOverlayLayer = (c) => (c === s.flashCanvas) || (c === s.flashBackCanvas) || (c === s.ghostCanvas) || (c === s.ghostBackCanvas) || (c === s.tutorialCanvas) || (c === s.tutorialBackCanvas) || (c === s.playheadCanvas);
       const isOverlayDormant = (c) => {
@@ -178,7 +173,17 @@ export function createDgBackSync({ state, deps } = {}) {
           ? paintScale
           : isOverlayLayer(canvas)
             ? overlayScale
-            : (auxScale * d.__dgComputeGestureStaticMul(s.zoomGestureMoving));
+            : auxScale;
+
+        // Heavy multi-toy stabilization: once non-paint layers are allocated,
+        // do not continuously resize them. Resize churn here can dominate compositor time.
+        if (freezeNonPaintResizes && !isPaintLayer(canvas)) {
+          const hasBacking = ((canvas.width | 0) > 0) && ((canvas.height | 0) > 0);
+          if (hasBacking) {
+            try { canvas.__dgBackingDpr = dpr; } catch {}
+            continue;
+          }
+        }
 
         // Cache DPR used for this backing store (useful for debug and for ctx reset helpers).
         try { canvas.__dgBackingDpr = dpr; } catch {}
@@ -186,7 +191,6 @@ export function createDgBackSync({ state, deps } = {}) {
         if (!isOverlayLayer(canvas) && isPaintLayer(canvas)) {
           // Paint/front layers are not gated; keep pending counters clear.
           try { canvas.__dgPendingN = 0; } catch {}
-          try { canvas.__dgAuxPendingN = 0; } catch {}
         }
 
         {
@@ -200,13 +204,11 @@ export function createDgBackSync({ state, deps } = {}) {
             cachePrefix: '__bm',
             alsoCachePrefixes: ['__dg'],
             skipCssSync: true,
-            gate: isOverlayLayer(canvas)
-              ? overlayGate.gate
-              : (isPaintLayer(canvas) ? null : auxGate.gate),
+            gate: isOverlayLayer(canvas) ? overlayGate.gate : null,
           });
 
           // If the overlay gate decided "not yet", skip any post-resize bookkeeping.
-          if (r && r.gated && r.resized === false && !isPaintLayer(canvas)) {
+          if (r && r.gated && r.resized === false && isOverlayLayer(canvas)) {
             continue;
           }
 
