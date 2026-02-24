@@ -250,6 +250,29 @@ const AUTO_FOCUS_MICRO_QUEUE = [
   'runP3fNoParticlesShort2',
 ];
 
+// Zoom spike probe:
+// - Same DrawGrid scene/warmup as focus runs
+// - Adds commit-spam zoom variants (anchor ON/OFF) with short durations
+//   to expose tail spikes tied to zoom commit/reflow paths.
+const AUTO_ZOOM_SPIKE_QUEUE = [
+  'traceOff',
+  'dgTierAutoOn',
+  'dgForceTierAuto',
+  'dgAdaptiveOn',
+  'buildP3',
+  'warmupFirstAppearance',
+  'warmupSettle',
+  'runP3fShort',
+  'warmupSettle',
+  'runP3lShort',
+  'warmupSettle',
+  'runP3l2Short',
+  'warmupSettle',
+  'runP3fShort2',
+  'dgAdaptiveOn',
+  'dgForceTierAuto',
+];
+
 function ensureUI() {
   let ov = document.getElementById('perf-lab-overlay');
   if (ov) return ov;
@@ -511,6 +534,7 @@ function ensureUI() {
           <div class="perf-lab-row perf-lab-footer">
             <button class="perf-lab-btn" data-act="autoGeneric">Run-Auto (Generic)</button>
             <button class="perf-lab-btn" data-act="autoFocus">Auto: Current Focus</button>
+            <button class="perf-lab-btn" data-act="autoZoomSpike">Auto: Zoom Spike Probe</button>
             <button class="perf-lab-btn" data-act="autoFocusHeavy">Auto: Focus Validation (Heavy)</button>
             <button class="perf-lab-btn" data-act="autoMicro">Auto: Focus Micro (Best)</button>
             <div class="perf-lab-status" id="perf-lab-status">Idle</div>
@@ -1035,9 +1059,21 @@ function ensureUI() {
         clear: true,
         save: false,
         postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
-        notes: 'Current Focus (single batch): P3f baseline + no-overlays + no-particles (+ baseline repeat) on one shared build/warmup.',
+        notes: 'Current Focus (single batch): P3f baseline + no-overlays (+ baseline repeat) on one shared build/warmup.',
         queue: AUTO_FOCUS_QUEUE,
         runId: 'autoFocus',
+      });
+      return;
+    }
+    if (act === 'autoZoomSpike') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      await runAuto({
+        clear: true,
+        save: false,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        notes: 'Zoom Spike Probe: baseline + commit-spam zoom (anchor ON/OFF) + baseline repeat.',
+        queue: AUTO_ZOOM_SPIKE_QUEUE,
+        runId: 'autoZoomSpike',
       });
       return;
     }
@@ -4868,6 +4904,34 @@ async function runP3l2() {
   });
 }
 
+async function runP3lShort() {
+  // Short probe variant for auto queues.
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3lShort'; } catch {}
+  try {
+    await runP3l();
+  } finally {
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
+}
+
+async function runP3l2Short() {
+  // Short probe variant for auto queues.
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__PERF_LAB_DURATION_MS = 12000; } catch {}
+  try { window.__PERF_RUN_TAG = 'P3l2Short'; } catch {}
+  try {
+    await runP3l2();
+  } finally {
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
+}
+
 
 async function runP3l3() {
   const panZoom = makePanZoomCommitSpamScript({
@@ -6044,6 +6108,8 @@ try {
     runP3k2,
     runP3l,
     runP3l2,
+    runP3lShort,
+    runP3l2Short,
     runP3l3,
     runP3l4,
     runP3l5,

@@ -2736,6 +2736,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let __lastZoomMotionTs = 0;
   let __dgLastFrameCamSample = null;
   let __dgFrameCamMotionTs = 0;
+  let __dgLastToyZoomCommitTs = 0;
   P.initDrawgridParticles();
   dgField = particleState.field;
   P.installParticleResizeObserver();
@@ -3497,6 +3498,32 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }
 
     if (z.phase === 'commit') {
+      const __commitNow = nowMs();
+      const __commitMinGapMs = (typeof window !== 'undefined' && Number.isFinite(window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS))
+        ? Math.max(0, window.__DG_TOY_ZOOM_COMMIT_MIN_GAP_MS | 0)
+        : 320;
+      const __canRunHeavyCommit = !__dgLastToyZoomCommitTs || ((__commitNow - __dgLastToyZoomCommitTs) >= __commitMinGapMs);
+      if (!__canRunHeavyCommit) {
+        // Coalesce commit-spam bursts: keep visuals correct, defer heavy resnap/redraw work.
+        __dgNeedsUIRefresh = true;
+        __dgFrontSwapNextDraw = true;
+        __dgForceFullDrawNext = true;
+        __dgForceFullDrawFrames = Math.max(__dgForceFullDrawFrames || 0, 2);
+        zoomGestureActive = false;
+        zoomMode = 'idle';
+        lastCommittedScale = boardScale;
+        try {
+          if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
+            console.log('[DG][zoom-commit] coalesced', {
+              panelId: panel?.id || null,
+              gapMs: __commitNow - __dgLastToyZoomCommitTs,
+              minGapMs: __commitMinGapMs,
+            });
+          }
+        } catch {}
+        return;
+      }
+      __dgLastToyZoomCommitTs = __commitNow;
       // one-time swap & finalize
       useFrontBuffers();
       // copy ghost back -> front exactly once after swap
