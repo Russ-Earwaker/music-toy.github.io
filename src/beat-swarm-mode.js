@@ -38,6 +38,12 @@ const SWARM_ARENA_PATH_MAX_TURN_RATE_RAD = (Math.PI / 180) * 12; // smooth, no s
 const SWARM_ARENA_PATH_TURN_SMOOTH = 1.8;
 const SWARM_ARENA_PATH_RETARGET_MIN = 2.6;
 const SWARM_ARENA_PATH_RETARGET_MAX = 5.8;
+const SWARM_STARFIELD_SECTION_SIZE_WORLD = 2400;
+const SWARM_STARFIELD_SECTION_GAP_WORLD = 260;
+const SWARM_STARFIELD_STARS_PER_SECTION = 370;
+const SWARM_STARFIELD_PARALLAX_MIN = 0.42;
+const SWARM_STARFIELD_PARALLAX_MAX = 0.88;
+const SWARM_STARFIELD_PARALLAX_SHIFT_SCALE = 0.7;
 
 let active = false;
 let overlayEl = null;
@@ -49,6 +55,7 @@ let reactiveArrowEl = null;
 let thrustFxEl = null;
 let spawnerLayerEl = null;
 let enemyLayerEl = null;
+let starfieldLayerEl = null;
 let arenaRingEl = null;
 let arenaCoreEl = null;
 let arenaLimitEl = null;
@@ -64,6 +71,8 @@ let arenaPathHeadingRad = 0;
 let arenaPathTurnRateRad = 0;
 let arenaPathTargetTurnRateRad = 0;
 let arenaPathRetargetTimer = 0;
+let starfieldParallaxAnchorWorld = null;
+let borderForceEnabled = true;
 
 let dragPointerId = null;
 let dragStartX = 0;
@@ -78,6 +87,7 @@ const enemies = [];
 const pickups = [];
 const projectiles = [];
 const effects = [];
+const starfieldSections = [];
 const ENEMY_CAP = 120;
 const ENEMY_ACCEL = 680;
 const ENEMY_MAX_SPEED = 260;
@@ -133,6 +143,23 @@ function captureBeatSwarmState() {
       targetTurnRateRad: arenaPathTargetTurnRateRad,
       retargetTimer: arenaPathRetargetTimer,
     },
+    starfield: starfieldSections.map((section) => ({
+      x: Number(section.x) || 0,
+      y: Number(section.y) || 0,
+      size: Number(section.size) || SWARM_STARFIELD_SECTION_SIZE_WORLD,
+      stars: Array.isArray(section.stars)
+        ? section.stars.map((s) => ({
+          lx: Number(s.lx) || 0,
+          ly: Number(s.ly) || 0,
+          p: Number(s.p) || 0,
+          size: Number(s.size) || 1.5,
+          alpha: Number(s.alpha) || 0.7,
+        }))
+        : [],
+    })),
+    starfieldParallaxAnchorWorld: starfieldParallaxAnchorWorld
+      ? { x: Number(starfieldParallaxAnchorWorld.x) || 0, y: Number(starfieldParallaxAnchorWorld.y) || 0 }
+      : null,
     arenaCenterWorld: arenaCenterWorld ? { x: arenaCenterWorld.x, y: arenaCenterWorld.y } : null,
     equippedWeapons: Array.from(equippedWeapons),
     enemies: enemies.map((e) => ({
@@ -253,6 +280,7 @@ function restoreBeatSwarmState(state) {
   arenaCenterWorld = state.arenaCenterWorld
     ? { x: Number(state.arenaCenterWorld.x) || 0, y: Number(state.arenaCenterWorld.y) || 0 }
     : getViewportCenterWorld();
+  restoreStarfieldFromState(state.starfield, arenaCenterWorld, state.starfieldParallaxAnchorWorld);
 
   equippedWeapons.clear();
   for (const id of Array.isArray(state.equippedWeapons) ? state.equippedWeapons : []) {
@@ -302,6 +330,7 @@ function restoreBeatSwarmState(state) {
       });
     } else if (fx.kind === 'explosion') {
       el.className = 'beat-swarm-fx-explosion';
+      el.style.transform = 'translate(-9999px, -9999px)';
       enemyLayerEl.appendChild(el);
       effects.push({
         kind: 'explosion',
@@ -338,6 +367,7 @@ function ensureUi() {
       <div class="beat-swarm-ship-wrap" aria-hidden="true">
         <div class="beat-swarm-ship"></div>
       </div>
+      <div class="beat-swarm-starfield-layer" aria-hidden="true"></div>
       <div class="beat-swarm-spawner-layer" aria-hidden="true"></div>
       <div class="beat-swarm-enemy-layer" aria-hidden="true"></div>
       <div class="beat-swarm-resistance" aria-hidden="true"></div>
@@ -349,6 +379,7 @@ function ensureUi() {
     `;
     document.body.appendChild(overlayEl);
   }
+  starfieldLayerEl = overlayEl.querySelector('.beat-swarm-starfield-layer');
   spawnerLayerEl = overlayEl.querySelector('.beat-swarm-spawner-layer');
   enemyLayerEl = overlayEl.querySelector('.beat-swarm-enemy-layer');
   resistanceEl = overlayEl.querySelector('.beat-swarm-resistance');
@@ -438,6 +469,136 @@ function randRange(min, max) {
   const a = Number(min) || 0;
   const b = Number(max) || 0;
   return a + ((b - a) * Math.random());
+}
+
+function clearStarfield() {
+  while (starfieldSections.length) {
+    const section = starfieldSections.pop();
+    try { section?.windowEl?.remove?.(); } catch {}
+  }
+  starfieldParallaxAnchorWorld = null;
+}
+
+function createStarElement(starMeta) {
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-star';
+  const sizePx = Math.max(1, Number(starMeta?.size) || 1.4);
+  const alpha = Math.max(0.45, Math.min(1, Number(starMeta?.alpha) || 0.78));
+  el.style.width = `${sizePx.toFixed(2)}px`;
+  el.style.height = `${sizePx.toFixed(2)}px`;
+  el.style.opacity = alpha.toFixed(3);
+  return el;
+}
+
+function buildStarSection(x, y, size, stars = null) {
+  if (!starfieldLayerEl) return;
+  const windowEl = document.createElement('div');
+  windowEl.className = 'beat-swarm-star-window';
+  starfieldLayerEl.appendChild(windowEl);
+  const section = {
+    x: Number(x) || 0,
+    y: Number(y) || 0,
+    size: Math.max(500, Number(size) || SWARM_STARFIELD_SECTION_SIZE_WORLD),
+    windowEl,
+    stars: [],
+  };
+  const sourceStars = Array.isArray(stars) ? stars : null;
+  const count = sourceStars ? sourceStars.length : SWARM_STARFIELD_STARS_PER_SECTION;
+  for (let i = 0; i < count; i++) {
+    const meta = sourceStars?.[i] || {};
+    const p = sourceStars
+      ? Math.max(0.08, Math.min(0.98, Number(meta.p) || SWARM_STARFIELD_PARALLAX_MIN))
+      : (SWARM_STARFIELD_PARALLAX_MIN + ((SWARM_STARFIELD_PARALLAX_MAX - SWARM_STARFIELD_PARALLAX_MIN) * Math.pow(Math.random(), 0.65)));
+    const star = {
+      lx: sourceStars ? (Number(meta.lx) || 0) : randRange(0, section.size),
+      ly: sourceStars ? (Number(meta.ly) || 0) : randRange(0, section.size),
+      p,
+      size: sourceStars ? Math.max(1.05, Number(meta.size) || 1.45) : randRange(1.0, 2.35),
+      alpha: sourceStars ? Math.max(0.45, Number(meta.alpha) || 0.72) : randRange(0.45, 0.98),
+      el: null,
+    };
+    star.el = createStarElement(star);
+    try { windowEl.appendChild(star.el); } catch {}
+    section.stars.push(star);
+  }
+  starfieldSections.push(section);
+}
+
+function initStarfieldNear(centerWorld) {
+  if (!centerWorld || !starfieldLayerEl) return;
+  clearStarfield();
+  starfieldParallaxAnchorWorld = { x: Number(centerWorld.x) || 0, y: Number(centerWorld.y) || 0 };
+  const size = SWARM_STARFIELD_SECTION_SIZE_WORLD;
+  const centerOffset = (size * 0.5) + (SWARM_STARFIELD_SECTION_GAP_WORLD * 0.5);
+  const baseY = centerWorld.y - (size * 0.5);
+  const x1 = centerWorld.x - centerOffset - (size * 0.5);
+  const x2 = centerWorld.x + centerOffset - (size * 0.5);
+  buildStarSection(x1, baseY - 120, size);
+  buildStarSection(x2, baseY + 120, size);
+}
+
+function restoreStarfieldFromState(stateStarfield, centerWorld, anchorWorld = null) {
+  if (!starfieldLayerEl) return;
+  clearStarfield();
+  if (anchorWorld && Number.isFinite(anchorWorld.x) && Number.isFinite(anchorWorld.y)) {
+    starfieldParallaxAnchorWorld = { x: Number(anchorWorld.x) || 0, y: Number(anchorWorld.y) || 0 };
+  } else {
+    const c = centerWorld || getViewportCenterWorld();
+    starfieldParallaxAnchorWorld = { x: Number(c.x) || 0, y: Number(c.y) || 0 };
+  }
+  const sections = Array.isArray(stateStarfield) ? stateStarfield : [];
+  if (!sections.length) {
+    initStarfieldNear(centerWorld || getViewportCenterWorld());
+    return;
+  }
+  for (const section of sections) {
+    buildStarSection(
+      Number(section?.x) || 0,
+      Number(section?.y) || 0,
+      Number(section?.size) || SWARM_STARFIELD_SECTION_SIZE_WORLD,
+      Array.isArray(section?.stars) ? section.stars : []
+    );
+  }
+}
+
+function updateStarfieldVisual() {
+  if (!starfieldSections.length) return;
+  const camWorld = getViewportCenterWorld();
+  const z = getZoomState();
+  const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
+  const anchor = starfieldParallaxAnchorWorld || camWorld;
+  const camDxPx = ((Number(camWorld?.x) || 0) - (Number(anchor?.x) || 0)) * Math.max(0.001, scale || 1);
+  const camDyPx = ((Number(camWorld?.y) || 0) - (Number(anchor?.y) || 0)) * Math.max(0.001, scale || 1);
+  for (const section of starfieldSections) {
+    const sectionTl = worldToScreen({ x: section.x, y: section.y });
+    const sectionBr = worldToScreen({ x: section.x + section.size, y: section.y + section.size });
+    if (!sectionTl || !sectionBr || !section.windowEl) continue;
+    const left = Math.min(sectionTl.x, sectionBr.x);
+    const top = Math.min(sectionTl.y, sectionBr.y);
+    const width = Math.abs(sectionBr.x - sectionTl.x);
+    const height = Math.abs(sectionBr.y - sectionTl.y);
+    section.windowEl.style.transform = `translate(${left.toFixed(2)}px, ${top.toFixed(2)}px)`;
+    section.windowEl.style.width = `${width.toFixed(2)}px`;
+    section.windowEl.style.height = `${height.toFixed(2)}px`;
+    section.windowEl.style.opacity = (width < 20 || height < 20) ? '0' : '1';
+
+    for (const star of section.stars) {
+      if (!(width > 0) || !(height > 0)) continue;
+      const p = Math.max(0.08, Math.min(0.98, Number(star.p) || 0.82));
+      const baseX = (Math.max(0, Math.min(section.size, Number(star.lx) || 0)) / Math.max(1, section.size)) * width;
+      const baseY = (Math.max(0, Math.min(section.size, Number(star.ly) || 0)) / Math.max(1, section.size)) * height;
+      const shiftX = -camDxPx * (1 - p) * SWARM_STARFIELD_PARALLAX_SHIFT_SCALE;
+      const shiftY = -camDyPx * (1 - p) * SWARM_STARFIELD_PARALLAX_SHIFT_SCALE;
+      let localX = baseX + shiftX;
+      let localY = baseY + shiftY;
+      localX = ((localX % width) + width) % width;
+      localY = ((localY % height) + height) % height;
+      if (star.el) {
+        star.el.style.opacity = `${Math.max(0.45, Math.min(1, Number(star.alpha) || 0.78)).toFixed(3)}`;
+        star.el.style.transform = `translate(${localX.toFixed(2)}px, ${localY.toFixed(2)}px)`;
+      }
+    }
+  }
 }
 
 function resetArenaPathState() {
@@ -604,6 +765,8 @@ function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD) {
   if (!enemyLayerEl) return;
   const el = document.createElement('div');
   el.className = 'beat-swarm-fx-explosion';
+  // Keep off-screen until first visual update to avoid a one-frame origin flash.
+  el.style.transform = 'translate(-9999px, -9999px)';
   enemyLayerEl.appendChild(el);
   effects.push({
     kind: 'explosion',
@@ -968,6 +1131,13 @@ function pulseReactiveArrowCharge() {
 }
 
 function applyArenaBoundaryResistance(dt, input, centerWorld, scale) {
+  if (!borderForceEnabled) {
+    barrierPushingOut = false;
+    barrierPushCharge = 0;
+    setResistanceVisual(false);
+    setReactiveArrowVisual(false);
+    return false;
+  }
   if (!arenaCenterWorld || !centerWorld) {
     barrierPushingOut = false;
     barrierPushCharge = 0;
@@ -1056,6 +1226,7 @@ function applyArenaBoundaryResistance(dt, input, centerWorld, scale) {
 }
 
 function enforceArenaOuterLimit(centerWorld, scale, dt) {
+  if (!borderForceEnabled) return centerWorld;
   if (!arenaCenterWorld || !centerWorld) return centerWorld;
   const dx = centerWorld.x - arenaCenterWorld.x;
   const dy = centerWorld.y - arenaCenterWorld.y;
@@ -1080,6 +1251,7 @@ function enforceArenaOuterLimit(centerWorld, scale, dt) {
 }
 
 function applyLaunchInnerCircleBounce(centerWorld, scale) {
+  if (!borderForceEnabled) return centerWorld;
   if (!arenaCenterWorld || !centerWorld) return centerWorld;
   if (!(postReleaseAssistTimer > 0) || dragPointerId != null) return centerWorld;
   const dx = centerWorld.x - arenaCenterWorld.x;
@@ -1145,6 +1317,7 @@ function tick(nowMs) {
   const dt = Math.max(0.001, Math.min(0.05, (now - lastFrameTs) / 1000));
   lastFrameTs = now;
   updateArenaPath(dt);
+  updateStarfieldVisual();
   postReleaseAssistTimer = Math.max(0, postReleaseAssistTimer - dt);
   if (postReleaseAssistTimer <= 0) lastLaunchBeatLevel = 0;
   setThrustFxVisual(postReleaseAssistTimer > 0);
@@ -1336,6 +1509,7 @@ export function enterBeatSwarmMode(options = null) {
   try { window.ToySpawner?.close?.(); } catch {}
   if (overlayEl) overlayEl.hidden = true;
   if (exitBtn) exitBtn.hidden = false;
+  if (starfieldLayerEl) starfieldLayerEl.hidden = true;
   if (spawnerLayerEl) spawnerLayerEl.hidden = true;
   if (enemyLayerEl) enemyLayerEl.hidden = true;
   setJoystickVisible(false);
@@ -1344,6 +1518,7 @@ export function enterBeatSwarmMode(options = null) {
   clearPickups();
   clearProjectiles();
   clearEffects();
+  clearStarfield();
   arenaCenterWorld = null;
   barrierPushingOut = false;
   barrierPushCharge = 0;
@@ -1360,6 +1535,7 @@ export function enterBeatSwarmMode(options = null) {
     try { window.__MT_ANCHOR?.center?.(); } catch {}
     applyBeatSwarmCameraScaleWithRetry(1);
     arenaCenterWorld = getViewportCenterWorld();
+    initStarfieldNear(arenaCenterWorld);
     spawnStarterPickups(arenaCenterWorld);
     updateArenaVisual((Number(getZoomState?.()?.targetScale) || Number(getZoomState?.()?.currentScale) || 1));
     setResistanceVisual(false);
@@ -1372,6 +1548,7 @@ export function enterBeatSwarmMode(options = null) {
   }
   if (spawnerLayerEl) spawnerLayerEl.hidden = false;
   if (enemyLayerEl) enemyLayerEl.hidden = false;
+  if (starfieldLayerEl) starfieldLayerEl.hidden = false;
   if (overlayEl) overlayEl.hidden = false;
   bindInput();
   startTick();
@@ -1389,6 +1566,7 @@ export function exitBeatSwarmMode() {
   document.body.classList.remove('beat-swarm-active');
   if (overlayEl) overlayEl.hidden = true;
   if (exitBtn) exitBtn.hidden = true;
+  if (starfieldLayerEl) starfieldLayerEl.hidden = true;
   if (spawnerLayerEl) spawnerLayerEl.hidden = true;
   if (enemyLayerEl) enemyLayerEl.hidden = true;
   setJoystickVisible(false);
@@ -1400,6 +1578,7 @@ export function exitBeatSwarmMode() {
   clearPickups();
   clearProjectiles();
   clearEffects();
+  clearStarfield();
   arenaCenterWorld = null;
   barrierPushingOut = false;
   barrierPushCharge = 0;
@@ -1432,6 +1611,26 @@ export const BeatSwarmMode = {
 
 try {
   window.BeatSwarmMode = Object.assign(window.BeatSwarmMode || {}, BeatSwarmMode);
+} catch {}
+
+try {
+  window.__beatSwarmDebug = Object.assign(window.__beatSwarmDebug || {}, {
+    setBorderForceEnabled(next) {
+      borderForceEnabled = !!next;
+      if (!borderForceEnabled) {
+        barrierPushingOut = false;
+        barrierPushCharge = 0;
+        releaseForcePrimed = false;
+        releaseBeatLevel = 0;
+        setResistanceVisual(false);
+        setReactiveArrowVisual(false);
+      }
+      return borderForceEnabled;
+    },
+    getBorderForceEnabled() {
+      return !!borderForceEnabled;
+    },
+  });
 } catch {}
 
 function installBeatSwarmPersistence() {

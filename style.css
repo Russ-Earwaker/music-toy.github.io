@@ -3199,7 +3199,7 @@ body.internal-board-active #board-main {
 .beat-swarm-overlay {
   position: fixed;
   inset: 0;
-  z-index: 860;
+  z-index: 5601;
   pointer-events: auto;
   touch-action: none;
   cursor: grab;
@@ -3219,6 +3219,7 @@ body.internal-board-active #board-main {
   display: grid;
   place-items: center;
   pointer-events: none;
+  z-index: 4;
 }
 
 .beat-swarm-ship {
@@ -3233,12 +3234,59 @@ body.internal-board-active #board-main {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: 2;
 }
 
 .beat-swarm-spawner-layer {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: 1;
+}
+
+.beat-swarm-starfield-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.beat-swarm-star-window {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 2px solid rgba(156, 186, 220, 0.44);
+  background: #000;
+  box-shadow:
+    inset 0 0 0 1px rgba(210, 232, 255, 0.12),
+    0 8px 22px rgba(0, 0, 0, 0.38);
+  opacity: 0;
+  transform: translate(-9999px, -9999px);
+}
+
+.beat-swarm-star-window::after {
+  content: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.beat-swarm-star {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 45% 45%, rgba(255, 255, 255, 0.95) 0%, rgba(188, 224, 255, 0.85) 58%, rgba(188, 224, 255, 0.12) 100%);
+  box-shadow: 0 0 6px rgba(184, 222, 255, 0.5);
+  transform: translate(-9999px, -9999px);
+  opacity: 0;
 }
 
 .beat-swarm-arena-ring {
@@ -3304,6 +3352,7 @@ body.internal-board-active #board-main {
   opacity: 0;
   pointer-events: none;
   transition: opacity 80ms linear;
+  z-index: 4;
 }
 
 .beat-swarm-resistance.is-visible {
@@ -3332,6 +3381,7 @@ body.internal-board-active #board-main {
   opacity: 0;
   pointer-events: none;
   transition: opacity 80ms linear;
+  z-index: 4;
 }
 
 .beat-swarm-reactive-arrow::after {
@@ -3413,6 +3463,7 @@ body.internal-board-active #board-main {
     rgba(84, 168, 255, 0.42) 78%,
     rgba(84, 168, 255, 0) 100%
   );
+  z-index: 4;
   filter: drop-shadow(0 0 9px rgba(155, 220, 255, 0.75));
   opacity: 0;
   pointer-events: none;
@@ -3684,7 +3735,7 @@ body.internal-board-active #board-main {
   left: auto;
   right: 14px;
   bottom: 14px;
-  z-index: 861;
+  z-index: 5602;
   width: calc(var(--side-icon-size) * 1.1);
   height: calc(var(--side-icon-size) * 1.1);
   --c-btn-size: calc(var(--side-icon-size) * 1.1);
