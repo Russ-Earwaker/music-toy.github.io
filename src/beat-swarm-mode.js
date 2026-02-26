@@ -33,6 +33,11 @@ const SWARM_RELEASE_MULTIPLIER_AT_MAX = 31.0; // keep level-3 feel
 const SWARM_RELEASE_POST_FIRE_SPEED_SCALE = 1.8; // extra max-speed scale per beat level during launch assist
 const SWARM_RELEASE_BOUNCE_RESTITUTION = 0.9;
 const SWARM_RELEASE_BOUNCE_MIN_SPEED = 180;
+const SWARM_ARENA_PATH_SPEED_WORLD = 22; // world units/sec
+const SWARM_ARENA_PATH_MAX_TURN_RATE_RAD = (Math.PI / 180) * 12; // smooth, no sharp turn-backs
+const SWARM_ARENA_PATH_TURN_SMOOTH = 1.8;
+const SWARM_ARENA_PATH_RETARGET_MIN = 2.6;
+const SWARM_ARENA_PATH_RETARGET_MAX = 5.8;
 
 let active = false;
 let overlayEl = null;
@@ -55,6 +60,10 @@ let lastLaunchBeatLevel = 0;
 let postReleaseAssistTimer = 0;
 let outerForceContinuousSeconds = 0;
 let releaseForcePrimed = false;
+let arenaPathHeadingRad = 0;
+let arenaPathTurnRateRad = 0;
+let arenaPathTargetTurnRateRad = 0;
+let arenaPathRetargetTimer = 0;
 
 let dragPointerId = null;
 let dragStartX = 0;
@@ -118,6 +127,12 @@ function captureBeatSwarmState() {
     postReleaseAssistTimer,
     outerForceContinuousSeconds,
     releaseForcePrimed,
+    arenaPath: {
+      headingRad: arenaPathHeadingRad,
+      turnRateRad: arenaPathTurnRateRad,
+      targetTurnRateRad: arenaPathTargetTurnRateRad,
+      retargetTimer: arenaPathRetargetTimer,
+    },
     arenaCenterWorld: arenaCenterWorld ? { x: arenaCenterWorld.x, y: arenaCenterWorld.y } : null,
     equippedWeapons: Array.from(equippedWeapons),
     enemies: enemies.map((e) => ({
@@ -227,6 +242,14 @@ function restoreBeatSwarmState(state) {
   postReleaseAssistTimer = Math.max(0, Number(state.postReleaseAssistTimer) || 0);
   outerForceContinuousSeconds = Math.max(0, Number(state.outerForceContinuousSeconds) || 0);
   releaseForcePrimed = !!state.releaseForcePrimed;
+  arenaPathHeadingRad = Number(state?.arenaPath?.headingRad);
+  if (!Number.isFinite(arenaPathHeadingRad)) arenaPathHeadingRad = Math.random() * Math.PI * 2;
+  arenaPathTurnRateRad = Number(state?.arenaPath?.turnRateRad);
+  if (!Number.isFinite(arenaPathTurnRateRad)) arenaPathTurnRateRad = 0;
+  arenaPathTargetTurnRateRad = Number(state?.arenaPath?.targetTurnRateRad);
+  if (!Number.isFinite(arenaPathTargetTurnRateRad)) arenaPathTargetTurnRateRad = 0;
+  arenaPathRetargetTimer = Number(state?.arenaPath?.retargetTimer);
+  if (!Number.isFinite(arenaPathRetargetTimer)) arenaPathRetargetTimer = 0;
   arenaCenterWorld = state.arenaCenterWorld
     ? { x: Number(state.arenaCenterWorld.x) || 0, y: Number(state.arenaCenterWorld.y) || 0 }
     : getViewportCenterWorld();
@@ -395,7 +418,7 @@ function getViewportCenterWorld() {
   return (w && Number.isFinite(w.x) && Number.isFinite(w.y)) ? w : { x: 0, y: 0 };
 }
 
-function applyBeatSwarmCameraScaleWithRetry() {
+function applyBeatSwarmCameraScaleWithRetry(retries = 0) {
   const apply = () => {
     try {
       const z = getZoomState();
@@ -406,8 +429,45 @@ function applyBeatSwarmCameraScaleWithRetry() {
     } catch {}
   };
   apply();
-  setTimeout(apply, 140);
-  setTimeout(apply, 320);
+  if (retries >= 1) requestAnimationFrame(apply);
+  if (retries >= 2) setTimeout(apply, 140);
+  if (retries >= 3) setTimeout(apply, 320);
+}
+
+function randRange(min, max) {
+  const a = Number(min) || 0;
+  const b = Number(max) || 0;
+  return a + ((b - a) * Math.random());
+}
+
+function resetArenaPathState() {
+  arenaPathHeadingRad = Math.random() * Math.PI * 2;
+  arenaPathTurnRateRad = 0;
+  arenaPathTargetTurnRateRad = randRange(-SWARM_ARENA_PATH_MAX_TURN_RATE_RAD, SWARM_ARENA_PATH_MAX_TURN_RATE_RAD);
+  arenaPathRetargetTimer = randRange(SWARM_ARENA_PATH_RETARGET_MIN, SWARM_ARENA_PATH_RETARGET_MAX);
+}
+
+function updateArenaPath(dt) {
+  if (!arenaCenterWorld || !(dt > 0)) return;
+  arenaPathRetargetTimer -= dt;
+  if (!(arenaPathRetargetTimer > 0)) {
+    // Keep turn-rate targets modest so the path stays curvy but avoids frequent reversals.
+    arenaPathTargetTurnRateRad = randRange(
+      -SWARM_ARENA_PATH_MAX_TURN_RATE_RAD,
+      SWARM_ARENA_PATH_MAX_TURN_RATE_RAD
+    );
+    arenaPathRetargetTimer = randRange(SWARM_ARENA_PATH_RETARGET_MIN, SWARM_ARENA_PATH_RETARGET_MAX);
+  }
+  const s = Math.max(0, Math.min(1, SWARM_ARENA_PATH_TURN_SMOOTH * dt));
+  arenaPathTurnRateRad += (arenaPathTargetTurnRateRad - arenaPathTurnRateRad) * s;
+  arenaPathTurnRateRad = Math.max(
+    -SWARM_ARENA_PATH_MAX_TURN_RATE_RAD,
+    Math.min(SWARM_ARENA_PATH_MAX_TURN_RATE_RAD, arenaPathTurnRateRad)
+  );
+  arenaPathHeadingRad += arenaPathTurnRateRad * dt;
+  const step = SWARM_ARENA_PATH_SPEED_WORLD * dt;
+  arenaCenterWorld.x += Math.cos(arenaPathHeadingRad) * step;
+  arenaCenterWorld.y += Math.sin(arenaPathHeadingRad) * step;
 }
 
 function removeEnemy(enemy) {
@@ -1084,6 +1144,7 @@ function tick(nowMs) {
   if (!lastFrameTs) lastFrameTs = now;
   const dt = Math.max(0.001, Math.min(0.05, (now - lastFrameTs) / 1000));
   lastFrameTs = now;
+  updateArenaPath(dt);
   postReleaseAssistTimer = Math.max(0, postReleaseAssistTimer - dt);
   if (postReleaseAssistTimer <= 0) lastLaunchBeatLevel = 0;
   setThrustFxVisual(postReleaseAssistTimer > 0);
@@ -1273,10 +1334,10 @@ export function enterBeatSwarmMode(options = null) {
   window.__beatSwarmActive = true;
   document.body.classList.add('beat-swarm-active');
   try { window.ToySpawner?.close?.(); } catch {}
-  if (overlayEl) overlayEl.hidden = false;
+  if (overlayEl) overlayEl.hidden = true;
   if (exitBtn) exitBtn.hidden = false;
-  if (spawnerLayerEl) spawnerLayerEl.hidden = false;
-  if (enemyLayerEl) enemyLayerEl.hidden = false;
+  if (spawnerLayerEl) spawnerLayerEl.hidden = true;
+  if (enemyLayerEl) enemyLayerEl.hidden = true;
   setJoystickVisible(false);
   setThrustFxVisual(false);
   clearEnemies();
@@ -1291,26 +1352,29 @@ export function enterBeatSwarmMode(options = null) {
   postReleaseAssistTimer = 0;
   outerForceContinuousSeconds = 0;
   releaseForcePrimed = false;
-  if (!restoreState) {
-    spawnStarterPickups(getViewportCenterWorld());
-  }
+  if (!restoreState) resetArenaPathState();
   lastBeatIndex = null;
   try { spawnerRuntime?.enter?.(); } catch {}
   try { configureInitialSpawnerEnablement(); } catch {}
-  bindInput();
-  startTick();
   if (!restoreState) {
     try { window.__MT_ANCHOR?.center?.(); } catch {}
-    applyBeatSwarmCameraScaleWithRetry();
+    applyBeatSwarmCameraScaleWithRetry(1);
     arenaCenterWorld = getViewportCenterWorld();
+    spawnStarterPickups(arenaCenterWorld);
     updateArenaVisual((Number(getZoomState?.()?.targetScale) || Number(getZoomState?.()?.currentScale) || 1));
     setResistanceVisual(false);
     setReactiveArrowVisual(false);
   } else {
     restoreBeatSwarmState(restoreState);
-    applyBeatSwarmCameraScaleWithRetry();
+    updateArenaVisual((Number(getZoomState?.()?.targetScale) || Number(getZoomState?.()?.currentScale) || 1));
+    setResistanceVisual(false);
     setReactiveArrowVisual(false);
   }
+  if (spawnerLayerEl) spawnerLayerEl.hidden = false;
+  if (enemyLayerEl) enemyLayerEl.hidden = false;
+  if (overlayEl) overlayEl.hidden = false;
+  bindInput();
+  startTick();
   persistBeatSwarmState();
   return true;
 }
@@ -1344,6 +1408,7 @@ export function exitBeatSwarmMode() {
   postReleaseAssistTimer = 0;
   outerForceContinuousSeconds = 0;
   releaseForcePrimed = false;
+  resetArenaPathState();
   if (arenaRingEl) arenaRingEl.style.opacity = '0';
   if (arenaCoreEl) arenaCoreEl.style.opacity = '0';
   if (arenaLimitEl) arenaLimitEl.style.opacity = '0';
