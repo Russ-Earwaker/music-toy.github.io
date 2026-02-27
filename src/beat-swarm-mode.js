@@ -1354,6 +1354,22 @@ function getOutwardOnlyInput(input, centerWorld) {
   };
 }
 
+function getShipFacingFromReleaseAim(input, centerWorld) {
+  if (!input || !arenaCenterWorld || !centerWorld) return null;
+  if (!(input.mag > 0.0001)) return null;
+  const dx = centerWorld.x - arenaCenterWorld.x;
+  const dy = centerWorld.y - arenaCenterWorld.y;
+  const dist = Math.hypot(dx, dy) || 0;
+  if (!(dist > SWARM_ARENA_RADIUS_WORLD) || !(dist > 0.0001)) return null;
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const inputOut = Math.max(0, (input.x * nx) + (input.y * ny));
+  if (!(inputOut > 0.0001)) return null;
+  // Match reactive-arrow heading: arrow angle is atan2(-input.y, -input.x), and
+  // ship uses +90deg convention for its sprite orientation.
+  return (Math.atan2(-input.y, -input.x) * 180 / Math.PI) + 90;
+}
+
 function getInputVector() {
   if (dragPointerId == null) return { x: 0, y: 0, mag: 0 };
   let dx = dragNowX - dragStartX;
@@ -1369,10 +1385,12 @@ function getInputVector() {
   return { x: nx, y: ny, mag: clamped / SWARM_JOYSTICK_RADIUS };
 }
 
-function updateShipFacing(dt, inputX, inputY) {
+function updateShipFacing(dt, inputX, inputY, overrideTargetDeg = null) {
   const speed = Math.hypot(velocityX, velocityY);
-  let targetDeg = shipFacingDeg;
-  if (speed > 14) {
+  let targetDeg = Number.isFinite(overrideTargetDeg) ? Number(overrideTargetDeg) : shipFacingDeg;
+  if (Number.isFinite(overrideTargetDeg)) {
+    // keep explicit override from release-aim state
+  } else if (speed > 14) {
     targetDeg = (Math.atan2(velocityY, velocityX) * 180 / Math.PI) + 90;
   } else if (dragPointerId != null && (Math.abs(inputX) > 0.001 || Math.abs(inputY) > 0.001)) {
     targetDeg = (Math.atan2(inputY, inputX) * 180 / Math.PI) + 90;
@@ -1474,7 +1492,8 @@ function tick(nowMs) {
   updateEnemies(dt);
   updatePickupsAndCombat(dt);
   try { spawnerRuntime?.update?.(dt); } catch {}
-  updateShipFacing(dt, input.x, input.y);
+  const aimFacingDeg = getShipFacingFromReleaseAim(input, centerWorldAfterMove);
+  updateShipFacing(dt, input.x, input.y, aimFacingDeg);
   rafId = requestAnimationFrame(tick);
 }
 
