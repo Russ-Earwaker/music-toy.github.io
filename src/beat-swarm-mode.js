@@ -1323,6 +1323,37 @@ function applyLaunchInnerCircleBounce(centerWorld, scale) {
   return { x: cx, y: cy };
 }
 
+function shouldSuppressSteeringForRelease(input, centerWorld) {
+  if (dragPointerId == null) return false;
+  if (!arenaCenterWorld || !centerWorld) return false;
+  if (!input || !(input.mag > 0.0001)) return false;
+  const dx = centerWorld.x - arenaCenterWorld.x;
+  const dy = centerWorld.y - arenaCenterWorld.y;
+  const dist = Math.hypot(dx, dy) || 0;
+  if (!(dist > SWARM_ARENA_RADIUS_WORLD) || !(dist > 0.0001)) return false;
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const inputOut = Math.max(0, (input.x * nx) + (input.y * ny));
+  return inputOut > 0.0001;
+}
+
+function getOutwardOnlyInput(input, centerWorld) {
+  if (!input || !arenaCenterWorld || !centerWorld) return { x: 0, y: 0, mag: 0 };
+  const dx = centerWorld.x - arenaCenterWorld.x;
+  const dy = centerWorld.y - arenaCenterWorld.y;
+  const dist = Math.hypot(dx, dy) || 0;
+  if (!(dist > 0.0001)) return { x: 0, y: 0, mag: 0 };
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const inputOut = Math.max(0, (input.x * nx) + (input.y * ny));
+  if (!(inputOut > 0.0001)) return { x: 0, y: 0, mag: 0 };
+  return {
+    x: nx * inputOut,
+    y: ny * inputOut,
+    mag: Math.max(0, Math.min(1, (Number(input.mag) || 0) * inputOut)),
+  };
+}
+
 function getInputVector() {
   if (dragPointerId == null) return { x: 0, y: 0, mag: 0 };
   let dx = dragNowX - dragStartX;
@@ -1384,10 +1415,15 @@ function tick(nowMs) {
   if (postReleaseAssistTimer <= 0) lastLaunchBeatLevel = 0;
   setThrustFxVisual(postReleaseAssistTimer > 0);
 
+  const z = getZoomState();
+  const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
+  const centerWorld = getViewportCenterWorld();
   const input = getInputVector();
-  if (input.mag > 0.0001) {
-    const targetVx = input.x * SWARM_MAX_SPEED * input.mag;
-    const targetVy = input.y * SWARM_MAX_SPEED * input.mag;
+  const suppressSteering = shouldSuppressSteeringForRelease(input, centerWorld);
+  const steerInput = suppressSteering ? getOutwardOnlyInput(input, centerWorld) : input;
+  if (steerInput.mag > 0.0001) {
+    const targetVx = steerInput.x * SWARM_MAX_SPEED * steerInput.mag;
+    const targetVy = steerInput.y * SWARM_MAX_SPEED * steerInput.mag;
     let steerX = targetVx - velocityX;
     let steerY = targetVy - velocityY;
     const steerLen = Math.hypot(steerX, steerY) || 0;
@@ -1397,8 +1433,8 @@ function tick(nowMs) {
       steerX *= k;
       steerY *= k;
     }
-    velocityX += steerX * SWARM_TURN_WEIGHT + steerX * (1 - SWARM_TURN_WEIGHT) * input.mag;
-    velocityY += steerY * SWARM_TURN_WEIGHT + steerY * (1 - SWARM_TURN_WEIGHT) * input.mag;
+    velocityX += steerX * SWARM_TURN_WEIGHT + steerX * (1 - SWARM_TURN_WEIGHT) * steerInput.mag;
+    velocityY += steerY * SWARM_TURN_WEIGHT + steerY * (1 - SWARM_TURN_WEIGHT) * steerInput.mag;
   } else {
     const decay = Math.exp(-SWARM_DECEL * dt);
     velocityX *= decay;
@@ -1408,10 +1444,6 @@ function tick(nowMs) {
       velocityY = 0;
     }
   }
-
-  const z = getZoomState();
-  const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
-  const centerWorld = getViewportCenterWorld();
   const outsideForceActive = applyArenaBoundaryResistance(dt, input, centerWorld, scale);
   if (outsideForceActive) {
     outerForceContinuousSeconds += dt;
