@@ -38,9 +38,7 @@ const SWARM_ARENA_PATH_MAX_TURN_RATE_RAD = (Math.PI / 180) * 12; // smooth, no s
 const SWARM_ARENA_PATH_TURN_SMOOTH = 1.8;
 const SWARM_ARENA_PATH_RETARGET_MIN = 2.6;
 const SWARM_ARENA_PATH_RETARGET_MAX = 5.8;
-const SWARM_STARFIELD_SECTION_SIZE_WORLD = 2400;
-const SWARM_STARFIELD_SECTION_GAP_WORLD = 260;
-const SWARM_STARFIELD_STARS_PER_SECTION = 370;
+const SWARM_STARFIELD_COUNT = 520;
 const SWARM_STARFIELD_PARALLAX_MIN = 0.42;
 const SWARM_STARFIELD_PARALLAX_MAX = 0.88;
 const SWARM_STARFIELD_PARALLAX_SHIFT_SCALE = 0.7;
@@ -53,6 +51,7 @@ let joystickKnobEl = null;
 let resistanceEl = null;
 let reactiveArrowEl = null;
 let thrustFxEl = null;
+let pauseLabelEl = null;
 let spawnerLayerEl = null;
 let enemyLayerEl = null;
 let starfieldLayerEl = null;
@@ -72,7 +71,9 @@ let arenaPathTurnRateRad = 0;
 let arenaPathTargetTurnRateRad = 0;
 let arenaPathRetargetTimer = 0;
 let starfieldParallaxAnchorWorld = null;
+let starfieldSplitWorldX = 0;
 let borderForceEnabled = true;
+let gameplayPaused = false;
 
 let dragPointerId = null;
 let dragStartX = 0;
@@ -87,7 +88,7 @@ const enemies = [];
 const pickups = [];
 const projectiles = [];
 const effects = [];
-const starfieldSections = [];
+const starfieldStars = [];
 const ENEMY_CAP = 120;
 const ENEMY_ACCEL = 680;
 const ENEMY_MAX_SPEED = 260;
@@ -143,23 +144,17 @@ function captureBeatSwarmState() {
       targetTurnRateRad: arenaPathTargetTurnRateRad,
       retargetTimer: arenaPathRetargetTimer,
     },
-    starfield: starfieldSections.map((section) => ({
-      x: Number(section.x) || 0,
-      y: Number(section.y) || 0,
-      size: Number(section.size) || SWARM_STARFIELD_SECTION_SIZE_WORLD,
-      stars: Array.isArray(section.stars)
-        ? section.stars.map((s) => ({
-          lx: Number(s.lx) || 0,
-          ly: Number(s.ly) || 0,
-          p: Number(s.p) || 0,
-          size: Number(s.size) || 1.5,
-          alpha: Number(s.alpha) || 0.7,
-        }))
-        : [],
+    starfield: starfieldStars.map((s) => ({
+      nx: Number(s.nx) || 0,
+      ny: Number(s.ny) || 0,
+      p: Number(s.p) || 0,
+      size: Number(s.size) || 1.5,
+      alpha: Number(s.alpha) || 0.7,
     })),
     starfieldParallaxAnchorWorld: starfieldParallaxAnchorWorld
       ? { x: Number(starfieldParallaxAnchorWorld.x) || 0, y: Number(starfieldParallaxAnchorWorld.y) || 0 }
       : null,
+    starfieldSplitWorldX: Number(starfieldSplitWorldX) || 0,
     arenaCenterWorld: arenaCenterWorld ? { x: arenaCenterWorld.x, y: arenaCenterWorld.y } : null,
     equippedWeapons: Array.from(equippedWeapons),
     enemies: enemies.map((e) => ({
@@ -280,7 +275,7 @@ function restoreBeatSwarmState(state) {
   arenaCenterWorld = state.arenaCenterWorld
     ? { x: Number(state.arenaCenterWorld.x) || 0, y: Number(state.arenaCenterWorld.y) || 0 }
     : getViewportCenterWorld();
-  restoreStarfieldFromState(state.starfield, arenaCenterWorld, state.starfieldParallaxAnchorWorld);
+  restoreStarfieldFromState(state.starfield, arenaCenterWorld, state.starfieldParallaxAnchorWorld, state.starfieldSplitWorldX);
 
   equippedWeapons.clear();
   for (const id of Array.isArray(state.equippedWeapons) ? state.equippedWeapons : []) {
@@ -367,6 +362,7 @@ function ensureUi() {
       <div class="beat-swarm-ship-wrap" aria-hidden="true">
         <div class="beat-swarm-ship"></div>
       </div>
+      <div class="beat-swarm-pause-label" aria-hidden="true">PAUSE</div>
       <div class="beat-swarm-starfield-layer" aria-hidden="true"></div>
       <div class="beat-swarm-spawner-layer" aria-hidden="true"></div>
       <div class="beat-swarm-enemy-layer" aria-hidden="true"></div>
@@ -379,6 +375,7 @@ function ensureUi() {
     `;
     document.body.appendChild(overlayEl);
   }
+  pauseLabelEl = overlayEl.querySelector('.beat-swarm-pause-label');
   starfieldLayerEl = overlayEl.querySelector('.beat-swarm-starfield-layer');
   spawnerLayerEl = overlayEl.querySelector('.beat-swarm-spawner-layer');
   enemyLayerEl = overlayEl.querySelector('.beat-swarm-enemy-layer');
@@ -429,6 +426,21 @@ function ensureUi() {
   }
 }
 
+function setGameplayPaused(next) {
+  gameplayPaused = !!next;
+  if (gameplayPaused) {
+    dragPointerId = null;
+    setJoystickVisible(false);
+    setReactiveArrowVisual(false);
+    setThrustFxVisual(false);
+    barrierPushingOut = false;
+    barrierPushCharge = 0;
+    outerForceContinuousSeconds = 0;
+    releaseForcePrimed = false;
+  }
+  pauseLabelEl?.classList?.toggle?.('is-visible', gameplayPaused);
+}
+
 function applyCameraDelta(dx, dy) {
   const z = getZoomState();
   const s = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
@@ -447,6 +459,36 @@ function getViewportCenterWorld() {
   const c = getViewportCenterClient();
   const w = screenToWorld({ x: c.x, y: c.y });
   return (w && Number.isFinite(w.x) && Number.isFinite(w.y)) ? w : { x: 0, y: 0 };
+}
+
+function getSceneStartWorld() {
+  try {
+    if (window.__ArtInternal?.isActive?.()) {
+      const home = window.__ArtInternal?.getHomeAnchor?.();
+      if (home && Number.isFinite(home.x) && Number.isFinite(home.y)) {
+        return { x: Number(home.x) || 0, y: Number(home.y) || 0 };
+      }
+    }
+  } catch {}
+  try {
+    const w = window.__MT_ANCHOR_WORLD;
+    if (w && Number.isFinite(w.x) && Number.isFinite(w.y)) {
+      return { x: Number(w.x) || 0, y: Number(w.y) || 0 };
+    }
+  } catch {}
+  return getViewportCenterWorld();
+}
+
+function snapCameraToWorld(worldPoint, scaleValue = SWARM_CAMERA_TARGET_SCALE) {
+  const w = worldPoint && Number.isFinite(worldPoint.x) && Number.isFinite(worldPoint.y)
+    ? worldPoint
+    : getViewportCenterWorld();
+  const s = Math.max(0.3, Math.min(1, Number(scaleValue) || 0.6));
+  const cx = window.innerWidth * 0.5;
+  const cy = window.innerHeight * 0.5;
+  const tx = cx - (w.x * s);
+  const ty = cy - (w.y * s);
+  try { window.__setBoardViewportNow?.(s, tx, ty); } catch {}
 }
 
 function applyBeatSwarmCameraScaleWithRetry(retries = 0) {
@@ -472,11 +514,17 @@ function randRange(min, max) {
 }
 
 function clearStarfield() {
-  while (starfieldSections.length) {
-    const section = starfieldSections.pop();
-    try { section?.windowEl?.remove?.(); } catch {}
+  while (starfieldStars.length) {
+    const star = starfieldStars.pop();
+    try { star?.el?.remove?.(); } catch {}
   }
   starfieldParallaxAnchorWorld = null;
+  starfieldSplitWorldX = 0;
+  if (starfieldLayerEl) {
+    starfieldLayerEl.style.clipPath = '';
+    starfieldLayerEl.style.webkitClipPath = '';
+    starfieldLayerEl.style.background = 'transparent';
+  }
 }
 
 function createStarElement(starMeta) {
@@ -490,54 +538,38 @@ function createStarElement(starMeta) {
   return el;
 }
 
-function buildStarSection(x, y, size, stars = null) {
+function buildInfiniteStarfield(stars = null) {
   if (!starfieldLayerEl) return;
-  const windowEl = document.createElement('div');
-  windowEl.className = 'beat-swarm-star-window';
-  starfieldLayerEl.appendChild(windowEl);
-  const section = {
-    x: Number(x) || 0,
-    y: Number(y) || 0,
-    size: Math.max(500, Number(size) || SWARM_STARFIELD_SECTION_SIZE_WORLD),
-    windowEl,
-    stars: [],
-  };
-  const sourceStars = Array.isArray(stars) ? stars : null;
-  const count = sourceStars ? sourceStars.length : SWARM_STARFIELD_STARS_PER_SECTION;
+  const source = Array.isArray(stars) ? stars : null;
+  const count = source ? source.length : SWARM_STARFIELD_COUNT;
   for (let i = 0; i < count; i++) {
-    const meta = sourceStars?.[i] || {};
-    const p = sourceStars
+    const meta = source?.[i] || {};
+    const p = source
       ? Math.max(0.08, Math.min(0.98, Number(meta.p) || SWARM_STARFIELD_PARALLAX_MIN))
       : (SWARM_STARFIELD_PARALLAX_MIN + ((SWARM_STARFIELD_PARALLAX_MAX - SWARM_STARFIELD_PARALLAX_MIN) * Math.pow(Math.random(), 0.65)));
     const star = {
-      lx: sourceStars ? (Number(meta.lx) || 0) : randRange(0, section.size),
-      ly: sourceStars ? (Number(meta.ly) || 0) : randRange(0, section.size),
+      nx: source ? (Math.max(0, Math.min(1, Number(meta.nx) || 0))) : Math.random(),
+      ny: source ? (Math.max(0, Math.min(1, Number(meta.ny) || 0))) : Math.random(),
       p,
-      size: sourceStars ? Math.max(1.05, Number(meta.size) || 1.45) : randRange(1.0, 2.35),
-      alpha: sourceStars ? Math.max(0.45, Number(meta.alpha) || 0.72) : randRange(0.45, 0.98),
+      size: source ? Math.max(1.05, Number(meta.size) || 1.45) : randRange(1.0, 2.35),
+      alpha: source ? Math.max(0.45, Number(meta.alpha) || 0.72) : randRange(0.45, 0.98),
       el: null,
     };
     star.el = createStarElement(star);
-    try { windowEl.appendChild(star.el); } catch {}
-    section.stars.push(star);
+    try { starfieldLayerEl.appendChild(star.el); } catch {}
+    starfieldStars.push(star);
   }
-  starfieldSections.push(section);
 }
 
 function initStarfieldNear(centerWorld) {
   if (!centerWorld || !starfieldLayerEl) return;
   clearStarfield();
   starfieldParallaxAnchorWorld = { x: Number(centerWorld.x) || 0, y: Number(centerWorld.y) || 0 };
-  const size = SWARM_STARFIELD_SECTION_SIZE_WORLD;
-  const centerOffset = (size * 0.5) + (SWARM_STARFIELD_SECTION_GAP_WORLD * 0.5);
-  const baseY = centerWorld.y - (size * 0.5);
-  const x1 = centerWorld.x - centerOffset - (size * 0.5);
-  const x2 = centerWorld.x + centerOffset - (size * 0.5);
-  buildStarSection(x1, baseY - 120, size);
-  buildStarSection(x2, baseY + 120, size);
+  starfieldSplitWorldX = Number(centerWorld.x) || 0;
+  buildInfiniteStarfield();
 }
 
-function restoreStarfieldFromState(stateStarfield, centerWorld, anchorWorld = null) {
+function restoreStarfieldFromState(stateStarfield, centerWorld, anchorWorld = null, splitWorldX = null) {
   if (!starfieldLayerEl) return;
   clearStarfield();
   if (anchorWorld && Number.isFinite(anchorWorld.x) && Number.isFinite(anchorWorld.y)) {
@@ -546,57 +578,74 @@ function restoreStarfieldFromState(stateStarfield, centerWorld, anchorWorld = nu
     const c = centerWorld || getViewportCenterWorld();
     starfieldParallaxAnchorWorld = { x: Number(c.x) || 0, y: Number(c.y) || 0 };
   }
-  const sections = Array.isArray(stateStarfield) ? stateStarfield : [];
-  if (!sections.length) {
-    initStarfieldNear(centerWorld || getViewportCenterWorld());
-    return;
+  if (Number.isFinite(splitWorldX)) {
+    starfieldSplitWorldX = Number(splitWorldX) || 0;
+  } else {
+    starfieldSplitWorldX = Number(centerWorld?.x) || 0;
   }
-  for (const section of sections) {
-    buildStarSection(
-      Number(section?.x) || 0,
-      Number(section?.y) || 0,
-      Number(section?.size) || SWARM_STARFIELD_SECTION_SIZE_WORLD,
-      Array.isArray(section?.stars) ? section.stars : []
-    );
+  let sourceStars = null;
+  if (Array.isArray(stateStarfield)) {
+    if (stateStarfield.length && Array.isArray(stateStarfield[0]?.stars)) {
+      // Backward compatibility: older saves stored starfield by sections.
+      sourceStars = [];
+      for (const sec of stateStarfield) {
+        const secSize = Math.max(1, Number(sec?.size) || 1);
+        for (const s of Array.isArray(sec?.stars) ? sec.stars : []) {
+          sourceStars.push({
+            nx: Math.max(0, Math.min(1, (Number(s?.lx) || 0) / secSize)),
+            ny: Math.max(0, Math.min(1, (Number(s?.ly) || 0) / secSize)),
+            p: Number(s?.p) || SWARM_STARFIELD_PARALLAX_MIN,
+            size: Number(s?.size) || 1.4,
+            alpha: Number(s?.alpha) || 0.72,
+          });
+        }
+      }
+    } else {
+      sourceStars = stateStarfield;
+    }
   }
+  buildInfiniteStarfield(sourceStars);
 }
 
 function updateStarfieldVisual() {
-  if (!starfieldSections.length) return;
+  if (!starfieldStars.length || !starfieldLayerEl) return;
   const camWorld = getViewportCenterWorld();
   const z = getZoomState();
   const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
   const anchor = starfieldParallaxAnchorWorld || camWorld;
   const camDxPx = ((Number(camWorld?.x) || 0) - (Number(anchor?.x) || 0)) * Math.max(0.001, scale || 1);
   const camDyPx = ((Number(camWorld?.y) || 0) - (Number(anchor?.y) || 0)) * Math.max(0.001, scale || 1);
-  for (const section of starfieldSections) {
-    const sectionTl = worldToScreen({ x: section.x, y: section.y });
-    const sectionBr = worldToScreen({ x: section.x + section.size, y: section.y + section.size });
-    if (!sectionTl || !sectionBr || !section.windowEl) continue;
-    const left = Math.min(sectionTl.x, sectionBr.x);
-    const top = Math.min(sectionTl.y, sectionBr.y);
-    const width = Math.abs(sectionBr.x - sectionTl.x);
-    const height = Math.abs(sectionBr.y - sectionTl.y);
-    section.windowEl.style.transform = `translate(${left.toFixed(2)}px, ${top.toFixed(2)}px)`;
-    section.windowEl.style.width = `${width.toFixed(2)}px`;
-    section.windowEl.style.height = `${height.toFixed(2)}px`;
-    section.windowEl.style.opacity = (width < 20 || height < 20) ? '0' : '1';
-
-    for (const star of section.stars) {
-      if (!(width > 0) || !(height > 0)) continue;
-      const p = Math.max(0.08, Math.min(0.98, Number(star.p) || 0.82));
-      const baseX = (Math.max(0, Math.min(section.size, Number(star.lx) || 0)) / Math.max(1, section.size)) * width;
-      const baseY = (Math.max(0, Math.min(section.size, Number(star.ly) || 0)) / Math.max(1, section.size)) * height;
-      const shiftX = -camDxPx * (1 - p) * SWARM_STARFIELD_PARALLAX_SHIFT_SCALE;
-      const shiftY = -camDyPx * (1 - p) * SWARM_STARFIELD_PARALLAX_SHIFT_SCALE;
-      let localX = baseX + shiftX;
-      let localY = baseY + shiftY;
-      localX = ((localX % width) + width) % width;
-      localY = ((localY % height) + height) % height;
-      if (star.el) {
-        star.el.style.opacity = `${Math.max(0.45, Math.min(1, Number(star.alpha) || 0.78)).toFixed(3)}`;
-        star.el.style.transform = `translate(${localX.toFixed(2)}px, ${localY.toFixed(2)}px)`;
-      }
+  const splitPoint = worldToScreen({ x: Number(starfieldSplitWorldX) || 0, y: Number(camWorld?.y) || 0 });
+  const splitX = Math.max(0, Math.min(window.innerWidth, Number(splitPoint?.x) || 0));
+  const rightW = Math.max(0, window.innerWidth - splitX);
+  const w = Math.max(1, window.innerWidth);
+  const h = Math.max(1, window.innerHeight);
+  if (rightW <= 0.5) {
+    starfieldLayerEl.style.clipPath = '';
+    starfieldLayerEl.style.webkitClipPath = '';
+    starfieldLayerEl.style.background = 'transparent';
+    for (const star of starfieldStars) {
+      if (star.el) star.el.style.opacity = '0';
+    }
+    return;
+  }
+  starfieldLayerEl.style.background = '#000';
+  const clip = `inset(0px 0px 0px ${splitX.toFixed(2)}px)`;
+  starfieldLayerEl.style.clipPath = clip;
+  starfieldLayerEl.style.webkitClipPath = clip;
+  for (const star of starfieldStars) {
+    const p = Math.max(0.08, Math.min(0.98, Number(star.p) || 0.82));
+    const baseX = (Math.max(0, Math.min(1, Number(star.nx) || 0)) * w);
+    const baseY = (Math.max(0, Math.min(1, Number(star.ny) || 0)) * h);
+    const shiftX = -camDxPx * (1 - p) * SWARM_STARFIELD_PARALLAX_SHIFT_SCALE;
+    const shiftY = -camDyPx * (1 - p) * SWARM_STARFIELD_PARALLAX_SHIFT_SCALE;
+    let localX = baseX + shiftX;
+    let localY = baseY + shiftY;
+    localX = ((localX % w) + w) % w;
+    localY = ((localY % h) + h) % h;
+    if (star.el) {
+      star.el.style.opacity = `${Math.max(0.45, Math.min(1, Number(star.alpha) || 0.78)).toFixed(3)}`;
+      star.el.style.transform = `translate(${localX.toFixed(2)}px, ${localY.toFixed(2)}px)`;
     }
   }
 }
@@ -1316,6 +1365,19 @@ function tick(nowMs) {
   if (!lastFrameTs) lastFrameTs = now;
   const dt = Math.max(0.001, Math.min(0.05, (now - lastFrameTs) / 1000));
   lastFrameTs = now;
+  if (gameplayPaused) {
+    const zPause = getZoomState();
+    const scalePause = Number.isFinite(zPause?.targetScale) ? zPause.targetScale : (Number.isFinite(zPause?.currentScale) ? zPause.currentScale : 1);
+    const centerPause = getViewportCenterWorld();
+    const outsideMainPause = arenaCenterWorld
+      ? (Math.hypot(centerPause.x - arenaCenterWorld.x, centerPause.y - arenaCenterWorld.y) > SWARM_ARENA_RADIUS_WORLD)
+      : false;
+    updateArenaVisual(scalePause, outsideMainPause);
+    updateStarfieldVisual();
+    try { spawnerRuntime?.update?.(0); } catch {}
+    rafId = requestAnimationFrame(tick);
+    return;
+  }
   updateArenaPath(dt);
   updateStarfieldVisual();
   postReleaseAssistTimer = Math.max(0, postReleaseAssistTimer - dt);
@@ -1399,6 +1461,7 @@ function stopTick() {
 
 function onPointerDown(ev) {
   if (!active) return;
+  if (gameplayPaused) return;
   if (ev.button != null && ev.button !== 0) return;
   dragPointerId = ev.pointerId;
   dragStartX = ev.clientX;
@@ -1423,6 +1486,7 @@ function onPointerDown(ev) {
 
 function onPointerMove(ev) {
   if (!active) return;
+  if (gameplayPaused) return;
   if (dragPointerId == null || ev.pointerId !== dragPointerId) return;
   dragNowX = ev.clientX;
   dragNowY = ev.clientY;
@@ -1431,6 +1495,7 @@ function onPointerMove(ev) {
 
 function onPointerUp(ev) {
   if (!active) return;
+  if (gameplayPaused) return;
   if (dragPointerId == null || ev.pointerId !== dragPointerId) return;
   try { overlayEl?.releasePointerCapture?.(dragPointerId); } catch {}
   if (arenaCenterWorld && barrierPushingOut && barrierPushCharge > 0.02) {
@@ -1480,12 +1545,25 @@ function onWheel(ev) {
   ev.stopPropagation();
 }
 
+function onTransportPause() {
+  if (!active) return;
+  setGameplayPaused(true);
+}
+
+function onTransportResume() {
+  if (!active) return;
+  setGameplayPaused(false);
+}
+
 function bindInput() {
   overlayEl?.addEventListener('pointerdown', onPointerDown, { passive: false });
   overlayEl?.addEventListener('pointermove', onPointerMove, { passive: false });
   overlayEl?.addEventListener('pointerup', onPointerUp, { passive: false });
   overlayEl?.addEventListener('pointercancel', onPointerUp, { passive: false });
   window.addEventListener('wheel', onWheel, { passive: false, capture: true });
+  document.addEventListener('transport:pause', onTransportPause, { passive: true });
+  document.addEventListener('transport:resume', onTransportResume, { passive: true });
+  document.addEventListener('transport:play', onTransportResume, { passive: true });
 }
 
 function unbindInput() {
@@ -1494,6 +1572,9 @@ function unbindInput() {
   overlayEl?.removeEventListener('pointerup', onPointerUp);
   overlayEl?.removeEventListener('pointercancel', onPointerUp);
   window.removeEventListener('wheel', onWheel, { capture: true });
+  document.removeEventListener('transport:pause', onTransportPause);
+  document.removeEventListener('transport:resume', onTransportResume);
+  document.removeEventListener('transport:play', onTransportResume);
 }
 
 export function enterBeatSwarmMode(options = null) {
@@ -1527,22 +1608,28 @@ export function enterBeatSwarmMode(options = null) {
   postReleaseAssistTimer = 0;
   outerForceContinuousSeconds = 0;
   releaseForcePrimed = false;
+  const shouldStartPaused = !(isRunning?.());
+  setGameplayPaused(shouldStartPaused);
   if (!restoreState) resetArenaPathState();
   lastBeatIndex = null;
   try { spawnerRuntime?.enter?.(); } catch {}
   try { configureInitialSpawnerEnablement(); } catch {}
   if (!restoreState) {
-    try { window.__MT_ANCHOR?.center?.(); } catch {}
-    applyBeatSwarmCameraScaleWithRetry(1);
-    arenaCenterWorld = getViewportCenterWorld();
+    const startWorld = getSceneStartWorld();
+    snapCameraToWorld(startWorld, SWARM_CAMERA_TARGET_SCALE);
+    arenaCenterWorld = { x: Number(startWorld.x) || 0, y: Number(startWorld.y) || 0 };
     initStarfieldNear(arenaCenterWorld);
     spawnStarterPickups(arenaCenterWorld);
     updateArenaVisual((Number(getZoomState?.()?.targetScale) || Number(getZoomState?.()?.currentScale) || 1));
+    updateStarfieldVisual();
+    try { spawnerRuntime?.update?.(0); } catch {}
     setResistanceVisual(false);
     setReactiveArrowVisual(false);
   } else {
     restoreBeatSwarmState(restoreState);
     updateArenaVisual((Number(getZoomState?.()?.targetScale) || Number(getZoomState?.()?.currentScale) || 1));
+    updateStarfieldVisual();
+    try { spawnerRuntime?.update?.(0); } catch {}
     setResistanceVisual(false);
     setReactiveArrowVisual(false);
   }
@@ -1587,6 +1674,7 @@ export function exitBeatSwarmMode() {
   postReleaseAssistTimer = 0;
   outerForceContinuousSeconds = 0;
   releaseForcePrimed = false;
+  setGameplayPaused(false);
   resetArenaPathState();
   if (arenaRingEl) arenaRingEl.style.opacity = '0';
   if (arenaCoreEl) arenaCoreEl.style.opacity = '0';
