@@ -53,6 +53,8 @@ let reactiveArrowEl = null;
 let thrustFxEl = null;
 let pauseLabelEl = null;
 let pauseScreenEl = null;
+let pausePreviewSceneEl = null;
+let pausePreviewStatusEl = null;
 let spawnerLayerEl = null;
 let enemyLayerEl = null;
 let starfieldLayerEl = null;
@@ -155,6 +157,16 @@ const PROJECTILE_LIFETIME = 1.1;
 const LASER_TTL = 0.12;
 const EXPLOSION_TTL = 0.22;
 const EXPLOSION_RADIUS_WORLD = 220;
+const BEAM_DAMAGE_PER_SECOND = 3.2;
+const PREVIEW_PROJECTILE_SPEED = 360;
+const PREVIEW_PROJECTILE_LIFETIME = 1.6;
+const PREVIEW_LASER_TTL = 0.16;
+const PREVIEW_EXPLOSION_TTL = 0.24;
+const PREVIEW_EXPLOSION_RADIUS = 52;
+const PREVIEW_BEAM_DAMAGE_PER_SECOND = 3.2;
+const PREVIEW_ENEMY_COUNT = 7;
+const PREVIEW_ENEMY_HP = 4;
+const PREVIEW_BEAT_LEN_FALLBACK = 0.5;
 const weaponDefs = Object.freeze({
   laser: { id: 'laser', damage: 2 },
   projectile: { id: 'projectile', damage: 2 },
@@ -163,6 +175,20 @@ const weaponDefs = Object.freeze({
 const equippedWeapons = new Set();
 let lastBeatIndex = null;
 let currentBeatIndex = 0;
+let previewSelectedWeaponSlotIndex = null;
+const pausePreview = {
+  initialized: false,
+  width: 0,
+  height: 0,
+  ship: { x: 64, y: 160 },
+  enemies: [],
+  projectiles: [],
+  effects: [],
+  pendingEvents: [],
+  aoeZones: [],
+  beatIndex: 0,
+  beatTimer: 0,
+};
 let spawnerRuntime = null;
 const difficultyConfig = Object.seal({
   initialEnabledSpawnerCount: 1,
@@ -269,6 +295,8 @@ function captureBeatSwarmState() {
       to: fx.to ? { x: Number(fx.to.x) || 0, y: Number(fx.to.y) || 0 } : null,
       at: fx.at ? { x: Number(fx.at.x) || 0, y: Number(fx.at.y) || 0 } : null,
       radiusWorld: Number(fx.radiusWorld) || EXPLOSION_RADIUS_WORLD,
+      targetEnemyId: Number.isFinite(fx.targetEnemyId) ? Math.trunc(fx.targetEnemyId) : null,
+      damagePerSec: Number(fx.damagePerSec) || 0,
     })),
   };
 }
@@ -472,6 +500,18 @@ function restoreBeatSwarmState(state) {
         to: fx.to ? { x: Number(fx.to.x) || 0, y: Number(fx.to.y) || 0 } : { x: 0, y: 0 },
         el,
       });
+    } else if (fx.kind === 'beam') {
+      el.className = 'beat-swarm-fx-laser';
+      enemyLayerEl.appendChild(el);
+      effects.push({
+        kind: 'beam',
+        ttl: Math.max(0, Number(fx.ttl) || 0),
+        from: fx.from ? { x: Number(fx.from.x) || 0, y: Number(fx.from.y) || 0 } : { x: 0, y: 0 },
+        to: fx.to ? { x: Number(fx.to.x) || 0, y: Number(fx.to.y) || 0 } : { x: 0, y: 0 },
+        targetEnemyId: Number.isFinite(fx.targetEnemyId) ? Math.trunc(fx.targetEnemyId) : null,
+        damagePerSec: Math.max(0, Number(fx.damagePerSec) || BEAM_DAMAGE_PER_SECOND),
+        el,
+      });
     } else if (fx.kind === 'explosion') {
       el.className = 'beat-swarm-fx-explosion';
       el.style.transform = 'translate(-9999px, -9999px)';
@@ -592,6 +632,9 @@ function setGameplayPaused(next) {
   }
   pauseLabelEl?.classList?.toggle?.('is-visible', gameplayPaused);
   pauseScreenEl?.classList?.toggle?.('is-visible', gameplayPaused);
+  if (gameplayPaused) {
+    resetPausePreviewState();
+  }
 }
 
 function createArchetypeOptions(selected) {
@@ -607,6 +650,425 @@ function createVariantOptions(archetype, selected) {
   return def.variants
     .map((v) => `<option value="${v.id}"${v.id === sel ? ' selected' : ''}>${v.label}</option>`)
     .join('');
+}
+
+function createRandomWeaponStages() {
+  const archetypes = Object.values(WEAPON_ARCHETYPES);
+  const count = Math.max(1, Math.min(MAX_WEAPON_STAGES, 1 + Math.floor(Math.random() * MAX_WEAPON_STAGES)));
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const a = archetypes[Math.floor(Math.random() * archetypes.length)] || WEAPON_ARCHETYPES.projectile;
+    const variants = Array.isArray(a.variants) ? a.variants : [];
+    const v = variants[Math.floor(Math.random() * variants.length)] || variants[0];
+    out.push({
+      archetype: a.id,
+      variant: v?.id || getArchetypeDef(a.id)?.variants?.[0]?.id || 'homing-missile',
+    });
+  }
+  return sanitizeWeaponStages(out);
+}
+
+function clearPausePreviewVisuals() {
+  for (const e of pausePreview.enemies) {
+    try { e?.el?.remove?.(); } catch {}
+  }
+  for (const p of pausePreview.projectiles) {
+    try { p?.el?.remove?.(); } catch {}
+  }
+  for (const fx of pausePreview.effects) {
+    try { fx?.el?.remove?.(); } catch {}
+  }
+  pausePreview.enemies.length = 0;
+  pausePreview.projectiles.length = 0;
+  pausePreview.effects.length = 0;
+  pausePreview.pendingEvents.length = 0;
+  pausePreview.aoeZones.length = 0;
+  pausePreview.beatIndex = 0;
+  pausePreview.beatTimer = 0;
+}
+
+function spawnPausePreviewEnemy() {
+  if (!pausePreviewSceneEl) return;
+  const minX = pausePreview.width * 0.48;
+  const maxX = pausePreview.width * 0.9;
+  const minY = pausePreview.height * 0.18;
+  const maxY = pausePreview.height * 0.84;
+  const x = randRange(minX, maxX);
+  const y = randRange(minY, maxY);
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-preview-enemy';
+  pausePreviewSceneEl.appendChild(el);
+  pausePreview.enemies.push({
+    x,
+    y,
+    hp: PREVIEW_ENEMY_HP,
+    maxHp: PREVIEW_ENEMY_HP,
+    el,
+  });
+}
+
+function resetPausePreviewState() {
+  if (!pausePreviewSceneEl) return;
+  const rect = pausePreviewSceneEl.getBoundingClientRect();
+  pausePreview.width = Math.max(260, Number(rect.width) || 0);
+  pausePreview.height = Math.max(200, Number(rect.height) || 0);
+  pausePreview.ship.x = pausePreview.width * 0.18;
+  pausePreview.ship.y = pausePreview.height * 0.55;
+  clearPausePreviewVisuals();
+  pausePreviewSceneEl.innerHTML = '';
+  const shipEl = document.createElement('div');
+  shipEl.className = 'beat-swarm-preview-ship';
+  pausePreviewSceneEl.appendChild(shipEl);
+  pausePreview.ship.el = shipEl;
+  for (let i = 0; i < PREVIEW_ENEMY_COUNT; i++) spawnPausePreviewEnemy();
+  pausePreview.initialized = true;
+}
+
+function ensurePausePreviewState() {
+  if (!pausePreviewSceneEl) return;
+  const rect = pausePreviewSceneEl.getBoundingClientRect();
+  const w = Math.max(260, Number(rect.width) || 0);
+  const h = Math.max(200, Number(rect.height) || 0);
+  if (!pausePreview.initialized || Math.abs(w - pausePreview.width) > 1 || Math.abs(h - pausePreview.height) > 1) {
+    resetPausePreviewState();
+  }
+}
+
+function getPausePreviewNearestEnemies(x, y, count = 1) {
+  const scored = pausePreview.enemies.map((e) => {
+    const dx = e.x - x;
+    const dy = e.y - y;
+    return { e, d2: (dx * dx) + (dy * dy) };
+  });
+  scored.sort((a, b) => a.d2 - b.d2);
+  return scored.slice(0, Math.max(1, Math.trunc(Number(count) || 1))).map((it) => it.e);
+}
+
+function removePausePreviewEnemy(enemy) {
+  if (!enemy) return;
+  const idx = pausePreview.enemies.indexOf(enemy);
+  if (idx >= 0) pausePreview.enemies.splice(idx, 1);
+  try { enemy.el?.remove?.(); } catch {}
+}
+
+function damagePausePreviewEnemy(enemy, amount = 1) {
+  if (!enemy) return false;
+  enemy.hp -= Math.max(0, Number(amount) || 0);
+  if (enemy.hp <= 0) {
+    removePausePreviewEnemy(enemy);
+    return true;
+  }
+  return false;
+}
+
+function queuePausePreviewChain(beatIndex, nextStages, context) {
+  const stages = sanitizeWeaponStages(nextStages);
+  if (!stages.length) return;
+  pausePreview.pendingEvents.push({
+    beatIndex: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
+    stages,
+    context: {
+      origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : null,
+      impactPoint: context?.impactPoint ? { x: Number(context.impactPoint.x) || 0, y: Number(context.impactPoint.y) || 0 } : null,
+    },
+  });
+}
+
+function addPausePreviewLaser(from, to) {
+  if (!pausePreviewSceneEl) return;
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-preview-fx-laser';
+  pausePreviewSceneEl.appendChild(el);
+  pausePreview.effects.push({
+    kind: 'laser',
+    ttl: PREVIEW_LASER_TTL,
+    from: { x: from.x, y: from.y },
+    to: { x: to.x, y: to.y },
+    el,
+  });
+}
+
+function addPausePreviewBeam(from, target, ttl = null) {
+  if (!pausePreviewSceneEl || !target) return;
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-preview-fx-laser';
+  pausePreviewSceneEl.appendChild(el);
+  pausePreview.effects.push({
+    kind: 'beam',
+    ttl: Math.max(0.05, Number.isFinite(ttl) ? Number(ttl) : getPausePreviewBeatLen()),
+    from: { x: from.x, y: from.y },
+    to: { x: target.x, y: target.y },
+    targetEnemy: target,
+    damagePerSec: PREVIEW_BEAM_DAMAGE_PER_SECOND,
+    el,
+  });
+}
+
+function addPausePreviewExplosion(at, radius = PREVIEW_EXPLOSION_RADIUS, ttl = PREVIEW_EXPLOSION_TTL) {
+  if (!pausePreviewSceneEl) return;
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-preview-fx-explosion';
+  pausePreviewSceneEl.appendChild(el);
+  pausePreview.effects.push({
+    kind: 'explosion',
+    ttl: Math.max(0.01, Number(ttl) || PREVIEW_EXPLOSION_TTL),
+    at: { x: at.x, y: at.y },
+    radius: Math.max(8, Number(radius) || PREVIEW_EXPLOSION_RADIUS),
+    el,
+  });
+}
+
+function spawnPausePreviewProjectile(from, target, damage, nextStages = null, nextBeatIndex = null) {
+  if (!pausePreviewSceneEl || !target) return;
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-preview-projectile';
+  pausePreviewSceneEl.appendChild(el);
+  const dx = target.x - from.x;
+  const dy = target.y - from.y;
+  const len = Math.max(0.0001, Math.hypot(dx, dy));
+  pausePreview.projectiles.push({
+    x: from.x,
+    y: from.y,
+    vx: (dx / len) * PREVIEW_PROJECTILE_SPEED,
+    vy: (dy / len) * PREVIEW_PROJECTILE_SPEED,
+    ttl: PREVIEW_PROJECTILE_LIFETIME,
+    damage: Math.max(1, Number(damage) || 1),
+    nextStages: sanitizeWeaponStages(nextStages),
+    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    el,
+  });
+}
+
+function applyPausePreviewAoeAt(point, variant = 'explosion', beatIndex = 0) {
+  const isDot = variant === 'dot-area';
+  addPausePreviewExplosion(point, PREVIEW_EXPLOSION_RADIUS, isDot ? (getPausePreviewBeatLen() * 2) : PREVIEW_EXPLOSION_TTL);
+  const r2 = PREVIEW_EXPLOSION_RADIUS * PREVIEW_EXPLOSION_RADIUS;
+  for (let i = pausePreview.enemies.length - 1; i >= 0; i--) {
+    const e = pausePreview.enemies[i];
+    const dx = e.x - point.x;
+    const dy = e.y - point.y;
+    if ((dx * dx + dy * dy) <= r2) damagePausePreviewEnemy(e, isDot ? 0.5 : 1);
+  }
+  if (isDot) {
+    pausePreview.aoeZones.push({
+      x: point.x,
+      y: point.y,
+      radius: PREVIEW_EXPLOSION_RADIUS,
+      damagePerBeat: 0.6,
+      untilBeat: Math.max(beatIndex + 2, beatIndex + 1),
+    });
+  }
+}
+
+function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStages = [], context = null) {
+  if (!stage || !origin) return;
+  const archetype = stage.archetype;
+  const variant = stage.variant;
+  const continuation = sanitizeWeaponStages(remainingStages);
+  const nearest = getPausePreviewNearestEnemies(origin.x, origin.y, 1)[0] || null;
+  if (archetype === 'projectile') {
+    const targets = variant === 'split-shot'
+      ? getPausePreviewNearestEnemies(origin.x, origin.y, 2)
+      : (nearest ? [nearest] : []);
+    for (const t of targets) {
+      spawnPausePreviewProjectile(origin, t, 2, continuation, beatIndex + 1);
+    }
+    return;
+  }
+  if (archetype === 'laser') {
+    if (variant === 'beam') {
+      if (!nearest) return;
+      addPausePreviewBeam(origin, nearest, getPausePreviewBeatLen());
+      if (continuation.length) {
+        queuePausePreviewChain(beatIndex + 1, continuation, {
+          origin,
+          impactPoint: { x: nearest.x, y: nearest.y },
+        });
+      }
+      return;
+    }
+    if (!nearest) return;
+    addPausePreviewLaser(origin, { x: nearest.x, y: nearest.y });
+    damagePausePreviewEnemy(nearest, 2);
+    if (continuation.length) {
+      queuePausePreviewChain(beatIndex + 1, continuation, {
+        origin,
+        impactPoint: { x: nearest.x, y: nearest.y },
+      });
+    }
+    return;
+  }
+  if (archetype === 'aoe') {
+    applyPausePreviewAoeAt(origin, variant, beatIndex);
+    if (continuation.length) {
+      queuePausePreviewChain(beatIndex + 1, continuation, {
+        origin: context?.origin || origin,
+        impactPoint: origin,
+      });
+    }
+  }
+}
+
+function processPausePreviewPendingChains(beatIndex) {
+  for (let i = pausePreview.pendingEvents.length - 1; i >= 0; i--) {
+    const ev = pausePreview.pendingEvents[i];
+    if ((Number(ev?.beatIndex) || 0) > beatIndex) continue;
+    pausePreview.pendingEvents.splice(i, 1);
+    const stages = sanitizeWeaponStages(ev?.stages);
+    if (!stages.length) continue;
+    const stage = stages[0];
+    const rem = stages.slice(1);
+    const origin = ev?.context?.impactPoint || ev?.context?.origin || { x: pausePreview.ship.x, y: pausePreview.ship.y };
+    triggerPausePreviewWeaponStage(stage, origin, beatIndex, rem, ev?.context || null);
+  }
+}
+
+function applyPausePreviewLingeringAoeBeat(beatIndex) {
+  for (let i = pausePreview.aoeZones.length - 1; i >= 0; i--) {
+    const z = pausePreview.aoeZones[i];
+    if ((Number(z.untilBeat) || 0) < beatIndex) {
+      pausePreview.aoeZones.splice(i, 1);
+      continue;
+    }
+    const r2 = (Number(z.radius) || PREVIEW_EXPLOSION_RADIUS) ** 2;
+    const dmg = Math.max(0, Number(z.damagePerBeat) || 0);
+    for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
+      const e = pausePreview.enemies[j];
+      const dx = e.x - z.x;
+      const dy = e.y - z.y;
+      if ((dx * dx + dy * dy) <= r2) damagePausePreviewEnemy(e, dmg);
+    }
+  }
+}
+
+function firePausePreviewWeaponsOnBeat(beatIndex) {
+  const origin = { x: pausePreview.ship.x, y: pausePreview.ship.y };
+  const selectedWeapons = Number.isInteger(previewSelectedWeaponSlotIndex)
+    ? [weaponLoadout[previewSelectedWeaponSlotIndex]].filter(Boolean)
+    : weaponLoadout.slice();
+  for (const weapon of selectedWeapons) {
+    const stages = sanitizeWeaponStages(weapon?.stages);
+    if (!stages.length) continue;
+    const first = stages[0];
+    const rest = stages.slice(1);
+    triggerPausePreviewWeaponStage(first, origin, beatIndex, rest, { origin, impactPoint: origin });
+  }
+}
+
+function updatePausePreviewProjectilesAndEffects(dt) {
+  const hitRadius = 14;
+  const hitR2 = hitRadius * hitRadius;
+  for (let i = pausePreview.projectiles.length - 1; i >= 0; i--) {
+    const p = pausePreview.projectiles[i];
+    p.ttl -= dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    let hit = false;
+    let hitPoint = null;
+    for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
+      const e = pausePreview.enemies[j];
+      const dx = e.x - p.x;
+      const dy = e.y - p.y;
+      if ((dx * dx + dy * dy) <= hitR2) {
+        hitPoint = { x: e.x, y: e.y };
+        damagePausePreviewEnemy(e, p.damage);
+        if (Array.isArray(p.nextStages) && p.nextStages.length) {
+          const nextBeat = Number.isFinite(p.nextBeatIndex) ? p.nextBeatIndex : (Math.max(0, pausePreview.beatIndex) + 1);
+          queuePausePreviewChain(nextBeat, p.nextStages, {
+            origin: { x: p.x, y: p.y },
+            impactPoint: hitPoint,
+          });
+        }
+        hit = true;
+        break;
+      }
+    }
+    if (
+      hit || p.ttl <= 0
+      || p.x < -30 || p.y < -30
+      || p.x > pausePreview.width + 30
+      || p.y > pausePreview.height + 30
+    ) {
+      try { p.el?.remove?.(); } catch {}
+      pausePreview.projectiles.splice(i, 1);
+      continue;
+    }
+    p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px)`;
+  }
+
+  for (let i = pausePreview.effects.length - 1; i >= 0; i--) {
+    const fx = pausePreview.effects[i];
+    fx.ttl -= dt;
+    if (fx.ttl <= 0) {
+      try { fx.el?.remove?.(); } catch {}
+      pausePreview.effects.splice(i, 1);
+      continue;
+    }
+    if (fx.kind === 'laser' || fx.kind === 'beam') {
+      if (fx.kind === 'beam') {
+        fx.from = { x: pausePreview.ship.x, y: pausePreview.ship.y };
+        let target = fx.targetEnemy || null;
+        if (!target || !pausePreview.enemies.includes(target)) {
+          target = getPausePreviewNearestEnemies(fx.from?.x || 0, fx.from?.y || 0, 1)[0] || null;
+          fx.targetEnemy = target || null;
+        }
+        if (target) {
+          fx.to = { x: target.x, y: target.y };
+          damagePausePreviewEnemy(target, Math.max(0, Number(fx.damagePerSec) || 0) * dt);
+        }
+      }
+      const dx = fx.to.x - fx.from.x;
+      const dy = fx.to.y - fx.from.y;
+      const len = Math.max(1, Math.hypot(dx, dy));
+      const ang = Math.atan2(dy, dx) * (180 / Math.PI);
+      fx.el.style.width = `${len.toFixed(2)}px`;
+      fx.el.style.transform = `translate(${fx.from.x.toFixed(2)}px, ${fx.from.y.toFixed(2)}px) rotate(${ang.toFixed(2)}deg)`;
+      if (fx.kind === 'beam') {
+        fx.el.style.opacity = '1';
+      } else {
+        fx.el.style.opacity = `${Math.max(0, Math.min(1, fx.ttl / PREVIEW_LASER_TTL)).toFixed(3)}`;
+      }
+    } else if (fx.kind === 'explosion') {
+      const radius = Math.max(8, Number(fx.radius) || PREVIEW_EXPLOSION_RADIUS);
+      const size = radius * 2;
+      fx.el.style.width = `${size.toFixed(2)}px`;
+      fx.el.style.height = `${size.toFixed(2)}px`;
+      fx.el.style.marginLeft = `${(-radius).toFixed(2)}px`;
+      fx.el.style.marginTop = `${(-radius).toFixed(2)}px`;
+      fx.el.style.transform = `translate(${fx.at.x.toFixed(2)}px, ${fx.at.y.toFixed(2)}px)`;
+      fx.el.style.opacity = `${Math.max(0, Math.min(1, fx.ttl / PREVIEW_EXPLOSION_TTL)).toFixed(3)}`;
+    }
+  }
+}
+
+function getPausePreviewBeatLen() {
+  const info = getLoopInfo?.();
+  return Math.max(0.2, Number(info?.beatLen) || PREVIEW_BEAT_LEN_FALLBACK);
+}
+
+function updatePausePreview(dt) {
+  if (!gameplayPaused || !pauseScreenEl?.classList?.contains?.('is-visible')) return;
+  ensurePausePreviewState();
+  if (!pausePreviewSceneEl || !pausePreview.initialized) return;
+
+  pausePreview.beatTimer += Math.max(0.001, Number(dt) || 0.016);
+  const beatLen = getPausePreviewBeatLen();
+  while (pausePreview.beatTimer >= beatLen) {
+    pausePreview.beatTimer -= beatLen;
+    pausePreview.beatIndex += 1;
+    processPausePreviewPendingChains(pausePreview.beatIndex);
+    applyPausePreviewLingeringAoeBeat(pausePreview.beatIndex);
+    firePausePreviewWeaponsOnBeat(pausePreview.beatIndex);
+  }
+
+  while (pausePreview.enemies.length < PREVIEW_ENEMY_COUNT) spawnPausePreviewEnemy();
+  updatePausePreviewProjectilesAndEffects(dt);
+  for (const e of pausePreview.enemies) {
+    e.el.style.transform = `translate(${e.x.toFixed(2)}px, ${e.y.toFixed(2)}px)`;
+  }
+  if (pausePreview.ship.el) {
+    pausePreview.ship.el.style.transform = `translate(${pausePreview.ship.x.toFixed(2)}px, ${pausePreview.ship.y.toFixed(2)}px)`;
+  }
 }
 
 function ensurePauseWeaponUi() {
@@ -640,12 +1102,29 @@ function ensurePauseWeaponUi() {
   pauseScreenEl.addEventListener('click', (ev) => {
     const target = ev.target;
     if (!(target instanceof HTMLElement)) return;
+    if (!(target.closest('button, select, option, input, label'))) {
+      const row = target.closest('.beat-swarm-weapon-card');
+      if (row instanceof HTMLElement) {
+        const slotIndex = Math.trunc(Number(row.dataset.slotIndex));
+        if (slotIndex >= 0 && slotIndex < weaponLoadout.length) {
+          previewSelectedWeaponSlotIndex = (previewSelectedWeaponSlotIndex === slotIndex) ? null : slotIndex;
+          renderPauseWeaponUi();
+          return;
+        }
+      }
+    }
     const actionEl = target.closest('[data-action]');
     if (!(actionEl instanceof HTMLElement)) return;
     const slotIndex = Math.trunc(Number(actionEl.dataset.slotIndex));
     if (!(slotIndex >= 0 && slotIndex < weaponLoadout.length)) return;
     const slot = weaponLoadout[slotIndex];
     const action = String(actionEl.dataset.action || '');
+    if (action === 'random-weapon') {
+      slot.stages = createRandomWeaponStages();
+      renderPauseWeaponUi();
+      persistBeatSwarmState();
+      return;
+    }
     if (action === 'add-stage') {
       if (slot.stages.length >= MAX_WEAPON_STAGES) return;
       const archetype = 'projectile';
@@ -704,19 +1183,35 @@ function renderPauseWeaponUi() {
       `;
     }).join('');
     return `
-      <section class="beat-swarm-weapon-card">
-        <header class="beat-swarm-weapon-head">${slot.name}</header>
+      <section class="beat-swarm-weapon-card${previewSelectedWeaponSlotIndex === slotIndex ? ' is-preview-selected' : ''}" data-slot-index="${slotIndex}">
+        <div class="beat-swarm-weapon-head-wrap">
+          <header class="beat-swarm-weapon-head">${slot.name}</header>
+          <button type="button" class="beat-swarm-stage-add beat-swarm-random-weapon" data-action="random-weapon" data-slot-index="${slotIndex}">Create Random Weapon</button>
+        </div>
         <div class="beat-swarm-weapon-stages">
           ${stageCells}
         </div>
       </section>
     `;
   }).join('');
+  const previewStatus = Number.isInteger(previewSelectedWeaponSlotIndex)
+    ? `Previewing ${weaponLoadout[previewSelectedWeaponSlotIndex]?.name || 'Weapon'}`
+    : 'Previewing all weapons';
   pauseScreenEl.innerHTML = `
     <div class="beat-swarm-pause-title">Weapon Customisation</div>
     <div class="beat-swarm-pause-subtitle">Up to 3 weapons, each with up to 5 beat stages.</div>
-    <div class="beat-swarm-weapon-grid">${cards}</div>
+    <div class="beat-swarm-pause-layout">
+      <div class="beat-swarm-weapon-grid">${cards}</div>
+      <aside class="beat-swarm-preview-panel">
+        <div class="beat-swarm-preview-title">Live Preview</div>
+        <div class="beat-swarm-preview-status">${previewStatus}</div>
+        <div class="beat-swarm-preview-scene" aria-hidden="true"></div>
+      </aside>
+    </div>
   `;
+  pausePreviewSceneEl = pauseScreenEl.querySelector('.beat-swarm-preview-scene');
+  pausePreviewStatusEl = pauseScreenEl.querySelector('.beat-swarm-preview-status');
+  resetPausePreviewState();
 }
 
 function applyCameraDelta(dx, dy) {
@@ -1111,6 +1606,27 @@ function addLaserEffect(fromW, toW) {
   effects.push({ kind: 'laser', ttl: LASER_TTL, from: { ...fromW }, to: { ...toW }, el });
 }
 
+function getGameplayBeatLen() {
+  const info = getLoopInfo?.();
+  return Math.max(0.05, Number(info?.beatLen) || 0.5);
+}
+
+function addBeamEffect(fromW, targetEnemy, ttl = null) {
+  if (!enemyLayerEl || !targetEnemy) return;
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-fx-laser';
+  enemyLayerEl.appendChild(el);
+  effects.push({
+    kind: 'beam',
+    ttl: Math.max(0.05, Number.isFinite(ttl) ? Number(ttl) : getGameplayBeatLen()),
+    from: { ...fromW },
+    to: { x: Number(targetEnemy.wx) || 0, y: Number(targetEnemy.wy) || 0 },
+    targetEnemyId: Number.isFinite(targetEnemy.id) ? Math.trunc(targetEnemy.id) : null,
+    damagePerSec: BEAM_DAMAGE_PER_SECOND,
+    el,
+  });
+}
+
 function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD, ttlOverride = null) {
   if (!enemyLayerEl) return;
   const el = document.createElement('div');
@@ -1204,19 +1720,13 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
   }
   if (archetype === 'laser') {
     if (variant === 'beam') {
-      const targets = getNearestEnemies(originWorld.x, originWorld.y, 4);
-      if (!targets.length) return;
-      let primaryImpact = null;
-      for (const t of targets) {
-        addLaserEffect(originWorld, { x: t.wx, y: t.wy });
-        damageEnemy(t, 1.7);
-        if (!primaryImpact) primaryImpact = { x: t.wx, y: t.wy };
-      }
+      if (!nearest) return;
+      addBeamEffect(originWorld, nearest, getGameplayBeatLen());
       if (continuation.length) {
         queueWeaponChain(beatIndex + 1, continuation, {
           origin: originWorld,
           // Chain source is defined by previous stage output point.
-          impactPoint: primaryImpact || originWorld,
+          impactPoint: { x: nearest.wx, y: nearest.wy },
         });
       }
       return;
@@ -1479,7 +1989,23 @@ function updatePickupsAndCombat(dt) {
       effects.splice(i, 1);
       continue;
     }
-    if (fx.kind === 'laser') {
+    if (fx.kind === 'laser' || fx.kind === 'beam') {
+      if (fx.kind === 'beam') {
+        // Constant beam always originates from the live ship position.
+        fx.from = { x: centerWorld.x, y: centerWorld.y };
+        let target = null;
+        if (Number.isFinite(fx.targetEnemyId)) {
+          target = enemies.find((e) => Math.trunc(Number(e.id) || 0) === Math.trunc(fx.targetEnemyId)) || null;
+        }
+        if (!target) {
+          target = getNearestEnemy(fx.from?.x || 0, fx.from?.y || 0);
+          fx.targetEnemyId = Number.isFinite(target?.id) ? Math.trunc(target.id) : null;
+        }
+        if (target) {
+          fx.to = { x: target.wx, y: target.wy };
+          damageEnemy(target, Math.max(0, Number(fx.damagePerSec) || 0) * dt);
+        }
+      }
       const a = worldToScreen({ x: fx.from.x, y: fx.from.y });
       const b = worldToScreen({ x: fx.to.x, y: fx.to.y });
       if (!a || !b) continue;
@@ -1489,7 +2015,11 @@ function updatePickupsAndCombat(dt) {
       const ang = Math.atan2(dy, dx) * (180 / Math.PI);
       fx.el.style.width = `${len}px`;
       fx.el.style.transform = `translate(${a.x}px, ${a.y}px) rotate(${ang}deg)`;
-      fx.el.style.opacity = `${Math.max(0, Math.min(1, fx.ttl / LASER_TTL))}`;
+      if (fx.kind === 'beam') {
+        fx.el.style.opacity = '1';
+      } else {
+        fx.el.style.opacity = `${Math.max(0, Math.min(1, fx.ttl / LASER_TTL))}`;
+      }
     } else if (fx.kind === 'explosion') {
       const c = worldToScreen({ x: fx.at.x, y: fx.at.y });
       if (!c) continue;
@@ -1868,6 +2398,7 @@ function tick(nowMs) {
     updateArenaVisual(scalePause, outsideMainPause);
     updateStarfieldVisual();
     try { spawnerRuntime?.update?.(0); } catch {}
+    updatePausePreview(dt);
     rafId = requestAnimationFrame(tick);
     return;
   }
