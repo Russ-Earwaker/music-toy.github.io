@@ -52,6 +52,7 @@ let resistanceEl = null;
 let reactiveArrowEl = null;
 let thrustFxEl = null;
 let pauseLabelEl = null;
+let pauseScreenEl = null;
 let spawnerLayerEl = null;
 let enemyLayerEl = null;
 let starfieldLayerEl = null;
@@ -89,6 +90,58 @@ const pickups = [];
 const projectiles = [];
 const effects = [];
 const starfieldStars = [];
+let enemyIdSeq = 1;
+const pendingWeaponChainEvents = [];
+const lingeringAoeZones = [];
+const MAX_WEAPON_SLOTS = 3;
+const MAX_WEAPON_STAGES = 5;
+const WEAPON_ARCHETYPES = Object.freeze({
+  projectile: Object.freeze({
+    id: 'projectile',
+    label: 'Projectile',
+    variants: Object.freeze([
+      Object.freeze({ id: 'homing-missile', label: 'Homing Missile' }),
+      Object.freeze({ id: 'boomerang', label: 'Boomerang' }),
+      Object.freeze({ id: 'split-shot', label: 'Split Shot' }),
+    ]),
+  }),
+  aoe: Object.freeze({
+    id: 'aoe',
+    label: 'AOE',
+    variants: Object.freeze([
+      Object.freeze({ id: 'explosion', label: 'Explosion' }),
+      Object.freeze({ id: 'dot-area', label: 'Damage Over Time Area' }),
+    ]),
+  }),
+  laser: Object.freeze({
+    id: 'laser',
+    label: 'Laser',
+    variants: Object.freeze([
+      Object.freeze({ id: 'hitscan', label: 'Hit-scan' }),
+      Object.freeze({ id: 'beam', label: 'Constant Beam' }),
+    ]),
+  }),
+});
+const weaponLoadout = Array.from({ length: MAX_WEAPON_SLOTS }, (_, i) => ({
+  id: `slot-${i + 1}`,
+  name: `Weapon ${i + 1}`,
+  stages: [],
+}));
+
+function seedDefaultWeaponLoadout() {
+  for (let i = 0; i < weaponLoadout.length; i++) {
+    const slot = weaponLoadout[i];
+    slot.name = `Weapon ${i + 1}`;
+    slot.stages = [];
+  }
+  // Default starter: Projectile -> Explosion.
+  weaponLoadout[0].stages = [
+    { archetype: 'projectile', variant: 'homing-missile' },
+    { archetype: 'aoe', variant: 'explosion' },
+  ];
+}
+
+seedDefaultWeaponLoadout();
 const ENEMY_CAP = 120;
 const ENEMY_ACCEL = 680;
 const ENEMY_MAX_SPEED = 260;
@@ -109,6 +162,7 @@ const weaponDefs = Object.freeze({
 });
 const equippedWeapons = new Set();
 let lastBeatIndex = null;
+let currentBeatIndex = 0;
 let spawnerRuntime = null;
 const difficultyConfig = Object.seal({
   initialEnabledSpawnerCount: 1,
@@ -157,7 +211,33 @@ function captureBeatSwarmState() {
     starfieldSplitWorldX: Number(starfieldSplitWorldX) || 0,
     arenaCenterWorld: arenaCenterWorld ? { x: arenaCenterWorld.x, y: arenaCenterWorld.y } : null,
     equippedWeapons: Array.from(equippedWeapons),
+    weaponLoadout: weaponLoadout.map((w) => ({
+      id: w.id,
+      name: w.name,
+      stages: Array.isArray(w.stages)
+        ? w.stages.map((s) => ({ archetype: s.archetype, variant: s.variant }))
+        : [],
+    })),
+    pendingWeaponChainEvents: pendingWeaponChainEvents.map((ev) => ({
+      beatIndex: Number(ev.beatIndex) || 0,
+      stages: Array.isArray(ev.stages)
+        ? ev.stages.map((s) => ({ archetype: s.archetype, variant: s.variant }))
+        : [],
+      context: {
+        origin: ev.context?.origin ? { x: Number(ev.context.origin.x) || 0, y: Number(ev.context.origin.y) || 0 } : null,
+        impactPoint: ev.context?.impactPoint ? { x: Number(ev.context.impactPoint.x) || 0, y: Number(ev.context.impactPoint.y) || 0 } : null,
+      },
+    })),
+    lingeringAoeZones: lingeringAoeZones.map((z) => ({
+      x: Number(z.x) || 0,
+      y: Number(z.y) || 0,
+      radius: Number(z.radius) || EXPLOSION_RADIUS_WORLD,
+      damagePerBeat: Number(z.damagePerBeat) || 1,
+      untilBeat: Number(z.untilBeat) || 0,
+    })),
+    currentBeatIndex: Number(currentBeatIndex) || 0,
     enemies: enemies.map((e) => ({
+      id: Number(e.id) || 0,
       wx: Number(e.wx) || 0,
       wy: Number(e.wy) || 0,
       vx: Number(e.vx) || 0,
@@ -179,6 +259,8 @@ function captureBeatSwarmState() {
       vy: Number(p.vy) || 0,
       ttl: Number(p.ttl) || 0,
       damage: Number(p.damage) || 1,
+      nextStages: Array.isArray(p.nextStages) ? p.nextStages.map((s) => ({ archetype: s.archetype, variant: s.variant })) : [],
+      nextBeatIndex: Number.isFinite(p.nextBeatIndex) ? Math.trunc(p.nextBeatIndex) : null,
     })),
     effects: effects.map((fx) => ({
       kind: fx.kind,
@@ -217,6 +299,48 @@ function consumeBeatSwarmPersistedState() {
   }
 }
 
+function getArchetypeDef(id) {
+  const key = String(id || '').trim();
+  return WEAPON_ARCHETYPES[key] || null;
+}
+
+function getVariantDef(archetype, variant) {
+  const a = getArchetypeDef(archetype);
+  if (!a) return null;
+  return a.variants.find((v) => v.id === variant) || null;
+}
+
+function sanitizeWeaponStages(stages) {
+  const out = [];
+  for (const raw of Array.isArray(stages) ? stages : []) {
+    if (out.length >= MAX_WEAPON_STAGES) break;
+    const archetype = String(raw?.archetype || '').trim();
+    const variant = String(raw?.variant || '').trim();
+    if (!getArchetypeDef(archetype)) continue;
+    if (!getVariantDef(archetype, variant)) continue;
+    out.push({ archetype, variant });
+  }
+  return out;
+}
+
+function applyWeaponLoadoutFromState(loadoutState) {
+  for (let i = 0; i < weaponLoadout.length; i++) {
+    const slot = weaponLoadout[i];
+    const raw = Array.isArray(loadoutState) ? loadoutState[i] : null;
+    slot.name = String(raw?.name || slot.name || `Weapon ${i + 1}`);
+    slot.stages = sanitizeWeaponStages(raw?.stages);
+  }
+  renderPauseWeaponUi();
+}
+
+function clearPendingWeaponChainEvents() {
+  pendingWeaponChainEvents.length = 0;
+}
+
+function clearLingeringAoeZones() {
+  lingeringAoeZones.length = 0;
+}
+
 function spawnEnemyFromState(state) {
   if (!enemyLayerEl || !state) return;
   if (enemies.length >= ENEMY_CAP) {
@@ -233,6 +357,7 @@ function spawnEnemyFromState(state) {
   el.appendChild(hpWrap);
   enemyLayerEl.appendChild(el);
   const e = {
+    id: Math.max(1, Math.trunc(Number(state.id) || enemyIdSeq++)),
     wx: Number(state.wx) || 0,
     wy: Number(state.wy) || 0,
     vx: Number(state.vx) || 0,
@@ -244,6 +369,7 @@ function spawnEnemyFromState(state) {
     spawnT: Math.max(0, Number(state.spawnT) || 0),
     spawnDur: Math.max(0.001, Number(state.spawnDur) || ENEMY_SPAWN_DURATION),
   };
+  enemyIdSeq = Math.max(enemyIdSeq, (Number(e.id) || 0) + 1);
   enemies.push(e);
   updateEnemyHealthUi(e);
 }
@@ -281,6 +407,31 @@ function restoreBeatSwarmState(state) {
   for (const id of Array.isArray(state.equippedWeapons) ? state.equippedWeapons : []) {
     if (weaponDefs[id]) equippedWeapons.add(id);
   }
+  applyWeaponLoadoutFromState(state.weaponLoadout);
+  clearPendingWeaponChainEvents();
+  for (const ev of Array.isArray(state.pendingWeaponChainEvents) ? state.pendingWeaponChainEvents : []) {
+    const stages = sanitizeWeaponStages(ev?.stages);
+    if (!stages.length) continue;
+    pendingWeaponChainEvents.push({
+      beatIndex: Math.max(0, Math.trunc(Number(ev?.beatIndex) || 0)),
+      stages,
+      context: {
+        origin: ev?.context?.origin ? { x: Number(ev.context.origin.x) || 0, y: Number(ev.context.origin.y) || 0 } : null,
+        impactPoint: ev?.context?.impactPoint ? { x: Number(ev.context.impactPoint.x) || 0, y: Number(ev.context.impactPoint.y) || 0 } : null,
+      },
+    });
+  }
+  lingeringAoeZones.length = 0;
+  for (const z of Array.isArray(state.lingeringAoeZones) ? state.lingeringAoeZones : []) {
+    lingeringAoeZones.push({
+      x: Number(z.x) || 0,
+      y: Number(z.y) || 0,
+      radius: Math.max(1, Number(z.radius) || EXPLOSION_RADIUS_WORLD),
+      damagePerBeat: Math.max(0, Number(z.damagePerBeat) || 1),
+      untilBeat: Math.max(0, Math.trunc(Number(z.untilBeat) || 0)),
+    });
+  }
+  currentBeatIndex = Math.max(0, Math.trunc(Number(state.currentBeatIndex) || 0));
 
   clearEnemies();
   clearPickups();
@@ -290,11 +441,7 @@ function restoreBeatSwarmState(state) {
   for (const e of Array.isArray(state.enemies) ? state.enemies : []) {
     spawnEnemyFromState(e);
   }
-  for (const p of Array.isArray(state.pickups) ? state.pickups : []) {
-    if (weaponDefs[p?.weaponId]) {
-      spawnPickup(p.weaponId, Number(p.wx) || 0, Number(p.wy) || 0);
-    }
-  }
+  // Pickups temporarily disabled in Beat Swarm (kept for future re-enable).
   for (const p of Array.isArray(state.projectiles) ? state.projectiles : []) {
     if (!enemyLayerEl) continue;
     const el = document.createElement('div');
@@ -307,6 +454,8 @@ function restoreBeatSwarmState(state) {
       vy: Number(p.vy) || 0,
       ttl: Math.max(0, Number(p.ttl) || 0),
       damage: Math.max(1, Number(p.damage) || 1),
+      nextStages: sanitizeWeaponStages(p.nextStages),
+      nextBeatIndex: Number.isFinite(p.nextBeatIndex) ? Math.max(0, Math.trunc(p.nextBeatIndex)) : null,
       el,
     });
   }
@@ -363,6 +512,7 @@ function ensureUi() {
         <div class="beat-swarm-ship"></div>
       </div>
       <div class="beat-swarm-pause-label" aria-hidden="true">PAUSE</div>
+      <div class="beat-swarm-pause-screen" aria-hidden="true"></div>
       <div class="beat-swarm-starfield-layer" aria-hidden="true"></div>
       <div class="beat-swarm-spawner-layer" aria-hidden="true"></div>
       <div class="beat-swarm-enemy-layer" aria-hidden="true"></div>
@@ -376,6 +526,7 @@ function ensureUi() {
     document.body.appendChild(overlayEl);
   }
   pauseLabelEl = overlayEl.querySelector('.beat-swarm-pause-label');
+  pauseScreenEl = overlayEl.querySelector('.beat-swarm-pause-screen');
   starfieldLayerEl = overlayEl.querySelector('.beat-swarm-starfield-layer');
   spawnerLayerEl = overlayEl.querySelector('.beat-swarm-spawner-layer');
   enemyLayerEl = overlayEl.querySelector('.beat-swarm-enemy-layer');
@@ -409,6 +560,7 @@ function ensureUi() {
     });
     registerLoopgridSpawnerType(spawnerRuntime);
   }
+  ensurePauseWeaponUi();
 
   exitBtn = document.getElementById('beat-swarm-exit');
   if (!exitBtn) {
@@ -439,6 +591,132 @@ function setGameplayPaused(next) {
     releaseForcePrimed = false;
   }
   pauseLabelEl?.classList?.toggle?.('is-visible', gameplayPaused);
+  pauseScreenEl?.classList?.toggle?.('is-visible', gameplayPaused);
+}
+
+function createArchetypeOptions(selected) {
+  const sel = String(selected || '');
+  return Object.values(WEAPON_ARCHETYPES)
+    .map((a) => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${a.label}</option>`)
+    .join('');
+}
+
+function createVariantOptions(archetype, selected) {
+  const def = getArchetypeDef(archetype) || WEAPON_ARCHETYPES.projectile;
+  const sel = String(selected || '');
+  return def.variants
+    .map((v) => `<option value="${v.id}"${v.id === sel ? ' selected' : ''}>${v.label}</option>`)
+    .join('');
+}
+
+function ensurePauseWeaponUi() {
+  if (!pauseScreenEl) return;
+  if (pauseScreenEl.dataset.uiReady === '1') return;
+  pauseScreenEl.dataset.uiReady = '1';
+  renderPauseWeaponUi();
+  pauseScreenEl.addEventListener('change', (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const slotIndex = Math.trunc(Number(target.dataset.slotIndex));
+    const stageIndex = Math.trunc(Number(target.dataset.stageIndex));
+    if (!(slotIndex >= 0 && slotIndex < weaponLoadout.length)) return;
+    const slot = weaponLoadout[slotIndex];
+    if (!(stageIndex >= 0 && stageIndex < slot.stages.length)) return;
+    if (target.dataset.field === 'archetype') {
+      const nextArch = getArchetypeDef(target.value)?.id || slot.stages[stageIndex].archetype;
+      const firstVariant = getArchetypeDef(nextArch)?.variants?.[0]?.id || '';
+      slot.stages[stageIndex] = { archetype: nextArch, variant: firstVariant };
+      renderPauseWeaponUi();
+      persistBeatSwarmState();
+      return;
+    }
+    if (target.dataset.field === 'variant') {
+      const stage = slot.stages[stageIndex];
+      const nextVar = getVariantDef(stage.archetype, target.value)?.id || stage.variant;
+      slot.stages[stageIndex] = { archetype: stage.archetype, variant: nextVar };
+      persistBeatSwarmState();
+    }
+  });
+  pauseScreenEl.addEventListener('click', (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    const actionEl = target.closest('[data-action]');
+    if (!(actionEl instanceof HTMLElement)) return;
+    const slotIndex = Math.trunc(Number(actionEl.dataset.slotIndex));
+    if (!(slotIndex >= 0 && slotIndex < weaponLoadout.length)) return;
+    const slot = weaponLoadout[slotIndex];
+    const action = String(actionEl.dataset.action || '');
+    if (action === 'add-stage') {
+      if (slot.stages.length >= MAX_WEAPON_STAGES) return;
+      const archetype = 'projectile';
+      const variant = getArchetypeDef(archetype)?.variants?.[0]?.id || 'homing-missile';
+      slot.stages.push({ archetype, variant });
+      renderPauseWeaponUi();
+      persistBeatSwarmState();
+      return;
+    }
+    if (action === 'add-stage-at') {
+      if (slot.stages.length >= MAX_WEAPON_STAGES) return;
+      const stageIndex = Math.max(0, Math.min(MAX_WEAPON_STAGES - 1, Math.trunc(Number(actionEl.dataset.stageIndex))));
+      const archetype = 'projectile';
+      const variant = getArchetypeDef(archetype)?.variants?.[0]?.id || 'homing-missile';
+      slot.stages.splice(stageIndex, 0, { archetype, variant });
+      slot.stages = sanitizeWeaponStages(slot.stages);
+      renderPauseWeaponUi();
+      persistBeatSwarmState();
+      return;
+    }
+    if (action === 'remove-stage') {
+      const stageIndex = Math.trunc(Number(actionEl.dataset.stageIndex));
+      if (!(stageIndex >= 0 && stageIndex < slot.stages.length)) return;
+      slot.stages.splice(stageIndex, 1);
+      renderPauseWeaponUi();
+      persistBeatSwarmState();
+    }
+  });
+}
+
+function renderPauseWeaponUi() {
+  if (!pauseScreenEl) return;
+  const cards = weaponLoadout.map((slot, slotIndex) => {
+    const stageCells = Array.from({ length: MAX_WEAPON_STAGES }, (_, stageIndex) => {
+      const st = slot.stages[stageIndex] || null;
+      if (!st) {
+        return `
+          <div class="beat-swarm-stage-cell is-empty">
+            <div class="beat-swarm-stage-index">${stageIndex + 1}</div>
+            <div class="beat-swarm-stage-empty">Empty</div>
+            <button type="button" class="beat-swarm-stage-add" data-action="add-stage-at" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}" ${slot.stages.length >= MAX_WEAPON_STAGES ? 'disabled' : ''}>Add</button>
+          </div>
+        `;
+      }
+      return `
+        <div class="beat-swarm-stage-cell is-filled">
+          <div class="beat-swarm-stage-index">${stageIndex + 1}</div>
+          <select class="beat-swarm-select" data-field="archetype" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}">
+            ${createArchetypeOptions(st.archetype)}
+          </select>
+          <select class="beat-swarm-select" data-field="variant" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}">
+            ${createVariantOptions(st.archetype, st.variant)}
+          </select>
+          <button type="button" class="beat-swarm-stage-remove" data-action="remove-stage" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}">Remove</button>
+        </div>
+      `;
+    }).join('');
+    return `
+      <section class="beat-swarm-weapon-card">
+        <header class="beat-swarm-weapon-head">${slot.name}</header>
+        <div class="beat-swarm-weapon-stages">
+          ${stageCells}
+        </div>
+      </section>
+    `;
+  }).join('');
+  pauseScreenEl.innerHTML = `
+    <div class="beat-swarm-pause-title">Weapon Customisation</div>
+    <div class="beat-swarm-pause-subtitle">Up to 3 weapons, each with up to 5 beat stages.</div>
+    <div class="beat-swarm-weapon-grid">${cards}</div>
+  `;
 }
 
 function applyCameraDelta(dx, dy) {
@@ -756,6 +1034,7 @@ function spawnEnemyAt(clientX, clientY) {
     el.style.transform = `translate(-9999px, -9999px) scale(${ENEMY_SPAWN_START_SCALE})`;
   }
   enemies.push({
+    id: enemyIdSeq++,
     wx: w.x,
     wy: w.y,
     vx: 0,
@@ -784,6 +1063,32 @@ function getNearestEnemy(worldX, worldY) {
   return best;
 }
 
+function getNearestEnemies(worldX, worldY, count = 1) {
+  const scored = enemies.map((e) => {
+    const dx = e.wx - worldX;
+    const dy = e.wy - worldY;
+    return { e, d2: (dx * dx) + (dy * dy) };
+  });
+  scored.sort((a, b) => a.d2 - b.d2);
+  return scored.slice(0, Math.max(1, Math.trunc(Number(count) || 1))).map((it) => it.e);
+}
+
+function ensureDefaultWeaponFromLegacy(weaponId) {
+  const map = {
+    projectile: { archetype: 'projectile', variant: 'homing-missile' },
+    laser: { archetype: 'laser', variant: 'hitscan' },
+    explosion: { archetype: 'aoe', variant: 'explosion' },
+  };
+  const stage = map[weaponId];
+  if (!stage) return;
+  const exists = weaponLoadout.some((w) => Array.isArray(w.stages) && w.stages.some((s) => s.archetype === stage.archetype && s.variant === stage.variant));
+  if (exists) return;
+  const slot = weaponLoadout.find((w) => !w.stages.length) || weaponLoadout[0];
+  if (!slot) return;
+  slot.stages = [{ ...stage }];
+  renderPauseWeaponUi();
+}
+
 function spawnPickup(weaponId, worldX, worldY) {
   if (!enemyLayerEl || !weaponDefs[weaponId]) return;
   const el = document.createElement('div');
@@ -794,12 +1099,8 @@ function spawnPickup(weaponId, worldX, worldY) {
 }
 
 function spawnStarterPickups(centerWorld) {
+  // Pickups temporarily disabled in Beat Swarm (kept for future re-enable).
   clearPickups();
-  equippedWeapons.clear();
-  const c = centerWorld || { x: 0, y: 0 };
-  spawnPickup('laser', c.x - 170, c.y - 90);
-  spawnPickup('projectile', c.x + 170, c.y - 90);
-  spawnPickup('explosion', c.x, c.y - 190);
 }
 
 function addLaserEffect(fromW, toW) {
@@ -810,7 +1111,7 @@ function addLaserEffect(fromW, toW) {
   effects.push({ kind: 'laser', ttl: LASER_TTL, from: { ...fromW }, to: { ...toW }, el });
 }
 
-function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD) {
+function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD, ttlOverride = null) {
   if (!enemyLayerEl) return;
   const el = document.createElement('div');
   el.className = 'beat-swarm-fx-explosion';
@@ -819,14 +1120,14 @@ function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD) {
   enemyLayerEl.appendChild(el);
   effects.push({
     kind: 'explosion',
-    ttl: EXPLOSION_TTL,
+    ttl: Math.max(0.01, Number.isFinite(ttlOverride) ? Number(ttlOverride) : EXPLOSION_TTL),
     at: { ...centerW },
     radiusWorld: Math.max(1, Number(radiusWorld) || EXPLOSION_RADIUS_WORLD),
     el,
   });
 }
 
-function spawnProjectile(fromW, toEnemy, damage) {
+function spawnProjectile(fromW, toEnemy, damage, nextStages = null, nextBeatIndex = null) {
   if (!enemyLayerEl || !toEnemy) return;
   const el = document.createElement('div');
   el.className = 'beat-swarm-projectile';
@@ -841,23 +1142,153 @@ function spawnProjectile(fromW, toEnemy, damage) {
     vy: (dy / len) * PROJECTILE_SPEED,
     ttl: PROJECTILE_LIFETIME,
     damage: Math.max(1, Number(damage) || 1),
+    nextStages: sanitizeWeaponStages(nextStages),
+    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
   });
 }
 
-function fireWeaponsOnBeat(centerWorld) {
-  if (!centerWorld) return;
-  if (equippedWeapons.has('explosion')) {
-    const blastRadius = Math.max(1, Number(EXPLOSION_RADIUS_WORLD) || 1);
-    addExplosionEffect(centerWorld, blastRadius);
-    const r2 = blastRadius * blastRadius;
-    for (let i = enemies.length - 1; i >= 0; i--) {
-      const e = enemies[i];
-      const dx = e.wx - centerWorld.x;
-      const dy = e.wy - centerWorld.y;
-      if ((dx * dx + dy * dy) <= r2) damageEnemy(e, weaponDefs.explosion.damage);
+function queueWeaponChain(beatIndex, nextStages, context) {
+  const stages = sanitizeWeaponStages(nextStages);
+  if (!stages.length) return;
+  pendingWeaponChainEvents.push({
+    beatIndex: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
+    stages,
+    context: {
+      origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : null,
+      impactPoint: context?.impactPoint ? { x: Number(context.impactPoint.x) || 0, y: Number(context.impactPoint.y) || 0 } : null,
+    },
+  });
+}
+
+function applyAoeAt(point, variant = 'explosion', beatIndex = 0) {
+  if (!point) return;
+  const radius = Math.max(1, Number(EXPLOSION_RADIUS_WORLD) || 1);
+  const info = getLoopInfo?.();
+  const beatLen = Math.max(0.05, Number(info?.beatLen) || 0.5);
+  addExplosionEffect(point, radius, variant === 'dot-area' ? (beatLen * 2) : null);
+  const r2 = radius * radius;
+  const isDot = variant === 'dot-area';
+  const hitDamage = isDot ? 0.5 : 1;
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    const dx = e.wx - point.x;
+    const dy = e.wy - point.y;
+    if ((dx * dx + dy * dy) <= r2) damageEnemy(e, hitDamage);
+  }
+  if (isDot) {
+    lingeringAoeZones.push({
+      x: point.x,
+      y: point.y,
+      radius,
+      damagePerBeat: 0.6,
+      untilBeat: Math.max(beatIndex + 2, beatIndex + 1),
+    });
+  }
+}
+
+function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [], context = null) {
+  if (!stage || !originWorld) return;
+  const archetype = stage.archetype;
+  const variant = stage.variant;
+  const continuation = sanitizeWeaponStages(remainingStages);
+  const nearest = getNearestEnemy(originWorld.x, originWorld.y);
+  if (archetype === 'projectile') {
+    const targets = variant === 'split-shot'
+      ? getNearestEnemies(originWorld.x, originWorld.y, 2)
+      : (nearest ? [nearest] : []);
+    for (const t of targets) {
+      spawnProjectile(originWorld, t, 2, continuation, beatIndex + 1);
+    }
+    return;
+  }
+  if (archetype === 'laser') {
+    if (variant === 'beam') {
+      const targets = getNearestEnemies(originWorld.x, originWorld.y, 4);
+      if (!targets.length) return;
+      let primaryImpact = null;
+      for (const t of targets) {
+        addLaserEffect(originWorld, { x: t.wx, y: t.wy });
+        damageEnemy(t, 1.7);
+        if (!primaryImpact) primaryImpact = { x: t.wx, y: t.wy };
+      }
+      if (continuation.length) {
+        queueWeaponChain(beatIndex + 1, continuation, {
+          origin: originWorld,
+          // Chain source is defined by previous stage output point.
+          impactPoint: primaryImpact || originWorld,
+        });
+      }
+      return;
+    }
+    if (!nearest) return;
+    addLaserEffect(originWorld, { x: nearest.wx, y: nearest.wy });
+    damageEnemy(nearest, 2);
+    if (continuation.length) {
+      queueWeaponChain(beatIndex + 1, continuation, {
+        origin: originWorld,
+        impactPoint: { x: nearest.wx, y: nearest.wy },
+      });
+    }
+    return;
+  }
+  if (archetype === 'aoe') {
+    applyAoeAt(originWorld, variant, beatIndex);
+    if (continuation.length) {
+      queueWeaponChain(beatIndex + 1, continuation, {
+        origin: context?.origin || originWorld,
+        impactPoint: originWorld,
+      });
     }
   }
+}
+
+function processPendingWeaponChains(beatIndex) {
+  for (let i = pendingWeaponChainEvents.length - 1; i >= 0; i--) {
+    const ev = pendingWeaponChainEvents[i];
+    if ((Number(ev?.beatIndex) || 0) > beatIndex) continue;
+    pendingWeaponChainEvents.splice(i, 1);
+    const stages = sanitizeWeaponStages(ev?.stages);
+    if (!stages.length) continue;
+    const stage = stages[0];
+    const rem = stages.slice(1);
+    // Each stage starts from the source point emitted by the previous stage.
+    const origin = ev?.context?.impactPoint || ev?.context?.origin || getViewportCenterWorld();
+    triggerWeaponStage(stage, origin, beatIndex, rem, ev?.context || null);
+  }
+}
+
+function applyLingeringAoeBeat(beatIndex) {
+  for (let i = lingeringAoeZones.length - 1; i >= 0; i--) {
+    const z = lingeringAoeZones[i];
+    if ((Number(z.untilBeat) || 0) < beatIndex) {
+      lingeringAoeZones.splice(i, 1);
+      continue;
+    }
+    const r2 = (Number(z.radius) || EXPLOSION_RADIUS_WORLD) ** 2;
+    const dmg = Math.max(0, Number(z.damagePerBeat) || 0);
+    for (let j = enemies.length - 1; j >= 0; j--) {
+      const e = enemies[j];
+      const dx = e.wx - z.x;
+      const dy = e.wy - z.y;
+      if ((dx * dx + dy * dy) <= r2) damageEnemy(e, dmg);
+    }
+  }
+}
+
+function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex) {
+  if (!centerWorld) return;
+  for (const weapon of weaponLoadout) {
+    const stages = sanitizeWeaponStages(weapon?.stages);
+    if (!stages.length) continue;
+    const first = stages[0];
+    const rest = stages.slice(1);
+    triggerWeaponStage(first, centerWorld, beatIndex, rest, { origin: centerWorld, impactPoint: centerWorld });
+  }
+  // Backward compatibility: legacy pickup behavior if no configured stages exist.
+  const anyConfigured = weaponLoadout.some((w) => Array.isArray(w.stages) && w.stages.length > 0);
+  if (anyConfigured) return;
+  if (equippedWeapons.has('explosion')) applyAoeAt(centerWorld, 'explosion', beatIndex);
   const target = getNearestEnemy(centerWorld.x, centerWorld.y);
   if (!target) return;
   if (equippedWeapons.has('laser')) {
@@ -865,7 +1296,7 @@ function fireWeaponsOnBeat(centerWorld) {
     damageEnemy(target, weaponDefs.laser.damage);
   }
   if (equippedWeapons.has('projectile')) {
-    spawnProjectile(centerWorld, target, weaponDefs.projectile.damage);
+    spawnProjectile(centerWorld, target, weaponDefs.projectile.damage, null, null);
   }
 }
 
@@ -880,6 +1311,7 @@ function updateBeatWeapons(centerWorld) {
   const now = Number(info?.now) || 0;
   if (!(beatLen > 0)) return;
   const beatIndex = Math.floor(((now - loopStart) / beatLen) + 1e-6);
+  currentBeatIndex = beatIndex;
   if (beatIndex === lastBeatIndex) return;
   lastBeatIndex = beatIndex;
   if (active && outerForceContinuousSeconds >= beatLen) {
@@ -896,7 +1328,9 @@ function updateBeatWeapons(centerWorld) {
       }
     }
   }
-  fireWeaponsOnBeat(centerWorld);
+  processPendingWeaponChains(beatIndex);
+  applyLingeringAoeBeat(beatIndex);
+  fireConfiguredWeaponsOnBeat(centerWorld, beatIndex);
 }
 
 function configureInitialSpawnerEnablement() {
@@ -988,6 +1422,7 @@ function updatePickupsAndCombat(dt) {
     const dy = p.wy - centerWorld.y;
     if ((dx * dx + dy * dy) <= cr2) {
       equippedWeapons.add(p.weaponId);
+      ensureDefaultWeaponFromLegacy(p.weaponId);
       try { p.el?.remove?.(); } catch {}
       pickups.splice(i, 1);
       continue;
@@ -1003,12 +1438,21 @@ function updatePickupsAndCombat(dt) {
     p.wx += p.vx * dt;
     p.wy += p.vy * dt;
     let hit = false;
+    let hitPoint = null;
     for (let j = enemies.length - 1; j >= 0; j--) {
       const e = enemies[j];
       const dx = e.wx - p.wx;
       const dy = e.wy - p.wy;
       if ((dx * dx + dy * dy) <= pr2) {
         damageEnemy(e, p.damage);
+        hitPoint = { x: e.wx, y: e.wy };
+        if (Array.isArray(p.nextStages) && p.nextStages.length) {
+          const nextBeat = Number.isFinite(p.nextBeatIndex) ? p.nextBeatIndex : (Math.max(0, currentBeatIndex) + 1);
+          queueWeaponChain(nextBeat, p.nextStages, {
+            origin: { x: p.wx, y: p.wy },
+            impactPoint: hitPoint,
+          });
+        }
         hit = true;
         break;
       }
@@ -1650,6 +2094,8 @@ export function enterBeatSwarmMode(options = null) {
   clearPickups();
   clearProjectiles();
   clearEffects();
+  clearPendingWeaponChainEvents();
+  clearLingeringAoeZones();
   clearStarfield();
   arenaCenterWorld = null;
   barrierPushingOut = false;
@@ -1666,6 +2112,8 @@ export function enterBeatSwarmMode(options = null) {
   try { spawnerRuntime?.enter?.(); } catch {}
   try { configureInitialSpawnerEnablement(); } catch {}
   if (!restoreState) {
+    seedDefaultWeaponLoadout();
+    renderPauseWeaponUi();
     const startWorld = getSceneStartWorld();
     snapCameraToWorld(startWorld, SWARM_CAMERA_TARGET_SCALE);
     arenaCenterWorld = { x: Number(startWorld.x) || 0, y: Number(startWorld.y) || 0 };
@@ -1716,6 +2164,8 @@ export function exitBeatSwarmMode() {
   clearPickups();
   clearProjectiles();
   clearEffects();
+  clearPendingWeaponChainEvents();
+  clearLingeringAoeZones();
   clearStarfield();
   arenaCenterWorld = null;
   barrierPushingOut = false;

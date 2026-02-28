@@ -3241,6 +3241,147 @@ body.internal-board-active #board-main {
   opacity: 1;
 }
 
+.beat-swarm-pause-screen {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: min(980px, calc(100vw - 52px));
+  max-height: calc(100vh - 120px);
+  transform: translate(-50%, -50%);
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(136, 166, 202, 0.46);
+  background: rgba(6, 10, 18, 0.92);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.52);
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 7;
+}
+
+.beat-swarm-pause-screen.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.beat-swarm-pause-title {
+  font: 700 22px/1.2 'Trebuchet MS', 'Segoe UI', sans-serif;
+  letter-spacing: 0.03em;
+  color: #eef7ff;
+}
+
+.beat-swarm-pause-subtitle {
+  font: 600 13px/1.35 'Trebuchet MS', 'Segoe UI', sans-serif;
+  color: rgba(202, 224, 255, 0.84);
+}
+
+.beat-swarm-weapon-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.beat-swarm-weapon-card {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(118, 145, 178, 0.42);
+  background: rgba(14, 22, 36, 0.78);
+}
+
+.beat-swarm-weapon-head {
+  font: 700 15px/1.2 'Trebuchet MS', 'Segoe UI', sans-serif;
+  color: #f2f8ff;
+  padding-top: 8px;
+}
+
+.beat-swarm-weapon-stages {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.beat-swarm-stage-cell {
+  display: grid;
+  grid-template-rows: auto auto auto auto;
+  gap: 6px;
+  align-items: start;
+  padding: 8px;
+  min-height: 132px;
+  border-radius: 9px;
+  border: 1px solid rgba(119, 148, 184, 0.42);
+  background: rgba(8, 14, 24, 0.78);
+}
+
+.beat-swarm-stage-index {
+  font: 700 12px/1 'Trebuchet MS', 'Segoe UI', sans-serif;
+  color: rgba(191, 220, 255, 0.88);
+  opacity: 0.9;
+}
+
+.beat-swarm-select {
+  min-width: 0;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid rgba(119, 148, 184, 0.54);
+  background: rgba(6, 11, 18, 0.9);
+  color: #e6f3ff;
+  font: 600 12px/1.2 'Trebuchet MS', 'Segoe UI', sans-serif;
+  padding: 0 8px;
+}
+
+.beat-swarm-stage-remove,
+.beat-swarm-stage-add {
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid rgba(119, 148, 184, 0.54);
+  background: rgba(22, 35, 55, 0.92);
+  color: #e8f3ff;
+  font: 700 12px/1 'Trebuchet MS', 'Segoe UI', sans-serif;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.beat-swarm-stage-add:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.beat-swarm-stage-empty {
+  font: 600 12px/1.3 'Trebuchet MS', 'Segoe UI', sans-serif;
+  color: rgba(182, 206, 237, 0.72);
+}
+
+.beat-swarm-stage-cell.is-empty {
+  background: rgba(8, 14, 24, 0.52);
+  border-style: dashed;
+}
+
+.beat-swarm-stage-cell.is-empty .beat-swarm-stage-empty {
+  min-height: 30px;
+  display: grid;
+  place-items: center start;
+}
+
+@media (max-width: 980px) {
+  .beat-swarm-weapon-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .beat-swarm-weapon-head {
+    padding-top: 0;
+  }
+
+  .beat-swarm-weapon-stages {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .beat-swarm-ship {
   width: 28px;
   height: 28px;
