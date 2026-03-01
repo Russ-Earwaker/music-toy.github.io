@@ -168,6 +168,15 @@ const PROJECTILE_LIFETIME = 1.9;
 const PROJECTILE_SPLIT_ANGLE_RAD = Math.PI / 7.2; // 25 deg
 const PROJECTILE_BOOMERANG_RADIUS_WORLD = 320;
 const PROJECTILE_BOOMERANG_LOOP_SECONDS = 1.15;
+const PROJECTILE_HOMING_ACQUIRE_RANGE_WORLD = 920;
+const PROJECTILE_HOMING_SPEED = 900;
+const PROJECTILE_HOMING_TURN_RATE = 5.8;
+const PROJECTILE_HOMING_ORBIT_RADIUS_WORLD = 170;
+const PROJECTILE_HOMING_ORBIT_ANG_VEL = 2.4;
+const PROJECTILE_HOMING_ORBIT_CHASE_SPEED = 420;
+const PROJECTILE_HOMING_ORBIT_TURN_RATE = 4.2;
+const PROJECTILE_HOMING_MAX_ORBITING = 8;
+const PROJECTILE_HOMING_RETURN_SNAP_DIST_WORLD = 34;
 const LASER_TTL = 0.12;
 const EXPLOSION_TTL = 0.22;
 const EXPLOSION_RADIUS_WORLD = 220;
@@ -177,6 +186,15 @@ const PREVIEW_PROJECTILE_LIFETIME = 2.1;
 const PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD = Math.PI / 7.2; // 25 deg
 const PREVIEW_PROJECTILE_BOOMERANG_RADIUS = 42;
 const PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS = 1.15;
+const PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE = 160;
+const PREVIEW_PROJECTILE_HOMING_SPEED = 280;
+const PREVIEW_PROJECTILE_HOMING_TURN_RATE = 5.2;
+const PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS = 38;
+const PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL = 2.8;
+const PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED = 150;
+const PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE = 4.2;
+const PREVIEW_PROJECTILE_HOMING_MAX_ORBITING = 8;
+const PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST = 10;
 const PREVIEW_LASER_TTL = 0.16;
 const PREVIEW_EXPLOSION_TTL = 0.24;
 const PREVIEW_EXPLOSION_RADIUS = 52;
@@ -313,6 +331,11 @@ function captureBeatSwarmState() {
       boomRadius: Number(p.boomRadius) || 0,
       boomTheta: Number(p.boomTheta) || 0,
       boomOmega: Number(p.boomOmega) || 0,
+      homingState: String(p.homingState || ''),
+      targetEnemyId: Number.isFinite(p.targetEnemyId) ? Math.trunc(p.targetEnemyId) : null,
+      orbitAngle: Number(p.orbitAngle) || 0,
+      orbitAngVel: Number(p.orbitAngVel) || 0,
+      orbitRadius: Number(p.orbitRadius) || 0,
       hitEnemyIds: Array.from(p.hitEnemyIds || []),
       nextStages: Array.isArray(p.nextStages) ? p.nextStages.map((s) => ({ archetype: s.archetype, variant: s.variant })) : [],
       nextBeatIndex: Number.isFinite(p.nextBeatIndex) ? Math.trunc(p.nextBeatIndex) : null,
@@ -549,6 +572,11 @@ function restoreBeatSwarmState(state) {
       boomRadius: Math.max(0, Number(p.boomRadius) || 0),
       boomTheta: Number(p.boomTheta) || 0,
       boomOmega: Number(p.boomOmega) || 0,
+      homingState: String(p.homingState || ''),
+      targetEnemyId: Number.isFinite(p.targetEnemyId) ? Math.trunc(p.targetEnemyId) : null,
+      orbitAngle: Number(p.orbitAngle) || 0,
+      orbitAngVel: Number(p.orbitAngVel) || 0,
+      orbitRadius: Math.max(0, Number(p.orbitRadius) || 0),
       hitEnemyIds: new Set(Array.isArray(p.hitEnemyIds) ? p.hitEnemyIds.map((id) => Math.trunc(Number(id) || 0)).filter((id) => id > 0) : []),
       nextStages: sanitizeWeaponStages(p.nextStages),
       nextBeatIndex: Number.isFinite(p.nextBeatIndex) ? Math.max(0, Math.trunc(p.nextBeatIndex)) : null,
@@ -827,6 +855,16 @@ function queuePausePreviewChain(beatIndex, nextStages, context) {
   });
 }
 
+function countPausePreviewOrbitingHomingMissiles() {
+  let n = 0;
+  for (const p of pausePreview.projectiles) {
+    if (String(p?.kind || '') !== 'homing-missile') continue;
+    if (String(p?.homingState || '') !== 'orbit') continue;
+    n += 1;
+  }
+  return n;
+}
+
 function addPausePreviewLaser(from, to) {
   if (!pausePreviewSceneEl) return;
   const el = document.createElement('div');
@@ -894,6 +932,11 @@ function spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, next
     boomRadius: 0,
     boomTheta: 0,
     boomOmega: 0,
+    homingState: '',
+    targetEnemy: null,
+    orbitAngle: 0,
+    orbitAngVel: 0,
+    orbitRadius: 0,
     hitEnemyIds: new Set(),
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
@@ -933,11 +976,54 @@ function spawnPausePreviewBoomerangProjectile(from, dirX, dirY, damage, nextStag
     boomRadius: radius,
     boomTheta: theta,
     boomOmega: omega,
+    homingState: '',
+    targetEnemy: null,
+    orbitAngle: 0,
+    orbitAngVel: 0,
+    orbitRadius: 0,
     hitEnemyIds: new Set(),
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
   });
+}
+
+function spawnPausePreviewHomingMissile(from, damage, nextStages = null, nextBeatIndex = null) {
+  if (!pausePreviewSceneEl) return false;
+  if (countPausePreviewOrbitingHomingMissiles() >= PREVIEW_PROJECTILE_HOMING_MAX_ORBITING) return false;
+  const orbitCount = countPausePreviewOrbitingHomingMissiles();
+  const angle = ((orbitCount / Math.max(1, PREVIEW_PROJECTILE_HOMING_MAX_ORBITING)) * Math.PI * 2);
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-preview-projectile';
+  pausePreviewSceneEl.appendChild(el);
+  pausePreview.projectiles.push({
+    x: from.x,
+    y: from.y,
+    vx: 0,
+    vy: 0,
+    ttl: 60,
+    damage: Math.max(1, Number(damage) || 1),
+    kind: 'homing-missile',
+    boomCenterX: 0,
+    boomCenterY: 0,
+    boomDirX: 0,
+    boomDirY: 0,
+    boomPerpX: 0,
+    boomPerpY: 0,
+    boomRadius: 0,
+    boomTheta: 0,
+    boomOmega: 0,
+    homingState: 'orbit',
+    targetEnemy: null,
+    orbitAngle: angle,
+    orbitAngVel: PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL,
+    orbitRadius: PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS,
+    hitEnemyIds: new Set(),
+    nextStages: sanitizeWeaponStages(nextStages),
+    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    el,
+  });
+  return true;
 }
 
 function applyPausePreviewAoeAt(point, variant = 'explosion', beatIndex = 0) {
@@ -971,6 +1057,10 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
     const baseDir = nearest
       ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
       : { x: 1, y: 0 };
+    if (variant === 'homing-missile') {
+      spawnPausePreviewHomingMissile(origin, 2, continuation, beatIndex + 1);
+      return;
+    }
     if (variant === 'boomerang') {
       spawnPausePreviewBoomerangProjectile(origin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
       return;
@@ -1097,6 +1187,7 @@ function updatePausePreviewProjectilesAndEffects(dt) {
     const p = pausePreview.projectiles[i];
     p.ttl -= dt;
     const isBoomerang = String(p.kind || 'standard') === 'boomerang';
+    const isHoming = String(p.kind || 'standard') === 'homing-missile';
     if (isBoomerang) {
       p.boomTheta = (Number(p.boomTheta) || 0) + ((Number(p.boomOmega) || 0) * dt);
       const c = Math.cos(p.boomTheta || 0);
@@ -1108,6 +1199,97 @@ function updatePausePreviewProjectilesAndEffects(dt) {
       const perpY = Number(p.boomPerpY) || 0;
       p.x = (Number(p.boomCenterX) || 0) + (dirX * (1 + c) * r) + (perpX * s * r);
       p.y = (Number(p.boomCenterY) || 0) + (dirY * (1 + c) * r) + (perpY * s * r);
+    } else if (isHoming) {
+      let state = String(p.homingState || 'orbit');
+      const orbitRadius = Math.max(8, Number(p.orbitRadius) || PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS);
+      const orbitAngVel = Number(p.orbitAngVel) || PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL;
+      const nearestNow = getPausePreviewNearestEnemies(p.x, p.y, 1)[0] || null;
+      if (state === 'orbit' && nearestNow) {
+        const dx = nearestNow.x - p.x;
+        const dy = nearestNow.y - p.y;
+        if ((dx * dx + dy * dy) <= (PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE * PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE)) {
+          state = 'seek';
+          p.targetEnemy = nearestNow;
+        }
+      }
+      if (state === 'seek') {
+        let target = p.targetEnemy || null;
+        if (!target || !pausePreview.enemies.includes(target)) target = getPausePreviewNearestEnemies(p.x, p.y, 1)[0] || null;
+        if (!target) {
+          state = 'return';
+          p.targetEnemy = null;
+        } else {
+          p.targetEnemy = target;
+          const desired = normalizeDir(target.x - p.x, target.y - p.y, p.vx, p.vy);
+          const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
+          const steer = Math.max(0, Math.min(1, PREVIEW_PROJECTILE_HOMING_TURN_RATE * dt));
+          const nd = normalizeDir(
+            (cur.x * (1 - steer)) + (desired.x * steer),
+            (cur.y * (1 - steer)) + (desired.y * steer),
+            desired.x,
+            desired.y
+          );
+          p.vx = nd.x * PREVIEW_PROJECTILE_HOMING_SPEED;
+          p.vy = nd.y * PREVIEW_PROJECTILE_HOMING_SPEED;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+        }
+      }
+      if (state === 'return') {
+        const desired = normalizeDir(pausePreview.ship.x - p.x, pausePreview.ship.y - p.y, p.vx, p.vy);
+        const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
+        const steer = Math.max(0, Math.min(1, (PREVIEW_PROJECTILE_HOMING_TURN_RATE * 1.2) * dt));
+        const nd = normalizeDir(
+          (cur.x * (1 - steer)) + (desired.x * steer),
+          (cur.y * (1 - steer)) + (desired.y * steer),
+          desired.x,
+          desired.y
+        );
+        p.vx = nd.x * PREVIEW_PROJECTILE_HOMING_SPEED;
+        p.vy = nd.y * PREVIEW_PROJECTILE_HOMING_SPEED;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        const dx = p.x - pausePreview.ship.x;
+        const dy = p.y - pausePreview.ship.y;
+        if ((dx * dx + dy * dy) <= (PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST * PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST)) {
+          state = 'orbit';
+          const d = normalizeDir(dx, dy, 1, 0);
+          p.orbitAngle = Math.atan2(d.y, d.x);
+          p.vx = 0;
+          p.vy = 0;
+        }
+      }
+      if (state === 'orbit') {
+        const phaseCatchup = Math.max(
+          0.2,
+          Math.min(
+            1,
+            (Math.max(0, (Number(p.orbitRadius) || orbitRadius)) / Math.max(1, Math.hypot((p.x - pausePreview.ship.x), (p.y - pausePreview.ship.y))))
+          )
+        );
+        p.orbitAngle = (Number(p.orbitAngle) || 0) + (orbitAngVel * dt * phaseCatchup);
+        const targetX = pausePreview.ship.x + (Math.cos(p.orbitAngle) * orbitRadius);
+        const targetY = pausePreview.ship.y + (Math.sin(p.orbitAngle) * orbitRadius);
+        const toTx = targetX - p.x;
+        const toTy = targetY - p.y;
+        const toDist = Math.hypot(toTx, toTy) || 0.0001;
+        const desired = normalizeDir(targetX - p.x, targetY - p.y, 1, 0);
+        const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
+        const steer = Math.max(0, Math.min(1, PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE * dt));
+        const nd = normalizeDir(
+          (cur.x * (1 - steer)) + (desired.x * steer),
+          (cur.y * (1 - steer)) + (desired.y * steer),
+          desired.x,
+          desired.y
+        );
+        const speedN = Math.max(0.2, Math.min(1, toDist / Math.max(1, orbitRadius)));
+        const chaseSpeed = PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED * speedN;
+        p.vx = nd.x * chaseSpeed;
+        p.vy = nd.y * chaseSpeed;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+      }
+      p.homingState = state;
     } else {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -1849,6 +2031,16 @@ function getShipFacingDirWorld() {
   return { x: Math.cos(rad), y: Math.sin(rad) };
 }
 
+function countOrbitingHomingMissiles() {
+  let n = 0;
+  for (const p of projectiles) {
+    if (String(p?.kind || '') !== 'homing-missile') continue;
+    if (String(p?.homingState || '') !== 'orbit') continue;
+    n += 1;
+  }
+  return n;
+}
+
 function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null) {
   if (!enemyLayerEl) return;
   const dir = normalizeDir(dirX, dirY);
@@ -1873,6 +2065,11 @@ function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = nu
     boomRadius: 0,
     boomTheta: 0,
     boomOmega: 0,
+    homingState: '',
+    targetEnemyId: null,
+    orbitAngle: 0,
+    orbitAngVel: 0,
+    orbitRadius: 0,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
@@ -1914,10 +2111,53 @@ function spawnBoomerangProjectile(fromW, dirX, dirY, damage, nextStages = null, 
     boomRadius: radius,
     boomTheta: theta,
     boomOmega: omega,
+    homingState: '',
+    targetEnemyId: null,
+    orbitAngle: 0,
+    orbitAngVel: 0,
+    orbitRadius: 0,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
   });
+}
+
+function spawnHomingMissile(fromW, damage, nextStages = null, nextBeatIndex = null) {
+  if (!enemyLayerEl) return false;
+  if (countOrbitingHomingMissiles() >= PROJECTILE_HOMING_MAX_ORBITING) return false;
+  const orbitCount = countOrbitingHomingMissiles();
+  const angle = ((orbitCount / Math.max(1, PROJECTILE_HOMING_MAX_ORBITING)) * Math.PI * 2);
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-projectile';
+  enemyLayerEl.appendChild(el);
+  projectiles.push({
+    wx: fromW.x,
+    wy: fromW.y,
+    vx: 0,
+    vy: 0,
+    ttl: 60,
+    damage: Math.max(1, Number(damage) || 1),
+    kind: 'homing-missile',
+    hitEnemyIds: new Set(),
+    boomCenterX: 0,
+    boomCenterY: 0,
+    boomDirX: 0,
+    boomDirY: 0,
+    boomPerpX: 0,
+    boomPerpY: 0,
+    boomRadius: 0,
+    boomTheta: 0,
+    boomOmega: 0,
+    homingState: 'orbit',
+    targetEnemyId: null,
+    orbitAngle: angle,
+    orbitAngVel: PROJECTILE_HOMING_ORBIT_ANG_VEL,
+    orbitRadius: PROJECTILE_HOMING_ORBIT_RADIUS_WORLD,
+    nextStages: sanitizeWeaponStages(nextStages),
+    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    el,
+  });
+  return true;
 }
 
 function queueWeaponChain(beatIndex, nextStages, context) {
@@ -1970,6 +2210,10 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
     const baseDir = nearest
       ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
       : facingDir;
+    if (variant === 'homing-missile') {
+      spawnHomingMissile(originWorld, 2, continuation, beatIndex + 1);
+      return;
+    }
     if (variant === 'boomerang') {
       spawnBoomerangProjectile(originWorld, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
       return;
@@ -2247,6 +2491,7 @@ function updatePickupsAndCombat(dt) {
     const p = projectiles[i];
     p.ttl -= dt;
     const isBoomerang = String(p.kind || 'standard') === 'boomerang';
+    const isHoming = String(p.kind || 'standard') === 'homing-missile';
     if (isBoomerang) {
       p.boomTheta = (Number(p.boomTheta) || 0) + ((Number(p.boomOmega) || 0) * dt);
       const c = Math.cos(p.boomTheta || 0);
@@ -2259,6 +2504,100 @@ function updatePickupsAndCombat(dt) {
       // Furthest point from origin is aligned with forward target direction (dir).
       p.wx = (Number(p.boomCenterX) || 0) + (dirX * (1 + c) * r) + (perpX * s * r);
       p.wy = (Number(p.boomCenterY) || 0) + (dirY * (1 + c) * r) + (perpY * s * r);
+    } else if (isHoming) {
+      let state = String(p.homingState || 'orbit');
+      const orbitRadius = Math.max(20, Number(p.orbitRadius) || PROJECTILE_HOMING_ORBIT_RADIUS_WORLD);
+      const orbitAngVel = Number(p.orbitAngVel) || PROJECTILE_HOMING_ORBIT_ANG_VEL;
+      const nearestNow = getNearestEnemy(p.wx, p.wy);
+      if (state === 'orbit' && nearestNow) {
+        const dx = nearestNow.wx - p.wx;
+        const dy = nearestNow.wy - p.wy;
+        if ((dx * dx + dy * dy) <= (PROJECTILE_HOMING_ACQUIRE_RANGE_WORLD * PROJECTILE_HOMING_ACQUIRE_RANGE_WORLD)) {
+          state = 'seek';
+          p.targetEnemyId = Math.trunc(Number(nearestNow.id) || 0) || null;
+        }
+      }
+      if (state === 'seek') {
+        let target = null;
+        if (Number.isFinite(p.targetEnemyId)) {
+          target = enemies.find((e) => Math.trunc(Number(e.id) || 0) === Math.trunc(p.targetEnemyId)) || null;
+        }
+        if (!target) target = getNearestEnemy(p.wx, p.wy);
+        if (!target) {
+          state = 'return';
+          p.targetEnemyId = null;
+        } else {
+          p.targetEnemyId = Math.trunc(Number(target.id) || 0) || null;
+          const desired = normalizeDir(target.wx - p.wx, target.wy - p.wy, p.vx, p.vy);
+          const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
+          const steer = Math.max(0, Math.min(1, PROJECTILE_HOMING_TURN_RATE * dt));
+          const nd = normalizeDir(
+            (cur.x * (1 - steer)) + (desired.x * steer),
+            (cur.y * (1 - steer)) + (desired.y * steer),
+            desired.x,
+            desired.y
+          );
+          p.vx = nd.x * PROJECTILE_HOMING_SPEED;
+          p.vy = nd.y * PROJECTILE_HOMING_SPEED;
+          p.wx += p.vx * dt;
+          p.wy += p.vy * dt;
+        }
+      }
+      if (state === 'return') {
+        const desired = normalizeDir(centerWorld.x - p.wx, centerWorld.y - p.wy, p.vx, p.vy);
+        const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
+        const steer = Math.max(0, Math.min(1, (PROJECTILE_HOMING_TURN_RATE * 1.2) * dt));
+        const nd = normalizeDir(
+          (cur.x * (1 - steer)) + (desired.x * steer),
+          (cur.y * (1 - steer)) + (desired.y * steer),
+          desired.x,
+          desired.y
+        );
+        p.vx = nd.x * PROJECTILE_HOMING_SPEED;
+        p.vy = nd.y * PROJECTILE_HOMING_SPEED;
+        p.wx += p.vx * dt;
+        p.wy += p.vy * dt;
+        const dx = p.wx - centerWorld.x;
+        const dy = p.wy - centerWorld.y;
+        if ((dx * dx + dy * dy) <= (PROJECTILE_HOMING_RETURN_SNAP_DIST_WORLD * PROJECTILE_HOMING_RETURN_SNAP_DIST_WORLD)) {
+          state = 'orbit';
+          const d = normalizeDir(dx, dy, 1, 0);
+          p.orbitAngle = Math.atan2(d.y, d.x);
+          p.vx = 0;
+          p.vy = 0;
+        }
+      }
+      if (state === 'orbit') {
+        const phaseCatchup = Math.max(
+          0.2,
+          Math.min(
+            1,
+            (Math.max(0, (Number(p.orbitRadius) || orbitRadius)) / Math.max(1, Math.hypot((p.wx - centerWorld.x), (p.wy - centerWorld.y))))
+          )
+        );
+        p.orbitAngle = (Number(p.orbitAngle) || 0) + (orbitAngVel * dt * phaseCatchup);
+        const targetX = centerWorld.x + (Math.cos(p.orbitAngle) * orbitRadius);
+        const targetY = centerWorld.y + (Math.sin(p.orbitAngle) * orbitRadius);
+        const toTx = targetX - p.wx;
+        const toTy = targetY - p.wy;
+        const toDist = Math.hypot(toTx, toTy) || 0.0001;
+        const desired = normalizeDir(targetX - p.wx, targetY - p.wy, 1, 0);
+        const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
+        const steer = Math.max(0, Math.min(1, PROJECTILE_HOMING_ORBIT_TURN_RATE * dt));
+        const nd = normalizeDir(
+          (cur.x * (1 - steer)) + (desired.x * steer),
+          (cur.y * (1 - steer)) + (desired.y * steer),
+          desired.x,
+          desired.y
+        );
+        const speedN = Math.max(0.2, Math.min(1, toDist / Math.max(1, orbitRadius)));
+        const chaseSpeed = PROJECTILE_HOMING_ORBIT_CHASE_SPEED * speedN;
+        p.vx = nd.x * chaseSpeed;
+        p.vy = nd.y * chaseSpeed;
+        p.wx += p.vx * dt;
+        p.wy += p.vy * dt;
+      }
+      p.homingState = state;
     } else {
       p.wx += p.vx * dt;
       p.wy += p.vy * dt;
