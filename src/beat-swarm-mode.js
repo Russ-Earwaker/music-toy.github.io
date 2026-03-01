@@ -102,6 +102,7 @@ const WEAPON_ARCHETYPES = Object.freeze({
     id: 'projectile',
     label: 'Projectile',
     variants: Object.freeze([
+      Object.freeze({ id: 'standard', label: 'Standard' }),
       Object.freeze({ id: 'homing-missile', label: 'Homing Missile' }),
       Object.freeze({ id: 'boomerang', label: 'Boomerang' }),
       Object.freeze({ id: 'split-shot', label: 'Split Shot' }),
@@ -124,6 +125,16 @@ const WEAPON_ARCHETYPES = Object.freeze({
     ]),
   }),
 });
+const WEAPON_COMPONENTS = Object.freeze([
+  Object.freeze({ id: 'projectile:standard', archetype: 'projectile', variant: 'standard', label: 'Standard', previewClass: 'is-proj' }),
+  Object.freeze({ id: 'projectile:homing-missile', archetype: 'projectile', variant: 'homing-missile', label: 'Homing Missile', previewClass: 'is-proj' }),
+  Object.freeze({ id: 'projectile:boomerang', archetype: 'projectile', variant: 'boomerang', label: 'Boomerang', previewClass: 'is-boomerang' }),
+  Object.freeze({ id: 'projectile:split-shot', archetype: 'projectile', variant: 'split-shot', label: 'Split Shot', previewClass: 'is-split' }),
+  Object.freeze({ id: 'laser:hitscan', archetype: 'laser', variant: 'hitscan', label: 'Hit-scan', previewClass: 'is-hitscan' }),
+  Object.freeze({ id: 'laser:beam', archetype: 'laser', variant: 'beam', label: 'Constant Beam', previewClass: 'is-beam' }),
+  Object.freeze({ id: 'aoe:explosion', archetype: 'aoe', variant: 'explosion', label: 'Explosion', previewClass: 'is-explosion' }),
+  Object.freeze({ id: 'aoe:dot-area', archetype: 'aoe', variant: 'dot-area', label: 'Damage Over Time Area', previewClass: 'is-dotarea' }),
+]);
 const weaponLoadout = Array.from({ length: MAX_WEAPON_SLOTS }, (_, i) => ({
   id: `slot-${i + 1}`,
   name: `Weapon ${i + 1}`,
@@ -138,7 +149,7 @@ function seedDefaultWeaponLoadout() {
   }
   // Default starter: Projectile -> Explosion.
   weaponLoadout[0].stages = [
-    { archetype: 'projectile', variant: 'homing-missile' },
+    { archetype: 'projectile', variant: 'standard' },
     { archetype: 'aoe', variant: 'explosion' },
   ];
 }
@@ -153,13 +164,19 @@ const ENEMY_SPAWN_DURATION = 0.58;
 const PICKUP_COLLECT_RADIUS_PX = 46;
 const PROJECTILE_SPEED = 1100;
 const PROJECTILE_HIT_RADIUS_PX = 24;
-const PROJECTILE_LIFETIME = 1.1;
+const PROJECTILE_LIFETIME = 1.9;
+const PROJECTILE_SPLIT_ANGLE_RAD = Math.PI / 7.2; // 25 deg
+const PROJECTILE_BOOMERANG_RADIUS_WORLD = 320;
+const PROJECTILE_BOOMERANG_LOOP_SECONDS = 1.15;
 const LASER_TTL = 0.12;
 const EXPLOSION_TTL = 0.22;
 const EXPLOSION_RADIUS_WORLD = 220;
 const BEAM_DAMAGE_PER_SECOND = 3.2;
 const PREVIEW_PROJECTILE_SPEED = 360;
-const PREVIEW_PROJECTILE_LIFETIME = 1.6;
+const PREVIEW_PROJECTILE_LIFETIME = 2.1;
+const PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD = Math.PI / 7.2; // 25 deg
+const PREVIEW_PROJECTILE_BOOMERANG_RADIUS = 42;
+const PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS = 1.15;
 const PREVIEW_LASER_TTL = 0.16;
 const PREVIEW_EXPLOSION_TTL = 0.24;
 const PREVIEW_EXPLOSION_RADIUS = 52;
@@ -176,6 +193,7 @@ const equippedWeapons = new Set();
 let lastBeatIndex = null;
 let currentBeatIndex = 0;
 let previewSelectedWeaponSlotIndex = null;
+const stagePickerState = { open: false, slotIndex: -1, stageIndex: -1 };
 const pausePreview = {
   initialized: false,
   width: 0,
@@ -285,6 +303,17 @@ function captureBeatSwarmState() {
       vy: Number(p.vy) || 0,
       ttl: Number(p.ttl) || 0,
       damage: Number(p.damage) || 1,
+      kind: String(p.kind || 'standard'),
+      boomCenterX: Number(p.boomCenterX) || 0,
+      boomCenterY: Number(p.boomCenterY) || 0,
+      boomDirX: Number(p.boomDirX) || 0,
+      boomDirY: Number(p.boomDirY) || 0,
+      boomPerpX: Number(p.boomPerpX) || 0,
+      boomPerpY: Number(p.boomPerpY) || 0,
+      boomRadius: Number(p.boomRadius) || 0,
+      boomTheta: Number(p.boomTheta) || 0,
+      boomOmega: Number(p.boomOmega) || 0,
+      hitEnemyIds: Array.from(p.hitEnemyIds || []),
       nextStages: Array.isArray(p.nextStages) ? p.nextStages.map((s) => ({ archetype: s.archetype, variant: s.variant })) : [],
       nextBeatIndex: Number.isFinite(p.nextBeatIndex) ? Math.trunc(p.nextBeatIndex) : null,
     })),
@@ -336,6 +365,34 @@ function getVariantDef(archetype, variant) {
   const a = getArchetypeDef(archetype);
   if (!a) return null;
   return a.variants.find((v) => v.id === variant) || null;
+}
+
+function getWeaponComponentDefById(componentId) {
+  const id = String(componentId || '').trim();
+  return WEAPON_COMPONENTS.find((c) => c.id === id) || null;
+}
+
+function getWeaponComponentDefForStage(stage) {
+  const archetype = String(stage?.archetype || '').trim();
+  const variant = String(stage?.variant || '').trim();
+  return getWeaponComponentDefById(`${archetype}:${variant}`);
+}
+
+function renderComponentPreviewMarkup(componentDef) {
+  const cls = String(componentDef?.previewClass || 'is-empty').trim();
+  return `
+    <div class="beat-swarm-component-preview ${cls}" aria-hidden="true">
+      <span class="cp-lane"></span>
+      <span class="cp-ship"></span>
+      <span class="cp-enemy"></span>
+      <span class="cp-shot cp-shot-a"></span>
+      <span class="cp-shot cp-shot-b"></span>
+      <span class="cp-shot cp-shot-c"></span>
+      <span class="cp-beam"></span>
+      <span class="cp-burst"></span>
+      <span class="cp-dot"></span>
+    </div>
+  `;
 }
 
 function sanitizeWeaponStages(stages) {
@@ -482,6 +539,17 @@ function restoreBeatSwarmState(state) {
       vy: Number(p.vy) || 0,
       ttl: Math.max(0, Number(p.ttl) || 0),
       damage: Math.max(1, Number(p.damage) || 1),
+      kind: String(p.kind || 'standard'),
+      boomCenterX: Number(p.boomCenterX) || 0,
+      boomCenterY: Number(p.boomCenterY) || 0,
+      boomDirX: Number(p.boomDirX) || 0,
+      boomDirY: Number(p.boomDirY) || 0,
+      boomPerpX: Number(p.boomPerpX) || 0,
+      boomPerpY: Number(p.boomPerpY) || 0,
+      boomRadius: Math.max(0, Number(p.boomRadius) || 0),
+      boomTheta: Number(p.boomTheta) || 0,
+      boomOmega: Number(p.boomOmega) || 0,
+      hitEnemyIds: new Set(Array.isArray(p.hitEnemyIds) ? p.hitEnemyIds.map((id) => Math.trunc(Number(id) || 0)).filter((id) => id > 0) : []),
       nextStages: sanitizeWeaponStages(p.nextStages),
       nextBeatIndex: Number.isFinite(p.nextBeatIndex) ? Math.max(0, Math.trunc(p.nextBeatIndex)) : null,
       el,
@@ -637,21 +705,6 @@ function setGameplayPaused(next) {
   }
 }
 
-function createArchetypeOptions(selected) {
-  const sel = String(selected || '');
-  return Object.values(WEAPON_ARCHETYPES)
-    .map((a) => `<option value="${a.id}"${a.id === sel ? ' selected' : ''}>${a.label}</option>`)
-    .join('');
-}
-
-function createVariantOptions(archetype, selected) {
-  const def = getArchetypeDef(archetype) || WEAPON_ARCHETYPES.projectile;
-  const sel = String(selected || '');
-  return def.variants
-    .map((v) => `<option value="${v.id}"${v.id === sel ? ' selected' : ''}>${v.label}</option>`)
-    .join('');
-}
-
 function createRandomWeaponStages() {
   const archetypes = Object.values(WEAPON_ARCHETYPES);
   const count = Math.max(1, Math.min(MAX_WEAPON_STAGES, 1 + Math.floor(Math.random() * MAX_WEAPON_STAGES)));
@@ -659,11 +712,11 @@ function createRandomWeaponStages() {
   for (let i = 0; i < count; i++) {
     const a = archetypes[Math.floor(Math.random() * archetypes.length)] || WEAPON_ARCHETYPES.projectile;
     const variants = Array.isArray(a.variants) ? a.variants : [];
-    const v = variants[Math.floor(Math.random() * variants.length)] || variants[0];
-    out.push({
-      archetype: a.id,
-      variant: v?.id || getArchetypeDef(a.id)?.variants?.[0]?.id || 'homing-missile',
-    });
+      const v = variants[Math.floor(Math.random() * variants.length)] || variants[0];
+      out.push({
+        archetype: a.id,
+        variant: v?.id || getArchetypeDef(a.id)?.variants?.[0]?.id || 'standard',
+      });
   }
   return sanitizeWeaponStages(out);
 }
@@ -818,21 +871,69 @@ function addPausePreviewExplosion(at, radius = PREVIEW_EXPLOSION_RADIUS, ttl = P
   });
 }
 
-function spawnPausePreviewProjectile(from, target, damage, nextStages = null, nextBeatIndex = null) {
-  if (!pausePreviewSceneEl || !target) return;
+function spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, nextStages = null, nextBeatIndex = null) {
+  if (!pausePreviewSceneEl) return;
+  const dir = normalizeDir(dirX, dirY);
   const el = document.createElement('div');
   el.className = 'beat-swarm-preview-projectile';
   pausePreviewSceneEl.appendChild(el);
-  const dx = target.x - from.x;
-  const dy = target.y - from.y;
-  const len = Math.max(0.0001, Math.hypot(dx, dy));
   pausePreview.projectiles.push({
     x: from.x,
     y: from.y,
-    vx: (dx / len) * PREVIEW_PROJECTILE_SPEED,
-    vy: (dy / len) * PREVIEW_PROJECTILE_SPEED,
+    vx: dir.x * PREVIEW_PROJECTILE_SPEED,
+    vy: dir.y * PREVIEW_PROJECTILE_SPEED,
     ttl: PREVIEW_PROJECTILE_LIFETIME,
     damage: Math.max(1, Number(damage) || 1),
+    kind: 'standard',
+    boomCenterX: 0,
+    boomCenterY: 0,
+    boomDirX: 0,
+    boomDirY: 0,
+    boomPerpX: 0,
+    boomPerpY: 0,
+    boomRadius: 0,
+    boomTheta: 0,
+    boomOmega: 0,
+    hitEnemyIds: new Set(),
+    nextStages: sanitizeWeaponStages(nextStages),
+    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    el,
+  });
+}
+
+function spawnPausePreviewProjectile(from, target, damage, nextStages = null, nextBeatIndex = null) {
+  if (!target) return;
+  spawnPausePreviewProjectileFromDirection(from, target.x - from.x, target.y - from.y, damage, nextStages, nextBeatIndex);
+}
+
+function spawnPausePreviewBoomerangProjectile(from, dirX, dirY, damage, nextStages = null, nextBeatIndex = null) {
+  if (!pausePreviewSceneEl) return;
+  const dir = normalizeDir(dirX, dirY);
+  const perp = { x: dir.y, y: -dir.x };
+  const radius = Math.max(20, Number(PREVIEW_PROJECTILE_BOOMERANG_RADIUS) || 42);
+  const theta = Math.PI;
+  const omega = (Math.PI * 2) / Math.max(0.35, Number(PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15);
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-preview-projectile';
+  pausePreviewSceneEl.appendChild(el);
+  pausePreview.projectiles.push({
+    x: from.x,
+    y: from.y,
+    vx: 0,
+    vy: 0,
+    ttl: Math.max(0.35, Number(PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15),
+    damage: Math.max(1, Number(damage) || 1),
+    kind: 'boomerang',
+    boomCenterX: from.x,
+    boomCenterY: from.y,
+    boomDirX: dir.x,
+    boomDirY: dir.y,
+    boomPerpX: perp.x,
+    boomPerpY: perp.y,
+    boomRadius: radius,
+    boomTheta: theta,
+    boomOmega: omega,
+    hitEnemyIds: new Set(),
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
@@ -867,17 +968,41 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
   const continuation = sanitizeWeaponStages(remainingStages);
   const nearest = getPausePreviewNearestEnemies(origin.x, origin.y, 1)[0] || null;
   if (archetype === 'projectile') {
-    const targets = variant === 'split-shot'
-      ? getPausePreviewNearestEnemies(origin.x, origin.y, 2)
-      : (nearest ? [nearest] : []);
-    for (const t of targets) {
-      spawnPausePreviewProjectile(origin, t, 2, continuation, beatIndex + 1);
+    const baseDir = nearest
+      ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
+      : { x: 1, y: 0 };
+    if (variant === 'boomerang') {
+      spawnPausePreviewBoomerangProjectile(origin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
+      return;
+    }
+    if (variant === 'split-shot') {
+      const baseAngle = Math.atan2(baseDir.y, baseDir.x);
+      const angles = [baseAngle, baseAngle - PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD, baseAngle + PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD];
+      for (const ang of angles) {
+        spawnPausePreviewProjectileFromDirection(origin, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1);
+      }
+      return;
+    }
+    if (nearest) {
+      spawnPausePreviewProjectile(origin, nearest, 2, continuation, beatIndex + 1);
+    } else {
+      spawnPausePreviewProjectileFromDirection(origin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
     }
     return;
   }
   if (archetype === 'laser') {
     if (variant === 'beam') {
-      if (!nearest) return;
+      if (!nearest) {
+        const to = { x: origin.x + 300, y: origin.y };
+        addPausePreviewLaser(origin, to);
+        if (continuation.length) {
+          queuePausePreviewChain(beatIndex + 1, continuation, {
+            origin,
+            impactPoint: to,
+          });
+        }
+        return;
+      }
       addPausePreviewBeam(origin, nearest, getPausePreviewBeatLen());
       if (continuation.length) {
         queuePausePreviewChain(beatIndex + 1, continuation, {
@@ -887,7 +1012,17 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
       }
       return;
     }
-    if (!nearest) return;
+    if (!nearest) {
+      const to = { x: origin.x + 300, y: origin.y };
+      addPausePreviewLaser(origin, to);
+      if (continuation.length) {
+        queuePausePreviewChain(beatIndex + 1, continuation, {
+          origin,
+          impactPoint: to,
+        });
+      }
+      return;
+    }
     addPausePreviewLaser(origin, { x: nearest.x, y: nearest.y });
     damagePausePreviewEnemy(nearest, 2);
     if (continuation.length) {
@@ -961,16 +1096,34 @@ function updatePausePreviewProjectilesAndEffects(dt) {
   for (let i = pausePreview.projectiles.length - 1; i >= 0; i--) {
     const p = pausePreview.projectiles[i];
     p.ttl -= dt;
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
+    const isBoomerang = String(p.kind || 'standard') === 'boomerang';
+    if (isBoomerang) {
+      p.boomTheta = (Number(p.boomTheta) || 0) + ((Number(p.boomOmega) || 0) * dt);
+      const c = Math.cos(p.boomTheta || 0);
+      const s = Math.sin(p.boomTheta || 0);
+      const r = Math.max(1, Number(p.boomRadius) || PREVIEW_PROJECTILE_BOOMERANG_RADIUS);
+      const dirX = Number(p.boomDirX) || 0;
+      const dirY = Number(p.boomDirY) || 0;
+      const perpX = Number(p.boomPerpX) || 0;
+      const perpY = Number(p.boomPerpY) || 0;
+      p.x = (Number(p.boomCenterX) || 0) + (dirX * (1 + c) * r) + (perpX * s * r);
+      p.y = (Number(p.boomCenterY) || 0) + (dirY * (1 + c) * r) + (perpY * s * r);
+    } else {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
     let hit = false;
-    let hitPoint = null;
     for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
       const e = pausePreview.enemies[j];
       const dx = e.x - p.x;
       const dy = e.y - p.y;
       if ((dx * dx + dy * dy) <= hitR2) {
-        hitPoint = { x: e.x, y: e.y };
+        if (isBoomerang) {
+          if (!(p.hitEnemyIds instanceof Set)) p.hitEnemyIds = new Set();
+          if (p.hitEnemyIds.has(e)) continue;
+          p.hitEnemyIds.add(e);
+        }
+        const hitPoint = { x: e.x, y: e.y };
         damagePausePreviewEnemy(e, p.damage);
         if (Array.isArray(p.nextStages) && p.nextStages.length) {
           const nextBeat = Number.isFinite(p.nextBeatIndex) ? p.nextBeatIndex : (Math.max(0, pausePreview.beatIndex) + 1);
@@ -979,8 +1132,10 @@ function updatePausePreviewProjectilesAndEffects(dt) {
             impactPoint: hitPoint,
           });
         }
-        hit = true;
-        break;
+        if (!isBoomerang) {
+          hit = true;
+          break;
+        }
       }
     }
     if (
@@ -1076,29 +1231,6 @@ function ensurePauseWeaponUi() {
   if (pauseScreenEl.dataset.uiReady === '1') return;
   pauseScreenEl.dataset.uiReady = '1';
   renderPauseWeaponUi();
-  pauseScreenEl.addEventListener('change', (ev) => {
-    const target = ev.target;
-    if (!(target instanceof HTMLSelectElement)) return;
-    const slotIndex = Math.trunc(Number(target.dataset.slotIndex));
-    const stageIndex = Math.trunc(Number(target.dataset.stageIndex));
-    if (!(slotIndex >= 0 && slotIndex < weaponLoadout.length)) return;
-    const slot = weaponLoadout[slotIndex];
-    if (!(stageIndex >= 0 && stageIndex < slot.stages.length)) return;
-    if (target.dataset.field === 'archetype') {
-      const nextArch = getArchetypeDef(target.value)?.id || slot.stages[stageIndex].archetype;
-      const firstVariant = getArchetypeDef(nextArch)?.variants?.[0]?.id || '';
-      slot.stages[stageIndex] = { archetype: nextArch, variant: firstVariant };
-      renderPauseWeaponUi();
-      persistBeatSwarmState();
-      return;
-    }
-    if (target.dataset.field === 'variant') {
-      const stage = slot.stages[stageIndex];
-      const nextVar = getVariantDef(stage.archetype, target.value)?.id || stage.variant;
-      slot.stages[stageIndex] = { archetype: stage.archetype, variant: nextVar };
-      persistBeatSwarmState();
-    }
-  });
   pauseScreenEl.addEventListener('click', (ev) => {
     const target = ev.target;
     if (!(target instanceof HTMLElement)) return;
@@ -1116,39 +1248,55 @@ function ensurePauseWeaponUi() {
     const actionEl = target.closest('[data-action]');
     if (!(actionEl instanceof HTMLElement)) return;
     const slotIndex = Math.trunc(Number(actionEl.dataset.slotIndex));
+    const action = String(actionEl.dataset.action || '');
+    if (action === 'close-component-picker') {
+      stagePickerState.open = false;
+      stagePickerState.slotIndex = -1;
+      stagePickerState.stageIndex = -1;
+      renderPauseWeaponUi();
+      return;
+    }
     if (!(slotIndex >= 0 && slotIndex < weaponLoadout.length)) return;
     const slot = weaponLoadout[slotIndex];
-    const action = String(actionEl.dataset.action || '');
     if (action === 'random-weapon') {
       slot.stages = createRandomWeaponStages();
+      stagePickerState.open = false;
       renderPauseWeaponUi();
       persistBeatSwarmState();
       return;
     }
-    if (action === 'add-stage') {
-      if (slot.stages.length >= MAX_WEAPON_STAGES) return;
-      const archetype = 'projectile';
-      const variant = getArchetypeDef(archetype)?.variants?.[0]?.id || 'homing-missile';
-      slot.stages.push({ archetype, variant });
-      renderPauseWeaponUi();
-      persistBeatSwarmState();
-      return;
-    }
-    if (action === 'add-stage-at') {
-      if (slot.stages.length >= MAX_WEAPON_STAGES) return;
+    if (action === 'open-component-picker') {
       const stageIndex = Math.max(0, Math.min(MAX_WEAPON_STAGES - 1, Math.trunc(Number(actionEl.dataset.stageIndex))));
-      const archetype = 'projectile';
-      const variant = getArchetypeDef(archetype)?.variants?.[0]?.id || 'homing-missile';
-      slot.stages.splice(stageIndex, 0, { archetype, variant });
-      slot.stages = sanitizeWeaponStages(slot.stages);
+      stagePickerState.open = true;
+      stagePickerState.slotIndex = slotIndex;
+      stagePickerState.stageIndex = stageIndex;
       renderPauseWeaponUi();
-      persistBeatSwarmState();
       return;
     }
     if (action === 'remove-stage') {
       const stageIndex = Math.trunc(Number(actionEl.dataset.stageIndex));
       if (!(stageIndex >= 0 && stageIndex < slot.stages.length)) return;
       slot.stages.splice(stageIndex, 1);
+      stagePickerState.open = false;
+      renderPauseWeaponUi();
+      persistBeatSwarmState();
+      return;
+    }
+    if (action === 'assign-component') {
+      const stageIndex = Math.max(0, Math.min(MAX_WEAPON_STAGES - 1, Math.trunc(Number(actionEl.dataset.stageIndex))));
+      const componentId = String(actionEl.dataset.componentId || '');
+      const component = getWeaponComponentDefById(componentId);
+      if (!component) return;
+      if (stageIndex < slot.stages.length) {
+        slot.stages[stageIndex] = { archetype: component.archetype, variant: component.variant };
+      } else if (stageIndex === slot.stages.length && slot.stages.length < MAX_WEAPON_STAGES) {
+        slot.stages.push({ archetype: component.archetype, variant: component.variant });
+      } else {
+        return;
+      }
+      stagePickerState.open = false;
+      stagePickerState.slotIndex = -1;
+      stagePickerState.stageIndex = -1;
       renderPauseWeaponUi();
       persistBeatSwarmState();
     }
@@ -1160,24 +1308,34 @@ function renderPauseWeaponUi() {
   const cards = weaponLoadout.map((slot, slotIndex) => {
     const stageCells = Array.from({ length: MAX_WEAPON_STAGES }, (_, stageIndex) => {
       const st = slot.stages[stageIndex] || null;
+      const isFillableEmpty = !st && stageIndex === slot.stages.length;
+      const comp = getWeaponComponentDefForStage(st);
       if (!st) {
         return `
           <div class="beat-swarm-stage-cell is-empty">
             <div class="beat-swarm-stage-index">${stageIndex + 1}</div>
-            <div class="beat-swarm-stage-empty">Empty</div>
-            <button type="button" class="beat-swarm-stage-add" data-action="add-stage-at" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}" ${slot.stages.length >= MAX_WEAPON_STAGES ? 'disabled' : ''}>Add</button>
+            <button
+              type="button"
+              class="beat-swarm-stage-component-btn is-empty"
+              data-action="open-component-picker"
+              data-slot-index="${slotIndex}"
+              data-stage-index="${stageIndex}"
+              ${isFillableEmpty ? '' : 'disabled'}
+            >
+              ${renderComponentPreviewMarkup(null)}
+              <span class="beat-swarm-stage-component-name">Select Component</span>
+              <span class="beat-swarm-stage-component-detail">${isFillableEmpty ? 'Tap to choose' : 'Fill previous stage first'}</span>
+            </button>
           </div>
         `;
       }
       return `
         <div class="beat-swarm-stage-cell is-filled">
           <div class="beat-swarm-stage-index">${stageIndex + 1}</div>
-          <select class="beat-swarm-select" data-field="archetype" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}">
-            ${createArchetypeOptions(st.archetype)}
-          </select>
-          <select class="beat-swarm-select" data-field="variant" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}">
-            ${createVariantOptions(st.archetype, st.variant)}
-          </select>
+          <button type="button" class="beat-swarm-stage-component-btn" data-action="open-component-picker" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}">
+            ${renderComponentPreviewMarkup(comp)}
+            <span class="beat-swarm-stage-component-name">${comp?.label || st.variant}</span>
+          </button>
           <button type="button" class="beat-swarm-stage-remove" data-action="remove-stage" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}">Remove</button>
         </div>
       `;
@@ -1197,6 +1355,31 @@ function renderPauseWeaponUi() {
   const previewStatus = Number.isInteger(previewSelectedWeaponSlotIndex)
     ? `Previewing ${weaponLoadout[previewSelectedWeaponSlotIndex]?.name || 'Weapon'}`
     : 'Previewing all weapons';
+  const pickerSlot = Math.max(0, Math.min(weaponLoadout.length - 1, Math.trunc(Number(stagePickerState.slotIndex) || 0)));
+  const pickerStage = Math.max(0, Math.min(MAX_WEAPON_STAGES - 1, Math.trunc(Number(stagePickerState.stageIndex) || 0)));
+  const pickerOpen = !!stagePickerState.open;
+  const pickerItems = Object.values(WEAPON_ARCHETYPES).map((archetypeDef) => {
+    const comps = WEAPON_COMPONENTS.filter((c) => c.archetype === archetypeDef.id);
+    const compButtons = comps.map((c) => `
+      <button
+        type="button"
+        class="beat-swarm-component-option"
+        data-action="assign-component"
+        data-slot-index="${pickerSlot}"
+        data-stage-index="${pickerStage}"
+        data-component-id="${c.id}"
+      >
+        ${renderComponentPreviewMarkup(c)}
+        <span class="beat-swarm-component-option-name">${c.label}</span>
+      </button>
+    `).join('');
+    return `
+      <section class="beat-swarm-component-group">
+        <div class="beat-swarm-component-group-head">${archetypeDef.label}</div>
+        <div class="beat-swarm-component-picker-grid">${compButtons}</div>
+      </section>
+    `;
+  }).join('');
   pauseScreenEl.innerHTML = `
     <div class="beat-swarm-pause-title">Weapon Customisation</div>
     <div class="beat-swarm-pause-subtitle">Up to 3 weapons, each with up to 5 beat stages.</div>
@@ -1208,6 +1391,17 @@ function renderPauseWeaponUi() {
         <div class="beat-swarm-preview-scene" aria-hidden="true"></div>
       </aside>
     </div>
+    ${pickerOpen ? `
+      <div class="beat-swarm-component-picker-backdrop" data-action="close-component-picker">
+        <div class="beat-swarm-component-picker" role="dialog" aria-modal="true" aria-label="Weapon Components">
+          <div class="beat-swarm-component-picker-head">
+            <div class="beat-swarm-component-picker-title">Choose Component</div>
+            <button type="button" class="beat-swarm-stage-remove" data-action="close-component-picker" data-slot-index="${pickerSlot}">Close</button>
+          </div>
+          <div class="beat-swarm-component-picker-groups">${pickerItems}</div>
+        </div>
+      </div>
+    ` : ''}
   `;
   pausePreviewSceneEl = pauseScreenEl.querySelector('.beat-swarm-preview-scene');
   pausePreviewStatusEl = pauseScreenEl.querySelector('.beat-swarm-preview-status');
@@ -1570,7 +1764,7 @@ function getNearestEnemies(worldX, worldY, count = 1) {
 
 function ensureDefaultWeaponFromLegacy(weaponId) {
   const map = {
-    projectile: { archetype: 'projectile', variant: 'homing-missile' },
+    projectile: { archetype: 'projectile', variant: 'standard' },
     laser: { archetype: 'laser', variant: 'hitscan' },
     explosion: { archetype: 'aoe', variant: 'explosion' },
   };
@@ -1643,21 +1837,83 @@ function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD, ttlOv
   });
 }
 
-function spawnProjectile(fromW, toEnemy, damage, nextStages = null, nextBeatIndex = null) {
-  if (!enemyLayerEl || !toEnemy) return;
+function normalizeDir(dx, dy, fallbackX = 1, fallbackY = 0) {
+  const len = Math.hypot(dx, dy);
+  if (len > 0.0001) return { x: dx / len, y: dy / len };
+  const fLen = Math.hypot(fallbackX, fallbackY) || 1;
+  return { x: fallbackX / fLen, y: fallbackY / fLen };
+}
+
+function getShipFacingDirWorld() {
+  const rad = ((Number(shipFacingDeg) || 0) - 90) * (Math.PI / 180);
+  return { x: Math.cos(rad), y: Math.sin(rad) };
+}
+
+function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null) {
+  if (!enemyLayerEl) return;
+  const dir = normalizeDir(dirX, dirY);
   const el = document.createElement('div');
   el.className = 'beat-swarm-projectile';
   enemyLayerEl.appendChild(el);
-  const dx = toEnemy.wx - fromW.x;
-  const dy = toEnemy.wy - fromW.y;
-  const len = Math.max(0.0001, Math.hypot(dx, dy));
   projectiles.push({
     wx: fromW.x,
     wy: fromW.y,
-    vx: (dx / len) * PROJECTILE_SPEED,
-    vy: (dy / len) * PROJECTILE_SPEED,
+    vx: dir.x * PROJECTILE_SPEED,
+    vy: dir.y * PROJECTILE_SPEED,
     ttl: PROJECTILE_LIFETIME,
     damage: Math.max(1, Number(damage) || 1),
+    kind: 'standard',
+    hitEnemyIds: new Set(),
+    boomCenterX: 0,
+    boomCenterY: 0,
+    boomDirX: 0,
+    boomDirY: 0,
+    boomPerpX: 0,
+    boomPerpY: 0,
+    boomRadius: 0,
+    boomTheta: 0,
+    boomOmega: 0,
+    nextStages: sanitizeWeaponStages(nextStages),
+    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    el,
+  });
+}
+
+function spawnProjectile(fromW, toEnemy, damage, nextStages = null, nextBeatIndex = null) {
+  if (!toEnemy) return;
+  const dx = toEnemy.wx - fromW.x;
+  const dy = toEnemy.wy - fromW.y;
+  spawnProjectileFromDirection(fromW, dx, dy, damage, nextStages, nextBeatIndex);
+}
+
+function spawnBoomerangProjectile(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null) {
+  if (!enemyLayerEl) return;
+  const dir = normalizeDir(dirX, dirY);
+  const perp = { x: dir.y, y: -dir.x };
+  const radius = Math.max(40, Number(PROJECTILE_BOOMERANG_RADIUS_WORLD) || 320);
+  const theta = Math.PI;
+  const omega = (Math.PI * 2) / Math.max(0.35, Number(PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15);
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-projectile';
+  enemyLayerEl.appendChild(el);
+  projectiles.push({
+    wx: fromW.x,
+    wy: fromW.y,
+    vx: 0,
+    vy: 0,
+    ttl: Math.max(0.35, Number(PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15),
+    damage: Math.max(1, Number(damage) || 1),
+    kind: 'boomerang',
+    hitEnemyIds: new Set(),
+    boomCenterX: fromW.x,
+    boomCenterY: fromW.y,
+    boomDirX: dir.x,
+    boomDirY: dir.y,
+    boomPerpX: perp.x,
+    boomPerpY: perp.y,
+    boomRadius: radius,
+    boomTheta: theta,
+    boomOmega: omega,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
@@ -1710,17 +1966,48 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
   const continuation = sanitizeWeaponStages(remainingStages);
   const nearest = getNearestEnemy(originWorld.x, originWorld.y);
   if (archetype === 'projectile') {
-    const targets = variant === 'split-shot'
-      ? getNearestEnemies(originWorld.x, originWorld.y, 2)
-      : (nearest ? [nearest] : []);
-    for (const t of targets) {
-      spawnProjectile(originWorld, t, 2, continuation, beatIndex + 1);
+    const facingDir = getShipFacingDirWorld();
+    const baseDir = nearest
+      ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
+      : facingDir;
+    if (variant === 'boomerang') {
+      spawnBoomerangProjectile(originWorld, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
+      return;
+    }
+    if (variant === 'split-shot') {
+      const baseAngle = Math.atan2(baseDir.y, baseDir.x);
+      const angles = [baseAngle, baseAngle - PROJECTILE_SPLIT_ANGLE_RAD, baseAngle + PROJECTILE_SPLIT_ANGLE_RAD];
+      for (const ang of angles) {
+        spawnProjectileFromDirection(originWorld, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1);
+      }
+      return;
+    }
+    if (nearest) {
+      spawnProjectile(originWorld, nearest, 2, continuation, beatIndex + 1);
+    } else {
+      spawnProjectileFromDirection(originWorld, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
     }
     return;
   }
   if (archetype === 'laser') {
     if (variant === 'beam') {
-      if (!nearest) return;
+      if (!nearest) {
+        const dir = getShipFacingDirWorld();
+        addLaserEffect(originWorld, {
+          x: originWorld.x + (dir.x * 1400),
+          y: originWorld.y + (dir.y * 1400),
+        });
+        if (continuation.length) {
+          queueWeaponChain(beatIndex + 1, continuation, {
+            origin: originWorld,
+            impactPoint: {
+              x: originWorld.x + (dir.x * 1400),
+              y: originWorld.y + (dir.y * 1400),
+            },
+          });
+        }
+        return;
+      }
       addBeamEffect(originWorld, nearest, getGameplayBeatLen());
       if (continuation.length) {
         queueWeaponChain(beatIndex + 1, continuation, {
@@ -1731,7 +2018,21 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
       }
       return;
     }
-    if (!nearest) return;
+    if (!nearest) {
+      const dir = getShipFacingDirWorld();
+      const to = {
+        x: originWorld.x + (dir.x * 1400),
+        y: originWorld.y + (dir.y * 1400),
+      };
+      addLaserEffect(originWorld, to);
+      if (continuation.length) {
+        queueWeaponChain(beatIndex + 1, continuation, {
+          origin: originWorld,
+          impactPoint: to,
+        });
+      }
+      return;
+    }
     addLaserEffect(originWorld, { x: nearest.wx, y: nearest.wy });
     damageEnemy(nearest, 2);
     if (continuation.length) {
@@ -1945,17 +2246,37 @@ function updatePickupsAndCombat(dt) {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const p = projectiles[i];
     p.ttl -= dt;
-    p.wx += p.vx * dt;
-    p.wy += p.vy * dt;
+    const isBoomerang = String(p.kind || 'standard') === 'boomerang';
+    if (isBoomerang) {
+      p.boomTheta = (Number(p.boomTheta) || 0) + ((Number(p.boomOmega) || 0) * dt);
+      const c = Math.cos(p.boomTheta || 0);
+      const s = Math.sin(p.boomTheta || 0);
+      const r = Math.max(1, Number(p.boomRadius) || PROJECTILE_BOOMERANG_RADIUS_WORLD);
+      const dirX = Number(p.boomDirX) || 0;
+      const dirY = Number(p.boomDirY) || 0;
+      const perpX = Number(p.boomPerpX) || 0;
+      const perpY = Number(p.boomPerpY) || 0;
+      // Furthest point from origin is aligned with forward target direction (dir).
+      p.wx = (Number(p.boomCenterX) || 0) + (dirX * (1 + c) * r) + (perpX * s * r);
+      p.wy = (Number(p.boomCenterY) || 0) + (dirY * (1 + c) * r) + (perpY * s * r);
+    } else {
+      p.wx += p.vx * dt;
+      p.wy += p.vy * dt;
+    }
     let hit = false;
-    let hitPoint = null;
     for (let j = enemies.length - 1; j >= 0; j--) {
       const e = enemies[j];
       const dx = e.wx - p.wx;
       const dy = e.wy - p.wy;
       if ((dx * dx + dy * dy) <= pr2) {
+        const enemyId = Math.trunc(Number(e.id) || 0);
+        if (isBoomerang) {
+          if (!(p.hitEnemyIds instanceof Set)) p.hitEnemyIds = new Set();
+          if (enemyId > 0 && p.hitEnemyIds.has(enemyId)) continue;
+          if (enemyId > 0) p.hitEnemyIds.add(enemyId);
+        }
         damageEnemy(e, p.damage);
-        hitPoint = { x: e.wx, y: e.wy };
+        const hitPoint = { x: e.wx, y: e.wy };
         if (Array.isArray(p.nextStages) && p.nextStages.length) {
           const nextBeat = Number.isFinite(p.nextBeatIndex) ? p.nextBeatIndex : (Math.max(0, currentBeatIndex) + 1);
           queueWeaponChain(nextBeat, p.nextStages, {
@@ -1963,8 +2284,10 @@ function updatePickupsAndCombat(dt) {
             impactPoint: hitPoint,
           });
         }
-        hit = true;
-        break;
+        if (!isBoomerang) {
+          hit = true;
+          break;
+        }
       }
     }
     if (hit || p.ttl <= 0) {
