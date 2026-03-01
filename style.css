@@ -3554,6 +3554,49 @@ body.internal-board-active #board-main {
   animation: bs-comp-dotarea 1400ms ease-in-out infinite;
 }
 
+.beat-swarm-component-preview.is-helper-orbital .cp-shot-a {
+  animation: bs-comp-helper-orb-a 1300ms linear infinite;
+}
+
+.beat-swarm-component-preview.is-helper-orbital .cp-shot-b {
+  animation: bs-comp-helper-orb-b 1300ms linear infinite;
+}
+
+.beat-swarm-component-preview.is-helper-orbital .cp-shot-a,
+.beat-swarm-component-preview.is-helper-orbital .cp-shot-b {
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  margin-top: -7px;
+  background: #ffffff;
+  box-shadow: 0 0 9px rgba(255, 255, 255, 0.9);
+}
+
+.beat-swarm-component-preview.is-helper-orbital .cp-enemy {
+  opacity: 0.7;
+}
+
+.beat-swarm-component-preview.is-helper-turret .cp-shot-a {
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  margin-top: -8px;
+  left: 26%;
+  top: calc(50% - 8px);
+  opacity: 1;
+  background: linear-gradient(180deg, #8fd3ff 0%, #2f82ff 100%);
+  border: 1px solid rgba(188, 226, 255, 0.92);
+  box-shadow: 0 0 8px rgba(85, 157, 255, 0.72);
+}
+
+.beat-swarm-component-preview.is-helper-turret .cp-shot-b {
+  animation: bs-comp-proj 1100ms linear infinite;
+}
+
+.beat-swarm-component-preview.is-helper-turret .cp-shot-c {
+  opacity: 0;
+}
+
 .beat-swarm-component-preview.is-explosion .cp-ship,
 .beat-swarm-component-preview.is-dotarea .cp-ship {
   display: none;
@@ -3627,6 +3670,27 @@ body.internal-board-active #board-main {
 .beat-swarm-component-picker-title {
   font: 700 16px/1.2 'Trebuchet MS', 'Segoe UI', sans-serif;
   color: #eff8ff;
+}
+
+.beat-swarm-component-picker-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.beat-swarm-component-picker-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(150, 178, 214, 0.55);
+  background: rgba(14, 24, 40, 0.95);
+  color: #e9f4ff;
+  font: 700 14px/1 'Trebuchet MS', 'Segoe UI', sans-serif;
+  cursor: pointer;
+}
+
+.beat-swarm-component-picker-close:hover {
+  background: rgba(30, 45, 69, 0.95);
 }
 
 .beat-swarm-component-picker-groups {
@@ -3725,6 +3789,22 @@ body.internal-board-active #board-main {
   100% { transform: scale(0.92); opacity: 0.35; }
 }
 
+@keyframes bs-comp-helper-orb-a {
+  0% { left: 14%; top: calc(50% - 6px); opacity: 1; }
+  25% { left: 20%; top: calc(50% - 20px); opacity: 1; }
+  50% { left: 26%; top: calc(50% - 6px); opacity: 1; }
+  75% { left: 20%; top: calc(50% + 8px); opacity: 1; }
+  100% { left: 14%; top: calc(50% - 6px); opacity: 1; }
+}
+
+@keyframes bs-comp-helper-orb-b {
+  0% { left: 26%; top: calc(50% - 6px); opacity: 1; }
+  25% { left: 20%; top: calc(50% + 8px); opacity: 1; }
+  50% { left: 14%; top: calc(50% - 6px); opacity: 1; }
+  75% { left: 20%; top: calc(50% - 20px); opacity: 1; }
+  100% { left: 26%; top: calc(50% - 6px); opacity: 1; }
+}
+
 .beat-swarm-preview-panel {
   display: grid;
   gap: 8px;
@@ -3799,6 +3879,25 @@ body.internal-board-active #board-main {
   border-radius: 999px;
   background: rgba(222, 245, 255, 0.96);
   box-shadow: 0 0 8px rgba(172, 228, 255, 0.84);
+}
+
+.beat-swarm-preview-helper-orbital {
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  margin-top: -6px;
+  background: #ffffff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.88);
+}
+
+.beat-swarm-preview-helper-turret {
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  margin-top: -6px;
+  background: linear-gradient(180deg, #8fd3ff 0%, #2f82ff 100%);
+  border: 1px solid rgba(188, 226, 255, 0.92);
+  box-shadow: 0 0 10px rgba(85, 157, 255, 0.72);
 }
 
 .beat-swarm-preview-fx-laser {
@@ -4266,6 +4365,25 @@ body.internal-board-active #board-main {
   background: #ffe07d;
   box-shadow: 0 0 14px rgba(255, 224, 125, 0.65);
   transform: translate(-9999px, -9999px);
+}
+
+.beat-swarm-helper-orbital {
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
+  background: #ffffff;
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.86);
+}
+
+.beat-swarm-helper-turret {
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
+  background: linear-gradient(180deg, #8fd3ff 0%, #2f82ff 100%);
+  border: 1px solid rgba(188, 226, 255, 0.92);
+  box-shadow: 0 0 18px rgba(85, 157, 255, 0.72);
 }
 
 .beat-swarm-fx-laser {

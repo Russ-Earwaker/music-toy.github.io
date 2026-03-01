@@ -91,8 +91,10 @@ const enemies = [];
 const pickups = [];
 const projectiles = [];
 const effects = [];
+const helpers = [];
 const starfieldStars = [];
 let enemyIdSeq = 1;
+let helperIdSeq = 1;
 const pendingWeaponChainEvents = [];
 const lingeringAoeZones = [];
 const MAX_WEAPON_SLOTS = 3;
@@ -124,6 +126,14 @@ const WEAPON_ARCHETYPES = Object.freeze({
       Object.freeze({ id: 'beam', label: 'Constant Beam' }),
     ]),
   }),
+  helper: Object.freeze({
+    id: 'helper',
+    label: 'Helper',
+    variants: Object.freeze([
+      Object.freeze({ id: 'orbital-drone', label: 'Orbital Drone' }),
+      Object.freeze({ id: 'turret', label: 'Turret' }),
+    ]),
+  }),
 });
 const WEAPON_COMPONENTS = Object.freeze([
   Object.freeze({ id: 'projectile:standard', archetype: 'projectile', variant: 'standard', label: 'Standard', previewClass: 'is-proj' }),
@@ -134,6 +144,8 @@ const WEAPON_COMPONENTS = Object.freeze([
   Object.freeze({ id: 'laser:beam', archetype: 'laser', variant: 'beam', label: 'Constant Beam', previewClass: 'is-beam' }),
   Object.freeze({ id: 'aoe:explosion', archetype: 'aoe', variant: 'explosion', label: 'Explosion', previewClass: 'is-explosion' }),
   Object.freeze({ id: 'aoe:dot-area', archetype: 'aoe', variant: 'dot-area', label: 'Damage Over Time Area', previewClass: 'is-dotarea' }),
+  Object.freeze({ id: 'helper:orbital-drone', archetype: 'helper', variant: 'orbital-drone', label: 'Orbital Drone', previewClass: 'is-helper-orbital' }),
+  Object.freeze({ id: 'helper:turret', archetype: 'helper', variant: 'turret', label: 'Turret', previewClass: 'is-helper-turret' }),
 ]);
 const weaponLoadout = Array.from({ length: MAX_WEAPON_SLOTS }, (_, i) => ({
   id: `slot-${i + 1}`,
@@ -177,6 +189,12 @@ const PROJECTILE_HOMING_ORBIT_CHASE_SPEED = 420;
 const PROJECTILE_HOMING_ORBIT_TURN_RATE = 4.2;
 const PROJECTILE_HOMING_MAX_ORBITING = 8;
 const PROJECTILE_HOMING_RETURN_SNAP_DIST_WORLD = 34;
+const HELPER_LIFETIME_BEATS = 8;
+const HELPER_ORBIT_RADIUS_WORLD = 150;
+const HELPER_ORBIT_ANG_VEL = 1.9;
+const HELPER_IMPACT_RADIUS_PX = 24;
+const HELPER_IMPACT_DAMAGE = 1.25;
+const HELPER_TURRET_SPAWN_OFFSET_WORLD = 78;
 const LASER_TTL = 0.12;
 const EXPLOSION_TTL = 0.22;
 const EXPLOSION_RADIUS_WORLD = 220;
@@ -195,6 +213,12 @@ const PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED = 150;
 const PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE = 4.2;
 const PREVIEW_PROJECTILE_HOMING_MAX_ORBITING = 8;
 const PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST = 10;
+const PREVIEW_HELPER_LIFETIME_BEATS = 8;
+const PREVIEW_HELPER_ORBIT_RADIUS = 34;
+const PREVIEW_HELPER_ORBIT_ANG_VEL = 2.3;
+const PREVIEW_HELPER_IMPACT_RADIUS = 12;
+const PREVIEW_HELPER_IMPACT_DAMAGE = 1.1;
+const PREVIEW_HELPER_TURRET_SPAWN_OFFSET = 18;
 const PREVIEW_LASER_TTL = 0.16;
 const PREVIEW_EXPLOSION_TTL = 0.24;
 const PREVIEW_EXPLOSION_RADIUS = 52;
@@ -211,6 +235,7 @@ const equippedWeapons = new Set();
 let lastBeatIndex = null;
 let currentBeatIndex = 0;
 let previewSelectedWeaponSlotIndex = null;
+let activeWeaponSlotIndex = 0;
 const stagePickerState = { open: false, slotIndex: -1, stageIndex: -1 };
 const pausePreview = {
   initialized: false,
@@ -222,6 +247,7 @@ const pausePreview = {
   effects: [],
   pendingEvents: [],
   aoeZones: [],
+  helpers: [],
   beatIndex: 0,
   beatTimer: 0,
 };
@@ -280,6 +306,7 @@ function captureBeatSwarmState() {
         ? w.stages.map((s) => ({ archetype: s.archetype, variant: s.variant }))
         : [],
     })),
+    activeWeaponSlotIndex: Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0))),
     pendingWeaponChainEvents: pendingWeaponChainEvents.map((ev) => ({
       beatIndex: Number(ev.beatIndex) || 0,
       stages: Array.isArray(ev.stages)
@@ -288,6 +315,9 @@ function captureBeatSwarmState() {
       context: {
         origin: ev.context?.origin ? { x: Number(ev.context.origin.x) || 0, y: Number(ev.context.origin.y) || 0 } : null,
         impactPoint: ev.context?.impactPoint ? { x: Number(ev.context.impactPoint.x) || 0, y: Number(ev.context.impactPoint.y) || 0 } : null,
+        weaponSlotIndex: Number.isFinite(ev.context?.weaponSlotIndex) ? Math.trunc(ev.context.weaponSlotIndex) : null,
+        stageIndex: Number.isFinite(ev.context?.stageIndex) ? Math.trunc(ev.context.stageIndex) : null,
+        impactEnemyId: Number.isFinite(ev.context?.impactEnemyId) ? Math.trunc(ev.context.impactEnemyId) : null,
       },
     })),
     lingeringAoeZones: lingeringAoeZones.map((z) => ({
@@ -296,6 +326,7 @@ function captureBeatSwarmState() {
       radius: Number(z.radius) || EXPLOSION_RADIUS_WORLD,
       damagePerBeat: Number(z.damagePerBeat) || 1,
       untilBeat: Number(z.untilBeat) || 0,
+      weaponSlotIndex: Number.isFinite(z.weaponSlotIndex) ? Math.trunc(z.weaponSlotIndex) : null,
     })),
     currentBeatIndex: Number(currentBeatIndex) || 0,
     enemies: enemies.map((e) => ({
@@ -337,6 +368,8 @@ function captureBeatSwarmState() {
       orbitAngVel: Number(p.orbitAngVel) || 0,
       orbitRadius: Number(p.orbitRadius) || 0,
       hitEnemyIds: Array.from(p.hitEnemyIds || []),
+      chainWeaponSlotIndex: Number.isFinite(p.chainWeaponSlotIndex) ? Math.trunc(p.chainWeaponSlotIndex) : null,
+      chainStageIndex: Number.isFinite(p.chainStageIndex) ? Math.trunc(p.chainStageIndex) : null,
       nextStages: Array.isArray(p.nextStages) ? p.nextStages.map((s) => ({ archetype: s.archetype, variant: s.variant })) : [],
       nextBeatIndex: Number.isFinite(p.nextBeatIndex) ? Math.trunc(p.nextBeatIndex) : null,
     })),
@@ -349,6 +382,7 @@ function captureBeatSwarmState() {
       radiusWorld: Number(fx.radiusWorld) || EXPLOSION_RADIUS_WORLD,
       targetEnemyId: Number.isFinite(fx.targetEnemyId) ? Math.trunc(fx.targetEnemyId) : null,
       damagePerSec: Number(fx.damagePerSec) || 0,
+      weaponSlotIndex: Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null,
     })),
   };
 }
@@ -516,6 +550,7 @@ function restoreBeatSwarmState(state) {
     if (weaponDefs[id]) equippedWeapons.add(id);
   }
   applyWeaponLoadoutFromState(state.weaponLoadout);
+  activeWeaponSlotIndex = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(state.activeWeaponSlotIndex) || 0)));
   clearPendingWeaponChainEvents();
   for (const ev of Array.isArray(state.pendingWeaponChainEvents) ? state.pendingWeaponChainEvents : []) {
     const stages = sanitizeWeaponStages(ev?.stages);
@@ -526,6 +561,9 @@ function restoreBeatSwarmState(state) {
       context: {
         origin: ev?.context?.origin ? { x: Number(ev.context.origin.x) || 0, y: Number(ev.context.origin.y) || 0 } : null,
         impactPoint: ev?.context?.impactPoint ? { x: Number(ev.context.impactPoint.x) || 0, y: Number(ev.context.impactPoint.y) || 0 } : null,
+        weaponSlotIndex: Number.isFinite(ev?.context?.weaponSlotIndex) ? Math.trunc(ev.context.weaponSlotIndex) : null,
+        stageIndex: Number.isFinite(ev?.context?.stageIndex) ? Math.trunc(ev.context.stageIndex) : null,
+        impactEnemyId: Number.isFinite(ev?.context?.impactEnemyId) ? Math.trunc(ev.context.impactEnemyId) : null,
       },
     });
   }
@@ -537,6 +575,7 @@ function restoreBeatSwarmState(state) {
       radius: Math.max(1, Number(z.radius) || EXPLOSION_RADIUS_WORLD),
       damagePerBeat: Math.max(0, Number(z.damagePerBeat) || 1),
       untilBeat: Math.max(0, Math.trunc(Number(z.untilBeat) || 0)),
+      weaponSlotIndex: Number.isFinite(z.weaponSlotIndex) ? Math.trunc(z.weaponSlotIndex) : null,
     });
   }
   currentBeatIndex = Math.max(0, Math.trunc(Number(state.currentBeatIndex) || 0));
@@ -545,6 +584,7 @@ function restoreBeatSwarmState(state) {
   clearPickups();
   clearProjectiles();
   clearEffects();
+  clearHelpers();
 
   for (const e of Array.isArray(state.enemies) ? state.enemies : []) {
     spawnEnemyFromState(e);
@@ -578,6 +618,8 @@ function restoreBeatSwarmState(state) {
       orbitAngVel: Number(p.orbitAngVel) || 0,
       orbitRadius: Math.max(0, Number(p.orbitRadius) || 0),
       hitEnemyIds: new Set(Array.isArray(p.hitEnemyIds) ? p.hitEnemyIds.map((id) => Math.trunc(Number(id) || 0)).filter((id) => id > 0) : []),
+      chainWeaponSlotIndex: Number.isFinite(p.chainWeaponSlotIndex) ? Math.trunc(p.chainWeaponSlotIndex) : null,
+      chainStageIndex: Number.isFinite(p.chainStageIndex) ? Math.trunc(p.chainStageIndex) : null,
       nextStages: sanitizeWeaponStages(p.nextStages),
       nextBeatIndex: Number.isFinite(p.nextBeatIndex) ? Math.max(0, Math.trunc(p.nextBeatIndex)) : null,
       el,
@@ -594,6 +636,7 @@ function restoreBeatSwarmState(state) {
         ttl: Math.max(0, Number(fx.ttl) || 0),
         from: fx.from ? { x: Number(fx.from.x) || 0, y: Number(fx.from.y) || 0 } : { x: 0, y: 0 },
         to: fx.to ? { x: Number(fx.to.x) || 0, y: Number(fx.to.y) || 0 } : { x: 0, y: 0 },
+        weaponSlotIndex: Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null,
         el,
       });
     } else if (fx.kind === 'beam') {
@@ -606,6 +649,7 @@ function restoreBeatSwarmState(state) {
         to: fx.to ? { x: Number(fx.to.x) || 0, y: Number(fx.to.y) || 0 } : { x: 0, y: 0 },
         targetEnemyId: Number.isFinite(fx.targetEnemyId) ? Math.trunc(fx.targetEnemyId) : null,
         damagePerSec: Math.max(0, Number(fx.damagePerSec) || BEAM_DAMAGE_PER_SECOND),
+        weaponSlotIndex: Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null,
         el,
       });
     } else if (fx.kind === 'explosion') {
@@ -617,6 +661,7 @@ function restoreBeatSwarmState(state) {
         ttl: Math.max(0, Number(fx.ttl) || 0),
         at: fx.at ? { x: Number(fx.at.x) || 0, y: Number(fx.at.y) || 0 } : { x: 0, y: 0 },
         radiusWorld: Math.max(1, Number(fx.radiusWorld) || EXPLOSION_RADIUS_WORLD),
+        weaponSlotIndex: Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null,
         el,
       });
     }
@@ -759,13 +804,396 @@ function clearPausePreviewVisuals() {
   for (const fx of pausePreview.effects) {
     try { fx?.el?.remove?.(); } catch {}
   }
+  for (const h of pausePreview.helpers) {
+    try { h?.elA?.remove?.(); } catch {}
+    try { h?.elB?.remove?.(); } catch {}
+    try { h?.el?.remove?.(); } catch {}
+  }
   pausePreview.enemies.length = 0;
   pausePreview.projectiles.length = 0;
   pausePreview.effects.length = 0;
+  pausePreview.helpers.length = 0;
   pausePreview.pendingEvents.length = 0;
   pausePreview.aoeZones.length = 0;
   pausePreview.beatIndex = 0;
   pausePreview.beatTimer = 0;
+}
+
+function getHelperKey(slotIndex, stageIndex) {
+  const si = Number.isFinite(slotIndex) ? Math.trunc(slotIndex) : Math.trunc(Number(slotIndex));
+  const ti = Number.isFinite(stageIndex) ? Math.trunc(stageIndex) : Math.trunc(Number(stageIndex));
+  return `${Number.isFinite(si) ? si : -1}:${Number.isFinite(ti) ? ti : -1}`;
+}
+
+function getEnemyById(enemyId) {
+  const id = Math.trunc(Number(enemyId) || 0);
+  if (!(id > 0)) return null;
+  return enemies.find((e) => Math.trunc(Number(e.id) || 0) === id) || null;
+}
+
+function hasActiveHelperByKey(helperKey) {
+  return helpers.some((h) => String(h?.key || '') === String(helperKey || ''));
+}
+
+function createHelperVisuals(kind) {
+  if (!enemyLayerEl) return null;
+  if (kind === 'orbital-drone') {
+    const elA = document.createElement('div');
+    const elB = document.createElement('div');
+    elA.className = 'beat-swarm-projectile beat-swarm-helper-orbital';
+    elB.className = 'beat-swarm-projectile beat-swarm-helper-orbital';
+    enemyLayerEl.appendChild(elA);
+    enemyLayerEl.appendChild(elB);
+    return { elA, elB };
+  }
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-projectile beat-swarm-helper-turret';
+  enemyLayerEl.appendChild(el);
+  return { el };
+}
+
+function spawnHelper(kind, anchorWorld, beatIndex, nextStages = [], context = null, anchorEnemyId = null) {
+  if (!enemyLayerEl || !anchorWorld || !kind) return false;
+  const slotRaw = Number(context?.weaponSlotIndex);
+  const stageRaw = Number(context?.stageIndex);
+  const slotIndex = Number.isFinite(slotRaw) ? Math.trunc(slotRaw) : -1;
+  const stageIndex = Number.isFinite(stageRaw) ? Math.trunc(stageRaw) : -1;
+  const key = getHelperKey(slotIndex, stageIndex);
+  if (hasActiveHelperByKey(key)) return false;
+  const visuals = createHelperVisuals(kind);
+  if (!visuals) return false;
+  helpers.push({
+    id: helperIdSeq++,
+    key,
+    kind,
+    anchorType: Number.isFinite(anchorEnemyId)
+      ? 'enemy'
+      : (String(context?.helperAnchorType || '') === 'player' ? 'player' : 'world'),
+    anchorEnemyId: Number.isFinite(anchorEnemyId) ? Math.trunc(anchorEnemyId) : null,
+    anchorX: Number(anchorWorld.x) || 0,
+    anchorY: Number(anchorWorld.y) || 0,
+    orbitAngle: 0,
+    orbitRadius: HELPER_ORBIT_RADIUS_WORLD,
+    orbitAngVel: HELPER_ORBIT_ANG_VEL,
+    untilBeat: Math.max(0, Math.trunc(Number(beatIndex) || 0)) + HELPER_LIFETIME_BEATS,
+    nextStages: sanitizeWeaponStages(nextStages),
+    context: {
+      weaponSlotIndex: slotIndex,
+      stageIndex,
+    },
+    elA: visuals.elA || null,
+    elB: visuals.elB || null,
+    el: visuals.el || null,
+  });
+  return true;
+}
+
+function updateHelpers(dt, centerWorld, scale) {
+  const impactRadiusWorld = HELPER_IMPACT_RADIUS_PX / Math.max(0.001, scale || 1);
+  const ir2 = impactRadiusWorld * impactRadiusWorld;
+  for (let i = helpers.length - 1; i >= 0; i--) {
+    const h = helpers[i];
+    if ((Number(h.untilBeat) || 0) < currentBeatIndex) {
+      try { h?.elA?.remove?.(); } catch {}
+      try { h?.elB?.remove?.(); } catch {}
+      try { h?.el?.remove?.(); } catch {}
+      helpers.splice(i, 1);
+      continue;
+    }
+    if (String(h.anchorType) === 'enemy') {
+      const e = getEnemyById(h.anchorEnemyId);
+      if (e) {
+        h.anchorX = Number(e.wx) || 0;
+        h.anchorY = Number(e.wy) || 0;
+      } else {
+        h.anchorType = 'world';
+        h.anchorEnemyId = null;
+      }
+    } else if (String(h.anchorType) === 'player' && centerWorld) {
+      h.anchorX = Number(centerWorld.x) || 0;
+      h.anchorY = Number(centerWorld.y) || 0;
+    }
+
+    if (h.kind === 'orbital-drone') {
+      h.orbitAngle = (Number(h.orbitAngle) || 0) + ((Number(h.orbitAngVel) || HELPER_ORBIT_ANG_VEL) * dt);
+      const pts = [
+        {
+          x: h.anchorX + (Math.cos(h.orbitAngle) * (Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD)),
+          y: h.anchorY + (Math.sin(h.orbitAngle) * (Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD)),
+          el: h.elA,
+        },
+        {
+          x: h.anchorX + (Math.cos(h.orbitAngle + Math.PI) * (Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD)),
+          y: h.anchorY + (Math.sin(h.orbitAngle + Math.PI) * (Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD)),
+          el: h.elB,
+        },
+      ];
+      for (const p of pts) {
+        for (let j = enemies.length - 1; j >= 0; j--) {
+          const e = enemies[j];
+          const dx = e.wx - p.x;
+          const dy = e.wy - p.y;
+          if ((dx * dx + dy * dy) <= ir2) damageEnemy(e, HELPER_IMPACT_DAMAGE * dt * 8);
+        }
+        const s = worldToScreen({ x: p.x, y: p.y });
+        if (p.el && s && Number.isFinite(s.x) && Number.isFinite(s.y)) p.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+      }
+    } else {
+      for (let j = enemies.length - 1; j >= 0; j--) {
+        const e = enemies[j];
+        const dx = e.wx - h.anchorX;
+        const dy = e.wy - h.anchorY;
+        if ((dx * dx + dy * dy) <= ir2) damageEnemy(e, HELPER_IMPACT_DAMAGE * dt * 7);
+      }
+      const s = worldToScreen({ x: h.anchorX, y: h.anchorY });
+      if (h.el && s && Number.isFinite(s.x) && Number.isFinite(s.y)) h.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+    }
+  }
+}
+
+function fireHelperPayloadAt(originWorld, helperObj, beatIndex) {
+  const stages = sanitizeWeaponStages(helperObj?.nextStages);
+  const slotRaw = Number(helperObj?.context?.weaponSlotIndex);
+  const stageRaw = Number(helperObj?.context?.stageIndex);
+  const slotIndex = Number.isFinite(slotRaw) ? Math.trunc(slotRaw) : -1;
+  const baseStageIndex = Number.isFinite(stageRaw) ? Math.trunc(stageRaw) : -1;
+  const nearest = getNearestEnemy(originWorld.x, originWorld.y);
+  if (!stages.length) {
+    const dir = nearest
+      ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
+      : getShipFacingDirWorld();
+    spawnProjectileFromDirection(originWorld, dir.x, dir.y, 2, null, null);
+    return;
+  }
+  const first = stages[0];
+  const rest = stages.slice(1);
+  if (first.archetype === 'helper') {
+    if (first.variant && first.variant !== helperObj.kind) {
+      const helperSpawnPoint = (first.variant === 'turret')
+        ? getOffsetPoint(
+          originWorld,
+          nearest ? { x: nearest.wx, y: nearest.wy } : null,
+          HELPER_TURRET_SPAWN_OFFSET_WORLD,
+          getShipFacingDirWorld()
+        )
+        : originWorld;
+      spawnHelper(first.variant, helperSpawnPoint, beatIndex, rest, {
+        weaponSlotIndex: slotIndex,
+        stageIndex: baseStageIndex + 1,
+        helperAnchorType: 'world',
+      }, null);
+    }
+    const dir = nearest
+      ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
+      : getShipFacingDirWorld();
+    spawnProjectileFromDirection(originWorld, dir.x, dir.y, 2, null, null);
+    return;
+  }
+  triggerWeaponStage(first, originWorld, beatIndex, rest, {
+    origin: originWorld,
+    impactPoint: originWorld,
+    weaponSlotIndex: slotIndex,
+    stageIndex: baseStageIndex + 1,
+  });
+}
+
+function fireHelpersOnBeat(beatIndex) {
+  for (const h of helpers) {
+    if ((Number(h.untilBeat) || 0) < beatIndex) continue;
+    if (h.kind === 'orbital-drone') {
+      const r = Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD;
+      const a = Number(h.orbitAngle) || 0;
+      const points = [
+        { x: h.anchorX + (Math.cos(a) * r), y: h.anchorY + (Math.sin(a) * r) },
+        { x: h.anchorX + (Math.cos(a + Math.PI) * r), y: h.anchorY + (Math.sin(a + Math.PI) * r) },
+      ];
+      for (const p of points) fireHelperPayloadAt(p, h, beatIndex);
+    } else {
+      fireHelperPayloadAt({ x: h.anchorX, y: h.anchorY }, h, beatIndex);
+    }
+  }
+}
+
+function getPausePreviewHelperKey(slotIndex, stageIndex) {
+  const si = Number.isFinite(slotIndex) ? Math.trunc(slotIndex) : Math.trunc(Number(slotIndex));
+  const ti = Number.isFinite(stageIndex) ? Math.trunc(stageIndex) : Math.trunc(Number(stageIndex));
+  return `${Number.isFinite(si) ? si : -1}:${Number.isFinite(ti) ? ti : -1}`;
+}
+
+function hasActivePausePreviewHelperByKey(helperKey) {
+  return pausePreview.helpers.some((h) => String(h?.key || '') === String(helperKey || ''));
+}
+
+function createPausePreviewHelperVisuals(kind) {
+  if (!pausePreviewSceneEl) return null;
+  if (kind === 'orbital-drone') {
+    const elA = document.createElement('div');
+    const elB = document.createElement('div');
+    elA.className = 'beat-swarm-preview-projectile beat-swarm-preview-helper-orbital';
+    elB.className = 'beat-swarm-preview-projectile beat-swarm-preview-helper-orbital';
+    pausePreviewSceneEl.appendChild(elA);
+    pausePreviewSceneEl.appendChild(elB);
+    return { elA, elB };
+  }
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-preview-projectile beat-swarm-preview-helper-turret';
+  pausePreviewSceneEl.appendChild(el);
+  return { el };
+}
+
+function spawnPausePreviewHelper(kind, anchorPoint, beatIndex, nextStages = [], context = null, anchorEnemy = null) {
+  if (!pausePreviewSceneEl || !kind || !anchorPoint) return false;
+  const slotRaw = Number(context?.weaponSlotIndex);
+  const stageRaw = Number(context?.stageIndex);
+  const slotIndex = Number.isFinite(slotRaw) ? Math.trunc(slotRaw) : -1;
+  const stageIndex = Number.isFinite(stageRaw) ? Math.trunc(stageRaw) : -1;
+  const key = getPausePreviewHelperKey(slotIndex, stageIndex);
+  if (hasActivePausePreviewHelperByKey(key)) return false;
+  const visuals = createPausePreviewHelperVisuals(kind);
+  if (!visuals) return false;
+  pausePreview.helpers.push({
+    key,
+    kind,
+    anchorType: anchorEnemy ? 'enemy' : (String(context?.helperAnchorType || '') === 'player' ? 'player' : 'world'),
+    anchorEnemy: anchorEnemy || null,
+    anchorX: Number(anchorPoint.x) || 0,
+    anchorY: Number(anchorPoint.y) || 0,
+    orbitAngle: 0,
+    orbitRadius: PREVIEW_HELPER_ORBIT_RADIUS,
+    orbitAngVel: PREVIEW_HELPER_ORBIT_ANG_VEL,
+    untilBeat: Math.max(0, Math.trunc(Number(beatIndex) || 0)) + PREVIEW_HELPER_LIFETIME_BEATS,
+    nextStages: sanitizeWeaponStages(nextStages),
+    context: {
+      weaponSlotIndex: slotIndex,
+      stageIndex,
+    },
+    elA: visuals.elA || null,
+    elB: visuals.elB || null,
+    el: visuals.el || null,
+  });
+  return true;
+}
+
+function firePausePreviewHelperPayloadAt(origin, helperObj, beatIndex) {
+  const stages = sanitizeWeaponStages(helperObj?.nextStages);
+  const slotRaw = Number(helperObj?.context?.weaponSlotIndex);
+  const stageRaw = Number(helperObj?.context?.stageIndex);
+  const slotIndex = Number.isFinite(slotRaw) ? Math.trunc(slotRaw) : -1;
+  const baseStageIndex = Number.isFinite(stageRaw) ? Math.trunc(stageRaw) : -1;
+  const nearest = getPausePreviewNearestEnemies(origin.x, origin.y, 1)[0] || null;
+  if (!stages.length) {
+    const dir = nearest
+      ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
+      : { x: 1, y: 0 };
+    spawnPausePreviewProjectileFromDirection(origin, dir.x, dir.y, 2, null, null, null);
+    return;
+  }
+  const first = stages[0];
+  const rest = stages.slice(1);
+  if (first.archetype === 'helper') {
+    if (first.variant && first.variant !== helperObj.kind) {
+      const helperSpawnPoint = (first.variant === 'turret')
+        ? getOffsetPoint(
+          origin,
+          nearest ? { x: nearest.x, y: nearest.y } : null,
+          PREVIEW_HELPER_TURRET_SPAWN_OFFSET,
+          { x: 1, y: 0 }
+        )
+        : origin;
+      spawnPausePreviewHelper(first.variant, helperSpawnPoint, beatIndex, rest, {
+        weaponSlotIndex: slotIndex,
+        stageIndex: baseStageIndex + 1,
+        helperAnchorType: 'world',
+      }, null);
+    }
+    const dir = nearest
+      ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
+      : { x: 1, y: 0 };
+    spawnPausePreviewProjectileFromDirection(origin, dir.x, dir.y, 2, null, null, null);
+    return;
+  }
+  triggerPausePreviewWeaponStage(first, origin, beatIndex, rest, {
+    origin,
+    impactPoint: origin,
+    weaponSlotIndex: slotIndex,
+    stageIndex: baseStageIndex + 1,
+  });
+}
+
+function firePausePreviewHelpersOnBeat(beatIndex) {
+  for (const h of pausePreview.helpers) {
+    if ((Number(h.untilBeat) || 0) < beatIndex) continue;
+    if (h.kind === 'orbital-drone') {
+      const r = Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS;
+      const a = Number(h.orbitAngle) || 0;
+      const points = [
+        { x: h.anchorX + (Math.cos(a) * r), y: h.anchorY + (Math.sin(a) * r) },
+        { x: h.anchorX + (Math.cos(a + Math.PI) * r), y: h.anchorY + (Math.sin(a + Math.PI) * r) },
+      ];
+      for (const p of points) firePausePreviewHelperPayloadAt(p, h, beatIndex);
+    } else {
+      firePausePreviewHelperPayloadAt({ x: h.anchorX, y: h.anchorY }, h, beatIndex);
+    }
+  }
+}
+
+function updatePausePreviewHelpers(dt) {
+  const ir = Math.max(4, Number(PREVIEW_HELPER_IMPACT_RADIUS) || 12);
+  const ir2 = ir * ir;
+  for (let i = pausePreview.helpers.length - 1; i >= 0; i--) {
+    const h = pausePreview.helpers[i];
+    if ((Number(h.untilBeat) || 0) < pausePreview.beatIndex) {
+      try { h?.elA?.remove?.(); } catch {}
+      try { h?.elB?.remove?.(); } catch {}
+      try { h?.el?.remove?.(); } catch {}
+      pausePreview.helpers.splice(i, 1);
+      continue;
+    }
+    if (String(h.anchorType) === 'enemy') {
+      if (h.anchorEnemy && pausePreview.enemies.includes(h.anchorEnemy)) {
+        h.anchorX = Number(h.anchorEnemy.x) || 0;
+        h.anchorY = Number(h.anchorEnemy.y) || 0;
+      } else {
+        h.anchorType = 'world';
+        h.anchorEnemy = null;
+      }
+    } else if (String(h.anchorType) === 'player') {
+      h.anchorX = Number(pausePreview.ship.x) || 0;
+      h.anchorY = Number(pausePreview.ship.y) || 0;
+    }
+    if (h.kind === 'orbital-drone') {
+      h.orbitAngle = (Number(h.orbitAngle) || 0) + ((Number(h.orbitAngVel) || PREVIEW_HELPER_ORBIT_ANG_VEL) * dt);
+      const pts = [
+        {
+          x: h.anchorX + (Math.cos(h.orbitAngle) * (Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS)),
+          y: h.anchorY + (Math.sin(h.orbitAngle) * (Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS)),
+          el: h.elA,
+        },
+        {
+          x: h.anchorX + (Math.cos(h.orbitAngle + Math.PI) * (Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS)),
+          y: h.anchorY + (Math.sin(h.orbitAngle + Math.PI) * (Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS)),
+          el: h.elB,
+        },
+      ];
+      for (const p of pts) {
+        for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
+          const e = pausePreview.enemies[j];
+          const dx = e.x - p.x;
+          const dy = e.y - p.y;
+          if ((dx * dx + dy * dy) <= ir2) damagePausePreviewEnemy(e, PREVIEW_HELPER_IMPACT_DAMAGE * dt * 8);
+        }
+        if (p.el) p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px)`;
+      }
+    } else {
+      for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
+        const e = pausePreview.enemies[j];
+        const dx = e.x - h.anchorX;
+        const dy = e.y - h.anchorY;
+        if ((dx * dx + dy * dy) <= ir2) damagePausePreviewEnemy(e, PREVIEW_HELPER_IMPACT_DAMAGE * dt * 7);
+      }
+      if (h.el) h.el.style.transform = `translate(${h.anchorX.toFixed(2)}px, ${h.anchorY.toFixed(2)}px)`;
+    }
+  }
 }
 
 function spawnPausePreviewEnemy() {
@@ -851,6 +1279,9 @@ function queuePausePreviewChain(beatIndex, nextStages, context) {
     context: {
       origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : null,
       impactPoint: context?.impactPoint ? { x: Number(context.impactPoint.x) || 0, y: Number(context.impactPoint.y) || 0 } : null,
+      weaponSlotIndex: Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : null,
+      stageIndex: Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : null,
+      impactEnemy: context?.impactEnemy || null,
     },
   });
 }
@@ -909,7 +1340,7 @@ function addPausePreviewExplosion(at, radius = PREVIEW_EXPLOSION_RADIUS, ttl = P
   });
 }
 
-function spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, nextStages = null, nextBeatIndex = null) {
+function spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
   if (!pausePreviewSceneEl) return;
   const dir = normalizeDir(dirX, dirY);
   const el = document.createElement('div');
@@ -938,18 +1369,20 @@ function spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, next
     orbitAngVel: 0,
     orbitRadius: 0,
     hitEnemyIds: new Set(),
+    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
+    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
   });
 }
 
-function spawnPausePreviewProjectile(from, target, damage, nextStages = null, nextBeatIndex = null) {
+function spawnPausePreviewProjectile(from, target, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
   if (!target) return;
-  spawnPausePreviewProjectileFromDirection(from, target.x - from.x, target.y - from.y, damage, nextStages, nextBeatIndex);
+  spawnPausePreviewProjectileFromDirection(from, target.x - from.x, target.y - from.y, damage, nextStages, nextBeatIndex, chainContext);
 }
 
-function spawnPausePreviewBoomerangProjectile(from, dirX, dirY, damage, nextStages = null, nextBeatIndex = null) {
+function spawnPausePreviewBoomerangProjectile(from, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
   if (!pausePreviewSceneEl) return;
   const dir = normalizeDir(dirX, dirY);
   const perp = { x: dir.y, y: -dir.x };
@@ -982,13 +1415,15 @@ function spawnPausePreviewBoomerangProjectile(from, dirX, dirY, damage, nextStag
     orbitAngVel: 0,
     orbitRadius: 0,
     hitEnemyIds: new Set(),
+    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
+    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
   });
 }
 
-function spawnPausePreviewHomingMissile(from, damage, nextStages = null, nextBeatIndex = null) {
+function spawnPausePreviewHomingMissile(from, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
   if (!pausePreviewSceneEl) return false;
   if (countPausePreviewOrbitingHomingMissiles() >= PREVIEW_PROJECTILE_HOMING_MAX_ORBITING) return false;
   const orbitCount = countPausePreviewOrbitingHomingMissiles();
@@ -1019,6 +1454,8 @@ function spawnPausePreviewHomingMissile(from, damage, nextStages = null, nextBea
     orbitAngVel: PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL,
     orbitRadius: PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS,
     hitEnemyIds: new Set(),
+    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
+    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
@@ -1052,32 +1489,53 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
   const archetype = stage.archetype;
   const variant = stage.variant;
   const continuation = sanitizeWeaponStages(remainingStages);
+  const slotIndex = Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : -1;
+  const stageIndex = Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : 0;
+  const nextCtx = { weaponSlotIndex: slotIndex, stageIndex: stageIndex + 1 };
   const nearest = getPausePreviewNearestEnemies(origin.x, origin.y, 1)[0] || null;
   if (archetype === 'projectile') {
     const baseDir = nearest
       ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
       : { x: 1, y: 0 };
     if (variant === 'homing-missile') {
-      spawnPausePreviewHomingMissile(origin, 2, continuation, beatIndex + 1);
+      spawnPausePreviewHomingMissile(origin, 2, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'boomerang') {
-      spawnPausePreviewBoomerangProjectile(origin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
+      spawnPausePreviewBoomerangProjectile(origin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'split-shot') {
       const baseAngle = Math.atan2(baseDir.y, baseDir.x);
       const angles = [baseAngle, baseAngle - PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD, baseAngle + PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD];
       for (const ang of angles) {
-        spawnPausePreviewProjectileFromDirection(origin, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1);
+        spawnPausePreviewProjectileFromDirection(origin, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1, nextCtx);
       }
       return;
     }
     if (nearest) {
-      spawnPausePreviewProjectile(origin, nearest, 2, continuation, beatIndex + 1);
+      spawnPausePreviewProjectile(origin, nearest, 2, continuation, beatIndex + 1, nextCtx);
     } else {
-      spawnPausePreviewProjectileFromDirection(origin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
+      spawnPausePreviewProjectileFromDirection(origin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
     }
+    return;
+  }
+  if (archetype === 'helper') {
+    const impactEnemy = (variant !== 'turret') ? (context?.impactEnemy || null) : null;
+    const defaultAnchorType = (variant === 'orbital-drone') ? 'player' : 'world';
+    const turretSpawnPoint = (variant === 'turret')
+      ? getOffsetPoint(
+        origin,
+        nearest ? { x: nearest.x, y: nearest.y } : null,
+        PREVIEW_HELPER_TURRET_SPAWN_OFFSET,
+        { x: 1, y: 0 }
+      )
+      : origin;
+    spawnPausePreviewHelper(variant, turretSpawnPoint, beatIndex, continuation, {
+      weaponSlotIndex: slotIndex,
+      stageIndex,
+      helperAnchorType: context?.helperAnchorType || defaultAnchorType,
+    }, impactEnemy);
     return;
   }
   if (archetype === 'laser') {
@@ -1089,6 +1547,8 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
           queuePausePreviewChain(beatIndex + 1, continuation, {
             origin,
             impactPoint: to,
+            weaponSlotIndex: slotIndex,
+            stageIndex: stageIndex + 1,
           });
         }
         return;
@@ -1098,6 +1558,8 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
         queuePausePreviewChain(beatIndex + 1, continuation, {
           origin,
           impactPoint: { x: nearest.x, y: nearest.y },
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
         });
       }
       return;
@@ -1109,6 +1571,8 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
         queuePausePreviewChain(beatIndex + 1, continuation, {
           origin,
           impactPoint: to,
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
         });
       }
       return;
@@ -1119,6 +1583,8 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
       queuePausePreviewChain(beatIndex + 1, continuation, {
         origin,
         impactPoint: { x: nearest.x, y: nearest.y },
+        weaponSlotIndex: slotIndex,
+        stageIndex: stageIndex + 1,
       });
     }
     return;
@@ -1129,6 +1595,8 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
       queuePausePreviewChain(beatIndex + 1, continuation, {
         origin: context?.origin || origin,
         impactPoint: origin,
+        weaponSlotIndex: slotIndex,
+        stageIndex: stageIndex + 1,
       });
     }
   }
@@ -1168,15 +1636,21 @@ function applyPausePreviewLingeringAoeBeat(beatIndex) {
 
 function firePausePreviewWeaponsOnBeat(beatIndex) {
   const origin = { x: pausePreview.ship.x, y: pausePreview.ship.y };
-  const selectedWeapons = Number.isInteger(previewSelectedWeaponSlotIndex)
-    ? [weaponLoadout[previewSelectedWeaponSlotIndex]].filter(Boolean)
-    : weaponLoadout.slice();
-  for (const weapon of selectedWeapons) {
+  const indices = Number.isInteger(previewSelectedWeaponSlotIndex)
+    ? [previewSelectedWeaponSlotIndex]
+    : weaponLoadout.map((_, i) => i);
+  for (const slotIndex of indices) {
+    const weapon = weaponLoadout[slotIndex];
     const stages = sanitizeWeaponStages(weapon?.stages);
     if (!stages.length) continue;
     const first = stages[0];
     const rest = stages.slice(1);
-    triggerPausePreviewWeaponStage(first, origin, beatIndex, rest, { origin, impactPoint: origin });
+    triggerPausePreviewWeaponStage(first, origin, beatIndex, rest, {
+      origin,
+      impactPoint: origin,
+      weaponSlotIndex: slotIndex,
+      stageIndex: 0,
+    });
   }
 }
 
@@ -1312,6 +1786,9 @@ function updatePausePreviewProjectilesAndEffects(dt) {
           queuePausePreviewChain(nextBeat, p.nextStages, {
             origin: { x: p.x, y: p.y },
             impactPoint: hitPoint,
+            weaponSlotIndex: Number.isFinite(p.chainWeaponSlotIndex) ? Math.trunc(p.chainWeaponSlotIndex) : null,
+            stageIndex: Number.isFinite(p.chainStageIndex) ? Math.trunc(p.chainStageIndex) : null,
+            impactEnemy: e,
           });
         }
         if (!isBoomerang) {
@@ -1395,10 +1872,12 @@ function updatePausePreview(dt) {
     pausePreview.beatIndex += 1;
     processPausePreviewPendingChains(pausePreview.beatIndex);
     applyPausePreviewLingeringAoeBeat(pausePreview.beatIndex);
+    firePausePreviewHelpersOnBeat(pausePreview.beatIndex);
     firePausePreviewWeaponsOnBeat(pausePreview.beatIndex);
   }
 
   while (pausePreview.enemies.length < PREVIEW_ENEMY_COUNT) spawnPausePreviewEnemy();
+  updatePausePreviewHelpers(dt);
   updatePausePreviewProjectilesAndEffects(dt);
   for (const e of pausePreview.enemies) {
     e.el.style.transform = `translate(${e.x.toFixed(2)}px, ${e.y.toFixed(2)}px)`;
@@ -1442,6 +1921,7 @@ function ensurePauseWeaponUi() {
     const slot = weaponLoadout[slotIndex];
     if (action === 'random-weapon') {
       slot.stages = createRandomWeaponStages();
+      clearHelpers();
       stagePickerState.open = false;
       renderPauseWeaponUi();
       persistBeatSwarmState();
@@ -1459,6 +1939,7 @@ function ensurePauseWeaponUi() {
       const stageIndex = Math.trunc(Number(actionEl.dataset.stageIndex));
       if (!(stageIndex >= 0 && stageIndex < slot.stages.length)) return;
       slot.stages.splice(stageIndex, 1);
+      clearHelpers();
       stagePickerState.open = false;
       renderPauseWeaponUi();
       persistBeatSwarmState();
@@ -1469,6 +1950,13 @@ function ensurePauseWeaponUi() {
       const componentId = String(actionEl.dataset.componentId || '');
       const component = getWeaponComponentDefById(componentId);
       if (!component) return;
+      const prevStage = stageIndex > 0 ? slot.stages[stageIndex - 1] : null;
+      if (
+        prevStage
+        && prevStage.archetype === 'helper'
+        && component.archetype === 'helper'
+        && String(prevStage.variant) === String(component.variant)
+      ) return;
       if (stageIndex < slot.stages.length) {
         slot.stages[stageIndex] = { archetype: component.archetype, variant: component.variant };
       } else if (stageIndex === slot.stages.length && slot.stages.length < MAX_WEAPON_STAGES) {
@@ -1479,6 +1967,7 @@ function ensurePauseWeaponUi() {
       stagePickerState.open = false;
       stagePickerState.slotIndex = -1;
       stagePickerState.stageIndex = -1;
+      clearHelpers();
       renderPauseWeaponUi();
       persistBeatSwarmState();
     }
@@ -1540,9 +2029,20 @@ function renderPauseWeaponUi() {
   const pickerSlot = Math.max(0, Math.min(weaponLoadout.length - 1, Math.trunc(Number(stagePickerState.slotIndex) || 0)));
   const pickerStage = Math.max(0, Math.min(MAX_WEAPON_STAGES - 1, Math.trunc(Number(stagePickerState.stageIndex) || 0)));
   const pickerOpen = !!stagePickerState.open;
+  const pickerSlotStages = weaponLoadout[pickerSlot]?.stages || [];
+  const prevStage = pickerStage > 0 ? pickerSlotStages[pickerStage - 1] : null;
+  const blockedHelperVariant = (prevStage?.archetype === 'helper')
+    ? String(prevStage.variant || '')
+    : '';
   const pickerItems = Object.values(WEAPON_ARCHETYPES).map((archetypeDef) => {
     const comps = WEAPON_COMPONENTS.filter((c) => c.archetype === archetypeDef.id);
-    const compButtons = comps.map((c) => `
+    const compButtons = comps.map((c) => {
+      const sameHelperBlocked = (
+        archetypeDef.id === 'helper'
+        && blockedHelperVariant
+        && String(c.variant || '') === blockedHelperVariant
+      );
+      return `
       <button
         type="button"
         class="beat-swarm-component-option"
@@ -1550,11 +2050,14 @@ function renderPauseWeaponUi() {
         data-slot-index="${pickerSlot}"
         data-stage-index="${pickerStage}"
         data-component-id="${c.id}"
+        ${sameHelperBlocked ? 'disabled' : ''}
       >
         ${renderComponentPreviewMarkup(c)}
         <span class="beat-swarm-component-option-name">${c.label}</span>
+        ${sameHelperBlocked ? '<span class="beat-swarm-stage-component-detail">Cannot follow same helper</span>' : ''}
       </button>
-    `).join('');
+    `;
+    }).join('');
     return `
       <section class="beat-swarm-component-group">
         <div class="beat-swarm-component-group-head">${archetypeDef.label}</div>
@@ -1578,7 +2081,10 @@ function renderPauseWeaponUi() {
         <div class="beat-swarm-component-picker" role="dialog" aria-modal="true" aria-label="Weapon Components">
           <div class="beat-swarm-component-picker-head">
             <div class="beat-swarm-component-picker-title">Choose Component</div>
-            <button type="button" class="beat-swarm-stage-remove" data-action="close-component-picker" data-slot-index="${pickerSlot}">Close</button>
+            <div class="beat-swarm-component-picker-actions">
+              <button type="button" class="beat-swarm-stage-remove" data-action="close-component-picker" data-slot-index="${pickerSlot}">Close</button>
+              <button type="button" class="beat-swarm-component-picker-close" aria-label="Close component picker" title="Close" data-action="close-component-picker">x</button>
+            </div>
           </div>
           <div class="beat-swarm-component-picker-groups">${pickerItems}</div>
         </div>
@@ -1880,6 +2386,76 @@ function clearEffects() {
   }
 }
 
+function clearHelpers() {
+  while (helpers.length) {
+    const h = helpers.pop();
+    try { h?.elA?.remove?.(); } catch {}
+    try { h?.elB?.remove?.(); } catch {}
+    try { h?.el?.remove?.(); } catch {}
+  }
+}
+
+function clearRuntimeForWeaponSlot(slotIndex) {
+  const slotRaw = Number(slotIndex);
+  const idx = Number.isFinite(slotRaw) ? Math.trunc(slotRaw) : -1;
+  if (!(idx >= 0)) return;
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    const v = Number(p?.chainWeaponSlotIndex);
+    if ((Number.isFinite(v) ? Math.trunc(v) : -1) !== idx) continue;
+    try { p?.el?.remove?.(); } catch {}
+    projectiles.splice(i, 1);
+  }
+  for (let i = helpers.length - 1; i >= 0; i--) {
+    const h = helpers[i];
+    const v = Number(h?.context?.weaponSlotIndex);
+    if ((Number.isFinite(v) ? Math.trunc(v) : -1) !== idx) continue;
+    try { h?.elA?.remove?.(); } catch {}
+    try { h?.elB?.remove?.(); } catch {}
+    try { h?.el?.remove?.(); } catch {}
+    helpers.splice(i, 1);
+  }
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const fx = effects[i];
+    const v = Number(fx?.weaponSlotIndex);
+    if ((Number.isFinite(v) ? Math.trunc(v) : -1) !== idx) continue;
+    try { fx?.el?.remove?.(); } catch {}
+    effects.splice(i, 1);
+  }
+  for (let i = pendingWeaponChainEvents.length - 1; i >= 0; i--) {
+    const ev = pendingWeaponChainEvents[i];
+    const v = Number(ev?.context?.weaponSlotIndex);
+    if ((Number.isFinite(v) ? Math.trunc(v) : -1) !== idx) continue;
+    pendingWeaponChainEvents.splice(i, 1);
+  }
+  for (let i = lingeringAoeZones.length - 1; i >= 0; i--) {
+    const z = lingeringAoeZones[i];
+    const v = Number(z?.weaponSlotIndex);
+    if ((Number.isFinite(v) ? Math.trunc(v) : -1) !== idx) continue;
+    lingeringAoeZones.splice(i, 1);
+  }
+}
+
+function clearHomingMissiles() {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    if (String(p?.kind || '') !== 'homing-missile') continue;
+    try { p?.el?.remove?.(); } catch {}
+    projectiles.splice(i, 1);
+  }
+}
+
+function setActiveWeaponSlot(nextSlotIndex) {
+  const next = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(nextSlotIndex) || 0)));
+  const prev = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
+  if (next === prev) return false;
+  clearRuntimeForWeaponSlot(prev);
+  clearHomingMissiles();
+  activeWeaponSlotIndex = next;
+  persistBeatSwarmState();
+  return true;
+}
+
 function spawnEnemyAt(clientX, clientY) {
   if (!enemyLayerEl) return;
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
@@ -1974,12 +2550,19 @@ function spawnStarterPickups(centerWorld) {
   clearPickups();
 }
 
-function addLaserEffect(fromW, toW) {
+function addLaserEffect(fromW, toW, weaponSlotIndex = null) {
   if (!enemyLayerEl) return;
   const el = document.createElement('div');
   el.className = 'beat-swarm-fx-laser';
   enemyLayerEl.appendChild(el);
-  effects.push({ kind: 'laser', ttl: LASER_TTL, from: { ...fromW }, to: { ...toW }, el });
+  effects.push({
+    kind: 'laser',
+    ttl: LASER_TTL,
+    from: { ...fromW },
+    to: { ...toW },
+    weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
+    el,
+  });
 }
 
 function getGameplayBeatLen() {
@@ -1987,7 +2570,7 @@ function getGameplayBeatLen() {
   return Math.max(0.05, Number(info?.beatLen) || 0.5);
 }
 
-function addBeamEffect(fromW, targetEnemy, ttl = null) {
+function addBeamEffect(fromW, targetEnemy, ttl = null, weaponSlotIndex = null) {
   if (!enemyLayerEl || !targetEnemy) return;
   const el = document.createElement('div');
   el.className = 'beat-swarm-fx-laser';
@@ -1999,11 +2582,12 @@ function addBeamEffect(fromW, targetEnemy, ttl = null) {
     to: { x: Number(targetEnemy.wx) || 0, y: Number(targetEnemy.wy) || 0 },
     targetEnemyId: Number.isFinite(targetEnemy.id) ? Math.trunc(targetEnemy.id) : null,
     damagePerSec: BEAM_DAMAGE_PER_SECOND,
+    weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
     el,
   });
 }
 
-function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD, ttlOverride = null) {
+function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD, ttlOverride = null, weaponSlotIndex = null) {
   if (!enemyLayerEl) return;
   const el = document.createElement('div');
   el.className = 'beat-swarm-fx-explosion';
@@ -2015,6 +2599,7 @@ function addExplosionEffect(centerW, radiusWorld = EXPLOSION_RADIUS_WORLD, ttlOv
     ttl: Math.max(0.01, Number.isFinite(ttlOverride) ? Number(ttlOverride) : EXPLOSION_TTL),
     at: { ...centerW },
     radiusWorld: Math.max(1, Number(radiusWorld) || EXPLOSION_RADIUS_WORLD),
+    weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
     el,
   });
 }
@@ -2024,6 +2609,23 @@ function normalizeDir(dx, dy, fallbackX = 1, fallbackY = 0) {
   if (len > 0.0001) return { x: dx / len, y: dy / len };
   const fLen = Math.hypot(fallbackX, fallbackY) || 1;
   return { x: fallbackX / fLen, y: fallbackY / fLen };
+}
+
+function getOffsetPoint(fromPoint, towardPoint, offsetDist, fallbackDir = null) {
+  const ox = Number(fromPoint?.x) || 0;
+  const oy = Number(fromPoint?.y) || 0;
+  const tx = Number(towardPoint?.x);
+  const ty = Number(towardPoint?.y);
+  let dir = null;
+  if (Number.isFinite(tx) && Number.isFinite(ty)) {
+    dir = normalizeDir(tx - ox, ty - oy);
+  } else if (fallbackDir && Number.isFinite(fallbackDir.x) && Number.isFinite(fallbackDir.y)) {
+    dir = normalizeDir(fallbackDir.x, fallbackDir.y);
+  } else {
+    dir = { x: 1, y: 0 };
+  }
+  const d = Math.max(0, Number(offsetDist) || 0);
+  return { x: ox + (dir.x * d), y: oy + (dir.y * d) };
 }
 
 function getShipFacingDirWorld() {
@@ -2041,7 +2643,7 @@ function countOrbitingHomingMissiles() {
   return n;
 }
 
-function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null) {
+function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
   if (!enemyLayerEl) return;
   const dir = normalizeDir(dirX, dirY);
   const el = document.createElement('div');
@@ -2070,20 +2672,22 @@ function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = nu
     orbitAngle: 0,
     orbitAngVel: 0,
     orbitRadius: 0,
+    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
+    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
   });
 }
 
-function spawnProjectile(fromW, toEnemy, damage, nextStages = null, nextBeatIndex = null) {
+function spawnProjectile(fromW, toEnemy, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
   if (!toEnemy) return;
   const dx = toEnemy.wx - fromW.x;
   const dy = toEnemy.wy - fromW.y;
-  spawnProjectileFromDirection(fromW, dx, dy, damage, nextStages, nextBeatIndex);
+  spawnProjectileFromDirection(fromW, dx, dy, damage, nextStages, nextBeatIndex, chainContext);
 }
 
-function spawnBoomerangProjectile(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null) {
+function spawnBoomerangProjectile(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
   if (!enemyLayerEl) return;
   const dir = normalizeDir(dirX, dirY);
   const perp = { x: dir.y, y: -dir.x };
@@ -2116,13 +2720,15 @@ function spawnBoomerangProjectile(fromW, dirX, dirY, damage, nextStages = null, 
     orbitAngle: 0,
     orbitAngVel: 0,
     orbitRadius: 0,
+    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
+    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
   });
 }
 
-function spawnHomingMissile(fromW, damage, nextStages = null, nextBeatIndex = null) {
+function spawnHomingMissile(fromW, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
   if (!enemyLayerEl) return false;
   if (countOrbitingHomingMissiles() >= PROJECTILE_HOMING_MAX_ORBITING) return false;
   const orbitCount = countOrbitingHomingMissiles();
@@ -2153,6 +2759,8 @@ function spawnHomingMissile(fromW, damage, nextStages = null, nextBeatIndex = nu
     orbitAngle: angle,
     orbitAngVel: PROJECTILE_HOMING_ORBIT_ANG_VEL,
     orbitRadius: PROJECTILE_HOMING_ORBIT_RADIUS_WORLD,
+    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
+    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     el,
@@ -2169,16 +2777,19 @@ function queueWeaponChain(beatIndex, nextStages, context) {
     context: {
       origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : null,
       impactPoint: context?.impactPoint ? { x: Number(context.impactPoint.x) || 0, y: Number(context.impactPoint.y) || 0 } : null,
+      weaponSlotIndex: Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : null,
+      stageIndex: Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : null,
+      impactEnemyId: Number.isFinite(context?.impactEnemyId) ? Math.trunc(context.impactEnemyId) : null,
     },
   });
 }
 
-function applyAoeAt(point, variant = 'explosion', beatIndex = 0) {
+function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex = null) {
   if (!point) return;
   const radius = Math.max(1, Number(EXPLOSION_RADIUS_WORLD) || 1);
   const info = getLoopInfo?.();
   const beatLen = Math.max(0.05, Number(info?.beatLen) || 0.5);
-  addExplosionEffect(point, radius, variant === 'dot-area' ? (beatLen * 2) : null);
+  addExplosionEffect(point, radius, variant === 'dot-area' ? (beatLen * 2) : null, weaponSlotIndex);
   const r2 = radius * radius;
   const isDot = variant === 'dot-area';
   const hitDamage = isDot ? 0.5 : 1;
@@ -2195,6 +2806,7 @@ function applyAoeAt(point, variant = 'explosion', beatIndex = 0) {
       radius,
       damagePerBeat: 0.6,
       untilBeat: Math.max(beatIndex + 2, beatIndex + 1),
+      weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
     });
   }
 }
@@ -2204,6 +2816,9 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
   const archetype = stage.archetype;
   const variant = stage.variant;
   const continuation = sanitizeWeaponStages(remainingStages);
+  const slotIndex = Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : -1;
+  const stageIndex = Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : 0;
+  const nextCtx = { weaponSlotIndex: slotIndex, stageIndex: stageIndex + 1 };
   const nearest = getNearestEnemy(originWorld.x, originWorld.y);
   if (archetype === 'projectile') {
     const facingDir = getShipFacingDirWorld();
@@ -2211,26 +2826,46 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
       ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
       : facingDir;
     if (variant === 'homing-missile') {
-      spawnHomingMissile(originWorld, 2, continuation, beatIndex + 1);
+      spawnHomingMissile(originWorld, 2, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'boomerang') {
-      spawnBoomerangProjectile(originWorld, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
+      spawnBoomerangProjectile(originWorld, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'split-shot') {
       const baseAngle = Math.atan2(baseDir.y, baseDir.x);
       const angles = [baseAngle, baseAngle - PROJECTILE_SPLIT_ANGLE_RAD, baseAngle + PROJECTILE_SPLIT_ANGLE_RAD];
       for (const ang of angles) {
-        spawnProjectileFromDirection(originWorld, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1);
+        spawnProjectileFromDirection(originWorld, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1, nextCtx);
       }
       return;
     }
     if (nearest) {
-      spawnProjectile(originWorld, nearest, 2, continuation, beatIndex + 1);
+      spawnProjectile(originWorld, nearest, 2, continuation, beatIndex + 1, nextCtx);
     } else {
-      spawnProjectileFromDirection(originWorld, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1);
+      spawnProjectileFromDirection(originWorld, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
     }
+    return;
+  }
+  if (archetype === 'helper') {
+    const anchorEnemyId = (
+      variant !== 'turret' && Number.isFinite(context?.impactEnemyId)
+    ) ? Math.trunc(context.impactEnemyId) : null;
+    const defaultAnchorType = (variant === 'orbital-drone') ? 'player' : 'world';
+    const turretSpawnPoint = (variant === 'turret')
+      ? getOffsetPoint(
+        originWorld,
+        nearest ? { x: nearest.wx, y: nearest.wy } : null,
+        HELPER_TURRET_SPAWN_OFFSET_WORLD,
+        getShipFacingDirWorld()
+      )
+      : originWorld;
+    spawnHelper(variant, turretSpawnPoint, beatIndex, continuation, {
+      weaponSlotIndex: slotIndex,
+      stageIndex,
+      helperAnchorType: context?.helperAnchorType || defaultAnchorType,
+    }, anchorEnemyId);
     return;
   }
   if (archetype === 'laser') {
@@ -2240,7 +2875,7 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
         addLaserEffect(originWorld, {
           x: originWorld.x + (dir.x * 1400),
           y: originWorld.y + (dir.y * 1400),
-        });
+        }, slotIndex);
         if (continuation.length) {
           queueWeaponChain(beatIndex + 1, continuation, {
             origin: originWorld,
@@ -2248,16 +2883,20 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
               x: originWorld.x + (dir.x * 1400),
               y: originWorld.y + (dir.y * 1400),
             },
+            weaponSlotIndex: slotIndex,
+            stageIndex: stageIndex + 1,
           });
         }
         return;
       }
-      addBeamEffect(originWorld, nearest, getGameplayBeatLen());
+      addBeamEffect(originWorld, nearest, getGameplayBeatLen(), slotIndex);
       if (continuation.length) {
         queueWeaponChain(beatIndex + 1, continuation, {
           origin: originWorld,
           // Chain source is defined by previous stage output point.
           impactPoint: { x: nearest.wx, y: nearest.wy },
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
         });
       }
       return;
@@ -2268,31 +2907,37 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
         x: originWorld.x + (dir.x * 1400),
         y: originWorld.y + (dir.y * 1400),
       };
-      addLaserEffect(originWorld, to);
+      addLaserEffect(originWorld, to, slotIndex);
       if (continuation.length) {
         queueWeaponChain(beatIndex + 1, continuation, {
           origin: originWorld,
           impactPoint: to,
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
         });
       }
       return;
     }
-    addLaserEffect(originWorld, { x: nearest.wx, y: nearest.wy });
+    addLaserEffect(originWorld, { x: nearest.wx, y: nearest.wy }, slotIndex);
     damageEnemy(nearest, 2);
     if (continuation.length) {
       queueWeaponChain(beatIndex + 1, continuation, {
         origin: originWorld,
         impactPoint: { x: nearest.wx, y: nearest.wy },
+        weaponSlotIndex: slotIndex,
+        stageIndex: stageIndex + 1,
       });
     }
     return;
   }
   if (archetype === 'aoe') {
-    applyAoeAt(originWorld, variant, beatIndex);
+    applyAoeAt(originWorld, variant, beatIndex, slotIndex);
     if (continuation.length) {
       queueWeaponChain(beatIndex + 1, continuation, {
         origin: context?.origin || originWorld,
         impactPoint: originWorld,
+        weaponSlotIndex: slotIndex,
+        stageIndex: stageIndex + 1,
       });
     }
   }
@@ -2333,12 +2978,19 @@ function applyLingeringAoeBeat(beatIndex) {
 
 function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex) {
   if (!centerWorld) return;
-  for (const weapon of weaponLoadout) {
-    const stages = sanitizeWeaponStages(weapon?.stages);
-    if (!stages.length) continue;
+  const slotIndex = Math.max(0, Math.min(weaponLoadout.length - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
+  const weapon = weaponLoadout[slotIndex];
+  const stages = sanitizeWeaponStages(weapon?.stages);
+  if (stages.length) {
     const first = stages[0];
     const rest = stages.slice(1);
-    triggerWeaponStage(first, centerWorld, beatIndex, rest, { origin: centerWorld, impactPoint: centerWorld });
+    triggerWeaponStage(first, centerWorld, beatIndex, rest, {
+      origin: centerWorld,
+      impactPoint: centerWorld,
+      weaponSlotIndex: slotIndex,
+      stageIndex: 0,
+    });
+    return;
   }
   // Backward compatibility: legacy pickup behavior if no configured stages exist.
   const anyConfigured = weaponLoadout.some((w) => Array.isArray(w.stages) && w.stages.length > 0);
@@ -2385,6 +3037,7 @@ function updateBeatWeapons(centerWorld) {
   }
   processPendingWeaponChains(beatIndex);
   applyLingeringAoeBeat(beatIndex);
+  fireHelpersOnBeat(beatIndex);
   fireConfiguredWeaponsOnBeat(centerWorld, beatIndex);
 }
 
@@ -2470,6 +3123,7 @@ function updatePickupsAndCombat(dt) {
   const projectileHitRadiusWorld = PROJECTILE_HIT_RADIUS_PX / Math.max(0.001, scale || 1);
   const cr2 = collectRadiusWorld * collectRadiusWorld;
   const pr2 = projectileHitRadiusWorld * projectileHitRadiusWorld;
+  updateHelpers(dt, centerWorld, scale);
 
   for (let i = pickups.length - 1; i >= 0; i--) {
     const p = pickups[i];
@@ -2621,6 +3275,9 @@ function updatePickupsAndCombat(dt) {
           queueWeaponChain(nextBeat, p.nextStages, {
             origin: { x: p.wx, y: p.wy },
             impactPoint: hitPoint,
+            weaponSlotIndex: Number.isFinite(p.chainWeaponSlotIndex) ? Math.trunc(p.chainWeaponSlotIndex) : null,
+            stageIndex: Number.isFinite(p.chainStageIndex) ? Math.trunc(p.chainStageIndex) : null,
+            impactEnemyId: enemyId > 0 ? enemyId : null,
           });
         }
         if (!isBoomerang) {
@@ -3243,11 +3900,39 @@ function onTransportResume() {
   setGameplayPaused(false);
 }
 
+function onKeyDown(ev) {
+  if (!active) return;
+  if (gameplayPaused) return;
+  const code = String(ev?.code || '');
+  if (code === 'Digit1') {
+    if (setActiveWeaponSlot(0)) ev.preventDefault();
+    return;
+  }
+  if (code === 'Digit2') {
+    if (setActiveWeaponSlot(1)) ev.preventDefault();
+    return;
+  }
+  if (code === 'Digit3') {
+    if (setActiveWeaponSlot(2)) ev.preventDefault();
+    return;
+  }
+  if (code === 'KeyQ') {
+    const next = (Math.max(0, Math.trunc(Number(activeWeaponSlotIndex) || 0) + MAX_WEAPON_SLOTS - 1)) % MAX_WEAPON_SLOTS;
+    if (setActiveWeaponSlot(next)) ev.preventDefault();
+    return;
+  }
+  if (code === 'KeyE') {
+    const next = (Math.max(0, Math.trunc(Number(activeWeaponSlotIndex) || 0) + 1)) % MAX_WEAPON_SLOTS;
+    if (setActiveWeaponSlot(next)) ev.preventDefault();
+  }
+}
+
 function bindInput() {
   overlayEl?.addEventListener('pointerdown', onPointerDown, { passive: false });
   overlayEl?.addEventListener('pointermove', onPointerMove, { passive: false });
   overlayEl?.addEventListener('pointerup', onPointerUp, { passive: false });
   overlayEl?.addEventListener('pointercancel', onPointerUp, { passive: false });
+  document.addEventListener('keydown', onKeyDown, { passive: false });
   window.addEventListener('wheel', onWheel, { passive: false, capture: true });
   document.addEventListener('transport:pause', onTransportPause, { passive: true });
   document.addEventListener('transport:resume', onTransportResume, { passive: true });
@@ -3259,6 +3944,7 @@ function unbindInput() {
   overlayEl?.removeEventListener('pointermove', onPointerMove);
   overlayEl?.removeEventListener('pointerup', onPointerUp);
   overlayEl?.removeEventListener('pointercancel', onPointerUp);
+  document.removeEventListener('keydown', onKeyDown);
   window.removeEventListener('wheel', onWheel, { capture: true });
   document.removeEventListener('transport:pause', onTransportPause);
   document.removeEventListener('transport:resume', onTransportResume);
@@ -3287,6 +3973,7 @@ export function enterBeatSwarmMode(options = null) {
   clearPickups();
   clearProjectiles();
   clearEffects();
+  clearHelpers();
   clearPendingWeaponChainEvents();
   clearLingeringAoeZones();
   clearStarfield();
@@ -3305,6 +3992,7 @@ export function enterBeatSwarmMode(options = null) {
   try { spawnerRuntime?.enter?.(); } catch {}
   try { configureInitialSpawnerEnablement(); } catch {}
   if (!restoreState) {
+    activeWeaponSlotIndex = 0;
     seedDefaultWeaponLoadout();
     renderPauseWeaponUi();
     const startWorld = getSceneStartWorld();
@@ -3357,6 +4045,7 @@ export function exitBeatSwarmMode() {
   clearPickups();
   clearProjectiles();
   clearEffects();
+  clearHelpers();
   clearPendingWeaponChainEvents();
   clearLingeringAoeZones();
   clearStarfield();
@@ -3376,6 +4065,7 @@ export function exitBeatSwarmMode() {
   setResistanceVisual(false);
   setReactiveArrowVisual(false);
   equippedWeapons.clear();
+  activeWeaponSlotIndex = 0;
   lastBeatIndex = null;
   clearBeatSwarmPersistedState();
   return true;
