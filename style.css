@@ -4412,9 +4412,14 @@ body.internal-board-active #board-main {
   margin-left: -6px;
   margin-top: -6px;
   border-radius: 50%;
-  background: #ffe07d;
-  box-shadow: 0 0 14px rgba(255, 224, 125, 0.65);
+  background: rgba(222, 245, 255, 0.96);
+  box-shadow: 0 0 10px rgba(172, 228, 255, 0.84);
   transform: translate(-9999px, -9999px);
+}
+
+.beat-swarm-projectile.is-homing-missile {
+  background: rgba(191, 255, 214, 0.96);
+  box-shadow: 0 0 10px rgba(124, 244, 172, 0.86);
 }
 
 .beat-swarm-helper-orbital {

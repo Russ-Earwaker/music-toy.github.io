@@ -561,7 +561,7 @@ function fireComponentLivePreview(state) {
       return;
     }
     if (c.variant === 'homing-missile') {
-      spawnComponentMiniProjectile(state, state.ship, state.enemy, 'homing');
+      spawnComponentMiniProjectile(state, state.ship, { x: state.ship.x + 220, y: state.ship.y }, 'homing');
       return;
     }
     spawnComponentMiniProjectile(state, state.ship, state.enemy);
@@ -573,10 +573,12 @@ function fireComponentLivePreview(state) {
     } else {
       spawnComponentMiniEffect(state, 'laser', state.ship, state.enemy, 0.18);
     }
+    pulseHitFlash(state.enemy.el);
     return;
   }
   if (c.archetype === 'aoe') {
     spawnComponentMiniEffect(state, 'explosion', state.ship, state.ship, c.variant === 'dot-area' ? 0.7 : 0.24, 36);
+    pulseHitFlash(state.enemy.el);
     return;
   }
   if (c.archetype === 'helper') {
@@ -611,6 +613,15 @@ function updateComponentLivePreviewState(state, dt) {
     if (state.enemyAlt?.el) {
       state.enemyAlt.x = w * 0.58;
       state.enemyAlt.y = h * 0.55;
+    }
+  } else if (state.component?.archetype === 'projectile' && state.component?.variant === 'homing-missile') {
+    state.ship.x = w * 0.2;
+    state.ship.y = h * 0.52;
+    state.enemy.x = w * 0.8;
+    state.enemy.y = (h * 0.5) + (Math.sin((performance.now() || 0) * 0.004) * (h * 0.17));
+    if (state.enemyAlt?.el) {
+      state.enemyAlt.x = w * 0.9;
+      state.enemyAlt.y = h * 0.42;
     }
   } else {
     state.ship.x = w * 0.2;
@@ -927,7 +938,9 @@ function restoreBeatSwarmState(state) {
   for (const p of Array.isArray(state.projectiles) ? state.projectiles : []) {
     if (!enemyLayerEl) continue;
     const el = document.createElement('div');
-    el.className = 'beat-swarm-projectile';
+    el.className = String(p.kind || '') === 'homing-missile'
+      ? 'beat-swarm-projectile is-homing-missile'
+      : 'beat-swarm-projectile';
     enemyLayerEl.appendChild(el);
     projectiles.push({
       wx: Number(p.wx) || 0,
@@ -2948,6 +2961,10 @@ function normalizeDir(dx, dy, fallbackX = 1, fallbackY = 0) {
 
 function pulseHitFlash(el) {
   if (!el?.classList) return;
+  const now = performance.now();
+  const last = Number(el.dataset?.hitFlashTs || 0);
+  if ((now - last) < 60) return;
+  if (el.dataset) el.dataset.hitFlashTs = `${now}`;
   el.classList.remove('is-hit-flash');
   void el.offsetWidth;
   el.classList.add('is-hit-flash');
@@ -3076,7 +3093,7 @@ function spawnHomingMissile(fromW, damage, nextStages = null, nextBeatIndex = nu
   const orbitCount = countOrbitingHomingMissiles();
   const angle = ((orbitCount / Math.max(1, PROJECTILE_HOMING_MAX_ORBITING)) * Math.PI * 2);
   const el = document.createElement('div');
-  el.className = 'beat-swarm-projectile';
+  el.className = 'beat-swarm-projectile is-homing-missile';
   enemyLayerEl.appendChild(el);
   projectiles.push({
     wx: fromW.x,
