@@ -173,6 +173,8 @@ const ENEMY_MAX_SPEED = 260;
 const ENEMY_HIT_RADIUS = 20;
 const ENEMY_SPAWN_START_SCALE = 0.2;
 const ENEMY_SPAWN_DURATION = 0.58;
+const ENEMY_TARGET_ONSCREEN_COUNT = 8;
+const ENEMY_FALLBACK_SPAWN_MARGIN_PX = 42;
 const PICKUP_COLLECT_RADIUS_PX = 46;
 const PROJECTILE_SPEED = 1100;
 const PROJECTILE_HIT_RADIUS_PX = 24;
@@ -481,6 +483,9 @@ function createComponentMiniNode(className, parent) {
 
 function spawnComponentMiniProjectile(state, from, to, kind = 'standard') {
   const dir = normalizeDir((to?.x || 0) - from.x, (to?.y || 0) - from.y, 1, 0);
+  const rect = state?.root?.getBoundingClientRect?.();
+  const sceneSize = Math.max(100, Math.min(Number(rect?.width) || 0, Number(rect?.height) || 0));
+  const boomRadius = Math.max(18, Math.min(36, sceneSize * 0.2));
   const p = {
     kind,
     x: from.x,
@@ -500,7 +505,7 @@ function spawnComponentMiniProjectile(state, from, to, kind = 'standard') {
     boomPerpY: -dir.x,
     boomTheta: Math.PI,
     boomOmega: (Math.PI * 2) / 1.2,
-    boomRadius: 33,
+    boomRadius,
   };
   state.projectiles.push(p);
   return p;
@@ -1563,8 +1568,8 @@ function updatePausePreviewHelpers(dt) {
 
 function spawnPausePreviewEnemy() {
   if (!pausePreviewSceneEl) return;
-  const minX = pausePreview.width * 0.48;
-  const maxX = pausePreview.width * 0.9;
+  const minX = pausePreview.width * 0.62;
+  const maxX = pausePreview.width * 0.92;
   const minY = pausePreview.height * 0.18;
   const maxY = pausePreview.height * 0.84;
   const x = randRange(minX, maxX);
@@ -1609,12 +1614,14 @@ function ensurePausePreviewState() {
   }
 }
 
-function getPausePreviewNearestEnemies(x, y, count = 1) {
-  const scored = pausePreview.enemies.map((e) => {
+function getPausePreviewNearestEnemies(x, y, count = 1, excludeEnemy = null) {
+  const scored = pausePreview.enemies
+    .filter((e) => !excludeEnemy || e !== excludeEnemy)
+    .map((e) => {
     const dx = e.x - x;
     const dy = e.y - y;
     return { e, d2: (dx * dx) + (dy * dy) };
-  });
+    });
   scored.sort((a, b) => a.d2 - b.d2);
   return scored.slice(0, Math.max(1, Math.trunc(Number(count) || 1))).map((it) => it.e);
 }
@@ -1638,6 +1645,19 @@ function damagePausePreviewEnemy(enemy, amount = 1) {
   return false;
 }
 
+function previewSelectionContainsBoomerang() {
+  const indices = Number.isInteger(previewSelectedWeaponSlotIndex)
+    ? [previewSelectedWeaponSlotIndex]
+    : weaponLoadout.map((_, i) => i);
+  for (const slotIndex of indices) {
+    const stages = sanitizeWeaponStages(weaponLoadout?.[slotIndex]?.stages);
+    for (const st of stages) {
+      if (String(st?.archetype || '') === 'projectile' && String(st?.variant || '') === 'boomerang') return true;
+    }
+  }
+  return false;
+}
+
 function nudgePausePreviewEnemiesIntoAction(force = false) {
   if (!pausePreview.enemies.length) return;
   if (!force && (Number(pausePreview.secondsSinceHit) || 0) < PREVIEW_NO_HIT_REPOSITION_SECONDS) return;
@@ -1651,15 +1671,18 @@ function nudgePausePreviewEnemiesIntoAction(force = false) {
 
   const nearCount = Math.min(3, pausePreview.enemies.length);
   const farCount = pausePreview.enemies.length - nearCount;
-  const nearCenterX = Math.min(maxX, Math.max(minX, shipX + 58));
+  const boomerangLayout = previewSelectionContainsBoomerang();
+  const nearCenterX = Math.min(maxX, Math.max(minX, shipX + (boomerangLayout ? 98 : 74)));
   const nearCenterY = Math.min(maxY, Math.max(minY, shipY));
-  const farMinX = Math.min(maxX, Math.max(minX, shipX + Math.max(110, (Number(pausePreview.width) || 0) * 0.26)));
+  const farMinX = Math.min(maxX, Math.max(minX, shipX + Math.max(150, (Number(pausePreview.width) || 0) * 0.34)));
+  const nearRadiusMin = boomerangLayout ? 56 : 24;
+  const nearRadiusMax = boomerangLayout ? 88 : 54;
 
   // Full reshuffle: keep a small cluster close to ship and spread the rest farther out.
   for (let i = 0; i < nearCount; i++) {
     const e = pausePreview.enemies[i];
     const ang = randRange(0, Math.PI * 2);
-    const radius = randRange(24, 54);
+    const radius = randRange(nearRadiusMin, nearRadiusMax);
     e.x = Math.min(maxX, Math.max(minX, nearCenterX + (Math.cos(ang) * radius)));
     e.y = Math.min(maxY, Math.max(minY, nearCenterY + (Math.sin(ang) * radius)));
   }
@@ -1683,6 +1706,7 @@ function queuePausePreviewChain(beatIndex, nextStages, context) {
       weaponSlotIndex: Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : null,
       stageIndex: Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : null,
       impactEnemy: context?.impactEnemy || null,
+      sourceEnemy: context?.sourceEnemy || null,
     },
   });
 }
@@ -1722,6 +1746,7 @@ function addPausePreviewBeam(from, target, ttl = null) {
     from: { x: from.x, y: from.y },
     to: { x: target.x, y: target.y },
     targetEnemy: target,
+    sourceEnemy: null,
     damagePerSec: PREVIEW_BEAM_DAMAGE_PER_SECOND,
     el,
   });
@@ -1774,6 +1799,7 @@ function spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, next
     chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    ignoreEnemy: chainContext?.sourceEnemy || null,
     el,
   });
 }
@@ -1820,6 +1846,7 @@ function spawnPausePreviewBoomerangProjectile(from, dirX, dirY, damage, nextStag
     chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    ignoreEnemy: chainContext?.sourceEnemy || null,
     el,
   });
 }
@@ -1859,6 +1886,7 @@ function spawnPausePreviewHomingMissile(from, damage, nextStages = null, nextBea
     chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    ignoreEnemy: chainContext?.sourceEnemy || null,
     el,
   });
   return true;
@@ -1893,7 +1921,8 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
   const slotIndex = Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : -1;
   const stageIndex = Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : 0;
   const nextCtx = { weaponSlotIndex: slotIndex, stageIndex: stageIndex + 1 };
-  const nearest = getPausePreviewNearestEnemies(origin.x, origin.y, 1)[0] || null;
+  const sourceEnemy = context?.sourceEnemy || null;
+  const nearest = getPausePreviewNearestEnemies(origin.x, origin.y, 1, sourceEnemy)[0] || null;
   if (archetype === 'projectile') {
     const baseDir = nearest
       ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
@@ -1950,13 +1979,30 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
         return;
       }
       addPausePreviewBeam(origin, nearest, getPausePreviewBeatLen());
+      const beamFx = pausePreview.effects[pausePreview.effects.length - 1];
+      if (beamFx && beamFx.kind === 'beam') beamFx.sourceEnemy = sourceEnemy;
       if (continuation.length) {
-        queuePausePreviewChain(beatIndex + 1, continuation, {
-          origin,
-          impactPoint: { x: nearest.x, y: nearest.y },
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-        });
+        const firstNext = continuation[0];
+        const restNext = continuation.slice(1);
+        if (firstNext?.archetype === 'laser' && firstNext?.variant === 'beam') {
+          triggerPausePreviewWeaponStage(firstNext, { x: nearest.x, y: nearest.y }, beatIndex, restNext, {
+            origin: context?.origin || origin,
+            impactPoint: { x: nearest.x, y: nearest.y },
+            weaponSlotIndex: slotIndex,
+            stageIndex: stageIndex + 1,
+            impactEnemy: nearest,
+            sourceEnemy: nearest,
+          });
+        } else {
+          queuePausePreviewChain(beatIndex + 1, continuation, {
+            origin,
+            impactPoint: { x: nearest.x, y: nearest.y },
+            weaponSlotIndex: slotIndex,
+            stageIndex: stageIndex + 1,
+            impactEnemy: nearest,
+            sourceEnemy: nearest,
+          });
+        }
       }
       return;
     }
@@ -1976,12 +2022,27 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
     addPausePreviewLaser(origin, { x: nearest.x, y: nearest.y });
     damagePausePreviewEnemy(nearest, 2);
     if (continuation.length) {
-      queuePausePreviewChain(beatIndex + 1, continuation, {
-        origin,
-        impactPoint: { x: nearest.x, y: nearest.y },
-        weaponSlotIndex: slotIndex,
-        stageIndex: stageIndex + 1,
-      });
+      const firstNext = continuation[0];
+      const restNext = continuation.slice(1);
+      if (firstNext?.archetype === 'laser' && firstNext?.variant === 'hitscan') {
+        triggerPausePreviewWeaponStage(firstNext, { x: nearest.x, y: nearest.y }, beatIndex, restNext, {
+          origin: context?.origin || origin,
+          impactPoint: { x: nearest.x, y: nearest.y },
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
+          impactEnemy: nearest,
+          sourceEnemy: nearest,
+        });
+      } else {
+        queuePausePreviewChain(beatIndex + 1, continuation, {
+          origin,
+          impactPoint: { x: nearest.x, y: nearest.y },
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
+          impactEnemy: nearest,
+          sourceEnemy: nearest,
+        });
+      }
     }
     return;
   }
@@ -2073,7 +2134,7 @@ function updatePausePreviewProjectilesAndEffects(dt) {
       let state = String(p.homingState || 'orbit');
       const orbitRadius = Math.max(8, Number(p.orbitRadius) || PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS);
       const orbitAngVel = Number(p.orbitAngVel) || PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL;
-      const nearestNow = getPausePreviewNearestEnemies(p.x, p.y, 1)[0] || null;
+      const nearestNow = getPausePreviewNearestEnemies(p.x, p.y, 1, p.ignoreEnemy || null)[0] || null;
       if (state === 'orbit' && nearestNow) {
         const dx = nearestNow.x - p.x;
         const dy = nearestNow.y - p.y;
@@ -2084,7 +2145,7 @@ function updatePausePreviewProjectilesAndEffects(dt) {
       }
       if (state === 'seek') {
         let target = p.targetEnemy || null;
-        if (!target || !pausePreview.enemies.includes(target)) target = getPausePreviewNearestEnemies(p.x, p.y, 1)[0] || null;
+        if (!target || !pausePreview.enemies.includes(target)) target = getPausePreviewNearestEnemies(p.x, p.y, 1, p.ignoreEnemy || null)[0] || null;
         if (!target) {
           state = 'return';
           p.targetEnemy = null;
@@ -2167,6 +2228,7 @@ function updatePausePreviewProjectilesAndEffects(dt) {
     let hit = false;
     for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
       const e = pausePreview.enemies[j];
+      if (p.ignoreEnemy && e === p.ignoreEnemy) continue;
       const dx = e.x - p.x;
       const dy = e.y - p.y;
       if ((dx * dx + dy * dy) <= hitR2) {
@@ -2178,14 +2240,23 @@ function updatePausePreviewProjectilesAndEffects(dt) {
         const hitPoint = { x: e.x, y: e.y };
         damagePausePreviewEnemy(e, p.damage);
         if (Array.isArray(p.nextStages) && p.nextStages.length) {
+          const stages = sanitizeWeaponStages(p.nextStages);
+          const first = stages[0];
+          const rest = stages.slice(1);
           const nextBeat = Number.isFinite(p.nextBeatIndex) ? p.nextBeatIndex : (Math.max(0, pausePreview.beatIndex) + 1);
-          queuePausePreviewChain(nextBeat, p.nextStages, {
+          const chainCtx = {
             origin: { x: p.x, y: p.y },
             impactPoint: hitPoint,
             weaponSlotIndex: Number.isFinite(p.chainWeaponSlotIndex) ? Math.trunc(p.chainWeaponSlotIndex) : null,
             stageIndex: Number.isFinite(p.chainStageIndex) ? Math.trunc(p.chainStageIndex) : null,
             impactEnemy: e,
-          });
+            sourceEnemy: e,
+          };
+          if (first?.archetype === 'projectile') {
+            triggerPausePreviewWeaponStage(first, hitPoint, pausePreview.beatIndex, rest, chainCtx);
+          } else {
+            queuePausePreviewChain(nextBeat, stages, chainCtx);
+          }
         }
         if (!isBoomerang) {
           hit = true;
@@ -2221,10 +2292,9 @@ function updatePausePreviewProjectilesAndEffects(dt) {
     }
     if (fx.kind === 'laser' || fx.kind === 'beam') {
       if (fx.kind === 'beam') {
-        fx.from = { x: pausePreview.ship.x, y: pausePreview.ship.y };
         let target = fx.targetEnemy || null;
         if (!target || !pausePreview.enemies.includes(target)) {
-          target = getPausePreviewNearestEnemies(fx.from?.x || 0, fx.from?.y || 0, 1)[0] || null;
+          target = getPausePreviewNearestEnemies(fx.from?.x || 0, fx.from?.y || 0, 1, fx.sourceEnemy || null)[0] || null;
           fx.targetEnemy = target || null;
         }
         if (target) {
@@ -2901,10 +2971,13 @@ function spawnEnemyAt(clientX, clientY) {
   });
 }
 
-function getNearestEnemy(worldX, worldY) {
+function getNearestEnemy(worldX, worldY, excludeEnemyId = null) {
+  const exId = Number.isFinite(excludeEnemyId) ? Math.trunc(excludeEnemyId) : null;
   let best = null;
   let bestD2 = Infinity;
   for (const e of enemies) {
+    const eid = Number.isFinite(e?.id) ? Math.trunc(e.id) : null;
+    if (exId !== null && eid === exId) continue;
     const dx = (e.wx - worldX);
     const dy = (e.wy - worldY);
     const d2 = dx * dx + dy * dy;
@@ -2987,6 +3060,7 @@ function addBeamEffect(fromW, targetEnemy, ttl = null, weaponSlotIndex = null) {
     from: { ...fromW },
     to: { x: Number(targetEnemy.wx) || 0, y: Number(targetEnemy.wy) || 0 },
     targetEnemyId: Number.isFinite(targetEnemy.id) ? Math.trunc(targetEnemy.id) : null,
+    sourceEnemyId: null,
     damagePerSec: BEAM_DAMAGE_PER_SECOND,
     weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
     el,
@@ -3093,6 +3167,7 @@ function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = nu
     chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
     el,
   });
 }
@@ -3141,6 +3216,7 @@ function spawnBoomerangProjectile(fromW, dirX, dirY, damage, nextStages = null, 
     chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
     el,
   });
 }
@@ -3180,6 +3256,7 @@ function spawnHomingMissile(fromW, damage, nextStages = null, nextBeatIndex = nu
     chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     nextStages: sanitizeWeaponStages(nextStages),
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
+    ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
     el,
   });
   return true;
@@ -3197,6 +3274,7 @@ function queueWeaponChain(beatIndex, nextStages, context) {
       weaponSlotIndex: Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : null,
       stageIndex: Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : null,
       impactEnemyId: Number.isFinite(context?.impactEnemyId) ? Math.trunc(context.impactEnemyId) : null,
+      sourceEnemyId: Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : null,
     },
   });
 }
@@ -3236,7 +3314,8 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
   const slotIndex = Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : -1;
   const stageIndex = Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : 0;
   const nextCtx = { weaponSlotIndex: slotIndex, stageIndex: stageIndex + 1 };
-  const nearest = getNearestEnemy(originWorld.x, originWorld.y);
+  const sourceEnemyId = Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : null;
+  const nearest = getNearestEnemy(originWorld.x, originWorld.y, sourceEnemyId);
   if (archetype === 'projectile') {
     const facingDir = getShipFacingDirWorld();
     const baseDir = nearest
@@ -3307,14 +3386,30 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
         return;
       }
       addBeamEffect(originWorld, nearest, getGameplayBeatLen(), slotIndex);
+      const beamFx = effects[effects.length - 1];
+      if (beamFx && beamFx.kind === 'beam') beamFx.sourceEnemyId = sourceEnemyId;
       if (continuation.length) {
-        queueWeaponChain(beatIndex + 1, continuation, {
-          origin: originWorld,
-          // Chain source is defined by previous stage output point.
-          impactPoint: { x: nearest.wx, y: nearest.wy },
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-        });
+        const firstNext = continuation[0];
+        const restNext = continuation.slice(1);
+        if (firstNext?.archetype === 'laser' && firstNext?.variant === 'beam') {
+          triggerWeaponStage(firstNext, { x: nearest.wx, y: nearest.wy }, beatIndex, restNext, {
+            origin: context?.origin || originWorld,
+            impactPoint: { x: nearest.wx, y: nearest.wy },
+            weaponSlotIndex: slotIndex,
+            stageIndex: stageIndex + 1,
+            impactEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
+            sourceEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
+          });
+        } else {
+          queueWeaponChain(beatIndex + 1, continuation, {
+            origin: originWorld,
+            impactPoint: { x: nearest.wx, y: nearest.wy },
+            weaponSlotIndex: slotIndex,
+            stageIndex: stageIndex + 1,
+            impactEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
+            sourceEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
+          });
+        }
       }
       return;
     }
@@ -3338,12 +3433,27 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
     addLaserEffect(originWorld, { x: nearest.wx, y: nearest.wy }, slotIndex);
     damageEnemy(nearest, 2);
     if (continuation.length) {
-      queueWeaponChain(beatIndex + 1, continuation, {
-        origin: originWorld,
-        impactPoint: { x: nearest.wx, y: nearest.wy },
-        weaponSlotIndex: slotIndex,
-        stageIndex: stageIndex + 1,
-      });
+      const firstNext = continuation[0];
+      const restNext = continuation.slice(1);
+      if (firstNext?.archetype === 'laser' && firstNext?.variant === 'hitscan') {
+        triggerWeaponStage(firstNext, { x: nearest.wx, y: nearest.wy }, beatIndex, restNext, {
+          origin: context?.origin || originWorld,
+          impactPoint: { x: nearest.wx, y: nearest.wy },
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
+          impactEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
+          sourceEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
+        });
+      } else {
+        queueWeaponChain(beatIndex + 1, continuation, {
+          origin: originWorld,
+          impactPoint: { x: nearest.wx, y: nearest.wy },
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
+          impactEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
+          sourceEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
+        });
+      }
     }
     return;
   }
@@ -3532,6 +3642,54 @@ function updateEnemies(dt) {
   }
 }
 
+function countOnscreenEnemies() {
+  let n = 0;
+  const w = Math.max(1, Number(window.innerWidth) || 0);
+  const h = Math.max(1, Number(window.innerHeight) || 0);
+  for (const e of enemies) {
+    const s = worldToScreen({ x: Number(e?.wx) || 0, y: Number(e?.wy) || 0 });
+    if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
+    if (s.x >= 0 && s.y >= 0 && s.x <= w && s.y <= h) n += 1;
+  }
+  return n;
+}
+
+function spawnFallbackEnemyOffscreen() {
+  const w = Math.max(1, Number(window.innerWidth) || 0);
+  const h = Math.max(1, Number(window.innerHeight) || 0);
+  const m = Math.max(8, Number(ENEMY_FALLBACK_SPAWN_MARGIN_PX) || 42);
+  const side = Math.floor(Math.random() * 4);
+  let x = 0;
+  let y = 0;
+  if (side === 0) {
+    x = -m;
+    y = randRange(0, h);
+  } else if (side === 1) {
+    x = w + m;
+    y = randRange(0, h);
+  } else if (side === 2) {
+    x = randRange(0, w);
+    y = -m;
+  } else {
+    x = randRange(0, w);
+    y = h + m;
+  }
+  spawnEnemyAt(x, y);
+}
+
+function maintainEnemyPopulation() {
+  const target = Math.max(0, Math.trunc(Number(ENEMY_TARGET_ONSCREEN_COUNT) || 0));
+  if (!(target > 0)) return;
+  const onscreen = countOnscreenEnemies();
+  if (onscreen >= target) return;
+  const room = Math.max(0, ENEMY_CAP - enemies.length);
+  const deficit = Math.max(0, target - onscreen);
+  const spawnCount = Math.min(deficit, room);
+  for (let i = 0; i < spawnCount; i++) {
+    spawnFallbackEnemyOffscreen();
+  }
+}
+
 function updatePickupsAndCombat(dt) {
   const centerWorld = getViewportCenterWorld();
   const z = getZoomState();
@@ -3579,7 +3737,7 @@ function updatePickupsAndCombat(dt) {
       let state = String(p.homingState || 'orbit');
       const orbitRadius = Math.max(20, Number(p.orbitRadius) || PROJECTILE_HOMING_ORBIT_RADIUS_WORLD);
       const orbitAngVel = Number(p.orbitAngVel) || PROJECTILE_HOMING_ORBIT_ANG_VEL;
-      const nearestNow = getNearestEnemy(p.wx, p.wy);
+      const nearestNow = getNearestEnemy(p.wx, p.wy, p.ignoreEnemyId);
       if (state === 'orbit' && nearestNow) {
         const dx = nearestNow.wx - p.wx;
         const dy = nearestNow.wy - p.wy;
@@ -3593,7 +3751,7 @@ function updatePickupsAndCombat(dt) {
         if (Number.isFinite(p.targetEnemyId)) {
           target = enemies.find((e) => Math.trunc(Number(e.id) || 0) === Math.trunc(p.targetEnemyId)) || null;
         }
-        if (!target) target = getNearestEnemy(p.wx, p.wy);
+        if (!target) target = getNearestEnemy(p.wx, p.wy, p.ignoreEnemyId);
         if (!target) {
           state = 'return';
           p.targetEnemyId = null;
@@ -3676,10 +3834,11 @@ function updatePickupsAndCombat(dt) {
     let hit = false;
     for (let j = enemies.length - 1; j >= 0; j--) {
       const e = enemies[j];
+      const enemyId = Math.trunc(Number(e.id) || 0);
+      if (Number.isFinite(p.ignoreEnemyId) && Math.trunc(p.ignoreEnemyId) === enemyId) continue;
       const dx = e.wx - p.wx;
       const dy = e.wy - p.wy;
       if ((dx * dx + dy * dy) <= pr2) {
-        const enemyId = Math.trunc(Number(e.id) || 0);
         if (isBoomerang) {
           if (!(p.hitEnemyIds instanceof Set)) p.hitEnemyIds = new Set();
           if (enemyId > 0 && p.hitEnemyIds.has(enemyId)) continue;
@@ -3688,14 +3847,23 @@ function updatePickupsAndCombat(dt) {
         damageEnemy(e, p.damage);
         const hitPoint = { x: e.wx, y: e.wy };
         if (Array.isArray(p.nextStages) && p.nextStages.length) {
+          const stages = sanitizeWeaponStages(p.nextStages);
+          const first = stages[0];
+          const rest = stages.slice(1);
           const nextBeat = Number.isFinite(p.nextBeatIndex) ? p.nextBeatIndex : (Math.max(0, currentBeatIndex) + 1);
-          queueWeaponChain(nextBeat, p.nextStages, {
+          const chainCtx = {
             origin: { x: p.wx, y: p.wy },
             impactPoint: hitPoint,
             weaponSlotIndex: Number.isFinite(p.chainWeaponSlotIndex) ? Math.trunc(p.chainWeaponSlotIndex) : null,
             stageIndex: Number.isFinite(p.chainStageIndex) ? Math.trunc(p.chainStageIndex) : null,
             impactEnemyId: enemyId > 0 ? enemyId : null,
-          });
+            sourceEnemyId: enemyId > 0 ? enemyId : null,
+          };
+          if (first?.archetype === 'projectile') {
+            triggerWeaponStage(first, hitPoint, currentBeatIndex, rest, chainCtx);
+          } else {
+            queueWeaponChain(nextBeat, stages, chainCtx);
+          }
         }
         if (!isBoomerang) {
           hit = true;
@@ -3732,14 +3900,12 @@ function updatePickupsAndCombat(dt) {
     }
     if (fx.kind === 'laser' || fx.kind === 'beam') {
       if (fx.kind === 'beam') {
-        // Constant beam always originates from the live ship position.
-        fx.from = { x: centerWorld.x, y: centerWorld.y };
         let target = null;
         if (Number.isFinite(fx.targetEnemyId)) {
           target = enemies.find((e) => Math.trunc(Number(e.id) || 0) === Math.trunc(fx.targetEnemyId)) || null;
         }
         if (!target) {
-          target = getNearestEnemy(fx.from?.x || 0, fx.from?.y || 0);
+          target = getNearestEnemy(fx.from?.x || 0, fx.from?.y || 0, fx.sourceEnemyId);
           fx.targetEnemyId = Number.isFinite(target?.id) ? Math.trunc(target.id) : null;
         }
         if (target) {
@@ -4208,6 +4374,7 @@ function tick(nowMs) {
   updateEnemies(dt);
   updatePickupsAndCombat(dt);
   try { spawnerRuntime?.update?.(dt); } catch {}
+  maintainEnemyPopulation();
   const aimFacingDeg = getShipFacingFromReleaseAim(input, centerWorldAfterMove);
   updateShipFacing(dt, input.x, input.y, aimFacingDeg);
   rafId = requestAnimationFrame(tick);
