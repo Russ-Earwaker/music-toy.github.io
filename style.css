@@ -4330,6 +4330,22 @@ body.internal-board-active #board-main {
   animation: beat-swarm-enemy-hit-flash 130ms ease-out;
 }
 
+.beat-swarm-enemy.is-dying {
+  filter: brightness(0.52) saturate(0.62);
+  box-shadow: 0 0 10px rgba(96, 28, 28, 0.32);
+}
+
+.beat-swarm-enemy.beat-swarm-enemy-deathfx {
+  --bs-death-x: -9999px;
+  --bs-death-y: -9999px;
+  pointer-events: none;
+  transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(1);
+}
+
+.beat-swarm-enemy.is-death-pop {
+  animation: beat-swarm-enemy-death-pop 180ms ease-out forwards;
+}
+
 @keyframes beat-swarm-enemy-hit-flash {
   0% {
     filter: brightness(1);
@@ -4338,6 +4354,25 @@ body.internal-board-active #board-main {
   }
   100% {
     filter: brightness(1);
+  }
+}
+
+@keyframes beat-swarm-enemy-death-pop {
+  0% {
+    transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(1);
+    background: #a34c3d;
+    box-shadow: 0 0 12px rgba(140, 48, 48, 0.45);
+    opacity: 1;
+  }
+  55% {
+    transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(1.22);
+    background: #ff2f2f;
+    box-shadow: 0 0 28px rgba(255, 62, 62, 0.95);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(0.92);
+    opacity: 0;
   }
 }
 

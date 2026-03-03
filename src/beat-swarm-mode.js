@@ -88,6 +88,7 @@ let velocityX = 0;
 let velocityY = 0;
 let shipFacingDeg = 0;
 const enemies = [];
+const pendingEnemyDeaths = [];
 const pickups = [];
 const projectiles = [];
 const effects = [];
@@ -173,8 +174,11 @@ const ENEMY_MAX_SPEED = 260;
 const ENEMY_HIT_RADIUS = 20;
 const ENEMY_SPAWN_START_SCALE = 0.2;
 const ENEMY_SPAWN_DURATION = 0.58;
-const ENEMY_TARGET_ONSCREEN_COUNT = 8;
+const ENEMY_TARGET_ACTIVE_COUNT = 24;
+const ENEMY_MANAGER_MAX_FALLBACK_PER_TICK = 2;
 const ENEMY_FALLBACK_SPAWN_MARGIN_PX = 42;
+const BEAM_SOURCE_DEATH_GRACE_SECONDS = 0.5;
+const ENEMY_DEATH_POP_FALLBACK_SECONDS = 0.65;
 const PICKUP_COLLECT_RADIUS_PX = 46;
 const PROJECTILE_SPEED = 1100;
 const PROJECTILE_HIT_RADIUS_PX = 24;
@@ -1747,6 +1751,7 @@ function addPausePreviewBeam(from, target, ttl = null) {
     to: { x: target.x, y: target.y },
     targetEnemy: target,
     sourceEnemy: null,
+    sourceGoneTtl: null,
     damagePerSec: PREVIEW_BEAM_DAMAGE_PER_SECOND,
     el,
   });
@@ -2292,6 +2297,16 @@ function updatePausePreviewProjectilesAndEffects(dt) {
     }
     if (fx.kind === 'laser' || fx.kind === 'beam') {
       if (fx.kind === 'beam') {
+        if (fx.sourceEnemy && !pausePreview.enemies.includes(fx.sourceEnemy)) {
+          try { fx.el?.remove?.(); } catch {}
+          pausePreview.effects.splice(i, 1);
+          continue;
+        } else {
+          fx.sourceGoneTtl = null;
+        }
+        if (fx.sourceEnemy && pausePreview.enemies.includes(fx.sourceEnemy)) {
+          fx.from = { x: Number(fx.sourceEnemy.x) || 0, y: Number(fx.sourceEnemy.y) || 0 };
+        }
         let target = fx.targetEnemy || null;
         if (!target || !pausePreview.enemies.includes(target)) {
           target = getPausePreviewNearestEnemies(fx.from?.x || 0, fx.from?.y || 0, 1, fx.sourceEnemy || null)[0] || null;
@@ -2815,6 +2830,47 @@ function removeEnemy(enemy) {
   try { enemy.el?.remove?.(); } catch {}
 }
 
+function clearPendingEnemyDeaths() {
+  for (const d of pendingEnemyDeaths) {
+    try { d?.el?.remove?.(); } catch {}
+  }
+  pendingEnemyDeaths.length = 0;
+}
+
+function getPendingEnemyDeathByEnemyId(enemyId) {
+  const id = Math.trunc(Number(enemyId) || 0);
+  if (!(id > 0)) return null;
+  return pendingEnemyDeaths.find((d) => Math.trunc(Number(d?.sourceEnemyId) || 0) === id) || null;
+}
+
+function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = currentBeatIndex) {
+  const now = Number(nowTs) || performance.now();
+  const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
+  for (let i = pendingEnemyDeaths.length - 1; i >= 0; i--) {
+    const d = pendingEnemyDeaths[i];
+    const el = d?.el || null;
+    if (!el) {
+      pendingEnemyDeaths.splice(i, 1);
+      continue;
+    }
+    const s = worldToScreen({ x: Number(d.wx) || 0, y: Number(d.wy) || 0 });
+    if (s && Number.isFinite(s.x) && Number.isFinite(s.y)) {
+      el.style.setProperty('--bs-death-x', `${s.x}px`);
+      el.style.setProperty('--bs-death-y', `${s.y}px`);
+    }
+    if (!d.popped && (beat >= (Number(d.popBeat) || 0) || now >= (Number(d.fallbackPopAt) || 0))) {
+      el.classList.remove('is-dying');
+      el.classList.add('is-death-pop');
+      d.popped = true;
+      d.removeAt = now + 180;
+    }
+    if (d.popped && now >= (Number(d.removeAt) || 0)) {
+      try { el.remove?.(); } catch {}
+      pendingEnemyDeaths.splice(i, 1);
+    }
+  }
+}
+
 function updateEnemyHealthUi(enemy) {
   if (!enemy?.hpFillEl || !Number.isFinite(enemy.hp) || !Number.isFinite(enemy.maxHp)) return;
   const t = Math.max(0, Math.min(1, enemy.hp / Math.max(1, enemy.maxHp)));
@@ -2828,8 +2884,42 @@ function damageEnemy(enemy, amount = 1) {
   updateEnemyHealthUi(enemy);
   if (enemy.hp <= 0) {
     const idx = enemies.indexOf(enemy);
+    const screenFromTransform = (() => {
+      const tr = String(enemy?.el?.style?.transform || '');
+      const m = tr.match(/translate\(\s*([-\d.]+)px,\s*([-\d.]+)px\s*\)/i);
+      if (!m) return null;
+      const x = Number(m[1]);
+      const y = Number(m[2]);
+      return (Number.isFinite(x) && Number.isFinite(y)) ? { x, y } : null;
+    })();
+    const s0 = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 }) || screenFromTransform || {
+      x: window.innerWidth * 0.5,
+      y: window.innerHeight * 0.5,
+    };
     if (idx >= 0) enemies.splice(idx, 1);
+    enemy.vx = 0;
+    enemy.vy = 0;
+    const deathEl = document.createElement('div');
+    deathEl.className = 'beat-swarm-enemy beat-swarm-enemy-deathfx is-dying';
+    if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)) {
+      deathEl.style.setProperty('--bs-death-x', `${s0.x}px`);
+      deathEl.style.setProperty('--bs-death-y', `${s0.y}px`);
+    } else {
+      deathEl.style.setProperty('--bs-death-x', '-9999px');
+      deathEl.style.setProperty('--bs-death-y', '-9999px');
+    }
+    try { enemyLayerEl?.appendChild?.(deathEl); } catch {}
     removeEnemy(enemy);
+    pendingEnemyDeaths.push({
+      el: deathEl,
+      wx: Number(enemy.wx) || 0,
+      wy: Number(enemy.wy) || 0,
+      sourceEnemyId: Number.isFinite(enemy?.id) ? Math.trunc(enemy.id) : null,
+      popBeat: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) + 1,
+      fallbackPopAt: (performance.now() || 0) + (ENEMY_DEATH_POP_FALLBACK_SECONDS * 1000),
+      popped: false,
+      removeAt: 0,
+    });
     return true;
   }
   return false;
@@ -2839,6 +2929,7 @@ function clearEnemies() {
   while (enemies.length) {
     removeEnemy(enemies.pop());
   }
+  clearPendingEnemyDeaths();
 }
 
 function clearPickups() {
@@ -2935,12 +3026,9 @@ function setActiveWeaponSlot(nextSlotIndex) {
 function spawnEnemyAt(clientX, clientY) {
   if (!enemyLayerEl) return;
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
+  if (enemies.length >= Math.max(1, Math.trunc(Number(ENEMY_TARGET_ACTIVE_COUNT) || 1))) return;
   const w = screenToWorld({ x: clientX, y: clientY });
   if (!w || !Number.isFinite(w.x) || !Number.isFinite(w.y)) return;
-  if (enemies.length >= ENEMY_CAP) {
-    const old = enemies.shift();
-    removeEnemy(old);
-  }
   const el = document.createElement('div');
   el.className = 'beat-swarm-enemy';
   const hpWrap = document.createElement('div');
@@ -3061,6 +3149,7 @@ function addBeamEffect(fromW, targetEnemy, ttl = null, weaponSlotIndex = null) {
     to: { x: Number(targetEnemy.wx) || 0, y: Number(targetEnemy.wy) || 0 },
     targetEnemyId: Number.isFinite(targetEnemy.id) ? Math.trunc(targetEnemy.id) : null,
     sourceEnemyId: null,
+    sourceGoneTtl: null,
     damagePerSec: BEAM_DAMAGE_PER_SECOND,
     weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
     el,
@@ -3642,18 +3731,6 @@ function updateEnemies(dt) {
   }
 }
 
-function countOnscreenEnemies() {
-  let n = 0;
-  const w = Math.max(1, Number(window.innerWidth) || 0);
-  const h = Math.max(1, Number(window.innerHeight) || 0);
-  for (const e of enemies) {
-    const s = worldToScreen({ x: Number(e?.wx) || 0, y: Number(e?.wy) || 0 });
-    if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
-    if (s.x >= 0 && s.y >= 0 && s.x <= w && s.y <= h) n += 1;
-  }
-  return n;
-}
-
 function spawnFallbackEnemyOffscreen() {
   const w = Math.max(1, Number(window.innerWidth) || 0);
   const h = Math.max(1, Number(window.innerHeight) || 0);
@@ -3678,13 +3755,13 @@ function spawnFallbackEnemyOffscreen() {
 }
 
 function maintainEnemyPopulation() {
-  const target = Math.max(0, Math.trunc(Number(ENEMY_TARGET_ONSCREEN_COUNT) || 0));
+  const target = Math.max(0, Math.trunc(Number(ENEMY_TARGET_ACTIVE_COUNT) || 0));
   if (!(target > 0)) return;
-  const onscreen = countOnscreenEnemies();
-  if (onscreen >= target) return;
+  const activeCount = Math.max(0, Math.trunc(enemies.length || 0));
+  if (activeCount >= target) return;
   const room = Math.max(0, ENEMY_CAP - enemies.length);
-  const deficit = Math.max(0, target - onscreen);
-  const spawnCount = Math.min(deficit, room);
+  const deficit = Math.max(0, target - activeCount);
+  const spawnCount = Math.min(deficit, room, Math.max(1, Math.trunc(Number(ENEMY_MANAGER_MAX_FALLBACK_PER_TICK) || 1)));
   for (let i = 0; i < spawnCount; i++) {
     spawnFallbackEnemyOffscreen();
   }
@@ -3900,6 +3977,23 @@ function updatePickupsAndCombat(dt) {
     }
     if (fx.kind === 'laser' || fx.kind === 'beam') {
       if (fx.kind === 'beam') {
+        if (Number.isFinite(fx.sourceEnemyId)) {
+          const srcAlive = enemies.some((e) => Math.trunc(Number(e.id) || 0) === Math.trunc(fx.sourceEnemyId));
+          if (!srcAlive) {
+            const pendingDeath = getPendingEnemyDeathByEnemyId(fx.sourceEnemyId);
+            if (!pendingDeath) {
+              try { fx.el?.remove?.(); } catch {}
+              effects.splice(i, 1);
+              continue;
+            } else {
+              fx.from = { x: Number(pendingDeath.wx) || 0, y: Number(pendingDeath.wy) || 0 };
+            }
+          } else {
+            fx.sourceGoneTtl = null;
+            const src = enemies.find((e) => Math.trunc(Number(e.id) || 0) === Math.trunc(fx.sourceEnemyId)) || null;
+            if (src) fx.from = { x: Number(src.wx) || 0, y: Number(src.wy) || 0 };
+          }
+        }
         let target = null;
         if (Number.isFinite(fx.targetEnemyId)) {
           target = enemies.find((e) => Math.trunc(Number(e.id) || 0) === Math.trunc(fx.targetEnemyId)) || null;
@@ -4371,6 +4465,7 @@ function tick(nowMs) {
     ? (Math.hypot(centerWorldAfterMove.x - arenaCenterWorld.x, centerWorldAfterMove.y - arenaCenterWorld.y) > SWARM_ARENA_RADIUS_WORLD)
     : false;
   updateArenaVisual(scale, outsideMain);
+  processPendingEnemyDeaths(now, currentBeatIndex);
   updateEnemies(dt);
   updatePickupsAndCombat(dt);
   try { spawnerRuntime?.update?.(dt); } catch {}
