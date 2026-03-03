@@ -178,8 +178,9 @@ const PROJECTILE_SPEED = 1100;
 const PROJECTILE_HIT_RADIUS_PX = 24;
 const PROJECTILE_LIFETIME = 1.9;
 const PROJECTILE_SPLIT_ANGLE_RAD = Math.PI / 7.2; // 25 deg
-const PROJECTILE_BOOMERANG_RADIUS_WORLD = 320;
+const PROJECTILE_BOOMERANG_RADIUS_WORLD = 480;
 const PROJECTILE_BOOMERANG_LOOP_SECONDS = 1.15;
+const PROJECTILE_BOOMERANG_SPIN_MULT = 2.4;
 const PROJECTILE_HOMING_ACQUIRE_RANGE_WORLD = 920;
 const PROJECTILE_HOMING_SPEED = 900;
 const PROJECTILE_HOMING_TURN_RATE = 5.8;
@@ -202,7 +203,7 @@ const BEAM_DAMAGE_PER_SECOND = 3.2;
 const PREVIEW_PROJECTILE_SPEED = 360;
 const PREVIEW_PROJECTILE_LIFETIME = 2.1;
 const PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD = Math.PI / 7.2; // 25 deg
-const PREVIEW_PROJECTILE_BOOMERANG_RADIUS = 42;
+const PREVIEW_PROJECTILE_BOOMERANG_RADIUS = 63;
 const PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS = 1.15;
 const PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE = 160;
 const PREVIEW_PROJECTILE_HOMING_SPEED = 280;
@@ -226,6 +227,7 @@ const PREVIEW_BEAM_DAMAGE_PER_SECOND = 3.2;
 const PREVIEW_ENEMY_COUNT = 7;
 const PREVIEW_ENEMY_HP = 4;
 const PREVIEW_BEAT_LEN_FALLBACK = 0.5;
+const PREVIEW_NO_HIT_REPOSITION_SECONDS = 2.4;
 const weaponDefs = Object.freeze({
   laser: { id: 'laser', damage: 2 },
   projectile: { id: 'projectile', damage: 2 },
@@ -255,6 +257,7 @@ const pausePreview = {
   helpers: [],
   beatIndex: 0,
   beatTimer: 0,
+  secondsSinceHit: 0,
 };
 let spawnerRuntime = null;
 const difficultyConfig = Object.seal({
@@ -485,7 +488,10 @@ function spawnComponentMiniProjectile(state, from, to, kind = 'standard') {
     vx: dir.x * 120,
     vy: dir.y * 120,
     ttl: kind === 'boomerang' ? 1.2 : 1.6,
-    el: createComponentMiniNode('beat-swarm-preview-projectile', state.scene),
+    el: createComponentMiniNode(
+      `beat-swarm-preview-projectile${kind === 'boomerang' ? ' is-boomerang' : ''}`,
+      state.scene
+    ),
     centerX: from.x,
     centerY: from.y,
     boomDirX: dir.x,
@@ -494,7 +500,7 @@ function spawnComponentMiniProjectile(state, from, to, kind = 'standard') {
     boomPerpY: -dir.x,
     boomTheta: Math.PI,
     boomOmega: (Math.PI * 2) / 1.2,
-    boomRadius: 22,
+    boomRadius: 33,
   };
   state.projectiles.push(p);
   return p;
@@ -606,13 +612,13 @@ function updateComponentLivePreviewState(state, dt) {
     state.enemy.x = state.ship.x + 28;
     state.enemy.y = state.ship.y - 10;
   } else if (state.component?.archetype === 'projectile' && state.component?.variant === 'boomerang') {
-    state.ship.x = w * 0.28;
+    state.ship.x = w * 0.2;
     state.ship.y = h * 0.52;
-    state.enemy.x = w * 0.46;
-    state.enemy.y = h * 0.49;
+    state.enemy.x = w * 0.56;
+    state.enemy.y = h * 0.48;
     if (state.enemyAlt?.el) {
-      state.enemyAlt.x = w * 0.58;
-      state.enemyAlt.y = h * 0.55;
+      state.enemyAlt.x = w * 0.62;
+      state.enemyAlt.y = h * 0.56;
     }
   } else if (state.component?.archetype === 'projectile' && state.component?.variant === 'homing-missile') {
     state.ship.x = w * 0.2;
@@ -706,7 +712,12 @@ function updateComponentLivePreviewState(state, dt) {
         continue;
       }
     }
-    p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px)`;
+    if (p.kind === 'boomerang') {
+      const deg = ((Number(p.boomTheta) || 0) * (180 / Math.PI) * PROJECTILE_BOOMERANG_SPIN_MULT) + 180;
+      p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px) rotate(${deg.toFixed(2)}deg)`;
+    } else {
+      p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px)`;
+    }
   }
 
   for (let i = state.effects.length - 1; i >= 0; i--) {
@@ -938,9 +949,12 @@ function restoreBeatSwarmState(state) {
   for (const p of Array.isArray(state.projectiles) ? state.projectiles : []) {
     if (!enemyLayerEl) continue;
     const el = document.createElement('div');
-    el.className = String(p.kind || '') === 'homing-missile'
+    const kind = String(p.kind || '');
+    el.className = kind === 'homing-missile'
       ? 'beat-swarm-projectile is-homing-missile'
-      : 'beat-swarm-projectile';
+      : (kind === 'boomerang'
+        ? 'beat-swarm-projectile is-boomerang'
+        : 'beat-swarm-projectile');
     enemyLayerEl.appendChild(el);
     projectiles.push({
       wx: Number(p.wx) || 0,
@@ -1122,6 +1136,7 @@ function setGameplayPaused(next) {
   pauseScreenEl?.classList?.toggle?.('is-visible', gameplayPaused);
   if (gameplayPaused) {
     resetPausePreviewState();
+    renderPauseWeaponUi();
   } else {
     stopComponentLivePreviews();
   }
@@ -1166,6 +1181,7 @@ function clearPausePreviewVisuals() {
   pausePreview.aoeZones.length = 0;
   pausePreview.beatIndex = 0;
   pausePreview.beatTimer = 0;
+  pausePreview.secondsSinceHit = 0;
 }
 
 function getHelperKey(slotIndex, stageIndex) {
@@ -1579,6 +1595,7 @@ function resetPausePreviewState() {
   pausePreviewSceneEl.appendChild(shipEl);
   pausePreview.ship.el = shipEl;
   for (let i = 0; i < PREVIEW_ENEMY_COUNT; i++) spawnPausePreviewEnemy();
+  nudgePausePreviewEnemiesIntoAction(true);
   pausePreview.initialized = true;
 }
 
@@ -1611,6 +1628,7 @@ function removePausePreviewEnemy(enemy) {
 
 function damagePausePreviewEnemy(enemy, amount = 1) {
   if (!enemy) return false;
+  pausePreview.secondsSinceHit = 0;
   enemy.hp -= Math.max(0, Number(amount) || 0);
   pulseHitFlash(enemy.el);
   if (enemy.hp <= 0) {
@@ -1618,6 +1636,39 @@ function damagePausePreviewEnemy(enemy, amount = 1) {
     return true;
   }
   return false;
+}
+
+function nudgePausePreviewEnemiesIntoAction(force = false) {
+  if (!pausePreview.enemies.length) return;
+  if (!force && (Number(pausePreview.secondsSinceHit) || 0) < PREVIEW_NO_HIT_REPOSITION_SECONDS) return;
+
+  const shipX = Number(pausePreview.ship.x) || 0;
+  const shipY = Number(pausePreview.ship.y) || 0;
+  const minX = 32;
+  const maxX = Math.max(minX + 12, (Number(pausePreview.width) || 0) - 32);
+  const minY = 26;
+  const maxY = Math.max(minY + 12, (Number(pausePreview.height) || 0) - 26);
+
+  const nearCount = Math.min(3, pausePreview.enemies.length);
+  const farCount = pausePreview.enemies.length - nearCount;
+  const nearCenterX = Math.min(maxX, Math.max(minX, shipX + 58));
+  const nearCenterY = Math.min(maxY, Math.max(minY, shipY));
+  const farMinX = Math.min(maxX, Math.max(minX, shipX + Math.max(110, (Number(pausePreview.width) || 0) * 0.26)));
+
+  // Full reshuffle: keep a small cluster close to ship and spread the rest farther out.
+  for (let i = 0; i < nearCount; i++) {
+    const e = pausePreview.enemies[i];
+    const ang = randRange(0, Math.PI * 2);
+    const radius = randRange(24, 54);
+    e.x = Math.min(maxX, Math.max(minX, nearCenterX + (Math.cos(ang) * radius)));
+    e.y = Math.min(maxY, Math.max(minY, nearCenterY + (Math.sin(ang) * radius)));
+  }
+  for (let i = 0; i < farCount; i++) {
+    const e = pausePreview.enemies[nearCount + i];
+    e.x = randRange(farMinX, maxX);
+    e.y = randRange(minY, maxY);
+  }
+  pausePreview.secondsSinceHit = 0;
 }
 
 function queuePausePreviewChain(beatIndex, nextStages, context) {
@@ -1740,7 +1791,7 @@ function spawnPausePreviewBoomerangProjectile(from, dirX, dirY, damage, nextStag
   const theta = Math.PI;
   const omega = (Math.PI * 2) / Math.max(0.35, Number(PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15);
   const el = document.createElement('div');
-  el.className = 'beat-swarm-preview-projectile';
+  el.className = 'beat-swarm-preview-projectile is-boomerang';
   pausePreviewSceneEl.appendChild(el);
   pausePreview.projectiles.push({
     x: from.x,
@@ -2152,7 +2203,12 @@ function updatePausePreviewProjectilesAndEffects(dt) {
       pausePreview.projectiles.splice(i, 1);
       continue;
     }
-    p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px)`;
+    if (isBoomerang) {
+      const deg = ((Number(p.boomTheta) || 0) * (180 / Math.PI) * PROJECTILE_BOOMERANG_SPIN_MULT) + 180;
+      p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px) rotate(${deg.toFixed(2)}deg)`;
+    } else {
+      p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px)`;
+    }
   }
 
   for (let i = pausePreview.effects.length - 1; i >= 0; i--) {
@@ -2222,6 +2278,8 @@ function updatePausePreview(dt) {
   }
 
   while (pausePreview.enemies.length < PREVIEW_ENEMY_COUNT) spawnPausePreviewEnemy();
+  pausePreview.secondsSinceHit += Math.max(0.001, Number(dt) || 0.016);
+  nudgePausePreviewEnemiesIntoAction(false);
   updatePausePreviewHelpers(dt);
   updatePausePreviewProjectilesAndEffects(dt);
   for (const e of pausePreview.enemies) {
@@ -3054,7 +3112,7 @@ function spawnBoomerangProjectile(fromW, dirX, dirY, damage, nextStages = null, 
   const theta = Math.PI;
   const omega = (Math.PI * 2) / Math.max(0.35, Number(PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15);
   const el = document.createElement('div');
-  el.className = 'beat-swarm-projectile';
+  el.className = 'beat-swarm-projectile is-boomerang';
   enemyLayerEl.appendChild(el);
   projectiles.push({
     wx: fromW.x,
@@ -3656,7 +3714,12 @@ function updatePickupsAndCombat(dt) {
       projectiles.splice(i, 1);
       continue;
     }
-    p.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+    if (isBoomerang) {
+      const deg = ((Number(p.boomTheta) || 0) * (180 / Math.PI) * PROJECTILE_BOOMERANG_SPIN_MULT) + 180;
+      p.el.style.transform = `translate(${s.x}px, ${s.y}px) rotate(${deg.toFixed(2)}deg)`;
+    } else {
+      p.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+    }
   }
 
   for (let i = effects.length - 1; i >= 0; i--) {
