@@ -237,6 +237,11 @@ let currentBeatIndex = 0;
 let previewSelectedWeaponSlotIndex = null;
 let activeWeaponSlotIndex = 0;
 const stagePickerState = { open: false, slotIndex: -1, stageIndex: -1 };
+const componentLivePreview = {
+  rafId: 0,
+  lastTs: 0,
+  states: [],
+};
 const pausePreview = {
   initialized: false,
   width: 0,
@@ -437,8 +442,11 @@ function getWeaponComponentDefForStage(stage) {
 
 function renderComponentPreviewMarkup(componentDef) {
   const cls = String(componentDef?.previewClass || 'is-empty').trim();
+  const componentId = String(componentDef?.id || '').trim();
+  const liveAttr = componentId ? `data-component-id="${componentId}"` : '';
   return `
-    <div class="beat-swarm-component-preview ${cls}" aria-hidden="true">
+    <div class="beat-swarm-component-preview ${cls}${componentId ? ' is-live' : ''}" ${liveAttr} aria-hidden="true">
+      ${componentId ? '<div class="beat-swarm-component-mini-scene"></div>' : ''}
       <span class="cp-lane"></span>
       <span class="cp-ship"></span>
       <span class="cp-enemy"></span>
@@ -450,6 +458,332 @@ function renderComponentPreviewMarkup(componentDef) {
       <span class="cp-dot"></span>
     </div>
   `;
+}
+
+function stopComponentLivePreviews() {
+  if (componentLivePreview.rafId) {
+    cancelAnimationFrame(componentLivePreview.rafId);
+    componentLivePreview.rafId = 0;
+  }
+  componentLivePreview.lastTs = 0;
+  componentLivePreview.states.length = 0;
+}
+
+function createComponentMiniNode(className, parent) {
+  const el = document.createElement('div');
+  el.className = className;
+  parent.appendChild(el);
+  return el;
+}
+
+function spawnComponentMiniProjectile(state, from, to, kind = 'standard') {
+  const dir = normalizeDir((to?.x || 0) - from.x, (to?.y || 0) - from.y, 1, 0);
+  const p = {
+    kind,
+    x: from.x,
+    y: from.y,
+    vx: dir.x * 120,
+    vy: dir.y * 120,
+    ttl: kind === 'boomerang' ? 1.2 : 1.6,
+    el: createComponentMiniNode('beat-swarm-preview-projectile', state.scene),
+    centerX: from.x,
+    centerY: from.y,
+    boomDirX: dir.x,
+    boomDirY: dir.y,
+    boomPerpX: dir.y,
+    boomPerpY: -dir.x,
+    boomTheta: Math.PI,
+    boomOmega: (Math.PI * 2) / 1.2,
+    boomRadius: 22,
+  };
+  state.projectiles.push(p);
+  return p;
+}
+
+function spawnComponentMiniEffect(state, kind, from, to, ttl = 0.22, radius = 14) {
+  const cls = kind === 'explosion' ? 'beat-swarm-preview-fx-explosion' : 'beat-swarm-preview-fx-laser';
+  const e = {
+    kind,
+    ttl,
+    from: from ? { x: from.x, y: from.y } : null,
+    to: to ? { x: to.x, y: to.y } : null,
+    at: to ? { x: to.x, y: to.y } : (from ? { x: from.x, y: from.y } : null),
+    radius: Math.max(8, Number(radius) || 14),
+    el: createComponentMiniNode(cls, state.scene),
+  };
+  state.effects.push(e);
+}
+
+function ensureComponentMiniHelper(state, variant) {
+  if (variant === 'turret') {
+    if (state.helpers.some((h) => h.kind === 'turret')) return;
+    const at = { x: state.ship.x, y: state.ship.y - 20 };
+    state.helpers.push({
+      kind: 'turret',
+      x: at.x,
+      y: at.y,
+      el: createComponentMiniNode('beat-swarm-preview-projectile beat-swarm-preview-helper-turret', state.scene),
+    });
+    return;
+  }
+  if (variant === 'orbital-drone') {
+    if (state.helpers.some((h) => h.kind === 'orbital-drone')) return;
+    state.helpers.push({
+      kind: 'orbital-drone',
+      anchor: 'ship',
+      angle: 0,
+      radius: 18,
+      elA: createComponentMiniNode('beat-swarm-preview-projectile beat-swarm-preview-helper-orbital', state.scene),
+      elB: createComponentMiniNode('beat-swarm-preview-projectile beat-swarm-preview-helper-orbital', state.scene),
+      ax: 0,
+      ay: 0,
+      bx: 0,
+      by: 0,
+    });
+  }
+}
+
+function fireComponentLivePreview(state) {
+  const c = state.component;
+  if (!c) return;
+  if (c.archetype === 'projectile') {
+    if (c.variant === 'split-shot') {
+      const base = Math.atan2(state.enemy.y - state.ship.y, state.enemy.x - state.ship.x);
+      const offs = [0, -PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD, PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD];
+      for (const o of offs) {
+        const dir = { x: Math.cos(base + o), y: Math.sin(base + o) };
+        spawnComponentMiniProjectile(state, state.ship, { x: state.ship.x + dir.x * 200, y: state.ship.y + dir.y * 200 });
+      }
+      return;
+    }
+    if (c.variant === 'boomerang') {
+      spawnComponentMiniProjectile(state, state.ship, state.enemy, 'boomerang');
+      return;
+    }
+    if (c.variant === 'homing-missile') {
+      spawnComponentMiniProjectile(state, state.ship, state.enemy, 'homing');
+      return;
+    }
+    spawnComponentMiniProjectile(state, state.ship, state.enemy);
+    return;
+  }
+  if (c.archetype === 'laser') {
+    if (c.variant === 'beam') {
+      spawnComponentMiniEffect(state, 'beam', state.ship, state.enemy, 0.5);
+    } else {
+      spawnComponentMiniEffect(state, 'laser', state.ship, state.enemy, 0.18);
+    }
+    return;
+  }
+  if (c.archetype === 'aoe') {
+    spawnComponentMiniEffect(state, 'explosion', state.ship, state.ship, c.variant === 'dot-area' ? 0.7 : 0.24, 36);
+    return;
+  }
+  if (c.archetype === 'helper') {
+    ensureComponentMiniHelper(state, c.variant);
+    if (c.variant === 'turret') {
+      const t = state.helpers.find((h) => h.kind === 'turret');
+      if (t) spawnComponentMiniProjectile(state, { x: t.x, y: t.y }, state.enemy);
+    } else {
+      const h = state.helpers.find((x) => x.kind === 'orbital-drone');
+      if (h) {
+        spawnComponentMiniProjectile(state, { x: h.ax, y: h.ay }, state.enemy);
+        spawnComponentMiniProjectile(state, { x: h.bx, y: h.by }, state.enemy);
+      }
+    }
+  }
+}
+
+function updateComponentLivePreviewState(state, dt) {
+  const rect = state.root.getBoundingClientRect();
+  const w = Math.max(120, Number(rect.width) || 0);
+  const h = Math.max(120, Number(rect.height) || 0);
+  if (state.component?.archetype === 'aoe') {
+    state.ship.x = w * 0.5;
+    state.ship.y = h * 0.5;
+    state.enemy.x = state.ship.x + 28;
+    state.enemy.y = state.ship.y - 10;
+  } else if (state.component?.archetype === 'projectile' && state.component?.variant === 'boomerang') {
+    state.ship.x = w * 0.28;
+    state.ship.y = h * 0.52;
+    state.enemy.x = w * 0.46;
+    state.enemy.y = h * 0.49;
+    if (state.enemyAlt?.el) {
+      state.enemyAlt.x = w * 0.58;
+      state.enemyAlt.y = h * 0.55;
+    }
+  } else {
+    state.ship.x = w * 0.2;
+    state.ship.y = h * 0.52;
+    state.enemy.x = w * 0.78;
+    state.enemy.y = h * 0.52;
+    if (state.enemyAlt?.el) {
+      state.enemyAlt.x = w * 0.88;
+      state.enemyAlt.y = h * 0.42;
+    }
+  }
+  state.ship.el.style.transform = `translate(${state.ship.x.toFixed(2)}px, ${state.ship.y.toFixed(2)}px)`;
+  state.enemy.el.style.transform = `translate(${state.enemy.x.toFixed(2)}px, ${state.enemy.y.toFixed(2)}px)`;
+  state.enemy.el.style.opacity = '1';
+  state.ship.el.style.opacity = '1';
+  if (state.enemyAlt?.el) {
+    const showAlt = state.component?.archetype === 'projectile' && state.component?.variant === 'boomerang';
+    state.enemyAlt.el.style.opacity = showAlt ? '1' : '0';
+    state.enemyAlt.el.style.transform = `translate(${state.enemyAlt.x.toFixed(2)}px, ${state.enemyAlt.y.toFixed(2)}px)`;
+  }
+
+  for (const hObj of state.helpers) {
+    if (hObj.kind === 'orbital-drone') {
+      hObj.angle += dt * 2.2;
+      const r = 18;
+      hObj.ax = state.ship.x + Math.cos(hObj.angle) * r;
+      hObj.ay = state.ship.y + Math.sin(hObj.angle) * r;
+      hObj.bx = state.ship.x + Math.cos(hObj.angle + Math.PI) * r;
+      hObj.by = state.ship.y + Math.sin(hObj.angle + Math.PI) * r;
+      hObj.elA.style.transform = `translate(${hObj.ax.toFixed(2)}px, ${hObj.ay.toFixed(2)}px)`;
+      hObj.elB.style.transform = `translate(${hObj.bx.toFixed(2)}px, ${hObj.by.toFixed(2)}px)`;
+    } else if (hObj.kind === 'turret') {
+      hObj.el.style.transform = `translate(${hObj.x.toFixed(2)}px, ${hObj.y.toFixed(2)}px)`;
+    }
+  }
+
+  for (let i = state.projectiles.length - 1; i >= 0; i--) {
+    const p = state.projectiles[i];
+    p.ttl -= dt;
+    if (p.kind === 'boomerang') {
+      p.boomTheta += p.boomOmega * dt;
+      const c = Math.cos(p.boomTheta);
+      const s = Math.sin(p.boomTheta);
+      p.x = p.centerX + (p.boomDirX * (1 + c) * p.boomRadius) + (p.boomPerpX * s * p.boomRadius);
+      p.y = p.centerY + (p.boomDirY * (1 + c) * p.boomRadius) + (p.boomPerpY * s * p.boomRadius);
+    } else if (p.kind === 'homing') {
+      const desired = normalizeDir(state.enemy.x - p.x, state.enemy.y - p.y, p.vx, p.vy);
+      const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
+      const steer = Math.max(0, Math.min(1, 4.8 * dt));
+      const nd = normalizeDir((cur.x * (1 - steer)) + (desired.x * steer), (cur.y * (1 - steer)) + (desired.y * steer), desired.x, desired.y);
+      p.vx = nd.x * 120;
+      p.vy = nd.y * 120;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    } else {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+    if (p.ttl <= 0 || p.x < -20 || p.y < -20 || p.x > w + 20 || p.y > h + 20) {
+      try { p.el?.remove?.(); } catch {}
+      state.projectiles.splice(i, 1);
+      continue;
+    }
+    const dx = p.x - state.enemy.x;
+    const dy = p.y - state.enemy.y;
+    let hitAny = (dx * dx + dy * dy) <= 110;
+    if (!hitAny && state.enemyAlt?.el && (state.component?.archetype === 'projectile' && state.component?.variant === 'boomerang')) {
+      const dx2 = p.x - state.enemyAlt.x;
+      const dy2 = p.y - state.enemyAlt.y;
+      hitAny = (dx2 * dx2 + dy2 * dy2) <= 110;
+    }
+    if (hitAny) {
+      pulseHitFlash(state.enemy.el);
+      if (state.enemyAlt?.el && (state.component?.archetype === 'projectile' && state.component?.variant === 'boomerang')) {
+        const dxMain = p.x - state.enemy.x;
+        const dyMain = p.y - state.enemy.y;
+        if ((dxMain * dxMain + dyMain * dyMain) > 110) pulseHitFlash(state.enemyAlt.el);
+      }
+      if (p.kind !== 'boomerang') {
+        try { p.el?.remove?.(); } catch {}
+        state.projectiles.splice(i, 1);
+        continue;
+      }
+    }
+    p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px)`;
+  }
+
+  for (let i = state.effects.length - 1; i >= 0; i--) {
+    const fx = state.effects[i];
+    fx.ttl -= dt;
+    if (fx.ttl <= 0) {
+      try { fx.el?.remove?.(); } catch {}
+      state.effects.splice(i, 1);
+      continue;
+    }
+    if (fx.kind === 'laser' || fx.kind === 'beam') {
+      const from = fx.from || state.ship;
+      const to = fx.to || state.enemy;
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const len = Math.max(1, Math.hypot(dx, dy));
+      const ang = Math.atan2(dy, dx) * (180 / Math.PI);
+      fx.el.style.width = `${len.toFixed(2)}px`;
+      fx.el.style.transform = `translate(${from.x.toFixed(2)}px, ${from.y.toFixed(2)}px) rotate(${ang.toFixed(2)}deg)`;
+      fx.el.style.opacity = fx.kind === 'beam' ? '1' : `${Math.max(0.15, Math.min(1, fx.ttl / 0.2)).toFixed(3)}`;
+    } else {
+      const r = Math.max(8, Number(fx.radius) || 14);
+      fx.el.style.width = `${(r * 2).toFixed(2)}px`;
+      fx.el.style.height = `${(r * 2).toFixed(2)}px`;
+      fx.el.style.marginLeft = `${(-r).toFixed(2)}px`;
+      fx.el.style.marginTop = `${(-r).toFixed(2)}px`;
+      fx.el.style.transform = `translate(${(fx.at?.x || state.enemy.x).toFixed(2)}px, ${(fx.at?.y || state.enemy.y).toFixed(2)}px)`;
+      fx.el.style.opacity = `${Math.max(0.1, Math.min(1, fx.ttl / 0.24)).toFixed(3)}`;
+    }
+  }
+
+  state.beatTimer += dt;
+  const beatLen = Math.max(0.32, getPausePreviewBeatLen() * 0.9);
+  while (state.beatTimer >= beatLen) {
+    state.beatTimer -= beatLen;
+    fireComponentLivePreview(state);
+  }
+}
+
+function tickComponentLivePreviews(ts) {
+  if (!componentLivePreview.states.length) {
+    componentLivePreview.rafId = 0;
+    componentLivePreview.lastTs = 0;
+    return;
+  }
+  const now = Number(ts) || performance.now();
+  if (!componentLivePreview.lastTs) componentLivePreview.lastTs = now;
+  const dt = Math.max(0.001, Math.min(0.05, (now - componentLivePreview.lastTs) / 1000));
+  componentLivePreview.lastTs = now;
+  for (const s of componentLivePreview.states) {
+    if (!s.root?.isConnected) continue;
+    updateComponentLivePreviewState(s, dt);
+  }
+  componentLivePreview.rafId = requestAnimationFrame(tickComponentLivePreviews);
+}
+
+function initComponentLivePreviews() {
+  stopComponentLivePreviews();
+  if (!pauseScreenEl) return;
+  if (!gameplayPaused) return;
+  const roots = Array.from(pauseScreenEl.querySelectorAll('.beat-swarm-component-preview.is-live[data-component-id]'));
+  for (const root of roots) {
+    if (!(root instanceof HTMLElement)) continue;
+    const id = String(root.dataset.componentId || '').trim();
+    const comp = getWeaponComponentDefById(id);
+    if (!comp) continue;
+    const scene = root.querySelector('.beat-swarm-component-mini-scene');
+    if (!(scene instanceof HTMLElement)) continue;
+    const shipEl = createComponentMiniNode('beat-swarm-preview-ship', scene);
+    const enemyEl = createComponentMiniNode('beat-swarm-preview-enemy', scene);
+    const enemyAltEl = createComponentMiniNode('beat-swarm-preview-enemy', scene);
+    enemyAltEl.style.opacity = '0';
+    componentLivePreview.states.push({
+      root,
+      scene,
+      component: comp,
+      ship: { x: 0, y: 0, el: shipEl },
+      enemy: { x: 0, y: 0, el: enemyEl },
+      enemyAlt: { x: 0, y: 0, el: enemyAltEl },
+      projectiles: [],
+      effects: [],
+      helpers: [],
+      beatTimer: Math.random() * 0.4,
+    });
+  }
+  if (componentLivePreview.states.length) {
+    componentLivePreview.rafId = requestAnimationFrame(tickComponentLivePreviews);
+  }
 }
 
 function sanitizeWeaponStages(stages) {
@@ -775,6 +1109,8 @@ function setGameplayPaused(next) {
   pauseScreenEl?.classList?.toggle?.('is-visible', gameplayPaused);
   if (gameplayPaused) {
     resetPausePreviewState();
+  } else {
+    stopComponentLivePreviews();
   }
 }
 
@@ -1263,6 +1599,7 @@ function removePausePreviewEnemy(enemy) {
 function damagePausePreviewEnemy(enemy, amount = 1) {
   if (!enemy) return false;
   enemy.hp -= Math.max(0, Number(amount) || 0);
+  pulseHitFlash(enemy.el);
   if (enemy.hp <= 0) {
     removePausePreviewEnemy(enemy);
     return true;
@@ -1524,12 +1861,7 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
     const impactEnemy = (variant !== 'turret') ? (context?.impactEnemy || null) : null;
     const defaultAnchorType = (variant === 'orbital-drone') ? 'player' : 'world';
     const turretSpawnPoint = (variant === 'turret')
-      ? getOffsetPoint(
-        origin,
-        nearest ? { x: nearest.x, y: nearest.y } : null,
-        PREVIEW_HELPER_TURRET_SPAWN_OFFSET,
-        { x: 1, y: 0 }
-      )
+      ? { x: origin.x, y: origin.y - PREVIEW_HELPER_TURRET_SPAWN_OFFSET }
       : origin;
     spawnPausePreviewHelper(variant, turretSpawnPoint, beatIndex, continuation, {
       weaponSlotIndex: slotIndex,
@@ -2091,9 +2423,11 @@ function renderPauseWeaponUi() {
       </div>
     ` : ''}
   `;
+  pauseScreenEl.classList.toggle('has-component-picker', pickerOpen);
   pausePreviewSceneEl = pauseScreenEl.querySelector('.beat-swarm-preview-scene');
   pausePreviewStatusEl = pauseScreenEl.querySelector('.beat-swarm-preview-status');
   resetPausePreviewState();
+  initComponentLivePreviews();
 }
 
 function applyCameraDelta(dx, dy) {
@@ -2349,6 +2683,7 @@ function updateEnemyHealthUi(enemy) {
 function damageEnemy(enemy, amount = 1) {
   if (!enemy || !Number.isFinite(enemy.hp)) return false;
   enemy.hp -= Math.max(0, Number(amount) || 0);
+  pulseHitFlash(enemy.el);
   updateEnemyHealthUi(enemy);
   if (enemy.hp <= 0) {
     const idx = enemies.indexOf(enemy);
@@ -2609,6 +2944,13 @@ function normalizeDir(dx, dy, fallbackX = 1, fallbackY = 0) {
   if (len > 0.0001) return { x: dx / len, y: dy / len };
   const fLen = Math.hypot(fallbackX, fallbackY) || 1;
   return { x: fallbackX / fLen, y: fallbackY / fLen };
+}
+
+function pulseHitFlash(el) {
+  if (!el?.classList) return;
+  el.classList.remove('is-hit-flash');
+  void el.offsetWidth;
+  el.classList.add('is-hit-flash');
 }
 
 function getOffsetPoint(fromPoint, towardPoint, offsetDist, fallbackDir = null) {
@@ -4039,6 +4381,7 @@ export function exitBeatSwarmMode() {
   setJoystickVisible(false);
   setThrustFxVisual(false);
   stopTick();
+  stopComponentLivePreviews();
   unbindInput();
   try { spawnerRuntime?.exit?.(); } catch {}
   clearEnemies();
