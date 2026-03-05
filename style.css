@@ -4772,6 +4772,11 @@ body.beat-swarm-active.internal-board-active .toy-spawner-dock .toy-spawner-tras
   display: inline-flex !important;
 }
 
+body.beat-swarm-active.internal-board-active .toy-spawner-dock {
+  z-index: 131000 !important;
+  pointer-events: auto !important;
+}
+
 body.beat-swarm-active .toy-spawner-dock .toy-spawner-help {
   order: -100;
 }
@@ -5713,6 +5718,13 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 body.beat-swarm-active.internal-board-active #topbar [data-action="toggle-play"],
 body.beat-swarm-active.internal-board-active .play-button,
 body.beat-swarm-active.internal-board-active .controls-layer {
+  z-index: 131000 !important;
+  pointer-events: auto !important;
+}
+
+body.beat-swarm-active.internal-board-active #topbar,
+body.beat-swarm-active.internal-board-active .app-topbar {
+  position: relative !important;
   z-index: 131000 !important;
   pointer-events: auto !important;
 }

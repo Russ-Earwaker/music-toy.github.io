@@ -1,7 +1,7 @@
 import { getZoomState } from './zoom/ZoomCoordinator.js';
 import { screenToWorld, worldToScreen } from './board-viewport.js';
 import { createBeatSwarmSpawnerRuntime, registerLoopgridSpawnerType } from './beat-swarm/spawner-runtime.js';
-import { getLoopInfo, isRunning, start as startTransport } from './audio-core.js';
+import { getLoopInfo, isRunning, start as startTransport, stop as stopTransport } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { getIdForDisplayName } from './instrument-catalog.js';
 import { buildPalette, midiToName } from './note-helpers.js';
@@ -1274,8 +1274,7 @@ function normalizeSwarmNoteName(noteName) {
   const letter = m[1];
   const accidental = (m[2] || '').replace('B', 'b');
   const octave = m[3];
-  const n = `${letter}${accidental}${octave}`;
-  return SWARM_PENTATONIC_NOTES_ONE_OCTAVE.includes(n) ? n : '';
+  return `${letter}${accidental}${octave}`;
 }
 
 function getSwarmEnemySoundNoteById(enemyId) {
@@ -1458,6 +1457,16 @@ function setGameplayPaused(next) {
     tuneEditorState.playheadStep = 0;
     stopComponentLivePreviews();
   }
+}
+
+function playSwarmSoundEventImmediate(eventKey, volume = 1, noteName = null) {
+  const key = String(eventKey || '').trim();
+  if (!SWARM_SOUND_EVENTS[key]) return;
+  const vol = Math.max(0.001, Math.min(1, Number(volume) || 0));
+  const def = SWARM_SOUND_EVENTS[key];
+  const inst = resolveSwarmSoundInstrumentId(key);
+  const note = normalizeSwarmNoteName(noteName) || String(def?.note || getRandomSwarmPentatonicNote());
+  try { triggerInstrument(inst, note, undefined, 'master', {}, vol); } catch {}
 }
 
 function createRandomWeaponStages() {
@@ -2924,6 +2933,7 @@ function triggerWeaponFromSubBoardNote(slotIndex, rowIndex) {
     stageIndex: 0,
     damageScale,
     forcedNoteName: weaponSubBoardRowToNoteName(rowIndex),
+    directSound: true,
   });
 }
 
@@ -3036,9 +3046,12 @@ function updateWeaponSubBoardSession() {
   const activeInternal = !!window.__ArtInternal?.isActive?.();
   const activeHome = window.__ArtInternal?.getHomeAnchor?.();
   if (!activeInternal || !artToyId) {
-    const wasPaused = !!gameplayPaused;
+    const wasRunning = !!isRunning?.();
     closeWeaponSubBoardEditor();
-    if (!wasPaused) setGameplayPaused(true);
+    if (wasRunning) {
+      try { stopTransport?.(); } catch {}
+    }
+    if (!gameplayPaused) setGameplayPaused(true);
     return;
   }
   hideWeaponSubBoardArtAnchor(slotIndex);
@@ -4525,22 +4538,24 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
   const slotIndex = Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : -1;
   const stageIndex = Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : 0;
   const damageScale = Math.max(0.05, Number(context?.damageScale) || 1);
-  const forcedNoteName = (stageIndex === 0) ? (normalizeSwarmNoteName(context?.forcedNoteName) || null) : null;
+  const forcedNoteName = normalizeSwarmNoteName(context?.forcedNoteName) || null;
+  const directSound = !!context?.directSound;
   const nextCtx = {
     weaponSlotIndex: slotIndex,
     stageIndex: stageIndex + 1,
     damageScale,
     forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
+    directSound,
   };
   const sourceEnemyId = Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : null;
   const nearest = getNearestEnemy(originWorld.x, originWorld.y, sourceEnemyId);
   if (archetype === 'projectile') {
-    noteSwarmSoundEvent(
-      'projectile',
-      getStageSoundVolume(stageIndex),
-      beatIndex,
-      forcedNoteName || getSwarmEnemySoundNoteById(nearest?.id)
-    );
+    const noteName = forcedNoteName || getSwarmEnemySoundNoteById(nearest?.id);
+    if (directSound) {
+      playSwarmSoundEventImmediate('projectile', getStageSoundVolume(stageIndex), noteName);
+    } else {
+      noteSwarmSoundEvent('projectile', getStageSoundVolume(stageIndex), beatIndex, noteName);
+    }
     const facingDir = getShipFacingDirWorld();
     const baseDir = nearest
       ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
@@ -4649,12 +4664,14 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
       }
       return;
     }
-    noteSwarmSoundEvent(
-      'hitscan',
-      getStageSoundVolume(stageIndex),
-      beatIndex,
-      forcedNoteName || getSwarmEnemySoundNoteById(nearest?.id)
-    );
+    {
+      const noteName = forcedNoteName || getSwarmEnemySoundNoteById(nearest?.id);
+      if (directSound) {
+        playSwarmSoundEventImmediate('hitscan', getStageSoundVolume(stageIndex), noteName);
+      } else {
+        noteSwarmSoundEvent('hitscan', getStageSoundVolume(stageIndex), beatIndex, noteName);
+      }
+    }
     if (!nearest) {
       const dir = getShipFacingDirWorld();
       const to = {
@@ -4714,12 +4731,12 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
   if (archetype === 'aoe') {
     const aoeHit = applyAoeAt(originWorld, variant, beatIndex, slotIndex, sourceEnemyId, stageIndex, damageScale);
     if (variant === 'explosion') {
-      noteSwarmSoundEvent(
-        'explosion',
-        getStageSoundVolume(stageIndex),
-        beatIndex,
-        forcedNoteName || getSwarmEnemySoundNoteById(aoeHit?.firstHitEnemyId)
-      );
+      const noteName = forcedNoteName || getSwarmEnemySoundNoteById(aoeHit?.firstHitEnemyId);
+      if (directSound) {
+        playSwarmSoundEventImmediate('explosion', getStageSoundVolume(stageIndex), noteName);
+      } else {
+        noteSwarmSoundEvent('explosion', getStageSoundVolume(stageIndex), beatIndex, noteName);
+      }
     }
     if (continuation.length) {
       if (variant === 'explosion' && aoeHit?.firstHitPoint) {
