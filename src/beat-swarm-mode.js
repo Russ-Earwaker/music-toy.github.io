@@ -197,6 +197,7 @@ const PROJECTILE_HOMING_ORBIT_CHASE_SPEED = 420;
 const PROJECTILE_HOMING_ORBIT_TURN_RATE = 4.2;
 const PROJECTILE_HOMING_MAX_ORBITING = 8;
 const PROJECTILE_HOMING_RETURN_SNAP_DIST_WORLD = 34;
+const PROJECTILE_CHAIN_SPAWN_OFFSET_WORLD = 26;
 const HELPER_LIFETIME_BEATS = 8;
 const HELPER_ORBIT_RADIUS_WORLD = 150;
 const HELPER_ORBIT_ANG_VEL = 1.9;
@@ -210,6 +211,7 @@ const EXPLOSION_PRIME_MAX_SCALE = 0.5;
 const BEAM_DAMAGE_PER_SECOND = 3.2;
 const PREVIEW_PROJECTILE_SPEED = 360;
 const PREVIEW_PROJECTILE_LIFETIME = 2.1;
+const PREVIEW_PROJECTILE_HIT_RADIUS = 14;
 const PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD = Math.PI / 7.2; // 25 deg
 const PREVIEW_PROJECTILE_BOOMERANG_RADIUS = 63;
 const PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS = 1.15;
@@ -222,6 +224,7 @@ const PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED = 150;
 const PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE = 4.2;
 const PREVIEW_PROJECTILE_HOMING_MAX_ORBITING = 8;
 const PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST = 10;
+const PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET = 20;
 const PREVIEW_HELPER_LIFETIME_BEATS = 8;
 const PREVIEW_HELPER_ORBIT_RADIUS = 34;
 const PREVIEW_HELPER_ORBIT_ANG_VEL = 2.3;
@@ -1705,6 +1708,42 @@ function previewSelectionContainsBoomerang() {
   return false;
 }
 
+function previewSelectionStartsWithExplosion() {
+  const indices = Number.isInteger(previewSelectedWeaponSlotIndex)
+    ? [previewSelectedWeaponSlotIndex]
+    : weaponLoadout.map((_, i) => i);
+  for (const slotIndex of indices) {
+    const stages = sanitizeWeaponStages(weaponLoadout?.[slotIndex]?.stages);
+    const first = stages[0] || null;
+    if (String(first?.archetype || '') === 'aoe' && String(first?.variant || '') === 'explosion') return true;
+  }
+  return false;
+}
+
+function ensurePausePreviewExplosionBiasEnemy() {
+  if (!previewSelectionStartsWithExplosion()) return;
+  if (!pausePreview.enemies.length) return;
+  const cx = Number(pausePreview.ship.x) || 0;
+  const cy = Number(pausePreview.ship.y) || 0;
+  const biasRadius = Math.max(8, PREVIEW_EXPLOSION_RADIUS * 0.9);
+  const r2 = biasRadius * biasRadius;
+  for (const e of pausePreview.enemies) {
+    const dx = (Number(e.x) || 0) - cx;
+    const dy = (Number(e.y) || 0) - cy;
+    if ((dx * dx + dy * dy) <= r2) return;
+  }
+  const target = pausePreview.enemies[pausePreview.enemies.length - 1] || pausePreview.enemies[0];
+  if (!target) return;
+  const minX = 32;
+  const maxX = Math.max(minX + 12, (Number(pausePreview.width) || 0) - 32);
+  const minY = 26;
+  const maxY = Math.max(minY + 12, (Number(pausePreview.height) || 0) - 26);
+  const ang = randRange(0, Math.PI * 2);
+  const radius = randRange(Math.max(6, PREVIEW_EXPLOSION_RADIUS * 0.2), biasRadius);
+  target.x = Math.min(maxX, Math.max(minX, cx + (Math.cos(ang) * radius)));
+  target.y = Math.min(maxY, Math.max(minY, cy + (Math.sin(ang) * radius)));
+}
+
 function nudgePausePreviewEnemiesIntoAction(force = false) {
   if (!pausePreview.enemies.length) return;
   if (!force && (Number(pausePreview.secondsSinceHit) || 0) < PREVIEW_NO_HIT_REPOSITION_SECONDS) return;
@@ -1738,6 +1777,7 @@ function nudgePausePreviewEnemiesIntoAction(force = false) {
     e.x = randRange(farMinX, maxX);
     e.y = randRange(minY, maxY);
   }
+  ensurePausePreviewExplosionBiasEnemy();
   pausePreview.secondsSinceHit = 0;
 }
 
@@ -1942,15 +1982,31 @@ function spawnPausePreviewHomingMissile(from, damage, nextStages = null, nextBea
   return true;
 }
 
-function applyPausePreviewAoeAt(point, variant = 'explosion', beatIndex = 0) {
+function applyPausePreviewAoeAt(point, variant = 'explosion', beatIndex = 0, avoidEnemy = null) {
   const isDot = variant === 'dot-area';
   addPausePreviewExplosion(point, PREVIEW_EXPLOSION_RADIUS, isDot ? (getPausePreviewBeatLen() * 2) : PREVIEW_EXPLOSION_TTL);
   const r2 = PREVIEW_EXPLOSION_RADIUS * PREVIEW_EXPLOSION_RADIUS;
+  const hitCandidates = [];
+  for (let i = 0; i < pausePreview.enemies.length; i++) {
+    const e = pausePreview.enemies[i];
+    const dx = e.x - point.x;
+    const dy = e.y - point.y;
+    const d2 = (dx * dx) + (dy * dy);
+    if (d2 <= r2) {
+      hitCandidates.push({
+        enemy: e,
+        point: { x: Number(e.x) || 0, y: Number(e.y) || 0 },
+        d2,
+      });
+    }
+  }
+  hitCandidates.sort((a, b) => a.d2 - b.d2);
   for (let i = pausePreview.enemies.length - 1; i >= 0; i--) {
     const e = pausePreview.enemies[i];
     const dx = e.x - point.x;
     const dy = e.y - point.y;
-    if ((dx * dx + dy * dy) <= r2) damagePausePreviewEnemy(e, isDot ? 0.5 : 1);
+    const d2 = (dx * dx) + (dy * dy);
+    if (d2 <= r2) damagePausePreviewEnemy(e, isDot ? 0.5 : 1);
   }
   if (isDot) {
     pausePreview.aoeZones.push({
@@ -1961,6 +2017,12 @@ function applyPausePreviewAoeAt(point, variant = 'explosion', beatIndex = 0) {
       untilBeat: Math.max(beatIndex + 2, beatIndex + 1),
     });
   }
+  const selected = hitCandidates.find((c) => c.enemy !== avoidEnemy) || hitCandidates[0] || null;
+  if (!selected?.enemy) return null;
+  return {
+    point: selected.point,
+    enemy: selected.enemy,
+  };
 }
 
 function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStages = [], context = null) {
@@ -1977,26 +2039,32 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
     const baseDir = nearest
       ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
       : { x: 1, y: 0 };
+    const spawnOrigin = context?.sourceEnemy
+      ? {
+        x: origin.x + (baseDir.x * PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET),
+        y: origin.y + (baseDir.y * PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET),
+      }
+      : origin;
     if (variant === 'homing-missile') {
-      spawnPausePreviewHomingMissile(origin, 2, continuation, beatIndex + 1, nextCtx);
+      spawnPausePreviewHomingMissile(spawnOrigin, 2, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'boomerang') {
-      spawnPausePreviewBoomerangProjectile(origin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
+      spawnPausePreviewBoomerangProjectile(spawnOrigin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'split-shot') {
       const baseAngle = Math.atan2(baseDir.y, baseDir.x);
       const angles = [baseAngle, baseAngle - PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD, baseAngle + PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD];
       for (const ang of angles) {
-        spawnPausePreviewProjectileFromDirection(origin, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1, nextCtx);
+        spawnPausePreviewProjectileFromDirection(spawnOrigin, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1, nextCtx);
       }
       return;
     }
     if (nearest) {
-      spawnPausePreviewProjectile(origin, nearest, 2, continuation, beatIndex + 1, nextCtx);
+      spawnPausePreviewProjectile(spawnOrigin, nearest, 2, continuation, beatIndex + 1, nextCtx);
     } else {
-      spawnPausePreviewProjectileFromDirection(origin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
+      spawnPausePreviewProjectileFromDirection(spawnOrigin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
     }
     return;
   }
@@ -2097,14 +2165,28 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
     return;
   }
   if (archetype === 'aoe') {
-    applyPausePreviewAoeAt(origin, variant, beatIndex);
+    const firstHit = applyPausePreviewAoeAt(origin, variant, beatIndex, context?.sourceEnemy || null);
     if (continuation.length) {
-      queuePausePreviewChain(beatIndex + 1, continuation, {
-        origin: context?.origin || origin,
-        impactPoint: origin,
-        weaponSlotIndex: slotIndex,
-        stageIndex: stageIndex + 1,
-      });
+      if (variant === 'explosion' && firstHit?.point) {
+        const firstNext = continuation[0];
+        const restNext = continuation.slice(1);
+        const nextOrigin = firstHit.point;
+        triggerPausePreviewWeaponStage(firstNext, nextOrigin, beatIndex, restNext, {
+          origin: context?.origin || origin,
+          impactPoint: nextOrigin,
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
+          impactEnemy: firstHit.enemy || null,
+          sourceEnemy: firstHit.enemy || null,
+        });
+      } else if (variant !== 'explosion') {
+        queuePausePreviewChain(beatIndex + 1, continuation, {
+          origin: context?.origin || origin,
+          impactPoint: origin,
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
+        });
+      }
     }
   }
 }
@@ -2162,7 +2244,7 @@ function firePausePreviewWeaponsOnBeat(beatIndex) {
 }
 
 function updatePausePreviewProjectilesAndEffects(dt) {
-  const hitRadius = 14;
+  const hitRadius = PREVIEW_PROJECTILE_HIT_RADIUS;
   const hitR2 = hitRadius * hitRadius;
   for (let i = pausePreview.projectiles.length - 1; i >= 0; i--) {
     const p = pausePreview.projectiles[i];
@@ -2415,6 +2497,7 @@ function updatePausePreview(dt) {
   }
 
   while (pausePreview.enemies.length < PREVIEW_ENEMY_COUNT) spawnPausePreviewEnemy();
+  ensurePausePreviewExplosionBiasEnemy();
   pausePreview.secondsSinceHit += Math.max(0.001, Number(dt) || 0.016);
   nudgePausePreviewEnemiesIntoAction(false);
   updatePausePreviewHelpers(dt);
@@ -3507,6 +3590,13 @@ function getShipFacingDirWorld() {
   return { x: Math.cos(rad), y: Math.sin(rad) };
 }
 
+function getProjectileChainSpawnOffsetWorld() {
+  const z = getZoomState?.();
+  const s = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
+  const hitRadiusWorld = PROJECTILE_HIT_RADIUS_PX / Math.max(0.001, s || 1);
+  return Math.max(PROJECTILE_CHAIN_SPAWN_OFFSET_WORLD, hitRadiusWorld + 8);
+}
+
 function countOrbitingHomingMissiles() {
   let n = 0;
   for (const p of projectiles) {
@@ -3682,7 +3772,7 @@ function queueWeaponChain(beatIndex, nextStages, context) {
   });
 }
 
-function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex = null) {
+function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex = null, avoidEnemyId = null) {
   if (!point) return;
   const radius = Math.max(1, Number(EXPLOSION_RADIUS_WORLD) || 1);
   const info = getLoopInfo?.();
@@ -3691,11 +3781,29 @@ function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex
   const r2 = radius * radius;
   const isDot = variant === 'dot-area';
   const hitDamage = isDot ? 0.5 : 1;
+  const hitCandidates = [];
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    const dx = e.wx - point.x;
+    const dy = e.wy - point.y;
+    const d2 = (dx * dx) + (dy * dy);
+    if (d2 <= r2) {
+      hitCandidates.push({
+        enemyId: Number.isFinite(e?.id) ? Math.trunc(e.id) : null,
+        point: { x: Number(e.wx) || 0, y: Number(e.wy) || 0 },
+        d2,
+      });
+    }
+  }
+  hitCandidates.sort((a, b) => a.d2 - b.d2);
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     const dx = e.wx - point.x;
     const dy = e.wy - point.y;
-    if ((dx * dx + dy * dy) <= r2) damageEnemy(e, hitDamage);
+    const d2 = (dx * dx) + (dy * dy);
+    if (d2 <= r2) {
+      damageEnemy(e, hitDamage);
+    }
   }
   if (isDot) {
     lingeringAoeZones.push({
@@ -3707,6 +3815,12 @@ function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex
       weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
     });
   }
+  const avoidId = Number.isFinite(avoidEnemyId) ? Math.trunc(avoidEnemyId) : null;
+  const selected = hitCandidates.find((c) => c.enemyId !== avoidId) || hitCandidates[0] || null;
+  return {
+    firstHitEnemyId: Number.isFinite(selected?.enemyId) ? Math.trunc(selected.enemyId) : null,
+    firstHitPoint: selected?.point || null,
+  };
 }
 
 function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [], context = null) {
@@ -3724,26 +3838,30 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
     const baseDir = nearest
       ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
       : facingDir;
+    const chainSpawnOffsetWorld = getProjectileChainSpawnOffsetWorld();
+    const spawnOrigin = Number.isFinite(sourceEnemyId)
+      ? getOffsetPoint(originWorld, nearest ? { x: nearest.wx, y: nearest.wy } : null, chainSpawnOffsetWorld, facingDir)
+      : originWorld;
     if (variant === 'homing-missile') {
-      spawnHomingMissile(originWorld, 2, continuation, beatIndex + 1, nextCtx);
+      spawnHomingMissile(spawnOrigin, 2, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'boomerang') {
-      spawnBoomerangProjectile(originWorld, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
+      spawnBoomerangProjectile(spawnOrigin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'split-shot') {
       const baseAngle = Math.atan2(baseDir.y, baseDir.x);
       const angles = [baseAngle, baseAngle - PROJECTILE_SPLIT_ANGLE_RAD, baseAngle + PROJECTILE_SPLIT_ANGLE_RAD];
       for (const ang of angles) {
-        spawnProjectileFromDirection(originWorld, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1, nextCtx);
+        spawnProjectileFromDirection(spawnOrigin, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1, nextCtx);
       }
       return;
     }
     if (nearest) {
-      spawnProjectile(originWorld, nearest, 2, continuation, beatIndex + 1, nextCtx);
+      spawnProjectile(spawnOrigin, nearest, 2, continuation, beatIndex + 1, nextCtx);
     } else {
-      spawnProjectileFromDirection(originWorld, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
+      spawnProjectileFromDirection(spawnOrigin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
     }
     return;
   }
@@ -3867,14 +3985,28 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
     return;
   }
   if (archetype === 'aoe') {
-    applyAoeAt(originWorld, variant, beatIndex, slotIndex);
+    const aoeHit = applyAoeAt(originWorld, variant, beatIndex, slotIndex, sourceEnemyId);
     if (continuation.length) {
-      queueWeaponChain(beatIndex + 1, continuation, {
-        origin: context?.origin || originWorld,
-        impactPoint: originWorld,
-        weaponSlotIndex: slotIndex,
-        stageIndex: stageIndex + 1,
-      });
+      if (variant === 'explosion' && aoeHit?.firstHitPoint) {
+        const firstNext = continuation[0];
+        const restNext = continuation.slice(1);
+        const nextOrigin = aoeHit.firstHitPoint;
+        triggerWeaponStage(firstNext, nextOrigin, beatIndex, restNext, {
+          origin: context?.origin || originWorld,
+          impactPoint: nextOrigin,
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
+          impactEnemyId: Number.isFinite(aoeHit.firstHitEnemyId) ? Math.trunc(aoeHit.firstHitEnemyId) : null,
+          sourceEnemyId: Number.isFinite(aoeHit.firstHitEnemyId) ? Math.trunc(aoeHit.firstHitEnemyId) : null,
+        });
+      } else if (variant !== 'explosion') {
+        queueWeaponChain(beatIndex + 1, continuation, {
+          origin: context?.origin || originWorld,
+          impactPoint: originWorld,
+          weaponSlotIndex: slotIndex,
+          stageIndex: stageIndex + 1,
+        });
+      }
     }
   }
 }
