@@ -3205,6 +3205,11 @@ body.internal-board-active #board-main {
   cursor: grab;
 }
 
+.beat-swarm-overlay.is-subboard-open {
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .beat-swarm-overlay:active {
   cursor: grabbing;
 }
@@ -3241,6 +3246,22 @@ body.internal-board-active #board-main {
   opacity: 1;
 }
 
+.beat-swarm-spawn-health-debug {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(130, 176, 214, 0.42);
+  background: rgba(5, 10, 18, 0.64);
+  color: rgba(210, 234, 255, 0.95);
+  font: 600 12px/1.2 'Trebuchet MS', 'Segoe UI', sans-serif;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 8;
+}
+
 .beat-swarm-pause-screen {
   position: fixed;
   left: 50%;
@@ -3267,8 +3288,27 @@ body.internal-board-active #board-main {
   pointer-events: auto;
 }
 
+.beat-swarm-pause-screen.is-subboard-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .beat-swarm-pause-screen.has-component-picker {
   overflow: visible;
+}
+
+.art-toy-panel.beat-swarm-weapon-subboard-anchor {
+  position: absolute !important;
+  left: -100000px !important;
+  top: -100000px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.internal-art-anchor-ghost.beat-swarm-subboard-hide-anchor {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .beat-swarm-pause-title {
@@ -3320,6 +3360,21 @@ body.internal-board-active #board-main {
   font: 700 15px/1.2 'Trebuchet MS', 'Segoe UI', sans-serif;
   color: #f2f8ff;
   padding-top: 2px;
+}
+
+.beat-swarm-weapon-head-wrap {
+  grid-column: 1;
+}
+
+.beat-swarm-weapon-tune-summary,
+.beat-swarm-weapon-stages {
+  grid-column: 2;
+}
+
+.beat-swarm-weapon-tune-summary {
+  font: 600 11px/1.25 'Trebuchet MS', 'Segoe UI', sans-serif;
+  color: rgba(176, 209, 240, 0.92);
+  letter-spacing: 0.01em;
 }
 
 .beat-swarm-random-weapon {
@@ -3716,6 +3771,64 @@ body.internal-board-active #board-main {
   gap: 10px;
 }
 
+.beat-swarm-tune-editor {
+  width: min(980px, calc(100vw - 70px));
+  max-height: min(84vh, 760px);
+}
+
+.beat-swarm-tune-toy-host {
+  position: relative;
+  min-height: 460px;
+  border-radius: 10px;
+  border: 1px solid rgba(106, 140, 180, 0.45);
+  background: rgba(9, 15, 26, 0.94);
+  overflow: hidden;
+}
+
+.beat-swarm-tune-toy-panel {
+  width: min(920px, calc(100% - 20px)) !important;
+}
+
+.beat-swarm-tune-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.beat-swarm-tune-row {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.beat-swarm-tune-note {
+  font: 700 12px/1 'Trebuchet MS', 'Segoe UI', sans-serif;
+  color: rgba(209, 231, 250, 0.94);
+}
+
+.beat-swarm-tune-cells {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(34px, 1fr));
+  gap: 6px;
+}
+
+.beat-swarm-tune-cell {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(95, 127, 161, 0.4);
+  background: rgba(20, 34, 50, 0.62);
+  cursor: pointer;
+}
+
+.beat-swarm-tune-cell.is-on {
+  background: radial-gradient(circle at 40% 34%, rgba(132, 216, 255, 0.55), rgba(63, 142, 255, 0.45));
+  border-color: rgba(143, 208, 255, 0.9);
+}
+
+.beat-swarm-tune-cell.is-playhead {
+  box-shadow: 0 0 0 2px rgba(255, 210, 106, 0.9), 0 0 14px rgba(255, 196, 74, 0.46);
+}
+
 .beat-swarm-component-picker-head {
   display: flex;
   align-items: center;
@@ -4024,6 +4137,22 @@ body.internal-board-active #board-main {
   background: linear-gradient(180deg, #d7f3ff 0%, #89d6ff 100%);
   clip-path: polygon(50% 0%, 100% 100%, 50% 78%, 0% 100%);
   filter: drop-shadow(0 0 7px rgba(137, 214, 255, 0.9));
+}
+
+.beat-swarm-ship.is-note-flash {
+  animation: beatSwarmShipNoteFlash 170ms ease-out;
+}
+
+@keyframes beatSwarmShipNoteFlash {
+  0% {
+    filter: drop-shadow(0 0 8px rgba(137, 214, 255, 0.95)) brightness(1);
+  }
+  40% {
+    filter: drop-shadow(0 0 26px rgba(188, 241, 255, 1)) drop-shadow(0 0 44px rgba(130, 230, 255, 0.95)) brightness(1.85);
+  }
+  100% {
+    filter: drop-shadow(0 0 7px rgba(137, 214, 255, 0.9)) brightness(1);
+  }
 }
 
 .beat-swarm-enemy-layer {
@@ -4637,6 +4766,10 @@ body.beat-swarm-active .toy-spawner-dock .toy-spawner-game,
 body.beat-swarm-active .toy-spawner-dock .toy-spawner-overview,
 body.beat-swarm-active .toy-spawner-dock .toy-spawner-trash {
   display: none !important;
+}
+
+body.beat-swarm-active.internal-board-active .toy-spawner-dock .toy-spawner-trash {
+  display: inline-flex !important;
 }
 
 body.beat-swarm-active .toy-spawner-dock .toy-spawner-help {
@@ -5575,6 +5708,13 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
 
 #topbar [data-action="toggle-play"] .c-btn-core {
   background-size: 50%;
+}
+
+body.beat-swarm-active.internal-board-active #topbar [data-action="toggle-play"],
+body.beat-swarm-active.internal-board-active .play-button,
+body.beat-swarm-active.internal-board-active .controls-layer {
+  z-index: 131000 !important;
+  pointer-events: auto !important;
 }
 
 #topbar [data-action="bpm"] {
@@ -7677,6 +7817,10 @@ body.intro-open .topbar-menu-wrap {
 #internal-board-overlay {
   z-index: 800 !important;          /* below UI (topbar/menu/spawner), above main board */
   pointer-events: auto !important;
+}
+
+body.beat-swarm-active #internal-board-overlay {
+  z-index: 1000 !important;
 }
 
 

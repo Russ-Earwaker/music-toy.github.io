@@ -273,6 +273,16 @@ const AUTO_ZOOM_SPIKE_QUEUE = [
   'dgForceTierAuto',
 ];
 
+const AUTO_BEAT_SWARM_GENERIC_QUEUE = [
+  'traceOff',
+  'buildBS0',
+  'runBS0s1',
+  'runBS0s2',
+  'runBS0s3',
+  'runBS0s4',
+  'runBS0s5',
+];
+
 function ensureUI() {
   let ov = document.getElementById('perf-lab-overlay');
   if (ov) return ov;
@@ -399,7 +409,19 @@ function ensureUI() {
     ]),
   };
 
-  const tests = [...P3.runs, ...P7.runs];
+  const BS0 = {
+    title: 'BS0 - Beat Swarm (Default Empty Scene)',
+    build: btn('buildBS0', 'Build BS0: Beat Swarm Default Scene', 'primary'),
+    runs: sortByLabel([
+      { act: 'runBS0s1', label: 'Run BS0 S1: Static Fire (1 Stage)' },
+      { act: 'runBS0s2', label: 'Run BS0 S2: Static Fire (2 Stages)' },
+      { act: 'runBS0s3', label: 'Run BS0 S3: Static Fire (3 Stages)' },
+      { act: 'runBS0s4', label: 'Run BS0 S4: Static Fire (4 Stages)' },
+      { act: 'runBS0s5', label: 'Run BS0 S5: Static Fire (5 Stages)' },
+    ]),
+  };
+
+  const tests = [...P3.runs, ...P7.runs, ...BS0.runs];
   if (!window.__PERF_LAB_TESTS_LOGGED) {
     window.__PERF_LAB_TESTS_LOGGED = true;
     try { console.log('[perf-lab] tests:', tests.map(t => t.label)); } catch {}
@@ -419,6 +441,7 @@ function ensureUI() {
   const sectionsHtml = [
     section(P3.title, `${P3.build}${P3.runs.map(r => btn(r.act, r.label)).join('')}`),
     section(P7.title, `${P7.build}`),
+    section(BS0.title, `${BS0.build}${BS0.runs.map(r => btn(r.act, r.label)).join('')}`),
     toolsHtml,
   ].join('');
 
@@ -533,6 +556,7 @@ function ensureUI() {
           </div>
           <div class="perf-lab-row perf-lab-footer">
             <button class="perf-lab-btn" data-act="autoGeneric">Run-Auto (Generic)</button>
+            <button class="perf-lab-btn" data-act="autoBeatSwarmGeneric">Auto: Beat Swarm (Generic)</button>
             <button class="perf-lab-btn" data-act="autoFocus">Auto: Current Focus</button>
             <button class="perf-lab-btn" data-act="autoZoomSpike">Auto: Zoom Spike Probe</button>
             <button class="perf-lab-btn" data-act="autoFocusHeavy">Auto: Focus Validation (Heavy)</button>
@@ -1012,6 +1036,14 @@ function ensureUI() {
     if (act === 'runP2x') await runP2x();
     if (act === 'runP2y') await runP2y();
     if (act === 'runP2z') await runP2z();
+    if (act === 'buildBS0') await buildBS0();
+    if (act === 'runBS0a') await runBS0a();
+    if (act === 'runBS0b') await runBS0b();
+    if (act === 'runBS0s1') await runBS0s1();
+    if (act === 'runBS0s2') await runBS0s2();
+    if (act === 'runBS0s3') await runBS0s3();
+    if (act === 'runBS0s4') await runBS0s4();
+    if (act === 'runBS0s5') await runBS0s5();
 
     // --------------------------------------------------------------
     // Footer auto-tests (these are the big buttons in the footer)
@@ -1100,6 +1132,21 @@ function ensureUI() {
         notes: 'Focus Micro: short, high-signal, typically trace-enabled (edit AUTO_MICRO_QUEUE in perf-lab.js)',
         queue: AUTO_MICRO_QUEUE,
         runId: 'autoMicro',
+      });
+      return;
+    }
+    if (act === 'autoBeatSwarmGeneric') {
+      const cfgBase = (await readAutoConfigFromFile()) || readAutoConfig() || {};
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      await runAuto({
+        clear: true,
+        save: false,
+        download: true,
+        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        downloadName: `perf-lab-beat-swarm-generic-${ts}.json`,
+        notes: 'Beat Swarm generic baseline: default empty Beat Swarm scene (idle + pan/zoom).',
+        queue: AUTO_BEAT_SWARM_GENERIC_QUEUE,
+        runId: 'autoBeatSwarmGeneric',
       });
       return;
     }
@@ -2261,6 +2308,89 @@ async function buildP7() {
   };
   setTimeout(() => finalize(0), 0);
   setStatus('P7 built');
+}
+
+function getBeatSwarmApi() {
+  const api = window.BeatSwarmMode;
+  if (!api || typeof api.enter !== 'function' || typeof api.exit !== 'function') return null;
+  return api;
+}
+
+function getBeatSwarmDebugApi() {
+  const dbg = window.__beatSwarmDebug;
+  if (!dbg || typeof dbg.preparePerfScenario !== 'function') return null;
+  return dbg;
+}
+
+async function buildBS0() {
+  try { clearSceneViaSnapshot(); } catch {}
+  setStatus('Building BS0...');
+  const api = getBeatSwarmApi();
+  if (!api) {
+    setStatus('BS0 build failed (Beat Swarm API unavailable)');
+    return false;
+  }
+  try { api.exit(); } catch {}
+  try { api.enter(); } catch {}
+  try { if (!isRunning()) startTransport(); } catch {}
+  setStatus('BS0 built');
+  return true;
+}
+
+async function ensureBS0Built() {
+  const api = getBeatSwarmApi();
+  if (!api) return false;
+  try {
+    if (!api.isActive?.()) await buildBS0();
+  } catch {
+    await buildBS0();
+  }
+  return true;
+}
+
+async function prepareBS0StaticStage(stageCount = 2, enemyCount = 24) {
+  const ok = await ensureBS0Built();
+  if (!ok) return false;
+  const dbg = getBeatSwarmDebugApi();
+  if (!dbg) return false;
+  try { dbg.preparePerfScenario({ stageCount, enemyCount }); } catch {}
+  return true;
+}
+
+async function runBS0Stage(stageCount = 1) {
+  const ok = await prepareBS0StaticStage(stageCount, 24);
+  if (!ok) {
+    setStatus(`BS0 S${stageCount} failed (Beat Swarm debug API unavailable)`);
+    return;
+  }
+  const prevDur = window.__PERF_LAB_DURATION_MS;
+  const prevTag = window.__PERF_RUN_TAG;
+  try { window.__PERF_LAB_DURATION_MS = 9000; } catch {}
+  try { window.__PERF_RUN_TAG = `BS0S${stageCount}`; } catch {}
+  try {
+    await runVariantPlaying(
+      `BS0_stage${stageCount}_beatswarm_static_fire`,
+      null,
+      `Running BS0 S${stageCount} (static player, ${stageCount} stage weapon, onscreen enemies)...`
+    );
+  } finally {
+    try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
+    try { window.__PERF_RUN_TAG = prevTag; } catch {}
+  }
+}
+
+async function runBS0s1() { await runBS0Stage(1); }
+async function runBS0s2() { await runBS0Stage(2); }
+async function runBS0s3() { await runBS0Stage(3); }
+async function runBS0s4() { await runBS0Stage(4); }
+async function runBS0s5() { await runBS0Stage(5); }
+
+async function runBS0a() {
+  await runBS0s1();
+}
+
+async function runBS0b() {
+  await runBS0s2();
 }
 
 async function runP7a() {
@@ -6070,6 +6200,7 @@ try {
     buildP5,
     buildP6,
     buildP7,
+    buildBS0,
     runP2a,
     runP2b,
     runP2c,
@@ -6136,6 +6267,13 @@ try {
     runP3m2,
     runP7a,
     runP7b,
+    runBS0s1,
+    runBS0s2,
+    runBS0s3,
+    runBS0s4,
+    runBS0s5,
+    runBS0a,
+    runBS0b,
     runQueue,
     runAuto,
     runP4a,
