@@ -247,6 +247,23 @@ let currentBeatIndex = 0;
 let previewSelectedWeaponSlotIndex = null;
 let activeWeaponSlotIndex = 0;
 const stagePickerState = { open: false, slotIndex: -1, stageIndex: -1 };
+const PAUSE_WEAPON_DRAG_HOLD_MS = 170;
+const PAUSE_WEAPON_DRAG_START_SLOP_PX = 8;
+const pauseWeaponDrag = {
+  pointerId: null,
+  holdTimer: 0,
+  started: false,
+  startX: 0,
+  startY: 0,
+  lastX: 0,
+  lastY: 0,
+  sourceSlotIndex: -1,
+  sourceStageIndex: -1,
+  targetSlotIndex: -1,
+  targetStageIndex: -1,
+  proxyEl: null,
+  suppressClickUntil: 0,
+};
 const componentLivePreview = {
   rafId: 0,
   lastTs: 0,
@@ -2416,6 +2433,11 @@ function ensurePauseWeaponUi() {
   pauseScreenEl.dataset.uiReady = '1';
   renderPauseWeaponUi();
   pauseScreenEl.addEventListener('click', (ev) => {
+    if ((performance.now() || 0) < (Number(pauseWeaponDrag.suppressClickUntil) || 0)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     const target = ev.target;
     if (!(target instanceof HTMLElement)) return;
     if (!(target.closest('button, select, option, input, label'))) {
@@ -2495,6 +2517,82 @@ function ensurePauseWeaponUi() {
       persistBeatSwarmState();
     }
   });
+  pauseScreenEl.addEventListener('pointerdown', (ev) => {
+    if (!pauseScreenEl || stagePickerState.open) return;
+    if (!(ev instanceof PointerEvent)) return;
+    if (ev.button !== 0) return;
+    if (pauseWeaponDrag.pointerId != null) resetPauseWeaponDrag(false);
+    const dragHandle = (ev.target instanceof HTMLElement)
+      ? ev.target.closest('.beat-swarm-stage-component-btn:not(.is-empty)')
+      : null;
+    if (!(dragHandle instanceof HTMLElement)) return;
+    const cell = getPauseWeaponStageCellFromEventTarget(ev.target);
+    const parsed = parsePauseWeaponStageCell(cell);
+    if (!parsed) return;
+    pauseWeaponDrag.pointerId = ev.pointerId;
+    pauseWeaponDrag.started = false;
+    pauseWeaponDrag.startX = Number(ev.clientX) || 0;
+    pauseWeaponDrag.startY = Number(ev.clientY) || 0;
+    pauseWeaponDrag.lastX = pauseWeaponDrag.startX;
+    pauseWeaponDrag.lastY = pauseWeaponDrag.startY;
+    pauseWeaponDrag.sourceSlotIndex = parsed.slotIndex;
+    pauseWeaponDrag.sourceStageIndex = parsed.stageIndex;
+    pauseWeaponDrag.targetSlotIndex = -1;
+    pauseWeaponDrag.targetStageIndex = -1;
+    if (pauseWeaponDrag.holdTimer) {
+      try { clearTimeout(pauseWeaponDrag.holdTimer); } catch {}
+      pauseWeaponDrag.holdTimer = 0;
+    }
+    pauseWeaponDrag.holdTimer = setTimeout(() => {
+      pauseWeaponDrag.holdTimer = 0;
+      if (pauseWeaponDrag.pointerId !== ev.pointerId) return;
+      beginPauseWeaponDrag(pauseWeaponDrag.lastX, pauseWeaponDrag.lastY);
+    }, PAUSE_WEAPON_DRAG_HOLD_MS);
+    try { pauseScreenEl.setPointerCapture(ev.pointerId); } catch {}
+  });
+  pauseScreenEl.addEventListener('pointermove', (ev) => {
+    if (!(ev instanceof PointerEvent)) return;
+    if (pauseWeaponDrag.pointerId !== ev.pointerId) return;
+    pauseWeaponDrag.lastX = Number(ev.clientX) || 0;
+    pauseWeaponDrag.lastY = Number(ev.clientY) || 0;
+    if (!pauseWeaponDrag.started) return;
+    updatePauseWeaponDragVisual(pauseWeaponDrag.lastX, pauseWeaponDrag.lastY);
+    ev.preventDefault();
+  });
+  pauseScreenEl.addEventListener('pointerup', (ev) => {
+    if (!(ev instanceof PointerEvent)) return;
+    if (pauseWeaponDrag.pointerId !== ev.pointerId) return;
+    if (pauseWeaponDrag.started) {
+      const didReorder = reorderWeaponStages(
+        pauseWeaponDrag.sourceSlotIndex,
+        pauseWeaponDrag.sourceStageIndex,
+        pauseWeaponDrag.targetStageIndex
+      );
+      resetPauseWeaponDrag(true);
+      if (didReorder) {
+        clearHelpers();
+        stagePickerState.open = false;
+        stagePickerState.slotIndex = -1;
+        stagePickerState.stageIndex = -1;
+        renderPauseWeaponUi();
+        persistBeatSwarmState();
+      }
+    } else {
+      resetPauseWeaponDrag(false);
+    }
+    try { pauseScreenEl.releasePointerCapture(ev.pointerId); } catch {}
+  });
+  pauseScreenEl.addEventListener('pointercancel', (ev) => {
+    if (!(ev instanceof PointerEvent)) return;
+    if (pauseWeaponDrag.pointerId !== ev.pointerId) return;
+    resetPauseWeaponDrag(false);
+    try { pauseScreenEl.releasePointerCapture(ev.pointerId); } catch {}
+  });
+  pauseScreenEl.addEventListener('lostpointercapture', (ev) => {
+    if (!(ev instanceof PointerEvent)) return;
+    if (pauseWeaponDrag.pointerId !== ev.pointerId) return;
+    resetPauseWeaponDrag(false);
+  });
 }
 
 function renderPauseWeaponUi() {
@@ -2524,7 +2622,7 @@ function renderPauseWeaponUi() {
         `;
       }
       return `
-        <div class="beat-swarm-stage-cell is-filled">
+        <div class="beat-swarm-stage-cell is-filled" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}">
           <div class="beat-swarm-stage-index">${stageIndex + 1}</div>
           <button type="button" class="beat-swarm-stage-component-btn" data-action="open-component-picker" data-slot-index="${slotIndex}" data-stage-index="${stageIndex}">
             ${renderComponentPreviewMarkup(comp)}
@@ -3263,6 +3361,110 @@ function removeExplosionPrimeEffectsForEvent(eventId) {
     try { fx?.el?.remove?.(); } catch {}
     effects.splice(i, 1);
   }
+}
+
+function clearPauseWeaponDragMarkers() {
+  if (!pauseScreenEl) return;
+  for (const el of pauseScreenEl.querySelectorAll('.beat-swarm-stage-cell.is-drag-source, .beat-swarm-stage-cell.is-drag-target')) {
+    el.classList.remove('is-drag-source', 'is-drag-target');
+  }
+}
+
+function clearPauseWeaponDragProxy() {
+  if (!pauseWeaponDrag.proxyEl) return;
+  try { pauseWeaponDrag.proxyEl.remove?.(); } catch {}
+  pauseWeaponDrag.proxyEl = null;
+}
+
+function resetPauseWeaponDrag(suppressClick = false) {
+  if (pauseWeaponDrag.holdTimer) {
+    try { clearTimeout(pauseWeaponDrag.holdTimer); } catch {}
+    pauseWeaponDrag.holdTimer = 0;
+  }
+  if (suppressClick) pauseWeaponDrag.suppressClickUntil = (performance.now() || 0) + 280;
+  clearPauseWeaponDragMarkers();
+  clearPauseWeaponDragProxy();
+  pauseWeaponDrag.pointerId = null;
+  pauseWeaponDrag.started = false;
+  pauseWeaponDrag.sourceSlotIndex = -1;
+  pauseWeaponDrag.sourceStageIndex = -1;
+  pauseWeaponDrag.targetSlotIndex = -1;
+  pauseWeaponDrag.targetStageIndex = -1;
+}
+
+function getPauseWeaponStageCellFromEventTarget(target) {
+  if (!(target instanceof HTMLElement)) return null;
+  const cell = target.closest('.beat-swarm-stage-cell.is-filled[data-slot-index][data-stage-index]');
+  return (cell instanceof HTMLElement) ? cell : null;
+}
+
+function parsePauseWeaponStageCell(cellEl) {
+  if (!(cellEl instanceof HTMLElement)) return null;
+  const slotIndex = Math.trunc(Number(cellEl.dataset.slotIndex));
+  const stageIndex = Math.trunc(Number(cellEl.dataset.stageIndex));
+  if (!(slotIndex >= 0 && slotIndex < weaponLoadout.length)) return null;
+  const stages = sanitizeWeaponStages(weaponLoadout[slotIndex]?.stages);
+  if (!(stageIndex >= 0 && stageIndex < stages.length)) return null;
+  return { slotIndex, stageIndex };
+}
+
+function getPauseWeaponDropTargetAtClient(clientX, clientY, sourceSlotIndex, sourceStageIndex) {
+  const raw = document.elementFromPoint(Number(clientX) || 0, Number(clientY) || 0);
+  const cell = getPauseWeaponStageCellFromEventTarget(raw);
+  if (!cell) return null;
+  const parsed = parsePauseWeaponStageCell(cell);
+  if (!parsed) return null;
+  if (parsed.slotIndex !== sourceSlotIndex) return null;
+  if (parsed.stageIndex === sourceStageIndex) return null;
+  return { ...parsed, cellEl: cell };
+}
+
+function reorderWeaponStages(slotIndex, fromStageIndex, dropBeforeStageIndex) {
+  if (!(slotIndex >= 0 && slotIndex < weaponLoadout.length)) return false;
+  const slot = weaponLoadout[slotIndex];
+  const stages = sanitizeWeaponStages(slot?.stages);
+  if (!(fromStageIndex >= 0 && fromStageIndex < stages.length)) return false;
+  if (!(dropBeforeStageIndex >= 0 && dropBeforeStageIndex < stages.length)) return false;
+  if (fromStageIndex === dropBeforeStageIndex) return false;
+  const a = stages[fromStageIndex];
+  const b = stages[dropBeforeStageIndex];
+  stages[fromStageIndex] = b;
+  stages[dropBeforeStageIndex] = a;
+  slot.stages = stages;
+  return true;
+}
+
+function updatePauseWeaponDragVisual(clientX, clientY) {
+  if (pauseWeaponDrag.proxyEl) {
+    pauseWeaponDrag.proxyEl.style.left = `${Number(clientX) || 0}px`;
+    pauseWeaponDrag.proxyEl.style.top = `${Number(clientY) || 0}px`;
+  }
+  clearPauseWeaponDragMarkers();
+  const sourceSelector = `.beat-swarm-stage-cell.is-filled[data-slot-index="${pauseWeaponDrag.sourceSlotIndex}"][data-stage-index="${pauseWeaponDrag.sourceStageIndex}"]`;
+  pauseScreenEl?.querySelector?.(sourceSelector)?.classList?.add?.('is-drag-source');
+  const target = getPauseWeaponDropTargetAtClient(clientX, clientY, pauseWeaponDrag.sourceSlotIndex, pauseWeaponDrag.sourceStageIndex);
+  pauseWeaponDrag.targetSlotIndex = target?.slotIndex ?? -1;
+  pauseWeaponDrag.targetStageIndex = target?.stageIndex ?? -1;
+  if (target?.cellEl) target.cellEl.classList.add('is-drag-target');
+}
+
+function beginPauseWeaponDrag(clientX, clientY) {
+  if (pauseWeaponDrag.started || pauseWeaponDrag.pointerId == null || !pauseScreenEl) return;
+  pauseWeaponDrag.started = true;
+  const sourceSelector = `.beat-swarm-stage-cell.is-filled[data-slot-index="${pauseWeaponDrag.sourceSlotIndex}"][data-stage-index="${pauseWeaponDrag.sourceStageIndex}"] .beat-swarm-stage-component-btn`;
+  const sourceBtn = pauseScreenEl.querySelector(sourceSelector);
+  if (sourceBtn instanceof HTMLElement) {
+    const rect = sourceBtn.getBoundingClientRect();
+    const proxy = sourceBtn.cloneNode(true);
+    if (proxy instanceof HTMLElement) {
+      proxy.classList.add('beat-swarm-stage-drag-proxy');
+      proxy.style.width = `${Math.max(80, rect.width).toFixed(2)}px`;
+      proxy.style.height = `${Math.max(80, rect.height).toFixed(2)}px`;
+      document.body.appendChild(proxy);
+      pauseWeaponDrag.proxyEl = proxy;
+    }
+  }
+  updatePauseWeaponDragVisual(clientX, clientY);
 }
 
 function normalizeDir(dx, dy, fallbackX = 1, fallbackY = 0) {
