@@ -332,6 +332,7 @@ function captureBeatSwarmState() {
         weaponSlotIndex: Number.isFinite(ev.context?.weaponSlotIndex) ? Math.trunc(ev.context.weaponSlotIndex) : null,
         stageIndex: Number.isFinite(ev.context?.stageIndex) ? Math.trunc(ev.context.stageIndex) : null,
         impactEnemyId: Number.isFinite(ev.context?.impactEnemyId) ? Math.trunc(ev.context.impactEnemyId) : null,
+        sourceEnemyId: Number.isFinite(ev.context?.sourceEnemyId) ? Math.trunc(ev.context.sourceEnemyId) : null,
       },
     })),
     lingeringAoeZones: lingeringAoeZones.map((z) => ({
@@ -395,6 +396,7 @@ function captureBeatSwarmState() {
       at: fx.at ? { x: Number(fx.at.x) || 0, y: Number(fx.at.y) || 0 } : null,
       radiusWorld: Number(fx.radiusWorld) || EXPLOSION_RADIUS_WORLD,
       targetEnemyId: Number.isFinite(fx.targetEnemyId) ? Math.trunc(fx.targetEnemyId) : null,
+      sourceEnemyId: Number.isFinite(fx.sourceEnemyId) ? Math.trunc(fx.sourceEnemyId) : null,
       damagePerSec: Number(fx.damagePerSec) || 0,
       weaponSlotIndex: Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null,
     })),
@@ -929,6 +931,7 @@ function restoreBeatSwarmState(state) {
         weaponSlotIndex: Number.isFinite(ev?.context?.weaponSlotIndex) ? Math.trunc(ev.context.weaponSlotIndex) : null,
         stageIndex: Number.isFinite(ev?.context?.stageIndex) ? Math.trunc(ev.context.stageIndex) : null,
         impactEnemyId: Number.isFinite(ev?.context?.impactEnemyId) ? Math.trunc(ev.context.impactEnemyId) : null,
+        sourceEnemyId: Number.isFinite(ev?.context?.sourceEnemyId) ? Math.trunc(ev.context.sourceEnemyId) : null,
       },
     });
   }
@@ -1006,6 +1009,8 @@ function restoreBeatSwarmState(state) {
         ttl: Math.max(0, Number(fx.ttl) || 0),
         from: fx.from ? { x: Number(fx.from.x) || 0, y: Number(fx.from.y) || 0 } : { x: 0, y: 0 },
         to: fx.to ? { x: Number(fx.to.x) || 0, y: Number(fx.to.y) || 0 } : { x: 0, y: 0 },
+        sourceEnemyId: Number.isFinite(fx.sourceEnemyId) ? Math.trunc(fx.sourceEnemyId) : null,
+        targetEnemyId: Number.isFinite(fx.targetEnemyId) ? Math.trunc(fx.targetEnemyId) : null,
         weaponSlotIndex: Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null,
         el,
       });
@@ -1018,6 +1023,7 @@ function restoreBeatSwarmState(state) {
         from: fx.from ? { x: Number(fx.from.x) || 0, y: Number(fx.from.y) || 0 } : { x: 0, y: 0 },
         to: fx.to ? { x: Number(fx.to.x) || 0, y: Number(fx.to.y) || 0 } : { x: 0, y: 0 },
         targetEnemyId: Number.isFinite(fx.targetEnemyId) ? Math.trunc(fx.targetEnemyId) : null,
+        sourceEnemyId: Number.isFinite(fx.sourceEnemyId) ? Math.trunc(fx.sourceEnemyId) : null,
         damagePerSec: Math.max(0, Number(fx.damagePerSec) || BEAM_DAMAGE_PER_SECOND),
         weaponSlotIndex: Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null,
         el,
@@ -1725,7 +1731,7 @@ function countPausePreviewOrbitingHomingMissiles() {
   return n;
 }
 
-function addPausePreviewLaser(from, to) {
+function addPausePreviewLaser(from, to, sourceEnemy = null, targetEnemy = null) {
   if (!pausePreviewSceneEl) return;
   const el = document.createElement('div');
   el.className = 'beat-swarm-preview-fx-laser';
@@ -1735,6 +1741,8 @@ function addPausePreviewLaser(from, to) {
     ttl: PREVIEW_LASER_TTL,
     from: { x: from.x, y: from.y },
     to: { x: to.x, y: to.y },
+    sourceEnemy: sourceEnemy || null,
+    targetEnemy: targetEnemy || null,
     el,
   });
 }
@@ -1972,7 +1980,7 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
     if (variant === 'beam') {
       if (!nearest) {
         const to = { x: origin.x + 300, y: origin.y };
-        addPausePreviewLaser(origin, to);
+        addPausePreviewLaser(origin, to, sourceEnemy, null);
         if (continuation.length) {
           queuePausePreviewChain(beatIndex + 1, continuation, {
             origin,
@@ -2013,7 +2021,7 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
     }
     if (!nearest) {
       const to = { x: origin.x + 300, y: origin.y };
-      addPausePreviewLaser(origin, to);
+      addPausePreviewLaser(origin, to, sourceEnemy, null);
       if (continuation.length) {
         queuePausePreviewChain(beatIndex + 1, continuation, {
           origin,
@@ -2024,7 +2032,7 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
       }
       return;
     }
-    addPausePreviewLaser(origin, { x: nearest.x, y: nearest.y });
+    addPausePreviewLaser(origin, { x: nearest.x, y: nearest.y }, sourceEnemy, nearest);
     damagePausePreviewEnemy(nearest, 2);
     if (continuation.length) {
       const firstNext = continuation[0];
@@ -2315,6 +2323,13 @@ function updatePausePreviewProjectilesAndEffects(dt) {
         if (target) {
           fx.to = { x: target.x, y: target.y };
           damagePausePreviewEnemy(target, Math.max(0, Number(fx.damagePerSec) || 0) * dt);
+        }
+      } else if (fx.kind === 'laser') {
+        if (fx.sourceEnemy && pausePreview.enemies.includes(fx.sourceEnemy)) {
+          fx.from = { x: Number(fx.sourceEnemy.x) || 0, y: Number(fx.sourceEnemy.y) || 0 };
+        }
+        if (fx.targetEnemy && pausePreview.enemies.includes(fx.targetEnemy)) {
+          fx.to = { x: Number(fx.targetEnemy.x) || 0, y: Number(fx.targetEnemy.y) || 0 };
         }
       }
       const dx = fx.to.x - fx.from.x;
@@ -3117,7 +3132,7 @@ function spawnStarterPickups(centerWorld) {
   clearPickups();
 }
 
-function addLaserEffect(fromW, toW, weaponSlotIndex = null) {
+function addLaserEffect(fromW, toW, weaponSlotIndex = null, sourceEnemyId = null, targetEnemyId = null) {
   if (!enemyLayerEl) return;
   const el = document.createElement('div');
   el.className = 'beat-swarm-fx-laser';
@@ -3127,6 +3142,8 @@ function addLaserEffect(fromW, toW, weaponSlotIndex = null) {
     ttl: LASER_TTL,
     from: { ...fromW },
     to: { ...toW },
+    sourceEnemyId: Number.isFinite(sourceEnemyId) ? Math.trunc(sourceEnemyId) : null,
+    targetEnemyId: Number.isFinite(targetEnemyId) ? Math.trunc(targetEnemyId) : null,
     weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
     el,
   });
@@ -3460,7 +3477,7 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
         addLaserEffect(originWorld, {
           x: originWorld.x + (dir.x * 1400),
           y: originWorld.y + (dir.y * 1400),
-        }, slotIndex);
+        }, slotIndex, sourceEnemyId, null);
         if (continuation.length) {
           queueWeaponChain(beatIndex + 1, continuation, {
             origin: originWorld,
@@ -3508,7 +3525,7 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
         x: originWorld.x + (dir.x * 1400),
         y: originWorld.y + (dir.y * 1400),
       };
-      addLaserEffect(originWorld, to, slotIndex);
+      addLaserEffect(originWorld, to, slotIndex, sourceEnemyId, null);
       if (continuation.length) {
         queueWeaponChain(beatIndex + 1, continuation, {
           origin: originWorld,
@@ -3519,7 +3536,13 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
       }
       return;
     }
-    addLaserEffect(originWorld, { x: nearest.wx, y: nearest.wy }, slotIndex);
+    addLaserEffect(
+      originWorld,
+      { x: nearest.wx, y: nearest.wy },
+      slotIndex,
+      sourceEnemyId,
+      Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null
+    );
     damageEnemy(nearest, 2);
     if (continuation.length) {
       const firstNext = continuation[0];
@@ -3615,7 +3638,13 @@ function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex) {
   const target = getNearestEnemy(centerWorld.x, centerWorld.y);
   if (!target) return;
   if (equippedWeapons.has('laser')) {
-    addLaserEffect(centerWorld, { x: target.wx, y: target.wy });
+    addLaserEffect(
+      centerWorld,
+      { x: target.wx, y: target.wy },
+      null,
+      null,
+      Number.isFinite(target.id) ? Math.trunc(target.id) : null
+    );
     damageEnemy(target, weaponDefs.laser.damage);
   }
   if (equippedWeapons.has('projectile')) {
@@ -4005,6 +4034,20 @@ function updatePickupsAndCombat(dt) {
         if (target) {
           fx.to = { x: target.wx, y: target.wy };
           damageEnemy(target, Math.max(0, Number(fx.damagePerSec) || 0) * dt);
+        }
+      } else if (fx.kind === 'laser') {
+        if (Number.isFinite(fx.sourceEnemyId)) {
+          const src = enemies.find((e) => Math.trunc(Number(e.id) || 0) === Math.trunc(fx.sourceEnemyId)) || null;
+          if (src) {
+            fx.from = { x: Number(src.wx) || 0, y: Number(src.wy) || 0 };
+          } else {
+            const pendingDeath = getPendingEnemyDeathByEnemyId(fx.sourceEnemyId);
+            if (pendingDeath) fx.from = { x: Number(pendingDeath.wx) || 0, y: Number(pendingDeath.wy) || 0 };
+          }
+        }
+        if (Number.isFinite(fx.targetEnemyId)) {
+          const trg = enemies.find((e) => Math.trunc(Number(e.id) || 0) === Math.trunc(fx.targetEnemyId)) || null;
+          if (trg) fx.to = { x: Number(trg.wx) || 0, y: Number(trg.wy) || 0 };
         }
       }
       const a = worldToScreen({ x: fx.from.x, y: fx.from.y });
