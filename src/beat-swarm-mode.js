@@ -167,6 +167,7 @@ const weaponLoadout = Array.from({ length: MAX_WEAPON_SLOTS }, (_, i) => ({
   name: `Weapon ${i + 1}`,
   stages: [],
   tune: null,
+  tuneChain: [],
 }));
 const tuneEditorState = {
   open: false,
@@ -183,6 +184,7 @@ const weaponSubBoardState = {
     artToyId: '',
     boundPanelIds: new Set(),
     scheduledTimeoutIds: new Set(),
+    seededStarterPattern: false,
   })),
 };
 
@@ -236,6 +238,13 @@ function sanitizeWeaponTune(rawTune) {
   return { kind: 'drawgrid', steps, notes, active, list, disabled };
 }
 
+function sanitizeWeaponTuneChain(rawChain) {
+  const arr = Array.isArray(rawChain) ? rawChain : [];
+  const out = [];
+  for (const raw of arr) out.push(sanitizeWeaponTune(raw));
+  return out;
+}
+
 function countWeaponTuneActiveEvents(tune) {
   let n = 0;
   const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
@@ -249,12 +258,51 @@ function countWeaponTuneActiveEvents(tune) {
   return n;
 }
 
-function getWeaponTuneDamageScale(slotIndex) {
+function countWeaponTuneActiveColumns(tune) {
+  let n = 0;
+  const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
+  const active = Array.isArray(tune?.active) ? tune.active : [];
+  const list = Array.isArray(tune?.list) ? tune.list : [];
+  for (let s = 0; s < steps; s++) {
+    if (!active[s]) continue;
+    const rows = Array.isArray(list[s]) ? list[s] : [];
+    if (rows.length > 0) n += 1;
+  }
+  return n;
+}
+
+function getWeaponSlotTuneChain(slotIndex) {
   const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
-  const tune = sanitizeWeaponTune(weaponLoadout[idx]?.tune);
-  const active = Math.max(0, countWeaponTuneActiveEvents(tune));
+  const slot = weaponLoadout[idx];
+  const chain = sanitizeWeaponTuneChain(slot?.tuneChain);
+  if (chain.length) return chain;
+  return [sanitizeWeaponTune(slot?.tune)];
+}
+
+function getWeaponTuneActivityStats(slotIndex) {
+  const chain = getWeaponSlotTuneChain(slotIndex);
+  let totalNotes = 0;
+  let activeNotes = 0;
+  for (const tune of chain) {
+    const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
+    totalNotes += steps;
+    activeNotes += countWeaponTuneActiveColumns(tune);
+  }
+  if (totalNotes <= 0) totalNotes = WEAPON_TUNE_STEPS;
+  return { activeNotes, totalNotes };
+}
+
+function shouldMuteProjectileStageSound(slotIndex) {
+  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
+  return hasWeaponSubBoard(idx);
+}
+
+function getWeaponTuneDamageScale(slotIndex) {
+  const stats = getWeaponTuneActivityStats(slotIndex);
+  const active = Math.max(0, Number(stats.activeNotes) || 0);
+  const total = Math.max(1, Number(stats.totalNotes) || WEAPON_TUNE_STEPS);
   if (active <= 0) return 1;
-  const scale = WEAPON_TUNE_BASE_ACTIVE_EVENTS / active;
+  const scale = total / active;
   return Math.max(0.25, Math.min(8, Number(scale) || 1));
 }
 
@@ -281,6 +329,7 @@ function seedDefaultWeaponLoadout() {
     slot.name = `Weapon ${i + 1}`;
     slot.stages = [];
     slot.tune = createDefaultWeaponTune();
+    slot.tuneChain = [sanitizeWeaponTune(slot.tune)];
   }
   // Default starter: Projectile -> Explosion.
   weaponLoadout[0].stages = [
@@ -492,6 +541,13 @@ function captureBeatSwarmState() {
           ? w.tune.disabled.map((col) => (Array.isArray(col) ? col.map((v) => Math.trunc(Number(v) || 0)) : []))
           : createDefaultWeaponTune().disabled,
       },
+      tuneChain: sanitizeWeaponTuneChain(w?.tuneChain).map((t) => ({
+        steps: Math.max(1, Math.trunc(Number(t?.steps) || WEAPON_TUNE_STEPS)),
+        notes: Array.isArray(t?.notes) ? t.notes.map((n) => String(n || '')) : DRAWGRID_TUNE_NOTE_PALETTE.slice(),
+        active: Array.isArray(t?.active) ? t.active.map((v) => !!v) : createDefaultWeaponTune().active,
+        list: Array.isArray(t?.list) ? t.list.map((col) => (Array.isArray(col) ? col.map((v) => Math.trunc(Number(v) || 0)) : [])) : createDefaultWeaponTune().list,
+        disabled: Array.isArray(t?.disabled) ? t.disabled.map((col) => (Array.isArray(col) ? col.map((v) => Math.trunc(Number(v) || 0)) : [])) : createDefaultWeaponTune().disabled,
+      })),
     })),
     activeWeaponSlotIndex: Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0))),
     pendingWeaponChainEvents: pendingWeaponChainEvents.map((ev) => ({
@@ -1021,6 +1077,8 @@ function applyWeaponLoadoutFromState(loadoutState) {
     slot.name = String(raw?.name || slot.name || `Weapon ${i + 1}`);
     slot.stages = sanitizeWeaponStages(raw?.stages);
     slot.tune = sanitizeWeaponTune(raw?.tune);
+    slot.tuneChain = sanitizeWeaponTuneChain(raw?.tuneChain);
+    if (!slot.tuneChain.length) slot.tuneChain = [sanitizeWeaponTune(slot.tune)];
   }
   renderPauseWeaponUi();
 }
@@ -2827,6 +2885,11 @@ function applyTuneFromDrawgridState(slotIndex, rawState) {
     },
   });
   weaponLoadout[slotIndex].tune = tune;
+  if (!Array.isArray(weaponLoadout[slotIndex].tuneChain) || !weaponLoadout[slotIndex].tuneChain.length) {
+    weaponLoadout[slotIndex].tuneChain = [tune];
+  } else {
+    weaponLoadout[slotIndex].tuneChain[0] = tune;
+  }
 }
 
 function getWeaponSubBoardSlotState(slotIndex) {
@@ -2888,6 +2951,49 @@ function hideWeaponSubBoardArtAnchor(slotIndex) {
   }
 }
 
+function drawgridStateHasAnyNotes(stateLike) {
+  const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
+  const active = Array.isArray(st?.nodes?.active) ? st.nodes.active : Array.isArray(st?.active) ? st.active : [];
+  const list = Array.isArray(st?.nodes?.list) ? st.nodes.list : Array.isArray(st?.list) ? st.list : [];
+  const steps = Math.max(active.length, list.length);
+  for (let i = 0; i < steps; i++) {
+    if (!active[i]) continue;
+    const rows = Array.isArray(list[i]) ? list[i] : [];
+    if (rows.length > 0) return true;
+  }
+  return false;
+}
+
+function maybeSeedStarterDrawgridPattern(slotIndex) {
+  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
+  const slotState = getWeaponSubBoardSlotState(idx);
+  if (slotState.seededStarterPattern) return;
+  const artToyId = getWeaponSubBoardArtToyId(idx);
+  if (!artToyId) return;
+  const panels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
+  if (!panels.length) return;
+  panels.sort((a, b) => {
+    const ax = Number.parseFloat(a?.style?.left || '0') || 0;
+    const bx = Number.parseFloat(b?.style?.left || '0') || 0;
+    return ax - bx;
+  });
+  const panel = panels[0];
+  if (!(panel instanceof HTMLElement)) return;
+  const hasNotes = (() => {
+    try {
+      const st = panel.__drawToy?.getState?.();
+      return drawgridStateHasAnyNotes(st);
+    } catch {
+      return false;
+    }
+  })();
+  if (!hasNotes) {
+    try { panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, detail: { mode: 'music', source: 'beat-swarm-starter' } })); } catch {}
+  }
+  slotState.seededStarterPattern = true;
+  try { snapshotWeaponSubBoardTuneChain(idx); } catch {}
+}
+
 function ensureWeaponSubBoardArtToy(slotIndex) {
   const slotState = getWeaponSubBoardSlotState(slotIndex);
   const existingId = String(slotState.artToyId || '').trim();
@@ -2903,6 +3009,7 @@ function ensureWeaponSubBoardArtToy(slotIndex) {
   if (!(artPanel instanceof HTMLElement)) return '';
   try { artPanel.classList.add('beat-swarm-weapon-subboard-anchor'); } catch {}
   try { artPanel.dataset.beatSwarmWeaponSlot = String(slotIndex); } catch {}
+  slotState.seededStarterPattern = false;
   slotState.artToyId = String(artPanel.id || '');
   return slotState.artToyId;
 }
@@ -2911,6 +3018,29 @@ function weaponSubBoardRowToNoteName(rowIndex) {
   const row = Math.trunc(Number(rowIndex));
   if (!(row >= 0 && row < DRAWGRID_TUNE_NOTE_PALETTE.length)) return getRandomSwarmPentatonicNote();
   return normalizeSwarmNoteName(DRAWGRID_TUNE_NOTE_PALETTE[row]) || getRandomSwarmPentatonicNote();
+}
+
+function snapshotWeaponSubBoardTuneChain(slotIndex) {
+  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
+  const artToyId = getWeaponSubBoardArtToyId(idx);
+  if (!artToyId) return;
+  const panels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
+  if (!panels.length) return;
+  panels.sort((a, b) => {
+    const ax = Number.parseFloat(a?.style?.left || '0') || 0;
+    const bx = Number.parseFloat(b?.style?.left || '0') || 0;
+    return ax - bx;
+  });
+  const chain = [];
+  for (const panel of panels) {
+    try {
+      const st = panel?.__drawToy?.getState?.();
+      chain.push(sanitizeWeaponTune(st));
+    } catch {}
+  }
+  if (!chain.length) return;
+  weaponLoadout[idx].tuneChain = chain;
+  weaponLoadout[idx].tune = chain[0];
 }
 
 function triggerWeaponFromSubBoardNote(slotIndex, rowIndex) {
@@ -2999,8 +3129,7 @@ function syncWeaponSubBoardBindingsForSlot(slotIndex) {
     };
     const onUpdate = () => {
       try {
-        const st = panel.__drawToy?.getState?.();
-        applyTuneFromDrawgridState(idx, st);
+        snapshotWeaponSubBoardTuneChain(idx);
       } catch {}
     };
     panel.__beatSwarmSubBoardSlotIndex = idx;
@@ -3009,11 +3138,11 @@ function syncWeaponSubBoardBindingsForSlot(slotIndex) {
     try { panel.addEventListener('drawgrid:note-fired', onNote); } catch {}
     try { panel.addEventListener('drawgrid:update', onUpdate); } catch {}
     try {
-      const st = panel.__drawToy?.getState?.();
-      applyTuneFromDrawgridState(idx, st);
+      snapshotWeaponSubBoardTuneChain(idx);
     } catch {}
     slotState.boundPanelIds.add(panel.id);
   }
+  snapshotWeaponSubBoardTuneChain(idx);
 }
 
 function setPauseScreenSubBoardHidden(hidden) {
@@ -3079,12 +3208,17 @@ function openWeaponSubBoardEditor(slotIndex) {
   setTimeout(() => {
     hideWeaponSubBoardArtAnchor(idx);
     syncWeaponSubBoardBindingsForSlot(idx);
+    maybeSeedStarterDrawgridPattern(idx);
     const boardPanels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
     if (!boardPanels.length) return;
     for (const p of boardPanels) {
       try { p.dispatchEvent(new CustomEvent('toy:start', { bubbles: true })); } catch {}
     }
   }, 80);
+  setTimeout(() => {
+    syncWeaponSubBoardBindingsForSlot(idx);
+    maybeSeedStarterDrawgridPattern(idx);
+  }, 260);
   return true;
 }
 
@@ -3369,7 +3503,9 @@ function renderPauseWeaponUi() {
   const cards = weaponLoadout.map((slot, slotIndex) => {
     const tune = sanitizeWeaponTune(slot.tune);
     slot.tune = tune;
-    const tuneActiveCount = countWeaponTuneActiveEvents(tune);
+    const tuneStats = getWeaponTuneActivityStats(slotIndex);
+    const tuneActiveCount = Math.max(0, Math.trunc(Number(tuneStats.activeNotes) || 0));
+    const tuneTotalCount = Math.max(1, Math.trunc(Number(tuneStats.totalNotes) || WEAPON_TUNE_STEPS));
     const tuneDmgScale = getWeaponTuneDamageScale(slotIndex);
     const stageCells = Array.from({ length: MAX_WEAPON_STAGES }, (_, stageIndex) => {
       const st = slot.stages[stageIndex] || null;
@@ -3412,7 +3548,7 @@ function renderPauseWeaponUi() {
           <button type="button" class="beat-swarm-stage-add" data-action="open-weapon-tune" data-slot-index="${slotIndex}">Board</button>
           <button type="button" class="beat-swarm-stage-add beat-swarm-random-weapon" data-action="random-weapon" data-slot-index="${slotIndex}">Create Random Weapon</button>
         </div>
-        <div class="beat-swarm-weapon-tune-summary">Tune: ${tuneActiveCount} active notes | Damage x${tuneDmgScale.toFixed(2)}</div>
+        <div class="beat-swarm-weapon-tune-summary">Tune: ${tuneActiveCount}/${tuneTotalCount} active notes | Damage x${tuneDmgScale.toFixed(2)}</div>
         <div class="beat-swarm-weapon-stages">
           ${stageCells}
         </div>
@@ -4550,11 +4686,13 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
   const sourceEnemyId = Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : null;
   const nearest = getNearestEnemy(originWorld.x, originWorld.y, sourceEnemyId);
   if (archetype === 'projectile') {
-    const noteName = forcedNoteName || getSwarmEnemySoundNoteById(nearest?.id);
-    if (directSound) {
-      playSwarmSoundEventImmediate('projectile', getStageSoundVolume(stageIndex), noteName);
-    } else {
-      noteSwarmSoundEvent('projectile', getStageSoundVolume(stageIndex), beatIndex, noteName);
+    if (!shouldMuteProjectileStageSound(slotIndex)) {
+      const noteName = forcedNoteName || getSwarmEnemySoundNoteById(nearest?.id);
+      if (directSound) {
+        playSwarmSoundEventImmediate('projectile', getStageSoundVolume(stageIndex), noteName);
+      } else {
+        noteSwarmSoundEvent('projectile', getStageSoundVolume(stageIndex), beatIndex, noteName);
+      }
     }
     const facingDir = getShipFacingDirWorld();
     const baseDir = nearest
@@ -4731,11 +4869,11 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
   if (archetype === 'aoe') {
     const aoeHit = applyAoeAt(originWorld, variant, beatIndex, slotIndex, sourceEnemyId, stageIndex, damageScale);
     if (variant === 'explosion') {
-      const noteName = forcedNoteName || getSwarmEnemySoundNoteById(aoeHit?.firstHitEnemyId);
+      const defaultExplosionNote = normalizeSwarmNoteName(SWARM_SOUND_EVENTS.explosion?.note) || 'C4';
       if (directSound) {
-        playSwarmSoundEventImmediate('explosion', getStageSoundVolume(stageIndex), noteName);
+        playSwarmSoundEventImmediate('explosion', getStageSoundVolume(stageIndex), defaultExplosionNote);
       } else {
-        noteSwarmSoundEvent('explosion', getStageSoundVolume(stageIndex), beatIndex, noteName);
+        noteSwarmSoundEvent('explosion', getStageSoundVolume(stageIndex), beatIndex, defaultExplosionNote);
       }
     }
     if (continuation.length) {
