@@ -3129,7 +3129,7 @@ function buildVisualStrokeFromWeaponTune(tuneLike) {
     if (!rows.length) continue;
     const row = Math.max(0, Math.min(noteRows - 1, Math.trunc(Number(rows[0]) || 0)));
     const nx = (s + 0.5) / steps;
-    const ny = 1 - ((row + 0.5) / noteRows);
+    const ny = (row + 0.5) / noteRows;
     ptsN.push({ nx, ny });
   }
   if (!ptsN.length) return [];
