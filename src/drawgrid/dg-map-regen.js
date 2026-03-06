@@ -5,6 +5,17 @@ export function createDgMapRegen({ state, deps } = {}) {
   const s = state;
   const d = deps;
 
+  function isBeatSwarmSubboardPanel() {
+    try {
+      const ownerId = String(s?.panel?.dataset?.artOwnerId || s?.panel?.dataset?.artOwnerID || '').trim();
+      if (!ownerId) return false;
+      const owner = document.getElementById(ownerId);
+      return String(owner?.dataset?.beatSwarmSubboard || '') === '1';
+    } catch {
+      return false;
+    }
+  }
+
   function processGeneratorStroke(stroke, newMap, newGroups) {
     const partial = d.snapToGridFromStroke(stroke);
     const filledNodes = d.fillGapsInNodeArray(partial.nodes, s.cols);
@@ -34,6 +45,25 @@ export function createDgMapRegen({ state, deps } = {}) {
   }
 
   function regenerateMapFromStrokes() {
+    const regenSource = s.__dgRegenSource || 'unknown';
+    s.__dgRegenSource = '';
+    const sourceLower = String(regenSource || '').toLowerCase();
+    const isUserEditSource =
+      sourceLower.includes('stroke-commit') ||
+      sourceLower.includes('randomize');
+    if (isUserEditSource) s.__dgPreserveNodesOverStrokes = false;
+    const beatSwarmSubboard = isBeatSwarmSubboardPanel();
+    if ((s.__dgPreserveNodesOverStrokes || beatSwarmSubboard) && s.currentMap && !isUserEditSource) {
+      // Keep externally hydrated node map authoritative (Beat Swarm subboard),
+      // while still allowing stroke redraw for the animated visual guide line.
+      try { d.drawNodes(s.currentMap.nodes); } catch {}
+      try { d.drawGrid(); } catch {}
+      if (d.DG_SINGLE_CANVAS) {
+        d.__dgMarkSingleCanvasDirty(s.panel);
+        try { d.compositeSingleCanvas(); } catch {}
+      }
+      return;
+    }
     const isZoomed = s.panel.classList.contains('toy-zoomed');
     const newMap = {
       active: Array(s.cols).fill(false),
@@ -149,8 +179,6 @@ export function createDgMapRegen({ state, deps } = {}) {
       }
     }
 
-    const regenSource = s.__dgRegenSource || 'unknown';
-    s.__dgRegenSource = '';
     if (d.DG_DEBUG) {
       console.log('[DG][regen]', {
         panelId: s.panel?.id || null,

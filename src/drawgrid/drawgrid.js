@@ -2047,7 +2047,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const showTutorial = !flat && !panel.__dgTutorialLayerEmpty;
     // Playhead should follow transport running state, not note/chain flags.
     // (If we gate this, it's easy to end up with a permanently hidden playhead.)
-    const showPlayhead = !flat && separatePlayhead && transportRunning && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS);
+    const forcePlayheadVisible = String(panel?.dataset?.forcePlayheadVisible || '') === '1';
+    const showPlayhead = !flat && separatePlayhead && (transportRunning || forcePlayheadVisible) && (!DG_SINGLE_CANVAS || DG_SINGLE_CANVAS_OVERLAYS);
     // Keep the main paint canvas visible; hide auxiliary layers in flat mode.
     toggle(paint, true);
     toggle(grid, showGrid);
@@ -2062,7 +2063,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (nodesCanvas !== grid) toggle(nodesCanvas, DG_SINGLE_CANVAS_OVERLAYS);
       toggle(ghostCanvas, DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgGhostLayerEmpty);
       toggle(flashCanvas, DG_SINGLE_CANVAS_OVERLAYS && !panel.__dgFlashLayerEmpty);
-      toggle(playheadCanvas, DG_SINGLE_CANVAS_OVERLAYS && separatePlayhead && transportRunning);
+      toggle(playheadCanvas, DG_SINGLE_CANVAS_OVERLAYS && separatePlayhead && (transportRunning || forcePlayheadVisible));
     }
     try { __dgEnsureLayerSizes('flat-layer-visibility'); } catch {}
   }
@@ -7282,6 +7283,21 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (e && e.__dgHandled) return;
       if (e) e.__dgHandled = true;
     } catch {}
+    const randomDisabled = String(panel?.dataset?.disableRandomEvents || '') === '1';
+    if (randomDisabled) {
+      try {
+        const owner = String(panel?.dataset?.artOwnerId || '').trim();
+        const artPanel = owner ? document.getElementById(owner) : null;
+        const isBeatSwarmSubboard = String(artPanel?.dataset?.beatSwarmSubboard || '') === '1';
+        if (isBeatSwarmSubboard) {
+          console.log('[BS-SUBBOARD-INIT] drawgrid:random-ignored', {
+            panelId: panel?.id || null,
+            kind,
+          });
+        }
+      } catch {}
+      return;
+    }
     if (typeof window !== 'undefined' && window.__DG_DEBUG_DRAWFLOW) {
       console.log('[DG][flow] handleToyRandomEvent', {
         kind,
@@ -7667,7 +7683,26 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   };
 
 
-  const persistedState = loadPersistedState();
+  const skipPersistedRestore = String(panel?.dataset?.skipDrawgridPersistedRestore || '') === '1';
+  const bsSubboard = (() => {
+    try {
+      const owner = String(panel?.dataset?.artOwnerId || '').trim();
+      if (!owner) return false;
+      const artPanel = document.getElementById(owner);
+      return String(artPanel?.dataset?.beatSwarmSubboard || '') === '1';
+    } catch {
+      return false;
+    }
+  })();
+  if (bsSubboard) {
+    try {
+      console.log('[BS-SUBBOARD-INIT] drawgrid:persisted-restore-gate', {
+        panelId: panel?.id || null,
+        skipPersistedRestore,
+      });
+    } catch {}
+  }
+  const persistedState = skipPersistedRestore ? null : loadPersistedState();
   if (persistedState) {
     try { layout(true); } catch {}
     try { restoreFromState(persistedState); } catch (err) {

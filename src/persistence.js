@@ -556,6 +556,11 @@ function applyRippler(panel, state){
 }
 
 function snapDrawGrid(panel) {
+  const ownerId = String(panel?.dataset?.artOwnerId || panel?.dataset?.artOwnerID || '').trim();
+  const ownerPanel = ownerId ? document.getElementById(ownerId) : null;
+  if (String(ownerPanel?.dataset?.beatSwarmSubboard || '') === '1') {
+    return {};
+  }
   const toy = panel.__drawToy;
   if (toy && typeof toy.getState === 'function') {
     return { ...toy.getState(), ...snapInstrumentPitch(panel) };
@@ -564,6 +569,12 @@ function snapDrawGrid(panel) {
 }
 
 function applyDrawGrid(panel, state) {
+  const ownerId = String(panel?.dataset?.artOwnerId || panel?.dataset?.artOwnerID || '').trim();
+  const ownerPanel = ownerId ? document.getElementById(ownerId) : null;
+  if (String(ownerPanel?.dataset?.beatSwarmSubboard || '') === '1') {
+    try { persistTraceLog('[persistence][drawgrid] SKIP (beat-swarm-subboard)', panel.id); } catch {}
+    return;
+  }
   const toy = panel.__drawToy;
 
   // Summarize state for logs

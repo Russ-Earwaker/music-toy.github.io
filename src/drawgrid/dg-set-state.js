@@ -44,6 +44,9 @@ export function createDgSetState({ state, deps } = {}) {
           d.applyInstrumentFromState?.(st.instrument, { emitEvents: true });
         }
         try {
+          const preserveNodesOverStrokes =
+            !!st?.meta?.preserveNodesOverStrokes ||
+            !!st?.__preserveNodesOverStrokes;
           // Steps first
           if (typeof st.steps === 'number' && (st.steps === 8 || st.steps === 16)) {
             if ((st.steps | 0) !== s.cols) {
@@ -105,6 +108,7 @@ export function createDgSetState({ state, deps } = {}) {
               };
               s.strokes.push(nextStroke);
             }
+            if (preserveNodesOverStrokes) s.__dgSkipMapRegenOnce = true;
             d.clearAndRedrawFromStrokes?.(null, 'setState-strokes');
           } else if (hasIncomingStrokes && Array.isArray(st.strokes)) {
             const hasFallback = Array.isArray(fallbackHydrationState?.strokes) && fallbackHydrationState.strokes.length > 0;
@@ -142,6 +146,7 @@ export function createDgSetState({ state, deps } = {}) {
               }
 
               s.persistentDisabled = s.currentMap.disabled;
+              s.__dgPreserveNodesOverStrokes = !!(preserveNodesOverStrokes && list);
               d.__dgBumpNodesRev?.('setState-nodes');
 
               d.drawGrid?.();

@@ -1,9 +1,74 @@
-window.__MT_DEBUG_STICKER_DRAW_AREA = true
-true
-art-toy-factory.js:2452 [LightPaths][draw-area] {reason: 'init', panelId: 'art-laserTrails-1771417050014-1jm4zt', panelStyleSize: {…}, panelOffset: {…}, panelRect: {…}, …}drawRect: {w: 295.95, h: 264.77}panelId: "art-laserTrails-1771417050014-1jm4zt"panelOffset: {w: 220, h: 220}panelRect: {w: 132, h: 132}panelStyleSize: {w: '220px', h: '220px'}ratio: {x: 2.242, y: 2.006}reason: "init"styles: {left: '-94px', top: '74px', width: '493.25px', height: '441.29px'}[[Prototype]]: Object
-art-toy-factory.js:2452 [LightPaths][draw-area] {reason: 'post-timeout', panelId: 'art-laserTrails-1771417050014-1jm4zt', panelStyleSize: {…}, panelOffset: {…}, panelRect: {…}, …}drawRect: {w: 295.95, h: 264.77}panelId: "art-laserTrails-1771417050014-1jm4zt"panelOffset: {w: 220, h: 220}panelRect: {w: 132, h: 132}panelStyleSize: {w: '220px', h: '220px'}ratio: {x: 2.242, y: 2.006}reason: "post-timeout"styles: {left: '-94px', top: '74px', width: '493.25px', height: '441.29px'}[[Prototype]]: Object
-art-toy-factory.js:2452 [LightPaths][draw-area] {reason: 'random-all', panelId: 'art-laserTrails-1771417050014-1jm4zt', panelStyleSize: {…}, panelOffset: {…}, panelRect: {…}, …}drawRect: {w: 960, h: 596.85}panelId: "art-laserTrails-1771417050014-1jm4zt"panelOffset: {w: 220, h: 220}panelRect: {w: 132, h: 132}panelStyleSize: {w: '220px', h: '220px'}ratio: {x: 7.273, y: 4.522}reason: "random-all"styles: {left: '-94px', top: '74px', width: '1600px', height: '994.76px'}[[Prototype]]: Object
-art-toy-factory.js:4570 [Sticker][draw-area] {reason: 'init', panelId: 'art-sticker-1771417057578-yzc70x', panelStyleSize: {…}, panelOffset: {…}, panelRect: {…}, …}drawRect: {w: 230.4, h: 165.6}panelId: "art-sticker-1771417057578-yzc70x"panelOffset: {w: 220, h: 220}panelRect: {w: 132, h: 132}panelStyleSize: {w: '220px', h: '220px'}ratio: {x: 1.745, y: 1.255}reason: "init"styles: {left: '-94px', top: '74px', width: '384px', height: '276px'}[[Prototype]]: Object
-art-toy-factory.js:4570 [Sticker][draw-area] {reason: 'post-timeout', panelId: 'art-sticker-1771417057578-yzc70x', panelStyleSize: {…}, panelOffset: {…}, panelRect: {…}, …}drawRect: {w: 230.4, h: 165.6}panelId: "art-sticker-1771417057578-yzc70x"panelOffset: {w: 220, h: 220}panelRect: {w: 132, h: 132}panelStyleSize: {w: '220px', h: '220px'}ratio: {x: 1.745, y: 1.255}reason: "post-timeout"styles: {left: '-94px', top: '74px', width: '384px', height: '276px'}[[Prototype]]: Object
-art-toy-factory.js:4570 [Sticker][draw-area] {reason: 'random-all', panelId: 'art-sticker-1771417057578-yzc70x', panelStyleSize: {…}, panelOffset: {…}, panelRect: {…}, …}drawRect: {w: 230.4, h: 165.6}panelId: "art-sticker-1771417057578-yzc70x"panelOffset: {w: 220, h: 220}panelRect: {w: 132, h: 132}panelStyleSize: {w: '220px', h: '220px'}ratio: {x: 1.745, y: 1.255}reason: "random-all"styles: {left: '-94px', top: '74px', width: '384px', height: '276px'}[[Prototype]]: Object
+window.__beatSwarmDebug.enableTuneShotDebug(true)
 
+true
+[Violation] Forced reflow while executing JavaScript took 33ms
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] step {seq: 1, slotIndex: 0, stepIndex: 0, beatIndex: 0, noteCount: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] step {seq: 2, slotIndex: 0, stepIndex: 1, beatIndex: 0, noteCount: 1, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] stage {seq: 3, source: 'tune-primary', archetype: 'projectile', variant: 'standard', stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn {seq: 4, source: 'tune-primary', projectileKind: 'standard', shots: 1, stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn-raw {seq: 5, source: 'tune-primary', slotIndex: 0, stageIndex: 1, stepIndex: 1, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] step {seq: 6, slotIndex: 0, stepIndex: 2, beatIndex: 1, noteCount: 1, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] stage {seq: 7, source: 'tune-primary', archetype: 'projectile', variant: 'standard', stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn {seq: 8, source: 'tune-primary', projectileKind: 'standard', shots: 1, stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn-raw {seq: 9, source: 'tune-primary', slotIndex: 0, stageIndex: 1, stepIndex: 2, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] step {seq: 10, slotIndex: 0, stepIndex: 3, beatIndex: 1, noteCount: 1, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] stage {seq: 11, source: 'tune-primary', archetype: 'projectile', variant: 'standard', stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn {seq: 12, source: 'tune-primary', projectileKind: 'standard', shots: 1, stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn-raw {seq: 13, source: 'tune-primary', slotIndex: 0, stageIndex: 1, stepIndex: 3, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] step {seq: 14, slotIndex: 0, stepIndex: 4, beatIndex: 2, noteCount: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] step {seq: 15, slotIndex: 0, stepIndex: 5, beatIndex: 2, noteCount: 1, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] stage {seq: 16, source: 'tune-primary', archetype: 'projectile', variant: 'standard', stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn {seq: 17, source: 'tune-primary', projectileKind: 'standard', shots: 1, stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn-raw {seq: 18, source: 'tune-primary', slotIndex: 0, stageIndex: 1, stepIndex: 5, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] step {seq: 19, slotIndex: 0, stepIndex: 6, beatIndex: 3, noteCount: 1, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] stage {seq: 20, source: 'tune-primary', archetype: 'projectile', variant: 'standard', stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn {seq: 21, source: 'tune-primary', projectileKind: 'standard', shots: 1, stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn-raw {seq: 22, source: 'tune-primary', slotIndex: 0, stageIndex: 1, stepIndex: 6, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] stage {seq: 23, source: '', archetype: 'aoe', variant: 'explosion', stageIndex: 1, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] step {seq: 24, slotIndex: 0, stepIndex: 7, beatIndex: 3, noteCount: 1, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] stage {seq: 25, source: 'tune-primary', archetype: 'projectile', variant: 'standard', stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn {seq: 26, source: 'tune-primary', projectileKind: 'standard', shots: 1, stageIndex: 0, …}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] spawn-raw {seq: 27, source: 'tune-primary', slotIndex: 0, stageIndex: 1, stepIndex: 7, …}
+index.html:1 Blocked aria-hidden on an element because its descendant retained focus. The focus must not be hidden from assistive technology users. Avoid using aria-hidden on a focused element or its ancestor. Consider using the inert attribute instead, which will also prevent focus. For more details, see the aria-hidden section of the WAI-ARIA specification at https://w3c.github.io/aria/#aria-hidden.
+Element with focus: <button.beat-swarm-stage-add>
+Ancestor with aria-hidden: <div.beat-swarm-pause-screen is-visible> <div class=​"beat-swarm-pause-screen is-visible" aria-hidden=​"true" data-ui-ready=​"1">​…​</div>​grid
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-open-snapshot {seq: 28, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-pending-state {seq: 29, slotIndex: 0, source: 'snapshot', signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7', runtimeSignature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7', …}
+[Violation] Forced reflow while executing JavaScript took 44ms
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-bind-panels {seq: 30, slotIndex: 0, panelCount: 1, panelIds: Array(1)}
+drawgrid.js:7699 [BS-SUBBOARD-INIT] drawgrid:persisted-restore-gate {panelId: 'drawgrid-1772823895651-jeupy2', skipPersistedRestore: true}
+drawgrid-init.js:78 [BS-SUBBOARD-INIT] drawgrid-init:enter {panelId: 'drawgrid-1772823895651-jeupy2', artOwnerId: 'art-flashCircle-1772823895644-ts1x0o', isBeatSwarmSubboard: true, hasPendingState: true, skipPersistedRestore: true}
+drawgrid-init.js:98 [drawgrid-init] HYDRATE (pending) drawgrid-1772823895651-jeupy2 {hasStrokes: true, activeCols: 6, steps: 8, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-force-apply-open-snapshot {seq: 31, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-apply-panel-tune {seq: 32, panelId: 'drawgrid-1772823895651-jeupy2', signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+drawgrid-init.js:111 [drawgrid-init] HYDRATE (post-50ms) drawgrid-1772823895651-jeupy2 {signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-force-apply-open-snapshot {seq: 33, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-apply-panel-tune {seq: 34, panelId: 'drawgrid-1772823895651-jeupy2', signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-force-apply-open-snapshot {seq: 35, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-apply-panel-tune {seq: 36, panelId: 'drawgrid-1772823895651-jeupy2', signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+drawgrid-init.js:135 [drawgrid-init] HYDRATE (reapply-before-reveal-skip) drawgrid-1772823895651-jeupy2 {signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+drawgrid-init.js:145 [drawgrid-init] HYDRATE (pre-reveal) drawgrid-1772823895651-jeupy2 {signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-force-apply-open-snapshot {seq: 37, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-apply-panel-tune {seq: 38, panelId: 'drawgrid-1772823895651-jeupy2', signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-open-start-panels {seq: 39, slotIndex: 0, panelCount: 1, panelIds: Array(1)}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-note-ignored-paused {seq: 40, slotIndex: 0, rowIndex: 6}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-note-ignored-paused {seq: 41, slotIndex: 0, rowIndex: 3}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-note-ignored-paused {seq: 42, slotIndex: 0, rowIndex: 2}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-note-ignored-paused {seq: 43, slotIndex: 0, rowIndex: 8}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-note-ignored-paused {seq: 44, slotIndex: 0, rowIndex: 11}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-note-ignored-paused {seq: 45, slotIndex: 0, rowIndex: 7}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-note-ignored-paused {seq: 46, slotIndex: 0, rowIndex: 6}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-note-ignored-paused {seq: 47, slotIndex: 0, rowIndex: 3}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] snapshot-skip-clean-session {seq: 48, slotIndex: 0}
+[Violation] Forced reflow while executing JavaScript took 56ms
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-open-snapshot {seq: 49, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+[Violation] Forced reflow while executing JavaScript took 45ms
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-force-apply-open-snapshot {seq: 50, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-apply-panel-tune {seq: 51, panelId: 'drawgrid-1772823895651-jeupy2', signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-force-apply-open-snapshot {seq: 52, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-apply-panel-tune {seq: 53, panelId: 'drawgrid-1772823895651-jeupy2', signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-force-apply-open-snapshot {seq: 54, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-apply-panel-tune {seq: 55, panelId: 'drawgrid-1772823895651-jeupy2', signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-force-apply-open-snapshot {seq: 56, slotIndex: 0, signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-apply-panel-tune {seq: 57, panelId: 'drawgrid-1772823895651-jeupy2', signature: 'steps=8|events=6|sig=1:6,2:3,3:2,5:8,6:11,7:7'}
+beat-swarm-mode.js:1406 [BS-TUNE-DEBUG] subboard-open-start-panels {seq: 58, slotIndex: 0, panelCount: 1, panelIds: Array(1)}

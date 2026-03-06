@@ -92,7 +92,12 @@ export function createDgPaintRedraw({ state, deps } = {}) {
         } catch {}
       }
 
-      d.regenerateMapFromStrokes?.();
+      const skipMapRegenOnce = !!s.__dgSkipMapRegenOnce;
+      if (skipMapRegenOnce) {
+        s.__dgSkipMapRegenOnce = false;
+      } else {
+        d.regenerateMapFromStrokes?.();
+      }
       try { (s.panel?.__dgUpdateButtons || d.updateGeneratorButtons || function(){})() } catch (e) { }
       d.syncLetterFade?.();
       d.__dgMarkSingleCanvasDirty?.(s.panel);

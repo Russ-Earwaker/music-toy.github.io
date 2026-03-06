@@ -185,6 +185,10 @@ const weaponSubBoardState = {
     boundPanelIds: new Set(),
     scheduledTimeoutIds: new Set(),
     seededStarterPattern: false,
+    seedingStarterPattern: false,
+    openTuneSnapshot: null,
+    lastBindSignature: '',
+    sessionDirty: false,
   })),
 };
 
@@ -195,6 +199,30 @@ function createDefaultWeaponTune() {
   const active = Array.from({ length: steps }, () => true);
   const list = Array.from({ length: steps }, () => [Math.max(0, rows - 1)]);
   const disabled = Array.from({ length: steps }, () => []);
+  return { kind: 'drawgrid', steps, notes, active, list, disabled };
+}
+
+function createRandomWeaponTune() {
+  const base = createDefaultWeaponTune();
+  const steps = Math.max(1, Math.trunc(Number(base.steps) || WEAPON_TUNE_STEPS));
+  const notes = DRAWGRID_TUNE_NOTE_PALETTE.slice();
+  const rows = Math.max(1, notes.length);
+  const active = Array.from({ length: steps }, () => false);
+  const list = Array.from({ length: steps }, () => []);
+  const disabled = Array.from({ length: steps }, () => []);
+  for (let s = 0; s < steps; s++) {
+    if (Math.random() >= 0.62) continue;
+    const r = Math.max(0, Math.min(rows - 1, Math.trunc(Math.random() * rows)));
+    active[s] = true;
+    // Startup tune is monophonic so projectile count maps 1:1 to active notes.
+    list[s] = [r];
+  }
+  if (!active.some(Boolean)) {
+    const s = Math.max(0, Math.min(steps - 1, Math.trunc(Math.random() * steps)));
+    const r = Math.max(0, Math.min(rows - 1, Math.trunc(Math.random() * rows)));
+    active[s] = true;
+    list[s] = [r];
+  }
   return { kind: 'drawgrid', steps, notes, active, list, disabled };
 }
 
@@ -323,6 +351,22 @@ function getWeaponTuneStepNotes(slotIndex, beatIndex) {
   return out;
 }
 
+function hasWeaponTuneContent(slotIndex) {
+  const chain = getWeaponSlotTuneChain(slotIndex);
+  for (const tune of chain) {
+    if (countWeaponTuneActiveEvents(sanitizeWeaponTune(tune)) > 0) return true;
+  }
+  return false;
+}
+
+function ensureWeaponHasStarterTune(slotIndex) {
+  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
+  if (hasWeaponTuneContent(idx)) return;
+  const starter = createRandomWeaponTune();
+  weaponLoadout[idx].tune = starter;
+  weaponLoadout[idx].tuneChain = [sanitizeWeaponTune(starter)];
+}
+
 function seedDefaultWeaponLoadout() {
   for (let i = 0; i < weaponLoadout.length; i++) {
     const slot = weaponLoadout[i];
@@ -336,6 +380,9 @@ function seedDefaultWeaponLoadout() {
     { archetype: 'projectile', variant: 'standard' },
     { archetype: 'aoe', variant: 'explosion' },
   ];
+  const randomStarterTune = createRandomWeaponTune();
+  weaponLoadout[0].tune = randomStarterTune;
+  weaponLoadout[0].tuneChain = [sanitizeWeaponTune(randomStarterTune)];
 }
 
 seedDefaultWeaponLoadout();
@@ -421,6 +468,8 @@ const swarmSoundEventState = {
   played: Object.create(null),
   maxVolume: Object.create(null),
   note: Object.create(null),
+  noteList: Object.create(null),
+  count: Object.create(null),
 };
 const swarmSoundInstrumentCache = new Map();
 const PREVIEW_NO_HIT_REPOSITION_SECONDS = 2.4;
@@ -431,7 +480,12 @@ const weaponDefs = Object.freeze({
 });
 const equippedWeapons = new Set();
 let lastBeatIndex = null;
+let lastWeaponTuneStepIndex = null;
 let currentBeatIndex = 0;
+const weaponTuneFireDebug = {
+  enabled: false,
+  seq: 0,
+};
 let previewSelectedWeaponSlotIndex = null;
 let activeWeaponSlotIndex = 0;
 const stagePickerState = { open: false, slotIndex: -1, stageIndex: -1 };
@@ -1345,6 +1399,28 @@ function getSwarmEnemySoundNoteById(enemyId) {
   return '';
 }
 
+function logWeaponTuneFireDebug(event, payload = null) {
+  if (!weaponTuneFireDebug.enabled) return;
+  weaponTuneFireDebug.seq = Math.max(0, Math.trunc(Number(weaponTuneFireDebug.seq) || 0)) + 1;
+  try {
+    console.log('[BS-TUNE-DEBUG]', event, { seq: weaponTuneFireDebug.seq, ...(payload && typeof payload === 'object' ? payload : {}) });
+  } catch {}
+}
+
+function getWeaponTuneSignature(tuneLike) {
+  const tune = sanitizeWeaponTune(tuneLike);
+  const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
+  const parts = [];
+  for (let s = 0; s < steps; s++) {
+    if (!tune.active?.[s]) continue;
+    const rows = Array.isArray(tune.list?.[s]) ? tune.list[s].slice() : [];
+    if (!rows.length) continue;
+    rows.sort((a, b) => a - b);
+    parts.push(`${s}:${rows.join('.')}`);
+  }
+  return `steps=${steps}|events=${parts.length}|sig=${parts.join(',')}`;
+}
+
 function resolveSwarmSoundInstrumentId(eventKey) {
   const key = String(eventKey || '').trim();
   if (!key) return 'tone';
@@ -1365,9 +1441,27 @@ function noteSwarmSoundEvent(eventKey, volume = 1, beatIndex = currentBeatIndex,
     swarmSoundEventState.played = Object.create(null);
     swarmSoundEventState.maxVolume = Object.create(null);
     swarmSoundEventState.note = Object.create(null);
+    swarmSoundEventState.noteList = Object.create(null);
+    swarmSoundEventState.count = Object.create(null);
   }
   const vol = Math.max(0.001, Math.min(1, Number(volume) || 0));
-  const note = normalizeSwarmNoteName(noteName) || getRandomSwarmPentatonicNote();
+  let note = normalizeSwarmNoteName(noteName) || getRandomSwarmPentatonicNote();
+  if (key === 'enemyDeath') {
+    const noteList = Array.isArray(swarmSoundEventState.noteList[key]) ? swarmSoundEventState.noteList[key] : [];
+    if (noteList.includes(note)) {
+      const count = Math.max(0, Math.trunc(Number(swarmSoundEventState.count[key]) || 0));
+      const preferred = SWARM_PENTATONIC_NOTES_ONE_OCTAVE[count % SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length];
+      if (preferred && !noteList.includes(preferred)) {
+        note = preferred;
+      } else {
+        const fallback = SWARM_PENTATONIC_NOTES_ONE_OCTAVE.find((n) => !noteList.includes(n));
+        if (fallback) note = fallback;
+      }
+    }
+    noteList.push(note);
+    swarmSoundEventState.noteList[key] = noteList;
+    swarmSoundEventState.count[key] = Math.max(0, Math.trunc(Number(swarmSoundEventState.count[key]) || 0)) + 1;
+  }
   const prev = Number(swarmSoundEventState.maxVolume[key]) || 0;
   if (vol > prev) {
     swarmSoundEventState.maxVolume[key] = vol;
@@ -1386,8 +1480,30 @@ function flushSwarmSoundEventsForBeat(beatIndex = currentBeatIndex) {
     if (!(vol > 0.0001)) continue;
     const def = SWARM_SOUND_EVENTS[key];
     const inst = resolveSwarmSoundInstrumentId(key);
-    const note = normalizeSwarmNoteName(swarmSoundEventState.note[key]) || String(def?.note || getRandomSwarmPentatonicNote());
-    try { triggerInstrument(inst, note, undefined, 'master', {}, vol); } catch {}
+    const notes = (() => {
+      if (key !== 'enemyDeath') {
+        return [normalizeSwarmNoteName(swarmSoundEventState.note[key]) || String(def?.note || getRandomSwarmPentatonicNote())];
+      }
+      const list = Array.isArray(swarmSoundEventState.noteList[key]) ? swarmSoundEventState.noteList[key] : [];
+      const uniq = [];
+      for (const n of list) {
+        const normalized = normalizeSwarmNoteName(n);
+        if (!normalized) continue;
+        if (uniq.includes(normalized)) continue;
+        uniq.push(normalized);
+      }
+      if (uniq.length) return uniq;
+      return [normalizeSwarmNoteName(swarmSoundEventState.note[key]) || String(def?.note || getRandomSwarmPentatonicNote())];
+    })();
+    const nowAudio = Number(getLoopInfo?.()?.now);
+    const deathArpStepSec = 0.028;
+    const deathPitchList = key === 'enemyDeath' ? notes.slice(0, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length) : notes;
+    for (let i = 0; i < deathPitchList.length; i++) {
+      const when = (key === 'enemyDeath' && Number.isFinite(nowAudio))
+        ? (nowAudio + (i * deathArpStepSec))
+        : undefined;
+      try { triggerInstrument(inst, deathPitchList[i], when, 'master', {}, vol); } catch {}
+    }
     swarmSoundEventState.played[key] = true;
   }
 }
@@ -2908,6 +3024,22 @@ function hasWeaponSubBoard(slotIndex) {
   return artToyId.length > 0;
 }
 
+function setWeaponSubBoardPanelPlayback(slotIndex, playing) {
+  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
+  const artToyId = getWeaponSubBoardArtToyId(idx);
+  if (!artToyId) return;
+  const panels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
+  for (const panel of panels) {
+    if (!(panel instanceof HTMLElement)) continue;
+    try { panel.dataset.chainActive = playing ? 'true' : 'false'; } catch {}
+    try { panel.dataset.forcePlayheadVisible = playing ? '1' : '0'; } catch {}
+    try { panel.dispatchEvent(new CustomEvent('toy:visibility', { bubbles: true, detail: { visible: !!playing } })); } catch {}
+    if (playing) {
+      try { panel.dispatchEvent(new CustomEvent('toy:start', { bubbles: true })); } catch {}
+    }
+  }
+}
+
 function clearWeaponSubBoardBindingsForSlot(slotIndex) {
   const slotState = getWeaponSubBoardSlotState(slotIndex);
   const ids = Array.from(slotState.boundPanelIds || []);
@@ -2922,9 +3054,20 @@ function clearWeaponSubBoardBindingsForSlot(slotIndex) {
     if (typeof updateHandler === 'function') {
       try { panel.removeEventListener('drawgrid:update', updateHandler); } catch {}
     }
+    const dirtyHandler = panel.__beatSwarmSubBoardDirtyHandler;
+    if (typeof dirtyHandler === 'function') {
+      try { panel.removeEventListener('drawgrid:node-toggle', dirtyHandler); } catch {}
+      try { panel.removeEventListener('drawgrid:node-drag-end', dirtyHandler); } catch {}
+      try { panel.removeEventListener('toy-random', dirtyHandler); } catch {}
+      try { panel.removeEventListener('toy-random-notes', dirtyHandler); } catch {}
+      try { panel.removeEventListener('toy-random-blocks', dirtyHandler); } catch {}
+      try { panel.removeEventListener('pointerdown', dirtyHandler); } catch {}
+      try { panel.removeEventListener('touchstart', dirtyHandler); } catch {}
+    }
     delete panel.__beatSwarmSubBoardSlotIndex;
     delete panel.__beatSwarmSubBoardNoteHandler;
     delete panel.__beatSwarmSubBoardUpdateHandler;
+    delete panel.__beatSwarmSubBoardDirtyHandler;
   }
   slotState.boundPanelIds.clear();
 }
@@ -2964,10 +3107,162 @@ function drawgridStateHasAnyNotes(stateLike) {
   return false;
 }
 
-function maybeSeedStarterDrawgridPattern(slotIndex) {
+function applyProjectileInstrumentToDrawgridPanel(panel) {
+  if (!(panel instanceof HTMLElement)) return;
+  const projectileInstrument = resolveSwarmSoundInstrumentId('projectile') || 'tone';
+  try { panel.dataset.instrument = projectileInstrument; } catch {}
+  try { panel.dataset.instrumentPersisted = '1'; } catch {}
+  try { panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: projectileInstrument }, bubbles: true })); } catch {}
+  try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: projectileInstrument, value: projectileInstrument }, bubbles: true })); } catch {}
+}
+
+function buildVisualStrokeFromWeaponTune(tuneLike) {
+  const tune = sanitizeWeaponTune(tuneLike);
+  const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
+  const noteRows = Math.max(1, Array.isArray(tune?.notes) ? tune.notes.length : DRAWGRID_TUNE_NOTE_PALETTE.length);
+  const active = Array.isArray(tune?.active) ? tune.active : [];
+  const list = Array.isArray(tune?.list) ? tune.list : [];
+  const ptsN = [];
+  for (let s = 0; s < steps; s++) {
+    if (!active[s]) continue;
+    const rows = Array.isArray(list[s]) ? list[s] : [];
+    if (!rows.length) continue;
+    const row = Math.max(0, Math.min(noteRows - 1, Math.trunc(Number(rows[0]) || 0)));
+    const nx = (s + 0.5) / steps;
+    const ny = 1 - ((row + 0.5) / noteRows);
+    ptsN.push({ nx, ny });
+  }
+  if (!ptsN.length) return [];
+  return [{
+    ptsN,
+    isSpecial: true,
+  }];
+}
+
+function applyWeaponTuneToDrawgridPanel(slotIndex, panel) {
+  if (!(panel instanceof HTMLElement)) return false;
+  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
+  const chain = getWeaponSlotTuneChain(idx);
+  const api = panel.__drawToy;
+  if (!api?.setState) return false;
+  const tune = sanitizeWeaponTune(chain[0]);
+  if (!(countWeaponTuneActiveEvents(tune) > 0)) return false;
+  return applyWeaponTuneObjectToDrawgridPanel(tune, panel);
+}
+
+function applyWeaponTuneObjectToDrawgridPanel(tuneLike, panel) {
+  if (!(panel instanceof HTMLElement)) return false;
+  const api = panel.__drawToy;
+  if (!api?.setState && !api?.restoreState) return false;
+  const tune = sanitizeWeaponTune(tuneLike);
+  if (!(countWeaponTuneActiveEvents(tune) > 0)) return false;
+  logWeaponTuneFireDebug('subboard-apply-panel-tune', {
+    panelId: String(panel?.id || ''),
+    signature: getWeaponTuneSignature(tune),
+  });
+  const payload = {
+    steps: tune.steps,
+    strokes: buildVisualStrokeFromWeaponTune(tune),
+    meta: {
+      preserveNodesOverStrokes: true,
+    },
+    nodes: {
+      active: tune.active.slice(),
+      list: tune.list.map((col) => (Array.isArray(col) ? col.slice() : [])),
+      disabled: tune.disabled.map((col) => (Array.isArray(col) ? col.slice() : [])),
+    },
+  };
+  try {
+    if (typeof api.setState === 'function') api.setState(payload);
+    else api.restoreState(payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function panelDrawgridSignature(panel) {
+  if (!(panel instanceof HTMLElement)) return '';
+  try {
+    const st = panel.__drawToy?.getState?.();
+    if (!st || typeof st !== 'object') return '';
+    return getWeaponTuneSignature(sanitizeWeaponTune(st));
+  } catch {
+    return '';
+  }
+}
+
+function forceApplyOpenTuneSnapshotToSubBoard(slotIndex) {
   const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
   const slotState = getWeaponSubBoardSlotState(idx);
-  if (slotState.seededStarterPattern) return;
+  const snap = slotState?.openTuneSnapshot ? sanitizeWeaponTune(slotState.openTuneSnapshot) : null;
+  if (!snap || !(countWeaponTuneActiveEvents(snap) > 0)) return;
+  logWeaponTuneFireDebug('subboard-force-apply-open-snapshot', {
+    slotIndex: idx,
+    signature: getWeaponTuneSignature(snap),
+  });
+  const artToyId = getWeaponSubBoardArtToyId(idx);
+  if (!artToyId) return;
+  const panels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
+  for (const panel of panels) {
+    applyProjectileInstrumentToDrawgridPanel(panel);
+    applyWeaponTuneObjectToDrawgridPanel(snap, panel);
+  }
+}
+
+function getWeaponSubBoardSlotIndexByArtToyId(artToyId) {
+  const target = String(artToyId || '').trim();
+  if (!target) return -1;
+  for (let i = 0; i < MAX_WEAPON_SLOTS; i++) {
+    if (getWeaponSubBoardArtToyId(i) === target) return i;
+  }
+  return -1;
+}
+
+function getWeaponSubBoardPendingDrawgridState(artToyId) {
+  const idx = getWeaponSubBoardSlotIndexByArtToyId(artToyId);
+  if (idx < 0) return null;
+  const slotState = getWeaponSubBoardSlotState(idx);
+  const snapshotTune = slotState?.openTuneSnapshot ? sanitizeWeaponTune(slotState.openTuneSnapshot) : null;
+  const runtimeTune = sanitizeWeaponTune(weaponLoadout[idx]?.tune);
+  const chainTune = sanitizeWeaponTune(getWeaponSlotTuneChain(idx)[0]);
+  let source = 'chain';
+  let tune = chainTune;
+  if (snapshotTune && countWeaponTuneActiveEvents(snapshotTune) > 0) {
+    source = 'snapshot';
+    tune = snapshotTune;
+  } else if (countWeaponTuneActiveEvents(runtimeTune) > 0) {
+    source = 'runtime';
+    tune = runtimeTune;
+  }
+  if (!(countWeaponTuneActiveEvents(tune) > 0)) return null;
+  logWeaponTuneFireDebug('subboard-pending-state', {
+    slotIndex: idx,
+    source,
+    signature: getWeaponTuneSignature(tune),
+    runtimeSignature: getWeaponTuneSignature(runtimeTune),
+    chainSignature: getWeaponTuneSignature(chainTune),
+    snapshotSignature: snapshotTune ? getWeaponTuneSignature(snapshotTune) : '',
+  });
+  return {
+    steps: tune.steps,
+    strokes: buildVisualStrokeFromWeaponTune(tune),
+    meta: {
+      preserveNodesOverStrokes: true,
+    },
+    nodes: {
+      active: tune.active.slice(),
+      list: tune.list.map((col) => (Array.isArray(col) ? col.slice() : [])),
+      disabled: tune.disabled.map((col) => (Array.isArray(col) ? col.slice() : [])),
+    },
+  };
+}
+
+function maybeSeedStarterDrawgridPattern(slotIndex) {
+  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
+  const weaponHasTune = hasWeaponTuneContent(idx);
+  const slotState = getWeaponSubBoardSlotState(idx);
+  if (slotState.seededStarterPattern || slotState.seedingStarterPattern) return;
   const artToyId = getWeaponSubBoardArtToyId(idx);
   if (!artToyId) return;
   const panels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
@@ -2979,6 +3274,17 @@ function maybeSeedStarterDrawgridPattern(slotIndex) {
   });
   const panel = panels[0];
   if (!(panel instanceof HTMLElement)) return;
+  const ownerId = String(panel?.dataset?.artOwnerId || '').trim();
+  const ownerPanel = ownerId ? document.getElementById(ownerId) : null;
+  const isBeatSwarmSubboard = String(ownerPanel?.dataset?.beatSwarmSubboard || '') === '1';
+  if (isBeatSwarmSubboard && weaponHasTune) {
+    // Beat Swarm subboard gets deterministic pending/open-snapshot hydration; avoid late reseed writes.
+    slotState.seededStarterPattern = true;
+    slotState.seedingStarterPattern = false;
+    logWeaponTuneFireDebug('subboard-seed-skip-has-tune', { slotIndex: idx });
+    return;
+  }
+  applyProjectileInstrumentToDrawgridPanel(panel);
   const hasNotes = (() => {
     try {
       const st = panel.__drawToy?.getState?.();
@@ -2987,11 +3293,36 @@ function maybeSeedStarterDrawgridPattern(slotIndex) {
       return false;
     }
   })();
-  if (!hasNotes) {
-    try { panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, detail: { mode: 'music', source: 'beat-swarm-starter' } })); } catch {}
+  if (hasNotes) {
+    slotState.seededStarterPattern = true;
+    slotState.seedingStarterPattern = false;
+    return;
   }
-  slotState.seededStarterPattern = true;
-  try { snapshotWeaponSubBoardTuneChain(idx); } catch {}
+  slotState.seedingStarterPattern = true;
+  let hydratedFromWeapon = weaponHasTune ? applyWeaponTuneToDrawgridPanel(idx, panel) : false;
+  const tryFinalize = (attempt = 0) => {
+    if (weaponHasTune && !hydratedFromWeapon) {
+      // Keep hydrating until DrawGrid API is attached and accepts the weapon tune.
+      hydratedFromWeapon = !!applyWeaponTuneToDrawgridPanel(idx, panel);
+    }
+    const st = panel.__drawToy?.getState?.();
+    const ready = drawgridStateHasAnyNotes(st);
+    if (ready && (!weaponHasTune || hydratedFromWeapon)) {
+      slotState.seededStarterPattern = true;
+      slotState.seedingStarterPattern = false;
+      return;
+    }
+    if (attempt >= 30) {
+      slotState.seedingStarterPattern = false;
+      return;
+    }
+    const timerId = setTimeout(() => {
+      slotState.scheduledTimeoutIds.delete(timerId);
+      tryFinalize(attempt + 1);
+    }, 40);
+    slotState.scheduledTimeoutIds.add(timerId);
+  };
+  tryFinalize(0);
 }
 
 function ensureWeaponSubBoardArtToy(slotIndex) {
@@ -3009,7 +3340,11 @@ function ensureWeaponSubBoardArtToy(slotIndex) {
   if (!(artPanel instanceof HTMLElement)) return '';
   try { artPanel.classList.add('beat-swarm-weapon-subboard-anchor'); } catch {}
   try { artPanel.dataset.beatSwarmWeaponSlot = String(slotIndex); } catch {}
+  try { artPanel.dataset.beatSwarmSubboard = '1'; } catch {}
+  try { artPanel.dataset.pendingRandMusic = '0'; } catch {}
+  try { artPanel.dataset.pendingRandAll = '0'; } catch {}
   slotState.seededStarterPattern = false;
+  slotState.seedingStarterPattern = false;
   slotState.artToyId = String(artPanel.id || '');
   return slotState.artToyId;
 }
@@ -3035,10 +3370,23 @@ function snapshotWeaponSubBoardTuneChain(slotIndex) {
   for (const panel of panels) {
     try {
       const st = panel?.__drawToy?.getState?.();
+      if (!st || typeof st !== 'object') continue;
       chain.push(sanitizeWeaponTune(st));
     } catch {}
   }
   if (!chain.length) return;
+  let nextEvents = 0;
+  for (const tune of chain) nextEvents += countWeaponTuneActiveEvents(tune);
+  const previousHadContent = hasWeaponTuneContent(idx);
+  if (nextEvents <= 0 && previousHadContent) {
+    logWeaponTuneFireDebug('snapshot-skip-empty', { slotIndex: idx, chainPanels: chain.length });
+    return;
+  }
+  logWeaponTuneFireDebug('snapshot-apply', { slotIndex: idx, chainPanels: chain.length, activeEvents: nextEvents });
+  logWeaponTuneFireDebug('snapshot-primary-signature', {
+    slotIndex: idx,
+    signature: getWeaponTuneSignature(chain[0]),
+  });
   weaponLoadout[idx].tuneChain = chain;
   weaponLoadout[idx].tune = chain[0];
 }
@@ -3055,6 +3403,11 @@ function triggerWeaponFromSubBoardNote(slotIndex, rowIndex) {
   const damageScale = getWeaponTuneDamageScale(idx);
   const first = stages[0];
   const rest = stages.slice(1);
+  logWeaponTuneFireDebug('subboard-note-fire', {
+    slotIndex: idx,
+    rowIndex: Math.trunc(Number(rowIndex) || 0),
+    beatIndex,
+  });
   pulsePlayerShipNoteFlash();
   triggerWeaponStage(first, centerWorld, beatIndex, rest, {
     origin: centerWorld,
@@ -3064,6 +3417,8 @@ function triggerWeaponFromSubBoardNote(slotIndex, rowIndex) {
     damageScale,
     forcedNoteName: weaponSubBoardRowToNoteName(rowIndex),
     directSound: true,
+    debugSource: 'subboard-note',
+    debugBeatIndex: beatIndex,
   });
 }
 
@@ -3075,10 +3430,22 @@ function scheduleWeaponFromSubBoardNote(slotIndex, rowIndex, whenAudio) {
   const nowAudio = Number(info?.now);
   if (!Number.isFinite(row)) return;
   if (!Number.isFinite(when) || !Number.isFinite(nowAudio)) {
+    logWeaponTuneFireDebug('subboard-note-schedule', {
+      slotIndex: idx,
+      rowIndex: row,
+      whenAudio: null,
+      delayMs: 0,
+    });
     triggerWeaponFromSubBoardNote(idx, row);
     return;
   }
   const delayMs = Math.max(0, (when - nowAudio) * 1000);
+  logWeaponTuneFireDebug('subboard-note-schedule', {
+    slotIndex: idx,
+    rowIndex: row,
+    whenAudio: when,
+    delayMs: Math.round(delayMs),
+  });
   if (!(delayMs > 2)) {
     triggerWeaponFromSubBoardNote(idx, row);
     return;
@@ -3100,6 +3467,16 @@ function syncWeaponSubBoardBindingsForSlot(slotIndex) {
     return;
   }
   const panels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
+  const panelIdsForDebug = panels.map((p) => String(p?.id || '')).filter(Boolean);
+  const bindSignature = panelIdsForDebug.join('|');
+  if (slotState.lastBindSignature !== bindSignature) {
+    slotState.lastBindSignature = bindSignature;
+    logWeaponTuneFireDebug('subboard-bind-panels', {
+      slotIndex: idx,
+      panelCount: panels.length,
+      panelIds: panelIdsForDebug,
+    });
+  }
   const nextIds = new Set(panels.map((p) => String(p.id || '')).filter((id) => !!id));
   for (const oldId of Array.from(slotState.boundPanelIds)) {
     if (nextIds.has(oldId)) continue;
@@ -3112,37 +3489,64 @@ function syncWeaponSubBoardBindingsForSlot(slotIndex) {
     if (typeof oldUpdate === 'function') {
       try { oldPanel.removeEventListener('drawgrid:update', oldUpdate); } catch {}
     }
+    const oldDirty = oldPanel?.__beatSwarmSubBoardDirtyHandler;
+    if (typeof oldDirty === 'function') {
+      try { oldPanel.removeEventListener('drawgrid:node-toggle', oldDirty); } catch {}
+      try { oldPanel.removeEventListener('drawgrid:node-drag-end', oldDirty); } catch {}
+      try { oldPanel.removeEventListener('toy-random', oldDirty); } catch {}
+      try { oldPanel.removeEventListener('toy-random-notes', oldDirty); } catch {}
+      try { oldPanel.removeEventListener('toy-random-blocks', oldDirty); } catch {}
+      try { oldPanel.removeEventListener('pointerdown', oldDirty); } catch {}
+      try { oldPanel.removeEventListener('touchstart', oldDirty); } catch {}
+    }
     if (oldPanel) {
       delete oldPanel.__beatSwarmSubBoardSlotIndex;
       delete oldPanel.__beatSwarmSubBoardNoteHandler;
       delete oldPanel.__beatSwarmSubBoardUpdateHandler;
+      delete oldPanel.__beatSwarmSubBoardDirtyHandler;
     }
     slotState.boundPanelIds.delete(oldId);
   }
   for (const panel of panels) {
     if (!(panel instanceof HTMLElement) || !panel.id) continue;
     if (slotState.boundPanelIds.has(panel.id)) continue;
+    applyProjectileInstrumentToDrawgridPanel(panel);
     const onNote = (ev) => {
+      if (gameplayPaused) {
+        logWeaponTuneFireDebug('subboard-note-ignored-paused', {
+          slotIndex: idx,
+          rowIndex: Math.trunc(Number(ev?.detail?.row) || 0),
+        });
+        return;
+      }
+      if (!weaponSubBoardState.open || Math.trunc(Number(weaponSubBoardState.slotIndex) || -1) !== idx) return;
       const row = Math.trunc(Number(ev?.detail?.row));
       if (!Number.isFinite(row)) return;
       scheduleWeaponFromSubBoardNote(idx, row, ev?.detail?.when);
     };
     const onUpdate = () => {
-      try {
-        snapshotWeaponSubBoardTuneChain(idx);
-      } catch {}
+      void idx;
+    };
+    const markDirty = () => {
+      if (!weaponSubBoardState.open || Math.trunc(Number(weaponSubBoardState.slotIndex) || -1) !== idx) return;
+      getWeaponSubBoardSlotState(idx).sessionDirty = true;
     };
     panel.__beatSwarmSubBoardSlotIndex = idx;
     panel.__beatSwarmSubBoardNoteHandler = onNote;
     panel.__beatSwarmSubBoardUpdateHandler = onUpdate;
+    panel.__beatSwarmSubBoardDirtyHandler = markDirty;
     try { panel.addEventListener('drawgrid:note-fired', onNote); } catch {}
     try { panel.addEventListener('drawgrid:update', onUpdate); } catch {}
-    try {
-      snapshotWeaponSubBoardTuneChain(idx);
-    } catch {}
+    try { panel.addEventListener('drawgrid:node-toggle', markDirty); } catch {}
+    try { panel.addEventListener('drawgrid:node-drag-end', markDirty); } catch {}
+    try { panel.addEventListener('toy-random', markDirty); } catch {}
+    try { panel.addEventListener('toy-random-notes', markDirty); } catch {}
+    try { panel.addEventListener('toy-random-blocks', markDirty); } catch {}
+    try { panel.addEventListener('pointerdown', markDirty); } catch {}
+    try { panel.addEventListener('touchstart', markDirty); } catch {}
+    // Keep tune state stable during autoplay; we snapshot on sub-board close.
     slotState.boundPanelIds.add(panel.id);
   }
-  snapshotWeaponSubBoardTuneChain(idx);
 }
 
 function setPauseScreenSubBoardHidden(hidden) {
@@ -3157,10 +3561,24 @@ function closeWeaponSubBoardEditor(options = null) {
   const prevSlotIndex = Number.isFinite(weaponSubBoardState.slotIndex)
     ? Math.trunc(weaponSubBoardState.slotIndex)
     : Math.trunc(Number(weaponSubBoardState.slotIndex));
+  if (wasOpen && prevSlotIndex >= 0 && prevSlotIndex < MAX_WEAPON_SLOTS) {
+    const prevSlotState = getWeaponSubBoardSlotState(prevSlotIndex);
+    if (prevSlotState?.sessionDirty) {
+      try { snapshotWeaponSubBoardTuneChain(prevSlotIndex); } catch {}
+    } else {
+      logWeaponTuneFireDebug('snapshot-skip-clean-session', { slotIndex: prevSlotIndex });
+    }
+    try { setWeaponSubBoardPanelPlayback(prevSlotIndex, false); } catch {}
+  }
   weaponSubBoardState.open = false;
   weaponSubBoardState.slotIndex = -1;
   setPauseScreenSubBoardHidden(false);
   if (wasOpen && prevSlotIndex >= 0 && prevSlotIndex < MAX_WEAPON_SLOTS) {
+    try {
+      const prevSlotState = getWeaponSubBoardSlotState(prevSlotIndex);
+      prevSlotState.openTuneSnapshot = null;
+      prevSlotState.sessionDirty = false;
+    } catch {}
     clearWeaponSubBoardScheduledTriggersForSlot(prevSlotIndex);
   }
   if (opts.keepUi !== true && gameplayPaused) renderPauseWeaponUi();
@@ -3168,7 +3586,9 @@ function closeWeaponSubBoardEditor(options = null) {
 }
 
 function updateWeaponSubBoardSession() {
-  for (let i = 0; i < MAX_WEAPON_SLOTS; i++) syncWeaponSubBoardBindingsForSlot(i);
+  for (let i = 0; i < MAX_WEAPON_SLOTS; i++) {
+    syncWeaponSubBoardBindingsForSlot(i);
+  }
   if (!weaponSubBoardState.open) return;
   const slotIndex = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(weaponSubBoardState.slotIndex) || 0)));
   const artToyId = getWeaponSubBoardArtToyId(slotIndex);
@@ -3191,6 +3611,15 @@ function updateWeaponSubBoardSession() {
 function openWeaponSubBoardEditor(slotIndex) {
   const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
   if (!active || !gameplayPaused) return false;
+  try {
+    const slotState = getWeaponSubBoardSlotState(idx);
+    slotState.openTuneSnapshot = sanitizeWeaponTune(weaponLoadout[idx]?.tune);
+    slotState.sessionDirty = false;
+    logWeaponTuneFireDebug('subboard-open-snapshot', {
+      slotIndex: idx,
+      signature: getWeaponTuneSignature(slotState.openTuneSnapshot),
+    });
+  } catch {}
   const artToyId = ensureWeaponSubBoardArtToy(idx);
   if (!artToyId) return false;
   weaponSubBoardState.open = true;
@@ -3205,20 +3634,67 @@ function openWeaponSubBoardEditor(slotIndex) {
   tuneEditorState.playheadStep = 0;
   teardownWeaponTuneToyEditor();
   try { window.__ArtInternal?.enter?.(artToyId); } catch {}
+  try {
+    const existingPanels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
+    for (const p of existingPanels) {
+      if (!(p instanceof HTMLElement)) continue;
+      p.style.visibility = 'hidden';
+      try { p.dataset.beatSwarmAwaitReveal = '1'; } catch {}
+    }
+  } catch {}
   setTimeout(() => {
     hideWeaponSubBoardArtAnchor(idx);
     syncWeaponSubBoardBindingsForSlot(idx);
-    maybeSeedStarterDrawgridPattern(idx);
-    const boardPanels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
-    if (!boardPanels.length) return;
-    for (const p of boardPanels) {
-      try { p.dispatchEvent(new CustomEvent('toy:start', { bubbles: true })); } catch {}
-    }
+    forceApplyOpenTuneSnapshotToSubBoard(idx);
   }, 80);
   setTimeout(() => {
     syncWeaponSubBoardBindingsForSlot(idx);
-    maybeSeedStarterDrawgridPattern(idx);
+    forceApplyOpenTuneSnapshotToSubBoard(idx);
   }, 260);
+  setTimeout(() => {
+    syncWeaponSubBoardBindingsForSlot(idx);
+    forceApplyOpenTuneSnapshotToSubBoard(idx);
+  }, 520);
+  setTimeout(() => {
+    syncWeaponSubBoardBindingsForSlot(idx);
+    forceApplyOpenTuneSnapshotToSubBoard(idx);
+    const boardPanels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="drawgrid"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
+    logWeaponTuneFireDebug('subboard-open-start-panels', {
+      slotIndex: idx,
+      panelCount: boardPanels.length,
+      panelIds: boardPanels.map((p) => String(p?.id || '')).filter(Boolean),
+    });
+    if (!boardPanels.length) return;
+    const slotState = getWeaponSubBoardSlotState(idx);
+    const snap = slotState?.openTuneSnapshot ? sanitizeWeaponTune(slotState.openTuneSnapshot) : null;
+    const targetSig = snap ? getWeaponTuneSignature(snap) : '';
+    const finalizeStart = () => {
+      for (const p of boardPanels) {
+        try { p.dispatchEvent(new CustomEvent('toy:start', { bubbles: true })); } catch {}
+        try { p.dispatchEvent(new CustomEvent('beat-swarm:reveal-subboard-panel', { bubbles: false })); } catch {}
+        try { p.style.visibility = ''; } catch {}
+        try { p.dataset.beatSwarmAwaitReveal = '0'; } catch {}
+      }
+      try { setWeaponSubBoardPanelPlayback(idx, true); } catch {}
+    };
+    // Do not block board open on async setState convergence; it causes visible delays.
+    // Start immediately, then enforce the snapshot signature shortly after startup.
+    finalizeStart();
+    if (!targetSig || !snap) return;
+    const enforce = (delayMs) => {
+      const timerId = setTimeout(() => {
+        slotState.scheduledTimeoutIds.delete(timerId);
+        for (const p of boardPanels) {
+          const sig = panelDrawgridSignature(p);
+          if (sig !== targetSig) applyWeaponTuneObjectToDrawgridPanel(snap, p);
+        }
+      }, delayMs);
+      slotState.scheduledTimeoutIds.add(timerId);
+    };
+    enforce(30);
+    enforce(90);
+    enforce(180);
+  }, 820);
   return true;
 }
 
@@ -4448,6 +4924,14 @@ function countOrbitingHomingMissiles() {
 
 function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
   if (!enemyLayerEl) return;
+  logWeaponTuneFireDebug('spawn-raw', {
+    source: String(chainContext?.debugSource || 'unknown'),
+    slotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
+    stageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
+    stepIndex: Number.isFinite(chainContext?.debugStepIndex) ? Math.trunc(chainContext.debugStepIndex) : null,
+    beatIndex: Number.isFinite(chainContext?.debugBeatIndex) ? Math.trunc(chainContext.debugBeatIndex) : Math.trunc(Number(currentBeatIndex) || 0),
+    damage: Math.max(1, Number(damage) || 1),
+  });
   const dir = normalizeDir(dirX, dirY);
   const el = document.createElement('div');
   el.className = 'beat-swarm-projectile';
@@ -4682,7 +5166,21 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
     damageScale,
     forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
     directSound,
+    debugSource: String(context?.debugSource || ''),
+    debugStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
+    debugBeatIndex: Number.isFinite(context?.debugBeatIndex) ? Math.trunc(context.debugBeatIndex) : null,
+    debugNoteIndex: Number.isFinite(context?.debugNoteIndex) ? Math.trunc(context.debugNoteIndex) : null,
   };
+  logWeaponTuneFireDebug('stage', {
+    source: String(context?.debugSource || ''),
+    archetype: String(archetype || ''),
+    variant: String(variant || ''),
+    stageIndex,
+    slotIndex,
+    stepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
+    beatIndex: Number.isFinite(context?.debugBeatIndex) ? Math.trunc(context.debugBeatIndex) : Math.trunc(Number(beatIndex) || 0),
+    noteIndex: Number.isFinite(context?.debugNoteIndex) ? Math.trunc(context.debugNoteIndex) : null,
+  });
   const sourceEnemyId = Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : null;
   const nearest = getNearestEnemy(originWorld.x, originWorld.y, sourceEnemyId);
   if (archetype === 'projectile') {
@@ -4703,21 +5201,25 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
       ? getOffsetPoint(originWorld, nearest ? { x: nearest.wx, y: nearest.wy } : null, chainSpawnOffsetWorld, facingDir)
       : originWorld;
     if (variant === 'homing-missile') {
+      logWeaponTuneFireDebug('spawn', { source: nextCtx.debugSource, projectileKind: 'homing-missile', shots: 1, stageIndex, slotIndex });
       spawnHomingMissile(spawnOrigin, 2 * damageScale, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'boomerang') {
+      logWeaponTuneFireDebug('spawn', { source: nextCtx.debugSource, projectileKind: 'boomerang', shots: 1, stageIndex, slotIndex });
       spawnBoomerangProjectile(spawnOrigin, baseDir.x, baseDir.y, 2 * damageScale, continuation, beatIndex + 1, nextCtx);
       return;
     }
     if (variant === 'split-shot') {
       const baseAngle = Math.atan2(baseDir.y, baseDir.x);
       const angles = [baseAngle, baseAngle - PROJECTILE_SPLIT_ANGLE_RAD, baseAngle + PROJECTILE_SPLIT_ANGLE_RAD];
+      logWeaponTuneFireDebug('spawn', { source: nextCtx.debugSource, projectileKind: 'split-shot', shots: angles.length, stageIndex, slotIndex });
       for (const ang of angles) {
         spawnProjectileFromDirection(spawnOrigin, Math.cos(ang), Math.sin(ang), 2 * damageScale, continuation, beatIndex + 1, nextCtx);
       }
       return;
     }
+    logWeaponTuneFireDebug('spawn', { source: nextCtx.debugSource, projectileKind: 'standard', shots: 1, stageIndex, slotIndex });
     if (nearest) {
       spawnProjectile(spawnOrigin, nearest, 2 * damageScale, continuation, beatIndex + 1, nextCtx);
     } else {
@@ -4940,35 +5442,48 @@ function applyLingeringAoeBeat(beatIndex) {
   }
 }
 
-function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex) {
+function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex, contextBeatIndex = beatIndex) {
   if (!centerWorld) return;
   const slotIndex = Math.max(0, Math.min(weaponLoadout.length - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
-  if (hasWeaponSubBoard(slotIndex)) return;
+  if (weaponSubBoardState.open && Math.trunc(Number(weaponSubBoardState.slotIndex) || -1) === slotIndex) return;
   const weapon = weaponLoadout[slotIndex];
   const stages = sanitizeWeaponStages(weapon?.stages);
   if (stages.length) {
     const tuneNotes = getWeaponTuneStepNotes(slotIndex, beatIndex);
-    if (!tuneNotes.length) return;
+    const noteName = tuneNotes.length ? tuneNotes[0] : null;
+    logWeaponTuneFireDebug('step', {
+      slotIndex,
+      stepIndex: Math.trunc(Number(beatIndex) || 0),
+      beatIndex: Math.trunc(Number(contextBeatIndex) || 0),
+      noteCount: tuneNotes.length,
+      notes: tuneNotes.slice(),
+      chosenNote: noteName,
+      firstStage: `${String(stages[0]?.archetype || '')}:${String(stages[0]?.variant || '')}`,
+    });
+    if (!noteName) return;
     const damageScale = getWeaponTuneDamageScale(slotIndex);
     const first = stages[0];
     const rest = stages.slice(1);
-    for (const noteName of tuneNotes) {
-      pulsePlayerShipNoteFlash();
-      triggerWeaponStage(first, centerWorld, beatIndex, rest, {
-        origin: centerWorld,
-        impactPoint: centerWorld,
-        weaponSlotIndex: slotIndex,
-        stageIndex: 0,
-        damageScale,
-        forcedNoteName: noteName,
-      });
-    }
+    pulsePlayerShipNoteFlash();
+    triggerWeaponStage(first, centerWorld, contextBeatIndex, rest, {
+      origin: centerWorld,
+      impactPoint: centerWorld,
+      weaponSlotIndex: slotIndex,
+      stageIndex: 0,
+      damageScale,
+      forcedNoteName: noteName,
+      directSound: true,
+      debugSource: 'tune-primary',
+      debugStepIndex: Math.trunc(Number(beatIndex) || 0),
+      debugBeatIndex: Math.trunc(Number(contextBeatIndex) || 0),
+      debugNoteIndex: 0,
+    });
     return;
   }
   // Backward compatibility: legacy pickup behavior if no configured stages exist.
   const anyConfigured = weaponLoadout.some((w) => Array.isArray(w.stages) && w.stages.length > 0);
   if (anyConfigured) return;
-  if (equippedWeapons.has('explosion')) applyAoeAt(centerWorld, 'explosion', beatIndex);
+  if (equippedWeapons.has('explosion')) applyAoeAt(centerWorld, 'explosion', contextBeatIndex);
   const target = getNearestEnemy(centerWorld.x, centerWorld.y);
   if (!target) return;
   if (equippedWeapons.has('laser')) {
@@ -4989,6 +5504,7 @@ function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex) {
 function updateBeatWeapons(centerWorld) {
   if (!isRunning?.()) {
     lastBeatIndex = null;
+    lastWeaponTuneStepIndex = null;
     return;
   }
   const info = getLoopInfo?.();
@@ -4998,6 +5514,14 @@ function updateBeatWeapons(centerWorld) {
   if (!(beatLen > 0)) return;
   const beatIndex = Math.floor(((now - loopStart) / beatLen) + 1e-6);
   currentBeatIndex = beatIndex;
+  const stepLen = beatLen * 0.5;
+  if (stepLen > 0) {
+    const stepIndex = Math.floor(((now - loopStart) / stepLen) + 1e-6);
+    if (stepIndex !== lastWeaponTuneStepIndex) {
+      lastWeaponTuneStepIndex = stepIndex;
+      fireConfiguredWeaponsOnBeat(centerWorld, stepIndex, beatIndex);
+    }
+  }
   if (beatIndex === lastBeatIndex) return;
   lastBeatIndex = beatIndex;
   if (active && outerForceContinuousSeconds >= beatLen) {
@@ -5017,7 +5541,6 @@ function updateBeatWeapons(centerWorld) {
   processPendingWeaponChains(beatIndex);
   applyLingeringAoeBeat(beatIndex);
   fireHelpersOnBeat(beatIndex);
-  fireConfiguredWeaponsOnBeat(centerWorld, beatIndex);
 }
 
 function configureInitialSpawnerEnablement() {
@@ -6086,6 +6609,8 @@ export function enterBeatSwarmMode(options = null) {
   swarmSoundEventState.played = Object.create(null);
   swarmSoundEventState.maxVolume = Object.create(null);
   swarmSoundEventState.note = Object.create(null);
+  swarmSoundEventState.noteList = Object.create(null);
+  swarmSoundEventState.count = Object.create(null);
   clearLingeringAoeZones();
   clearStarfield();
   arenaCenterWorld = null;
@@ -6103,6 +6628,7 @@ export function enterBeatSwarmMode(options = null) {
   updateSpawnHealthDebugUi();
   if (!restoreState) resetArenaPathState();
   lastBeatIndex = null;
+  lastWeaponTuneStepIndex = null;
   try { spawnerRuntime?.enter?.(); } catch {}
   try { configureInitialSpawnerEnablement(); } catch {}
   if (!restoreState) {
@@ -6168,6 +6694,8 @@ export function exitBeatSwarmMode() {
   swarmSoundEventState.played = Object.create(null);
   swarmSoundEventState.maxVolume = Object.create(null);
   swarmSoundEventState.note = Object.create(null);
+  swarmSoundEventState.noteList = Object.create(null);
+  swarmSoundEventState.count = Object.create(null);
   clearLingeringAoeZones();
   clearStarfield();
   arenaCenterWorld = null;
@@ -6191,6 +6719,7 @@ export function exitBeatSwarmMode() {
   updateEnemySpawnHealthScaling();
   updateSpawnHealthDebugUi();
   lastBeatIndex = null;
+  lastWeaponTuneStepIndex = null;
   clearBeatSwarmPersistedState();
   return true;
 }
@@ -6203,6 +6732,7 @@ export const BeatSwarmMode = {
   enter: enterBeatSwarmMode,
   exit: exitBeatSwarmMode,
   isActive: isBeatSwarmModeActive,
+  getSubBoardPendingDrawgridState: getWeaponSubBoardPendingDrawgridState,
 };
 
 try {
@@ -6211,6 +6741,11 @@ try {
 
 try {
   window.__beatSwarmDebug = Object.assign(window.__beatSwarmDebug || {}, {
+    enableTuneShotDebug(next = true) {
+      weaponTuneFireDebug.enabled = !!next;
+      weaponTuneFireDebug.seq = 0;
+      return weaponTuneFireDebug.enabled;
+    },
     setPerfWeaponStageCount(nextCount = 2) {
       const stageTemplates = [
         { archetype: 'projectile', variant: 'standard' },
@@ -6319,3 +6854,4 @@ function installBeatSwarmPersistence() {
 }
 
 installBeatSwarmPersistence();
+

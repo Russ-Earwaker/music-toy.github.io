@@ -3457,6 +3457,10 @@ function markPendingInternalRandom(panelOrId, which) {
   if (!artToyId) return;
   const artPanel = document.getElementById(artToyId);
   if (!artPanel) return;
+  if (String(artPanel.dataset.beatSwarmSubboard || '') === '1') {
+    __artRandLog('markPending:skipBeatSwarmSubboard', { artToyId, which });
+    return;
+  }
   // pendingRandAll supports multiple modes:
   // - '1'          => apply full random-all on enter
   // - 'blocksOnly' => apply ONLY non-music random on enter (keeps notes stable)
@@ -3472,6 +3476,12 @@ function applyPendingInternalRandomIfNeeded(artToyId) {
 
   const artPanel = document.getElementById(artToyId);
   if (!artPanel) return;
+  if (String(artPanel.dataset.beatSwarmSubboard || '') === '1') {
+    try { artPanel.dataset.pendingRandMusic = '0'; } catch {}
+    try { artPanel.dataset.pendingRandAll = '0'; } catch {}
+    __artRandLog('applyPending:skipBeatSwarmSubboard', { artToyId });
+    return;
+  }
 
   const wantMusic = artPanel.dataset.pendingRandMusic === '1';
   const pendingAllMode = artPanel.dataset.pendingRandAll || '0';
@@ -3889,6 +3899,18 @@ function ensureDefaultInternalToyOnFirstEnter(artToyId, worldEl) {
       containerEl: worldEl,
       artOwnerId: artToyId,
     });
+    try {
+      const isBeatSwarmSubboard = String(artPanel?.dataset?.beatSwarmSubboard || '') === '1';
+      const wantsDrawgrid = String(kind || '').toLowerCase() === 'drawgrid';
+      if (p && isBeatSwarmSubboard && wantsDrawgrid && !p.__pendingDrawGridState) {
+        try { p.dataset.disableRandomEvents = '1'; } catch {}
+        try { p.dataset.skipDrawgridPersistedRestore = '1'; } catch {}
+        const pending = window.BeatSwarmMode?.getSubBoardPendingDrawgridState?.(artToyId) || null;
+        if (pending && typeof pending === 'object') {
+          p.__pendingDrawGridState = pending;
+        }
+      }
+    } catch {}
     return p || null;
   } catch (err) {
     console.warn('[InternalBoard] default toy spawn failed', err);
@@ -5359,6 +5381,12 @@ function initializeNewToy(panel) {
             let shouldDispatchClear = true;
             if (toyType === 'drawgrid') {
                 try {
+                    const ownerId = String(panel?.dataset?.artOwnerId || '').trim();
+                    const ownerPanel = ownerId ? document.getElementById(ownerId) : null;
+                    const isBeatSwarmSubboard = String(ownerPanel?.dataset?.beatSwarmSubboard || '') === '1';
+                    if (isBeatSwarmSubboard) {
+                        shouldDispatchClear = false;
+                    }
                     const inboundNonEmpty = typeof panel.__drawToy?.__inboundNonEmpty === 'function'
                         ? !!panel.__drawToy.__inboundNonEmpty()
                         : false;
