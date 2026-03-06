@@ -3122,17 +3122,80 @@ function buildVisualStrokeFromWeaponTune(tuneLike) {
   const noteRows = Math.max(1, Array.isArray(tune?.notes) ? tune.notes.length : DRAWGRID_TUNE_NOTE_PALETTE.length);
   const active = Array.isArray(tune?.active) ? tune.active : [];
   const list = Array.isArray(tune?.list) ? tune.list : [];
-  const ptsN = [];
+  const rowByStep = Array.from({ length: steps }, () => null);
   for (let s = 0; s < steps; s++) {
     if (!active[s]) continue;
     const rows = Array.isArray(list[s]) ? list[s] : [];
     if (!rows.length) continue;
-    const row = Math.max(0, Math.min(noteRows - 1, Math.trunc(Number(rows[0]) || 0)));
-    const nx = (s + 0.5) / steps;
-    const ny = (row + 0.5) / noteRows;
-    ptsN.push({ nx, ny });
+    rowByStep[s] = Math.max(0, Math.min(noteRows - 1, Math.trunc(Number(rows[0]) || 0)));
   }
-  if (!ptsN.length) return [];
+  const seededSteps = [];
+  for (let s = 0; s < steps; s++) if (Number.isFinite(rowByStep[s])) seededSteps.push(s);
+  if (!seededSteps.length) return [];
+  const leftSeed = Array.from({ length: steps }, () => -1);
+  const rightSeed = Array.from({ length: steps }, () => -1);
+  let last = -1;
+  for (let s = 0; s < steps; s++) {
+    if (Number.isFinite(rowByStep[s])) last = s;
+    leftSeed[s] = last;
+  }
+  last = -1;
+  for (let s = steps - 1; s >= 0; s--) {
+    if (Number.isFinite(rowByStep[s])) last = s;
+    rightSeed[s] = last;
+  }
+  const anchors = [];
+  for (let s = 0; s < steps; s++) {
+    let row = rowByStep[s];
+    if (!Number.isFinite(row)) {
+      const l = leftSeed[s];
+      const r = rightSeed[s];
+      if (l >= 0 && r >= 0 && l !== r) {
+        const t = (s - l) / (r - l);
+        row = (rowByStep[l] * (1 - t)) + (rowByStep[r] * t);
+      } else if (l >= 0) {
+        row = rowByStep[l];
+      } else if (r >= 0) {
+        row = rowByStep[r];
+      } else {
+        row = Math.max(0, Math.min(noteRows - 1, Math.trunc(noteRows * 0.5)));
+      }
+    }
+    const nx = (steps <= 1) ? 0.5 : (s / (steps - 1));
+    const ny = (Math.max(0, Math.min(noteRows - 1, row)) + 0.5) / noteRows;
+    anchors.push({ nx, ny });
+  }
+  if (anchors.length === 1) {
+    anchors.unshift({ nx: 0, ny: anchors[0].ny });
+    anchors.push({ nx: 1, ny: anchors[0].ny });
+  }
+  const catmull = (p0, p1, p2, p3, t) => {
+    const t2 = t * t;
+    const t3 = t2 * t;
+    return 0.5 * (
+      (2 * p1) +
+      (-p0 + p2) * t +
+      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+      (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+    );
+  };
+  const ptsN = [];
+  const samplesPerSeg = 4;
+  for (let i = 0; i < anchors.length - 1; i++) {
+    const p0 = anchors[Math.max(0, i - 1)];
+    const p1 = anchors[i];
+    const p2 = anchors[i + 1];
+    const p3 = anchors[Math.min(anchors.length - 1, i + 2)];
+    for (let j = 0; j < samplesPerSeg; j++) {
+      const t = j / samplesPerSeg;
+      const nx = Math.max(0, Math.min(1, catmull(p0.nx, p1.nx, p2.nx, p3.nx, t)));
+      const ny = Math.max(0, Math.min(1, catmull(p0.ny, p1.ny, p2.ny, p3.ny, t)));
+      ptsN.push({ nx, ny });
+    }
+  }
+  ptsN.push({ nx: anchors[anchors.length - 1].nx, ny: anchors[anchors.length - 1].ny });
+  if (ptsN[0]?.nx > 0) ptsN.unshift({ nx: 0, ny: ptsN[0].ny });
+  if (ptsN[ptsN.length - 1]?.nx < 1) ptsN.push({ nx: 1, ny: ptsN[ptsN.length - 1].ny });
   return [{
     ptsN,
     isSpecial: true,
@@ -3650,11 +3713,7 @@ function openWeaponSubBoardEditor(slotIndex) {
   setTimeout(() => {
     syncWeaponSubBoardBindingsForSlot(idx);
     forceApplyOpenTuneSnapshotToSubBoard(idx);
-  }, 260);
-  setTimeout(() => {
-    syncWeaponSubBoardBindingsForSlot(idx);
-    forceApplyOpenTuneSnapshotToSubBoard(idx);
-  }, 520);
+  }, 180);
   setTimeout(() => {
     syncWeaponSubBoardBindingsForSlot(idx);
     forceApplyOpenTuneSnapshotToSubBoard(idx);
@@ -3694,7 +3753,7 @@ function openWeaponSubBoardEditor(slotIndex) {
     enforce(30);
     enforce(90);
     enforce(180);
-  }, 820);
+  }, 260);
   return true;
 }
 
