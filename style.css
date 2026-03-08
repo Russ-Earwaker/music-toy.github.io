@@ -4481,11 +4481,11 @@ body.internal-board-active #board-main {
 }
 
 .beat-swarm-enemy.is-spawner-enemy {
-  width: 86px;
-  height: 86px;
-  margin-left: -43px;
-  margin-top: -43px;
-  border-radius: 22px;
+  width: 172px;
+  height: 172px;
+  margin-left: -86px;
+  margin-top: -86px;
+  border-radius: 34px;
   background: radial-gradient(circle at 50% 36%, #ff9a7d 0%, #d84c36 62%, #8e261f 100%);
   border: 2px solid rgba(255, 218, 196, 0.8);
   box-shadow: 0 0 24px rgba(223, 95, 73, 0.5);
@@ -4495,8 +4495,8 @@ body.internal-board-active #board-main {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 58px;
-  height: 58px;
+  width: 116px;
+  height: 116px;
   transform: translate(-50%, -50%);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

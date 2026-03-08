@@ -3,7 +3,7 @@ import { screenToWorld, worldToScreen } from './board-viewport.js';
 import { createBeatSwarmSpawnerRuntime, registerLoopgridSpawnerType } from './beat-swarm/spawner-runtime.js';
 import { getLoopInfo, isRunning, start as startTransport, stop as stopTransport } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
-import { getIdForDisplayName } from './instrument-catalog.js';
+import { getAllIds, getIdForDisplayName, getInstrumentEntries } from './instrument-catalog.js';
 import { buildPalette, midiToName } from './note-helpers.js';
 import { createArtToyAt } from './art/art-toy-factory.js';
 
@@ -450,6 +450,11 @@ const SPAWNER_ENEMY_TARGET_COUNT = 1; // test mode
 const SPAWNER_ENEMY_HEALTH_MULTIPLIER = 8;
 const SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME = 0.42;
 const SPAWNER_ENEMY_GRID_WORLD_OFFSET = 86;
+const SPAWNER_ENEMY_SPEED_MULTIPLIER = 0.5;
+const SPAWNER_ENEMY_BURST_MIN_PX = 48;
+const SPAWNER_ENEMY_BURST_MAX_PX = 180;
+const SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX = 86;
+const LOOPGRID_FALLBACK_NOTE_PALETTE = Object.freeze(buildPalette(48, Array.from({ length: 12 }, (_, i) => i), 3));
 const SPAWNER_ENEMY_GRID_STEP_TO_CELL = Object.freeze([
   Object.freeze({ c: 0, r: 0 }), // 1
   Object.freeze({ c: 1, r: 0 }), // 2
@@ -537,6 +542,11 @@ const swarmSoundEventState = {
   count: Object.create(null),
 };
 const swarmSoundInstrumentCache = new Map();
+try {
+  window.addEventListener('instrument-catalog:loaded', () => {
+    try { swarmSoundInstrumentCache.clear(); } catch {}
+  });
+} catch {}
 const PREVIEW_NO_HIT_REPOSITION_SECONDS = 2.4;
 const weaponDefs = Object.freeze({
   laser: { id: 'laser', damage: 2 },
@@ -1491,13 +1501,31 @@ function getWeaponTuneSignature(tuneLike) {
   return `steps=${steps}|events=${parts.length}|sig=${parts.join(',')}`;
 }
 
+function normalizeInstrumentIdToken(value) {
+  return String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+}
+
 function resolveSwarmSoundInstrumentId(eventKey) {
   const key = String(eventKey || '').trim();
   if (!key) return 'tone';
-  if (swarmSoundInstrumentCache.has(key)) return swarmSoundInstrumentCache.get(key);
+  const allIds = Array.isArray(getAllIds?.()) ? getAllIds().map((id) => String(id || '').trim()).filter(Boolean) : [];
+  const idSet = new Set(allIds);
+  if (swarmSoundInstrumentCache.has(key)) {
+    const cached = String(swarmSoundInstrumentCache.get(key) || '').trim();
+    if (cached && (idSet.has(cached) || allIds.length === 0)) return cached;
+    swarmSoundInstrumentCache.delete(key);
+  }
   const def = SWARM_SOUND_EVENTS[key] || null;
   const display = String(def?.instrumentDisplay || '').trim();
-  const id = getIdForDisplayName(display) || display || 'tone';
+  let id = String(getIdForDisplayName(display) || '').trim();
+  if (!id && display && allIds.length) {
+    const target = normalizeInstrumentIdToken(display);
+    id = allIds.find((cand) => normalizeInstrumentIdToken(cand) === target) || '';
+  }
+  if (!id && display && idSet.has(display)) id = display;
+  if (!id) {
+    id = String(getIdForDisplayName('Tone (Sine)') || '').trim() || 'tone';
+  }
   swarmSoundInstrumentCache.set(key, id);
   return id;
 }
@@ -4828,7 +4856,52 @@ function spawnEnemyAt(clientX, clientY) {
     hpFillEl: hpFill,
     spawnT: 0,
     spawnDur: ENEMY_SPAWN_DURATION,
+    projectileHitRadiusPx: 0,
   });
+}
+
+function getUsedSpawnerEnemyInstrumentIds() {
+  const used = new Set();
+  for (const e of enemies) {
+    if (String(e?.enemyType || '') !== 'spawner') continue;
+    const id = String(e?.spawnerInstrument || '').trim();
+    if (id) used.add(id);
+  }
+  return used;
+}
+
+function getUsedWeaponInstrumentIds() {
+  const used = new Set();
+  try {
+    for (const key of Object.keys(SWARM_SOUND_EVENTS || {})) {
+      const id = String(resolveSwarmSoundInstrumentId(key) || '').trim();
+      if (id) used.add(id);
+    }
+  } catch {}
+  return used;
+}
+
+function pickSpawnerEnemyInstrumentId(preferredId = '') {
+  const preferred = String(preferredId || '').trim();
+  const used = new Set();
+  for (const id of getUsedWeaponInstrumentIds()) used.add(id);
+  for (const id of getUsedSpawnerEnemyInstrumentIds()) used.add(id);
+  const entries = Array.isArray(getInstrumentEntries?.()) ? getInstrumentEntries() : [];
+  const validatedLoopgridIds = entries
+    .filter((e) => Array.isArray(e?.recommendedToys) && e.recommendedToys.includes('loopgrid'))
+    .map((e) => String(e?.id || '').trim())
+    .filter(Boolean);
+  const validatedSet = new Set(validatedLoopgridIds);
+  if (preferred && validatedSet.has(preferred) && !used.has(preferred)) return preferred;
+  const all = (validatedLoopgridIds.length ? validatedLoopgridIds : (Array.isArray(getAllIds?.()) ? getAllIds() : []));
+  const pool = all
+    .map((v) => String(v || '').trim())
+    .filter((v) => !!v && !used.has(v));
+  if (pool.length) {
+    return pool[Math.max(0, Math.min(pool.length - 1, Math.trunc(Math.random() * pool.length)))] || 'tone';
+  }
+  if (preferred) return preferred;
+  return resolveSwarmSoundInstrumentId('projectile') || 'tone';
 }
 
 function createSpawnerEnemyRhythmProfile() {
@@ -4840,14 +4913,24 @@ function createSpawnerEnemyRhythmProfile() {
     : null;
   const stepsRaw = source && Array.isArray(source?.__gridState?.steps) ? source.__gridState.steps : [];
   const noteIdxRaw = source && Array.isArray(source?.__gridState?.noteIndices) ? source.__gridState.noteIndices : [];
+  const notePaletteRaw = source && Array.isArray(source?.__gridState?.notePalette) ? source.__gridState.notePalette : LOOPGRID_FALLBACK_NOTE_PALETTE;
+  const notePalette = notePaletteRaw
+    .map((m) => Math.trunc(Number(m)))
+    .filter((m) => Number.isFinite(m));
   const steps = Array.from({ length: 8 }, (_, i) => !!stepsRaw[i]);
   if (!steps.some(Boolean)) {
     for (let i = 0; i < steps.length; i++) if (Math.random() >= 0.56) steps[i] = true;
     if (!steps.some(Boolean)) steps[Math.max(0, Math.min(7, Math.trunc(Math.random() * 8)))] = true;
   }
   const noteIndices = Array.from({ length: 8 }, (_, i) => Math.max(0, Math.trunc(Number(noteIdxRaw[i]) || (6 + (i % 7)))));
-  const instrument = String(source?.dataset?.instrument || source?.dataset?.instrumentId || fallbackInstrument || 'tone');
-  return { steps, noteIndices, instrument };
+  const srcInstrument = String(source?.dataset?.instrument || source?.dataset?.instrumentId || fallbackInstrument || 'tone');
+  const instrument = pickSpawnerEnemyInstrumentId(srcInstrument);
+  const resolvedPalette = notePalette.length ? notePalette : Array.from(LOOPGRID_FALLBACK_NOTE_PALETTE);
+  const firstActiveStep = Math.max(0, steps.findIndex(Boolean));
+  const baseIdx = Math.max(0, Math.trunc(Number(noteIndices[firstActiveStep >= 0 ? firstActiveStep : 0]) || 0));
+  const baseMidi = Math.trunc(Number(resolvedPalette[baseIdx % Math.max(1, resolvedPalette.length)]) || 60);
+  const baseNoteName = normalizeSwarmNoteName(midiToName(baseMidi)) || 'C4';
+  return { steps, noteIndices, notePalette: resolvedPalette, instrument, baseNoteName };
 }
 
 function spawnSpawnerEnemyAt(clientX, clientY) {
@@ -4906,8 +4989,11 @@ function spawnSpawnerEnemyAt(clientX, clientY) {
     spawnT: 0,
     spawnDur: ENEMY_SPAWN_DURATION,
     enemyType: 'spawner',
+    projectileHitRadiusPx: SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX,
     spawnerSteps: profile.steps.slice(0, 8),
     spawnerNoteIndices: profile.noteIndices.slice(0, 8),
+    spawnerNotePalette: Array.isArray(profile.notePalette) ? profile.notePalette.slice() : Array.from(LOOPGRID_FALLBACK_NOTE_PALETTE),
+    spawnerNoteName: normalizeSwarmNoteName(profile.baseNoteName) || 'C4',
     spawnerInstrument: profile.instrument,
     spawnerCells: gridCells,
   });
@@ -4966,17 +5052,14 @@ function triggerSpawnerEnemiesOnStep(stepIndex, beatIndex) {
     const steps = Array.isArray(enemy?.spawnerSteps) ? enemy.spawnerSteps : [];
     if (!steps[step]) continue;
     flashSpawnerEnemyCell(enemy, step);
-    const noteIdx = Math.max(0, Math.trunc(Number(enemy?.spawnerNoteIndices?.[step]) || 0));
-    const noteName = SWARM_PENTATONIC_NOTES_ONE_OCTAVE[noteIdx % SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length] || 'C4';
+    const noteName = normalizeSwarmNoteName(enemy?.spawnerNoteName) || 'C4';
     try { triggerInstrument(String(enemy?.spawnerInstrument || 'tone'), noteName, undefined, 'master', {}, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME); } catch {}
     const center = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
     if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) continue;
-    const map = SPAWNER_ENEMY_GRID_STEP_TO_CELL[step];
-    if (!map) continue;
-    const nx = (map.c - 1) / 1;
-    const ny = (map.r - 1) / 1;
-    const spawnClientX = center.x + (nx * SPAWNER_ENEMY_GRID_WORLD_OFFSET);
-    const spawnClientY = center.y + (ny * SPAWNER_ENEMY_GRID_WORLD_OFFSET);
+    const baseAngle = Math.random() * Math.PI * 2;
+    const baseDist = randRange(SPAWNER_ENEMY_BURST_MIN_PX, SPAWNER_ENEMY_BURST_MAX_PX);
+    const spawnClientX = center.x + (Math.cos(baseAngle) * baseDist);
+    const spawnClientY = center.y + (Math.sin(baseAngle) * baseDist);
     spawnEnemyAt(spawnClientX, spawnClientY);
     void beatIndex;
   }
@@ -5973,10 +6056,12 @@ function updateEnemies(dt) {
   const hitRadiusWorld = ENEMY_HIT_RADIUS / Math.max(0.001, scale || 1);
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
+    const isSpawnerEnemy = String(e?.enemyType || '') === 'spawner';
     const dx = centerWorld.x - e.wx;
     const dy = centerWorld.y - e.wy;
     const d = Math.hypot(dx, dy) || 0.0001;
-    const speedMult = Math.max(0.05, Number(difficultyConfig.enemySpeedMultiplier) || 1);
+    const typeSpeedMult = String(e?.enemyType || '') === 'spawner' ? SPAWNER_ENEMY_SPEED_MULTIPLIER : 1;
+    const speedMult = Math.max(0.05, Number(difficultyConfig.enemySpeedMultiplier) || 1) * Math.max(0.05, Number(typeSpeedMult) || 1);
     const ax = (dx / d) * ENEMY_ACCEL * speedMult;
     const ay = (dy / d) * ENEMY_ACCEL * speedMult;
     e.vx += ax * dt;
@@ -5997,11 +6082,13 @@ function updateEnemies(dt) {
     }
     const s = worldToScreen({ x: e.wx, y: e.wy });
     if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) {
+      if (isSpawnerEnemy) continue;
       removeEnemy(e);
       enemies.splice(i, 1);
       continue;
     }
     if (s.x < -80 || s.y < -80 || s.x > window.innerWidth + 80 || s.y > window.innerHeight + 80) {
+      if (isSpawnerEnemy) continue;
       removeEnemy(e);
       enemies.splice(i, 1);
       continue;
@@ -6198,7 +6285,9 @@ function updatePickupsAndCombat(dt) {
       if (Number.isFinite(p.ignoreEnemyId) && Math.trunc(p.ignoreEnemyId) === enemyId) continue;
       const dx = e.wx - p.wx;
       const dy = e.wy - p.wy;
-      if ((dx * dx + dy * dy) <= pr2) {
+      const enemyExtraRadiusWorld = Math.max(0, Number(e?.projectileHitRadiusPx) || 0) / Math.max(0.001, scale || 1);
+      const effR = projectileHitRadiusWorld + enemyExtraRadiusWorld;
+      if ((dx * dx + dy * dy) <= (effR * effR)) {
         if (isBoomerang) {
           if (!(p.hitEnemyIds instanceof Set)) p.hitEnemyIds = new Set();
           if (enemyId > 0 && p.hitEnemyIds.has(enemyId)) continue;
