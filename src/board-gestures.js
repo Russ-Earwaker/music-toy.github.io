@@ -183,7 +183,10 @@ function __mtBindBoardGestures() {
   }
 
   function onDown(e) {
-    if (window.__beatSwarmActive) {
+    const allowBeatSwarmInternalBoard =
+      !!window.__beatSwarmActive &&
+      !!document.body?.classList?.contains?.('internal-board-active');
+    if (window.__beatSwarmActive && !allowBeatSwarmInternalBoard) {
       e.preventDefault();
       return;
     }

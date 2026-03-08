@@ -42,7 +42,7 @@ export function initDrawGrid(panel){
     try { panel.style.visibility = ''; } catch {}
   };
   if (isBeatSwarmSubboard) {
-    try { panel.dataset.disableRandomEvents = '1'; } catch {}
+    try { panel.dataset.disableRandomEvents = '0'; } catch {}
     try { panel.style.visibility = 'hidden'; } catch {}
     try { panel.dataset.beatSwarmAwaitReveal = '1'; } catch {}
     waitForBeatSwarmReveal = true;
@@ -87,7 +87,7 @@ export function initDrawGrid(panel){
     if (!pending) {
       if (isBeatSwarmSubboard) {
         try { panel.dataset.skipDrawgridPersistedRestore = '1'; } catch {}
-        pending = window.BeatSwarmMode?.getSubBoardPendingDrawgridState?.(artOwnerId) || null;
+        pending = window.BeatSwarmMode?.getSubBoardPendingDrawgridState?.(artOwnerId, panel?.id || '') || null;
         if (pending && typeof pending === 'object') {
           try { panel.__pendingDrawGridState = pending; } catch {}
         }
