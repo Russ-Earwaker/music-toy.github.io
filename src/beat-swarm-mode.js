@@ -445,6 +445,21 @@ const ENEMY_SPAWN_DURATION = 0.58;
 const ENEMY_TARGET_ACTIVE_COUNT = 24;
 const ENEMY_MANAGER_MAX_FALLBACK_PER_TICK = 2;
 const ENEMY_FALLBACK_SPAWN_MARGIN_PX = 42;
+const SPAWNER_ENEMY_ENABLED = true;
+const SPAWNER_ENEMY_TARGET_COUNT = 1; // test mode
+const SPAWNER_ENEMY_HEALTH_MULTIPLIER = 8;
+const SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME = 0.42;
+const SPAWNER_ENEMY_GRID_WORLD_OFFSET = 86;
+const SPAWNER_ENEMY_GRID_STEP_TO_CELL = Object.freeze([
+  Object.freeze({ c: 0, r: 0 }), // 1
+  Object.freeze({ c: 1, r: 0 }), // 2
+  Object.freeze({ c: 2, r: 0 }), // 3
+  Object.freeze({ c: 2, r: 1 }), // 4
+  Object.freeze({ c: 2, r: 2 }), // 5
+  Object.freeze({ c: 1, r: 2 }), // 6
+  Object.freeze({ c: 0, r: 2 }), // 7
+  Object.freeze({ c: 0, r: 1 }), // 8
+]);
 const BEAM_SOURCE_DEATH_GRACE_SECONDS = 0.5;
 const ENEMY_DEATH_POP_FALLBACK_SECONDS = 0.65;
 const ENEMY_HEALTH_RAMP_PER_SECOND = 0.1;
@@ -531,6 +546,7 @@ const weaponDefs = Object.freeze({
 const equippedWeapons = new Set();
 let lastBeatIndex = null;
 let lastWeaponTuneStepIndex = null;
+let lastSpawnerEnemyStepIndex = null;
 let currentBeatIndex = 0;
 const weaponTuneFireDebug = {
   enabled: false,
@@ -4780,7 +4796,8 @@ function setActiveWeaponSlot(nextSlotIndex) {
 function spawnEnemyAt(clientX, clientY) {
   if (!enemyLayerEl) return;
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
-  if (enemies.length >= Math.max(1, Math.trunc(Number(ENEMY_TARGET_ACTIVE_COUNT) || 1))) return;
+  // Allow rhythm spawners to add pressure beyond baseline population control.
+  if (enemies.length >= Math.max(1, Math.trunc(Number(ENEMY_CAP) || 1))) return;
   const w = screenToWorld({ x: clientX, y: clientY });
   if (!w || !Number.isFinite(w.x) || !Number.isFinite(w.y)) return;
   const el = document.createElement('div');
@@ -4812,6 +4829,157 @@ function spawnEnemyAt(clientX, clientY) {
     spawnT: 0,
     spawnDur: ENEMY_SPAWN_DURATION,
   });
+}
+
+function createSpawnerEnemyRhythmProfile() {
+  const fallbackInstrument = resolveSwarmSoundInstrumentId('explosion') || getIdForDisplayName('Bass Tone 4') || 'tone';
+  const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
+  const candidates = panels.filter((p) => Array.isArray(p?.__gridState?.steps) && p.__gridState.steps.some(Boolean));
+  const source = candidates.length
+    ? candidates[Math.max(0, Math.min(candidates.length - 1, Math.trunc(Math.random() * candidates.length)))]
+    : null;
+  const stepsRaw = source && Array.isArray(source?.__gridState?.steps) ? source.__gridState.steps : [];
+  const noteIdxRaw = source && Array.isArray(source?.__gridState?.noteIndices) ? source.__gridState.noteIndices : [];
+  const steps = Array.from({ length: 8 }, (_, i) => !!stepsRaw[i]);
+  if (!steps.some(Boolean)) {
+    for (let i = 0; i < steps.length; i++) if (Math.random() >= 0.56) steps[i] = true;
+    if (!steps.some(Boolean)) steps[Math.max(0, Math.min(7, Math.trunc(Math.random() * 8)))] = true;
+  }
+  const noteIndices = Array.from({ length: 8 }, (_, i) => Math.max(0, Math.trunc(Number(noteIdxRaw[i]) || (6 + (i % 7)))));
+  const instrument = String(source?.dataset?.instrument || source?.dataset?.instrumentId || fallbackInstrument || 'tone');
+  return { steps, noteIndices, instrument };
+}
+
+function spawnSpawnerEnemyAt(clientX, clientY) {
+  if (!enemyLayerEl) return;
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
+  if (enemies.length >= Math.max(1, Math.trunc(Number(ENEMY_CAP) || 1))) return;
+  const w = screenToWorld({ x: clientX, y: clientY });
+  if (!w || !Number.isFinite(w.x) || !Number.isFinite(w.y)) return;
+  const profile = createSpawnerEnemyRhythmProfile();
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-enemy is-spawner-enemy';
+  const grid = document.createElement('div');
+  grid.className = 'beat-swarm-enemy-spawner-grid';
+  const gridCells = [];
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'beat-swarm-enemy-spawner-cell';
+    if (i === 4) cell.classList.add('is-center');
+    grid.appendChild(cell);
+    gridCells.push(cell);
+  }
+  for (let i = 0; i < 8; i++) {
+    if (!profile.steps[i]) continue;
+    const map = SPAWNER_ENEMY_GRID_STEP_TO_CELL[i];
+    if (!map) continue;
+    const cellIndex = (Math.max(0, Math.min(2, map.r)) * 3) + Math.max(0, Math.min(2, map.c));
+    const cell = gridCells[cellIndex];
+    if (cell) cell.classList.add('is-active-note');
+  }
+  const hpWrap = document.createElement('div');
+  hpWrap.className = 'beat-swarm-enemy-hp';
+  const hpFill = document.createElement('div');
+  hpFill.className = 'beat-swarm-enemy-hp-fill';
+  hpWrap.appendChild(hpFill);
+  el.appendChild(grid);
+  el.appendChild(hpWrap);
+  enemyLayerEl.appendChild(el);
+  const s0 = worldToScreen({ x: w.x, y: w.y });
+  if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)) {
+    el.style.transform = `translate(${s0.x}px, ${s0.y}px) scale(${ENEMY_SPAWN_START_SCALE})`;
+  } else {
+    el.style.transform = `translate(-9999px, -9999px) scale(${ENEMY_SPAWN_START_SCALE})`;
+  }
+  const hpBase = Math.max(1, Number(currentEnemySpawnMaxHp) || 1);
+  enemies.push({
+    id: enemyIdSeq++,
+    wx: w.x,
+    wy: w.y,
+    vx: 0,
+    vy: 0,
+    soundNote: getRandomSwarmPentatonicNote(),
+    el,
+    hp: hpBase * SPAWNER_ENEMY_HEALTH_MULTIPLIER,
+    maxHp: hpBase * SPAWNER_ENEMY_HEALTH_MULTIPLIER,
+    hpFillEl: hpFill,
+    spawnT: 0,
+    spawnDur: ENEMY_SPAWN_DURATION,
+    enemyType: 'spawner',
+    spawnerSteps: profile.steps.slice(0, 8),
+    spawnerNoteIndices: profile.noteIndices.slice(0, 8),
+    spawnerInstrument: profile.instrument,
+    spawnerCells: gridCells,
+  });
+}
+
+function spawnSpawnerEnemyOffscreen() {
+  const w = Math.max(1, Number(window.innerWidth) || 0);
+  const h = Math.max(1, Number(window.innerHeight) || 0);
+  const m = Math.max(8, Number(ENEMY_FALLBACK_SPAWN_MARGIN_PX) || 42);
+  const side = Math.floor(Math.random() * 4);
+  let x = 0;
+  let y = 0;
+  if (side === 0) {
+    x = -m;
+    y = randRange(0, h);
+  } else if (side === 1) {
+    x = w + m;
+    y = randRange(0, h);
+  } else if (side === 2) {
+    x = randRange(0, w);
+    y = -m;
+  } else {
+    x = randRange(0, w);
+    y = h + m;
+  }
+  spawnSpawnerEnemyAt(x, y);
+}
+
+function maintainSpawnerEnemyPopulation() {
+  if (!SPAWNER_ENEMY_ENABLED) return;
+  const target = Math.max(0, Math.trunc(Number(SPAWNER_ENEMY_TARGET_COUNT) || 0));
+  if (!(target > 0)) return;
+  const activeCount = enemies.filter((e) => String(e?.enemyType || '') === 'spawner').length;
+  if (activeCount >= target) return;
+  const spawnCount = Math.min(target - activeCount, Math.max(0, ENEMY_CAP - enemies.length));
+  for (let i = 0; i < spawnCount; i++) spawnSpawnerEnemyOffscreen();
+}
+
+function flashSpawnerEnemyCell(enemy, stepIndex) {
+  const idx = ((Math.trunc(Number(stepIndex) || 0) % 8) + 8) % 8;
+  const cellMap = SPAWNER_ENEMY_GRID_STEP_TO_CELL[idx];
+  if (!cellMap) return;
+  const cellIndex = (Math.max(0, Math.min(2, cellMap.r)) * 3) + Math.max(0, Math.min(2, cellMap.c));
+  const cell = Array.isArray(enemy?.spawnerCells) ? enemy.spawnerCells[cellIndex] : null;
+  if (!(cell instanceof HTMLElement)) return;
+  cell.classList.remove('is-spawn');
+  void cell.offsetWidth;
+  cell.classList.add('is-spawn');
+}
+
+function triggerSpawnerEnemiesOnStep(stepIndex, beatIndex) {
+  if (!active || gameplayPaused) return;
+  const step = ((Math.trunc(Number(stepIndex) || 0) % 8) + 8) % 8;
+  for (const enemy of enemies) {
+    if (String(enemy?.enemyType || '') !== 'spawner') continue;
+    const steps = Array.isArray(enemy?.spawnerSteps) ? enemy.spawnerSteps : [];
+    if (!steps[step]) continue;
+    flashSpawnerEnemyCell(enemy, step);
+    const noteIdx = Math.max(0, Math.trunc(Number(enemy?.spawnerNoteIndices?.[step]) || 0));
+    const noteName = SWARM_PENTATONIC_NOTES_ONE_OCTAVE[noteIdx % SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length] || 'C4';
+    try { triggerInstrument(String(enemy?.spawnerInstrument || 'tone'), noteName, undefined, 'master', {}, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME); } catch {}
+    const center = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
+    if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) continue;
+    const map = SPAWNER_ENEMY_GRID_STEP_TO_CELL[step];
+    if (!map) continue;
+    const nx = (map.c - 1) / 1;
+    const ny = (map.r - 1) / 1;
+    const spawnClientX = center.x + (nx * SPAWNER_ENEMY_GRID_WORLD_OFFSET);
+    const spawnClientY = center.y + (ny * SPAWNER_ENEMY_GRID_WORLD_OFFSET);
+    spawnEnemyAt(spawnClientX, spawnClientY);
+    void beatIndex;
+  }
 }
 
 function getNearestEnemy(worldX, worldY, excludeEnemyId = null) {
@@ -5742,6 +5910,10 @@ function updateBeatWeapons(centerWorld) {
   const stepLen = beatLen * 0.5;
   if (stepLen > 0) {
     const stepIndex = Math.floor(((now - loopStart) / stepLen) + 1e-6);
+    if (stepIndex !== lastSpawnerEnemyStepIndex) {
+      lastSpawnerEnemyStepIndex = stepIndex;
+      triggerSpawnerEnemiesOnStep(stepIndex, beatIndex);
+    }
     if (stepIndex !== lastWeaponTuneStepIndex) {
       lastWeaponTuneStepIndex = stepIndex;
       fireConfiguredWeaponsOnBeat(centerWorld, stepIndex, beatIndex);
@@ -6639,6 +6811,7 @@ function tick(nowMs) {
   updatePickupsAndCombat(dt);
   try { spawnerRuntime?.update?.(dt); } catch {}
   maintainEnemyPopulation();
+  maintainSpawnerEnemyPopulation();
   const aimFacingDeg = getShipFacingFromReleaseAim(input, centerWorldAfterMove);
   updateShipFacing(dt, input.x, input.y, aimFacingDeg);
   rafId = requestAnimationFrame(tick);
@@ -6854,6 +7027,7 @@ export function enterBeatSwarmMode(options = null) {
   if (!restoreState) resetArenaPathState();
   lastBeatIndex = null;
   lastWeaponTuneStepIndex = null;
+  lastSpawnerEnemyStepIndex = null;
   try { spawnerRuntime?.enter?.(); } catch {}
   try { configureInitialSpawnerEnablement(); } catch {}
   if (!restoreState) {
@@ -6921,6 +7095,7 @@ export function exitBeatSwarmMode() {
   swarmSoundEventState.note = Object.create(null);
   swarmSoundEventState.noteList = Object.create(null);
   swarmSoundEventState.count = Object.create(null);
+  lastSpawnerEnemyStepIndex = null;
   clearLingeringAoeZones();
   clearStarfield();
   arenaCenterWorld = null;
