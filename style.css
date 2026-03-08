@@ -4491,6 +4491,26 @@ body.internal-board-active #board-main {
   box-shadow: 0 0 24px rgba(223, 95, 73, 0.5);
 }
 
+.beat-swarm-enemy.is-composer-group {
+  width: 50px;
+  height: 50px;
+  margin-left: -25px;
+  margin-top: -25px;
+  border-radius: 50%;
+  background: var(--bs-group-color, #ff8b6e);
+  border: 2px solid rgba(255, 236, 220, 0.72);
+  box-shadow: 0 0 16px rgba(255, 122, 86, 0.56);
+}
+
+.beat-swarm-enemy.is-composer-group.is-shape-square {
+  border-radius: 8px;
+}
+
+.beat-swarm-enemy.is-composer-group.is-shape-diamond {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
 .beat-swarm-enemy.is-drawsnake-enemy {
   width: 0;
   height: 0;
@@ -4536,12 +4556,18 @@ body.internal-board-active #board-main {
   background: rgba(245, 154, 66, 0.98);
   box-shadow: 0 0 12px rgba(255, 138, 62, 0.68);
   opacity: 0;
+  transition: filter 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
 }
 
 .beat-swarm-drawsnake-node.is-spawn {
-  animation: beat-swarm-spawn-pop 220ms cubic-bezier(0.18, 0.84, 0.22, 1);
+  animation: beat-swarm-drawsnake-node-flash 180ms ease-out;
   filter: brightness(1.32) saturate(1.2);
   box-shadow: 0 0 18px rgba(255, 169, 78, 0.95);
+}
+
+@keyframes beat-swarm-drawsnake-node-flash {
+  0% { filter: brightness(1.75) saturate(1.45); box-shadow: 0 0 24px rgba(255, 186, 90, 0.98); }
+  100% { filter: brightness(1.32) saturate(1.2); box-shadow: 0 0 18px rgba(255, 169, 78, 0.95); }
 }
 
 .beat-swarm-enemy-spawner-grid {
@@ -4819,6 +4845,11 @@ body.internal-board-active #board-main {
   background: radial-gradient(circle at center, rgba(255, 182, 119, 0.3), rgba(255, 121, 79, 0.14), rgba(255, 100, 66, 0.02));
   border: 2px solid rgba(255, 176, 121, 0.62);
   pointer-events: none;
+}
+
+.beat-swarm-fx-explosion.is-hostile-red {
+  background: radial-gradient(circle at center, rgba(255, 110, 110, 0.36), rgba(255, 54, 54, 0.16), rgba(255, 22, 22, 0.03));
+  border-color: rgba(255, 112, 112, 0.72);
 }
 
 .beat-swarm-joystick {
