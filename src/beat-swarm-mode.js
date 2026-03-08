@@ -496,6 +496,10 @@ const COMPOSER_GROUP_EXPLOSION_RADIUS_WORLD = 115;
 const COMPOSER_GROUP_EXPLOSION_TTL = 0.18;
 const COMPOSER_GROUP_ACTION_PULSE_SECONDS = 0.24;
 const COMPOSER_GROUP_ACTION_PULSE_SCALE = 0.28;
+const COMPOSER_GROUP_LOOP_HITS_MIN = 2;
+const COMPOSER_GROUP_LOOP_HITS_MAX = 3;
+const COMPOSER_GROUP_SEPARATION_RADIUS_WORLD = 240;
+const COMPOSER_GROUP_SEPARATION_FORCE = 760;
 const COMPOSER_GROUP_COLORS = Object.freeze(['#ff8b6e', '#ff5f68', '#ffae56', '#73dcff', '#9bff8f']);
 const COMPOSER_GROUP_SHAPES = Object.freeze(['circle', 'square', 'diamond']);
 const DRAW_SNAKE_NODE_PULSE_SECONDS = 0.22;
@@ -1598,12 +1602,27 @@ function pickComposerGroupColor(index = 0) {
   return String(colors[i] || '#ff8b6e');
 }
 
+function createComposerGroupStepLoop() {
+  const steps = Array.from({ length: WEAPON_TUNE_STEPS }, () => false);
+  const hitCount = Math.max(
+    COMPOSER_GROUP_LOOP_HITS_MIN,
+    Math.min(COMPOSER_GROUP_LOOP_HITS_MAX, Math.trunc(randRange(COMPOSER_GROUP_LOOP_HITS_MIN, COMPOSER_GROUP_LOOP_HITS_MAX + 1)))
+  );
+  const phase = Math.max(0, Math.min(WEAPON_TUNE_STEPS - 1, Math.trunc(Math.random() * WEAPON_TUNE_STEPS)));
+  const stride = Math.max(1, Math.floor(WEAPON_TUNE_STEPS / Math.max(1, hitCount)));
+  for (let i = 0; i < hitCount; i++) {
+    const idx = (phase + (i * stride)) % WEAPON_TUNE_STEPS;
+    steps[idx] = true;
+  }
+  if (!steps.some(Boolean)) steps[phase] = true;
+  return steps;
+}
+
 function createComposerEnemyGroupProfile(groupIndex = 0) {
   const notesCount = Math.max(COMPOSER_GROUP_NOTES_MIN, Math.min(COMPOSER_GROUP_NOTES_MAX, Math.trunc(randRange(COMPOSER_GROUP_NOTES_MIN, COMPOSER_GROUP_NOTES_MAX + 1))));
   const notes = [];
   for (let i = 0; i < notesCount; i++) notes.push(getSwarmPentatonicNoteByIndex(i));
-  const steps = Array.from({ length: WEAPON_TUNE_STEPS }, () => Math.random() >= 0.5);
-  if (!steps.some(Boolean)) steps[Math.max(0, Math.min(WEAPON_TUNE_STEPS - 1, Math.trunc(Math.random() * WEAPON_TUNE_STEPS)))] = true;
+  const steps = createComposerGroupStepLoop();
   const actionType = COMPOSER_GROUP_ACTIONS[Math.max(0, Math.min(COMPOSER_GROUP_ACTIONS.length - 1, Math.trunc(Math.random() * COMPOSER_GROUP_ACTIONS.length)))] || 'projectile';
   const performers = Math.max(COMPOSER_GROUP_PERFORMERS_MIN, Math.min(COMPOSER_GROUP_PERFORMERS_MAX, Math.trunc(randRange(COMPOSER_GROUP_PERFORMERS_MIN, COMPOSER_GROUP_PERFORMERS_MAX + 1))));
   const size = Math.max(COMPOSER_GROUP_SIZE_MIN, Math.min(COMPOSER_GROUP_SIZE_MAX, Math.trunc(randRange(COMPOSER_GROUP_SIZE_MIN, COMPOSER_GROUP_SIZE_MAX + 1))));
@@ -6765,6 +6784,30 @@ function updateEnemies(dt) {
       ax = 0;
       ay = 0;
     }
+    if (enemyType === 'composer-group-member') {
+      const sepR = Math.max(20, Number(COMPOSER_GROUP_SEPARATION_RADIUS_WORLD) || 200);
+      const sepR2 = sepR * sepR;
+      let repelX = 0;
+      let repelY = 0;
+      for (let j = 0; j < enemies.length; j++) {
+        const o = enemies[j];
+        if (!o || o === e || String(o?.enemyType || '') !== 'composer-group-member') continue;
+        const ddx = e.wx - o.wx;
+        const ddy = e.wy - o.wy;
+        const d2 = (ddx * ddx) + (ddy * ddy);
+        if (!(d2 > 0.0001) || d2 >= sepR2) continue;
+        const dist = Math.sqrt(d2);
+        const push = (1 - (dist / sepR));
+        repelX += (ddx / dist) * push;
+        repelY += (ddy / dist) * push;
+      }
+      if (repelX !== 0 || repelY !== 0) {
+        const repelLen = Math.hypot(repelX, repelY) || 1;
+        const force = Math.max(0, Number(COMPOSER_GROUP_SEPARATION_FORCE) || 0);
+        ax += (repelX / repelLen) * force;
+        ay += (repelY / repelLen) * force;
+      }
+    }
     e.vx += ax * dt;
     e.vy += ay * dt;
     const speed = Math.hypot(e.vx, e.vy);
@@ -6996,24 +7039,34 @@ function triggerComposerGroupsOnStep(stepIndex, beatIndex) {
     const aliveMembers = getAliveEnemiesByIds(group.memberIds).filter((e) => String(e?.enemyType || '') === 'composer-group-member');
     if (!aliveMembers.length) continue;
     const performerCount = Math.max(COMPOSER_GROUP_PERFORMERS_MIN, Math.min(COMPOSER_GROUP_PERFORMERS_MAX, Math.trunc(Number(group.performers) || 1)));
-    const notesToPlay = [];
-    for (let i = 0; i < performerCount; i++) {
-      const idx = Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % Math.max(1, group.notes.length);
-      notesToPlay.push(String(group.notes[idx] || getRandomSwarmPentatonicNote()));
-      group.noteCursor = idx + 1;
-    }
+    // One musical note per group step; multiple enemies can still perform actions.
+    const noteIdx = Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % Math.max(1, group.notes.length);
+    const noteName = normalizeSwarmNoteName(group.notes[noteIdx]) || getRandomSwarmPentatonicNote();
+    group.noteCursor = noteIdx + 1;
+    const performers = [];
     const usedEnemyIds = new Set();
-    for (const rawNote of notesToPlay) {
-      const noteName = normalizeSwarmNoteName(rawNote) || getRandomSwarmPentatonicNote();
-      const pick = chooseComposerGroupEnemyForNote(group, noteName, aliveMembers.filter((e) => !usedEnemyIds.has(Math.trunc(Number(e.id) || 0))));
-      const enemy = pick || chooseComposerGroupEnemyForNote(group, noteName, aliveMembers);
+    const primary = chooseComposerGroupEnemyForNote(group, noteName, aliveMembers);
+    if (primary) {
+      performers.push(primary);
+      const primaryId = Math.trunc(Number(primary.id) || 0);
+      if (primaryId > 0) usedEnemyIds.add(primaryId);
+    }
+    while (performers.length < performerCount) {
+      const remaining = aliveMembers.filter((e) => !usedEnemyIds.has(Math.trunc(Number(e.id) || 0)));
+      if (!remaining.length) break;
+      const enemy = remaining[Math.max(0, Math.min(remaining.length - 1, Math.trunc(Math.random() * remaining.length)))] || null;
       if (!enemy) continue;
       const enemyId = Math.trunc(Number(enemy.id) || 0);
-      if (enemyId > 0) usedEnemyIds.add(enemyId);
+      if (!(enemyId > 0) || usedEnemyIds.has(enemyId)) continue;
+      usedEnemyIds.add(enemyId);
+      performers.push(enemy);
+    }
+    if (!performers.length) continue;
+    try { triggerInstrument(resolveInstrumentIdOrFallback(group.instrument, resolveSwarmSoundInstrumentId('projectile') || 'tone'), noteName, undefined, 'master', {}, 0.42); } catch {}
+    for (const enemy of performers) {
       pulseHitFlash(enemy.el);
       enemy.composerActionPulseDur = COMPOSER_GROUP_ACTION_PULSE_SECONDS;
       enemy.composerActionPulseT = COMPOSER_GROUP_ACTION_PULSE_SECONDS;
-      try { triggerInstrument(resolveInstrumentIdOrFallback(group.instrument, resolveSwarmSoundInstrumentId('projectile') || 'tone'), noteName, undefined, 'master', {}, 0.42); } catch {}
       const origin = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
       if (String(group.actionType || 'projectile') === 'explosion') {
         addHostileRedExplosionEffect(origin);
