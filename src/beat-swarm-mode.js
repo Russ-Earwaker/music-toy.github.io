@@ -454,6 +454,27 @@ const SPAWNER_ENEMY_SPEED_MULTIPLIER = 0.5;
 const SPAWNER_ENEMY_BURST_MIN_PX = 48;
 const SPAWNER_ENEMY_BURST_MAX_PX = 180;
 const SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX = 86;
+const DRAW_SNAKE_ENEMY_ENABLED = true;
+const DRAW_SNAKE_ENEMY_TARGET_COUNT = 1;
+const DRAW_SNAKE_ENEMY_HEALTH_MULTIPLIER = SPAWNER_ENEMY_HEALTH_MULTIPLIER;
+const DRAW_SNAKE_SEGMENT_COUNT = 12;
+const DRAW_SNAKE_SEGMENT_SPACING_WORLD = 176;
+const DRAW_SNAKE_TRIGGER_SOUND_VOLUME = 0.45;
+const DRAW_SNAKE_PROJECTILE_SPEED = 760;
+const DRAW_SNAKE_PROJECTILE_DAMAGE = 1.25;
+const DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK = 6;
+const DRAW_SNAKE_VISUAL_SCALE = 4;
+const DRAW_SNAKE_WIND_ACCEL = 420;
+const DRAW_SNAKE_WIND_FREQ_HZ = 0.65;
+const DRAW_SNAKE_SCREEN_MARGIN_PX = 180;
+const DRAW_SNAKE_EDGE_PULL_RATE = 8;
+const DRAW_SNAKE_NODE_SIZE_SCALE = 0.75;
+const DRAW_SNAKE_TURN_INTERVAL_MIN = 1.1;
+const DRAW_SNAKE_TURN_INTERVAL_MAX = 2.8;
+const DRAW_SNAKE_TURN_RATE_MIN = 0.32;
+const DRAW_SNAKE_TURN_RATE_MAX = 1.1;
+const DRAW_SNAKE_ARENA_BIAS_RADIUS_SCALE = 0.82;
+const DRAW_SNAKE_ARENA_BIAS_STRENGTH = 0.18;
 const LOOPGRID_FALLBACK_NOTE_PALETTE = Object.freeze(buildPalette(48, Array.from({ length: 12 }, (_, i) => i), 3));
 const SPAWNER_ENEMY_GRID_STEP_TO_CELL = Object.freeze([
   Object.freeze({ c: 0, r: 0 }), // 1
@@ -1459,6 +1480,13 @@ function getRandomSwarmPentatonicNote() {
   return list[idx] || 'C4';
 }
 
+function getSwarmPentatonicNoteByIndex(index) {
+  const list = SWARM_PENTATONIC_NOTES_ONE_OCTAVE;
+  if (!Array.isArray(list) || !list.length) return 'C4';
+  const i = ((Math.trunc(Number(index) || 0) % list.length) + list.length) % list.length;
+  return normalizeSwarmNoteName(list[i]) || getRandomSwarmPentatonicNote();
+}
+
 function normalizeSwarmNoteName(noteName) {
   const s = String(noteName || '').trim().toUpperCase();
   const m = /^([A-G])([#B]?)(-?\d+)$/.exec(s);
@@ -1505,6 +1533,21 @@ function normalizeInstrumentIdToken(value) {
   return String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
 }
 
+function resolveInstrumentIdOrFallback(candidate, fallback = 'tone') {
+  const raw = String(candidate || '').trim();
+  const allIds = Array.isArray(getAllIds?.()) ? getAllIds().map((id) => String(id || '').trim()).filter(Boolean) : [];
+  if (!raw) return String(fallback || 'tone').trim() || 'tone';
+  if (allIds.includes(raw)) return raw;
+  const fromDisplay = String(getIdForDisplayName(raw) || '').trim();
+  if (fromDisplay) return fromDisplay;
+  if (allIds.length) {
+    const token = normalizeInstrumentIdToken(raw);
+    const match = allIds.find((id) => normalizeInstrumentIdToken(id) === token);
+    if (match) return match;
+  }
+  return String(fallback || 'tone').trim() || 'tone';
+}
+
 function resolveSwarmSoundInstrumentId(eventKey) {
   const key = String(eventKey || '').trim();
   if (!key) return 'tone';
@@ -1517,15 +1560,8 @@ function resolveSwarmSoundInstrumentId(eventKey) {
   }
   const def = SWARM_SOUND_EVENTS[key] || null;
   const display = String(def?.instrumentDisplay || '').trim();
-  let id = String(getIdForDisplayName(display) || '').trim();
-  if (!id && display && allIds.length) {
-    const target = normalizeInstrumentIdToken(display);
-    id = allIds.find((cand) => normalizeInstrumentIdToken(cand) === target) || '';
-  }
+  let id = resolveInstrumentIdOrFallback(display, String(getIdForDisplayName('Tone (Sine)') || '').trim() || 'tone');
   if (!id && display && idSet.has(display)) id = display;
-  if (!id) {
-    id = String(getIdForDisplayName('Tone (Sine)') || '').trim() || 'tone';
-  }
   swarmSoundInstrumentCache.set(key, id);
   return id;
 }
@@ -4904,6 +4940,45 @@ function pickSpawnerEnemyInstrumentId(preferredId = '') {
   return resolveSwarmSoundInstrumentId('projectile') || 'tone';
 }
 
+function pickEnemyInstrumentIdForToy(toyKey, preferredId = '', extraUsed = null) {
+  const key = String(toyKey || '').trim().toLowerCase();
+  const preferred = String(preferredId || '').trim();
+  const used = new Set();
+  for (const id of getUsedWeaponInstrumentIds()) used.add(id);
+  for (const id of getUsedSpawnerEnemyInstrumentIds()) used.add(id);
+  if (extraUsed instanceof Set) for (const id of extraUsed) used.add(String(id || '').trim());
+  const entries = Array.isArray(getInstrumentEntries?.()) ? getInstrumentEntries() : [];
+  const validated = entries
+    .filter((e) => Array.isArray(e?.recommendedToys) && e.recommendedToys.includes(key))
+    .map((e) => String(e?.id || '').trim())
+    .filter(Boolean);
+  const validatedSet = new Set(validated);
+  if (preferred && validatedSet.has(preferred) && !used.has(preferred)) return preferred;
+  const pool = (validated.length ? validated : (Array.isArray(getAllIds?.()) ? getAllIds() : []))
+    .map((v) => String(v || '').trim())
+    .filter((v) => !!v && !used.has(v));
+  if (pool.length) return pool[Math.max(0, Math.min(pool.length - 1, Math.trunc(Math.random() * pool.length)))] || 'tone';
+  return resolveInstrumentIdOrFallback(preferred, resolveSwarmSoundInstrumentId('projectile') || 'tone');
+}
+
+function pickEnemyInstrumentIdForToyRandom(toyKey, extraUsed = null) {
+  const key = String(toyKey || '').trim().toLowerCase();
+  const used = new Set();
+  for (const id of getUsedWeaponInstrumentIds()) used.add(id);
+  for (const id of getUsedSpawnerEnemyInstrumentIds()) used.add(id);
+  if (extraUsed instanceof Set) for (const id of extraUsed) used.add(String(id || '').trim());
+  const entries = Array.isArray(getInstrumentEntries?.()) ? getInstrumentEntries() : [];
+  const validated = entries
+    .filter((e) => Array.isArray(e?.recommendedToys) && e.recommendedToys.includes(key))
+    .map((e) => String(e?.id || '').trim())
+    .filter(Boolean);
+  const pool = (validated.length ? validated : (Array.isArray(getAllIds?.()) ? getAllIds() : []))
+    .map((v) => String(v || '').trim())
+    .filter((v) => !!v && !used.has(v));
+  if (pool.length) return pool[Math.max(0, Math.min(pool.length - 1, Math.trunc(Math.random() * pool.length)))] || 'tone';
+  return resolveSwarmSoundInstrumentId('projectile') || 'tone';
+}
+
 function createSpawnerEnemyRhythmProfile() {
   const fallbackInstrument = resolveSwarmSoundInstrumentId('explosion') || getIdForDisplayName('Bass Tone 4') || 'tone';
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
@@ -4924,13 +4999,51 @@ function createSpawnerEnemyRhythmProfile() {
   }
   const noteIndices = Array.from({ length: 8 }, (_, i) => Math.max(0, Math.trunc(Number(noteIdxRaw[i]) || (6 + (i % 7)))));
   const srcInstrument = String(source?.dataset?.instrument || source?.dataset?.instrumentId || fallbackInstrument || 'tone');
-  const instrument = pickSpawnerEnemyInstrumentId(srcInstrument);
+  const instrument = pickEnemyInstrumentIdForToy('loopgrid', srcInstrument);
   const resolvedPalette = notePalette.length ? notePalette : Array.from(LOOPGRID_FALLBACK_NOTE_PALETTE);
   const firstActiveStep = Math.max(0, steps.findIndex(Boolean));
   const baseIdx = Math.max(0, Math.trunc(Number(noteIndices[firstActiveStep >= 0 ? firstActiveStep : 0]) || 0));
   const baseMidi = Math.trunc(Number(resolvedPalette[baseIdx % Math.max(1, resolvedPalette.length)]) || 60);
   const baseNoteName = normalizeSwarmNoteName(midiToName(baseMidi)) || 'C4';
   return { steps, noteIndices, notePalette: resolvedPalette, instrument, baseNoteName };
+}
+
+function createDrawSnakeEnemyProfile() {
+  const fallbackInstrument = resolveSwarmSoundInstrumentId('projectile') || getIdForDisplayName('Tone (Sine)') || 'tone';
+  const steps = Array.from({ length: WEAPON_TUNE_STEPS }, () => Math.random() >= 0.5);
+  if (!steps.some(Boolean)) steps[Math.max(0, Math.min(WEAPON_TUNE_STEPS - 1, Math.trunc(Math.random() * WEAPON_TUNE_STEPS)))] = true;
+  const rows = Array.from({ length: WEAPON_TUNE_STEPS }, () => Math.max(0, Math.min(SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1, Math.trunc(Math.random() * SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length))));
+  const usedDrawSnake = new Set(
+    enemies
+      .filter((e) => String(e?.enemyType || '') === 'drawsnake')
+      .map((e) => String(e?.drawsnakeInstrument || '').trim())
+      .filter(Boolean)
+  );
+  let instrument = pickEnemyInstrumentIdForToyRandom('drawgrid', usedDrawSnake);
+  if (!instrument) instrument = fallbackInstrument;
+  const lineWidthPx = getDrawSnakeLineWidthPxFromDrawgrid();
+  return { steps, rows, instrument, lineWidthPx };
+}
+
+function getDrawSnakeLineWidthPxFromDrawgrid() {
+  const fallback = Math.max(2, Number(DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK) || 6);
+  const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
+  if (!panels.length) return fallback;
+  for (const panel of panels) {
+    try {
+      const rect = panel.getBoundingClientRect?.();
+      const w = Math.max(1, Number(rect?.width) || 0);
+      const h = Math.max(1, Number(rect?.height) || 0);
+      if (!(w > 0 && h > 0)) continue;
+      const st = panel.__drawToy?.getState?.() || null;
+      const steps = Math.max(1, Math.trunc(Number(st?.steps) || WEAPON_TUNE_STEPS));
+      const rows = Math.max(1, DRAWGRID_TUNE_ROWS);
+      const cell = Math.max(4, Math.min(w / steps, h / rows));
+      const lineWidthPx = Math.max(2, Math.min(60, cell * 0.8));
+      if (Number.isFinite(lineWidthPx) && lineWidthPx > 0) return lineWidthPx;
+    } catch {}
+  }
+  return fallback;
 }
 
 function spawnSpawnerEnemyAt(clientX, clientY) {
@@ -4975,6 +5088,13 @@ function spawnSpawnerEnemyAt(clientX, clientY) {
     el.style.transform = `translate(-9999px, -9999px) scale(${ENEMY_SPAWN_START_SCALE})`;
   }
   const hpBase = Math.max(1, Number(currentEnemySpawnMaxHp) || 1);
+  const seedAng = Math.random() * Math.PI * 2;
+  const seedDirX = Math.cos(seedAng);
+  const seedDirY = Math.sin(seedAng);
+  const seedTrail = Array.from({ length: Math.max(24, DRAW_SNAKE_SEGMENT_COUNT * 6) }, (_, ti) => ({
+    x: w.x - (seedDirX * ti * (DRAW_SNAKE_SEGMENT_SPACING_WORLD / 5)),
+    y: w.y - (seedDirY * ti * (DRAW_SNAKE_SEGMENT_SPACING_WORLD / 5)),
+  }));
   enemies.push({
     id: enemyIdSeq++,
     wx: w.x,
@@ -5044,6 +5164,311 @@ function flashSpawnerEnemyCell(enemy, stepIndex) {
   cell.classList.add('is-spawn');
 }
 
+function flashDrawSnakeNode(enemy, nodeIndex) {
+  const nodes = Array.isArray(enemy?.drawsnakeNodeEls) ? enemy.drawsnakeNodeEls : [];
+  if (!nodes.length) return;
+  const idx = ((Math.trunc(Number(nodeIndex) || 0) % nodes.length) + nodes.length) % nodes.length;
+  const node = nodes[idx];
+  if (!(node instanceof HTMLElement)) return;
+  node.classList.remove('is-spawn');
+  void node.offsetWidth;
+  node.classList.add('is-spawn');
+}
+
+function spawnDrawSnakeEnemyAt(clientX, clientY) {
+  if (!enemyLayerEl) return;
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
+  if (enemies.length >= Math.max(1, Math.trunc(Number(ENEMY_CAP) || 1))) return;
+  const w = screenToWorld({ x: clientX, y: clientY });
+  if (!w || !Number.isFinite(w.x) || !Number.isFinite(w.y)) return;
+  const profile = createDrawSnakeEnemyProfile();
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-enemy is-drawsnake-enemy';
+  const segLayer = document.createElement('div');
+  segLayer.className = 'beat-swarm-drawsnake-segments';
+  const nodeLayer = document.createElement('div');
+  nodeLayer.className = 'beat-swarm-drawsnake-nodes';
+  const segEls = [];
+  const nodeEls = [];
+  for (let i = 0; i < Math.max(1, DRAW_SNAKE_SEGMENT_COUNT - 1); i++) {
+    const seg = document.createElement('div');
+    seg.className = 'beat-swarm-drawsnake-segment';
+    segLayer.appendChild(seg);
+    segEls.push(seg);
+  }
+  for (let i = 0; i < DRAW_SNAKE_SEGMENT_COUNT; i++) {
+    const node = document.createElement('div');
+    node.className = 'beat-swarm-drawsnake-node';
+    nodeLayer.appendChild(node);
+    nodeEls.push(node);
+  }
+  const hpWrap = document.createElement('div');
+  hpWrap.className = 'beat-swarm-enemy-hp';
+  const hpFill = document.createElement('div');
+  hpFill.className = 'beat-swarm-enemy-hp-fill';
+  hpWrap.appendChild(hpFill);
+  el.appendChild(segLayer);
+  el.appendChild(nodeLayer);
+  el.appendChild(hpWrap);
+  enemyLayerEl.appendChild(el);
+  el.style.transform = 'translate(-9999px, -9999px)';
+  const hpBase = Math.max(1, Number(currentEnemySpawnMaxHp) || 1);
+  const seedAng = Math.random() * Math.PI * 2;
+  const seedDirX = Math.cos(seedAng);
+  const seedDirY = Math.sin(seedAng);
+  const seedTrail = Array.from({ length: Math.max(24, DRAW_SNAKE_SEGMENT_COUNT * 6) }, (_, ti) => ({
+    x: w.x - (seedDirX * ti * (DRAW_SNAKE_SEGMENT_SPACING_WORLD / 5)),
+    y: w.y - (seedDirY * ti * (DRAW_SNAKE_SEGMENT_SPACING_WORLD / 5)),
+  }));
+  enemies.push({
+    id: enemyIdSeq++,
+    wx: w.x,
+    wy: w.y,
+    vx: 0,
+    vy: 0,
+    soundNote: getRandomSwarmPentatonicNote(),
+    el,
+    hp: hpBase * DRAW_SNAKE_ENEMY_HEALTH_MULTIPLIER,
+    maxHp: hpBase * DRAW_SNAKE_ENEMY_HEALTH_MULTIPLIER,
+    hpFillEl: hpFill,
+    spawnT: 0,
+    spawnDur: ENEMY_SPAWN_DURATION,
+    enemyType: 'drawsnake',
+    projectileHitRadiusPx: 296,
+    drawsnakeSteps: profile.steps.slice(0, WEAPON_TUNE_STEPS),
+    drawsnakeRows: profile.rows.slice(0, WEAPON_TUNE_STEPS),
+    drawsnakeInstrument: profile.instrument,
+    drawsnakeLineWidthPx: Math.max(2, Number(profile.lineWidthPx) || DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK),
+    drawsnakeWindPhase: Math.random() * Math.PI * 2,
+    drawsnakeWindDir: Math.random() >= 0.5 ? 1 : -1,
+    drawsnakeMoveAngle: Math.random() * Math.PI * 2,
+    drawsnakeTurnRate: 0,
+    drawsnakeTurnTarget: ((Math.random() >= 0.5 ? 1 : -1) * randRange(DRAW_SNAKE_TURN_RATE_MIN, DRAW_SNAKE_TURN_RATE_MAX)),
+    drawsnakeTurnTimer: randRange(DRAW_SNAKE_TURN_INTERVAL_MIN, DRAW_SNAKE_TURN_INTERVAL_MAX),
+    drawsnakeSegEls: segEls,
+    drawsnakeNodeEls: nodeEls,
+    drawsnakeNodeWorld: Array.from({ length: DRAW_SNAKE_SEGMENT_COUNT }, (_, ni) => ({
+      x: w.x - (seedDirX * ni * DRAW_SNAKE_SEGMENT_SPACING_WORLD),
+      y: w.y - (seedDirY * ni * DRAW_SNAKE_SEGMENT_SPACING_WORLD),
+    })),
+    drawsnakeTrail: seedTrail,
+  });
+}
+
+function spawnDrawSnakeEnemyOffscreen() {
+  const w = Math.max(1, Number(window.innerWidth) || 0);
+  const h = Math.max(1, Number(window.innerHeight) || 0);
+  const m = Math.max(8, Number(ENEMY_FALLBACK_SPAWN_MARGIN_PX) || 42);
+  const side = Math.floor(Math.random() * 4);
+  let x = 0;
+  let y = 0;
+  if (side === 0) {
+    x = -m;
+    y = randRange(0, h);
+  } else if (side === 1) {
+    x = w + m;
+    y = randRange(0, h);
+  } else if (side === 2) {
+    x = randRange(0, w);
+    y = -m;
+  } else {
+    x = randRange(0, w);
+    y = h + m;
+  }
+  spawnDrawSnakeEnemyAt(x, y);
+}
+
+function maintainDrawSnakeEnemyPopulation() {
+  if (!DRAW_SNAKE_ENEMY_ENABLED) return;
+  const target = Math.max(0, Math.trunc(Number(DRAW_SNAKE_ENEMY_TARGET_COUNT) || 0));
+  if (!(target > 0)) return;
+  const activeCount = enemies.filter((e) => String(e?.enemyType || '') === 'drawsnake').length;
+  if (activeCount >= target) return;
+  const spawnCount = Math.min(target - activeCount, Math.max(0, ENEMY_CAP - enemies.length));
+  for (let i = 0; i < spawnCount; i++) spawnDrawSnakeEnemyOffscreen();
+}
+
+function sampleTrailAtDistance(trail, distanceWorld) {
+  const pts = Array.isArray(trail) ? trail : null;
+  if (!pts || !pts.length) return null;
+  if (pts.length === 1) return pts[0];
+  let remain = Math.max(0, Number(distanceWorld) || 0);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const d = Math.hypot(dx, dy);
+    if (!(d > 0.0001)) continue;
+    if (remain <= d) {
+      const t = Math.max(0, Math.min(1, remain / d));
+      return { x: a.x + (dx * t), y: a.y + (dy * t) };
+    }
+    remain -= d;
+  }
+  return pts[pts.length - 1];
+}
+
+function updateDrawSnakeTrail(enemy) {
+  const trail = Array.isArray(enemy?.drawsnakeTrail) ? enemy.drawsnakeTrail : (enemy.drawsnakeTrail = []);
+  const head = { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 };
+  if (!trail.length) {
+    trail.push(head);
+    return trail;
+  }
+  const prev = trail[0];
+  const dx = head.x - prev.x;
+  const dy = head.y - prev.y;
+  const dist = Math.hypot(dx, dy);
+  const step = Math.max(4, DRAW_SNAKE_SEGMENT_SPACING_WORLD * 0.25);
+  if (dist < 0.01) return trail;
+  const inserts = [head];
+  if (dist > step) {
+    const n = Math.max(1, Math.floor(dist / step));
+    for (let i = n; i >= 1; i--) {
+      const t = Math.max(0, Math.min(1, (i * step) / dist));
+      inserts.push({
+        x: prev.x + (dx * t),
+        y: prev.y + (dy * t),
+      });
+    }
+  }
+  trail.unshift(...inserts);
+  const needLen = Math.max(step, DRAW_SNAKE_SEGMENT_SPACING_WORLD * (DRAW_SNAKE_SEGMENT_COUNT + 2));
+  let acc = 0;
+  let keep = 1;
+  for (let i = 1; i < trail.length; i++) {
+    const a = trail[i - 1];
+    const b = trail[i];
+    acc += Math.hypot((a.x - b.x), (a.y - b.y));
+    keep = i + 1;
+    if (acc >= needLen) break;
+  }
+  if (trail.length > keep) trail.length = keep;
+  return trail;
+}
+
+function updateDrawSnakeVisual(enemy, scale) {
+  if (String(enemy?.enemyType || '') !== 'drawsnake') return;
+  const originScreen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
+  if (!originScreen || !Number.isFinite(originScreen.x) || !Number.isFinite(originScreen.y)) return;
+  const trail = updateDrawSnakeTrail(enemy);
+  const nodes = [];
+  for (let i = 0; i < DRAW_SNAKE_SEGMENT_COUNT; i++) {
+    const p = sampleTrailAtDistance(trail, i * DRAW_SNAKE_SEGMENT_SPACING_WORLD) || { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+    nodes.push(p);
+    enemy.drawsnakeNodeWorld[i] = { x: p.x, y: p.y };
+  }
+  const segEls = Array.isArray(enemy.drawsnakeSegEls) ? enemy.drawsnakeSegEls : [];
+  const nodeEls = Array.isArray(enemy.drawsnakeNodeEls) ? enemy.drawsnakeNodeEls : [];
+  const lineWidthPx = Math.max(2, Number(enemy?.drawsnakeLineWidthPx) || DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK) * DRAW_SNAKE_VISUAL_SCALE;
+  const jointSizePx = Math.max(7, lineWidthPx * 1.7 * DRAW_SNAKE_NODE_SIZE_SCALE);
+  for (let i = 0; i < segEls.length; i++) {
+    const a = nodes[i];
+    const b = nodes[Math.min(nodes.length - 1, i + 1)];
+    const sa = worldToScreen(a);
+    const sb = worldToScreen(b);
+    const seg = segEls[i];
+    if (!seg || !sa || !sb || !Number.isFinite(sa.x) || !Number.isFinite(sa.y) || !Number.isFinite(sb.x) || !Number.isFinite(sb.y)) {
+      try { if (seg) seg.style.opacity = '0'; } catch {}
+      continue;
+    }
+    const dx = sb.x - sa.x;
+    const dy = sb.y - sa.y;
+    const len = Math.max(2, Math.hypot(dx, dy));
+    const ang = Math.atan2(dy, dx) * (180 / Math.PI);
+    seg.style.opacity = '1';
+    seg.style.height = `${lineWidthPx}px`;
+    seg.style.marginTop = `${(-lineWidthPx * 0.5).toFixed(2)}px`;
+    seg.style.width = `${len}px`;
+    seg.style.transform = `translate(${(sa.x - originScreen.x).toFixed(2)}px, ${(sa.y - originScreen.y).toFixed(2)}px) rotate(${ang}deg)`;
+  }
+  for (let i = 0; i < nodeEls.length; i++) {
+    const node = nodeEls[i];
+    const s = worldToScreen(nodes[i]);
+    if (!node || !s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) {
+      try { if (node) node.style.opacity = '0'; } catch {}
+      continue;
+    }
+    node.style.opacity = '1';
+    node.style.width = `${jointSizePx}px`;
+    node.style.height = `${jointSizePx}px`;
+    node.style.marginLeft = `${(-jointSizePx * 0.5).toFixed(2)}px`;
+    node.style.marginTop = `${(-jointSizePx * 0.5).toFixed(2)}px`;
+    node.style.transform = `translate(${(s.x - originScreen.x).toFixed(2)}px, ${(s.y - originScreen.y).toFixed(2)}px)`;
+  }
+  void scale;
+}
+
+function getDrawSnakeNodeIndexForStep(stepIndex, nodeCount) {
+  const count = Math.max(1, Math.trunc(Number(nodeCount) || 1));
+  const step = ((Math.trunc(Number(stepIndex) || 0) % WEAPON_TUNE_STEPS) + WEAPON_TUNE_STEPS) % WEAPON_TUNE_STEPS;
+  if (count <= 1 || WEAPON_TUNE_STEPS <= 1) return 0;
+  const t = step / Math.max(1, WEAPON_TUNE_STEPS - 1);
+  return Math.max(0, Math.min(count - 1, Math.round(t * (count - 1))));
+}
+
+function fireDrawSnakeProjectile(enemy, nodeIndex, noteName) {
+  if (!enemyLayerEl) return;
+  const nodes = Array.isArray(enemy?.drawsnakeNodeWorld) ? enemy.drawsnakeNodeWorld : [];
+  const idx = Math.max(0, Math.min(nodes.length - 1, Math.trunc(Number(nodeIndex) || 0)));
+  flashDrawSnakeNode(enemy, idx);
+  const origin = nodes[idx] || { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 };
+  const dirAng = Math.random() * Math.PI * 2;
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-projectile is-hostile-red';
+  enemyLayerEl.appendChild(el);
+  projectiles.push({
+    wx: Number(origin.x) || 0,
+    wy: Number(origin.y) || 0,
+    vx: Math.cos(dirAng) * DRAW_SNAKE_PROJECTILE_SPEED,
+    vy: Math.sin(dirAng) * DRAW_SNAKE_PROJECTILE_SPEED,
+    ttl: PROJECTILE_LIFETIME,
+    damage: DRAW_SNAKE_PROJECTILE_DAMAGE,
+    kind: 'hostile-red',
+    hitEnemyIds: new Set(),
+    boomCenterX: 0,
+    boomCenterY: 0,
+    boomDirX: 0,
+    boomDirY: 0,
+    boomPerpX: 0,
+    boomPerpY: 0,
+    boomRadius: 0,
+    boomTheta: 0,
+    boomOmega: 0,
+    homingState: '',
+    targetEnemyId: null,
+    orbitAngle: 0,
+    orbitAngVel: 0,
+    orbitRadius: 0,
+    chainWeaponSlotIndex: null,
+    chainStageIndex: null,
+    nextStages: [],
+    nextBeatIndex: null,
+    ignoreEnemyId: null,
+    hostileToEnemies: false,
+    hostileNoteName: normalizeSwarmNoteName(noteName) || 'C4',
+    hostileInstrument: resolveInstrumentIdOrFallback(enemy?.drawsnakeInstrument, resolveSwarmSoundInstrumentId('projectile') || 'tone'),
+    el,
+  });
+}
+
+function triggerDrawSnakeEnemiesOnStep(stepIndex) {
+  if (!active || gameplayPaused) return;
+  const step = ((Math.trunc(Number(stepIndex) || 0) % WEAPON_TUNE_STEPS) + WEAPON_TUNE_STEPS) % WEAPON_TUNE_STEPS;
+  for (const enemy of enemies) {
+    if (String(enemy?.enemyType || '') !== 'drawsnake') continue;
+    const steps = Array.isArray(enemy?.drawsnakeSteps) ? enemy.drawsnakeSteps : [];
+    if (!steps[step]) continue;
+    const row = Math.max(0, Math.min(SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1, Math.trunc(Number(enemy?.drawsnakeRows?.[step]) || 0)));
+    const noteName = getSwarmPentatonicNoteByIndex(row);
+    const instrumentId = resolveInstrumentIdOrFallback(enemy?.drawsnakeInstrument, resolveSwarmSoundInstrumentId('projectile') || 'tone');
+    enemy.drawsnakeInstrument = instrumentId;
+    try { triggerInstrument(instrumentId, noteName, undefined, 'master', {}, DRAW_SNAKE_TRIGGER_SOUND_VOLUME); } catch {}
+    fireDrawSnakeProjectile(enemy, getDrawSnakeNodeIndexForStep(step, DRAW_SNAKE_SEGMENT_COUNT), noteName);
+  }
+}
+
 function triggerSpawnerEnemiesOnStep(stepIndex, beatIndex) {
   if (!active || gameplayPaused) return;
   const step = ((Math.trunc(Number(stepIndex) || 0) % 8) + 8) % 8;
@@ -5053,7 +5478,9 @@ function triggerSpawnerEnemiesOnStep(stepIndex, beatIndex) {
     if (!steps[step]) continue;
     flashSpawnerEnemyCell(enemy, step);
     const noteName = normalizeSwarmNoteName(enemy?.spawnerNoteName) || 'C4';
-    try { triggerInstrument(String(enemy?.spawnerInstrument || 'tone'), noteName, undefined, 'master', {}, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME); } catch {}
+    const instrumentId = resolveInstrumentIdOrFallback(enemy?.spawnerInstrument, resolveSwarmSoundInstrumentId('projectile') || 'tone');
+    if (instrumentId !== enemy?.spawnerInstrument) enemy.spawnerInstrument = instrumentId;
+    try { triggerInstrument(instrumentId, noteName, undefined, 'master', {}, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME); } catch {}
     const center = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
     if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) continue;
     const baseAngle = Math.random() * Math.PI * 2;
@@ -5996,6 +6423,7 @@ function updateBeatWeapons(centerWorld) {
     if (stepIndex !== lastSpawnerEnemyStepIndex) {
       lastSpawnerEnemyStepIndex = stepIndex;
       triggerSpawnerEnemiesOnStep(stepIndex, beatIndex);
+      triggerDrawSnakeEnemiesOnStep(stepIndex);
     }
     if (stepIndex !== lastWeaponTuneStepIndex) {
       lastWeaponTuneStepIndex = stepIndex;
@@ -6048,6 +6476,45 @@ function getEnemySpawnScale(enemy) {
   return 1.1 - (0.1 * v); // settle from 1.1 -> 1.0
 }
 
+function keepDrawSnakeEnemyOnscreen(enemy, dt) {
+  if (String(enemy?.enemyType || '') !== 'drawsnake') return null;
+  const s = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
+  const screenW = Math.max(1, Number(window.innerWidth) || 0);
+  const screenH = Math.max(1, Number(window.innerHeight) || 0);
+  const pad = Math.max(40, Number(DRAW_SNAKE_SCREEN_MARGIN_PX) || 140);
+  if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) {
+    const center = screenToWorld({ x: screenW * 0.5, y: screenH * 0.5 });
+    if (center && Number.isFinite(center.x) && Number.isFinite(center.y)) {
+      enemy.wx = center.x;
+      enemy.wy = center.y;
+      enemy.vx = 0;
+      enemy.vy = 0;
+      return worldToScreen({ x: enemy.wx, y: enemy.wy });
+    }
+    return s;
+  }
+  const clampedX = Math.max(pad, Math.min(screenW - pad, s.x));
+  const clampedY = Math.max(pad, Math.min(screenH - pad, s.y));
+  if (Math.abs(clampedX - s.x) < 0.001 && Math.abs(clampedY - s.y) < 0.001) return s;
+  const pulled = screenToWorld({ x: clampedX, y: clampedY });
+  if (!pulled || !Number.isFinite(pulled.x) || !Number.isFinite(pulled.y)) return s;
+  const pullRate = Math.max(0.5, Number(DRAW_SNAKE_EDGE_PULL_RATE) || 8);
+  const t = Math.max(0, Math.min(1, dt * pullRate));
+  const pullAngle = Math.atan2((pulled.y - enemy.wy), (pulled.x - enemy.wx));
+  if (Number.isFinite(pullAngle)) {
+    const cur = Number(enemy.drawsnakeMoveAngle) || 0;
+    let delta = pullAngle - cur;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    enemy.drawsnakeMoveAngle = cur + (delta * Math.max(0, Math.min(1, t * 0.8)));
+  }
+  enemy.wx += (pulled.x - enemy.wx) * t;
+  enemy.wy += (pulled.y - enemy.wy) * t;
+  enemy.vx *= 0.86;
+  enemy.vy *= 0.86;
+  return worldToScreen({ x: enemy.wx, y: enemy.wy }) || s;
+}
+
 function updateEnemies(dt) {
   if (!enemies.length) return;
   const centerWorld = getViewportCenterWorld();
@@ -6056,14 +6523,57 @@ function updateEnemies(dt) {
   const hitRadiusWorld = ENEMY_HIT_RADIUS / Math.max(0.001, scale || 1);
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
-    const isSpawnerEnemy = String(e?.enemyType || '') === 'spawner';
+    const enemyType = String(e?.enemyType || '');
+    const isPersistentSpecialEnemy = enemyType === 'spawner' || enemyType === 'drawsnake';
     const dx = centerWorld.x - e.wx;
     const dy = centerWorld.y - e.wy;
     const d = Math.hypot(dx, dy) || 0.0001;
     const typeSpeedMult = String(e?.enemyType || '') === 'spawner' ? SPAWNER_ENEMY_SPEED_MULTIPLIER : 1;
     const speedMult = Math.max(0.05, Number(difficultyConfig.enemySpeedMultiplier) || 1) * Math.max(0.05, Number(typeSpeedMult) || 1);
-    const ax = (dx / d) * ENEMY_ACCEL * speedMult;
-    const ay = (dy / d) * ENEMY_ACCEL * speedMult;
+    let ax = (dx / d) * ENEMY_ACCEL * speedMult;
+    let ay = (dy / d) * ENEMY_ACCEL * speedMult;
+    if (enemyType === 'drawsnake') {
+      const curAngle = Number(e.drawsnakeMoveAngle);
+      e.drawsnakeMoveAngle = Number.isFinite(curAngle) ? curAngle : (Math.random() * Math.PI * 2);
+      e.drawsnakeTurnTimer = (Number(e.drawsnakeTurnTimer) || 0) - dt;
+      if (!(Number(e.drawsnakeTurnTimer) > 0)) {
+        e.drawsnakeTurnTimer = randRange(DRAW_SNAKE_TURN_INTERVAL_MIN, DRAW_SNAKE_TURN_INTERVAL_MAX);
+        const dir = Math.random() >= 0.5 ? 1 : -1;
+        e.drawsnakeTurnTarget = dir * randRange(DRAW_SNAKE_TURN_RATE_MIN, DRAW_SNAKE_TURN_RATE_MAX);
+      }
+      const targetTurn = Number(e.drawsnakeTurnTarget) || 0;
+      const curTurn = Number(e.drawsnakeTurnRate) || 0;
+      const turnBlend = Math.max(0, Math.min(1, dt * 1.85));
+      e.drawsnakeTurnRate = curTurn + ((targetTurn - curTurn) * turnBlend);
+      e.drawsnakeWindPhase = (Number(e.drawsnakeWindPhase) || 0) + (dt * Math.PI * 2 * DRAW_SNAKE_WIND_FREQ_HZ);
+      const wind = Math.sin(Number(e.drawsnakeWindPhase) || 0);
+      e.drawsnakeMoveAngle += ((Number(e.drawsnakeTurnRate) || 0) + (wind * 0.18)) * dt;
+      const arenaCenter = (arenaCenterWorld && Number.isFinite(arenaCenterWorld.x) && Number.isFinite(arenaCenterWorld.y))
+        ? arenaCenterWorld
+        : centerWorld;
+      const toArenaX = Number(arenaCenter.x) - Number(e.wx);
+      const toArenaY = Number(arenaCenter.y) - Number(e.wy);
+      const arenaDist = Math.hypot(toArenaX, toArenaY) || 0.0001;
+      const arenaSoft = SWARM_ARENA_RADIUS_WORLD * DRAW_SNAKE_ARENA_BIAS_RADIUS_SCALE;
+      if (arenaDist > arenaSoft) {
+        const inwardAngle = Math.atan2(toArenaY, toArenaX);
+        let delta = inwardAngle - e.drawsnakeMoveAngle;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        const over = Math.max(0, arenaDist - arenaSoft);
+        const maxOver = Math.max(1, SWARM_ARENA_RADIUS_WORLD - arenaSoft);
+        const bias = Math.max(0, Math.min(1, over / maxOver)) * DRAW_SNAKE_ARENA_BIAS_STRENGTH;
+        e.drawsnakeMoveAngle += delta * Math.max(0, Math.min(1, bias));
+      }
+      const roamSpeed = ENEMY_MAX_SPEED * Math.max(0.45, Math.min(1.3, speedMult * 0.78));
+      const desiredVx = Math.cos(e.drawsnakeMoveAngle) * roamSpeed;
+      const desiredVy = Math.sin(e.drawsnakeMoveAngle) * roamSpeed;
+      const blend = Math.max(0, Math.min(1, dt * 2.2));
+      e.vx += (desiredVx - e.vx) * blend;
+      e.vy += (desiredVy - e.vy) * blend;
+      ax = 0;
+      ay = 0;
+    }
     e.vx += ax * dt;
     e.vy += ay * dt;
     const speed = Math.hypot(e.vx, e.vy);
@@ -6076,28 +6586,44 @@ function updateEnemies(dt) {
     e.wx += e.vx * dt;
     e.wy += e.vy * dt;
     if (d <= hitRadiusWorld) {
+      if (enemyType === 'drawsnake') {
+        e.drawsnakeMoveAngle = (Number(e.drawsnakeMoveAngle) || 0) + Math.PI * 0.75;
+        e.vx *= -0.45;
+        e.vy *= -0.45;
+        continue;
+      }
       removeEnemy(e);
       enemies.splice(i, 1);
       continue;
     }
-    const s = worldToScreen({ x: e.wx, y: e.wy });
+    const s = (enemyType === 'drawsnake')
+      ? keepDrawSnakeEnemyOnscreen(e, dt)
+      : worldToScreen({ x: e.wx, y: e.wy });
     if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) {
-      if (isSpawnerEnemy) continue;
+      if (isPersistentSpecialEnemy) {
+        if (e.el) e.el.style.transform = 'translate(-9999px, -9999px)';
+        continue;
+      }
       removeEnemy(e);
       enemies.splice(i, 1);
       continue;
     }
     if (s.x < -80 || s.y < -80 || s.x > window.innerWidth + 80 || s.y > window.innerHeight + 80) {
-      if (isSpawnerEnemy) continue;
-      removeEnemy(e);
-      enemies.splice(i, 1);
-      continue;
+      if (isPersistentSpecialEnemy) {
+        // Keep persistent rhythm enemies alive when they travel off-screen.
+        // We still update their transform so they can fully move beyond the edge.
+      } else {
+        removeEnemy(e);
+        enemies.splice(i, 1);
+        continue;
+      }
     }
     if (e.el) {
       e.spawnT = Math.min(Number(e.spawnDur) || 0.14, (Number(e.spawnT) || 0) + dt);
-      const spawnScale = getEnemySpawnScale(e);
+      const spawnScale = enemyType === 'drawsnake' ? 1 : getEnemySpawnScale(e);
       e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${spawnScale.toFixed(3)})`;
     }
+    if (enemyType === 'drawsnake') updateDrawSnakeVisual(e, scale);
   }
 }
 
@@ -6281,6 +6807,7 @@ function updatePickupsAndCombat(dt) {
     let hit = false;
     for (let j = enemies.length - 1; j >= 0; j--) {
       const e = enemies[j];
+      if (p?.hostileToEnemies === false) continue;
       const enemyId = Math.trunc(Number(e.id) || 0);
       if (Number.isFinite(p.ignoreEnemyId) && Math.trunc(p.ignoreEnemyId) === enemyId) continue;
       const dx = e.wx - p.wx;
@@ -6901,6 +7428,7 @@ function tick(nowMs) {
   try { spawnerRuntime?.update?.(dt); } catch {}
   maintainEnemyPopulation();
   maintainSpawnerEnemyPopulation();
+  maintainDrawSnakeEnemyPopulation();
   const aimFacingDeg = getShipFacingFromReleaseAim(input, centerWorldAfterMove);
   updateShipFacing(dt, input.x, input.y, aimFacingDeg);
   rafId = requestAnimationFrame(tick);
