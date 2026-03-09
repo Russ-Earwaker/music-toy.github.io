@@ -1,5 +1,5 @@
 {
-  "createdAt": "2026-03-09T15:29:52.343Z",
+  "createdAt": "2026-03-09T14:49:53.653Z",
   "href": "http://192.168.0.62:5500/index.html",
   "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
   "meta": {
@@ -40,19 +40,19 @@
       "label": "BS0_stage1_beatswarm_static_fire__BS0S1",
       "durationMs": 9000,
       "warmupMs": 1200,
-      "createdAt": "2026-03-09T15:29:16.107Z",
-      "samples": 284,
+      "createdAt": "2026-03-09T14:49:17.392Z",
+      "samples": 244,
       "frameMs": {
-        "avg": 27.663732394366196,
-        "p50": 33.29999999999927,
-        "p95": 33.5,
-        "p99": 50.100000000000364,
-        "worst": 83.29999999999927
+        "avg": 32.199180327868994,
+        "p50": 33.300000000046566,
+        "p95": 50.100000000034925,
+        "p99": 50.20000000001164,
+        "worst": 66.80000000004657
       },
       "counts": {
-        "over16ms": 230,
-        "over33ms": 122,
-        "over50ms": 8
+        "over16ms": 215,
+        "over33ms": 123,
+        "over50ms": 27
       },
       "pulseCount": 0,
       "outlineSyncCount": 0,
@@ -61,118 +61,118 @@
       "dgBackingResizeCount": 0,
       "dgOverlayResizeCount": 0,
       "frameProfile": {
-        "samples": 17,
+        "samples": 58,
         "parts": {
           "perf.raf.other": {
-            "totalMs": 84.200000166893,
-            "avgMs": 4.952941186287823
+            "totalMs": 327.70000034570694,
+            "avgMs": 5.6500000059604645
           },
           "pulse.service": {
-            "totalMs": 0,
-            "avgMs": 0
+            "totalMs": 0.10000002384185791,
+            "avgMs": 0.0017241383421009984
           },
           "anchor": {
-            "totalMs": 2.2000001668930054,
-            "avgMs": 0.12941177452311797
+            "totalMs": 9.00000011920929,
+            "avgMs": 0.15517241584843602
           },
           "perf.raf.scheduler": {
-            "totalMs": 3.100000023841858,
-            "avgMs": 0.1823529425789328
+            "totalMs": 12.199999988079071,
+            "avgMs": 0.21034482738067364
           },
           "perf.raf.main": {
-            "totalMs": 3.100000023841858,
-            "avgMs": 0.1823529425789328
-          },
-          "chain.draw": {
-            "totalMs": 0.49999988079071045,
-            "avgMs": 0.029411757693571204
+            "totalMs": 12.399999916553497,
+            "avgMs": 0.21379310200954305
           },
           "perf.raf.zoomTick": {
-            "totalMs": 0.7999999523162842,
-            "avgMs": 0.047058820724487305
+            "totalMs": 3.699999988079071,
+            "avgMs": 0.06379310324274261
+          },
+          "chain.draw": {
+            "totalMs": 1.399999976158142,
+            "avgMs": 0.024137930623416244
           },
           "script": {
             "totalMs": 0.10000002384185791,
-            "avgMs": 0.0058823543436387
+            "avgMs": 0.0017241383421009984
           },
           "perf.raf.benchmark": {
-            "totalMs": 0.30000007152557373,
-            "avgMs": 0.0176470630309161
+            "totalMs": 0.8000000715255737,
+            "avgMs": 0.01379310468147541
           },
           "unattributed": {
-            "totalMs": 806.4999996900497,
-            "avgMs": 47.44117645235586
+            "totalMs": 2652.0999995472375,
+            "avgMs": 45.72586206115927
           },
           "frame.nonScript": {
-            "totalMs": 900.699999976152,
-            "avgMs": 52.98235293977365
+            "totalMs": 3019.399999976391,
+            "avgMs": 52.05862068924812
           }
         },
         "work": {
-          "totalMs": 0.20000004768371582,
-          "avgMs": 0.0117647086872774
+          "totalMs": 0.40000003576278687,
+          "avgMs": 0.006896552340737705
         },
         "idle": {
-          "totalMs": 900.5999999523101,
-          "avgMs": 52.97647058543001
+          "totalMs": 3019.09999996447,
+          "avgMs": 52.05344827524949
         }
       },
       "warmupProfile": {
-        "t": 9420.199999928474,
-        "frameDt": 33.29999999999927,
+        "t": 313060.6999999881,
+        "frameDt": 33.40000000002328,
         "parts": {
-          "perf.raf.other": 6.600000023841858,
+          "perf.raf.other": 6.799999952316284,
           "pulse.service": 0,
           "anchor": 0.10000002384185791,
-          "perf.raf.scheduler": 0.20000004768371582,
-          "perf.raf.main": 0.20000004768371582,
+          "perf.raf.scheduler": 0.10000002384185791,
+          "perf.raf.main": 0.10000002384185791,
           "chain.draw": 0,
           "perf.raf.zoomTick": 0.10000002384185791,
           "script": 0.10000002384185791,
           "perf.raf.benchmark": 0.10000002384185791,
-          "unattributed": 25.89999978542255,
-          "frame.nonScript": 33.199999976157414
+          "unattributed": 25.99999990465585,
+          "frame.nonScript": 33.299999976181425
         },
         "workMs": 0.10000002384185791,
-        "idleMs": 33.199999976157414
+        "idleMs": 33.299999976181425
       },
       "frameProfileWorst": {
-        "frameDt": 83.39999999999964,
+        "frameDt": 133.20000000001164,
         "workMs": 0,
-        "idleMs": 83.39999999999964,
+        "idleMs": 133.20000000001164,
         "memory": {
-          "used": 17955595,
-          "total": 33172215,
+          "used": 15675007,
+          "total": 20231519,
           "limit": 4294967296
         },
         "parts": [
           {
             "name": "frame.nonScript",
-            "ms": 83.39999999999964
+            "ms": 133.20000000001164
           },
           {
             "name": "unattributed",
-            "ms": 80.59999980926477
+            "ms": 128.90000004769536
           },
           {
             "name": "perf.raf.other",
-            "ms": 1.9000000953674316
+            "ms": 2.899999976158142
           },
           {
             "name": "perf.raf.scheduler",
-            "ms": 0.30000007152557373
+            "ms": 0.5
           },
           {
             "name": "perf.raf.main",
-            "ms": 0.30000007152557373
-          },
-          {
-            "name": "perf.raf.zoomTick",
-            "ms": 0.19999992847442627
+            "ms": 0.5
           },
           {
             "name": "anchor",
-            "ms": 0.10000002384185791
+            "ms": 0.30000001192092896
+          },
+          {
+            "name": "chain.draw",
+            "ms": 0.09999996423721313
           },
           {
             "name": "pulse.service",
@@ -245,19 +245,19 @@
       "label": "BS0_stage2_beatswarm_static_fire__BS0S2",
       "durationMs": 9000,
       "warmupMs": 1200,
-      "createdAt": "2026-03-09T15:29:25.171Z",
-      "samples": 248,
+      "createdAt": "2026-03-09T14:49:26.457Z",
+      "samples": 208,
       "frameMs": {
-        "avg": 31.61209677419356,
-        "p50": 33.30000000000291,
-        "p95": 50,
-        "p99": 50.10000000000218,
-        "worst": 66.79999999999927
+        "avg": 37.61105769230758,
+        "p50": 33.40000000002328,
+        "p95": 50.100000000034925,
+        "p99": 66.70000000001164,
+        "worst": 66.79999999998836
       },
       "counts": {
-        "over16ms": 226,
-        "over33ms": 135,
-        "over50ms": 13
+        "over16ms": 200,
+        "over33ms": 138,
+        "over50ms": 38
       },
       "pulseCount": 0,
       "outlineSyncCount": 0,
@@ -266,122 +266,122 @@
       "dgBackingResizeCount": 0,
       "dgOverlayResizeCount": 0,
       "frameProfile": {
-        "samples": 38,
+        "samples": 83,
         "parts": {
           "perf.raf.other": {
-            "totalMs": 200.40000021457672,
-            "avgMs": 5.273684216173072
+            "totalMs": 520.9000001549721,
+            "avgMs": 6.275903616324965
           },
           "pulse.service": {
-            "totalMs": 0,
-            "avgMs": 0
+            "totalMs": 0.10000002384185791,
+            "avgMs": 0.0012048195643597338
           },
           "anchor": {
-            "totalMs": 5.000000238418579,
-            "avgMs": 0.1315789536425942
+            "totalMs": 14.299999833106995,
+            "avgMs": 0.17228915461574693
           },
           "perf.raf.scheduler": {
-            "totalMs": 6.300000190734863,
-            "avgMs": 0.16578947870354904
+            "totalMs": 19,
+            "avgMs": 0.2289156626506024
           },
           "perf.raf.main": {
-            "totalMs": 6.500000238418579,
-            "avgMs": 0.1710526378531205
+            "totalMs": 19.399999976158142,
+            "avgMs": 0.23373493947178484
           },
           "chain.draw": {
-            "totalMs": 1,
-            "avgMs": 0.02631578947368421
-          },
-          "perf.raf.zoomTick": {
-            "totalMs": 2.0999995470046997,
-            "avgMs": 0.05526314597380789
+            "totalMs": 2.699999988079071,
+            "avgMs": 0.03253012033830206
           },
           "script": {
-            "totalMs": 0.10000002384185791,
-            "avgMs": 0.0026315795747857344
+            "totalMs": 0.20000004768371582,
+            "avgMs": 0.0024096391287194677
           },
           "perf.raf.benchmark": {
-            "totalMs": 0.49999988079071045,
-            "avgMs": 0.013157891599755538
+            "totalMs": 1.2000000476837158,
+            "avgMs": 0.014457831899803805
           },
           "unattributed": {
-            "totalMs": 1713.499999666201,
-            "avgMs": 45.092105254373706
+            "totalMs": 3703.1999996543163,
+            "avgMs": 44.616867465714655
           },
           "frame.nonScript": {
-            "totalMs": 1935.299999976145,
-            "avgMs": 50.92894736779329
+            "totalMs": 4287.69999995234,
+            "avgMs": 51.65903614400409
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 6.900000274181366,
+            "avgMs": 0.08313253342387188
           }
         },
         "work": {
-          "totalMs": 0.20000004768371582,
-          "avgMs": 0.005263159149571469
+          "totalMs": 0.40000003576278687,
+          "avgMs": 0.004819277539310685
         },
         "idle": {
-          "totalMs": 1935.1999999523032,
-          "avgMs": 50.9263157882185
+          "totalMs": 4287.4999999642605,
+          "avgMs": 51.6566265055935
         }
       },
       "warmupProfile": {
-        "t": 18474.899999976158,
-        "frameDt": 33.39999999999782,
+        "t": 322133.40000003576,
+        "frameDt": 50,
         "parts": {
-          "perf.raf.other": 2.299999952316284,
+          "perf.raf.other": 2.300000011920929,
           "pulse.service": 0,
-          "anchor": 0.20000004768371582,
-          "perf.raf.scheduler": 0.20000004768371582,
-          "perf.raf.main": 0.20000004768371582,
+          "anchor": 0.10000002384185791,
+          "perf.raf.scheduler": 0.19999998807907104,
+          "perf.raf.main": 0.19999998807907104,
           "chain.draw": 0,
-          "perf.raf.zoomTick": 0,
-          "script": 0.10000002384185791,
-          "perf.raf.benchmark": 0.10000002384185791,
-          "unattributed": 30.29999985694667,
-          "frame.nonScript": 33.29999997615596
+          "perf.raf.zoomTick": 0.19999998807907104,
+          "script": 0.20000004768371582,
+          "perf.raf.benchmark": 0.20000004768371582,
+          "unattributed": 46.59999990463257,
+          "frame.nonScript": 49.799999952316284
         },
-        "workMs": 0.10000002384185791,
-        "idleMs": 33.29999997615596
+        "workMs": 0.20000004768371582,
+        "idleMs": 49.799999952316284
       },
       "frameProfileWorst": {
-        "frameDt": 83.20000000000073,
+        "frameDt": 83.29999999998836,
         "workMs": 0,
-        "idleMs": 83.20000000000073,
+        "idleMs": 83.29999999998836,
         "memory": {
-          "used": 22055423,
-          "total": 32280747,
+          "used": 16831605,
+          "total": 21006833,
           "limit": 4294967296
         },
         "parts": [
           {
             "name": "frame.nonScript",
-            "ms": 83.20000000000073
+            "ms": 83.29999999998836
           },
           {
             "name": "unattributed",
-            "ms": 74.80000002384259
+            "ms": 74.79999999998836
           },
           {
             "name": "perf.raf.other",
-            "ms": 7.200000047683716
-          },
-          {
-            "name": "perf.raf.scheduler",
-            "ms": 0.3999999761581421
-          },
-          {
-            "name": "perf.raf.main",
-            "ms": 0.3999999761581421
+            "ms": 7.800000071525574
           },
           {
             "name": "anchor",
-            "ms": 0.20000004768371582
+            "ms": 0.19999998807907104
           },
           {
-            "name": "chain.draw",
-            "ms": 0.10000002384185791
+            "name": "perf.raf.scheduler",
+            "ms": 0.19999998807907104
+          },
+          {
+            "name": "perf.raf.main",
+            "ms": 0.19999998807907104
           },
           {
             "name": "perf.raf.zoomTick",
-            "ms": 0.09999990463256836
+            "ms": 0.09999996423721313
+          },
+          {
+            "name": "pulse.service",
+            "ms": 0
           }
         ]
       },
@@ -450,19 +450,19 @@
       "label": "BS0_stage3_beatswarm_static_fire__BS0S3",
       "durationMs": 9000,
       "warmupMs": 1200,
-      "createdAt": "2026-03-09T15:29:34.223Z",
-      "samples": 272,
+      "createdAt": "2026-03-09T14:49:35.520Z",
+      "samples": 223,
       "frameMs": {
-        "avg": 28.761397058823537,
-        "p50": 33.29999999999927,
-        "p95": 50,
-        "p99": 50.10000000000582,
-        "worst": 83.40000000000146
+        "avg": 35.15605381165914,
+        "p50": 33.399999999965075,
+        "p95": 50.09999999997672,
+        "p99": 66.70000000001164,
+        "worst": 66.79999999998836
       },
       "counts": {
-        "over16ms": 229,
-        "over33ms": 129,
-        "over50ms": 13
+        "over16ms": 206,
+        "over33ms": 141,
+        "over50ms": 25
       },
       "pulseCount": 0,
       "outlineSyncCount": 0,
@@ -471,121 +471,121 @@
       "dgBackingResizeCount": 0,
       "dgOverlayResizeCount": 0,
       "frameProfile": {
-        "samples": 26,
+        "samples": 57,
         "parts": {
           "perf.raf.other": {
-            "totalMs": 124.00000011920929,
-            "avgMs": 4.769230773815742
+            "totalMs": 391.10000044107437,
+            "avgMs": 6.861403516510077
           },
           "pulse.service": {
             "totalMs": 0,
             "avgMs": 0
           },
           "anchor": {
-            "totalMs": 3.6000001430511475,
-            "avgMs": 0.13846154396350568
+            "totalMs": 8.5,
+            "avgMs": 0.14912280701754385
           },
           "perf.raf.scheduler": {
-            "totalMs": 4.900000095367432,
-            "avgMs": 0.1884615421295166
+            "totalMs": 12.099999845027924,
+            "avgMs": 0.2122806990355776
           },
           "perf.raf.main": {
-            "totalMs": 5.1000001430511475,
-            "avgMs": 0.19615385165581337
+            "totalMs": 12.399999797344208,
+            "avgMs": 0.21754385609375804
           },
           "chain.draw": {
-            "totalMs": 0.40000009536743164,
-            "avgMs": 0.015384619052593525
+            "totalMs": 1.8000000715255737,
+            "avgMs": 0.03157894862325568
           },
           "perf.raf.zoomTick": {
-            "totalMs": 1.100000023841858,
-            "avgMs": 0.042307693224686846
+            "totalMs": 3.7999996542930603,
+            "avgMs": 0.06666666060163264
           },
           "script": {
             "totalMs": 0.10000002384185791,
-            "avgMs": 0.0038461547631483814
+            "avgMs": 0.0017543863831904897
           },
           "perf.raf.benchmark": {
-            "totalMs": 0.39999985694885254,
-            "avgMs": 0.015384609882648174
+            "totalMs": 0.9000000953674316,
+            "avgMs": 0.015789475357323363
           },
           "unattributed": {
-            "totalMs": 1195.3999994993246,
-            "avgMs": 45.97692305766633
+            "totalMs": 2538.2000000714324,
+            "avgMs": 44.52982456265671
           },
           "frame.nonScript": {
-            "totalMs": 1334.8999999761618,
-            "avgMs": 51.342307691390836
+            "totalMs": 2968.799999976065,
+            "avgMs": 52.08421052589588
           }
         },
         "work": {
-          "totalMs": 0.10000002384185791,
-          "avgMs": 0.0038461547631483814
+          "totalMs": 0.30000007152557373,
+          "avgMs": 0.005263159149571469
         },
         "idle": {
-          "totalMs": 1334.8999999761618,
-          "avgMs": 51.342307691390836
+          "totalMs": 2968.5999999283813,
+          "avgMs": 52.080701753129496
         }
       },
       "warmupProfile": {
-        "t": 27558.100000023842,
-        "frameDt": 16.700000000000728,
+        "t": 331200,
+        "frameDt": 33.29999999998836,
         "parts": {
-          "perf.raf.other": 6.699999928474426,
+          "perf.raf.other": 2.299999952316284,
           "pulse.service": 0,
-          "anchor": 0.19999992847442627,
-          "perf.raf.scheduler": 0.19999992847442627,
-          "perf.raf.main": 0.19999992847442627,
-          "chain.draw": 0,
+          "anchor": 0.19999998807907104,
+          "perf.raf.scheduler": 0.19999998807907104,
+          "perf.raf.main": 0.19999998807907104,
+          "chain.draw": 0.10000002384185791,
           "perf.raf.zoomTick": 0.10000002384185791,
           "script": 0.10000002384185791,
           "perf.raf.benchmark": 0.10000002384185791,
-          "unattributed": 9.100000214577449,
-          "frame.nonScript": 16.59999997615887
+          "unattributed": 29.99999998806743,
+          "frame.nonScript": 33.1999999761465
         },
         "workMs": 0.10000002384185791,
-        "idleMs": 16.59999997615887
+        "idleMs": 33.1999999761465
       },
       "frameProfileWorst": {
-        "frameDt": 83.40000000000146,
+        "frameDt": 83.29999999998836,
         "workMs": 0,
-        "idleMs": 83.40000000000146,
+        "idleMs": 83.29999999998836,
         "memory": {
-          "used": 21727180,
-          "total": 33067236,
+          "used": 17199448,
+          "total": 23104156,
           "limit": 4294967296
         },
         "parts": [
           {
             "name": "frame.nonScript",
-            "ms": 83.40000000000146
+            "ms": 83.29999999998836
           },
           {
             "name": "unattributed",
-            "ms": 80.79999985695031
+            "ms": 75.20000003575115
           },
           {
             "name": "perf.raf.other",
-            "ms": 2
+            "ms": 7.900000035762787
           },
           {
             "name": "perf.raf.scheduler",
-            "ms": 0.20000004768371582
+            "ms": 0.09999996423721313
           },
           {
             "name": "perf.raf.main",
-            "ms": 0.20000004768371582
-          },
-          {
-            "name": "anchor",
-            "ms": 0.10000002384185791
-          },
-          {
-            "name": "perf.raf.zoomTick",
-            "ms": 0.10000002384185791
+            "ms": 0.09999996423721313
           },
           {
             "name": "pulse.service",
+            "ms": 0
+          },
+          {
+            "name": "anchor",
+            "ms": 0
+          },
+          {
+            "name": "chain.draw",
             "ms": 0
           }
         ]
@@ -655,19 +655,19 @@
       "label": "BS0_stage4_beatswarm_static_fire__BS0S4",
       "durationMs": 9000,
       "warmupMs": 1200,
-      "createdAt": "2026-03-09T15:29:43.267Z",
-      "samples": 273,
+      "createdAt": "2026-03-09T14:49:44.568Z",
+      "samples": 226,
       "frameMs": {
-        "avg": 28.656410256410247,
-        "p50": 33.30000000000291,
-        "p95": 50,
-        "p99": 50.099999999998545,
-        "worst": 66.79999999999563
+        "avg": 34.61592920353988,
+        "p50": 33.399999999965075,
+        "p95": 50.09999999997672,
+        "p99": 50.100000000034925,
+        "worst": 66.70000000001164
       },
       "counts": {
-        "over16ms": 206,
-        "over33ms": 147,
-        "over50ms": 9
+        "over16ms": 216,
+        "over33ms": 136,
+        "over50ms": 21
       },
       "pulseCount": 0,
       "outlineSyncCount": 0,
@@ -676,121 +676,121 @@
       "dgBackingResizeCount": 0,
       "dgOverlayResizeCount": 0,
       "frameProfile": {
-        "samples": 21,
+        "samples": 48,
         "parts": {
           "perf.raf.other": {
-            "totalMs": 125.60000026226044,
-            "avgMs": 5.980952393440973
+            "totalMs": 285.90000027418137,
+            "avgMs": 5.9562500057121115
           },
           "pulse.service": {
-            "totalMs": 0.09999990463256836,
-            "avgMs": 0.004761900220598493
+            "totalMs": 0,
+            "avgMs": 0
           },
           "anchor": {
-            "totalMs": 2.800000309944153,
-            "avgMs": 0.1333333480925787
+            "totalMs": 5.799999892711639,
+            "avgMs": 0.12083333109815915
           },
           "perf.raf.scheduler": {
-            "totalMs": 3.8000001907348633,
-            "avgMs": 0.1809523900349935
+            "totalMs": 8.800000131130219,
+            "avgMs": 0.18333333606521288
           },
           "perf.raf.main": {
-            "totalMs": 3.9000000953674316,
-            "avgMs": 0.185714290255592
+            "totalMs": 9.20000010728836,
+            "avgMs": 0.19166666890184084
           },
           "chain.draw": {
-            "totalMs": 0.5999997854232788,
-            "avgMs": 0.028571418353489468
-          },
-          "perf.raf.zoomTick": {
-            "totalMs": 0.8999998569488525,
-            "avgMs": 0.04285713604518345
+            "totalMs": 1.4000001549720764,
+            "avgMs": 0.02916666989525159
           },
           "script": {
-            "totalMs": 0.19999992847442627,
-            "avgMs": 0.009523806117829822
+            "totalMs": 0.10000002384185791,
+            "avgMs": 0.0020833338300387063
           },
           "perf.raf.benchmark": {
             "totalMs": 0.5,
-            "avgMs": 0.023809523809523808
+            "avgMs": 0.010416666666666666
           },
           "unattributed": {
-            "totalMs": 895.8999996662023,
-            "avgMs": 42.66190474600963
+            "totalMs": 2086.999999630323,
+            "avgMs": 43.47916665896506
           },
           "frame.nonScript": {
-            "totalMs": 1034.100000071514,
-            "avgMs": 49.242857146262565
+            "totalMs": 2402.19999997603,
+            "avgMs": 50.04583333283396
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 3.599999785423279,
+            "avgMs": 0.07499999552965164
           }
         },
         "work": {
-          "totalMs": 0.19999992847442627,
-          "avgMs": 0.009523806117829822
+          "totalMs": 0.19999998807907104,
+          "avgMs": 0.00416666641831398
         },
         "idle": {
-          "totalMs": 1034.100000071514,
-          "avgMs": 49.242857146262565
+          "totalMs": 2402.100000011793,
+          "avgMs": 50.04375000024569
         }
       },
       "warmupProfile": {
-        "t": 36590.10000002384,
-        "frameDt": 16.69999999999709,
+        "t": 340261.40000003576,
+        "frameDt": 16.699999999953434,
         "parts": {
-          "perf.raf.other": 7.5,
-          "pulse.service": 0.09999990463256836,
+          "perf.raf.other": 2.100000023841858,
+          "pulse.service": 0,
           "anchor": 0.10000002384185791,
-          "perf.raf.scheduler": 0.19999992847442627,
-          "perf.raf.main": 0.19999992847442627,
-          "chain.draw": 0,
-          "perf.raf.zoomTick": 0.10000002384185791,
-          "script": 0.19999992847442627,
-          "perf.raf.benchmark": 0.19999992847442627,
-          "unattributed": 8.1000003337831,
-          "frame.nonScript": 16.500000071522663
+          "perf.raf.scheduler": 0.10000002384185791,
+          "perf.raf.main": 0.19999998807907104,
+          "chain.draw": 0.10000002384185791,
+          "perf.raf.zoomTick": 0,
+          "script": 0.10000002384185791,
+          "perf.raf.benchmark": 0.10000002384185791,
+          "unattributed": 13.899999868823215,
+          "frame.nonScript": 16.599999976111576
         },
-        "workMs": 0.19999992847442627,
-        "idleMs": 16.500000071522663
+        "workMs": 0.10000002384185791,
+        "idleMs": 16.599999976111576
       },
       "frameProfileWorst": {
-        "frameDt": 66.79999999999563,
+        "frameDt": 66.70000000001164,
         "workMs": 0,
-        "idleMs": 66.79999999999563,
+        "idleMs": 66.70000000001164,
         "memory": {
-          "used": 17876686,
-          "total": 34113558,
+          "used": 17065404,
+          "total": 22579808,
           "limit": 4294967296
         },
         "parts": [
           {
             "name": "frame.nonScript",
-            "ms": 66.79999999999563
+            "ms": 66.70000000001164
           },
           {
             "name": "unattributed",
-            "ms": 57.8999999046282
+            "ms": 61.89999992848607
           },
           {
             "name": "perf.raf.other",
-            "ms": 8.00000011920929
+            "ms": 3.300000011920929
           },
           {
             "name": "perf.raf.scheduler",
-            "ms": 0.2999999523162842
+            "ms": 0.6000000238418579
           },
           {
             "name": "perf.raf.main",
-            "ms": 0.2999999523162842
+            "ms": 0.6000000238418579
           },
           {
             "name": "anchor",
-            "ms": 0.20000004768371582
-          },
-          {
-            "name": "perf.raf.benchmark",
-            "ms": 0.10000002384185791
+            "ms": 0.30000001192092896
           },
           {
             "name": "pulse.service",
+            "ms": 0
+          },
+          {
+            "name": "chain.draw",
             "ms": 0
           }
         ]
@@ -860,19 +860,19 @@
       "label": "BS0_stage5_beatswarm_static_fire__BS0S5",
       "durationMs": 9000,
       "warmupMs": 1200,
-      "createdAt": "2026-03-09T15:29:52.328Z",
-      "samples": 303,
+      "createdAt": "2026-03-09T14:49:53.640Z",
+      "samples": 257,
       "frameMs": {
-        "avg": 25.873927392739258,
-        "p50": 33.200000000004366,
-        "p95": 33.5,
-        "p99": 50,
-        "worst": 66.70000000000437
+        "avg": 30.504669260700208,
+        "p50": 33.29999999998836,
+        "p95": 50.09999999997672,
+        "p99": 50.199999999953434,
+        "worst": 83.40000000002328
       },
       "counts": {
-        "over16ms": 211,
-        "over33ms": 126,
-        "over50ms": 3
+        "over16ms": 229,
+        "over33ms": 114,
+        "over50ms": 15
       },
       "pulseCount": 0,
       "outlineSyncCount": 0,
@@ -881,121 +881,121 @@
       "dgBackingResizeCount": 0,
       "dgOverlayResizeCount": 0,
       "frameProfile": {
-        "samples": 13,
+        "samples": 43,
         "parts": {
           "perf.raf.other": {
-            "totalMs": 63.69999945163727,
-            "avgMs": 4.899999957818252
+            "totalMs": 274.3999997973442,
+            "avgMs": 6.381395344124284
           },
           "pulse.service": {
-            "totalMs": 0,
-            "avgMs": 0
+            "totalMs": 0.09999996423721313,
+            "avgMs": 0.0023255805636561194
           },
           "anchor": {
-            "totalMs": 1.7000001668930054,
-            "avgMs": 0.13076924360715425
+            "totalMs": 5.299999952316284,
+            "avgMs": 0.12325581284456474
           },
           "perf.raf.scheduler": {
-            "totalMs": 2,
-            "avgMs": 0.15384615384615385
+            "totalMs": 7.700000107288361,
+            "avgMs": 0.17906976993693863
           },
           "perf.raf.main": {
-            "totalMs": 2.200000047683716,
-            "avgMs": 0.16923077289874738
+            "totalMs": 8.200000047683716,
+            "avgMs": 0.19069767552752828
           },
           "chain.draw": {
-            "totalMs": 0.19999992847442627,
-            "avgMs": 0.015384609882648174
+            "totalMs": 0.9999998211860657,
+            "avgMs": 0.023255809795024784
           },
           "perf.raf.zoomTick": {
-            "totalMs": 1.0000001192092896,
-            "avgMs": 0.07692308609302227
+            "totalMs": 3.0999999046325684,
+            "avgMs": 0.0720930210379667
           },
           "script": {
-            "totalMs": 0.10000002384185791,
-            "avgMs": 0.007692309526296763
+            "totalMs": 0.19999998807907104,
+            "avgMs": 0.004651162513466769
           },
           "perf.raf.benchmark": {
-            "totalMs": 0.19999992847442627,
-            "avgMs": 0.015384609882648174
+            "totalMs": 0.9999999403953552,
+            "avgMs": 0.023255812567333844
           },
           "unattributed": {
-            "totalMs": 579.2000003337889,
-            "avgMs": 44.553846179522225
+            "totalMs": 1934.700000476907,
+            "avgMs": 44.993023266904814
           },
           "frame.nonScript": {
-            "totalMs": 650.199999976161,
-            "avgMs": 50.01538461355085
+            "totalMs": 2235.500000011991,
+            "avgMs": 51.98837209330211
           }
         },
         "work": {
-          "totalMs": 0.10000002384185791,
-          "avgMs": 0.007692309526296763
+          "totalMs": 0.3999999761581421,
+          "avgMs": 0.009302325026933537
         },
         "idle": {
-          "totalMs": 650.199999976161,
-          "avgMs": 50.01538461355085
+          "totalMs": 2235.3000000239117,
+          "avgMs": 51.98372093078864
         }
       },
       "warmupProfile": {
-        "t": 45630.60000002384,
-        "frameDt": 33.400000000001455,
+        "t": 349304.1999999881,
+        "frameDt": 50,
         "parts": {
-          "perf.raf.other": 2,
+          "perf.raf.other": 2.200000047683716,
           "pulse.service": 0,
-          "anchor": 0,
-          "perf.raf.scheduler": 0.09999990463256836,
-          "perf.raf.main": 0.09999990463256836,
+          "anchor": 0.10000002384185791,
+          "perf.raf.scheduler": 0.10000002384185791,
+          "perf.raf.main": 0.10000002384185791,
           "chain.draw": 0,
-          "perf.raf.zoomTick": 0.10000002384185791,
-          "script": 0.10000002384185791,
-          "perf.raf.benchmark": 0.10000002384185791,
-          "unattributed": 30.900000119210745,
-          "frame.nonScript": 33.2999999761596
+          "perf.raf.zoomTick": 0.09999996423721313,
+          "script": 0.19999998807907104,
+          "perf.raf.benchmark": 0.19999998807907104,
+          "unattributed": 46.999999940395355,
+          "frame.nonScript": 49.80000001192093
         },
-        "workMs": 0.10000002384185791,
-        "idleMs": 33.2999999761596
+        "workMs": 0.19999998807907104,
+        "idleMs": 49.80000001192093
       },
       "frameProfileWorst": {
-        "frameDt": 66.70000000000437,
+        "frameDt": 83.40000000002328,
         "workMs": 0,
-        "idleMs": 66.70000000000437,
+        "idleMs": 83.40000000002328,
         "memory": {
-          "used": 17698156,
-          "total": 34113496,
+          "used": 17396491,
+          "total": 22317099,
           "limit": 4294967296
         },
         "parts": [
           {
             "name": "frame.nonScript",
-            "ms": 66.70000000000437
+            "ms": 83.40000000002328
           },
           {
             "name": "unattributed",
-            "ms": 58.39999992847879
+            "ms": 75.10000010731164
           },
           {
             "name": "perf.raf.other",
-            "ms": 7.599999904632568
-          },
-          {
-            "name": "perf.raf.main",
-            "ms": 0.30000007152557373
-          },
-          {
-            "name": "anchor",
-            "ms": 0.20000004768371582
+            "ms": 7.699999988079071
           },
           {
             "name": "perf.raf.scheduler",
-            "ms": 0.20000004768371582
+            "ms": 0.19999998807907104
+          },
+          {
+            "name": "perf.raf.main",
+            "ms": 0.19999998807907104
+          },
+          {
+            "name": "anchor",
+            "ms": 0.09999996423721313
+          },
+          {
+            "name": "perf.raf.benchmark",
+            "ms": 0.09999996423721313
           },
           {
             "name": "pulse.service",
-            "ms": 0
-          },
-          {
-            "name": "chain.draw",
             "ms": 0
           }
         ]

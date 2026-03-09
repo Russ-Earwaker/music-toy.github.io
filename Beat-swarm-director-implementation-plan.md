@@ -1,471 +1,677 @@
-# Beat Swarm Director – Concise Implementation Plan
+# Beat Swarm – Detailed Codex Task List
 
-## Goal
+## Overall goal
 
-Implement a **music-first battlefield director** for Beat Swarm that keeps combat, visuals, and music synchronized, while improving pacing, readability, and long-term difficulty ramping.
+Improve Beat Swarm so that:
+
+* the soundtrack has a stable **default Beat Swarm palette**
+* the mode has a proper **ease-in and spawn pacing system**
+* the player’s weapon and explosions remain **stable, readable gameplay sounds**
+* enemy deaths stay **game-like death sounds**
+* grouped enemies become the primary enemy music structure
+* generic non-group enemies are retired or absorbed into the group system
+* the system supports multiple player weapon archetypes:
+
+  * projectile
+  * boomerang
+  * hitscan
+  * beam / sustained laser
+  * future variants
+
+Do this in **small safe steps**, validating after each step.
 
 ---
 
-## Core Principles
+# Phase 1 – Add a proper Beat Swarm sound identity layer
 
-### 1. Beat-locked world
+## Task 1.1 – Create a default Beat Swarm palette concept
 
-All key events happen on the beat grid:
+Create a new palette definition for Beat Swarm that separates:
 
-* player shots
-* enemy deaths
+### Core gameplay sounds (stable, not palette-swapped)
+
+* player weapon archetype sounds
 * explosions
-* spawner actions
-* drawsnake actions
-* grouped enemy actions
+* hit / damage feedback
+* enemy death sound families
 
-### 2. Sound and action are linked
+### Musical role sounds (palette-controlled)
 
-Every audible note must have a visible action.
-Every major visible action should have an audible note or rhythmic sound.
+* bass
+* lead
+* accent
+* motion
 
-### 3. Everyone can participate, not everyone can be dangerous
+### Requirements
 
-Many actors may perform on a beat, but only a limited number may perform full-threat actions.
+* keep player weapon sounds stable across the run
+* keep explosion sounds stable across the run
+* enemy deaths must always feel like death sounds
+* only enemy musical role layers should be palette-driven
 
-### 4. Pentatonic safety
+### Suggested new module
 
-All notes remain within the active pentatonic note pool.
+* `src/beat-swarm-palette.js`
 
----
+### Output shape
 
-## Director Responsibilities
+Have one exported default object like:
 
-The Director should:
-
-1. Track the beat/bar grid
-2. Maintain the current note pool
-3. Maintain pacing / energy state
-4. Limit threat density per beat
-5. Decide participation priority by role
-6. Support recurring themes and call-and-response
-7. Apply adaptive pacing via energy gravity
-
-The Director should **not** micromanage all AI logic. Existing systems still decide what they want to do; the Director decides how and when those actions are allowed to perform.
-
----
-
-## Musical Roles
-
-### Bass / Groove
-
-Used for:
-
-* spawners
-* large enemy attacks
-* major explosions
-
-Purpose:
-
-* anchor groove
-* provide weight
-* signal danger clearly
-
-### Lead / Phrase
-
-Used for:
-
-* drawsnakes
-* coordinated enemy groups
-* special enemies
-
-Purpose:
-
-* melodic phrasing
-* call-and-response
-* identity and variation
-
-### Accent
-
-Used for:
-
-* enemy deaths
-* minor bursts
-* small enemy actions
-
-Purpose:
-
-* punctuation
-* kill feedback
-* rhythmic fill
-
-### Motion
-
-Used for:
-
-* pulses
-* recoil
-* shield shimmer
-* cosmetic sync gestures
-
-Purpose:
-
-* make the battlefield bounce together without increasing difficulty
+```js
+{
+  id: 'beat-swarm-default',
+  gameplay: {
+    playerWeapons: {
+      projectile: ...,
+      boomerang: ...,
+      hitscan: ...,
+      beam: ...,
+    },
+    explosion: ...,
+    enemyDeath: {
+      small: ...,
+      medium: ...,
+      large: ...,
+    },
+  },
+  roles: {
+    bass: ...,
+    lead: ...,
+    accent: ...,
+    motion: ...,
+  },
+}
+```
 
 ---
 
-## Action Threat Classes
+## Task 1.2 – Route sound lookup through role + family, not raw event type
 
-Every performed event should be assigned one of these classes:
+Right now there is event-type-based sound logic in `src/beat-swarm-mode.js` around swarm sound event resolution and calls like:
 
-### Full Threat
+* `playSwarmSoundEventImmediate(...)`
+* `noteSwarmSoundEvent(...)`
+* event mappings for `hitscan`, `enemyDeath`, etc.
 
-Examples:
+Change this so Beat Swarm first resolves:
 
-* real projectile launch
-* aimed burst
-* dangerous spawn
-* sweeping attack
+* is this a **core gameplay sound**?
+* or is this a **musical role sound**?
 
-### Light Threat
+### Requirements
 
-Examples:
+* player shots use stable weapon-family sounds by archetype
+* explosions use stable explosion family
+* enemy deaths use stable death family by enemy class
+* grouped/spawner/drawsnake phrase events use palette roles
 
-* short-range pop
-* micro explosion
-* minor burst
-* low-danger hazard
+### Acceptance check
 
-### Cosmetic
+During play:
 
-Examples:
-
-* flash
-* recoil
-* sprite pulse
-* glow ring
-
-Rule: the Director limits **full threats per beat**, not total participation.
+* spawners/drawsnakes/groups feel like one soundtrack family
+* player gun does not suddenly change instrument
+* explosions do not suddenly become melodic bells or weird textures
+* enemy deaths still read as kills
 
 ---
 
-## Existing System Mapping
+# Phase 2 – Add spawn pacing and intro ease-in
 
-### Dumb enemies
+## Task 2.1 – Add a Beat Swarm pacing state machine
 
-* No uncontrolled random notes
-* On death, wait for beat
-* Pick note from current pool
-* Produce accent event + visible burst
-* Cluster multiple simultaneous deaths cleanly
+Add a lightweight pacing controller for enemy spawning and system activation.
 
-### Spawners
+### Suggested new module
 
-* Main groove engine
-* Behave as bass / percussion layer
-* Keep patterns simple and readable
+* `src/beat-swarm-pacing.js`
 
-### Drawsnakes
+### Add these states
 
-* Main lead / phrase engine
-* Carry melody and motion
-* Good source of call-and-response
+* `intro_solo`
+* `intro_bass`
+* `intro_response`
+* `main_low`
+* `main_mid`
+* `peak`
+* `break`
 
-### Grouped enemies
+### State meanings
 
-* Use for coordinated phrase behaviour
-* Best place for call-and-response patterns
+#### `intro_solo`
 
-### Player weapon
+* only player weapon active
+* no enemy spawning
+* optional cosmetic battlefield pulse only
 
-* Still beat-locked
-* Notes and firing remain linked
-* Drawgrid logic still controls sequence and silence
-* Damage scaling remains tied to simultaneous active notes
+#### `intro_bass`
 
-Damage rule currently assumed:
+* allow only simple spawner layer
+* low enemy count
+* low threat
+* no drawsnakes
+* no large groups yet
 
-* 8 notes = 1x
-* 4 notes = 2x
-* 2 notes = 4x
-* 1 note = 8x
+#### `intro_response`
 
-Do not rebalance yet; just preserve support for this mechanic.
+* allow first melodic opposition
+* introduce one drawsnake or one small group
+* still low danger
 
----
+#### `main_low`
 
-## Beat Grid
+* normal play begins
+* all systems can exist, but with low budgets
 
-Initial implementation can stay on **8 steps per bar**.
-Later expansion to 16 steps is allowed.
+#### `main_mid`
 
-Recommendation:
+* fuller normal play
 
-* build the Director around generic step counts
-* start by tuning for 8-step bars
+#### `peak`
 
----
+* strongest density and coordination
 
-## Harmonic Control
+#### `break`
 
-Per bar, the Director should define:
+* reduce danger while maintaining groove
 
-* active pentatonic scale
-* restricted note pool for that bar
-* optional phrase bias (for recurring motifs)
+### Requirements
 
-Example:
-
-* scale: C pentatonic
-* note pool this bar: C, E, G
-
-All enemy note generation should route through this pool.
+* transitions happen by bar count, not frame timing
+* first 2–4 bars should be player-only
+* next few bars should bring in spawners first
+* melodic opposition comes after that
 
 ---
 
-## Performed Beat Event Model
+## Task 2.2 – Make spawn systems obey pacing states
 
-Each scheduled event should contain at least:
+Current relevant functions in `src/beat-swarm-mode.js` include:
 
-* actor id
-* beat time / step index
-* role (bass / lead / accent / motion)
-* note
-* instrument / sound id
-* action type
-* threat class
-* visual sync type
+* `maintainEnemyPopulation()`
+* `maintainSpawnerEnemyPopulation()`
+* `maintainDrawSnakeEnemyPopulation()`
+* `maintainComposerEnemyGroups()`
 
-This should become the common format used by the Director and gameplay systems.
+Update these so they obey the pacing controller.
 
----
+### Requirements by state
 
-## Pacing System
+#### `intro_solo`
 
-Replace simple verse/chorus thinking with **energy states**.
+* no enemy spawns from any of these systems
 
-### Energy States
+#### `intro_bass`
 
-#### Intro
+* only `maintainSpawnerEnemyPopulation()` allowed
+* strict low count caps
 
-Purpose:
+#### `intro_response`
 
-* establish groove
-* low danger
-* high clarity
+* allow one melodic source:
 
-#### Build
+  * either limited drawsnake
+  * or one small composer group
 
-Purpose:
+#### `main_low`, `main_mid`, `peak`
 
-* increase density
-* introduce lead phrases
-* start simple call-and-response
+* progressively loosen caps and coordination complexity
 
-#### Clash
+#### `break`
 
-Purpose:
+* keep musical participation possible
+* sharply reduce full-threat actions and/or new spawns
 
-* main combat intensity
-* multiple active layers
-* strongest normal play state
+### Acceptance check
 
-#### Break
+The round should feel like:
 
-Purpose:
-
-* breathing room
-* reduce danger
-* keep musical continuity
-
-#### Peak
-
-Purpose:
-
-* spectacle moment
-* strongest coordination
-* highest density and visual sync
-
-These states can still align with verse/chorus labels if useful, but energy states should drive gameplay pacing.
+* player establishes rhythm
+* world answers with groove
+* then melodic opposition arrives
+* then full battlefield play begins
 
 ---
 
-## State Flow
+# Phase 3 – Replace section-jump feel with theme continuity
 
-Example looping flow:
+## Task 3.1 – Add persistent palette lifetime
 
-* Intro
-* Build
-* Clash
-* Break
-* Build
-* Clash
-* Peak
-* Break
+Right now the problem is abrupt identity switching.
 
-The Director should be able to move between states based on:
+Add palette persistence so the default Beat Swarm palette remains stable for a meaningful duration.
 
-* elapsed bars
-* combat pressure
-* player performance
-* current energy gravity
+### Requirements
 
----
+* palette should persist for many bars
+* internal variation can evolve gradually
+* do not hard-swap from one unrelated family to another during normal section changes
 
-## Recurring Themes
+### Allowable changes
 
-To preserve recurring musical identity, the Director should support:
+* brightness
+* filter
+* density
+* octave emphasis
+* accent strength
 
-* repeated note pools
-* repeated phrase shapes
-* repeated rhythmic patterns
-* repeated role usage per state
+### Avoid
 
-This is how “chorus-like” familiarity should emerge.
-
-Do not hard-author long songs.
-Author short reusable motifs and state patterns instead.
+* bells suddenly replaced by guitar-like sounds
+* unrelated sound family swaps on section change
 
 ---
 
-## Energy Gravity
+## Task 3.2 – Make section/state changes vary arrangement, not core timbre
 
-Energy Gravity is the adaptive pacing system.
-It nudges the Director toward higher or lower intensity without obvious rubber-banding.
+Current composer section logic exists around:
 
-### Intent
+* `COMPOSER_SECTIONS`
+* current section/directive usage
+* motif caching
 
-* If the player is doing well, the system gradually drifts upward in energy
-* If the player is struggling, the system gradually drifts downward or holds in safer states
+Keep that system if useful, but stop using it as the main source of timbral identity change.
 
-### Inputs to consider
+### Change section usage so it primarily alters
 
-* player health / shield status
-* recent damage taken
-* kill speed / clear speed
-* survival duration
-* incoming threat load
-* how overwhelmed the player appears
+* note density
+* active roles
+* phrase complexity
+* call/response usage
+* spawn availability
+* threat budgets
 
-### Output
+### Do not use it to hard-swap core identity
 
-Energy Gravity should influence:
-
-* state transition likelihood
-* threat density budget
-* number of participating actors
-* call-and-response complexity
-* peak frequency
-
-### Important rule
-
-Energy Gravity should be **slow and subtle**.
-It should shape the next few bars, not instantly react every beat.
+The “track” should feel like one evolving piece gaining and losing layers.
 
 ---
 
-## Budgets Per Beat / Bar
+# Phase 4 – Clean up enemy structure around groups
 
-The Director should maintain at least these budgets:
+## Task 4.1 – Make groups the primary enemy music unit
 
-### Per Beat
+You said generic enemies now feel obsolete. I agree.
+
+Move toward a model where all musically participating enemies belong to a group structure.
+
+### New rule
+
+Even “solo” enemies should be treated as **groups of size 1**.
+
+### Benefits
+
+* consistent motif ownership
+* consistent role ownership
+* easier call-and-response
+* easier pacing and threat control
+
+---
+
+## Task 4.2 – Retire generic non-group enemy logic where safe
+
+Audit where truly generic enemies are still spawned and used.
+
+Likely relevant areas:
+
+* general enemy population maintenance
+* enemy spawn helpers
+* enemy death and attack behaviour routing
+
+### Goal
+
+Replace “generic musical enemies” with:
+
+* group members
+* or group size 1 members
+
+### Keep only true special cases if needed
+
+If a completely generic enemy is still needed for debugging or tutorial reasons, isolate it clearly and do not let it dominate normal musical play.
+
+---
+
+## Task 4.3 – Add default group templates by role
+
+Create reusable group templates for:
+
+* bass spawner groups
+* lead drawsnake groups
+* accent burst groups
+* response groups
+
+### Minimum group data
+
+* `id`
+* `role`
+* `size`
+* `motif`
+* `actionType`
+* `threatLevel`
+* `notes`
+* `performers`
+
+This should simplify `triggerComposerGroupsOnStep()` and future tuning.
+
+---
+
+# Phase 5 – Tighten enemy death sound rules
+
+## Task 5.1 – Define enemy death sound families
+
+Enemy death sounds should never become arbitrary musical instruments.
+
+Add 3 default death families:
+
+* small death
+* medium death
+* large death
+
+### Style requirements
+
+All should sound like:
+
+* arcade death pop
+* digital burst
+* gamey destruction sound
+
+They can vary by size/class, but all should clearly read as deaths.
+
+### Avoid
+
+* organic sounds
+* tonal instruments that sound like leads
+* novelty sounds
+
+---
+
+## Task 5.2 – Route death sounds by enemy type/class
+
+Where enemy death audio is triggered, classify by enemy size/type/group role and choose the right death family.
+
+### Requirements
+
+* death can still be pitched to the active note pool
+* but timbre stays within the death family
+* multiple simultaneous deaths should remain readable and not turn into melodic mush
+
+### Acceptance check
+
+Killing enemies should sound satisfying and game-like, even when musical.
+
+---
+
+# Phase 6 – Support multiple player weapon archetypes properly
+
+## Task 6.1 – Formalise weapon archetype sound families
+
+Current code already contains archetypes/variants including:
+
+* projectile
+* boomerang
+* laser / hitscan
+* beam-related behaviour can be added similarly
+
+Create stable sound family rules per archetype.
+
+### Required families
+
+* `projectile`
+* `boomerang`
+* `hitscan`
+* `beam`
+
+### Rules
+
+Each archetype:
+
+* keeps a stable timbral identity
+* can be pitched to notes
+* remains recognisable as that weapon type
+* does not get palette-swapped without player consent
+
+### Examples
+
+* projectile: classic arcade shot family
+* boomerang: thrown/whirl family, still synthetic and game-readable
+* hitscan: sharp laser family
+* beam: sustained sci-fi beam family with clean on/off and loop behaviour
+
+---
+
+## Task 6.2 – Keep note linkage for all player archetypes
+
+Preserve the current Beat Swarm rule:
+
+* note playing and firing are linked
+* if the weapon step is silent, it should be silent
+* if the weapon fires, it should produce its note through that weapon’s stable sound family
+
+This must hold for:
+
+* projectile weapons
+* boomerangs
+* hitscan weapons
+* beams
+
+---
+
+## Task 6.3 – Preserve damage scaling by note density
+
+Do not rebalance yet, but keep support for the current rule:
+
+* 8 active notes = 1x
+* 4 active notes = 2x
+* 2 active notes = 4x
+* 1 active note = 8x
+
+### Requirement
+
+This logic must continue to work no matter which weapon archetype is active.
+
+### Important
+
+Do not tie this to palette or enemy soundtrack changes.
+
+---
+
+## Task 6.4 – Add beam-specific handling if not already formalised
+
+For beam / sustained laser weapons, ensure the sound and gameplay both remain beat-locked.
+
+### Desired behaviour
+
+* beam activation begins on beat
+* beam sustain remains readable and stable
+* beam note identity is still clear
+* if the sequence step is silent, beam should not sustain illegally across silence unless explicitly designed to
+
+### Check for
+
+* sustained sound spam
+* awkward looping
+* overly intrusive beam sound dominating the whole soundtrack
+
+---
+
+# Phase 7 – Refine threat participation rules
+
+## Task 7.1 – Keep “everyone can play, not everyone can be dangerous”
+
+Preserve the rule that many enemies may participate rhythmically, but only some may perform full threats.
+
+### Add explicit budgets
+
+Per beat:
 
 * max full threats
 * max light threats
-* optional max audible accents
+* max cosmetic participants
 
-### Per Bar
+Per bar:
 
 * target note density
-* target active roles
-* phrase complexity level
-* call-and-response usage level
+* target active role count
+* call/response complexity level
 
-These budgets should vary by energy state.
+### Use these budgets in
 
----
-
-## Suggested Implementation Order
-
-### Step 1 – Director Skeleton
-
-Create a central Director module that tracks:
-
-* current bar
-* current step
-* current energy state
-* current note pool
-* per-beat threat budgets
-
-### Step 2 – Common Event Format
-
-Create the performed beat event structure and route quantized events through it.
-
-### Step 3 – Harmonic Clamp
-
-Clamp enemy-generated notes to the active note pool.
-Start with dumb enemy deaths.
-
-### Step 4 – Role Mapping
-
-Assign default roles:
-
-* spawners = bass
-* drawsnakes = lead
-* dumb enemies = accent
-* cosmetic sync systems = motion
-
-### Step 5 – Threat Budgeting
-
-Limit full-threat actions per beat while allowing wider cosmetic participation.
-
-### Step 6 – Energy States
-
-Implement Intro / Build / Clash / Break / Peak and allow simple bar-based transitions.
-
-### Step 7 – Recurring Themes
-
-Add repeated phrase pools, note pools, and rhythmic motifs per state.
-
-### Step 8 – Call-and-Response
-
-Teach grouped enemies / drawsnakes to alternate phrases between groups.
-
-### Step 9 – Energy Gravity
-
-Add performance-based pacing drift to influence state transitions and budgets.
-
-### Step 10 – Tuning Pass
-
-Tune:
-
-* note density
-* danger density
-* phrase repetition
-* player readability
-* how strongly the battlefield “bounces together”
+* group triggering
+* spawner triggering
+* drawsnake triggering
+* pacing state transitions
 
 ---
 
-## Non-Goals For First Pass
+## Task 7.2 – Make low-threat actions the fallback participation mode
 
-Do not solve these yet:
+You already chose to replace passive note-only behaviour with low-threat actions. Keep that.
 
-* full weapon damage rebalance
-* 16-step bar expansion
-* advanced dynamic instrumentation
-* long-form song authoring
-* final difficulty curve
+### Rule
 
-First pass goal is:
-**make Beat Swarm feel coherent, musical, readable, and fun in test play.**
+If an enemy is allowed to join the beat musically but is not budgeted for a major threat, it should perform:
+
+* tiny AOE
+* pulse burst
+* short-range pop
+* cosmetic sync action
+* recoil/flash/charge gesture
+
+That keeps the battlefield bouncing together.
 
 ---
 
-## Success Criteria
+# Phase 8 – Improve recurring themes without hard song swapping
 
-The implementation is working when:
+## Task 8.1 – Preserve motifs across bars and states
 
-1. The battlefield visibly pulses together on beat
-2. Enemy deaths sound intentional instead of random
-3. Spawners feel like groove
-4. Drawsnakes feel like melody
-5. Group actions feel coordinated
-6. The player can read danger despite high participation
-7. Intensity rises and falls naturally over time
-8. The mode feels like a hostile retro arcade orchestra
+Current motif caching is a decent start.
+
+Strengthen it so recurring themes come from:
+
+* repeated note pools
+* repeated phrase shapes
+* repeated rhythmic cells
+* repeated group-response patterns
+
+### Goal
+
+“chorus” should feel like the return of a recognisable behaviour/theme, not a sudden unrelated sound pack.
+
+---
+
+## Task 8.2 – Use pacing states to control arrangement
+
+Energy/pacing states should determine:
+
+* how many layers are active
+* who enters
+* who answers
+* how dense the bar is
+
+They should not fully replace the sonic identity.
+
+---
+
+# Phase 9 – Validate current code paths and keep changes localised
+
+## Task 9.1 – Audit current relevant functions before editing
+
+Before changing logic, inspect and annotate these current areas in `src/beat-swarm-mode.js`:
+
+* `COMPOSER_SECTIONS`
+* sound event resolution / mapping
+* `maintainSpawnerEnemyPopulation()`
+* `maintainDrawSnakeEnemyPopulation()`
+* `maintainComposerEnemyGroups()`
+* `triggerComposerGroupsOnStep()`
+* enemy death sound trigger logic
+* player weapon firing logic for:
+
+  * projectile
+  * boomerang
+  * hitscan
+  * any sustained beam path
+
+### Requirement
+
+Codex should avoid rewriting everything blindly.
+It should adapt the current working paths.
+
+---
+
+## Task 9.2 – Keep existing gameplay stable while layering changes
+
+Do not break:
+
+* quantized player shots
+* drawgrid-driven player sequence logic
+* silence step behaviour
+* current projectile behaviour
+* current boomerang behaviour
+* current hitscan behaviour
+
+This refactor is about:
+
+* better identity
+* better pacing
+* better structure
+
+Not changing the core feel of the controls.
+
+---
+
+# Phase 10 – Testing checklist
+
+## Task 10.1 – Add quick manual verification checklist
+
+After each phase, test these in Beat Swarm:
+
+### Sound identity
+
+* player gun stays recognisable
+* explosions stay punchy and stable
+* enemy deaths sound like deaths
+* enemy musical layers feel like one soundtrack family
+
+### Pacing
+
+* game starts with player-only period
+* spawners enter first
+* melodic opposition enters later
+* intensity ramps naturally
+
+### Gameplay
+
+* enemies still act on beat
+* low-threat participation works
+* not too many dangerous events land at once
+* groups feel more coherent than generic enemies
+
+### Weapon coverage
+
+* projectile works
+* boomerang works
+* hitscan works
+* beam works or degrades gracefully if not yet complete
+
+---
+
+# Suggested order for Codex to execute
+
+1. Add `beat-swarm-palette.js`
+2. Route sound resolution through stable families + role palette
+3. Add `beat-swarm-pacing.js`
+4. Make spawn maintenance obey pacing states
+5. Implement intro solo → bass → response → main pacing
+6. Convert generic musical enemies toward group size 1 model
+7. Add proper enemy death sound families
+8. Formalise player weapon sound families for projectile / boomerang / hitscan / beam
+9. Tune state transitions and threat budgets
+10. Run manual checks and fix regressions
+
+---
+
+# Short brief to paste to Codex
+
+Implement a default Beat Swarm sound palette and pacing system. Keep player weapon sounds stable by weapon archetype, keep explosions stable and punchy, keep enemy deaths game-like, and let only enemy musical roles use the dynamic palette. Add an intro pacing flow: player-only first, then spawners, then melodic opposition, then full play. Move away from generic musical enemies and make groups the primary enemy structure, including size-1 groups. Preserve beat-locked shots, silence behaviour, boomerangs, hitscan, projectile weapons, and note-linked damage scaling. Avoid abrupt instrument-family swaps; the soundtrack should feel like one evolving track gaining layers.
