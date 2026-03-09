@@ -72,7 +72,7 @@ function getPacingCapsForState(stateName, responseMode = 'drawsnake') {
   }
   if (s === PACING_STATES.MAIN_MID) {
     return {
-      maxFallbackEnemies: 1,
+      maxFallbackEnemies: 0,
       maxSpawners: 2,
       maxDrawSnakes: 2,
       maxComposerGroups: 2,
@@ -83,7 +83,7 @@ function getPacingCapsForState(stateName, responseMode = 'drawsnake') {
   }
   if (s === PACING_STATES.PEAK) {
     return {
-      maxFallbackEnemies: 2,
+      maxFallbackEnemies: 0,
       maxSpawners: 3,
       maxDrawSnakes: 2,
       maxComposerGroups: 3,
@@ -195,4 +195,3 @@ export function createBeatSwarmPacing(options = null) {
     getSnapshot,
   };
 }
-

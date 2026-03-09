@@ -104,6 +104,7 @@ export function createBeatSwarmPaletteRuntime() {
     octaveEmphasis: 0.5,
     accentStrength: 0.5,
   };
+  let evolveSeed = 1;
 
   function reseedPalette(barIndex = 0, preserveRoles = false) {
     const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
@@ -128,17 +129,29 @@ export function createBeatSwarmPaletteRuntime() {
     nextPaletteBar = bar + nextPaletteDurationBars();
     nextEvolveBar = bar + PALETTE_EVOLVE_BARS;
     paletteIndex += 1;
+    evolveSeed = ((paletteIndex * 2654435761) ^ (bar * 2246822519)) >>> 0;
   }
 
   function evolveArrangement(barIndex = 0) {
     const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
-    const drift = () => (Math.random() * 0.14) - 0.07;
+    const span = Math.max(1, (nextPaletteBar - paletteStartBar) || PALETTE_MIN_BARS);
+    const phase = clamp01((bar - paletteStartBar) / span);
+    const seed01 = ((evolveSeed % 1000) / 1000);
+    const bias = (seed01 - 0.5) * 0.16;
+    const target = {
+      brightness: clampRange(0.28 + (phase * 0.46) + bias, 0.18, 0.92),
+      filter: clampRange(0.72 - (phase * 0.34) - (bias * 0.6), 0.12, 0.9),
+      density: clampRange(0.22 + (phase * 0.58) + (bias * 0.5), 0.16, 0.9),
+      octaveEmphasis: clampRange(0.2 + (phase * 0.5) + (bias * 0.35), 0.08, 0.92),
+      accentStrength: clampRange(0.24 + (phase * 0.56) + (bias * 0.4), 0.12, 0.95),
+    };
+    const blend = 0.38;
     arrangement = {
-      brightness: clampRange(arrangement.brightness + drift(), 0.18, 0.92),
-      filter: clampRange(arrangement.filter + drift(), 0.12, 0.9),
-      density: clampRange(arrangement.density + drift(), 0.16, 0.9),
-      octaveEmphasis: clampRange(arrangement.octaveEmphasis + drift(), 0.08, 0.92),
-      accentStrength: clampRange(arrangement.accentStrength + drift(), 0.12, 0.95),
+      brightness: clampRange(arrangement.brightness + ((target.brightness - arrangement.brightness) * blend), 0.18, 0.92),
+      filter: clampRange(arrangement.filter + ((target.filter - arrangement.filter) * blend), 0.12, 0.9),
+      density: clampRange(arrangement.density + ((target.density - arrangement.density) * blend), 0.16, 0.9),
+      octaveEmphasis: clampRange(arrangement.octaveEmphasis + ((target.octaveEmphasis - arrangement.octaveEmphasis) * blend), 0.08, 0.92),
+      accentStrength: clampRange(arrangement.accentStrength + ((target.accentStrength - arrangement.accentStrength) * blend), 0.12, 0.95),
     };
     nextEvolveBar = bar + PALETTE_EVOLVE_BARS;
   }

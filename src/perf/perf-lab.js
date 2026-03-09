@@ -421,6 +421,19 @@ function ensureUI() {
     ]),
   };
 
+  const MUSIC_LAB = {
+    title: 'Music Lab - Beat Swarm Diagnostics',
+    controls: [
+      btn('musicLabEnable', 'Music Lab: Enable'),
+      btn('musicLabDisable', 'Music Lab: Disable'),
+      btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
+      btn('musicLabSnapshot', 'Music Lab: Show Snapshot'),
+      btn('musicLabExport', 'Music Lab: Export JSON'),
+      btn('musicLabSaveResources', 'Music Lab: Save to resources'),
+      btn('musicLabDownload', 'Music Lab: Download JSON'),
+    ].join(''),
+  };
+
   const tests = [...P3.runs, ...P7.runs, ...BS0.runs];
   if (!window.__PERF_LAB_TESTS_LOGGED) {
     window.__PERF_LAB_TESTS_LOGGED = true;
@@ -444,6 +457,7 @@ function ensureUI() {
     section(BS0.title, `${BS0.build}${BS0.runs.map(r => btn(r.act, r.label)).join('')}`),
     toolsHtml,
   ].join('');
+  const musicHtml = section(MUSIC_LAB.title, MUSIC_LAB.controls);
 
   ov.innerHTML = `
     <div class="perf-lab-panel">
@@ -461,6 +475,7 @@ function ensureUI() {
         <div class="perf-lab-left">
           <div class="perf-lab-tabs">
             <button class="perf-lab-tab is-active" data-tab="controls">Controls</button>
+            <button class="perf-lab-tab" data-tab="music">Music</button>
             <button class="perf-lab-tab" data-tab="tests">Tests</button>
           </div>
 
@@ -546,6 +561,12 @@ function ensureUI() {
                 </div>
               </div>
               ${sectionsHtml}
+            </div>
+          </div>
+
+          <div class="perf-lab-tabpage" data-tabpage="music">
+            <div class="perf-lab-tests" id="perf-lab-music">
+              ${musicHtml}
             </div>
           </div>
 
@@ -960,6 +981,36 @@ function ensureUI() {
     } catch {}
   }
 
+  function getMusicLabApi() {
+    const api = window.__beatSwarmMusicLab;
+    if (!api || typeof api !== 'object') return null;
+    if (typeof api.exportSession !== 'function') return null;
+    return api;
+  }
+
+  function getMusicLabDebugState() {
+    const api = getMusicLabApi();
+    if (!api) return { available: false };
+    let snap = null;
+    try {
+      snap = (typeof api.getSessionSnapshot === 'function') ? api.getSessionSnapshot() : null;
+    } catch {}
+    const events = Array.isArray(snap?.events) ? snap.events : [];
+    const paletteChanges = Array.isArray(snap?.paletteChanges) ? snap.paletteChanges : [];
+    const pacingChanges = Array.isArray(snap?.pacingChanges) ? snap.pacingChanges : [];
+    const executedCount = events.filter((e) => String(e?.phase || '') === 'executed').length;
+    return {
+      available: true,
+      sessionId: String(snap?.sessionId || ''),
+      startedAtIso: String(snap?.startedAtIso || ''),
+      eventCount: events.length,
+      executedCount,
+      paletteChangeCount: paletteChanges.length,
+      pacingChangeCount: pacingChanges.length,
+      metricsCheckpoints: Array.isArray(snap?.metricsHistory) ? snap.metricsHistory.length : 0,
+    };
+  }
+
   ov.addEventListener('click', async (e) => {
     // Tabs (Controls / Tests)
     const tabBtn = e.target && e.target.closest ? e.target.closest('button[data-tab]') : null;
@@ -1044,6 +1095,150 @@ function ensureUI() {
     if (act === 'runBS0s3') await runBS0s3();
     if (act === 'runBS0s4') await runBS0s4();
     if (act === 'runBS0s5') await runBS0s5();
+    if (act === 'musicLabEnable') {
+      const api = getMusicLabApi();
+      if (!api || typeof api.setEnabled !== 'function') {
+        setStatus('Music Lab API unavailable (enter Beat Swarm first)');
+        return;
+      }
+      try {
+        api.setEnabled(true);
+        setStatus('Music Lab enabled');
+        setOutput(getMusicLabDebugState());
+      } catch (err) {
+        setStatus('Music Lab enable failed');
+        setOutput({ ok: false, error: String(err && err.message || err) });
+      }
+      return;
+    }
+    if (act === 'musicLabDisable') {
+      const api = getMusicLabApi();
+      if (!api || typeof api.setEnabled !== 'function') {
+        setStatus('Music Lab API unavailable (enter Beat Swarm first)');
+        return;
+      }
+      try {
+        api.setEnabled(false);
+        setStatus('Music Lab disabled');
+        setOutput(getMusicLabDebugState());
+      } catch (err) {
+        setStatus('Music Lab disable failed');
+        setOutput({ ok: false, error: String(err && err.message || err) });
+      }
+      return;
+    }
+    if (act === 'musicLabReset') {
+      const api = getMusicLabApi();
+      if (!api || typeof api.reset !== 'function') {
+        setStatus('Music Lab API unavailable (enter Beat Swarm first)');
+        return;
+      }
+      try {
+        const snap = api.reset('perf-lab');
+        setStatus('Music Lab session reset');
+        setOutput({
+          ok: true,
+          sessionId: String(snap?.sessionId || ''),
+          startedAtIso: String(snap?.startedAtIso || ''),
+        });
+      } catch (err) {
+        setStatus('Music Lab reset failed');
+        setOutput({ ok: false, error: String(err && err.message || err) });
+      }
+      return;
+    }
+    if (act === 'musicLabSnapshot') {
+      const state = getMusicLabDebugState();
+      if (!state.available) {
+        setStatus('Music Lab API unavailable (enter Beat Swarm first)');
+        return;
+      }
+      setStatus('Music Lab snapshot');
+      setOutput(state);
+      return;
+    }
+    if (act === 'musicLabExport') {
+      const api = getMusicLabApi();
+      if (!api || typeof api.exportSession !== 'function') {
+        setStatus('Music Lab API unavailable (enter Beat Swarm first)');
+        return;
+      }
+      try {
+        const payload = api.exportSession();
+        setStatus('Music Lab exported to output');
+        setOutput(payload);
+      } catch (err) {
+        setStatus('Music Lab export failed');
+        setOutput({ ok: false, error: String(err && err.message || err) });
+      }
+      return;
+    }
+    if (act === 'musicLabSaveResources') {
+      const api = getMusicLabApi();
+      if (!api || typeof api.exportSession !== 'function') {
+        setStatus('Music Lab API unavailable (enter Beat Swarm first)');
+        return;
+      }
+      try {
+        const payload = api.exportSession();
+        const cfg = await resolveResultsConfig();
+        const postUrl = cfg?.postUrl || window.__PERF_LAB_RESULTS_URL;
+        if (!postUrl) {
+          setStatus('Music Lab save failed: no postUrl configured');
+          setOutput({
+            ok: false,
+            reason: 'no_post_url',
+            hint: 'Set postUrl in resources/perf-lab-auto.json or window.__PERF_LAB_RESULTS_URL',
+          });
+          return;
+        }
+        const bundle = buildResultsBundle([
+          {
+            label: 'music-lab-session',
+            runId: 'musicLabManualSave',
+            createdAt: new Date().toISOString(),
+            musicLab: payload,
+          },
+        ], {
+          runId: 'musicLabManualSave',
+          notes: 'Manual Music Lab save from Perf Lab UI',
+          kind: 'music-lab',
+        });
+        const ok = await postResultsBundle(bundle, postUrl);
+        setStatus(ok ? 'Music Lab saved via results endpoint' : 'Music Lab save failed (endpoint)');
+        setOutput({
+          ok: !!ok,
+          postUrl,
+          sessionId: String(payload?.sessionId || ''),
+          events: Array.isArray(payload?.eventTimeline) ? payload.eventTimeline.length : 0,
+          ...getMusicLabDebugState(),
+        });
+      } catch (err) {
+        setStatus('Music Lab save failed');
+        setOutput({ ok: false, error: String(err && err.message || err) });
+      }
+      return;
+    }
+    if (act === 'musicLabDownload') {
+      const api = getMusicLabApi();
+      if (!api || typeof api.downloadSession !== 'function') {
+        setStatus('Music Lab API unavailable (enter Beat Swarm first)');
+        return;
+      }
+      try {
+        const ok = api.downloadSession('music-lab-results.json');
+        setStatus(ok ? 'Music Lab JSON download started' : 'Music Lab JSON download failed');
+        setOutput({
+          ok: !!ok,
+          fileName: 'music-lab-results.json',
+          ...getMusicLabDebugState(),
+        });
+      } catch (err) {
+        setStatus('Music Lab download failed');
+        setOutput({ ok: false, error: String(err && err.message || err) });
+      }
+      return;
+    }
 
     // --------------------------------------------------------------
     // Footer auto-tests (these are the big buttons in the footer)

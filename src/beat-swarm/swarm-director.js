@@ -60,6 +60,7 @@ function createThreatBudgets(base = null) {
     maxFullThreatsPerBeat: clampInt(raw.maxFullThreatsPerBeat, 0, 128, 3),
     maxLightThreatsPerBeat: clampInt(raw.maxLightThreatsPerBeat, 0, 128, 6),
     maxAudibleAccentsPerBeat: clampInt(raw.maxAudibleAccentsPerBeat, 0, 128, 8),
+    maxCosmeticPerBeat: clampInt(raw.maxCosmeticPerBeat, 0, 256, 12),
   };
 }
 
@@ -85,6 +86,7 @@ export function createSwarmDirector(options = null) {
       fullThreats: 0,
       lightThreats: 0,
       audibleAccents: 0,
+      cosmeticParticipants: 0,
     },
     eventQueue: [],
     eventSeq: 1,
@@ -95,6 +97,7 @@ export function createSwarmDirector(options = null) {
     state.usage.fullThreats = 0;
     state.usage.lightThreats = 0;
     state.usage.audibleAccents = 0;
+    state.usage.cosmeticParticipants = 0;
   }
 
   function ensureUsageBeat(beatIndex = state.beatIndex) {
@@ -107,6 +110,7 @@ export function createSwarmDirector(options = null) {
     const fullRemaining = Math.max(0, state.budgets.maxFullThreatsPerBeat - state.usage.fullThreats);
     const lightRemaining = Math.max(0, state.budgets.maxLightThreatsPerBeat - state.usage.lightThreats);
     const accentRemaining = Math.max(0, state.budgets.maxAudibleAccentsPerBeat - state.usage.audibleAccents);
+    const cosmeticRemaining = Math.max(0, state.budgets.maxCosmeticPerBeat - state.usage.cosmeticParticipants);
     return {
       barIndex: state.barIndex,
       beatIndex: state.beatIndex,
@@ -122,11 +126,13 @@ export function createSwarmDirector(options = null) {
         fullThreats: state.usage.fullThreats,
         lightThreats: state.usage.lightThreats,
         audibleAccents: state.usage.audibleAccents,
+        cosmeticParticipants: state.usage.cosmeticParticipants,
       },
       remaining: {
         fullThreats: fullRemaining,
         lightThreats: lightRemaining,
         audibleAccents: accentRemaining,
+        cosmeticParticipants: cosmeticRemaining,
       },
       queuedEventCount: Math.max(0, Math.trunc(state.eventQueue.length || 0)),
     };
@@ -177,6 +183,27 @@ export function createSwarmDirector(options = null) {
     return { valid: true, beatChanged, stepChanged, barChanged, beatIndex, stepIndex, barIndex, state: getSnapshot() };
   }
 
+  function canConsumeThreatIntent(threatClass = 'full', amount = 1, beatIndex = state.beatIndex) {
+    const beat = ensureUsageBeat(beatIndex);
+    const count = Math.max(1, Math.trunc(Number(amount) || 1));
+    const cls = String(threatClass || 'full').trim().toLowerCase();
+    const remain = getSnapshot().remaining || {};
+    const remainingForClass = cls === 'light'
+      ? Math.max(0, Math.trunc(Number(remain.lightThreats) || 0))
+      : (cls === 'accent'
+        ? Math.max(0, Math.trunc(Number(remain.audibleAccents) || 0))
+        : (cls === 'cosmetic'
+          ? Math.max(0, Math.trunc(Number(remain.cosmeticParticipants) || 0))
+          : Math.max(0, Math.trunc(Number(remain.fullThreats) || 0))));
+    return {
+      beatIndex: beat,
+      threatClass: cls,
+      amount: count,
+      withinBudget: remainingForClass >= count,
+      state: getSnapshot(),
+    };
+  }
+
   function noteThreatIntent(threatClass = 'full', amount = 1, beatIndex = state.beatIndex) {
     const beat = ensureUsageBeat(beatIndex);
     const count = Math.max(1, Math.trunc(Number(amount) || 1));
@@ -184,16 +211,24 @@ export function createSwarmDirector(options = null) {
 
     if (cls === 'light') state.usage.lightThreats += count;
     else if (cls === 'accent') state.usage.audibleAccents += count;
+    else if (cls === 'cosmetic') state.usage.cosmeticParticipants += count;
     else state.usage.fullThreats += count;
 
     const fullWithinBudget = state.usage.fullThreats <= state.budgets.maxFullThreatsPerBeat;
     const lightWithinBudget = state.usage.lightThreats <= state.budgets.maxLightThreatsPerBeat;
     const accentWithinBudget = state.usage.audibleAccents <= state.budgets.maxAudibleAccentsPerBeat;
+    const cosmeticWithinBudget = state.usage.cosmeticParticipants <= state.budgets.maxCosmeticPerBeat;
+    const withinBudget = cls === 'light'
+      ? lightWithinBudget
+      : (cls === 'accent'
+        ? accentWithinBudget
+        : (cls === 'cosmetic' ? cosmeticWithinBudget : fullWithinBudget));
 
     return {
       beatIndex: beat,
       threatClass: cls,
-      withinBudget: fullWithinBudget && lightWithinBudget && accentWithinBudget,
+      withinBudget,
+      withinAllBudgets: fullWithinBudget && lightWithinBudget && accentWithinBudget && cosmeticWithinBudget,
       state: getSnapshot(),
     };
   }
@@ -304,6 +339,7 @@ export function createSwarmDirector(options = null) {
   return Object.freeze({
     updateFromLoopInfo,
     noteThreatIntent,
+    canConsumeThreatIntent,
     enqueueBeatEvent,
     drainBeatEventsForStep,
     clearBeatEvents,
