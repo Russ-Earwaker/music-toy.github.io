@@ -4,6 +4,17 @@ const DEFAULT_ENERGY_STATE = 'intro';
 
 const ENERGY_STATES = Object.freeze(['intro', 'build', 'clash', 'break', 'peak']);
 
+const NOTE_RE = /^([A-G])([#b]?)(-?\d+)$/;
+const NOTE_BASE_SEMI = Object.freeze({
+  C: 0,
+  D: 2,
+  E: 4,
+  F: 5,
+  G: 7,
+  A: 9,
+  B: 11,
+});
+
 function clampInt(v, min, max, fallback) {
   const n = Math.trunc(Number(v));
   if (!Number.isFinite(n)) return fallback;
@@ -26,6 +37,21 @@ function normalizeNotePool(next, fallbackPool) {
   }
   if (out.length) return out;
   return Array.isArray(fallbackPool) ? fallbackPool.slice() : ['C4', 'D#4', 'F4', 'G4', 'A#4'];
+}
+
+function noteNameToMidi(note) {
+  const s = String(note || '').trim();
+  const m = NOTE_RE.exec(s);
+  if (!m) return null;
+  const letter = String(m[1] || '').toUpperCase();
+  const accidental = String(m[2] || '');
+  const octave = Math.trunc(Number(m[3]));
+  const base = NOTE_BASE_SEMI[letter];
+  if (!Number.isFinite(base) || !Number.isFinite(octave)) return null;
+  let semi = base;
+  if (accidental === '#') semi += 1;
+  else if (accidental === 'b') semi -= 1;
+  return ((octave + 1) * 12) + semi;
 }
 
 function createThreatBudgets(base = null) {
@@ -223,6 +249,40 @@ export function createSwarmDirector(options = null) {
     return state.notePool.slice();
   }
 
+  function getNotePool() {
+    return state.notePool.slice();
+  }
+
+  function pickNoteFromPool(index = 0) {
+    const pool = state.notePool;
+    if (!Array.isArray(pool) || !pool.length) return 'C4';
+    const i = ((Math.trunc(Number(index) || 0) % pool.length) + pool.length) % pool.length;
+    return String(pool[i] || pool[0] || 'C4');
+  }
+
+  function clampNoteToPool(note, fallbackIndex = 0) {
+    const normalized = String(note || '').trim();
+    const pool = state.notePool;
+    if (!Array.isArray(pool) || !pool.length) return normalized || 'C4';
+    if (normalized && pool.includes(normalized)) return normalized;
+    const targetMidi = noteNameToMidi(normalized);
+    if (targetMidi == null) return pickNoteFromPool(fallbackIndex);
+    let bestNote = pickNoteFromPool(fallbackIndex);
+    let bestDelta = Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      const n = String(pool[i] || '').trim();
+      if (!n) continue;
+      const midi = noteNameToMidi(n);
+      if (midi == null) continue;
+      const delta = Math.abs(midi - targetMidi);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestNote = n;
+      }
+    }
+    return bestNote || pickNoteFromPool(fallbackIndex);
+  }
+
   function setBudgets(next) {
     const merged = { ...state.budgets, ...(next && typeof next === 'object' ? next : {}) };
     state.budgets = createThreatBudgets(merged);
@@ -251,6 +311,9 @@ export function createSwarmDirector(options = null) {
     syncToBeat,
     setEnergyState,
     setNotePool,
+    getNotePool,
+    pickNoteFromPool,
+    clampNoteToPool,
     setBudgets,
     reset,
   });
