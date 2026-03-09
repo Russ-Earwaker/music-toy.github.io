@@ -7,6 +7,8 @@ import { getAllIds, getIdForDisplayName, getInstrumentEntries } from './instrume
 import { getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { buildPalette, midiToName } from './note-helpers.js';
 import { createArtToyAt } from './art/art-toy-factory.js';
+import { createSwarmDirector } from './beat-swarm/swarm-director.js';
+import { createPerformedBeatEvent, BEAT_EVENT_ROLES, BEAT_EVENT_THREAT } from './beat-swarm/beat-events.js';
 
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
@@ -593,6 +595,135 @@ const SWARM_SOUND_EVENTS = Object.freeze({
   enemyDeath: Object.freeze({ instrumentDisplay: 'Gaming Bling', note: 'C4' }),
 });
 const SWARM_PENTATONIC_NOTES_ONE_OCTAVE = Object.freeze(['C4', 'D#4', 'F4', 'G4', 'A#4']);
+
+function ensureSwarmDirector() {
+  if (swarmDirector) return swarmDirector;
+  swarmDirector = createSwarmDirector({
+    beatsPerBar: COMPOSER_BEATS_PER_BAR,
+    stepsPerBar: WEAPON_TUNE_STEPS,
+    energyState: 'intro',
+    notePool: SWARM_PENTATONIC_NOTES_ONE_OCTAVE,
+    budgets: {
+      maxFullThreatsPerBeat: 3,
+      maxLightThreatsPerBeat: 6,
+      maxAudibleAccentsPerBeat: 8,
+    },
+  });
+  return swarmDirector;
+}
+
+function resetSwarmDirector(beatIndex = 0) {
+  const director = ensureSwarmDirector();
+  director.reset();
+  director.setEnergyState('intro');
+  director.setNotePool(SWARM_PENTATONIC_NOTES_ONE_OCTAVE);
+  director.syncToBeat(Math.max(0, Math.trunc(Number(beatIndex) || 0)));
+  return director;
+}
+
+function reportSwarmThreatIntent(threatClass = 'full', amount = 1, beatIndex = currentBeatIndex, reason = '') {
+  const director = ensureSwarmDirector();
+  const res = director.noteThreatIntent(threatClass, amount, beatIndex);
+  if (swarmDirectorDebug.logBeats) {
+    try {
+      console.log('[BeatSwarmDirector][threat]', {
+        reason: String(reason || ''),
+        threatClass: String(threatClass || 'full'),
+        beatIndex: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
+        withinBudget: !!res?.withinBudget,
+        usage: res?.state?.usage || null,
+        budgets: res?.state?.budgets || null,
+      });
+    } catch {}
+  }
+  return res;
+}
+
+function ensureSwarmDirectorDebugHud() {
+  if (!swarmDirectorDebug.hudEnabled) return null;
+  if (!(overlayEl instanceof HTMLElement)) return null;
+  let el = swarmDirectorDebug.hudEl;
+  if (!(el instanceof HTMLElement)) {
+    el = document.createElement('div');
+    el.className = 'beat-swarm-director-debug';
+    el.style.position = 'absolute';
+    el.style.left = '12px';
+    el.style.bottom = '12px';
+    el.style.zIndex = '9999';
+    el.style.minWidth = '280px';
+    el.style.maxWidth = '52vw';
+    el.style.maxHeight = '42vh';
+    el.style.overflow = 'auto';
+    el.style.padding = '8px 10px';
+    el.style.borderRadius = '8px';
+    el.style.border = '1px solid rgba(110,190,255,0.55)';
+    el.style.background = 'rgba(8,14,24,0.82)';
+    el.style.color = '#d7ecff';
+    el.style.font = '12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+    el.style.whiteSpace = 'pre-wrap';
+    el.style.pointerEvents = 'none';
+    swarmDirectorDebug.hudEl = el;
+  }
+  if (el.parentElement !== overlayEl) {
+    try { overlayEl.appendChild(el); } catch {}
+  }
+  return el;
+}
+
+function removeSwarmDirectorDebugHud() {
+  const el = swarmDirectorDebug.hudEl;
+  if (!(el instanceof HTMLElement)) return;
+  try { el.remove(); } catch {}
+  swarmDirectorDebug.hudEl = null;
+}
+
+function pushSwarmStepDebugEvent(event) {
+  const e = event && typeof event === 'object' ? event : {};
+  swarmDirectorDebug.stepEventLog.push({
+    ts: Math.round((performance?.now?.() || 0)),
+    beat: Math.max(0, Math.trunc(Number(e.beat) || 0)),
+    step: Math.max(0, Math.trunc(Number(e.step) || 0)),
+    activeSpawners: Math.max(0, Math.trunc(Number(e.activeSpawners) || 0)),
+    triggeredSpawners: Math.max(0, Math.trunc(Number(e.triggeredSpawners) || 0)),
+    stepChanged: !!e.stepChanged,
+    source: String(e.source || ''),
+  });
+  if (swarmDirectorDebug.stepEventLog.length > 24) {
+    swarmDirectorDebug.stepEventLog.splice(0, swarmDirectorDebug.stepEventLog.length - 24);
+  }
+}
+
+function updateSwarmDirectorDebugHud(payload = null) {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  swarmDirectorDebug.snapshot = {
+    atMs: Date.now(),
+    active: !!active,
+    paused: !!gameplayPaused,
+    ...p,
+  };
+  if (!swarmDirectorDebug.hudEnabled) return;
+  const el = ensureSwarmDirectorDebugHud();
+  if (!(el instanceof HTMLElement)) return;
+  const snap = swarmDirectorDebug.snapshot || {};
+  const ds = snap?.directorState || ensureSwarmDirector().getSnapshot();
+  const lines = [];
+  lines.push('Beat Swarm Director Debug');
+  lines.push(`active=${snap.active ? 1 : 0} paused=${snap.paused ? 1 : 0} transport=${isRunning?.() ? 1 : 0}`);
+  lines.push(`beat=${Math.trunc(Number(ds?.beatIndex) || 0)} bar=${Math.trunc(Number(ds?.barIndex) || 0)} step=${Math.trunc(Number(ds?.stepIndex) || 0)} phase=${(Number(ds?.phase01) || 0).toFixed(3)}`);
+  lines.push(`energy=${String(ds?.energyState || '')} pool=[${Array.isArray(ds?.notePool) ? ds.notePool.join(',') : ''}]`);
+  lines.push(`stepChanged=${snap.stepChanged ? 1 : 0} beatChanged=${snap.beatChanged ? 1 : 0} reason=${String(snap.reason || '')}`);
+  lines.push(`spawners active=${Math.trunc(Number(snap.spawnerActiveCount) || 0)} triggered=${Math.trunc(Number(snap.spawnerTriggeredCount) || 0)} spawned=${Math.trunc(Number(snap.spawnerSpawnCount) || 0)}`);
+  lines.push(`events queued=${Math.trunc(Number(snap.queuedStepEvents) || 0)} drained=${Math.trunc(Number(snap.drainedStepEvents) || 0)}`);
+  lines.push(`budgets full=${Math.trunc(Number(ds?.budgets?.maxFullThreatsPerBeat) || 0)} light=${Math.trunc(Number(ds?.budgets?.maxLightThreatsPerBeat) || 0)} acc=${Math.trunc(Number(ds?.budgets?.maxAudibleAccentsPerBeat) || 0)}`);
+  lines.push(`usage   full=${Math.trunc(Number(ds?.usage?.fullThreats) || 0)} light=${Math.trunc(Number(ds?.usage?.lightThreats) || 0)} acc=${Math.trunc(Number(ds?.usage?.audibleAccents) || 0)}`);
+  lines.push('recent steps:');
+  const recent = swarmDirectorDebug.stepEventLog.slice(-8);
+  for (const ev of recent) {
+    lines.push(`t${String(ev.ts).padStart(6, ' ')} b${ev.beat} s${ev.step} sc${ev.stepChanged ? 1 : 0} a${ev.activeSpawners} tr${ev.triggeredSpawners} ${ev.source}`);
+  }
+  el.textContent = lines.join('\n');
+}
+
 const swarmSoundEventState = {
   beatIndex: null,
   played: Object.create(null),
@@ -618,6 +749,14 @@ let lastBeatIndex = null;
 let lastWeaponTuneStepIndex = null;
 let lastSpawnerEnemyStepIndex = null;
 let currentBeatIndex = 0;
+let swarmDirector = null;
+const swarmDirectorDebug = {
+  logBeats: false,
+  hudEnabled: false,
+  hudEl: null,
+  snapshot: null,
+  stepEventLog: [],
+};
 const weaponTuneFireDebug = {
   enabled: false,
   seq: 0,
@@ -767,6 +906,7 @@ function captureBeatSwarmState() {
       stageIndex: Number.isFinite(z.stageIndex) ? Math.trunc(z.stageIndex) : null,
     })),
     currentBeatIndex: Number(currentBeatIndex) || 0,
+    directorState: ensureSwarmDirector().getSnapshot(),
     enemies: enemies.map((e) => ({
       id: Number(e.id) || 0,
       wx: Number(e.wx) || 0,
@@ -1391,6 +1531,17 @@ function restoreBeatSwarmState(state) {
     });
   }
   currentBeatIndex = Math.max(0, Math.trunc(Number(state.currentBeatIndex) || 0));
+  const director = ensureSwarmDirector();
+  if (state?.directorState?.energyState) {
+    director.setEnergyState(String(state.directorState.energyState));
+  }
+  if (Array.isArray(state?.directorState?.notePool)) {
+    director.setNotePool(state.directorState.notePool);
+  }
+  if (state?.directorState?.budgets && typeof state.directorState.budgets === 'object') {
+    director.setBudgets(state.directorState.budgets);
+  }
+  director.syncToBeat(currentBeatIndex);
 
   clearEnemies();
   clearPickups();
@@ -1557,6 +1708,7 @@ function updateComposerForBeat(beatIndex) {
     composerRuntime.currentSectionId = 'default';
     composerRuntime.currentCycle = 0;
     composerRuntime.lastSectionKey = 'default:0';
+    try { ensureSwarmDirector().setEnergyState('intro'); } catch {}
     return;
   }
   const section = getComposerSectionForBeat(beatIndex);
@@ -1565,6 +1717,11 @@ function updateComposerForBeat(beatIndex) {
   composerRuntime.currentSectionId = section.id;
   composerRuntime.currentCycle = section.cycle;
   composerRuntime.lastSectionKey = key;
+  const sectionId = String(section?.id || '').toLowerCase();
+  const energyState = sectionId === 'chorus'
+    ? 'clash'
+    : (sectionId === 'verse' ? 'build' : 'intro');
+  try { ensureSwarmDirector().setEnergyState(energyState); } catch {}
 }
 
 function getComposerDirective() {
@@ -4856,12 +5013,20 @@ function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = curren
       el.classList.add('is-death-pop');
       d.popped = true;
       d.removeAt = now + 180;
-      noteSwarmSoundEvent(
-        'enemyDeath',
-        Math.max(0.001, Math.min(1, Number(d.soundVolume) || 0)),
-        beat,
-        normalizeSwarmNoteName(d.soundNote) || getRandomSwarmPentatonicNote()
-      );
+      executePerformedBeatEvent(createPerformedBeatEvent({
+        actorId: Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || 0)),
+        beatIndex: beat,
+        stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+        role: BEAT_EVENT_ROLES.ACCENT,
+        note: normalizeSwarmNoteName(d.soundNote) || getRandomSwarmPentatonicNote(),
+        instrumentId: resolveSwarmSoundInstrumentId('enemyDeath') || '',
+        actionType: 'enemy-death-accent',
+        threatClass: BEAT_EVENT_THREAT.ACCENT,
+        visualSyncType: 'death-pop',
+        payload: {
+          volume: Math.max(0.001, Math.min(1, Number(d.soundVolume) || 0)),
+        },
+      }));
     }
     if (d.popped && now >= (Number(d.removeAt) || 0)) {
       try { el.remove?.(); } catch {}
@@ -5287,6 +5452,8 @@ function spawnSpawnerEnemyAt(clientX, clientY, options = null) {
     spawnerNoteName: normalizeSwarmNoteName(profile.baseNoteName) || 'C4',
     spawnerInstrument: profile.instrument,
     spawnerCells: gridCells,
+    spawnerCellFlash: Array.from({ length: 9 }, () => 0),
+    spawnerCellPop: Array.from({ length: 9 }, () => 0),
     composerRole: role || 'loop',
   });
 }
@@ -5336,9 +5503,44 @@ function flashSpawnerEnemyCell(enemy, stepIndex) {
   const cellIndex = (Math.max(0, Math.min(2, cellMap.r)) * 3) + Math.max(0, Math.min(2, cellMap.c));
   const cell = Array.isArray(enemy?.spawnerCells) ? enemy.spawnerCells[cellIndex] : null;
   if (!(cell instanceof HTMLElement)) return;
-  cell.classList.remove('is-spawn');
-  void cell.offsetWidth;
-  cell.classList.add('is-spawn');
+  if (!Array.isArray(enemy.spawnerCellFlash)) {
+    enemy.spawnerCellFlash = Array.from({ length: 9 }, () => 0);
+  }
+  if (!Array.isArray(enemy.spawnerCellPop)) {
+    enemy.spawnerCellPop = Array.from({ length: 9 }, () => 0);
+  }
+  const isActive = !!Array.isArray(enemy?.spawnerSteps) && !!enemy.spawnerSteps[idx];
+  const boost = isActive ? 1 : 0.35;
+  const popBoost = isActive ? 1 : 0.45;
+  enemy.spawnerCellFlash[cellIndex] = Math.max(Number(enemy.spawnerCellFlash[cellIndex]) || 0, boost);
+  enemy.spawnerCellPop[cellIndex] = Math.max(Number(enemy.spawnerCellPop[cellIndex]) || 0, popBoost);
+  try { cell.style.setProperty('--bs-cell-flash', String(enemy.spawnerCellFlash[cellIndex].toFixed(3))); } catch {}
+  try { cell.style.setProperty('--bs-cell-pop', String(enemy.spawnerCellPop[cellIndex].toFixed(3))); } catch {}
+}
+
+function updateSpawnerEnemyFlash(enemy, dt) {
+  const cells = Array.isArray(enemy?.spawnerCells) ? enemy.spawnerCells : [];
+  if (!cells.length) return;
+  if (!Array.isArray(enemy.spawnerCellFlash)) {
+    enemy.spawnerCellFlash = Array.from({ length: Math.max(9, cells.length) }, () => 0);
+  }
+  if (!Array.isArray(enemy.spawnerCellPop)) {
+    enemy.spawnerCellPop = Array.from({ length: Math.max(9, cells.length) }, () => 0);
+  }
+  const decay = Math.max(0.001, Number(dt) || 0.016) * 2.2;
+  const popDecay = Math.max(0.001, Number(dt) || 0.016) * 6.8;
+  for (let i = 0; i < cells.length; i++) {
+    const el = cells[i];
+    if (!(el instanceof HTMLElement)) continue;
+    const cur = Math.max(0, Number(enemy.spawnerCellFlash[i]) || 0);
+    const popCur = Math.max(0, Number(enemy.spawnerCellPop[i]) || 0);
+    const next = Math.max(0, cur - decay);
+    const popNext = Math.max(0, popCur - popDecay);
+    enemy.spawnerCellFlash[i] = next;
+    enemy.spawnerCellPop[i] = popNext;
+    try { el.style.setProperty('--bs-cell-flash', String(next.toFixed(3))); } catch {}
+    try { el.style.setProperty('--bs-cell-pop', String(popNext.toFixed(3))); } catch {}
+  }
 }
 
 function flashDrawSnakeNode(enemy, nodeIndex) {
@@ -5661,8 +5863,16 @@ function fireDrawSnakeProjectile(enemy, nodeIndex, noteName) {
   });
 }
 
-function triggerDrawSnakeEnemiesOnStep(stepIndex) {
-  if (!active || gameplayPaused) return;
+function getSwarmEnemyById(enemyId) {
+  const id = Math.trunc(Number(enemyId) || 0);
+  if (!(id > 0)) return null;
+  return enemies.find((e) => Math.trunc(Number(e?.id) || 0) === id) || null;
+}
+
+function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex) {
+  const events = [];
+  if (!active || gameplayPaused) return events;
+  const stepAbs = Math.max(0, Math.trunc(Number(stepIndex) || 0));
   const step = ((Math.trunc(Number(stepIndex) || 0) % WEAPON_TUNE_STEPS) + WEAPON_TUNE_STEPS) % WEAPON_TUNE_STEPS;
   for (const enemy of enemies) {
     if (String(enemy?.enemyType || '') !== 'drawsnake') continue;
@@ -5671,33 +5881,160 @@ function triggerDrawSnakeEnemiesOnStep(stepIndex) {
     const row = Math.max(0, Math.min(SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1, Math.trunc(Number(enemy?.drawsnakeRows?.[step]) || 0)));
     const noteName = getSwarmPentatonicNoteByIndex(row);
     const instrumentId = resolveInstrumentIdOrFallback(enemy?.drawsnakeInstrument, resolveSwarmSoundInstrumentId('projectile') || 'tone');
-    enemy.drawsnakeInstrument = instrumentId;
-    try { triggerInstrument(instrumentId, noteName, undefined, 'master', {}, DRAW_SNAKE_TRIGGER_SOUND_VOLUME); } catch {}
-    fireDrawSnakeProjectile(enemy, getDrawSnakeNodeIndexForStep(step, DRAW_SNAKE_SEGMENT_COUNT), noteName);
+    events.push(createPerformedBeatEvent({
+      actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
+      beatIndex,
+      stepIndex: stepAbs,
+      role: BEAT_EVENT_ROLES.LEAD,
+      note: noteName,
+      instrumentId,
+      actionType: 'drawsnake-projectile',
+      threatClass: BEAT_EVENT_THREAT.FULL,
+      visualSyncType: 'node-pulse',
+      payload: {
+        nodeIndex: getDrawSnakeNodeIndexForStep(step, DRAW_SNAKE_SEGMENT_COUNT),
+      },
+    }));
   }
+  return events;
 }
 
-function triggerSpawnerEnemiesOnStep(stepIndex, beatIndex) {
-  if (!active || gameplayPaused) return;
+function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
+  const events = [];
+  const stats = {
+    activeSpawners: 0,
+    triggeredSpawners: 0,
+    spawnedEnemies: 0,
+  };
+  if (!active || gameplayPaused) return { events, stats };
+  const stepAbs = Math.max(0, Math.trunc(Number(stepIndex) || 0));
   const step = ((Math.trunc(Number(stepIndex) || 0) % 8) + 8) % 8;
   for (const enemy of enemies) {
     if (String(enemy?.enemyType || '') !== 'spawner') continue;
+    const actorId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
+    stats.activeSpawners += 1;
     const steps = Array.isArray(enemy?.spawnerSteps) ? enemy.spawnerSteps : [];
-    if (!steps[step]) continue;
-    flashSpawnerEnemyCell(enemy, step);
+    const isActiveStep = !!steps[step];
+    events.push(createPerformedBeatEvent({
+      actorId,
+      beatIndex,
+      stepIndex: stepAbs,
+      role: BEAT_EVENT_ROLES.MOTION,
+      note: '',
+      instrumentId: '',
+      actionType: 'spawner-flash',
+      threatClass: BEAT_EVENT_THREAT.COSMETIC,
+      visualSyncType: 'cell-pulse',
+      payload: {
+        cellStepIndex: step,
+      },
+    }));
+    if (!isActiveStep) continue;
+    stats.triggeredSpawners += 1;
     const noteName = normalizeSwarmNoteName(enemy?.spawnerNoteName) || 'C4';
     const instrumentId = resolveInstrumentIdOrFallback(enemy?.spawnerInstrument, resolveSwarmSoundInstrumentId('projectile') || 'tone');
+    events.push(createPerformedBeatEvent({
+      actorId,
+      beatIndex,
+      stepIndex: stepAbs,
+      role: BEAT_EVENT_ROLES.BASS,
+      note: noteName,
+      instrumentId,
+      actionType: 'spawner-spawn',
+      threatClass: BEAT_EVENT_THREAT.FULL,
+      visualSyncType: 'spawn-burst',
+      payload: {},
+    }));
+    stats.spawnedEnemies += 1;
+  }
+  return { events, stats };
+}
+
+function executePerformedBeatEvent(event) {
+  const ev = event && typeof event === 'object' ? event : null;
+  if (!ev) return false;
+  const actionType = String(ev.actionType || '').trim().toLowerCase();
+  if (!actionType) return false;
+  const beatIndex = Math.max(0, Math.trunc(Number(ev.beatIndex) || 0));
+  if (actionType === 'spawner-flash') {
+    const enemy = getSwarmEnemyById(ev.actorId);
+    if (!enemy || String(enemy?.enemyType || '') !== 'spawner') return false;
+    flashSpawnerEnemyCell(enemy, Math.trunc(Number(ev?.payload?.cellStepIndex) || ev.stepIndex || 0));
+    return true;
+  }
+  if (actionType === 'spawner-spawn') {
+    const enemy = getSwarmEnemyById(ev.actorId);
+    if (!enemy || String(enemy?.enemyType || '') !== 'spawner') return false;
+    const instrumentId = resolveInstrumentIdOrFallback(ev.instrumentId, resolveSwarmSoundInstrumentId('projectile') || 'tone');
     if (instrumentId !== enemy?.spawnerInstrument) enemy.spawnerInstrument = instrumentId;
-    try { triggerInstrument(instrumentId, noteName, undefined, 'master', {}, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME); } catch {}
+    try { triggerInstrument(instrumentId, normalizeSwarmNoteName(ev.note) || 'C4', undefined, 'master', {}, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME); } catch {}
     const center = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
-    if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) continue;
+    if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) return false;
     const baseAngle = Math.random() * Math.PI * 2;
     const baseDist = randRange(SPAWNER_ENEMY_BURST_MIN_PX, SPAWNER_ENEMY_BURST_MAX_PX);
     const spawnClientX = center.x + (Math.cos(baseAngle) * baseDist);
     const spawnClientY = center.y + (Math.sin(baseAngle) * baseDist);
+    reportSwarmThreatIntent('full', 1, beatIndex, 'spawner-spawn');
     spawnEnemyAt(spawnClientX, spawnClientY);
-    void beatIndex;
+    return true;
   }
+  if (actionType === 'drawsnake-projectile') {
+    const enemy = getSwarmEnemyById(ev.actorId);
+    if (!enemy || String(enemy?.enemyType || '') !== 'drawsnake') return false;
+    const instrumentId = resolveInstrumentIdOrFallback(ev.instrumentId, resolveSwarmSoundInstrumentId('projectile') || 'tone');
+    enemy.drawsnakeInstrument = instrumentId;
+    const noteName = normalizeSwarmNoteName(ev.note) || getRandomSwarmPentatonicNote();
+    try { triggerInstrument(instrumentId, noteName, undefined, 'master', {}, DRAW_SNAKE_TRIGGER_SOUND_VOLUME); } catch {}
+    reportSwarmThreatIntent('full', 1, beatIndex, 'drawsnake-projectile');
+    fireDrawSnakeProjectile(enemy, Math.trunc(Number(ev?.payload?.nodeIndex) || 0), noteName);
+    return true;
+  }
+  if (actionType === 'composer-group-projectile' || actionType === 'composer-group-explosion') {
+    const enemy = getSwarmEnemyById(ev.actorId);
+    if (!enemy || String(enemy?.enemyType || '') !== 'composer-group-member') return false;
+    const noteName = normalizeSwarmNoteName(ev.note) || getRandomSwarmPentatonicNote();
+    const instrumentId = resolveInstrumentIdOrFallback(ev.instrumentId, resolveSwarmSoundInstrumentId('projectile') || 'tone');
+    try { triggerInstrument(instrumentId, noteName, undefined, 'master', {}, 0.42); } catch {}
+    pulseHitFlash(enemy.el);
+    enemy.composerActionPulseDur = COMPOSER_GROUP_ACTION_PULSE_SECONDS;
+    enemy.composerActionPulseT = COMPOSER_GROUP_ACTION_PULSE_SECONDS;
+    const origin = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+    if (actionType === 'composer-group-explosion') {
+      reportSwarmThreatIntent('full', 1, beatIndex, 'composer-group-explosion');
+      addHostileRedExplosionEffect(origin);
+    } else {
+      const toPlayer = getViewportCenterWorld();
+      const dir = Math.atan2((Number(toPlayer?.y) || 0) - origin.y, (Number(toPlayer?.x) || 0) - origin.x);
+      reportSwarmThreatIntent('full', 1, beatIndex, 'composer-group-projectile');
+      spawnHostileRedProjectileAt(origin, {
+        angle: dir + randRange(-0.28, 0.28),
+        speed: COMPOSER_GROUP_PROJECTILE_SPEED,
+        noteName,
+        instrument: instrumentId,
+        damage: 1,
+      });
+    }
+    return true;
+  }
+  if (actionType === 'enemy-death-accent') {
+    reportSwarmThreatIntent('accent', 1, beatIndex, 'enemy-death-pop');
+    noteSwarmSoundEvent(
+      'enemyDeath',
+      Math.max(0.001, Math.min(1, Number(ev?.payload?.volume) || 0)),
+      beatIndex,
+      normalizeSwarmNoteName(ev.note) || getRandomSwarmPentatonicNote()
+    );
+    return true;
+  }
+  if (actionType === 'player-weapon-step') {
+    const origin = ev?.payload?.centerWorld;
+    const centerWorld = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)
+      ? { x: Number(origin.x) || 0, y: Number(origin.y) || 0 }
+      : getViewportCenterWorld();
+    fireConfiguredWeaponsOnBeat(centerWorld, Math.trunc(Number(ev.stepIndex) || 0), beatIndex);
+    return true;
+  }
+  return false;
 }
 
 function getNearestEnemy(worldX, worldY, excludeEnemyId = null) {
@@ -6613,34 +6950,98 @@ function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex, contextBeatIndex = 
 }
 
 function updateBeatWeapons(centerWorld) {
+  const director = ensureSwarmDirector();
   if (!isRunning?.()) {
     lastBeatIndex = null;
     lastWeaponTuneStepIndex = null;
+    lastSpawnerEnemyStepIndex = null;
+    director.reset();
+    director.syncToBeat(Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)));
+    updateSwarmDirectorDebugHud({
+      reason: 'transport-stopped',
+      stepChanged: false,
+      beatChanged: false,
+      beatIndex: currentBeatIndex,
+      stepIndex: Math.max(0, Math.trunc(Number(director.getSnapshot()?.stepIndex) || 0)),
+      spawnerActiveCount: 0,
+      spawnerTriggeredCount: 0,
+      spawnerSpawnCount: 0,
+      directorState: director.getSnapshot(),
+    });
     return;
   }
   const info = getLoopInfo?.();
-  const beatLen = Number(info?.beatLen) || 0;
-  const loopStart = Number(info?.loopStartTime) || 0;
-  const now = Number(info?.now) || 0;
+  const tick = director.updateFromLoopInfo(info);
+  if (!tick?.valid) return;
+  const beatLen = Math.max(0, Number(info?.beatLen) || 0);
   if (!(beatLen > 0)) return;
-  const beatIndex = Math.floor(((now - loopStart) / beatLen) + 1e-6);
+  const beatIndex = Math.max(0, Math.trunc(Number(tick.beatIndex) || 0));
+  const stepIndex = Math.max(0, Math.trunc(Number(tick.stepIndex) || 0));
   currentBeatIndex = beatIndex;
   updateComposerForBeat(beatIndex);
-  const stepLen = beatLen * 0.5;
-  if (stepLen > 0) {
-    const stepIndex = Math.floor(((now - loopStart) / stepLen) + 1e-6);
-    if (stepIndex !== lastSpawnerEnemyStepIndex) {
-      lastSpawnerEnemyStepIndex = stepIndex;
-      triggerSpawnerEnemiesOnStep(stepIndex, beatIndex);
-      triggerDrawSnakeEnemiesOnStep(stepIndex);
-      triggerComposerGroupsOnStep(stepIndex, beatIndex);
+  let spawnerStepStats = { activeSpawners: 0, triggeredSpawners: 0, spawnedEnemies: 0 };
+  let queuedStepEvents = 0;
+  let drainedStepEvents = 0;
+  const stepChanged = !!tick?.stepChanged || stepIndex !== lastSpawnerEnemyStepIndex || stepIndex !== lastWeaponTuneStepIndex;
+  if (stepChanged) {
+    const spawnerStep = collectSpawnerStepBeatEvents(stepIndex, beatIndex);
+    spawnerStepStats = spawnerStep?.stats || spawnerStepStats;
+    const stepEvents = [
+      ...(Array.isArray(spawnerStep?.events) ? spawnerStep.events : []),
+      ...collectDrawSnakeStepBeatEvents(stepIndex, beatIndex),
+      ...collectComposerGroupStepBeatEvents(stepIndex, beatIndex),
+      createPerformedBeatEvent({
+        actorId: 0,
+        beatIndex,
+        stepIndex,
+        role: BEAT_EVENT_ROLES.ACCENT,
+        note: '',
+        instrumentId: '',
+        actionType: 'player-weapon-step',
+        threatClass: BEAT_EVENT_THREAT.FULL,
+        visualSyncType: 'weapon-fire',
+        payload: {
+          centerWorld: { x: Number(centerWorld?.x) || 0, y: Number(centerWorld?.y) || 0 },
+        },
+      }),
+    ];
+    for (const ev of stepEvents) {
+      const queued = director.enqueueBeatEvent(ev);
+      if (queued) queuedStepEvents += 1;
     }
-    if (stepIndex !== lastWeaponTuneStepIndex) {
-      lastWeaponTuneStepIndex = stepIndex;
-      fireConfiguredWeaponsOnBeat(centerWorld, stepIndex, beatIndex);
+    const drained = director.drainBeatEventsForStep(beatIndex, stepIndex);
+    for (const ev of drained) {
+      if (executePerformedBeatEvent(ev)) drainedStepEvents += 1;
     }
+    lastSpawnerEnemyStepIndex = stepIndex;
+    lastWeaponTuneStepIndex = stepIndex;
+    pushSwarmStepDebugEvent({
+      beat: beatIndex,
+      step: stepIndex,
+      activeSpawners: Number(spawnerStepStats?.activeSpawners) || 0,
+      triggeredSpawners: Number(spawnerStepStats?.triggeredSpawners) || 0,
+      stepChanged: true,
+      source: 'updateBeatWeapons',
+    });
   }
-  if (beatIndex === lastBeatIndex) return;
+  const beatChanged = !!tick?.beatChanged || beatIndex !== lastBeatIndex;
+  updateSwarmDirectorDebugHud({
+    reason: stepChanged ? 'step' : (beatChanged ? 'beat-only' : 'frame'),
+    stepChanged,
+    beatChanged,
+    beatIndex,
+    stepIndex,
+    spawnerActiveCount: Number(spawnerStepStats?.activeSpawners) || 0,
+    spawnerTriggeredCount: Number(spawnerStepStats?.triggeredSpawners) || 0,
+    spawnerSpawnCount: Number(spawnerStepStats?.spawnedEnemies) || 0,
+    queuedStepEvents,
+    drainedStepEvents,
+    directorState: director.getSnapshot(),
+  });
+  if (!beatChanged) return;
+  if (swarmDirectorDebug.logBeats) {
+    try { console.log('[BeatSwarmDirector][beat]', director.getSnapshot()); } catch {}
+  }
   lastBeatIndex = beatIndex;
   if (active && outerForceContinuousSeconds >= beatLen) {
     if (!releaseForcePrimed) {
@@ -6734,6 +7135,7 @@ function updateEnemies(dt) {
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     const enemyType = String(e?.enemyType || '');
+    if (enemyType === 'spawner') updateSpawnerEnemyFlash(e, dt);
     const isPersistentSpecialEnemy = enemyType === 'spawner' || enemyType === 'drawsnake';
     const dx = centerWorld.x - e.wx;
     const dy = centerWorld.y - e.wy;
@@ -7030,8 +7432,10 @@ function chooseComposerGroupEnemyForNote(group, noteName, aliveMembers) {
   return picked;
 }
 
-function triggerComposerGroupsOnStep(stepIndex, beatIndex) {
-  if (!active || gameplayPaused) return;
+function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
+  const events = [];
+  if (!active || gameplayPaused) return events;
+  const stepAbs = Math.max(0, Math.trunc(Number(stepIndex) || 0));
   const step = ((Math.trunc(Number(stepIndex) || 0) % WEAPON_TUNE_STEPS) + WEAPON_TUNE_STEPS) % WEAPON_TUNE_STEPS;
   for (const group of composerEnemyGroups) {
     if (!group || !group.active) continue;
@@ -7062,28 +7466,27 @@ function triggerComposerGroupsOnStep(stepIndex, beatIndex) {
       performers.push(enemy);
     }
     if (!performers.length) continue;
-    try { triggerInstrument(resolveInstrumentIdOrFallback(group.instrument, resolveSwarmSoundInstrumentId('projectile') || 'tone'), noteName, undefined, 'master', {}, 0.42); } catch {}
+    const instrumentId = resolveInstrumentIdOrFallback(group.instrument, resolveSwarmSoundInstrumentId('projectile') || 'tone');
     for (const enemy of performers) {
-      pulseHitFlash(enemy.el);
-      enemy.composerActionPulseDur = COMPOSER_GROUP_ACTION_PULSE_SECONDS;
-      enemy.composerActionPulseT = COMPOSER_GROUP_ACTION_PULSE_SECONDS;
-      const origin = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
-      if (String(group.actionType || 'projectile') === 'explosion') {
-        addHostileRedExplosionEffect(origin);
-      } else {
-        const toPlayer = getViewportCenterWorld();
-        const dir = Math.atan2((Number(toPlayer?.y) || 0) - origin.y, (Number(toPlayer?.x) || 0) - origin.x);
-        spawnHostileRedProjectileAt(origin, {
-          angle: dir + randRange(-0.28, 0.28),
-          speed: COMPOSER_GROUP_PROJECTILE_SPEED,
-          noteName,
-          instrument: group.instrument,
-          damage: 1,
-        });
-      }
+      events.push(createPerformedBeatEvent({
+        actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
+        beatIndex,
+        stepIndex: stepAbs,
+        role: BEAT_EVENT_ROLES.LEAD,
+        note: noteName,
+        instrumentId,
+        actionType: String(group.actionType || 'projectile') === 'explosion'
+          ? 'composer-group-explosion'
+          : 'composer-group-projectile',
+        threatClass: BEAT_EVENT_THREAT.FULL,
+        visualSyncType: 'group-pulse',
+        payload: {
+          groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+        },
+      }));
     }
-    void beatIndex;
   }
+  return events;
 }
 
 function maintainComposerEnemyGroups() {
@@ -7835,6 +8238,17 @@ function tick(nowMs) {
   const dt = Math.max(0.001, Math.min(0.05, (now - lastFrameTs) / 1000));
   lastFrameTs = now;
   if (gameplayPaused) {
+    updateSwarmDirectorDebugHud({
+      reason: 'paused',
+      stepChanged: false,
+      beatChanged: false,
+      beatIndex: currentBeatIndex,
+      stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+      spawnerActiveCount: 0,
+      spawnerTriggeredCount: 0,
+      spawnerSpawnCount: 0,
+      directorState: ensureSwarmDirector().getSnapshot(),
+    });
     updateWeaponSubBoardSession();
     const zPause = getZoomState();
     const scalePause = Number.isFinite(zPause?.targetScale) ? zPause.targetScale : (Number.isFinite(zPause?.currentScale) ? zPause.currentScale : 1);
@@ -8136,6 +8550,7 @@ export function enterBeatSwarmMode(options = null) {
   enemyHealthRampSeconds = 0;
   updateEnemySpawnHealthScaling();
   updateSpawnHealthDebugUi();
+  resetSwarmDirector(0);
   if (!restoreState) resetArenaPathState();
   lastBeatIndex = null;
   lastWeaponTuneStepIndex = null;
@@ -8164,6 +8579,9 @@ export function enterBeatSwarmMode(options = null) {
     setResistanceVisual(false);
     setReactiveArrowVisual(false);
   }
+  if (swarmDirectorDebug.hudEnabled) ensureSwarmDirectorDebugHud();
+  else removeSwarmDirectorDebugHud();
+  ensureSwarmDirector().syncToBeat(currentBeatIndex);
   if (spawnerLayerEl) spawnerLayerEl.hidden = false;
   if (enemyLayerEl) enemyLayerEl.hidden = false;
   if (starfieldLayerEl) starfieldLayerEl.hidden = false;
@@ -8194,6 +8612,7 @@ export function exitBeatSwarmMode() {
   stopComponentLivePreviews();
   unbindInput();
   try { spawnerRuntime?.exit?.(); } catch {}
+  removeSwarmDirectorDebugHud();
   clearEnemies();
   clearPickups();
   clearProjectiles();
@@ -8218,6 +8637,7 @@ export function exitBeatSwarmMode() {
   postReleaseAssistTimer = 0;
   outerForceContinuousSeconds = 0;
   releaseForcePrimed = false;
+  ensureSwarmDirector().reset();
   setGameplayPaused(false);
   resetArenaPathState();
   if (arenaRingEl) arenaRingEl.style.opacity = '0';
@@ -8253,6 +8673,25 @@ try {
 
 try {
   window.__beatSwarmDebug = Object.assign(window.__beatSwarmDebug || {}, {
+    getDirectorState() {
+      try { return ensureSwarmDirector().getSnapshot(); } catch { return null; }
+    },
+    getDirectorDebugSnapshot() {
+      return swarmDirectorDebug.snapshot ? { ...swarmDirectorDebug.snapshot } : null;
+    },
+    getDirectorStepEventLog() {
+      return Array.isArray(swarmDirectorDebug.stepEventLog) ? swarmDirectorDebug.stepEventLog.slice() : [];
+    },
+    setDirectorHudEnabled(next = true) {
+      swarmDirectorDebug.hudEnabled = !!next;
+      if (swarmDirectorDebug.hudEnabled) ensureSwarmDirectorDebugHud();
+      else removeSwarmDirectorDebugHud();
+      return swarmDirectorDebug.hudEnabled;
+    },
+    setDirectorBeatLogging(next = true) {
+      swarmDirectorDebug.logBeats = !!next;
+      return swarmDirectorDebug.logBeats;
+    },
     enableTuneShotDebug(next = true) {
       weaponTuneFireDebug.enabled = !!next;
       weaponTuneFireDebug.seq = 0;
