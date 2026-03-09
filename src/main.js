@@ -31,7 +31,7 @@ import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
-import { BeatSwarmMode } from './beat-swarm-mode.js';
+import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';

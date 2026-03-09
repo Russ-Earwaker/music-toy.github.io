@@ -1,6 +1,6 @@
-import { getIdForDisplayName } from './instrument-catalog.js';
-import { getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
-import { BEAT_EVENT_ROLES } from './beat-swarm/beat-events.js';
+import { getIdForDisplayName } from '../instrument-catalog.js';
+import { getSoundThemeKey, pickInstrumentForToy } from '../sound-theme.js';
+import { BEAT_EVENT_ROLES } from './beat-events.js';
 
 const PALETTE_MIN_BARS = 48;
 const PALETTE_MAX_BARS = 72;

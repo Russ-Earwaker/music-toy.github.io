@@ -49,6 +49,13 @@ These are not urgent changes, but the intended long-term direction.
   Energy-state alias mapping now supports future arrangement labels (`build_up`, `mini_break`, `boss_phase`, `swarm_chaos`) while routing to current stable state configs for compatibility.
 - Done: section 9 baseline implementation.
   Music Lab now records per-step director threat budget snapshots (budgets/usage/remaining) and exports aggregated `threatBudgetUsage` metrics (`perBeat`/`perBar`) alongside event-level threat balance.
+- In progress: section 10 refactor pass.
+  Group helper logic (`normalizeCallResponseLane`, template picking, loop-step generation, response-note selection) is now extracted to `beat-swarm-groups.js`; `beat-swarm-mode.js` now calls the module instead of local duplicate implementations.
+  Beat Swarm runtime modules were also relocated under `src/beat-swarm/` (`beat-swarm-mode`, `beat-swarm-palette`, `beat-swarm-pacing`, `beat-swarm-music-lab`, `beat-swarm-groups`) and import paths were rewired.
+  Composer group profile construction and group shape/color selection were extracted to `beat-swarm-composer-groups.js`, with `beat-swarm-mode.js` delegating via a thin wrapper.
+  Composer group lifecycle orchestration (`maintainComposerEnemyGroups`) is now extracted to `beat-swarm-composer-lifecycle.js`, with mode wiring callbacks for retreat/spawn/motif-group creation.
+  Composer group beat-event collection (`collectComposerGroupStepBeatEvents`) and note→enemy selection were extracted to `beat-swarm-composer-events.js`, with mode delegating through callback wiring.
+  Composer group spawn helpers (`spawnComposerGroupEnemyAt`, `spawnComposerGroupOffscreenMembers`) were extracted to `beat-swarm-composer-spawn.js`; mode now delegates with runtime context callbacks/state.
 - Remaining focus after masking pass: eliminate occasional `perfectSyncSpawnerPairs` edge cases.
   Active mitigation now includes deterministic per-active-spawner collision-avoidance (signature + primary-note uniqueness pass) in addition to seeded motif variation.
 
