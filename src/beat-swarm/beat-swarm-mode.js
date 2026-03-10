@@ -35,10 +35,21 @@ import {
   spawnComposerGroupOffscreenMembersRuntime,
 } from './beat-swarm-composer-spawn.js';
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
+import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js';
 import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
+import {
+  applyArenaBoundaryResistanceRuntime,
+  applyLaunchInnerCircleBounceRuntime,
+  enforceArenaOuterLimitRuntime,
+} from './beat-swarm-arena-boundary.js';
+import {
+  getOutwardOnlyInputRuntime,
+  getShipFacingFromReleaseAimRuntime,
+  shouldSuppressSteeringForReleaseRuntime,
+} from './beat-swarm-release-input.js';
 
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
@@ -533,6 +544,7 @@ const DRAW_SNAKE_TURN_RATE_MAX = 1.1;
 const DRAW_SNAKE_ARENA_BIAS_RADIUS_SCALE = 0.82;
 const DRAW_SNAKE_ARENA_BIAS_STRENGTH = 0.18;
 const COMPOSER_ENABLED = true;
+const BEAT_SWARM_STYLE_ID = 'retro_shooter';
 const COMPOSER_BEATS_PER_BAR = 4;
 const COMPOSER_SECTIONS = Object.freeze([
   Object.freeze({ id: 'verse', bars: 8, directive: Object.freeze({ drumLoops: 1, drawSnakes: 1, intensity: 0.62 }) }),
@@ -808,6 +820,7 @@ const composerEnemyGroups = [];
 let composerEnemyGroupIdSeq = 1;
 const singletonEnemyMusicGroups = new Map();
 let singletonEnemyMusicGroupIdSeq = 1;
+let musicContinuityIdSeq = 1;
 const LOOPGRID_FALLBACK_NOTE_PALETTE = Object.freeze(buildPalette(48, Array.from({ length: 12 }, (_, i) => i), 3));
 const SPAWNER_ENEMY_GRID_STEP_TO_CELL = Object.freeze([
   Object.freeze({ c: 0, r: 0 }), // 1
@@ -968,6 +981,26 @@ function getEnemyAggressionScale(enemyLike, fallbackState = 'active') {
   return getLifecycleAggressionScale(state);
 }
 
+function getNextMusicContinuityId() {
+  const next = Math.max(1, Math.trunc(Number(musicContinuityIdSeq) || 1));
+  musicContinuityIdSeq = next + 1;
+  return `mc-${next}`;
+}
+
+function clonePhraseState(stateLike = null) {
+  const src = stateLike && typeof stateLike === 'object' ? stateLike : null;
+  if (!src) return null;
+  return {
+    beatIndex: Math.max(0, Math.trunc(Number(src.beatIndex) || 0)),
+    stepIndex: Math.max(0, Math.trunc(Number(src.stepIndex) || 0)),
+    barIndex: Math.max(0, Math.trunc(Number(src.barIndex) || 0)),
+    role: normalizeSwarmRole(src.role || '', ''),
+    note: normalizeSwarmNoteName(src.note || ''),
+    actionType: String(src.actionType || '').trim().toLowerCase(),
+    updatedAtMs: Math.max(0, Number(src.updatedAtMs) || 0),
+  };
+}
+
 function getPlayerWeaponSoundEventKeyForStage(archetype = '', variant = '') {
   const a = String(archetype || '').trim().toLowerCase();
   const v = String(variant || '').trim().toLowerCase();
@@ -997,6 +1030,13 @@ function ensureSingletonMusicGroupForEnemy(enemyLike, options = null) {
   );
   const steps = Array.isArray(options?.steps) ? options.steps.map((v) => !!v) : null;
   const rows = Array.isArray(options?.rows) ? options.rows.map((v) => Math.max(0, Math.trunc(Number(v) || 0))) : null;
+  const continuityId = String(
+    options?.continuityId
+      || enemy?.musicContinuityId
+      || enemy?.continuityId
+      || ''
+  ).trim() || getNextMusicContinuityId();
+  const phraseState = clonePhraseState(options?.phraseState);
   let group = singletonEnemyMusicGroups.get(enemyId) || null;
   if (!group) {
     group = {
@@ -1010,6 +1050,8 @@ function ensureSingletonMusicGroupForEnemy(enemyLike, options = null) {
       instrumentId,
       steps: steps || null,
       rows: rows || null,
+      continuityId,
+      phraseState: phraseState || null,
       active: true,
       lifecycleState,
       size: 1,
@@ -1024,6 +1066,8 @@ function ensureSingletonMusicGroupForEnemy(enemyLike, options = null) {
     if (instrumentId) group.instrumentId = instrumentId;
     if (steps) group.steps = steps;
     if (rows) group.rows = rows;
+    group.continuityId = continuityId;
+    if (phraseState) group.phraseState = phraseState;
     group.memberIds = new Set([enemyId]);
     group.active = true;
     group.lifecycleState = lifecycleState;
@@ -1032,6 +1076,8 @@ function ensureSingletonMusicGroupForEnemy(enemyLike, options = null) {
   }
   enemy.musicGroupId = Math.trunc(Number(group.id) || 0);
   enemy.musicGroupType = 'singleton';
+  enemy.musicContinuityId = String(group.continuityId || continuityId);
+  enemy.continuityId = String(group.continuityId || continuityId);
   return group;
 }
 
@@ -1039,6 +1085,11 @@ function syncSingletonEnemyStateFromMusicGroup(enemyLike, groupLike = null) {
   const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
   const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
   if (!enemy || !group) return;
+  const continuityId = String(group?.continuityId || enemy?.musicContinuityId || '').trim();
+  if (continuityId) {
+    enemy.musicContinuityId = continuityId;
+    enemy.continuityId = continuityId;
+  }
   const enemyType = String(enemy?.enemyType || '').trim().toLowerCase();
   if (enemyType === 'spawner') {
     if (Array.isArray(group.steps)) enemy.spawnerSteps = group.steps.slice(0, 8);
@@ -1082,6 +1133,151 @@ function getEnemyMusicGroup(enemyLike, fallbackActionType = '') {
   return created;
 }
 
+function noteMusicSystemEvent(eventType, fields = null, context = null) {
+  const payload = fields && typeof fields === 'object' ? fields : {};
+  const beatIndex = Math.max(0, Math.trunc(Number(context?.beatIndex) || Number(currentBeatIndex) || 0));
+  const stepIndex = Math.max(0, Math.trunc(Number(context?.stepIndex) || Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0));
+  const barIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
+  const type = String(eventType || '').trim().toLowerCase();
+  if (!type) return;
+  try {
+    swarmMusicLab.noteSystemEvent(type, payload, getMusicLabContext({
+      beatIndex,
+      stepIndex,
+      barIndex,
+      ...context,
+    }));
+  } catch {}
+}
+
+function chooseSingletonMusicHandoffTarget(sourceEnemy, sourceGroup) {
+  const source = sourceEnemy && typeof sourceEnemy === 'object' ? sourceEnemy : null;
+  const group = sourceGroup && typeof sourceGroup === 'object' ? sourceGroup : null;
+  if (!source || !group) return null;
+  const sourceId = Math.max(0, Math.trunc(Number(source.id) || 0));
+  const sourceType = String(source.enemyType || '').trim().toLowerCase();
+  if (!(sourceId > 0) || !sourceType) return null;
+  const sourceX = Number(source.x);
+  const sourceY = Number(source.y);
+  const style = getSwarmStyleProfile();
+  const handoffAggressiveness = clamp01(Number(style?.handoffAggressiveness) || 0.72);
+  const candidateList = enemies.filter((enemy) => {
+    if (!enemy || enemy === source) return false;
+    const id = Math.max(0, Math.trunc(Number(enemy.id) || 0));
+    if (!(id > 0) || id === sourceId) return false;
+    if (String(enemy.enemyType || '').trim().toLowerCase() !== sourceType) return false;
+    if (enemy.retreating) return false;
+    const lifecycleState = normalizeMusicLifecycleState(enemy.lifecycleState || 'active', 'active');
+    if (lifecycleState === 'retiring') return false;
+    return true;
+  });
+  if (!candidateList.length) return null;
+  let best = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const candidate of candidateList) {
+    const cx = Number(candidate.x);
+    const cy = Number(candidate.y);
+    const dist = (Number.isFinite(sourceX) && Number.isFinite(sourceY) && Number.isFinite(cx) && Number.isFinite(cy))
+      ? Math.hypot(cx - sourceX, cy - sourceY)
+      : 9999;
+    const lifecycleState = normalizeMusicLifecycleState(candidate.lifecycleState || 'active', 'active');
+    const lifecyclePenalty = lifecycleState === 'inactiveForScheduling' ? (360 * (1 - handoffAggressiveness)) : 0;
+    const score = dist + lifecyclePenalty;
+    if (score < bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context = null) {
+  const source = sourceEnemy && typeof sourceEnemy === 'object' ? sourceEnemy : null;
+  if (!source) return { attempted: false, success: false, reason: 'no_source' };
+  const sourceId = Math.max(0, Math.trunc(Number(source.id) || 0));
+  if (!(sourceId > 0)) return { attempted: false, success: false, reason: 'invalid_source' };
+  const sourceGroup = singletonEnemyMusicGroups.get(sourceId) || null;
+  if (!sourceGroup) return { attempted: false, success: false, reason: 'no_group' };
+  const sourceType = String(source.enemyType || sourceGroup.enemyType || '').trim().toLowerCase();
+  if (sourceType === 'composer-group-member') return { attempted: false, success: false, reason: 'group_member' };
+  const handoffReason = String(reason || 'unknown').trim().toLowerCase() || 'unknown';
+  if (
+    handoffReason === 'mode_exit_clear'
+    || handoffReason === 'director_cleanup'
+    || handoffReason === 'section_change_cleanup'
+    || handoffReason === 'restore_overflow'
+  ) {
+    return { attempted: false, success: false, reason: 'reason_not_eligible' };
+  }
+  const beatIndex = Math.max(0, Math.trunc(Number(context?.beatIndex) || Number(currentBeatIndex) || 0));
+  const stepIndex = Math.max(0, Math.trunc(Number(context?.stepIndex) || Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0));
+  const continuityId = String(sourceGroup.continuityId || source.musicContinuityId || '').trim() || getNextMusicContinuityId();
+  const phraseState = clonePhraseState(sourceGroup.phraseState);
+  const startedPayload = {
+    sourceEnemyId: sourceId,
+    sourceEnemyType: sourceType,
+    sourceGroupId: Math.max(0, Math.trunc(Number(sourceGroup.id) || 0)),
+    continuityId,
+    laneRole: normalizeSwarmRole(sourceGroup.role || getSwarmRoleForEnemy(source, BEAT_EVENT_ROLES.LEAD), BEAT_EVENT_ROLES.LEAD),
+    actionType: String(sourceGroup.actionType || '').trim().toLowerCase(),
+    phraseStep: Math.max(0, Math.trunc(Number(phraseState?.stepIndex) || stepIndex)),
+    barPosition: Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR)),
+    reason: handoffReason,
+  };
+  noteMusicSystemEvent('music_handoff_started', startedPayload, { beatIndex, stepIndex, ...context });
+  const targetEnemy = chooseSingletonMusicHandoffTarget(source, sourceGroup);
+  if (!targetEnemy) {
+    noteMusicSystemEvent('music_handoff_failed', { ...startedPayload, failureReason: 'no_candidate' }, { beatIndex, stepIndex, ...context });
+    noteMusicSystemEvent('music_handoff_reset_phrase', { ...startedPayload, failureReason: 'no_candidate' }, { beatIndex, stepIndex, ...context });
+    return { attempted: true, success: false, reason: 'no_candidate' };
+  }
+  const targetGroup = ensureSingletonMusicGroupForEnemy(targetEnemy, {
+    role: sourceGroup.role,
+    actionType: sourceGroup.actionType,
+    note: sourceGroup.note,
+    instrumentId: sourceGroup.instrumentId,
+    steps: Array.isArray(sourceGroup.steps) ? sourceGroup.steps.slice() : null,
+    rows: Array.isArray(sourceGroup.rows) ? sourceGroup.rows.slice() : null,
+    lifecycleState: targetEnemy.lifecycleState || 'active',
+    continuityId,
+    phraseState: phraseState || {
+      beatIndex,
+      stepIndex,
+      barIndex: Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR)),
+      role: normalizeSwarmRole(sourceGroup.role || '', ''),
+      note: normalizeSwarmNoteName(sourceGroup.note || ''),
+      actionType: String(sourceGroup.actionType || '').trim().toLowerCase(),
+      updatedAtMs: Number(performance?.now?.() || 0),
+    },
+  });
+  if (!targetGroup) {
+    noteMusicSystemEvent('music_handoff_failed', { ...startedPayload, failureReason: 'target_group_create_failed' }, { beatIndex, stepIndex, ...context });
+    noteMusicSystemEvent('music_handoff_reset_phrase', { ...startedPayload, failureReason: 'target_group_create_failed' }, { beatIndex, stepIndex, ...context });
+    return { attempted: true, success: false, reason: 'target_group_create_failed' };
+  }
+  syncSingletonEnemyStateFromMusicGroup(targetEnemy, targetGroup);
+  try {
+    targetEnemy.__bsLastSpawnerNote = sourceEnemy?.__bsLastSpawnerNote || targetEnemy.__bsLastSpawnerNote;
+    targetEnemy.__bsLastDrawsnakeNote = sourceEnemy?.__bsLastDrawsnakeNote || targetEnemy.__bsLastDrawsnakeNote;
+    targetEnemy.__bsLastDrawsnakeRow = Number.isFinite(sourceEnemy?.__bsLastDrawsnakeRow)
+      ? sourceEnemy.__bsLastDrawsnakeRow
+      : targetEnemy.__bsLastDrawsnakeRow;
+  } catch {}
+  const resultPayload = {
+    ...startedPayload,
+    targetEnemyId: Math.max(0, Math.trunc(Number(targetEnemy.id) || 0)),
+    targetEnemyType: String(targetEnemy.enemyType || '').trim().toLowerCase(),
+    targetGroupId: Math.max(0, Math.trunc(Number(targetGroup.id) || 0)),
+  };
+  noteMusicSystemEvent('music_handoff_completed', resultPayload, { beatIndex, stepIndex, ...context });
+  noteMusicSystemEvent(
+    phraseState ? 'music_handoff_inherited_phrase' : 'music_handoff_reset_phrase',
+    resultPayload,
+    { beatIndex, stepIndex, ...context }
+  );
+  return { attempted: true, success: true, sourceGroup, targetGroup, targetEnemy };
+}
+
 function removeSingletonMusicGroupForEnemy(enemyId) {
   const id = Math.trunc(Number(enemyId) || 0);
   if (!(id > 0)) return;
@@ -1115,9 +1311,26 @@ function getCurrentSwarmEnergyStateName() {
   return String(ds?.energyState || energyStateRuntime.state || 'intro').trim().toLowerCase() || 'intro';
 }
 
+function getSwarmStyleProfile() {
+  return getBeatSwarmStyleProfile(BEAT_SWARM_STYLE_ID);
+}
+
+function getSwarmStyleId() {
+  return String(getSwarmStyleProfile()?.id || BEAT_SWARM_STYLE_ID).trim().toLowerCase() || 'retro_shooter';
+}
+
 function getEnergyStateThemePreset(stateName = '') {
   const key = String(stateName || getCurrentSwarmEnergyStateName()).trim().toLowerCase();
-  return DIRECTOR_STATE_THEME_CONFIG[key] || DIRECTOR_STATE_THEME_CONFIG.intro;
+  const base = DIRECTOR_STATE_THEME_CONFIG[key] || DIRECTOR_STATE_THEME_CONFIG.intro;
+  const style = getSwarmStyleProfile();
+  if (getSwarmStyleId() !== 'retro_shooter') return base;
+  const maxUnique = Math.max(1, Math.trunc(Number(style?.notePoolMaxUnique) || 4));
+  const basePool = Array.isArray(base?.notePool) ? base.notePool : SWARM_PENTATONIC_NOTES_ONE_OCTAVE;
+  const notePool = basePool.slice(0, Math.min(basePool.length, maxUnique));
+  return {
+    ...base,
+    notePool: notePool.length ? notePool : SWARM_PENTATONIC_NOTES_ONE_OCTAVE.slice(0, maxUnique),
+  };
 }
 
 function getCurrentPacingStateName() {
@@ -1144,7 +1357,9 @@ function createRowPattern(pattern, length = WEAPON_TUNE_STEPS, rowLimit = SWARM_
 
 function updateComposerMotifEpochForBeat(beatIndex = currentBeatIndex) {
   const bar = Math.max(0, Math.floor(Math.max(0, Math.trunc(Number(beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR)));
-  const epochBars = Math.max(4, Math.trunc(Number(COMPOSER_MOTIF_EPOCH_BARS) || 24));
+  const style = getSwarmStyleProfile();
+  const persistenceBars = Math.max(1, Math.trunc(Number(style?.patternPersistenceBars) || COMPOSER_MOTIF_LOCK_BARS || 8));
+  const epochBars = Math.max(4, Math.max(Math.trunc(Number(COMPOSER_MOTIF_EPOCH_BARS) || 24), persistenceBars * 2));
   if (!(composerRuntime.motifEpochStartBar >= 0)) {
     composerRuntime.motifEpochStartBar = bar;
     composerRuntime.motifEpochIndex = 0;
@@ -1171,7 +1386,14 @@ function updateComposerMotifEpochForBeat(beatIndex = currentBeatIndex) {
 function getComposerMotifScopeKey() {
   const sectionId = String(composerRuntime.currentSectionId || 'default').trim().toLowerCase() || 'default';
   const epoch = Math.max(0, Math.trunc(Number(composerRuntime.motifEpochIndex) || 0));
-  const lockBars = Math.max(1, Math.trunc(Number(COMPOSER_MOTIF_LOCK_BARS) || 8));
+  const style = getSwarmStyleProfile();
+  const lockBars = Math.max(
+    1,
+    Math.max(
+      Math.trunc(Number(COMPOSER_MOTIF_LOCK_BARS) || 8),
+      Math.trunc(Number(style?.patternPersistenceBars) || 8)
+    )
+  );
   const bar = Math.max(0, Math.floor(Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR)));
   const lockIndex = Math.floor(bar / lockBars);
   return `section-${sectionId}:epoch-${epoch}:lock-${lockIndex}`;
@@ -2783,7 +3005,9 @@ function getComposerSectionForBeat(beatIndex) {
   const sections = Array.isArray(COMPOSER_SECTIONS) ? COMPOSER_SECTIONS : [];
   if (!sections.length) return { id: 'default', cycle: 0, directive: getComposerDefaultDirective() };
   const beatsPerBar = Math.max(1, Math.trunc(Number(COMPOSER_BEATS_PER_BAR) || 4));
-  const sectionBeats = sections.map((s) => Math.max(1, Math.trunc(Number(s?.bars) || 1)) * beatsPerBar);
+  const style = getSwarmStyleProfile();
+  const minSectionBars = Math.max(1, Math.trunc(Number(style?.sectionMinDuration) || 1));
+  const sectionBeats = sections.map((s) => Math.max(minSectionBars, Math.trunc(Number(s?.bars) || 1)) * beatsPerBar);
   const totalBeats = sectionBeats.reduce((acc, n) => acc + n, 0) || beatsPerBar;
   const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
   const cycle = Math.floor(beat / totalBeats);
@@ -3117,6 +3341,29 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
   };
   try {
     swarmMusicLab.logCreatedEvent(created, getMusicLabContext(logContext));
+  } catch {}
+  try {
+    const actorId = Math.max(0, Math.trunc(Number(created?.actorId) || 0));
+    if (actorId > 0) {
+      const actor = getSwarmEnemyById(actorId);
+      const group = actor ? getEnemyMusicGroup(actor) : null;
+      if (group && String(group?.type || 'singleton').trim().toLowerCase() === 'singleton') {
+        group.phraseState = {
+          beatIndex: Math.max(0, Math.trunc(Number(created?.beatIndex) || 0)),
+          stepIndex: Math.max(0, Math.trunc(Number(created?.stepIndex) || 0)),
+          barIndex: Math.floor(Math.max(0, Math.trunc(Number(created?.beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR)),
+          role: normalizeSwarmRole(created?.role || '', ''),
+          note: normalizeSwarmNoteName(created?.note || ''),
+          actionType: String(created?.actionType || '').trim().toLowerCase(),
+          updatedAtMs: Number(performance?.now?.() || 0),
+        };
+        if (!String(group.continuityId || '').trim()) group.continuityId = String(actor?.musicContinuityId || '') || getNextMusicContinuityId();
+        if (actor && String(group.continuityId || '').trim()) {
+          actor.musicContinuityId = String(group.continuityId);
+          actor.continuityId = String(group.continuityId);
+        }
+      }
+    }
   } catch {}
   return created;
 }
@@ -6433,6 +6680,16 @@ function removeEnemy(enemy, reason = 'unknown', context = null) {
   }
   const enemyId = Math.trunc(Number(enemy?.id) || 0);
   if (enemyId > 0) {
+    try {
+      tryHandoffSingletonMusicGroup(enemy, removalReason, {
+        beatIndex,
+        stepIndex,
+        barIndex,
+        reason: removalReason,
+        groupId: Math.max(0, Math.trunc(Number(ctx.groupId) || Number(enemy?.composerGroupId) || 0)),
+        retireOrigin: String(ctx.retireOrigin || enemy?.retreatOrigin || '').trim().toLowerCase(),
+      });
+    } catch {}
     removeSingletonMusicGroupForEnemy(enemyId);
     const composerGroupId = Math.trunc(Number(enemy?.composerGroupId) || 0);
     if (composerGroupId > 0) {
@@ -6611,6 +6868,7 @@ function clearEnemies() {
   composerEnemyGroups.length = 0;
   singletonEnemyMusicGroups.clear();
   singletonEnemyMusicGroupIdSeq = 1;
+  musicContinuityIdSeq = 1;
   clearPendingEnemyDeaths();
 }
 
@@ -6827,6 +7085,7 @@ const beatSwarmInstrumentLaneTools = createBeatSwarmInstrumentLaneTools({
   pickInstrumentForToy,
   getUsedWeaponInstrumentIds,
   getUsedEnemyInstrumentIds,
+  getStyleProfile: getSwarmStyleProfile,
   resolveSwarmSoundInstrumentId,
   resolveInstrumentIdOrFallback,
 });
@@ -6861,6 +7120,7 @@ function pickEnemyInstrumentIdForToyRandom(toyKey, extraUsed = null, options = n
 
 function createSpawnerEnemyRhythmProfile(options = null) {
   const arrangement = getPaletteArrangementControls();
+  const style = getSwarmStyleProfile();
   const role = String(options?.role || 'loop').trim().toLowerCase();
   const toyType = role === 'drum' ? 'loopgrid-drum' : 'loopgrid';
   const fallbackInstrument = role === 'drum'
@@ -6890,7 +7150,8 @@ function createSpawnerEnemyRhythmProfile(options = null) {
     }
     if (!steps.some(Boolean)) steps[Math.max(0, Math.min(7, Math.trunc(Math.random() * 8)))] = true;
   }
-  const densitySteps = applyStepPatternDensity(steps, arrangement.density, { minHits: 1, maxHits: 6 });
+  const styleDensity = clamp01(arrangement.density * Math.max(0.2, Number(style?.spawnerDensityMult) || 1));
+  const densitySteps = applyStepPatternDensity(steps, styleDensity, { minHits: 1, maxHits: 6 });
   for (let i = 0; i < steps.length; i++) steps[i] = !!densitySteps[i];
   const noteIndices = Array.from({ length: 8 }, (_, i) => Math.max(0, Math.trunc(Number(noteIdxRaw[i]) || (6 + (i % 7)))));
   const srcInstrument = String(source?.dataset?.instrument || source?.dataset?.instrumentId || fallbackInstrument || 'tone');
@@ -7165,6 +7426,7 @@ function applySpawnerCollisionAvoidance(activeSpawners = []) {
 
 function createDrawSnakeEnemyProfile() {
   const arrangement = getPaletteArrangementControls();
+  const style = getSwarmStyleProfile();
   const fallbackInstrument = resolveSwarmSoundInstrumentId('projectile') || getIdForDisplayName('Tone (Sine)') || 'tone';
   const theme = getEnergyStateThemePreset();
   const phrase = pickRandomArrayItem(theme?.drawsnakePhrases, null);
@@ -7173,7 +7435,8 @@ function createDrawSnakeEnemyProfile() {
     ? createStepPattern(phrase.steps, WEAPON_TUNE_STEPS)
     : Array.from({ length: WEAPON_TUNE_STEPS }, () => Math.random() >= 0.5);
   if (!steps.some(Boolean)) steps[Math.max(0, Math.min(WEAPON_TUNE_STEPS - 1, Math.trunc(Math.random() * WEAPON_TUNE_STEPS)))] = true;
-  const densitySteps = applyStepPatternDensity(steps, arrangement.density, { minHits: 1, maxHits: Math.max(2, WEAPON_TUNE_STEPS - 1) });
+  const styleDensity = clamp01(arrangement.density * Math.max(0.2, Number(style?.drawsnakeDensityMult) || 1));
+  const densitySteps = applyStepPatternDensity(steps, styleDensity, { minHits: 1, maxHits: Math.max(2, WEAPON_TUNE_STEPS - 1) });
   for (let i = 0; i < steps.length; i++) steps[i] = !!densitySteps[i];
   const hookRows = Array.isArray(lockedHook?.notes)
     ? lockedHook.notes.map((n) => {
@@ -7949,20 +8212,25 @@ function isPlayerWeaponStepLikelyAudible(stepIndex = 0) {
 }
 
 function shouldKeepEnemyAudibleDuringPlayerDuck(ev, channel = '') {
+  const style = getSwarmStyleProfile();
+  const playerProminence = clamp01(Number(style?.playerProminence) || 0);
   const beat = Math.max(0, Math.trunc(Number(ev?.beatIndex) || 0));
   const step = Math.max(0, Math.trunc(Number(ev?.stepIndex) || 0));
   const actor = Math.max(0, Math.trunc(Number(ev?.actorId) || 0));
   const action = String(ev?.actionType || '').trim().toLowerCase();
   const channelKey = String(channel || '').trim().toLowerCase();
   const keepChance = Number(PLAYER_MASK_DUCK_KEEP_CHANCE_BY_CHANNEL[channelKey]);
-  const threshold = Number.isFinite(keepChance)
+  const thresholdBase = Number.isFinite(keepChance)
     ? keepChance
     : Number(PLAYER_MASK_DUCK_KEEP_CHANCE_BY_CHANNEL.default);
+  const threshold = Math.max(0, Math.min(1, thresholdBase * (1 - (0.6 * playerProminence))));
   const seed = hashStringSeed(`${beat}|${step}|${actor}|${action}|${String(channel || '').trim().toLowerCase()}`);
-  return seededNoise01(seed) < Math.max(0, Math.min(1, Number(threshold) || 0));
+  return seededNoise01(seed) < threshold;
 }
 
 function shouldKeepEnemyEventDuringPlayerStep(ev, keepCount = 0) {
+  const style = getSwarmStyleProfile();
+  const playerProminence = clamp01(Number(style?.playerProminence) || 0);
   if (!ev || typeof ev !== 'object') return false;
   const action = String(ev.actionType || '').trim().toLowerCase();
   if (!action) return false;
@@ -7972,11 +8240,12 @@ function shouldKeepEnemyEventDuringPlayerStep(ev, keepCount = 0) {
   const step = Math.max(0, Math.trunc(Number(ev?.stepIndex) || 0));
   const actor = Math.max(0, Math.trunc(Number(ev?.actorId) || 0));
   const keepChanceRaw = Number(PLAYER_MASK_STEP_EVENT_KEEP_CHANCE[action]);
-  const keepChance = Number.isFinite(keepChanceRaw)
+  const keepChanceBase = Number.isFinite(keepChanceRaw)
     ? keepChanceRaw
     : Number(PLAYER_MASK_STEP_EVENT_KEEP_CHANCE.default);
+  const keepChance = Math.max(0, Math.min(1, keepChanceBase * (1 - (0.7 * playerProminence))));
   const seed = hashStringSeed(`mask-step|${beat}|${step}|${actor}|${action}`);
-  return seededNoise01(seed) < Math.max(0, Math.min(1, Number(keepChance) || 0));
+  return seededNoise01(seed) < keepChance;
 }
 
 function clampNoteToDirectorPool(noteName, fallbackIndex = 0) {
@@ -8019,6 +8288,7 @@ function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex)
     threat: {
       full: BEAT_EVENT_THREAT.FULL,
     },
+    styleProfile: getSwarmStyleProfile(),
   });
 }
 
@@ -8045,6 +8315,7 @@ function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
     threat: {
       full: BEAT_EVENT_THREAT.FULL,
     },
+    styleProfile: getSwarmStyleProfile(),
   });
 }
 
@@ -9553,6 +9824,7 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
       stepIndex: Math.max(0, Math.trunc(Number(evt?.stepIndex) || 0)),
     }),
     isLifecycleSchedulable,
+    styleProfile: getSwarmStyleProfile(),
   });
 }
 
@@ -9657,6 +9929,8 @@ function maintainComposerEnemyGroups() {
         .filter(Boolean),
       instrument: resolveInstrumentIdOrFallback(motif?.instrument, resolveSwarmSoundInstrumentId('projectile') || 'tone'),
       instrumentId: resolveInstrumentIdOrFallback(motif?.instrument, resolveSwarmSoundInstrumentId('projectile') || 'tone'),
+      continuityId: String(motif?.continuityId || '') || getNextMusicContinuityId(),
+      phraseState: null,
       noteToEnemyId: new Map(),
       memberIds: new Set(),
       noteCursor: 0,
@@ -9858,194 +10132,134 @@ function pulsePlayerShipNoteFlash() {
 }
 
 function applyArenaBoundaryResistance(dt, input, centerWorld, scale) {
-  if (!borderForceEnabled) {
-    barrierPushingOut = false;
-    barrierPushCharge = 0;
-    setResistanceVisual(false);
-    setReactiveArrowVisual(false);
-    return false;
-  }
-  if (!arenaCenterWorld || !centerWorld) {
-    barrierPushingOut = false;
-    barrierPushCharge = 0;
-    setResistanceVisual(false);
-    setReactiveArrowVisual(false);
-    return false;
-  }
-  const dx = centerWorld.x - arenaCenterWorld.x;
-  const dy = centerWorld.y - arenaCenterWorld.y;
-  const dist = Math.hypot(dx, dy) || 0;
-  const outside = Math.max(0, dist - SWARM_ARENA_RADIUS_WORLD);
-  if (!(outside > 0.0001) || !(dist > 0.0001)) {
-    barrierPushingOut = false;
-    barrierPushCharge = 0;
-    setResistanceVisual(false);
-    setReactiveArrowVisual(false);
-    return false;
-  }
-
-  const nx = dx / dist;
-  const ny = dy / dist;
-  const outsideN = Math.max(0, Math.min(1, outside / Math.max(1, SWARM_ARENA_RESIST_RANGE_WORLD)));
-  const worldToScreenScale = Math.max(0.001, scale || 1);
-  const borderScale = postReleaseAssistTimer > 0 ? SWARM_RELEASE_POST_FIRE_BORDER_SCALE * 0.2 : 1;
-  const baseInward = SWARM_ARENA_INWARD_ACCEL_WORLD * borderScale * (outsideN * outsideN) * worldToScreenScale * dt;
-  velocityX -= nx * baseInward;
-  velocityY -= ny * baseInward;
-  const maxDist = SWARM_ARENA_RADIUS_WORLD + SWARM_ARENA_RESIST_RANGE_WORLD;
-  const edgeBand = Math.max(1, SWARM_ARENA_RESIST_RANGE_WORLD * 0.35);
-  const nearEdgeN = Math.max(0, Math.min(1, (dist - (maxDist - edgeBand)) / edgeBand));
-  const softStartDist = Math.max(SWARM_ARENA_RADIUS_WORLD, maxDist - SWARM_ARENA_OUTER_SOFT_BUFFER_WORLD);
-  const nearLimitN = Math.max(0, Math.min(1, (dist - softStartDist) / Math.max(1, (maxDist - softStartDist))));
-
-  let inputOut = 0;
-  if (input && input.mag > 0.0001) {
-    inputOut = Math.max(0, (input.x * nx) + (input.y * ny));
-  }
-
-  const radialBefore = (velocityX * nx) + (velocityY * ny);
-  const radialOut = Math.max(0, radialBefore);
-
-  // Rubber-band response:
-  // spring grows with stretch, and damping grows with outward speed so faster
-  // outward motion is cushioned harder instead of hard-stopping.
-  if (outside > 0) {
-    const springAccel = SWARM_ARENA_RUBBER_K_WORLD * borderScale * outside * worldToScreenScale;
-    const dampAccel = borderScale * ((SWARM_ARENA_RUBBER_DAMP_LINEAR * radialOut) + (SWARM_ARENA_RUBBER_DAMP_QUAD * radialOut * radialOut));
-    const inward = (springAccel + dampAccel) * dt;
-    velocityX -= nx * inward;
-    velocityY -= ny * inward;
-  }
-
-  const radialAfterRubber = (velocityX * nx) + (velocityY * ny);
-  const radialOutAfterRubber = Math.max(0, radialAfterRubber);
-  if (radialOutAfterRubber > 0 && nearEdgeN > 0) {
-    const edgeBrake = (SWARM_ARENA_EDGE_BRAKE_WORLD * 2 * borderScale * (nearEdgeN * nearEdgeN) * (1 + (2.4 * nearLimitN)))
-      * worldToScreenScale * dt;
-    const remove = Math.min(radialOutAfterRubber, edgeBrake);
-    velocityX -= nx * remove;
-    velocityY -= ny * remove;
-  }
-  if (inputOut > 0.0001) {
-    barrierPushingOut = true;
-    barrierPushCharge = Math.min(1, barrierPushCharge + (dt * (0.75 + (outsideN * 1.8) + (inputOut * 1.1))));
-    if (radialBefore > 0) {
-      const brake = borderScale * (SWARM_ARENA_OUTWARD_BRAKE_WORLD + (SWARM_ARENA_OUTWARD_CANCEL_WORLD * outsideN * inputOut))
-        * worldToScreenScale * dt;
-      const nextRad = Math.max(0, radialBefore - brake);
-      const remove = radialBefore - nextRad;
-      velocityX -= nx * remove;
-      velocityY -= ny * remove;
-    }
-    const inAngle = (Math.atan2(input.y, input.x) * 180 / Math.PI) + 90;
-    setResistanceVisual(true, inAngle, outsideN * inputOut);
-    const releaseDirAngle = (Math.atan2(-input.y, -input.x) * 180 / Math.PI);
-    const releaseImpulse = getReactiveReleaseImpulse(outsideN, barrierPushCharge);
-    setReactiveArrowVisual(true, releaseDirAngle, releaseImpulse);
-    return true;
-  }
-
-  barrierPushingOut = false;
-  barrierPushCharge = Math.max(0, barrierPushCharge - (dt * 1.4));
-  setResistanceVisual(false);
-  setReactiveArrowVisual(false);
-  return true;
+  const runtime = applyArenaBoundaryResistanceRuntime({
+    dt,
+    input,
+    centerWorld,
+    scale,
+    constants: {
+      swarmArenaRadiusWorld: SWARM_ARENA_RADIUS_WORLD,
+      swarmArenaResistRangeWorld: SWARM_ARENA_RESIST_RANGE_WORLD,
+      swarmReleasePostFireBorderScale: SWARM_RELEASE_POST_FIRE_BORDER_SCALE,
+      swarmArenaInwardAccelWorld: SWARM_ARENA_INWARD_ACCEL_WORLD,
+      swarmArenaOuterSoftBufferWorld: SWARM_ARENA_OUTER_SOFT_BUFFER_WORLD,
+      swarmArenaRubberKWorld: SWARM_ARENA_RUBBER_K_WORLD,
+      swarmArenaRubberDampLinear: SWARM_ARENA_RUBBER_DAMP_LINEAR,
+      swarmArenaRubberDampQuad: SWARM_ARENA_RUBBER_DAMP_QUAD,
+      swarmArenaEdgeBrakeWorld: SWARM_ARENA_EDGE_BRAKE_WORLD,
+      swarmArenaOutwardBrakeWorld: SWARM_ARENA_OUTWARD_BRAKE_WORLD,
+      swarmArenaOutwardCancelWorld: SWARM_ARENA_OUTWARD_CANCEL_WORLD,
+    },
+    helpers: {
+      setResistanceVisual,
+      setReactiveArrowVisual,
+      getReactiveReleaseImpulse,
+    },
+    state: {
+      borderForceEnabled,
+      arenaCenterWorld,
+      postReleaseAssistTimer,
+      velocityX,
+      velocityY,
+      barrierPushingOut,
+      barrierPushCharge,
+    },
+  });
+  const nextState = runtime?.state || {};
+  velocityX = Number(nextState.velocityX) || 0;
+  velocityY = Number(nextState.velocityY) || 0;
+  barrierPushingOut = nextState.barrierPushingOut === true;
+  barrierPushCharge = Math.max(0, Math.min(1, Number(nextState.barrierPushCharge) || 0));
+  return runtime?.outsideForceActive === true;
 }
 
 function enforceArenaOuterLimit(centerWorld, scale, dt) {
-  if (!borderForceEnabled) return centerWorld;
-  if (!arenaCenterWorld || !centerWorld) return centerWorld;
-  const dx = centerWorld.x - arenaCenterWorld.x;
-  const dy = centerWorld.y - arenaCenterWorld.y;
-  const dist = Math.hypot(dx, dy) || 0;
-  const maxDist = SWARM_ARENA_RADIUS_WORLD + SWARM_ARENA_RESIST_RANGE_WORLD;
-  if (!(dist > maxDist) || !(dist > 0.0001)) return centerWorld;
-  const nx = dx / dist;
-  const ny = dy / dist;
-  const worldToScreenScale = Math.max(0.001, scale || 1);
-
-  // Safety non-penetration correction: never allow visual center beyond outer limit.
-  const cx = arenaCenterWorld.x + (nx * maxDist);
-  const cy = arenaCenterWorld.y + (ny * maxDist);
-  applyCameraDelta((cx - centerWorld.x) * worldToScreenScale, (cy - centerWorld.y) * worldToScreenScale);
-
-  const radial = (velocityX * nx) + (velocityY * ny);
-  if (radial > 0) {
-    velocityX -= nx * radial;
-    velocityY -= ny * radial;
-  }
-  return { x: cx, y: cy };
+  const runtime = enforceArenaOuterLimitRuntime({
+    centerWorld,
+    scale,
+    dt,
+    constants: {
+      swarmArenaRadiusWorld: SWARM_ARENA_RADIUS_WORLD,
+      swarmArenaResistRangeWorld: SWARM_ARENA_RESIST_RANGE_WORLD,
+    },
+    helpers: {
+      applyCameraDelta,
+    },
+    state: {
+      borderForceEnabled,
+      arenaCenterWorld,
+      velocityX,
+      velocityY,
+    },
+  });
+  const nextState = runtime?.state || {};
+  velocityX = Number(nextState.velocityX) || 0;
+  velocityY = Number(nextState.velocityY) || 0;
+  return runtime?.centerWorld || centerWorld;
 }
 
 function applyLaunchInnerCircleBounce(centerWorld, scale) {
-  if (!borderForceEnabled) return centerWorld;
-  if (!arenaCenterWorld || !centerWorld) return centerWorld;
-  if (!(postReleaseAssistTimer > 0) || dragPointerId != null) return centerWorld;
-  const dx = centerWorld.x - arenaCenterWorld.x;
-  const dy = centerWorld.y - arenaCenterWorld.y;
-  const dist = Math.hypot(dx, dy) || 0;
-  const r = SWARM_ARENA_RADIUS_WORLD;
-  if (!(dist >= r) || !(dist > 0.0001)) return centerWorld;
-  const nx = dx / dist;
-  const ny = dy / dist;
-  const radial = (velocityX * nx) + (velocityY * ny);
-  if (radial <= SWARM_RELEASE_BOUNCE_MIN_SPEED) return centerWorld;
-  const worldToScreenScale = Math.max(0.001, scale || 1);
-  const cx = arenaCenterWorld.x + (nx * r);
-  const cy = arenaCenterWorld.y + (ny * r);
-  applyCameraDelta((cx - centerWorld.x) * worldToScreenScale, (cy - centerWorld.y) * worldToScreenScale);
-  const rx = velocityX - (2 * radial * nx);
-  const ry = velocityY - (2 * radial * ny);
-  velocityX = rx * SWARM_RELEASE_BOUNCE_RESTITUTION;
-  velocityY = ry * SWARM_RELEASE_BOUNCE_RESTITUTION;
-  return { x: cx, y: cy };
+  const runtime = applyLaunchInnerCircleBounceRuntime({
+    centerWorld,
+    scale,
+    constants: {
+      swarmArenaRadiusWorld: SWARM_ARENA_RADIUS_WORLD,
+      swarmReleaseBounceMinSpeed: SWARM_RELEASE_BOUNCE_MIN_SPEED,
+      swarmReleaseBounceRestitution: SWARM_RELEASE_BOUNCE_RESTITUTION,
+    },
+    helpers: {
+      applyCameraDelta,
+    },
+    state: {
+      borderForceEnabled,
+      arenaCenterWorld,
+      postReleaseAssistTimer,
+      dragPointerId,
+      velocityX,
+      velocityY,
+    },
+  });
+  const nextState = runtime?.state || {};
+  velocityX = Number(nextState.velocityX) || 0;
+  velocityY = Number(nextState.velocityY) || 0;
+  return runtime?.centerWorld || centerWorld;
 }
 
 function shouldSuppressSteeringForRelease(input, centerWorld) {
-  if (dragPointerId == null) return false;
-  if (!arenaCenterWorld || !centerWorld) return false;
-  if (!input || !(input.mag > 0.0001)) return false;
-  const dx = centerWorld.x - arenaCenterWorld.x;
-  const dy = centerWorld.y - arenaCenterWorld.y;
-  const dist = Math.hypot(dx, dy) || 0;
-  if (!(dist > SWARM_ARENA_RADIUS_WORLD) || !(dist > 0.0001)) return false;
-  const nx = dx / dist;
-  const ny = dy / dist;
-  const inputOut = Math.max(0, (input.x * nx) + (input.y * ny));
-  return inputOut > 0.0001;
+  return shouldSuppressSteeringForReleaseRuntime({
+    input,
+    centerWorld,
+    constants: {
+      swarmArenaRadiusWorld: SWARM_ARENA_RADIUS_WORLD,
+    },
+    state: {
+      dragPointerId,
+      arenaCenterWorld,
+    },
+  });
 }
 
 function getOutwardOnlyInput(input, centerWorld) {
-  if (!input || !arenaCenterWorld || !centerWorld) return { x: 0, y: 0, mag: 0 };
-  const dx = centerWorld.x - arenaCenterWorld.x;
-  const dy = centerWorld.y - arenaCenterWorld.y;
-  const dist = Math.hypot(dx, dy) || 0;
-  if (!(dist > 0.0001)) return { x: 0, y: 0, mag: 0 };
-  const nx = dx / dist;
-  const ny = dy / dist;
-  const inputOut = Math.max(0, (input.x * nx) + (input.y * ny));
-  if (!(inputOut > 0.0001)) return { x: 0, y: 0, mag: 0 };
-  return {
-    x: nx * inputOut,
-    y: ny * inputOut,
-    mag: Math.max(0, Math.min(1, (Number(input.mag) || 0) * inputOut)),
-  };
+  return getOutwardOnlyInputRuntime({
+    input,
+    centerWorld,
+    state: {
+      arenaCenterWorld,
+    },
+  });
 }
 
 function getShipFacingFromReleaseAim(input, centerWorld) {
-  if (!input || !arenaCenterWorld || !centerWorld) return null;
-  if (!(input.mag > 0.0001)) return null;
-  const dx = centerWorld.x - arenaCenterWorld.x;
-  const dy = centerWorld.y - arenaCenterWorld.y;
-  const dist = Math.hypot(dx, dy) || 0;
-  if (!(dist > SWARM_ARENA_RADIUS_WORLD) || !(dist > 0.0001)) return null;
-  const nx = dx / dist;
-  const ny = dy / dist;
-  const inputOut = Math.max(0, (input.x * nx) + (input.y * ny));
-  if (!(inputOut > 0.0001)) return null;
-  // Match reactive-arrow heading: arrow angle is atan2(-input.y, -input.x), and
-  // ship uses +90deg convention for its sprite orientation.
-  return (Math.atan2(-input.y, -input.x) * 180 / Math.PI) + 90;
+  return getShipFacingFromReleaseAimRuntime({
+    input,
+    centerWorld,
+    constants: {
+      swarmArenaRadiusWorld: SWARM_ARENA_RADIUS_WORLD,
+    },
+    state: {
+      arenaCenterWorld,
+    },
+  });
 }
 
 function getInputVector() {

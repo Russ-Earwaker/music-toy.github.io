@@ -127,6 +127,7 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     : (context?.phraseResolutionHit === false
       ? false
       : (payload?.phraseResolutionHit === true ? true : (payload?.phraseResolutionHit === false ? false : null)));
+  const continuityId = String(context?.continuityId ?? payload?.continuityId ?? '').trim();
   return {
     tMs: nowMs(),
     phase: String(phase || '').trim() || 'queued',
@@ -158,6 +159,7 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     phraseGravityHit,
     phraseResolutionOpportunity,
     phraseResolutionHit,
+    continuityId,
   };
 }
 
@@ -182,6 +184,34 @@ function makeEnemyRemovalRecord(enemyLike, context, beatsPerBar) {
     pacingState: String(context?.pacingState || '').trim().toLowerCase(),
     paletteId: String(context?.paletteId || '').trim(),
     themeId: String(context?.themeId || '').trim(),
+  };
+}
+
+function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
+  const payload = payloadLike && typeof payloadLike === 'object' ? payloadLike : {};
+  const beatIndex = clampInt(context?.beatIndex, 0, 0);
+  const barIndex = context?.barIndex != null
+    ? clampInt(context.barIndex, Math.floor(beatIndex / Math.max(1, beatsPerBar)), 0)
+    : Math.floor(beatIndex / Math.max(1, beatsPerBar));
+  return {
+    tMs: nowMs(),
+    timestamp: Date.now(),
+    eventType: String(eventType || '').trim().toLowerCase(),
+    barIndex,
+    beatIndex,
+    stepIndex: clampInt(context?.stepIndex, 0, 0),
+    continuityId: String(payload?.continuityId || context?.continuityId || '').trim(),
+    sourceEnemyId: clampInt(payload?.sourceEnemyId, 0, 0),
+    sourceEnemyType: String(payload?.sourceEnemyType || '').trim().toLowerCase(),
+    sourceGroupId: clampInt(payload?.sourceGroupId, 0, 0),
+    targetEnemyId: clampInt(payload?.targetEnemyId, 0, 0),
+    targetEnemyType: String(payload?.targetEnemyType || '').trim().toLowerCase(),
+    targetGroupId: clampInt(payload?.targetGroupId, 0, 0),
+    laneRole: String(payload?.laneRole || '').trim().toLowerCase(),
+    phraseStep: clampInt(payload?.phraseStep, 0, 0),
+    barPosition: clampInt(payload?.barPosition, 0, 0),
+    reason: String(payload?.reason || '').trim().toLowerCase(),
+    failureReason: String(payload?.failureReason || '').trim().toLowerCase(),
   };
 }
 
@@ -464,6 +494,37 @@ function collectEnemyRemovalDiagnostics(session, maxBarIndex) {
     sameFrameGroupRemovals,
     groupRetirements,
     groupNaturalDeaths,
+  };
+}
+
+function collectHandoffDiagnostics(session, maxBarIndex) {
+  const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
+  const byType = Object.create(null);
+  let attempts = 0;
+  let successes = 0;
+  let failures = 0;
+  let inheritedPhrase = 0;
+  let resetPhrase = 0;
+  for (const e of logs) {
+    const type = String(e?.eventType || '').trim().toLowerCase() || 'unknown';
+    byType[type] = clampInt(byType[type], 0, 0) + 1;
+    if (type === 'music_handoff_started') attempts += 1;
+    if (type === 'music_handoff_completed') successes += 1;
+    if (type === 'music_handoff_failed') failures += 1;
+    if (type === 'music_handoff_inherited_phrase') inheritedPhrase += 1;
+    if (type === 'music_handoff_reset_phrase') resetPhrase += 1;
+  }
+  const successRate = attempts > 0 ? (successes / attempts) : 0;
+  return {
+    totalHandoffLogs: logs.length,
+    byType,
+    attempts,
+    successes,
+    failures,
+    successRate,
+    inheritedPhrase,
+    resetPhrase,
   };
 }
 
@@ -933,6 +994,7 @@ function computeSummary(metrics) {
   const contourLargeLeapRate = Number(metrics?.melodicContour?.largeLeapRate) || 0;
   const motifPersistence = Number(metrics?.motifPersistence?.weightedPersistence) || 0;
   const laneMatchRate = Number(metrics?.laneCompliance?.matchRate);
+  const handoffSuccessRate = Number(metrics?.handoff?.successRate) || 0;
   return {
     notePoolCompliance: `${Math.round((Number(metrics?.notePoolCompliance?.poolComplianceRate) || 0) * 100)}%`,
     motifReuse: `${Math.round(motifReuse * 100)}%`,
@@ -954,6 +1016,7 @@ function computeSummary(metrics) {
       || (Number(metrics?.enemyRemovals?.sectionChangeCleanupRemovals) || 0) > 0
     ) ? 'warning' : 'clean',
     spawnerSync: (Number(metrics?.spawnerSync?.perfectSyncSpawnerPairs) || 0) > 0 ? 'warning' : 'ok',
+    handoff: handoffSuccessRate >= 0.75 ? 'stable' : (handoffSuccessRate >= 0.45 ? 'mixed' : 'fragile'),
   };
 }
 
@@ -980,6 +1043,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const paletteContinuity = collectPaletteContinuity(session, maxBarIndex);
   const enemyRemovals = collectEnemyRemovalDiagnostics(session, maxBarIndex);
   const spawnerSync = collectSpawnerSync(executedEvents);
+  const handoff = collectHandoffDiagnostics(session, maxBarIndex);
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -998,6 +1062,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     paletteContinuity,
     enemyRemovals,
     spawnerSync,
+    handoff,
   };
   return {
     metrics,
@@ -1028,6 +1093,7 @@ export function createBeatSwarmMusicLab(options = null) {
       paletteChanges: [],
       pacingChanges: [],
       enemyRemovals: [],
+      systemEvents: [],
       threatBudgetSnapshots: [],
       metricsHistory: [],
       metrics: null,
@@ -1147,6 +1213,16 @@ export function createBeatSwarmMusicLab(options = null) {
     return rec;
   }
 
+  function noteSystemEvent(eventType, payload = null, context = null) {
+    if (!enabled) return null;
+    const s = ensureSession(context);
+    const rec = makeSystemEventRecord(eventType, payload, context || {}, beatsPerBar);
+    if (!rec.eventType) return null;
+    s.systemEvents.push(rec);
+    recordMetricsCheckpoint(rec.barIndex);
+    return rec;
+  }
+
   function exportSession() {
     const s = ensureSession();
     let maxBar = 0;
@@ -1166,6 +1242,7 @@ export function createBeatSwarmMusicLab(options = null) {
       paletteChanges: s.paletteChanges,
       pacingChanges: s.pacingChanges,
       enemyRemovals: s.enemyRemovals,
+      systemEvents: s.systemEvents,
       threatBudgetSnapshots: s.threatBudgetSnapshots,
       metricsHistory: s.metricsHistory,
       metrics: s.metrics,
@@ -1211,6 +1288,7 @@ export function createBeatSwarmMusicLab(options = null) {
     notePacingChange,
     noteEnemyRemoval,
     noteThreatBudgetSnapshot,
+    noteSystemEvent,
     exportSession,
     downloadSession,
     setEnabled,

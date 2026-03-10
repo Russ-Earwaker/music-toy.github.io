@@ -63,6 +63,10 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
   const roles = options?.roles && typeof options.roles === 'object' ? options.roles : {};
   const threat = options?.threat && typeof options.threat === 'object' ? options.threat : {};
   const drawSnakeSegmentCount = Math.max(1, Math.trunc(Number(options?.drawSnakeSegmentCount) || 1));
+  const styleProfile = options?.styleProfile && typeof options.styleProfile === 'object' ? options.styleProfile : {};
+  const styleId = String(styleProfile?.id || '').trim().toLowerCase();
+  const motifRepeatBias = Math.max(0, Math.min(1, Number(styleProfile?.motifRepeatBias) || 0));
+  const leadLeapChance = Math.max(0, Math.min(1, Number(styleProfile?.leadLeapChance) || 1));
 
   const snakes = enemies.filter((e) => String(e?.enemyType || '') === 'drawsnake');
   for (const enemy of snakes) {
@@ -75,7 +79,14 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
     const steps = Array.isArray(group?.steps) ? group.steps : [];
     if (!steps[step]) continue;
     const rows = Array.isArray(group?.rows) ? group.rows : [];
-    const row = Math.max(0, Math.min(notePoolSize - 1, Math.trunc(Number(rows?.[step]) || 0)));
+    let row = Math.max(0, Math.min(notePoolSize - 1, Math.trunc(Number(rows?.[step]) || 0)));
+    if (styleId === 'retro_shooter') {
+      const prevRow = Math.max(0, Math.min(notePoolSize - 1, Math.trunc(Number(enemy?.__bsLastDrawsnakeRow) || row)));
+      const leap = Math.abs(row - prevRow);
+      if (leap > 1 && Math.random() > leadLeapChance) {
+        row = row > prevRow ? (prevRow + 1) : (prevRow - 1);
+      }
+    }
     const noteNameBase = getSwarmPentatonicNoteByIndex(row);
     const phraseStep = getPhraseStepState(stepAbs, Array.isArray(group?.steps) ? group.steps.length : stepsPerBar);
     const rowHead = Math.max(0, Math.min(notePoolSize - 1, Math.trunc(Number(rows?.[0]) || row)));
@@ -93,9 +104,15 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       : '';
     const phraseGravityOpportunity = !!phraseGravityTarget && phraseStep.nearPhraseEnd;
     const gravityBiasChance = phraseStep.resolutionOpportunity ? 0.74 : 0.52;
-    const noteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
+    let noteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
       ? phraseGravityTarget
       : noteNameBase;
+    if (styleId === 'retro_shooter') {
+      const prevNote = normalizeSwarmNoteName(enemy?.__bsLastDrawsnakeNote);
+      if (prevNote && Math.random() < (motifRepeatBias * 0.45)) {
+        noteNameRaw = prevNote;
+      }
+    }
     const phraseGravityHit = phraseGravityOpportunity
       ? normalizeSwarmNoteName(noteNameRaw) === normalizeSwarmNoteName(phraseGravityTarget)
       : false;
@@ -105,6 +122,8 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.lead), roles.lead),
       resolveSwarmSoundInstrumentId('projectile') || 'tone'
     );
+    enemy.__bsLastDrawsnakeRow = row;
+    enemy.__bsLastDrawsnakeNote = normalizeSwarmNoteName(noteNameRaw) || noteNameRaw;
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
     events.push(createLoggedPerformedBeatEvent({
       actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
@@ -118,6 +137,7 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       visualSyncType: 'node-pulse',
       payload: {
         groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+        continuityId: String(group?.continuityId || enemy?.musicContinuityId || '').trim(),
         nodeIndex: getDrawSnakeNodeIndexForStep(step, drawSnakeSegmentCount),
         audioGain: clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain) * lifecycleAudioGain),
         requestedNoteRaw: noteNameRaw,
@@ -182,6 +202,9 @@ export function collectSpawnerStepBeatEvents(options = null) {
     : ((v) => Math.max(0, Math.min(1, Number(v) || 0)));
   const roles = options?.roles && typeof options.roles === 'object' ? options.roles : {};
   const threat = options?.threat && typeof options.threat === 'object' ? options.threat : {};
+  const styleProfile = options?.styleProfile && typeof options.styleProfile === 'object' ? options.styleProfile : {};
+  const styleId = String(styleProfile?.id || '').trim().toLowerCase();
+  const motifRepeatBias = Math.max(0, Math.min(1, Number(styleProfile?.motifRepeatBias) || 0));
 
   for (const enemy of enemies) {
     if (String(enemy?.enemyType || '') !== 'spawner') continue;
@@ -197,7 +220,13 @@ export function collectSpawnerStepBeatEvents(options = null) {
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
     if (!isActiveStep) continue;
     stats.triggeredSpawners += 1;
-    const noteNameRaw = normalizeSwarmNoteName(group?.note) || 'C4';
+    let noteNameRaw = normalizeSwarmNoteName(group?.note) || 'C4';
+    if (styleId === 'retro_shooter') {
+      const prevNote = normalizeSwarmNoteName(enemy?.__bsLastSpawnerNote);
+      if (prevNote && Math.random() < (motifRepeatBias * 0.55)) {
+        noteNameRaw = prevNote;
+      }
+    }
     const noteName = clampNoteToDirectorPool(
       noteNameRaw,
       beatIndex + stepAbs + actorId
@@ -218,6 +247,7 @@ export function collectSpawnerStepBeatEvents(options = null) {
       visualSyncType: 'spawn-burst',
       payload: {
         groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+        continuityId: String(group?.continuityId || enemy?.musicContinuityId || '').trim(),
         nodeStepIndex: step,
         audioGain: clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain) * lifecycleAudioGain),
         requestedNoteRaw: noteNameRaw,
@@ -229,6 +259,7 @@ export function collectSpawnerStepBeatEvents(options = null) {
       enemyType: 'spawner',
       groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
     }));
+    enemy.__bsLastSpawnerNote = noteName;
     stats.spawnedEnemies += 1;
   }
   return { events, stats };

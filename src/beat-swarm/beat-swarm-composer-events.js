@@ -125,6 +125,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const roles = options?.roles && typeof options.roles === 'object' ? options.roles : {};
   const threat = options?.threat && typeof options.threat === 'object' ? options.threat : {};
   const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+  const styleProfile = options?.styleProfile && typeof options.styleProfile === 'object' ? options.styleProfile : {};
+  const styleId = String(styleProfile?.id || '').trim().toLowerCase();
+  const motifRepeatBias = Math.max(0, Math.min(1, Number(styleProfile?.motifRepeatBias) || 0));
+  const leadLeapChance = Math.max(0, Math.min(1, Number(styleProfile?.leadLeapChance) || 1));
+  const accentPitchVariance = Math.max(0, Math.min(1, Number(styleProfile?.accentPitchVariance) || 1));
 
   for (const group of composerEnemyGroups) {
     if (!group || !group.active || group.retiring) continue;
@@ -193,8 +198,23 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       gravityNoteNameRaw,
       stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
     );
+    let styledNoteName = gravityNoteName;
+    if (styleId === 'retro_shooter') {
+      const prevNote = normalizeSwarmNoteName(group?.__bsLastComposerNote);
+      const currentNote = normalizeSwarmNoteName(gravityNoteName);
+      const roleForStyle = normalizeSwarmRole(group?.role || roles.lead, roles.lead);
+      const prevIdx = prevNote ? getNotePoolIndex(prevNote) : -1;
+      const currIdx = currentNote ? getNotePoolIndex(currentNote) : -1;
+      if (prevNote && Math.random() < (motifRepeatBias * 0.5)) {
+        styledNoteName = prevNote;
+      } else if (prevIdx >= 0 && currIdx >= 0 && Math.abs(currIdx - prevIdx) > 1 && Math.random() > leadLeapChance) {
+        styledNoteName = prevNote;
+      } else if (roleForStyle === String(roles?.accent || 'accent') && prevNote && Math.random() > accentPitchVariance) {
+        styledNoteName = prevNote;
+      }
+    }
     const phraseGravityHit = phraseGravityOpportunity
-      ? normalizeSwarmNoteName(gravityNoteName) === normalizeSwarmNoteName(phraseGravityTarget)
+      ? normalizeSwarmNoteName(styledNoteName) === normalizeSwarmNoteName(phraseGravityTarget)
       : false;
     const phraseResolutionOpportunity = phraseGravityOpportunity && phraseStep.resolutionOpportunity;
     const phraseResolutionHit = phraseResolutionOpportunity && phraseGravityHit;
@@ -204,7 +224,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const usedEnemyIds = new Set();
     const primary = chooseEnemyForNote({
       group,
-      noteName: gravityNoteName,
+      noteName: styledNoteName,
       aliveMembers,
       normalizeNoteName: normalizeSwarmNoteName,
       getFallbackNote: getRandomSwarmPentatonicNote,
@@ -243,7 +263,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         beatIndex,
         stepIndex: stepAbs,
         role: normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.lead), roles.lead),
-        note: gravityNoteName,
+        note: styledNoteName,
         instrumentId,
         actionType: String(group.actionType || 'projectile') === 'explosion'
           ? 'composer-group-explosion'
@@ -252,6 +272,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         visualSyncType: 'group-pulse',
         payload: {
           groupId,
+          continuityId: String(group?.continuityId || '').trim(),
           callResponseLane: lane,
           audioGain: clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain),
           requestedNoteRaw: gravityNoteNameRaw,
@@ -266,11 +287,12 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (lane === 'call') {
       callResponseRuntime.lastCallStepAbs = stepAbs;
       callResponseRuntime.lastCallGroupId = groupId;
-      callResponseRuntime.lastCallNote = gravityNoteName;
+      callResponseRuntime.lastCallNote = styledNoteName;
     } else {
       callResponseRuntime.lastResponseStepAbs = stepAbs;
       callResponseRuntime.lastResponseGroupId = groupId;
     }
+    group.__bsLastComposerNote = normalizeSwarmNoteName(styledNoteName) || styledNoteName;
   }
   return events;
 }
