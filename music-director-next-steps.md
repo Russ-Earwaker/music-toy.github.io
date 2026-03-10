@@ -1,5 +1,33 @@
 # Beat Swarm — Music Director Next Steps (Updated)
 
+## Status Update (March 10, 2026)
+
+Completed in current pass:
+
+* Enemy behaviour decoupled from musical relevance (mix changes only, no action suppression)
+* Spawner pulse now always represents real action
+* Phrase gravity implemented and measurable in Music Lab
+* Instrument lane selection now uses `samples.csv` metadata (`recommended_toys`, lane hints, pitch rank)
+* Weapon explosion sound updated to `Retro Explosion Subtle`
+* Music Lab logging now includes `create`/`queue`/`execute` phases
+* Music Lab off-pool diagnostics include `clampedByEnemyType`
+* Music Lab lane compliance diagnostics added and validated
+
+Latest validation snapshot:
+
+* `laneCompliance.matchRate = 1.00` (`304/304`)
+* `gravityHitRate = 0.81`
+* `phraseResolutionRate = 0.80`
+* `directorCleanupRemovals = 0`
+* `sectionChangeCleanupRemovals = 0`
+* `perfectSyncSpawnerPairs = 0`
+
+Open/next focus:
+
+* Define target operating bands for phrase gravity metrics and tune toward those bands
+* Continue monitoring lane compliance as new instruments/phrases are introduced
+* Keep validating cleanup/sync diagnostics stay at zero
+
 ## Purpose
 
 This document captures the current design direction and implementation tasks for the Beat Swarm music director and Music Lab systems.

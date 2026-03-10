@@ -3087,6 +3087,31 @@ function getMusicLabContext(base = null) {
   };
 }
 
+function createLoggedPerformedBeatEvent(eventLike, context = null) {
+  const created = createPerformedBeatEvent(eventLike);
+  const input = context && typeof context === 'object' ? context : {};
+  const sourceSystem = String(input?.sourceSystem || '').trim().toLowerCase();
+  const expectedInstrumentLane = normalizeEnemyInstrumentLane(
+    input?.expectedInstrumentLane
+      || inferEnemyLaneFromSourceSystem(sourceSystem, created?.actionType, created?.role),
+    inferEnemyLaneFromRole(created?.role, 'lead')
+  );
+  const actualInstrumentLane = normalizeEnemyInstrumentLane(
+    input?.actualInstrumentLane
+      || inferInstrumentLaneFromCatalogId(created?.instrumentId, expectedInstrumentLane),
+    expectedInstrumentLane
+  );
+  const logContext = {
+    ...input,
+    expectedInstrumentLane,
+    actualInstrumentLane,
+  };
+  try {
+    swarmMusicLab.logCreatedEvent(created, getMusicLabContext(logContext));
+  } catch {}
+  return created;
+}
+
 function startMusicLabSession(reason = 'unknown') {
   musicLabLastPacingSignature = '';
   musicLabLastPaletteSignature = '';
@@ -6457,7 +6482,7 @@ function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = curren
         normalizeSwarmNoteName(d.soundNote) || getRandomSwarmPentatonicNote(),
         beat + Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || 0))
       );
-      executePerformedBeatEvent(createPerformedBeatEvent({
+      executePerformedBeatEvent(createLoggedPerformedBeatEvent({
         actorId: Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || 0)),
         beatIndex: beat,
         stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
@@ -6473,6 +6498,10 @@ function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = curren
           soundEventKey: deathEventKey,
           requestedNoteRaw,
         },
+      }, {
+        beatIndex: beat,
+        sourceSystem: 'death',
+        enemyType: 'death',
       }));
     }
     if (d.popped && now >= (Number(d.removeAt) || 0)) {
@@ -6811,6 +6840,48 @@ function inferEnemyLaneFromRole(roleLike, fallbackLane = 'lead') {
   if (role === BEAT_EVENT_ROLES.LEAD) return 'lead';
   if (role === BEAT_EVENT_ROLES.MOTION) return 'motion';
   if (role === BEAT_EVENT_ROLES.ACCENT) return 'accent';
+  return normalizeEnemyInstrumentLane(fallbackLane, 'lead');
+}
+
+function inferEnemyLaneFromSourceSystem(sourceSystem = '', actionType = '', roleLike = '') {
+  const src = String(sourceSystem || '').trim().toLowerCase();
+  const action = String(actionType || '').trim().toLowerCase();
+  if (action === 'composer-group-explosion') return 'bass';
+  if (src === 'spawner' || action.startsWith('spawner-')) return 'bass';
+  if (src === 'drawsnake' || action.startsWith('drawsnake-')) return 'lead';
+  if (src === 'group' || action.startsWith('composer-group-')) return inferEnemyLaneFromRole(roleLike, 'lead');
+  if (src === 'player' || action === 'player-weapon-step') return 'accent';
+  if (src === 'death' || action.startsWith('enemy-death-')) return 'accent';
+  return inferEnemyLaneFromRole(roleLike, 'lead');
+}
+
+function inferInstrumentLaneFromCatalogId(instrumentId, fallbackLane = 'lead') {
+  const id = String(instrumentId || '').trim();
+  if (!id) return normalizeEnemyInstrumentLane(fallbackLane, 'lead');
+  const entries = Array.isArray(getInstrumentEntries?.()) ? getInstrumentEntries() : [];
+  const entry = entries.find((e) => String(e?.id || '').trim() === id) || null;
+  if (!entry) return normalizeEnemyInstrumentLane(fallbackLane, 'lead');
+  const laneHints = Array.isArray(entry?.laneHints)
+    ? entry.laneHints.map((v) => normalizeEnemyInstrumentLane(v, '')).filter(Boolean)
+    : [];
+  if (laneHints.length) return laneHints[0];
+  const type = String(entry?.type || '').trim().toLowerCase();
+  const family = String(entry?.instrumentFamily || '').trim().toLowerCase();
+  const functionTag = String(entry?.functionTag || '').trim().toLowerCase();
+  const pitchRank = Number(entry?.pitchRank);
+  if (type.includes('effects')) return 'motion';
+  if (functionTag.includes('ambient') || functionTag.includes('texture')) return 'motion';
+  if (family.includes('bass') || family.includes('drum') || family.includes('kick') || family.includes('djembe')) return 'bass';
+  if (
+    family.includes('clap')
+    || family.includes('snare')
+    || family.includes('hihat')
+    || family.includes('cowbell')
+    || family.includes('percussion')
+  ) return 'accent';
+  if (Number.isFinite(pitchRank) && pitchRank <= 2) return 'bass';
+  if (Number.isFinite(pitchRank) && pitchRank >= 4) return 'lead';
+  if (Number.isFinite(pitchRank) && pitchRank === 3) return 'lead';
   return normalizeEnemyInstrumentLane(fallbackLane, 'lead');
 }
 
@@ -8111,7 +8182,7 @@ function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex)
       resolveSwarmSoundInstrumentId('projectile') || 'tone'
     );
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
-    events.push(createPerformedBeatEvent({
+    events.push(createLoggedPerformedBeatEvent({
       actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
       beatIndex,
       stepIndex: stepAbs,
@@ -8131,6 +8202,12 @@ function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex)
         phraseResolutionOpportunity,
         phraseResolutionHit,
       },
+    }, {
+      beatIndex,
+      stepIndex: stepAbs,
+      sourceSystem: 'drawsnake',
+      enemyType: 'drawsnake',
+      groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
     }));
   }
   return events;
@@ -8169,7 +8246,7 @@ function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
       normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.BASS), BEAT_EVENT_ROLES.BASS),
       resolveSwarmSoundInstrumentId('projectile') || 'tone'
     );
-    events.push(createPerformedBeatEvent({
+    events.push(createLoggedPerformedBeatEvent({
       actorId,
       beatIndex,
       stepIndex: stepAbs,
@@ -8185,6 +8262,12 @@ function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
         audioGain: clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain) * lifecycleAudioGain),
         requestedNoteRaw: noteNameRaw,
       },
+    }, {
+      beatIndex,
+      stepIndex: stepAbs,
+      sourceSystem: 'spawner',
+      enemyType: 'spawner',
+      groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
     }));
     stats.spawnedEnemies += 1;
   }
@@ -9613,7 +9696,7 @@ function updateBeatWeapons(centerWorld) {
     };
     const stepEvents = [
       ...filteredEnemyEvents.map(withPlayerDuck),
-      createPerformedBeatEvent({
+      createLoggedPerformedBeatEvent({
         actorId: 0,
         beatIndex,
         stepIndex,
@@ -9626,6 +9709,11 @@ function updateBeatWeapons(centerWorld) {
         payload: {
           centerWorld: { x: Number(centerWorld?.x) || 0, y: Number(centerWorld?.y) || 0 },
         },
+      }, {
+        beatIndex,
+        stepIndex,
+        sourceSystem: 'player',
+        enemyType: 'player',
       }),
     ];
     for (const ev of stepEvents) {
@@ -10171,7 +10259,13 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
     getSwarmRoleForEnemy,
     resolveSwarmRoleInstrumentId,
     resolveSwarmSoundInstrumentId,
-    createPerformedBeatEvent,
+    createPerformedBeatEvent: (evt) => createLoggedPerformedBeatEvent(evt, {
+      sourceSystem: 'group',
+      enemyType: 'composer-group-member',
+      groupId: Math.max(0, Math.trunc(Number(evt?.payload?.groupId) || 0)),
+      beatIndex: Math.max(0, Math.trunc(Number(evt?.beatIndex) || 0)),
+      stepIndex: Math.max(0, Math.trunc(Number(evt?.stepIndex) || 0)),
+    }),
     isLifecycleSchedulable,
   });
 }

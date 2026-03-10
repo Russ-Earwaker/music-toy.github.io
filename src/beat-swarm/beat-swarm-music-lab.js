@@ -36,6 +36,34 @@ function normalizeSourceSystem(sourceSystem, actionType = '') {
   return 'unknown';
 }
 
+function normalizeEnemyType(enemyType, sourceSystem = '', actionType = '') {
+  const explicit = String(enemyType || '').trim().toLowerCase();
+  if (explicit) return explicit;
+  const source = String(sourceSystem || '').trim().toLowerCase();
+  if (source === 'spawner') return 'spawner';
+  if (source === 'drawsnake') return 'drawsnake';
+  if (source === 'group') return 'composer-group-member';
+  if (source === 'player') return 'player';
+  if (source === 'death') return 'death';
+  const action = String(actionType || '').trim().toLowerCase();
+  if (action.startsWith('spawner-')) return 'spawner';
+  if (action.startsWith('drawsnake-')) return 'drawsnake';
+  if (action.startsWith('composer-group-')) return 'composer-group-member';
+  if (action === 'player-weapon-step') return 'player';
+  if (action.startsWith('enemy-death-')) return 'death';
+  return 'unknown';
+}
+
+function normalizeInstrumentLane(value, fallback = '') {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'bass' || raw === 'lead' || raw === 'accent' || raw === 'motion') return raw;
+  if (raw === 'drum' || raw === 'rhythm' || raw === 'groove') return 'bass';
+  if (raw === 'phrase' || raw === 'melody') return 'lead';
+  if (raw === 'fx' || raw === 'effect') return 'accent';
+  if (raw === 'texture' || raw === 'cosmetic' || raw === 'ambient') return 'motion';
+  return String(fallback || '').trim().toLowerCase();
+}
+
 function toMidi(noteName) {
   const raw = String(noteName || '').trim();
   if (!raw) return null;
@@ -70,6 +98,15 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const resolvedNote = String(context?.resolvedNote ?? requestedNote).trim();
   const noteWasClamped = context?.noteWasClamped === true;
   const sourceSystem = normalizeSourceSystem(context?.sourceSystem, actionType);
+  const enemyType = normalizeEnemyType(context?.enemyType ?? payload.enemyType, sourceSystem, actionType);
+  const expectedInstrumentLane = normalizeInstrumentLane(
+    context?.expectedInstrumentLane ?? payload.expectedInstrumentLane,
+    ''
+  );
+  const actualInstrumentLane = normalizeInstrumentLane(
+    context?.actualInstrumentLane ?? payload.actualInstrumentLane,
+    ''
+  );
   const playerAudible = context?.playerAudible === true;
   const enemyAudible = context?.enemyAudible === true
     ? true
@@ -111,6 +148,9 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     paletteId: String(context?.paletteId || '').trim(),
     themeId: String(context?.themeId || '').trim(),
     sourceSystem,
+    enemyType,
+    expectedInstrumentLane,
+    actualInstrumentLane,
     playerAudible,
     enemyAudible,
     visualSyncType: String(ev.visualSyncType || '').trim(),
@@ -529,6 +569,7 @@ function collectNotePoolCompliance(events) {
   let offPoolNoteRequests = 0;
   let clampedNoteCount = 0;
   const clampedNoteBySource = Object.create(null);
+  const clampedByEnemyType = Object.create(null);
   const clampedNoteByEnemyId = Object.create(null);
   for (const ev of events) {
     const requested = String(ev?.note || '').trim();
@@ -541,6 +582,8 @@ function collectNotePoolCompliance(events) {
       clampedNoteCount += 1;
       const src = String(ev?.sourceSystem || '').trim().toLowerCase() || 'unknown';
       clampedNoteBySource[src] = clampInt(clampedNoteBySource[src], 0, 0) + 1;
+      const enemyType = String(ev?.enemyType || '').trim().toLowerCase() || 'unknown';
+      clampedByEnemyType[enemyType] = clampInt(clampedByEnemyType[enemyType], 0, 0) + 1;
       const actorId = clampInt(ev?.actorId, 0, 0);
       if (actorId > 0) clampedNoteByEnemyId[String(actorId)] = clampInt(clampedNoteByEnemyId[String(actorId)], 0, 0) + 1;
     }
@@ -550,6 +593,7 @@ function collectNotePoolCompliance(events) {
     offPoolNoteRequests,
     clampedNoteCount,
     clampedNoteBySource,
+    clampedByEnemyType,
     clampedNoteByEnemyId,
     considered,
     clamped,
@@ -664,6 +708,83 @@ function collectPhraseGravity(events) {
     phraseResolutionOpportunities,
     phraseResolutionHits,
     phraseResolutionRate: phraseResolutionOpportunities > 0 ? (phraseResolutionHits / phraseResolutionOpportunities) : 0,
+  };
+}
+
+function collectLaneCompliance(events) {
+  const createdEnemyEvents = events.filter((ev) => {
+    if (String(ev?.phase || '').trim().toLowerCase() !== 'created') return false;
+    const source = String(ev?.sourceSystem || '').trim().toLowerCase();
+    if (source === 'player' || source === 'death' || source === 'unknown') return false;
+    return true;
+  });
+  let evaluated = 0;
+  let matched = 0;
+  let missingActual = 0;
+  const bySource = Object.create(null);
+  const byLane = Object.create(null);
+  const mismatchExamples = [];
+  for (const ev of createdEnemyEvents) {
+    const expected = normalizeInstrumentLane(ev?.expectedInstrumentLane, '');
+    if (!expected) continue;
+    const actual = normalizeInstrumentLane(ev?.actualInstrumentLane, '');
+    const source = String(ev?.sourceSystem || '').trim().toLowerCase() || 'unknown';
+    if (!bySource[source]) bySource[source] = { evaluated: 0, matched: 0, mismatched: 0, missingActual: 0 };
+    if (!byLane[expected]) byLane[expected] = { evaluated: 0, matched: 0, mismatched: 0, missingActual: 0 };
+    evaluated += 1;
+    bySource[source].evaluated += 1;
+    byLane[expected].evaluated += 1;
+    if (!actual) {
+      missingActual += 1;
+      bySource[source].missingActual += 1;
+      byLane[expected].missingActual += 1;
+      if (mismatchExamples.length < 24) {
+        mismatchExamples.push({
+          beatIndex: clampInt(ev?.beatIndex, 0, 0),
+          stepIndex: clampInt(ev?.stepIndex, 0, 0),
+          sourceSystem: source,
+          enemyType: String(ev?.enemyType || ''),
+          actorId: clampInt(ev?.actorId, 0, 0),
+          expectedInstrumentLane: expected,
+          actualInstrumentLane: '',
+          instrumentId: String(ev?.instrumentId || ''),
+          actionType: String(ev?.actionType || ''),
+        });
+      }
+      continue;
+    }
+    const laneMatch = actual === expected;
+    if (laneMatch) {
+      matched += 1;
+      bySource[source].matched += 1;
+      byLane[expected].matched += 1;
+    } else {
+      bySource[source].mismatched += 1;
+      byLane[expected].mismatched += 1;
+      if (mismatchExamples.length < 24) {
+        mismatchExamples.push({
+          beatIndex: clampInt(ev?.beatIndex, 0, 0),
+          stepIndex: clampInt(ev?.stepIndex, 0, 0),
+          sourceSystem: source,
+          enemyType: String(ev?.enemyType || ''),
+          actorId: clampInt(ev?.actorId, 0, 0),
+          expectedInstrumentLane: expected,
+          actualInstrumentLane: actual,
+          instrumentId: String(ev?.instrumentId || ''),
+          actionType: String(ev?.actionType || ''),
+        });
+      }
+    }
+  }
+  return {
+    evaluated,
+    matched,
+    missingActual,
+    matchRate: evaluated > 0 ? (matched / evaluated) : 1,
+    mismatchRate: evaluated > 0 ? ((evaluated - matched) / evaluated) : 0,
+    bySource,
+    byLane,
+    mismatchExamples,
   };
 }
 
@@ -811,6 +932,7 @@ function computeSummary(metrics) {
   const pitchEntropy = Number(metrics?.pitchEntropy?.entropyOverall) || 0;
   const contourLargeLeapRate = Number(metrics?.melodicContour?.largeLeapRate) || 0;
   const motifPersistence = Number(metrics?.motifPersistence?.weightedPersistence) || 0;
+  const laneMatchRate = Number(metrics?.laneCompliance?.matchRate);
   return {
     notePoolCompliance: `${Math.round((Number(metrics?.notePoolCompliance?.poolComplianceRate) || 0) * 100)}%`,
     motifReuse: `${Math.round(motifReuse * 100)}%`,
@@ -822,6 +944,9 @@ function computeSummary(metrics) {
     pitchEntropy: Number(pitchEntropy.toFixed(3)),
     melodicContour: contourLargeLeapRate <= 0.18 ? 'stable' : (contourLargeLeapRate <= 0.32 ? 'mixed' : 'jumpy'),
     motifPersistence: Number(motifPersistence.toFixed(3)),
+    laneCompliance: Number.isFinite(laneMatchRate)
+      ? (laneMatchRate >= 0.82 ? 'good' : (laneMatchRate >= 0.65 ? 'mixed' : 'poor'))
+      : 'unknown',
     paletteContinuity: continuity >= 0.6 ? 'stable' : 'volatile',
     playerMasking: masking <= 0.25 ? 'low' : (masking <= 0.45 ? 'moderate' : 'high'),
     removalCleanup: (
@@ -845,6 +970,9 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const motifReuse = collectMotifReuse(executedEvents);
   const motifPersistence = collectMotifPersistence(motifReuse);
   const phraseGravity = collectPhraseGravity(executedEvents);
+  const createdEvents = (Array.isArray(session?.events) ? session.events : [])
+    .filter((e) => String(e?.phase || '').trim().toLowerCase() === 'created' && clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
+  const laneCompliance = collectLaneCompliance(createdEvents);
   const callResponse = collectCallResponse(executedEvents, {
     responseWindowSteps: 8,
     stepsPerBeat: 8,
@@ -860,6 +988,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     motifReuse,
     motifPersistence,
     phraseGravity,
+    laneCompliance,
     roleBalance,
     threatBalance,
     threatBudgetUsage,
@@ -943,6 +1072,10 @@ export function createBeatSwarmMusicLab(options = null) {
 
   function logQueuedEvent(event, context = null) {
     return logEvent(event, 'queued', context);
+  }
+
+  function logCreatedEvent(event, context = null) {
+    return logEvent(event, 'created', context);
   }
 
   function logExecutedEvent(event, context = null) {
@@ -1071,6 +1204,7 @@ export function createBeatSwarmMusicLab(options = null) {
 
   return {
     resetSession,
+    logCreatedEvent,
     logQueuedEvent,
     logExecutedEvent,
     notePaletteChange,

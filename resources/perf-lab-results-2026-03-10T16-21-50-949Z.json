@@ -1,0 +1,195 @@
+{
+  "createdAt": "2026-03-10T16:21:50.940Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+  "meta": {
+    "runId": "musicLabManualSave",
+    "notes": "Manual Music Lab save from Perf Lab UI",
+    "kind": "music-lab"
+  },
+  "results": [
+    {
+      "label": "music-lab-session",
+      "runId": "musicLabManualSave",
+      "createdAt": "2026-03-10T16:21:50.940Z",
+      "musicLab": {
+        "sessionId": "music-lab-2026-03-10T16:21:47.889Z-1",
+        "startedAtIso": "2026-03-10T16:21:47.889Z",
+        "endedAtIso": "2026-03-10T16:21:50.934Z",
+        "beatsPerBar": 4,
+        "metricsEveryBars": 4,
+        "eventTimeline": [],
+        "paletteChanges": [],
+        "pacingChanges": [],
+        "enemyRemovals": [],
+        "threatBudgetSnapshots": [],
+        "metricsHistory": [],
+        "metrics": {
+          "notePoolCompliance": {
+            "offPoolNoteRequests": 0,
+            "clampedNoteCount": 0,
+            "clampedNoteBySource": {},
+            "clampedByEnemyType": {},
+            "clampedNoteByEnemyId": {},
+            "considered": 0,
+            "clamped": 0,
+            "insidePool": 0,
+            "poolComplianceRate": 1
+          },
+          "pitchEntropy": {
+            "considered": 0,
+            "entropyOverall": 0,
+            "entropyByRole": {}
+          },
+          "intervalProfile": {
+            "buckets": {
+              "repeat": 0,
+              "step": 0,
+              "smallLeap": 0,
+              "largeLeap": 0
+            },
+            "compared": 0,
+            "smoothShare": 0
+          },
+          "melodicContour": {
+            "buckets": {
+              "repeat": 0,
+              "step": 0,
+              "smallLeap": 0,
+              "largeLeap": 0
+            },
+            "compared": 0,
+            "smoothShare": 0,
+            "largeLeapRate": 0,
+            "contourStability": "rough"
+          },
+          "motifReuse": {
+            "windowsByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "repeatedByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "uniqueMotifsByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "motifReuseRate": 0
+          },
+          "motifPersistence": {
+            "windowsByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "persistenceByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "weightedPersistence": 0,
+            "motifReuseRate": 0
+          },
+          "phraseGravity": {
+            "gravityOpportunities": 0,
+            "gravityHits": 0,
+            "gravityHitRate": 0,
+            "phraseResolutionOpportunities": 0,
+            "phraseResolutionHits": 0,
+            "phraseResolutionRate": 0
+          },
+          "laneCompliance": {
+            "evaluated": 0,
+            "matched": 0,
+            "missingActual": 0,
+            "matchRate": 1,
+            "mismatchRate": 0,
+            "bySource": {},
+            "byLane": {},
+            "mismatchExamples": []
+          },
+          "roleBalance": {
+            "perBar": {},
+            "totals": {},
+            "distribution": {},
+            "totalEvents": 0
+          },
+          "threatBalance": {
+            "perBeat": {},
+            "perBar": {}
+          },
+          "threatBudgetUsage": {
+            "snapshots": 0,
+            "perBeat": {},
+            "perBar": {}
+          },
+          "callResponse": {
+            "callCount": 0,
+            "responsePairs": 0,
+            "responseRate": 0,
+            "responseWindowSteps": 8,
+            "pairExamples": []
+          },
+          "deathDensity": {
+            "perBeat": {},
+            "perBar": {},
+            "clusterBeats": 0
+          },
+          "playerMasking": {
+            "playerAudibleSteps": 0,
+            "enemyEvents": 0,
+            "maskedEnemyEvents": 0,
+            "playerMaskingRate": 0
+          },
+          "paletteContinuity": {
+            "paletteChanges": 0,
+            "barsSinceLastPaletteChange": 1,
+            "avgBarsBetweenChanges": 1,
+            "themeChanges": 0,
+            "roleInstrumentChanges": 0,
+            "paletteContinuityScore": 1
+          },
+          "enemyRemovals": {
+            "totalEnemyRemovals": 0,
+            "byReason": {},
+            "byEnemyType": {},
+            "directorCleanupRemovals": 0,
+            "sectionChangeCleanupRemovals": 0,
+            "sameFrameGroupRemovals": 0,
+            "groupRetirements": 0,
+            "groupNaturalDeaths": 0
+          },
+          "spawnerSync": {
+            "spawnerCount": 0,
+            "perfectSyncSpawnerPairs": 0,
+            "nearDuplicateSpawnerPairs": 0,
+            "duplicateSpawnerPatternClusters": [],
+            "pairExamples": []
+          }
+        },
+        "sessionSummary": {
+          "notePoolCompliance": "100%",
+          "motifReuse": "0%",
+          "gravityHitRate": 0,
+          "phraseResolutionRate": 0,
+          "leadIntervalSmoothness": "rough",
+          "roleBalance": "acceptable",
+          "responseRate": 0,
+          "pitchEntropy": 0,
+          "melodicContour": "stable",
+          "motifPersistence": 0,
+          "laneCompliance": "good",
+          "paletteContinuity": "stable",
+          "playerMasking": "low",
+          "removalCleanup": "clean",
+          "spawnerSync": "ok"
+        }
+      }
+    }
+  ]
+}
