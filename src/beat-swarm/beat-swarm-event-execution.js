@@ -37,9 +37,9 @@ export function executePerformedBeatEventRuntime(options = null) {
     );
     group.instrumentId = instrumentId;
     group.role = helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.bass);
-    const duckForPlayer = ev?.payload?.duckForPlayer === true;
+    const duckForPlayer = false;
     const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
-    const enemyAudible = duckForPlayer ? helpers.shouldKeepEnemyAudibleDuringPlayerDuck?.(ev, 'spawner') : true;
+    const enemyAudible = true;
     const triggerVolume = (Number(constants.spawnerTriggerSoundVolume) || 0)
       * (duckForPlayer ? (Number(constants.playerMaskDuckEnemyVolumeMult) || 1) : 1)
       * (Number(audioGain) || 0)
@@ -90,24 +90,6 @@ export function executePerformedBeatEventRuntime(options = null) {
     const origin = { x: Number(linkedEnemy.wx) || 0, y: Number(linkedEnemy.wy) || 0 };
     const toPlayer = helpers.getViewportCenterWorld?.();
     const dir = Math.atan2((Number(toPlayer?.y) || 0) - origin.y, (Number(toPlayer?.x) || 0) - origin.x);
-    const fullThreat = helpers.tryConsumeSwarmThreatIntent?.('full', 1, beatIndex, 'spawner-linked-attack');
-    if (!fullThreat?.withinBudget || aggressionScale <= 0.5) {
-      helpers.flashSpawnerEnemyCell?.(enemy, nodeStepIndex, 'alternate');
-      if (aggressionScale <= 0.5) {
-        helpers.triggerCosmeticSyncAt?.(origin, beatIndex, 'spawner-retiring-cosmetic', linkedEnemy.el);
-      } else {
-        helpers.triggerLowThreatBurstAt?.(origin, beatIndex, 'spawner-linked-fallback');
-      }
-      helpers.pulseHitFlash?.(linkedEnemy.el);
-      logMusicLabExecution({
-        sourceSystem: 'spawner',
-        requestedNote,
-        resolvedNote: noteName,
-        noteWasClamped: requestedNote ? requestedNote !== noteName : false,
-        enemyAudible,
-      });
-      return true;
-    }
     helpers.spawnHostileRedProjectileAt?.(origin, {
       angle: dir + helpers.randRange?.(-0.24, 0.24),
       speed: (Number(constants.spawnerLinkedAttackSpeed) || 0) * Math.max(0.4, Math.min(1, aggressionScale)),
@@ -139,9 +121,9 @@ export function executePerformedBeatEventRuntime(options = null) {
     group.instrumentId = instrumentId;
     group.instrument = instrumentId;
     group.role = helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.lead);
-    const duckForPlayer = ev?.payload?.duckForPlayer === true;
+    const duckForPlayer = false;
     const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
-    const enemyAudible = duckForPlayer ? false : true;
+    const enemyAudible = true;
     const triggerVolume = (Number(constants.drawSnakeTriggerSoundVolume) || 0)
       * (duckForPlayer ? (Number(constants.playerMaskDuckEnemyVolumeMult) || 1) : 1)
       * (Number(audioGain) || 0)
@@ -154,27 +136,6 @@ export function executePerformedBeatEventRuntime(options = null) {
       try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
     }
     const nodeIndex = Math.trunc(Number(ev?.payload?.nodeIndex) || 0);
-    const fullThreat = helpers.tryConsumeSwarmThreatIntent?.('full', 1, beatIndex, 'drawsnake-projectile');
-    if (!fullThreat?.withinBudget || aggressionScale <= 0.5) {
-      const nodes = Array.isArray(enemy?.drawsnakeNodeWorld) ? enemy.drawsnakeNodeWorld : [];
-      const idx = Math.max(0, Math.min(nodes.length - 1, nodeIndex));
-      const origin = nodes[idx] || { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 };
-      helpers.flashDrawSnakeNode?.(enemy, idx);
-      if (aggressionScale <= 0.5) {
-        helpers.triggerCosmeticSyncAt?.(origin, beatIndex, 'drawsnake-retiring-cosmetic', enemy.el);
-      } else {
-        helpers.triggerLowThreatBurstAt?.(origin, beatIndex, 'drawsnake-fallback-burst');
-      }
-      helpers.pulseHitFlash?.(enemy.el);
-      logMusicLabExecution({
-        sourceSystem: 'drawsnake',
-        requestedNote,
-        resolvedNote: noteName,
-        noteWasClamped: requestedNote ? requestedNote !== noteName : false,
-        enemyAudible,
-      });
-      return true;
-    }
     helpers.fireDrawSnakeProjectile?.(enemy, nodeIndex, noteName, aggressionScale);
     logMusicLabExecution({
       sourceSystem: 'drawsnake',
@@ -200,9 +161,9 @@ export function executePerformedBeatEventRuntime(options = null) {
     );
     group.instrumentId = instrumentId;
     group.role = helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.lead);
-    const duckForPlayer = ev?.payload?.duckForPlayer === true;
+    const duckForPlayer = false;
     const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
-    const enemyAudible = duckForPlayer ? false : true;
+    const enemyAudible = true;
     const triggerVolume = 0.42
       * (duckForPlayer ? (Number(constants.playerMaskDuckEnemyVolumeMult) || 1) : 1)
       * (Number(audioGain) || 0)
@@ -214,51 +175,6 @@ export function executePerformedBeatEventRuntime(options = null) {
     enemy.composerActionPulseDur = Number(constants.composerGroupActionPulseSeconds) || 0;
     enemy.composerActionPulseT = Number(constants.composerGroupActionPulseSeconds) || 0;
     const origin = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
-    const requestedThreatClass = String(ev?.threatClass || constants.threat?.full || 'full').trim().toLowerCase();
-    if (requestedThreatClass === constants.threat?.cosmetic) {
-      helpers.triggerCosmeticSyncAt?.(origin, beatIndex, 'composer-cosmetic', enemy.el);
-      logMusicLabExecution({
-        sourceSystem: 'group',
-        requestedNote,
-        resolvedNote: noteName,
-        noteWasClamped: requestedNote ? requestedNote !== noteName : false,
-        enemyAudible,
-      });
-      return true;
-    }
-    if (requestedThreatClass === constants.threat?.light) {
-      helpers.triggerLowThreatBurstAt?.(origin, beatIndex, 'composer-light-burst');
-      logMusicLabExecution({
-        sourceSystem: 'group',
-        requestedNote,
-        resolvedNote: noteName,
-        noteWasClamped: requestedNote ? requestedNote !== noteName : false,
-        enemyAudible,
-      });
-      return true;
-    }
-    const fullThreat = helpers.tryConsumeSwarmThreatIntent?.(
-      'full',
-      1,
-      beatIndex,
-      actionType === 'composer-group-explosion' ? 'composer-group-explosion' : 'composer-group-projectile'
-    );
-    if (!fullThreat?.withinBudget || aggressionScale <= 0.5) {
-      if (aggressionScale <= 0.5) {
-        helpers.triggerCosmeticSyncAt?.(origin, beatIndex, 'composer-retiring-cosmetic', enemy.el);
-      } else {
-        helpers.triggerLowThreatBurstAt?.(origin, beatIndex, 'composer-fallback-burst');
-      }
-      helpers.pulseHitFlash?.(enemy.el);
-      logMusicLabExecution({
-        sourceSystem: 'group',
-        requestedNote,
-        resolvedNote: noteName,
-        noteWasClamped: requestedNote ? requestedNote !== noteName : false,
-        enemyAudible,
-      });
-      return true;
-    }
     if (actionType === 'composer-group-explosion') {
       helpers.addHostileRedExplosionEffect?.(origin);
     } else {
@@ -283,11 +199,6 @@ export function executePerformedBeatEventRuntime(options = null) {
   }
 
   if (actionType === 'enemy-death-accent') {
-    const accentThreat = helpers.tryConsumeSwarmThreatIntent?.('accent', 1, beatIndex, 'enemy-death-pop');
-    if (!accentThreat?.withinBudget) {
-      logMusicLabExecution({ sourceSystem: 'death' });
-      return true;
-    }
     const requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
     const noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.actorId);
     const eventKeyRaw = String(ev?.payload?.soundEventKey || '').trim();

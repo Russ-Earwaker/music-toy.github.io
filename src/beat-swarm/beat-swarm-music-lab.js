@@ -128,6 +128,11 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
       ? false
       : (payload?.phraseResolutionHit === true ? true : (payload?.phraseResolutionHit === false ? false : null)));
   const continuityId = String(context?.continuityId ?? payload?.continuityId ?? '').trim();
+  const playerCadenceMode = String(context?.playerCadenceMode ?? payload?.playerCadenceMode ?? '').trim().toLowerCase();
+  const playerCadenceReason = String(context?.playerCadenceReason ?? payload?.playerCadenceReason ?? '').trim().toLowerCase();
+  const playerManualOverrideActive = context?.playerManualOverrideActive === true
+    ? true
+    : (payload?.playerManualOverrideActive === true);
   return {
     tMs: nowMs(),
     phase: String(phase || '').trim() || 'queued',
@@ -160,6 +165,9 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     phraseResolutionOpportunity,
     phraseResolutionHit,
     continuityId,
+    playerCadenceMode,
+    playerCadenceReason,
+    playerManualOverrideActive,
   };
 }
 
@@ -210,6 +218,11 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     laneRole: String(payload?.laneRole || '').trim().toLowerCase(),
     phraseStep: clampInt(payload?.phraseStep, 0, 0),
     barPosition: clampInt(payload?.barPosition, 0, 0),
+    sectionId: String(payload?.sectionId || '').trim().toLowerCase(),
+    sectionCycle: clampInt(payload?.sectionCycle, 0, 0),
+    previousSectionId: String(payload?.previousSectionId || '').trim().toLowerCase(),
+    previousSectionCycle: clampInt(payload?.previousSectionCycle, 0, 0),
+    sectionDurationBars: clampInt(payload?.sectionDurationBars, 0, 0),
     reason: String(payload?.reason || '').trim().toLowerCase(),
     failureReason: String(payload?.failureReason || '').trim().toLowerCase(),
   };
@@ -444,6 +457,30 @@ function collectPlayerMasking(events) {
   };
 }
 
+function collectPlayerInstrumentMetrics(events) {
+  const playerSteps = events.filter((ev) => String(ev?.sourceSystem || '').trim().toLowerCase() === 'player');
+  const cadenceModeCounts = Object.create(null);
+  const cadenceReasonCounts = Object.create(null);
+  let manualOverrideSteps = 0;
+  let audiblePlayerSteps = 0;
+  for (const ev of playerSteps) {
+    const mode = String(ev?.playerCadenceMode || '').trim().toLowerCase() || 'unknown';
+    const reason = String(ev?.playerCadenceReason || '').trim().toLowerCase() || 'unknown';
+    cadenceModeCounts[mode] = clampInt(cadenceModeCounts[mode], 0, 0) + 1;
+    cadenceReasonCounts[reason] = clampInt(cadenceReasonCounts[reason], 0, 0) + 1;
+    if (ev?.playerManualOverrideActive === true) manualOverrideSteps += 1;
+    if (ev?.playerAudible === true) audiblePlayerSteps += 1;
+  }
+  return {
+    playerStepEvents: playerSteps.length,
+    audiblePlayerSteps,
+    cadenceModeCounts,
+    cadenceReasonCounts,
+    manualOverrideSteps,
+    manualOverrideRate: playerSteps.length > 0 ? (manualOverrideSteps / playerSteps.length) : 0,
+  };
+}
+
 function collectEnemyRemovalDiagnostics(session, maxBarIndex) {
   const removals = (Array.isArray(session?.enemyRemovals) ? session.enemyRemovals : [])
     .filter((r) => clampInt(r?.barIndex, 0, 0) <= maxBarIndex);
@@ -525,6 +562,70 @@ function collectHandoffDiagnostics(session, maxBarIndex) {
     successRate,
     inheritedPhrase,
     resetPhrase,
+  };
+}
+
+function collectSectionStability(session, maxBarIndex) {
+  const sectionChanges = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
+    .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_section_changed');
+  const durations = sectionChanges
+    .map((e) => clampInt(e?.sectionDurationBars, 0, 0))
+    .filter((n) => n > 0);
+  const totalDur = durations.reduce((acc, n) => acc + n, 0);
+  const avgDurationBars = durations.length ? (totalDur / durations.length) : Math.max(1, maxBarIndex + 1);
+  const minDurationBars = durations.length ? Math.min(...durations) : Math.max(1, maxBarIndex + 1);
+  const maxDurationBars = durations.length ? Math.max(...durations) : Math.max(1, maxBarIndex + 1);
+  const shortSections = durations.filter((n) => n < 8).length;
+  return {
+    sectionChanges: sectionChanges.length,
+    avgDurationBars,
+    minDurationBars,
+    maxDurationBars,
+    shortSections,
+  };
+}
+
+function collectGrooveStability(events, sectionStability = null) {
+  const bars = Object.create(null);
+  for (const ev of events) {
+    const bar = clampInt(ev?.barIndex, 0, 0);
+    const key = String(bar);
+    if (!bars[key]) {
+      bars[key] = {
+        pitch: new Set(),
+        rhythm: new Set(),
+        bassSig: [],
+      };
+    }
+    const note = String(ev?.noteResolved || ev?.note || '').trim();
+    const role = String(ev?.role || '').trim().toLowerCase();
+    const step = ((clampInt(ev?.stepIndex, 0, 0) % 8) + 8) % 8;
+    if (note) bars[key].pitch.add(note);
+    bars[key].rhythm.add(`${step}:${String(ev?.actionType || '').trim().toLowerCase()}`);
+    if (role === 'bass' && note) bars[key].bassSig.push(`${step}:${note}`);
+  }
+  const barKeys = Object.keys(bars).map((k) => clampInt(k, 0, 0)).sort((a, b) => a - b);
+  const pitchCounts = barKeys.map((b) => bars[String(b)].pitch.size);
+  const rhythmCounts = barKeys.map((b) => bars[String(b)].rhythm.size);
+  const avgUniquePitchPerBar = pitchCounts.length ? (pitchCounts.reduce((a, n) => a + n, 0) / pitchCounts.length) : 0;
+  const avgUniqueRhythmicEventsPerBar = rhythmCounts.length ? (rhythmCounts.reduce((a, n) => a + n, 0) / rhythmCounts.length) : 0;
+  let comparedBassBars = 0;
+  let repeatedBassBars = 0;
+  for (let i = 1; i < barKeys.length; i++) {
+    const prevSig = bars[String(barKeys[i - 1])].bassSig.slice().sort().join('|');
+    const curSig = bars[String(barKeys[i])].bassSig.slice().sort().join('|');
+    if (!prevSig || !curSig) continue;
+    comparedBassBars += 1;
+    if (prevSig === curSig) repeatedBassBars += 1;
+  }
+  const bassPatternPersistence = comparedBassBars > 0 ? (repeatedBassBars / comparedBassBars) : 0;
+  return {
+    barsConsidered: barKeys.length,
+    avgUniquePitchPerBar,
+    avgUniqueRhythmicEventsPerBar,
+    bassPatternPersistence,
+    sectionAvgDurationBars: Number(sectionStability?.avgDurationBars) || 0,
   };
 }
 
@@ -995,6 +1096,11 @@ function computeSummary(metrics) {
   const motifPersistence = Number(metrics?.motifPersistence?.weightedPersistence) || 0;
   const laneMatchRate = Number(metrics?.laneCompliance?.matchRate);
   const handoffSuccessRate = Number(metrics?.handoff?.successRate) || 0;
+  const playerOverrideRate = Number(metrics?.playerInstrument?.manualOverrideRate) || 0;
+  const bassPersistence = Number(metrics?.grooveStability?.bassPatternPersistence) || 0;
+  const avgPitchPerBar = Number(metrics?.grooveStability?.avgUniquePitchPerBar) || 0;
+  const avgRhythmPerBar = Number(metrics?.grooveStability?.avgUniqueRhythmicEventsPerBar) || 0;
+  const sectionAvgBars = Number(metrics?.sectionStability?.avgDurationBars) || 0;
   return {
     notePoolCompliance: `${Math.round((Number(metrics?.notePoolCompliance?.poolComplianceRate) || 0) * 100)}%`,
     motifReuse: `${Math.round(motifReuse * 100)}%`,
@@ -1017,6 +1123,10 @@ function computeSummary(metrics) {
     ) ? 'warning' : 'clean',
     spawnerSync: (Number(metrics?.spawnerSync?.perfectSyncSpawnerPairs) || 0) > 0 ? 'warning' : 'ok',
     handoff: handoffSuccessRate >= 0.75 ? 'stable' : (handoffSuccessRate >= 0.45 ? 'mixed' : 'fragile'),
+    playerOverride: playerOverrideRate >= 0.2 ? 'active' : (playerOverrideRate > 0 ? 'present' : 'inactive'),
+    grooveStability: (bassPersistence >= 0.52 && avgPitchPerBar <= 5.2 && avgRhythmPerBar <= 11.5 && sectionAvgBars >= 8)
+      ? 'stable'
+      : 'volatile',
   };
 }
 
@@ -1029,6 +1139,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const pitchEntropy = collectPitchEntropy(executedEvents);
   const deathDensity = collectDeathDensity(executedEvents);
   const playerMasking = collectPlayerMasking(executedEvents);
+  const playerInstrument = collectPlayerInstrumentMetrics(executedEvents);
   const notePoolCompliance = collectNotePoolCompliance(executedEvents);
   const motifReuse = collectMotifReuse(executedEvents);
   const motifPersistence = collectMotifPersistence(motifReuse);
@@ -1044,6 +1155,8 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const enemyRemovals = collectEnemyRemovalDiagnostics(session, maxBarIndex);
   const spawnerSync = collectSpawnerSync(executedEvents);
   const handoff = collectHandoffDiagnostics(session, maxBarIndex);
+  const sectionStability = collectSectionStability(session, maxBarIndex);
+  const grooveStability = collectGrooveStability(executedEvents, sectionStability);
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -1059,10 +1172,13 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     callResponse,
     deathDensity,
     playerMasking,
+    playerInstrument,
     paletteContinuity,
     enemyRemovals,
     spawnerSync,
     handoff,
+    sectionStability,
+    grooveStability,
   };
   return {
     metrics,

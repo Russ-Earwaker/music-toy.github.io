@@ -13,8 +13,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   let spawnerStepStats = { activeSpawners: 0, triggeredSpawners: 0, spawnedEnemies: 0 };
   let queuedStepEvents = 0;
   let drainedStepEvents = 0;
+  const playerStepDirective = helpers.getPlayerInstrumentStepDirective?.(stepIndex, beatIndex) || { emit: true, mode: 'free_fire', reason: 'default' };
 
-  const playerLikelyAudible = helpers.isPlayerWeaponStepLikelyAudible?.(stepIndex) === true;
+  const playerTuneAuthoredStep = helpers.isPlayerWeaponTuneStepAuthoredActive?.(stepIndex) === true;
+  const shouldEmitPlayerStep = playerStepDirective.emit === true || playerTuneAuthoredStep;
+  const playerLikelyAudible = shouldEmitPlayerStep
+    && helpers.isPlayerWeaponStepLikelyAudible?.(stepIndex) === true;
   const spawnerStep = helpers.collectSpawnerStepBeatEvents?.(stepIndex, beatIndex);
   if (spawnerStep?.stats && typeof spawnerStep.stats === 'object') {
     spawnerStepStats = spawnerStep.stats;
@@ -38,7 +42,14 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const withPlayerDuck = (ev) => {
     if (!playerLikelyAudible || !ev || typeof ev !== 'object') return ev;
     const action = String(ev.actionType || '').trim().toLowerCase();
-    if (!action || action === 'player-weapon-step') return ev;
+    if (
+      !action
+      || action === 'player-weapon-step'
+      || action === 'spawner-spawn'
+      || action === 'drawsnake-projectile'
+      || action === 'composer-group-projectile'
+      || action === 'composer-group-explosion'
+    ) return ev;
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     return {
       ...ev,
@@ -51,28 +62,36 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
 
   const stepEvents = [
     ...filteredEnemyEvents.map(withPlayerDuck),
-    helpers.createLoggedPerformedBeatEvent?.({
-      actorId: 0,
-      beatIndex,
-      stepIndex,
-      role: constants.roles?.accent || 'accent',
-      note: '',
-      instrumentId: '',
-      actionType: 'player-weapon-step',
-      threatClass: constants.threat?.full || 'full',
-      visualSyncType: 'weapon-fire',
-      payload: {
-        centerWorld: {
-          x: Number(centerWorld?.x) || 0,
-          y: Number(centerWorld?.y) || 0,
+    shouldEmitPlayerStep
+      ? helpers.createLoggedPerformedBeatEvent?.({
+        actorId: 0,
+        beatIndex,
+        stepIndex,
+        role: constants.roles?.accent || 'accent',
+        note: '',
+        instrumentId: '',
+        actionType: 'player-weapon-step',
+        threatClass: constants.threat?.full || 'full',
+        visualSyncType: 'weapon-fire',
+        payload: {
+          centerWorld: {
+            x: Number(centerWorld?.x) || 0,
+            y: Number(centerWorld?.y) || 0,
+          },
+          playerCadenceMode: String(playerStepDirective.mode || 'free_fire'),
+          playerCadenceReason: playerTuneAuthoredStep
+            ? 'tune_override'
+            : String(playerStepDirective.reason || ''),
+          playerManualOverrideActive: playerStepDirective.manualOverrideActive === true,
+          playerTuneAuthoredStep,
         },
-      },
-    }, {
-      beatIndex,
-      stepIndex,
-      sourceSystem: 'player',
-      enemyType: 'player',
-    }),
+      }, {
+        beatIndex,
+        stepIndex,
+        sourceSystem: 'player',
+        enemyType: 'player',
+      })
+      : null,
   ].filter(Boolean);
 
   for (const ev of stepEvents) {
