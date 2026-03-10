@@ -56,6 +56,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const chooseEnemyForNote = typeof options?.chooseEnemyForNote === 'function' ? options.chooseEnemyForNote : ((o) => chooseComposerGroupEnemyForNote(o));
   const roles = options?.roles && typeof options.roles === 'object' ? options.roles : {};
   const threat = options?.threat && typeof options.threat === 'object' ? options.threat : {};
+  const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
 
   for (const group of composerEnemyGroups) {
     if (!group || !group.active || group.retiring) continue;
@@ -150,6 +151,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         payload: {
           groupId,
           callResponseLane: lane,
+          audioGain: clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain)),
         },
       }));
     }

@@ -7008,16 +7008,13 @@ function maintainSpawnerEnemyPopulation() {
     : Math.max(0, Math.trunc(Number(SPAWNER_ENEMY_TARGET_COUNT) || 0));
   const pacedTarget = Math.max(0, Math.min(target, pacingCaps.maxSpawners));
   const spawners = enemies.filter((e) => String(e?.enemyType || '') === 'spawner');
-  if (spawners.length > pacedTarget) {
-    const extras = spawners
-      .slice()
-      .sort((a, b) => Math.trunc(Number(b?.id) || 0) - Math.trunc(Number(a?.id) || 0))
-      .slice(0, spawners.length - pacedTarget);
-    for (const extra of extras) {
-      startEnemyRetreat(extra, 'retreated');
-    }
+  const rankedSpawners = spawners
+    .slice()
+    .sort((a, b) => Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0));
+  for (let i = 0; i < rankedSpawners.length; i++) {
+    const enemy = rankedSpawners[i];
+    enemy.musicParticipationGain = (i < pacedTarget) ? 1 : 0.35;
   }
-  if (!(pacedTarget > 0)) return;
   const motif = getComposerMotif(motifScopeKey, 'spawner-drum', () => createSpawnerEnemyRhythmProfile({ role: 'drum' }));
   applySpawnerCollisionAvoidance(spawners.filter((e) => !e?.retreating));
   for (const enemy of spawners) {
@@ -7270,16 +7267,13 @@ function maintainDrawSnakeEnemyPopulation() {
     : Math.max(0, Math.trunc(Number(DRAW_SNAKE_ENEMY_TARGET_COUNT) || 0));
   const pacedTarget = Math.max(0, Math.min(target, pacingCaps.maxDrawSnakes));
   const snakes = enemies.filter((e) => String(e?.enemyType || '') === 'drawsnake');
-  if (snakes.length > pacedTarget) {
-    const extras = snakes
-      .slice()
-      .sort((a, b) => Math.trunc(Number(b?.id) || 0) - Math.trunc(Number(a?.id) || 0))
-      .slice(0, snakes.length - pacedTarget);
-    for (const extra of extras) {
-      startEnemyRetreat(extra, 'retreated');
-    }
+  const rankedSnakes = snakes
+    .slice()
+    .sort((a, b) => Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0));
+  for (let i = 0; i < rankedSnakes.length; i++) {
+    const enemy = rankedSnakes[i];
+    enemy.musicParticipationGain = (i < pacedTarget) ? 1 : 0.35;
   }
-  if (!(pacedTarget > 0)) return;
   const motif = getComposerMotif(motifScopeKey, 'drawsnake-lead', () => createDrawSnakeEnemyProfile());
   for (const enemy of snakes) {
     if (enemy?.retreating) continue;
@@ -7632,6 +7626,7 @@ function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex)
       payload: {
         groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
         nodeIndex: getDrawSnakeNodeIndexForStep(step, DRAW_SNAKE_SEGMENT_COUNT),
+        audioGain: clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain)),
       },
     }));
   }
@@ -7695,6 +7690,7 @@ function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
       payload: {
         groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
         nodeStepIndex: step,
+        audioGain: clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain)),
       },
     }));
     stats.spawnedEnemies += 1;
@@ -7744,8 +7740,9 @@ function executePerformedBeatEvent(event) {
     group.instrumentId = instrumentId;
     group.role = normalizeSwarmRole(ev.role || group.role, BEAT_EVENT_ROLES.BASS);
     const duckForPlayer = ev?.payload?.duckForPlayer === true;
+    const audioGain = clamp01(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
     const enemyAudible = duckForPlayer ? shouldKeepEnemyAudibleDuringPlayerDuck(ev, 'spawner') : true;
-    const triggerVolume = SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME * (duckForPlayer ? PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT : 1);
+    const triggerVolume = SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME * (duckForPlayer ? PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT : 1) * audioGain;
     const noteName = clampNoteToDirectorPool(ev.note, beatIndex + ev.stepIndex + ev.actorId);
     const requestedNote = String(ev.note || '').trim();
     group.note = noteName;
@@ -7835,8 +7832,9 @@ function executePerformedBeatEvent(event) {
     group.instrument = instrumentId;
     group.role = normalizeSwarmRole(ev.role || group.role, BEAT_EVENT_ROLES.LEAD);
     const duckForPlayer = ev?.payload?.duckForPlayer === true;
+    const audioGain = clamp01(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
     const enemyAudible = duckForPlayer ? false : true;
-    const triggerVolume = DRAW_SNAKE_TRIGGER_SOUND_VOLUME * (duckForPlayer ? PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT : 1);
+    const triggerVolume = DRAW_SNAKE_TRIGGER_SOUND_VOLUME * (duckForPlayer ? PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT : 1) * audioGain;
     // Compatibility mirror while non-group code paths still exist.
     enemy.drawsnakeInstrument = instrumentId;
     const noteName = clampNoteToDirectorPool(ev.note, beatIndex + ev.stepIndex + ev.actorId);
@@ -7887,8 +7885,9 @@ function executePerformedBeatEvent(event) {
     group.instrumentId = instrumentId;
     group.role = normalizeSwarmRole(ev.role || group.role, BEAT_EVENT_ROLES.LEAD);
     const duckForPlayer = ev?.payload?.duckForPlayer === true;
+    const audioGain = clamp01(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
     const enemyAudible = duckForPlayer ? false : true;
-    const triggerVolume = 0.42 * (duckForPlayer ? PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT : 1);
+    const triggerVolume = 0.42 * (duckForPlayer ? PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT : 1) * audioGain;
     if (enemyAudible) {
       try { triggerInstrument(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
     }

@@ -7,7 +7,6 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const composer = options?.composer && typeof options.composer === 'object' ? options.composer : {};
   const motifScopeKey = String(options?.motifScopeKey || 'default');
 
-  const retireGroup = typeof options?.retireGroup === 'function' ? options.retireGroup : (() => {});
   const getAliveIdsForGroup = typeof options?.getAliveIdsForGroup === 'function' ? options.getAliveIdsForGroup : (() => new Set());
   const spawnComposerGroupOffscreenMembers = typeof options?.spawnComposerGroupOffscreenMembers === 'function' ? options.spawnComposerGroupOffscreenMembers : (() => {});
   const pickTemplate = typeof options?.pickTemplate === 'function' ? options.pickTemplate : (() => null);
@@ -36,8 +35,8 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       continue;
     }
     if (g.sectionKey !== sectionKey) {
-      retireGroup(g, 'section_change_cleanup');
-      continue;
+      // Keep groups alive across section boundaries and adapt scheduling/audio instead.
+      g.sectionKey = sectionKey;
     }
     if (Number(pacingCaps.maxComposerPerformers) > 0) {
       g.performers = Math.max(1, Math.min(Math.trunc(Number(g.performers) || 1), Math.trunc(Number(pacingCaps.maxComposerPerformers) || 1)));
@@ -50,14 +49,12 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   }
 
   const sameSection = composerEnemyGroups.filter((g) => g && g.sectionKey === sectionKey && g.active && !g.retiring);
-  if (sameSection.length > desiredGroups) {
-    const extras = sameSection
-      .slice()
-      .sort((a, b) => (Math.trunc(Number(b?.id) || 0) - Math.trunc(Number(a?.id) || 0)))
-      .slice(0, sameSection.length - desiredGroups);
-    for (const extra of extras) {
-      retireGroup(extra, 'director_cleanup');
-    }
+  const rankedGroups = sameSection
+    .slice()
+    .sort((a, b) => (Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0)));
+  for (let i = 0; i < rankedGroups.length; i++) {
+    const group = rankedGroups[i];
+    group.musicParticipationGain = (i < desiredGroups) ? 1 : 0.35;
   }
 
   const currentSectionCount = composerEnemyGroups
