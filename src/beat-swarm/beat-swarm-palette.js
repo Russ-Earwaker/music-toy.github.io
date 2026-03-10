@@ -70,6 +70,20 @@ function parseEntryBaseOctave(entry) {
   return null;
 }
 
+function getEntryPitchRank(entry) {
+  const explicit = Math.trunc(Number(entry?.pitchRank));
+  if (Number.isFinite(explicit) && explicit >= 1 && explicit <= 5) return explicit;
+  const oct = parseEntryBaseOctave(entry);
+  if (Number.isFinite(oct)) {
+    if (oct <= 2) return 1;
+    if (oct === 3) return 2;
+    if (oct === 4) return 3;
+    if (oct === 5) return 4;
+    if (oct >= 6) return 5;
+  }
+  return null;
+}
+
 function entryHasToy(entry, toyKey) {
   const key = String(toyKey || '').trim().toLowerCase();
   if (!key) return false;
@@ -86,51 +100,59 @@ function entryMatchesTheme(entry, themeKey) {
 
 function entryLaneScore(entry, roleKey, roleToys) {
   const type = String(entry?.type || '').trim().toLowerCase();
+  const family = String(entry?.instrumentFamily || '').trim().toLowerCase();
+  const fn = String(entry?.functionTag || '').trim().toLowerCase();
   const id = String(entry?.id || '').trim().toLowerCase();
   const display = String(entry?.display || '').trim().toLowerCase();
-  const oct = parseEntryBaseOctave(entry);
+  const pitchRank = getEntryPitchRank(entry);
+  const laneHints = Array.isArray(entry?.laneHints) ? entry.laneHints.map((h) => String(h || '').trim().toLowerCase()) : [];
   const hasLoop = roleToys.some((t) => t === 'loopgrid' || t === 'loopgrid-drum') && (entryHasToy(entry, 'loopgrid') || entryHasToy(entry, 'loopgrid-drum'));
   const hasDraw = roleToys.includes('drawgrid') && entryHasToy(entry, 'drawgrid');
-  const text = `${type} ${id} ${display}`;
-  const isPercussive = /drum|percussion|djembe|clap|cowbell|effect/.test(text);
-  const isBassLike = /bass|kick/.test(text);
-  const isTonalLeadLike = /piano|string|guitar|kalimba|marimba|xylophone|glockenspiel|ukulele|synth/.test(text);
+  const text = `${type} ${family} ${fn} ${id} ${display}`;
+  const isPercussive = /drum|percussion|djembe|clap|cowbell|snare|hihat|hat|kick/.test(text);
+  const isBassLike = /bass|kick|sub/.test(text);
+  const isMotionLike = /effect|fx|noise|texture|ambient|wind|sweep|whoosh/.test(text);
+  const isTonalLeadLike = /piano|string|guitar|kalimba|marimba|xylophone|glockenspiel|ukulele|synth|wind|flute|lead/.test(text);
 
   let score = 0;
   if (entry?.priority) score += 0.5;
+  if (laneHints.includes(roleKey)) score += 4.5;
 
   if (roleKey === BEAT_EVENT_ROLES.BASS) {
     if (hasLoop) score += 3;
     if (isBassLike) score += 3;
     if (isPercussive) score += 1.5;
-    if (Number.isFinite(oct)) {
-      if (oct <= 3) score += 3;
-      else if (oct === 4) score += 1;
+    if (Number.isFinite(pitchRank)) {
+      if (pitchRank <= 2) score += 3.5;
+      else if (pitchRank === 3) score += 1.2;
       else score -= 2;
     }
+    if (isMotionLike) score -= 1;
     if (hasDraw) score -= 1;
     return score;
   }
 
   if (roleKey === BEAT_EVENT_ROLES.LEAD) {
     if (hasDraw) score += 3;
+    if (hasLoop) score += 0.8;
     if (isTonalLeadLike) score += 2;
     if (isPercussive) score -= 1.5;
-    if (Number.isFinite(oct)) {
-      if (oct >= 4 && oct <= 6) score += 3;
-      else if (oct === 3) score += 0.5;
-      else if (oct <= 2) score -= 2;
+    if (Number.isFinite(pitchRank)) {
+      if (pitchRank >= 3 && pitchRank <= 5) score += 3;
+      else if (pitchRank === 2) score += 0.5;
+      else if (pitchRank === 1) score -= 2;
     }
     return score;
   }
 
   if (roleKey === BEAT_EVENT_ROLES.MOTION) {
     if (hasDraw) score += 1.5;
-    if (isPercussive) score += 2;
+    if (isMotionLike) score += 3;
+    if (isPercussive) score += 1;
     if (isBassLike) score -= 2;
-    if (Number.isFinite(oct)) {
-      if (oct >= 4) score += 1.5;
-      else if (oct <= 2) score -= 1.5;
+    if (Number.isFinite(pitchRank)) {
+      if (pitchRank >= 4) score += 1.5;
+      else if (pitchRank <= 2) score -= 1.5;
     }
     return score;
   }
@@ -138,10 +160,11 @@ function entryLaneScore(entry, roleKey, roleToys) {
   // Accent lane
   if (hasLoop || hasDraw) score += 1.5;
   if (isPercussive) score += 2;
+  if (isMotionLike) score += 0.5;
   if (isBassLike) score -= 0.5;
-  if (Number.isFinite(oct)) {
-    if (oct >= 3 && oct <= 5) score += 2;
-    else if (oct <= 2 || oct >= 6) score -= 0.8;
+  if (Number.isFinite(pitchRank)) {
+    if (pitchRank >= 2 && pitchRank <= 4) score += 2;
+    else if (pitchRank === 1 || pitchRank === 5) score -= 0.8;
   }
   return score;
 }

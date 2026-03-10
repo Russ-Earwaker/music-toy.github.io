@@ -66,7 +66,7 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     : Math.floor(beatIndex / Math.max(1, beatsPerBar));
   const actionType = String(ev.actionType || '').trim();
   const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
-  const requestedNote = String(context?.requestedNote ?? ev.note ?? '').trim();
+  const requestedNote = String(context?.requestedNote ?? payload.requestedNoteRaw ?? ev.note ?? '').trim();
   const resolvedNote = String(context?.resolvedNote ?? requestedNote).trim();
   const noteWasClamped = context?.noteWasClamped === true;
   const sourceSystem = normalizeSourceSystem(context?.sourceSystem, actionType);
@@ -447,15 +447,31 @@ function collectSpawnerSync(events) {
 function collectNotePoolCompliance(events) {
   let considered = 0;
   let clamped = 0;
+  let offPoolNoteRequests = 0;
+  let clampedNoteCount = 0;
+  const clampedNoteBySource = Object.create(null);
+  const clampedNoteByEnemyId = Object.create(null);
   for (const ev of events) {
     const requested = String(ev?.note || '').trim();
     const resolved = String(ev?.noteResolved || '').trim();
     if (!requested || !resolved) continue;
     considered += 1;
-    if (ev?.noteWasClamped === true || requested !== resolved) clamped += 1;
+    if (ev?.noteWasClamped === true || requested !== resolved) {
+      clamped += 1;
+      offPoolNoteRequests += 1;
+      clampedNoteCount += 1;
+      const src = String(ev?.sourceSystem || '').trim().toLowerCase() || 'unknown';
+      clampedNoteBySource[src] = clampInt(clampedNoteBySource[src], 0, 0) + 1;
+      const actorId = clampInt(ev?.actorId, 0, 0);
+      if (actorId > 0) clampedNoteByEnemyId[String(actorId)] = clampInt(clampedNoteByEnemyId[String(actorId)], 0, 0) + 1;
+    }
   }
   const insidePool = Math.max(0, considered - clamped);
   return {
+    offPoolNoteRequests,
+    clampedNoteCount,
+    clampedNoteBySource,
+    clampedNoteByEnemyId,
     considered,
     clamped,
     insidePool,

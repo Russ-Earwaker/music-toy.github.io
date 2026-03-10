@@ -13,6 +13,16 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const getComposerMotif = typeof options?.getComposerMotif === 'function' ? options.getComposerMotif : ((_scope, _id, factory) => (typeof factory === 'function' ? factory() : null));
   const createComposerEnemyGroupProfile = typeof options?.createComposerEnemyGroupProfile === 'function' ? options.createComposerEnemyGroupProfile : (() => ({}));
   const createGroupFromMotif = typeof options?.createGroupFromMotif === 'function' ? options.createGroupFromMotif : (() => null);
+  const normalizeLifecycleState = (value, fallback = 'active') => {
+    const raw = String(value || '').trim().toLowerCase();
+    if (raw === 'active') return 'active';
+    if (raw === 'retiring') return 'retiring';
+    if (raw === 'inactiveforscheduling' || raw === 'inactive_for_scheduling' || raw === 'inactive-for-scheduling') return 'inactiveForScheduling';
+    const fb = String(fallback || 'active').trim().toLowerCase();
+    if (fb === 'retiring') return 'retiring';
+    if (fb.includes('inactive')) return 'inactiveForScheduling';
+    return 'active';
+  };
 
   const responseMode = String(pacingCaps.responseMode || 'none');
   const responseAllowsGroups = responseMode === 'either' || responseMode === 'group';
@@ -31,9 +41,11 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     const aliveIds = getAliveIdsForGroup(g);
     g.memberIds = aliveIds;
     if (g.retiring || g.active === false) {
+      g.lifecycleState = normalizeLifecycleState(g.lifecycleState, 'retiring');
       if (!aliveIds.size) composerEnemyGroups.splice(i, 1);
       continue;
     }
+    g.lifecycleState = normalizeLifecycleState(g.lifecycleState, 'active');
     if (g.sectionKey !== sectionKey) {
       // Keep groups alive across section boundaries and adapt scheduling/audio instead.
       g.sectionKey = sectionKey;
@@ -54,7 +66,9 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     .sort((a, b) => (Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0)));
   for (let i = 0; i < rankedGroups.length; i++) {
     const group = rankedGroups[i];
-    group.musicParticipationGain = (i < desiredGroups) ? 1 : 0.35;
+    const shouldSchedule = i < desiredGroups;
+    group.musicParticipationGain = shouldSchedule ? 1 : 0.35;
+    group.lifecycleState = shouldSchedule ? 'active' : 'inactiveForScheduling';
   }
 
   const currentSectionCount = composerEnemyGroups
@@ -79,6 +93,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       pacingCaps,
     });
     if (!group) continue;
+    group.lifecycleState = normalizeLifecycleState(group.lifecycleState, 'active');
     composerEnemyGroups.push(group);
     spawnComposerGroupOffscreenMembers(group, Math.max(0, Math.trunc(Number(group.size) || 0)));
   }

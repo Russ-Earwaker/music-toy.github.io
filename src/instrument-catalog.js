@@ -28,11 +28,44 @@ export async function loadInstrumentEntries(){
       const dispIdx = header.findIndex(h=>/^(display\s*_?name|display|label|title)$/i.test(h));
       const synthIdx= header.findIndex(h=>/^(synth|synth_id|tone)$/i.test(h));
       const typeIdx = header.findIndex(h=>/^(instrument\s*_?type|type|category)$/i.test(h));
+      const familyIdx = header.findIndex(h=>/^(instrument|family|instrument_family)$/i.test(h));
+      const fnIdx = header.findIndex(h=>/^(function|usage|use|purpose)$/i.test(h));
       const themeIdx= header.findIndex(h=>/^themes?$/i.test(h));
       const recoIdx = header.findIndex(h=>/^recommended[_-]?toys$/i.test(h));
+      const laneIdx = header.findIndex(h=>/^(lane[_-]?tags?|role[_-]?tags?|suitability|suitable[_-]?for|musical[_-]?roles?)$/i.test(h));
+      const pitchIdx = header.findIndex(h=>/^(pitch|pitch[_-]?grade|pitch[_-]?band|register)$/i.test(h));
       const baseNoteIdx = header.findIndex(h=>/^(base\s*_?note|baseNote|note_base)$/i.test(h));
       const baseOctIdx = header.findIndex(h=>/^(base\s*_?oct(ave)?|baseOct(ave)?|octave)$/i.test(h));
       const priIdx  = header.findIndex(h=>/^(priority|is_priority|ispriority|first_pick|firstpick)$/i.test(h));
+      const mapLaneToken = (rawToken) => {
+        const t = String(rawToken || '').trim().toLowerCase();
+        if (!t) return '';
+        if (t === 'bass' || t === 'drum' || t === 'groove' || t === 'rhythm') return 'bass';
+        if (t === 'lead' || t === 'melody' || t === 'phrase') return 'lead';
+        if (t === 'accent' || t === 'fx' || t === 'effect') return 'accent';
+        if (t === 'motion' || t === 'cosmetic' || t === 'texture' || t === 'ambient') return 'motion';
+        return '';
+      };
+      const parsePitchRank = (rawValue, baseOctRaw) => {
+        const raw = String(rawValue || '').trim().toLowerCase();
+        if (raw) {
+          const n = Number(raw);
+          if (Number.isFinite(n)) return Math.max(1, Math.min(5, Math.trunc(n)));
+          if (raw.includes('very low') || raw.includes('sub') || raw.includes('deep')) return 1;
+          if (raw.includes('low')) return 2;
+          if (raw.includes('mid')) return raw.includes('high') ? 4 : 3;
+          if (raw.includes('high')) return 5;
+        }
+        const oct = Math.trunc(Number(baseOctRaw));
+        if (Number.isFinite(oct)) {
+          if (oct <= 2) return 1;
+          if (oct === 3) return 2;
+          if (oct === 4) return 3;
+          if (oct === 5) return 4;
+          if (oct >= 6) return 5;
+        }
+        return null;
+      };
       ID_TO_DISPLAY_NAME.clear(); DISPLAY_NAME_TO_ID.clear(); ID_TO_THEMES.clear(); ALL_THEMES.clear();
       const out = [];
       for (const line of lines){
@@ -40,6 +73,8 @@ export async function loadInstrumentEntries(){
         const id = String((idIdx !== -1 ? cells[idIdx] : '') || cells[synthIdx] || '').trim();
         const display = String((cells[dispIdx] || id)).trim();
         const type = String((cells[typeIdx]||'')).trim();
+        const instrumentFamily = String((familyIdx >= 0 ? cells[familyIdx] : '') || '').trim();
+        const functionTag = String((fnIdx >= 0 ? cells[fnIdx] : '') || '').trim();
         const synth = String((cells[synthIdx]||'')).trim();
         let baseNote = String((baseNoteIdx >= 0 ? cells[baseNoteIdx] : '') || '').trim();
         const baseOct = String((baseOctIdx >= 0 ? cells[baseOctIdx] : '') || '').trim();
@@ -48,10 +83,31 @@ export async function loadInstrumentEntries(){
         const themes = themesRaw.split(/[;|]/).map(t=>t.trim()).filter(Boolean);
         const recoRaw = recoIdx >= 0 ? String(cells[recoIdx] || '') : '';
         const recommendedToys = recoRaw.split(/[;|]/).map(t=>t.trim().toLowerCase()).filter(Boolean);
+        const laneRaw = laneIdx >= 0 ? String(cells[laneIdx] || '') : '';
+        const laneHints = laneRaw
+          .split(/[;|,/]/)
+          .map((token) => mapLaneToken(token))
+          .filter(Boolean);
+        const pitchGrade = String((pitchIdx >= 0 ? cells[pitchIdx] : '') || '').trim();
+        const pitchRank = parsePitchRank(pitchGrade, baseOct);
         const priRaw = priIdx >= 0 ? String(cells[priIdx] || '') : '';
         const priority = /^(1|true|yes|y|prio|priority)$/i.test(priRaw.trim());
         if (!id || !display) continue;
-        out.push({ id, display, type, synth, themes, recommendedToys, priority, baseNote: baseNote || undefined });
+        out.push({
+          id,
+          display,
+          type,
+          instrumentFamily,
+          functionTag,
+          synth,
+          themes,
+          recommendedToys,
+          laneHints,
+          pitchGrade: pitchGrade || undefined,
+          pitchRank: Number.isFinite(pitchRank) ? pitchRank : undefined,
+          priority,
+          baseNote: baseNote || undefined,
+        });
         ID_TO_DISPLAY_NAME.set(id, display);
         DISPLAY_NAME_TO_ID.set(display, id);
         if (themes.length){

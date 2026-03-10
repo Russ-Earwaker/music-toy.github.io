@@ -74,6 +74,7 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     composerRole: normalizeSwarmRole('lead', leadRole),
     musicGroupId: Math.trunc(Number(group.id) || 0),
     musicGroupType: 'composer',
+    lifecycleState: String(group?.lifecycleState || 'active'),
   };
   enemies.push(enemy);
   group.memberIds?.add?.(enemy.id);

@@ -1,5 +1,16 @@
 import { normalizeCallResponseLane, chooseResponseNoteFromPool } from './beat-swarm-groups.js';
 
+function normalizeLifecycleState(value, fallback = 'active') {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'active') return 'active';
+  if (raw === 'retiring') return 'retiring';
+  if (raw === 'inactiveforscheduling' || raw === 'inactive_for_scheduling' || raw === 'inactive-for-scheduling') return 'inactiveForScheduling';
+  const fb = String(fallback || 'active').trim().toLowerCase();
+  if (fb === 'retiring') return 'retiring';
+  if (fb.includes('inactive')) return 'inactiveForScheduling';
+  return 'active';
+}
+
 export function chooseComposerGroupEnemyForNote(options = null) {
   const group = options?.group || null;
   const aliveMembers = Array.isArray(options?.aliveMembers) ? options.aliveMembers : [];
@@ -60,6 +71,8 @@ export function collectComposerGroupStepBeatEvents(options = null) {
 
   for (const group of composerEnemyGroups) {
     if (!group || !group.active || group.retiring) continue;
+    const lifecycleState = normalizeLifecycleState(group?.lifecycleState, 'active');
+    if (lifecycleState === 'retiring') continue;
     const lane = normalizeCallResponseLane(group?.callResponseLane, 'call');
     if (!isCallResponseLaneActive(lane, stepAbs, activeGroups.length)) continue;
     const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
@@ -81,22 +94,26 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const performerCount = Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
     const notesLen = Math.max(1, Array.isArray(group?.notes) ? group.notes.length : 0);
     const noteIdx = Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen;
+    const noteNameBaseRaw = normalizeSwarmNoteName(group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
     const noteNameBase = clampNoteToDirectorPool(
-      normalizeSwarmNoteName(group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote(),
+      noteNameBaseRaw,
       stepAbs + noteIdx
     );
-    const noteName = lane === 'response'
-      ? clampNoteToDirectorPool(
+    const noteNameRaw = lane === 'response'
+      ? normalizeSwarmNoteName(
         chooseResponseNoteFromPool({
           callNote: callResponseRuntime.lastCallNote,
-          fallbackNote: noteNameBase,
+          fallbackNote: noteNameBaseRaw,
           stepAbs,
           notePool: getDirectorNotePool(),
           normalizeNoteName: normalizeSwarmNoteName,
-        }),
-        stepAbs + noteIdx + 1
-      )
-      : noteNameBase;
+        })
+      ) || noteNameBaseRaw
+      : noteNameBaseRaw;
+    const noteName = clampNoteToDirectorPool(
+      noteNameRaw,
+      stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
+    );
     group.noteCursor = noteIdx + 1;
 
     const performers = [];
@@ -135,6 +152,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(performers[0], roles.lead), roles.lead),
       resolveSwarmSoundInstrumentId('projectile') || 'tone'
     );
+    const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
     for (const enemy of performers) {
       events.push(createPerformedBeatEvent({
         actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
@@ -151,7 +169,8 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         payload: {
           groupId,
           callResponseLane: lane,
-          audioGain: clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain)),
+          audioGain: clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain),
+          requestedNoteRaw: noteName,
         },
       }));
     }
