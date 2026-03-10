@@ -1,4 +1,4 @@
-import { getIdForDisplayName } from '../instrument-catalog.js';
+import { getIdForDisplayName, getInstrumentEntries } from '../instrument-catalog.js';
 import { getSoundThemeKey, pickInstrumentForToy } from '../sound-theme.js';
 import { BEAT_EVENT_ROLES } from './beat-events.js';
 
@@ -60,11 +60,121 @@ function normalizeRole(roleName, fallback = BEAT_EVENT_ROLES.ACCENT) {
   return normalizeRole(fallback, BEAT_EVENT_ROLES.ACCENT);
 }
 
+function parseEntryBaseOctave(entry) {
+  const base = String(entry?.baseNote || '').trim();
+  const m = base.match(/-?\d+/);
+  if (m) {
+    const n = Math.trunc(Number(m[0]));
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function entryHasToy(entry, toyKey) {
+  const key = String(toyKey || '').trim().toLowerCase();
+  if (!key) return false;
+  const toys = Array.isArray(entry?.recommendedToys) ? entry.recommendedToys : [];
+  return toys.map((t) => String(t || '').trim().toLowerCase()).includes(key);
+}
+
+function entryMatchesTheme(entry, themeKey) {
+  const key = String(themeKey || '').trim();
+  if (!key) return true;
+  const themes = Array.isArray(entry?.themes) ? entry.themes : [];
+  return themes.includes(key);
+}
+
+function entryLaneScore(entry, roleKey, roleToys) {
+  const type = String(entry?.type || '').trim().toLowerCase();
+  const id = String(entry?.id || '').trim().toLowerCase();
+  const display = String(entry?.display || '').trim().toLowerCase();
+  const oct = parseEntryBaseOctave(entry);
+  const hasLoop = roleToys.some((t) => t === 'loopgrid' || t === 'loopgrid-drum') && (entryHasToy(entry, 'loopgrid') || entryHasToy(entry, 'loopgrid-drum'));
+  const hasDraw = roleToys.includes('drawgrid') && entryHasToy(entry, 'drawgrid');
+  const text = `${type} ${id} ${display}`;
+  const isPercussive = /drum|percussion|djembe|clap|cowbell|effect/.test(text);
+  const isBassLike = /bass|kick/.test(text);
+  const isTonalLeadLike = /piano|string|guitar|kalimba|marimba|xylophone|glockenspiel|ukulele|synth/.test(text);
+
+  let score = 0;
+  if (entry?.priority) score += 0.5;
+
+  if (roleKey === BEAT_EVENT_ROLES.BASS) {
+    if (hasLoop) score += 3;
+    if (isBassLike) score += 3;
+    if (isPercussive) score += 1.5;
+    if (Number.isFinite(oct)) {
+      if (oct <= 3) score += 3;
+      else if (oct === 4) score += 1;
+      else score -= 2;
+    }
+    if (hasDraw) score -= 1;
+    return score;
+  }
+
+  if (roleKey === BEAT_EVENT_ROLES.LEAD) {
+    if (hasDraw) score += 3;
+    if (isTonalLeadLike) score += 2;
+    if (isPercussive) score -= 1.5;
+    if (Number.isFinite(oct)) {
+      if (oct >= 4 && oct <= 6) score += 3;
+      else if (oct === 3) score += 0.5;
+      else if (oct <= 2) score -= 2;
+    }
+    return score;
+  }
+
+  if (roleKey === BEAT_EVENT_ROLES.MOTION) {
+    if (hasDraw) score += 1.5;
+    if (isPercussive) score += 2;
+    if (isBassLike) score -= 2;
+    if (Number.isFinite(oct)) {
+      if (oct >= 4) score += 1.5;
+      else if (oct <= 2) score -= 1.5;
+    }
+    return score;
+  }
+
+  // Accent lane
+  if (hasLoop || hasDraw) score += 1.5;
+  if (isPercussive) score += 2;
+  if (isBassLike) score -= 0.5;
+  if (Number.isFinite(oct)) {
+    if (oct >= 3 && oct <= 5) score += 2;
+    else if (oct <= 2 || oct >= 6) score -= 0.8;
+  }
+  return score;
+}
+
 function pickRoleInstrument(themeKey, role, usedIds = null, previousId = '') {
   const roleKey = normalizeRole(role, BEAT_EVENT_ROLES.ACCENT);
   const roleToys = ROLE_TOY_KEYS[roleKey] || ROLE_TOY_KEYS[BEAT_EVENT_ROLES.ACCENT];
   const used = usedIds instanceof Set ? usedIds : new Set();
   if (previousId) used.add(String(previousId || '').trim());
+  const entries = Array.isArray(getInstrumentEntries?.()) ? getInstrumentEntries() : [];
+  if (entries.length) {
+    const unused = entries.filter((e) => e?.id && !used.has(String(e.id || '').trim()));
+    const toyPool = unused.filter((e) => roleToys.some((toy) => entryHasToy(e, toy)));
+    const basePool = toyPool.length ? toyPool : (unused.length ? unused : entries);
+    const themed = basePool.filter((e) => entryMatchesTheme(e, themeKey));
+    const scoringPool = themed.length ? themed : basePool;
+    if (scoringPool.length) {
+      const ranked = scoringPool
+        .slice()
+        .sort((a, b) => {
+          const sa = entryLaneScore(a, roleKey, roleToys);
+          const sb = entryLaneScore(b, roleKey, roleToys);
+          if (sb !== sa) return sb - sa;
+          return String(a?.id || '').localeCompare(String(b?.id || ''));
+        });
+      const topScore = entryLaneScore(ranked[0], roleKey, roleToys);
+      const nearBest = ranked.filter((e) => (topScore - entryLaneScore(e, roleKey, roleToys)) <= 0.75);
+      const pickPool = nearBest.length ? nearBest : ranked;
+      const picked = pickPool[Math.floor(Math.random() * pickPool.length)] || ranked[0];
+      const pickedId = String(picked?.id || '').trim();
+      if (pickedId) return pickedId;
+    }
+  }
   for (const toyKey of roleToys) {
     const picked = String(pickInstrumentForToy?.(toyKey, {
       theme: themeKey,
