@@ -11,6 +11,61 @@ function normalizeLifecycleState(value, fallback = 'active') {
   return 'active';
 }
 
+function normalizePhraseNoteList(values, normalizeNoteName) {
+  if (!Array.isArray(values) || !values.length) return [];
+  const out = [];
+  const seen = new Set();
+  for (const v of values) {
+    const note = normalizeNoteName(v);
+    if (!note || seen.has(note)) continue;
+    seen.add(note);
+    out.push(note);
+  }
+  return out;
+}
+
+function getPhraseStepState(stepAbs = 0, phraseSteps = 4) {
+  const steps = Math.max(2, Math.trunc(Number(phraseSteps) || 4));
+  const abs = Math.max(0, Math.trunc(Number(stepAbs) || 0));
+  const stepInPhrase = ((abs % steps) + steps) % steps;
+  const stepsToEnd = Math.max(0, (steps - 1) - stepInPhrase);
+  const nearPhraseEnd = stepsToEnd <= Math.max(1, Math.floor(steps * 0.25));
+  const resolutionOpportunity = stepsToEnd === 0;
+  return {
+    phraseSteps: steps,
+    stepInPhrase,
+    stepsToEnd,
+    nearPhraseEnd,
+    resolutionOpportunity,
+  };
+}
+
+function pickClosestPhraseTarget(noteName, targets, options = null) {
+  const normalizeNoteName = typeof options?.normalizeNoteName === 'function'
+    ? options.normalizeNoteName
+    : ((n) => String(n || '').trim());
+  const getNotePoolIndex = typeof options?.getNotePoolIndex === 'function'
+    ? options.getNotePoolIndex
+    : (() => -1);
+  const note = normalizeNoteName(noteName);
+  const candidateNotes = normalizePhraseNoteList(targets, normalizeNoteName);
+  if (!candidateNotes.length) return '';
+  const noteIdx = Math.max(-1, Math.trunc(Number(getNotePoolIndex(note)) || -1));
+  if (noteIdx < 0) return candidateNotes[0];
+  let picked = candidateNotes[0];
+  let best = Number.POSITIVE_INFINITY;
+  for (const candidate of candidateNotes) {
+    const idx = Math.max(-1, Math.trunc(Number(getNotePoolIndex(candidate)) || -1));
+    if (idx < 0) continue;
+    const dist = Math.abs(idx - noteIdx);
+    if (dist < best) {
+      best = dist;
+      picked = candidate;
+    }
+  }
+  return picked;
+}
+
 export function chooseComposerGroupEnemyForNote(options = null) {
   const group = options?.group || null;
   const aliveMembers = Array.isArray(options?.aliveMembers) ? options.aliveMembers : [];
@@ -59,6 +114,8 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const normalizeSwarmNoteName = typeof options?.normalizeSwarmNoteName === 'function' ? options.normalizeSwarmNoteName : ((n) => String(n || '').trim());
   const getRandomSwarmPentatonicNote = typeof options?.getRandomSwarmPentatonicNote === 'function' ? options.getRandomSwarmPentatonicNote : (() => 'C4');
   const getDirectorNotePool = typeof options?.getDirectorNotePool === 'function' ? options.getDirectorNotePool : (() => []);
+  const getNotePoolIndex = typeof options?.getNotePoolIndex === 'function' ? options.getNotePoolIndex : (() => -1);
+  const getPhraseLengthSteps = typeof options?.getPhraseLengthSteps === 'function' ? options.getPhraseLengthSteps : (() => 4);
   const normalizeSwarmRole = typeof options?.normalizeSwarmRole === 'function' ? options.normalizeSwarmRole : ((r, f) => String(r || f || '').trim().toLowerCase());
   const getSwarmRoleForEnemy = typeof options?.getSwarmRoleForEnemy === 'function' ? options.getSwarmRoleForEnemy : (() => String(options?.roles?.lead || 'lead'));
   const resolveSwarmRoleInstrumentId = typeof options?.resolveSwarmRoleInstrumentId === 'function' ? options.resolveSwarmRoleInstrumentId : ((_, fallback) => fallback);
@@ -114,13 +171,40 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       noteNameRaw,
       stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
     );
+    const phraseStep = getPhraseStepState(stepAbs, getPhraseLengthSteps(lane, group, stepAbs));
+    const phraseTargets = normalizePhraseNoteList([
+      ...(Array.isArray(group?.resolutionTargets) ? group.resolutionTargets : []),
+      group?.phraseRoot,
+      group?.phraseFifth,
+      ...(Array.isArray(group?.gravityNotes) ? group.gravityNotes : []),
+    ], normalizeSwarmNoteName);
+    const phraseGravityTarget = phraseStep.nearPhraseEnd
+      ? pickClosestPhraseTarget(noteName, phraseTargets, {
+        normalizeNoteName: normalizeSwarmNoteName,
+        getNotePoolIndex,
+      })
+      : '';
+    const gravityBiasChance = phraseStep.resolutionOpportunity ? 0.72 : 0.5;
+    const phraseGravityOpportunity = !!phraseGravityTarget && phraseStep.nearPhraseEnd;
+    const gravityNoteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
+      ? phraseGravityTarget
+      : noteNameRaw;
+    const gravityNoteName = clampNoteToDirectorPool(
+      gravityNoteNameRaw,
+      stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
+    );
+    const phraseGravityHit = phraseGravityOpportunity
+      ? normalizeSwarmNoteName(gravityNoteName) === normalizeSwarmNoteName(phraseGravityTarget)
+      : false;
+    const phraseResolutionOpportunity = phraseGravityOpportunity && phraseStep.resolutionOpportunity;
+    const phraseResolutionHit = phraseResolutionOpportunity && phraseGravityHit;
     group.noteCursor = noteIdx + 1;
 
     const performers = [];
     const usedEnemyIds = new Set();
     const primary = chooseEnemyForNote({
       group,
-      noteName,
+      noteName: gravityNoteName,
       aliveMembers,
       normalizeNoteName: normalizeSwarmNoteName,
       getFallbackNote: getRandomSwarmPentatonicNote,
@@ -159,7 +243,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         beatIndex,
         stepIndex: stepAbs,
         role: normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.lead), roles.lead),
-        note: noteName,
+        note: gravityNoteName,
         instrumentId,
         actionType: String(group.actionType || 'projectile') === 'explosion'
           ? 'composer-group-explosion'
@@ -170,7 +254,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           groupId,
           callResponseLane: lane,
           audioGain: clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain),
-          requestedNoteRaw: noteName,
+          requestedNoteRaw: gravityNoteNameRaw,
+          phraseGravityTarget,
+          phraseGravityHit,
+          phraseResolutionOpportunity,
+          phraseResolutionHit,
         },
       }));
     }
@@ -178,7 +266,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (lane === 'call') {
       callResponseRuntime.lastCallStepAbs = stepAbs;
       callResponseRuntime.lastCallGroupId = groupId;
-      callResponseRuntime.lastCallNote = noteName;
+      callResponseRuntime.lastCallNote = gravityNoteName;
     } else {
       callResponseRuntime.lastResponseStepAbs = stepAbs;
       callResponseRuntime.lastResponseGroupId = groupId;

@@ -1,234 +1,233 @@
-# Beat Swarm — Music Director Next Steps
+# Beat Swarm — Music Director Next Steps (Updated)
 
 ## Purpose
 
-This document captures **next steps for the Beat Swarm music director and diagnostic systems**.
+This document captures the current design direction and implementation tasks for the Beat Swarm music director and Music Lab systems.
 
-The goals are to improve:
+Goals:
 
-* musical coherence
-* pacing and battlefield continuity
-* sound identity
-* enemy lifecycle behaviour
-* musical diagnostics
-* system observability
-
-These changes focus on **making the procedural music system behave more like a real evolving track** while preserving gameplay readability.
+* Preserve gameplay readability
+* Improve musical coherence
+* Improve diagnostics
+* Ensure enemy behaviour is never sacrificed for music
+* Make the battlefield feel like one evolving track
 
 ---
 
-# Core Design Principles
+# Core Gameplay Rule Changes
 
-## 1. Enemies Should Never Stop Acting for Musical Reasons
+## 1. Enemy Behaviour Must Never Change Due To Musical Relevance
 
-Enemy behaviour must **never be suppressed purely to improve the music**.
+Enemy aggression, attack timing, and spawn logic must **never be reduced or disabled because the music system wants fewer notes.**
 
-Examples of actions that must remain intact:
+### Incorrect behaviour
 
-* firing weapons
-* spawning enemies
-* attack telegraphs
-* movement patterns
-* group participation
+* enemy does not fire because music density is low
+* spawner flashes but does nothing
+* group stops attacking because it is musically inactive
 
-Stopping actions breaks gameplay readability and feels unnatural.
+### Correct behaviour
 
-Instead:
+* enemy behaviour stays consistent
+* musical system only changes **audibility or prominence**
 
-**Audio participation may be reduced in volume or density, but the behaviour remains visible.**
+### Allowed musical controls
 
----
+* lower sound volume
+* reduce harmonic prominence
+* reduce note layering
+* adjust orchestration
 
-## 2. Volume Reduction Is Preferred Over Behaviour Suppression
+### Never allowed
 
-When the director wants to reduce musical density:
+* suppress gameplay behaviour
 
-* lower audio volume
-* thin audible note participation
-* preserve visual and gameplay behaviour
+### Key principle
 
-Example:
-
-Enemy continues firing but:
-
-```
-audio volume = reduced
-visual attack = unchanged
-gameplay behaviour = unchanged
-```
-
-This preserves battlefield readability while controlling the soundtrack.
+**Musical relevance affects sound, not behaviour.**
 
 ---
 
-## 3. Spawner Participation Rules
+# 2. Spawner Pulse Must Always Equal Action
 
-Spawner enemies must **always remain behaviourally consistent**.
+Spawner visual language must be simplified.
 
-If a spawner visually flashes, it should still perform its intended action.
+### Current problem
 
-However:
+Spawner enemies can:
 
-* audio intensity may be reduced
-* sound triggers may be quieter
-* accent layers may be suppressed
+* flash without spawning
+* flash with cosmetic pulse
+* flash with linked attack
+* flash with spawn
 
-Spawner visual signals must remain reliable.
+This makes spawner behaviour difficult to read.
 
-### Visual Language Rule
+### New rule
 
-Separate spawner gestures:
+**Spawner pulse must always mean a real action occurs on that beat.**
 
-| Gesture        | Meaning                        |
-| -------------- | ------------------------------ |
-| Soft pulse     | rhythm participation           |
-| Strong flash   | guaranteed spawn               |
-| Alternate tell | linked attack / fallback burst |
+### Valid actions
 
-Do not reuse the same visual cue for different behaviours.
+* spawn enemy
+* trigger linked enemy action
+* trigger hazard or burst
+
+### Invalid behaviour
+
+* pulse only for music
+* pulse without action
+
+If spawners need background rhythm participation:
+
+* use subtle idle animation
+* use battlefield motion layer
+* do NOT reuse the spawn pulse gesture
 
 ---
 
-# Using `samples.csv` to Drive Musical Roles
+# 3. Reduce Musical Density Using Mix Control
 
-The project already has **excellent metadata in `samples.csv`**:
+To reduce clutter without changing gameplay:
 
-* pitch grading
+### Use
+
+* volume scaling
+* dynamic ducking
+* instrument lane thinning
+
+### Do NOT use
+
+* disabling enemy actions
+* suppressing spawns
+* suppressing attacks
+
+### Example
+
+Enemy fires normally:
+
+Gameplay: unchanged
+Sound: volume reduced if mix crowded
+
+---
+
+# Instrument Selection From `samples.csv`
+
+The `samples.csv` metadata should drive instrument selection.
+
+Fields already available:
+
+* pitch grade
 * suitability tags (`drawgrid`, `loopgrid`)
-* sound families
+* sound family
 
-We should leverage this directly in the director.
+Use these to assign **instrument lanes**.
 
 ---
 
-## Instrument Role Lanes
+# Instrument Lanes
 
-Define instrument lanes using sample metadata.
-
-### Bass Lane
+## Bass Lane
 
 Used by:
 
 * spawners
-* heavy enemy actions
-* large attacks
+* heavy attacks
 
 Selection rules:
 
 * prefer **low pitch grade samples**
 * prefer **loopgrid / rhythm-tagged instruments**
-* avoid high melodic sounds
+* strong transient
 
 Purpose:
 
-* anchor groove
-* maintain rhythmic foundation
+Anchor the groove and maintain rhythmic foundation.
 
 ---
 
-### Lead Lane
+## Lead Lane
 
 Used by:
 
 * drawsnakes
-* phrase enemies
-* group calls
+* phrase groups
 
 Selection rules:
 
-* prefer **mid–high pitch grade**
-* prefer **drawgrid-tagged instruments**
-* melodic clarity preferred
+* mid–high pitch grade
+* drawgrid-tagged sounds
 
 Purpose:
 
-* carry melody
-* create recognizable phrases
+Carry melody and musical phrases.
 
 ---
 
-### Accent Lane
+## Accent Lane
 
 Used by:
 
-* minor enemy actions
+* minor enemies
 * short bursts
-* small hazards
 
 Selection rules:
 
-* mid pitch range
-* short decay sounds
-* game-like blips or pops
+* short decay
+* mid pitch
 
 Purpose:
 
-* rhythmic punctuation
+Rhythmic punctuation.
 
 ---
 
-### Motion Lane
+## Motion Lane
 
 Used by:
 
 * cosmetic sync gestures
-* battlefield pulse effects
+* battlefield rhythm pulses
 
 Selection rules:
 
 * quiet sounds
-* subtle rhythmic ticks
-* low prominence
+* minimal tonal weight
 
 Purpose:
 
-* keep battlefield rhythm visible without cluttering mix
+Provide subtle rhythmic glue without cluttering the mix.
 
 ---
 
-# Enemy Structure Improvements
-
-## Generic Musical Enemies Should Be Removed
-
-Generic enemies are now mostly obsolete.
-
-Instead:
-
-```
-EnemyGroup
-  id
-  role
-  size
-  motif
-  performers
-  threatLevel
-  lifecycleState
-```
-
-Even a single enemy should be treated as:
-
-```
-group size = 1
-```
-
-Benefits:
-
-* consistent motif ownership
-* easier call-and-response
-* cleaner pacing logic
-
----
-
-# Enemy Lifecycle Behaviour
+# Enemy Lifecycle Improvements
 
 ## Director Must Never Despawn Enemies
 
-The director should never directly remove enemies as part of musical pacing.
+Enemy removal reasons must be logged.
 
-Invalid behaviour:
+Possible values:
 
-* deleting groups on section change
-* cleaning up enemies because they are musically obsolete
+```
+killed
+expired
+retreated
+director_cleanup
+section_change_cleanup
+```
+
+### Expected values
+
+```
+director_cleanup = 0
+section_change_cleanup = 0
+```
+
+If these occur they are bugs.
+
+---
+
+## Lifecycle States
 
 Instead use lifecycle states:
 
@@ -239,176 +238,139 @@ inactiveForScheduling
 retreating (rare)
 ```
 
-### Retiring Behaviour
+### Retiring behaviour
 
-When retiring:
+* enemy continues acting normally
+* reduced orchestration or mix prominence
+* player eliminates them naturally
 
-* stop scheduling new phrase events
-* reduce aggression
-* reduce audio participation
-* allow player to eliminate naturally
-
-Retreating should be **rare and explicit**, not routine pacing.
+Retreating should be rare and explicit.
 
 ---
 
-# Music Lab Diagnostic System
+# Music Lab Improvements
 
-A **Music Lab system** has now been introduced to analyse Beat Swarm musical behaviour.
-
-This system is similar in concept to Perf Lab but focused on music generation.
+Music Lab exists but should be expanded.
 
 ---
 
-## Data Collection
+# Logging Points
 
-Hook into:
+Capture events at:
 
 ```
 createPerformedBeatEvent()
-director.enqueueBeatEvent()
+enqueueBeatEvent()
 executePerformedBeatEvent()
-palette changes
-pacing state changes
-enemy removals
+palette change
+pacing change
+enemy removal
 ```
 
-Log data including:
+Each event records:
 
 ```
-timestamp
-barIndex
-beatIndex
-actorId
-groupId
+bar
+beat
+step
+actor
+group
 role
 requestedNote
-executedNote
-wasClamped
-notePoolAtTime
-instrumentId
-actionType
+resolvedNote
+instrument
+action
 threatClass
 pacingState
-paletteId
-themeId
+palette
+theme
 sourceSystem
 ```
 
 ---
 
-# Music Lab Diagnostics
+# New Music Lab Diagnostics
 
 ## 1. Off-Pool Note Detection
 
-Some enemies still originate notes outside the pentatonic scale.
-
-Music Lab must detect:
-
-```
-requestedNote != executedNote
-```
+Detect if source notes violate pentatonic pool.
 
 Metrics:
 
 ```
 offPoolNoteRequests
 clampedNoteCount
-clampedNoteBySource
-clampedNoteByEnemyId
+clampedBySource
+clampedByEnemyType
 ```
 
 Important:
 
-This must record **raw requested notes before clamping**.
+Measure **requested notes before clamping.**
 
 ---
 
-## 2. Perfect-Sync Spawner Detection
+## 2. Perfect Sync Spawner Detection
 
-Multiple spawners may accidentally share identical patterns.
+Detect identical spawner patterns.
 
-Music Lab must detect:
+Metrics:
 
 ```
 perfectSyncSpawnerPairs
 nearDuplicateSpawnerPairs
-duplicateSpawnerPatternClusters
+duplicatePatternClusters
 ```
 
-Spawner patterns should vary using:
+Spawner variation techniques:
 
-* step rotation
+* phase rotation
 * note offsets
 * density thinning
-* lane assignment
-* probabilistic muting
+* probabilistic mute
 
-Perfect sync should only occur intentionally.
+Perfect sync should only occur deliberately.
 
 ---
 
 ## 3. Director Cleanup Detection
 
-Enemy removals must record reason:
+Track all enemy removals.
+
+Metrics:
 
 ```
-killed
-expired
-retreated
-director_cleanup
-section_change_cleanup
+directorCleanupRemovals
+sectionChangeCleanupRemovals
+sameFrameGroupRemovals
+groupRetirements
+naturalDeaths
 ```
 
-Expected values:
-
-```
-director_cleanup = 0
-section_change_cleanup = 0
-```
-
-Any occurrence indicates a bug.
+Director cleanup must remain zero.
 
 ---
 
-# Core Musical Metrics
-
-The Music Lab should compute the following metrics.
-
----
+# Musical Metrics
 
 ## Pitch Entropy
 
-Measures randomness of pitch distribution.
+Measures randomness of pitch selection.
 
-Too low:
+Expected ranges:
 
-```
-repetitive loop
-```
-
-Too high:
-
-```
-chaotic melody
-```
-
-Target ranges:
-
-| Role   | Expected entropy |
-| ------ | ---------------- |
-| Bass   | low              |
-| Lead   | medium           |
-| Accent | medium-high      |
-| Motion | very low         |
+| Role   | Entropy     |
+| ------ | ----------- |
+| Bass   | Low         |
+| Lead   | Medium      |
+| Accent | Medium-High |
+| Motion | Very Low    |
 
 ---
 
 ## Melodic Contour Stability
 
-Measure pitch interval patterns.
-
-Buckets:
+Interval buckets:
 
 ```
 repeat
@@ -420,7 +382,9 @@ large leap
 Lead melodies should favour:
 
 ```
-repeat / step / small leap
+repeat
+step
+small leap
 ```
 
 Large leaps should be rare.
@@ -429,14 +393,12 @@ Large leaps should be rare.
 
 ## Motif Persistence Score
 
-Measures how often short sequences repeat.
-
-Track windows:
+Track repeating note windows:
 
 ```
-2-note
-3-note
-4-note
+2 note
+3 note
+4 note
 ```
 
 Metrics:
@@ -446,13 +408,13 @@ motifPersistence
 motifReuseRate
 ```
 
-High persistence indicates recognizable hooks.
+Higher persistence indicates stronger musical identity.
 
 ---
 
 ## Role Balance
 
-Track per-bar participation:
+Track events per role:
 
 ```
 bass
@@ -461,11 +423,9 @@ accent
 motion
 ```
 
-Goal:
+Motion should not dominate the mix.
 
-Lead and bass must remain audible.
-
-Motion should not dominate.
+Bass and lead must remain audible.
 
 ---
 
@@ -479,52 +439,15 @@ lightThreat
 cosmetic
 ```
 
-Goal:
+Design rule:
 
-```
-everyone plays
-few attack
-```
-
----
-
-## Call-and-Response Detection
-
-Detect patterns such as:
-
-```
-Group A event
-Group B response within N steps
-```
-
-Metrics:
-
-```
-responsePairs
-responseRate
-```
-
----
-
-## Palette Stability
-
-Track:
-
-```
-barsSincePaletteChange
-instrumentChanges
-themeChanges
-```
-
-Goal:
-
-Long-lived sonic identity.
+**Everyone plays, few attack.**
 
 ---
 
 ## Player Masking
 
-Detect when enemy activity hides player weapon.
+Detect when enemy sound masks player weapon.
 
 Metrics:
 
@@ -533,29 +456,32 @@ enemyEventsNearPlayerShot
 playerMaskingRate
 ```
 
-Player weapon must remain readable.
+Goal:
+
+Player weapon remains clearly readable.
 
 ---
 
 # Phrase Gravity (Future System)
 
-Phrase gravity encourages melodies to resolve toward stable tones.
+Phrase gravity nudges melodies toward musically stable targets.
 
-Implementation concept:
-
-Each phrase defines **gravity notes**.
-
-Melodies are biased toward:
+Each phrase defines:
 
 ```
-phrase root
-phrase fifth
-phrase target notes
+gravityNotes
+phraseRoot
+phraseFifth
+resolutionTargets
 ```
 
-Large random leaps become less likely.
+The generator biases toward these notes near phrase endings.
 
-This maintains melodic coherence without scripting exact notes.
+### Benefits
+
+* more coherent melodies
+* fewer random leaps
+* recognizable musical phrasing
 
 ---
 
@@ -563,12 +489,11 @@ This maintains melodic coherence without scripting exact notes.
 
 The system is working when:
 
+* spawner pulse always equals action
 * enemies never disappear due to director cleanup
-* enemy behaviour remains readable
-* audio density feels intentional
-* soundtrack evolves like one track
-* spawners no longer sync accidentally
-* off-pool notes are detected and eliminated
-* player weapon remains audible
-* Music Lab metrics provide useful tuning insight
-
+* aggression does not depend on musical relevance
+* musical density is controlled via mix not behaviour
+* palette evolves smoothly
+* spawners do not accidentally sync
+* Music Lab detects off-scale notes and pattern collisions
+* battlefield feels like one evolving musical performance

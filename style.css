@@ -4627,6 +4627,51 @@ body.internal-board-active #board-main {
     0 0 calc(2px + 12px * var(--bs-cell-flash) + 16px * var(--bs-cell-pop)) rgba(255, 210, 165, calc(0.16 + 0.25 * var(--bs-cell-flash) + 0.28 * var(--bs-cell-pop)));
 }
 
+.beat-swarm-enemy-spawner-cell.is-rhythm-pulse {
+  animation: beat-swarm-spawner-rhythm-pulse 120ms ease-out;
+}
+
+.beat-swarm-enemy-spawner-cell.is-spawn-flash {
+  animation: beat-swarm-spawner-strong-flash 185ms ease-out;
+}
+
+.beat-swarm-enemy-spawner-cell.is-alt-tell {
+  animation: beat-swarm-spawner-alt-tell 210ms ease-out;
+}
+
+@keyframes beat-swarm-spawner-rhythm-pulse {
+  0% {
+    filter: brightness(1.04) saturate(1.02);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+@keyframes beat-swarm-spawner-strong-flash {
+  0% {
+    filter: brightness(1.95) saturate(1.45);
+    box-shadow:
+      0 0 24px rgba(255, 176, 88, 0.95),
+      0 0 10px rgba(255, 224, 178, 0.78);
+  }
+  100% {
+    filter: brightness(1.18) saturate(1.08);
+  }
+}
+
+@keyframes beat-swarm-spawner-alt-tell {
+  0% {
+    filter: brightness(1.58) saturate(1.2) hue-rotate(148deg);
+    box-shadow:
+      0 0 22px rgba(96, 208, 255, 0.9),
+      0 0 10px rgba(169, 232, 255, 0.72);
+  }
+  100% {
+    filter: brightness(1.04) saturate(1.02) hue-rotate(112deg);
+  }
+}
+
 .beat-swarm-enemy.is-hit-flash {
   animation: beat-swarm-enemy-hit-flash 130ms ease-out;
 }

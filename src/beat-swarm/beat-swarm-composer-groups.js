@@ -108,7 +108,8 @@ export function createComposerEnemyGroupProfile(options = null) {
   const size = Math.max(sizeMin, Math.min(sizeMax, sizeBase + sizeBias));
 
   const toyKey = role === bassRole ? 'loopgrid-drum' : 'drawgrid';
-  const instrument = pickEnemyInstrumentIdForToyRandom(toyKey) || resolveSwarmSoundInstrumentId('projectile') || 'tone';
+  const instrumentLane = role === bassRole ? 'bass' : 'lead';
+  const instrument = pickEnemyInstrumentIdForToyRandom(toyKey, null, { lane: instrumentLane, role }) || resolveSwarmSoundInstrumentId('projectile') || 'tone';
 
   return {
     templateId,

@@ -74,6 +74,22 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const enemyAudible = context?.enemyAudible === true
     ? true
     : (context?.enemyAudible === false ? false : null);
+  const phraseGravityTarget = String(context?.phraseGravityTarget ?? payload.phraseGravityTarget ?? '').trim();
+  const phraseGravityHit = context?.phraseGravityHit === true
+    ? true
+    : (context?.phraseGravityHit === false
+      ? false
+      : (payload?.phraseGravityHit === true ? true : (payload?.phraseGravityHit === false ? false : null)));
+  const phraseResolutionOpportunity = context?.phraseResolutionOpportunity === true
+    ? true
+    : (context?.phraseResolutionOpportunity === false
+      ? false
+      : (payload?.phraseResolutionOpportunity === true ? true : (payload?.phraseResolutionOpportunity === false ? false : null)));
+  const phraseResolutionHit = context?.phraseResolutionHit === true
+    ? true
+    : (context?.phraseResolutionHit === false
+      ? false
+      : (payload?.phraseResolutionHit === true ? true : (payload?.phraseResolutionHit === false ? false : null)));
   return {
     tMs: nowMs(),
     phase: String(phase || '').trim() || 'queued',
@@ -98,6 +114,10 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     playerAudible,
     enemyAudible,
     visualSyncType: String(ev.visualSyncType || '').trim(),
+    phraseGravityTarget,
+    phraseGravityHit,
+    phraseResolutionOpportunity,
+    phraseResolutionHit,
   };
 }
 
@@ -250,6 +270,65 @@ function collectIntervalProfile(events) {
     ? (buckets.repeat + buckets.step + buckets.smallLeap) / compared
     : 0;
   return { buckets, compared, smoothShare };
+}
+
+function computeShannonEntropyFromCounts(countsLike) {
+  const counts = countsLike && typeof countsLike === 'object' ? countsLike : {};
+  const values = Object.values(counts).map((v) => Math.max(0, Number(v) || 0)).filter((v) => v > 0);
+  const total = values.reduce((sum, v) => sum + v, 0);
+  if (!(total > 0)) return 0;
+  let h = 0;
+  for (const c of values) {
+    const p = c / total;
+    h += -p * Math.log2(p);
+  }
+  return Number(h) || 0;
+}
+
+function collectPitchEntropy(events) {
+  const countsOverall = Object.create(null);
+  const countsByRole = Object.create(null);
+  let considered = 0;
+  for (const ev of events) {
+    const note = String(ev?.noteResolved || ev?.note || '').trim();
+    if (!note) continue;
+    const role = String(ev?.role || '').trim().toLowerCase() || 'unknown';
+    const key = note;
+    countsOverall[key] = clampInt(countsOverall[key], 0, 0) + 1;
+    if (!countsByRole[role]) countsByRole[role] = Object.create(null);
+    countsByRole[role][key] = clampInt(countsByRole[role][key], 0, 0) + 1;
+    considered += 1;
+  }
+  const byRole = Object.create(null);
+  for (const roleKey of Object.keys(countsByRole)) {
+    byRole[roleKey] = computeShannonEntropyFromCounts(countsByRole[roleKey]);
+  }
+  return {
+    considered,
+    entropyOverall: computeShannonEntropyFromCounts(countsOverall),
+    entropyByRole: byRole,
+  };
+}
+
+function collectMelodicContour(intervalProfile) {
+  const buckets = intervalProfile?.buckets && typeof intervalProfile.buckets === 'object'
+    ? intervalProfile.buckets
+    : { repeat: 0, step: 0, smallLeap: 0, largeLeap: 0 };
+  const compared = clampInt(intervalProfile?.compared, 0, 0);
+  const largeLeapRate = compared > 0 ? ((Number(buckets.largeLeap) || 0) / compared) : 0;
+  const smoothShare = Number(intervalProfile?.smoothShare) || 0;
+  return {
+    buckets: {
+      repeat: clampInt(buckets.repeat, 0, 0),
+      step: clampInt(buckets.step, 0, 0),
+      smallLeap: clampInt(buckets.smallLeap, 0, 0),
+      largeLeap: clampInt(buckets.largeLeap, 0, 0),
+    },
+    compared,
+    smoothShare,
+    largeLeapRate,
+    contourStability: smoothShare >= 0.8 ? 'good' : (smoothShare >= 0.62 ? 'acceptable' : 'rough'),
+  };
 }
 
 function collectDeathDensity(events) {
@@ -527,6 +606,67 @@ function collectMotifReuse(events) {
   };
 }
 
+function collectMotifPersistence(motifReuse) {
+  const windowsByN = motifReuse?.windowsByN && typeof motifReuse.windowsByN === 'object'
+    ? motifReuse.windowsByN
+    : { n2: 0, n3: 0, n4: 0 };
+  const repeatedByN = motifReuse?.repeatedByN && typeof motifReuse.repeatedByN === 'object'
+    ? motifReuse.repeatedByN
+    : { n2: 0, n3: 0, n4: 0 };
+  const persistenceByN = {
+    n2: Number(windowsByN.n2) > 0 ? ((Number(repeatedByN.n2) || 0) / Number(windowsByN.n2)) : 0,
+    n3: Number(windowsByN.n3) > 0 ? ((Number(repeatedByN.n3) || 0) / Number(windowsByN.n3)) : 0,
+    n4: Number(windowsByN.n4) > 0 ? ((Number(repeatedByN.n4) || 0) / Number(windowsByN.n4)) : 0,
+  };
+  const weightedPersistence = (
+    (persistenceByN.n2 * 1)
+    + (persistenceByN.n3 * 1.35)
+    + (persistenceByN.n4 * 1.8)
+  ) / (1 + 1.35 + 1.8);
+  return {
+    windowsByN: {
+      n2: clampInt(windowsByN.n2, 0, 0),
+      n3: clampInt(windowsByN.n3, 0, 0),
+      n4: clampInt(windowsByN.n4, 0, 0),
+    },
+    persistenceByN,
+    weightedPersistence,
+    motifReuseRate: Number(motifReuse?.motifReuseRate) || 0,
+  };
+}
+
+function collectPhraseGravity(events) {
+  const actionable = events.filter((ev) => {
+    const source = String(ev?.sourceSystem || '').trim().toLowerCase();
+    if (source === 'player' || source === 'death' || source === 'unknown') return false;
+    return true;
+  });
+  let gravityOpportunities = 0;
+  let gravityHits = 0;
+  let phraseResolutionOpportunities = 0;
+  let phraseResolutionHits = 0;
+  for (const ev of actionable) {
+    const gravityTarget = String(ev?.phraseGravityTarget || '').trim();
+    const gravityOpportunity = gravityTarget.length > 0;
+    if (gravityOpportunity) {
+      gravityOpportunities += 1;
+      if (ev?.phraseGravityHit === true) gravityHits += 1;
+    }
+    if (ev?.phraseResolutionOpportunity === true) {
+      phraseResolutionOpportunities += 1;
+      if (ev?.phraseResolutionHit === true) phraseResolutionHits += 1;
+    }
+  }
+  return {
+    gravityOpportunities,
+    gravityHits,
+    gravityHitRate: gravityOpportunities > 0 ? (gravityHits / gravityOpportunities) : 0,
+    phraseResolutionOpportunities,
+    phraseResolutionHits,
+    phraseResolutionRate: phraseResolutionOpportunities > 0 ? (phraseResolutionHits / phraseResolutionOpportunities) : 0,
+  };
+}
+
 function toAbsStepIndex(eventLike, stepsPerBeat = 8) {
   const ev = eventLike && typeof eventLike === 'object' ? eventLike : {};
   const beat = clampInt(ev?.beatIndex, 0, 0);
@@ -665,13 +805,23 @@ function computeSummary(metrics) {
   const masking = Number(metrics?.playerMasking?.playerMaskingRate) || 0;
   const continuity = Number(metrics?.paletteContinuity?.paletteContinuityScore) || 0;
   const motifReuse = Number(metrics?.motifReuse?.motifReuseRate) || 0;
+  const gravityHitRate = Number(metrics?.phraseGravity?.gravityHitRate) || 0;
+  const phraseResolutionRate = Number(metrics?.phraseGravity?.phraseResolutionRate) || 0;
   const responseRate = Number(metrics?.callResponse?.responseRate) || 0;
+  const pitchEntropy = Number(metrics?.pitchEntropy?.entropyOverall) || 0;
+  const contourLargeLeapRate = Number(metrics?.melodicContour?.largeLeapRate) || 0;
+  const motifPersistence = Number(metrics?.motifPersistence?.weightedPersistence) || 0;
   return {
     notePoolCompliance: `${Math.round((Number(metrics?.notePoolCompliance?.poolComplianceRate) || 0) * 100)}%`,
     motifReuse: `${Math.round(motifReuse * 100)}%`,
+    gravityHitRate: Number(gravityHitRate.toFixed(3)),
+    phraseResolutionRate: Number(phraseResolutionRate.toFixed(3)),
     leadIntervalSmoothness: smooth >= 0.8 ? 'good' : (smooth >= 0.62 ? 'acceptable' : 'rough'),
     roleBalance: maxRoleShare <= 0.58 ? 'acceptable' : 'skewed',
     responseRate: Number(responseRate.toFixed(3)),
+    pitchEntropy: Number(pitchEntropy.toFixed(3)),
+    melodicContour: contourLargeLeapRate <= 0.18 ? 'stable' : (contourLargeLeapRate <= 0.32 ? 'mixed' : 'jumpy'),
+    motifPersistence: Number(motifPersistence.toFixed(3)),
     paletteContinuity: continuity >= 0.6 ? 'stable' : 'volatile',
     playerMasking: masking <= 0.25 ? 'low' : (masking <= 0.45 ? 'moderate' : 'high'),
     removalCleanup: (
@@ -687,10 +837,14 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const threatBalance = collectThreatBalance(executedEvents);
   const threatBudgetUsage = collectThreatBudgetUsage(session, maxBarIndex);
   const intervalProfile = collectIntervalProfile(executedEvents);
+  const melodicContour = collectMelodicContour(intervalProfile);
+  const pitchEntropy = collectPitchEntropy(executedEvents);
   const deathDensity = collectDeathDensity(executedEvents);
   const playerMasking = collectPlayerMasking(executedEvents);
   const notePoolCompliance = collectNotePoolCompliance(executedEvents);
   const motifReuse = collectMotifReuse(executedEvents);
+  const motifPersistence = collectMotifPersistence(motifReuse);
+  const phraseGravity = collectPhraseGravity(executedEvents);
   const callResponse = collectCallResponse(executedEvents, {
     responseWindowSteps: 8,
     stepsPerBeat: 8,
@@ -700,8 +854,12 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const spawnerSync = collectSpawnerSync(executedEvents);
   const metrics = {
     notePoolCompliance,
+    pitchEntropy,
     intervalProfile,
+    melodicContour,
     motifReuse,
+    motifPersistence,
+    phraseGravity,
     roleBalance,
     threatBalance,
     threatBudgetUsage,
