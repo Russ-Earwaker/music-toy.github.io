@@ -33,6 +33,9 @@ export async function loadInstrumentEntries(){
       const themeIdx= header.findIndex(h=>/^themes?$/i.test(h));
       const recoIdx = header.findIndex(h=>/^recommended[_-]?toys$/i.test(h));
       const laneIdx = header.findIndex(h=>/^(lane[_-]?tags?|role[_-]?tags?|suitability|suitable[_-]?for|musical[_-]?roles?)$/i.test(h));
+      const laneRoleIdx = header.findIndex(h=>/^(lane[_-]?role|role[_-]?lane)$/i.test(h));
+      const registerClassIdx = header.findIndex(h=>/^(register[_-]?class|register[_-]?band)$/i.test(h));
+      const combatRoleIdx = header.findIndex(h=>/^(combat[_-]?role|usage[_-]?role)$/i.test(h));
       const pitchIdx = header.findIndex(h=>/^(pitch|pitch[_-]?grade|pitch[_-]?band|register)$/i.test(h));
       const baseNoteIdx = header.findIndex(h=>/^(base\s*_?note|baseNote|note_base)$/i.test(h));
       const baseOctIdx = header.findIndex(h=>/^(base\s*_?oct(ave)?|baseOct(ave)?|octave)$/i.test(h));
@@ -44,6 +47,37 @@ export async function loadInstrumentEntries(){
         if (t === 'lead' || t === 'melody' || t === 'phrase') return 'lead';
         if (t === 'accent' || t === 'fx' || t === 'effect') return 'accent';
         if (t === 'motion' || t === 'cosmetic' || t === 'texture' || t === 'ambient') return 'motion';
+        return '';
+      };
+      const normalizeRegisterClass = (value, pitchRankLike = null, baseOctRaw = '') => {
+        const raw = String(value || '').trim().toLowerCase();
+        if (raw === 'low' || raw === 'mid' || raw === 'high') return raw;
+        if (raw === 'sub') return 'low';
+        if (raw === 'mid_low' || raw === 'mid-low' || raw === 'midlow') return 'mid';
+        if (raw === 'mid_high' || raw === 'mid-high' || raw === 'midhigh') return 'high';
+        const pr = Math.trunc(Number(pitchRankLike));
+        if (Number.isFinite(pr) && pr >= 1 && pr <= 5) {
+          if (pr <= 2) return 'low';
+          if (pr === 3) return 'mid';
+          return 'high';
+        }
+        const oct = Math.trunc(Number(baseOctRaw));
+        if (Number.isFinite(oct)) {
+          if (oct <= 3) return 'low';
+          if (oct === 4) return 'mid';
+          return 'high';
+        }
+        return '';
+      };
+      const normalizeCombatRole = (value) => {
+        const raw = String(value || '').trim().toLowerCase();
+        if (!raw) return '';
+        if (raw === 'foundation' || raw === 'melodic' || raw === 'percussive' || raw === 'texture' || raw === 'punctuation') return raw;
+        if (raw.includes('drum') || raw.includes('perc')) return 'percussive';
+        if (raw.includes('lead') || raw.includes('melod')) return 'melodic';
+        if (raw.includes('bass') || raw.includes('foundation')) return 'foundation';
+        if (raw.includes('texture') || raw.includes('ambient') || raw.includes('motion')) return 'texture';
+        if (raw.includes('accent') || raw.includes('punct')) return 'punctuation';
         return '';
       };
       const parsePitchRank = (rawValue, baseOctRaw) => {
@@ -84,12 +118,19 @@ export async function loadInstrumentEntries(){
         const recoRaw = recoIdx >= 0 ? String(cells[recoIdx] || '') : '';
         const recommendedToys = recoRaw.split(/[;|]/).map(t=>t.trim().toLowerCase()).filter(Boolean);
         const laneRaw = laneIdx >= 0 ? String(cells[laneIdx] || '') : '';
+        const laneRoleRaw = laneRoleIdx >= 0 ? String(cells[laneRoleIdx] || '') : '';
+        const laneRole = mapLaneToken(laneRoleRaw);
         const laneHints = laneRaw
           .split(/[;|,/]/)
           .map((token) => mapLaneToken(token))
           .filter(Boolean);
+        if (laneRole) laneHints.unshift(laneRole);
         const pitchGrade = String((pitchIdx >= 0 ? cells[pitchIdx] : '') || '').trim();
         const pitchRank = parsePitchRank(pitchGrade, baseOct);
+        const registerClassRaw = registerClassIdx >= 0 ? String(cells[registerClassIdx] || '') : '';
+        const registerClass = normalizeRegisterClass(registerClassRaw, pitchRank, baseOct);
+        const combatRoleRaw = combatRoleIdx >= 0 ? String(cells[combatRoleIdx] || '') : '';
+        const combatRole = normalizeCombatRole(combatRoleRaw);
         const priRaw = priIdx >= 0 ? String(cells[priIdx] || '') : '';
         const priority = /^(1|true|yes|y|prio|priority)$/i.test(priRaw.trim());
         if (!id || !display) continue;
@@ -103,6 +144,9 @@ export async function loadInstrumentEntries(){
           themes,
           recommendedToys,
           laneHints,
+          laneRole: laneRole || undefined,
+          registerClass: registerClass || undefined,
+          combatRole: combatRole || undefined,
           pitchGrade: pitchGrade || undefined,
           pitchRank: Number.isFinite(pitchRank) ? pitchRank : undefined,
           priority,
@@ -115,9 +159,20 @@ export async function loadInstrumentEntries(){
           themes.forEach(t=> ALL_THEMES.add(t));
         }
       }
-      // Dedup by display label; keep first id per label
+      // Dedup by display label; prefer priority entries when duplicates exist.
       const byLabel = new Map();
-      for (const e of out){ if (!byLabel.has(e.display)) byLabel.set(e.display, e); }
+      for (const e of out){
+        const key = String(e?.display || '').trim();
+        if (!key) continue;
+        if (!byLabel.has(key)) {
+          byLabel.set(key, e);
+          continue;
+        }
+        const existing = byLabel.get(key);
+        const existingPriority = existing?.priority === true;
+        const incomingPriority = e?.priority === true;
+        if (incomingPriority && !existingPriority) byLabel.set(key, e);
+      }
       LAST_ENTRIES = Array.from(byLabel.values());
       try {
         window.dispatchEvent(new CustomEvent('instrument-catalog:loaded', { detail: { entries: LAST_ENTRIES } }));

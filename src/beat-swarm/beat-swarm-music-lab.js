@@ -128,6 +128,8 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
       ? false
       : (payload?.phraseResolutionHit === true ? true : (payload?.phraseResolutionHit === false ? false : null)));
   const continuityId = String(context?.continuityId ?? payload?.continuityId ?? '').trim();
+  const enemyVisualId = String(context?.enemyVisualId ?? payload?.enemyVisualId ?? payload?.musicRoleVisualId ?? '').trim().toLowerCase();
+  const enemyRoleColor = String(context?.enemyRoleColor ?? payload?.enemyRoleColor ?? payload?.musicRoleColor ?? '').trim().toLowerCase();
   const playerCadenceMode = String(context?.playerCadenceMode ?? payload?.playerCadenceMode ?? '').trim().toLowerCase();
   const playerCadenceReason = String(context?.playerCadenceReason ?? payload?.playerCadenceReason ?? '').trim().toLowerCase();
   const playerManualOverrideActive = context?.playerManualOverrideActive === true
@@ -165,6 +167,8 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     phraseResolutionOpportunity,
     phraseResolutionHit,
     continuityId,
+    enemyVisualId,
+    enemyRoleColor,
     playerCadenceMode,
     playerCadenceReason,
     playerManualOverrideActive,
@@ -210,12 +214,17 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     stepIndex: clampInt(context?.stepIndex, 0, 0),
     continuityId: String(payload?.continuityId || context?.continuityId || '').trim(),
     sourceEnemyId: clampInt(payload?.sourceEnemyId, 0, 0),
+    enemyId: clampInt(payload?.enemyId, 0, 0),
     sourceEnemyType: String(payload?.sourceEnemyType || '').trim().toLowerCase(),
     sourceGroupId: clampInt(payload?.sourceGroupId, 0, 0),
+    groupId: clampInt(payload?.groupId, 0, 0),
     targetEnemyId: clampInt(payload?.targetEnemyId, 0, 0),
     targetEnemyType: String(payload?.targetEnemyType || '').trim().toLowerCase(),
     targetGroupId: clampInt(payload?.targetGroupId, 0, 0),
     laneRole: String(payload?.laneRole || '').trim().toLowerCase(),
+    role: String(payload?.role || '').trim().toLowerCase(),
+    actionType: String(payload?.actionType || '').trim().toLowerCase(),
+    actorId: clampInt(payload?.actorId, 0, 0),
     phraseStep: clampInt(payload?.phraseStep, 0, 0),
     barPosition: clampInt(payload?.barPosition, 0, 0),
     sectionId: String(payload?.sectionId || '').trim().toLowerCase(),
@@ -223,8 +232,90 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     previousSectionId: String(payload?.previousSectionId || '').trim().toLowerCase(),
     previousSectionCycle: clampInt(payload?.previousSectionCycle, 0, 0),
     sectionDurationBars: clampInt(payload?.sectionDurationBars, 0, 0),
+    previousIntensity: Number(payload?.previousIntensity) || 0,
+    intensity: Number(payload?.intensity) || 0,
+    previousVoiceDensity: clampInt(payload?.previousVoiceDensity, 0, 0),
+    voiceDensity: clampInt(payload?.voiceDensity, 0, 0),
+    gameplayBefore: payload?.gameplayBefore && typeof payload.gameplayBefore === 'object'
+      ? {
+        enemyCount: clampInt(payload.gameplayBefore.enemyCount, 0, 0),
+        projectileCount: clampInt(payload.gameplayBefore.projectileCount, 0, 0),
+        activeRoleCount: clampInt(payload.gameplayBefore.activeRoleCount, 0, 0),
+        totalThreatUsage: clampInt(payload.gameplayBefore.totalThreatUsage, 0, 0),
+      }
+      : null,
+    gameplayAfter: payload?.gameplayAfter && typeof payload.gameplayAfter === 'object'
+      ? {
+        enemyCount: clampInt(payload.gameplayAfter.enemyCount, 0, 0),
+        projectileCount: clampInt(payload.gameplayAfter.projectileCount, 0, 0),
+        activeRoleCount: clampInt(payload.gameplayAfter.activeRoleCount, 0, 0),
+        totalThreatUsage: clampInt(payload.gameplayAfter.totalThreatUsage, 0, 0),
+      }
+      : null,
+    gameplayDeltaEnemyCount: clampInt(payload?.gameplayDeltaEnemyCount, 0, 0),
+    gameplayDeltaProjectileCount: clampInt(payload?.gameplayDeltaProjectileCount, 0, 0),
+    gameplayDeltaRoleCount: clampInt(payload?.gameplayDeltaRoleCount, 0, 0),
+    gameplayDeltaThreatUsage: clampInt(payload?.gameplayDeltaThreatUsage, 0, 0),
+    gameplayDeltaMixShift: Number(payload?.gameplayDeltaMixShift) || 0,
+    gameplayDeltaSignificant: payload?.gameplayDeltaSignificant === true,
+    meaningfulTransitionEligible: payload?.meaningfulTransitionEligible === true,
+    meaningfulTransitionReasons: Array.isArray(payload?.meaningfulTransitionReasons)
+      ? payload.meaningfulTransitionReasons.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
+    meaningfulTransitionFailedReasons: Array.isArray(payload?.meaningfulTransitionFailedReasons)
+      ? payload.meaningfulTransitionFailedReasons.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
+    transitionPreferred: payload?.transitionPreferred === true,
+    gameplayMeaningful: payload?.gameplayMeaningful === true,
+    musicalMeaningful: payload?.musicalMeaningful === true,
+    headingTitle: String(payload?.headingTitle || '').trim(),
+    headingSubtitle: String(payload?.headingSubtitle || '').trim(),
+    headingFlavorTag: String(payload?.headingFlavorTag || '').trim().toLowerCase(),
+    headingFlavorText: String(payload?.headingFlavorText || '').trim(),
+    levelTitle: String(payload?.levelTitle || '').trim(),
+    levelSubtitle: String(payload?.levelSubtitle || '').trim(),
+    levelFlavorText: String(payload?.levelFlavorText || '').trim(),
     reason: String(payload?.reason || '').trim().toLowerCase(),
     failureReason: String(payload?.failureReason || '').trim().toLowerCase(),
+    active: payload?.active === true,
+    assignedAtBeat: clampInt(payload?.assignedAtBeat, -1, -1),
+    transferCount: clampInt(payload?.transferCount, 0, 0),
+    loopIdentity: String(payload?.loopIdentity || '').trim().toLowerCase(),
+    requestedProminence: String(payload?.requestedProminence || '').trim().toLowerCase(),
+    finalProminence: String(payload?.finalProminence || '').trim().toLowerCase(),
+    changedByDeconflict: payload?.changedByDeconflict === true,
+    playerLikelyAudible: payload?.playerLikelyAudible === true,
+    foundationAssignedBefore: payload?.foundationAssignedBefore === true,
+    foundationAssignedAfter: payload?.foundationAssignedAfter === true,
+    enemyIndex: clampInt(payload?.enemyIndex, 0, 0),
+    totalEnemyEvents: clampInt(payload?.totalEnemyEvents, 0, 0),
+    onboardingPhase: String(payload?.onboardingPhase || '').trim().toLowerCase(),
+    readability: payload?.readability && typeof payload.readability === 'object'
+      ? {
+        playerMaskingRisk: Number(payload.readability.playerMaskingRisk) || 0,
+        sameRegisterOverlapRisk: Number(payload.readability.sameRegisterOverlapRisk) || 0,
+        playerAudibleShare: Number(payload.readability.playerAudibleShare) || 0,
+        enemyForegroundEvents: clampInt(payload.readability.enemyForegroundEvents, 0, 0),
+        enemyEvents: clampInt(payload.readability.enemyEvents, 0, 0),
+        enemyCompetingDuringPlayer: clampInt(payload.readability.enemyCompetingDuringPlayer, 0, 0),
+      }
+      : null,
+    structure: payload?.structure && typeof payload.structure === 'object'
+      ? {
+        foundationContinuityBars: clampInt(payload.structure.foundationContinuityBars, 0, 0),
+        foundationAudibleEvents: clampInt(payload.structure.foundationAudibleEvents, 0, 0),
+        loopAudibleEvents: clampInt(payload.structure.loopAudibleEvents, 0, 0),
+        sparkleAudibleEvents: clampInt(payload.structure.sparkleAudibleEvents, 0, 0),
+        sparkleSuppressedEvents: clampInt(payload.structure.sparkleSuppressedEvents, 0, 0),
+        sectionId: String(payload.structure.sectionId || '').trim().toLowerCase(),
+      }
+      : null,
+    onboarding: payload?.onboarding && typeof payload.onboarding === 'object'
+      ? {
+        knownIdentityCount: clampInt(payload.onboarding.knownIdentityCount, 0, 0),
+        recentNovelIdentityCount: clampInt(payload.onboarding.recentNovelIdentityCount, 0, 0),
+      }
+      : null,
   };
 }
 
@@ -241,6 +332,15 @@ function isAudibleEvent(eventLike) {
   if (note) return true;
   if (action === 'enemy-death-accent') return true;
   return false;
+}
+
+function isEnemyMusicEvent(eventLike) {
+  const ev = eventLike && typeof eventLike === 'object' ? eventLike : {};
+  const source = String(ev?.sourceSystem || '').trim().toLowerCase();
+  if (!source || source === 'player' || source === 'death' || source === 'unknown') return false;
+  const action = String(ev?.actionType || '').trim().toLowerCase();
+  if (!action || action === 'player-weapon-step' || action === 'spawner-flash') return false;
+  return true;
 }
 
 function collectRoleBalance(events) {
@@ -539,6 +639,7 @@ function collectHandoffDiagnostics(session, maxBarIndex) {
     .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
   const byType = Object.create(null);
   let attempts = 0;
+  let completed = 0;
   let successes = 0;
   let failures = 0;
   let inheritedPhrase = 0;
@@ -547,22 +648,122 @@ function collectHandoffDiagnostics(session, maxBarIndex) {
     const type = String(e?.eventType || '').trim().toLowerCase() || 'unknown';
     byType[type] = clampInt(byType[type], 0, 0) + 1;
     if (type === 'music_handoff_started') attempts += 1;
-    if (type === 'music_handoff_completed') successes += 1;
+    if (type === 'music_handoff_completed') completed += 1;
     if (type === 'music_handoff_failed') failures += 1;
     if (type === 'music_handoff_inherited_phrase') inheritedPhrase += 1;
     if (type === 'music_handoff_reset_phrase') resetPhrase += 1;
   }
+  // Handoff "success" means phrase continuity was preserved.
+  successes = inheritedPhrase;
   const successRate = attempts > 0 ? (successes / attempts) : 0;
   return {
     totalHandoffLogs: logs.length,
     byType,
     attempts,
+    completed,
     successes,
     failures,
     successRate,
     inheritedPhrase,
     resetPhrase,
   };
+}
+
+function collectBassStabilityDiagnostics(executedEvents, handoff = null) {
+  const bassEvents = (Array.isArray(executedEvents) ? executedEvents : [])
+    .filter((ev) => {
+      const role = String(ev?.role || '').trim().toLowerCase();
+      if (role !== 'bass') return false;
+      const source = String(ev?.sourceSystem || '').trim().toLowerCase();
+      return source !== 'player' && source !== 'death' && source !== 'unknown';
+    });
+  const loopCycles = new Set();
+  for (const ev of bassEvents) {
+    const stepAbs = clampInt(ev?.stepIndex, 0, 0);
+    loopCycles.add(Math.floor(stepAbs / 8));
+  }
+  return {
+    bassEventCount: bassEvents.length,
+    bassLoopCycles: loopCycles.size,
+    bassPhraseResets: Math.max(0, clampInt(handoff?.resetPhrase, 0, 0)),
+    bassHandoffContinuityRate: Number(handoff?.successRate) || 0,
+  };
+}
+
+function collectIdentityStabilityDiagnostics(session, maxBarIndex) {
+  const createdEnemyEvents = (Array.isArray(session?.events) ? session.events : [])
+    .filter((ev) => {
+      if (String(ev?.phase || '').trim().toLowerCase() !== 'created') return false;
+      if (clampInt(ev?.barIndex, 0, 0) > maxBarIndex) return false;
+      const source = String(ev?.sourceSystem || '').trim().toLowerCase();
+      if (source === 'player' || source === 'death' || source === 'unknown') return false;
+      const actorId = clampInt(ev?.actorId, 0, 0);
+      return actorId > 0;
+    })
+    .sort((a, b) => clampInt(a?.timestamp, 0, 0) - clampInt(b?.timestamp, 0, 0));
+  const perEnemy = new Map();
+  for (const ev of createdEnemyEvents) {
+    const actorId = clampInt(ev?.actorId, 0, 0);
+    if (!(actorId > 0)) continue;
+    const key = String(actorId);
+    if (!perEnemy.has(key)) {
+      perEnemy.set(key, {
+        instrumentChanges: 0,
+        colourChanges: 0,
+        lastInstrumentId: '',
+        lastColour: '',
+      });
+    }
+    const row = perEnemy.get(key);
+    const instrumentId = String(ev?.instrumentId || '').trim();
+    if (instrumentId) {
+      if (row.lastInstrumentId && row.lastInstrumentId !== instrumentId) row.instrumentChanges += 1;
+      row.lastInstrumentId = instrumentId;
+    }
+    const colour = String(ev?.enemyRoleColor || '').trim().toLowerCase();
+    if (colour) {
+      if (row.lastColour && row.lastColour !== colour) row.colourChanges += 1;
+      row.lastColour = colour;
+    }
+  }
+  let totalInstrumentChanges = 0;
+  let totalColourChanges = 0;
+  let enemiesWithInstrumentChanges = 0;
+  let enemiesWithColourChanges = 0;
+  for (const row of perEnemy.values()) {
+    totalInstrumentChanges += Math.max(0, clampInt(row.instrumentChanges, 0, 0));
+    totalColourChanges += Math.max(0, clampInt(row.colourChanges, 0, 0));
+    if (row.instrumentChanges > 0) enemiesWithInstrumentChanges += 1;
+    if (row.colourChanges > 0) enemiesWithColourChanges += 1;
+  }
+  const enemyCount = perEnemy.size;
+  return {
+    enemyCountObserved: enemyCount,
+    instrumentChangesPerEnemy: enemyCount > 0 ? (totalInstrumentChanges / enemyCount) : 0,
+    colourChangesPerEnemy: enemyCount > 0 ? (totalColourChanges / enemyCount) : 0,
+    totalInstrumentChanges,
+    totalColourChanges,
+    enemiesWithInstrumentChanges,
+    enemiesWithColourChanges,
+  };
+}
+
+function collectPassDiagnostics(executedEvents, session, maxBarIndex, handoff, spawnerPipeline) {
+  const bassStability = collectBassStabilityDiagnostics(executedEvents, handoff);
+  const identityStability = collectIdentityStabilityDiagnostics(session, maxBarIndex);
+  const delivery = collectDeliveryDiagnostics(session, maxBarIndex);
+  const spawnerFeedback = {
+    spawnerGameplayEvents: Math.max(0, clampInt(spawnerPipeline?.spawnerGameplayEvents, 0, 0)),
+    spawnerVisualEvents: Math.max(0, clampInt(spawnerPipeline?.spawnerVisualEvents, 0, 0)),
+    spawnerAudioEvents: Math.max(0, clampInt(spawnerPipeline?.spawnerAudioEvents, 0, 0)),
+    spawnerMismatchCount: (
+      Math.max(0, clampInt(spawnerPipeline?.spawnerPipelineMismatches, 0, 0))
+      + Math.max(0, clampInt(spawnerPipeline?.audioShortfall, 0, 0))
+      + Math.max(0, clampInt(spawnerPipeline?.visualShortfall, 0, 0))
+      + Math.max(0, clampInt(spawnerPipeline?.loopgridShortfall, 0, 0))
+    ),
+  };
+  return { bassStability, identityStability, spawnerFeedback, delivery };
 }
 
 function collectSectionStability(session, maxBarIndex) {
@@ -586,6 +787,221 @@ function collectSectionStability(session, maxBarIndex) {
   };
 }
 
+function collectSectionPresentation(session, maxBarIndex) {
+  const sectionChanges = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
+    .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_section_changed');
+  const totalSectionChanges = sectionChanges.length;
+  if (!totalSectionChanges) {
+    return {
+      totalSectionChanges: 0,
+      namedSectionChanges: 0,
+      headingCoverageRate: 0,
+      uniqueSectionIds: 0,
+      uniqueHeadingTitles: 0,
+      uniqueMovementCycles: 0,
+      avgBarsBetweenHeadingChanges: 0,
+      headingRepeatRate: 0,
+      meaningfulTitleRate: 0,
+      meaningfulTitleCount: 0,
+      meaningfulReasonCounts: {},
+      meaningfulFailureReasonCounts: {},
+      headingFlavorTagCounts: {},
+    };
+  }
+  const namedChanges = sectionChanges.filter((e) => String(e?.headingTitle || '').trim().length > 0);
+  const namedSectionChanges = namedChanges.length;
+  const headingCoverageRate = totalSectionChanges > 0 ? (namedSectionChanges / totalSectionChanges) : 0;
+  const sectionIdSet = new Set(
+    sectionChanges
+      .map((e) => String(e?.sectionId || '').trim().toLowerCase())
+      .filter((s) => s)
+  );
+  const headingTitleSet = new Set(
+    namedChanges
+      .map((e) => String(e?.headingTitle || '').trim())
+      .filter((s) => s)
+  );
+  const movementCycleSet = new Set(
+    sectionChanges
+      .map((e) => clampInt(e?.sectionCycle, -1, -1))
+      .filter((n) => n >= 0)
+  );
+  let spanTotal = 0;
+  let spanCount = 0;
+  const orderedNamed = namedChanges
+    .slice()
+    .sort((a, b) => clampInt(a?.barIndex, 0, 0) - clampInt(b?.barIndex, 0, 0));
+  for (let i = 1; i < orderedNamed.length; i++) {
+    const prevBar = clampInt(orderedNamed[i - 1]?.barIndex, 0, 0);
+    const nextBar = clampInt(orderedNamed[i]?.barIndex, 0, 0);
+    if (nextBar > prevBar) {
+      spanTotal += (nextBar - prevBar);
+      spanCount += 1;
+    }
+  }
+  const avgBarsBetweenHeadingChanges = spanCount > 0 ? (spanTotal / spanCount) : Math.max(1, maxBarIndex + 1);
+  const headingRepeatRate = namedSectionChanges > 0
+    ? Math.max(0, 1 - (headingTitleSet.size / namedSectionChanges))
+    : 0;
+  const meaningfulReasonCounts = Object.create(null);
+  const meaningfulFailureReasonCounts = Object.create(null);
+  const headingFlavorTagCounts = Object.create(null);
+  for (const e of sectionChanges) {
+    for (const key of Array.isArray(e?.meaningfulTransitionReasons) ? e.meaningfulTransitionReasons : []) {
+      const k = String(key || '').trim().toLowerCase();
+      if (!k) continue;
+      meaningfulReasonCounts[k] = clampInt(meaningfulReasonCounts[k], 0, 0) + 1;
+    }
+    for (const key of Array.isArray(e?.meaningfulTransitionFailedReasons) ? e.meaningfulTransitionFailedReasons : []) {
+      const k = String(key || '').trim().toLowerCase();
+      if (!k) continue;
+      meaningfulFailureReasonCounts[k] = clampInt(meaningfulFailureReasonCounts[k], 0, 0) + 1;
+    }
+    const tag = String(e?.headingFlavorTag || '').trim().toLowerCase();
+    if (tag) headingFlavorTagCounts[tag] = clampInt(headingFlavorTagCounts[tag], 0, 0) + 1;
+  }
+  const meaningfulTitleCount = namedChanges.filter((e) => {
+    if (e?.meaningfulTransitionEligible === true) return true;
+    if (e?.gameplayDeltaSignificant === true) return true;
+    const deltaEnemy = Math.abs(clampInt(e?.gameplayDeltaEnemyCount, 0, 0));
+    const deltaProjectile = Math.abs(clampInt(e?.gameplayDeltaProjectileCount, 0, 0));
+    const deltaRole = Math.abs(clampInt(e?.gameplayDeltaRoleCount, 0, 0));
+    const deltaThreat = Math.abs(clampInt(e?.gameplayDeltaThreatUsage, 0, 0));
+    const deltaMix = Math.abs(Number(e?.gameplayDeltaMixShift) || 0);
+    return deltaEnemy >= 3 || deltaRole >= 1 || deltaThreat >= 2 || deltaProjectile >= 4 || deltaMix >= 0.22;
+  }).length;
+  const meaningfulTitleRate = namedSectionChanges > 0 ? (meaningfulTitleCount / namedSectionChanges) : 0;
+  return {
+    totalSectionChanges,
+    namedSectionChanges,
+    headingCoverageRate,
+    uniqueSectionIds: sectionIdSet.size,
+    uniqueHeadingTitles: headingTitleSet.size,
+    uniqueMovementCycles: movementCycleSet.size,
+    avgBarsBetweenHeadingChanges,
+    headingRepeatRate,
+    meaningfulTitleRate,
+    meaningfulTitleCount,
+    meaningfulReasonCounts,
+    meaningfulFailureReasonCounts,
+    headingFlavorTagCounts,
+  };
+}
+
+function collectReadabilityStructureOnboarding(session, maxBarIndex) {
+  const snaps = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
+    .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_readability_snapshot');
+  const snapshotCount = snaps.length;
+  if (!snapshotCount) {
+    return {
+      readability: {
+        snapshotCount: 0,
+        avgPlayerMaskingRisk: 0,
+        avgSameRegisterOverlapRisk: 0,
+        avgPlayerAudibleShare: 0,
+        avgEnemyForegroundShare: 0,
+        avgEnemyCompetitionShare: 0,
+        phaseCounts: {},
+      },
+      structure: {
+        snapshotCount: 0,
+        avgFoundationContinuityBars: 0,
+        avgFoundationAudibleEvents: 0,
+        avgLoopAudibleEvents: 0,
+        avgSparkleAudibleEvents: 0,
+        avgSparkleSuppressedEvents: 0,
+        sectionIdCounts: {},
+      },
+      onboarding: {
+        snapshotCount: 0,
+        avgKnownIdentityCount: 0,
+        avgRecentNovelIdentityCount: 0,
+        maxKnownIdentityCount: 0,
+        maxRecentNovelIdentityCount: 0,
+        noveltyPressureRate: 0,
+      },
+    };
+  }
+  let sumMaskingRisk = 0;
+  let sumOverlapRisk = 0;
+  let sumPlayerAudibleShare = 0;
+  let sumEnemyForegroundShare = 0;
+  let sumEnemyCompetitionShare = 0;
+  let sumFoundationContinuityBars = 0;
+  let sumFoundationAudibleEvents = 0;
+  let sumLoopAudibleEvents = 0;
+  let sumSparkleAudibleEvents = 0;
+  let sumSparkleSuppressedEvents = 0;
+  let sumKnownIdentityCount = 0;
+  let sumRecentNovelIdentityCount = 0;
+  let maxKnownIdentityCount = 0;
+  let maxRecentNovelIdentityCount = 0;
+  let noveltyPressureCount = 0;
+  const phaseCounts = Object.create(null);
+  const sectionIdCounts = Object.create(null);
+  for (const s of snaps) {
+    const r = s?.readability && typeof s.readability === 'object' ? s.readability : {};
+    const st = s?.structure && typeof s.structure === 'object' ? s.structure : {};
+    const on = s?.onboarding && typeof s.onboarding === 'object' ? s.onboarding : {};
+    const enemyEvents = Math.max(0, clampInt(r?.enemyEvents, 0, 0));
+    const enemyForegroundEvents = Math.max(0, clampInt(r?.enemyForegroundEvents, 0, 0));
+    const enemyCompetingDuringPlayer = Math.max(0, clampInt(r?.enemyCompetingDuringPlayer, 0, 0));
+    const foregroundShare = enemyEvents > 0 ? (enemyForegroundEvents / enemyEvents) : 0;
+    const competitionShare = enemyEvents > 0 ? (enemyCompetingDuringPlayer / enemyEvents) : 0;
+    sumMaskingRisk += Number(r?.playerMaskingRisk) || 0;
+    sumOverlapRisk += Number(r?.sameRegisterOverlapRisk) || 0;
+    sumPlayerAudibleShare += Number(r?.playerAudibleShare) || 0;
+    sumEnemyForegroundShare += foregroundShare;
+    sumEnemyCompetitionShare += competitionShare;
+    sumFoundationContinuityBars += Math.max(0, clampInt(st?.foundationContinuityBars, 0, 0));
+    sumFoundationAudibleEvents += Math.max(0, clampInt(st?.foundationAudibleEvents, 0, 0));
+    sumLoopAudibleEvents += Math.max(0, clampInt(st?.loopAudibleEvents, 0, 0));
+    sumSparkleAudibleEvents += Math.max(0, clampInt(st?.sparkleAudibleEvents, 0, 0));
+    sumSparkleSuppressedEvents += Math.max(0, clampInt(st?.sparkleSuppressedEvents, 0, 0));
+    const knownIdentityCount = Math.max(0, clampInt(on?.knownIdentityCount, 0, 0));
+    const recentNovelIdentityCount = Math.max(0, clampInt(on?.recentNovelIdentityCount, 0, 0));
+    sumKnownIdentityCount += knownIdentityCount;
+    sumRecentNovelIdentityCount += recentNovelIdentityCount;
+    if (knownIdentityCount > maxKnownIdentityCount) maxKnownIdentityCount = knownIdentityCount;
+    if (recentNovelIdentityCount > maxRecentNovelIdentityCount) maxRecentNovelIdentityCount = recentNovelIdentityCount;
+    if (recentNovelIdentityCount >= 2) noveltyPressureCount += 1;
+    const phaseId = String(s?.onboardingPhase || '').trim().toLowerCase() || 'unknown';
+    phaseCounts[phaseId] = clampInt(phaseCounts[phaseId], 0, 0) + 1;
+    const sectionId = String(st?.sectionId || '').trim().toLowerCase() || 'unknown';
+    sectionIdCounts[sectionId] = clampInt(sectionIdCounts[sectionId], 0, 0) + 1;
+  }
+  return {
+    readability: {
+      snapshotCount,
+      avgPlayerMaskingRisk: snapshotCount > 0 ? (sumMaskingRisk / snapshotCount) : 0,
+      avgSameRegisterOverlapRisk: snapshotCount > 0 ? (sumOverlapRisk / snapshotCount) : 0,
+      avgPlayerAudibleShare: snapshotCount > 0 ? (sumPlayerAudibleShare / snapshotCount) : 0,
+      avgEnemyForegroundShare: snapshotCount > 0 ? (sumEnemyForegroundShare / snapshotCount) : 0,
+      avgEnemyCompetitionShare: snapshotCount > 0 ? (sumEnemyCompetitionShare / snapshotCount) : 0,
+      phaseCounts,
+    },
+    structure: {
+      snapshotCount,
+      avgFoundationContinuityBars: snapshotCount > 0 ? (sumFoundationContinuityBars / snapshotCount) : 0,
+      avgFoundationAudibleEvents: snapshotCount > 0 ? (sumFoundationAudibleEvents / snapshotCount) : 0,
+      avgLoopAudibleEvents: snapshotCount > 0 ? (sumLoopAudibleEvents / snapshotCount) : 0,
+      avgSparkleAudibleEvents: snapshotCount > 0 ? (sumSparkleAudibleEvents / snapshotCount) : 0,
+      avgSparkleSuppressedEvents: snapshotCount > 0 ? (sumSparkleSuppressedEvents / snapshotCount) : 0,
+      sectionIdCounts,
+    },
+    onboarding: {
+      snapshotCount,
+      avgKnownIdentityCount: snapshotCount > 0 ? (sumKnownIdentityCount / snapshotCount) : 0,
+      avgRecentNovelIdentityCount: snapshotCount > 0 ? (sumRecentNovelIdentityCount / snapshotCount) : 0,
+      maxKnownIdentityCount,
+      maxRecentNovelIdentityCount,
+      noveltyPressureRate: snapshotCount > 0 ? (noveltyPressureCount / snapshotCount) : 0,
+    },
+  };
+}
+
 function collectGrooveStability(events, sectionStability = null) {
   const bars = Object.create(null);
   for (const ev of events) {
@@ -595,19 +1011,27 @@ function collectGrooveStability(events, sectionStability = null) {
       bars[key] = {
         pitch: new Set(),
         rhythm: new Set(),
+        foundationRhythm: new Set(),
         bassSig: [],
       };
     }
     const note = String(ev?.noteResolved || ev?.note || '').trim();
     const role = String(ev?.role || '').trim().toLowerCase();
     const step = ((clampInt(ev?.stepIndex, 0, 0) % 8) + 8) % 8;
+    const actionSig = `${step}:${String(ev?.actionType || '').trim().toLowerCase()}`;
     if (note) bars[key].pitch.add(note);
-    bars[key].rhythm.add(`${step}:${String(ev?.actionType || '').trim().toLowerCase()}`);
+    bars[key].rhythm.add(actionSig);
+    if (role === 'bass') bars[key].foundationRhythm.add(actionSig);
     if (role === 'bass' && note) bars[key].bassSig.push(`${step}:${note}`);
   }
   const barKeys = Object.keys(bars).map((k) => clampInt(k, 0, 0)).sort((a, b) => a - b);
   const pitchCounts = barKeys.map((b) => bars[String(b)].pitch.size);
-  const rhythmCounts = barKeys.map((b) => bars[String(b)].rhythm.size);
+  const foundationRhythmCounts = barKeys
+    .map((b) => bars[String(b)].foundationRhythm.size)
+    .filter((n) => n > 0);
+  const rhythmCounts = foundationRhythmCounts.length
+    ? foundationRhythmCounts
+    : barKeys.map((b) => bars[String(b)].rhythm.size);
   const avgUniquePitchPerBar = pitchCounts.length ? (pitchCounts.reduce((a, n) => a + n, 0) / pitchCounts.length) : 0;
   const avgUniqueRhythmicEventsPerBar = rhythmCounts.length ? (rhythmCounts.reduce((a, n) => a + n, 0) / rhythmCounts.length) : 0;
   let comparedBassBars = 0;
@@ -722,6 +1146,133 @@ function collectSpawnerSync(events) {
     nearDuplicateSpawnerPairs,
     duplicateSpawnerPatternClusters,
     pairExamples,
+  };
+}
+
+function collectSpawnerPipelineDiagnostics(session, maxBarIndex) {
+  const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
+  let spawnerGameplayEvents = 0;
+  let spawnerAudioEvents = 0;
+  let spawnerAudioMutedEvents = 0;
+  let spawnerVisualEvents = 0;
+  let spawnerLoopgridEvents = 0;
+  let spawnerPipelineMismatches = 0;
+  for (const e of logs) {
+    const type = String(e?.eventType || '').trim().toLowerCase();
+    if (type === 'music_spawner_gameplay_event') spawnerGameplayEvents += 1;
+    if (type === 'music_spawner_audio_event') spawnerAudioEvents += 1;
+    if (type === 'music_spawner_audio_muted') spawnerAudioMutedEvents += 1;
+    if (type === 'music_spawner_visual_event') spawnerVisualEvents += 1;
+    if (type === 'music_spawner_loopgrid_event') spawnerLoopgridEvents += 1;
+    if (type === 'music_spawner_pipeline_mismatch') spawnerPipelineMismatches += 1;
+  }
+  const expectedAudioEvents = Math.max(0, spawnerGameplayEvents - spawnerAudioMutedEvents);
+  const audioShortfall = Math.max(0, expectedAudioEvents - spawnerAudioEvents);
+  const visualShortfall = Math.max(0, spawnerGameplayEvents - spawnerVisualEvents);
+  const loopgridShortfall = Math.max(0, spawnerGameplayEvents - spawnerLoopgridEvents);
+  return {
+    spawnerGameplayEvents,
+    spawnerAudioEvents,
+    spawnerAudioMutedEvents,
+    spawnerVisualEvents,
+    spawnerLoopgridEvents,
+    spawnerPipelineMismatches,
+    expectedAudioEvents,
+    audioShortfall,
+    visualShortfall,
+    loopgridShortfall,
+  };
+}
+
+function collectFoundationProminenceDiagnostics(session, maxBarIndex) {
+  const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
+    .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_foundation_prominence_decision');
+  let total = 0;
+  let full = 0;
+  let quiet = 0;
+  let trace = 0;
+  let suppressed = 0;
+  let changedByDeconflict = 0;
+  for (const e of logs) {
+    total += 1;
+    const finalProminence = String(e?.finalProminence || '').trim().toLowerCase();
+    if (finalProminence === 'full') full += 1;
+    else if (finalProminence === 'quiet') quiet += 1;
+    else if (finalProminence === 'trace') trace += 1;
+    else if (finalProminence === 'suppressed') suppressed += 1;
+    if (e?.changedByDeconflict === true) changedByDeconflict += 1;
+  }
+  return {
+    total,
+    full,
+    quiet,
+    trace,
+    suppressed,
+    changedByDeconflict,
+    quietShare: total > 0 ? (quiet / total) : 0,
+    traceShare: total > 0 ? (trace / total) : 0,
+    suppressedShare: total > 0 ? (suppressed / total) : 0,
+    deconflictChangeRate: total > 0 ? (changedByDeconflict / total) : 0,
+  };
+}
+
+function collectDeliveryDiagnostics(session, maxBarIndex) {
+  const rows = (Array.isArray(session?.events) ? session.events : [])
+    .filter((ev) => clampInt(ev?.barIndex, 0, 0) <= maxBarIndex)
+    .filter((ev) => isEnemyMusicEvent(ev));
+  const created = rows.filter((ev) => String(ev?.phase || '').trim().toLowerCase() === 'created');
+  const executed = rows.filter((ev) => String(ev?.phase || '').trim().toLowerCase() === 'executed');
+  const skippedCreatedEvents = Math.max(0, created.length - executed.length);
+  const unmatchedExecutedEvents = Math.max(0, executed.length - created.length);
+
+  const createdSpawner = created.filter((ev) => String(ev?.actionType || '').trim().toLowerCase() === 'spawner-spawn');
+  const executedSpawner = executed.filter((ev) => String(ev?.actionType || '').trim().toLowerCase() === 'spawner-spawn');
+  const createdBass = created.filter((ev) => String(ev?.role || '').trim().toLowerCase() === 'bass');
+  const executedBass = executed.filter((ev) => String(ev?.role || '').trim().toLowerCase() === 'bass');
+
+  const spawnerSkippedCreatedEvents = Math.max(0, createdSpawner.length - executedSpawner.length);
+  const bassSkippedCreatedEvents = Math.max(0, createdBass.length - executedBass.length);
+
+  const bassSteps = Array.from(new Set(executedBass.map((ev) => clampInt(ev?.stepIndex, 0, 0))))
+    .sort((a, b) => a - b);
+  let maxBassStepGap = 0;
+  for (let i = 1; i < bassSteps.length; i++) {
+    const gap = Math.max(0, bassSteps[i] - bassSteps[i - 1]);
+    if (gap > maxBassStepGap) maxBassStepGap = gap;
+  }
+
+  const executedSteps = Array.from(new Set(executed.map((ev) => clampInt(ev?.stepIndex, 0, 0))))
+    .sort((a, b) => a - b);
+  const bassStepSet = new Set(bassSteps);
+  let maxEnemyStepsWithoutBass = 0;
+  let currentRun = 0;
+  for (const step of executedSteps) {
+    if (bassStepSet.has(step)) {
+      currentRun = 0;
+      continue;
+    }
+    currentRun += 1;
+    if (currentRun > maxEnemyStepsWithoutBass) maxEnemyStepsWithoutBass = currentRun;
+  }
+
+  return {
+    createdEnemyEvents: created.length,
+    executedEnemyEvents: executed.length,
+    skippedCreatedEvents,
+    unmatchedExecutedEvents,
+    executedToCreatedRate: created.length > 0 ? (executed.length / created.length) : 1,
+    createdSpawnerEvents: createdSpawner.length,
+    executedSpawnerEvents: executedSpawner.length,
+    spawnerSkippedCreatedEvents,
+    spawnerExecutedToCreatedRate: createdSpawner.length > 0 ? (executedSpawner.length / createdSpawner.length) : 1,
+    createdBassEvents: createdBass.length,
+    executedBassEvents: executedBass.length,
+    bassSkippedCreatedEvents,
+    bassExecutedToCreatedRate: createdBass.length > 0 ? (executedBass.length / createdBass.length) : 1,
+    maxBassStepGap,
+    maxEnemyStepsWithoutBass,
   };
 }
 
@@ -1101,6 +1652,40 @@ function computeSummary(metrics) {
   const avgPitchPerBar = Number(metrics?.grooveStability?.avgUniquePitchPerBar) || 0;
   const avgRhythmPerBar = Number(metrics?.grooveStability?.avgUniqueRhythmicEventsPerBar) || 0;
   const sectionAvgBars = Number(metrics?.sectionStability?.avgDurationBars) || 0;
+  const avgRecentNovelIdentityCount = Number(metrics?.onboarding?.avgRecentNovelIdentityCount) || 0;
+  const noveltyPressureRate = Number(metrics?.onboarding?.noveltyPressureRate) || 0;
+  const avgKnownIdentityCount = Number(metrics?.onboarding?.avgKnownIdentityCount) || 0;
+  const avgEnemyCompetitionShare = Number(metrics?.readability?.avgEnemyCompetitionShare) || 0;
+  const avgEnemyForegroundShare = Number(metrics?.readability?.avgEnemyForegroundShare) || 0;
+  const headingCoverageRate = Number(metrics?.sectionPresentation?.headingCoverageRate) || 0;
+  const uniqueHeadingTitles = Math.max(0, clampInt(metrics?.sectionPresentation?.uniqueHeadingTitles, 0, 0));
+  const avgBarsBetweenHeadingChanges = Number(metrics?.sectionPresentation?.avgBarsBetweenHeadingChanges) || 0;
+  const meaningfulTitleRate = Number(metrics?.sectionPresentation?.meaningfulTitleRate) || 0;
+  const totalSectionChanges = Math.max(0, clampInt(metrics?.sectionPresentation?.totalSectionChanges, 0, 0));
+  const spawnerPipelineMismatches = Math.max(0, clampInt(metrics?.spawnerPipeline?.spawnerPipelineMismatches, 0, 0));
+  const spawnerAudioShortfall = Math.max(0, clampInt(metrics?.spawnerPipeline?.audioShortfall, 0, 0));
+  const spawnerVisualShortfall = Math.max(0, clampInt(metrics?.spawnerPipeline?.visualShortfall, 0, 0));
+  const spawnerLoopgridShortfall = Math.max(0, clampInt(metrics?.spawnerPipeline?.loopgridShortfall, 0, 0));
+  const foundationQuietShare = Number(metrics?.foundationProminence?.quietShare) || 0;
+  const foundationTraceShare = Number(metrics?.foundationProminence?.traceShare) || 0;
+  const foundationSuppressedShare = Number(metrics?.foundationProminence?.suppressedShare) || 0;
+  const foundationDeconflictChangeRate = Number(metrics?.foundationProminence?.deconflictChangeRate) || 0;
+  const bassLoopCycles = Number(metrics?.bassLoopCycles) || 0;
+  const bassPhraseResets = Number(metrics?.bassPhraseResets) || 0;
+  const bassHandoffContinuityRate = Number(metrics?.bassHandoffContinuityRate) || 0;
+  const instrumentChangesPerEnemy = Number(metrics?.instrumentChangesPerEnemy) || 0;
+  const colourChangesPerEnemy = Number(metrics?.colourChangesPerEnemy) || 0;
+  const spawnerMismatchCount = Math.max(0, clampInt(metrics?.passDiagnostics?.spawnerFeedback?.spawnerMismatchCount, 0, 0));
+  const createdEnemyEvents = Math.max(0, clampInt(metrics?.passDiagnostics?.delivery?.createdEnemyEvents, 0, 0));
+  const skippedCreatedEvents = Math.max(0, clampInt(metrics?.passDiagnostics?.delivery?.skippedCreatedEvents, 0, 0));
+  const createdSpawnerEvents = Math.max(0, clampInt(metrics?.passDiagnostics?.delivery?.createdSpawnerEvents, 0, 0));
+  const spawnerSkippedCreatedEvents = Math.max(0, clampInt(metrics?.passDiagnostics?.delivery?.spawnerSkippedCreatedEvents, 0, 0));
+  const createdBassEvents = Math.max(0, clampInt(metrics?.passDiagnostics?.delivery?.createdBassEvents, 0, 0));
+  const bassSkippedCreatedEvents = Math.max(0, clampInt(metrics?.passDiagnostics?.delivery?.bassSkippedCreatedEvents, 0, 0));
+  const executedToCreatedRate = Number(metrics?.passDiagnostics?.delivery?.executedToCreatedRate);
+  const spawnerExecutedToCreatedRate = Number(metrics?.passDiagnostics?.delivery?.spawnerExecutedToCreatedRate);
+  const bassExecutedToCreatedRate = Number(metrics?.passDiagnostics?.delivery?.bassExecutedToCreatedRate);
+  const maxEnemyStepsWithoutBass = Math.max(0, clampInt(metrics?.passDiagnostics?.delivery?.maxEnemyStepsWithoutBass, 0, 0));
   return {
     notePoolCompliance: `${Math.round((Number(metrics?.notePoolCompliance?.poolComplianceRate) || 0) * 100)}%`,
     motifReuse: `${Math.round(motifReuse * 100)}%`,
@@ -1127,6 +1712,36 @@ function computeSummary(metrics) {
     grooveStability: (bassPersistence >= 0.52 && avgPitchPerBar <= 5.2 && avgRhythmPerBar <= 11.5 && sectionAvgBars >= 8)
       ? 'stable'
       : 'volatile',
+    onboardingNovelty: (avgRecentNovelIdentityCount <= 1.1 && noveltyPressureRate <= 0.25) ? 'controlled' : 'crowded',
+    identityOnboarding: avgKnownIdentityCount >= 3 ? 'established' : 'early',
+    readabilityDensity: (avgEnemyCompetitionShare <= 0.2 && avgEnemyForegroundShare <= 0.35) ? 'clear' : 'busy',
+    sectionPresentation: totalSectionChanges < 3
+      ? 'insufficient_data'
+      : (
+        (headingCoverageRate >= 0.9 && uniqueHeadingTitles >= 5 && avgBarsBetweenHeadingChanges >= 4.5 && meaningfulTitleRate >= 0.85)
+          ? 'coherent'
+          : ((headingCoverageRate >= 0.6 && meaningfulTitleRate >= 0.55) ? 'partial' : 'missing')
+      ),
+    spawnerFeedback: (spawnerPipelineMismatches === 0 && spawnerAudioShortfall === 0 && spawnerVisualShortfall === 0 && spawnerLoopgridShortfall === 0)
+      ? 'consistent'
+      : 'mismatch',
+    foundationProminence: foundationSuppressedShare > 0
+      ? 'suppressed'
+      : ((foundationTraceShare > 0.2 || foundationDeconflictChangeRate > 0.35) ? 'heavily_ducked' : ((foundationQuietShare > 0.7) ? 'quiet_dominant' : 'balanced')),
+    beatDelivery: (
+      createdEnemyEvents > 0
+      && executedToCreatedRate >= 0.985
+      && (createdSpawnerEvents === 0 || (spawnerExecutedToCreatedRate >= 0.99 && spawnerSkippedCreatedEvents === 0))
+      && (createdBassEvents === 0 || (bassExecutedToCreatedRate >= 0.99 && bassSkippedCreatedEvents === 0))
+      && maxEnemyStepsWithoutBass <= 24
+    ) ? 'stable' : 'drops_detected',
+    bassFoundation: (bassLoopCycles >= 2 && bassPhraseResets === 0 && bassHandoffContinuityRate >= 0.9) ? 'stable' : 'at_risk',
+    identityStability: (instrumentChangesPerEnemy === 0 && colourChangesPerEnemy === 0) ? 'stable' : 'drift',
+    spawnerFeedbackMismatchCount: spawnerMismatchCount,
+    skippedCreatedEvents,
+    spawnerSkippedCreatedEvents,
+    bassSkippedCreatedEvents,
+    maxEnemyStepsWithoutBass,
   };
 }
 
@@ -1154,8 +1769,13 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const paletteContinuity = collectPaletteContinuity(session, maxBarIndex);
   const enemyRemovals = collectEnemyRemovalDiagnostics(session, maxBarIndex);
   const spawnerSync = collectSpawnerSync(executedEvents);
+  const spawnerPipeline = collectSpawnerPipelineDiagnostics(session, maxBarIndex);
+  const foundationProminence = collectFoundationProminenceDiagnostics(session, maxBarIndex);
   const handoff = collectHandoffDiagnostics(session, maxBarIndex);
+  const passDiagnostics = collectPassDiagnostics(executedEvents, session, maxBarIndex, handoff, spawnerPipeline);
   const sectionStability = collectSectionStability(session, maxBarIndex);
+  const sectionPresentation = collectSectionPresentation(session, maxBarIndex);
+  const readabilityStructureOnboarding = collectReadabilityStructureOnboarding(session, maxBarIndex);
   const grooveStability = collectGrooveStability(executedEvents, sectionStability);
   const metrics = {
     notePoolCompliance,
@@ -1176,8 +1796,37 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     paletteContinuity,
     enemyRemovals,
     spawnerSync,
+    spawnerPipeline,
+    foundationProminence,
     handoff,
+    passDiagnostics,
+    bassLoopCycles: Number(passDiagnostics?.bassStability?.bassLoopCycles) || 0,
+    bassPhraseResets: Number(passDiagnostics?.bassStability?.bassPhraseResets) || 0,
+    bassHandoffContinuityRate: Number(passDiagnostics?.bassStability?.bassHandoffContinuityRate) || 0,
+    instrumentChangesPerEnemy: Number(passDiagnostics?.identityStability?.instrumentChangesPerEnemy) || 0,
+    colourChangesPerEnemy: Number(passDiagnostics?.identityStability?.colourChangesPerEnemy) || 0,
+    spawnerGameplayEvents: Number(passDiagnostics?.spawnerFeedback?.spawnerGameplayEvents) || 0,
+    spawnerVisualEvents: Number(passDiagnostics?.spawnerFeedback?.spawnerVisualEvents) || 0,
+    spawnerAudioEvents: Number(passDiagnostics?.spawnerFeedback?.spawnerAudioEvents) || 0,
+    createdEnemyEvents: Number(passDiagnostics?.delivery?.createdEnemyEvents) || 0,
+    executedEnemyEvents: Number(passDiagnostics?.delivery?.executedEnemyEvents) || 0,
+    skippedCreatedEvents: Number(passDiagnostics?.delivery?.skippedCreatedEvents) || 0,
+    createdSpawnerEvents: Number(passDiagnostics?.delivery?.createdSpawnerEvents) || 0,
+    executedSpawnerEvents: Number(passDiagnostics?.delivery?.executedSpawnerEvents) || 0,
+    spawnerSkippedCreatedEvents: Number(passDiagnostics?.delivery?.spawnerSkippedCreatedEvents) || 0,
+    createdBassEvents: Number(passDiagnostics?.delivery?.createdBassEvents) || 0,
+    executedBassEvents: Number(passDiagnostics?.delivery?.executedBassEvents) || 0,
+    bassSkippedCreatedEvents: Number(passDiagnostics?.delivery?.bassSkippedCreatedEvents) || 0,
+    executedToCreatedRate: Number(passDiagnostics?.delivery?.executedToCreatedRate) || 0,
+    spawnerExecutedToCreatedRate: Number(passDiagnostics?.delivery?.spawnerExecutedToCreatedRate) || 0,
+    bassExecutedToCreatedRate: Number(passDiagnostics?.delivery?.bassExecutedToCreatedRate) || 0,
+    maxBassStepGap: Number(passDiagnostics?.delivery?.maxBassStepGap) || 0,
+    maxEnemyStepsWithoutBass: Number(passDiagnostics?.delivery?.maxEnemyStepsWithoutBass) || 0,
     sectionStability,
+    sectionPresentation,
+    readability: readabilityStructureOnboarding.readability,
+    structure: readabilityStructureOnboarding.structure,
+    onboarding: readabilityStructureOnboarding.onboarding,
     grooveStability,
   };
   return {
@@ -1366,15 +2015,16 @@ export function createBeatSwarmMusicLab(options = null) {
     });
   }
 
-  function downloadSession(fileName = 'music-lab-results.json') {
+  function downloadSession(fileName = '') {
     const payload = exportSession();
     if (!payload) return false;
     try {
+      const defaultName = `music-lab-results-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = String(fileName || 'music-lab-results.json').trim() || 'music-lab-results.json';
+      a.download = String(fileName || defaultName).trim() || defaultName;
       document.body.appendChild(a);
       a.click();
       a.remove();

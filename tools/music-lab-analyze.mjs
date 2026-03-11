@@ -8,11 +8,15 @@ const DEFAULT_THRESHOLDS = Object.freeze({
   responseRateMin: 0.2,
   paletteContinuityMin: 0.55,
   playerMaskingRateMax: 0.35,
+  enemyExecutedToCreatedRateMin: 0.985,
+  spawnerExecutedToCreatedRateMin: 0.99,
+  bassExecutedToCreatedRateMin: 0.99,
+  maxEnemyStepsWithoutBassMax: 24,
 });
 
 function parseArgs(argv) {
   const out = {
-    dir: 'resources',
+    dir: 'resources/music-lab-results',
     files: [],
     all: false,
     limit: 10,
@@ -50,7 +54,7 @@ function usage() {
     'Usage: node tools/music-lab-analyze.mjs [options]',
     '',
     'Options:',
-    '  --dir <path>     Directory to scan (default: resources)',
+    '  --dir <path>     Directory to scan (default: resources/music-lab-results)',
     '  --file <path>    Analyze a specific JSON file (repeatable)',
     '  --limit <n>      Max files to scan (default: 10)',
     '  --all            Scan all matching files',
@@ -61,27 +65,39 @@ function usage() {
     '  node tools/music-lab-analyze.mjs',
     '  node tools/music-lab-analyze.mjs --all',
     '  node tools/music-lab-analyze.mjs --limit 25',
-    '  node tools/music-lab-analyze.mjs --file resources/perf-lab-results.json',
+    '  node tools/music-lab-analyze.mjs --file resources/music-lab-results/music-lab-results-<timestamp>.json',
   ].join('\n');
 }
 
 function listCandidateFiles(opts) {
   if (opts.files.length > 0) return opts.files.map((f) => resolve(f));
   const dir = resolve(opts.dir);
-  const items = readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isFile())
-    .map((d) => d.name)
-    .filter((n) => /^perf-lab-results.*\.json$/i.test(n))
-    .map((name) => {
-      const full = join(dir, name);
+  const files = [];
+  const collect = (scanDir, depth = 0) => {
+    let entries = [];
+    try { entries = readdirSync(scanDir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const full = join(scanDir, entry.name);
+      if (entry.isDirectory()) {
+        if (depth < 1) collect(full, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
       let mtimeMs = 0;
       try { mtimeMs = Number(statSync(full).mtimeMs) || 0; } catch {}
-      return { full, mtimeMs };
-    })
+      const isMusic = /^music-lab-results.*\.json$/i.test(entry.name);
+      const isPerf = /^perf-lab-results.*\.json$/i.test(entry.name);
+      files.push({ full, mtimeMs, isMusic, isPerf });
+    }
+  };
+  collect(dir, 0);
+  const musicOnly = files.filter((x) => x.isMusic);
+  const legacyPerf = files.filter((x) => x.isPerf);
+  const picked = (musicOnly.length > 0) ? musicOnly : legacyPerf;
+  return picked
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
     .slice(0, Number.isFinite(opts.limit) ? opts.limit : undefined)
     .map((x) => x.full);
-  return items;
 }
 
 function safeReadJson(filePath) {
@@ -137,6 +153,13 @@ function evaluateSession(sessionWrap, thresholds = DEFAULT_THRESHOLDS) {
     playerMaskingRate: metricValue(s, 'playerMasking.playerMaskingRate'),
     perfectSyncSpawnerPairs: metricValue(s, 'spawnerSync.perfectSyncSpawnerPairs'),
     nearDuplicateSpawnerPairs: metricValue(s, 'spawnerSync.nearDuplicateSpawnerPairs'),
+    enemyExecutedToCreatedRate: metricValue(s, 'executedToCreatedRate'),
+    spawnerExecutedToCreatedRate: metricValue(s, 'spawnerExecutedToCreatedRate'),
+    bassExecutedToCreatedRate: metricValue(s, 'bassExecutedToCreatedRate'),
+    maxEnemyStepsWithoutBass: metricValue(s, 'maxEnemyStepsWithoutBass'),
+    skippedCreatedEvents: metricValue(s, 'skippedCreatedEvents'),
+    spawnerSkippedCreatedEvents: metricValue(s, 'spawnerSkippedCreatedEvents'),
+    bassSkippedCreatedEvents: metricValue(s, 'bassSkippedCreatedEvents'),
   };
 
   const checks = [
@@ -146,6 +169,10 @@ function evaluateSession(sessionWrap, thresholds = DEFAULT_THRESHOLDS) {
     { key: 'responseRate', op: '>=', target: thresholds.responseRateMin, value: observed.responseRate },
     { key: 'paletteContinuityScore', op: '>=', target: thresholds.paletteContinuityMin, value: observed.paletteContinuityScore },
     { key: 'playerMaskingRate', op: '<=', target: thresholds.playerMaskingRateMax, value: observed.playerMaskingRate },
+    { key: 'enemyExecutedToCreatedRate', op: '>=', target: thresholds.enemyExecutedToCreatedRateMin, value: observed.enemyExecutedToCreatedRate },
+    { key: 'spawnerExecutedToCreatedRate', op: '>=', target: thresholds.spawnerExecutedToCreatedRateMin, value: observed.spawnerExecutedToCreatedRate },
+    { key: 'bassExecutedToCreatedRate', op: '>=', target: thresholds.bassExecutedToCreatedRateMin, value: observed.bassExecutedToCreatedRate },
+    { key: 'maxEnemyStepsWithoutBass', op: '<=', target: thresholds.maxEnemyStepsWithoutBassMax, value: observed.maxEnemyStepsWithoutBass },
   ].map((c) => {
     const has = Number.isFinite(c.value);
     const pass = !has ? false : (c.op === '>=' ? c.value >= c.target : c.value <= c.target);
@@ -178,6 +205,10 @@ function aggregate(sessions) {
     'responseRate',
     'paletteContinuityScore',
     'playerMaskingRate',
+    'enemyExecutedToCreatedRate',
+    'spawnerExecutedToCreatedRate',
+    'bassExecutedToCreatedRate',
+    'maxEnemyStepsWithoutBass',
   ];
   const out = {};
   for (const k of keys) {
@@ -235,6 +266,12 @@ function printReport(scannedFiles, sessions) {
     );
     console.log(
       `  spawnerSync perfectPairs=${formatNum(s.observed.perfectSyncSpawnerPairs, 0)} nearDupPairs=${formatNum(s.observed.nearDuplicateSpawnerPairs, 0)}`
+    );
+    console.log(
+      `  delivery enemy=${formatPct(s.observed.enemyExecutedToCreatedRate)} spawner=${formatPct(s.observed.spawnerExecutedToCreatedRate)} bass=${formatPct(s.observed.bassExecutedToCreatedRate)} maxEnemyStepsWithoutBass=${formatNum(s.observed.maxEnemyStepsWithoutBass, 0)}`
+    );
+    console.log(
+      `  skipped created total=${formatNum(s.observed.skippedCreatedEvents, 0)} spawner=${formatNum(s.observed.spawnerSkippedCreatedEvents, 0)} bass=${formatNum(s.observed.bassSkippedCreatedEvents, 0)}`
     );
     if (!s.pass) console.log(`  failed: ${s.failed.join(', ')}`);
   }

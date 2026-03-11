@@ -61,6 +61,9 @@ function matchesRecommended(entry, toyType) {
   const key = String(toyType).toLowerCase();
   return Array.isArray(entry?.recommendedToys) && entry.recommendedToys.includes(key);
 }
+function hasRecommendedToys(entry) {
+  return Array.isArray(entry?.recommendedToys) && entry.recommendedToys.length > 0;
+}
 function matchesPriority(entry) {
   return !!entry?.priority;
 }
@@ -77,10 +80,12 @@ function pickFromList(entries, usedIds) {
 export function pickInstrumentForToy(toyType, { theme, usedIds, preferPriority = true } = {}) {
   const entries = getInstrumentEntries ? getInstrumentEntries() : [];
   if (!entries.length) return 'tone';
+  const eligibleEntries = entries.filter((entry) => hasRecommendedToys(entry));
+  if (!eligibleEntries.length) return 'tone';
 
   const themeKey = normalizeTheme(theme);
   const used = usedIds instanceof Set ? usedIds : new Set(usedIds || []);
-  const unusedEntries = entries.filter((entry) => entry?.id && !used.has(entry.id));
+  const unusedEntries = eligibleEntries.filter((entry) => entry?.id && !used.has(entry.id));
 
   const pickFromBucket = (bucket) => {
     if (!Array.isArray(bucket) || !bucket.length) return '';
@@ -111,7 +116,7 @@ export function pickInstrumentForToy(toyType, { theme, usedIds, preferPriority =
   // 3) If no unused choices remain: theme+toy, then toy, then any remaining
   const pickedUnused = pickByRuleOrder(unusedEntries);
   if (pickedUnused) return pickedUnused;
-  const pickedAny = pickByRuleOrder(entries);
+  const pickedAny = pickByRuleOrder(eligibleEntries);
   if (pickedAny) return pickedAny;
 
   return 'tone';

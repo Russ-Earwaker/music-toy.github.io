@@ -18,5 +18,7 @@
   },
   "gestureAutoLock": true,
   "freezeChainUi": true,
-  "postUrl": "http://localhost:5174/perf-lab-results"
+  "postUrl": "http://localhost:5174/perf-lab-results",
+  "postUrlPerf": "http://localhost:5174/perf-lab-results",
+  "postUrlMusic": "http://localhost:5174/music-lab-results"
 }

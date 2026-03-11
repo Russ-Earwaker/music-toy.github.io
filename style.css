@@ -3246,6 +3246,46 @@ body.internal-board-active #board-main {
   opacity: 1;
 }
 
+.beat-swarm-section-heading {
+  position: fixed;
+  left: 50%;
+  top: 14%;
+  transform: translate(-50%, -10px);
+  min-width: min(82vw, 780px);
+  max-width: min(92vw, 920px);
+  padding: 12px 16px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(136, 182, 228, 0.46);
+  background: linear-gradient(180deg, rgba(8, 15, 30, 0.84), rgba(5, 10, 20, 0.66));
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(178, 220, 255, 0.22);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 7;
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.beat-swarm-section-heading.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.beat-swarm-section-heading-title {
+  color: rgba(227, 242, 255, 0.96);
+  font: 700 30px/1.05 'Trebuchet MS', 'Segoe UI', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(130, 198, 255, 0.24);
+}
+
+.beat-swarm-section-heading-subtitle {
+  margin-top: 4px;
+  color: rgba(173, 212, 246, 0.9);
+  font: 600 13px/1.2 'Trebuchet MS', 'Segoe UI', sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .beat-swarm-spawn-health-debug {
   position: fixed;
   left: 12px;
@@ -4468,6 +4508,12 @@ body.internal-board-active #board-main {
 }
 
 .beat-swarm-enemy {
+  --bs-role-color: #df5f49;
+  --bs-role-color-bright: #ff9a7d;
+  --bs-role-color-deep: #8e261f;
+  --bs-role-border-color: rgba(255, 228, 214, 0.7);
+  --bs-role-glow-color: rgba(223, 95, 73, 0.45);
+  --bs-role-pulse: 0;
   position: fixed;
   z-index: 2;
   width: 42px;
@@ -4475,10 +4521,12 @@ body.internal-board-active #board-main {
   margin-left: -21px;
   margin-top: -21px;
   border-radius: 50%;
-  background: #df5f49;
-  border: 2px solid rgba(255, 228, 214, 0.7);
-  box-shadow: 0 0 18px rgba(223, 95, 73, 0.45);
+  background: var(--bs-role-color, #df5f49);
+  border: 2px solid var(--bs-role-border-color, rgba(255, 228, 214, 0.7));
+  box-shadow: 0 0 18px var(--bs-role-glow-color, rgba(223, 95, 73, 0.45));
+  filter: brightness(calc(1 + (var(--bs-role-pulse) * 0.32))) saturate(calc(1 + (var(--bs-role-pulse) * 0.24)));
   transform: translate(-9999px, -9999px);
+  transition: filter 80ms linear, box-shadow 80ms linear;
 }
 
 .beat-swarm-enemy.is-spawner-enemy {
@@ -4487,9 +4535,14 @@ body.internal-board-active #board-main {
   margin-left: -86px;
   margin-top: -86px;
   border-radius: 34px;
-  background: radial-gradient(circle at 50% 36%, #ff9a7d 0%, #d84c36 62%, #8e261f 100%);
-  border: 2px solid rgba(255, 218, 196, 0.8);
-  box-shadow: 0 0 24px rgba(223, 95, 73, 0.5);
+  background: radial-gradient(
+    circle at 50% 36%,
+    var(--bs-role-color-bright, #ff9a7d) 0%,
+    var(--bs-role-color, #d84c36) 62%,
+    var(--bs-role-color-deep, #8e261f) 100%
+  );
+  border: 2px solid var(--bs-role-border-color, rgba(255, 218, 196, 0.8));
+  box-shadow: 0 0 24px var(--bs-role-glow-color, rgba(223, 95, 73, 0.5));
 }
 
 .beat-swarm-enemy.is-composer-group {
@@ -4498,9 +4551,9 @@ body.internal-board-active #board-main {
   margin-left: -25px;
   margin-top: -25px;
   border-radius: 50%;
-  background: var(--bs-group-color, #ff8b6e);
-  border: 2px solid rgba(255, 236, 220, 0.72);
-  box-shadow: 0 0 16px rgba(255, 122, 86, 0.56);
+  background: var(--bs-role-color, var(--bs-group-color, #ff8b6e));
+  border: 2px solid var(--bs-role-border-color, rgba(255, 236, 220, 0.72));
+  box-shadow: 0 0 16px var(--bs-role-glow-color, rgba(255, 122, 86, 0.56));
 }
 
 .beat-swarm-enemy.is-composer-group.is-shape-square {
@@ -4530,9 +4583,9 @@ body.internal-board-active #board-main {
   top: 0;
   width: 1px;
   height: 0;
-  border-top: 4px solid rgba(255, 190, 126, 0.68);
+  border-top: 4px solid var(--bs-role-border-color, rgba(255, 190, 126, 0.68));
   transform-origin: 0 50%;
-  box-shadow: 0 0 6px rgba(255, 150, 92, 0.42);
+  box-shadow: 0 0 6px var(--bs-role-glow-color, rgba(255, 150, 92, 0.42));
   opacity: 0;
   pointer-events: none;
   z-index: 1;
@@ -4554,8 +4607,8 @@ body.internal-board-active #board-main {
   height: 6px;
   transform-origin: 0 50%;
   border-radius: 999px;
-  background: rgba(242, 126, 48, 0.97);
-  box-shadow: 0 0 9px rgba(255, 131, 58, 0.5);
+  background: var(--bs-role-color, rgba(242, 126, 48, 0.97));
+  box-shadow: 0 0 9px var(--bs-role-glow-color, rgba(255, 131, 58, 0.5));
   opacity: 0;
 }
 
@@ -4568,9 +4621,9 @@ body.internal-board-active #board-main {
   margin-left: -6px;
   margin-top: -6px;
   border-radius: 2px;
-  border: 1px solid rgba(255, 235, 198, 0.92);
-  background: rgba(245, 154, 66, 0.98);
-  box-shadow: 0 0 12px rgba(255, 138, 62, 0.68);
+  border: 1px solid var(--bs-role-border-color, rgba(255, 235, 198, 0.92));
+  background: var(--bs-role-color-bright, rgba(245, 154, 66, 0.98));
+  box-shadow: 0 0 12px var(--bs-role-glow-color, rgba(255, 138, 62, 0.68));
   opacity: 0;
   transition: filter 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
 }
@@ -4603,11 +4656,11 @@ body.internal-board-active #board-main {
   --bs-cell-flash: 0;
   --bs-cell-pop: 0;
   border-radius: 5px;
-  border: 1px solid rgba(255, 186, 120, 0.45);
+  border: 1px solid var(--bs-role-border-color, rgba(255, 186, 120, 0.45));
   background: rgba(56, 28, 18, 0.66);
   box-shadow:
     inset 0 0 0 1px rgba(255, 143, 87, 0.08),
-    0 0 calc(2px + 12px * var(--bs-cell-flash) + 20px * var(--bs-cell-pop)) rgba(255, 154, 92, calc(0.12 + 0.28 * var(--bs-cell-flash) + 0.34 * var(--bs-cell-pop)));
+    0 0 calc(2px + 12px * var(--bs-cell-flash) + 20px * var(--bs-cell-pop)) var(--bs-role-glow-color, rgba(255, 154, 92, calc(0.12 + 0.28 * var(--bs-cell-flash) + 0.34 * var(--bs-cell-pop))));
   filter: brightness(calc(1 + var(--bs-cell-flash) * 0.55 + var(--bs-cell-pop) * 0.7));
   transform: scale(calc(1 + var(--bs-cell-pop) * 0.18));
   transition: filter 40ms linear, box-shadow 40ms linear, transform 40ms linear;
@@ -4620,11 +4673,11 @@ body.internal-board-active #board-main {
 }
 
 .beat-swarm-enemy-spawner-cell.is-active-note {
-  background: linear-gradient(180deg, rgba(255, 174, 86, 0.95), rgba(235, 111, 43, 0.95));
-  border-color: rgba(255, 230, 186, 0.85);
+  background: linear-gradient(180deg, var(--bs-role-color-bright, rgba(255, 174, 86, 0.95)), var(--bs-role-color, rgba(235, 111, 43, 0.95)));
+  border-color: var(--bs-role-border-color, rgba(255, 230, 186, 0.85));
   box-shadow:
-    0 0 calc(10px + 16px * var(--bs-cell-flash) + 22px * var(--bs-cell-pop)) rgba(255, 145, 70, calc(0.38 + 0.35 * var(--bs-cell-flash) + 0.38 * var(--bs-cell-pop))),
-    0 0 calc(2px + 12px * var(--bs-cell-flash) + 16px * var(--bs-cell-pop)) rgba(255, 210, 165, calc(0.16 + 0.25 * var(--bs-cell-flash) + 0.28 * var(--bs-cell-pop)));
+    0 0 calc(10px + 16px * var(--bs-cell-flash) + 22px * var(--bs-cell-pop)) var(--bs-role-glow-color, rgba(255, 145, 70, calc(0.38 + 0.35 * var(--bs-cell-flash) + 0.38 * var(--bs-cell-pop)))),
+    0 0 calc(2px + 12px * var(--bs-cell-flash) + 16px * var(--bs-cell-pop)) var(--bs-role-color-bright, rgba(255, 210, 165, calc(0.16 + 0.25 * var(--bs-cell-flash) + 0.28 * var(--bs-cell-pop))));
 }
 
 .beat-swarm-enemy-spawner-cell.is-rhythm-pulse {

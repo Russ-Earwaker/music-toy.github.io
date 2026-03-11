@@ -22,6 +22,7 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
   const spawnMaxHp = Math.max(1, Number(options?.spawnMaxHp) || 1);
   const actionPulseSeconds = Math.max(0.01, Number(options?.actionPulseSeconds) || 0.24);
   const leadRole = String(options?.leadRole || 'lead');
+  const groupRole = normalizeSwarmRole(group?.role || leadRole, leadRole);
 
   const w = screenToWorld({ x: clientX, y: clientY });
   if (!w || !Number.isFinite(w.x) || !Number.isFinite(w.y)) return null;
@@ -63,7 +64,7 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     spawnT: 0,
     spawnDur: spawnDuration,
     enemyType: 'composer-group-member',
-    musicalRole: normalizeSwarmRole('lead', leadRole),
+    musicalRole: groupRole,
     composerGroupId: group.id,
     composerGroupShape: group.shape,
     composerGroupColor: group.color,
@@ -71,7 +72,7 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     composerInstrument: group.instrument,
     composerActionPulseT: 0,
     composerActionPulseDur: actionPulseSeconds,
-    composerRole: normalizeSwarmRole('lead', leadRole),
+    composerRole: groupRole,
     musicGroupId: Math.trunc(Number(group.id) || 0),
     musicGroupType: 'composer',
     lifecycleState: String(group?.lifecycleState || 'active'),

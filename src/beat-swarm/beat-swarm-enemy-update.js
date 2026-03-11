@@ -16,6 +16,25 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     const enemyType = String(e?.enemyType || '');
     const lifecycleState = helpers.normalizeMusicLifecycleState?.(e?.lifecycleState || 'active', 'active');
     const aggressionScale = helpers.getLifecycleAggressionScale?.(lifecycleState);
+    const resolveRolePulseScale = () => {
+      const pulseDur = Math.max(0.01, Number(e?.musicRolePulseDur) || Number(constants.musicRolePulseSeconds) || 0.24);
+      const pulseT = Math.max(0, Number(e?.musicRolePulseT) || 0);
+      const pulseScale = Math.max(0, Math.min(0.5, Number(e?.musicRolePulseScale) || Number(constants.musicRolePulseScale) || 0.1));
+      if (!(pulseT > 0)) {
+        if (e?.el) {
+          try { e.el.style.setProperty('--bs-role-pulse', '0'); } catch {}
+        }
+        return 1;
+      }
+      const phase = 1 - Math.max(0, Math.min(1, pulseT / pulseDur));
+      const strength = Math.sin(phase * Math.PI);
+      const nextPulseT = Math.max(0, pulseT - (Number(state.dt) || 0));
+      e.musicRolePulseT = nextPulseT;
+      if (e?.el) {
+        try { e.el.style.setProperty('--bs-role-pulse', String(Math.max(0, Math.min(1, strength)).toFixed(3))); } catch {}
+      }
+      return 1 + (strength * pulseScale);
+    };
     if (enemyType === 'spawner') helpers.updateSpawnerEnemyFlash?.(e, state.dt);
     const isPersistentSpecialEnemy = enemyType === 'spawner' || enemyType === 'drawsnake';
     if (!e?.retreating && lifecycleState === 'retiring' && enemyType === 'composer-group-member') {
@@ -57,7 +76,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       if (e.el) {
         e.spawnT = Math.min(Number(e.spawnDur) || 0.14, (Number(e.spawnT) || 0) + (Number(state.dt) || 0));
         const spawnScale = enemyType === 'drawsnake' ? 1 : (helpers.getEnemySpawnScale?.(e) || 1);
-        e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${spawnScale.toFixed(3)})`;
+        const rolePulseScale = resolveRolePulseScale();
+        e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${(spawnScale * rolePulseScale).toFixed(3)})`;
       }
       if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
       if (enemyType === 'drawsnake') helpers.updateDrawSnakeVisual?.(e, scale, state.dt);
@@ -208,6 +228,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     if (e.el) {
       e.spawnT = Math.min(Number(e.spawnDur) || 0.14, (Number(e.spawnT) || 0) + (Number(state.dt) || 0));
       const spawnScale = enemyType === 'drawsnake' ? 1 : (helpers.getEnemySpawnScale?.(e) || 1);
+      const rolePulseScale = resolveRolePulseScale();
       let actionScale = 1;
       if (enemyType === 'composer-group-member') {
         const pulseDur = Math.max(0.01, Number(e.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);
@@ -218,7 +239,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
           e.composerActionPulseT = Math.max(0, pulseT - (Number(state.dt) || 0));
         }
       }
-      e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${(spawnScale * actionScale).toFixed(3)})`;
+      e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${(spawnScale * actionScale * rolePulseScale).toFixed(3)})`;
     }
     if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
     if (enemyType === 'drawsnake') helpers.updateDrawSnakeVisual?.(e, scale, state.dt);

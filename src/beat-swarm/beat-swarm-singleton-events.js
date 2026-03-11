@@ -217,7 +217,7 @@ export function collectSpawnerStepBeatEvents(options = null) {
     stats.activeSpawners += 1;
     const steps = Array.isArray(group?.steps) ? group.steps : [];
     const isActiveStep = !!steps[step];
-    const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
+    const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.6 : 1;
     if (!isActiveStep) continue;
     stats.triggeredSpawners += 1;
     let noteNameRaw = normalizeSwarmNoteName(group?.note) || 'C4';

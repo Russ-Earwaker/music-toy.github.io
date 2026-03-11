@@ -427,6 +427,9 @@ function ensureUI() {
       btn('musicLabEnable', 'Music Lab: Enable'),
       btn('musicLabDisable', 'Music Lab: Disable'),
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
+      btn('musicLabRunBS0S3x1m1m', 'Music Lab: Run BS0 S3 (1x1m, auto-save)', 'primary'),
+      btn('musicLabRunBS0S3x1m', 'Music Lab: Run BS0 S3 (1x3m, auto-save)', 'primary'),
+      btn('musicLabRunBS0S3x3m', 'Music Lab: Run BS0 S3 (3x3m each, auto-save)', 'primary'),
       btn('musicLabSnapshot', 'Music Lab: Show Snapshot'),
       btn('musicLabExport', 'Music Lab: Export JSON'),
       btn('musicLabSaveResources', 'Music Lab: Save to resources'),
@@ -1011,6 +1014,51 @@ function ensureUI() {
     };
   }
 
+  async function saveMusicLabSessionToResources({
+    runId = 'musicLabAutoSave',
+    label = 'music-lab-session',
+    notes = '',
+    iterationIndex = 1,
+    iterationCount = 1,
+  } = {}) {
+    const api = getMusicLabApi();
+    if (!api || typeof api.exportSession !== 'function') {
+      return { ok: false, reason: 'music_lab_api_unavailable' };
+    }
+    const payload = api.exportSession();
+    const cfg = await resolveResultsConfig();
+    const postUrl = resolveLabPostUrl(cfg, 'music');
+    if (!postUrl) {
+      return { ok: false, reason: 'no_post_url' };
+    }
+    const bundle = buildResultsBundle([
+      {
+        label: String(label || 'music-lab-session'),
+        runId: String(runId || 'musicLabAutoSave'),
+        createdAt: new Date().toISOString(),
+        musicLab: payload,
+      },
+    ], {
+      runId: String(runId || 'musicLabAutoSave'),
+      notes: String(notes || ''),
+      runMode: 'auto',
+      scenarioName: String(label || 'music-lab-session'),
+      testCategory: 'music-lab-session',
+      iterationIndex: Math.max(1, Math.trunc(Number(iterationIndex) || 1)),
+      iterationCount: Math.max(1, Math.trunc(Number(iterationCount) || 1)),
+      labType: 'music',
+      kind: 'music-lab',
+    });
+    const ok = await postResultsBundle(bundle, postUrl, { allowLegacyPerfFallback: true });
+    return {
+      ok: !!ok,
+      reason: ok ? '' : 'post_failed',
+      postUrl,
+      sessionId: String(payload?.sessionId || ''),
+      events: Array.isArray(payload?.eventTimeline) ? payload.eventTimeline.length : 0,
+    };
+  }
+
   ov.addEventListener('click', async (e) => {
     // Tabs (Controls / Tests)
     const tabBtn = e.target && e.target.closest ? e.target.closest('button[data-tab]') : null;
@@ -1147,6 +1195,18 @@ function ensureUI() {
       }
       return;
     }
+    if (act === 'musicLabRunBS0S3x3m') {
+      await runBS0s3MusicLabTriplet();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3x1m') {
+      await runBS0s3MusicLabSingle();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3x1m1m') {
+      await runBS0s3MusicLabSingle1m();
+      return;
+    }
     if (act === 'musicLabSnapshot') {
       const state = getMusicLabDebugState();
       if (!state.available) {
@@ -1182,13 +1242,13 @@ function ensureUI() {
       try {
         const payload = api.exportSession();
         const cfg = await resolveResultsConfig();
-        const postUrl = cfg?.postUrl || window.__PERF_LAB_RESULTS_URL;
+        const postUrl = resolveLabPostUrl(cfg, 'music');
         if (!postUrl) {
-          setStatus('Music Lab save failed: no postUrl configured');
+          setStatus('Music Lab save failed: no music post URL configured');
           setOutput({
             ok: false,
             reason: 'no_post_url',
-            hint: 'Set postUrl in resources/perf-lab-auto.json or window.__PERF_LAB_RESULTS_URL',
+            hint: 'Set postUrlMusic in resources/perf-lab-auto.json or window.__MUSIC_LAB_RESULTS_URL',
           });
           return;
         }
@@ -1202,9 +1262,15 @@ function ensureUI() {
         ], {
           runId: 'musicLabManualSave',
           notes: 'Manual Music Lab save from Perf Lab UI',
+          runMode: 'manual',
+          scenarioName: 'music-lab-session',
+          testCategory: 'music-lab-session',
+          iterationIndex: 1,
+          iterationCount: 1,
+          labType: 'music',
           kind: 'music-lab',
         });
-        const ok = await postResultsBundle(bundle, postUrl);
+        const ok = await postResultsBundle(bundle, postUrl, { allowLegacyPerfFallback: true });
         setStatus(ok ? 'Music Lab saved via results endpoint' : 'Music Lab save failed (endpoint)');
         setOutput({
           ok: !!ok,
@@ -1226,11 +1292,12 @@ function ensureUI() {
         return;
       }
       try {
-        const ok = api.downloadSession('music-lab-results.json');
+        const fileName = buildLabResultFileName('music');
+        const ok = api.downloadSession(fileName);
         setStatus(ok ? 'Music Lab JSON download started' : 'Music Lab JSON download failed');
         setOutput({
           ok: !!ok,
-          fileName: 'music-lab-results.json',
+          fileName,
           ...getMusicLabDebugState(),
         });
       } catch (err) {
@@ -1250,7 +1317,7 @@ function ensureUI() {
         clear: true,
         save: false,
         download: true,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        postUrl: cfgBase.postUrlPerf || cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         downloadName: `perf-lab-generic-${ts}.json`,
         notes: 'Generic baseline: Mixed (P6a) -> Lots of DrawGrid (P3f) -> Lots of Simple Rhythm (P4b)',
         queue: AUTO_GENERIC_QUEUE,
@@ -1265,7 +1332,7 @@ function ensureUI() {
         clear: true,
         save: false,
         download: true,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        postUrl: cfgBase.postUrlPerf || cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         downloadName: `perf-lab-generic-adaptive-compare-${ts}.json`,
         notes: 'Generic A/B: compares DrawGrid adaptive DPR OFF vs ON (does not change Auto: Generic).',
         queue: [
@@ -1285,7 +1352,7 @@ function ensureUI() {
       await runAuto({
         clear: true,
         save: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        postUrl: cfgBase.postUrlPerf || cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         notes: 'Current Focus (single batch): P3f baseline + no-overlays (+ baseline repeat) on one shared build/warmup.',
         queue: AUTO_FOCUS_QUEUE,
         runId: 'autoFocus',
@@ -1297,7 +1364,7 @@ function ensureUI() {
       await runAuto({
         clear: true,
         save: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        postUrl: cfgBase.postUrlPerf || cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         notes: 'Zoom Spike Probe: baseline + commit-spam zoom (anchor ON/OFF) + baseline repeat.',
         queue: AUTO_ZOOM_SPIKE_QUEUE,
         runId: 'autoZoomSpike',
@@ -1310,7 +1377,7 @@ function ensureUI() {
       await runAuto({
         clear: true,
         save: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        postUrl: cfgBase.postUrlPerf || cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         notes: 'Focus Validation (Heavy): force pressure-DPR engagement + catch resize churn (edit AUTO_FOCUS_HEAVY_QUEUE in perf-lab.js)',
         queue: AUTO_FOCUS_HEAVY_QUEUE,
         runId: 'autoFocusHeavy',
@@ -1323,7 +1390,7 @@ function ensureUI() {
       await runAuto({
         clear: true,
         save: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        postUrl: cfgBase.postUrlPerf || cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         notes: 'Focus Micro: short, high-signal, typically trace-enabled (edit AUTO_MICRO_QUEUE in perf-lab.js)',
         queue: AUTO_MICRO_QUEUE,
         runId: 'autoMicro',
@@ -1337,7 +1404,7 @@ function ensureUI() {
         clear: true,
         save: false,
         download: true,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        postUrl: cfgBase.postUrlPerf || cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         downloadName: `perf-lab-beat-swarm-generic-${ts}.json`,
         notes: 'Beat Swarm generic baseline: default empty Beat Swarm scene (idle + pan/zoom).',
         queue: AUTO_BEAT_SWARM_GENERIC_QUEUE,
@@ -1351,7 +1418,7 @@ function ensureUI() {
       await runAuto({
         clear: true,
         save: false,
-        postUrl: cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
+        postUrl: cfgBase.postUrlPerf || cfgBase.postUrl || window.__PERF_LAB_RESULTS_URL,
         notes: 'Demon Hunt v1: baseline (traceOff) then traceOn; P3f + P4b',
         queue: [
           'traceOff',
@@ -1736,6 +1803,8 @@ function logOverlapReport(selector = '.toy-panel[data-toy="drawgrid"]', limit = 
 
 const PERF_LAB_STORAGE_KEY = 'perfLab:lastResults';
 const PERF_LAB_AUTO_KEY = 'perfLab:auto';
+const DEFAULT_PERF_RESULTS_URL = 'http://localhost:5174/perf-lab-results';
+const DEFAULT_MUSIC_RESULTS_URL = 'http://localhost:5174/music-lab-results';
 
 function normalizeQueue(input) {
   if (!input) return [];
@@ -1753,15 +1822,135 @@ function safeJsonParse(raw) {
   try { return JSON.parse(raw); } catch { return null; }
 }
 
+function readMusicLabMetric(payload, path, fallback = NaN) {
+  try {
+    const parts = String(path || '').split('.').filter(Boolean);
+    let cur = payload?.metrics;
+    for (const part of parts) {
+      if (!cur || typeof cur !== 'object') return fallback;
+      cur = cur[part];
+    }
+    const n = Number(cur);
+    return Number.isFinite(n) ? n : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function summarizeMusicLabSessionPayload(payload) {
+  const timeline = Array.isArray(payload?.eventTimeline) ? payload.eventTimeline : [];
+  return {
+    sessionId: String(payload?.sessionId || ''),
+    startedAtIso: String(payload?.startedAtIso || ''),
+    endedAtIso: String(payload?.endedAtIso || ''),
+    eventCount: timeline.length,
+    paletteChangeCount: Array.isArray(payload?.paletteChanges) ? payload.paletteChanges.length : 0,
+    pacingChangeCount: Array.isArray(payload?.pacingChanges) ? payload.pacingChanges.length : 0,
+    metrics: {
+      notePoolCompliance: readMusicLabMetric(payload, 'notePoolCompliance.poolComplianceRate'),
+      intervalSmoothShare: readMusicLabMetric(payload, 'intervalProfile.smoothShare'),
+      motifReuseRate: readMusicLabMetric(payload, 'motifReuse.motifReuseRate'),
+      responseRate: readMusicLabMetric(payload, 'callResponse.responseRate'),
+      paletteContinuityScore: readMusicLabMetric(payload, 'paletteContinuity.paletteContinuityScore'),
+      playerMaskingRate: readMusicLabMetric(payload, 'playerMasking.playerMaskingRate'),
+      enemyExecutedToCreatedRate: readMusicLabMetric(payload, 'executedToCreatedRate'),
+      spawnerExecutedToCreatedRate: readMusicLabMetric(payload, 'spawnerExecutedToCreatedRate'),
+      bassExecutedToCreatedRate: readMusicLabMetric(payload, 'bassExecutedToCreatedRate'),
+      skippedCreatedEvents: readMusicLabMetric(payload, 'skippedCreatedEvents'),
+      spawnerSkippedCreatedEvents: readMusicLabMetric(payload, 'spawnerSkippedCreatedEvents'),
+      bassSkippedCreatedEvents: readMusicLabMetric(payload, 'bassSkippedCreatedEvents'),
+      maxEnemyStepsWithoutBass: readMusicLabMetric(payload, 'maxEnemyStepsWithoutBass'),
+    },
+  };
+}
+
+function aggregateMusicRunSummaries(summaries) {
+  const list = Array.isArray(summaries) ? summaries.filter((s) => s && typeof s === 'object') : [];
+  const count = list.length;
+  const avg = (vals) => {
+    const nums = vals.map((v) => Number(v)).filter((n) => Number.isFinite(n));
+    if (!nums.length) return null;
+    return nums.reduce((a, b) => a + b, 0) / nums.length;
+  };
+  const variance = (vals) => {
+    const nums = vals.map((v) => Number(v)).filter((n) => Number.isFinite(n));
+    if (nums.length < 2) return null;
+    const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+    return nums.reduce((a, b) => a + ((b - mean) * (b - mean)), 0) / nums.length;
+  };
+  return {
+    runCount: count,
+    averageEventCount: avg(list.map((s) => s.eventCount)),
+    averagePaletteChangeCount: avg(list.map((s) => s.paletteChangeCount)),
+    averagePacingChangeCount: avg(list.map((s) => s.pacingChangeCount)),
+    averageNotePoolCompliance: avg(list.map((s) => s?.metrics?.notePoolCompliance)),
+    averageIntervalSmoothShare: avg(list.map((s) => s?.metrics?.intervalSmoothShare)),
+    averageMotifReuseRate: avg(list.map((s) => s?.metrics?.motifReuseRate)),
+    averageResponseRate: avg(list.map((s) => s?.metrics?.responseRate)),
+    averagePaletteContinuityScore: avg(list.map((s) => s?.metrics?.paletteContinuityScore)),
+    averagePlayerMaskingRate: avg(list.map((s) => s?.metrics?.playerMaskingRate)),
+    averageEnemyExecutedToCreatedRate: avg(list.map((s) => s?.metrics?.enemyExecutedToCreatedRate)),
+    averageSpawnerExecutedToCreatedRate: avg(list.map((s) => s?.metrics?.spawnerExecutedToCreatedRate)),
+    averageBassExecutedToCreatedRate: avg(list.map((s) => s?.metrics?.bassExecutedToCreatedRate)),
+    averageSkippedCreatedEvents: avg(list.map((s) => s?.metrics?.skippedCreatedEvents)),
+    averageSpawnerSkippedCreatedEvents: avg(list.map((s) => s?.metrics?.spawnerSkippedCreatedEvents)),
+    averageBassSkippedCreatedEvents: avg(list.map((s) => s?.metrics?.bassSkippedCreatedEvents)),
+    averageMaxEnemyStepsWithoutBass: avg(list.map((s) => s?.metrics?.maxEnemyStepsWithoutBass)),
+    varianceEventCount: variance(list.map((s) => s.eventCount)),
+    variancePlayerMaskingRate: variance(list.map((s) => s?.metrics?.playerMaskingRate)),
+  };
+}
+
+function normalizeLabType(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'music' || raw === 'music-lab' || raw === 'musiclab') return 'music';
+  return 'perf';
+}
+
+function buildLabResultFileName(labType = 'perf', prefixOverride = '') {
+  const mode = normalizeLabType(labType);
+  const prefix = String(prefixOverride || (mode === 'music' ? 'music-lab-results' : 'perf-lab-results')).trim() || 'perf-lab-results';
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  return `${prefix}-${ts}.json`;
+}
+
+function resolveLabPostUrl(cfg, labType = 'perf') {
+  const src = (cfg && typeof cfg === 'object') ? cfg : {};
+  const mode = normalizeLabType(labType);
+  if (mode === 'music') {
+    return src.postUrlMusic
+      || src.musicPostUrl
+      || window.__MUSIC_LAB_RESULTS_URL
+      || src.postUrl
+      || window.__PERF_LAB_RESULTS_URL
+      || DEFAULT_MUSIC_RESULTS_URL;
+  }
+  return src.postUrlPerf
+    || src.perfPostUrl
+    || src.postUrl
+    || window.__PERF_LAB_RESULTS_URL
+    || DEFAULT_PERF_RESULTS_URL;
+}
+
 function buildResultsBundle(results, meta = {}) {
   const href = (typeof location !== 'undefined' && location.href) ? location.href : '';
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
+  const labType = normalizeLabType(meta?.labType || meta?.kind);
+  const safeMeta = { ...(meta || {}), labType };
+  if (!safeMeta.kind) safeMeta.kind = (labType === 'music') ? 'music-lab' : 'perf-lab';
+  const rows = Array.isArray(results) ? results : [];
+  const safeResults = rows.map((row) => {
+    if (!row || typeof row !== 'object') return row;
+    const next = { ...row };
+    if (!next.labType) next.labType = labType;
+    return next;
+  });
   return {
     createdAt: new Date().toISOString(),
     href,
     userAgent: ua,
-    meta: { ...meta },
-    results: Array.isArray(results) ? results : [],
+    meta: safeMeta,
+    results: safeResults,
   };
 }
 
@@ -1776,15 +1965,37 @@ function saveResultsBundle(bundle, key = PERF_LAB_STORAGE_KEY) {
   }
 }
 
-async function postResultsBundle(bundle, url) {
+function deriveLegacyPerfResultsUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (raw.includes('/music-lab-results')) return raw.replace('/music-lab-results', '/perf-lab-results');
+  return '';
+}
+
+async function postResultsBundle(bundle, url, opts = {}) {
   if (!bundle || !url) return false;
+  const allowLegacyPerfFallback = !!opts.allowLegacyPerfFallback;
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bundle),
     });
-    return true;
+    if (res && res.ok) return true;
+    if (allowLegacyPerfFallback && res && res.status === 404) {
+      const fallbackUrl = deriveLegacyPerfResultsUrl(url);
+      if (fallbackUrl) {
+        try {
+          const retry = await fetch(fallbackUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bundle),
+          });
+          return !!(retry && retry.ok);
+        } catch {}
+      }
+    }
+    return false;
   } catch (err) {
     console.warn('[PerfLab] postResults failed', err);
     return false;
@@ -1803,7 +2014,14 @@ function readAutoConfig() {
       const delayMs = Number(params.get('perfAutoDelay') || '');
       if (Number.isFinite(delayMs)) cfg.delayMs = delayMs;
       const postUrl = params.get('perfResultsUrl');
-      if (postUrl) cfg.postUrl = postUrl;
+      if (postUrl) {
+        cfg.postUrl = postUrl;
+        cfg.postUrlPerf = postUrl;
+      }
+      const postUrlPerf = params.get('perfResultsUrlPerf');
+      if (postUrlPerf) cfg.postUrlPerf = postUrlPerf;
+      const postUrlMusic = params.get('musicResultsUrl');
+      if (postUrlMusic) cfg.postUrlMusic = postUrlMusic;
       const saveKey = params.get('perfSaveKey');
       if (saveKey) cfg.saveKey = saveKey;
       const autoStart = params.get('perfAutoStart');
@@ -1856,13 +2074,17 @@ async function publishResultBundle(result, meta = {}) {
     queue: meta.queue || cfg.queue || [],
     notes: (meta.notes != null) ? meta.notes : (cfg.notes || ''),
     runId: (meta.runId != null) ? meta.runId : (cfg.runId || ''),
+    testCategory: (meta.testCategory != null) ? meta.testCategory : '',
+    scenarioName: (meta.scenarioName != null) ? meta.scenarioName : '',
+    runMode: (meta.runMode != null) ? meta.runMode : 'manual',
+    labType: 'perf',
   });
   lastBundle = bundle;
 
   const saveKey = cfg.saveKey || PERF_LAB_STORAGE_KEY;
   if (cfg.save !== false) saveResultsBundle(bundle, saveKey);
 
-  const postUrl = cfg.postUrl || window.__PERF_LAB_RESULTS_URL;
+  const postUrl = resolveLabPostUrl(cfg, 'perf');
   if (postUrl) await postResultsBundle(bundle, postUrl);
   return bundle;
 }
@@ -1992,13 +2214,19 @@ async function runAuto(config = {}) {
       executedQueue: Array.isArray(window.__PERF_LAB_EXECUTED_QUEUE) ? window.__PERF_LAB_EXECUTED_QUEUE : [],
       notes: cfg.notes || '',
       runId: cfg.runId || '',
+      testCategory: cfg.testCategory || '',
+      scenarioName: cfg.scenarioName || '',
+      runMode: 'auto',
+      iterationIndex: Number.isFinite(cfg.iterationIndex) ? Math.max(1, Math.trunc(cfg.iterationIndex)) : 1,
+      iterationCount: Number.isFinite(cfg.iterationCount) ? Math.max(1, Math.trunc(cfg.iterationCount)) : 1,
+      labType: 'perf',
     });
     lastBundle = bundle;
 
     const saveKey = cfg.saveKey || PERF_LAB_STORAGE_KEY;
     if (cfg.save !== false) saveResultsBundle(bundle, saveKey);
 
-    const postUrl = cfg.postUrl || window.__PERF_LAB_RESULTS_URL;
+    const postUrl = resolveLabPostUrl(cfg, 'perf');
     if (postUrl) await postResultsBundle(bundle, postUrl);
 
     if (cfg.clearAfter !== false) {
@@ -2517,6 +2745,118 @@ function getBeatSwarmDebugApi() {
   return dbg;
 }
 
+function getMusicLabApiGlobal() {
+  const api = window.__beatSwarmMusicLab;
+  if (!api || typeof api !== 'object') return null;
+  if (typeof api.exportSession !== 'function') return null;
+  return api;
+}
+
+async function saveMusicLabSessionToResourcesGlobal({
+  runId = 'musicLabAutoSave',
+  label = 'music-lab-session',
+  notes = '',
+  iterationIndex = 1,
+  iterationCount = 1,
+} = {}) {
+  const api = getMusicLabApiGlobal();
+  if (!api || typeof api.exportSession !== 'function') {
+    return { ok: false, reason: 'music_lab_api_unavailable' };
+  }
+  const payload = api.exportSession();
+  const cfg = await resolveResultsConfig();
+  const postUrl = resolveLabPostUrl(cfg, 'music');
+  if (!postUrl) {
+    return { ok: false, reason: 'no_post_url' };
+  }
+  const bundle = buildResultsBundle([
+    {
+      label: String(label || 'music-lab-session'),
+      runId: String(runId || 'musicLabAutoSave'),
+      createdAt: new Date().toISOString(),
+      musicLab: payload,
+    },
+  ], {
+    runId: String(runId || 'musicLabAutoSave'),
+    notes: String(notes || ''),
+    runMode: 'auto',
+    scenarioName: String(label || 'music-lab-session'),
+    testCategory: 'music-lab-session',
+    iterationIndex: Math.max(1, Math.trunc(Number(iterationIndex) || 1)),
+    iterationCount: Math.max(1, Math.trunc(Number(iterationCount) || 1)),
+    labType: 'music',
+    kind: 'music-lab',
+  });
+  const ok = await postResultsBundle(bundle, postUrl, { allowLegacyPerfFallback: true });
+  const sessionSummary = summarizeMusicLabSessionPayload(payload);
+  return {
+    ok: !!ok,
+    reason: ok ? '' : 'post_failed',
+    postUrl,
+    sessionId: String(payload?.sessionId || ''),
+    events: Array.isArray(payload?.eventTimeline) ? payload.eventTimeline.length : 0,
+    sessionSummary,
+  };
+}
+
+async function publishGroupedMusicLabScenarioBundle({
+  scenarioName = 'beat-swarm-music-multi-run',
+  runId = 'musicLabScenarioBundle',
+  notes = '',
+  stageCount = 0,
+  durationMs = 0,
+  repeatCount = 0,
+  runOutcomes = [],
+} = {}) {
+  const cfg = await resolveResultsConfig();
+  const postUrl = resolveLabPostUrl(cfg, 'music');
+  if (!postUrl) return { ok: false, reason: 'no_post_url' };
+
+  const runDetails = Array.isArray(runOutcomes) ? runOutcomes.map((r) => ({
+    runIndex: Math.max(1, Math.trunc(Number(r?.runIndex) || 1)),
+    runId: String(r?.runId || ''),
+    saved: !!r?.saved,
+    reason: String(r?.reason || ''),
+    sessionId: String(r?.sessionId || ''),
+    events: Math.max(0, Number(r?.events) || 0),
+    sessionSummary: (r?.sessionSummary && typeof r.sessionSummary === 'object') ? r.sessionSummary : null,
+  })) : [];
+  const aggregateSummary = aggregateMusicRunSummaries(
+    runDetails.map((r) => r.sessionSummary).filter(Boolean)
+  );
+
+  const bundle = buildResultsBundle([
+    {
+      label: String(scenarioName || 'beat-swarm-music-multi-run'),
+      runId: String(runId || 'musicLabScenarioBundle'),
+      createdAt: new Date().toISOString(),
+      stageCount: Math.max(0, Math.trunc(Number(stageCount) || 0)),
+      durationMs: Math.max(0, Math.trunc(Number(durationMs) || 0)),
+      runDetails,
+      aggregateSummary,
+    },
+  ], {
+    runId: String(runId || 'musicLabScenarioBundle'),
+    notes: String(notes || ''),
+    testCategory: 'beat-swarm-music',
+    scenarioName: String(scenarioName || 'beat-swarm-music-multi-run'),
+    runMode: 'multi-run',
+    iterationIndex: 1,
+    iterationCount: Math.max(1, Math.trunc(Number(repeatCount) || runDetails.length || 1)),
+    labType: 'music',
+    kind: 'music-lab-scenario',
+  });
+
+  const ok = await postResultsBundle(bundle, postUrl, { allowLegacyPerfFallback: true });
+  return {
+    ok: !!ok,
+    reason: ok ? '' : 'post_failed',
+    postUrl,
+    runCount: runDetails.length,
+    aggregateSummary,
+  };
+}
+
 async function buildBS0() {
   try { clearSceneViaSnapshot(); } catch {}
   setStatus('Building BS0...');
@@ -2552,22 +2892,120 @@ async function prepareBS0StaticStage(stageCount = 2, enemyCount = 24) {
   return true;
 }
 
-async function runBS0Stage(stageCount = 1) {
-  const ok = await prepareBS0StaticStage(stageCount, 24);
-  if (!ok) {
-    setStatus(`BS0 S${stageCount} failed (Beat Swarm debug API unavailable)`);
-    return;
-  }
+async function runBS0Stage(stageCount = 1, opts = null) {
+  const cfg = opts && typeof opts === 'object' ? opts : {};
+  const durationMs = Math.max(1000, Number(cfg.durationMs) || 9000);
+  const repeatCount = Math.max(1, Math.round(Number(cfg.repeatCount) || 1));
+  const enemyCount = Math.max(1, Math.round(Number(cfg.enemyCount) || 24));
+  const freshResetEachRun = cfg.freshResetEachRun !== false && repeatCount > 1;
+  const restartTransportEachRun = cfg.restartTransportEachRun !== false && repeatCount > 1;
+  const resetMusicLabEachRun = cfg.resetMusicLabEachRun !== false;
+  const saveMusicLabEachRun = cfg.saveMusicLabEachRun === true;
+  const saveRunIdBase = String(cfg.saveRunIdBase || `musicLab_bs0_s${stageCount}`).trim() || `musicLab_bs0_s${stageCount}`;
+  const saveNotes = String(cfg.saveNotes || '').trim();
+  const groupedScenarioName = String(cfg.groupedScenarioName || `beat-swarm-s${stageCount}-music-multi-run`).trim() || `beat-swarm-s${stageCount}-music-multi-run`;
+  const groupedRunId = String(cfg.groupedRunId || `${saveRunIdBase}_scenario`).trim() || `${saveRunIdBase}_scenario`;
+  const groupedNotes = String(cfg.groupedNotes || `Grouped scenario bundle for BS0 S${stageCount} music multi-run.`).trim()
+    || `Grouped scenario bundle for BS0 S${stageCount} music multi-run.`;
+  const tagPrefix = String(cfg.tagPrefix || `BS0S${stageCount}`).trim() || `BS0S${stageCount}`;
+  const labelPrefix = String(cfg.labelPrefix || `BS0_stage${stageCount}_beatswarm_static_fire`).trim() || `BS0_stage${stageCount}_beatswarm_static_fire`;
+  const statusPrefix = String(cfg.statusPrefix || `Running BS0 S${stageCount} (static player, ${stageCount} stage weapon, onscreen enemies)`).trim()
+    || `Running BS0 S${stageCount} (static player, ${stageCount} stage weapon, onscreen enemies)`;
   const prevDur = window.__PERF_LAB_DURATION_MS;
   const prevTag = window.__PERF_RUN_TAG;
-  try { window.__PERF_LAB_DURATION_MS = 9000; } catch {}
-  try { window.__PERF_RUN_TAG = `BS0S${stageCount}`; } catch {}
+  const runOutcomes = [];
+  const totalMinutes = Number(((durationMs * repeatCount) / 60000).toFixed(1));
   try {
-    await runVariantPlaying(
-      `BS0_stage${stageCount}_beatswarm_static_fire`,
-      null,
-      `Running BS0 S${stageCount} (static player, ${stageCount} stage weapon, onscreen enemies)...`
-    );
+    try { window.__PERF_LAB_DURATION_MS = durationMs; } catch {}
+    for (let runIndex = 1; runIndex <= repeatCount; runIndex += 1) {
+      if (freshResetEachRun) {
+        const rebuilt = await buildBS0();
+        if (!rebuilt) {
+          setStatus(`BS0 S${stageCount} failed (fresh reset failed)`);
+          return;
+        }
+      }
+      const ok = await prepareBS0StaticStage(stageCount, enemyCount);
+      if (!ok) {
+        setStatus(`BS0 S${stageCount} failed (Beat Swarm debug API unavailable)`);
+        return;
+      }
+      if (restartTransportEachRun) {
+        try { stopTransport(); } catch {}
+        try { startTransport(); } catch {}
+      }
+      const runSuffix = repeatCount > 1 ? `_run${runIndex}` : '';
+      const runHuman = repeatCount > 1 ? ` [${runIndex}/${repeatCount}]` : '';
+      if (resetMusicLabEachRun) {
+        const api = getMusicLabApiGlobal();
+        if (api && typeof api.reset === 'function') {
+          try { api.reset('perf-lab-run'); } catch {}
+        }
+      }
+      try { window.__PERF_RUN_TAG = `${tagPrefix}${runSuffix}`; } catch {}
+      await runVariantPlaying(
+        `${labelPrefix}${runSuffix}`,
+        null,
+        `${statusPrefix}${runHuman}...`
+      );
+      if (saveMusicLabEachRun) {
+        const save = await saveMusicLabSessionToResourcesGlobal({
+          runId: `${saveRunIdBase}${runSuffix}`,
+          label: `music-lab-session${runSuffix}`,
+          notes: saveNotes || `Auto save for BS0 S${stageCount} run ${runIndex}/${repeatCount}`,
+          iterationIndex: runIndex,
+          iterationCount: repeatCount,
+        });
+        runOutcomes.push({
+          runIndex,
+          runId: `${saveRunIdBase}${runSuffix}`,
+          saved: !!save?.ok,
+          reason: String(save?.reason || ''),
+          postUrl: String(save?.postUrl || ''),
+          sessionId: String(save?.sessionId || ''),
+          events: Math.max(0, Number(save?.events) || 0),
+          sessionSummary: (save?.sessionSummary && typeof save.sessionSummary === 'object') ? save.sessionSummary : null,
+        });
+        if (!save?.ok) {
+          setStatus(`BS0 S${stageCount} run ${runIndex}/${repeatCount} save failed`);
+          setOutput({
+            ok: false,
+            stageCount,
+            runIndex,
+            repeatCount,
+            durationMs,
+            reason: String(save?.reason || 'save_failed'),
+            postUrl: String(save?.postUrl || ''),
+            hint: 'Ensure perf-lab results server is running and music postUrl points to /music-lab-results.',
+          });
+          return;
+        }
+      }
+    }
+    if (saveMusicLabEachRun) {
+      let groupedScenario = null;
+      if (repeatCount > 1) {
+        groupedScenario = await publishGroupedMusicLabScenarioBundle({
+          scenarioName: groupedScenarioName,
+          runId: groupedRunId,
+          notes: groupedNotes,
+          stageCount,
+          durationMs,
+          repeatCount,
+          runOutcomes,
+        });
+      }
+      setStatus(`BS0 S${stageCount} complete (${repeatCount} x ${(durationMs / 60000).toFixed(1)}m, total ${totalMinutes}m)`);
+      setOutput({
+        ok: true,
+        stageCount,
+        repeatCount,
+        durationMs,
+        totalMinutes,
+        saves: runOutcomes,
+        groupedScenario: groupedScenario || null,
+      });
+    }
   } finally {
     try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
     try { window.__PERF_RUN_TAG = prevTag; } catch {}
@@ -2579,6 +3017,62 @@ async function runBS0s2() { await runBS0Stage(2); }
 async function runBS0s3() { await runBS0Stage(3); }
 async function runBS0s4() { await runBS0Stage(4); }
 async function runBS0s5() { await runBS0Stage(5); }
+async function runBS0s3MusicLabTriplet() {
+  await runBS0Stage(3, {
+    durationMs: 180000,
+    repeatCount: 3,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_bs0_s3_3x3m',
+    saveNotes: 'Beat Swarm Music Lab auto run: S3, 3 runs x 3 minutes, one file per run.',
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_3x3m',
+    groupedRunId: 'musicLab_bs0_s3_3x3m_scenario',
+    groupedNotes: 'Beat Swarm Music Lab grouped scenario: S3, 3 runs x 3 minutes, with aggregate summary.',
+    tagPrefix: 'BS0S3MusicLab3x3m',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_3m',
+    statusPrefix: 'Running BS0 S3 Music Lab playtest (3 minutes)',
+  });
+}
+
+async function runBS0s3MusicLabSingle() {
+  await runBS0Stage(3, {
+    durationMs: 180000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_bs0_s3_1x3m',
+    saveNotes: 'Beat Swarm Music Lab quick run: S3, 1 run x 3 minutes.',
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_1x3m',
+    groupedRunId: 'musicLab_bs0_s3_1x3m_scenario',
+    groupedNotes: 'Beat Swarm Music Lab grouped scenario: S3, 1 run x 3 minutes.',
+    tagPrefix: 'BS0S3MusicLab1x3m',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_1x3m',
+    statusPrefix: 'Running BS0 S3 Music Lab quick playtest (3 minutes)',
+  });
+}
+
+async function runBS0s3MusicLabSingle1m() {
+  await runBS0Stage(3, {
+    durationMs: 60000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_bs0_s3_1x1m',
+    saveNotes: 'Beat Swarm Music Lab quick run: S3, 1 run x 1 minute.',
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_1x1m',
+    groupedRunId: 'musicLab_bs0_s3_1x1m_scenario',
+    groupedNotes: 'Beat Swarm Music Lab grouped scenario: S3, 1 run x 1 minute.',
+    tagPrefix: 'BS0S3MusicLab1x1m',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_1x1m',
+    statusPrefix: 'Running BS0 S3 Music Lab quick playtest (1 minute)',
+  });
+}
 
 async function runBS0a() {
   await runBS0s1();
@@ -2913,7 +3407,7 @@ function __perfGetRunTagSuffix() {
 async function runVariantPlaying(label, step, statusText) {
   const warmupMs = 1200;
   // Make variant labels self-describing (tier/AB toggles, etc).
-  // Without this, perf-lab-results.json ends up with many identical labels,
+  // Without this, perf-lab-results-<timestamp>.json ends up with many identical labels,
   // which is painful to compare.
   const fullLabel = (() => {
     try {
@@ -4154,7 +4648,7 @@ async function runP3e2() {
     await withTempAnchorDisabled(false, async () => {
       // IMPORTANT: variants like runP3fNoParticles/runP3fNoOverlays wrap runP3f()
       // and set window.__PERF_RUN_TAG. If we don't bake that into the label,
-      // perf-lab-results.json ends up with duplicate labels that are hard to compare.
+      // perf-lab-results-<timestamp>.json ends up with duplicate labels that are hard to compare.
       const __runTag = (() => {
         try { return window.__PERF_RUN_TAG; } catch { return null; }
       })();
@@ -6467,6 +6961,7 @@ try {
     runBS0s3,
     runBS0s4,
     runBS0s5,
+    runBS0s3MusicLabTriplet,
     runBS0a,
     runBS0b,
     runQueue,
@@ -6766,3 +7261,4 @@ try {
 
 
 try { scheduleAutoRun(); } catch {}
+

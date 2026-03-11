@@ -58,6 +58,15 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     return String(fallback || 'lead').trim().toLowerCase() || 'lead';
   }
 
+  function normalizeRegisterClassToken(rawValue = '') {
+    const raw = String(rawValue || '').trim().toLowerCase();
+    if (raw === 'low' || raw === 'mid' || raw === 'high') return raw;
+    if (raw === 'sub') return 'low';
+    if (raw === 'mid_low' || raw === 'mid-low' || raw === 'midlow') return 'mid';
+    if (raw === 'mid_high' || raw === 'mid-high' || raw === 'midhigh') return 'high';
+    return '';
+  }
+
   function inferEnemyLaneFromToyKey(toyKey) {
     const key = String(toyKey || '').trim().toLowerCase();
     if (key === 'loopgrid-drum' || key === 'loopgrid') return 'bass';
@@ -110,6 +119,8 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const entries = Array.isArray(getInstrumentEntries()) ? getInstrumentEntries() : [];
     const entry = entries.find((e) => String(e?.id || '').trim() === id) || null;
     if (!entry) return normalizeEnemyInstrumentLane(fallbackLane, 'lead');
+    const explicitLaneRole = normalizeEnemyInstrumentLane(entry?.laneRole || '', '');
+    if (explicitLaneRole) return explicitLaneRole;
     const laneHints = Array.isArray(entry?.laneHints)
       ? entry.laneHints.map((v) => normalizeEnemyInstrumentLane(v, '')).filter(Boolean)
       : [];
@@ -117,6 +128,7 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const type = String(entry?.type || '').trim().toLowerCase();
     const family = String(entry?.instrumentFamily || '').trim().toLowerCase();
     const functionTag = String(entry?.functionTag || '').trim().toLowerCase();
+    const registerClass = normalizeRegisterClassToken(entry?.registerClass || '');
     const pitchRank = Number(entry?.pitchRank);
     if (type.includes('effects')) return 'motion';
     if (functionTag.includes('ambient') || functionTag.includes('texture')) return 'motion';
@@ -128,6 +140,8 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
       || family.includes('cowbell')
       || family.includes('percussion')
     ) return 'accent';
+    if (registerClass === 'low') return 'bass';
+    if (registerClass === 'high') return 'lead';
     if (Number.isFinite(pitchRank) && pitchRank <= 2) return 'bass';
     if (Number.isFinite(pitchRank) && pitchRank >= 4) return 'lead';
     if (Number.isFinite(pitchRank) && pitchRank === 3) return 'lead';
@@ -143,9 +157,11 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
   function entryMatchesLane(entry, lane = 'lead', toyCandidates = null) {
     const style = getStyleProfileSnapshot();
     const laneKey = normalizeEnemyInstrumentLane(lane, 'lead');
+    const explicitLaneRole = normalizeEnemyInstrumentLane(entry?.laneRole || '', '');
     const laneHints = Array.isArray(entry?.laneHints)
       ? entry.laneHints.map((v) => normalizeEnemyInstrumentLane(v, '')).filter(Boolean)
       : [];
+    const registerClass = normalizeRegisterClassToken(entry?.registerClass || '');
     const pitchRank = Number(entry?.pitchRank);
     const family = String(entry?.instrumentFamily || '').trim().toLowerCase();
     const functionTag = String(entry?.functionTag || '').trim().toLowerCase();
@@ -154,13 +170,16 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const isLoopgridRecommended = candidates.some((k) => k === 'loopgrid' || k === 'loopgrid-drum')
       && (entryMatchesToy(entry, 'loopgrid') || entryMatchesToy(entry, 'loopgrid-drum'));
     const isDrawgridRecommended = candidates.includes('drawgrid') && entryMatchesToy(entry, 'drawgrid');
-    let laneMatch = laneHints.includes(laneKey);
+    if (explicitLaneRole && explicitLaneRole !== laneKey) return false;
+    let laneMatch = explicitLaneRole === laneKey || laneHints.includes(laneKey);
     if (laneKey === 'bass') {
+      if (registerClass === 'low') laneMatch = true;
       if (Number.isFinite(pitchRank) && pitchRank <= 3) laneMatch = true;
       if (family.includes('bass') || family.includes('drum') || family.includes('kick') || family.includes('djembe')) laneMatch = true;
       if (isLoopgridRecommended) laneMatch = true;
     }
     if (!laneMatch && laneKey === 'lead') {
+      if (registerClass === 'high') laneMatch = true;
       if (Number.isFinite(pitchRank) && pitchRank >= 3) laneMatch = isDrawgridRecommended || !isLoopgridRecommended;
       if (
         family.includes('piano')
@@ -173,6 +192,7 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
       if (isDrawgridRecommended) laneMatch = true;
     }
     if (!laneMatch && laneKey === 'accent') {
+      if (registerClass === 'mid') laneMatch = true;
       if (functionTag.includes('short')) laneMatch = true;
       if (
         family.includes('clap')

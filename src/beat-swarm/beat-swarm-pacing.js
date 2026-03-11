@@ -39,23 +39,24 @@ function getPacingCapsForState(stateName, responseMode = 'drawsnake') {
   if (s === PACING_STATES.INTRO_BASS) {
     return {
       maxFallbackEnemies: 0,
-      maxSpawners: 1,
+      maxSpawners: 0,
       maxDrawSnakes: 0,
-      maxComposerGroups: 0,
-      maxComposerGroupSize: 0,
-      maxComposerPerformers: 0,
-      responseMode: 'none',
+      maxComposerGroups: 1,
+      maxComposerGroupSize: 4,
+      maxComposerPerformers: 1,
+      responseMode: 'group',
     };
   }
   if (s === PACING_STATES.INTRO_RESPONSE) {
     const mode = String(responseMode || 'drawsnake') === 'group' ? 'group' : 'drawsnake';
     return {
       maxFallbackEnemies: 0,
-      maxSpawners: 1,
+      maxSpawners: mode === 'group' ? 1 : 0,
       maxDrawSnakes: mode === 'drawsnake' ? 1 : 0,
-      maxComposerGroups: mode === 'group' ? 1 : 0,
-      maxComposerGroupSize: mode === 'group' ? 2 : 0,
-      maxComposerPerformers: mode === 'group' ? 1 : 0,
+      // Phase 2 should add one response loop while preserving phase-1 bass foundation.
+      maxComposerGroups: 1,
+      maxComposerGroupSize: 4,
+      maxComposerPerformers: 1,
       responseMode: mode,
     };
   }

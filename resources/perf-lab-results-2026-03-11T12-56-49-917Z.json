@@ -1,0 +1,219 @@
+{
+  "createdAt": "2026-03-11T12:56:49.913Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+  "meta": {
+    "queue": [
+      "BS0_stage3_beatswarm_static_fire_musiclab_3m_run2"
+    ],
+    "notes": "Running BS0 S3 Music Lab playtest (3 minutes) [2/3]...",
+    "runId": "manual"
+  },
+  "results": [
+    {
+      "label": "BS0_stage3_beatswarm_static_fire_musiclab_3m_run2__BS0S3MusicLab3x3m_run2",
+      "durationMs": 180000,
+      "warmupMs": 1200,
+      "createdAt": "2026-03-11T12:56:49.890Z",
+      "samples": 8709,
+      "frameMs": {
+        "avg": 20.534033758181195,
+        "p50": 16.70000000001164,
+        "p95": 50,
+        "p99": 66.79999999998836,
+        "worst": 200.10000000000582
+      },
+      "counts": {
+        "over16ms": 5235,
+        "over33ms": 900,
+        "over50ms": 319
+      },
+      "pulseCount": 0,
+      "outlineSyncCount": 0,
+      "warmupCount": 0,
+      "warmupTs": null,
+      "dgBackingResizeCount": 0,
+      "dgOverlayResizeCount": 0,
+      "frameProfile": {
+        "samples": 120,
+        "parts": {
+          "perf.raf.other": {
+            "totalMs": 652.2999999970198,
+            "avgMs": 5.435833333308498
+          },
+          "pulse.service": {
+            "totalMs": 0.09999999403953552,
+            "avgMs": 0.0008333332836627961
+          },
+          "anchor": {
+            "totalMs": 19.400000110268593,
+            "avgMs": 0.1616666675855716
+          },
+          "perf.raf.scheduler": {
+            "totalMs": 25.100000008940697,
+            "avgMs": 0.20916666674117249
+          },
+          "perf.raf.main": {
+            "totalMs": 25.399999991059303,
+            "avgMs": 0.21166666659216085
+          },
+          "chain.draw": {
+            "totalMs": 3.0999999940395355,
+            "avgMs": 0.025833333283662795
+          },
+          "perf.raf.zoomTick": {
+            "totalMs": 7.800000071525574,
+            "avgMs": 0.06500000059604645
+          },
+          "script": {
+            "totalMs": 0,
+            "avgMs": 0
+          },
+          "perf.raf.benchmark": {
+            "totalMs": 1.1000000089406967,
+            "avgMs": 0.009166666741172473
+          },
+          "unattributed": {
+            "totalMs": 6652.799999824201,
+            "avgMs": 55.43999999853501
+          },
+          "frame.nonScript": {
+            "totalMs": 7387.100000000035,
+            "avgMs": 61.55916666666696
+          }
+        },
+        "work": {
+          "totalMs": 0.19999998807907104,
+          "avgMs": 0.0016666665673255921
+        },
+        "idle": {
+          "totalMs": 7386.900000011956,
+          "avgMs": 61.55750000009963
+        }
+      },
+      "warmupProfile": {
+        "t": 189988.70000000298,
+        "frameDt": 16.70000000001164,
+        "parts": {
+          "perf.raf.other": 6.4000000059604645,
+          "pulse.service": 0,
+          "anchor": 0,
+          "perf.raf.scheduler": 0.09999999403953552,
+          "perf.raf.main": 0.09999999403953552,
+          "chain.draw": 0.09999999403953552,
+          "perf.raf.zoomTick": 0,
+          "script": 0.09999999403953552,
+          "perf.raf.benchmark": 0.19999998807907104,
+          "unattributed": 9.700000029813964,
+          "frame.nonScript": 16.600000005972106
+        },
+        "workMs": 0.09999999403953552,
+        "idleMs": 16.600000005972106
+      },
+      "frameProfileWorst": {
+        "frameDt": 200.10000000000582,
+        "workMs": 0,
+        "idleMs": 200.10000000000582,
+        "memory": {
+          "used": 23189752,
+          "total": 79762292,
+          "limit": 4294967296
+        },
+        "parts": [
+          {
+            "name": "frame.nonScript",
+            "ms": 200.10000000000582
+          },
+          {
+            "name": "unattributed",
+            "ms": 163.50000002086745
+          },
+          {
+            "name": "perf.raf.main",
+            "ms": 10.799999997019768
+          },
+          {
+            "name": "perf.raf.scheduler",
+            "ms": 10.599999994039536
+          },
+          {
+            "name": "anchor",
+            "ms": 10.5
+          },
+          {
+            "name": "perf.raf.other",
+            "ms": 3.9000000059604645
+          },
+          {
+            "name": "perf.raf.zoomTick",
+            "ms": 0.5999999940395355
+          },
+          {
+            "name": "chain.draw",
+            "ms": 0.09999999403953552
+          }
+        ]
+      },
+      "sceneMeta": {
+        "toys": 0,
+        "chainMarkers": 0,
+        "cam": null,
+        "toyTypes": {},
+        "camBounds": null
+      },
+      "particleToggles": {
+        "skipUpdate": false,
+        "skipDraw": false,
+        "budgetMul": 1,
+        "freezeUnfocusedDuringGesture": false,
+        "logFreeze": false
+      },
+      "particleTempPatch": null,
+      "playing": true,
+      "flags": {
+        "traceCanvasResize": false,
+        "traceDomInRaf": false,
+        "disableLoopgridRender": false,
+        "disableChains": false,
+        "disableChainConnectors": false,
+        "disableTapDots": false,
+        "disableOverlays": false,
+        "disableOverlayStrokes": false,
+        "disableOverlayCore": false,
+        "dgDisableParticles": false,
+        "disablePulses": false,
+        "freezeAllUnfocused": false,
+        "loopgridGestureRenderMod": 1,
+        "loopgridChainCache": false,
+        "noPaint": false,
+        "noPaintActive": false,
+        "paintOnlyActive": false,
+        "noDomUpdates": false,
+        "disableChainUi": false,
+        "traceMarks": false,
+        "tapDotsSim": false,
+        "playheadSeparateCanvas": false,
+        "dgPlayheadSeparateEffectiveKnown": 0,
+        "dgPlayheadSeparateEffectiveOn": 0,
+        "dgTierKnown": 0,
+        "dgTierM1": 0,
+        "dgTier0": 0,
+        "dgTier1": 0,
+        "dgTier2": 0,
+        "dgTier3": 0,
+        "dgOverlayLoadShedKnown": 0,
+        "dgOverlayLoadShedOn": 0,
+        "dgAdaptiveVisibilityOkKnown": 0,
+        "dgAdaptiveVisibilityOkOn": 0,
+        "dgTotalCount": 0,
+        "dgSingleCanvas": false,
+        "runTag": "BS0S3MusicLab3x3m_run2"
+      },
+      "gestureSkipCount": 0,
+      "trace": {
+        "total": 0,
+        "tail": []
+      }
+    }
+  ]
+}
