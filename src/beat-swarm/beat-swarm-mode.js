@@ -150,14 +150,18 @@ import {
 } from './beat-swarm-pause-weapon-drag.js';
 import {
   applyAoeAtRuntime,
+  applyLingeringAoeBeatRuntime,
   clearBeamEffectsForWeaponSlotRuntime,
   clearPendingWeaponChainsForSlotRuntime,
+  fireConfiguredWeaponsOnBeatRuntime,
+  processPendingWeaponChainsRuntime,
   queueWeaponChainRuntime,
   shouldPlayBeamSoundForBeatRuntime,
   spawnBoomerangProjectileRuntime,
   spawnHomingMissileRuntime,
   spawnProjectileFromDirectionRuntime,
   spawnProjectileRuntime,
+  triggerWeaponStageRuntime,
 } from './beat-swarm-weapon-chain-core.js';
 
 const OVERLAY_ID = 'beat-swarm-overlay';
@@ -4937,6 +4941,9 @@ function ensureUi() {
 
 function setGameplayPaused(next) {
   gameplayPaused = !!next;
+  if (!gameplayPaused && pauseScreenEl?.contains?.(document.activeElement)) {
+    try { document.activeElement?.blur?.(); } catch {}
+  }
   if (!gameplayPaused && weaponSubBoardState.open) {
     try {
       if (window.__ArtInternal?.isActive?.()) window.__ArtInternal?.exit?.();
@@ -4955,6 +4962,14 @@ function setGameplayPaused(next) {
   }
   pauseLabelEl?.classList?.toggle?.('is-visible', gameplayPaused);
   pauseScreenEl?.classList?.toggle?.('is-visible', gameplayPaused);
+  if (pauseScreenEl) {
+    pauseScreenEl.setAttribute('aria-hidden', gameplayPaused ? 'false' : 'true');
+    if (gameplayPaused) {
+      pauseScreenEl.removeAttribute('inert');
+    } else {
+      pauseScreenEl.setAttribute('inert', '');
+    }
+  }
   if (gameplayPaused) {
     resetPausePreviewState();
     renderPauseWeaponUi();
@@ -9983,397 +9998,118 @@ function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex
 }
 
 function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [], context = null) {
-  if (!stage || !originWorld) return;
-  const archetype = stage.archetype;
-  const variant = stage.variant;
-  const continuation = sanitizeWeaponStages(remainingStages);
-  const slotIndex = Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : -1;
-  const stageIndex = Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : 0;
-  const damageScale = Math.max(0.05, Number(context?.damageScale) || 1);
-  const forcedNoteName = normalizeSwarmNoteName(context?.forcedNoteName) || null;
-  const directSound = !!context?.directSound;
-  const nextCtx = {
-    weaponSlotIndex: slotIndex,
-    stageIndex: stageIndex + 1,
-    damageScale,
-    forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-    directSound,
-    debugSource: String(context?.debugSource || ''),
-    debugStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
-    debugBeatIndex: Number.isFinite(context?.debugBeatIndex) ? Math.trunc(context.debugBeatIndex) : null,
-    debugNoteIndex: Number.isFinite(context?.debugNoteIndex) ? Math.trunc(context.debugNoteIndex) : null,
-  };
-  logWeaponTuneFireDebug('stage', {
-    source: String(context?.debugSource || ''),
-    archetype: String(archetype || ''),
-    variant: String(variant || ''),
-    soundEventKey: getPlayerWeaponSoundEventKeyForStage(archetype, variant) || '',
-    damageScale,
-    stageIndex,
-    slotIndex,
-    stepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
-    beatIndex: Number.isFinite(context?.debugBeatIndex) ? Math.trunc(context.debugBeatIndex) : Math.trunc(Number(beatIndex) || 0),
-    noteIndex: Number.isFinite(context?.debugNoteIndex) ? Math.trunc(context.debugNoteIndex) : null,
+  triggerWeaponStageRuntime({
+    stage,
+    originWorld,
+    beatIndex,
+    remainingStages,
+    context,
+    state: {
+      beamSustainStateBySlot,
+      effects,
+    },
+    constants: {
+      beamDamagePerSecond: BEAM_DAMAGE_PER_SECOND,
+      helperTurretSpawnOffsetWorld: HELPER_TURRET_SPAWN_OFFSET_WORLD,
+      projectileSplitAngleRad: PROJECTILE_SPLIT_ANGLE_RAD,
+      swarmSoundEvents: SWARM_SOUND_EVENTS,
+    },
+    helpers: {
+      addBeamEffect,
+      addLaserEffect,
+      applyAoeAt,
+      damageEnemy,
+      getGameplayBeatLen,
+      getNearestEnemy,
+      getOffsetPoint,
+      getPlayerWeaponSoundEventKeyForStage,
+      getProjectileChainSpawnOffsetWorld,
+      getShipFacingDirWorld,
+      getStageSoundVolume,
+      getSwarmEnemySoundNoteById,
+      logWeaponTuneFireDebug,
+      normalizeDir,
+      normalizeSwarmNoteName,
+      noteSwarmSoundEvent,
+      playSwarmSoundEventImmediate,
+      queueWeaponChain,
+      sanitizeWeaponStages,
+      shouldMuteProjectileStageSound,
+      shouldPlayBeamSoundForBeat,
+      spawnBoomerangProjectile,
+      spawnHelper,
+      spawnHomingMissile,
+      spawnProjectile,
+      spawnProjectileFromDirection,
+      triggerWeaponStage,
+      withDamageSoundStage,
+    },
   });
-  const sourceEnemyId = Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : null;
-  const nearest = getNearestEnemy(originWorld.x, originWorld.y, sourceEnemyId);
-  if (archetype === 'projectile') {
-    if (!shouldMuteProjectileStageSound(slotIndex)) {
-      const noteName = forcedNoteName || getSwarmEnemySoundNoteById(nearest?.id);
-      const weaponSoundKey = getPlayerWeaponSoundEventKeyForStage(archetype, variant) || 'projectile';
-      if (directSound) {
-        playSwarmSoundEventImmediate(weaponSoundKey, getStageSoundVolume(stageIndex), noteName);
-      } else {
-        noteSwarmSoundEvent(weaponSoundKey, getStageSoundVolume(stageIndex), beatIndex, noteName);
-      }
-    }
-    const facingDir = getShipFacingDirWorld();
-    const baseDir = nearest
-      ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
-      : facingDir;
-    const chainSpawnOffsetWorld = getProjectileChainSpawnOffsetWorld();
-    const spawnOrigin = Number.isFinite(sourceEnemyId)
-      ? getOffsetPoint(originWorld, nearest ? { x: nearest.wx, y: nearest.wy } : null, chainSpawnOffsetWorld, facingDir)
-      : originWorld;
-    if (variant === 'homing-missile') {
-      logWeaponTuneFireDebug('spawn', { source: nextCtx.debugSource, projectileKind: 'homing-missile', shots: 1, stageIndex, slotIndex });
-      spawnHomingMissile(spawnOrigin, 2 * damageScale, continuation, beatIndex + 1, nextCtx);
-      return;
-    }
-    if (variant === 'boomerang') {
-      logWeaponTuneFireDebug('spawn', { source: nextCtx.debugSource, projectileKind: 'boomerang', shots: 1, stageIndex, slotIndex });
-      spawnBoomerangProjectile(spawnOrigin, baseDir.x, baseDir.y, 2 * damageScale, continuation, beatIndex + 1, nextCtx);
-      return;
-    }
-    if (variant === 'split-shot') {
-      const baseAngle = Math.atan2(baseDir.y, baseDir.x);
-      const angles = [baseAngle, baseAngle - PROJECTILE_SPLIT_ANGLE_RAD, baseAngle + PROJECTILE_SPLIT_ANGLE_RAD];
-      logWeaponTuneFireDebug('spawn', { source: nextCtx.debugSource, projectileKind: 'split-shot', shots: angles.length, stageIndex, slotIndex });
-      for (const ang of angles) {
-        spawnProjectileFromDirection(spawnOrigin, Math.cos(ang), Math.sin(ang), 2 * damageScale, continuation, beatIndex + 1, nextCtx);
-      }
-      return;
-    }
-    logWeaponTuneFireDebug('spawn', { source: nextCtx.debugSource, projectileKind: 'standard', shots: 1, stageIndex, slotIndex });
-    if (nearest) {
-      spawnProjectile(spawnOrigin, nearest, 2 * damageScale, continuation, beatIndex + 1, nextCtx);
-    } else {
-      spawnProjectileFromDirection(spawnOrigin, baseDir.x, baseDir.y, 2 * damageScale, continuation, beatIndex + 1, nextCtx);
-    }
-    return;
-  }
-  if (archetype === 'helper') {
-    const anchorEnemyId = (
-      variant !== 'turret' && Number.isFinite(context?.impactEnemyId)
-    ) ? Math.trunc(context.impactEnemyId) : null;
-    const defaultAnchorType = (variant === 'orbital-drone') ? 'player' : 'world';
-    const turretSpawnPoint = (variant === 'turret')
-      ? getOffsetPoint(
-        originWorld,
-        nearest ? { x: nearest.wx, y: nearest.wy } : null,
-        HELPER_TURRET_SPAWN_OFFSET_WORLD,
-        getShipFacingDirWorld()
-      )
-      : originWorld;
-    spawnHelper(variant, turretSpawnPoint, beatIndex, continuation, {
-      weaponSlotIndex: slotIndex,
-      stageIndex,
-      helperAnchorType: context?.helperAnchorType || defaultAnchorType,
-      damageScale,
-      forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-    }, anchorEnemyId);
-    return;
-  }
-  if (archetype === 'laser') {
-    if (variant === 'beam') {
-      const noteName = forcedNoteName || getSwarmEnemySoundNoteById(nearest?.id);
-      const weaponSoundKey = getPlayerWeaponSoundEventKeyForStage(archetype, variant) || 'beam';
-      const slotKey = Number.isFinite(slotIndex) ? Math.trunc(slotIndex) : -1;
-      const sustain = beamSustainStateBySlot.get(slotKey) || null;
-      const sameNote = sustain && String(sustain.note || '') === String(noteName || '');
-      const contiguous = sustain && Math.max(0, Math.trunc(Number(beatIndex) || 0)) === (Math.max(0, Math.trunc(Number(sustain.beat) || 0)) + 1);
-      const sustaining = !!(sameNote && contiguous);
-      const beamVol = getStageSoundVolume(stageIndex) * (sustaining ? 0.36 : 0.82);
-      if (shouldPlayBeamSoundForBeat(slotIndex, beatIndex)) {
-        if (directSound) {
-          playSwarmSoundEventImmediate(weaponSoundKey, beamVol, noteName);
-        } else {
-          noteSwarmSoundEvent(weaponSoundKey, beamVol, beatIndex, noteName);
-        }
-      }
-      beamSustainStateBySlot.set(slotKey, {
-        beat: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
-        note: String(noteName || ''),
-      });
-      if (!nearest) {
-        const dir = getShipFacingDirWorld();
-        addLaserEffect(originWorld, {
-          x: originWorld.x + (dir.x * 1400),
-          y: originWorld.y + (dir.y * 1400),
-        }, slotIndex, sourceEnemyId, null);
-        if (continuation.length) {
-          queueWeaponChain(beatIndex + 1, continuation, {
-            origin: originWorld,
-            impactPoint: {
-              x: originWorld.x + (dir.x * 1400),
-              y: originWorld.y + (dir.y * 1400),
-            },
-            weaponSlotIndex: slotIndex,
-            stageIndex: stageIndex + 1,
-            damageScale,
-            forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-          });
-        }
-        return;
-      }
-      addBeamEffect(originWorld, nearest, getGameplayBeatLen(), slotIndex, BEAM_DAMAGE_PER_SECOND * damageScale);
-      const beamFx = effects[effects.length - 1];
-      if (beamFx && beamFx.kind === 'beam') beamFx.sourceEnemyId = sourceEnemyId;
-      if (continuation.length) {
-        const firstNext = continuation[0];
-        const restNext = continuation.slice(1);
-        if (firstNext?.archetype === 'laser' && firstNext?.variant === 'beam') {
-          triggerWeaponStage(firstNext, { x: nearest.wx, y: nearest.wy }, beatIndex, restNext, {
-            origin: context?.origin || originWorld,
-            impactPoint: { x: nearest.wx, y: nearest.wy },
-            weaponSlotIndex: slotIndex,
-            stageIndex: stageIndex + 1,
-            impactEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
-            sourceEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
-            damageScale,
-            forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-          });
-        } else {
-          queueWeaponChain(beatIndex + 1, continuation, {
-            origin: originWorld,
-            impactPoint: { x: nearest.wx, y: nearest.wy },
-            weaponSlotIndex: slotIndex,
-            stageIndex: stageIndex + 1,
-            impactEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
-            sourceEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
-            damageScale,
-            forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-          });
-        }
-      }
-      return;
-    }
-    {
-      const noteName = forcedNoteName || getSwarmEnemySoundNoteById(nearest?.id);
-      const weaponSoundKey = getPlayerWeaponSoundEventKeyForStage(archetype, variant) || 'hitscan';
-      if (directSound) {
-        playSwarmSoundEventImmediate(weaponSoundKey, getStageSoundVolume(stageIndex), noteName);
-      } else {
-        noteSwarmSoundEvent(weaponSoundKey, getStageSoundVolume(stageIndex), beatIndex, noteName);
-      }
-    }
-    if (!nearest) {
-      const dir = getShipFacingDirWorld();
-      const to = {
-        x: originWorld.x + (dir.x * 1400),
-        y: originWorld.y + (dir.y * 1400),
-      };
-      addLaserEffect(originWorld, to, slotIndex, sourceEnemyId, null);
-      if (continuation.length) {
-        queueWeaponChain(beatIndex + 1, continuation, {
-          origin: originWorld,
-          impactPoint: to,
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-          damageScale,
-          forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-        });
-      }
-      return;
-    }
-    addLaserEffect(
-      originWorld,
-      { x: nearest.wx, y: nearest.wy },
-      slotIndex,
-      sourceEnemyId,
-      Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null
-    );
-    withDamageSoundStage(stageIndex, () => damageEnemy(nearest, 2 * damageScale));
-    if (continuation.length) {
-      const firstNext = continuation[0];
-      const restNext = continuation.slice(1);
-      if (firstNext?.archetype === 'laser' && firstNext?.variant === 'hitscan') {
-        triggerWeaponStage(firstNext, { x: nearest.wx, y: nearest.wy }, beatIndex, restNext, {
-          origin: context?.origin || originWorld,
-          impactPoint: { x: nearest.wx, y: nearest.wy },
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-          impactEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
-          sourceEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
-          damageScale,
-          forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-        });
-      } else {
-        queueWeaponChain(beatIndex + 1, continuation, {
-          origin: originWorld,
-          impactPoint: { x: nearest.wx, y: nearest.wy },
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-          impactEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
-          sourceEnemyId: Number.isFinite(nearest.id) ? Math.trunc(nearest.id) : null,
-          damageScale,
-          forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-        });
-      }
-    }
-    return;
-  }
-  if (archetype === 'aoe') {
-    const aoeHit = applyAoeAt(originWorld, variant, beatIndex, slotIndex, sourceEnemyId, stageIndex, damageScale);
-    if (variant === 'explosion') {
-      const explosionSoundKey = getPlayerWeaponSoundEventKeyForStage(archetype, variant) || 'explosion';
-      const defaultExplosionNote = normalizeSwarmNoteName(SWARM_SOUND_EVENTS[explosionSoundKey]?.note) || 'C4';
-      if (directSound) {
-        playSwarmSoundEventImmediate(explosionSoundKey, getStageSoundVolume(stageIndex), defaultExplosionNote);
-      } else {
-        noteSwarmSoundEvent(explosionSoundKey, getStageSoundVolume(stageIndex), beatIndex, defaultExplosionNote);
-      }
-    }
-    if (continuation.length) {
-      if (variant === 'explosion' && aoeHit?.firstHitPoint) {
-        const firstNext = continuation[0];
-        const restNext = continuation.slice(1);
-        const nextOrigin = aoeHit.firstHitPoint;
-        triggerWeaponStage(firstNext, nextOrigin, beatIndex, restNext, {
-          origin: context?.origin || originWorld,
-          impactPoint: nextOrigin,
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-          impactEnemyId: Number.isFinite(aoeHit.firstHitEnemyId) ? Math.trunc(aoeHit.firstHitEnemyId) : null,
-          sourceEnemyId: Number.isFinite(aoeHit.firstHitEnemyId) ? Math.trunc(aoeHit.firstHitEnemyId) : null,
-          damageScale,
-          forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-        });
-      } else if (variant !== 'explosion') {
-        queueWeaponChain(beatIndex + 1, continuation, {
-          origin: context?.origin || originWorld,
-          impactPoint: originWorld,
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-          damageScale,
-          forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
-        });
-      }
-    }
-  }
 }
 
 function processPendingWeaponChains(beatIndex) {
-  for (let i = pendingWeaponChainEvents.length - 1; i >= 0; i--) {
-    const ev = pendingWeaponChainEvents[i];
-    if ((Number(ev?.beatIndex) || 0) > beatIndex) continue;
-    pendingWeaponChainEvents.splice(i, 1);
-    if (Number.isFinite(ev?.eventId)) removeExplosionPrimeEffectsForEvent(ev.eventId);
-    const stages = sanitizeWeaponStages(ev?.stages);
-    if (!stages.length) continue;
-    const stage = stages[0];
-    const rem = stages.slice(1);
-    // Each stage starts from the source point emitted by the previous stage.
-    const origin = ev?.context?.impactPoint || ev?.context?.origin || getViewportCenterWorld();
-    triggerWeaponStage(stage, origin, beatIndex, rem, ev?.context || null);
-  }
+  processPendingWeaponChainsRuntime({
+    beatIndex,
+    state: { pendingWeaponChainEvents },
+    helpers: {
+      getViewportCenterWorld,
+      removeExplosionPrimeEffectsForEvent,
+      sanitizeWeaponStages,
+      triggerWeaponStage,
+    },
+  });
 }
 
 function applyLingeringAoeBeat(beatIndex) {
-  for (let i = lingeringAoeZones.length - 1; i >= 0; i--) {
-    const z = lingeringAoeZones[i];
-    if ((Number(z.untilBeat) || 0) < beatIndex) {
-      lingeringAoeZones.splice(i, 1);
-      continue;
-    }
-    const r2 = (Number(z.radius) || EXPLOSION_RADIUS_WORLD) ** 2;
-    const dmg = Math.max(0, Number(z.damagePerBeat) || 0);
-    const stageIndex = Number.isFinite(z.stageIndex) ? Math.trunc(z.stageIndex) : null;
-    for (let j = enemies.length - 1; j >= 0; j--) {
-      const e = enemies[j];
-      const dx = e.wx - z.x;
-      const dy = e.wy - z.y;
-      if ((dx * dx + dy * dy) <= r2) withDamageSoundStage(stageIndex, () => damageEnemy(e, dmg));
-    }
-  }
+  applyLingeringAoeBeatRuntime({
+    beatIndex,
+    state: {
+      enemies,
+      lingeringAoeZones,
+    },
+    constants: {
+      explosionRadiusWorld: EXPLOSION_RADIUS_WORLD,
+    },
+    helpers: {
+      damageEnemy,
+      withDamageSoundStage,
+    },
+  });
 }
 
 function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex, contextBeatIndex = beatIndex) {
-  if (!centerWorld) return { attempted: false, playerAudible: false };
-  const slotIndex = Math.max(0, Math.min(weaponLoadout.length - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
-  if (weaponSubBoardState.open && Math.trunc(Number(weaponSubBoardState.slotIndex) || -1) === slotIndex) {
-    return { attempted: false, playerAudible: false };
-  }
-  const weapon = weaponLoadout[slotIndex];
-  const stages = sanitizeWeaponStages(weapon?.stages);
-  if (stages.length) {
-    const tuneStats = getWeaponTuneActivityStats(slotIndex);
-    const damageScale = getWeaponTuneDamageScale(slotIndex);
-    const tuneNotes = getWeaponTuneStepNotes(slotIndex, beatIndex);
-    const noteName = tuneNotes.length ? tuneNotes[0] : null;
-    logWeaponTuneFireDebug('step', {
-      slotIndex,
-      stepIndex: Math.trunc(Number(beatIndex) || 0),
-      beatIndex: Math.trunc(Number(contextBeatIndex) || 0),
-      noteCount: tuneNotes.length,
-      notes: tuneNotes.slice(),
-      chosenNote: noteName,
-      damageScale,
-      activeNotes: Math.max(0, Math.trunc(Number(tuneStats?.activeNotes) || 0)),
-      totalNotes: Math.max(1, Math.trunc(Number(tuneStats?.totalNotes) || WEAPON_TUNE_STEPS)),
-      firstStage: `${String(stages[0]?.archetype || '')}:${String(stages[0]?.variant || '')}`,
-    });
-    if (!noteName) {
-      clearBeamEffectsForWeaponSlot(slotIndex);
-      clearPendingWeaponChainsForSlot(slotIndex);
-      beamSustainStateBySlot.delete(slotIndex);
-      return { attempted: true, playerAudible: false };
-    }
-    const first = stages[0];
-    const rest = stages.slice(1);
-    pulsePlayerShipNoteFlash();
-    triggerWeaponStage(first, centerWorld, contextBeatIndex, rest, {
-      origin: centerWorld,
-      impactPoint: centerWorld,
-      weaponSlotIndex: slotIndex,
-      stageIndex: 0,
-      damageScale,
-      forcedNoteName: noteName,
-      directSound: true,
-      debugSource: 'tune-primary',
-      debugStepIndex: Math.trunc(Number(beatIndex) || 0),
-      debugBeatIndex: Math.trunc(Number(contextBeatIndex) || 0),
-      debugNoteIndex: 0,
-    });
-    return { attempted: true, playerAudible: true };
-  }
-  clearBeamEffectsForWeaponSlot(slotIndex);
-  clearPendingWeaponChainsForSlot(slotIndex);
-  beamSustainStateBySlot.delete(slotIndex);
-  // Backward compatibility: legacy pickup behavior if no configured stages exist.
-  const anyConfigured = weaponLoadout.some((w) => Array.isArray(w.stages) && w.stages.length > 0);
-  if (anyConfigured) return { attempted: true, playerAudible: false };
-  let playerAudible = false;
-  if (equippedWeapons.has('explosion')) applyAoeAt(centerWorld, 'explosion', contextBeatIndex);
-  if (equippedWeapons.has('explosion')) playerAudible = true;
-  const target = getNearestEnemy(centerWorld.x, centerWorld.y);
-  if (!target) return { attempted: true, playerAudible };
-  if (equippedWeapons.has('laser')) {
-    addLaserEffect(
-      centerWorld,
-      { x: target.wx, y: target.wy },
-      null,
-      null,
-      Number.isFinite(target.id) ? Math.trunc(target.id) : null
-    );
-    damageEnemy(target, weaponDefs.laser.damage);
-    playerAudible = true;
-  }
-  if (equippedWeapons.has('projectile')) {
-    spawnProjectile(centerWorld, target, weaponDefs.projectile.damage, null, null);
-    playerAudible = true;
-  }
-  return { attempted: true, playerAudible };
+  return fireConfiguredWeaponsOnBeatRuntime({
+    centerWorld,
+    beatIndex,
+    contextBeatIndex,
+    state: {
+      activeWeaponSlotIndex,
+      beamSustainStateBySlot,
+      equippedWeapons,
+      weaponDefs,
+      weaponLoadout,
+      weaponSubBoardState,
+    },
+    constants: {
+      weaponTuneSteps: WEAPON_TUNE_STEPS,
+    },
+    helpers: {
+      addLaserEffect,
+      applyAoeAt,
+      clearBeamEffectsForWeaponSlot,
+      clearPendingWeaponChainsForSlot,
+      damageEnemy,
+      getNearestEnemy,
+      getWeaponTuneActivityStats,
+      getWeaponTuneDamageScale,
+      getWeaponTuneStepNotes,
+      logWeaponTuneFireDebug,
+      pulsePlayerShipNoteFlash,
+      sanitizeWeaponStages,
+      spawnProjectile,
+      triggerWeaponStage,
+    },
+  });
 }
 
 function updateBeatWeapons(centerWorld) {
