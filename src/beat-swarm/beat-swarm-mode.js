@@ -148,6 +148,17 @@ import {
   resetPauseWeaponDragRuntime,
   updatePauseWeaponDragVisualRuntime,
 } from './beat-swarm-pause-weapon-drag.js';
+import {
+  applyAoeAtRuntime,
+  clearBeamEffectsForWeaponSlotRuntime,
+  clearPendingWeaponChainsForSlotRuntime,
+  queueWeaponChainRuntime,
+  shouldPlayBeamSoundForBeatRuntime,
+  spawnBoomerangProjectileRuntime,
+  spawnHomingMissileRuntime,
+  spawnProjectileFromDirectionRuntime,
+  spawnProjectileRuntime,
+} from './beat-swarm-weapon-chain-core.js';
 
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
@@ -9806,280 +9817,169 @@ function countOrbitingHomingMissiles() {
 }
 
 function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
-  if (!enemyLayerEl) return;
-  logWeaponTuneFireDebug('spawn-raw', {
-    source: String(chainContext?.debugSource || 'unknown'),
-    slotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
-    stageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
-    stepIndex: Number.isFinite(chainContext?.debugStepIndex) ? Math.trunc(chainContext.debugStepIndex) : null,
-    beatIndex: Number.isFinite(chainContext?.debugBeatIndex) ? Math.trunc(chainContext.debugBeatIndex) : Math.trunc(Number(currentBeatIndex) || 0),
-    damage: Math.max(1, Number(damage) || 1),
-  });
-  const dir = normalizeDir(dirX, dirY);
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-projectile';
-  enemyLayerEl.appendChild(el);
-  projectiles.push({
-    wx: fromW.x,
-    wy: fromW.y,
-    vx: dir.x * PROJECTILE_SPEED,
-    vy: dir.y * PROJECTILE_SPEED,
-    ttl: PROJECTILE_LIFETIME,
-    damage: Math.max(1, Number(damage) || 1),
-    kind: 'standard',
-    hitEnemyIds: new Set(),
-    boomCenterX: 0,
-    boomCenterY: 0,
-    boomDirX: 0,
-    boomDirY: 0,
-    boomPerpX: 0,
-    boomPerpY: 0,
-    boomRadius: 0,
-    boomTheta: 0,
-    boomOmega: 0,
-    homingState: '',
-    targetEnemyId: null,
-    orbitAngle: 0,
-    orbitAngVel: 0,
-    orbitRadius: 0,
-    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
-    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
-    chainDamageScale: Math.max(0.05, Number(chainContext?.damageScale) || 1),
-    nextStages: sanitizeWeaponStages(nextStages),
-    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
-    ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
-    hasEnteredScreen: false,
-    collisionGraceT: PROJECTILE_COLLISION_GRACE_SECONDS,
-    el,
+  spawnProjectileFromDirectionRuntime({
+    fromW,
+    dirX,
+    dirY,
+    damage,
+    nextStages,
+    nextBeatIndex,
+    chainContext,
+    state: {
+      currentBeatIndex,
+      enemyLayerEl,
+      projectiles,
+    },
+    constants: {
+      projectileCollisionGraceSeconds: PROJECTILE_COLLISION_GRACE_SECONDS,
+      projectileLifetime: PROJECTILE_LIFETIME,
+      projectileSpeed: PROJECTILE_SPEED,
+    },
+    helpers: {
+      logWeaponTuneFireDebug,
+      normalizeDir,
+      sanitizeWeaponStages,
+    },
   });
 }
 
 function spawnProjectile(fromW, toEnemy, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
-  if (!toEnemy) return;
-  const dx = toEnemy.wx - fromW.x;
-  const dy = toEnemy.wy - fromW.y;
-  spawnProjectileFromDirection(fromW, dx, dy, damage, nextStages, nextBeatIndex, chainContext);
+  spawnProjectileRuntime({
+    fromW,
+    toEnemy,
+    damage,
+    nextStages,
+    nextBeatIndex,
+    chainContext,
+    helpers: {
+      spawnProjectileFromDirection: ({ fromW, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext }) =>
+        spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext),
+    },
+  });
 }
 
 function spawnBoomerangProjectile(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
-  if (!enemyLayerEl) return;
-  const dir = normalizeDir(dirX, dirY);
-  const perp = { x: dir.y, y: -dir.x };
-  const radius = Math.max(40, Number(PROJECTILE_BOOMERANG_RADIUS_WORLD) || 320);
-  const theta = Math.PI;
-  const omega = (Math.PI * 2) / Math.max(0.35, Number(PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15);
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-projectile is-boomerang';
-  enemyLayerEl.appendChild(el);
-  projectiles.push({
-    wx: fromW.x,
-    wy: fromW.y,
-    vx: 0,
-    vy: 0,
-    ttl: Math.max(0.35, Number(PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15),
-    damage: Math.max(1, Number(damage) || 1),
-    kind: 'boomerang',
-    hitEnemyIds: new Set(),
-    boomCenterX: fromW.x,
-    boomCenterY: fromW.y,
-    boomDirX: dir.x,
-    boomDirY: dir.y,
-    boomPerpX: perp.x,
-    boomPerpY: perp.y,
-    boomRadius: radius,
-    boomTheta: theta,
-    boomOmega: omega,
-    homingState: '',
-    targetEnemyId: null,
-    orbitAngle: 0,
-    orbitAngVel: 0,
-    orbitRadius: 0,
-    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
-    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
-    chainDamageScale: Math.max(0.05, Number(chainContext?.damageScale) || 1),
-    nextStages: sanitizeWeaponStages(nextStages),
-    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
-    ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
-    hasEnteredScreen: false,
-    collisionGraceT: PROJECTILE_COLLISION_GRACE_SECONDS,
-    el,
+  spawnBoomerangProjectileRuntime({
+    fromW,
+    dirX,
+    dirY,
+    damage,
+    nextStages,
+    nextBeatIndex,
+    chainContext,
+    state: {
+      enemyLayerEl,
+      projectiles,
+    },
+    constants: {
+      projectileBoomerangLoopSeconds: PROJECTILE_BOOMERANG_LOOP_SECONDS,
+      projectileBoomerangRadiusWorld: PROJECTILE_BOOMERANG_RADIUS_WORLD,
+      projectileCollisionGraceSeconds: PROJECTILE_COLLISION_GRACE_SECONDS,
+    },
+    helpers: {
+      normalizeDir,
+      sanitizeWeaponStages,
+    },
   });
 }
 
 function spawnHomingMissile(fromW, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
-  if (!enemyLayerEl) return false;
-  if (countOrbitingHomingMissiles() >= PROJECTILE_HOMING_MAX_ORBITING) return false;
-  const orbitCount = countOrbitingHomingMissiles();
-  const angle = ((orbitCount / Math.max(1, PROJECTILE_HOMING_MAX_ORBITING)) * Math.PI * 2);
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-projectile is-homing-missile';
-  enemyLayerEl.appendChild(el);
-  projectiles.push({
-    wx: fromW.x,
-    wy: fromW.y,
-    vx: 0,
-    vy: 0,
-    ttl: 60,
-    damage: Math.max(1, Number(damage) || 1),
-    kind: 'homing-missile',
-    hitEnemyIds: new Set(),
-    boomCenterX: 0,
-    boomCenterY: 0,
-    boomDirX: 0,
-    boomDirY: 0,
-    boomPerpX: 0,
-    boomPerpY: 0,
-    boomRadius: 0,
-    boomTheta: 0,
-    boomOmega: 0,
-    homingState: 'orbit',
-    targetEnemyId: null,
-    orbitAngle: angle,
-    orbitAngVel: PROJECTILE_HOMING_ORBIT_ANG_VEL,
-    orbitRadius: PROJECTILE_HOMING_ORBIT_RADIUS_WORLD,
-    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
-    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
-    chainDamageScale: Math.max(0.05, Number(chainContext?.damageScale) || 1),
-    nextStages: sanitizeWeaponStages(nextStages),
-    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
-    ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
-    hasEnteredScreen: false,
-    collisionGraceT: PROJECTILE_COLLISION_GRACE_SECONDS,
-    el,
+  return spawnHomingMissileRuntime({
+    fromW,
+    damage,
+    nextStages,
+    nextBeatIndex,
+    chainContext,
+    state: {
+      enemyLayerEl,
+      projectiles,
+    },
+    constants: {
+      projectileCollisionGraceSeconds: PROJECTILE_COLLISION_GRACE_SECONDS,
+      projectileHomingMaxOrbiting: PROJECTILE_HOMING_MAX_ORBITING,
+      projectileHomingOrbitAngVel: PROJECTILE_HOMING_ORBIT_ANG_VEL,
+      projectileHomingOrbitRadiusWorld: PROJECTILE_HOMING_ORBIT_RADIUS_WORLD,
+    },
+    helpers: {
+      countOrbitingHomingMissiles,
+      sanitizeWeaponStages,
+    },
   });
-  return true;
 }
 
 function queueWeaponChain(beatIndex, nextStages, context) {
-  const stages = sanitizeWeaponStages(nextStages);
-  if (!stages.length) return;
-  const queuedBeatIndex = Math.max(0, Math.trunc(Number(beatIndex) || 0));
-  const impactPoint = context?.impactPoint ? { x: Number(context.impactPoint.x) || 0, y: Number(context.impactPoint.y) || 0 } : null;
-  const weaponSlotIndex = Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : null;
-  const impactEnemyId = Number.isFinite(context?.impactEnemyId) ? Math.trunc(context.impactEnemyId) : null;
-  const firstStage = stages[0];
-  const eventId = weaponChainEventSeq++;
-  if (firstStage?.archetype === 'aoe' && firstStage?.variant === 'explosion' && impactPoint) {
-    const secondsUntilTrigger = getSecondsUntilQueuedChainBeat(queuedBeatIndex);
-    if (secondsUntilTrigger > 0.02) {
-      addExplosionPrimeEffect(
-        impactPoint,
-        EXPLOSION_RADIUS_WORLD,
-        secondsUntilTrigger,
-        weaponSlotIndex,
-        eventId,
-        impactEnemyId
-      );
-    }
-  }
-  pendingWeaponChainEvents.push({
-    eventId,
-    beatIndex: queuedBeatIndex,
-    stages,
-    context: {
-      origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : null,
-      impactPoint,
-      weaponSlotIndex,
-      stageIndex: Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : null,
-      impactEnemyId,
-      sourceEnemyId: Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : null,
-      damageScale: Math.max(0.05, Number(context?.damageScale) || 1),
-      forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
+  queueWeaponChainRuntime({
+    beatIndex,
+    nextStages,
+    context,
+    state: {
+      pendingWeaponChainEvents,
+    },
+    constants: {
+      explosionRadiusWorld: EXPLOSION_RADIUS_WORLD,
+    },
+    helpers: {
+      addExplosionPrimeEffect,
+      getNextWeaponChainEventId: () => weaponChainEventSeq++,
+      getSecondsUntilQueuedChainBeat,
+      normalizeSwarmNoteName,
+      sanitizeWeaponStages,
     },
   });
 }
 
 function clearBeamEffectsForWeaponSlot(slotIndex = null) {
-  const key = Number.isFinite(slotIndex) ? Math.trunc(slotIndex) : null;
-  for (let i = effects.length - 1; i >= 0; i--) {
-    const fx = effects[i];
-    const fxSlot = Number.isFinite(fx?.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null;
-    const slotMatches = key === null ? true : fxSlot === key;
-    if (!slotMatches) continue;
-    const isBeam = String(fx?.kind || '') === 'beam';
-    const isBeamFallbackLaser = String(fx?.kind || '') === 'laser' && !Number.isFinite(fx?.targetEnemyId);
-    if (!isBeam && !isBeamFallbackLaser) continue;
-    try { fx?.el?.remove?.(); } catch {}
-    effects.splice(i, 1);
-  }
+  clearBeamEffectsForWeaponSlotRuntime({
+    slotIndex,
+    state: { effects },
+  });
 }
 
 function clearPendingWeaponChainsForSlot(slotIndex = null) {
-  const key = Number.isFinite(slotIndex) ? Math.trunc(slotIndex) : null;
-  for (let i = pendingWeaponChainEvents.length - 1; i >= 0; i--) {
-    const ev = pendingWeaponChainEvents[i];
-    const evSlot = Number.isFinite(ev?.context?.weaponSlotIndex) ? Math.trunc(ev.context.weaponSlotIndex) : null;
-    if (key !== null && evSlot !== key) continue;
-    if (ev?.eventId) removeExplosionPrimeEffectsForEvent(ev.eventId);
-    pendingWeaponChainEvents.splice(i, 1);
-  }
+  clearPendingWeaponChainsForSlotRuntime({
+    slotIndex,
+    state: { pendingWeaponChainEvents },
+    helpers: { removeExplosionPrimeEffectsForEvent },
+  });
 }
 
 function shouldPlayBeamSoundForBeat(slotIndex = null, beatIndex = currentBeatIndex) {
-  const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
-  if (beamSoundGateBeatIndex !== beat) {
-    beamSoundGateBeatIndex = beat;
-    beamSoundGateSlotKeys.clear();
-  }
-  const key = Number.isFinite(slotIndex) ? `slot:${Math.trunc(slotIndex)}` : 'slot:none';
-  if (beamSoundGateSlotKeys.has(key)) return false;
-  beamSoundGateSlotKeys.add(key);
-  return true;
+  const gateState = {
+    beamSoundGateBeatIndex,
+    beamSoundGateSlotKeys,
+  };
+  const shouldPlay = shouldPlayBeamSoundForBeatRuntime({
+    slotIndex,
+    beatIndex,
+    state: gateState,
+  });
+  beamSoundGateBeatIndex = Number(gateState.beamSoundGateBeatIndex) || 0;
+  return shouldPlay;
 }
 
 function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex = null, avoidEnemyId = null, stageIndex = null, damageScale = 1) {
-  if (!point) return;
-  const radius = Math.max(1, Number(EXPLOSION_RADIUS_WORLD) || 1);
-  const info = getLoopInfo?.();
-  const beatLen = Math.max(0.05, Number(info?.beatLen) || 0.5);
-  const dmgScale = Math.max(0.05, Number(damageScale) || 1);
-  addExplosionEffect(point, radius, variant === 'dot-area' ? (beatLen * 2) : null, weaponSlotIndex);
-  const r2 = radius * radius;
-  const isDot = variant === 'dot-area';
-  const hitDamage = (isDot ? 0.5 : 1) * dmgScale;
-  const hitCandidates = [];
-  for (let i = 0; i < enemies.length; i++) {
-    const e = enemies[i];
-    if (!e) continue;
-    const dx = e.wx - point.x;
-    const dy = e.wy - point.y;
-    const d2 = (dx * dx) + (dy * dy);
-    if (d2 <= r2) {
-      hitCandidates.push({
-        enemyId: Number.isFinite(e?.id) ? Math.trunc(e.id) : null,
-        point: { x: Number(e.wx) || 0, y: Number(e.wy) || 0 },
-        d2,
-      });
-    }
-  }
-  hitCandidates.sort((a, b) => a.d2 - b.d2);
-  for (let i = enemies.length - 1; i >= 0; i--) {
-    const e = enemies[i];
-    if (!e) continue;
-    const dx = e.wx - point.x;
-    const dy = e.wy - point.y;
-    const d2 = (dx * dx) + (dy * dy);
-    if (d2 <= r2) {
-      withDamageSoundStage(stageIndex, () => damageEnemy(e, hitDamage));
-    }
-  }
-  if (isDot) {
-    lingeringAoeZones.push({
-      x: point.x,
-      y: point.y,
-      radius,
-      damagePerBeat: 0.6 * dmgScale,
-      untilBeat: Math.max(beatIndex + 2, beatIndex + 1),
-      weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
-      stageIndex: Number.isFinite(stageIndex) ? Math.trunc(stageIndex) : null,
-    });
-  }
-  const avoidId = Number.isFinite(avoidEnemyId) ? Math.trunc(avoidEnemyId) : null;
-  const selected = hitCandidates.find((c) => c.enemyId !== avoidId) || hitCandidates[0] || null;
-  return {
-    firstHitEnemyId: Number.isFinite(selected?.enemyId) ? Math.trunc(selected.enemyId) : null,
-    firstHitPoint: selected?.point || null,
-  };
+  return applyAoeAtRuntime({
+    point,
+    variant,
+    beatIndex,
+    weaponSlotIndex,
+    avoidEnemyId,
+    stageIndex,
+    damageScale,
+    state: {
+      enemies,
+      lingeringAoeZones,
+    },
+    constants: {
+      explosionRadiusWorld: EXPLOSION_RADIUS_WORLD,
+    },
+    helpers: {
+      addExplosionEffect,
+      damageEnemy,
+      getLoopInfo,
+      withDamageSoundStage,
+    },
+  });
 }
 
 function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [], context = null) {
