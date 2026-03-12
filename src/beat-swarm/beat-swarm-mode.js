@@ -129,6 +129,25 @@ import {
   spawnHelperRuntime,
   updateHelpersRuntime,
 } from './beat-swarm-helpers-runtime.js';
+import {
+  countOrbitingHomingMissilesRuntime,
+  getOffsetPointRuntime,
+  getProjectileChainSpawnOffsetWorldRuntime,
+  getShipFacingDirWorldRuntime,
+  normalizeDirRuntime,
+  pulseHitFlashRuntime,
+} from './beat-swarm-combat-utils.js';
+import {
+  beginPauseWeaponDragRuntime,
+  clearPauseWeaponDragMarkersRuntime,
+  clearPauseWeaponDragProxyRuntime,
+  getPauseWeaponDropTargetAtClientRuntime,
+  getPauseWeaponStageCellFromEventTargetRuntime,
+  parsePauseWeaponStageCellRuntime,
+  reorderWeaponStagesRuntime,
+  resetPauseWeaponDragRuntime,
+  updatePauseWeaponDragVisualRuntime,
+} from './beat-swarm-pause-weapon-drag.js';
 
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
@@ -9662,165 +9681,128 @@ function removeExplosionPrimeEffectsForEvent(eventId) {
 }
 
 function clearPauseWeaponDragMarkers() {
-  if (!pauseScreenEl) return;
-  for (const el of pauseScreenEl.querySelectorAll('.beat-swarm-stage-cell.is-drag-source, .beat-swarm-stage-cell.is-drag-target')) {
-    el.classList.remove('is-drag-source', 'is-drag-target');
-  }
+  clearPauseWeaponDragMarkersRuntime({
+    state: { pauseScreenEl },
+  });
 }
 
 function clearPauseWeaponDragProxy() {
-  if (!pauseWeaponDrag.proxyEl) return;
-  try { pauseWeaponDrag.proxyEl.remove?.(); } catch {}
-  pauseWeaponDrag.proxyEl = null;
+  clearPauseWeaponDragProxyRuntime({
+    state: { pauseWeaponDrag },
+  });
 }
 
 function resetPauseWeaponDrag(suppressClick = false) {
-  if (pauseWeaponDrag.holdTimer) {
-    try { clearTimeout(pauseWeaponDrag.holdTimer); } catch {}
-    pauseWeaponDrag.holdTimer = 0;
-  }
-  if (suppressClick) pauseWeaponDrag.suppressClickUntil = (performance.now() || 0) + 280;
-  clearPauseWeaponDragMarkers();
-  clearPauseWeaponDragProxy();
-  pauseWeaponDrag.pointerId = null;
-  pauseWeaponDrag.started = false;
-  pauseWeaponDrag.sourceSlotIndex = -1;
-  pauseWeaponDrag.sourceStageIndex = -1;
-  pauseWeaponDrag.targetSlotIndex = -1;
-  pauseWeaponDrag.targetStageIndex = -1;
+  resetPauseWeaponDragRuntime({
+    suppressClick,
+    state: { pauseWeaponDrag },
+    helpers: {
+      clearPauseWeaponDragMarkers: () => clearPauseWeaponDragMarkers(),
+      clearPauseWeaponDragProxy: () => clearPauseWeaponDragProxy(),
+    },
+  });
 }
 
 function getPauseWeaponStageCellFromEventTarget(target) {
-  if (!(target instanceof HTMLElement)) return null;
-  const cell = target.closest('.beat-swarm-stage-cell.is-filled[data-slot-index][data-stage-index]');
-  return (cell instanceof HTMLElement) ? cell : null;
+  return getPauseWeaponStageCellFromEventTargetRuntime({ target });
 }
 
 function parsePauseWeaponStageCell(cellEl) {
-  if (!(cellEl instanceof HTMLElement)) return null;
-  const slotIndex = Math.trunc(Number(cellEl.dataset.slotIndex));
-  const stageIndex = Math.trunc(Number(cellEl.dataset.stageIndex));
-  if (!(slotIndex >= 0 && slotIndex < weaponLoadout.length)) return null;
-  const stages = sanitizeWeaponStages(weaponLoadout[slotIndex]?.stages);
-  if (!(stageIndex >= 0 && stageIndex < stages.length)) return null;
-  return { slotIndex, stageIndex };
+  return parsePauseWeaponStageCellRuntime({
+    cellEl,
+    state: { weaponLoadout },
+    helpers: { sanitizeWeaponStages },
+  });
 }
 
 function getPauseWeaponDropTargetAtClient(clientX, clientY, sourceSlotIndex, sourceStageIndex) {
-  const raw = document.elementFromPoint(Number(clientX) || 0, Number(clientY) || 0);
-  const cell = getPauseWeaponStageCellFromEventTarget(raw);
-  if (!cell) return null;
-  const parsed = parsePauseWeaponStageCell(cell);
-  if (!parsed) return null;
-  if (parsed.slotIndex !== sourceSlotIndex) return null;
-  if (parsed.stageIndex === sourceStageIndex) return null;
-  return { ...parsed, cellEl: cell };
+  return getPauseWeaponDropTargetAtClientRuntime({
+    clientX,
+    clientY,
+    sourceSlotIndex,
+    sourceStageIndex,
+    state: { weaponLoadout },
+    helpers: {
+      getPauseWeaponStageCellFromEventTarget: ({ target }) => getPauseWeaponStageCellFromEventTarget(target),
+      parsePauseWeaponStageCell: ({ cellEl }) => parsePauseWeaponStageCell(cellEl),
+    },
+  });
 }
 
 function reorderWeaponStages(slotIndex, fromStageIndex, dropBeforeStageIndex) {
-  if (!(slotIndex >= 0 && slotIndex < weaponLoadout.length)) return false;
-  const slot = weaponLoadout[slotIndex];
-  const stages = sanitizeWeaponStages(slot?.stages);
-  if (!(fromStageIndex >= 0 && fromStageIndex < stages.length)) return false;
-  if (!(dropBeforeStageIndex >= 0 && dropBeforeStageIndex < stages.length)) return false;
-  if (fromStageIndex === dropBeforeStageIndex) return false;
-  const a = stages[fromStageIndex];
-  const b = stages[dropBeforeStageIndex];
-  stages[fromStageIndex] = b;
-  stages[dropBeforeStageIndex] = a;
-  slot.stages = stages;
-  return true;
+  return reorderWeaponStagesRuntime({
+    slotIndex,
+    fromStageIndex,
+    dropBeforeStageIndex,
+    state: { weaponLoadout },
+    helpers: { sanitizeWeaponStages },
+  });
 }
 
 function updatePauseWeaponDragVisual(clientX, clientY) {
-  if (pauseWeaponDrag.proxyEl) {
-    pauseWeaponDrag.proxyEl.style.left = `${Number(clientX) || 0}px`;
-    pauseWeaponDrag.proxyEl.style.top = `${Number(clientY) || 0}px`;
-  }
-  clearPauseWeaponDragMarkers();
-  const sourceSelector = `.beat-swarm-stage-cell.is-filled[data-slot-index="${pauseWeaponDrag.sourceSlotIndex}"][data-stage-index="${pauseWeaponDrag.sourceStageIndex}"]`;
-  pauseScreenEl?.querySelector?.(sourceSelector)?.classList?.add?.('is-drag-source');
-  const target = getPauseWeaponDropTargetAtClient(clientX, clientY, pauseWeaponDrag.sourceSlotIndex, pauseWeaponDrag.sourceStageIndex);
-  pauseWeaponDrag.targetSlotIndex = target?.slotIndex ?? -1;
-  pauseWeaponDrag.targetStageIndex = target?.stageIndex ?? -1;
-  if (target?.cellEl) target.cellEl.classList.add('is-drag-target');
+  updatePauseWeaponDragVisualRuntime({
+    clientX,
+    clientY,
+    state: {
+      pauseScreenEl,
+      pauseWeaponDrag,
+    },
+    helpers: {
+      clearPauseWeaponDragMarkers: () => clearPauseWeaponDragMarkers(),
+      getPauseWeaponDropTargetAtClient: ({ clientX: x, clientY: y, sourceSlotIndex, sourceStageIndex }) =>
+        getPauseWeaponDropTargetAtClient(x, y, sourceSlotIndex, sourceStageIndex),
+    },
+  });
 }
 
 function beginPauseWeaponDrag(clientX, clientY) {
-  if (pauseWeaponDrag.started || pauseWeaponDrag.pointerId == null || !pauseScreenEl) return;
-  pauseWeaponDrag.started = true;
-  try { pauseScreenEl.setPointerCapture(pauseWeaponDrag.pointerId); } catch {}
-  const sourceSelector = `.beat-swarm-stage-cell.is-filled[data-slot-index="${pauseWeaponDrag.sourceSlotIndex}"][data-stage-index="${pauseWeaponDrag.sourceStageIndex}"] .beat-swarm-stage-component-btn`;
-  const sourceBtn = pauseScreenEl.querySelector(sourceSelector);
-  if (sourceBtn instanceof HTMLElement) {
-    const rect = sourceBtn.getBoundingClientRect();
-    const proxy = sourceBtn.cloneNode(true);
-    if (proxy instanceof HTMLElement) {
-      proxy.classList.add('beat-swarm-stage-drag-proxy');
-      proxy.style.width = `${Math.max(80, rect.width).toFixed(2)}px`;
-      proxy.style.height = `${Math.max(80, rect.height).toFixed(2)}px`;
-      document.body.appendChild(proxy);
-      pauseWeaponDrag.proxyEl = proxy;
-    }
-  }
-  updatePauseWeaponDragVisual(clientX, clientY);
+  beginPauseWeaponDragRuntime({
+    clientX,
+    clientY,
+    state: {
+      pauseScreenEl,
+      pauseWeaponDrag,
+    },
+    helpers: {
+      updatePauseWeaponDragVisual: ({ clientX: x, clientY: y }) => updatePauseWeaponDragVisual(x, y),
+    },
+  });
 }
 
 function normalizeDir(dx, dy, fallbackX = 1, fallbackY = 0) {
-  const len = Math.hypot(dx, dy);
-  if (len > 0.0001) return { x: dx / len, y: dy / len };
-  const fLen = Math.hypot(fallbackX, fallbackY) || 1;
-  return { x: fallbackX / fLen, y: fallbackY / fLen };
+  return normalizeDirRuntime({ dx, dy, fallbackX, fallbackY });
 }
 
 function pulseHitFlash(el) {
-  if (!el?.classList) return;
-  const now = performance.now();
-  const last = Number(el.dataset?.hitFlashTs || 0);
-  if ((now - last) < 60) return;
-  if (el.dataset) el.dataset.hitFlashTs = `${now}`;
-  el.classList.remove('is-hit-flash');
-  void el.offsetWidth;
-  el.classList.add('is-hit-flash');
+  pulseHitFlashRuntime({ el });
 }
 
 function getOffsetPoint(fromPoint, towardPoint, offsetDist, fallbackDir = null) {
-  const ox = Number(fromPoint?.x) || 0;
-  const oy = Number(fromPoint?.y) || 0;
-  const tx = Number(towardPoint?.x);
-  const ty = Number(towardPoint?.y);
-  let dir = null;
-  if (Number.isFinite(tx) && Number.isFinite(ty)) {
-    dir = normalizeDir(tx - ox, ty - oy);
-  } else if (fallbackDir && Number.isFinite(fallbackDir.x) && Number.isFinite(fallbackDir.y)) {
-    dir = normalizeDir(fallbackDir.x, fallbackDir.y);
-  } else {
-    dir = { x: 1, y: 0 };
-  }
-  const d = Math.max(0, Number(offsetDist) || 0);
-  return { x: ox + (dir.x * d), y: oy + (dir.y * d) };
+  return getOffsetPointRuntime({
+    fromPoint,
+    towardPoint,
+    offsetDist,
+    fallbackDir,
+    helpers: {
+      normalizeDir: ({ dx, dy, fallbackX = 1, fallbackY = 0 }) => normalizeDir(dx, dy, fallbackX, fallbackY),
+    },
+  });
 }
 
 function getShipFacingDirWorld() {
-  const rad = ((Number(shipFacingDeg) || 0) - 90) * (Math.PI / 180);
-  return { x: Math.cos(rad), y: Math.sin(rad) };
+  return getShipFacingDirWorldRuntime({ shipFacingDeg });
 }
 
 function getProjectileChainSpawnOffsetWorld() {
-  const z = getZoomState?.();
-  const s = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
-  const hitRadiusWorld = PROJECTILE_HIT_RADIUS_PX / Math.max(0.001, s || 1);
-  return Math.max(PROJECTILE_CHAIN_SPAWN_OFFSET_WORLD, hitRadiusWorld + 8);
+  return getProjectileChainSpawnOffsetWorldRuntime({
+    zoomState: getZoomState?.(),
+    projectileHitRadiusPx: PROJECTILE_HIT_RADIUS_PX,
+    projectileChainSpawnOffsetWorld: PROJECTILE_CHAIN_SPAWN_OFFSET_WORLD,
+  });
 }
 
 function countOrbitingHomingMissiles() {
-  let n = 0;
-  for (const p of projectiles) {
-    if (String(p?.kind || '') !== 'homing-missile') continue;
-    if (String(p?.homingState || '') !== 'orbit') continue;
-    n += 1;
-  }
-  return n;
+  return countOrbitingHomingMissilesRuntime({ projectiles });
 }
 
 function spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
