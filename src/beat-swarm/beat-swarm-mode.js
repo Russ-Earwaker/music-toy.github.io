@@ -119,6 +119,16 @@ import {
   getWeaponComponentDefById,
   getWeaponComponentDefForStage,
 } from './beat-swarm-weapon-components.js';
+import {
+  createHelperVisualsRuntime,
+  fireHelperPayloadAtRuntime,
+  fireHelpersOnBeatRuntime,
+  getEnemyByIdRuntime,
+  getHelperKeyRuntime,
+  hasActiveHelperByKeyRuntime,
+  spawnHelperRuntime,
+  updateHelpersRuntime,
+} from './beat-swarm-helpers-runtime.js';
 
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
@@ -4985,207 +4995,119 @@ function clearPausePreviewVisuals() {
 }
 
 function getHelperKey(slotIndex, stageIndex) {
-  const si = Number.isFinite(slotIndex) ? Math.trunc(slotIndex) : Math.trunc(Number(slotIndex));
-  const ti = Number.isFinite(stageIndex) ? Math.trunc(stageIndex) : Math.trunc(Number(stageIndex));
-  return `${Number.isFinite(si) ? si : -1}:${Number.isFinite(ti) ? ti : -1}`;
+  return getHelperKeyRuntime({ slotIndex, stageIndex });
 }
 
 function getEnemyById(enemyId) {
-  const id = Math.trunc(Number(enemyId) || 0);
-  if (!(id > 0)) return null;
-  return enemies.find((e) => Math.trunc(Number(e.id) || 0) === id) || null;
+  return getEnemyByIdRuntime({
+    enemyId,
+    state: { enemies },
+  });
 }
 
 function hasActiveHelperByKey(helperKey) {
-  return helpers.some((h) => String(h?.key || '') === String(helperKey || ''));
+  return hasActiveHelperByKeyRuntime({
+    helperKey,
+    state: { helpers },
+  });
 }
 
 function createHelperVisuals(kind) {
-  if (!enemyLayerEl) return null;
-  if (kind === 'orbital-drone') {
-    const elA = document.createElement('div');
-    const elB = document.createElement('div');
-    elA.className = 'beat-swarm-projectile beat-swarm-helper-orbital';
-    elB.className = 'beat-swarm-projectile beat-swarm-helper-orbital';
-    enemyLayerEl.appendChild(elA);
-    enemyLayerEl.appendChild(elB);
-    return { elA, elB };
-  }
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-projectile beat-swarm-helper-turret';
-  enemyLayerEl.appendChild(el);
-  return { el };
+  return createHelperVisualsRuntime({
+    kind,
+    state: { enemyLayerEl },
+  });
 }
 
 function spawnHelper(kind, anchorWorld, beatIndex, nextStages = [], context = null, anchorEnemyId = null) {
-  if (!enemyLayerEl || !anchorWorld || !kind) return false;
-  const slotRaw = Number(context?.weaponSlotIndex);
-  const stageRaw = Number(context?.stageIndex);
-  const slotIndex = Number.isFinite(slotRaw) ? Math.trunc(slotRaw) : -1;
-  const stageIndex = Number.isFinite(stageRaw) ? Math.trunc(stageRaw) : -1;
-  const key = getHelperKey(slotIndex, stageIndex);
-  if (hasActiveHelperByKey(key)) return false;
-  const visuals = createHelperVisuals(kind);
-  if (!visuals) return false;
-  helpers.push({
-    id: helperIdSeq++,
-    key,
+  return spawnHelperRuntime({
     kind,
-    anchorType: Number.isFinite(anchorEnemyId)
-      ? 'enemy'
-      : (String(context?.helperAnchorType || '') === 'player' ? 'player' : 'world'),
-    anchorEnemyId: Number.isFinite(anchorEnemyId) ? Math.trunc(anchorEnemyId) : null,
-    anchorX: Number(anchorWorld.x) || 0,
-    anchorY: Number(anchorWorld.y) || 0,
-    orbitAngle: 0,
-    orbitRadius: HELPER_ORBIT_RADIUS_WORLD,
-    orbitAngVel: HELPER_ORBIT_ANG_VEL,
-    untilBeat: Math.max(0, Math.trunc(Number(beatIndex) || 0)) + HELPER_LIFETIME_BEATS,
-    damageScale: Math.max(0.05, Number(context?.damageScale) || 1),
-    nextStages: sanitizeWeaponStages(nextStages),
-    context: {
-      weaponSlotIndex: slotIndex,
-      stageIndex,
-      damageScale: Math.max(0.05, Number(context?.damageScale) || 1),
-      forcedNoteName: normalizeSwarmNoteName(context?.forcedNoteName) || null,
+    anchorWorld,
+    beatIndex,
+    nextStages,
+    context,
+    anchorEnemyId,
+    state: {
+      enemyLayerEl,
+      helpers,
     },
-    elA: visuals.elA || null,
-    elB: visuals.elB || null,
-    el: visuals.el || null,
+    constants: {
+      helperLifetimeBeats: HELPER_LIFETIME_BEATS,
+      helperOrbitRadiusWorld: HELPER_ORBIT_RADIUS_WORLD,
+      helperOrbitAngVel: HELPER_ORBIT_ANG_VEL,
+    },
+    helpers: {
+      createHelperVisuals: ({ kind: helperKind }) => createHelperVisuals(helperKind),
+      getHelperKey: ({ slotIndex: si, stageIndex: ti }) => getHelperKey(si, ti),
+      hasActiveHelperByKey: ({ helperKey }) => hasActiveHelperByKey(helperKey),
+      getNextHelperId: () => helperIdSeq++,
+      normalizeSwarmNoteName,
+      sanitizeWeaponStages,
+    },
   });
-  return true;
 }
 
 function updateHelpers(dt, centerWorld, scale) {
-  const impactRadiusWorld = HELPER_IMPACT_RADIUS_PX / Math.max(0.001, scale || 1);
-  const ir2 = impactRadiusWorld * impactRadiusWorld;
-  for (let i = helpers.length - 1; i >= 0; i--) {
-    const h = helpers[i];
-    if ((Number(h.untilBeat) || 0) < currentBeatIndex) {
-      try { h?.elA?.remove?.(); } catch {}
-      try { h?.elB?.remove?.(); } catch {}
-      try { h?.el?.remove?.(); } catch {}
-      helpers.splice(i, 1);
-      continue;
-    }
-    if (String(h.anchorType) === 'enemy') {
-      const e = getEnemyById(h.anchorEnemyId);
-      if (e) {
-        h.anchorX = Number(e.wx) || 0;
-        h.anchorY = Number(e.wy) || 0;
-      } else {
-        h.anchorType = 'world';
-        h.anchorEnemyId = null;
-      }
-    } else if (String(h.anchorType) === 'player' && centerWorld) {
-      h.anchorX = Number(centerWorld.x) || 0;
-      h.anchorY = Number(centerWorld.y) || 0;
-    }
-
-    if (h.kind === 'orbital-drone') {
-      h.orbitAngle = (Number(h.orbitAngle) || 0) + ((Number(h.orbitAngVel) || HELPER_ORBIT_ANG_VEL) * dt);
-      const pts = [
-        {
-          x: h.anchorX + (Math.cos(h.orbitAngle) * (Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD)),
-          y: h.anchorY + (Math.sin(h.orbitAngle) * (Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD)),
-          el: h.elA,
-        },
-        {
-          x: h.anchorX + (Math.cos(h.orbitAngle + Math.PI) * (Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD)),
-          y: h.anchorY + (Math.sin(h.orbitAngle + Math.PI) * (Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD)),
-          el: h.elB,
-        },
-      ];
-      for (const p of pts) {
-        for (let j = enemies.length - 1; j >= 0; j--) {
-          const e = enemies[j];
-          const dx = e.wx - p.x;
-          const dy = e.wy - p.y;
-          if ((dx * dx + dy * dy) <= ir2) damageEnemy(e, HELPER_IMPACT_DAMAGE * dt * 8 * Math.max(0.05, Number(h.damageScale) || 1));
-        }
-        const s = worldToScreen({ x: p.x, y: p.y });
-        if (p.el && s && Number.isFinite(s.x) && Number.isFinite(s.y)) p.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
-      }
-    } else {
-      for (let j = enemies.length - 1; j >= 0; j--) {
-        const e = enemies[j];
-        const dx = e.wx - h.anchorX;
-        const dy = e.wy - h.anchorY;
-        if ((dx * dx + dy * dy) <= ir2) damageEnemy(e, HELPER_IMPACT_DAMAGE * dt * 7 * Math.max(0.05, Number(h.damageScale) || 1));
-      }
-      const s = worldToScreen({ x: h.anchorX, y: h.anchorY });
-      if (h.el && s && Number.isFinite(s.x) && Number.isFinite(s.y)) h.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
-    }
-  }
+  updateHelpersRuntime({
+    dt,
+    centerWorld,
+    scale,
+    state: {
+      currentBeatIndex,
+      enemies,
+      helpers,
+    },
+    constants: {
+      helperImpactDamage: HELPER_IMPACT_DAMAGE,
+      helperImpactRadiusPx: HELPER_IMPACT_RADIUS_PX,
+      helperOrbitAngVel: HELPER_ORBIT_ANG_VEL,
+      helperOrbitRadiusWorld: HELPER_ORBIT_RADIUS_WORLD,
+    },
+    helpers: {
+      damageEnemy,
+      getEnemyById: ({ enemyId: id }) => getEnemyById(id),
+      worldToScreen,
+    },
+  });
 }
 
 function fireHelperPayloadAt(originWorld, helperObj, beatIndex) {
-  const stages = sanitizeWeaponStages(helperObj?.nextStages);
-  const slotRaw = Number(helperObj?.context?.weaponSlotIndex);
-  const stageRaw = Number(helperObj?.context?.stageIndex);
-  const slotIndex = Number.isFinite(slotRaw) ? Math.trunc(slotRaw) : -1;
-  const baseStageIndex = Number.isFinite(stageRaw) ? Math.trunc(stageRaw) : -1;
-  const damageScale = Math.max(0.05, Number(helperObj?.context?.damageScale) || Number(helperObj?.damageScale) || 1);
-  const forcedNoteName = normalizeSwarmNoteName(helperObj?.context?.forcedNoteName) || null;
-  const nearest = getNearestEnemy(originWorld.x, originWorld.y);
-  if (!stages.length) {
-    const dir = nearest
-      ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
-      : getShipFacingDirWorld();
-    spawnProjectileFromDirection(originWorld, dir.x, dir.y, 2 * damageScale, null, null);
-    return;
-  }
-  const first = stages[0];
-  const rest = stages.slice(1);
-  if (first.archetype === 'helper') {
-    if (first.variant && first.variant !== helperObj.kind) {
-      const helperSpawnPoint = (first.variant === 'turret')
-        ? getOffsetPoint(
-          originWorld,
-          nearest ? { x: nearest.wx, y: nearest.wy } : null,
-          HELPER_TURRET_SPAWN_OFFSET_WORLD,
-          getShipFacingDirWorld()
-        )
-        : originWorld;
-      spawnHelper(first.variant, helperSpawnPoint, beatIndex, rest, {
-        weaponSlotIndex: slotIndex,
-        stageIndex: baseStageIndex + 1,
-        helperAnchorType: 'world',
-        damageScale,
-        forcedNoteName,
-      }, null);
-    }
-    const dir = nearest
-      ? normalizeDir(nearest.wx - originWorld.x, nearest.wy - originWorld.y)
-      : getShipFacingDirWorld();
-    spawnProjectileFromDirection(originWorld, dir.x, dir.y, 2 * damageScale, null, null);
-    return;
-  }
-  triggerWeaponStage(first, originWorld, beatIndex, rest, {
-    origin: originWorld,
-    impactPoint: originWorld,
-    weaponSlotIndex: slotIndex,
-    stageIndex: baseStageIndex + 1,
-    damageScale,
-    forcedNoteName,
+  fireHelperPayloadAtRuntime({
+    originWorld,
+    helperObj,
+    beatIndex,
+    constants: {
+      helperTurretSpawnOffsetWorld: HELPER_TURRET_SPAWN_OFFSET_WORLD,
+    },
+    helpers: {
+      getNearestEnemy,
+      getOffsetPoint,
+      getShipFacingDirWorld,
+      normalizeDir,
+      normalizeSwarmNoteName,
+      sanitizeWeaponStages,
+      spawnHelper: ({ kind, anchorWorld, beatIndex: nextBeatIndex, nextStages, context, anchorEnemyId }) =>
+        spawnHelper(kind, anchorWorld, nextBeatIndex, nextStages, context, anchorEnemyId),
+      spawnProjectileFromDirection: ({ fromW, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext }) =>
+        spawnProjectileFromDirection(fromW, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext),
+      triggerWeaponStage: ({ stage, originWorld: nextOrigin, beatIndex: nextBeatIndex, remainingStages, context }) =>
+        triggerWeaponStage(stage, nextOrigin, nextBeatIndex, remainingStages, context),
+    },
   });
 }
 
 function fireHelpersOnBeat(beatIndex) {
-  for (const h of helpers) {
-    if ((Number(h.untilBeat) || 0) < beatIndex) continue;
-    if (h.kind === 'orbital-drone') {
-      const r = Number(h.orbitRadius) || HELPER_ORBIT_RADIUS_WORLD;
-      const a = Number(h.orbitAngle) || 0;
-      const points = [
-        { x: h.anchorX + (Math.cos(a) * r), y: h.anchorY + (Math.sin(a) * r) },
-        { x: h.anchorX + (Math.cos(a + Math.PI) * r), y: h.anchorY + (Math.sin(a + Math.PI) * r) },
-      ];
-      for (const p of points) fireHelperPayloadAt(p, h, beatIndex);
-    } else {
-      fireHelperPayloadAt({ x: h.anchorX, y: h.anchorY }, h, beatIndex);
-    }
-  }
+  fireHelpersOnBeatRuntime({
+    beatIndex,
+    state: { helpers },
+    constants: {
+      helperOrbitRadiusWorld: HELPER_ORBIT_RADIUS_WORLD,
+    },
+    helpers: {
+      fireHelperPayloadAt: ({ originWorld, helperObj, beatIndex: helperBeatIndex }) =>
+        fireHelperPayloadAt(originWorld, helperObj, helperBeatIndex),
+    },
+  });
 }
 
 function getPausePreviewHelperKey(slotIndex, stageIndex) {
