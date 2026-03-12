@@ -1,0 +1,57 @@
+export function updatePickupsAndCombatRuntimeWrapper(options = null) {
+  const dt = Number(options?.dt) || 0;
+  const state = options?.state && typeof options.state === 'object' ? options.state : {};
+  const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
+  const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
+  helpers.updateBeatSwarmPickupsAndCombatRuntime?.({
+    constants: {
+      pickupCollectRadiusPx: Number(constants.pickupCollectRadiusPx) || 0,
+      projectileHitRadiusPx: Number(constants.projectileHitRadiusPx) || 0,
+      projectileDespawnOffscreenPadPx: Number(constants.projectileDespawnOffscreenPadPx) || 0,
+      projectileBoomerangRadiusWorld: Number(constants.projectileBoomerangRadiusWorld) || 0,
+      projectileHomingOrbitRadiusWorld: Number(constants.projectileHomingOrbitRadiusWorld) || 0,
+      projectileHomingOrbitAngVel: Number(constants.projectileHomingOrbitAngVel) || 0,
+      projectileHomingAcquireRangeWorld: Number(constants.projectileHomingAcquireRangeWorld) || 0,
+      projectileHomingTurnRate: Number(constants.projectileHomingTurnRate) || 0,
+      projectileHomingSpeed: Number(constants.projectileHomingSpeed) || 0,
+      projectileHomingReturnSnapDistWorld: Number(constants.projectileHomingReturnSnapDistWorld) || 0,
+      projectileHomingOrbitTurnRate: Number(constants.projectileHomingOrbitTurnRate) || 0,
+      projectileHomingOrbitChaseSpeed: Number(constants.projectileHomingOrbitChaseSpeed) || 0,
+      projectileBoomerangSpinMult: Number(constants.projectileBoomerangSpinMult) || 0,
+      laserTtl: Number(constants.laserTtl) || 0,
+      explosionRadiusWorld: Number(constants.explosionRadiusWorld) || 0,
+      explosionTtl: Number(constants.explosionTtl) || 0,
+      explosionPrimeMaxScale: Number(constants.explosionPrimeMaxScale) || 0,
+      composerGroupExplosionTtl: Number(constants.composerGroupExplosionTtl) || 0,
+    },
+    helpers: {
+      getViewportCenterWorld: helpers.getViewportCenterWorld,
+      getZoomState: helpers.getZoomState,
+      updateHelpers: helpers.updateHelpers,
+      ensureDefaultWeaponFromLegacy: helpers.ensureDefaultWeaponFromLegacy,
+      worldToScreen: helpers.worldToScreen,
+      getNearestEnemy: helpers.getNearestEnemy,
+      normalizeDir: helpers.normalizeDir,
+      getDrawSnakeProjectileImpactPoint: helpers.getDrawSnakeProjectileImpactPoint,
+      withDamageSoundStage: helpers.withDamageSoundStage,
+      damageEnemy: helpers.damageEnemy,
+      sanitizeWeaponStages: helpers.sanitizeWeaponStages,
+      triggerWeaponStage: helpers.triggerWeaponStage,
+      queueWeaponChain: helpers.queueWeaponChain,
+      getPendingEnemyDeathByEnemyId: helpers.getPendingEnemyDeathByEnemyId,
+      getGameplayBeatLen: helpers.getGameplayBeatLen,
+      updateEnergyGravityRuntime: helpers.updateEnergyGravityRuntime,
+      updateBeatWeapons: helpers.updateBeatWeapons,
+      flushSwarmSoundEventsForBeat: helpers.flushSwarmSoundEventsForBeat,
+    },
+    state: {
+      dt,
+      currentBeatIndex: Math.max(0, Math.trunc(Number(state.currentBeatIndex) || 0)),
+      pickups: state.pickups,
+      projectiles: state.projectiles,
+      effects: state.effects,
+      enemies: state.enemies,
+      equippedWeapons: state.equippedWeapons,
+    },
+  });
+}
