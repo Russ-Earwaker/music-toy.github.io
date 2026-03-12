@@ -51,6 +51,62 @@ import {
   getShipFacingFromReleaseAimRuntime,
   shouldSuppressSteeringForReleaseRuntime,
 } from './beat-swarm-release-input.js';
+import {
+  classifyEnemyDeathFamily,
+  normalizeEnemyDeathFamily,
+  normalizeInstrumentIdToken,
+  normalizeSwarmNoteName,
+  transposeSwarmNoteName,
+} from './beat-swarm-music-utils.js';
+import { createBeatSwarmWeaponTuneTools } from './beat-swarm-weapon-tune.js';
+import { WEAPON_ARCHETYPES, WEAPON_COMPONENTS } from './beat-swarm-weapon-defs.js';
+import { createBeatSwarmSoundRoutingTools } from './beat-swarm-sound-routing.js';
+import {
+  PLAYER_WEAPON_SOUND_EVENT_KEYS,
+  SWARM_ENEMY_DEATH_EVENT_KEY_BY_FAMILY,
+  SWARM_SOUND_EVENTS,
+} from './beat-swarm-sound-defs.js';
+import {
+  applyPausePreviewLingeringAoeBeatRuntime,
+  firePausePreviewWeaponsOnBeatRuntime,
+  processPausePreviewPendingChainsRuntime,
+  updatePausePreviewProjectilesAndEffectsRuntime,
+} from './beat-swarm-pause-preview-update.js';
+import {
+  addPausePreviewBeamRuntime,
+  addPausePreviewExplosionRuntime,
+  addPausePreviewLaserRuntime,
+  applyPausePreviewAoeAtRuntime,
+  countPausePreviewOrbitingHomingMissilesRuntime,
+  queuePausePreviewChainRuntime,
+  spawnPausePreviewBoomerangProjectileRuntime,
+  spawnPausePreviewHomingMissileRuntime,
+  spawnPausePreviewProjectileFromDirectionRuntime,
+  spawnPausePreviewProjectileRuntime,
+  triggerPausePreviewWeaponStageRuntime,
+} from './beat-swarm-pause-preview-spawn.js';
+import {
+  damagePausePreviewEnemyRuntime,
+  ensurePausePreviewExplosionBiasEnemyRuntime,
+  ensurePausePreviewStateRuntime,
+  getPausePreviewBeatLenRuntime,
+  getPausePreviewNearestEnemiesRuntime,
+  nudgePausePreviewEnemiesIntoActionRuntime,
+  previewSelectionContainsBoomerangRuntime,
+  previewSelectionStartsWithExplosionRuntime,
+  removePausePreviewEnemyRuntime,
+  resetPausePreviewStateRuntime,
+  spawnPausePreviewEnemyRuntime,
+} from './beat-swarm-pause-preview-state.js';
+import {
+  createPausePreviewHelperVisualsRuntime,
+  firePausePreviewHelperPayloadAtRuntime,
+  firePausePreviewHelpersOnBeatRuntime,
+  getPausePreviewHelperKeyRuntime,
+  hasActivePausePreviewHelperByKeyRuntime,
+  spawnPausePreviewHelperRuntime,
+  updatePausePreviewHelpersRuntime,
+} from './beat-swarm-pause-preview-helpers.js';
 
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
@@ -385,54 +441,6 @@ const DRAWGRID_TUNE_ROWS = 12;
 const DRAWGRID_TUNE_NOTE_PALETTE = Object.freeze(
   buildPalette(48, Array.from({ length: DRAWGRID_TUNE_ROWS }, (_, i) => i), 1).reverse().map((m) => midiToName(m))
 );
-const WEAPON_ARCHETYPES = Object.freeze({
-  projectile: Object.freeze({
-    id: 'projectile',
-    label: 'Projectile',
-    variants: Object.freeze([
-      Object.freeze({ id: 'standard', label: 'Standard' }),
-      Object.freeze({ id: 'homing-missile', label: 'Homing Missile' }),
-      Object.freeze({ id: 'boomerang', label: 'Boomerang' }),
-      Object.freeze({ id: 'split-shot', label: 'Split Shot' }),
-    ]),
-  }),
-  aoe: Object.freeze({
-    id: 'aoe',
-    label: 'AOE',
-    variants: Object.freeze([
-      Object.freeze({ id: 'explosion', label: 'Explosion' }),
-      Object.freeze({ id: 'dot-area', label: 'Damage Over Time Area' }),
-    ]),
-  }),
-  laser: Object.freeze({
-    id: 'laser',
-    label: 'Laser',
-    variants: Object.freeze([
-      Object.freeze({ id: 'hitscan', label: 'Hit-scan' }),
-      Object.freeze({ id: 'beam', label: 'Constant Beam' }),
-    ]),
-  }),
-  helper: Object.freeze({
-    id: 'helper',
-    label: 'Helper',
-    variants: Object.freeze([
-      Object.freeze({ id: 'orbital-drone', label: 'Orbital Drone' }),
-      Object.freeze({ id: 'turret', label: 'Turret' }),
-    ]),
-  }),
-});
-const WEAPON_COMPONENTS = Object.freeze([
-  Object.freeze({ id: 'projectile:standard', archetype: 'projectile', variant: 'standard', label: 'Standard', previewClass: 'is-proj' }),
-  Object.freeze({ id: 'projectile:homing-missile', archetype: 'projectile', variant: 'homing-missile', label: 'Homing Missile', previewClass: 'is-proj' }),
-  Object.freeze({ id: 'projectile:boomerang', archetype: 'projectile', variant: 'boomerang', label: 'Boomerang', previewClass: 'is-boomerang' }),
-  Object.freeze({ id: 'projectile:split-shot', archetype: 'projectile', variant: 'split-shot', label: 'Split Shot', previewClass: 'is-split' }),
-  Object.freeze({ id: 'laser:hitscan', archetype: 'laser', variant: 'hitscan', label: 'Hit-scan', previewClass: 'is-hitscan' }),
-  Object.freeze({ id: 'laser:beam', archetype: 'laser', variant: 'beam', label: 'Constant Beam', previewClass: 'is-beam' }),
-  Object.freeze({ id: 'aoe:explosion', archetype: 'aoe', variant: 'explosion', label: 'Explosion', previewClass: 'is-explosion' }),
-  Object.freeze({ id: 'aoe:dot-area', archetype: 'aoe', variant: 'dot-area', label: 'Damage Over Time Area', previewClass: 'is-dotarea' }),
-  Object.freeze({ id: 'helper:orbital-drone', archetype: 'helper', variant: 'orbital-drone', label: 'Orbital Drone', previewClass: 'is-helper-orbital' }),
-  Object.freeze({ id: 'helper:turret', archetype: 'helper', variant: 'turret', label: 'Turret', previewClass: 'is-helper-turret' }),
-]);
 const weaponLoadout = Array.from({ length: MAX_WEAPON_SLOTS }, (_, i) => ({
   id: `slot-${i + 1}`,
   name: `Weapon ${i + 1}`,
@@ -464,245 +472,32 @@ const weaponSubBoardState = {
     syncTimerId: 0,
   })),
 };
-function createDefaultWeaponTune() {
-  const notes = DRAWGRID_TUNE_NOTE_PALETTE.slice();
-  const rows = Math.max(1, notes.length);
-  const steps = Math.max(1, WEAPON_TUNE_STEPS);
-  const active = Array.from({ length: steps }, () => true);
-  const list = Array.from({ length: steps }, () => [Math.max(0, rows - 1)]);
-  const disabled = Array.from({ length: steps }, () => []);
-  return { kind: 'drawgrid', steps, notes, active, list, disabled };
-}
-
-function createRandomWeaponTune() {
-  const base = createDefaultWeaponTune();
-  const steps = Math.max(1, Math.trunc(Number(base.steps) || WEAPON_TUNE_STEPS));
-  const notes = DRAWGRID_TUNE_NOTE_PALETTE.slice();
-  const rows = Math.max(1, notes.length);
-  const active = Array.from({ length: steps }, () => false);
-  const list = Array.from({ length: steps }, () => []);
-  const disabled = Array.from({ length: steps }, () => []);
-  for (let s = 0; s < steps; s++) {
-    if (Math.random() >= 0.62) continue;
-    const r = Math.max(0, Math.min(rows - 1, Math.trunc(Math.random() * rows)));
-    active[s] = true;
-    // Startup tune is monophonic so projectile count maps 1:1 to active notes.
-    list[s] = [r];
-  }
-  if (!active.some(Boolean)) {
-    const s = Math.max(0, Math.min(steps - 1, Math.trunc(Math.random() * steps)));
-    const r = Math.max(0, Math.min(rows - 1, Math.trunc(Math.random() * rows)));
-    active[s] = true;
-    list[s] = [r];
-  }
-  return { kind: 'drawgrid', steps, notes, active, list, disabled };
-}
-
-function createDistinctRandomWeaponTune(referenceTune) {
-  const refSig = getWeaponTuneSignature(referenceTune);
-  for (let i = 0; i < 16; i++) {
-    const candidate = createRandomWeaponTune();
-    if (getWeaponTuneSignature(candidate) !== refSig) return candidate;
-  }
-  // Extremely unlikely fallback: flip one step to force a different signature.
-  const fallback = sanitizeWeaponTune(referenceTune);
-  const steps = Math.max(1, Math.trunc(Number(fallback?.steps) || WEAPON_TUNE_STEPS));
-  const rowCount = Math.max(1, Array.isArray(fallback?.notes) ? fallback.notes.length : DRAWGRID_TUNE_NOTE_PALETTE.length);
-  const step = Math.max(0, Math.min(steps - 1, Math.trunc(Math.random() * steps)));
-  const row = Math.max(0, Math.min(rowCount - 1, Math.trunc(Math.random() * rowCount)));
-  fallback.active[step] = true;
-  fallback.list[step] = [row];
-  return fallback;
-}
-
-function sanitizeWeaponTune(rawTune) {
-  const base = createDefaultWeaponTune();
-  const steps = Math.max(1, WEAPON_TUNE_STEPS);
-  const notes = DRAWGRID_TUNE_NOTE_PALETTE.slice();
-  const active = Array.from({ length: steps }, () => false);
-  const list = Array.from({ length: steps }, () => []);
-  const disabled = Array.from({ length: steps }, () => []);
-  if (rawTune && Array.isArray(rawTune.cells)) {
-    // Back-compat with earlier 2D tune grid format.
-    for (let s = 0; s < steps; s++) {
-      const col = Array.isArray(rawTune.cells[s]) ? rawTune.cells[s] : [];
-      const picked = [];
-      for (let r = 0; r < Math.min(notes.length, col.length); r++) if (col[r]) picked.push(r);
-      if (picked.length) {
-        active[s] = true;
-        list[s] = picked;
-      }
-    }
-  } else {
-    const srcSteps = Math.max(1, Math.trunc(Number(rawTune?.steps) || base.steps || steps));
-    const srcActive = Array.isArray(rawTune?.nodes?.active) ? rawTune.nodes.active : Array.isArray(rawTune?.active) ? rawTune.active : base.active;
-    const srcList = Array.isArray(rawTune?.nodes?.list) ? rawTune.nodes.list : Array.isArray(rawTune?.list) ? rawTune.list : base.list;
-    const srcDisabled = Array.isArray(rawTune?.nodes?.disabled) ? rawTune.nodes.disabled : Array.isArray(rawTune?.disabled) ? rawTune.disabled : base.disabled;
-    for (let s = 0; s < steps; s++) {
-      const srcCol = ((s % srcSteps) + srcSteps) % srcSteps;
-      const on = !!srcActive?.[srcCol];
-      const rowsRaw = Array.isArray(srcList?.[srcCol]) ? srcList[srcCol] : [];
-      const rows = rowsRaw
-        .map((v) => Math.trunc(Number(v)))
-        .filter((v) => v >= 0 && v < notes.length);
-      active[s] = on && rows.length > 0;
-      list[s] = rows;
-      disabled[s] = (Array.isArray(srcDisabled?.[srcCol]) ? srcDisabled[srcCol] : [])
-        .map((v) => Math.trunc(Number(v)))
-        .filter((v) => v >= 0 && v < notes.length);
-    }
-  }
-  return { kind: 'drawgrid', steps, notes, active, list, disabled };
-}
-
-function sanitizeWeaponTuneChain(rawChain) {
-  const arr = Array.isArray(rawChain) ? rawChain : [];
-  const out = [];
-  for (const raw of arr) out.push(sanitizeWeaponTune(raw));
-  return out;
-}
-
-function countWeaponTuneActiveEvents(tune) {
-  let n = 0;
-  const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
-  const active = Array.isArray(tune?.active) ? tune.active : [];
-  const list = Array.isArray(tune?.list) ? tune.list : [];
-  for (let s = 0; s < steps; s++) {
-    if (!active[s]) continue;
-    const rows = Array.isArray(list[s]) ? list[s] : [];
-    n += rows.length;
-  }
-  return n;
-}
-
-function countWeaponTuneActiveColumns(tune) {
-  let n = 0;
-  const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
-  const active = Array.isArray(tune?.active) ? tune.active : [];
-  const list = Array.isArray(tune?.list) ? tune.list : [];
-  for (let s = 0; s < steps; s++) {
-    if (!active[s]) continue;
-    const rows = Array.isArray(list[s]) ? list[s] : [];
-    if (rows.length > 0) n += 1;
-  }
-  return n;
-}
-
-function getWeaponSlotTuneChain(slotIndex) {
-  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
-  const slot = weaponLoadout[idx];
-  const baseChain = sanitizeWeaponTuneChain(slot?.tuneChain);
-  const chain = baseChain.length ? baseChain : [sanitizeWeaponTune(slot?.tune)];
-  let synthesized = chain.length !== baseChain.length;
-  while (chain.length < WEAPON_TUNE_CHAIN_LENGTH) {
-    const prev = chain[chain.length - 1] || chain[0];
-    chain.push(createDistinctRandomWeaponTune(prev));
-    synthesized = true;
-  }
-  if (chain.length > WEAPON_TUNE_CHAIN_LENGTH) chain.length = WEAPON_TUNE_CHAIN_LENGTH;
-  if (synthesized) {
-    slot.tuneChain = chain.map((t) => sanitizeWeaponTune(t));
-    slot.tune = sanitizeWeaponTune(chain[0]);
-  }
-  return chain;
-}
-
-function getWeaponTuneActivityStats(slotIndex) {
-  const chain = getWeaponSlotTuneChain(slotIndex);
-  let totalNotes = 0;
-  let activeNotes = 0;
-  for (const tune of chain) {
-    const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
-    totalNotes += steps;
-    activeNotes += countWeaponTuneActiveColumns(tune);
-  }
-  if (totalNotes <= 0) totalNotes = WEAPON_TUNE_STEPS;
-  return { activeNotes, totalNotes };
-}
-
-function shouldMuteProjectileStageSound(slotIndex) {
-  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
-  return hasWeaponSubBoard(idx);
-}
-
-function getWeaponTuneDamageScale(slotIndex) {
-  const stats = getWeaponTuneActivityStats(slotIndex);
-  const active = Math.max(0, Number(stats.activeNotes) || 0);
-  const total = Math.max(1, Number(stats.totalNotes) || WEAPON_TUNE_STEPS);
-  if (active <= 0) return 1;
-  const scale = total / active;
-  return Math.max(0.25, Math.min(8, Number(scale) || 1));
-}
-
-function getWeaponTuneStepNotes(slotIndex, beatIndex) {
-  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
-  const chain = getWeaponSlotTuneChain(idx);
-  let totalSteps = 0;
-  for (const tune of chain) totalSteps += Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
-  totalSteps = Math.max(1, totalSteps);
-  let rem = ((Math.trunc(Number(beatIndex) || 0) % totalSteps) + totalSteps) % totalSteps;
-  let tune = chain[0];
-  let step = 0;
-  for (const candidate of chain) {
-    const steps = Math.max(1, Math.trunc(Number(candidate?.steps) || WEAPON_TUNE_STEPS));
-    if (rem < steps) {
-      tune = candidate;
-      step = rem;
-      break;
-    }
-    rem -= steps;
-  }
-  if (!Array.isArray(tune?.active) || !tune.active[step]) return [];
-  const colRows = Array.isArray(tune?.list?.[step]) ? tune.list[step] : [];
-  const out = [];
-  for (const rRaw of colRows) {
-    const r = Math.trunc(Number(rRaw));
-    if (!(r >= 0 && r < tune.notes.length)) continue;
-    const note = normalizeSwarmNoteName(tune.notes[r]) || getRandomSwarmPentatonicNote();
-    out.push(note);
-  }
-  return out;
-}
-
-function hasWeaponTuneContent(slotIndex) {
-  const chain = getWeaponSlotTuneChain(slotIndex);
-  for (const tune of chain) {
-    if (countWeaponTuneActiveEvents(sanitizeWeaponTune(tune)) > 0) return true;
-  }
-  return false;
-}
-
-function ensureWeaponHasStarterTune(slotIndex) {
-  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
-  if (hasWeaponTuneContent(idx)) return;
-  const starter = createRandomWeaponTune();
-  weaponLoadout[idx].tune = starter;
-  weaponLoadout[idx].tuneChain = [
-    sanitizeWeaponTune(starter),
-    sanitizeWeaponTune(createDistinctRandomWeaponTune(starter)),
-  ];
-}
-
-function seedDefaultWeaponLoadout() {
-  for (let i = 0; i < weaponLoadout.length; i++) {
-    const slot = weaponLoadout[i];
-    slot.name = `Weapon ${i + 1}`;
-    slot.stages = [];
-    slot.tune = createDefaultWeaponTune();
-    slot.tuneChain = [sanitizeWeaponTune(slot.tune), sanitizeWeaponTune(slot.tune)];
-  }
-  // Default starter: Projectile -> Explosion.
-  weaponLoadout[0].stages = [
-    { archetype: 'projectile', variant: 'standard' },
-    { archetype: 'aoe', variant: 'explosion' },
-  ];
-  const randomStarterTune = createRandomWeaponTune();
-  weaponLoadout[0].tune = randomStarterTune;
-  weaponLoadout[0].tuneChain = [
-    sanitizeWeaponTune(randomStarterTune),
-    sanitizeWeaponTune(createDistinctRandomWeaponTune(randomStarterTune)),
-  ];
-}
+const {
+  countWeaponTuneActiveColumns,
+  countWeaponTuneActiveEvents,
+  createDefaultWeaponTune,
+  createRandomWeaponTune,
+  ensureWeaponHasStarterTune,
+  getWeaponSlotTuneChain,
+  getWeaponTuneActivityStats,
+  getWeaponTuneDamageScale,
+  getWeaponTuneSignature,
+  getWeaponTuneStepNotes,
+  hasWeaponTuneContent,
+  sanitizeWeaponTune,
+  sanitizeWeaponTuneChain,
+  seedDefaultWeaponLoadout,
+  shouldMuteProjectileStageSound,
+} = createBeatSwarmWeaponTuneTools({
+  weaponTuneSteps: WEAPON_TUNE_STEPS,
+  drawgridTuneNotePalette: DRAWGRID_TUNE_NOTE_PALETTE,
+  maxWeaponSlots: MAX_WEAPON_SLOTS,
+  weaponTuneChainLength: WEAPON_TUNE_CHAIN_LENGTH,
+  weaponLoadout,
+  hasWeaponSubBoard,
+  normalizeSwarmNoteName,
+  getRandomSwarmPentatonicNote,
+});
 
 seedDefaultWeaponLoadout();
 const ENEMY_CAP = 120;
@@ -1299,32 +1094,7 @@ const PREVIEW_BEAM_DAMAGE_PER_SECOND = 3.2;
 const PREVIEW_ENEMY_COUNT = 7;
 const PREVIEW_ENEMY_HP = 4;
 const PREVIEW_BEAT_LEN_FALLBACK = 0.5;
-const SWARM_SOUND_EVENTS = Object.freeze({
-  hitscan: Object.freeze({ instrumentDisplay: 'Laser', note: 'C4' }),
-  playerProjectile: Object.freeze({ instrumentDisplay: 'Retro Projectile Subtle', note: 'C4' }),
-  projectile: Object.freeze({ instrumentDisplay: 'Tone (Sine)', note: 'C4' }),
-  boomerang: Object.freeze({ instrumentDisplay: 'Tone (Sine)', note: 'G3' }),
-  beam: Object.freeze({ instrumentDisplay: 'Laser', note: 'C3' }),
-  explosion: Object.freeze({ instrumentDisplay: 'Retro Explosion Subtle', note: 'C4' }),
-  enemyDeathSmall: Object.freeze({ instrumentDisplay: 'Arcade Blip', note: 'C5', volumeMult: 0.82, arpStepSec: 0.012, arpMaxNotes: 3, pitchDropSemitones: 2 }),
-  enemyDeathMedium: Object.freeze({ instrumentDisplay: 'Gaming Bling', note: 'C4', volumeMult: 0.9, arpStepSec: 0.022, arpMaxNotes: 4, pitchDropSemitones: 4 }),
-  enemyDeathLarge: Object.freeze({ instrumentDisplay: 'Bass Tone 4', note: 'C3', volumeMult: 1, arpStepSec: 0.032, arpMaxNotes: 5, pitchDropSemitones: 7 }),
-  // Legacy key kept for compatibility with older runtime/debug calls.
-  enemyDeath: Object.freeze({ instrumentDisplay: 'Gaming Bling', note: 'C4', volumeMult: 0.9, arpStepSec: 0.022, arpMaxNotes: 4, pitchDropSemitones: 4 }),
-});
-const SWARM_ENEMY_DEATH_EVENT_KEY_BY_FAMILY = Object.freeze({
-  small: 'enemyDeathSmall',
-  medium: 'enemyDeathMedium',
-  large: 'enemyDeathLarge',
-});
 const SWARM_PENTATONIC_NOTES_ONE_OCTAVE = Object.freeze(['C4', 'D#4', 'F4', 'G4', 'A#4']);
-const PLAYER_WEAPON_SOUND_EVENT_KEYS = Object.freeze({
-  projectile: 'playerProjectile',
-  boomerang: 'boomerang',
-  hitscan: 'hitscan',
-  beam: 'beam',
-  explosion: 'explosion',
-});
 const SWARM_SOURCE_MUSIC_IDENTITY_BY_TYPE = Object.freeze({
   dumb: Object.freeze({
     role: BEAT_EVENT_ROLES.ACCENT,
@@ -3815,6 +3585,25 @@ const swarmMusicLab = createBeatSwarmMusicLab({
 });
 let musicLabLastPacingSignature = '';
 let musicLabLastPaletteSignature = '';
+const {
+  isEnemyDeathSoundEventKey,
+  resolveEnemyDeathEventKey,
+  resolveInstrumentIdOrFallback,
+  resolveSwarmRoleInstrumentId,
+  resolveSwarmSoundInstrumentId,
+} = createBeatSwarmSoundRoutingTools({
+  getAllIds,
+  getIdForDisplayName,
+  normalizeInstrumentIdToken,
+  normalizeSwarmRole,
+  normalizeEnemyDeathFamily,
+  sanitizeEnemyMusicInstrumentId,
+  resolveRoleInstrument: (role, fallbackId) => swarmPaletteRuntime.resolveRoleInstrument(role, fallbackId),
+  swarmSoundEvents: SWARM_SOUND_EVENTS,
+  swarmEnemyDeathEventKeyByFamily: SWARM_ENEMY_DEATH_EVENT_KEY_BY_FAMILY,
+  swarmSoundInstrumentCache,
+  beatEventRoles: BEAT_EVENT_ROLES,
+});
 try {
   window.addEventListener('instrument-catalog:loaded', () => {
     try { swarmSoundInstrumentCache.clear(); } catch {}
@@ -4497,7 +4286,17 @@ function sanitizeWeaponStages(stages) {
   for (const raw of Array.isArray(stages) ? stages : []) {
     if (out.length >= MAX_WEAPON_STAGES) break;
     const archetype = String(raw?.archetype || '').trim();
-    const variant = String(raw?.variant || '').trim();
+    let variant = String(raw?.variant || '').trim();
+    if (archetype === 'helper') {
+      const token = variant.toLowerCase().replace(/[\s_]+/g, '-');
+      if (!token) {
+        variant = 'turret';
+      } else if (token === 'orbital' || token === 'drone' || token === 'orbitaldrone' || token === 'orbital-drone') {
+        variant = 'orbital-drone';
+      } else if (token === 'turret' || token === 'sentry' || token === 'mini-turret' || token === 'turret-drone') {
+        variant = 'turret';
+      }
+    }
     if (!getArchetypeDef(archetype)) continue;
     if (!getVariantDef(archetype, variant)) continue;
     out.push({ archetype, variant });
@@ -5019,43 +4818,6 @@ function getSwarmPentatonicNoteByIndex(index) {
   return normalizeSwarmNoteName(note) || getRandomSwarmPentatonicNote();
 }
 
-function normalizeSwarmNoteName(noteName) {
-  const s = String(noteName || '').trim().toUpperCase();
-  const m = /^([A-G])([#B]?)(-?\d+)$/.exec(s);
-  if (!m) return '';
-  const letter = m[1];
-  const accidental = (m[2] || '').replace('B', 'b');
-  const octave = m[3];
-  return `${letter}${accidental}${octave}`;
-}
-
-function noteNameToMidi(noteName) {
-  const normalized = normalizeSwarmNoteName(noteName);
-  const m = /^([A-G])([#b]?)(-?\d+)$/.exec(normalized);
-  if (!m) return null;
-  const base = m[1];
-  const accidental = m[2] || '';
-  const octave = Math.trunc(Number(m[3]) || 0);
-  const semitoneBase = (
-    base === 'C' ? 0
-      : base === 'D' ? 2
-        : base === 'E' ? 4
-          : base === 'F' ? 5
-            : base === 'G' ? 7
-              : base === 'A' ? 9
-                : 11
-  );
-  const accidentalDelta = accidental === '#' ? 1 : (accidental === 'b' ? -1 : 0);
-  return ((octave + 1) * 12) + semitoneBase + accidentalDelta;
-}
-
-function transposeSwarmNoteName(noteName, semitoneDelta = 0) {
-  const midi = noteNameToMidi(noteName);
-  if (!Number.isFinite(midi)) return normalizeSwarmNoteName(noteName) || '';
-  const shifted = Math.max(0, Math.min(127, Math.trunc(Number(midi) + Number(semitoneDelta || 0))));
-  return normalizeSwarmNoteName(midiToName(shifted)) || normalizeSwarmNoteName(noteName) || '';
-}
-
 function getSwarmEnemySoundNoteById(enemyId) {
   const id = Math.trunc(Number(enemyId) || 0);
   if (!(id > 0)) return '';
@@ -5072,99 +4834,6 @@ function logWeaponTuneFireDebug(event, payload = null) {
   try {
     console.log('[BS-TUNE-DEBUG]', event, { seq: weaponTuneFireDebug.seq, ...(payload && typeof payload === 'object' ? payload : {}) });
   } catch {}
-}
-
-function getWeaponTuneSignature(tuneLike) {
-  const tune = sanitizeWeaponTune(tuneLike);
-  const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
-  const parts = [];
-  for (let s = 0; s < steps; s++) {
-    if (!tune.active?.[s]) continue;
-    const rows = Array.isArray(tune.list?.[s]) ? tune.list[s].slice() : [];
-    if (!rows.length) continue;
-    rows.sort((a, b) => a - b);
-    parts.push(`${s}:${rows.join('.')}`);
-  }
-  return `steps=${steps}|events=${parts.length}|sig=${parts.join(',')}`;
-}
-
-function normalizeInstrumentIdToken(value) {
-  return String(value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
-}
-
-function resolveInstrumentIdOrFallback(candidate, fallback = 'tone') {
-  const raw = String(candidate || '').trim();
-  const allIds = Array.isArray(getAllIds?.()) ? getAllIds().map((id) => String(id || '').trim()).filter(Boolean) : [];
-  if (!raw) return String(fallback || 'tone').trim() || 'tone';
-  if (allIds.includes(raw)) return raw;
-  const fromDisplay = String(getIdForDisplayName(raw) || '').trim();
-  if (fromDisplay) return fromDisplay;
-  if (allIds.length) {
-    const token = normalizeInstrumentIdToken(raw);
-    const match = allIds.find((id) => normalizeInstrumentIdToken(id) === token);
-    if (match) return match;
-  }
-  return String(fallback || 'tone').trim() || 'tone';
-}
-
-function resolveSwarmSoundInstrumentId(eventKey) {
-  const key = String(eventKey || '').trim();
-  if (!key) return 'tone';
-  const allIds = Array.isArray(getAllIds?.()) ? getAllIds().map((id) => String(id || '').trim()).filter(Boolean) : [];
-  const idSet = new Set(allIds);
-  if (swarmSoundInstrumentCache.has(key)) {
-    const cached = String(swarmSoundInstrumentCache.get(key) || '').trim();
-    if (cached && (idSet.has(cached) || allIds.length === 0)) return cached;
-    swarmSoundInstrumentCache.delete(key);
-  }
-  const def = SWARM_SOUND_EVENTS[key] || null;
-  const display = String(def?.instrumentDisplay || '').trim();
-  let id = resolveInstrumentIdOrFallback(display, String(getIdForDisplayName('Tone (Sine)') || '').trim() || 'tone');
-  if (!id && display && idSet.has(display)) id = display;
-  swarmSoundInstrumentCache.set(key, id);
-  return id;
-}
-
-function resolveSwarmRoleInstrumentId(roleName, fallback = 'tone') {
-  const role = normalizeSwarmRole(roleName, BEAT_EVENT_ROLES.ACCENT);
-  const fallbackId = sanitizeEnemyMusicInstrumentId(fallback, 'tone', { role });
-  const roleId = resolveInstrumentIdOrFallback(swarmPaletteRuntime.resolveRoleInstrument(role, fallbackId), fallbackId);
-  return sanitizeEnemyMusicInstrumentId(roleId, fallbackId, { role });
-}
-
-function isEnemyDeathSoundEventKey(eventKey) {
-  const key = String(eventKey || '').trim();
-  if (!key) return false;
-  if (key === 'enemyDeath') return true;
-  return Object.values(SWARM_ENEMY_DEATH_EVENT_KEY_BY_FAMILY).includes(key);
-}
-
-function normalizeEnemyDeathFamily(family, fallback = 'medium') {
-  const raw = String(family || '').trim().toLowerCase();
-  if (raw === 'small' || raw === 'medium' || raw === 'large') return raw;
-  return String(fallback || 'medium').trim().toLowerCase() === 'small'
-    ? 'small'
-    : (String(fallback || 'medium').trim().toLowerCase() === 'large' ? 'large' : 'medium');
-}
-
-function resolveEnemyDeathEventKey(family, fallback = 'enemyDeathMedium') {
-  const normalized = normalizeEnemyDeathFamily(family, 'medium');
-  const key = SWARM_ENEMY_DEATH_EVENT_KEY_BY_FAMILY[normalized];
-  if (SWARM_SOUND_EVENTS[key]) return key;
-  if (SWARM_SOUND_EVENTS[fallback]) return fallback;
-  return SWARM_SOUND_EVENTS.enemyDeath ? 'enemyDeath' : '';
-}
-
-function classifyEnemyDeathFamily(enemyLike) {
-  const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
-  const enemyType = String(enemy?.enemyType || '').trim().toLowerCase();
-  if (enemyType === 'spawner') return 'large';
-  if (enemyType === 'drawsnake') return 'medium';
-  if (enemyType === 'composer-group-member') return 'small';
-  const hp = Math.max(0, Number(enemy?.maxHp) || Number(enemy?.hp) || 0);
-  if (hp >= 12) return 'large';
-  if (hp >= 5) return 'medium';
-  return 'small';
 }
 
 function getCurrentPacingCaps() {
@@ -5799,763 +5468,430 @@ function fireHelpersOnBeat(beatIndex) {
 }
 
 function getPausePreviewHelperKey(slotIndex, stageIndex) {
-  const si = Number.isFinite(slotIndex) ? Math.trunc(slotIndex) : Math.trunc(Number(slotIndex));
-  const ti = Number.isFinite(stageIndex) ? Math.trunc(stageIndex) : Math.trunc(Number(stageIndex));
-  return `${Number.isFinite(si) ? si : -1}:${Number.isFinite(ti) ? ti : -1}`;
+  return getPausePreviewHelperKeyRuntime({ slotIndex, stageIndex });
 }
 
 function hasActivePausePreviewHelperByKey(helperKey) {
-  return pausePreview.helpers.some((h) => String(h?.key || '') === String(helperKey || ''));
+  return hasActivePausePreviewHelperByKeyRuntime({
+    helperKey,
+    state: { pausePreview },
+  });
 }
 
 function createPausePreviewHelperVisuals(kind) {
-  if (!pausePreviewSceneEl) return null;
-  if (kind === 'orbital-drone') {
-    const elA = document.createElement('div');
-    const elB = document.createElement('div');
-    elA.className = 'beat-swarm-preview-projectile beat-swarm-preview-helper-orbital';
-    elB.className = 'beat-swarm-preview-projectile beat-swarm-preview-helper-orbital';
-    pausePreviewSceneEl.appendChild(elA);
-    pausePreviewSceneEl.appendChild(elB);
-    return { elA, elB };
-  }
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-preview-projectile beat-swarm-preview-helper-turret';
-  pausePreviewSceneEl.appendChild(el);
-  return { el };
+  return createPausePreviewHelperVisualsRuntime({
+    kind,
+    state: { pausePreviewSceneEl },
+  });
 }
 
 function spawnPausePreviewHelper(kind, anchorPoint, beatIndex, nextStages = [], context = null, anchorEnemy = null) {
-  if (!pausePreviewSceneEl || !kind || !anchorPoint) return false;
-  const slotRaw = Number(context?.weaponSlotIndex);
-  const stageRaw = Number(context?.stageIndex);
-  const slotIndex = Number.isFinite(slotRaw) ? Math.trunc(slotRaw) : -1;
-  const stageIndex = Number.isFinite(stageRaw) ? Math.trunc(stageRaw) : -1;
-  const key = getPausePreviewHelperKey(slotIndex, stageIndex);
-  if (hasActivePausePreviewHelperByKey(key)) return false;
-  const visuals = createPausePreviewHelperVisuals(kind);
-  if (!visuals) return false;
-  pausePreview.helpers.push({
-    key,
+  return spawnPausePreviewHelperRuntime({
     kind,
-    anchorType: anchorEnemy ? 'enemy' : (String(context?.helperAnchorType || '') === 'player' ? 'player' : 'world'),
-    anchorEnemy: anchorEnemy || null,
-    anchorX: Number(anchorPoint.x) || 0,
-    anchorY: Number(anchorPoint.y) || 0,
-    orbitAngle: 0,
-    orbitRadius: PREVIEW_HELPER_ORBIT_RADIUS,
-    orbitAngVel: PREVIEW_HELPER_ORBIT_ANG_VEL,
-    untilBeat: Math.max(0, Math.trunc(Number(beatIndex) || 0)) + PREVIEW_HELPER_LIFETIME_BEATS,
-    nextStages: sanitizeWeaponStages(nextStages),
-    context: {
-      weaponSlotIndex: slotIndex,
-      stageIndex,
+    anchorPoint,
+    beatIndex,
+    nextStages,
+    context,
+    anchorEnemy,
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
     },
-    elA: visuals.elA || null,
-    elB: visuals.elB || null,
-    el: visuals.el || null,
+    constants: {
+      previewHelperLifetimeBeats: PREVIEW_HELPER_LIFETIME_BEATS,
+      previewHelperOrbitRadius: PREVIEW_HELPER_ORBIT_RADIUS,
+      previewHelperOrbitAngVel: PREVIEW_HELPER_ORBIT_ANG_VEL,
+    },
+    helpers: {
+      createPausePreviewHelperVisuals: createPausePreviewHelperVisualsRuntime,
+      getPausePreviewHelperKey: getPausePreviewHelperKeyRuntime,
+      hasActivePausePreviewHelperByKey: hasActivePausePreviewHelperByKeyRuntime,
+      sanitizeWeaponStages,
+    },
   });
-  return true;
 }
 
 function firePausePreviewHelperPayloadAt(origin, helperObj, beatIndex) {
-  const stages = sanitizeWeaponStages(helperObj?.nextStages);
-  const slotRaw = Number(helperObj?.context?.weaponSlotIndex);
-  const stageRaw = Number(helperObj?.context?.stageIndex);
-  const slotIndex = Number.isFinite(slotRaw) ? Math.trunc(slotRaw) : -1;
-  const baseStageIndex = Number.isFinite(stageRaw) ? Math.trunc(stageRaw) : -1;
-  const nearest = getPausePreviewNearestEnemies(origin.x, origin.y, 1)[0] || null;
-  if (!stages.length) {
-    const dir = nearest
-      ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
-      : { x: 1, y: 0 };
-    spawnPausePreviewProjectileFromDirection(origin, dir.x, dir.y, 2, null, null, null);
-    return;
-  }
-  const first = stages[0];
-  const rest = stages.slice(1);
-  if (first.archetype === 'helper') {
-    if (first.variant && first.variant !== helperObj.kind) {
-      const helperSpawnPoint = (first.variant === 'turret')
-        ? getOffsetPoint(
-          origin,
-          nearest ? { x: nearest.x, y: nearest.y } : null,
-          PREVIEW_HELPER_TURRET_SPAWN_OFFSET,
-          { x: 1, y: 0 }
-        )
-        : origin;
-      spawnPausePreviewHelper(first.variant, helperSpawnPoint, beatIndex, rest, {
-        weaponSlotIndex: slotIndex,
-        stageIndex: baseStageIndex + 1,
-        helperAnchorType: 'world',
-      }, null);
-    }
-    const dir = nearest
-      ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
-      : { x: 1, y: 0 };
-    spawnPausePreviewProjectileFromDirection(origin, dir.x, dir.y, 2, null, null, null);
-    return;
-  }
-  triggerPausePreviewWeaponStage(first, origin, beatIndex, rest, {
+  firePausePreviewHelperPayloadAtRuntime({
     origin,
-    impactPoint: origin,
-    weaponSlotIndex: slotIndex,
-    stageIndex: baseStageIndex + 1,
+    helperObj,
+    beatIndex,
+    constants: {
+      previewHelperTurretSpawnOffset: PREVIEW_HELPER_TURRET_SPAWN_OFFSET,
+    },
+    helpers: {
+      getOffsetPoint,
+      getPausePreviewNearestEnemies,
+      normalizeDir,
+      sanitizeWeaponStages,
+      spawnPausePreviewHelper: ({ kind, anchorPoint, beatIndex: nextBeatIndex, nextStages, context, anchorEnemy }) =>
+        spawnPausePreviewHelper(kind, anchorPoint, nextBeatIndex, nextStages, context, anchorEnemy),
+      spawnPausePreviewProjectileFromDirection: ({ from, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext }) =>
+        spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext),
+      triggerPausePreviewWeaponStage: ({ stage, origin: nextOrigin, beatIndex: nextBeatIndex, remainingStages, context }) =>
+        triggerPausePreviewWeaponStage(stage, nextOrigin, nextBeatIndex, remainingStages, context),
+    },
   });
 }
 
 function firePausePreviewHelpersOnBeat(beatIndex) {
-  for (const h of pausePreview.helpers) {
-    if ((Number(h.untilBeat) || 0) < beatIndex) continue;
-    if (h.kind === 'orbital-drone') {
-      const r = Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS;
-      const a = Number(h.orbitAngle) || 0;
-      const points = [
-        { x: h.anchorX + (Math.cos(a) * r), y: h.anchorY + (Math.sin(a) * r) },
-        { x: h.anchorX + (Math.cos(a + Math.PI) * r), y: h.anchorY + (Math.sin(a + Math.PI) * r) },
-      ];
-      for (const p of points) firePausePreviewHelperPayloadAt(p, h, beatIndex);
-    } else {
-      firePausePreviewHelperPayloadAt({ x: h.anchorX, y: h.anchorY }, h, beatIndex);
-    }
-  }
-}
-
-function updatePausePreviewHelpers(dt) {
-  const ir = Math.max(4, Number(PREVIEW_HELPER_IMPACT_RADIUS) || 12);
-  const ir2 = ir * ir;
-  for (let i = pausePreview.helpers.length - 1; i >= 0; i--) {
-    const h = pausePreview.helpers[i];
-    if ((Number(h.untilBeat) || 0) < pausePreview.beatIndex) {
-      try { h?.elA?.remove?.(); } catch {}
-      try { h?.elB?.remove?.(); } catch {}
-      try { h?.el?.remove?.(); } catch {}
-      pausePreview.helpers.splice(i, 1);
-      continue;
-    }
-    if (String(h.anchorType) === 'enemy') {
-      if (h.anchorEnemy && pausePreview.enemies.includes(h.anchorEnemy)) {
-        h.anchorX = Number(h.anchorEnemy.x) || 0;
-        h.anchorY = Number(h.anchorEnemy.y) || 0;
-      } else {
-        h.anchorType = 'world';
-        h.anchorEnemy = null;
-      }
-    } else if (String(h.anchorType) === 'player') {
-      h.anchorX = Number(pausePreview.ship.x) || 0;
-      h.anchorY = Number(pausePreview.ship.y) || 0;
-    }
-    if (h.kind === 'orbital-drone') {
-      h.orbitAngle = (Number(h.orbitAngle) || 0) + ((Number(h.orbitAngVel) || PREVIEW_HELPER_ORBIT_ANG_VEL) * dt);
-      const pts = [
-        {
-          x: h.anchorX + (Math.cos(h.orbitAngle) * (Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS)),
-          y: h.anchorY + (Math.sin(h.orbitAngle) * (Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS)),
-          el: h.elA,
-        },
-        {
-          x: h.anchorX + (Math.cos(h.orbitAngle + Math.PI) * (Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS)),
-          y: h.anchorY + (Math.sin(h.orbitAngle + Math.PI) * (Number(h.orbitRadius) || PREVIEW_HELPER_ORBIT_RADIUS)),
-          el: h.elB,
-        },
-      ];
-      for (const p of pts) {
-        for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
-          const e = pausePreview.enemies[j];
-          const dx = e.x - p.x;
-          const dy = e.y - p.y;
-          if ((dx * dx + dy * dy) <= ir2) damagePausePreviewEnemy(e, PREVIEW_HELPER_IMPACT_DAMAGE * dt * 8);
-        }
-        if (p.el) p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px)`;
-      }
-    } else {
-      for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
-        const e = pausePreview.enemies[j];
-        const dx = e.x - h.anchorX;
-        const dy = e.y - h.anchorY;
-        if ((dx * dx + dy * dy) <= ir2) damagePausePreviewEnemy(e, PREVIEW_HELPER_IMPACT_DAMAGE * dt * 7);
-      }
-      if (h.el) h.el.style.transform = `translate(${h.anchorX.toFixed(2)}px, ${h.anchorY.toFixed(2)}px)`;
-    }
-  }
-}
-
-function spawnPausePreviewEnemy() {
-  if (!pausePreviewSceneEl) return;
-  const minX = pausePreview.width * 0.62;
-  const maxX = pausePreview.width * 0.92;
-  const minY = pausePreview.height * 0.18;
-  const maxY = pausePreview.height * 0.84;
-  const x = randRange(minX, maxX);
-  const y = randRange(minY, maxY);
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-preview-enemy';
-  pausePreviewSceneEl.appendChild(el);
-  pausePreview.enemies.push({
-    x,
-    y,
-    hp: PREVIEW_ENEMY_HP,
-    maxHp: PREVIEW_ENEMY_HP,
-    el,
-  });
-}
-
-function resetPausePreviewState() {
-  if (!pausePreviewSceneEl) return;
-  const rect = pausePreviewSceneEl.getBoundingClientRect();
-  pausePreview.width = Math.max(260, Number(rect.width) || 0);
-  pausePreview.height = Math.max(200, Number(rect.height) || 0);
-  pausePreview.ship.x = pausePreview.width * 0.18;
-  pausePreview.ship.y = pausePreview.height * 0.55;
-  clearPausePreviewVisuals();
-  pausePreviewSceneEl.innerHTML = '';
-  const shipEl = document.createElement('div');
-  shipEl.className = 'beat-swarm-preview-ship';
-  pausePreviewSceneEl.appendChild(shipEl);
-  pausePreview.ship.el = shipEl;
-  for (let i = 0; i < PREVIEW_ENEMY_COUNT; i++) spawnPausePreviewEnemy();
-  nudgePausePreviewEnemiesIntoAction(true);
-  pausePreview.initialized = true;
-}
-
-function ensurePausePreviewState() {
-  if (!pausePreviewSceneEl) return;
-  const rect = pausePreviewSceneEl.getBoundingClientRect();
-  const w = Math.max(260, Number(rect.width) || 0);
-  const h = Math.max(200, Number(rect.height) || 0);
-  if (!pausePreview.initialized || Math.abs(w - pausePreview.width) > 1 || Math.abs(h - pausePreview.height) > 1) {
-    resetPausePreviewState();
-  }
-}
-
-function getPausePreviewNearestEnemies(x, y, count = 1, excludeEnemy = null) {
-  const scored = pausePreview.enemies
-    .filter((e) => !excludeEnemy || e !== excludeEnemy)
-    .map((e) => {
-    const dx = e.x - x;
-    const dy = e.y - y;
-    return { e, d2: (dx * dx) + (dy * dy) };
-    });
-  scored.sort((a, b) => a.d2 - b.d2);
-  return scored.slice(0, Math.max(1, Math.trunc(Number(count) || 1))).map((it) => it.e);
-}
-
-function removePausePreviewEnemy(enemy) {
-  if (!enemy) return;
-  const idx = pausePreview.enemies.indexOf(enemy);
-  if (idx >= 0) pausePreview.enemies.splice(idx, 1);
-  try { enemy.el?.remove?.(); } catch {}
-}
-
-function damagePausePreviewEnemy(enemy, amount = 1) {
-  if (!enemy) return false;
-  pausePreview.secondsSinceHit = 0;
-  enemy.hp -= Math.max(0, Number(amount) || 0);
-  pulseHitFlash(enemy.el);
-  if (enemy.hp <= 0) {
-    removePausePreviewEnemy(enemy);
-    return true;
-  }
-  return false;
-}
-
-function previewSelectionContainsBoomerang() {
-  const indices = Number.isInteger(previewSelectedWeaponSlotIndex)
-    ? [previewSelectedWeaponSlotIndex]
-    : weaponLoadout.map((_, i) => i);
-  for (const slotIndex of indices) {
-    const stages = sanitizeWeaponStages(weaponLoadout?.[slotIndex]?.stages);
-    for (const st of stages) {
-      if (String(st?.archetype || '') === 'projectile' && String(st?.variant || '') === 'boomerang') return true;
-    }
-  }
-  return false;
-}
-
-function previewSelectionStartsWithExplosion() {
-  const indices = Number.isInteger(previewSelectedWeaponSlotIndex)
-    ? [previewSelectedWeaponSlotIndex]
-    : weaponLoadout.map((_, i) => i);
-  for (const slotIndex of indices) {
-    const stages = sanitizeWeaponStages(weaponLoadout?.[slotIndex]?.stages);
-    const first = stages[0] || null;
-    if (String(first?.archetype || '') === 'aoe' && String(first?.variant || '') === 'explosion') return true;
-  }
-  return false;
-}
-
-function ensurePausePreviewExplosionBiasEnemy() {
-  if (!previewSelectionStartsWithExplosion()) return;
-  if (!pausePreview.enemies.length) return;
-  const cx = Number(pausePreview.ship.x) || 0;
-  const cy = Number(pausePreview.ship.y) || 0;
-  const biasRadius = Math.max(8, PREVIEW_EXPLOSION_RADIUS * 0.9);
-  const r2 = biasRadius * biasRadius;
-  for (const e of pausePreview.enemies) {
-    const dx = (Number(e.x) || 0) - cx;
-    const dy = (Number(e.y) || 0) - cy;
-    if ((dx * dx + dy * dy) <= r2) return;
-  }
-  const target = pausePreview.enemies[pausePreview.enemies.length - 1] || pausePreview.enemies[0];
-  if (!target) return;
-  const minX = 32;
-  const maxX = Math.max(minX + 12, (Number(pausePreview.width) || 0) - 32);
-  const minY = 26;
-  const maxY = Math.max(minY + 12, (Number(pausePreview.height) || 0) - 26);
-  const ang = randRange(0, Math.PI * 2);
-  const radius = randRange(Math.max(6, PREVIEW_EXPLOSION_RADIUS * 0.2), biasRadius);
-  target.x = Math.min(maxX, Math.max(minX, cx + (Math.cos(ang) * radius)));
-  target.y = Math.min(maxY, Math.max(minY, cy + (Math.sin(ang) * radius)));
-}
-
-function nudgePausePreviewEnemiesIntoAction(force = false) {
-  if (!pausePreview.enemies.length) return;
-  if (!force && (Number(pausePreview.secondsSinceHit) || 0) < PREVIEW_NO_HIT_REPOSITION_SECONDS) return;
-
-  const shipX = Number(pausePreview.ship.x) || 0;
-  const shipY = Number(pausePreview.ship.y) || 0;
-  const minX = 32;
-  const maxX = Math.max(minX + 12, (Number(pausePreview.width) || 0) - 32);
-  const minY = 26;
-  const maxY = Math.max(minY + 12, (Number(pausePreview.height) || 0) - 26);
-
-  const nearCount = Math.min(3, pausePreview.enemies.length);
-  const farCount = pausePreview.enemies.length - nearCount;
-  const boomerangLayout = previewSelectionContainsBoomerang();
-  const nearCenterX = Math.min(maxX, Math.max(minX, shipX + (boomerangLayout ? 98 : 74)));
-  const nearCenterY = Math.min(maxY, Math.max(minY, shipY));
-  const farMinX = Math.min(maxX, Math.max(minX, shipX + Math.max(150, (Number(pausePreview.width) || 0) * 0.34)));
-  const nearRadiusMin = boomerangLayout ? 56 : 24;
-  const nearRadiusMax = boomerangLayout ? 88 : 54;
-
-  // Full reshuffle: keep a small cluster close to ship and spread the rest farther out.
-  for (let i = 0; i < nearCount; i++) {
-    const e = pausePreview.enemies[i];
-    const ang = randRange(0, Math.PI * 2);
-    const radius = randRange(nearRadiusMin, nearRadiusMax);
-    e.x = Math.min(maxX, Math.max(minX, nearCenterX + (Math.cos(ang) * radius)));
-    e.y = Math.min(maxY, Math.max(minY, nearCenterY + (Math.sin(ang) * radius)));
-  }
-  for (let i = 0; i < farCount; i++) {
-    const e = pausePreview.enemies[nearCount + i];
-    e.x = randRange(farMinX, maxX);
-    e.y = randRange(minY, maxY);
-  }
-  ensurePausePreviewExplosionBiasEnemy();
-  pausePreview.secondsSinceHit = 0;
-}
-
-function queuePausePreviewChain(beatIndex, nextStages, context) {
-  const stages = sanitizeWeaponStages(nextStages);
-  if (!stages.length) return;
-  pausePreview.pendingEvents.push({
-    beatIndex: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
-    stages,
-    context: {
-      origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : null,
-      impactPoint: context?.impactPoint ? { x: Number(context.impactPoint.x) || 0, y: Number(context.impactPoint.y) || 0 } : null,
-      weaponSlotIndex: Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : null,
-      stageIndex: Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : null,
-      impactEnemy: context?.impactEnemy || null,
-      sourceEnemy: context?.sourceEnemy || null,
+  firePausePreviewHelpersOnBeatRuntime({
+    beatIndex,
+    state: { pausePreview },
+    constants: {
+      previewHelperOrbitRadius: PREVIEW_HELPER_ORBIT_RADIUS,
+    },
+    helpers: {
+      firePausePreviewHelperPayloadAt: ({ origin, helperObj, beatIndex: helperBeatIndex }) =>
+        firePausePreviewHelperPayloadAt(origin, helperObj, helperBeatIndex),
     },
   });
 }
 
+function updatePausePreviewHelpers(dt) {
+  updatePausePreviewHelpersRuntime({
+    dt,
+    state: { pausePreview },
+    constants: {
+      previewHelperImpactRadius: PREVIEW_HELPER_IMPACT_RADIUS,
+      previewHelperImpactDamage: PREVIEW_HELPER_IMPACT_DAMAGE,
+      previewHelperOrbitRadius: PREVIEW_HELPER_ORBIT_RADIUS,
+      previewHelperOrbitAngVel: PREVIEW_HELPER_ORBIT_ANG_VEL,
+    },
+    helpers: {
+      damagePausePreviewEnemy: (enemy, amount) => damagePausePreviewEnemy(enemy, amount),
+    },
+  });
+}
+
+function spawnPausePreviewEnemy() {
+  spawnPausePreviewEnemyRuntime({
+    state: { pausePreview, pausePreviewSceneEl },
+    constants: { previewEnemyHp: PREVIEW_ENEMY_HP },
+    helpers: { randRange },
+  });
+}
+
+function resetPausePreviewState() {
+  resetPausePreviewStateRuntime({
+    state: { pausePreview, pausePreviewSceneEl },
+    constants: { previewEnemyCount: PREVIEW_ENEMY_COUNT },
+    helpers: {
+      clearPausePreviewVisuals,
+      nudgePausePreviewEnemiesIntoAction: (force) => nudgePausePreviewEnemiesIntoAction(force),
+      spawnPausePreviewEnemy: () => spawnPausePreviewEnemy(),
+    },
+  });
+}
+
+function ensurePausePreviewState() {
+  ensurePausePreviewStateRuntime({
+    state: { pausePreview, pausePreviewSceneEl },
+    helpers: {
+      resetPausePreviewState: () => resetPausePreviewState(),
+    },
+  });
+}
+
+function getPausePreviewNearestEnemies(x, y, count = 1, excludeEnemy = null) {
+  return getPausePreviewNearestEnemiesRuntime({
+    x,
+    y,
+    count,
+    excludeEnemy,
+    state: { pausePreview },
+  });
+}
+
+function removePausePreviewEnemy(enemy) {
+  removePausePreviewEnemyRuntime({
+    enemy,
+    state: { pausePreview },
+  });
+}
+
+function damagePausePreviewEnemy(enemy, amount = 1) {
+  return damagePausePreviewEnemyRuntime({
+    enemy,
+    amount,
+    state: { pausePreview },
+    helpers: {
+      pulseHitFlash,
+      removePausePreviewEnemy: ({ enemy: target }) => removePausePreviewEnemy(target),
+    },
+  });
+}
+
+function previewSelectionContainsBoomerang() {
+  return previewSelectionContainsBoomerangRuntime({
+    previewSelectedWeaponSlotIndex,
+    state: { weaponLoadout },
+    helpers: { sanitizeWeaponStages },
+  });
+}
+
+function previewSelectionStartsWithExplosion() {
+  return previewSelectionStartsWithExplosionRuntime({
+    previewSelectedWeaponSlotIndex,
+    state: { weaponLoadout },
+    helpers: { sanitizeWeaponStages },
+  });
+}
+
+function ensurePausePreviewExplosionBiasEnemy() {
+  ensurePausePreviewExplosionBiasEnemyRuntime({
+    state: { pausePreview },
+    constants: { previewExplosionRadius: PREVIEW_EXPLOSION_RADIUS },
+    helpers: {
+      previewSelectionStartsWithExplosion: () => previewSelectionStartsWithExplosion(),
+      randRange,
+    },
+  });
+}
+
+function nudgePausePreviewEnemiesIntoAction(force = false) {
+  nudgePausePreviewEnemiesIntoActionRuntime({
+    force,
+    state: { pausePreview, weaponLoadout },
+    constants: {
+      previewNoHitRepositionSeconds: PREVIEW_NO_HIT_REPOSITION_SECONDS,
+    },
+    previewSelectedWeaponSlotIndex,
+    helpers: {
+      ensurePausePreviewExplosionBiasEnemy: () => ensurePausePreviewExplosionBiasEnemy(),
+      previewSelectionContainsBoomerang: () => previewSelectionContainsBoomerang(),
+      randRange,
+      sanitizeWeaponStages,
+    },
+  });
+}
+
+function queuePausePreviewChain(beatIndex, nextStages, context) {
+  queuePausePreviewChainRuntime({
+    beatIndex,
+    nextStages,
+    context,
+    state: { pausePreview },
+    helpers: { sanitizeWeaponStages },
+  });
+}
+
 function countPausePreviewOrbitingHomingMissiles() {
-  let n = 0;
-  for (const p of pausePreview.projectiles) {
-    if (String(p?.kind || '') !== 'homing-missile') continue;
-    if (String(p?.homingState || '') !== 'orbit') continue;
-    n += 1;
-  }
-  return n;
+  return countPausePreviewOrbitingHomingMissilesRuntime({
+    state: { pausePreview },
+  });
 }
 
 function addPausePreviewLaser(from, to, sourceEnemy = null, targetEnemy = null) {
-  if (!pausePreviewSceneEl) return;
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-preview-fx-laser';
-  pausePreviewSceneEl.appendChild(el);
-  pausePreview.effects.push({
-    kind: 'laser',
-    ttl: PREVIEW_LASER_TTL,
-    from: { x: from.x, y: from.y },
-    to: { x: to.x, y: to.y },
-    sourceEnemy: sourceEnemy || null,
-    targetEnemy: targetEnemy || null,
-    el,
+  addPausePreviewLaserRuntime({
+    from,
+    to,
+    sourceEnemy,
+    targetEnemy,
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
+    },
+    constants: {
+      previewLaserTtl: PREVIEW_LASER_TTL,
+    },
   });
 }
 
 function addPausePreviewBeam(from, target, ttl = null) {
-  if (!pausePreviewSceneEl || !target) return;
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-preview-fx-laser';
-  pausePreviewSceneEl.appendChild(el);
-  pausePreview.effects.push({
-    kind: 'beam',
-    ttl: Math.max(0.05, Number.isFinite(ttl) ? Number(ttl) : getPausePreviewBeatLen()),
-    from: { x: from.x, y: from.y },
-    to: { x: target.x, y: target.y },
-    targetEnemy: target,
-    sourceEnemy: null,
-    sourceGoneTtl: null,
-    damagePerSec: PREVIEW_BEAM_DAMAGE_PER_SECOND,
-    el,
+  addPausePreviewBeamRuntime({
+    from,
+    target,
+    ttl,
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
+    },
+    constants: {
+      previewBeamDamagePerSec: PREVIEW_BEAM_DAMAGE_PER_SECOND,
+    },
+    helpers: {
+      getPausePreviewBeatLen,
+    },
   });
 }
 
 function addPausePreviewExplosion(at, radius = PREVIEW_EXPLOSION_RADIUS, ttl = PREVIEW_EXPLOSION_TTL) {
-  if (!pausePreviewSceneEl) return;
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-preview-fx-explosion';
-  pausePreviewSceneEl.appendChild(el);
-  pausePreview.effects.push({
-    kind: 'explosion',
-    ttl: Math.max(0.01, Number(ttl) || PREVIEW_EXPLOSION_TTL),
-    at: { x: at.x, y: at.y },
-    radius: Math.max(8, Number(radius) || PREVIEW_EXPLOSION_RADIUS),
-    el,
+  addPausePreviewExplosionRuntime({
+    at,
+    radius,
+    ttl,
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
+    },
+    constants: {
+      previewExplosionRadius: PREVIEW_EXPLOSION_RADIUS,
+      previewExplosionTtl: PREVIEW_EXPLOSION_TTL,
+    },
   });
 }
 
 function spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
-  if (!pausePreviewSceneEl) return;
-  const dir = normalizeDir(dirX, dirY);
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-preview-projectile';
-  pausePreviewSceneEl.appendChild(el);
-  pausePreview.projectiles.push({
-    x: from.x,
-    y: from.y,
-    vx: dir.x * PREVIEW_PROJECTILE_SPEED,
-    vy: dir.y * PREVIEW_PROJECTILE_SPEED,
-    ttl: PREVIEW_PROJECTILE_LIFETIME,
-    damage: Math.max(1, Number(damage) || 1),
-    kind: 'standard',
-    boomCenterX: 0,
-    boomCenterY: 0,
-    boomDirX: 0,
-    boomDirY: 0,
-    boomPerpX: 0,
-    boomPerpY: 0,
-    boomRadius: 0,
-    boomTheta: 0,
-    boomOmega: 0,
-    homingState: '',
-    targetEnemy: null,
-    orbitAngle: 0,
-    orbitAngVel: 0,
-    orbitRadius: 0,
-    hitEnemyIds: new Set(),
-    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
-    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
-    chainDamageScale: Math.max(0.05, Number(chainContext?.damageScale) || 1),
-    nextStages: sanitizeWeaponStages(nextStages),
-    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
-    ignoreEnemy: chainContext?.sourceEnemy || null,
-    el,
+  spawnPausePreviewProjectileFromDirectionRuntime({
+    from,
+    dirX,
+    dirY,
+    damage,
+    nextStages,
+    nextBeatIndex,
+    chainContext,
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
+    },
+    constants: {
+      previewProjectileSpeed: PREVIEW_PROJECTILE_SPEED,
+      previewProjectileLifetime: PREVIEW_PROJECTILE_LIFETIME,
+    },
+    helpers: {
+      normalizeDir,
+      sanitizeWeaponStages,
+    },
   });
 }
 
 function spawnPausePreviewProjectile(from, target, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
-  if (!target) return;
-  spawnPausePreviewProjectileFromDirection(from, target.x - from.x, target.y - from.y, damage, nextStages, nextBeatIndex, chainContext);
+  spawnPausePreviewProjectileRuntime({
+    from,
+    target,
+    damage,
+    nextStages,
+    nextBeatIndex,
+    chainContext,
+    helpers: {
+      spawnPausePreviewProjectileFromDirection: ({ from, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext }) =>
+        spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext),
+    },
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
+    },
+    constants: {
+      previewProjectileSpeed: PREVIEW_PROJECTILE_SPEED,
+      previewProjectileLifetime: PREVIEW_PROJECTILE_LIFETIME,
+    },
+  });
 }
 
 function spawnPausePreviewBoomerangProjectile(from, dirX, dirY, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
-  if (!pausePreviewSceneEl) return;
-  const dir = normalizeDir(dirX, dirY);
-  const perp = { x: dir.y, y: -dir.x };
-  const radius = Math.max(20, Number(PREVIEW_PROJECTILE_BOOMERANG_RADIUS) || 42);
-  const theta = Math.PI;
-  const omega = (Math.PI * 2) / Math.max(0.35, Number(PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15);
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-preview-projectile is-boomerang';
-  pausePreviewSceneEl.appendChild(el);
-  pausePreview.projectiles.push({
-    x: from.x,
-    y: from.y,
-    vx: 0,
-    vy: 0,
-    ttl: Math.max(0.35, Number(PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS) || 1.15),
-    damage: Math.max(1, Number(damage) || 1),
-    kind: 'boomerang',
-    boomCenterX: from.x,
-    boomCenterY: from.y,
-    boomDirX: dir.x,
-    boomDirY: dir.y,
-    boomPerpX: perp.x,
-    boomPerpY: perp.y,
-    boomRadius: radius,
-    boomTheta: theta,
-    boomOmega: omega,
-    homingState: '',
-    targetEnemy: null,
-    orbitAngle: 0,
-    orbitAngVel: 0,
-    orbitRadius: 0,
-    hitEnemyIds: new Set(),
-    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
-    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
-    chainDamageScale: Math.max(0.05, Number(chainContext?.damageScale) || 1),
-    nextStages: sanitizeWeaponStages(nextStages),
-    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
-    ignoreEnemy: chainContext?.sourceEnemy || null,
-    el,
+  spawnPausePreviewBoomerangProjectileRuntime({
+    from,
+    dirX,
+    dirY,
+    damage,
+    nextStages,
+    nextBeatIndex,
+    chainContext,
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
+    },
+    constants: {
+      previewProjectileBoomerangRadius: PREVIEW_PROJECTILE_BOOMERANG_RADIUS,
+      previewProjectileBoomerangLoopSeconds: PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS,
+    },
+    helpers: {
+      normalizeDir,
+      sanitizeWeaponStages,
+    },
   });
 }
 
 function spawnPausePreviewHomingMissile(from, damage, nextStages = null, nextBeatIndex = null, chainContext = null) {
-  if (!pausePreviewSceneEl) return false;
-  if (countPausePreviewOrbitingHomingMissiles() >= PREVIEW_PROJECTILE_HOMING_MAX_ORBITING) return false;
-  const orbitCount = countPausePreviewOrbitingHomingMissiles();
-  const angle = ((orbitCount / Math.max(1, PREVIEW_PROJECTILE_HOMING_MAX_ORBITING)) * Math.PI * 2);
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-preview-projectile';
-  pausePreviewSceneEl.appendChild(el);
-  pausePreview.projectiles.push({
-    x: from.x,
-    y: from.y,
-    vx: 0,
-    vy: 0,
-    ttl: 60,
-    damage: Math.max(1, Number(damage) || 1),
-    kind: 'homing-missile',
-    boomCenterX: 0,
-    boomCenterY: 0,
-    boomDirX: 0,
-    boomDirY: 0,
-    boomPerpX: 0,
-    boomPerpY: 0,
-    boomRadius: 0,
-    boomTheta: 0,
-    boomOmega: 0,
-    homingState: 'orbit',
-    targetEnemy: null,
-    orbitAngle: angle,
-    orbitAngVel: PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL,
-    orbitRadius: PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS,
-    hitEnemyIds: new Set(),
-    chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
-    chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
-    chainDamageScale: Math.max(0.05, Number(chainContext?.damageScale) || 1),
-    nextStages: sanitizeWeaponStages(nextStages),
-    nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
-    ignoreEnemy: chainContext?.sourceEnemy || null,
-    el,
+  return spawnPausePreviewHomingMissileRuntime({
+    from,
+    damage,
+    nextStages,
+    nextBeatIndex,
+    chainContext,
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
+    },
+    constants: {
+      previewProjectileHomingMaxOrbiting: PREVIEW_PROJECTILE_HOMING_MAX_ORBITING,
+      previewProjectileHomingOrbitAngVel: PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL,
+      previewProjectileHomingOrbitRadius: PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS,
+    },
+    helpers: {
+      countPausePreviewOrbitingHomingMissiles: countPausePreviewOrbitingHomingMissilesRuntime,
+      sanitizeWeaponStages,
+    },
   });
-  return true;
 }
 
 function applyPausePreviewAoeAt(point, variant = 'explosion', beatIndex = 0, avoidEnemy = null) {
-  const isDot = variant === 'dot-area';
-  addPausePreviewExplosion(point, PREVIEW_EXPLOSION_RADIUS, isDot ? (getPausePreviewBeatLen() * 2) : PREVIEW_EXPLOSION_TTL);
-  const r2 = PREVIEW_EXPLOSION_RADIUS * PREVIEW_EXPLOSION_RADIUS;
-  const hitCandidates = [];
-  for (let i = 0; i < pausePreview.enemies.length; i++) {
-    const e = pausePreview.enemies[i];
-    const dx = e.x - point.x;
-    const dy = e.y - point.y;
-    const d2 = (dx * dx) + (dy * dy);
-    if (d2 <= r2) {
-      hitCandidates.push({
-        enemy: e,
-        point: { x: Number(e.x) || 0, y: Number(e.y) || 0 },
-        d2,
-      });
-    }
-  }
-  hitCandidates.sort((a, b) => a.d2 - b.d2);
-  for (let i = pausePreview.enemies.length - 1; i >= 0; i--) {
-    const e = pausePreview.enemies[i];
-    const dx = e.x - point.x;
-    const dy = e.y - point.y;
-    const d2 = (dx * dx) + (dy * dy);
-    if (d2 <= r2) damagePausePreviewEnemy(e, isDot ? 0.5 : 1);
-  }
-  if (isDot) {
-    pausePreview.aoeZones.push({
-      x: point.x,
-      y: point.y,
-      radius: PREVIEW_EXPLOSION_RADIUS,
-      damagePerBeat: 0.6,
-      untilBeat: Math.max(beatIndex + 2, beatIndex + 1),
-    });
-  }
-  const selected = hitCandidates.find((c) => c.enemy !== avoidEnemy) || hitCandidates[0] || null;
-  if (!selected?.enemy) return null;
-  return {
-    point: selected.point,
-    enemy: selected.enemy,
-  };
+  return applyPausePreviewAoeAtRuntime({
+    point,
+    variant,
+    beatIndex,
+    avoidEnemy,
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
+    },
+    constants: {
+      previewExplosionRadius: PREVIEW_EXPLOSION_RADIUS,
+      previewExplosionTtl: PREVIEW_EXPLOSION_TTL,
+    },
+    helpers: {
+      addPausePreviewExplosion: addPausePreviewExplosionRuntime,
+      damagePausePreviewEnemy,
+      getPausePreviewBeatLen,
+    },
+  });
 }
 
 function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStages = [], context = null) {
-  if (!stage || !origin) return;
-  const archetype = stage.archetype;
-  const variant = stage.variant;
-  const continuation = sanitizeWeaponStages(remainingStages);
-  const slotIndex = Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : -1;
-  const stageIndex = Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : 0;
-  const nextCtx = { weaponSlotIndex: slotIndex, stageIndex: stageIndex + 1 };
-  const sourceEnemy = context?.sourceEnemy || null;
-  const nearest = getPausePreviewNearestEnemies(origin.x, origin.y, 1, sourceEnemy)[0] || null;
-  if (archetype === 'projectile') {
-    const baseDir = nearest
-      ? normalizeDir(nearest.x - origin.x, nearest.y - origin.y)
-      : { x: 1, y: 0 };
-    const spawnOrigin = context?.sourceEnemy
-      ? {
-        x: origin.x + (baseDir.x * PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET),
-        y: origin.y + (baseDir.y * PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET),
-      }
-      : origin;
-    if (variant === 'homing-missile') {
-      spawnPausePreviewHomingMissile(spawnOrigin, 2, continuation, beatIndex + 1, nextCtx);
-      return;
-    }
-    if (variant === 'boomerang') {
-      spawnPausePreviewBoomerangProjectile(spawnOrigin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
-      return;
-    }
-    if (variant === 'split-shot') {
-      const baseAngle = Math.atan2(baseDir.y, baseDir.x);
-      const angles = [baseAngle, baseAngle - PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD, baseAngle + PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD];
-      for (const ang of angles) {
-        spawnPausePreviewProjectileFromDirection(spawnOrigin, Math.cos(ang), Math.sin(ang), 2, continuation, beatIndex + 1, nextCtx);
-      }
-      return;
-    }
-    if (nearest) {
-      spawnPausePreviewProjectile(spawnOrigin, nearest, 2, continuation, beatIndex + 1, nextCtx);
-    } else {
-      spawnPausePreviewProjectileFromDirection(spawnOrigin, baseDir.x, baseDir.y, 2, continuation, beatIndex + 1, nextCtx);
-    }
-    return;
-  }
-  if (archetype === 'helper') {
-    const impactEnemy = (variant !== 'turret') ? (context?.impactEnemy || null) : null;
-    const defaultAnchorType = (variant === 'orbital-drone') ? 'player' : 'world';
-    const turretSpawnPoint = (variant === 'turret')
-      ? { x: origin.x, y: origin.y - PREVIEW_HELPER_TURRET_SPAWN_OFFSET }
-      : origin;
-    spawnPausePreviewHelper(variant, turretSpawnPoint, beatIndex, continuation, {
-      weaponSlotIndex: slotIndex,
-      stageIndex,
-      helperAnchorType: context?.helperAnchorType || defaultAnchorType,
-    }, impactEnemy);
-    return;
-  }
-  if (archetype === 'laser') {
-    if (variant === 'beam') {
-      if (!nearest) {
-        const to = { x: origin.x + 300, y: origin.y };
-        addPausePreviewLaser(origin, to, sourceEnemy, null);
-        if (continuation.length) {
-          queuePausePreviewChain(beatIndex + 1, continuation, {
-            origin,
-            impactPoint: to,
-            weaponSlotIndex: slotIndex,
-            stageIndex: stageIndex + 1,
-          });
-        }
-        return;
-      }
-      addPausePreviewBeam(origin, nearest, getPausePreviewBeatLen());
-      const beamFx = pausePreview.effects[pausePreview.effects.length - 1];
-      if (beamFx && beamFx.kind === 'beam') beamFx.sourceEnemy = sourceEnemy;
-      if (continuation.length) {
-        const firstNext = continuation[0];
-        const restNext = continuation.slice(1);
-        if (firstNext?.archetype === 'laser' && firstNext?.variant === 'beam') {
-          triggerPausePreviewWeaponStage(firstNext, { x: nearest.x, y: nearest.y }, beatIndex, restNext, {
-            origin: context?.origin || origin,
-            impactPoint: { x: nearest.x, y: nearest.y },
-            weaponSlotIndex: slotIndex,
-            stageIndex: stageIndex + 1,
-            impactEnemy: nearest,
-            sourceEnemy: nearest,
-          });
-        } else {
-          queuePausePreviewChain(beatIndex + 1, continuation, {
-            origin,
-            impactPoint: { x: nearest.x, y: nearest.y },
-            weaponSlotIndex: slotIndex,
-            stageIndex: stageIndex + 1,
-            impactEnemy: nearest,
-            sourceEnemy: nearest,
-          });
-        }
-      }
-      return;
-    }
-    if (!nearest) {
-      const to = { x: origin.x + 300, y: origin.y };
-      addPausePreviewLaser(origin, to, sourceEnemy, null);
-      if (continuation.length) {
-        queuePausePreviewChain(beatIndex + 1, continuation, {
-          origin,
-          impactPoint: to,
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-        });
-      }
-      return;
-    }
-    addPausePreviewLaser(origin, { x: nearest.x, y: nearest.y }, sourceEnemy, nearest);
-    damagePausePreviewEnemy(nearest, 2);
-    if (continuation.length) {
-      const firstNext = continuation[0];
-      const restNext = continuation.slice(1);
-      if (firstNext?.archetype === 'laser' && firstNext?.variant === 'hitscan') {
-        triggerPausePreviewWeaponStage(firstNext, { x: nearest.x, y: nearest.y }, beatIndex, restNext, {
-          origin: context?.origin || origin,
-          impactPoint: { x: nearest.x, y: nearest.y },
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-          impactEnemy: nearest,
-          sourceEnemy: nearest,
-        });
-      } else {
-        queuePausePreviewChain(beatIndex + 1, continuation, {
-          origin,
-          impactPoint: { x: nearest.x, y: nearest.y },
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-          impactEnemy: nearest,
-          sourceEnemy: nearest,
-        });
-      }
-    }
-    return;
-  }
-  if (archetype === 'aoe') {
-    const firstHit = applyPausePreviewAoeAt(origin, variant, beatIndex, context?.sourceEnemy || null);
-    if (continuation.length) {
-      if (variant === 'explosion' && firstHit?.point) {
-        const firstNext = continuation[0];
-        const restNext = continuation.slice(1);
-        const nextOrigin = firstHit.point;
-        triggerPausePreviewWeaponStage(firstNext, nextOrigin, beatIndex, restNext, {
-          origin: context?.origin || origin,
-          impactPoint: nextOrigin,
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-          impactEnemy: firstHit.enemy || null,
-          sourceEnemy: firstHit.enemy || null,
-        });
-      } else if (variant !== 'explosion') {
-        queuePausePreviewChain(beatIndex + 1, continuation, {
-          origin: context?.origin || origin,
-          impactPoint: origin,
-          weaponSlotIndex: slotIndex,
-          stageIndex: stageIndex + 1,
-        });
-      }
-    }
-  }
+  triggerPausePreviewWeaponStageRuntime({
+    stage,
+    origin,
+    beatIndex,
+    remainingStages,
+    context,
+    state: {
+      pausePreview,
+      pausePreviewSceneEl,
+    },
+    constants: {
+      previewProjectileChainSpawnOffset: PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET,
+      previewProjectileSplitAngleRad: PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD,
+      previewHelperTurretSpawnOffset: PREVIEW_HELPER_TURRET_SPAWN_OFFSET,
+    },
+    helpers: {
+      addPausePreviewBeam: ({ from, target, ttl }) =>
+        addPausePreviewBeam(from, target, ttl),
+      addPausePreviewLaser: ({ from, to, sourceEnemy, targetEnemy }) =>
+        addPausePreviewLaser(from, to, sourceEnemy, targetEnemy),
+      applyPausePreviewAoeAt: ({ point, variant, beatIndex: nextBeatIndex, avoidEnemy }) =>
+        applyPausePreviewAoeAt(point, variant, nextBeatIndex, avoidEnemy),
+      damagePausePreviewEnemy,
+      getPausePreviewBeatLen,
+      getPausePreviewNearestEnemies,
+      normalizeDir,
+      queuePausePreviewChain: ({ beatIndex: nextBeatIndex, nextStages, context }) =>
+        queuePausePreviewChain(nextBeatIndex, nextStages, context),
+      sanitizeWeaponStages,
+      spawnPausePreviewBoomerangProjectile: ({ from, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext }) =>
+        spawnPausePreviewBoomerangProjectile(from, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext),
+      spawnPausePreviewHelper: ({ kind, anchorPoint, beatIndex: nextBeatIndex, nextStages, context, anchorEnemy }) =>
+        spawnPausePreviewHelper(kind, anchorPoint, nextBeatIndex, nextStages, context, anchorEnemy),
+      spawnPausePreviewHomingMissile: ({ from, damage, nextStages, nextBeatIndex, chainContext }) =>
+        spawnPausePreviewHomingMissile(from, damage, nextStages, nextBeatIndex, chainContext),
+      spawnPausePreviewProjectile: ({ from, target, damage, nextStages, nextBeatIndex, chainContext }) =>
+        spawnPausePreviewProjectile(from, target, damage, nextStages, nextBeatIndex, chainContext),
+      spawnPausePreviewProjectileFromDirection: ({ from, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext }) =>
+        spawnPausePreviewProjectileFromDirection(from, dirX, dirY, damage, nextStages, nextBeatIndex, chainContext),
+      triggerPausePreviewWeaponStage: ({ stage, origin: nextOrigin, beatIndex: nextBeatIndex, remainingStages: nextRemainingStages = [], context: nextContext = null }) =>
+        triggerPausePreviewWeaponStage(stage, nextOrigin, nextBeatIndex, nextRemainingStages, nextContext),
+    },
+  });
 }
 
 function updateEnemySpawnHealthScaling() {
@@ -6574,292 +5910,84 @@ function updateSpawnHealthDebugUi() {
 }
 
 function processPausePreviewPendingChains(beatIndex) {
-  for (let i = pausePreview.pendingEvents.length - 1; i >= 0; i--) {
-    const ev = pausePreview.pendingEvents[i];
-    if ((Number(ev?.beatIndex) || 0) > beatIndex) continue;
-    pausePreview.pendingEvents.splice(i, 1);
-    const stages = sanitizeWeaponStages(ev?.stages);
-    if (!stages.length) continue;
-    const stage = stages[0];
-    const rem = stages.slice(1);
-    const origin = ev?.context?.impactPoint || ev?.context?.origin || { x: pausePreview.ship.x, y: pausePreview.ship.y };
-    triggerPausePreviewWeaponStage(stage, origin, beatIndex, rem, ev?.context || null);
-  }
+  processPausePreviewPendingChainsRuntime({
+    beatIndex,
+    state: { pausePreview },
+    helpers: {
+      sanitizeWeaponStages,
+      triggerPausePreviewWeaponStage,
+    },
+  });
 }
 
 function applyPausePreviewLingeringAoeBeat(beatIndex) {
-  for (let i = pausePreview.aoeZones.length - 1; i >= 0; i--) {
-    const z = pausePreview.aoeZones[i];
-    if ((Number(z.untilBeat) || 0) < beatIndex) {
-      pausePreview.aoeZones.splice(i, 1);
-      continue;
-    }
-    const r2 = (Number(z.radius) || PREVIEW_EXPLOSION_RADIUS) ** 2;
-    const dmg = Math.max(0, Number(z.damagePerBeat) || 0);
-    for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
-      const e = pausePreview.enemies[j];
-      const dx = e.x - z.x;
-      const dy = e.y - z.y;
-      if ((dx * dx + dy * dy) <= r2) damagePausePreviewEnemy(e, dmg);
-    }
-  }
+  applyPausePreviewLingeringAoeBeatRuntime({
+    beatIndex,
+    state: { pausePreview },
+    constants: {
+      previewExplosionRadius: PREVIEW_EXPLOSION_RADIUS,
+    },
+    helpers: {
+      damagePausePreviewEnemy,
+    },
+  });
 }
 
 function firePausePreviewWeaponsOnBeat(beatIndex) {
-  const origin = { x: pausePreview.ship.x, y: pausePreview.ship.y };
-  const indices = Number.isInteger(previewSelectedWeaponSlotIndex)
-    ? [previewSelectedWeaponSlotIndex]
-    : weaponLoadout.map((_, i) => i);
-  for (const slotIndex of indices) {
-    const weapon = weaponLoadout[slotIndex];
-    const stages = sanitizeWeaponStages(weapon?.stages);
-    if (!stages.length) continue;
-    const first = stages[0];
-    const rest = stages.slice(1);
-    triggerPausePreviewWeaponStage(first, origin, beatIndex, rest, {
-      origin,
-      impactPoint: origin,
-      weaponSlotIndex: slotIndex,
-      stageIndex: 0,
-    });
-  }
+  firePausePreviewWeaponsOnBeatRuntime({
+    beatIndex,
+    previewSelectedWeaponSlotIndex,
+    state: {
+      pausePreview,
+      weaponLoadout,
+    },
+    helpers: {
+      sanitizeWeaponStages,
+      triggerPausePreviewWeaponStage,
+    },
+  });
 }
 
 function updatePausePreviewProjectilesAndEffects(dt) {
-  const hitRadius = PREVIEW_PROJECTILE_HIT_RADIUS;
-  const hitR2 = hitRadius * hitRadius;
-  for (let i = pausePreview.projectiles.length - 1; i >= 0; i--) {
-    const p = pausePreview.projectiles[i];
-    p.ttl -= dt;
-    const isBoomerang = String(p.kind || 'standard') === 'boomerang';
-    const isHoming = String(p.kind || 'standard') === 'homing-missile';
-    if (isBoomerang) {
-      p.boomTheta = (Number(p.boomTheta) || 0) + ((Number(p.boomOmega) || 0) * dt);
-      const c = Math.cos(p.boomTheta || 0);
-      const s = Math.sin(p.boomTheta || 0);
-      const r = Math.max(1, Number(p.boomRadius) || PREVIEW_PROJECTILE_BOOMERANG_RADIUS);
-      const dirX = Number(p.boomDirX) || 0;
-      const dirY = Number(p.boomDirY) || 0;
-      const perpX = Number(p.boomPerpX) || 0;
-      const perpY = Number(p.boomPerpY) || 0;
-      p.x = (Number(p.boomCenterX) || 0) + (dirX * (1 + c) * r) + (perpX * s * r);
-      p.y = (Number(p.boomCenterY) || 0) + (dirY * (1 + c) * r) + (perpY * s * r);
-    } else if (isHoming) {
-      let state = String(p.homingState || 'orbit');
-      const orbitRadius = Math.max(8, Number(p.orbitRadius) || PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS);
-      const orbitAngVel = Number(p.orbitAngVel) || PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL;
-      const nearestNow = getPausePreviewNearestEnemies(p.x, p.y, 1, p.ignoreEnemy || null)[0] || null;
-      if (state === 'orbit' && nearestNow) {
-        const dx = nearestNow.x - p.x;
-        const dy = nearestNow.y - p.y;
-        if ((dx * dx + dy * dy) <= (PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE * PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE)) {
-          state = 'seek';
-          p.targetEnemy = nearestNow;
-        }
-      }
-      if (state === 'seek') {
-        let target = p.targetEnemy || null;
-        if (!target || !pausePreview.enemies.includes(target)) target = getPausePreviewNearestEnemies(p.x, p.y, 1, p.ignoreEnemy || null)[0] || null;
-        if (!target) {
-          state = 'return';
-          p.targetEnemy = null;
-        } else {
-          p.targetEnemy = target;
-          const desired = normalizeDir(target.x - p.x, target.y - p.y, p.vx, p.vy);
-          const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
-          const steer = Math.max(0, Math.min(1, PREVIEW_PROJECTILE_HOMING_TURN_RATE * dt));
-          const nd = normalizeDir(
-            (cur.x * (1 - steer)) + (desired.x * steer),
-            (cur.y * (1 - steer)) + (desired.y * steer),
-            desired.x,
-            desired.y
-          );
-          p.vx = nd.x * PREVIEW_PROJECTILE_HOMING_SPEED;
-          p.vy = nd.y * PREVIEW_PROJECTILE_HOMING_SPEED;
-          p.x += p.vx * dt;
-          p.y += p.vy * dt;
-        }
-      }
-      if (state === 'return') {
-        const desired = normalizeDir(pausePreview.ship.x - p.x, pausePreview.ship.y - p.y, p.vx, p.vy);
-        const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
-        const steer = Math.max(0, Math.min(1, (PREVIEW_PROJECTILE_HOMING_TURN_RATE * 1.2) * dt));
-        const nd = normalizeDir(
-          (cur.x * (1 - steer)) + (desired.x * steer),
-          (cur.y * (1 - steer)) + (desired.y * steer),
-          desired.x,
-          desired.y
-        );
-        p.vx = nd.x * PREVIEW_PROJECTILE_HOMING_SPEED;
-        p.vy = nd.y * PREVIEW_PROJECTILE_HOMING_SPEED;
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        const dx = p.x - pausePreview.ship.x;
-        const dy = p.y - pausePreview.ship.y;
-        if ((dx * dx + dy * dy) <= (PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST * PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST)) {
-          state = 'orbit';
-          const d = normalizeDir(dx, dy, 1, 0);
-          p.orbitAngle = Math.atan2(d.y, d.x);
-          p.vx = 0;
-          p.vy = 0;
-        }
-      }
-      if (state === 'orbit') {
-        const phaseCatchup = Math.max(
-          0.2,
-          Math.min(
-            1,
-            (Math.max(0, (Number(p.orbitRadius) || orbitRadius)) / Math.max(1, Math.hypot((p.x - pausePreview.ship.x), (p.y - pausePreview.ship.y))))
-          )
-        );
-        p.orbitAngle = (Number(p.orbitAngle) || 0) + (orbitAngVel * dt * phaseCatchup);
-        const targetX = pausePreview.ship.x + (Math.cos(p.orbitAngle) * orbitRadius);
-        const targetY = pausePreview.ship.y + (Math.sin(p.orbitAngle) * orbitRadius);
-        const toTx = targetX - p.x;
-        const toTy = targetY - p.y;
-        const toDist = Math.hypot(toTx, toTy) || 0.0001;
-        const desired = normalizeDir(targetX - p.x, targetY - p.y, 1, 0);
-        const cur = normalizeDir(p.vx, p.vy, desired.x, desired.y);
-        const steer = Math.max(0, Math.min(1, PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE * dt));
-        const nd = normalizeDir(
-          (cur.x * (1 - steer)) + (desired.x * steer),
-          (cur.y * (1 - steer)) + (desired.y * steer),
-          desired.x,
-          desired.y
-        );
-        const speedN = Math.max(0.2, Math.min(1, toDist / Math.max(1, orbitRadius)));
-        const chaseSpeed = PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED * speedN;
-        p.vx = nd.x * chaseSpeed;
-        p.vy = nd.y * chaseSpeed;
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-      }
-      p.homingState = state;
-    } else {
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-    }
-    let hit = false;
-    for (let j = pausePreview.enemies.length - 1; j >= 0; j--) {
-      const e = pausePreview.enemies[j];
-      if (p.ignoreEnemy && e === p.ignoreEnemy) continue;
-      const dx = e.x - p.x;
-      const dy = e.y - p.y;
-      if ((dx * dx + dy * dy) <= hitR2) {
-        if (isBoomerang) {
-          if (!(p.hitEnemyIds instanceof Set)) p.hitEnemyIds = new Set();
-          if (p.hitEnemyIds.has(e)) continue;
-          p.hitEnemyIds.add(e);
-        }
-        const hitPoint = { x: e.x, y: e.y };
-        damagePausePreviewEnemy(e, p.damage);
-        if (Array.isArray(p.nextStages) && p.nextStages.length) {
-          const stages = sanitizeWeaponStages(p.nextStages);
-          const first = stages[0];
-          const rest = stages.slice(1);
-          const nextBeat = Number.isFinite(p.nextBeatIndex) ? p.nextBeatIndex : (Math.max(0, pausePreview.beatIndex) + 1);
-          const chainCtx = {
-            origin: { x: p.x, y: p.y },
-            impactPoint: hitPoint,
-            weaponSlotIndex: Number.isFinite(p.chainWeaponSlotIndex) ? Math.trunc(p.chainWeaponSlotIndex) : null,
-            stageIndex: Number.isFinite(p.chainStageIndex) ? Math.trunc(p.chainStageIndex) : null,
-            impactEnemy: e,
-            sourceEnemy: e,
-          };
-          if (first?.archetype === 'projectile') {
-            triggerPausePreviewWeaponStage(first, hitPoint, pausePreview.beatIndex, rest, chainCtx);
-          } else {
-            queuePausePreviewChain(nextBeat, stages, chainCtx);
-          }
-        }
-        if (!isBoomerang) {
-          hit = true;
-          break;
-        }
-      }
-    }
-    if (
-      hit || p.ttl <= 0
-      || p.x < -30 || p.y < -30
-      || p.x > pausePreview.width + 30
-      || p.y > pausePreview.height + 30
-    ) {
-      try { p.el?.remove?.(); } catch {}
-      pausePreview.projectiles.splice(i, 1);
-      continue;
-    }
-    if (isBoomerang) {
-      const deg = ((Number(p.boomTheta) || 0) * (180 / Math.PI) * PROJECTILE_BOOMERANG_SPIN_MULT) + 180;
-      p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px) rotate(${deg.toFixed(2)}deg)`;
-    } else {
-      p.el.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px)`;
-    }
-  }
-
-  for (let i = pausePreview.effects.length - 1; i >= 0; i--) {
-    const fx = pausePreview.effects[i];
-    fx.ttl -= dt;
-    if (fx.ttl <= 0) {
-      try { fx.el?.remove?.(); } catch {}
-      pausePreview.effects.splice(i, 1);
-      continue;
-    }
-    if (fx.kind === 'laser' || fx.kind === 'beam') {
-      if (fx.kind === 'beam') {
-        if (fx.sourceEnemy && !pausePreview.enemies.includes(fx.sourceEnemy)) {
-          try { fx.el?.remove?.(); } catch {}
-          pausePreview.effects.splice(i, 1);
-          continue;
-        } else {
-          fx.sourceGoneTtl = null;
-        }
-        if (fx.sourceEnemy && pausePreview.enemies.includes(fx.sourceEnemy)) {
-          fx.from = { x: Number(fx.sourceEnemy.x) || 0, y: Number(fx.sourceEnemy.y) || 0 };
-        }
-        let target = fx.targetEnemy || null;
-        if (!target || !pausePreview.enemies.includes(target)) {
-          target = getPausePreviewNearestEnemies(fx.from?.x || 0, fx.from?.y || 0, 1, fx.sourceEnemy || null)[0] || null;
-          fx.targetEnemy = target || null;
-        }
-        if (target) {
-          fx.to = { x: target.x, y: target.y };
-          damagePausePreviewEnemy(target, Math.max(0, Number(fx.damagePerSec) || 0) * dt);
-        }
-      } else if (fx.kind === 'laser') {
-        if (fx.sourceEnemy && pausePreview.enemies.includes(fx.sourceEnemy)) {
-          fx.from = { x: Number(fx.sourceEnemy.x) || 0, y: Number(fx.sourceEnemy.y) || 0 };
-        }
-        if (fx.targetEnemy && pausePreview.enemies.includes(fx.targetEnemy)) {
-          fx.to = { x: Number(fx.targetEnemy.x) || 0, y: Number(fx.targetEnemy.y) || 0 };
-        }
-      }
-      const dx = fx.to.x - fx.from.x;
-      const dy = fx.to.y - fx.from.y;
-      const len = Math.max(1, Math.hypot(dx, dy));
-      const ang = Math.atan2(dy, dx) * (180 / Math.PI);
-      fx.el.style.width = `${len.toFixed(2)}px`;
-      fx.el.style.transform = `translate(${fx.from.x.toFixed(2)}px, ${fx.from.y.toFixed(2)}px) rotate(${ang.toFixed(2)}deg)`;
-      if (fx.kind === 'beam') {
-        fx.el.style.opacity = '1';
-      } else {
-        fx.el.style.opacity = `${Math.max(0, Math.min(1, fx.ttl / PREVIEW_LASER_TTL)).toFixed(3)}`;
-      }
-    } else if (fx.kind === 'explosion') {
-      const radius = Math.max(8, Number(fx.radius) || PREVIEW_EXPLOSION_RADIUS);
-      const size = radius * 2;
-      fx.el.style.width = `${size.toFixed(2)}px`;
-      fx.el.style.height = `${size.toFixed(2)}px`;
-      fx.el.style.marginLeft = `${(-radius).toFixed(2)}px`;
-      fx.el.style.marginTop = `${(-radius).toFixed(2)}px`;
-      fx.el.style.transform = `translate(${fx.at.x.toFixed(2)}px, ${fx.at.y.toFixed(2)}px)`;
-      fx.el.style.opacity = `${Math.max(0, Math.min(1, fx.ttl / PREVIEW_EXPLOSION_TTL)).toFixed(3)}`;
-    }
-  }
+  updatePausePreviewProjectilesAndEffectsRuntime({
+    dt,
+    state: { pausePreview },
+    constants: {
+      previewProjectileHitRadius: PREVIEW_PROJECTILE_HIT_RADIUS,
+      previewProjectileBoomerangRadius: PREVIEW_PROJECTILE_BOOMERANG_RADIUS,
+      previewProjectileHomingAcquireRange: PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE,
+      previewProjectileHomingTurnRate: PREVIEW_PROJECTILE_HOMING_TURN_RATE,
+      previewProjectileHomingSpeed: PREVIEW_PROJECTILE_HOMING_SPEED,
+      previewProjectileHomingReturnSnapDist: PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST,
+      previewProjectileHomingOrbitTurnRate: PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE,
+      previewProjectileHomingOrbitChaseSpeed: PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED,
+      previewProjectileHomingOrbitRadius: PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS,
+      previewProjectileHomingOrbitAngVel: PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL,
+      previewLaserTtl: PREVIEW_LASER_TTL,
+      previewExplosionRadius: PREVIEW_EXPLOSION_RADIUS,
+      previewExplosionTtl: PREVIEW_EXPLOSION_TTL,
+      projectileBoomerangSpinMult: PROJECTILE_BOOMERANG_SPIN_MULT,
+    },
+    helpers: {
+      damagePausePreviewEnemy,
+      getPausePreviewNearestEnemies,
+      normalizeDir,
+      queuePausePreviewChain,
+      sanitizeWeaponStages,
+      triggerPausePreviewWeaponStage,
+    },
+  });
 }
 
 function getPausePreviewBeatLen() {
-  const info = getLoopInfo?.();
-  return Math.max(0.2, Number(info?.beatLen) || PREVIEW_BEAT_LEN_FALLBACK);
+  return getPausePreviewBeatLenRuntime({
+    constants: {
+      previewBeatLenFallback: PREVIEW_BEAT_LEN_FALLBACK,
+    },
+    helpers: {
+      getLoopInfo,
+    },
+  });
 }
 
 function updatePausePreview(dt) {
