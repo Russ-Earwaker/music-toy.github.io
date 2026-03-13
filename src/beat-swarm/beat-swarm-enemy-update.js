@@ -178,6 +178,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     e.wx += e.vx * (Number(state.dt) || 0);
     e.wy += e.vy * (Number(state.dt) || 0);
     if (d <= hitRadiusWorld) {
+      const perfProtected = helpers.isPerfRepeatProtectedEnemy?.(e) === true;
       if (lifecycleState === 'retiring') {
         const back = helpers.normalizeDir?.(e.wx - centerWorld.x, e.wy - centerWorld.y, e.vx, e.vy) || { x: 0, y: 0 };
         const repulseSpeed = Math.max(80, (Number(constants.enemyMaxSpeed) || 0) * Math.max(0.4, Number(aggressionScale) || 0));
@@ -199,6 +200,15 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         e.vy = back.y * Math.max(120, Math.hypot(e.vx, e.vy));
         e.wx += e.vx * Math.max(0.016, (Number(state.dt) || 0) * 1.6);
         e.wy += e.vy * Math.max(0.016, (Number(state.dt) || 0) * 1.6);
+        continue;
+      }
+      if (perfProtected) {
+        const back = helpers.normalizeDir?.(e.wx - centerWorld.x, e.wy - centerWorld.y, e.vx, e.vy) || { x: 0, y: 0 };
+        const bounceSpeed = Math.max(110, Math.hypot(e.vx, e.vy), (Number(constants.enemyMaxSpeed) || 0) * 0.7);
+        e.vx = back.x * bounceSpeed;
+        e.vy = back.y * bounceSpeed;
+        e.wx += e.vx * Math.max(0.016, (Number(state.dt) || 0) * 1.4);
+        e.wy += e.vy * Math.max(0.016, (Number(state.dt) || 0) * 1.4);
         continue;
       }
       helpers.removeEnemy?.(e, 'killed');

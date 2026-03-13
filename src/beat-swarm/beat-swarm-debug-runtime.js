@@ -335,6 +335,12 @@ export function installBeatSwarmDebugGlobalRuntime(deps = {}) {
       spawnPerfEnemyDistribution(nextCount) {
         return api.spawnPerfEnemyDistribution(nextCount);
       },
+      spawnPerfEnemyType(enemyType) {
+        return api.spawnPerfEnemyType(enemyType);
+      },
+      setPerfEnemyRepeatMode(enemyType, enabled, options) {
+        return api.setPerfEnemyRepeatMode(enemyType, enabled, options);
+      },
       preparePerfScenario(options) {
         return api.preparePerfScenario(options);
       },
@@ -450,6 +456,12 @@ export function createBeatSwarmDebugApiRuntime(deps = {}) {
     },
     spawnPerfEnemyDistribution(nextCount = constants.enemyTargetActiveCount) {
       return helpers.spawnPerfEnemyDistribution?.(nextCount);
+    },
+    spawnPerfEnemyType(enemyType = 'drawsnake') {
+      return helpers.spawnPerfEnemyType?.(enemyType) || null;
+    },
+    setPerfEnemyRepeatMode(enemyType = '', enabled = true, options = null) {
+      return helpers.setPerfEnemyRepeatMode?.(enemyType, enabled, options) || { enabled: false, enemyType: '', targetCount: 0, persistent: true };
     },
     preparePerfScenario(options = null) {
       return helpers.preparePerfScenario?.(options);

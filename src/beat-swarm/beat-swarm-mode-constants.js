@@ -725,7 +725,7 @@ export const THEME_PERSISTENCE_POLICY = Object.freeze({
   themeReturnBias: 'high',
 });
 export const DRAW_SNAKE_NODE_PULSE_SECONDS = 0.22;
-export const DRAW_SNAKE_NODE_PULSE_SCALE = 0.52;
+export const DRAW_SNAKE_NODE_PULSE_SCALE = 0.72;
 export const composerRuntime = {
   enabled: COMPOSER_ENABLED,
   lastSectionKey: '',

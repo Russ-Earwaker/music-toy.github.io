@@ -424,6 +424,17 @@ function ensureUI() {
   const MUSIC_LAB = {
     title: 'Music Lab - Beat Swarm Diagnostics',
     controls: [
+      `<label class="perf-lab-toggle">Repeat enemy
+        <select class="perf-lab-select" data-music-spawn-type>
+          <option value="drawsnake">DrawSnake</option>
+          <option value="spawner">Spawner</option>
+          <option value="dumb">Dumb</option>
+          <option value="group">Composer Group</option>
+        </select>
+      </label>`,
+      `<label class="perf-lab-toggle"><input type="checkbox" data-music-repeat-persistent checked /> Repeat enemy stays alive</label>`,
+      btn('musicEnemyRepeatStart', 'Music: Start Repeat Spawn', 'primary'),
+      btn('musicEnemyRepeatStop', 'Music: Stop Repeat Spawn'),
       btn('musicLabEnable', 'Music Lab: Enable'),
       btn('musicLabDisable', 'Music Lab: Disable'),
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
@@ -1078,6 +1089,23 @@ function ensureUI() {
     if (!btn) return;
     const act = btn.getAttribute('data-act');
     if (act === 'close') hide();
+
+    if (act === 'musicEnemyRepeatStart') {
+      const typeEl = ov.querySelector('[data-music-spawn-type]');
+      const persistentEl = ov.querySelector('[data-music-repeat-persistent]');
+      const enemyType = String(typeEl?.value || 'drawsnake').trim().toLowerCase() || 'drawsnake';
+      const persistent = persistentEl ? persistentEl.checked !== false : true;
+      const result = await startPerfMusicRepeatSpawn(enemyType, { persistent });
+      setStatus(result.ok ? `Music repeat spawn running: ${enemyType}` : 'Music repeat spawn failed');
+      setOutput(result);
+      return;
+    }
+    if (act === 'musicEnemyRepeatStop') {
+      stopPerfMusicRepeatSpawn();
+      setStatus('Music repeat spawn stopped');
+      setOutput({ ok: true, stopped: true });
+      return;
+    }
 
     if (act === 'qualityApply') {
       try {
@@ -2283,6 +2311,7 @@ function show() {
 }
 
 function hide() {
+  stopPerfMusicRepeatSpawn();
   const ov = ensureUI();
   ov.style.display = 'none';
 }
@@ -2743,6 +2772,30 @@ function getBeatSwarmDebugApi() {
   const dbg = window.__beatSwarmDebug;
   if (!dbg || typeof dbg.preparePerfScenario !== 'function') return null;
   return dbg;
+}
+
+function stopPerfMusicRepeatSpawn() {
+  const dbg = getBeatSwarmDebugApi();
+  if (!dbg || typeof dbg.setPerfEnemyRepeatMode !== 'function') {
+    return { ok: false, reason: 'beat_swarm_debug_api_unavailable' };
+  }
+  return dbg.setPerfEnemyRepeatMode('', false);
+}
+
+async function startPerfMusicRepeatSpawn(enemyType = 'drawsnake', options = null) {
+  const built = await ensureBS0Built();
+  if (!built) {
+    return { ok: false, reason: 'beat_swarm_build_failed' };
+  }
+  const dbg = getBeatSwarmDebugApi();
+  if (!dbg || typeof dbg.setPerfEnemyRepeatMode !== 'function') {
+    return { ok: false, reason: 'beat_swarm_debug_api_unavailable' };
+  }
+  const type = String(enemyType || 'drawsnake').trim().toLowerCase() || 'drawsnake';
+  const opts = options && typeof options === 'object' ? options : {};
+  return dbg.setPerfEnemyRepeatMode(type, true, {
+    persistent: opts.persistent !== false,
+  });
 }
 
 function getMusicLabApiGlobal() {

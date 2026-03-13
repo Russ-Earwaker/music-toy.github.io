@@ -119,6 +119,13 @@ const perfLabRuntime = {
   autoMovePhase: 0,
   autoMoveMagnitude: 0.82,
 };
+const perfEnemyRepeatRuntime = {
+  enabled: false,
+  enemyType: '',
+  targetCount: 0,
+  composerGroupId: 0,
+  persistent: true,
+};
 const enemies = [];
 const pendingEnemyDeaths = [];
 const pickups = [];
@@ -550,7 +557,7 @@ function pulseEnemyMusicalRoleVisual(enemyLike = null, strength = 'soft') {
   if (String(enemy?.enemyType || '').trim().toLowerCase() === 'drawsnake') {
     enemy.drawsnakeLinePulseDur = dur;
     enemy.drawsnakeLinePulseT = dur;
-    enemy.drawsnakeLinePulseScale = scale;
+    enemy.drawsnakeLinePulseScale = Math.max(0.04, Math.min(0.65, scale * 1.45));
   }
   const el = enemy?.el instanceof HTMLElement ? enemy.el : null;
   if (el) {
@@ -1099,6 +1106,7 @@ function getEnemyMusicGroup(enemyLike, fallbackActionType = '') {
 }
 function createBassFoundationKeepaliveEventRuntime(options = null) {
   if (!active || gameplayPaused) return null;
+  if (perfEnemyRepeatRuntime.enabled) return null;
   const opts = options && typeof options === 'object' ? options : {};
   const beatIndex = Math.max(0, Math.trunc(Number(opts.beatIndex) || Number(currentBeatIndex) || 0));
   const stepIndex = Math.max(0, Math.trunc(Number(opts.stepIndex) || Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0));
@@ -1903,7 +1911,7 @@ function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context 
     // Bass is the foundation: always hand off onto a freshly spawned receiver to avoid fragile live-target transfers.
     targetEnemy = null;
   }
-  if (!targetEnemy && isBassSource) {
+  if (!targetEnemy && isBassSource && !perfEnemyRepeatRuntime.enabled) {
     const emergencyProfileInstrument = sourceGroup.instrumentId || source?.spawnerInstrument || source?.drawsnakeInstrument || resolveSwarmSoundInstrumentId('projectile') || 'tone';
     if (sourceType === 'spawner') {
       targetEnemy = spawnSpawnerEnemyOffscreen({
@@ -1950,7 +1958,7 @@ function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context 
       }, { beatIndex, stepIndex, ...context });
     }
   }
-  if (sourceType === 'dumb') {
+  if (sourceType === 'dumb' && !perfEnemyRepeatRuntime.enabled) {
     const targetTypeNow = String(targetEnemy?.enemyType || '').trim().toLowerCase();
     if (!targetEnemy || targetTypeNow !== 'dumb') {
       const fallbackPoint = getRandomOffscreenSpawnPoint();
@@ -4030,6 +4038,20 @@ function logWeaponTuneFireDebug(event, payload = null) {
   } catch {}
 }
 function getCurrentPacingCaps() {
+  if (perfEnemyRepeatRuntime.enabled) {
+    const targetType = String(perfEnemyRepeatRuntime.enemyType || '').trim().toLowerCase();
+    return {
+      maxFallbackEnemies: targetType === 'dumb' ? 1 : 0,
+      maxSpawners: targetType === 'spawner' ? 1 : 0,
+      maxDrawSnakes: targetType === 'drawsnake' ? 1 : 0,
+      maxComposerGroups: targetType === 'group' ? 1 : 0,
+      maxComposerGroupSize: targetType === 'group' ? 8 : 0,
+      maxComposerPerformers: targetType === 'group' ? 8 : 0,
+      responseMode: targetType === 'drawsnake'
+        ? 'drawsnake'
+        : (targetType === 'group' ? 'group' : 'none'),
+    };
+  }
   const pace = swarmPacingRuntime.getSnapshot();
   const caps = pace?.caps && typeof pace.caps === 'object' ? pace.caps : {};
   return {
@@ -6610,6 +6632,11 @@ function damageEnemy(enemy, amount = 1) {
   if (!enemy || !Number.isFinite(enemy.hp)) return false;
   enemy.hp -= Math.max(0, Number(amount) || 0);
   pulseHitFlash(enemy.el);
+  if (isPerfRepeatProtectedEnemy(enemy) && enemy.hp <= 0) {
+    enemy.hp = Math.max(1, Number(enemy.maxHp) || 1);
+    updateEnemyHealthUi(enemy);
+    return true;
+  }
   updateEnemyHealthUi(enemy);
   if (enemy.hp <= 0) {
     if (String(enemy?.enemyType || '') === 'spawner' && Array.isArray(enemy?.spawnerNodeEnemyIds)) {
@@ -7394,6 +7421,7 @@ function spawnSpawnerEnemyAt(clientX, clientY, options = null) {
     lifecycleState: created.lifecycleState,
   });
   syncSingletonEnemyStateFromMusicGroup(created, createdGroup);
+  updateSpawnerEnemyActiveCells(created, Array.isArray(createdGroup?.steps) ? createdGroup.steps : created.spawnerSteps);
   return created;
 }
 function spawnSpawnerEnemyOffscreen(options = null) {
@@ -7464,6 +7492,7 @@ function maintainSpawnerEnemyPopulation() {
       lifecycleState: enemy?.lifecycleState || 'active',
     });
     syncSingletonEnemyStateFromMusicGroup(enemy, syncGroup);
+    updateSpawnerEnemyActiveCells(enemy, Array.isArray(syncGroup?.steps) ? syncGroup.steps : enemy?.spawnerSteps);
   }
   const motif = getComposerMotif(motifScopeKey, 'spawner-drum', () => createSpawnerEnemyRhythmProfile({ role: 'drum' }));
   applySpawnerCollisionAvoidance(spawners.filter((e) => !e?.retreating));
@@ -7493,16 +7522,9 @@ function maintainSpawnerEnemyPopulation() {
       lifecycleState: enemy.lifecycleState,
     });
     syncSingletonEnemyStateFromMusicGroup(enemy, syncGroup);
+    updateSpawnerEnemyActiveCells(enemy, Array.isArray(syncGroup?.steps) ? syncGroup.steps : enemy?.spawnerSteps);
     if (!Array.isArray(enemy.spawnerNodeEnemyIds)) enemy.spawnerNodeEnemyIds = Array.from({ length: 8 }, () => 0);
     const groupSteps = Array.isArray(syncGroup?.steps) ? syncGroup.steps : [];
-    const activeCellIndices = new Set();
-    for (let i = 0; i < 8; i++) {
-      if (!groupSteps[i]) continue;
-      const map = SPAWNER_ENEMY_GRID_STEP_TO_CELL[i];
-      if (!map) continue;
-      const cellIndex = (Math.max(0, Math.min(2, map.r)) * 3) + Math.max(0, Math.min(2, map.c));
-      activeCellIndices.add(cellIndex);
-    }
     for (let i = 0; i < 8; i++) {
       if (groupSteps[i]) continue;
       const linkedId = Math.trunc(Number(enemy.spawnerNodeEnemyIds[i]) || 0);
@@ -7514,14 +7536,6 @@ function maintainSpawnerEnemyPopulation() {
         if (linkedIdx >= 0) enemies.splice(linkedIdx, 1);
       }
       enemy.spawnerNodeEnemyIds[i] = 0;
-    }
-    const cells = Array.isArray(enemy?.spawnerCells) ? enemy.spawnerCells : [];
-    for (let i = 0; i < cells.length; i++) {
-      const cell = cells[i];
-      if (!(cell instanceof HTMLElement)) continue;
-      if (i === 4) continue;
-      if (activeCellIndices.has(i)) cell.classList.add('is-active-note');
-      else cell.classList.remove('is-active-note');
     }
   }
   const activeCount = spawners.length;
@@ -7563,6 +7577,28 @@ function flashSpawnerEnemyCell(enemy, stepIndex, mode = 'soft') {
   try { cell.style.setProperty('--bs-cell-flash', String(enemy.spawnerCellFlash[cellIndex].toFixed(3))); } catch {}
   try { cell.style.setProperty('--bs-cell-pop', String(enemy.spawnerCellPop[cellIndex].toFixed(3))); } catch {}
 }
+function updateSpawnerEnemyActiveCells(enemy, stepsLike = null) {
+  const cells = Array.isArray(enemy?.spawnerCells) ? enemy.spawnerCells : [];
+  if (!cells.length) return;
+  const steps = Array.isArray(stepsLike)
+    ? stepsLike
+    : (Array.isArray(enemy?.spawnerSteps) ? enemy.spawnerSteps : []);
+  const activeCellIndices = new Set();
+  for (let i = 0; i < 8; i++) {
+    if (!steps[i]) continue;
+    const map = SPAWNER_ENEMY_GRID_STEP_TO_CELL[i];
+    if (!map) continue;
+    const cellIndex = (Math.max(0, Math.min(2, map.r)) * 3) + Math.max(0, Math.min(2, map.c));
+    activeCellIndices.add(cellIndex);
+  }
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    if (!(cell instanceof HTMLElement)) continue;
+    if (i === 4) continue;
+    if (activeCellIndices.has(i)) cell.classList.add('is-active-note');
+    else cell.classList.remove('is-active-note');
+  }
+}
 function updateSpawnerEnemyFlash(enemy, dt) {
   const cells = Array.isArray(enemy?.spawnerCells) ? enemy.spawnerCells : [];
   if (!cells.length) return;
@@ -7601,6 +7637,194 @@ function flashDrawSnakeNode(enemy, nodeIndex) {
   node.classList.remove('is-spawn');
   void node.offsetWidth;
   node.classList.add('is-spawn');
+}
+function getOffscreenSeedDirection(clientX, clientY) {
+  const screenW = Math.max(1, Number(window.innerWidth) || 0);
+  const screenH = Math.max(1, Number(window.innerHeight) || 0);
+  const leftOver = Math.max(0, -Number(clientX));
+  const rightOver = Math.max(0, Number(clientX) - screenW);
+  const topOver = Math.max(0, -Number(clientY));
+  const bottomOver = Math.max(0, Number(clientY) - screenH);
+  let dirX = 0;
+  let dirY = 0;
+  if (leftOver > 0) dirX += 1;
+  if (rightOver > 0) dirX -= 1;
+  if (topOver > 0) dirY += 1;
+  if (bottomOver > 0) dirY -= 1;
+  const len = Math.hypot(dirX, dirY);
+  if (!(len > 0.0001)) return null;
+  return { x: dirX / len, y: dirY / len };
+}
+function getRandomOffscreenSpawnClientPoint(marginPx = ENEMY_FALLBACK_SPAWN_MARGIN_PX) {
+  const screenW = Math.max(1, Number(window.innerWidth) || 0);
+  const screenH = Math.max(1, Number(window.innerHeight) || 0);
+  const margin = Math.max(8, Number(marginPx) || 42);
+  const side = Math.floor(Math.random() * 4);
+  if (side === 0) return { x: -margin, y: randRange(0, screenH) };
+  if (side === 1) return { x: screenW + margin, y: randRange(0, screenH) };
+  if (side === 2) return { x: randRange(0, screenW), y: -margin };
+  return { x: randRange(0, screenW), y: screenH + margin };
+}
+function getPerfEnemyRepeatTargetCount(enemyType = '') {
+  return String(enemyType || '').trim().toLowerCase() === 'group' ? 8 : 1;
+}
+function createPerfComposerEnemyGroup() {
+  const motif = createComposerEnemyGroupProfile(0, null) || {};
+  const role = normalizeSwarmRole(motif?.role || BEAT_EVENT_ROLES.LEAD, BEAT_EVENT_ROLES.LEAD);
+  const fallbackInstrument = resolveSwarmSoundInstrumentId('projectile') || 'tone';
+  const instrumentId = sanitizeEnemyMusicInstrumentId(motif?.instrument, fallbackInstrument, { role });
+  const group = {
+    id: composerEnemyGroupIdSeq++,
+    sectionKey: 'perf-repeat',
+    sectionId: 'perf-repeat',
+    templateId: String(motif?.templateId || 'perf-repeat'),
+    role,
+    callResponseLane: normalizeCallResponseLane(motif?.callResponseLane || 'call'),
+    shape: String(motif?.shape || pickComposerGroupShape?.({ shapes: COMPOSER_GROUP_SHAPES, index: 0 }) || 'circle'),
+    color: String(motif?.color || pickComposerGroupColor?.({ colors: COMPOSER_GROUP_COLORS, index: 0 }) || '#ff8b6e'),
+    actionType: String(motif?.actionType || 'projectile'),
+    threatLevel: String(motif?.threatLevel || BEAT_EVENT_THREAT.FULL),
+    performers: 8,
+    size: 8,
+    steps: Array.isArray(motif?.steps) ? motif.steps.slice(0, WEAPON_TUNE_STEPS) : Array.from({ length: WEAPON_TUNE_STEPS }, () => Math.random() >= 0.5),
+    motif: motif?.motif && typeof motif.motif === 'object'
+      ? { id: String(motif.motif.id || 'perf-repeat-group'), steps: Array.isArray(motif.motif.steps) ? motif.motif.steps.slice(0, WEAPON_TUNE_STEPS) : [] }
+      : { id: 'perf-repeat-group', steps: Array.isArray(motif?.steps) ? motif.steps.slice(0, WEAPON_TUNE_STEPS) : [] },
+    notes: (Array.isArray(motif?.notes) && motif.notes.length ? motif.notes : [getRandomSwarmPentatonicNote()]).map((n, idx) => clampNoteToDirectorPool(normalizeSwarmNoteName(n) || getRandomSwarmPentatonicNote(), idx)),
+    gravityNotes: Array.isArray(motif?.gravityNotes) ? motif.gravityNotes.slice() : [],
+    phraseRoot: clampNoteToDirectorPool(normalizeSwarmNoteName(motif?.phraseRoot) || getRandomSwarmPentatonicNote(), 0),
+    phraseFifth: clampNoteToDirectorPool(normalizeSwarmNoteName(motif?.phraseFifth) || getRandomSwarmPentatonicNote(), 2),
+    resolutionTargets: Array.isArray(motif?.resolutionTargets) ? motif.resolutionTargets.slice() : [],
+    instrument: instrumentId,
+    instrumentId,
+    continuityId: String(motif?.continuityId || '') || getNextMusicContinuityId(),
+    phraseState: null,
+    noteToEnemyId: new Map(),
+    memberIds: new Set(),
+    noteCursor: 0,
+    nextSpawnNoteIndex: 0,
+    active: true,
+    retiring: false,
+    lifecycleState: 'active',
+  };
+  assignMusicLaneIdentity({
+    group,
+    role,
+    layer: role === BEAT_EVENT_ROLES.BASS ? 'foundation' : 'loops',
+    instrumentId,
+    continuityId: group.continuityId,
+    phraseId: String(group?.motif?.id || ''),
+    performerGroupId: Math.trunc(Number(group.id) || 0),
+    performerType: 'composer-group',
+  });
+  composerEnemyGroups.push(group);
+  return group;
+}
+function isPerfRepeatProtectedEnemy(enemy) {
+  if (!perfEnemyRepeatRuntime.enabled || !perfEnemyRepeatRuntime.persistent) return false;
+  if (!enemy || enemy.retreating) return false;
+  const targetType = String(perfEnemyRepeatRuntime.enemyType || '').trim().toLowerCase();
+  const enemyType = String(enemy?.enemyType || '').trim().toLowerCase();
+  if (targetType === 'group') return enemyType === 'composer-group-member';
+  return !!targetType && enemyType === targetType;
+}
+function setPerfEnemyRepeatMode(enemyType = '', enabled = true, options = null) {
+  const type = String(enemyType || '').trim().toLowerCase();
+  const opts = options && typeof options === 'object' ? options : {};
+  const persistent = opts.persistent !== false;
+  if (!enabled || !type) {
+    perfEnemyRepeatRuntime.enabled = false;
+    perfEnemyRepeatRuntime.enemyType = '';
+    perfEnemyRepeatRuntime.targetCount = 0;
+    perfEnemyRepeatRuntime.composerGroupId = 0;
+    perfEnemyRepeatRuntime.persistent = true;
+    clearPendingEnemyDeaths();
+    clearEnemies();
+    return { ok: true, enabled: false, enemyType: '', targetCount: 0, persistent: true };
+  }
+  clearPendingEnemyDeaths();
+  clearEnemies();
+  perfEnemyRepeatRuntime.enabled = true;
+  perfEnemyRepeatRuntime.enemyType = type;
+  perfEnemyRepeatRuntime.targetCount = getPerfEnemyRepeatTargetCount(type);
+  perfEnemyRepeatRuntime.composerGroupId = 0;
+  perfEnemyRepeatRuntime.persistent = persistent;
+  if (type === 'group') {
+    const group = createPerfComposerEnemyGroup();
+    perfEnemyRepeatRuntime.composerGroupId = Math.trunc(Number(group?.id) || 0);
+    spawnComposerGroupOffscreenMembers(group, perfEnemyRepeatRuntime.targetCount);
+  } else {
+    for (let i = 0; i < perfEnemyRepeatRuntime.targetCount; i++) spawnPerfEnemyType(type);
+  }
+  return {
+    ok: true,
+    enabled: true,
+    enemyType: type,
+    targetCount: perfEnemyRepeatRuntime.targetCount,
+    persistent,
+  };
+}
+function maintainPerfEnemyRepeatMode() {
+  if (!perfEnemyRepeatRuntime.enabled) return false;
+  const targetType = String(perfEnemyRepeatRuntime.enemyType || '').trim().toLowerCase();
+  const targetCount = Math.max(1, Math.trunc(Number(perfEnemyRepeatRuntime.targetCount) || 1));
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const enemy = enemies[i];
+    const enemyType = String(enemy?.enemyType || '').trim().toLowerCase();
+    const keep = targetType === 'group'
+      ? enemyType === 'composer-group-member'
+      : (
+        enemyType === targetType
+        || (targetType === 'spawner'
+          && enemyType === 'dumb'
+          && Math.trunc(Number(enemy?.linkedSpawnerId) || 0) > 0)
+      );
+    if (keep) continue;
+    removeEnemy(enemy, 'perf_repeat_filter');
+    enemies.splice(i, 1);
+  }
+  if (targetType === 'group') {
+    let group = composerEnemyGroups.find((g) => Math.trunc(Number(g?.id) || 0) === Math.trunc(Number(perfEnemyRepeatRuntime.composerGroupId) || 0)) || null;
+    if (!group) {
+      group = createPerfComposerEnemyGroup();
+      perfEnemyRepeatRuntime.composerGroupId = Math.trunc(Number(group?.id) || 0);
+    }
+    group.active = true;
+    group.retiring = false;
+    group.lifecycleState = 'active';
+    const aliveMembers = getAliveEnemiesByIds(group.memberIds).filter((e) => String(e?.enemyType || '').trim().toLowerCase() === 'composer-group-member' && !e?.retreating);
+    if (aliveMembers.length > targetCount) {
+      for (let i = targetCount; i < aliveMembers.length; i++) {
+        const enemy = aliveMembers[i];
+        if (!enemy) continue;
+        removeEnemy(enemy, 'perf_repeat_cap');
+        const idx = enemies.indexOf(enemy);
+        if (idx >= 0) enemies.splice(idx, 1);
+      }
+    }
+    if (aliveMembers.length < targetCount) spawnComposerGroupOffscreenMembers(group, targetCount - aliveMembers.length);
+    return true;
+  }
+  const aliveEnemies = enemies.filter((e) => String(e?.enemyType || '').trim().toLowerCase() === targetType && !e?.retreating);
+  if (targetType === 'spawner') {
+    for (const enemy of aliveEnemies) {
+      if (!enemy) continue;
+      const group = getEnemyMusicGroup(enemy, 'spawner-spawn');
+      updateSpawnerEnemyActiveCells(enemy, Array.isArray(group?.steps) ? group.steps : enemy?.spawnerSteps);
+    }
+  }
+  if (aliveEnemies.length > targetCount) {
+    for (let i = targetCount; i < aliveEnemies.length; i++) {
+      const enemy = aliveEnemies[i];
+      if (!enemy) continue;
+      removeEnemy(enemy, 'perf_repeat_cap');
+      const idx = enemies.indexOf(enemy);
+      if (idx >= 0) enemies.splice(idx, 1);
+    }
+  }
+  const aliveCount = Math.min(targetCount, aliveEnemies.length);
+  for (let i = aliveCount; i < targetCount; i++) spawnPerfEnemyType(targetType);
+  return true;
 }
 function spawnDrawSnakeEnemyAt(clientX, clientY, options = null) {
   if (!enemyLayerEl) return;
@@ -7644,9 +7868,10 @@ function spawnDrawSnakeEnemyAt(clientX, clientY, options = null) {
   const mappedRole = normalizeSwarmRole(role || 'lead', BEAT_EVENT_ROLES.LEAD);
   const existingSnakeCount = enemies.filter((e) => String(e?.enemyType || '') === 'drawsnake').length;
   const callResponseLane = normalizeCallResponseLane(options?.callResponseLane, (existingSnakeCount % 2) === 0 ? 'call' : 'response');
+  const offscreenSeedDir = getOffscreenSeedDirection(clientX, clientY);
   const seedAng = Math.random() * Math.PI * 2;
-  const seedDirX = Math.cos(seedAng);
-  const seedDirY = Math.sin(seedAng);
+  const seedDirX = Number(offscreenSeedDir?.x) || Math.cos(seedAng);
+  const seedDirY = Number(offscreenSeedDir?.y) || Math.sin(seedAng);
   const seedTrail = Array.from({ length: Math.max(24, DRAW_SNAKE_SEGMENT_COUNT * 6) }, (_, ti) => ({
     x: w.x - (seedDirX * ti * (DRAW_SNAKE_SEGMENT_SPACING_WORLD / 5)),
     y: w.y - (seedDirY * ti * (DRAW_SNAKE_SEGMENT_SPACING_WORLD / 5)),
@@ -7686,7 +7911,7 @@ function spawnDrawSnakeEnemyAt(clientX, clientY, options = null) {
     drawsnakeNodePulseDur: Array.from({ length: DRAW_SNAKE_SEGMENT_COUNT }, () => DRAW_SNAKE_NODE_PULSE_SECONDS),
     drawsnakeLinePulseT: 0,
     drawsnakeLinePulseDur: Math.max(0.05, Number(MUSIC_ROLE_PULSE_POLICY.seconds) || 0.24),
-    drawsnakeLinePulseScale: Math.max(0.02, Math.min(0.4, Number(MUSIC_ROLE_PULSE_POLICY.softScale) || 0.08)),
+    drawsnakeLinePulseScale: Math.max(0.04, Math.min(0.65, (Number(MUSIC_ROLE_PULSE_POLICY.softScale) || 0.08) * 1.45)),
     drawsnakeTrail: seedTrail,
     drawsnakeHasEnteredScreen: false,
     callResponseLane,
@@ -7707,26 +7932,19 @@ function spawnDrawSnakeEnemyAt(clientX, clientY, options = null) {
   return created;
 }
 function spawnDrawSnakeEnemyOffscreen(options = null) {
-  const w = Math.max(1, Number(window.innerWidth) || 0);
-  const h = Math.max(1, Number(window.innerHeight) || 0);
-  const m = Math.max(8, Number(ENEMY_FALLBACK_SPAWN_MARGIN_PX) || 42);
-  const side = Math.floor(Math.random() * 4);
-  let x = 0;
-  let y = 0;
-  if (side === 0) {
-    x = -m;
-    y = randRange(0, h);
-  } else if (side === 1) {
-    x = w + m;
-    y = randRange(0, h);
-  } else if (side === 2) {
-    x = randRange(0, w);
-    y = -m;
-  } else {
-    x = randRange(0, w);
-    y = h + m;
+  const point = getRandomOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
+  return spawnDrawSnakeEnemyAt(point.x, point.y, options);
+}
+function spawnPerfEnemyType(enemyType = 'drawsnake') {
+  if (!active) return null;
+  const type = String(enemyType || 'drawsnake').trim().toLowerCase();
+  if (type === 'drawsnake') return spawnDrawSnakeEnemyOffscreen({ role: 'lead' }) || null;
+  if (type === 'spawner') return spawnSpawnerEnemyOffscreen({ role: 'drum' }) || null;
+  if (type === 'dumb') {
+    const point = getRandomOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
+    return spawnEnemyAt(point.x, point.y) || null;
   }
-  return spawnDrawSnakeEnemyAt(x, y, options);
+  return null;
 }
 function maintainDrawSnakeEnemyPopulation() {
   if (!DRAW_SNAKE_ENEMY_ENABLED) return;
@@ -7914,7 +8132,7 @@ function updateDrawSnakeVisual(enemy, scale, dt = 0) {
   const frameDt = Math.max(0, Number(dt) || 0);
   const linePulseDur = Math.max(0.01, Number(enemy?.drawsnakeLinePulseDur) || Number(MUSIC_ROLE_PULSE_POLICY.seconds) || 0.24);
   const linePulseRem = Math.max(0, Number(enemy?.drawsnakeLinePulseT) || 0);
-  const linePulseScale = Math.max(0, Math.min(0.5, Number(enemy?.drawsnakeLinePulseScale) || Number(MUSIC_ROLE_PULSE_POLICY.softScale) || 0.08));
+  const linePulseScale = Math.max(0, Math.min(0.65, Number(enemy?.drawsnakeLinePulseScale) || ((Number(MUSIC_ROLE_PULSE_POLICY.softScale) || 0.08) * 1.45)));
   let linePulseStrength = 0;
   if (linePulseRem > 0) {
     const t = 1 - Math.max(0, Math.min(1, linePulseRem / linePulseDur));
@@ -9528,6 +9746,7 @@ function updateEnemies(dt) {
       getZoomState,
       normalizeMusicLifecycleState,
       getLifecycleAggressionScale,
+      isPerfRepeatProtectedEnemy,
       updateSpawnerEnemyFlash,
       startEnemyRetreat,
       normalizeDir,
@@ -9734,6 +9953,7 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
   });
 }
 function maintainComposerEnemyGroups() {
+  if (perfEnemyRepeatRuntime.enabled) return;
   maintainComposerEnemyGroupsRuntime({
     state: {
       composerEnemyGroups,
@@ -10256,10 +10476,12 @@ function tick(nowMs) {
   updateEnemies(dt);
   updatePickupsAndCombat(dt);
   try { spawnerRuntime?.update?.(dt); } catch {}
-  maintainEnemyPopulation();
-  maintainSpawnerEnemyPopulation();
-  maintainDrawSnakeEnemyPopulation();
-  maintainComposerEnemyGroups();
+  if (!maintainPerfEnemyRepeatMode()) {
+    maintainEnemyPopulation();
+    maintainSpawnerEnemyPopulation();
+    maintainDrawSnakeEnemyPopulation();
+    maintainComposerEnemyGroups();
+  }
   const aimFacingDeg = getShipFacingFromReleaseAim(input, centerWorldAfterMove);
   updateShipFacing(dt, input.x, input.y, aimFacingDeg);
   rafId = requestAnimationFrame(tick);
@@ -10428,6 +10650,11 @@ export function enterBeatSwarmMode(options = null) {
   perfLabRuntime.autoMoveEnabled = false;
   perfLabRuntime.autoMoveMagnitude = 0.82;
   perfLabRuntime.autoMovePhase = Math.random() * Math.PI * 2;
+  perfEnemyRepeatRuntime.enabled = false;
+  perfEnemyRepeatRuntime.enemyType = '';
+  perfEnemyRepeatRuntime.targetCount = 0;
+  perfEnemyRepeatRuntime.composerGroupId = 0;
+  perfEnemyRepeatRuntime.persistent = true;
   window.__beatSwarmActive = true;
   document.body.classList.add('beat-swarm-active');
   try { window.ToySpawner?.close?.(); } catch {}
@@ -10584,6 +10811,11 @@ export function enterBeatSwarmMode(options = null) {
 }
 export function exitBeatSwarmMode() {
   if (!active) return true;
+  perfEnemyRepeatRuntime.enabled = false;
+  perfEnemyRepeatRuntime.enemyType = '';
+  perfEnemyRepeatRuntime.targetCount = 0;
+  perfEnemyRepeatRuntime.composerGroupId = 0;
+  perfEnemyRepeatRuntime.persistent = true;
   destroyWeaponSubBoards();
   const exitState = {
     active,
@@ -10849,6 +11081,8 @@ installBeatSwarmDebugGlobalRuntime({
         };
       },
       spawnPerfEnemyDistribution: perfDebugTools.spawnPerfEnemyDistribution,
+      spawnPerfEnemyType,
+      setPerfEnemyRepeatMode,
       preparePerfScenario: perfDebugTools.preparePerfScenario,
       setBorderForceEnabled: perfDebugTools.setBorderForceEnabled,
     },
