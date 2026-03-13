@@ -6,6 +6,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const composerEnemyGroups = Array.isArray(state.composerEnemyGroups) ? state.composerEnemyGroups : [];
   const composerRuntime = state.composerRuntime && typeof state.composerRuntime === 'object' ? state.composerRuntime : {};
   const currentBeatIndex = Number(state.currentBeatIndex) || 0;
+  const sanitizeEnemyMusicInstrumentId = typeof helpers.sanitizeEnemyMusicInstrumentId === 'function'
+    ? helpers.sanitizeEnemyMusicInstrumentId
+    : ((instrumentId, fallback) => helpers.resolveInstrumentIdOrFallback?.(instrumentId, fallback) || fallback || 'tone');
 
   const pacingCaps = helpers.getCurrentPacingCaps?.() || {};
   const pacingState = String(helpers.getCurrentPacingStateName?.() || '').trim().toLowerCase();
@@ -71,12 +74,24 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     },
     getComposerMotif: helpers.getComposerMotif,
     createComposerEnemyGroupProfile: helpers.createComposerEnemyGroupProfile,
-    createGroupFromMotif: ({ groupIndex, sectionKey, composer: composerDirective, templateId, motif, pacingCaps: caps }) => ({
+    createGroupFromMotif: ({ groupIndex, sectionKey, composer: composerDirective, templateId, motif, pacingCaps: caps }) => {
+      const templateRole = helpers.normalizeSwarmRole?.(
+        templateLibrary.find((t) => String(t?.id || '') === String(templateId || ''))?.role || '',
+        ''
+      );
+      const role = templateRole || helpers.normalizeSwarmRole?.(motif?.role || 'lead', constants.leadRole);
+      const fallbackInstrument = helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone';
+      const instrumentId = sanitizeEnemyMusicInstrumentId(
+        motif?.instrument,
+        fallbackInstrument,
+        { role }
+      );
+      return ({
       id: helpers.getNextComposerEnemyGroupId?.(),
       sectionKey,
       sectionId: String(composerDirective?.sectionId || 'default'),
       templateId: String(motif?.templateId || templateId),
-      role: helpers.normalizeSwarmRole?.(motif?.role || 'lead', constants.leadRole),
+      role,
       callResponseLane: helpers.normalizeCallResponseLane?.(motif?.callResponseLane || ((groupIndex % 2) === 0 ? 'call' : 'response')),
       shape: String(motif?.shape || helpers.pickComposerGroupShape?.({ shapes: constants.composerGroupShapes, index: groupIndex })),
       color: String(motif?.color || helpers.pickComposerGroupColor?.({ colors: constants.composerGroupColors, index: groupIndex })),
@@ -128,8 +143,8 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       resolutionTargets: (Array.isArray(motif?.resolutionTargets) ? motif.resolutionTargets : [])
         .map((n, idx) => helpers.clampNoteToDirectorPool?.(helpers.normalizeSwarmNoteName?.(n) || helpers.getRandomSwarmPentatonicNote?.(), groupIndex + idx + 3))
         .filter(Boolean),
-      instrument: helpers.resolveInstrumentIdOrFallback?.(motif?.instrument, helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'),
-      instrumentId: helpers.resolveInstrumentIdOrFallback?.(motif?.instrument, helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'),
+      instrument: instrumentId,
+      instrumentId,
       continuityId: String(motif?.continuityId || '') || helpers.getNextMusicContinuityId?.(),
       phraseState: null,
       noteToEnemyId: new Map(),
@@ -138,15 +153,41 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       nextSpawnNoteIndex: 0,
       active: true,
       lifecycleState: 'active',
-    }),
+    });
+    },
   });
   for (const group of composerEnemyGroups) {
     if (!group || group.retiring || group.active === false) continue;
+    const templateRole = helpers.normalizeSwarmRole?.(
+      templateLibrary.find((t) => String(t?.id || '') === String(group?.templateId || ''))?.role || '',
+      ''
+    );
+    if (templateRole) {
+      group.role = templateRole;
+      const sanitizedInstrumentId = sanitizeEnemyMusicInstrumentId(
+        group?.instrumentId || group?.instrument,
+        helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone',
+        { role: templateRole }
+      );
+      if (sanitizedInstrumentId) {
+        group.instrumentId = sanitizedInstrumentId;
+        group.instrument = sanitizedInstrumentId;
+      }
+    }
     const memberLifecycleState = helpers.normalizeMusicLifecycleState?.(group.lifecycleState, 'active');
     const aliveMembers = (helpers.getAliveEnemiesByIds?.(group.memberIds) || [])
       .filter((e) => String(e?.enemyType || '') === 'composer-group-member');
     for (const enemy of aliveMembers) {
       enemy.lifecycleState = memberLifecycleState;
+      if (templateRole) {
+        enemy.musicalRole = templateRole;
+        enemy.composerRole = templateRole;
+        if (group?.instrumentId) {
+          enemy.composerInstrument = String(group.instrumentId);
+          enemy.instrumentId = String(group.instrumentId);
+          enemy.musicInstrumentId = String(group.instrumentId);
+        }
+      }
       helpers.applyMusicalIdentityVisualToEnemy?.(enemy, group);
     }
   }

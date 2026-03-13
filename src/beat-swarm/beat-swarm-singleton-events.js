@@ -188,6 +188,9 @@ export function collectSpawnerStepBeatEvents(options = null) {
   const normalizeSwarmRole = typeof options?.normalizeSwarmRole === 'function'
     ? options.normalizeSwarmRole
     : ((r, f) => String(r || f || '').trim().toLowerCase());
+  const inferInstrumentLaneFromCatalogId = typeof options?.inferInstrumentLaneFromCatalogId === 'function'
+    ? options.inferInstrumentLaneFromCatalogId
+    : ((_, fallbackLane = 'lead') => String(fallbackLane || 'lead').trim().toLowerCase() || 'lead');
   const getSwarmRoleForEnemy = typeof options?.getSwarmRoleForEnemy === 'function'
     ? options.getSwarmRoleForEnemy
     : (() => String(options?.roles?.bass || 'bass'));
@@ -220,26 +223,44 @@ export function collectSpawnerStepBeatEvents(options = null) {
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.6 : 1;
     if (!isActiveStep) continue;
     stats.triggeredSpawners += 1;
-    let noteNameRaw = normalizeSwarmNoteName(group?.note) || 'C4';
-    if (styleId === 'retro_shooter') {
+    const lockedInstrumentId = String(
+      group?.instrumentId
+        || enemy?.spawnerInstrument
+        || enemy?.instrumentId
+        || enemy?.musicInstrumentId
+        || ''
+    ).trim();
+    const lockedLane = inferInstrumentLaneFromCatalogId(lockedInstrumentId, roles.bass);
+    const roleName = lockedLane === String(roles?.bass || 'bass')
+      ? String(roles?.bass || 'bass')
+      : normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.bass), roles.bass);
+    const isBassRole = roleName === String(roles?.bass || 'bass');
+    let noteNameRaw = normalizeSwarmNoteName(group?.note) || (isBassRole ? 'C3' : 'C4');
+    if (isBassRole) {
+      const locked = normalizeSwarmNoteName(enemy?.__bsLockedBassNote) || noteNameRaw || 'C3';
+      enemy.__bsLockedBassNote = locked;
+      noteNameRaw = locked;
+    } else if (styleId === 'retro_shooter') {
       const prevNote = normalizeSwarmNoteName(enemy?.__bsLastSpawnerNote);
       if (prevNote && Math.random() < (motifRepeatBias * 0.55)) {
         noteNameRaw = prevNote;
       }
     }
-    const noteName = clampNoteToDirectorPool(
-      noteNameRaw,
-      beatIndex + stepAbs + actorId
-    );
-    const instrumentId = resolveSwarmRoleInstrumentId(
-      normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.bass), roles.bass),
+    const noteName = isBassRole
+      ? noteNameRaw
+      : clampNoteToDirectorPool(
+        noteNameRaw,
+        beatIndex + stepAbs + actorId
+      );
+    const instrumentId = lockedInstrumentId || resolveSwarmRoleInstrumentId(
+      roleName,
       resolveSwarmSoundInstrumentId('projectile') || 'tone'
     );
     events.push(createLoggedPerformedBeatEvent({
       actorId,
       beatIndex,
       stepIndex: stepAbs,
-      role: normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.bass), roles.bass),
+      role: roleName,
       note: noteName,
       instrumentId,
       actionType: String(group?.actionType || 'spawner-spawn'),

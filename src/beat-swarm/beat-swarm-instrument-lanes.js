@@ -87,7 +87,6 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const src = String(sourceSystem || '').trim().toLowerCase();
     const action = String(actionType || '').trim().toLowerCase();
     let lane = 'lead';
-    if (action === 'composer-group-explosion') return 'bass';
     if (src === 'spawner' || action.startsWith('spawner-')) lane = 'bass';
     else if (src === 'drawsnake' || action.startsWith('drawsnake-')) lane = 'lead';
     else if (src === 'group' || action.startsWith('composer-group-')) lane = inferEnemyLaneFromRole(roleLike, 'lead');

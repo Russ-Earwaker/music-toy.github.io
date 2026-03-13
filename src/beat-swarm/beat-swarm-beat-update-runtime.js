@@ -10,12 +10,17 @@ export function handleTransportStoppedBeatUpdateRuntime(options = null) {
   state.lastSpawnerEnemyStepIndex = null;
   if (state.musicLayerRuntime) {
     state.musicLayerRuntime.foundationAnchorBar = -1;
+    state.musicLayerRuntime.foundationAnchorSectionId = '';
     state.musicLayerRuntime.lastFoundationBar = -1;
     state.musicLayerRuntime.foundationAnchorStep = -1;
+    state.musicLayerRuntime.foundationIdentityKey = '';
+    state.musicLayerRuntime.foundationIdentityStartStep = -1;
     state.musicLayerRuntime.lastFoundationStep = -1;
     state.musicLayerRuntime.foundationLastFullBar = -1;
     state.musicLayerRuntime.foundationLastFullStep = -1;
     state.musicLayerRuntime.foundationConsecutiveQuietEvents = 0;
+    state.musicLayerRuntime.sparkleBarIndex = -1;
+    state.musicLayerRuntime.sparkleEventsInBar = 0;
   }
   if (state.loopAdmissionRuntime) {
     state.loopAdmissionRuntime.identityFirstForegroundStep?.clear?.();

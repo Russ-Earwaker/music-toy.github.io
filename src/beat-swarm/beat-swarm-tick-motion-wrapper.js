@@ -58,7 +58,13 @@ export function applyTickSteeringAndResistanceRuntimeWrapper(deps = {}) {
     }
   }
 
+  state.velocityX = velocityX;
+  state.velocityY = velocityY;
   const outsideForceActive = !!applyArenaBoundaryResistance(dt, input, centerWorld, scale);
+  velocityX = Number(state.velocityX) || velocityX;
+  velocityY = Number(state.velocityY) || velocityY;
+  state.barrierPushingOut = state.barrierPushingOut === true;
+  state.barrierPushCharge = Math.max(0, Math.min(1, Number(state.barrierPushCharge) || 0));
   if (outsideForceActive) {
     outerForceContinuousSeconds += dt;
   } else {

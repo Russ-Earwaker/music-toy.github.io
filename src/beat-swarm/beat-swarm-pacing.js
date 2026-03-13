@@ -11,9 +11,9 @@ const PACING_STATES = Object.freeze({
 });
 
 const INTRO_SEQUENCE = Object.freeze([
-  Object.freeze({ id: PACING_STATES.INTRO_SOLO, bars: 3 }),
-  Object.freeze({ id: PACING_STATES.INTRO_BASS, bars: 4 }),
-  Object.freeze({ id: PACING_STATES.INTRO_RESPONSE, bars: 4 }),
+  Object.freeze({ id: PACING_STATES.INTRO_SOLO, bars: 4 }),
+  Object.freeze({ id: PACING_STATES.INTRO_BASS, bars: 8 }),
+  Object.freeze({ id: PACING_STATES.INTRO_RESPONSE, bars: 8 }),
 ]);
 
 const LOOP_SEQUENCE = Object.freeze([

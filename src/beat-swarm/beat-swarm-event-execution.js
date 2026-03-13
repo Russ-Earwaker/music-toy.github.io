@@ -12,6 +12,9 @@ export function executePerformedBeatEventRuntime(options = null) {
   const stepIndex = Math.max(0, Math.trunc(Number(ev.stepIndex) || 0));
   const barIndex = Math.floor(beatIndex / Math.max(1, Math.trunc(Number(constants.composerBeatsPerBar) || 4)));
   const playerStepLikelyAudible = helpers.isPlayerWeaponStepLikelyAudible?.(stepIndex) === true;
+  const inferInstrumentLaneFromCatalogId = typeof helpers.inferInstrumentLaneFromCatalogId === 'function'
+    ? helpers.inferInstrumentLaneFromCatalogId
+    : ((_, fallbackLane = 'lead') => String(fallbackLane || 'lead').trim().toLowerCase() || 'lead');
   const payloadGroupId = Math.max(0, Math.trunc(Number(ev?.payload?.groupId) || 0));
   const logMusicLabExecution = (context = null) => {
     const base = context && typeof context === 'object' ? context : {};
@@ -47,6 +50,17 @@ export function executePerformedBeatEventRuntime(options = null) {
     if (key === 'quiet') return 'quiet';
     return key;
   };
+  const normalizeBassRegister = (noteLike, fallback = 'C3') => {
+    const src = String(noteLike || '').trim();
+    const m = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(src);
+    if (!m) return String(fallback || 'C3').trim() || 'C3';
+    const letter = String(m[1] || '').toUpperCase();
+    const accidental = String(m[2] || '');
+    const octave = Math.trunc(Number(m[3]) || 3);
+    const clamped = octave >= 4 ? (octave - 1) : (octave < 2 ? 2 : octave);
+    return `${letter}${accidental}${clamped}`;
+  };
+  const hasExplicitOctave = (noteLike) => /^([A-Ga-g])([#b]?)(-?\d+)$/.test(String(noteLike || '').trim());
   const enemyForAction = helpers.getSwarmEnemyById?.(ev.actorId) || null;
   if (actionType === 'projectile' && enemyForAction) {
     const enemyType = String(enemyForAction?.enemyType || '').trim().toLowerCase();
@@ -70,12 +84,24 @@ export function executePerformedBeatEventRuntime(options = null) {
       } catch {}
     };
     const aggressionScale = helpers.getEnemyAggressionScale?.(enemy, group?.lifecycleState || 'active');
-    const instrumentId = helpers.resolveSwarmRoleInstrumentId?.(
-      ev.role || group.role || helpers.getSwarmRoleForEnemy?.(enemy, constants.roles?.bass),
+    const lockedInstrumentId = String(
+      ev?.instrumentId
+        || group?.instrumentId
+        || enemy?.spawnerInstrument
+        || enemy?.instrumentId
+        || enemy?.musicInstrumentId
+        || ''
+    ).trim();
+    const lockedLane = inferInstrumentLaneFromCatalogId(lockedInstrumentId, constants.roles?.bass || 'bass');
+    const normalizedGroupRole = lockedLane === String(constants?.roles?.bass || 'bass')
+      ? String(constants?.roles?.bass || 'bass')
+      : helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.bass);
+    const instrumentId = lockedInstrumentId || helpers.resolveSwarmRoleInstrumentId?.(
+      normalizedGroupRole,
       helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
     );
     group.instrumentId = instrumentId;
-    group.role = helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.bass);
+    group.role = normalizedGroupRole;
     const duckForPlayer = false;
     const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
     const musicProminence = normalizeEnemyProminenceForPlayerStep(
@@ -91,7 +117,12 @@ export function executePerformedBeatEventRuntime(options = null) {
       * Math.max(0.18, prominenceGain)
       * (0.7 + ((Number(aggressionScale) || 0) * 0.3));
     const requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
-    const noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
+    let noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
+    if (String(normalizedGroupRole || '') === String(constants?.roles?.bass || 'bass')) {
+      noteName = hasExplicitOctave(requestedNote)
+        ? String(requestedNote).trim()
+        : normalizeBassRegister(noteName, normalizeBassRegister(requestedNote || 'C3', 'C3'));
+    }
     group.note = noteName;
     helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
     helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
@@ -245,7 +276,7 @@ export function executePerformedBeatEventRuntime(options = null) {
       * prominenceGain
       * (0.72 + ((Number(aggressionScale) || 0) * 0.28));
     const requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
-    const noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
+    let noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
     group.note = noteName;
     helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
     helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
@@ -272,13 +303,30 @@ export function executePerformedBeatEventRuntime(options = null) {
     if (!group) return false;
     const aggressionScale = helpers.getEnemyAggressionScale?.(enemy, group?.lifecycleState || 'active');
     const requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
-    const noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
-    const instrumentId = helpers.resolveSwarmRoleInstrumentId?.(
-      ev.role || group.role || helpers.getSwarmRoleForEnemy?.(enemy, constants.roles?.lead),
+    let noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
+    const lockedInstrumentId = String(
+      ev?.instrumentId
+        || group?.instrumentId
+        || enemy?.instrumentId
+        || enemy?.musicInstrumentId
+        || enemy?.composerInstrument
+        || ''
+    ).trim();
+    const lockedLane = inferInstrumentLaneFromCatalogId(lockedInstrumentId, '');
+    const normalizedGroupRole = lockedLane === String(constants?.roles?.bass || 'bass')
+      ? String(constants?.roles?.bass || 'bass')
+      : helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.lead);
+    const instrumentId = lockedInstrumentId || helpers.resolveSwarmRoleInstrumentId?.(
+      normalizedGroupRole,
       helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
     );
     group.instrumentId = instrumentId;
-    group.role = helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.lead);
+    group.role = normalizedGroupRole;
+    if (String(normalizedGroupRole || '') === String(constants?.roles?.bass || 'bass')) {
+      noteName = hasExplicitOctave(requestedNote)
+        ? String(requestedNote).trim()
+        : normalizeBassRegister(noteName, normalizeBassRegister(requestedNote || 'C3', 'C3'));
+    }
     const duckForPlayer = false;
     const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
     const musicProminence = normalizeEnemyProminenceForPlayerStep(

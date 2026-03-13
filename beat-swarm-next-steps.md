@@ -1,319 +1,152 @@
-# Beat Swarm – Next Steps (Clean Plan for Codex)
+### 1. Remove pulse-like bass fallbacks from foundation ownership and keepalive paths
 
-## Goal of this pass
+Audit every bass fallback path and replace any even-step default like `i % 2 === 0`.
 
-Move the director from **reactive swarm behaviour** to **intentional musical arrangement**.
+Specifically:
 
-The system already understands the ideas of:
+* bass owner recovery
+* keepalive injection
+* singleton inheritance fallback
+* drawsnake/spawner recovery defaults
 
-* foundation
-* loops/themes
-* sparkle
+Replace with a small explicit foundation phrase library, for example:
 
-But it still behaves too permissively after the intro.
+* `foundation_A = [1,0,0,1,0,1,0,0]`
+* `foundation_B = [1,0,0,0,1,0,1,0]`
+* `foundation_C = [1,0,1,0,0,1,0,0]`
+* `foundation_D = [1,0,0,1,0,0,0,1]`
 
-The next pass is about **enforcing hierarchy and patience**, not adding new subsystems.
+Rules:
 
-Adaptive music systems commonly use **layering structures where stable loops form the base while other layers enter or leave dynamically**, which is similar to the approach we want here. ([digitalspace.bradfordcollege.ac.uk][1])
+* phrase chosen once and locked for at least 4 bars
+* only change on bar boundaries
+* no per-step randomisation
+* allow rests
+* allow at least some offbeat accents
+* keep the phrase stable long enough to register
 
----
+### 2. Make foundation phrase identity persist independently of actor handoff
 
-# 1. Strengthen the Foundation Layer
+Right now handoff continuity improved, but resets are still too common.
 
-The bass/foundation is now technically persistent, but its authority still fades too quickly.
+Change the model so:
 
-### Required behaviour
+* the **lane owns the phrase**
+* the actor only performs it
+* actor death must not imply phrase redesign
 
-Foundation must:
+Target:
 
-* survive actor death
-* maintain timing
-* maintain phrase continuity
-* remain clearly audible
-* remain present through section changes
+* `foundationPhraseResets` close to 0 during normal early play
+* `foundationContinuityRate` above 0.85
 
-### Director rules
+### 3. Create a dedicated intro bass arrangement phase
 
-Add hard guarantees:
+Do not let the intro bass behave like generic bass logic.
 
-```
-foundation cannot reset during section
-foundation cannot drop below quiet
-foundation cannot be replaced before minCycles
-```
+Add an explicit intro foundation plan:
 
-### Tunables
+* bars 0–3: player / minimal
+* bars 4–11: single bass phrase only
+* bars 12–19: bass continues, one primary loop may join
+* no extra foreground identities before that unless explicitly forced
+
+The intro bass should be a recognisable loop, not a generic continuously-generated bass presence.
+
+### 4. Tighten admission rules after intro
+
+Current later-state gates are still too loose.
+
+Change:
+
+* `main_low` minimum completed loops before new major identity: from `1` to `2`
+* `main_mid`: from `1` to `2`
+* `peak`: from `1` to `2`
+
+Also change:
+
+* minimum bars between major identities in `main_low`, `main_mid`, `peak` from `1` to at least `2`, preferably `4` for early/mid game
+
+### 5. Reduce foreground identity count in later states
+
+Keep it simpler.
+
+Change:
+
+* `maxForegroundIdentitiesByPacingState.main_low = 1`
+* `main_mid = 2`
+* `peak = 2` not 3
+
+The current ceiling is still too generous for readable enemy-sound association.
+
+### 6. Add a true lane model instead of mostly role-based behaviour
+
+Codex should implement explicit long-lived lanes:
+
+* `foundationLane`
+* `primaryLoopLane`
+* `secondaryLoopLane`
+* `sparkleLane`
+
+Each lane owns:
+
+* phrase id
+* instrument id
+* colour id
+* continuity id
+* lifetime bars
+* performer assignment
+* handoff policy
+
+Then enemies inherit from the lane rather than inventing/rewriting identity locally.
+
+### 7. Hard-lock instrument and colour identity after assignment
+
+The latest run still shows drift:
+
+* `instrumentChangesPerEnemy = 0.0465...`
+* `colourChangesPerEnemy = 0.1860...` 
+
+That is still too high for readable musical association.
+
+Add a hard guard:
+
+* once `musicInstrumentId` and role colour are assigned, reject mutation unless it is an explicit section re-orchestration event
+
+### 8. Make sparkle subordinate by authority, not just density
+
+`sparkleDensity` is currently reported as `0` in the summary, but the broader problem is still that later layers feel too busy. 
+
+Codex should:
+
+* duck sparkle during new loop registration
+* suppress sparkle when there are already 2 foreground lanes
+* never let sparkle create a new strong foreground identity
+
+### 9. Add a “foundation musicality” diagnostic block
+
+Right now the lab proves reliability, but not whether the bass is musically dead.
 
 Add:
 
-```
-foundationMinCycles = 3
-foundationProminenceFloor = quiet
-foundationResetAllowed = false
-```
+* `foundationRestShare`
+* `foundationOffbeatShare`
+* `foundationUniquePatternCount`
+* `foundationPatternChangeRate`
+* `foundationConsecutiveOnBeatHits`
 
-This ensures the bass behaves like a **bedrock layer** rather than just another participant.
+These will tell you whether the bass is behaving like a phrase or a metronome.
 
----
+### 10. Add a “lane readability” metric
 
-# 2. Introduce Loops More Slowly
+Add:
 
-Phase 2+ currently introduces loops too eagerly.
+* `audibleForegroundLaneCount`
+* `barsSinceNewForegroundIdea`
+* `laneReassignmentRate`
+* `enemyColourMutationCount`
+* `enemyInstrumentMutationCount`
 
-The system needs **registration time** so the player’s brain can recognize patterns.
+You want the lab to answer:
+“Could a player actually learn which enemy is which musical part?”
 
-### Rule
-
-A new foreground identity may only enter when:
-
-```
-currentLoop.completedCycles >= loopRegistrationCycles
-timeSinceLastForeground >= minLayerSpacing
-```
-
-Suggested values:
-
-```
-loopRegistrationCycles = 2
-minLayerSpacingBars = 4
-```
-
-This will slow the expansion of the track.
-
----
-
-# 3. Limit Foreground Identities
-
-Right now too many musical ideas compete simultaneously.
-
-Add a cap on **foreground roles**.
-
-Example:
-
-```
-foundation: 1
-primary loop: 1
-secondary loop: 0–1
-sparkle: capped
-```
-
-Director rule:
-
-```
-if foregroundIdentities >= foregroundLimit
-    downgrade new events to support or trace
-```
-
----
-
-# 4. Enforce Sparkle Discipline
-
-Sparkle is currently too active in later sections.
-
-Sparkle should act as **punctuation**, not as a major layer.
-
-Add rules:
-
-```
-sparkleMaxDensity = 2 events per bar
-sparkleCannotOverrideLoops = true
-sparkleCannotOverrideFoundation = true
-```
-
----
-
-# 5. Improve Theme Persistence
-
-Themes exist but are still too fragile.
-
-Add persistence tracking:
-
-```
-themeMinCycles = 2
-themeReturnBias = high
-```
-
-Themes should either:
-
-* continue
-* return recognisably later
-
-but not disappear instantly.
-
----
-
-# 6. Lock Instrument Identity
-
-Enemy colours now exist but occasionally change.
-
-Instrument identity must be stable.
-
-### Required rule
-
-```
-enemy.instrumentId assigned at spawn
-enemy.instrumentId immutable
-enemy.color = instrumentColor(instrumentId)
-```
-
-Motif or phrase updates must **not change colour**.
-
-If a loop transfers to a new actor:
-
-```
-newActor.instrumentId = oldActor.instrumentId
-newActor.color = oldActor.color
-```
-
-This keeps visual continuity of the musical role.
-
----
-
-# 7. Fix Spawner Feedback Consistency
-
-Spawners sometimes:
-
-* spawn gameplay
-* but do not emit note/visual feedback
-
-All spawner-triggered gameplay must use the same pipeline.
-
-Required event chain:
-
-```
-SpawnerTrigger
- → loopgrid event
- → visual proxy flash
- → note trigger
- → spawn gameplay
-```
-
-Add Music Lab counters:
-
-```
-spawnerGameplayEvents
-spawnerAudioEvents
-spawnerVisualEvents
-```
-
-Log mismatches.
-
----
-
-# 8. Improve Instrument Role Selection
-
-The `samples.csv` system already exists but is mostly heuristic.
-
-Make it more explicit.
-
-Add fields:
-
-```
-laneRole
-registerClass
-combatRole
-```
-
-Example:
-
-```
-instrument,base_oct,laneRole,registerClass
-bass_synth,3,bass,low
-lead_saw,5,lead,mid
-snare_hit,4,accent,mid
-```
-
-Selection logic:
-
-```
-prefer laneRole match
-fallback to heuristic if missing
-```
-
----
-
-# 9. Strengthen Music Lab Diagnostics
-
-Add metrics specifically for the hierarchy model.
-
-### Foundation metrics
-
-```
-foundationCycleCount
-foundationPhraseResets
-foundationContinuityRate
-```
-
-### Theme metrics
-
-```
-themeCycleCount
-themePersistenceRate
-themeReturnRate
-```
-
-### Sparkle metrics
-
-```
-sparkleDensity
-sparkleForegroundShare
-```
-
-### Identity metrics
-
-```
-instrumentChangesPerEnemy
-colorChangesPerEnemy
-```
-
-Expected values:
-
-```
-instrumentChangesPerEnemy = 0
-colorChangesPerEnemy = 0
-```
-
----
-
-# 10. Improve Section Pacing
-
-Current pacing:
-
-```
-intro_solo
-intro_bass
-intro_response
-main_low
-main_mid
-```
-
-The intro works better now, but phase transitions still happen too early.
-
-Add rules:
-
-```
-sectionMinBars = 8
-sectionChangeRequiresStableFoundation = true
-```
-
-This ensures sections don’t churn too quickly.
-
----
-
-# Success Criteria
-
-This pass succeeds when:
-
-* bass remains stable through enemy turnover
-* the intro foundation persists into early sections
-* loops enter slowly and clearly
-* sparkle stays subordinate
-* enemy colours never change mid-life
-* spawner events always produce note + visual feedback
-* Music Lab shows stable foundation metrics
-
----
-
-# Short Codex Brief
-
-Strengthen the music hierarchy so foundation, loops, and sparkle behave distinctly. The bass foundation must persist with phrase continuity and cannot reset or fade during sections. Introduce new loops only after existing loops have completed enough cycles to register, and limit simultaneous foreground identities. Sparkle events must remain subordinate to foundation and loops. Lock instrument identity and enemy colour at spawn so they never change mid-life. Ensure spawner gameplay always triggers the same audio and visual feedback pipeline. Extend Music Lab diagnostics to track foundation persistence, theme survival, sparkle density, and identity stability.

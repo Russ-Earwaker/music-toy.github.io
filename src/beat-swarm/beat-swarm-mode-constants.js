@@ -340,25 +340,36 @@ export const PLAYER_MASK_STEP_EVENT_KEEP_CHANCE = Object.freeze({
 export const PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP = 1;
 export const MUSIC_LAYER_POLICY = Object.freeze({
   foundationMinBars: 6,
+  foundationMinCycles: 3,
+  foundationProminenceFloor: 'quiet',
+  foundationResetAllowed: false,
   bassMinLoopCycles: 2,
   foundationForceFullEveryBars: 1,
   foundationMaxConsecutiveQuietEvents: 2,
   sparkleMaxDensity: 1,
+  sparkleMaxDensityPerBar: 2,
+  sparkleCannotOverrideLoops: true,
+  sparkleCannotOverrideFoundation: true,
   foregroundVoiceLimit: 2,
+  foregroundIdentityLimit: 3,
+  primaryLoopIdentityLimit: 1,
+  secondaryLoopIdentityLimit: 1,
   supportTraceGain: 0.3,
   supportQuietGain: 0.62,
 });
 export const LOOP_ADMISSION_POLICY = Object.freeze({
   loopLengthSteps: WEAPON_TUNE_STEPS,
-  minBarsSinceMajorIdentity: 1,
+  loopRegistrationCycles: 2,
+  minLayerSpacingBars: 4,
+  minBarsSinceMajorIdentity: 2,
   phraseBoundaryFallbackSteps: 4,
   minCompletedLoopsBeforeNextByPacingState: Object.freeze({
     intro_solo: 1,
     intro_bass: 2,
     intro_response: 2,
-    main_low: 1,
-    main_mid: 1,
-    peak: 1,
+    main_low: 2,
+    main_mid: 2,
+    peak: 2,
     break: 1,
   }),
 });
@@ -367,30 +378,36 @@ export const REGISTRATION_GATE_POLICY = Object.freeze({
     intro_solo: 1,
     intro_bass: 2,
     intro_response: 2,
-    main_low: 1,
-    main_mid: 1,
-    peak: 1,
+    main_low: 4,
+    main_mid: 4,
+    peak: 2,
     break: 1,
   }),
   minLoopCompletionsBetweenMajorIdentityByPacingState: Object.freeze({
     intro_solo: 1,
     intro_bass: 2,
     intro_response: 2,
-    main_low: 1,
-    main_mid: 1,
-    peak: 1,
+    main_low: 2,
+    main_mid: 2,
+    peak: 2,
     break: 1,
   }),
   maxForegroundIdentitiesByPacingState: Object.freeze({
     intro_solo: 1,
     intro_bass: 1,
     intro_response: 1,
-    main_low: 2,
+    main_low: 1,
     main_mid: 2,
-    peak: 3,
+    peak: 2,
     break: 1,
   }),
 });
+export const FOUNDATION_LANE_PHRASE_LIBRARY = Object.freeze([
+  Object.freeze({ id: 'foundation_a', steps: Object.freeze([true, false, false, true, false, true, false, false]) }),
+  Object.freeze({ id: 'foundation_b', steps: Object.freeze([true, false, false, false, true, false, true, false]) }),
+  Object.freeze({ id: 'foundation_c', steps: Object.freeze([true, false, true, false, false, true, false, false]) }),
+  Object.freeze({ id: 'foundation_d', steps: Object.freeze([true, false, false, true, false, false, false, true]) }),
+]);
 export const ROLE_COLOR_HUE_BY_LANE = Object.freeze({
   bass: 22,
   lead: 196,
@@ -498,10 +515,10 @@ export const COMPOSER_GROUP_TEMPLATE_LIBRARY = Object.freeze([
     actionType: 'projectile',
     threatLevel: BEAT_EVENT_THREAT.LIGHT,
     callResponseLane: 'call',
-    notes: Object.freeze(['C3', 'G3', 'A#3']),
+    notes: Object.freeze(['C3']),
     motif: Object.freeze({
       id: 'bass_syncopated',
-      steps: Object.freeze([1, 0, 1, 0, 1, 0, 0, 0]),
+      steps: Object.freeze([1, 0, 0, 1, 0, 1, 0, 0]),
     }),
   }),
   Object.freeze({
@@ -697,14 +714,24 @@ export const ENERGY_GRAVITY_CONFIG = Object.freeze({
   transitionUpThreshold: 0.55,
   nudgeThreshold: 0.35,
 });
+export const SECTION_PACING_POLICY = Object.freeze({
+  sectionMinBars: 8,
+  sectionChangeRequiresStableFoundation: true,
+});
 export const COMPOSER_MOTIF_EPOCH_BARS = 24;
 export const COMPOSER_MOTIF_LOCK_BARS = 8;
+export const THEME_PERSISTENCE_POLICY = Object.freeze({
+  themeMinCycles: 2,
+  themeReturnBias: 'high',
+});
 export const DRAW_SNAKE_NODE_PULSE_SECONDS = 0.22;
 export const DRAW_SNAKE_NODE_PULSE_SCALE = 0.52;
 export const composerRuntime = {
   enabled: COMPOSER_ENABLED,
   lastSectionKey: '',
   lastSectionChangeBar: -1,
+  lastDeferredSectionKey: '',
+  lastDeferredSectionBar: -1,
   lastSectionGameplayState: null,
   currentSectionId: '',
   currentCycle: 0,
@@ -712,6 +739,7 @@ export const composerRuntime = {
   motifEpochIndex: 0,
   motifEpochStartBar: 0,
   motifCache: new Map(),
+  motifThemeState: new Map(),
 };
 export const callResponseRuntime = {
   lastCallStepAbs: -1,
@@ -736,12 +764,23 @@ export const energyGravityRuntime = {
 };
 export const musicLayerRuntime = {
   foundationAnchorBar: -1,
+  foundationAnchorSectionId: '',
   lastFoundationBar: -1,
   foundationAnchorStep: -1,
+  foundationIdentityKey: '',
+  foundationIdentityStartStep: -1,
+  foundationLaneId: 'foundation_lane',
+  foundationPhraseId: '',
+  foundationPhraseSteps: [],
+  foundationPhraseLockedUntilBar: -1,
+  foundationPhraseStartBar: -1,
+  foundationPatternChangeCount: 0,
   lastFoundationStep: -1,
   foundationLastFullBar: -1,
   foundationLastFullStep: -1,
   foundationConsecutiveQuietEvents: 0,
+  sparkleBarIndex: -1,
+  sparkleEventsInBar: 0,
 };
 export const bassFoundationOwnerRuntime = {
   active: false,

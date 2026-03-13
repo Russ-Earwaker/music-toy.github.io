@@ -117,6 +117,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const getNotePoolIndex = typeof options?.getNotePoolIndex === 'function' ? options.getNotePoolIndex : (() => -1);
   const getPhraseLengthSteps = typeof options?.getPhraseLengthSteps === 'function' ? options.getPhraseLengthSteps : (() => 4);
   const normalizeSwarmRole = typeof options?.normalizeSwarmRole === 'function' ? options.normalizeSwarmRole : ((r, f) => String(r || f || '').trim().toLowerCase());
+  const inferInstrumentLaneFromCatalogId = typeof options?.inferInstrumentLaneFromCatalogId === 'function'
+    ? options.inferInstrumentLaneFromCatalogId
+    : ((_, fallbackLane = 'lead') => String(fallbackLane || 'lead').trim().toLowerCase() || 'lead');
   const getSwarmRoleForEnemy = typeof options?.getSwarmRoleForEnemy === 'function' ? options.getSwarmRoleForEnemy : (() => String(options?.roles?.lead || 'lead'));
   const resolveSwarmRoleInstrumentId = typeof options?.resolveSwarmRoleInstrumentId === 'function' ? options.resolveSwarmRoleInstrumentId : ((_, fallback) => fallback);
   const resolveSwarmSoundInstrumentId = typeof options?.resolveSwarmSoundInstrumentId === 'function' ? options.resolveSwarmSoundInstrumentId : (() => 'tone');
@@ -154,13 +157,20 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (!aliveMembers.length) continue;
 
     const performerCount = Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
+    const groupRole = normalizeSwarmRole(group?.role || roles.lead, roles.lead);
+    const isBassRole = groupRole === String(roles?.bass || 'bass');
     const notesLen = Math.max(1, Array.isArray(group?.notes) ? group.notes.length : 0);
-    const noteIdx = Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen;
+    // Bass should stay phase-locked and fixed-pitch like a simple rhythm toy.
+    const noteIdx = isBassRole
+      ? 0
+      : (Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen);
     const noteNameBaseRaw = normalizeSwarmNoteName(group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
-    const noteNameBase = clampNoteToDirectorPool(
-      noteNameBaseRaw,
-      stepAbs + noteIdx
-    );
+    const noteNameBase = isBassRole
+      ? noteNameBaseRaw
+      : clampNoteToDirectorPool(
+        noteNameBaseRaw,
+        stepAbs + noteIdx
+      );
     const noteNameRaw = lane === 'response'
       ? normalizeSwarmNoteName(
         chooseResponseNoteFromPool({
@@ -172,10 +182,12 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         })
       ) || noteNameBaseRaw
       : noteNameBaseRaw;
-    const noteName = clampNoteToDirectorPool(
-      noteNameRaw,
-      stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
-    );
+    const noteName = isBassRole
+      ? noteNameRaw
+      : clampNoteToDirectorPool(
+        noteNameRaw,
+        stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
+      );
     const phraseStep = getPhraseStepState(stepAbs, getPhraseLengthSteps(lane, group, stepAbs));
     const phraseTargets = normalizePhraseNoteList([
       ...(Array.isArray(group?.resolutionTargets) ? group.resolutionTargets : []),
@@ -194,18 +206,22 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const gravityNoteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
       ? phraseGravityTarget
       : noteNameRaw;
-    const gravityNoteName = clampNoteToDirectorPool(
-      gravityNoteNameRaw,
-      stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
-    );
+    const gravityNoteName = isBassRole
+      ? gravityNoteNameRaw
+      : clampNoteToDirectorPool(
+        gravityNoteNameRaw,
+        stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
+      );
     let styledNoteName = gravityNoteName;
     if (styleId === 'retro_shooter') {
       const prevNote = normalizeSwarmNoteName(group?.__bsLastComposerNote);
       const currentNote = normalizeSwarmNoteName(gravityNoteName);
-      const roleForStyle = normalizeSwarmRole(group?.role || roles.lead, roles.lead);
+      const roleForStyle = groupRole;
       const prevIdx = prevNote ? getNotePoolIndex(prevNote) : -1;
       const currIdx = currentNote ? getNotePoolIndex(currentNote) : -1;
-      if (prevNote && Math.random() < (motifRepeatBias * 0.5)) {
+      if (roleForStyle === String(roles?.bass || 'bass')) {
+        styledNoteName = gravityNoteName;
+      } else if (prevNote && Math.random() < (motifRepeatBias * 0.5)) {
         styledNoteName = prevNote;
       } else if (prevIdx >= 0 && currIdx >= 0 && Math.abs(currIdx - prevIdx) > 1 && Math.random() > leadLeapChance) {
         styledNoteName = prevNote;
@@ -252,8 +268,19 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       if (t === String(threat.light || 'light')) return String(threat.light || 'light');
       return String(threat.full || 'full');
     })();
-    const instrumentId = resolveSwarmRoleInstrumentId(
-      normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(performers[0], roles.lead), roles.lead),
+    const lockedInstrumentId = String(
+      group?.instrumentId
+        || performers[0]?.instrumentId
+        || performers[0]?.musicInstrumentId
+        || performers[0]?.composerInstrument
+        || ''
+    ).trim();
+    const lockedLane = inferInstrumentLaneFromCatalogId(lockedInstrumentId, '');
+    const resolvedRole = lockedLane === 'bass'
+      ? 'bass'
+      : normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(performers[0], roles.lead), roles.lead);
+    const instrumentId = lockedInstrumentId || resolveSwarmRoleInstrumentId(
+      resolvedRole,
       resolveSwarmSoundInstrumentId('projectile') || 'tone'
     );
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
@@ -262,7 +289,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
         beatIndex,
         stepIndex: stepAbs,
-        role: normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.lead), roles.lead),
+        role: lockedLane === 'bass'
+          ? 'bass'
+          : normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.lead), roles.lead),
         note: styledNoteName,
         instrumentId,
         actionType: String(group.actionType || 'projectile') === 'explosion'

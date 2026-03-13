@@ -93,6 +93,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       musicLayer,
       foregroundAssigned: Math.max(0, Math.trunc(Number(prominenceState?.foregroundAssigned) || 0)),
       sparkleAssigned: Math.max(0, Math.trunc(Number(prominenceState?.sparkleAssigned) || 0)),
+      foregroundIdentityCount: Math.max(0, Math.trunc(Number(prominenceState?.foregroundIdentityKeys?.size) || 0)),
+      loopForegroundIdentityCount: Math.max(0, Math.trunc(Number(prominenceState?.loopForegroundIdentityKeys?.size) || 0)),
       foundationAssigned: prominenceState?.foundationAssigned === true,
     }) || payload.musicProminence || 'full').trim().toLowerCase();
     const musicProminence = (
@@ -107,6 +109,19 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         ...payload,
         musicLayer,
         musicProminence,
+        ...(musicLayer === 'foundation'
+          ? (() => {
+            const lane = helpers.getFoundationLaneSnapshot?.(stepIndex, barIndex) || null;
+            return lane
+              ? {
+                foundationLaneId: String(lane.laneId || 'foundation_lane'),
+                foundationPhraseId: String(lane.phraseId || 'foundation_fallback'),
+                foundationPatternKey: String(lane.patternKey || ''),
+                foundationStepIndex: Math.max(0, Math.trunc(Number(lane.stepIndex) || 0)),
+              }
+              : {};
+          })()
+          : {}),
         musicRole: String(identity?.role || ev?.role || payload?.musicRole || '').trim().toLowerCase(),
         musicRegister: String(identity?.register || payload?.musicRegister || '').trim().toLowerCase(),
         musicInstrumentFamily: String(identity?.instrumentFamily || payload?.musicInstrumentFamily || '').trim().toLowerCase(),
@@ -134,7 +149,13 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
   }
 
-  const prominenceState = { foregroundAssigned: 0, sparkleAssigned: 0, foundationAssigned: false };
+  const prominenceState = {
+    foregroundAssigned: 0,
+    sparkleAssigned: 0,
+    foundationAssigned: false,
+    foregroundIdentityKeys: new Set(),
+    loopForegroundIdentityKeys: new Set(),
+  };
   const profiledEnemyEvents = effectiveEnemyEvents.map((ev, idx) => {
     const profiled = withEnemyProminence(withPlayerDuck(ev), idx, filteredEnemyEvents.length, prominenceState);
     const payload = profiled?.payload && typeof profiled.payload === 'object' ? profiled.payload : {};
@@ -164,6 +185,15 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       }
     }
     if (deconflictedProminence === 'full') prominenceState.foregroundAssigned += 1;
+    if (deconflictedProminence === 'full') {
+      const identityEnemyType = String(profiled?.enemyType || payload?.enemyType || 'unknown').trim().toLowerCase() || 'unknown';
+      const identityRole = String(payload?.musicRole || profiled?.role || 'accent').trim().toLowerCase() || 'accent';
+      const identityKey = `${identityEnemyType}|${identityRole}|${safeLayer}`;
+      if (identityKey) {
+        prominenceState.foregroundIdentityKeys.add(identityKey);
+        if (safeLayer === 'loops') prominenceState.loopForegroundIdentityKeys.add(identityKey);
+      }
+    }
     if (safeLayer === 'sparkle' && deconflictedProminence !== 'suppressed') prominenceState.sparkleAssigned += 1;
     if (safeLayer === 'foundation' && deconflictedProminence !== 'suppressed') prominenceState.foundationAssigned = true;
     if (safeLayer === 'foundation') {

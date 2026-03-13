@@ -69,7 +69,7 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     composerGroupShape: group.shape,
     composerGroupColor: group.color,
     composerActionType: group.actionType,
-    composerInstrument: group.instrument,
+    composerInstrument: group.instrumentId || group.instrument,
     composerActionPulseT: 0,
     composerActionPulseDur: actionPulseSeconds,
     composerRole: groupRole,
