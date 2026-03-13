@@ -293,7 +293,7 @@ function ensureUI() {
 
   // --- Build button lists (sorted) -----------------------------------------
   function btn(act, text, cls = '') {
-    return `<button class="perf-lab-btn ${cls}" data-act="${act}">${text}</button>`;
+    return `<button type="button" class="perf-lab-btn ${cls}" data-act="${act}">${text}</button>`;
   }
 
   function section(title, buttonsHtml) {
@@ -1074,6 +1074,8 @@ function ensureUI() {
     // Tabs (Controls / Tests)
     const tabBtn = e.target && e.target.closest ? e.target.closest('button[data-tab]') : null;
     if (tabBtn) {
+      try { e.preventDefault(); } catch {}
+      try { e.stopPropagation(); } catch {}
       try {
         const tab = String(tabBtn.getAttribute('data-tab') || 'controls');
         ov.querySelectorAll('.perf-lab-tab').forEach((b) => b.classList.toggle('is-active', b === tabBtn));
@@ -1087,6 +1089,8 @@ function ensureUI() {
 
     const btn = e.target && e.target.closest ? e.target.closest('button[data-act]') : null;
     if (!btn) return;
+    try { e.preventDefault(); } catch {}
+    try { e.stopPropagation(); } catch {}
     const act = btn.getAttribute('data-act');
     if (act === 'close') hide();
 
@@ -1935,6 +1939,25 @@ function normalizeLabType(value) {
   return 'perf';
 }
 
+function hasMusicLabHint(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return false;
+  return raw.includes('musiclab') || raw.includes('music-lab') || raw.includes('music lab');
+}
+
+function inferLabTypeFromResultsMeta(results, meta = {}) {
+  const explicitType = String(meta?.labType || meta?.kind || '').trim();
+  if (explicitType) return normalizeLabType(explicitType);
+
+  const rows = Array.isArray(results) ? results : [results];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    if (row.musicLab && typeof row.musicLab === 'object') return 'music';
+  }
+
+  return 'perf';
+}
+
 function buildLabResultFileName(labType = 'perf', prefixOverride = '') {
   const mode = normalizeLabType(labType);
   const prefix = String(prefixOverride || (mode === 'music' ? 'music-lab-results' : 'perf-lab-results')).trim() || 'perf-lab-results';
@@ -1963,7 +1986,7 @@ function resolveLabPostUrl(cfg, labType = 'perf') {
 function buildResultsBundle(results, meta = {}) {
   const href = (typeof location !== 'undefined' && location.href) ? location.href : '';
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
-  const labType = normalizeLabType(meta?.labType || meta?.kind);
+  const labType = inferLabTypeFromResultsMeta(results, meta);
   const safeMeta = { ...(meta || {}), labType };
   if (!safeMeta.kind) safeMeta.kind = (labType === 'music') ? 'music-lab' : 'perf-lab';
   const rows = Array.isArray(results) ? results : [];
@@ -2098,6 +2121,40 @@ async function resolveResultsConfig() {
 async function publishResultBundle(result, meta = {}) {
   if (!result) return null;
   const cfg = await resolveResultsConfig();
+  const publishMeta = {
+    queue: meta.queue || cfg.queue || [],
+    notes: (meta.notes != null) ? meta.notes : (cfg.notes || ''),
+    runId: (meta.runId != null) ? meta.runId : (cfg.runId || ''),
+    testCategory: (meta.testCategory != null) ? meta.testCategory : '',
+    scenarioName: (meta.scenarioName != null) ? meta.scenarioName : '',
+    runMode: (meta.runMode != null) ? meta.runMode : 'manual',
+  };
+  const labType = inferLabTypeFromResultsMeta([result], publishMeta);
+  const bundle = buildResultsBundle([result], {
+    ...publishMeta,
+    labType,
+  });
+  lastBundle = bundle;
+
+  const saveKey = cfg.saveKey || PERF_LAB_STORAGE_KEY;
+  if (cfg.save !== false) saveResultsBundle(bundle, saveKey);
+
+  const postUrl = resolveLabPostUrl(cfg, labType);
+  if (postUrl) await postResultsBundle(bundle, postUrl);
+  return bundle;
+}
+
+async function persistMusicLabSaveResultOnLatestPerfResult(saveResult, meta = {}) {
+  const result = (lastResult && typeof lastResult === 'object') ? lastResult : null;
+  if (!result) return null;
+  result.musicLabSaveResult = (saveResult && typeof saveResult === 'object') ? { ...saveResult } : null;
+  try {
+    if (Array.isArray(lastResults) && lastResults.length > 0) {
+      lastResults[lastResults.length - 1] = result;
+    }
+  } catch {}
+  try { setOutput(result); } catch {}
+  const cfg = await resolveResultsConfig();
   const bundle = buildResultsBundle([result], {
     queue: meta.queue || cfg.queue || [],
     notes: (meta.notes != null) ? meta.notes : (cfg.notes || ''),
@@ -2108,14 +2165,226 @@ async function publishResultBundle(result, meta = {}) {
     labType: 'perf',
   });
   lastBundle = bundle;
-
   const saveKey = cfg.saveKey || PERF_LAB_STORAGE_KEY;
   if (cfg.save !== false) saveResultsBundle(bundle, saveKey);
-
   const postUrl = resolveLabPostUrl(cfg, 'perf');
   if (postUrl) await postResultsBundle(bundle, postUrl);
   return bundle;
 }
+
+async function publishMusicLabSaveDebugResult(entry = {}) {
+  const cfg = await resolveResultsConfig();
+  const postUrl = resolveLabPostUrl(cfg, 'perf');
+  if (!postUrl) return { ok: false, reason: 'no_perf_post_url' };
+  const row = {
+    label: String(entry?.label || 'music-lab-save-debug'),
+    createdAt: new Date().toISOString(),
+    runId: String(entry?.runId || ''),
+    musicLabSaveDebug: {
+      ok: entry?.ok === true,
+      reason: String(entry?.reason || ''),
+      postUrl: String(entry?.postUrl || ''),
+      sessionId: String(entry?.sessionId || ''),
+      events: Math.max(0, Number(entry?.events) || 0),
+      notes: String(entry?.notes || ''),
+      sourceLabel: String(entry?.sourceLabel || ''),
+      durationMs: Math.max(0, Number(entry?.durationMs) || 0),
+      stageCount: Math.max(0, Number(entry?.stageCount) || 0),
+      iterationIndex: Math.max(0, Number(entry?.iterationIndex) || 0),
+      iterationCount: Math.max(0, Number(entry?.iterationCount) || 0),
+    },
+  };
+  const bundle = buildResultsBundle([row], {
+    runId: String(entry?.runId || ''),
+    notes: String(entry?.notes || ''),
+    runMode: 'manual',
+    scenarioName: 'music-lab-save-debug',
+    testCategory: 'music-lab-save-debug',
+    labType: 'perf',
+    kind: 'perf-lab-debug',
+  });
+  const ok = await postResultsBundle(bundle, postUrl);
+  return { ok: !!ok, reason: ok ? '' : 'post_failed', postUrl };
+}
+
+async function publishBs0MusicRunStageDebugResult(entry = {}) {
+  const cfg = await resolveResultsConfig();
+  const postUrl = resolveLabPostUrl(cfg, 'perf');
+  if (!postUrl) return { ok: false, reason: 'no_perf_post_url' };
+  const row = {
+    label: String(entry?.label || 'music-lab-run-stage-debug'),
+    createdAt: new Date().toISOString(),
+    runId: String(entry?.runId || ''),
+    musicLabRunStageDebug: {
+      stage: String(entry?.stage || ''),
+      sourceLabel: String(entry?.sourceLabel || ''),
+      notes: String(entry?.notes || ''),
+      durationMs: Math.max(0, Number(entry?.durationMs) || 0),
+      stageCount: Math.max(0, Number(entry?.stageCount) || 0),
+      iterationIndex: Math.max(0, Number(entry?.iterationIndex) || 0),
+      iterationCount: Math.max(0, Number(entry?.iterationCount) || 0),
+      transportRunning: entry?.transportRunning === true,
+      beatSwarmActive: entry?.beatSwarmActive === true,
+      perfRunTag: String(entry?.perfRunTag || ''),
+    },
+  };
+  const bundle = buildResultsBundle([row], {
+    runId: String(entry?.runId || ''),
+    notes: String(entry?.notes || ''),
+    runMode: 'manual',
+    scenarioName: 'music-lab-run-stage-debug',
+    testCategory: 'music-lab-run-stage-debug',
+    labType: 'perf',
+    kind: 'perf-lab-debug',
+  });
+  const ok = await postResultsBundle(bundle, postUrl);
+  return { ok: !!ok, reason: ok ? '' : 'post_failed', postUrl };
+}
+
+async function publishRunVariantDebugResult(entry = {}) {
+  const cfg = await resolveResultsConfig();
+  const postUrl = resolveLabPostUrl(cfg, 'perf');
+  if (!postUrl) return { ok: false, reason: 'no_perf_post_url' };
+  const row = {
+    label: String(entry?.label || 'run-variant-debug'),
+    createdAt: new Date().toISOString(),
+    runId: String(entry?.runId || ''),
+    runVariantDebug: {
+      stage: String(entry?.stage || ''),
+      sourceLabel: String(entry?.sourceLabel || ''),
+      durationMs: Math.max(0, Number(entry?.durationMs) || 0),
+      elapsedMs: Math.max(0, Number(entry?.elapsedMs) || 0),
+      frameCount: Math.max(0, Number(entry?.frameCount) || 0),
+      warmupMs: Math.max(0, Number(entry?.warmupMs) || 0),
+      transportRunning: entry?.transportRunning === true,
+      beatSwarmActive: entry?.beatSwarmActive === true,
+      perfRunTag: String(entry?.perfRunTag || ''),
+      detail: String(entry?.detail || ''),
+    },
+  };
+  const bundle = buildResultsBundle([row], {
+    runId: String(entry?.runId || ''),
+    notes: String(entry?.notes || ''),
+    runMode: 'manual',
+    scenarioName: 'run-variant-debug',
+    testCategory: 'run-variant-debug',
+    labType: 'perf',
+    kind: 'perf-lab-debug',
+  });
+  const ok = await postResultsBundle(bundle, postUrl);
+  return { ok: !!ok, reason: ok ? '' : 'post_failed', postUrl };
+}
+
+const PERF_RUN_LIFECYCLE_DEBUG_STORAGE_KEY = 'mt_perf_run_lifecycle_debug_v1';
+
+async function publishPerfRunLifecycleDebugResult(entry = {}) {
+  const cfg = await resolveResultsConfig();
+  const postUrl = resolveLabPostUrl(cfg, 'perf');
+  if (!postUrl) return { ok: false, reason: 'no_perf_post_url' };
+  const row = {
+    label: String(entry?.label || 'perf-run-lifecycle-debug'),
+    createdAt: new Date().toISOString(),
+    runId: String(entry?.runId || ''),
+    perfRunLifecycleDebug: {
+      stage: String(entry?.stage || ''),
+      sourceLabel: String(entry?.sourceLabel || ''),
+      durationMs: Math.max(0, Number(entry?.durationMs) || 0),
+      elapsedMs: Math.max(0, Number(entry?.elapsedMs) || 0),
+      frameCount: Math.max(0, Number(entry?.frameCount) || 0),
+      perfRunTag: String(entry?.perfRunTag || ''),
+      transportRunning: entry?.transportRunning === true,
+      beatSwarmActive: entry?.beatSwarmActive === true,
+      detail: String(entry?.detail || ''),
+      href: String(entry?.href || ''),
+      startedAt: String(entry?.startedAt || ''),
+      capturedAt: String(entry?.capturedAt || new Date().toISOString()),
+    },
+  };
+  const bundle = buildResultsBundle([row], {
+    runId: String(entry?.runId || ''),
+    notes: String(entry?.notes || ''),
+    runMode: 'manual',
+    scenarioName: 'perf-run-lifecycle-debug',
+    testCategory: 'perf-run-lifecycle-debug',
+    labType: 'perf',
+    kind: 'perf-lab-debug',
+  });
+  const ok = await postResultsBundle(bundle, postUrl);
+  return { ok: !!ok, reason: ok ? '' : 'post_failed', postUrl };
+}
+
+function stashPerfRunLifecycleDebug(entry = {}) {
+  try {
+    localStorage.setItem(PERF_RUN_LIFECYCLE_DEBUG_STORAGE_KEY, JSON.stringify({
+      ...entry,
+      capturedAt: new Date().toISOString(),
+    }));
+  } catch {}
+}
+
+async function flushPendingPerfRunLifecycleDebug() {
+  let raw = '';
+  try { raw = String(localStorage.getItem(PERF_RUN_LIFECYCLE_DEBUG_STORAGE_KEY) || ''); } catch {}
+  if (!raw) return null;
+  try { localStorage.removeItem(PERF_RUN_LIFECYCLE_DEBUG_STORAGE_KEY); } catch {}
+  try {
+    const parsed = JSON.parse(raw);
+    return await publishPerfRunLifecycleDebugResult(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function installPerfRunLifecycleDebugHooks() {
+  try {
+    if (window.__PERF_RUN_LIFECYCLE_DEBUG_HOOKS_INSTALLED) return;
+    window.__PERF_RUN_LIFECYCLE_DEBUG_HOOKS_INSTALLED = true;
+    const capture = (stage, detail = '') => {
+      const ctx = (window.__PERF_ACTIVE_RUN_DEBUG && typeof window.__PERF_ACTIVE_RUN_DEBUG === 'object')
+        ? window.__PERF_ACTIVE_RUN_DEBUG
+        : null;
+      if (!ctx) return;
+      stashPerfRunLifecycleDebug({
+        label: 'perf-run-lifecycle-debug',
+        runId: String(ctx.runId || ''),
+        stage,
+        sourceLabel: String(ctx.sourceLabel || ''),
+        durationMs: Math.max(0, Number(ctx.durationMs) || 0),
+        elapsedMs: Math.max(0, Number(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - (Number(ctx.wallStartMs) || 0)) || 0),
+        frameCount: Math.max(0, Number(ctx.frameCountRef?.()) || 0),
+        perfRunTag: String(ctx.perfRunTag || ''),
+        transportRunning: !!(typeof isRunning === 'function' && isRunning()),
+        beatSwarmActive: !!window.__beatSwarmActive,
+        detail: String(detail || ''),
+        href: String(location?.href || ''),
+        startedAt: String(ctx.startedAt || ''),
+      });
+    };
+    window.addEventListener('beforeunload', () => capture('beforeunload'), { capture: true });
+    window.addEventListener('pagehide', () => capture('pagehide'), { capture: true });
+    window.addEventListener('error', (event) => {
+      capture('error', String(event?.message || event?.error?.message || 'window_error'));
+    }, { capture: true });
+    window.addEventListener('unhandledrejection', (event) => {
+      const reason = event?.reason;
+      capture('unhandledrejection', String(reason?.message || reason || 'unhandled_rejection'));
+    }, { capture: true });
+  } catch {}
+}
+
+function publishRunVariantDebugResultAsync(entry = {}) {
+  try {
+    if (typeof window !== 'undefined' && window.__PERF_LAB_DEFER_DEBUG_POSTS) return;
+    Promise.resolve()
+      .then(() => publishRunVariantDebugResult(entry))
+      .catch(() => {});
+  } catch {}
+}
+
+try {
+  installPerfRunLifecycleDebugHooks();
+  Promise.resolve().then(() => flushPendingPerfRunLifecycleDebug()).catch(() => {});
+} catch {}
 
 async function runAuto(config = {}) {
   const cfg = (config && typeof config === 'object') ? config : { queue: normalizeQueue(config) };
@@ -2236,7 +2505,7 @@ async function runAuto(config = {}) {
     }
 
     const traceSummary = computePerfTraceSummary();
-    const bundle = buildResultsBundle(results, {
+    const bundleMeta = {
       queue,
       traceSummary,
       executedQueue: Array.isArray(window.__PERF_LAB_EXECUTED_QUEUE) ? window.__PERF_LAB_EXECUTED_QUEUE : [],
@@ -2247,14 +2516,18 @@ async function runAuto(config = {}) {
       runMode: 'auto',
       iterationIndex: Number.isFinite(cfg.iterationIndex) ? Math.max(1, Math.trunc(cfg.iterationIndex)) : 1,
       iterationCount: Number.isFinite(cfg.iterationCount) ? Math.max(1, Math.trunc(cfg.iterationCount)) : 1,
-      labType: 'perf',
+    };
+    const labType = inferLabTypeFromResultsMeta(results, bundleMeta);
+    const bundle = buildResultsBundle(results, {
+      ...bundleMeta,
+      labType,
     });
     lastBundle = bundle;
 
     const saveKey = cfg.saveKey || PERF_LAB_STORAGE_KEY;
     if (cfg.save !== false) saveResultsBundle(bundle, saveKey);
 
-    const postUrl = resolveLabPostUrl(cfg, 'perf');
+    const postUrl = resolveLabPostUrl(cfg, labType);
     if (postUrl) await postResultsBundle(bundle, postUrl);
 
     if (cfg.clearAfter !== false) {
@@ -2814,13 +3087,52 @@ async function saveMusicLabSessionToResourcesGlobal({
 } = {}) {
   const api = getMusicLabApiGlobal();
   if (!api || typeof api.exportSession !== 'function') {
-    return { ok: false, reason: 'music_lab_api_unavailable' };
+    const result = { ok: false, reason: 'music_lab_api_unavailable', postUrl: '', sessionId: '', events: 0, sessionSummary: null };
+    try { window.__LAST_MUSIC_LAB_SAVE_RESULT = { ...result, runId, label, notes }; } catch {}
+    try { console.warn('[PerfLab] Music Lab save failed', { ...result, runId, label, notes }); } catch {}
+    return result;
   }
-  const payload = api.exportSession();
+  let payload = null;
+  try {
+    payload = api.exportSession();
+  } catch (err) {
+    const result = {
+      ok: false,
+      reason: 'export_failed',
+      error: String(err && err.message || err || 'export_failed'),
+      postUrl: '',
+      sessionId: '',
+      events: 0,
+      sessionSummary: null,
+      payloadDebug: null,
+    };
+    try { window.__LAST_MUSIC_LAB_SAVE_RESULT = { ...result, runId, label, notes }; } catch {}
+    try { console.warn('[PerfLab] Music Lab export failed', { ...result, runId, label, notes }); } catch {}
+    return result;
+  }
+  const payloadDebug = {
+    sessionId: String(payload?.sessionId || ''),
+    eventTimelineCount: Array.isArray(payload?.eventTimeline) ? payload.eventTimeline.length : 0,
+    executedEventCount: Array.isArray(payload?.session?.executedEvents) ? payload.session.executedEvents.length : 0,
+    createdEventCount: Array.isArray(payload?.session?.createdEvents) ? payload.session.createdEvents.length : 0,
+    spawnerPipelineEventCount: Array.isArray(payload?.session?.spawnerPipelineEvents) ? payload.session.spawnerPipelineEvents.length : 0,
+    metricsHistoryCount: Array.isArray(payload?.metricsHistory) ? payload.metricsHistory.length : 0,
+  };
   const cfg = await resolveResultsConfig();
   const postUrl = resolveLabPostUrl(cfg, 'music');
   if (!postUrl) {
-    return { ok: false, reason: 'no_post_url' };
+    const result = {
+      ok: false,
+      reason: 'no_post_url',
+      postUrl: '',
+      sessionId: String(payload?.sessionId || ''),
+      events: Array.isArray(payload?.eventTimeline) ? payload.eventTimeline.length : 0,
+      sessionSummary: summarizeMusicLabSessionPayload(payload),
+      payloadDebug,
+    };
+    try { window.__LAST_MUSIC_LAB_SAVE_RESULT = { ...result, runId, label, notes }; } catch {}
+    try { console.warn('[PerfLab] Music Lab save failed', { ...result, runId, label, notes }); } catch {}
+    return result;
   }
   const bundle = buildResultsBundle([
     {
@@ -2840,16 +3152,30 @@ async function saveMusicLabSessionToResourcesGlobal({
     labType: 'music',
     kind: 'music-lab',
   });
+  let bundleBytes = 0;
+  try {
+    bundleBytes = String(JSON.stringify(bundle) || '').length;
+  } catch {}
   const ok = await postResultsBundle(bundle, postUrl, { allowLegacyPerfFallback: true });
   const sessionSummary = summarizeMusicLabSessionPayload(payload);
-  return {
+  const result = {
     ok: !!ok,
     reason: ok ? '' : 'post_failed',
     postUrl,
     sessionId: String(payload?.sessionId || ''),
     events: Array.isArray(payload?.eventTimeline) ? payload.eventTimeline.length : 0,
     sessionSummary,
+    payloadDebug: {
+      ...payloadDebug,
+      bundleBytes,
+    },
   };
+  try { window.__LAST_MUSIC_LAB_SAVE_RESULT = { ...result, runId, label, notes }; } catch {}
+  try {
+    if (ok) console.info('[PerfLab] Music Lab save succeeded', { ...result, runId, label, notes });
+    else console.warn('[PerfLab] Music Lab save failed', { ...result, runId, label, notes });
+  } catch {}
+  return result;
 }
 
 async function publishGroupedMusicLabScenarioBundle({
@@ -2996,12 +3322,77 @@ async function runBS0Stage(stageCount = 1, opts = null) {
         }
       }
       try { window.__PERF_RUN_TAG = `${tagPrefix}${runSuffix}`; } catch {}
-      await runVariantPlaying(
-        `${labelPrefix}${runSuffix}`,
-        null,
-        `${statusPrefix}${runHuman}...`
-      );
+      try {
+        await runVariantPlaying(
+          `${labelPrefix}${runSuffix}`,
+          null,
+          `${statusPrefix}${runHuman}...`,
+          { stopTransportAtEnd: !saveMusicLabEachRun }
+        );
+      } catch (err) {
+        try { delete window.__PERF_LAB_DEFER_DEBUG_POSTS; } catch {}
+        try { window.__PERF_ACTIVE_RUN_DEBUG = null; } catch {}
+        try {
+          await publishBs0MusicRunStageDebugResult({
+            label: `music-lab-run-stage-debug${runSuffix}`,
+            runId: `${saveRunIdBase}${runSuffix}`,
+            stage: 'run_variant_threw',
+            sourceLabel: `${labelPrefix}${runSuffix}`,
+            notes: `${saveNotes || `Auto save for BS0 S${stageCount} run ${runIndex}/${repeatCount}`} | ${String(err && err.message || err || 'unknown_error')}`,
+            durationMs,
+            stageCount,
+            iterationIndex: runIndex,
+            iterationCount: repeatCount,
+            transportRunning: isRunning(),
+            beatSwarmActive: !!window.__beatSwarmActive,
+            perfRunTag: String(window.__PERF_RUN_TAG || ''),
+          });
+        } catch {}
+        setStatus(`BS0 S${stageCount} run ${runIndex}/${repeatCount} failed during benchmark`);
+        setOutput({
+          ok: false,
+          stageCount,
+          runIndex,
+          repeatCount,
+          durationMs,
+          reason: 'run_variant_failed',
+          error: String(err && err.message || err || 'unknown_error'),
+        });
+        return;
+      }
+      try {
+        await publishBs0MusicRunStageDebugResult({
+          label: `music-lab-run-stage-debug${runSuffix}`,
+          runId: `${saveRunIdBase}${runSuffix}`,
+          stage: 'after_run_variant',
+          sourceLabel: `${labelPrefix}${runSuffix}`,
+          notes: saveNotes || `Auto save for BS0 S${stageCount} run ${runIndex}/${repeatCount}`,
+          durationMs,
+          stageCount,
+          iterationIndex: runIndex,
+          iterationCount: repeatCount,
+          transportRunning: isRunning(),
+          beatSwarmActive: !!window.__beatSwarmActive,
+          perfRunTag: String(window.__PERF_RUN_TAG || ''),
+        });
+      } catch {}
       if (saveMusicLabEachRun) {
+        try {
+          await publishBs0MusicRunStageDebugResult({
+            label: `music-lab-run-stage-debug${runSuffix}`,
+            runId: `${saveRunIdBase}${runSuffix}`,
+            stage: 'before_music_save',
+            sourceLabel: `${labelPrefix}${runSuffix}`,
+            notes: saveNotes || `Auto save for BS0 S${stageCount} run ${runIndex}/${repeatCount}`,
+            durationMs,
+            stageCount,
+            iterationIndex: runIndex,
+            iterationCount: repeatCount,
+            transportRunning: isRunning(),
+            beatSwarmActive: !!window.__beatSwarmActive,
+            perfRunTag: String(window.__PERF_RUN_TAG || ''),
+          });
+        } catch {}
         const save = await saveMusicLabSessionToResourcesGlobal({
           runId: `${saveRunIdBase}${runSuffix}`,
           label: `music-lab-session${runSuffix}`,
@@ -3019,6 +3410,43 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           events: Math.max(0, Number(save?.events) || 0),
           sessionSummary: (save?.sessionSummary && typeof save.sessionSummary === 'object') ? save.sessionSummary : null,
         });
+        try {
+          console.info('[PerfLab] BS0 Music run save outcome', {
+            stageCount,
+            runIndex,
+            repeatCount,
+            durationMs,
+            runId: `${saveRunIdBase}${runSuffix}`,
+            label: `music-lab-session${runSuffix}`,
+            save,
+          });
+        } catch {}
+        try {
+          await persistMusicLabSaveResultOnLatestPerfResult(save, {
+            queue: [`${labelPrefix}${runSuffix}`],
+            notes: saveNotes || `Auto save for BS0 S${stageCount} run ${runIndex}/${repeatCount}`,
+            runId: 'manual',
+            runMode: 'manual',
+          });
+        } catch {}
+        try {
+          await publishMusicLabSaveDebugResult({
+            label: `music-lab-save-debug${runSuffix}`,
+            runId: `${saveRunIdBase}${runSuffix}`,
+            ok: !!save?.ok,
+            reason: String(save?.reason || ''),
+            postUrl: String(save?.postUrl || ''),
+            sessionId: String(save?.sessionId || ''),
+            events: Math.max(0, Number(save?.events) || 0),
+            notes: saveNotes || `Auto save for BS0 S${stageCount} run ${runIndex}/${repeatCount}`,
+            sourceLabel: `${labelPrefix}${runSuffix}`,
+            durationMs,
+            stageCount,
+            iterationIndex: runIndex,
+            iterationCount: repeatCount,
+          });
+        } catch {}
+        try { stopTransport(); } catch {}
         if (!save?.ok) {
           setStatus(`BS0 S${stageCount} run ${runIndex}/${repeatCount} save failed`);
           setOutput({
@@ -3457,7 +3885,10 @@ function __perfGetRunTagSuffix() {
   return '';
 }
 
-async function runVariantPlaying(label, step, statusText) {
+async function runVariantPlaying(label, step, statusText, options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const stopTransportAtEnd = opts.stopTransportAtEnd !== false;
+  const hardTimeoutMs = Math.max(15000, Number(opts.hardTimeoutMs) || 8000);
   const warmupMs = 1200;
   // Make variant labels self-describing (tier/AB toggles, etc).
   // Without this, perf-lab-results-<timestamp>.json ends up with many identical labels,
@@ -3492,12 +3923,15 @@ async function runVariantPlaying(label, step, statusText) {
   let rafWrapped = false;
   let rafOriginal = null;
   const frameMs = [];
+  let runVariantFrameCount = 0;
   const warmupTriggerMs = Math.max(0, Math.min(warmupMs - 50, warmupMs * 0.5));
   let startMs = null;
   let lastMs = null;
+  const wallStartMs = nowMs();
   setStatus(statusText || `Running ${label}...`);
   setOutput(null);
   lastResult = null;
+  try { window.__PERF_LAB_DEFER_DEBUG_POSTS = true; } catch {}
 
   try { window.__PERF_CAM_BOUNDS = null; } catch {}
   const traceMarksEnabled = () => !!window.__PERF_TRACE_MARKS
@@ -3512,6 +3946,17 @@ async function runVariantPlaying(label, step, statusText) {
 
   // Ensure transport is running during the sample window
   try {
+    try {
+      window.__PERF_ACTIVE_RUN_DEBUG = {
+        runId: String(fullLabel || ''),
+        sourceLabel: fullLabel,
+        durationMs,
+        perfRunTag: String(window.__PERF_RUN_TAG || ''),
+        startedAt: new Date().toISOString(),
+        wallStartMs,
+        frameCountRef: () => runVariantFrameCount,
+      };
+    } catch {}
     if (!isRunning()) startTransport();
   } catch {}
 
@@ -3547,7 +3992,7 @@ async function runVariantPlaying(label, step, statusText) {
     window.__PERF_DG_OVERLAY_RESIZE_COUNT = 0;
   } catch {}
 
-  const result = await new Promise((resolve) => {
+  const result = await new Promise((resolve, reject) => {
     const finalizePendingFrame = () => {
       if (!pendingFrame) return;
       if (traceMarksEnabled()
@@ -3565,34 +4010,72 @@ async function runVariantPlaying(label, step, statusText) {
       pendingFrame = null;
       pendingFrameTimer = 0;
     };
+    let settled = false;
+    let watchdogTimer = 0;
+    const clearWatchdog = () => {
+      if (!watchdogTimer) return;
+      try { clearTimeout(watchdogTimer); } catch {}
+      watchdogTimer = 0;
+    };
+    const settleResolve = (value) => {
+      if (settled) return;
+      settled = true;
+      clearWatchdog();
+      resolve(value);
+    };
+    const settleReject = (err) => {
+      if (settled) return;
+      settled = true;
+      clearWatchdog();
+      reject(err);
+    };
+    watchdogTimer = setTimeout(() => {
+      const elapsedMs = Math.max(0, nowMs() - wallStartMs);
+      publishRunVariantDebugResultAsync({
+        label: `run-variant-debug__${fullLabel}`,
+        runId: String(fullLabel || ''),
+        stage: 'watchdog_timeout',
+        sourceLabel: fullLabel,
+        durationMs,
+        elapsedMs,
+        frameCount: runVariantFrameCount,
+        warmupMs,
+        transportRunning: isRunning(),
+        beatSwarmActive: !!window.__beatSwarmActive,
+        perfRunTag: String(window.__PERF_RUN_TAG || ''),
+      });
+      settleReject(new Error(`runVariantPlaying watchdog timeout after ${elapsedMs}ms`));
+    }, durationMs + hardTimeoutMs);
 
       const stepFrame = (ts) => {
+        try {
         if (startMs === null) {
           startMs = ts;
           lastMs = ts;
-      }
+        }
 
-      const t = ts - startMs;
-      const dtMs = ts - lastMs;
-      lastMs = ts;
+        const t = ts - startMs;
+        const dtMs = ts - lastMs;
+        lastMs = ts;
+        runVariantFrameCount += 1;
 
-      if (pendingFrame) finalizePendingFrame();
+        if (pendingFrame) finalizePendingFrame();
 
-      const t0 = nowMs();
-      const s0 = nowMs();
-      try { if (scriptStep) scriptStep(t, dtMs, Math.min(1, t / durationMs)); } catch {}
-      let forceSample = false;
-      let warmupTag = false;
-      if (!warmupDid && t >= warmupTriggerMs && t <= warmupMs) {
-        warmupDid = true;
-        forceSample = true;
-        warmupTag = true;
-        try { forcePerfWarmup(); } catch {}
-      }
-      prof.mark('script', nowMs() - s0);
-      const workMs = Math.max(0, nowMs() - t0);
-      const frameDt = Number.isFinite(dtMs) ? dtMs : (nowMs() - t0);
-      const idleMs = Math.max(0, frameDt - workMs);
+        const t0 = nowMs();
+        const s0 = nowMs();
+        try { if (scriptStep) scriptStep(t, dtMs, Math.min(1, t / durationMs)); } catch {}
+        let forceSample = false;
+        let warmupTag = false;
+        if (!warmupDid && t >= warmupTriggerMs && t <= warmupMs) {
+          warmupDid = true;
+          forceSample = true;
+          warmupTag = true;
+          try { forcePerfWarmup(); } catch {}
+        }
+        prof.mark('script', nowMs() - s0);
+        const workMs = Math.max(0, nowMs() - t0);
+        const frameDt = Number.isFinite(dtMs) ? dtMs : (nowMs() - t0);
+        const idleMs = Math.max(0, frameDt - workMs);
         const frameStart = Number.isFinite(dtMs) ? (ts - dtMs) : ts;
         const frameEnd = ts;
         pendingFrame = {
@@ -3601,21 +4084,51 @@ async function runVariantPlaying(label, step, statusText) {
         };
         if (!pendingFrameTimer) pendingFrameTimer = defer(finalizePendingFrame);
 
-      if (t > warmupMs) frameMs.push(frameDt);
+        if (t > warmupMs) frameMs.push(frameDt);
 
-      if (t >= durationMs) {
-        if (pendingFrame) finalizePendingFrame();
-        const s = statsFromFrameMs(frameMs);
-        resolve({
-          label: fullLabel,
-          durationMs,
-          warmupMs,
-          createdAt: new Date().toISOString(),
-          ...s,
-        });
-        return;
-      }
+        if (t >= durationMs) {
+          publishRunVariantDebugResultAsync({
+            label: `run-variant-debug__${fullLabel}`,
+            runId: String(fullLabel || ''),
+            stage: 'duration_reached',
+            sourceLabel: fullLabel,
+            durationMs,
+            elapsedMs: t,
+            frameCount: runVariantFrameCount,
+            warmupMs,
+            transportRunning: isRunning(),
+            beatSwarmActive: !!window.__beatSwarmActive,
+            perfRunTag: String(window.__PERF_RUN_TAG || ''),
+          });
+          if (pendingFrame) finalizePendingFrame();
+          const s = statsFromFrameMs(frameMs);
+          settleResolve({
+            label: fullLabel,
+            durationMs,
+            warmupMs,
+            createdAt: new Date().toISOString(),
+            ...s,
+          });
+          return;
+        }
         raf(stepFrame);
+        } catch (err) {
+          publishRunVariantDebugResultAsync({
+            label: `run-variant-debug__${fullLabel}`,
+            runId: String(fullLabel || ''),
+            stage: 'frame_threw',
+            sourceLabel: fullLabel,
+            durationMs,
+            elapsedMs: Math.max(0, nowMs() - wallStartMs),
+            frameCount: runVariantFrameCount,
+            warmupMs,
+            transportRunning: isRunning(),
+            beatSwarmActive: !!window.__beatSwarmActive,
+            perfRunTag: String(window.__PERF_RUN_TAG || ''),
+            notes: String(err && err.message || err || 'unknown_error'),
+          });
+          settleReject(err);
+        }
       };
       stepFrame.__perfRafTag = 'perf.raf.benchmark';
       raf(stepFrame);
@@ -3654,8 +4167,11 @@ async function runVariantPlaying(label, step, statusText) {
     };
   } catch {}
 
-  // Stop after test to avoid surprise audio continuing
-  try { stopTransport(); } catch {}
+  // Stop after test to avoid surprise audio continuing.
+  // BS0 music-lab runs can defer this until after the session export completes.
+  if (stopTransportAtEnd) {
+    try { stopTransport(); } catch {}
+  }
 
   // Restore rAF if we wrapped it.
   if (rafWrapped && rafOriginal) {
@@ -3666,11 +4182,14 @@ async function runVariantPlaying(label, step, statusText) {
 
   setParticleQualityLock(null);
 
-    try {
-      result.particleToggles = { ...(window.__PERF_PARTICLES || {}) };
-      result.particleTempPatch = window.__PERF_PARTICLES__TEMP_PATCH || null;
-      result.playing = true;
-      let dgPlayheadSeparateEffectiveKnown = 0;
+  try {
+    result.particleToggles = { ...(window.__PERF_PARTICLES || {}) };
+    result.particleTempPatch = window.__PERF_PARTICLES__TEMP_PATCH || null;
+    result.playing = true;
+    result.musicLabSaveResult = (window.__LAST_MUSIC_LAB_SAVE_RESULT && typeof window.__LAST_MUSIC_LAB_SAVE_RESULT === 'object')
+      ? { ...window.__LAST_MUSIC_LAB_SAVE_RESULT }
+      : null;
+    let dgPlayheadSeparateEffectiveKnown = 0;
       let dgPlayheadSeparateEffectiveOn = 0;
       let dgTierKnown = 0;
       let dgTierM1 = 0;
@@ -3761,12 +4280,28 @@ async function runVariantPlaying(label, step, statusText) {
 
   try { window.__PerfFrameProf?.dump?.(label); } catch {}
 
+  publishRunVariantDebugResultAsync({
+    label: `run-variant-debug__${fullLabel}`,
+    runId: String(fullLabel || ''),
+    stage: 'after_resolve',
+    sourceLabel: fullLabel,
+    durationMs,
+    elapsedMs: durationMs,
+    frameCount: runVariantFrameCount,
+    warmupMs,
+    transportRunning: isRunning(),
+    beatSwarmActive: !!window.__beatSwarmActive,
+    perfRunTag: String(window.__PERF_RUN_TAG || ''),
+  });
+
   lastResult = result;
   lastResults.push(result);
   setOutput(result);
   setStatus('Done');
   try { console.log('[PerfLab] result', result); } catch {}
   try { if (window.__PERF_LAB_RUN_CONTEXT !== 'auto') await publishResultBundle(result, { queue: [label], notes: statusText || '', runId: 'manual' }); } catch {}
+  try { window.__PERF_ACTIVE_RUN_DEBUG = null; } catch {}
+  try { delete window.__PERF_LAB_DEFER_DEBUG_POSTS; } catch {}
 }
 
 async function withTempPerfParticles(patch, fn) {

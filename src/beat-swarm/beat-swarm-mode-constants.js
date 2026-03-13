@@ -323,21 +323,21 @@ export const DRAW_SNAKE_ENEMY_HEALTH_MULTIPLIER = SPAWNER_ENEMY_HEALTH_MULTIPLIE
 export const DRAW_SNAKE_SEGMENT_COUNT = 12;
 export const DRAW_SNAKE_SEGMENT_SPACING_WORLD = 176;
 export const DRAW_SNAKE_TRIGGER_SOUND_VOLUME = 0.45;
-export const PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT = 0.16;
+export const PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT = 0.24;
 export const PLAYER_MASK_DUCK_KEEP_CHANCE_BY_CHANNEL = Object.freeze({
-  spawner: 0.22,
-  drawsnake: 0.26,
-  composer: 0.24,
-  default: 0.24,
+  spawner: 0.42,
+  drawsnake: 0.38,
+  composer: 0.36,
+  default: 0.36,
 });
 export const PLAYER_MASK_STEP_EVENT_KEEP_CHANCE = Object.freeze({
-  'spawner-spawn': 0.22,
-  'drawsnake-projectile': 0,
-  'composer-group-projectile': 0,
-  'composer-group-explosion': 0,
-  default: 0,
+  'spawner-spawn': 0.44,
+  'drawsnake-projectile': 0.2,
+  'composer-group-projectile': 0.18,
+  'composer-group-explosion': 0.14,
+  default: 0.12,
 });
-export const PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP = 1;
+export const PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP = 2;
 export const MUSIC_LAYER_POLICY = Object.freeze({
   foundationMinBars: 6,
   foundationMinCycles: 3,
@@ -354,8 +354,8 @@ export const MUSIC_LAYER_POLICY = Object.freeze({
   foregroundIdentityLimit: 3,
   primaryLoopIdentityLimit: 1,
   secondaryLoopIdentityLimit: 1,
-  supportTraceGain: 0.3,
-  supportQuietGain: 0.62,
+  supportTraceGain: 0.42,
+  supportQuietGain: 0.78,
 });
 export const LOOP_ADMISSION_POLICY = Object.freeze({
   loopLengthSteps: WEAPON_TUNE_STEPS,
@@ -510,7 +510,7 @@ export const COMPOSER_GROUP_LOOP_HITS_MIN = 2;
 export const COMPOSER_GROUP_LOOP_HITS_MAX = 3;
 export const COMPOSER_GROUP_SEPARATION_RADIUS_WORLD = 240;
 export const COMPOSER_GROUP_SEPARATION_FORCE = 760;
-export const COMPOSER_GROUP_COLORS = Object.freeze(['#ff8b6e', '#ff5f68', '#ffae56', '#73dcff', '#9bff8f']);
+export const COMPOSER_GROUP_COLORS = Object.freeze(['#ff7a45', '#57d8ff', '#a3ff5f', '#ff5f9f', '#8a7dff']);
 export const COMPOSER_GROUP_SHAPES = Object.freeze(['circle', 'square', 'diamond']);
 export const COMPOSER_GROUP_TEMPLATE_LIBRARY = Object.freeze([
   Object.freeze({

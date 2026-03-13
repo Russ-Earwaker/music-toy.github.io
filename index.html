@@ -136,9 +136,22 @@
   </script>
   <!-- NOTE: debug-hud is blocked on itch.io (403). Keep it in index.debug.html instead. -->
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
-    }
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      const host = String(location.hostname || '').trim().toLowerCase();
+      const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+      const isPrivateIpv4 = /^(10|127)\.\d+\.\d+\.\d+$/.test(host)
+        || /^192\.168\.\d+\.\d+$/.test(host)
+        || /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host);
+      const isDevHost = isLocalHost || isPrivateIpv4;
+      if (isDevHost) {
+        navigator.serviceWorker.getRegistrations?.()
+          .then((regs) => Promise.all(regs.map((reg) => reg.unregister())))
+          .catch(() => {});
+        return;
+      }
+      navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+    })();
   </script>
 </body>
 </html>

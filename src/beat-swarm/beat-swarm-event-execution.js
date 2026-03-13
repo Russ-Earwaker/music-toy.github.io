@@ -133,13 +133,17 @@ export function executePerformedBeatEventRuntime(options = null) {
     });
     let visualTriggered = false;
     let audioTriggered = false;
-    helpers.flashSpawnerEnemyCell?.(enemy, ((Math.trunc(Number(ev?.payload?.nodeStepIndex) || ev.stepIndex || 0) % 8) + 8) % 8, 'strong');
-    visualTriggered = true;
-    emitSpawnerSystemEvent('music_spawner_visual_event', {
-      sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-      sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-      reason: 'proxy_flash',
-    });
+    const nodeStepIndex = ((Math.trunc(Number(ev?.payload?.nodeStepIndex) || ev.stepIndex || 0) % 8) + 8) % 8;
+    const shouldFlashSpawnerCell = musicProminence === 'full' && prominenceGain > 0;
+    if (shouldFlashSpawnerCell) {
+      helpers.flashSpawnerEnemyCell?.(enemy, nodeStepIndex, 'strong');
+      visualTriggered = true;
+      emitSpawnerSystemEvent('music_spawner_visual_event', {
+        sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
+        sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+        reason: 'proxy_flash',
+      });
+    }
     if (shouldTriggerAudio) {
       try {
         helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume);
@@ -159,7 +163,6 @@ export function executePerformedBeatEventRuntime(options = null) {
         reason: 'note_triggered',
       });
     }
-    const nodeStepIndex = ((Math.trunc(Number(ev?.payload?.nodeStepIndex) || ev.stepIndex || 0) % 8) + 8) % 8;
     if (!Array.isArray(enemy.spawnerNodeEnemyIds)) enemy.spawnerNodeEnemyIds = Array.from({ length: 8 }, () => 0);
     const linkedEnemyId = Math.trunc(Number(enemy.spawnerNodeEnemyIds[nodeStepIndex]) || 0);
     let linkedEnemy = linkedEnemyId > 0 ? helpers.getSwarmEnemyById?.(linkedEnemyId) : null;
@@ -184,6 +187,11 @@ export function executePerformedBeatEventRuntime(options = null) {
         linkedSpawnerId: Math.trunc(Number(enemy.id) || 0),
         linkedSpawnerStepIndex: nodeStepIndex,
         hp,
+        role: normalizedGroupRole,
+        layer: 'foundation',
+        note: noteName,
+        instrumentId,
+        continuityId: String(group?.musicLaneContinuityId || group?.continuityId || enemy?.musicContinuityId || '').trim(),
       });
       if ((Array.isArray(state.enemies) ? state.enemies.length : 0) > beforeCount) {
         const created = state.enemies[state.enemies.length - 1];
@@ -197,11 +205,11 @@ export function executePerformedBeatEventRuntime(options = null) {
         sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
         reason: 'spawn_linked_enemy',
       });
-      if (!visualTriggered || (!audioTriggered && !audioMutedExplicitly)) {
+      if ((shouldFlashSpawnerCell && !visualTriggered) || (!audioTriggered && !audioMutedExplicitly)) {
         emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
           sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
           sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-          failureReason: !visualTriggered ? 'visual_missing' : 'audio_missing',
+          failureReason: (!visualTriggered && shouldFlashSpawnerCell) ? 'visual_missing' : 'audio_missing',
         });
       }
       logMusicLabExecution({
@@ -230,12 +238,12 @@ export function executePerformedBeatEventRuntime(options = null) {
       targetEnemyId: Math.max(0, Math.trunc(Number(linkedEnemy?.id) || 0)),
       reason: 'launch_linked_projectile',
     });
-    if (!visualTriggered || (!audioTriggered && !audioMutedExplicitly)) {
+    if ((shouldFlashSpawnerCell && !visualTriggered) || (!audioTriggered && !audioMutedExplicitly)) {
       emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
         sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
         sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
         targetEnemyId: Math.max(0, Math.trunc(Number(linkedEnemy?.id) || 0)),
-        failureReason: !visualTriggered ? 'visual_missing' : 'audio_missing',
+        failureReason: (!visualTriggered && shouldFlashSpawnerCell) ? 'visual_missing' : 'audio_missing',
       });
     }
     helpers.pulseHitFlash?.(linkedEnemy.el);

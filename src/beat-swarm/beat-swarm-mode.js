@@ -408,9 +408,64 @@ function clampHslHue(value = 0) {
   const n = Number(value) || 0;
   return ((n % 360) + 360) % 360;
 }
+function getCircularHueDistance(a = 0, b = 0) {
+  const delta = Math.abs(clampHslHue(a) - clampHslHue(b));
+  return Math.min(delta, 360 - delta);
+}
 function getLaneHueBase(laneLike = 'lead') {
   const lane = normalizeEnemyInstrumentLane(laneLike, 'lead');
   return Number(ROLE_COLOR_HUE_BY_LANE[lane] ?? ROLE_COLOR_HUE_BY_LANE.lead);
+}
+function collectAssignedMusicalIdentityHues() {
+  const seen = new Set();
+  const hues = [];
+  const pushHue = (value) => {
+    const hue = clampHslHue(value);
+    const key = String(Math.round(hue * 1000));
+    if (seen.has(key)) return;
+    seen.add(key);
+    hues.push(hue);
+  };
+  const maps = [
+    musicIdentityVisualRuntime.colorByContinuityId,
+    musicIdentityVisualRuntime.colorByInstrumentId,
+  ];
+  for (const map of maps) {
+    if (!(map instanceof Map)) continue;
+    for (const value of map.values()) {
+      if (!value || typeof value !== 'object') continue;
+      pushHue(value.hue);
+    }
+  }
+  return hues;
+}
+function chooseIdentityHue(baseHue = 0, seed = 0) {
+  const candidateOffsets = [0, 16, -16, 30, -30, 42, -42];
+  const assignedHues = collectAssignedMusicalIdentityHues();
+  if (!assignedHues.length) return clampHslHue(baseHue);
+
+  const rotation = Math.abs(Math.trunc(Number(seed) || 0)) % candidateOffsets.length;
+  let bestHue = clampHslHue(baseHue);
+  let bestDistance = -1;
+  let bestOffsetMagnitude = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < candidateOffsets.length; i += 1) {
+    const offset = candidateOffsets[(i + rotation) % candidateOffsets.length];
+    const hue = clampHslHue(baseHue + offset);
+    let minDistance = 180;
+    for (const existingHue of assignedHues) {
+      minDistance = Math.min(minDistance, getCircularHueDistance(hue, existingHue));
+    }
+    const offsetMagnitude = Math.abs(offset);
+    if (
+      minDistance > bestDistance
+      || (minDistance === bestDistance && offsetMagnitude < bestOffsetMagnitude)
+    ) {
+      bestHue = hue;
+      bestDistance = minDistance;
+      bestOffsetMagnitude = offsetMagnitude;
+    }
+  }
+  return bestHue;
 }
 function makeRoleColorSetFromIdentity(identity = null) {
   const id = identity && typeof identity === 'object' ? identity : {};
@@ -419,8 +474,8 @@ function makeRoleColorSetFromIdentity(identity = null) {
   const seedA = hashStringSeed(`music-role-hue|${lane}|${instrumentKey}`);
   const seedB = hashStringSeed(`music-role-sat|${instrumentKey}`);
   const baseHue = getLaneHueBase(lane);
-  const hueOffset = Math.round((seededNoise01(seedA) * 24) - 12);
-  const hue = clampHslHue(baseHue + hueOffset);
+  const hueOffset = Math.round((seededNoise01(seedA) * 18) - 9);
+  const hue = chooseIdentityHue(baseHue + hueOffset, seedA);
   const saturation = Math.max(52, Math.min(88, Math.round(66 + (seededNoise01(seedB) * 14))));
   const lightness = lane === 'bass'
     ? 46
@@ -7056,6 +7111,11 @@ function spawnEnemyAt(clientX, clientY, options = null) {
   }
   const linkedSpawnerId = Number.isFinite(options?.linkedSpawnerId) ? Math.trunc(Number(options.linkedSpawnerId)) : null;
   const linkedSpawnerStepIndex = Number.isFinite(options?.linkedSpawnerStepIndex) ? Math.trunc(Number(options.linkedSpawnerStepIndex)) : null;
+  const identityRole = normalizeSwarmRole(options?.role || BEAT_EVENT_ROLES.ACCENT, BEAT_EVENT_ROLES.ACCENT);
+  const identityInstrumentId = String(options?.instrumentId || '').trim();
+  const identityContinuityId = String(options?.continuityId || '').trim();
+  const identityLayer = normalizeEnemyMusicLayer(options?.layer || '', identityRole === BEAT_EVENT_ROLES.BASS ? 'foundation' : 'sparkle');
+  const identityNote = normalizeSwarmNoteName(options?.note) || '';
   let linkedSpawnerLineEl = null;
   if (linkedSpawnerId && linkedSpawnerStepIndex != null) {
     linkedSpawnerLineEl = document.createElement('div');
@@ -7098,13 +7158,15 @@ function spawnEnemyAt(clientX, clientY, options = null) {
   };
   enemies.push(created);
   const group = ensureSingletonMusicGroupForEnemy(created, {
-    role: getSwarmRoleForEnemy(created, BEAT_EVENT_ROLES.ACCENT),
+    role: identityRole || getSwarmRoleForEnemy(created, BEAT_EVENT_ROLES.ACCENT),
     actionType: 'enemy-accent',
-    note: created.soundNote,
-    instrumentId: resolveSwarmRoleInstrumentId(
-      getSwarmRoleForEnemy(created, BEAT_EVENT_ROLES.ACCENT),
+    note: identityNote || created.soundNote,
+    instrumentId: identityInstrumentId || resolveSwarmRoleInstrumentId(
+      identityRole || getSwarmRoleForEnemy(created, BEAT_EVENT_ROLES.ACCENT),
       resolveSwarmSoundInstrumentId('projectile') || 'tone'
     ),
+    continuityId: identityContinuityId || '',
+    layer: identityLayer,
     lifecycleState: created.lifecycleState,
   });
   syncSingletonEnemyStateFromMusicGroup(created, group);
@@ -7559,7 +7621,9 @@ function spawnSpawnerEnemyAt(clientX, clientY, options = null) {
   const role = String(options?.role || '').trim().toLowerCase();
   const profileBase = options?.profile || createSpawnerEnemyRhythmProfile({ role });
   const previewEnemyId = enemyIdSeq;
-  const profile = buildSpawnerProfileVariant(profileBase, previewEnemyId, String(options?.motifScopeKey || 'spawn'));
+  const profile = profileBase && typeof profileBase === 'object'
+    ? profileBase
+    : createSpawnerEnemyRhythmProfile({ role });
   const el = document.createElement('div');
   el.className = 'beat-swarm-enemy is-spawner-enemy';
   const grid = document.createElement('div');
@@ -7713,17 +7777,14 @@ function maintainSpawnerEnemyPopulation() {
     updateSpawnerEnemyActiveCells(enemy, Array.isArray(syncGroup?.steps) ? syncGroup.steps : enemy?.spawnerSteps);
   }
   const motif = getComposerMotif(motifScopeKey, 'spawner-drum', () => createSpawnerEnemyRhythmProfile({ role: 'drum' }));
-  applySpawnerCollisionAvoidance(spawners.filter((e) => !e?.retreating));
   for (const enemy of spawners) {
     if (enemy?.retreating) continue;
-    if (String(enemy?.motifScopeKey || '') === motifScopeKey) continue;
     enemy.motifScopeKey = motifScopeKey;
-    const varied = buildSpawnerProfileVariant(motif, Math.trunc(Number(enemy?.id) || 0), motifScopeKey);
-    enemy.spawnerSteps = Array.isArray(varied?.steps) ? varied.steps.slice(0, 8) : enemy.spawnerSteps;
-    enemy.spawnerNoteIndices = Array.isArray(varied?.noteIndices) ? varied.noteIndices.slice(0, 8) : enemy.spawnerNoteIndices;
-    enemy.spawnerNotePalette = Array.isArray(varied?.notePalette) ? varied.notePalette.slice() : enemy.spawnerNotePalette;
+    enemy.spawnerSteps = Array.isArray(motif?.steps) ? motif.steps.slice(0, 8) : enemy.spawnerSteps;
+    enemy.spawnerNoteIndices = Array.isArray(motif?.noteIndices) ? motif.noteIndices.slice(0, 8) : enemy.spawnerNoteIndices;
+    enemy.spawnerNotePalette = Array.isArray(motif?.notePalette) ? motif.notePalette.slice() : enemy.spawnerNotePalette;
     enemy.spawnerNoteName = clampNoteToDirectorPool(
-      normalizeSwarmNoteName(varied?.baseNoteName) || enemy.spawnerNoteName || 'C4',
+      normalizeSwarmNoteName(motif?.baseNoteName) || enemy.spawnerNoteName || 'C4',
       Math.trunc(Number(enemy?.id) || 0)
     );
     enemy.spawnerInstrument = sanitizeEnemyMusicInstrumentId(
