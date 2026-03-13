@@ -26,6 +26,8 @@ export function handleTransportStoppedBeatUpdateRuntime(options = null) {
     for (const lane of Object.values(state.musicLaneRuntime)) {
       if (!lane || typeof lane !== 'object') continue;
       lane.phraseId = '';
+      lane.phraseFamily = '';
+      lane.patternKey = '';
       lane.instrumentId = '';
       lane.colourId = '';
       lane.continuityId = '';

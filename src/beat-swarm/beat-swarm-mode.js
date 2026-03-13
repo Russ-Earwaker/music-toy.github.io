@@ -2275,18 +2275,113 @@ function getFoundationLanePhraseLibrary() {
     ? FOUNDATION_LANE_PHRASE_LIBRARY
     : [{ id: 'foundation_fallback', steps: [true, false, false, true, false, true, false, false] }];
 }
-function setFoundationLanePhrase(phraseLike = null, barIndex = 0) {
+function countFoundationPhraseHits(stepsLike = null) {
+  return cloneFoundationPhraseSteps(stepsLike).reduce((sum, step) => sum + (step ? 1 : 0), 0);
+}
+function buildFoundationPhrasePatternKey(stepsLike = null) {
+  return cloneFoundationPhraseSteps(stepsLike).map((v) => (v ? '1' : '0')).join('');
+}
+function cloneFoundationPhraseEntry(phraseLike = null, fallbackId = 'foundation_fallback') {
   const phrase = phraseLike && typeof phraseLike === 'object' ? phraseLike : null;
-  const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const steps = cloneFoundationPhraseSteps(phrase?.steps);
+  return {
+    id: String(phrase?.id || fallbackId).trim().toLowerCase() || fallbackId,
+    family: String(phrase?.family || '').trim().toLowerCase(),
+    steps,
+    patternKey: buildFoundationPhrasePatternKey(steps),
+  };
+}
+function getFoundationPhraseLockDurationBars(seedKey = '') {
+  const seed = hashStringSeed(`foundation-lock|${String(seedKey || '').trim()}`);
+  return 4 + (Math.max(0, Math.floor(seededNoise01(seed) * 5)) % 5);
+}
+function mutateFoundationPhraseEntry(basePhraseLike = null, barIndex = 0, seedKey = '') {
+  const base = cloneFoundationPhraseEntry(basePhraseLike);
+  const steps = base.steps.slice();
+  const hits = countFoundationPhraseHits(steps);
+  const mutableOn = [];
+  const mutableOff = [];
+  for (let i = 1; i < steps.length; i++) {
+    if (steps[i]) mutableOn.push(i);
+    else mutableOff.push(i);
+  }
+  const preferAdd = hits <= 2;
+  const preferRemove = hits >= 4;
+  const chooseFrom = (arr, salt) => {
+    if (!arr.length) return -1;
+    const seed = hashStringSeed(`foundation-mutate|${seedKey}|${barIndex}|${salt}|${base.patternKey}`);
+    return arr[Math.max(0, Math.floor(seededNoise01(seed) * arr.length)) % arr.length];
+  };
+  let flipIndex = -1;
+  if (preferAdd) {
+    flipIndex = chooseFrom(mutableOff, 'add');
+  } else if (preferRemove) {
+    flipIndex = chooseFrom(mutableOn, 'remove');
+  } else {
+    const seed = hashStringSeed(`foundation-mutate-mode|${seedKey}|${barIndex}|${base.patternKey}`);
+    flipIndex = seededNoise01(seed) < 0.5
+      ? chooseFrom(mutableOff, 'add')
+      : chooseFrom(mutableOn, 'remove');
+    if (flipIndex < 0) flipIndex = chooseFrom(mutableOff, 'add-fallback');
+    if (flipIndex < 0) flipIndex = chooseFrom(mutableOn, 'remove-fallback');
+  }
+  if (flipIndex < 0) return base;
+  steps[flipIndex] = !steps[flipIndex];
+  const mutatedHits = countFoundationPhraseHits(steps);
+  if (mutatedHits < 2 || mutatedHits > 4) return base;
+  return {
+    id: `${base.id}_mut_${Math.max(0, Math.trunc(Number(barIndex) || 0))}`,
+    family: base.family,
+    steps,
+    patternKey: buildFoundationPhrasePatternKey(steps),
+    sourcePhraseId: base.id,
+  };
+}
+function chooseFoundationLanePhrase(barIndex = 0, options = null) {
+  const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const opts = options && typeof options === 'object' ? options : {};
+  const library = getFoundationLanePhraseLibrary().map((entry) => cloneFoundationPhraseEntry(entry));
+  const currentPhraseId = String(opts.currentPhraseId || '').trim().toLowerCase();
+  const currentFamily = String(opts.currentFamily || '').trim().toLowerCase();
+  const currentPatternKey = String(opts.currentPatternKey || '').trim();
+  const sectionId = String(opts.sectionId || 'default').trim().toLowerCase() || 'default';
+  const cycle = Math.max(0, Math.trunc(Number(opts.cycle) || 0));
+  const mutationChance = Math.max(0, Math.min(1, Number(opts.mutationChance) || 0.3));
+  const randomSeedKey = `${sectionId}|${cycle}|${bar}`;
+  if (opts.allowMutation && opts.currentPhrase && library.length) {
+    const mutationSeed = hashStringSeed(`foundation-mutation-chance|${randomSeedKey}|${currentPhraseId}|${currentPatternKey}`);
+    if (seededNoise01(mutationSeed) < mutationChance) {
+      const mutated = mutateFoundationPhraseEntry(opts.currentPhrase, bar, randomSeedKey);
+      if (mutated?.patternKey && mutated.patternKey !== currentPatternKey) return mutated;
+    }
+  }
+  const candidates = library.filter((entry) => {
+    if (!entry?.patternKey) return false;
+    if (entry.patternKey === currentPatternKey) return false;
+    if (currentFamily && entry.family && entry.family === currentFamily && library.length > 2) return false;
+    return true;
+  });
+  const pool = candidates.length ? candidates : library.filter((entry) => entry.patternKey !== currentPatternKey);
+  const finalPool = pool.length ? pool : library;
+  const seed = hashStringSeed(`foundation-select|${randomSeedKey}|${currentPhraseId}|${currentFamily}|${currentPatternKey}`);
+  const picked = finalPool[Math.max(0, Math.floor(seededNoise01(seed) * finalPool.length)) % finalPool.length] || finalPool[0] || null;
+  return picked || cloneFoundationPhraseEntry(null);
+}
+function setFoundationLanePhrase(phraseLike = null, barIndex = 0) {
+  const phrase = cloneFoundationPhraseEntry(phraseLike);
+  const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const steps = phrase.steps.slice();
   const nextPhraseId = String(phrase?.id || 'foundation_fallback').trim().toLowerCase() || 'foundation_fallback';
   const prevPhraseId = String(musicLayerRuntime.foundationPhraseId || '').trim().toLowerCase();
-  const changed = !!prevPhraseId && prevPhraseId !== nextPhraseId;
+  const prevPatternKey = buildFoundationPhrasePatternKey(musicLayerRuntime.foundationPhraseSteps);
+  const nextPatternKey = buildFoundationPhrasePatternKey(steps);
+  const changed = (!!prevPhraseId && prevPhraseId !== nextPhraseId) || (!!prevPatternKey && prevPatternKey !== nextPatternKey);
+  const lockDurationBars = getFoundationPhraseLockDurationBars(`${nextPhraseId}|${phrase.family}|${nextPatternKey}|${safeBar}`);
   musicLayerRuntime.foundationLaneId = 'foundation_lane';
   musicLayerRuntime.foundationPhraseId = nextPhraseId;
   musicLayerRuntime.foundationPhraseSteps = steps;
   musicLayerRuntime.foundationPhraseStartBar = safeBar;
-  musicLayerRuntime.foundationPhraseLockedUntilBar = safeBar + 3;
+  musicLayerRuntime.foundationPhraseLockedUntilBar = safeBar + Math.max(3, lockDurationBars - 1);
   if (changed) {
     musicLayerRuntime.foundationPatternChangeCount = Math.max(
       0,
@@ -2296,6 +2391,8 @@ function setFoundationLanePhrase(phraseLike = null, barIndex = 0) {
   const foundationLane = getMusicLaneRuntimeEntry('foundation_lane');
   if (foundationLane) {
     foundationLane.phraseId = nextPhraseId;
+    foundationLane.phraseFamily = String(phrase?.family || '').trim().toLowerCase();
+    foundationLane.patternKey = nextPatternKey;
     if (!(foundationLane.activeSinceBar >= 0)) foundationLane.activeSinceBar = safeBar;
     foundationLane.lastAssignedBar = safeBar;
     foundationLane.lifetimeBars = foundationLane.activeSinceBar >= 0 ? Math.max(1, (safeBar - foundationLane.activeSinceBar) + 1) : 0;
@@ -2313,27 +2410,37 @@ function ensureFoundationLanePlan(barIndex = 0, options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const currentSteps = cloneFoundationPhraseSteps(musicLayerRuntime.foundationPhraseSteps);
   const currentPhraseId = String(musicLayerRuntime.foundationPhraseId || '').trim().toLowerCase();
+  const currentPatternKey = buildFoundationPhrasePatternKey(currentSteps);
+  const foundationLane = getMusicLaneRuntimeEntry('foundation_lane');
+  const currentFamily = String(foundationLane?.phraseFamily || '').trim().toLowerCase();
   const lockedUntilBar = Math.max(-1, Math.trunc(Number(musicLayerRuntime.foundationPhraseLockedUntilBar) || -1));
   if (currentPhraseId && currentSteps.some(Boolean) && !opts.forceRefresh && bar <= lockedUntilBar) {
     return {
       laneId: String(musicLayerRuntime.foundationLaneId || 'foundation_lane'),
       phraseId: currentPhraseId,
+      family: currentFamily,
       steps: currentSteps,
       startBar: Math.max(0, Math.trunc(Number(musicLayerRuntime.foundationPhraseStartBar) || 0)),
       lockedUntilBar,
     };
   }
-  const library = getFoundationLanePhraseLibrary();
   const currentSectionId = String(composerRuntime.currentSectionId || 'default').trim().toLowerCase() || 'default';
   const currentCycle = Math.max(0, Math.trunc(Number(composerRuntime.currentCycle) || 0));
-  let phrase = library[0];
-  if (library.length > 1) {
-    const seed = hashStringSeed(`foundation-lane|${currentSectionId}|${currentCycle}|${bar}`);
-    const candidates = library.filter((entry) => String(entry?.id || '').trim().toLowerCase() !== currentPhraseId);
-    const pool = candidates.length ? candidates : library;
-    const idx = Math.max(0, Math.floor(seededNoise01(seed) * pool.length)) % pool.length;
-    phrase = pool[idx] || pool[0] || library[0];
-  }
+  const phrase = chooseFoundationLanePhrase(bar, {
+    sectionId: currentSectionId,
+    cycle: currentCycle,
+    currentPhraseId,
+    currentFamily,
+    currentPatternKey,
+    currentPhrase: {
+      id: currentPhraseId,
+      family: currentFamily,
+      steps: currentSteps,
+    },
+    allowMutation: !!currentPhraseId && currentSteps.some(Boolean),
+    mutationChance: currentPhraseId ? 0.34 : 0,
+  });
+  if (foundationLane) foundationLane.phraseFamily = String(phrase?.family || '').trim().toLowerCase();
   return setFoundationLanePhrase(phrase, bar);
 }
 function getFoundationLaneSnapshot(stepIndex = 0, barIndex = 0) {
@@ -10808,6 +10915,8 @@ export function enterBeatSwarmMode(options = null) {
   for (const lane of Object.values(musicLaneRuntime)) {
     if (!lane || typeof lane !== 'object') continue;
     lane.phraseId = '';
+    lane.phraseFamily = '';
+    lane.patternKey = '';
     lane.instrumentId = '';
     lane.colourId = '';
     lane.continuityId = '';
