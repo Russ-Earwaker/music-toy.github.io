@@ -1,7 +1,7 @@
 import { getZoomState } from '../zoom/ZoomCoordinator.js';
 import { screenToWorld, worldToScreen } from '../board-viewport.js';
 import { createBeatSwarmSpawnerRuntime, registerLoopgridSpawnerType } from './spawner-runtime.js';
-import { getLoopInfo, isRunning, start as startTransport, stop as stopTransport } from '../audio-core.js';
+import { DEFAULT_BPM, bpm as currentBpm, getLoopInfo, isRunning, setBpm, start as startTransport, stop as stopTransport } from '../audio-core.js';
 import { triggerInstrument } from '../audio-samples.js';
 import { getAllIds, getIdForDisplayName, getInstrumentEntries } from '../instrument-catalog.js';
 import { getSoundThemeKey, pickInstrumentForToy } from '../sound-theme.js';
@@ -64,6 +64,23 @@ import { ensurePauseWeaponUiRuntime, renderPauseWeaponUiRuntime } from './beat-s
 import { SWARM_MAX_SPEED, SWARM_ACCEL, SWARM_DECEL, SWARM_TURN_WEIGHT, SWARM_JOYSTICK_RADIUS, SWARM_STOP_EPS, SWARM_CAMERA_TARGET_SCALE, SWARM_ARENA_RADIUS_WORLD, SWARM_ARENA_RESIST_RANGE_WORLD, SWARM_ARENA_INWARD_ACCEL_WORLD, SWARM_ARENA_OUTWARD_BRAKE_WORLD, SWARM_ARENA_OUTWARD_CANCEL_WORLD, SWARM_ARENA_EDGE_BRAKE_WORLD, SWARM_ARENA_OUTER_SOFT_BUFFER_WORLD, SWARM_ARENA_RUBBER_K_WORLD, SWARM_ARENA_RUBBER_DAMP_LINEAR, SWARM_ARENA_RUBBER_DAMP_QUAD, SWARM_ARENA_SLINGSHOT_IMPULSE, SWARM_RELEASE_POST_FIRE_BORDER_SCALE, SWARM_RELEASE_POST_FIRE_DURATION, SWARM_RELEASE_BEAT_LEVEL_MAX, SWARM_RELEASE_MULTIPLIER_BASE, SWARM_RELEASE_MULTIPLIER_AT_MAX, SWARM_RELEASE_POST_FIRE_SPEED_SCALE, SWARM_RELEASE_BOUNCE_RESTITUTION, SWARM_RELEASE_BOUNCE_MIN_SPEED, SWARM_ARENA_PATH_SPEED_WORLD, SWARM_ARENA_PATH_MAX_TURN_RATE_RAD, SWARM_ARENA_PATH_TURN_SMOOTH, SWARM_ARENA_PATH_RETARGET_MIN, SWARM_ARENA_PATH_RETARGET_MAX, SWARM_STARFIELD_COUNT, SWARM_STARFIELD_PARALLAX_MIN, SWARM_STARFIELD_PARALLAX_MAX, SWARM_STARFIELD_PARALLAX_SHIFT_SCALE, BEAT_SWARM_SECTION_HEADING_COOLDOWN_MS, BEAT_SWARM_SECTION_HEADING_DURATION_MS, BEAT_SWARM_SECTION_HEADING_MIN_SECTION_BARS, SECTION_HEADING_TRANSITION_POLICY, BEAT_SWARM_FLAVOR_NAMING, beamSoundGateSlotKeys, beamSustainStateBySlot, SECTION_PRESENTATION_PROFILE_BY_ID, ENEMY_CAP, ENEMY_ACCEL, ENEMY_MAX_SPEED, ENEMY_HIT_RADIUS, ENEMY_SPAWN_START_SCALE, ENEMY_SPAWN_DURATION, ENEMY_TARGET_ACTIVE_COUNT, ENEMY_MANAGER_MAX_FALLBACK_PER_TICK, ENEMY_FALLBACK_SPAWN_MARGIN_PX, SPAWNER_ENEMY_ENABLED, SPAWNER_ENEMY_TARGET_COUNT, SPAWNER_ENEMY_HEALTH_MULTIPLIER, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME, SPAWNER_ENEMY_GRID_WORLD_OFFSET, SPAWNER_ENEMY_SPEED_MULTIPLIER, SPAWNER_ENEMY_BURST_MIN_PX, SPAWNER_ENEMY_BURST_MAX_PX, SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX, SPAWNER_SCHEDULING_ROTATION_BARS, SPAWNER_LINKED_ATTACK_SPEED, DRAW_SNAKE_ENEMY_ENABLED, DRAW_SNAKE_ENEMY_TARGET_COUNT, DRAW_SNAKE_ENEMY_HEALTH_MULTIPLIER, DRAW_SNAKE_SEGMENT_COUNT, DRAW_SNAKE_SEGMENT_SPACING_WORLD, DRAW_SNAKE_TRIGGER_SOUND_VOLUME, PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT, PLAYER_MASK_DUCK_KEEP_CHANCE_BY_CHANNEL, PLAYER_MASK_STEP_EVENT_KEEP_CHANCE, PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP, MUSIC_LAYER_POLICY, LOOP_ADMISSION_POLICY, REGISTRATION_GATE_POLICY, ROLE_COLOR_HUE_BY_LANE, MUSIC_ROLE_PULSE_POLICY, ONBOARDING_PHASE_FLOW, DRAW_SNAKE_PROJECTILE_SPEED, DRAW_SNAKE_PROJECTILE_DAMAGE, RETIRING_RETREAT_DELAY_SEC, DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK, DRAW_SNAKE_VISUAL_SCALE, DRAW_SNAKE_WIND_ACCEL, DRAW_SNAKE_WIND_FREQ_HZ, DRAW_SNAKE_SCREEN_MARGIN_PX, DRAW_SNAKE_EDGE_PULL_RATE, DRAW_SNAKE_NODE_SIZE_SCALE, DRAW_SNAKE_TURN_INTERVAL_MIN, DRAW_SNAKE_TURN_INTERVAL_MAX, DRAW_SNAKE_TURN_RATE_MIN, DRAW_SNAKE_TURN_RATE_MAX, DRAW_SNAKE_ARENA_BIAS_RADIUS_SCALE, DRAW_SNAKE_ARENA_BIAS_STRENGTH, COMPOSER_ENABLED, BEAT_SWARM_STYLE_ID, COMPOSER_BEATS_PER_BAR, COMPOSER_SECTIONS, COMPOSER_GROUPS_ENABLED, COMPOSER_GROUP_SIZE_MIN, COMPOSER_GROUP_SIZE_MAX, COMPOSER_GROUP_NOTES_MIN, COMPOSER_GROUP_NOTES_MAX, COMPOSER_GROUP_ACTIONS, COMPOSER_GROUP_PERFORMERS_MIN, COMPOSER_GROUP_PERFORMERS_MAX, COMPOSER_GROUP_PROJECTILE_SPEED, COMPOSER_GROUP_EXPLOSION_RADIUS_WORLD, COMPOSER_GROUP_EXPLOSION_TTL, LOW_THREAT_BURST_RADIUS_WORLD, LOW_THREAT_BURST_TTL, COMPOSER_GROUP_ACTION_PULSE_SECONDS, COMPOSER_GROUP_ACTION_PULSE_SCALE, COMPOSER_GROUP_LOOP_HITS_MIN, COMPOSER_GROUP_LOOP_HITS_MAX, COMPOSER_GROUP_SEPARATION_RADIUS_WORLD, COMPOSER_GROUP_SEPARATION_FORCE, COMPOSER_GROUP_COLORS, COMPOSER_GROUP_SHAPES, COMPOSER_GROUP_TEMPLATE_LIBRARY, DIRECTOR_ENERGY_STATE_SEQUENCE, DIRECTOR_ENERGY_STATE_CONFIG, DIRECTOR_ENERGY_STATE_ALIAS, DIRECTOR_STATE_THEME_CONFIG, DIRECTOR_CALL_RESPONSE_STATE_CONFIG, DIRECTOR_CALL_RESPONSE_PACING_CONFIG, PACING_ARRANGEMENT_INTENSITY_MULT, ENERGY_GRAVITY_CONFIG, SECTION_PACING_POLICY, COMPOSER_MOTIF_EPOCH_BARS, COMPOSER_MOTIF_LOCK_BARS, THEME_PERSISTENCE_POLICY, DRAW_SNAKE_NODE_PULSE_SECONDS, DRAW_SNAKE_NODE_PULSE_SCALE, composerRuntime, callResponseRuntime, energyStateRuntime, energyGravityRuntime, musicLayerRuntime, musicLaneRuntime, bassFoundationOwnerRuntime, bassKeepaliveRuntime, loopAdmissionRuntime, musicIdentityVisualRuntime, onboardingRuntime, sectionPresentationRuntime, starfieldSectionRuntime, readabilityMetricsRuntime, LOOPGRID_FALLBACK_NOTE_PALETTE, SPAWNER_ENEMY_GRID_STEP_TO_CELL, BEAM_SOURCE_DEATH_GRACE_SECONDS, ENEMY_DEATH_POP_FALLBACK_SECONDS, ENEMY_HEALTH_RAMP_PER_SECOND, PICKUP_COLLECT_RADIUS_PX, PROJECTILE_SPEED, PROJECTILE_HIT_RADIUS_PX, PROJECTILE_LIFETIME, PROJECTILE_SPLIT_ANGLE_RAD, PROJECTILE_BOOMERANG_RADIUS_WORLD, PROJECTILE_BOOMERANG_LOOP_SECONDS, PROJECTILE_BOOMERANG_SPIN_MULT, PROJECTILE_HOMING_ACQUIRE_RANGE_WORLD, PROJECTILE_HOMING_SPEED, PROJECTILE_HOMING_TURN_RATE, PROJECTILE_HOMING_ORBIT_RADIUS_WORLD, PROJECTILE_HOMING_ORBIT_ANG_VEL, PROJECTILE_HOMING_ORBIT_CHASE_SPEED, PROJECTILE_HOMING_ORBIT_TURN_RATE, PROJECTILE_HOMING_MAX_ORBITING, PROJECTILE_HOMING_RETURN_SNAP_DIST_WORLD, PROJECTILE_DESPAWN_OFFSCREEN_PAD_PX, PROJECTILE_COLLISION_GRACE_SECONDS, PROJECTILE_CHAIN_SPAWN_OFFSET_WORLD, HELPER_LIFETIME_BEATS, HELPER_ORBIT_RADIUS_WORLD, HELPER_ORBIT_ANG_VEL, HELPER_IMPACT_RADIUS_PX, HELPER_IMPACT_DAMAGE, HELPER_TURRET_SPAWN_OFFSET_WORLD, LASER_TTL, EXPLOSION_TTL, EXPLOSION_RADIUS_WORLD, EXPLOSION_PRIME_MAX_SCALE, BEAM_DAMAGE_PER_SECOND, PREVIEW_PROJECTILE_SPEED, PREVIEW_PROJECTILE_LIFETIME, PREVIEW_PROJECTILE_HIT_RADIUS, PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD, PREVIEW_PROJECTILE_BOOMERANG_RADIUS, PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS, PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE, PREVIEW_PROJECTILE_HOMING_SPEED, PREVIEW_PROJECTILE_HOMING_TURN_RATE, PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS, PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL, PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED, PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE, PREVIEW_PROJECTILE_HOMING_MAX_ORBITING, PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST, PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET, PREVIEW_HELPER_LIFETIME_BEATS, PREVIEW_HELPER_ORBIT_RADIUS, PREVIEW_HELPER_ORBIT_ANG_VEL, PREVIEW_HELPER_IMPACT_RADIUS, PREVIEW_HELPER_IMPACT_DAMAGE, PREVIEW_HELPER_TURRET_SPAWN_OFFSET, PREVIEW_LASER_TTL, PREVIEW_EXPLOSION_TTL, PREVIEW_EXPLOSION_RADIUS, PREVIEW_BEAM_DAMAGE_PER_SECOND, PREVIEW_ENEMY_COUNT, PREVIEW_ENEMY_HP, PREVIEW_BEAT_LEN_FALLBACK, SWARM_PENTATONIC_NOTES_ONE_OCTAVE, SWARM_SOURCE_MUSIC_IDENTITY_BY_TYPE, FOUNDATION_LANE_PHRASE_LIBRARY, } from './beat-swarm-mode-constants.js';
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
+const BEAT_SWARM_THEME_ID = 'beat-swarm-shmup';
+const BEAT_SWARM_ENTRY_BPM = 132;
+const BEAT_SWARM_THEME_PRESET = Object.freeze({
+  id: BEAT_SWARM_THEME_ID,
+  catalogTheme: BEAT_SWARM_THEME_ID,
+  roles: Object.freeze({
+    bass: 'BASS TONE 4',
+    lead: 'RETRO SAW',
+    accent: 'RETRO SQUARE',
+    motion: 'GAMING BLING',
+  }),
+  gameplay: Object.freeze({
+    playerWeapon: 'LASER',
+    projectile: 'RETRO PROJECTILE SUBTLE',
+    explosion: 'RETRO EXPLOSION SUBTLE',
+  }),
+});
 // Beat Swarm movement tuning.
 let active = false;
 let overlayEl = null;
@@ -95,6 +112,13 @@ let lastLaunchBeatLevel = 0;
 let postReleaseAssistTimer = 0;
 let outerForceContinuousSeconds = 0;
 let releaseForcePrimed = false;
+const beatSwarmSessionRuntime = {
+  themeOverrideActive: false,
+  themeId: '',
+  themeCatalogTheme: '',
+  tempoOverrideActive: false,
+  previousBpm: null,
+};
 let arenaPathHeadingRad = 0;
 let arenaPathTurnRateRad = 0;
 let arenaPathTargetTurnRateRad = 0;
@@ -2970,7 +2994,10 @@ const swarmSoundEventState = {
   count: Object.create(null),
 };
 const swarmSoundInstrumentCache = new Map();
-const swarmPaletteRuntime = createBeatSwarmPaletteRuntime();
+const swarmPaletteRuntime = createBeatSwarmPaletteRuntime({
+  getThemeKey: getBeatSwarmEffectiveThemeId,
+  getThemePreset: getBeatSwarmThemePreset,
+});
 const swarmPacingRuntime = createBeatSwarmPacing({ beatsPerBar: COMPOSER_BEATS_PER_BAR });
 const swarmMusicLab = createBeatSwarmMusicLab({
   beatsPerBar: COMPOSER_BEATS_PER_BAR,
@@ -2987,6 +3014,17 @@ const {
 } = createBeatSwarmSoundRoutingTools({
   getAllIds,
   getIdForDisplayName,
+  getEventInstrumentId(eventKey) {
+    if (!beatSwarmSessionRuntime.themeOverrideActive) return '';
+    const preset = getBeatSwarmThemePreset(getBeatSwarmEffectiveThemeId());
+    const gameplay = preset?.gameplay && typeof preset.gameplay === 'object' ? preset.gameplay : null;
+    const key = String(eventKey || '').trim();
+    if (!gameplay || !key) return '';
+    if (key === 'playerProjectile' || key === 'projectile') return String(gameplay.projectile || '').trim();
+    if (key === 'hitscan' || key === 'beam') return String(gameplay.playerWeapon || '').trim();
+    if (key === 'explosion') return String(gameplay.explosion || '').trim();
+    return '';
+  },
   normalizeInstrumentIdToken,
   normalizeSwarmRole,
   normalizeEnemyDeathFamily,
@@ -3088,6 +3126,62 @@ let lastFrameTs = 0;
 function safeSessionStorage() {
   try { return window.sessionStorage; } catch { return null; }
 }
+function getBeatSwarmThemePreset(themeId = '') {
+  const key = String(themeId || '').trim().toLowerCase();
+  if (key === BEAT_SWARM_THEME_ID) return BEAT_SWARM_THEME_PRESET;
+  return null;
+}
+function getBeatSwarmEffectiveThemeId() {
+  if (beatSwarmSessionRuntime.themeOverrideActive) {
+    return String(beatSwarmSessionRuntime.themeId || BEAT_SWARM_THEME_ID).trim() || BEAT_SWARM_THEME_ID;
+  }
+  return String(getSoundThemeKey?.() || '').trim();
+}
+function getBeatSwarmEffectiveCatalogThemeKey() {
+  if (beatSwarmSessionRuntime.themeOverrideActive) {
+    return String(beatSwarmSessionRuntime.themeCatalogTheme || BEAT_SWARM_THEME_PRESET.catalogTheme || '').trim();
+  }
+  return String(getSoundThemeKey?.() || '').trim();
+}
+function enterBeatSwarmThemeOverride(restoreState = null) {
+  const restoredSession = restoreState?.session && typeof restoreState.session === 'object'
+    ? restoreState.session
+    : null;
+  const preset = getBeatSwarmThemePreset(String(restoredSession?.themeId || BEAT_SWARM_THEME_ID).trim()) || BEAT_SWARM_THEME_PRESET;
+  beatSwarmSessionRuntime.themeOverrideActive = true;
+  beatSwarmSessionRuntime.themeId = String(preset.id || BEAT_SWARM_THEME_ID).trim() || BEAT_SWARM_THEME_ID;
+  beatSwarmSessionRuntime.themeCatalogTheme = String(
+    restoredSession?.themeCatalogTheme || preset.catalogTheme || ''
+  ).trim();
+  try { swarmPaletteRuntime.invalidate(); } catch {}
+}
+function exitBeatSwarmThemeOverride() {
+  beatSwarmSessionRuntime.themeOverrideActive = false;
+  beatSwarmSessionRuntime.themeId = '';
+  beatSwarmSessionRuntime.themeCatalogTheme = '';
+  try { swarmPaletteRuntime.invalidate(); } catch {}
+}
+function enterBeatSwarmTempo(restoreState = null) {
+  const restoredSession = restoreState?.session && typeof restoreState.session === 'object'
+    ? restoreState.session
+    : null;
+  const restoredPreviousBpm = Number(restoredSession?.previousBpm);
+  if (!beatSwarmSessionRuntime.tempoOverrideActive) {
+    beatSwarmSessionRuntime.previousBpm = Number.isFinite(restoredPreviousBpm)
+      ? restoredPreviousBpm
+      : (Number.isFinite(Number(currentBpm)) ? Number(currentBpm) : DEFAULT_BPM);
+  }
+  beatSwarmSessionRuntime.tempoOverrideActive = true;
+  try { setBpm(BEAT_SWARM_ENTRY_BPM); } catch {}
+}
+function exitBeatSwarmTempoRestore() {
+  const restoreBpm = Number(beatSwarmSessionRuntime.previousBpm);
+  const shouldRestore = beatSwarmSessionRuntime.tempoOverrideActive && Number.isFinite(restoreBpm);
+  beatSwarmSessionRuntime.tempoOverrideActive = false;
+  beatSwarmSessionRuntime.previousBpm = null;
+  if (!shouldRestore) return;
+  try { setBpm(restoreBpm); } catch {}
+}
 function captureBeatSwarmState() {
   const z = getZoomState();
   const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
@@ -3095,6 +3189,15 @@ function captureBeatSwarmState() {
   const y = Number.isFinite(z?.targetY) ? z.targetY : (Number.isFinite(z?.currentY) ? z.currentY : 0);
   return {
     active: !!active,
+    session: {
+      themeOverrideActive: !!beatSwarmSessionRuntime.themeOverrideActive,
+      themeId: String(beatSwarmSessionRuntime.themeId || '').trim(),
+      themeCatalogTheme: String(beatSwarmSessionRuntime.themeCatalogTheme || '').trim(),
+      tempoOverrideActive: !!beatSwarmSessionRuntime.tempoOverrideActive,
+      previousBpm: Number.isFinite(Number(beatSwarmSessionRuntime.previousBpm))
+        ? Number(beatSwarmSessionRuntime.previousBpm)
+        : null,
+    },
     viewport: { scale, x, y },
     velocity: { x: velocityX, y: velocityY },
     shipFacingDeg,
@@ -3458,6 +3561,14 @@ function spawnEnemyFromState(state) {
 }
 function restoreBeatSwarmState(state) {
   if (!state || typeof state !== 'object') return;
+  const restoredSession = state.session && typeof state.session === 'object' ? state.session : null;
+  beatSwarmSessionRuntime.themeOverrideActive = restoredSession?.themeOverrideActive === true;
+  beatSwarmSessionRuntime.themeId = String(restoredSession?.themeId || '').trim();
+  beatSwarmSessionRuntime.themeCatalogTheme = String(restoredSession?.themeCatalogTheme || '').trim();
+  beatSwarmSessionRuntime.tempoOverrideActive = restoredSession?.tempoOverrideActive === true;
+  beatSwarmSessionRuntime.previousBpm = Number.isFinite(Number(restoredSession?.previousBpm))
+    ? Number(restoredSession.previousBpm)
+    : null;
   const vp = state.viewport;
   if (vp && Number.isFinite(vp.scale) && Number.isFinite(vp.x) && Number.isFinite(vp.y)) {
     try { window.__setBoardViewportNow?.(vp.scale, vp.x, vp.y); } catch {}
@@ -6922,7 +7033,7 @@ const beatSwarmInstrumentLaneTools = createBeatSwarmInstrumentLaneTools({
     motion: BEAT_EVENT_ROLES.MOTION,
   },
   getInstrumentEntries: () => getInstrumentEntries(),
-  getSoundThemeKey,
+  getSoundThemeKey: getBeatSwarmEffectiveCatalogThemeKey,
   pickInstrumentForToy,
   getUsedWeaponInstrumentIds,
   getUsedEnemyInstrumentIds,
@@ -10643,6 +10754,8 @@ export function enterBeatSwarmMode(options = null) {
   if (active) return true;
   const restoreState = options && typeof options === 'object' ? options.restoreState : null;
   ensureUi();
+  enterBeatSwarmThemeOverride(restoreState);
+  enterBeatSwarmTempo(restoreState);
   active = true;
   dragPointerId = null;
   velocityX = 0;
@@ -10929,6 +11042,8 @@ export function exitBeatSwarmMode() {
     lastBeatIndex,
     lastWeaponTuneStepIndex,
   } = exitState);
+  exitBeatSwarmThemeOverride();
+  exitBeatSwarmTempoRestore();
   return true;
 }
 export function isBeatSwarmModeActive() {

@@ -28,7 +28,7 @@ const ROLE_LIST = Object.freeze([
 ]);
 
 export const BEAT_SWARM_DEFAULT_PALETTE = Object.freeze({
-  id: 'beat-swarm-default',
+  id: 'beat-swarm-shmup',
   gameplay: Object.freeze({
     playerWeapons: Object.freeze({
       projectile: Object.freeze({ family: 'projectile' }),
@@ -48,6 +48,14 @@ export const BEAT_SWARM_DEFAULT_PALETTE = Object.freeze({
     lead: Object.freeze({ family: 'lead' }),
     accent: Object.freeze({ family: 'accent' }),
     motion: Object.freeze({ family: 'motion' }),
+  }),
+  laneRoles: Object.freeze({
+    foundation: Object.freeze({ family: 'bass' }),
+    kick_or_low_pulse: Object.freeze({ family: 'bass' }),
+    primary_loop: Object.freeze({ family: 'lead' }),
+    secondary_loop: Object.freeze({ family: 'accent' }),
+    sparkle: Object.freeze({ family: 'motion' }),
+    player_weapon: Object.freeze({ family: 'lead' }),
   }),
 });
 
@@ -320,8 +328,16 @@ function clampRange(value, lo, hi) {
   return Math.max(Number(lo) || 0, Math.min(Number(hi) || 0, Number(value) || 0));
 }
 
-export function createBeatSwarmPaletteRuntime() {
+export function createBeatSwarmPaletteRuntime(options = null) {
+  const getThemePreset = typeof options?.getThemePreset === 'function'
+    ? options.getThemePreset
+    : (() => null);
+  const getThemeKey = typeof options?.getThemeKey === 'function'
+    ? options.getThemeKey
+    : (() => String(getSoundThemeKey?.() || '').trim());
   let currentTheme = '';
+  let currentCatalogTheme = '';
+  let currentThemePreset = null;
   let paletteIndex = 0;
   let lastAppliedBar = -1;
   let paletteStartBar = 0;
@@ -339,13 +355,19 @@ export function createBeatSwarmPaletteRuntime() {
 
   function reseedPalette(barIndex = 0, preserveRoles = false) {
     const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
-    currentTheme = String(getSoundThemeKey?.() || '').trim();
+    currentTheme = String(getThemeKey?.() || '').trim();
+    currentThemePreset = getThemePreset?.(currentTheme) || null;
+    currentCatalogTheme = String(currentThemePreset?.catalogTheme || currentTheme || '').trim();
     const used = new Set();
     const nextMap = Object.create(null);
     for (const role of ROLE_LIST) {
       const prev = preserveRoles ? String(roleInstruments[role] || '').trim() : '';
-      const prevReusable = prev && canReuseRoleInstrumentId(prev, currentTheme, role);
-      const picked = prevReusable ? prev : pickRoleInstrument(currentTheme, role, used, prev);
+      const presetId = String(currentThemePreset?.roles?.[role] || '').trim();
+      const explicitPresetId = presetId && canReuseRoleInstrumentId(presetId, currentCatalogTheme, role)
+        ? presetId
+        : '';
+      const prevReusable = !explicitPresetId && prev && canReuseRoleInstrumentId(prev, currentCatalogTheme, role);
+      const picked = explicitPresetId || (prevReusable ? prev : pickRoleInstrument(currentCatalogTheme, role, used, prev));
       nextMap[role] = picked;
       if (picked) used.add(picked);
     }
@@ -410,7 +432,7 @@ export function createBeatSwarmPaletteRuntime() {
     const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
     if (lastAppliedBar === bar) return;
     lastAppliedBar = bar;
-    const themeKey = String(getSoundThemeKey?.() || '').trim();
+    const themeKey = String(getThemeKey?.() || '').trim();
     if (!roleInstruments[BEAT_EVENT_ROLES.BASS]) {
       reseedPalette(bar, false);
       return;
@@ -448,6 +470,7 @@ export function createBeatSwarmPaletteRuntime() {
     return {
       id: BEAT_SWARM_DEFAULT_PALETTE.id,
       theme: currentTheme,
+      catalogTheme: currentCatalogTheme,
       paletteIndex,
       paletteStartBar,
       nextPaletteBar,

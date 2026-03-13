@@ -16,6 +16,9 @@ export function createBeatSwarmSoundRoutingTools(options = {}) {
   const resolveRoleInstrument = typeof options.resolveRoleInstrument === 'function'
     ? options.resolveRoleInstrument
     : ((_role, fallback) => fallback);
+  const getEventInstrumentId = typeof options.getEventInstrumentId === 'function'
+    ? options.getEventInstrumentId
+    : (() => '');
   const swarmSoundEvents = (options.swarmSoundEvents && typeof options.swarmSoundEvents === 'object')
     ? options.swarmSoundEvents
     : Object.freeze({});
@@ -49,6 +52,14 @@ export function createBeatSwarmSoundRoutingTools(options = {}) {
     if (!key) return 'tone';
     const allIds = Array.isArray(getAllIds?.()) ? getAllIds().map((id) => String(id || '').trim()).filter(Boolean) : [];
     const idSet = new Set(allIds);
+    const explicitId = resolveInstrumentIdOrFallback(
+      getEventInstrumentId(key),
+      String(getIdForDisplayName('Tone (Sine)') || '').trim() || 'tone'
+    );
+    if (explicitId && (idSet.has(explicitId) || allIds.length === 0)) {
+      swarmSoundInstrumentCache.set(key, explicitId);
+      return explicitId;
+    }
     if (swarmSoundInstrumentCache.has(key)) {
       const cached = String(swarmSoundInstrumentCache.get(key) || '').trim();
       if (cached && (idSet.has(cached) || allIds.length === 0)) return cached;
