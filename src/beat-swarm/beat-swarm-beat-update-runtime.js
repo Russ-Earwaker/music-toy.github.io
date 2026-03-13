@@ -22,6 +22,21 @@ export function handleTransportStoppedBeatUpdateRuntime(options = null) {
     state.musicLayerRuntime.sparkleBarIndex = -1;
     state.musicLayerRuntime.sparkleEventsInBar = 0;
   }
+  if (state.musicLaneRuntime) {
+    for (const lane of Object.values(state.musicLaneRuntime)) {
+      if (!lane || typeof lane !== 'object') continue;
+      lane.phraseId = '';
+      lane.instrumentId = '';
+      lane.colourId = '';
+      lane.continuityId = '';
+      lane.lifetimeBars = 0;
+      lane.performerEnemyId = 0;
+      lane.performerGroupId = 0;
+      lane.performerType = '';
+      lane.activeSinceBar = -1;
+      lane.lastAssignedBar = -1;
+    }
+  }
   if (state.loopAdmissionRuntime) {
     state.loopAdmissionRuntime.identityFirstForegroundStep?.clear?.();
     state.loopAdmissionRuntime.currentForegroundIdentityKey = '';

@@ -61,7 +61,7 @@ import { applyExitBeatSwarmRuntimeWrapper } from './beat-swarm-exit-wrapper.js';
 import { installBeatSwarmPersistenceRuntime } from './beat-swarm-persistence-runtime.js';
 import { createBeatSwarmPerfDebugToolsRuntime, createBeatSwarmDebugApiRuntime, createBeatSwarmMusicLabApiRuntime, getBeatSwarmStabilitySmokeChecksRuntime, installBeatSwarmDebugGlobalRuntime, installBeatSwarmModeGlobalRuntime, installBeatSwarmMusicLabGlobalRuntime, } from './beat-swarm-debug-runtime.js';
 import { ensurePauseWeaponUiRuntime, renderPauseWeaponUiRuntime } from './beat-swarm-pause-weapon-ui-runtime.js';
-import { SWARM_MAX_SPEED, SWARM_ACCEL, SWARM_DECEL, SWARM_TURN_WEIGHT, SWARM_JOYSTICK_RADIUS, SWARM_STOP_EPS, SWARM_CAMERA_TARGET_SCALE, SWARM_ARENA_RADIUS_WORLD, SWARM_ARENA_RESIST_RANGE_WORLD, SWARM_ARENA_INWARD_ACCEL_WORLD, SWARM_ARENA_OUTWARD_BRAKE_WORLD, SWARM_ARENA_OUTWARD_CANCEL_WORLD, SWARM_ARENA_EDGE_BRAKE_WORLD, SWARM_ARENA_OUTER_SOFT_BUFFER_WORLD, SWARM_ARENA_RUBBER_K_WORLD, SWARM_ARENA_RUBBER_DAMP_LINEAR, SWARM_ARENA_RUBBER_DAMP_QUAD, SWARM_ARENA_SLINGSHOT_IMPULSE, SWARM_RELEASE_POST_FIRE_BORDER_SCALE, SWARM_RELEASE_POST_FIRE_DURATION, SWARM_RELEASE_BEAT_LEVEL_MAX, SWARM_RELEASE_MULTIPLIER_BASE, SWARM_RELEASE_MULTIPLIER_AT_MAX, SWARM_RELEASE_POST_FIRE_SPEED_SCALE, SWARM_RELEASE_BOUNCE_RESTITUTION, SWARM_RELEASE_BOUNCE_MIN_SPEED, SWARM_ARENA_PATH_SPEED_WORLD, SWARM_ARENA_PATH_MAX_TURN_RATE_RAD, SWARM_ARENA_PATH_TURN_SMOOTH, SWARM_ARENA_PATH_RETARGET_MIN, SWARM_ARENA_PATH_RETARGET_MAX, SWARM_STARFIELD_COUNT, SWARM_STARFIELD_PARALLAX_MIN, SWARM_STARFIELD_PARALLAX_MAX, SWARM_STARFIELD_PARALLAX_SHIFT_SCALE, BEAT_SWARM_SECTION_HEADING_COOLDOWN_MS, BEAT_SWARM_SECTION_HEADING_DURATION_MS, BEAT_SWARM_SECTION_HEADING_MIN_SECTION_BARS, SECTION_HEADING_TRANSITION_POLICY, BEAT_SWARM_FLAVOR_NAMING, beamSoundGateSlotKeys, beamSustainStateBySlot, SECTION_PRESENTATION_PROFILE_BY_ID, ENEMY_CAP, ENEMY_ACCEL, ENEMY_MAX_SPEED, ENEMY_HIT_RADIUS, ENEMY_SPAWN_START_SCALE, ENEMY_SPAWN_DURATION, ENEMY_TARGET_ACTIVE_COUNT, ENEMY_MANAGER_MAX_FALLBACK_PER_TICK, ENEMY_FALLBACK_SPAWN_MARGIN_PX, SPAWNER_ENEMY_ENABLED, SPAWNER_ENEMY_TARGET_COUNT, SPAWNER_ENEMY_HEALTH_MULTIPLIER, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME, SPAWNER_ENEMY_GRID_WORLD_OFFSET, SPAWNER_ENEMY_SPEED_MULTIPLIER, SPAWNER_ENEMY_BURST_MIN_PX, SPAWNER_ENEMY_BURST_MAX_PX, SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX, SPAWNER_SCHEDULING_ROTATION_BARS, SPAWNER_LINKED_ATTACK_SPEED, DRAW_SNAKE_ENEMY_ENABLED, DRAW_SNAKE_ENEMY_TARGET_COUNT, DRAW_SNAKE_ENEMY_HEALTH_MULTIPLIER, DRAW_SNAKE_SEGMENT_COUNT, DRAW_SNAKE_SEGMENT_SPACING_WORLD, DRAW_SNAKE_TRIGGER_SOUND_VOLUME, PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT, PLAYER_MASK_DUCK_KEEP_CHANCE_BY_CHANNEL, PLAYER_MASK_STEP_EVENT_KEEP_CHANCE, PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP, MUSIC_LAYER_POLICY, LOOP_ADMISSION_POLICY, REGISTRATION_GATE_POLICY, ROLE_COLOR_HUE_BY_LANE, MUSIC_ROLE_PULSE_POLICY, ONBOARDING_PHASE_FLOW, DRAW_SNAKE_PROJECTILE_SPEED, DRAW_SNAKE_PROJECTILE_DAMAGE, RETIRING_RETREAT_DELAY_SEC, DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK, DRAW_SNAKE_VISUAL_SCALE, DRAW_SNAKE_WIND_ACCEL, DRAW_SNAKE_WIND_FREQ_HZ, DRAW_SNAKE_SCREEN_MARGIN_PX, DRAW_SNAKE_EDGE_PULL_RATE, DRAW_SNAKE_NODE_SIZE_SCALE, DRAW_SNAKE_TURN_INTERVAL_MIN, DRAW_SNAKE_TURN_INTERVAL_MAX, DRAW_SNAKE_TURN_RATE_MIN, DRAW_SNAKE_TURN_RATE_MAX, DRAW_SNAKE_ARENA_BIAS_RADIUS_SCALE, DRAW_SNAKE_ARENA_BIAS_STRENGTH, COMPOSER_ENABLED, BEAT_SWARM_STYLE_ID, COMPOSER_BEATS_PER_BAR, COMPOSER_SECTIONS, COMPOSER_GROUPS_ENABLED, COMPOSER_GROUP_SIZE_MIN, COMPOSER_GROUP_SIZE_MAX, COMPOSER_GROUP_NOTES_MIN, COMPOSER_GROUP_NOTES_MAX, COMPOSER_GROUP_ACTIONS, COMPOSER_GROUP_PERFORMERS_MIN, COMPOSER_GROUP_PERFORMERS_MAX, COMPOSER_GROUP_PROJECTILE_SPEED, COMPOSER_GROUP_EXPLOSION_RADIUS_WORLD, COMPOSER_GROUP_EXPLOSION_TTL, LOW_THREAT_BURST_RADIUS_WORLD, LOW_THREAT_BURST_TTL, COMPOSER_GROUP_ACTION_PULSE_SECONDS, COMPOSER_GROUP_ACTION_PULSE_SCALE, COMPOSER_GROUP_LOOP_HITS_MIN, COMPOSER_GROUP_LOOP_HITS_MAX, COMPOSER_GROUP_SEPARATION_RADIUS_WORLD, COMPOSER_GROUP_SEPARATION_FORCE, COMPOSER_GROUP_COLORS, COMPOSER_GROUP_SHAPES, COMPOSER_GROUP_TEMPLATE_LIBRARY, DIRECTOR_ENERGY_STATE_SEQUENCE, DIRECTOR_ENERGY_STATE_CONFIG, DIRECTOR_ENERGY_STATE_ALIAS, DIRECTOR_STATE_THEME_CONFIG, DIRECTOR_CALL_RESPONSE_STATE_CONFIG, DIRECTOR_CALL_RESPONSE_PACING_CONFIG, PACING_ARRANGEMENT_INTENSITY_MULT, ENERGY_GRAVITY_CONFIG, SECTION_PACING_POLICY, COMPOSER_MOTIF_EPOCH_BARS, COMPOSER_MOTIF_LOCK_BARS, THEME_PERSISTENCE_POLICY, DRAW_SNAKE_NODE_PULSE_SECONDS, DRAW_SNAKE_NODE_PULSE_SCALE, composerRuntime, callResponseRuntime, energyStateRuntime, energyGravityRuntime, musicLayerRuntime, bassFoundationOwnerRuntime, bassKeepaliveRuntime, loopAdmissionRuntime, musicIdentityVisualRuntime, onboardingRuntime, sectionPresentationRuntime, starfieldSectionRuntime, readabilityMetricsRuntime, LOOPGRID_FALLBACK_NOTE_PALETTE, SPAWNER_ENEMY_GRID_STEP_TO_CELL, BEAM_SOURCE_DEATH_GRACE_SECONDS, ENEMY_DEATH_POP_FALLBACK_SECONDS, ENEMY_HEALTH_RAMP_PER_SECOND, PICKUP_COLLECT_RADIUS_PX, PROJECTILE_SPEED, PROJECTILE_HIT_RADIUS_PX, PROJECTILE_LIFETIME, PROJECTILE_SPLIT_ANGLE_RAD, PROJECTILE_BOOMERANG_RADIUS_WORLD, PROJECTILE_BOOMERANG_LOOP_SECONDS, PROJECTILE_BOOMERANG_SPIN_MULT, PROJECTILE_HOMING_ACQUIRE_RANGE_WORLD, PROJECTILE_HOMING_SPEED, PROJECTILE_HOMING_TURN_RATE, PROJECTILE_HOMING_ORBIT_RADIUS_WORLD, PROJECTILE_HOMING_ORBIT_ANG_VEL, PROJECTILE_HOMING_ORBIT_CHASE_SPEED, PROJECTILE_HOMING_ORBIT_TURN_RATE, PROJECTILE_HOMING_MAX_ORBITING, PROJECTILE_HOMING_RETURN_SNAP_DIST_WORLD, PROJECTILE_DESPAWN_OFFSCREEN_PAD_PX, PROJECTILE_COLLISION_GRACE_SECONDS, PROJECTILE_CHAIN_SPAWN_OFFSET_WORLD, HELPER_LIFETIME_BEATS, HELPER_ORBIT_RADIUS_WORLD, HELPER_ORBIT_ANG_VEL, HELPER_IMPACT_RADIUS_PX, HELPER_IMPACT_DAMAGE, HELPER_TURRET_SPAWN_OFFSET_WORLD, LASER_TTL, EXPLOSION_TTL, EXPLOSION_RADIUS_WORLD, EXPLOSION_PRIME_MAX_SCALE, BEAM_DAMAGE_PER_SECOND, PREVIEW_PROJECTILE_SPEED, PREVIEW_PROJECTILE_LIFETIME, PREVIEW_PROJECTILE_HIT_RADIUS, PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD, PREVIEW_PROJECTILE_BOOMERANG_RADIUS, PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS, PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE, PREVIEW_PROJECTILE_HOMING_SPEED, PREVIEW_PROJECTILE_HOMING_TURN_RATE, PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS, PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL, PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED, PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE, PREVIEW_PROJECTILE_HOMING_MAX_ORBITING, PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST, PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET, PREVIEW_HELPER_LIFETIME_BEATS, PREVIEW_HELPER_ORBIT_RADIUS, PREVIEW_HELPER_ORBIT_ANG_VEL, PREVIEW_HELPER_IMPACT_RADIUS, PREVIEW_HELPER_IMPACT_DAMAGE, PREVIEW_HELPER_TURRET_SPAWN_OFFSET, PREVIEW_LASER_TTL, PREVIEW_EXPLOSION_TTL, PREVIEW_EXPLOSION_RADIUS, PREVIEW_BEAM_DAMAGE_PER_SECOND, PREVIEW_ENEMY_COUNT, PREVIEW_ENEMY_HP, PREVIEW_BEAT_LEN_FALLBACK, SWARM_PENTATONIC_NOTES_ONE_OCTAVE, SWARM_SOURCE_MUSIC_IDENTITY_BY_TYPE, FOUNDATION_LANE_PHRASE_LIBRARY, } from './beat-swarm-mode-constants.js';
+import { SWARM_MAX_SPEED, SWARM_ACCEL, SWARM_DECEL, SWARM_TURN_WEIGHT, SWARM_JOYSTICK_RADIUS, SWARM_STOP_EPS, SWARM_CAMERA_TARGET_SCALE, SWARM_ARENA_RADIUS_WORLD, SWARM_ARENA_RESIST_RANGE_WORLD, SWARM_ARENA_INWARD_ACCEL_WORLD, SWARM_ARENA_OUTWARD_BRAKE_WORLD, SWARM_ARENA_OUTWARD_CANCEL_WORLD, SWARM_ARENA_EDGE_BRAKE_WORLD, SWARM_ARENA_OUTER_SOFT_BUFFER_WORLD, SWARM_ARENA_RUBBER_K_WORLD, SWARM_ARENA_RUBBER_DAMP_LINEAR, SWARM_ARENA_RUBBER_DAMP_QUAD, SWARM_ARENA_SLINGSHOT_IMPULSE, SWARM_RELEASE_POST_FIRE_BORDER_SCALE, SWARM_RELEASE_POST_FIRE_DURATION, SWARM_RELEASE_BEAT_LEVEL_MAX, SWARM_RELEASE_MULTIPLIER_BASE, SWARM_RELEASE_MULTIPLIER_AT_MAX, SWARM_RELEASE_POST_FIRE_SPEED_SCALE, SWARM_RELEASE_BOUNCE_RESTITUTION, SWARM_RELEASE_BOUNCE_MIN_SPEED, SWARM_ARENA_PATH_SPEED_WORLD, SWARM_ARENA_PATH_MAX_TURN_RATE_RAD, SWARM_ARENA_PATH_TURN_SMOOTH, SWARM_ARENA_PATH_RETARGET_MIN, SWARM_ARENA_PATH_RETARGET_MAX, SWARM_STARFIELD_COUNT, SWARM_STARFIELD_PARALLAX_MIN, SWARM_STARFIELD_PARALLAX_MAX, SWARM_STARFIELD_PARALLAX_SHIFT_SCALE, BEAT_SWARM_SECTION_HEADING_COOLDOWN_MS, BEAT_SWARM_SECTION_HEADING_DURATION_MS, BEAT_SWARM_SECTION_HEADING_MIN_SECTION_BARS, SECTION_HEADING_TRANSITION_POLICY, BEAT_SWARM_FLAVOR_NAMING, beamSoundGateSlotKeys, beamSustainStateBySlot, SECTION_PRESENTATION_PROFILE_BY_ID, ENEMY_CAP, ENEMY_ACCEL, ENEMY_MAX_SPEED, ENEMY_HIT_RADIUS, ENEMY_SPAWN_START_SCALE, ENEMY_SPAWN_DURATION, ENEMY_TARGET_ACTIVE_COUNT, ENEMY_MANAGER_MAX_FALLBACK_PER_TICK, ENEMY_FALLBACK_SPAWN_MARGIN_PX, SPAWNER_ENEMY_ENABLED, SPAWNER_ENEMY_TARGET_COUNT, SPAWNER_ENEMY_HEALTH_MULTIPLIER, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME, SPAWNER_ENEMY_GRID_WORLD_OFFSET, SPAWNER_ENEMY_SPEED_MULTIPLIER, SPAWNER_ENEMY_BURST_MIN_PX, SPAWNER_ENEMY_BURST_MAX_PX, SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX, SPAWNER_SCHEDULING_ROTATION_BARS, SPAWNER_LINKED_ATTACK_SPEED, DRAW_SNAKE_ENEMY_ENABLED, DRAW_SNAKE_ENEMY_TARGET_COUNT, DRAW_SNAKE_ENEMY_HEALTH_MULTIPLIER, DRAW_SNAKE_SEGMENT_COUNT, DRAW_SNAKE_SEGMENT_SPACING_WORLD, DRAW_SNAKE_TRIGGER_SOUND_VOLUME, PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT, PLAYER_MASK_DUCK_KEEP_CHANCE_BY_CHANNEL, PLAYER_MASK_STEP_EVENT_KEEP_CHANCE, PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP, MUSIC_LAYER_POLICY, LOOP_ADMISSION_POLICY, REGISTRATION_GATE_POLICY, ROLE_COLOR_HUE_BY_LANE, MUSIC_ROLE_PULSE_POLICY, ONBOARDING_PHASE_FLOW, DRAW_SNAKE_PROJECTILE_SPEED, DRAW_SNAKE_PROJECTILE_DAMAGE, RETIRING_RETREAT_DELAY_SEC, DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK, DRAW_SNAKE_VISUAL_SCALE, DRAW_SNAKE_WIND_ACCEL, DRAW_SNAKE_WIND_FREQ_HZ, DRAW_SNAKE_SCREEN_MARGIN_PX, DRAW_SNAKE_EDGE_PULL_RATE, DRAW_SNAKE_NODE_SIZE_SCALE, DRAW_SNAKE_TURN_INTERVAL_MIN, DRAW_SNAKE_TURN_INTERVAL_MAX, DRAW_SNAKE_TURN_RATE_MIN, DRAW_SNAKE_TURN_RATE_MAX, DRAW_SNAKE_ARENA_BIAS_RADIUS_SCALE, DRAW_SNAKE_ARENA_BIAS_STRENGTH, COMPOSER_ENABLED, BEAT_SWARM_STYLE_ID, COMPOSER_BEATS_PER_BAR, COMPOSER_SECTIONS, COMPOSER_GROUPS_ENABLED, COMPOSER_GROUP_SIZE_MIN, COMPOSER_GROUP_SIZE_MAX, COMPOSER_GROUP_NOTES_MIN, COMPOSER_GROUP_NOTES_MAX, COMPOSER_GROUP_ACTIONS, COMPOSER_GROUP_PERFORMERS_MIN, COMPOSER_GROUP_PERFORMERS_MAX, COMPOSER_GROUP_PROJECTILE_SPEED, COMPOSER_GROUP_EXPLOSION_RADIUS_WORLD, COMPOSER_GROUP_EXPLOSION_TTL, LOW_THREAT_BURST_RADIUS_WORLD, LOW_THREAT_BURST_TTL, COMPOSER_GROUP_ACTION_PULSE_SECONDS, COMPOSER_GROUP_ACTION_PULSE_SCALE, COMPOSER_GROUP_LOOP_HITS_MIN, COMPOSER_GROUP_LOOP_HITS_MAX, COMPOSER_GROUP_SEPARATION_RADIUS_WORLD, COMPOSER_GROUP_SEPARATION_FORCE, COMPOSER_GROUP_COLORS, COMPOSER_GROUP_SHAPES, COMPOSER_GROUP_TEMPLATE_LIBRARY, DIRECTOR_ENERGY_STATE_SEQUENCE, DIRECTOR_ENERGY_STATE_CONFIG, DIRECTOR_ENERGY_STATE_ALIAS, DIRECTOR_STATE_THEME_CONFIG, DIRECTOR_CALL_RESPONSE_STATE_CONFIG, DIRECTOR_CALL_RESPONSE_PACING_CONFIG, PACING_ARRANGEMENT_INTENSITY_MULT, ENERGY_GRAVITY_CONFIG, SECTION_PACING_POLICY, COMPOSER_MOTIF_EPOCH_BARS, COMPOSER_MOTIF_LOCK_BARS, THEME_PERSISTENCE_POLICY, DRAW_SNAKE_NODE_PULSE_SECONDS, DRAW_SNAKE_NODE_PULSE_SCALE, composerRuntime, callResponseRuntime, energyStateRuntime, energyGravityRuntime, musicLayerRuntime, musicLaneRuntime, bassFoundationOwnerRuntime, bassKeepaliveRuntime, loopAdmissionRuntime, musicIdentityVisualRuntime, onboardingRuntime, sectionPresentationRuntime, starfieldSectionRuntime, readabilityMetricsRuntime, LOOPGRID_FALLBACK_NOTE_PALETTE, SPAWNER_ENEMY_GRID_STEP_TO_CELL, BEAM_SOURCE_DEATH_GRACE_SECONDS, ENEMY_DEATH_POP_FALLBACK_SECONDS, ENEMY_HEALTH_RAMP_PER_SECOND, PICKUP_COLLECT_RADIUS_PX, PROJECTILE_SPEED, PROJECTILE_HIT_RADIUS_PX, PROJECTILE_LIFETIME, PROJECTILE_SPLIT_ANGLE_RAD, PROJECTILE_BOOMERANG_RADIUS_WORLD, PROJECTILE_BOOMERANG_LOOP_SECONDS, PROJECTILE_BOOMERANG_SPIN_MULT, PROJECTILE_HOMING_ACQUIRE_RANGE_WORLD, PROJECTILE_HOMING_SPEED, PROJECTILE_HOMING_TURN_RATE, PROJECTILE_HOMING_ORBIT_RADIUS_WORLD, PROJECTILE_HOMING_ORBIT_ANG_VEL, PROJECTILE_HOMING_ORBIT_CHASE_SPEED, PROJECTILE_HOMING_ORBIT_TURN_RATE, PROJECTILE_HOMING_MAX_ORBITING, PROJECTILE_HOMING_RETURN_SNAP_DIST_WORLD, PROJECTILE_DESPAWN_OFFSCREEN_PAD_PX, PROJECTILE_COLLISION_GRACE_SECONDS, PROJECTILE_CHAIN_SPAWN_OFFSET_WORLD, HELPER_LIFETIME_BEATS, HELPER_ORBIT_RADIUS_WORLD, HELPER_ORBIT_ANG_VEL, HELPER_IMPACT_RADIUS_PX, HELPER_IMPACT_DAMAGE, HELPER_TURRET_SPAWN_OFFSET_WORLD, LASER_TTL, EXPLOSION_TTL, EXPLOSION_RADIUS_WORLD, EXPLOSION_PRIME_MAX_SCALE, BEAM_DAMAGE_PER_SECOND, PREVIEW_PROJECTILE_SPEED, PREVIEW_PROJECTILE_LIFETIME, PREVIEW_PROJECTILE_HIT_RADIUS, PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD, PREVIEW_PROJECTILE_BOOMERANG_RADIUS, PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS, PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE, PREVIEW_PROJECTILE_HOMING_SPEED, PREVIEW_PROJECTILE_HOMING_TURN_RATE, PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS, PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL, PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED, PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE, PREVIEW_PROJECTILE_HOMING_MAX_ORBITING, PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST, PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET, PREVIEW_HELPER_LIFETIME_BEATS, PREVIEW_HELPER_ORBIT_RADIUS, PREVIEW_HELPER_ORBIT_ANG_VEL, PREVIEW_HELPER_IMPACT_RADIUS, PREVIEW_HELPER_IMPACT_DAMAGE, PREVIEW_HELPER_TURRET_SPAWN_OFFSET, PREVIEW_LASER_TTL, PREVIEW_EXPLOSION_TTL, PREVIEW_EXPLOSION_RADIUS, PREVIEW_BEAM_DAMAGE_PER_SECOND, PREVIEW_ENEMY_COUNT, PREVIEW_ENEMY_HP, PREVIEW_BEAT_LEN_FALLBACK, SWARM_PENTATONIC_NOTES_ONE_OCTAVE, SWARM_SOURCE_MUSIC_IDENTITY_BY_TYPE, FOUNDATION_LANE_PHRASE_LIBRARY, } from './beat-swarm-mode-constants.js';
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
 // Beat Swarm movement tuning.
@@ -279,6 +279,100 @@ function getNextMusicContinuityId() {
   musicContinuityIdSeq = next + 1;
   return `mc-${next}`;
 }
+function getMusicLaneRuntimeEntry(laneId = '') {
+  const key = String(laneId || '').trim().toLowerCase();
+  if (key === 'foundation_lane') return musicLaneRuntime.foundationLane;
+  if (key === 'primary_loop_lane') return musicLaneRuntime.primaryLoopLane;
+  if (key === 'secondary_loop_lane') return musicLaneRuntime.secondaryLoopLane;
+  if (key === 'sparkle_lane') return musicLaneRuntime.sparkleLane;
+  return null;
+}
+function resolveMusicLaneId(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const preferred = String(opts?.preferredLaneId || '').trim().toLowerCase();
+  if (preferred) return preferred;
+  const layer = normalizeEnemyMusicLayer(opts?.layer || '', 'sparkle');
+  const role = normalizeSwarmRole(opts?.role || '', BEAT_EVENT_ROLES.ACCENT);
+  if (layer === 'foundation' || role === BEAT_EVENT_ROLES.BASS) return 'foundation_lane';
+  if (layer === 'sparkle') return 'sparkle_lane';
+  return role === BEAT_EVENT_ROLES.LEAD ? 'primary_loop_lane' : 'secondary_loop_lane';
+}
+function assignMusicLaneIdentity(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const laneId = resolveMusicLaneId(opts);
+  const lane = getMusicLaneRuntimeEntry(laneId);
+  if (!lane) return null;
+  const barIndex = Math.max(0, Math.trunc(Number(opts?.barIndex) || 0));
+  const role = normalizeSwarmRole(opts?.role || lane.role || '', lane.role || BEAT_EVENT_ROLES.ACCENT);
+  const layer = normalizeEnemyMusicLayer(opts?.layer || lane.layer || '', lane.layer || 'sparkle');
+  const continuityId = String(opts?.continuityId || lane.continuityId || '').trim() || getNextMusicContinuityId();
+  const instrumentId = String(opts?.instrumentId || lane.instrumentId || '').trim();
+  const phraseId = String(opts?.phraseId || lane.phraseId || '').trim().toLowerCase();
+  const performerEnemyId = Math.max(0, Math.trunc(Number(opts?.performerEnemyId) || 0));
+  const performerGroupId = Math.max(0, Math.trunc(Number(opts?.performerGroupId) || 0));
+  lane.laneId = laneId;
+  lane.layer = layer;
+  lane.role = role;
+  lane.continuityId = continuityId;
+  if (instrumentId) lane.instrumentId = instrumentId;
+  if (phraseId) lane.phraseId = phraseId;
+  if (!(lane.activeSinceBar >= 0)) lane.activeSinceBar = barIndex;
+  lane.lastAssignedBar = barIndex;
+  lane.lifetimeBars = lane.activeSinceBar >= 0 ? Math.max(1, (barIndex - lane.activeSinceBar) + 1) : 0;
+  lane.performerEnemyId = performerEnemyId;
+  lane.performerGroupId = performerGroupId;
+  lane.performerType = String(opts?.performerType || lane.performerType || '').trim().toLowerCase();
+  lane.handoffPolicy = String(opts?.handoffPolicy || lane.handoffPolicy || '').trim().toLowerCase()
+    || (laneId === 'foundation_lane' ? 'preserve_phrase' : (laneId === 'sparkle_lane' ? 'ephemeral_support' : 'inherit_identity'));
+  const group = opts?.group && typeof opts.group === 'object' ? opts.group : null;
+  const enemy = opts?.enemy && typeof opts.enemy === 'object' ? opts.enemy : null;
+  if (group) {
+    group.musicLaneId = laneId;
+    group.musicLaneLayer = layer;
+    group.musicLaneContinuityId = continuityId;
+    group.musicLaneInstrumentId = String(lane.instrumentId || instrumentId || group.musicLaneInstrumentId || '').trim();
+    group.musicLanePhraseId = String(lane.phraseId || group.musicLanePhraseId || '').trim();
+    group.musicLaneLifetimeBars = lane.lifetimeBars;
+    group.musicLaneHandoffPolicy = lane.handoffPolicy;
+    if (laneId !== 'sparkle_lane') {
+      group.continuityId = continuityId;
+      if (group.musicLaneInstrumentId) {
+        group.instrumentId = group.musicLaneInstrumentId;
+        group.instrument = group.musicLaneInstrumentId;
+      }
+    }
+  }
+  if (enemy) {
+    enemy.musicLaneId = laneId;
+    enemy.musicLaneLayer = layer;
+    enemy.musicLaneContinuityId = continuityId;
+    enemy.musicLaneInstrumentId = String(lane.instrumentId || instrumentId || enemy.musicLaneInstrumentId || '').trim();
+    enemy.musicLanePhraseId = String(lane.phraseId || enemy.musicLanePhraseId || '').trim();
+    enemy.musicLaneLifetimeBars = lane.lifetimeBars;
+    enemy.musicLaneHandoffPolicy = lane.handoffPolicy;
+    if (laneId !== 'sparkle_lane') {
+      enemy.musicContinuityId = continuityId;
+      enemy.continuityId = continuityId;
+      if (enemy.musicLaneInstrumentId) {
+        enemy.instrumentId = enemy.musicLaneInstrumentId;
+        enemy.musicInstrumentId = enemy.musicLaneInstrumentId;
+      }
+    }
+  }
+  return {
+    laneId,
+    layer,
+    role,
+    continuityId,
+    instrumentId: String(lane.instrumentId || instrumentId || '').trim(),
+    phraseId: String(lane.phraseId || '').trim(),
+    lifetimeBars: lane.lifetimeBars,
+    performerEnemyId,
+    performerGroupId,
+    performerType: lane.performerType,
+    handoffPolicy: lane.handoffPolicy,
+  };
+}
 function clampHslHue(value = 0) {
   const n = Number(value) || 0;
   return ((n % 360) + 360) % 360;
@@ -354,7 +448,9 @@ function applyMusicalIdentityVisualToEnemy(enemyLike = null, groupLike = null) {
   const instrumentId = resolveLockedEnemyInstrumentId(
     enemy,
     String(
-      group?.instrumentId
+      group?.musicLaneInstrumentId
+        || enemy?.musicLaneInstrumentId
+        || group?.instrumentId
         || enemy?.musicInstrumentId
         || enemy?.spawnerInstrument
         || enemy?.drawsnakeInstrument
@@ -371,7 +467,9 @@ function applyMusicalIdentityVisualToEnemy(enemyLike = null, groupLike = null) {
     ? String(group?.roleLane || enemy?.musicRoleLane || '').trim()
     : '';
   const continuityId = String(
-    group?.continuityId
+    group?.musicLaneContinuityId
+      || enemy?.musicLaneContinuityId
+      || group?.continuityId
       || enemy?.musicContinuityId
       || enemy?.continuityId
       || ''
@@ -407,6 +505,14 @@ function applyMusicalIdentityVisualToEnemy(enemyLike = null, groupLike = null) {
     enemy.identityVisualLocked = true;
   }
   enemy.musicRoleVisualId = `${String(enemy.musicRoleLane || '')}:${String(enemy.musicRoleColor || '')}`;
+  const lane = getMusicLaneRuntimeEntry(String(group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase());
+  if (lane) {
+    lane.colourId = String(enemy.musicRoleVisualId || lane.colourId || '').trim();
+    if (group) {
+      group.musicLaneColourId = lane.colourId;
+    }
+    enemy.musicLaneColourId = lane.colourId;
+  }
   const el = enemy?.el instanceof HTMLElement ? enemy.el : null;
   if (el) {
     try { el.style.setProperty('--bs-role-color', enemy.musicRoleColor); } catch {}
@@ -820,6 +926,8 @@ function ensureSingletonMusicGroupForEnemy(enemyLike, options = null) {
     enemyType,
     normalizeSwarmRole(options?.role || getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.ACCENT), BEAT_EVENT_ROLES.ACCENT)
   );
+  const identityProfile = getEnemyMusicIdentityProfile({ enemyType, role }, role);
+  const laneLayer = normalizeEnemyMusicLayer(options?.layer || identityProfile?.layer || '', role === BEAT_EVENT_ROLES.BASS ? 'foundation' : 'sparkle');
   const actionType = String(options?.actionType || getDefaultActionTypeForEnemyGroup(enemy?.enemyType)).trim().toLowerCase();
   const note = normalizeSwarmNoteName(options?.note) || '';
   const requestedInstrumentId = resolveInstrumentIdOrFallback(options?.instrumentId, resolveSwarmSoundInstrumentId('projectile') || 'tone');
@@ -886,6 +994,28 @@ function ensureSingletonMusicGroupForEnemy(enemyLike, options = null) {
   enemy.musicInstrumentId = String(group.instrumentId || instrumentId || enemy.musicInstrumentId || enemy.instrumentId || 'tone');
   enemy.musicContinuityId = String(group.continuityId || continuityId);
   enemy.continuityId = String(group.continuityId || continuityId);
+  const laneAssignment = assignMusicLaneIdentity({
+    group,
+    enemy,
+    role,
+    layer: laneLayer,
+    instrumentId: String(group.instrumentId || instrumentId || '').trim(),
+    continuityId: String(group.continuityId || continuityId || '').trim(),
+    phraseId: String(group?.foundationPhraseId || '').trim(),
+    performerEnemyId: enemyId,
+    performerGroupId: Math.trunc(Number(group.id) || 0),
+    performerType: 'singleton',
+  });
+  if (laneAssignment?.instrumentId) {
+    group.instrumentId = laneAssignment.instrumentId;
+    enemy.instrumentId = laneAssignment.instrumentId;
+    enemy.musicInstrumentId = laneAssignment.instrumentId;
+  }
+  if (laneAssignment?.continuityId) {
+    group.continuityId = laneAssignment.continuityId;
+    enemy.musicContinuityId = laneAssignment.continuityId;
+    enemy.continuityId = laneAssignment.continuityId;
+  }
   try {
     if (!bassFoundationOwnerRuntime.active || isBassFoundationOwnerEnemy(enemyId)) {
       assignBassFoundationOwner(enemy, group, null);
@@ -908,6 +1038,18 @@ function syncSingletonEnemyStateFromMusicGroup(enemyLike, groupLike = null) {
     enemy.musicContinuityId = continuityId;
     enemy.continuityId = continuityId;
   }
+  assignMusicLaneIdentity({
+    group,
+    enemy,
+    role: fixedRole || group?.role || enemy?.musicalRole,
+    layer: normalizeEnemyMusicLayer(group?.musicLaneLayer || getEnemyMusicIdentityProfile({ enemyType: enemy?.enemyType, role: fixedRole || group?.role || enemy?.musicalRole }, fixedRole || group?.role || enemy?.musicalRole)?.layer || '', 'sparkle'),
+    instrumentId: String(group?.musicLaneInstrumentId || group?.instrumentId || enemy?.musicInstrumentId || '').trim(),
+    continuityId: String(group?.musicLaneContinuityId || group?.continuityId || continuityId || '').trim(),
+    phraseId: String(group?.musicLanePhraseId || group?.foundationPhraseId || '').trim(),
+    performerEnemyId: Math.trunc(Number(enemy?.id) || 0),
+    performerGroupId: Math.trunc(Number(group?.id) || 0),
+    performerType: 'singleton',
+  });
   applyMusicalIdentityVisualToEnemy(enemy, group);
   const enemyType = String(enemy?.enemyType || '').trim().toLowerCase();
   if (enemyType === 'spawner') {
@@ -2114,6 +2256,13 @@ function setFoundationLanePhrase(phraseLike = null, barIndex = 0) {
       Math.trunc(Number(musicLayerRuntime.foundationPatternChangeCount) || 0)
     ) + 1;
   }
+  const foundationLane = getMusicLaneRuntimeEntry('foundation_lane');
+  if (foundationLane) {
+    foundationLane.phraseId = nextPhraseId;
+    if (!(foundationLane.activeSinceBar >= 0)) foundationLane.activeSinceBar = safeBar;
+    foundationLane.lastAssignedBar = safeBar;
+    foundationLane.lifetimeBars = foundationLane.activeSinceBar >= 0 ? Math.max(1, (safeBar - foundationLane.activeSinceBar) + 1) : 0;
+  }
   return {
     laneId: musicLayerRuntime.foundationLaneId,
     phraseId: nextPhraseId,
@@ -2189,6 +2338,19 @@ function applyFoundationLaneToPerformer(enemyLike = null, groupLike = null, cont
   if (String(enemy.enemyType || '').trim().toLowerCase() === 'spawner') {
     enemy.spawnerSteps = steps.slice(0, 8);
   }
+  assignMusicLaneIdentity({
+    group,
+    enemy,
+    role,
+    layer: 'foundation',
+    instrumentId: String(group?.instrumentId || enemy?.musicInstrumentId || '').trim(),
+    continuityId: String(group?.continuityId || enemy?.musicContinuityId || '').trim(),
+    phraseId: lane.phraseId,
+    performerEnemyId: Math.trunc(Number(enemy?.id) || 0),
+    performerGroupId: Math.trunc(Number(group?.id) || 0),
+    performerType: 'foundation-performer',
+    barIndex,
+  });
   return lane;
 }
 function updateComposerMotifEpochForBeat(beatIndex = currentBeatIndex) {
@@ -3233,6 +3395,16 @@ function applyWeaponLoadoutFromState(loadoutState) {
   renderPauseWeaponUi();
 }
 function clearPendingWeaponChainEvents() {
+  for (const ev of pendingWeaponChainEvents) {
+    noteMusicSystemEvent('weapon_explosion_queue_cleared', {
+      chainEventId: Math.trunc(Number(ev?.eventId) || 0),
+      weaponSlotIndex: Math.trunc(Number(ev?.context?.weaponSlotIndex) || -1),
+      impactEnemyId: Math.trunc(Number(ev?.context?.impactEnemyId) || 0),
+      scheduledBeatIndex: Math.trunc(Number(ev?.beatIndex) || 0),
+      reason: 'clear_all',
+    }, { beatIndex: Math.trunc(Number(ev?.beatIndex) || Number(currentBeatIndex) || 0), stepIndex: 0 });
+    if (Number.isFinite(ev?.eventId)) removeExplosionPrimeEffectsForEvent(Math.trunc(ev.eventId));
+  }
   pendingWeaponChainEvents.length = 0;
 }
 function clearLingeringAoeZones() {
@@ -6365,6 +6537,11 @@ function getPendingEnemyDeathByEnemyId(enemyId) {
   if (!(id > 0)) return null;
   return pendingEnemyDeaths.find((d) => Math.trunc(Number(d?.sourceEnemyId) || 0) === id) || null;
 }
+function hasPendingWeaponChainEventById(eventId) {
+  const id = Math.trunc(Number(eventId) || 0);
+  if (!(id > 0)) return false;
+  return pendingWeaponChainEvents.some((ev) => Math.trunc(Number(ev?.eventId) || 0) === id);
+}
 function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = currentBeatIndex) {
   const now = Number(nowTs) || performance.now();
   const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
@@ -6570,6 +6747,14 @@ function clearRuntimeForWeaponSlot(slotIndex) {
     const ev = pendingWeaponChainEvents[i];
     const v = Number(ev?.context?.weaponSlotIndex);
     if ((Number.isFinite(v) ? Math.trunc(v) : -1) !== idx) continue;
+    noteMusicSystemEvent('weapon_explosion_queue_cleared', {
+      chainEventId: Math.trunc(Number(ev?.eventId) || 0),
+      weaponSlotIndex: idx,
+      impactEnemyId: Math.trunc(Number(ev?.context?.impactEnemyId) || 0),
+      scheduledBeatIndex: Math.trunc(Number(ev?.beatIndex) || 0),
+      reason: 'runtime_slot_cleared',
+    }, { beatIndex: Math.trunc(Number(ev?.beatIndex) || Number(currentBeatIndex) || 0), stepIndex: 0 });
+    if (Number.isFinite(ev?.eventId)) removeExplosionPrimeEffectsForEvent(Math.trunc(ev.eventId));
     pendingWeaponChainEvents.splice(i, 1);
   }
   for (let i = lingeringAoeZones.length - 1; i >= 0; i--) {
@@ -8628,7 +8813,9 @@ function addExplosionPrimeEffect(
   ttl = null,
   weaponSlotIndex = null,
   chainEventId = null,
-  anchorEnemyId = null
+  anchorEnemyId = null,
+  stageIndex = null,
+  damageScale = 1
 ) {
   if (!enemyLayerEl) return;
   const duration = Math.max(0.05, Number.isFinite(ttl) ? Number(ttl) : getGameplayBeatLen());
@@ -8648,9 +8835,21 @@ function addExplosionPrimeEffect(
     fallbackAt: { ...centerW },
     chainEventId: Number.isFinite(chainEventId) ? Math.trunc(chainEventId) : null,
     anchorEnemyId: Number.isFinite(anchorEnemyId) ? Math.trunc(anchorEnemyId) : null,
+    stageIndex: Number.isFinite(stageIndex) ? Math.trunc(stageIndex) : null,
+    damageScale: Math.max(0.05, Number(damageScale) || 1),
     radiusWorld: Math.max(1, Number(radiusWorld) || EXPLOSION_RADIUS_WORLD),
     weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : null,
     el,
+  });
+  noteMusicSystemEvent('weapon_explosion_prime_created', {
+    chainEventId: Number.isFinite(chainEventId) ? Math.trunc(chainEventId) : 0,
+    weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : -1,
+    impactEnemyId: Number.isFinite(anchorEnemyId) ? Math.trunc(anchorEnemyId) : 0,
+    stageIndex: Number.isFinite(stageIndex) ? Math.trunc(stageIndex) : -1,
+    damageScale: Math.max(0.05, Number(damageScale) || 1),
+  }, {
+    beatIndex: currentBeatIndex,
+    stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
   });
 }
 function removeExplosionPrimeEffectsForEvent(eventId) {
@@ -8874,9 +9073,12 @@ function queueWeaponChain(beatIndex, nextStages, context) {
     },
     helpers: {
       addExplosionPrimeEffect,
+      noteMusicSystemEvent,
+      getPendingEnemyDeathByEnemyId,
       getNextWeaponChainEventId: () => weaponChainEventSeq++,
       getSecondsUntilQueuedChainBeat,
       normalizeSwarmNoteName,
+      removeExplosionPrimeEffectsForEvent,
       sanitizeWeaponStages,
     },
   });
@@ -8891,7 +9093,10 @@ function clearPendingWeaponChainsForSlot(slotIndex = null) {
   clearPendingWeaponChainsForSlotRuntime({
     slotIndex,
     state: { pendingWeaponChainEvents },
-    helpers: { removeExplosionPrimeEffectsForEvent },
+    helpers: {
+      noteMusicSystemEvent,
+      removeExplosionPrimeEffectsForEvent,
+    },
   });
 }
 function shouldPlayBeamSoundForBeat(slotIndex = null, beatIndex = currentBeatIndex) {
@@ -8907,8 +9112,8 @@ function shouldPlayBeamSoundForBeat(slotIndex = null, beatIndex = currentBeatInd
   beamSoundGateBeatIndex = Number(gateState.beamSoundGateBeatIndex) || 0;
   return shouldPlay;
 }
-function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex = null, avoidEnemyId = null, stageIndex = null, damageScale = 1) {
-  return applyAoeAtRuntime({
+function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex = null, avoidEnemyId = null, stageIndex = null, damageScale = 1, chainEventId = null) {
+  const result = applyAoeAtRuntime({
     point,
     variant,
     beatIndex,
@@ -8930,6 +9135,20 @@ function applyAoeAt(point, variant = 'explosion', beatIndex = 0, weaponSlotIndex
       withDamageSoundStage,
     },
   });
+  if (String(variant || '').trim().toLowerCase() === 'explosion' && point) {
+    noteMusicSystemEvent('weapon_explosion_applied', {
+      chainEventId: Number.isFinite(chainEventId) ? Math.trunc(chainEventId) : 0,
+      weaponSlotIndex: Number.isFinite(weaponSlotIndex) ? Math.trunc(weaponSlotIndex) : -1,
+      impactEnemyId: Number.isFinite(avoidEnemyId) ? Math.trunc(avoidEnemyId) : 0,
+      scheduledBeatIndex: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
+      damageScale: Math.max(0.05, Number(damageScale) || 1),
+      detonationSource: 'apply_aoe',
+    }, {
+      beatIndex,
+      stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+    });
+  }
+  return result;
 }
 function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [], context = null) {
   triggerWeaponStageRuntime({
@@ -8954,6 +9173,16 @@ function triggerWeaponStage(stage, originWorld, beatIndex, remainingStages = [],
       applyAoeAt,
       damageEnemy,
       getGameplayBeatLen,
+      getGameplayWeaponSoundVolume: (archetype = '', variant = '', stageIndex = 0) => {
+        const safeArchetype = String(archetype || '').trim().toLowerCase();
+        const safeVariant = String(variant || '').trim().toLowerCase();
+        const base = Number(getStageSoundVolume(stageIndex)) || 0;
+        const fullStrength = safeArchetype === 'aoe'
+          || safeArchetype === 'laser'
+          || (safeArchetype === 'projectile' && (safeVariant === 'boomerang' || safeVariant === 'homing-missile' || safeVariant === 'split-shot'));
+        const resolved = fullStrength ? 1 : base;
+        return Math.max(0, Math.min(1, resolved * PLAYER_WEAPON_SOUND_MIX_MULT));
+      },
       getNearestEnemy,
       getOffsetPoint,
       getPlayerWeaponSoundEventKeyForStage,
@@ -8988,6 +9217,7 @@ function processPendingWeaponChains(beatIndex) {
     beatIndex,
     state: { pendingWeaponChainEvents },
     helpers: {
+      noteMusicSystemEvent,
       getViewportCenterWorld,
       removeExplosionPrimeEffectsForEvent,
       sanitizeWeaponStages,
@@ -9055,6 +9285,7 @@ function updateBeatWeapons(centerWorld) {
     loopAdmissionRuntime,
     musicIdentityVisualRuntime,
     musicLayerRuntime,
+    musicLaneRuntime,
     onboardingRuntime,
     sectionPresentationRuntime,
     swarmPacingRuntime,
@@ -9526,6 +9757,7 @@ function maintainComposerEnemyGroups() {
       pickComposerGroupColor,
       pickComposerGroupShape,
       pickComposerGroupTemplate,
+      ensureMusicLaneAssignment: assignMusicLaneIdentity,
       resolveInstrumentIdOrFallback,
       resolveSwarmSoundInstrumentId,
       sanitizeEnemyMusicInstrumentId,
@@ -9577,7 +9809,10 @@ function updatePickupsAndCombat(dt) {
       triggerWeaponStage,
       queueWeaponChain,
       getPendingEnemyDeathByEnemyId,
+      hasPendingWeaponChainEventById,
       getGameplayBeatLen,
+      applyAoeAt,
+      noteMusicSystemEvent,
       updateEnergyGravityRuntime,
       updateBeatWeapons,
       flushSwarmSoundEventsForBeat,
@@ -10211,6 +10446,19 @@ export function enterBeatSwarmMode(options = null) {
   musicLayerRuntime.foundationConsecutiveQuietEvents = 0;
   musicLayerRuntime.sparkleBarIndex = -1;
   musicLayerRuntime.sparkleEventsInBar = 0;
+  for (const lane of Object.values(musicLaneRuntime)) {
+    if (!lane || typeof lane !== 'object') continue;
+    lane.phraseId = '';
+    lane.instrumentId = '';
+    lane.colourId = '';
+    lane.continuityId = '';
+    lane.lifetimeBars = 0;
+    lane.performerEnemyId = 0;
+    lane.performerGroupId = 0;
+    lane.performerType = '';
+    lane.activeSinceBar = -1;
+    lane.lastAssignedBar = -1;
+  }
   loopAdmissionRuntime.identityFirstForegroundStep.clear();
   loopAdmissionRuntime.currentForegroundIdentityKey = '';
   loopAdmissionRuntime.currentForegroundIdentityStartStep = -1;

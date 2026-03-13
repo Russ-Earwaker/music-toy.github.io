@@ -86,7 +86,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         fallbackInstrument,
         { role }
       );
-      return ({
+      const created = ({
       id: helpers.getNextComposerEnemyGroupId?.(),
       sectionKey,
       sectionId: String(composerDirective?.sectionId || 'default'),
@@ -154,6 +154,17 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       active: true,
       lifecycleState: 'active',
     });
+      helpers.ensureMusicLaneAssignment?.({
+        group: created,
+        role,
+        layer: role === constants.bassRole ? 'foundation' : 'loops',
+        instrumentId,
+        continuityId: created.continuityId,
+        phraseId: String(created?.motif?.id || ''),
+        performerGroupId: Math.trunc(Number(created.id) || 0),
+        performerType: 'composer-group',
+      });
+      return created;
     },
   });
   for (const group of composerEnemyGroups) {
@@ -179,6 +190,18 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       .filter((e) => String(e?.enemyType || '') === 'composer-group-member');
     for (const enemy of aliveMembers) {
       enemy.lifecycleState = memberLifecycleState;
+      helpers.ensureMusicLaneAssignment?.({
+        group,
+        enemy,
+        role: templateRole || group?.role,
+        layer: String(group?.musicLaneLayer || (templateRole === constants.bassRole ? 'foundation' : 'loops')),
+        instrumentId: String(group?.musicLaneInstrumentId || group?.instrumentId || '').trim(),
+        continuityId: String(group?.musicLaneContinuityId || group?.continuityId || '').trim(),
+        phraseId: String(group?.musicLanePhraseId || group?.motif?.id || ''),
+        performerEnemyId: Math.trunc(Number(enemy?.id) || 0),
+        performerGroupId: Math.trunc(Number(group?.id) || 0),
+        performerType: 'composer-group-member',
+      });
       if (templateRole) {
         enemy.musicalRole = templateRole;
         enemy.composerRole = templateRole;

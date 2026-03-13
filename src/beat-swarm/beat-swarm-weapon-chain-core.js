@@ -1,3 +1,7 @@
+function safeInt(value, fallback = 0) {
+  return Number.isFinite(value) ? Math.trunc(value) : fallback;
+}
+
 export function spawnProjectileFromDirectionRuntime(options = null) {
   const fromW = options?.fromW || null;
   const dirX = Number(options?.dirX) || 0;
@@ -203,9 +207,74 @@ export function queueWeaponChainRuntime(options = null) {
   const weaponSlotIndex = Number.isFinite(context?.weaponSlotIndex) ? Math.trunc(context.weaponSlotIndex) : null;
   const impactEnemyId = Number.isFinite(context?.impactEnemyId) ? Math.trunc(context.impactEnemyId) : null;
   const firstStage = stages[0];
+  const pendingDeath = impactEnemyId > 0 ? (helpers.getPendingEnemyDeathByEnemyId?.(impactEnemyId) || null) : null;
+  const resolvedBeatIndex = (
+    firstStage?.archetype === 'aoe'
+    && firstStage?.variant === 'explosion'
+    && pendingDeath
+    && Number.isFinite(pendingDeath?.popBeat)
+  )
+    ? Math.max(0, Math.trunc(Number(pendingDeath.popBeat) || queuedBeatIndex))
+    : queuedBeatIndex;
+  const existingExplosionEvent = (
+    firstStage?.archetype === 'aoe'
+    && firstStage?.variant === 'explosion'
+    && impactEnemyId > 0
+  )
+    ? (pendingWeaponChainEvents.find((ev) => {
+      const evStages = Array.isArray(ev?.stages) ? ev.stages : [];
+      const evFirst = evStages[0] || null;
+      const evImpactEnemyId = Number.isFinite(ev?.context?.impactEnemyId) ? Math.trunc(ev.context.impactEnemyId) : null;
+      return evFirst?.archetype === 'aoe'
+        && evFirst?.variant === 'explosion'
+        && evImpactEnemyId === impactEnemyId;
+    }) || null)
+    : null;
+  if (existingExplosionEvent) {
+    helpers.noteMusicSystemEvent?.('weapon_explosion_queue_retargeted', {
+      chainEventId: safeInt(existingExplosionEvent?.eventId, 0),
+      weaponSlotIndex,
+      impactEnemyId,
+      scheduledBeatIndex: resolvedBeatIndex,
+      damageScale: Math.max(0.05, Number(context?.damageScale) || 1),
+    }, { beatIndex: resolvedBeatIndex, stepIndex: 0 });
+    existingExplosionEvent.beatIndex = resolvedBeatIndex;
+    existingExplosionEvent.stages = stages;
+    existingExplosionEvent.context = {
+      ...existingExplosionEvent.context,
+      origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : existingExplosionEvent.context?.origin || null,
+      impactPoint: impactPoint || existingExplosionEvent.context?.impactPoint || null,
+      weaponSlotIndex,
+      stageIndex: Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : existingExplosionEvent.context?.stageIndex ?? null,
+      impactEnemyId,
+      sourceEnemyId: Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : existingExplosionEvent.context?.sourceEnemyId ?? null,
+      damageScale: Math.max(
+        0.05,
+        Math.max(Number(context?.damageScale) || 0, Number(existingExplosionEvent.context?.damageScale) || 0.05)
+      ),
+      forcedNoteName: helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || existingExplosionEvent.context?.forcedNoteName || null,
+    };
+    if (existingExplosionEvent?.eventId) helpers.removeExplosionPrimeEffectsForEvent?.(existingExplosionEvent.eventId);
+    if (impactPoint) {
+      const secondsUntilTrigger = helpers.getSecondsUntilQueuedChainBeat?.(resolvedBeatIndex) || 0;
+      if (secondsUntilTrigger > 0.02) {
+        helpers.addExplosionPrimeEffect?.(
+          impactPoint,
+          Number(constants.explosionRadiusWorld) || 0,
+          secondsUntilTrigger,
+          weaponSlotIndex,
+          existingExplosionEvent.eventId,
+          impactEnemyId,
+          Number.isFinite(existingExplosionEvent.context?.stageIndex) ? Math.trunc(existingExplosionEvent.context.stageIndex) : null,
+          Math.max(0.05, Number(existingExplosionEvent.context?.damageScale) || 1)
+        );
+      }
+    }
+    return;
+  }
   const eventId = Math.max(1, Number(helpers.getNextWeaponChainEventId?.() || 1));
   if (firstStage?.archetype === 'aoe' && firstStage?.variant === 'explosion' && impactPoint) {
-    const secondsUntilTrigger = helpers.getSecondsUntilQueuedChainBeat?.(queuedBeatIndex) || 0;
+    const secondsUntilTrigger = helpers.getSecondsUntilQueuedChainBeat?.(resolvedBeatIndex) || 0;
     if (secondsUntilTrigger > 0.02) {
       helpers.addExplosionPrimeEffect?.(
         impactPoint,
@@ -213,13 +282,15 @@ export function queueWeaponChainRuntime(options = null) {
         secondsUntilTrigger,
         weaponSlotIndex,
         eventId,
-        impactEnemyId
+        impactEnemyId,
+        Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : null,
+        Math.max(0.05, Number(context?.damageScale) || 1)
       );
     }
   }
   pendingWeaponChainEvents.push({
     eventId,
-    beatIndex: queuedBeatIndex,
+    beatIndex: resolvedBeatIndex,
     stages,
     context: {
       origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : null,
@@ -232,6 +303,13 @@ export function queueWeaponChainRuntime(options = null) {
       forcedNoteName: helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || null,
     },
   });
+  helpers.noteMusicSystemEvent?.('weapon_explosion_queue_created', {
+    chainEventId: eventId,
+    weaponSlotIndex,
+    impactEnemyId,
+    scheduledBeatIndex: resolvedBeatIndex,
+    damageScale: Math.max(0.05, Number(context?.damageScale) || 1),
+  }, { beatIndex: resolvedBeatIndex, stepIndex: 0 });
 }
 
 export function clearBeamEffectsForWeaponSlotRuntime(options = null) {
@@ -264,6 +342,16 @@ export function clearPendingWeaponChainsForSlotRuntime(options = null) {
     const ev = pendingWeaponChainEvents[i];
     const evSlot = Number.isFinite(ev?.context?.weaponSlotIndex) ? Math.trunc(ev.context.weaponSlotIndex) : null;
     if (key !== null && evSlot !== key) continue;
+    const firstStage = Array.isArray(ev?.stages) ? (ev.stages[0] || null) : null;
+    const preserveExplosionQueue = firstStage?.archetype === 'aoe' && firstStage?.variant === 'explosion';
+    if (preserveExplosionQueue) continue;
+    helpers.noteMusicSystemEvent?.('weapon_explosion_queue_cleared', {
+      chainEventId: safeInt(ev?.eventId, 0),
+      weaponSlotIndex: evSlot,
+      impactEnemyId: safeInt(ev?.context?.impactEnemyId, 0),
+      scheduledBeatIndex: safeInt(ev?.beatIndex, 0),
+      reason: 'slot_cleared',
+    }, { beatIndex: safeInt(ev?.beatIndex, 0), stepIndex: 0 });
     if (ev?.eventId) helpers.removeExplosionPrimeEffectsForEvent?.(ev.eventId);
     pendingWeaponChainEvents.splice(i, 1);
   }
@@ -361,13 +449,22 @@ export function processPendingWeaponChainsRuntime(options = null) {
     const ev = pendingWeaponChainEvents[i];
     if ((Number(ev?.beatIndex) || 0) > beatIndex) continue;
     pendingWeaponChainEvents.splice(i, 1);
+    helpers.noteMusicSystemEvent?.('weapon_explosion_queue_processed', {
+      chainEventId: safeInt(ev?.eventId, 0),
+      weaponSlotIndex: safeInt(ev?.context?.weaponSlotIndex, -1),
+      impactEnemyId: safeInt(ev?.context?.impactEnemyId, 0),
+      scheduledBeatIndex: safeInt(ev?.beatIndex, 0),
+    }, { beatIndex, stepIndex: 0 });
     if (Number.isFinite(ev?.eventId)) helpers.removeExplosionPrimeEffectsForEvent?.(ev.eventId);
     const stages = helpers.sanitizeWeaponStages?.(ev?.stages) || [];
     if (!stages.length) continue;
     const stage = stages[0];
     const rem = stages.slice(1);
     const origin = ev?.context?.impactPoint || ev?.context?.origin || helpers.getViewportCenterWorld?.();
-    helpers.triggerWeaponStage?.(stage, origin, beatIndex, rem, ev?.context || null);
+    helpers.triggerWeaponStage?.(stage, origin, beatIndex, rem, {
+      ...(ev?.context || null),
+      chainEventId: Number.isFinite(ev?.eventId) ? Math.trunc(ev.eventId) : null,
+    });
   }
 }
 
@@ -417,6 +514,12 @@ export function triggerWeaponStageRuntime(options = null) {
   const damageScale = Math.max(0.05, Number(context?.damageScale) || 1);
   const forcedNoteName = helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || null;
   const directSound = !!context?.directSound;
+  const gameplayWeaponSoundVolume = (() => {
+    if (typeof helpers.getGameplayWeaponSoundVolume === 'function') {
+      return Math.max(0, Math.min(1, Number(helpers.getGameplayWeaponSoundVolume(archetype, variant, stageIndex)) || 0));
+    }
+    return Math.max(0, Math.min(1, Number(helpers.getStageSoundVolume?.(stageIndex)) || 0));
+  })();
   const nextCtx = {
     weaponSlotIndex: slotIndex,
     stageIndex: stageIndex + 1,
@@ -447,9 +550,9 @@ export function triggerWeaponStageRuntime(options = null) {
       const noteName = forcedNoteName || helpers.getSwarmEnemySoundNoteById?.(nearest?.id);
       const weaponSoundKey = helpers.getPlayerWeaponSoundEventKeyForStage?.(archetype, variant) || 'projectile';
       if (directSound) {
-        helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, helpers.getStageSoundVolume?.(stageIndex), noteName);
+        helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, gameplayWeaponSoundVolume, noteName);
       } else {
-        helpers.noteSwarmSoundEvent?.(weaponSoundKey, helpers.getStageSoundVolume?.(stageIndex), beatIndex, noteName);
+        helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName);
       }
     }
     const facingDir = helpers.getShipFacingDirWorld?.() || { x: 1, y: 0 };
@@ -520,7 +623,7 @@ export function triggerWeaponStageRuntime(options = null) {
       const sameNote = sustain && String(sustain.note || '') === String(noteName || '');
       const contiguous = sustain && Math.max(0, Math.trunc(Number(beatIndex) || 0)) === (Math.max(0, Math.trunc(Number(sustain.beat) || 0)) + 1);
       const sustaining = !!(sameNote && contiguous);
-      const beamVol = (Number(helpers.getStageSoundVolume?.(stageIndex)) || 1) * (sustaining ? 0.36 : 0.82);
+      const beamVol = gameplayWeaponSoundVolume * (sustaining ? 0.36 : 0.82);
       if (helpers.shouldPlayBeamSoundForBeat?.(slotIndex, beatIndex)) {
         if (directSound) {
           helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, beamVol, noteName);
@@ -590,9 +693,9 @@ export function triggerWeaponStageRuntime(options = null) {
       const noteName = forcedNoteName || helpers.getSwarmEnemySoundNoteById?.(nearest?.id);
       const weaponSoundKey = helpers.getPlayerWeaponSoundEventKeyForStage?.(archetype, variant) || 'hitscan';
       if (directSound) {
-        helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, helpers.getStageSoundVolume?.(stageIndex), noteName);
+        helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, gameplayWeaponSoundVolume, noteName);
       } else {
-        helpers.noteSwarmSoundEvent?.(weaponSoundKey, helpers.getStageSoundVolume?.(stageIndex), beatIndex, noteName);
+        helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName);
       }
     }
     if (!nearest) {
@@ -652,14 +755,15 @@ export function triggerWeaponStageRuntime(options = null) {
     return;
   }
   if (archetype === 'aoe') {
-    const aoeHit = helpers.applyAoeAt?.(originWorld, variant, beatIndex, slotIndex, sourceEnemyId, stageIndex, damageScale);
+    const chainEventId = Number.isFinite(context?.chainEventId) ? Math.trunc(context.chainEventId) : null;
+    const aoeHit = helpers.applyAoeAt?.(originWorld, variant, beatIndex, slotIndex, sourceEnemyId, stageIndex, damageScale, chainEventId);
     if (variant === 'explosion') {
       const explosionSoundKey = helpers.getPlayerWeaponSoundEventKeyForStage?.(archetype, variant) || 'explosion';
       const defaultExplosionNote = helpers.normalizeSwarmNoteName?.(constants.swarmSoundEvents?.[explosionSoundKey]?.note) || 'C4';
       if (directSound) {
-        helpers.playSwarmSoundEventImmediate?.(explosionSoundKey, helpers.getStageSoundVolume?.(stageIndex), defaultExplosionNote);
+        helpers.playSwarmSoundEventImmediate?.(explosionSoundKey, gameplayWeaponSoundVolume, defaultExplosionNote);
       } else {
-        helpers.noteSwarmSoundEvent?.(explosionSoundKey, helpers.getStageSoundVolume?.(stageIndex), beatIndex, defaultExplosionNote);
+        helpers.noteSwarmSoundEvent?.(explosionSoundKey, gameplayWeaponSoundVolume, beatIndex, defaultExplosionNote);
       }
     }
     if (continuation.length) {

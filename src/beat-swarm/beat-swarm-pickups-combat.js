@@ -242,6 +242,37 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   for (let i = effects.length - 1; i >= 0; i--) {
     const fx = effects[i];
     fx.ttl -= dt;
+    if (fx.kind === 'explosion-prime' && fx.ttl <= 0) {
+      const chainEventId = Number.isFinite(fx.chainEventId) ? Math.trunc(fx.chainEventId) : null;
+      const pendingStillExists = chainEventId ? helpers.hasPendingWeaponChainEventById?.(chainEventId) === true : false;
+      if (!pendingStillExists) {
+        const detonationPoint = fx.at && Number.isFinite(fx.at.x) && Number.isFinite(fx.at.y)
+          ? { x: Number(fx.at.x) || 0, y: Number(fx.at.y) || 0 }
+          : (fx.fallbackAt && Number.isFinite(fx.fallbackAt.x) && Number.isFinite(fx.fallbackAt.y)
+            ? { x: Number(fx.fallbackAt.x) || 0, y: Number(fx.fallbackAt.y) || 0 }
+            : null);
+        if (detonationPoint) {
+          helpers.applyAoeAt?.(
+            detonationPoint,
+            'explosion',
+            currentBeatIndex,
+            Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null,
+            Number.isFinite(fx.anchorEnemyId) ? Math.trunc(fx.anchorEnemyId) : null,
+            Number.isFinite(fx.stageIndex) ? Math.trunc(fx.stageIndex) : null,
+            Math.max(0.05, Number(fx.damageScale) || 1),
+            chainEventId
+          );
+          helpers.noteMusicSystemEvent?.('weapon_explosion_failsafe_detonated', {
+            chainEventId: chainEventId || 0,
+            weaponSlotIndex: Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : -1,
+            impactEnemyId: Number.isFinite(fx.anchorEnemyId) ? Math.trunc(fx.anchorEnemyId) : 0,
+            scheduledBeatIndex: currentBeatIndex,
+            damageScale: Math.max(0.05, Number(fx.damageScale) || 1),
+            detonationSource: 'prime_ttl_expired',
+          }, { beatIndex: currentBeatIndex, stepIndex: 0 });
+        }
+      }
+    }
     if (fx.ttl <= 0) {
       try { fx.el?.remove?.(); } catch {}
       effects.splice(i, 1);
@@ -322,6 +353,33 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
             if (pendingDeath) {
               fx.at = { x: Number(pendingDeath.wx) || 0, y: Number(pendingDeath.wy) || 0 };
             } else {
+              const chainEventId = Number.isFinite(fx.chainEventId) ? Math.trunc(fx.chainEventId) : null;
+              const pendingStillExists = chainEventId ? helpers.hasPendingWeaponChainEventById?.(chainEventId) === true : false;
+              if (!pendingStillExists) {
+                const detonationPoint = fx.fallbackAt && Number.isFinite(fx.fallbackAt.x) && Number.isFinite(fx.fallbackAt.y)
+                  ? { x: Number(fx.fallbackAt.x) || 0, y: Number(fx.fallbackAt.y) || 0 }
+                  : null;
+                if (detonationPoint) {
+                  helpers.applyAoeAt?.(
+                    detonationPoint,
+                    'explosion',
+                    currentBeatIndex,
+                    Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : null,
+                    anchorId,
+                    Number.isFinite(fx.stageIndex) ? Math.trunc(fx.stageIndex) : null,
+                    Math.max(0.05, Number(fx.damageScale) || 1),
+                    chainEventId
+                  );
+                  helpers.noteMusicSystemEvent?.('weapon_explosion_failsafe_detonated', {
+                    chainEventId: chainEventId || 0,
+                    weaponSlotIndex: Number.isFinite(fx.weaponSlotIndex) ? Math.trunc(fx.weaponSlotIndex) : -1,
+                    impactEnemyId: anchorId || 0,
+                    scheduledBeatIndex: currentBeatIndex,
+                    damageScale: Math.max(0.05, Number(fx.damageScale) || 1),
+                    detonationSource: 'prime_anchor_lost',
+                  }, { beatIndex: currentBeatIndex, stepIndex: 0 });
+                }
+              }
               try { fx.el?.remove?.(); } catch {}
               effects.splice(i, 1);
               continue;

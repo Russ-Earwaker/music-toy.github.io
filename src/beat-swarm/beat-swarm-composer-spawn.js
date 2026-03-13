@@ -75,6 +75,12 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     composerRole: groupRole,
     musicGroupId: Math.trunc(Number(group.id) || 0),
     musicGroupType: 'composer',
+    musicLaneId: String(group.musicLaneId || ''),
+    musicLaneLayer: String(group.musicLaneLayer || ''),
+    musicLaneContinuityId: String(group.musicLaneContinuityId || group.continuityId || ''),
+    musicLaneInstrumentId: String(group.musicLaneInstrumentId || group.instrumentId || group.instrument || ''),
+    musicLanePhraseId: String(group.musicLanePhraseId || group?.motif?.id || ''),
+    musicLaneHandoffPolicy: String(group.musicLaneHandoffPolicy || ''),
     lifecycleState: String(group?.lifecycleState || 'active'),
   };
   enemies.push(enemy);

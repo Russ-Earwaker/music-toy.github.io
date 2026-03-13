@@ -320,6 +320,12 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
         recentNovelIdentityCount: clampInt(payload.onboarding.recentNovelIdentityCount, 0, 0),
       }
       : null,
+    chainEventId: clampInt(payload?.chainEventId, 0, 0),
+    weaponSlotIndex: clampInt(payload?.weaponSlotIndex, -1, -1),
+    scheduledBeatIndex: clampInt(payload?.scheduledBeatIndex, 0, 0),
+    impactEnemyId: clampInt(payload?.impactEnemyId, 0, 0),
+    damageScale: Number(payload?.damageScale) || 0,
+    detonationSource: String(payload?.detonationSource || '').trim().toLowerCase(),
   };
 }
 
@@ -1418,6 +1424,59 @@ function collectDeliveryDiagnostics(session, maxBarIndex) {
     maxEnemyStepsWithoutBass,
   };
 }
+function collectExplosionReliabilityDiagnostics(session, maxBarIndex) {
+  const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
+  const byType = Object.create(null);
+  const appliedByChain = new Set();
+  const primeByChain = new Set();
+  let primesCreated = 0;
+  let queuesCreated = 0;
+  let queuesRetargeted = 0;
+  let queuesProcessed = 0;
+  let queuesCleared = 0;
+  let failsafeDetonations = 0;
+  let explosionApplications = 0;
+  for (const log of logs) {
+    const type = String(log?.eventType || '').trim().toLowerCase();
+    if (!type.startsWith('weapon_explosion_')) continue;
+    byType[type] = clampInt(byType[type], 0, 0) + 1;
+    const chainEventId = clampInt(log?.chainEventId, 0, 0);
+    if (type === 'weapon_explosion_prime_created') {
+      primesCreated += 1;
+      if (chainEventId > 0) primeByChain.add(chainEventId);
+    } else if (type === 'weapon_explosion_queue_created') {
+      queuesCreated += 1;
+    } else if (type === 'weapon_explosion_queue_retargeted') {
+      queuesRetargeted += 1;
+    } else if (type === 'weapon_explosion_queue_processed') {
+      queuesProcessed += 1;
+    } else if (type === 'weapon_explosion_queue_cleared') {
+      queuesCleared += 1;
+    } else if (type === 'weapon_explosion_failsafe_detonated') {
+      failsafeDetonations += 1;
+    } else if (type === 'weapon_explosion_applied') {
+      explosionApplications += 1;
+      if (chainEventId > 0) appliedByChain.add(chainEventId);
+    }
+  }
+  let primeWithoutApplicationCount = 0;
+  for (const chainEventId of primeByChain) {
+    if (!appliedByChain.has(chainEventId)) primeWithoutApplicationCount += 1;
+  }
+  return {
+    byType,
+    explosionPrimesCreated: primesCreated,
+    explosionQueuesCreated: queuesCreated,
+    explosionQueuesRetargeted: queuesRetargeted,
+    explosionQueuesProcessed: queuesProcessed,
+    explosionQueuesCleared: queuesCleared,
+    explosionFailsafeDetonations: failsafeDetonations,
+    explosionApplications,
+    explosionPrimeWithoutApplicationCount: primeWithoutApplicationCount,
+    explosionReliabilityRate: primesCreated > 0 ? ((primesCreated - primeWithoutApplicationCount) / primesCreated) : 1,
+  };
+}
 
 function collectNotePoolCompliance(events) {
   let considered = 0;
@@ -1809,6 +1868,8 @@ function computeSummary(metrics) {
   const spawnerAudioShortfall = Math.max(0, clampInt(metrics?.spawnerPipeline?.audioShortfall, 0, 0));
   const spawnerVisualShortfall = Math.max(0, clampInt(metrics?.spawnerPipeline?.visualShortfall, 0, 0));
   const spawnerLoopgridShortfall = Math.max(0, clampInt(metrics?.spawnerPipeline?.loopgridShortfall, 0, 0));
+  const explosionReliabilityRate = Number(metrics?.explosionReliability?.explosionReliabilityRate) || 0;
+  const explosionPrimeWithoutApplicationCount = Math.max(0, clampInt(metrics?.explosionReliability?.explosionPrimeWithoutApplicationCount, 0, 0));
   const foundationQuietShare = Number(metrics?.foundationProminence?.quietShare) || 0;
   const foundationTraceShare = Number(metrics?.foundationProminence?.traceShare) || 0;
   const foundationSuppressedShare = Number(metrics?.foundationProminence?.suppressedShare) || 0;
@@ -1868,6 +1929,9 @@ function computeSummary(metrics) {
     spawnerFeedback: (spawnerPipelineMismatches === 0 && spawnerAudioShortfall === 0 && spawnerVisualShortfall === 0 && spawnerLoopgridShortfall === 0)
       ? 'consistent'
       : 'mismatch',
+    explosionReliability: (explosionPrimeWithoutApplicationCount === 0 && explosionReliabilityRate >= 0.999)
+      ? 'reliable'
+      : (explosionReliabilityRate >= 0.9 ? 'at_risk' : 'fragile'),
     foundationProminence: foundationSuppressedShare > 0
       ? 'suppressed'
       : ((foundationTraceShare > 0.2 || foundationDeconflictChangeRate > 0.35) ? 'heavily_ducked' : ((foundationQuietShare > 0.7) ? 'quiet_dominant' : 'balanced')),
@@ -1915,6 +1979,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const spawnerPipeline = collectSpawnerPipelineDiagnostics(session, maxBarIndex);
   const foundationProminence = collectFoundationProminenceDiagnostics(session, maxBarIndex);
   const handoff = collectHandoffDiagnostics(session, maxBarIndex);
+  const explosionReliability = collectExplosionReliabilityDiagnostics(session, maxBarIndex);
   const passDiagnostics = collectPassDiagnostics(executedEvents, session, maxBarIndex, handoff, spawnerPipeline);
   const sectionStability = collectSectionStability(session, maxBarIndex);
   const sectionPresentation = collectSectionPresentation(session, maxBarIndex);
@@ -1949,6 +2014,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     spawnerPipeline,
     foundationProminence,
     handoff,
+    explosionReliability,
     passDiagnostics,
     bassLoopCycles: Number(passDiagnostics?.bassStability?.bassLoopCycles) || 0,
     bassPhraseResets: Number(passDiagnostics?.bassStability?.bassPhraseResets) || 0,
@@ -1992,6 +2058,10 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     structure: readabilityStructureOnboarding.structure,
     onboarding: readabilityStructureOnboarding.onboarding,
     grooveStability,
+    explosionPrimesCreated: Number(explosionReliability?.explosionPrimesCreated) || 0,
+    explosionApplications: Number(explosionReliability?.explosionApplications) || 0,
+    explosionPrimeWithoutApplicationCount: Number(explosionReliability?.explosionPrimeWithoutApplicationCount) || 0,
+    explosionReliabilityRate: Number(explosionReliability?.explosionReliabilityRate) || 0,
   };
   return {
     metrics,
