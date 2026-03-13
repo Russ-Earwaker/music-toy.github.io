@@ -10,6 +10,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
   const z = helpers.getZoomState?.();
   const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
   const hitRadiusWorld = (Number(constants.enemyHitRadius) || 0) / Math.max(0.001, scale || 1);
+  const offscreenRemovePad = 80;
+  const offscreenGraceSeconds = 2.4;
 
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
@@ -203,9 +205,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       enemies.splice(i, 1);
       continue;
     }
-    const s = (enemyType === 'drawsnake')
-      ? helpers.keepDrawSnakeEnemyOnscreen?.(e, state.dt)
-      : helpers.worldToScreen?.({ x: e.wx, y: e.wy });
+    const s = helpers.worldToScreen?.({ x: e.wx, y: e.wy });
     if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) {
       if (isPersistentSpecialEnemy) {
         if (e.el) e.el.style.transform = 'translate(-9999px, -9999px)';
@@ -215,20 +215,24 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       enemies.splice(i, 1);
       continue;
     }
-    if (s.x < -80 || s.y < -80 || s.x > globalThis.window.innerWidth + 80 || s.y > globalThis.window.innerHeight + 80) {
-      if (isPersistentSpecialEnemy) {
-        // Keep persistent rhythm enemies alive when they travel off-screen.
-        // We still update their transform so they can fully move beyond the edge.
-      } else {
+    const isOffscreenBeyondGracePad = s.x < -offscreenRemovePad
+      || s.y < -offscreenRemovePad
+      || s.x > globalThis.window.innerWidth + offscreenRemovePad
+      || s.y > globalThis.window.innerHeight + offscreenRemovePad;
+    if (isOffscreenBeyondGracePad) {
+      e.offscreenGraceT = Math.max(0, Number(e.offscreenGraceT) || 0) + (Number(state.dt) || 0);
+      if (!isPersistentSpecialEnemy && Number(e.offscreenGraceT) >= offscreenGraceSeconds) {
         helpers.removeEnemy?.(e, 'retreated');
         enemies.splice(i, 1);
         continue;
       }
+    } else {
+      e.offscreenGraceT = 0;
     }
     if (e.el) {
       e.spawnT = Math.min(Number(e.spawnDur) || 0.14, (Number(e.spawnT) || 0) + (Number(state.dt) || 0));
       const spawnScale = enemyType === 'drawsnake' ? 1 : (helpers.getEnemySpawnScale?.(e) || 1);
-      const rolePulseScale = resolveRolePulseScale();
+      const rolePulseScale = enemyType === 'drawsnake' ? 1 : resolveRolePulseScale();
       let actionScale = 1;
       if (enemyType === 'composer-group-member') {
         const pulseDur = Math.max(0.01, Number(e.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);

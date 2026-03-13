@@ -547,6 +547,11 @@ function pulseEnemyMusicalRoleVisual(enemyLike = null, strength = 'soft') {
   enemy.musicRolePulseDur = dur;
   enemy.musicRolePulseT = dur;
   enemy.musicRolePulseScale = scale;
+  if (String(enemy?.enemyType || '').trim().toLowerCase() === 'drawsnake') {
+    enemy.drawsnakeLinePulseDur = dur;
+    enemy.drawsnakeLinePulseT = dur;
+    enemy.drawsnakeLinePulseScale = scale;
+  }
   const el = enemy?.el instanceof HTMLElement ? enemy.el : null;
   if (el) {
     try { el.style.setProperty('--bs-role-pulse', '1'); } catch {}
@@ -7679,6 +7684,9 @@ function spawnDrawSnakeEnemyAt(clientX, clientY, options = null) {
     })),
     drawsnakeNodePulseTs: Array.from({ length: DRAW_SNAKE_SEGMENT_COUNT }, () => 0),
     drawsnakeNodePulseDur: Array.from({ length: DRAW_SNAKE_SEGMENT_COUNT }, () => DRAW_SNAKE_NODE_PULSE_SECONDS),
+    drawsnakeLinePulseT: 0,
+    drawsnakeLinePulseDur: Math.max(0.05, Number(MUSIC_ROLE_PULSE_POLICY.seconds) || 0.24),
+    drawsnakeLinePulseScale: Math.max(0.02, Math.min(0.4, Number(MUSIC_ROLE_PULSE_POLICY.softScale) || 0.08)),
     drawsnakeTrail: seedTrail,
     drawsnakeHasEnteredScreen: false,
     callResponseLane,
@@ -7904,7 +7912,18 @@ function updateDrawSnakeVisual(enemy, scale, dt = 0) {
     ? enemy.drawsnakeNodePulseDur
     : (enemy.drawsnakeNodePulseDur = Array.from({ length: nodeEls.length }, () => DRAW_SNAKE_NODE_PULSE_SECONDS));
   const frameDt = Math.max(0, Number(dt) || 0);
-  const lineWidthPx = Math.max(2, Number(enemy?.drawsnakeLineWidthPx) || DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK) * DRAW_SNAKE_VISUAL_SCALE;
+  const linePulseDur = Math.max(0.01, Number(enemy?.drawsnakeLinePulseDur) || Number(MUSIC_ROLE_PULSE_POLICY.seconds) || 0.24);
+  const linePulseRem = Math.max(0, Number(enemy?.drawsnakeLinePulseT) || 0);
+  const linePulseScale = Math.max(0, Math.min(0.5, Number(enemy?.drawsnakeLinePulseScale) || Number(MUSIC_ROLE_PULSE_POLICY.softScale) || 0.08));
+  let linePulseStrength = 0;
+  if (linePulseRem > 0) {
+    const t = 1 - Math.max(0, Math.min(1, linePulseRem / linePulseDur));
+    linePulseStrength = Math.sin(t * Math.PI);
+    enemy.drawsnakeLinePulseT = Math.max(0, linePulseRem - frameDt);
+  }
+  const lineWidthPx = Math.max(2, Number(enemy?.drawsnakeLineWidthPx) || DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK)
+    * DRAW_SNAKE_VISUAL_SCALE
+    * (1 + (linePulseStrength * linePulseScale));
   const jointSizePx = Math.max(7, lineWidthPx * 1.7 * DRAW_SNAKE_NODE_SIZE_SCALE);
   for (let i = 0; i < segEls.length; i++) {
     const a = nodes[i];
