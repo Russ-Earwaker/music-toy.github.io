@@ -171,6 +171,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       if (safeProminence !== 'full' && safeProminence !== 'quiet') return safeProminence;
       // Preserve foundation full hits; loop events are kept present but ducked under player.
       if (safeLayer === 'foundation' && safeProminence === 'full') return 'full';
+      if (safeLayer === 'loops') return 'trace';
       if (safeLayer === 'sparkle') return 'trace';
       return 'quiet';
     })();
@@ -178,7 +179,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (layerStepStats[safeLayer]) layerStepStats[safeLayer][deconflictedProminence] += 1;
     readabilityStepStats.enemyEvents += 1;
     if (deconflictedProminence === 'full') readabilityStepStats.enemyForegroundEvents += 1;
-    if (playerLikelyAudible && (deconflictedProminence === 'full' || deconflictedProminence === 'quiet')) {
+    if (
+      playerLikelyAudible
+      && safeLayer !== 'foundation'
+      && (deconflictedProminence === 'full' || deconflictedProminence === 'quiet')
+    ) {
       readabilityStepStats.enemyCompetingDuringPlayer += 1;
       if (register === 'mid' || register === 'mid_high') {
         readabilityStepStats.sameRegisterOverlapDuringPlayer += 1;

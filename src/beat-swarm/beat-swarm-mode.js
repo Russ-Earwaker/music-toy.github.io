@@ -1727,7 +1727,7 @@ function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context 
     } catch {}
   }
   const phraseState = clonePhraseState(sourceGroup.phraseState)
-    || (isBassSource ? buildFallbackPhraseStateForHandoff(sourceGroup, beatIndex, stepIndex, continuityId) : null);
+    || buildFallbackPhraseStateForHandoff(sourceGroup, beatIndex, stepIndex, continuityId);
   const sourceActionType = String(sourceGroup.actionType || '').trim().toLowerCase();
   const startedPayload = {
     sourceEnemyId: sourceId,
@@ -1801,6 +1801,24 @@ function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context 
         targetEnemyId: Math.max(0, Math.trunc(Number(targetEnemy.id) || 0)),
         targetEnemyType: String(targetEnemy?.enemyType || '').trim().toLowerCase(),
       }, { beatIndex, stepIndex, ...context });
+    }
+  }
+  if (sourceType === 'dumb') {
+    const targetTypeNow = String(targetEnemy?.enemyType || '').trim().toLowerCase();
+    if (!targetEnemy || targetTypeNow !== 'dumb') {
+      const fallbackPoint = getRandomOffscreenSpawnPoint();
+      const spawnedDumb = fallbackPoint && Number.isFinite(fallbackPoint.x) && Number.isFinite(fallbackPoint.y)
+        ? spawnEnemyAt(fallbackPoint.x, fallbackPoint.y)
+        : null;
+      if (spawnedDumb) {
+        targetEnemy = spawnedDumb;
+        compatibleReceiverFound = true;
+        noteMusicSystemEvent('music_handoff_emergency_receiver_spawned', {
+          ...startedPayload,
+          targetEnemyId: Math.max(0, Math.trunc(Number(targetEnemy.id) || 0)),
+          targetEnemyType: String(targetEnemy?.enemyType || '').trim().toLowerCase(),
+        }, { beatIndex, stepIndex, ...context });
+      }
     }
   }
   if (!targetEnemy) {
@@ -6655,6 +6673,7 @@ function spawnEnemyAt(clientX, clientY, options = null) {
     lifecycleState: created.lifecycleState,
   });
   syncSingletonEnemyStateFromMusicGroup(created, group);
+  return created;
 }
 function getUsedSpawnerEnemyInstrumentIds() {
   const used = new Set();
@@ -8183,6 +8202,20 @@ function getEnemyEventMusicProminence(ev, context = null) {
   const sparkleMaxDensityPerBar = Math.max(0, Math.trunc(Number(MUSIC_LAYER_POLICY.sparkleMaxDensityPerBar) || 2));
   const sparkleCannotOverrideLoops = MUSIC_LAYER_POLICY.sparkleCannotOverrideLoops !== false;
   const sparkleCannotOverrideFoundation = MUSIC_LAYER_POLICY.sparkleCannotOverrideFoundation !== false;
+  const lastFoundationBar = Math.max(-1, Math.trunc(Number(musicLayerRuntime.lastFoundationBar) || -1));
+  const foundationRecentlyActive = lastFoundationBar >= 0 && (bar - lastFoundationBar) <= 1;
+  const currentForegroundIdentityLayer = String(loopAdmissionRuntime.currentForegroundIdentityLayer || '').trim().toLowerCase();
+  const currentForegroundIdentityKey = String(loopAdmissionRuntime.currentForegroundIdentityKey || '').trim().toLowerCase();
+  const loopRegistrationCycles = Math.max(
+    0,
+    Math.max(
+      Math.trunc(Number(loopTunables.minCompletedLoopsBeforeNext) || 0),
+      Math.trunc(Number(loopTunables.loopRegistrationCycles) || 0)
+    )
+  );
+  const loopRegistrationActive = currentForegroundIdentityLayer === 'loops'
+    && !!currentForegroundIdentityKey
+    && getForegroundIdentityCompletedLoops(stepAbs, loopTunables) < loopRegistrationCycles;
   const idx = Math.max(0, Math.trunc(Number(context?.enemyIndex) || 0));
   const total = Math.max(1, Math.trunc(Number(context?.totalEnemyEvents) || 1));
   const seed = hashStringSeed(`prominence|${beat}|${bar}|${actor}|${action}|${layer}|${idx}|${total}`);
@@ -8303,8 +8336,15 @@ function getEnemyEventMusicProminence(ev, context = null) {
   const sparkleEventsInBar = musicLayerRuntime.sparkleBarIndex === bar
     ? Math.max(0, Math.trunc(Number(musicLayerRuntime.sparkleEventsInBar) || 0))
     : 0;
+  const authoritativeForegroundActive = foundationAssigned
+    || foundationRecentlyActive
+    || loopForegroundIdentityCount > 0
+    || loopRegistrationActive;
   if (sparkleEventsInBar >= sparkleMaxDensityPerBar) return commitSparkleProminence('suppressed');
   if (sparkleAssigned >= sparkleMaxDensity) return commitSparkleProminence('suppressed');
+  if (!authoritativeForegroundActive) return commitSparkleProminence('suppressed');
+  if (loopRegistrationActive) return commitSparkleProminence('suppressed');
+  if (foregroundAssigned >= 2 || foregroundIdentityCount >= 2) return commitSparkleProminence('suppressed');
   if (sparkleCannotOverrideFoundation && foundationAssigned) return commitSparkleProminence('trace');
   if (sparkleCannotOverrideLoops && loopForegroundIdentityCount > 0) return commitSparkleProminence('trace');
   if (foregroundIdentityCount >= foregroundIdentityLimit) return commitSparkleProminence('trace');
