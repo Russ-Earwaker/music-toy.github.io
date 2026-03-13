@@ -169,9 +169,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const deconflictedProminence = (() => {
       if (!playerLikelyAudible) return safeProminence;
       if (safeProminence !== 'full' && safeProminence !== 'quiet') return safeProminence;
-      // Preserve foundation full hits; loop events are kept present but ducked under player.
+      // Preserve the tune skeleton under player fire: foundation stays anchored,
+      // one loop voice can remain quiet, sparkle stays background-only.
       if (safeLayer === 'foundation' && safeProminence === 'full') return 'full';
-      if (safeLayer === 'loops') return 'trace';
+      if (safeLayer === 'loops') return 'quiet';
       if (safeLayer === 'sparkle') return 'trace';
       return 'quiet';
     })();

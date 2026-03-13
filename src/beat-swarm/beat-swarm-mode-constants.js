@@ -323,21 +323,21 @@ export const DRAW_SNAKE_ENEMY_HEALTH_MULTIPLIER = SPAWNER_ENEMY_HEALTH_MULTIPLIE
 export const DRAW_SNAKE_SEGMENT_COUNT = 12;
 export const DRAW_SNAKE_SEGMENT_SPACING_WORLD = 176;
 export const DRAW_SNAKE_TRIGGER_SOUND_VOLUME = 0.45;
-export const PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT = 0.24;
+export const PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT = 0.36;
 export const PLAYER_MASK_DUCK_KEEP_CHANCE_BY_CHANNEL = Object.freeze({
-  spawner: 0.42,
-  drawsnake: 0.38,
-  composer: 0.36,
-  default: 0.36,
+  spawner: 0.52,
+  drawsnake: 0.5,
+  composer: 0.48,
+  default: 0.44,
 });
 export const PLAYER_MASK_STEP_EVENT_KEEP_CHANCE = Object.freeze({
-  'spawner-spawn': 0.44,
-  'drawsnake-projectile': 0.2,
-  'composer-group-projectile': 0.18,
-  'composer-group-explosion': 0.14,
-  default: 0.12,
+  'spawner-spawn': 0.54,
+  'drawsnake-projectile': 0.36,
+  'composer-group-projectile': 0.32,
+  'composer-group-explosion': 0.22,
+  default: 0.18,
 });
-export const PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP = 2;
+export const PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP = 3;
 export const MUSIC_LAYER_POLICY = Object.freeze({
   foundationMinBars: 6,
   foundationMinCycles: 3,
@@ -354,8 +354,8 @@ export const MUSIC_LAYER_POLICY = Object.freeze({
   foregroundIdentityLimit: 3,
   primaryLoopIdentityLimit: 1,
   secondaryLoopIdentityLimit: 1,
-  supportTraceGain: 0.42,
-  supportQuietGain: 0.78,
+  supportTraceGain: 0.58,
+  supportQuietGain: 0.92,
 });
 export const LOOP_ADMISSION_POLICY = Object.freeze({
   loopLengthSteps: WEAPON_TUNE_STEPS,
