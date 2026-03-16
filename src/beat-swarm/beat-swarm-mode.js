@@ -7412,10 +7412,61 @@ function applySpawnerCollisionAvoidance(activeSpawners = []) {
   const MIN_DISTANCE_FOR_DUP_PRIMARY_NOTE = 4.1;
   const list = Array.isArray(activeSpawners) ? activeSpawners : [];
   if (list.length <= 1) return;
+  const groupedByMotif = new Map();
+  const singletonCandidates = [];
+  for (const enemy of list) {
+    if (!enemy || enemy?.retreating) continue;
+    const motifKey = String(enemy?.motifScopeKey || '').trim();
+    if (!motifKey) {
+      singletonCandidates.push(enemy);
+      continue;
+    }
+    const bucket = groupedByMotif.get(motifKey);
+    if (bucket) bucket.push(enemy);
+    else groupedByMotif.set(motifKey, [enemy]);
+  }
+  for (const bucket of groupedByMotif.values()) {
+    if (!Array.isArray(bucket) || bucket.length <= 1) {
+      if (bucket?.[0]) singletonCandidates.push(bucket[0]);
+      continue;
+    }
+    const leader = bucket[0];
+    const leaderGroup = getEnemyMusicGroup(leader, 'spawner-spawn');
+    const canonicalSteps = Array.isArray(leaderGroup?.steps)
+      ? leaderGroup.steps.map((v) => !!v).slice(0, 8)
+      : Array.isArray(leader?.spawnerSteps) ? leader.spawnerSteps.map((v) => !!v).slice(0, 8) : Array.from({ length: 8 }, () => false);
+    const canonicalNoteIndices = Array.isArray(leader?.spawnerNoteIndices)
+      ? leader.spawnerNoteIndices.map((v) => Math.max(0, Math.trunc(Number(v) || 0))).slice(0, 8)
+      : Array.from({ length: 8 }, () => 0);
+    const canonicalNotePalette = Array.isArray(leader?.spawnerNotePalette) ? leader.spawnerNotePalette.slice() : Array.from(LOOPGRID_FALLBACK_NOTE_PALETTE);
+    const canonicalNoteName = normalizeSwarmNoteName(leader?.spawnerNoteName) || 'C3';
+    for (const enemy of bucket) {
+      enemy.spawnerSteps = canonicalSteps.slice();
+      enemy.spawnerNoteIndices = canonicalNoteIndices.slice();
+      enemy.spawnerNotePalette = canonicalNotePalette.slice();
+      enemy.spawnerNoteName = canonicalNoteName;
+      enemy.spawnerCollisionVariant = {
+        rotation: 0,
+        noteOffset: 0,
+        signature: 'motif_group_canonical',
+        minDistance: 0,
+      };
+      const syncedGroup = ensureSingletonMusicGroupForEnemy(enemy, {
+        role: getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.BASS),
+        actionType: 'spawner-spawn',
+        note: enemy.spawnerNoteName,
+        instrumentId: enemy.spawnerInstrument,
+        steps: enemy.spawnerSteps,
+      });
+      syncSingletonEnemyStateFromMusicGroup(enemy, syncedGroup);
+    }
+  }
+  const dedupedList = singletonCandidates;
+  if (dedupedList.length <= 1) return;
   const usedSignatures = new Set();
   const usedPrimaryNotes = new Set();
   const acceptedPatterns = [];
-  for (const enemy of list) {
+  for (const enemy of dedupedList) {
     if (!enemy || enemy?.retreating) continue;
     const group = getEnemyMusicGroup(enemy, 'spawner-spawn');
     const stepsSrc = Array.isArray(group?.steps) ? group.steps.map((v) => !!v) : Array.from({ length: 8 }, () => false);
@@ -9757,11 +9808,12 @@ function applyLingeringAoeBeat(beatIndex) {
     },
   });
 }
-function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex, contextBeatIndex = beatIndex) {
+function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex, contextBeatIndex = beatIndex, options = null) {
   return fireConfiguredWeaponsOnBeatRuntime({
     centerWorld,
     beatIndex,
     contextBeatIndex,
+    options,
     state: {
       activeWeaponSlotIndex,
       beamSustainStateBySlot,

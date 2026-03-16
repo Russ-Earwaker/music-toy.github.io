@@ -514,11 +514,12 @@ export function triggerWeaponStageRuntime(options = null) {
   const damageScale = Math.max(0.05, Number(context?.damageScale) || 1);
   const forcedNoteName = helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || null;
   const directSound = !!context?.directSound;
+  const playerSoundVolumeMult = Math.max(0.1, Math.min(1, Number(context?.playerSoundVolumeMult) || 1));
   const gameplayWeaponSoundVolume = (() => {
     if (typeof helpers.getGameplayWeaponSoundVolume === 'function') {
-      return Math.max(0, Math.min(1, Number(helpers.getGameplayWeaponSoundVolume(archetype, variant, stageIndex)) || 0));
+      return Math.max(0, Math.min(1, (Number(helpers.getGameplayWeaponSoundVolume(archetype, variant, stageIndex)) || 0) * 0.58 * playerSoundVolumeMult));
     }
-    return Math.max(0, Math.min(1, Number(helpers.getStageSoundVolume?.(stageIndex)) || 0));
+    return Math.max(0, Math.min(1, (Number(helpers.getStageSoundVolume?.(stageIndex)) || 0) * 0.58 * playerSoundVolumeMult));
   })();
   const nextCtx = {
     weaponSlotIndex: slotIndex,
@@ -802,6 +803,7 @@ export function fireConfiguredWeaponsOnBeatRuntime(options = null) {
   const state = options?.state && typeof options.state === 'object' ? options.state : {};
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
+  const runtimeOptions = options?.options && typeof options.options === 'object' ? options.options : {};
 
   const weaponLoadout = Array.isArray(state.weaponLoadout) ? state.weaponLoadout : [];
   const equippedWeapons = state.equippedWeapons instanceof Set ? state.equippedWeapons : new Set();
@@ -851,6 +853,7 @@ export function fireConfiguredWeaponsOnBeatRuntime(options = null) {
       damageScale,
       forcedNoteName: noteName,
       directSound: true,
+      playerSoundVolumeMult: Math.max(0.1, Math.min(1, Number(runtimeOptions?.playerSoundVolumeMult) || 1)),
       debugSource: 'tune-primary',
       debugStepIndex: Math.trunc(Number(beatIndex) || 0),
       debugBeatIndex: Math.trunc(Number(contextBeatIndex) || 0),

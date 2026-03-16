@@ -1,347 +1,148 @@
-# Beat Swarm – next tasks
+### Beat Swarm music fix task list
 
-## Goal
+1. **Add a final per-step note arbitration pass**
 
-Make Beat Swarm behave like a **readable retro shmup music arranger**:
+   * Before any enemy note is actually played, gather all candidate enemy notes for that step and choose which ones survive.
+   * Hard cap simultaneous enemy notes by musical role.
+   * Suggested priority:
 
-* stable layered tune
-* recognisable enemy-to-sound identity
-* intro bass that has musical variation without becoming unreliable
-* slower, more digestible buildup
-* Beat Swarm-specific sound theme
-* Beat Swarm-specific BPM on entry, restored on exit
+     * foundation bass
+     * newly introduced loop notes
+     * established loop notes
+     * accents / sparkle
+     * duplicate or low-value extras get dropped
+   * Goal: stop the mix from turning into a pile of valid-but-bad simultaneous notes.
 
----
+2. **Protect foundation / bass from being ducked too often**
 
-## 1. Add a Beat Swarm-specific sound theme preset
+   * Right now bass events are being created and executed, but they’re frequently marked `musicProminence: "quiet"` and often collide with player steps, which makes them feel absent rather than foundational.  
+   * Add a rule so foundation is usually `full` unless there is a very strong reason not to be.
+   * On steps where player weapon audio overlaps foundation:
 
-Create a dedicated Beat Swarm music theme/palette instead of relying on the generic/default toy setup.
+     * prefer suppressing less important enemy notes
+     * or duck player layer slightly
+     * or offset non-foundation enemy notes
+   * Do **not** keep sacrificing bass readability.
 
-### Theme target
+3. **Create an “establishment window” for new loops**
 
-A **retro arcade shmup** feel inspired by Zero Wing / Gradius / Thunder Force style music:
+   * When a new loop/riff is introduced, protect it for at least 2 bars.
+   * During that window:
 
-* punchy synth bass
-* bright arcade lead
-* square/arp support
-* crisp electronic percussion
-* metallic accent/sparkle
-* weapon tone that feels gamey and musical
+     * it should stay audible
+     * it should not instantly be demoted to `trace`
+     * avoid replacing it with other loop material too quickly
+   * Goal: when a loop enters, the player can actually hear and learn it.
 
-### Required lanes / roles
+4. **Promote loops out of permanent trace mode**
 
-Set up explicit instrument-role mapping for Beat Swarm:
+   * We’re seeing loop events regularly marked as `musicLayer: "loops"` with `musicProminence: "trace"`, which means they exist technically but don’t really read musically. 
+   * Add a clearer loop lifecycle:
 
-* `foundation` = retro synth bass
-* `kick_or_low_pulse` = short electronic low hit
-* `primary_loop` = bright arcade lead / saw-ish lead
-* `secondary_loop` = square arp / support riff
-* `sparkle` = metallic FM/digital accent
-* `player_weapon` = pitched arcade zap / weapon tone
+     * introduced
+     * established
+     * background support
+     * retired
+   * Only use `trace` for very low-priority decorative material, not for main riff ideas.
 
-### Codex tasks
+5. **Stop same-note pileups on the same step**
 
-* Add a Beat Swarm-specific theme id, something like `beat-swarm-shmup`
-* Make Beat Swarm use this theme by default instead of inheriting whatever generic toy palette is active
-* Ensure palette / lane-role assignment is explicit, not heuristic where possible
-* Keep role colours stable and distinct per lane family
+   * Add de-duplication at playback-selection time.
+   * If multiple enemy sources want the same note / same register / same role on the same step:
 
----
+     * keep the best one
+     * optionally octave-shift one
+     * or merge into a single representative note
+   * Goal: prevent stacked identical notes making the mix too loud or ugly.
 
-## 2. Set Beat Swarm default BPM on entry, and restore previous BPM on exit
+6. **Strengthen spawner anti-duplication**
 
-Beat Swarm should push the app into a BPM that suits the mode, then cleanly restore the previous value when leaving.
+   * The perf results show 1 perfect-sync spawner pair and 16 near-duplicate spawner pairs, which matches the “multiples of the same note at the same time” problem. 
+   * Existing dedupe is not enough.
+   * Add live checks when assigning a new spawner pattern:
 
-### BPM target
+     * rhythm similarity against active spawners
+     * note similarity against active spawners
+     * phase alignment checks
+   * Reject or mutate patterns that are too close.
 
-Set Beat Swarm entry BPM to:
+7. **Guarantee one clear foreground musical idea at a time**
 
-* **132 BPM**
+   * Decide what the current “foreground idea” is for each phrase/section:
 
-This should happen automatically when entering Beat Swarm.
+     * bass foundation
+     * one loop
+     * one accent layer
+   * Avoid letting multiple competing riffs all try to lead at once.
+   * New loop enters -> it becomes foreground briefly.
+   * Existing loop supporting -> it moves to background.
+   * Goal: the music feels authored, not accumulated.
 
-### Behaviour rules
+8. **Add role-based lane budgets**
 
-* On entering Beat Swarm:
+   * Define simple budgets such as:
 
-  * store current global/app BPM
-  * set BPM to `132`
-* On exiting Beat Swarm:
+     * 1 foundation event
+     * 1 loop lead event
+     * 0–1 accent event
+     * 0–1 death accent
+   * Enforce those budgets in the arbitration pass.
+   * This should dramatically reduce clutter without breaking the system.
 
-  * restore the previous BPM that was active before entering
-* Do not permanently overwrite the user’s prior BPM
-* Avoid repeated reapplication if Beat Swarm internally reloads or remounts
+9. **Improve section-level loop persistence**
 
-### Codex tasks
+   * If a loop is intended to “hang around”, give it a minimum life before replacement.
+   * Don’t allow constant churn of loop ownership within the same section unless the section is explicitly chaotic.
+   * Add rules like:
 
-* Find Beat Swarm mode enter/exit hooks
-* Add `enterBeatSwarmTempo()` logic
-* Add `exitBeatSwarmTempoRestore()` logic
-* Store previous BPM in Beat Swarm session state, not in a loose global that can be stomped
-* Guard against nested re-entry / duplicate restores
+     * minimum bars before replacement
+     * minimum heard count before retirement
+     * avoid replacing a loop before it has properly surfaced
 
-### Success criteria
+10. **Add better diagnostics for audibility, not just delivery**
 
-* entering Beat Swarm always sets BPM to 132
-* leaving Beat Swarm always restores the prior BPM
-* switching in/out repeatedly does not drift or break tempo state
+* Delivery is not the main problem: created/executed rates are hitting 1.0 for enemy, spawner, and bass events. 
+* Add new debug metrics:
 
----
+  * same-step note collisions
+  * same-note same-register collisions
+  * suppressed-by-arbitration counts
+  * new loop establishment success rate
+  * foundation survival rate on player-audible steps
+  * average simultaneous audible notes by step
+* Goal: measure what is actually heard, not just what was scheduled.
 
-## 3. Replace constant bass fallback with pattern-based phrase randomisation
+11. **Tune player-vs-enemy masking rules**
 
-The current intro bass is too often a rigid on-beat pulse. Replace that with the same kind of **pattern randomisation approach** used by DrawGrid and Simple Rhythm toys.
+* Nearly half of enemy audible events are landing on player-audible steps, so player audio is masking too much of the musical content. 
+* Add explicit masking policy:
 
-### Important rule
+  * player can dominate accents
+  * player should not erase foundation
+  * player should not immediately bury newly introduced loops
+* Make the music system protect important content from player spam.
 
-Do **not** randomise each beat independently.
+12. **Re-test with focused acceptance criteria**
 
-Use:
+* After implementing the above, run Music Lab again and verify:
 
-* phrase library
-* phrase selection
-* phrase locking
-* occasional mutation
+  * bass stays clearly present throughout
+  * new loop is clearly heard when introduced
+  * identical spawner notes are no longer stacked badly
+  * fewer steps contain messy simultaneous enemy notes
+  * player weapons still feel responsive, but no longer dominate the whole song
 
-### Codex tasks
+### Suggested acceptance criteria
 
-* Find the randomisation logic used by:
+Give Codex this as the success target:
 
-  * DrawGrid random button
-  * Simple Rhythm random button
-* Reuse the same conceptual model for Beat Swarm foundation generation
-* Apply it to **foundation lane phrase creation**, not only optional theme layers
-* Audit and remove simple pulse fallbacks like:
+* Bass/foundation should remain clearly audible for the full run unless intentionally dropped for arrangement reasons.
+* A newly introduced loop should be clearly heard for at least 2 bars.
+* No obvious same-note spawner pileups.
+* Enemy notes should sound curated, not accumulated.
+* Player weapons/components should enhance the track, not bury the arrangement.
 
-  * even-step alternation
-  * always-on quarter notes
-  * emergency keepalive patterns that flatten to metronome behaviour
+### One-line summary for Codex
 
-### Foundation phrase rules
+**The scheduler is mostly working; now build a musical arbitration/arrangement layer so foundation is protected, loops get establishment time, and duplicate enemy notes are culled before playback.**
 
-* choose one phrase from a pattern library
-* keep it stable for **4–8 bars**
-* only change on **bar boundaries**
-* allow rests
-* allow occasional offbeats
-* no per-step coin-flip randomness
-
-### Example pattern style
-
-Use 8-step or 16-step patterns that feel arcade and punchy, for example:
-
-* strong downbeat with one syncopated hit
-* downbeat + gap + later response
-* sparse phrase with one pickup
-* repeated hook with one rest
-
-The point is:
-
-* recognisable
-* musical
-* repeatable
-* not robotic
-
----
-
-## 4. Make foundation phrase ownership belong to the lane, not the enemy
-
-Right now the bass still gets flattened or reset too easily when ownership changes.
-
-### Codex tasks
-
-Create or tighten a persistent lane model so that:
-
-* `foundationLane` owns:
-
-  * phrase pattern
-  * phrase id
-  * continuity id
-  * instrument id
-  * role colour
-  * cycle count
-* performer enemy only renders/plays that lane
-* enemy death or replacement must not redesign the phrase
-
-### Handoff rules
-
-* inherit phrase by default
-* inherit phrase step / bar offset
-* inherit continuity id
-* only reset when there is an explicit musical reason:
-
-  * section re-orchestration
-  * cadence resolution
-  * deliberate arrangement change
-
-### Success criteria
-
-* intro bass survives enemy churn without becoming a new pattern every time
-* handoffs preserve musical identity
-* foundation continuity metrics improve significantly
-
----
-
-## 5. Add a protected intro arrangement window
-
-Do not let intro bass use the same freedom as the later arranger.
-
-### Intro structure
-
-Implement an explicit first-stage arrangement:
-
-* bars 0–3: player / minimal punctuation
-* bars 4–11: foundation only
-* bars 12–19: foundation + one primary loop allowed
-* only after that: consider support lane / secondary response
-
-### Codex tasks
-
-* Add an intro arrangement plan for Beat Swarm
-* Block extra foreground identities during the intro window
-* Keep the first foundation phrase stable long enough to register
-* Prefer low churn in intro:
-
-  * fewer handoffs
-  * fewer new colours
-  * fewer new lane admissions
-
-### Success criteria
-
-* player can clearly hear “the bass part”
-* player can identify which enemies belong to that part
-* intro feels like a tune beginning, not a system waking up chaotically
-
----
-
-## 6. Slow post-intro layering so the tune builds digestibly
-
-After intro, new ideas are still arriving too fast.
-
-### Codex tasks
-
-Tighten admission rules so that:
-
-* no new major foreground lane enters until the current one has completed at least **2 full cycles**
-* minimum spacing between major new ideas = **4 bars**
-* after a section change, add a temporary lockout before another major idea may enter
-
-### Adjust caps
-
-Set readable lane caps:
-
-* foundation audible = 1
-* primary loop audible = 1
-* secondary loop audible = 0–1
-* sparkle foreground voices = 1 max
-
-Reduce later-state chaos by tightening pacing-state limits, especially:
-
-* `main_low`
-* `main_mid`
-* `peak`
-
-Keep later states more musical, not just busier.
-
----
-
-## 7. Lock enemy instrument/colour identity harder
-
-Enemy identity still needs to read like band membership.
-
-### Codex tasks
-
-* Once an enemy gets:
-
-  * `musicInstrumentId`
-  * `enemyRoleColor`
-* reject later mutation unless it is part of an explicit re-orchestration event
-* log attempted illegal identity rewrites for debugging
-
-### Success criteria
-
-* enemy colour remains stable for life
-* enemy sound identity remains stable for life
-* lane identity transfers cleanly to a replacement performer when needed
-
----
-
-## 8. Make sparkle obey the arrangement
-
-Sparkle should decorate, not compete.
-
-### Codex tasks
-
-* duck sparkle during new loop registration
-* suppress sparkle when there are already 2 readable foreground lanes
-* prevent sparkle from acting like a third melody
-* keep sparkle short, light, and subordinate
-
----
-
-## 9. Add diagnostics for “musicality,” not just reliability
-
-The system is now reliable enough that the next problem is musical shape.
-
-### Codex tasks
-
-Add foundation metrics such as:
-
-* `foundationRestShare`
-* `foundationOffbeatShare`
-* `foundationUniquePatternCount`
-* `foundationPatternChangeRate`
-* `foundationConsecutiveOnBeatHits`
-
-Add readability metrics such as:
-
-* `audibleForegroundLaneCount`
-* `barsSinceNewForegroundIdea`
-* `laneReassignmentRate`
-* `enemyColourMutationCount`
-* `enemyInstrumentMutationCount`
-
-### Why
-
-We need the lab to tell us:
-
-* is the bass still just a pulse?
-* are too many ideas entering too fast?
-* are identities visually/musically stable?
-
----
-
-## 10. Keep the implementation aligned with DrawGrid / Simple Rhythm behaviour
-
-This is important.
-
-### Codex rule
-
-Beat Swarm should use the **same philosophy** as DrawGrid/Simple Rhythm random:
-
-* generate coherent patterns
-* preserve them long enough to feel intentional
-* mutate occasionally
-* avoid per-step chaos
-
-Do not “fake variation” with constant micro-randomness.
-
----
-
-# Priority order
-
-1. Beat Swarm sound theme preset
-2. Beat Swarm entry BPM = 132 / restore on exit
-3. Replace bass pulse fallbacks with DrawGrid/Simple Rhythm style pattern selection
-4. Make foundation phrase lane-owned, not enemy-owned
-5. Add protected intro arrangement window
-6. Slow post-intro lane admission and cap foreground ideas
-7. Hard-lock enemy instrument/colour identity
-8. Sparkle suppression
-9. Add musicality/readability diagnostics
-
----
-
-# One-line brief for Codex
-
-Build Beat Swarm as a **retro shmup track arranger** with its own theme and 132 BPM entry tempo, restoring prior BPM on exit; replace rigid bass pulse fallbacks with DrawGrid/Simple Rhythm style phrase randomisation; keep phrases lane-owned and identity-stable; slow layer admission so the tune builds clearly instead of becoming chaotic.

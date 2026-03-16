@@ -30,7 +30,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const playerStepDirective = helpers.getPlayerInstrumentStepDirective?.(stepIndex, beatIndex) || { emit: true, mode: 'free_fire', reason: 'default' };
 
   const playerTuneAuthoredStep = helpers.isPlayerWeaponTuneStepAuthoredActive?.(stepIndex) === true;
-  const shouldEmitPlayerStep = playerStepDirective.emit === true || playerTuneAuthoredStep;
+  const shouldEmitPlayerStep = (() => {
+    if (!(playerStepDirective.emit === true || playerTuneAuthoredStep)) return false;
+    const mode = String(playerStepDirective.mode || '').trim().toLowerCase();
+    if (!playerTuneAuthoredStep && mode === 'guided_fire') return (stepIndex % 2) === 0;
+    return true;
+  })();
   const playerLikelyAudible = shouldEmitPlayerStep
     && helpers.isPlayerWeaponStepLikelyAudible?.(stepIndex) === true;
   const spawnerStep = helpers.collectSpawnerStepBeatEvents?.(stepIndex, beatIndex);
@@ -132,6 +137,53 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   };
 
   let effectiveEnemyEvents = Array.isArray(filteredEnemyEvents) ? filteredEnemyEvents.slice() : [];
+  const foundationCandidates = effectiveEnemyEvents.filter((ev) => {
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const role = String(ev?.role || payload?.musicRole || '').trim().toLowerCase();
+    const action = String(ev?.actionType || '').trim().toLowerCase();
+    return role === 'bass'
+      || String(payload?.musicLayer || '').trim().toLowerCase() === 'foundation'
+      || action === 'spawner-spawn'
+      || action === 'composer-group-projectile';
+  });
+  if (foundationCandidates.length > 1) {
+    const scoreFoundationCandidate = (ev, idx = 0) => {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const action = String(ev?.actionType || '').trim().toLowerCase();
+      let score = 0;
+      if (payload?.bassKeepaliveInjected === true) score -= 500;
+      if (action === 'composer-group-projectile') score += 180;
+      else if (action === 'spawner-spawn') score += 120;
+      else if (action === 'drawsnake-projectile') score += 80;
+      const continuityId = String(payload?.continuityId || '').trim();
+      if (continuityId) score += 20;
+      const audioGain = Number(payload?.audioGain);
+      if (Number.isFinite(audioGain)) score += Math.max(0, Math.min(1, audioGain)) * 10;
+      score -= idx * 0.01;
+      return score;
+    };
+    const ranked = foundationCandidates
+      .map((ev, idx) => ({ ev, idx, score: scoreFoundationCandidate(ev, idx) }))
+      .sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
+    const chosenFoundation = ranked[0]?.ev || null;
+    effectiveEnemyEvents = effectiveEnemyEvents.filter((ev) => {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const role = String(ev?.role || payload?.musicRole || '').trim().toLowerCase();
+      const action = String(ev?.actionType || '').trim().toLowerCase();
+      const isFoundation = role === 'bass'
+        || String(payload?.musicLayer || '').trim().toLowerCase() === 'foundation'
+        || action === 'spawner-spawn'
+        || action === 'composer-group-projectile';
+      return !isFoundation || ev === chosenFoundation;
+    });
+    try {
+      helpers.noteMusicSystemEvent?.('music_foundation_candidate_collapse', {
+        candidateCount: foundationCandidates.length,
+        keptActorId: Math.max(0, Math.trunc(Number(chosenFoundation?.actorId) || 0)),
+        keptActionType: String(chosenFoundation?.actionType || '').trim().toLowerCase(),
+      }, { beatIndex, stepIndex, barIndex });
+    } catch {}
+  }
   const hasBassEnemyEvent = effectiveEnemyEvents.some((ev) => String(ev?.role || '').trim().toLowerCase() === 'bass');
   if (hasBassEnemyEvent && typeof helpers.noteNaturalBassStep === 'function') {
     try { helpers.noteNaturalBassStep(stepIndex); } catch {}
@@ -176,20 +228,6 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       if (safeLayer === 'sparkle') return 'trace';
       return 'quiet';
     })();
-    const register = String(payload.musicRegister || '').trim().toLowerCase();
-    if (layerStepStats[safeLayer]) layerStepStats[safeLayer][deconflictedProminence] += 1;
-    readabilityStepStats.enemyEvents += 1;
-    if (deconflictedProminence === 'full') readabilityStepStats.enemyForegroundEvents += 1;
-    if (
-      playerLikelyAudible
-      && safeLayer !== 'foundation'
-      && (deconflictedProminence === 'full' || deconflictedProminence === 'quiet')
-    ) {
-      readabilityStepStats.enemyCompetingDuringPlayer += 1;
-      if (register === 'mid' || register === 'mid_high') {
-        readabilityStepStats.sameRegisterOverlapDuringPlayer += 1;
-      }
-    }
     if (deconflictedProminence === 'full') prominenceState.foregroundAssigned += 1;
     if (deconflictedProminence === 'full') {
       const identityEnemyType = String(profiled?.enemyType || payload?.enemyType || 'unknown').trim().toLowerCase() || 'unknown';
@@ -202,32 +240,6 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     if (safeLayer === 'sparkle' && deconflictedProminence !== 'suppressed') prominenceState.sparkleAssigned += 1;
     if (safeLayer === 'foundation' && deconflictedProminence !== 'suppressed') prominenceState.foundationAssigned = true;
-    if (safeLayer === 'foundation') {
-      try {
-        helpers.noteMusicSystemEvent?.('music_foundation_prominence_decision', {
-          actorId: Math.max(0, Math.trunc(Number(profiled?.actorId) || 0)),
-          actionType: String(profiled?.actionType || '').trim().toLowerCase(),
-          role: String(profiled?.role || payload?.musicRole || '').trim().toLowerCase(),
-          requestedProminence: safeProminence,
-          finalProminence: deconflictedProminence,
-          changedByDeconflict: deconflictedProminence !== safeProminence,
-          playerLikelyAudible,
-          foundationAssignedBefore,
-          foundationAssignedAfter: prominenceState.foundationAssigned === true,
-          enemyIndex: Math.max(0, Math.trunc(Number(idx) || 0)),
-          totalEnemyEvents: Math.max(0, Math.trunc(Number(effectiveEnemyEvents.length) || 0)),
-        }, { beatIndex, stepIndex, barIndex });
-      } catch {}
-    }
-    if (deconflictedProminence !== 'suppressed') {
-      try {
-        helpers.noteEnemyMusicIdentityExposure?.({
-          enemyType: String(profiled?.enemyType || profiled?.payload?.enemyType || '').trim().toLowerCase(),
-          musicRole: String(payload.musicRole || '').trim().toLowerCase(),
-          musicLayer: safeLayer,
-        }, barIndex);
-      } catch {}
-    }
     if (deconflictedProminence === safeProminence) return profiled;
     return {
       ...profiled,
@@ -238,8 +250,195 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     };
   });
 
+  const currentForegroundIdentityKey = String(state?.loopAdmissionRuntime?.currentForegroundIdentityKey || '').trim().toLowerCase();
+  const currentForegroundIdentityLayer = String(state?.loopAdmissionRuntime?.currentForegroundIdentityLayer || '').trim().toLowerCase();
+  const prominenceRank = { suppressed: 0, trace: 1, quiet: 2, full: 3 };
+  const layerBudgets = { foundation: 1, loops: 1, sparkle: 1 };
+  const profiledAnnotated = profiledEnemyEvents.map((ev, idx) => {
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const layer = String(payload.musicLayer || 'sparkle').trim().toLowerCase();
+    const safeLayer = (layer === 'foundation' || layer === 'loops' || layer === 'sparkle') ? layer : 'sparkle';
+    const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
+    const safeProminence = (
+      prominence === 'suppressed' || prominence === 'trace' || prominence === 'quiet' || prominence === 'full'
+    ) ? prominence : 'full';
+    const role = String(payload.musicRole || ev?.role || '').trim().toLowerCase();
+    const register = String(payload.musicRegister || '').trim().toLowerCase();
+    const enemyType = String(ev?.enemyType || payload?.enemyType || '').trim().toLowerCase();
+    const continuityId = String(payload.continuityId || '').trim().toLowerCase();
+    const noteResolved = String(ev?.noteResolved || ev?.note || payload?.noteResolved || payload?.requestedNoteRaw || '').trim().toLowerCase();
+    const identityKey = [
+      continuityId,
+      enemyType || 'unknown',
+      role || 'accent',
+      safeLayer,
+    ].filter(Boolean).join('|');
+    const isCurrentForegroundLoop = safeLayer === 'loops'
+      && currentForegroundIdentityLayer === 'loops'
+      && !!currentForegroundIdentityKey
+      && identityKey === currentForegroundIdentityKey;
+    let score = 0;
+    if (safeLayer === 'foundation') score += 1000;
+    else if (safeLayer === 'loops') score += 700;
+    else score += 300;
+    score += (prominenceRank[safeProminence] || 0) * 40;
+    if (safeLayer === 'foundation' && playerLikelyAudible) score += 180;
+    if (isCurrentForegroundLoop) score += 140;
+    if (safeLayer === 'loops' && safeProminence === 'full') score += 60;
+    if (safeLayer === 'sparkle' && String(ev?.actionType || '').trim().toLowerCase() === 'enemy-death-accent') score += 40;
+    score += Math.max(0, Math.min(1, Number(payload.onboardingPriority) || 0)) * 25;
+    score -= idx * 0.01;
+    return {
+      ev,
+      idx,
+      payload,
+      layer: safeLayer,
+      prominence: safeProminence,
+      role,
+      register,
+      enemyType,
+      continuityId,
+      noteResolved,
+      identityKey,
+      isCurrentForegroundLoop,
+      score,
+      duplicateKey: [
+        safeLayer,
+        role || 'role',
+        register || 'register',
+        noteResolved || 'note',
+      ].join('|'),
+    };
+  });
+
+  const duplicateWinnerByKey = new Map();
+  for (const item of profiledAnnotated) {
+    if (!item.duplicateKey.includes('|note')) {
+      const prev = duplicateWinnerByKey.get(item.duplicateKey);
+      if (!prev || item.score > prev.score) duplicateWinnerByKey.set(item.duplicateKey, item);
+    }
+  }
+
+  const keptByLayer = {
+    foundation: [],
+    loops: [],
+    sparkle: [],
+  };
+  const selectedIds = new Set();
+  const sortedForSelection = profiledAnnotated
+    .slice()
+    .sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
+  for (const item of sortedForSelection) {
+    const duplicateWinner = duplicateWinnerByKey.get(item.duplicateKey);
+    if (duplicateWinner && duplicateWinner !== item) continue;
+    const bucket = keptByLayer[item.layer] || [];
+    const budget = Math.max(0, Math.trunc(Number(layerBudgets[item.layer]) || 0));
+    if (bucket.length >= budget) continue;
+    bucket.push(item);
+    selectedIds.add(item.idx);
+    if (keptByLayer[item.layer] !== bucket) keptByLayer[item.layer] = bucket;
+  }
+  const foundationSelected = keptByLayer.foundation.length > 0;
+
+  const arbitratedEnemyEvents = profiledAnnotated.map((item) => {
+    const finalProminence = (() => {
+      if (selectedIds.has(item.idx)) {
+        if (item.layer === 'foundation') return 'full';
+        if (item.layer === 'loops') {
+          if (foundationSelected && playerLikelyAudible) return item.isCurrentForegroundLoop ? 'quiet' : 'trace';
+          return item.isCurrentForegroundLoop ? 'full' : (item.prominence === 'trace' ? 'quiet' : item.prominence);
+        }
+        if (foundationSelected && playerLikelyAudible) return 'suppressed';
+        return item.prominence === 'full' ? 'quiet' : item.prominence;
+      }
+      if (item.layer === 'foundation') return 'suppressed';
+      return 'suppressed';
+    })();
+    if (finalProminence === item.prominence) return item.ev;
+    return {
+      ...item.ev,
+      payload: {
+        ...item.payload,
+        musicProminence: finalProminence,
+      },
+    };
+  });
+
+  for (let idx = 0; idx < arbitratedEnemyEvents.length; idx += 1) {
+    const profiled = arbitratedEnemyEvents[idx];
+    const payload = profiled?.payload && typeof profiled.payload === 'object' ? profiled.payload : {};
+    const layer = String(payload.musicLayer || 'sparkle').trim().toLowerCase();
+    const safeLayer = (layer === 'foundation' || layer === 'loops' || layer === 'sparkle') ? layer : 'sparkle';
+    const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
+    const safeProminence = (
+      prominence === 'suppressed' || prominence === 'trace' || prominence === 'quiet' || prominence === 'full'
+    ) ? prominence : 'full';
+    const register = String(payload.musicRegister || '').trim().toLowerCase();
+    const preArbitration = profiledAnnotated[idx];
+    if (safeLayer === 'foundation') {
+      try {
+        helpers.noteMusicSystemEvent?.('music_foundation_prominence_decision', {
+          actorId: Math.max(0, Math.trunc(Number(profiled?.actorId) || 0)),
+          actionType: String(profiled?.actionType || '').trim().toLowerCase(),
+          role: String(profiled?.role || payload?.musicRole || '').trim().toLowerCase(),
+          requestedProminence: String(preArbitration?.prominence || 'full'),
+          finalProminence: safeProminence,
+          changedByDeconflict: safeProminence !== String(preArbitration?.prominence || 'full'),
+          changedByArbitration: safeProminence !== String(preArbitration?.prominence || 'full'),
+          playerLikelyAudible,
+          foundationAssignedBefore: false,
+          foundationAssignedAfter: safeProminence !== 'suppressed',
+          enemyIndex: Math.max(0, Math.trunc(Number(idx) || 0)),
+          totalEnemyEvents: Math.max(0, Math.trunc(Number(arbitratedEnemyEvents.length) || 0)),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    }
+    if (preArbitration && safeProminence !== preArbitration.prominence) {
+      try {
+        helpers.noteMusicSystemEvent?.('music_step_arbitration', {
+          actorId: Math.max(0, Math.trunc(Number(profiled?.actorId) || 0)),
+          actionType: String(profiled?.actionType || '').trim().toLowerCase(),
+          layer: safeLayer,
+          role: String(payload.musicRole || profiled?.role || '').trim().toLowerCase(),
+          noteResolved: String(preArbitration.noteResolved || ''),
+          duplicateKey: String(preArbitration.duplicateKey || ''),
+          requestedProminence: String(preArbitration.prominence || ''),
+          finalProminence: safeProminence,
+          suppressedByArbitration: safeProminence === 'suppressed',
+          playerLikelyAudible,
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    }
+    if (safeProminence === 'suppressed') continue;
+    if (layerStepStats[safeLayer]) layerStepStats[safeLayer][safeProminence] += 1;
+    readabilityStepStats.enemyEvents += 1;
+    if (safeProminence === 'full') readabilityStepStats.enemyForegroundEvents += 1;
+    if (
+      playerLikelyAudible
+      && safeLayer !== 'foundation'
+      && (safeProminence === 'full' || safeProminence === 'quiet')
+    ) {
+      readabilityStepStats.enemyCompetingDuringPlayer += 1;
+      if (register === 'mid' || register === 'mid_high') {
+        readabilityStepStats.sameRegisterOverlapDuringPlayer += 1;
+      }
+    }
+    try {
+      helpers.noteEnemyMusicIdentityExposure?.({
+        enemyType: String(profiled?.enemyType || profiled?.payload?.enemyType || '').trim().toLowerCase(),
+        musicRole: String(payload.musicRole || '').trim().toLowerCase(),
+        musicLayer: safeLayer,
+      }, barIndex);
+    } catch {}
+  }
+
+  const emittedEnemyEvents = arbitratedEnemyEvents.filter((ev) => {
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    return String(payload.musicProminence || 'full').trim().toLowerCase() !== 'suppressed';
+  });
+
   const stepEvents = [
-    ...profiledEnemyEvents,
+    ...emittedEnemyEvents,
     shouldEmitPlayerStep
       ? helpers.createLoggedPerformedBeatEvent?.({
         actorId: 0,
@@ -256,6 +455,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
             x: Number(centerWorld?.x) || 0,
             y: Number(centerWorld?.y) || 0,
           },
+          foundationPresent: foundationSelected,
+          playerSoundVolumeMult: foundationSelected ? 0.72 : 1,
           playerCadenceMode: String(playerStepDirective.mode || 'free_fire'),
           playerCadenceReason: playerTuneAuthoredStep
             ? 'tune_override'

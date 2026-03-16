@@ -45,6 +45,8 @@ export function executePerformedBeatEventRuntime(options = null) {
     const key = String(raw || '').trim().toLowerCase() || 'full';
     if (!playerStepLikelyAudible) return key;
     if (actionType === 'player-weapon-step') return key;
+    const eventLayer = String(ev?.payload?.musicLayer || '').trim().toLowerCase();
+    if (eventLayer === 'foundation') return key;
     // During player-audible steps, keep enemy voices present but ducked (quiet) instead of muting to trace.
     if (key === 'full') return 'quiet';
     if (key === 'quiet') return 'quiet';
@@ -124,6 +126,15 @@ export function executePerformedBeatEventRuntime(options = null) {
         : normalizeBassRegister(noteName, normalizeBassRegister(requestedNote || 'C3', 'C3'));
     }
     group.note = noteName;
+    const audioDedupKey = [
+      Math.max(0, Math.trunc(Number(group?.id) || 0)),
+      String(group?.continuityId || enemy?.musicContinuityId || ''),
+      beatIndex,
+      stepIndex,
+      String(instrumentId || ''),
+      String(noteName || ''),
+      String(musicProminence || ''),
+    ].join('|');
     helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
     helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
     emitSpawnerSystemEvent('music_spawner_loopgrid_event', {
@@ -144,16 +155,25 @@ export function executePerformedBeatEventRuntime(options = null) {
         reason: 'proxy_flash',
       });
     }
-    if (shouldTriggerAudio) {
+    const shouldTriggerGroupAudio = shouldTriggerAudio
+      && String(group?.lastAudioDedupKey || '') !== audioDedupKey;
+    if (shouldTriggerGroupAudio) {
       try {
         helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume);
         audioTriggered = true;
+        group.lastAudioDedupKey = audioDedupKey;
       } catch {}
-    } else {
+    } else if (!shouldTriggerAudio) {
       emitSpawnerSystemEvent('music_spawner_audio_muted', {
         sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
         sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
         reason: 'explicit_mute',
+      });
+    } else {
+      emitSpawnerSystemEvent('music_spawner_audio_deduped', {
+        sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
+        sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+        reason: 'group_step_duplicate',
       });
     }
     if (audioTriggered) {
@@ -342,7 +362,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     );
     const prominenceGain = resolveMusicProminenceGain(musicProminence);
     const enemyAudible = isMaskingAudibleProminence(musicProminence);
-    const triggerVolume = 0.42
+    const triggerVolume = 0.62
       * (duckForPlayer ? (Number(constants.playerMaskDuckEnemyVolumeMult) || 1) : 1)
       * (Number(audioGain) || 0)
       * prominenceGain
@@ -416,7 +436,15 @@ export function executePerformedBeatEventRuntime(options = null) {
     const centerWorld = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)
       ? { x: Number(origin.x) || 0, y: Number(origin.y) || 0 }
       : helpers.getViewportCenterWorld?.();
-    const fireResult = helpers.fireConfiguredWeaponsOnBeat?.(centerWorld, Math.trunc(Number(ev.stepIndex) || 0), beatIndex);
+    const fireResult = helpers.fireConfiguredWeaponsOnBeat?.(
+      centerWorld,
+      Math.trunc(Number(ev.stepIndex) || 0),
+      beatIndex,
+      {
+        playerSoundVolumeMult: Math.max(0.1, Math.min(1, Number(ev?.payload?.playerSoundVolumeMult) || 1)),
+        foundationPresent: ev?.payload?.foundationPresent === true,
+      }
+    );
     logMusicLabExecution({
       sourceSystem: 'player',
       playerAudible: fireResult?.playerAudible === true,

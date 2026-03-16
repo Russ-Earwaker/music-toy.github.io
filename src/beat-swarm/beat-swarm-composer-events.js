@@ -156,9 +156,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const aliveMembers = getAliveEnemiesByIds(group.memberIds).filter((e) => String(e?.enemyType || '') === 'composer-group-member' && !e?.retreating);
     if (!aliveMembers.length) continue;
 
-    const performerCount = Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
     const groupRole = normalizeSwarmRole(group?.role || roles.lead, roles.lead);
     const isBassRole = groupRole === String(roles?.bass || 'bass');
+    const performerCount = isBassRole
+      ? 1
+      : Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
     const notesLen = Math.max(1, Array.isArray(group?.notes) ? group.notes.length : 0);
     // Bass should stay phase-locked and fixed-pitch like a simple rhythm toy.
     const noteIdx = isBassRole
