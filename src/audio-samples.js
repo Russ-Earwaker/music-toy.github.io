@@ -366,7 +366,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
   if (synthId){
     const sNorm = String(synthId||'').toLowerCase().replace(/_/g,'-');
     const toneId = TONE_NAMES.includes(sNorm) ? sNorm : 'tone';
-    return playById(toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(toyId||'master'));
+    return playById(toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(toyId||'master'), gain, options);
   }
   return false;
 }
@@ -405,8 +405,8 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
     // Common "tone (sine)" pattern: prefer the inner token if present
     const m = /\(([a-z-\s_]+)\)/.exec(id.toLowerCase());
     const inner = m ? m[1].trim().replace(/[_\s]+/g,'-') : '';
-      if (inner && TONE_NAMES.includes(inner)) return playById(inner, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'));
-      if (TONE_NAMES.includes(idLoose)) return playById(idLoose, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'));
+      if (inner && TONE_NAMES.includes(inner)) return playById(inner, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
+      if (TONE_NAMES.includes(idLoose)) return playById(idLoose, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
     }catch{}
 
   // exact or alias match first

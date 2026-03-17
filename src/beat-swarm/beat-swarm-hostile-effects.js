@@ -18,10 +18,14 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
   const enemyLayerEl = state.enemyLayerEl || null;
   const projectiles = Array.isArray(state.projectiles) ? state.projectiles : null;
+  const pooledHostileRedProjectiles = Array.isArray(state.pooledHostileRedProjectiles) ? state.pooledHostileRedProjectiles : null;
   if (!enemyLayerEl || !projectiles || !origin) return;
   const ang = Number.isFinite(opts?.angle) ? Number(opts.angle) : (Math.random() * Math.PI * 2);
   const speed = Math.max(120, Number(opts?.speed) || Number(constants.composerGroupProjectileSpeed) || 0);
-  const el = document.createElement('div');
+  const pooledEl = pooledHostileRedProjectiles && pooledHostileRedProjectiles.length
+    ? pooledHostileRedProjectiles.pop()
+    : null;
+  const el = pooledEl instanceof HTMLElement ? pooledEl : document.createElement('div');
   el.className = 'beat-swarm-projectile is-hostile-red';
   enemyLayerEl.appendChild(el);
   projectiles.push({

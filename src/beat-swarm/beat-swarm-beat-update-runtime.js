@@ -168,6 +168,22 @@ export function handleBeatStepChangeRuntime(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
   const director = options?.director || null;
+  const getPerfNow = typeof helpers.getPerfNow === 'function'
+    ? helpers.getPerfNow
+    : (() => (globalThis.performance?.now?.() ?? Date.now()));
+  const recordPerfSample = typeof helpers.recordPerfSample === 'function'
+    ? helpers.recordPerfSample
+    : null;
+  const withPerfSample = (name, fn) => {
+    if (typeof fn !== 'function') return undefined;
+    const startedAt = getPerfNow();
+    try {
+      return fn();
+    } finally {
+      const durationMs = Math.max(0, getPerfNow() - startedAt);
+      recordPerfSample?.(name, durationMs);
+    }
+  };
 
   let spawnerStepStats = { activeSpawners: 0, triggeredSpawners: 0, spawnedEnemies: 0 };
   let onboardingPhase = '';
@@ -185,59 +201,73 @@ export function handleBeatStepChangeRuntime(options = null) {
     if ((stepIndex % tuneSteps) === 0) {
       helpers.noteBassFoundationOwnerState?.('bar_boundary', { beatIndex, stepIndex, barIndex });
     }
-    const stepResult = helpers.processBeatSwarmStepEventsRuntime?.({
-      constants: {
-        roles: constants.roles,
-        threat: constants.threat,
-      },
-      helpers: {
-        isPlayerWeaponStepLikelyAudible: helpers.isPlayerWeaponStepLikelyAudible,
-        isPlayerWeaponTuneStepAuthoredActive: helpers.isPlayerWeaponTuneStepAuthoredActive,
-        collectSpawnerStepBeatEvents: helpers.collectSpawnerStepBeatEvents,
-        collectDrawSnakeStepBeatEvents: helpers.collectDrawSnakeStepBeatEvents,
-        collectComposerGroupStepBeatEvents: helpers.collectComposerGroupStepBeatEvents,
-        getPlayerInstrumentStepDirective: helpers.getPlayerInstrumentStepDirective,
-        getEnemyMusicIdentityProfile: helpers.getEnemyMusicIdentityProfile,
-        getEnemyEventMusicLayer: helpers.getEnemyEventMusicLayer,
-        getEnemyEventMusicProminence: helpers.getEnemyEventMusicProminence,
-        getOnboardingReadabilityDirective: helpers.getOnboardingReadabilityDirective,
-        noteEnemyMusicIdentityExposure: helpers.noteEnemyMusicIdentityExposure,
+    let stepResult = null;
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents', () => {
+      stepResult = helpers.processBeatSwarmStepEventsRuntime?.({
+        constants: {
+          roles: constants.roles,
+          threat: constants.threat,
+        },
+        helpers: {
+          isPlayerWeaponStepLikelyAudible: helpers.isPlayerWeaponStepLikelyAudible,
+          isPlayerWeaponTuneStepAuthoredActive: helpers.isPlayerWeaponTuneStepAuthoredActive,
+          collectSpawnerStepBeatEvents: helpers.collectSpawnerStepBeatEvents,
+          collectDrawSnakeStepBeatEvents: helpers.collectDrawSnakeStepBeatEvents,
+          collectComposerGroupStepBeatEvents: helpers.collectComposerGroupStepBeatEvents,
+          getPlayerInstrumentStepDirective: helpers.getPlayerInstrumentStepDirective,
+          getEnemyMusicIdentityProfile: helpers.getEnemyMusicIdentityProfile,
+          getEnemyEventMusicLayer: helpers.getEnemyEventMusicLayer,
+          getEnemyEventMusicProminence: helpers.getEnemyEventMusicProminence,
+          getFoundationLaneSnapshot: helpers.getFoundationLaneSnapshot,
+          getOnboardingReadabilityDirective: helpers.getOnboardingReadabilityDirective,
+          noteEnemyMusicIdentityExposure: helpers.noteEnemyMusicIdentityExposure,
         noteNaturalBassStep: helpers.noteNaturalBassStepRuntime,
         createBassFoundationKeepaliveEvent: helpers.createBassFoundationKeepaliveEventRuntime,
+        createPrimaryLoopLaneEvent: helpers.createPrimaryLoopLaneEventRuntime,
         noteMusicSystemEvent: helpers.noteMusicSystemEvent,
         shouldKeepEnemyEventDuringPlayerStep: helpers.shouldKeepEnemyEventDuringPlayerStep,
         createLoggedPerformedBeatEvent: helpers.createLoggedPerformedBeatEvent,
         executePerformedBeatEvent: helpers.executePerformedBeatEvent,
+        recordStepEventsPerfSample: helpers.recordStepEventsPerfSample,
         director,
         swarmMusicLab: helpers.swarmMusicLab,
         getMusicLabContext: helpers.getMusicLabContext,
       },
-      state: {
-        beatIndex,
-        stepIndex,
-        barIndex,
-        centerWorld,
-      },
-    }) || null;
-    helpers.foldStepMetricsIntoReadabilityRuntime?.(stepResult, barIndex, beatIndex);
+        state: {
+          beatIndex,
+          stepIndex,
+          barIndex,
+          centerWorld,
+          musicLaneRuntime: state.musicLaneRuntime,
+          loopAdmissionRuntime: state.loopAdmissionRuntime,
+        },
+      }) || null;
+    });
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.readabilityFold', () => {
+      helpers.foldStepMetricsIntoReadabilityRuntime?.(stepResult, barIndex, beatIndex);
+    });
     spawnerStepStats = stepResult?.spawnerStepStats || spawnerStepStats;
     onboardingPhase = String(stepResult?.onboardingPhase || '').trim().toLowerCase();
     layerStepStats = stepResult?.layerStepStats || layerStepStats;
     readabilityStepStats = stepResult?.readabilityStepStats || readabilityStepStats;
     queuedStepEvents += Math.max(0, Math.trunc(Number(stepResult?.queuedStepEvents) || 0));
     drainedStepEvents += Math.max(0, Math.trunc(Number(stepResult?.drainedStepEvents) || 0));
-    state.lastSpawnerEnemyStepIndex = stepIndex;
-    state.lastWeaponTuneStepIndex = stepIndex;
-    helpers.pushSwarmStepDebugEvent?.({
-      beat: beatIndex,
-      step: stepIndex,
-      activeSpawners: Number(spawnerStepStats?.activeSpawners) || 0,
-      triggeredSpawners: Number(spawnerStepStats?.triggeredSpawners) || 0,
-      onboardingPhase: onboardingPhase || undefined,
-      layerStepStats: layerStepStats || undefined,
-      readabilityStepStats: readabilityStepStats || undefined,
-      stepChanged: true,
-      source: 'updateBeatWeapons',
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.bookkeeping', () => {
+      state.lastSpawnerEnemyStepIndex = stepIndex;
+      state.lastWeaponTuneStepIndex = stepIndex;
+    });
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.debugEvent', () => {
+      helpers.pushSwarmStepDebugEvent?.({
+        beat: beatIndex,
+        step: stepIndex,
+        activeSpawners: Number(spawnerStepStats?.activeSpawners) || 0,
+        triggeredSpawners: Number(spawnerStepStats?.triggeredSpawners) || 0,
+        onboardingPhase: onboardingPhase || undefined,
+        layerStepStats: layerStepStats || undefined,
+        readabilityStepStats: readabilityStepStats || undefined,
+        stepChanged: true,
+        source: 'updateBeatWeapons',
+      });
     });
   }
 

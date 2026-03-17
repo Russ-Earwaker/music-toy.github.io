@@ -7,6 +7,25 @@ export function executePerformedBeatEventRuntime(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
   const state = options?.state && typeof options.state === 'object' ? options.state : {};
+  const getPerfNow = (() => {
+    try {
+      if (typeof performance !== 'undefined' && typeof performance.now === 'function') return () => performance.now();
+    } catch {}
+    return () => Date.now();
+  })();
+  const recordPerfSample = typeof helpers.recordStepEventsPerfSample === 'function'
+    ? helpers.recordStepEventsPerfSample
+    : null;
+  const withPerfSample = (name, fn) => {
+    if (typeof fn !== 'function') return undefined;
+    if (typeof recordPerfSample !== 'function') return fn();
+    const startedAt = getPerfNow();
+    try {
+      return fn();
+    } finally {
+      recordPerfSample(name, Math.max(0, getPerfNow() - startedAt));
+    }
+  };
 
   const beatIndex = Math.max(0, Math.trunc(Number(ev.beatIndex) || 0));
   const stepIndex = Math.max(0, Math.trunc(Number(ev.stepIndex) || 0));
@@ -72,11 +91,19 @@ export function executePerformedBeatEventRuntime(options = null) {
   }
 
   if (actionType === 'spawner-spawn') {
+    return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner', () => {
     const enemy = helpers.getSwarmEnemyById?.(ev.actorId);
     if (!enemy || String(enemy?.enemyType || '') !== 'spawner') return false;
-    const group = helpers.getEnemyMusicGroup?.(enemy, 'spawner-spawn');
+    const group = withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.group', () => (
+      helpers.getEnemyMusicGroup?.(enemy, 'spawner-spawn', { sync: false })
+    ));
     if (!group) return false;
+    const sourceEnemyId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
+    const sourceGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
     const emitSpawnerSystemEvent = (eventType, payload = null) => {
+      if (eventType !== 'music_spawner_gameplay_event' && eventType !== 'music_spawner_pipeline_mismatch') {
+        return;
+      }
       try {
         helpers.noteMusicSystemEvent?.(eventType, payload && typeof payload === 'object' ? payload : {}, {
           beatIndex,
@@ -127,7 +154,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     }
     group.note = noteName;
     const audioDedupKey = [
-      Math.max(0, Math.trunc(Number(group?.id) || 0)),
+      sourceGroupId,
       String(group?.continuityId || enemy?.musicContinuityId || ''),
       beatIndex,
       stepIndex,
@@ -135,103 +162,136 @@ export function executePerformedBeatEventRuntime(options = null) {
       String(noteName || ''),
       String(musicProminence || ''),
     ].join('|');
-    helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
-    helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
-    emitSpawnerSystemEvent('music_spawner_loopgrid_event', {
-      sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-      sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-      reason: 'performed_spawner_spawn',
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.audioVisual', () => {
+      enemy.musicalRole = normalizedGroupRole;
+      enemy.composerRole = normalizedGroupRole;
+      enemy.musicInstrumentId = instrumentId;
+      enemy.instrumentId = instrumentId;
+      enemy.spawnerInstrument = instrumentId;
+      enemy.spawnerNoteName = noteName;
+      if (group?.continuityId) {
+        enemy.musicContinuityId = String(group.continuityId);
+        enemy.continuityId = String(group.continuityId);
+      }
+      helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
     });
     let visualTriggered = false;
     let audioTriggered = false;
     const nodeStepIndex = ((Math.trunc(Number(ev?.payload?.nodeStepIndex) || ev.stepIndex || 0) % 8) + 8) % 8;
     const shouldFlashSpawnerCell = musicProminence === 'full' && prominenceGain > 0;
     if (shouldFlashSpawnerCell) {
-      helpers.flashSpawnerEnemyCell?.(enemy, nodeStepIndex, 'strong');
-      visualTriggered = true;
-      emitSpawnerSystemEvent('music_spawner_visual_event', {
-        sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-        sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-        reason: 'proxy_flash',
+      withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.flash', () => {
+        helpers.flashSpawnerEnemyCell?.(enemy, nodeStepIndex, 'strong');
       });
+      visualTriggered = true;
     }
     const shouldTriggerGroupAudio = shouldTriggerAudio
       && String(group?.lastAudioDedupKey || '') !== audioDedupKey;
     if (shouldTriggerGroupAudio) {
-      try {
-        helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume);
-        audioTriggered = true;
-        group.lastAudioDedupKey = audioDedupKey;
-      } catch {}
-    } else if (!shouldTriggerAudio) {
-      emitSpawnerSystemEvent('music_spawner_audio_muted', {
-        sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-        sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-        reason: 'explicit_mute',
-      });
-    } else {
-      emitSpawnerSystemEvent('music_spawner_audio_deduped', {
-        sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-        sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-        reason: 'group_step_duplicate',
-      });
-    }
-    if (audioTriggered) {
-      emitSpawnerSystemEvent('music_spawner_audio_event', {
-        sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-        sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-        reason: 'note_triggered',
+      withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.audioTrigger', () => {
+        try {
+          helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume);
+          audioTriggered = true;
+          group.lastAudioDedupKey = audioDedupKey;
+        } catch {}
       });
     }
     if (!Array.isArray(enemy.spawnerNodeEnemyIds)) enemy.spawnerNodeEnemyIds = Array.from({ length: 8 }, () => 0);
-    const linkedEnemyId = Math.trunc(Number(enemy.spawnerNodeEnemyIds[nodeStepIndex]) || 0);
-    let linkedEnemy = linkedEnemyId > 0 ? helpers.getSwarmEnemyById?.(linkedEnemyId) : null;
-    if (!linkedEnemy || String(linkedEnemy?.enemyType || '') !== 'dumb') {
-      linkedEnemy = null;
-      enemy.spawnerNodeEnemyIds[nodeStepIndex] = 0;
-    }
+    let linkedEnemy = withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.linkedLookup', () => {
+      const linkedEnemyId = Math.trunc(Number(enemy.spawnerNodeEnemyIds[nodeStepIndex]) || 0);
+      const resolved = linkedEnemyId > 0 ? helpers.getSwarmEnemyById?.(linkedEnemyId) : null;
+      if (!resolved || String(resolved?.enemyType || '') !== 'dumb') {
+        enemy.spawnerNodeEnemyIds[nodeStepIndex] = 0;
+        return null;
+      }
+      return resolved;
+    });
     if (!linkedEnemy) {
-      const spawnWorld = helpers.getSpawnerNodeCellWorld?.(enemy, nodeStepIndex) || { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
-      const spawnScreen = helpers.worldToScreen?.(spawnWorld);
-      if (!spawnScreen || !Number.isFinite(spawnScreen.x) || !Number.isFinite(spawnScreen.y)) {
-        emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
-          sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-          sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-          failureReason: 'spawn_screen_invalid',
-        });
-        return false;
-      }
-      const hp = Math.max(1, Number(state.currentEnemySpawnMaxHp) || 1);
-      const beforeCount = Array.isArray(state.enemies) ? state.enemies.length : 0;
-      helpers.spawnEnemyAt?.(spawnScreen.x, spawnScreen.y, {
-        linkedSpawnerId: Math.trunc(Number(enemy.id) || 0),
-        linkedSpawnerStepIndex: nodeStepIndex,
-        hp,
-        role: normalizedGroupRole,
-        layer: 'foundation',
-        note: noteName,
-        instrumentId,
-        continuityId: String(group?.musicLaneContinuityId || group?.continuityId || enemy?.musicContinuityId || '').trim(),
-      });
-      if ((Array.isArray(state.enemies) ? state.enemies.length : 0) > beforeCount) {
-        const created = state.enemies[state.enemies.length - 1];
-        if (created && Number.isFinite(created.id)) {
-          enemy.spawnerNodeEnemyIds[nodeStepIndex] = Math.trunc(created.id);
-          helpers.updateSpawnerLinkedEnemyLine?.(created);
+      const spawned = withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.spawnLinked', () => {
+        const spawnWorld = helpers.getSpawnerNodeCellWorld?.(enemy, nodeStepIndex) || { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+        const spawnScreen = helpers.worldToScreen?.(spawnWorld);
+        if (!spawnScreen || !Number.isFinite(spawnScreen.x) || !Number.isFinite(spawnScreen.y)) {
+          emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
+            sourceEnemyId,
+            sourceGroupId,
+            failureReason: 'spawn_screen_invalid',
+          });
+          return false;
         }
-      }
+        const hp = Math.max(1, Number(state.currentEnemySpawnMaxHp) || 1);
+        const beforeCount = Array.isArray(state.enemies) ? state.enemies.length : 0;
+        helpers.spawnEnemyAt?.(spawnScreen.x, spawnScreen.y, {
+          linkedSpawnerId: Math.trunc(Number(enemy.id) || 0),
+          linkedSpawnerStepIndex: nodeStepIndex,
+          hp,
+          role: normalizedGroupRole,
+          layer: 'foundation',
+          note: noteName,
+          instrumentId,
+          continuityId: String(group?.musicLaneContinuityId || group?.continuityId || enemy?.musicContinuityId || '').trim(),
+          skipMusicGroupInit: true,
+        });
+        if ((Array.isArray(state.enemies) ? state.enemies.length : 0) > beforeCount) {
+          const created = state.enemies[state.enemies.length - 1];
+          if (created && Number.isFinite(created.id)) {
+            enemy.spawnerNodeEnemyIds[nodeStepIndex] = Math.trunc(created.id);
+          }
+        }
+        return true;
+      });
+      if (!spawned) return false;
       emitSpawnerSystemEvent('music_spawner_gameplay_event', {
-        sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-        sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+        sourceEnemyId,
+        sourceGroupId,
         reason: 'spawn_linked_enemy',
       });
       if ((shouldFlashSpawnerCell && !visualTriggered) || (!audioTriggered && !audioMutedExplicitly)) {
         emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
-          sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-          sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+          sourceEnemyId,
+          sourceGroupId,
           failureReason: (!visualTriggered && shouldFlashSpawnerCell) ? 'visual_missing' : 'audio_missing',
         });
       }
+      withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.logging', () => {
+        logMusicLabExecution({
+          sourceSystem: 'spawner',
+          requestedNote,
+          resolvedNote: noteName,
+          noteWasClamped: requestedNote ? requestedNote !== noteName : false,
+          enemyAudible,
+          musicProminence,
+        });
+      });
+      return true;
+    }
+    const origin = { x: Number(linkedEnemy.wx) || 0, y: Number(linkedEnemy.wy) || 0 };
+    const toPlayer = helpers.getViewportCenterWorld?.();
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.launchLinked', () => {
+      const dir = Math.atan2((Number(toPlayer?.y) || 0) - origin.y, (Number(toPlayer?.x) || 0) - origin.x);
+      helpers.spawnHostileRedProjectileAt?.(origin, {
+        angle: dir + helpers.randRange?.(-0.24, 0.24),
+        speed: (Number(constants.spawnerLinkedAttackSpeed) || 0) * Math.max(0.4, Math.min(1, aggressionScale)),
+        noteName,
+        instrument: instrumentId,
+        damage: Math.max(0.2, aggressionScale),
+      });
+    });
+    emitSpawnerSystemEvent('music_spawner_gameplay_event', {
+      sourceEnemyId,
+      sourceGroupId,
+      targetEnemyId: Math.max(0, Math.trunc(Number(linkedEnemy?.id) || 0)),
+      reason: 'launch_linked_projectile',
+    });
+    if ((shouldFlashSpawnerCell && !visualTriggered) || (!audioTriggered && !audioMutedExplicitly)) {
+      emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
+        sourceEnemyId,
+        sourceGroupId,
+        targetEnemyId: Math.max(0, Math.trunc(Number(linkedEnemy?.id) || 0)),
+        failureReason: (!visualTriggered && shouldFlashSpawnerCell) ? 'visual_missing' : 'audio_missing',
+      });
+    }
+    helpers.pulseHitFlash?.(linkedEnemy.el);
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.logging', () => {
       logMusicLabExecution({
         sourceSystem: 'spawner',
         requestedNote,
@@ -240,48 +300,18 @@ export function executePerformedBeatEventRuntime(options = null) {
         enemyAudible,
         musicProminence,
       });
-      return true;
-    }
-    const origin = { x: Number(linkedEnemy.wx) || 0, y: Number(linkedEnemy.wy) || 0 };
-    const toPlayer = helpers.getViewportCenterWorld?.();
-    const dir = Math.atan2((Number(toPlayer?.y) || 0) - origin.y, (Number(toPlayer?.x) || 0) - origin.x);
-    helpers.spawnHostileRedProjectileAt?.(origin, {
-      angle: dir + helpers.randRange?.(-0.24, 0.24),
-      speed: (Number(constants.spawnerLinkedAttackSpeed) || 0) * Math.max(0.4, Math.min(1, aggressionScale)),
-      noteName,
-      instrument: instrumentId,
-      damage: Math.max(0.2, aggressionScale),
-    });
-    emitSpawnerSystemEvent('music_spawner_gameplay_event', {
-      sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-      sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-      targetEnemyId: Math.max(0, Math.trunc(Number(linkedEnemy?.id) || 0)),
-      reason: 'launch_linked_projectile',
-    });
-    if ((shouldFlashSpawnerCell && !visualTriggered) || (!audioTriggered && !audioMutedExplicitly)) {
-      emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
-        sourceEnemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
-        sourceGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-        targetEnemyId: Math.max(0, Math.trunc(Number(linkedEnemy?.id) || 0)),
-        failureReason: (!visualTriggered && shouldFlashSpawnerCell) ? 'visual_missing' : 'audio_missing',
-      });
-    }
-    helpers.pulseHitFlash?.(linkedEnemy.el);
-    logMusicLabExecution({
-      sourceSystem: 'spawner',
-      requestedNote,
-      resolvedNote: noteName,
-      noteWasClamped: requestedNote ? requestedNote !== noteName : false,
-      enemyAudible,
-      musicProminence,
     });
     return true;
+  });
   }
 
   if (actionType === 'drawsnake-projectile') {
+    return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake', () => {
     const enemy = helpers.getSwarmEnemyById?.(ev.actorId);
     if (!enemy || String(enemy?.enemyType || '') !== 'drawsnake') return false;
-    const group = helpers.getEnemyMusicGroup?.(enemy, 'drawsnake-projectile');
+    const group = withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.group', () => (
+      helpers.getEnemyMusicGroup?.(enemy, 'drawsnake-projectile', { sync: false })
+    ));
     if (!group) return false;
     const aggressionScale = helpers.getEnemyAggressionScale?.(enemy, group?.lifecycleState || 'active');
     const instrumentId = helpers.resolveSwarmRoleInstrumentId?.(
@@ -306,13 +336,25 @@ export function executePerformedBeatEventRuntime(options = null) {
     const requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
     let noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
     group.note = noteName;
-    helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
-    helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.audioVisual', () => {
+      enemy.musicalRole = group.role;
+      enemy.composerRole = group.role;
+      enemy.drawsnakeInstrument = instrumentId;
+      enemy.musicInstrumentId = instrumentId;
+      enemy.instrumentId = instrumentId;
+      if (group?.continuityId) {
+        enemy.musicContinuityId = String(group.continuityId);
+        enemy.continuityId = String(group.continuityId);
+      }
+      helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
+    });
     if (enemyAudible) {
       try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
     }
     const nodeIndex = Math.trunc(Number(ev?.payload?.nodeIndex) || 0);
-    helpers.fireDrawSnakeProjectile?.(enemy, nodeIndex, noteName, aggressionScale);
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.projectile', () => {
+      helpers.fireDrawSnakeProjectile?.(enemy, nodeIndex, noteName, aggressionScale);
+    });
     logMusicLabExecution({
       sourceSystem: 'drawsnake',
       requestedNote,
@@ -322,9 +364,11 @@ export function executePerformedBeatEventRuntime(options = null) {
       musicProminence,
     });
     return true;
+  });
   }
 
   if (actionType === 'composer-group-projectile' || actionType === 'composer-group-explosion') {
+    return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.composer', () => {
     const enemy = helpers.getSwarmEnemyById?.(ev.actorId);
     if (!enemy || String(enemy?.enemyType || '') !== 'composer-group-member') return false;
     const group = helpers.getEnemyMusicGroup?.(enemy, actionType);
@@ -398,9 +442,11 @@ export function executePerformedBeatEventRuntime(options = null) {
       musicProminence,
     });
     return true;
+  });
   }
 
   if (actionType === 'enemy-death-accent') {
+    return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.deathAccent', () => {
     const musicProminence = normalizeEnemyProminenceForPlayerStep(
       String(ev?.payload?.musicProminence || 'quiet').trim().toLowerCase() || 'quiet'
     );
@@ -429,9 +475,11 @@ export function executePerformedBeatEventRuntime(options = null) {
       musicProminence,
     });
     return true;
+  });
   }
 
   if (actionType === 'player-weapon-step') {
+    return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player', () => {
     const origin = ev?.payload?.centerWorld;
     const centerWorld = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)
       ? { x: Number(origin.x) || 0, y: Number(origin.y) || 0 }
@@ -450,10 +498,12 @@ export function executePerformedBeatEventRuntime(options = null) {
       playerAudible: fireResult?.playerAudible === true,
     });
     return true;
+  });
   }
 
   // Compatibility path for legacy/generic projectile events that do not map to a gameplay actor handler.
   if (actionType === 'projectile') {
+    return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.genericProjectile', () => {
     const enemy = enemyForAction || helpers.getSwarmEnemyById?.(ev.actorId);
     if (!enemy) return false;
     const group = helpers.getEnemyMusicGroup?.(enemy, 'projectile');
@@ -491,6 +541,7 @@ export function executePerformedBeatEventRuntime(options = null) {
       musicProminence,
     });
     return true;
+  });
   }
 
   return false;

@@ -6,15 +6,42 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const composerEnemyGroups = Array.isArray(state.composerEnemyGroups) ? state.composerEnemyGroups : [];
   const composerRuntime = state.composerRuntime && typeof state.composerRuntime === 'object' ? state.composerRuntime : {};
   const currentBeatIndex = Number(state.currentBeatIndex) || 0;
+  const enemies = Array.isArray(state.enemies) ? state.enemies : [];
   const sanitizeEnemyMusicInstrumentId = typeof helpers.sanitizeEnemyMusicInstrumentId === 'function'
     ? helpers.sanitizeEnemyMusicInstrumentId
     : ((instrumentId, fallback) => helpers.resolveInstrumentIdOrFallback?.(instrumentId, fallback) || fallback || 'tone');
+  const enemyById = new Map();
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+    const enemyId = Math.trunc(Number(enemy?.id) || 0);
+    if (enemyId > 0) enemyById.set(enemyId, enemy);
+  }
+  const getAliveComposerEnemiesByIds = (idsLike) => {
+    const out = [];
+    const ids = idsLike instanceof Set ? Array.from(idsLike) : (Array.isArray(idsLike) ? idsLike : []);
+    for (let i = 0; i < ids.length; i++) {
+      const enemy = enemyById.get(Math.trunc(Number(ids[i]) || 0));
+      if (!enemy || enemy?.retreating) continue;
+      if (String(enemy?.enemyType || '') !== 'composer-group-member') continue;
+      out.push(enemy);
+    }
+    return out;
+  };
 
   const pacingCaps = helpers.getCurrentPacingCaps?.() || {};
   const pacingState = String(helpers.getCurrentPacingStateName?.() || '').trim().toLowerCase();
+  const introWindowActive = pacingState === 'intro_solo' || pacingState === 'intro_bass' || pacingState === 'intro_response';
   const stepAbs = Math.max(0, Math.trunc(currentBeatIndex));
   const introHoldActive = !!helpers.shouldHoldIntroLayerExpansion?.(stepAbs);
-  const effectivePacingCaps = introHoldActive
+  const effectivePacingCaps = introWindowActive
+    ? {
+      ...pacingCaps,
+      responseMode: 'group',
+      maxComposerGroups: 0,
+      maxComposerGroupSize: 0,
+      maxComposerPerformers: 0,
+    }
+    : (introHoldActive
     ? {
       ...pacingCaps,
       responseMode: 'group',
@@ -22,8 +49,14 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       maxComposerGroupSize: Math.max(1, Math.trunc(Number(pacingCaps?.maxComposerGroupSize) || 1)),
       maxComposerPerformers: Math.max(1, Math.trunc(Number(pacingCaps?.maxComposerPerformers) || 1)),
     }
-    : pacingCaps;
+    : pacingCaps);
   const templateLibrary = Array.isArray(constants.composerGroupTemplateLibrary) ? constants.composerGroupTemplateLibrary : [];
+  const templateById = new Map();
+  for (let i = 0; i < templateLibrary.length; i++) {
+    const template = templateLibrary[i];
+    const templateId = String(template?.id || '').trim();
+    if (templateId) templateById.set(templateId, template);
+  }
   const forcedIntroBassTemplate = templateLibrary.find(
     (t) => helpers.normalizeSwarmRole?.(t?.role || '', constants.leadRole) === constants.bassRole
   ) || null;
@@ -35,8 +68,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     group.retiring = true;
     group.lifecycleState = 'retiring';
     group.retireReason = String(reason || 'retreated').trim().toLowerCase() || 'retreated';
-    const aliveMembers = (helpers.getAliveEnemiesByIds?.(group.memberIds) || [])
-      .filter((e) => String(e?.enemyType || '') === 'composer-group-member');
+    const aliveMembers = getAliveComposerEnemiesByIds(group.memberIds);
     group.memberIds = new Set(aliveMembers.map((e) => Math.trunc(Number(e?.id) || 0)).filter((id) => id > 0));
     for (const enemy of aliveMembers) {
       enemy.lifecycleState = 'retiring';
@@ -53,13 +85,13 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     motifScopeKey,
     retireGroup,
     getAliveIdsForGroup: (group) => new Set(
-      (helpers.getAliveEnemiesByIds?.(group?.memberIds) || [])
-        .filter((e) => String(e?.enemyType || '') === 'composer-group-member')
+      getAliveComposerEnemiesByIds(group?.memberIds)
         .map((e) => Math.trunc(Number(e?.id) || 0))
         .filter((id) => id > 0)
     ),
     spawnComposerGroupOffscreenMembers: helpers.spawnComposerGroupOffscreenMembers,
     pickTemplate: (groupIndex) => {
+      if (introWindowActive) return null;
       if ((pacingState === 'intro_bass' || pacingState === 'intro_response' || introHoldActive) && forcedIntroBassTemplate) {
         return forcedIntroBassTemplate;
       }
@@ -76,7 +108,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     createComposerEnemyGroupProfile: helpers.createComposerEnemyGroupProfile,
     createGroupFromMotif: ({ groupIndex, sectionKey, composer: composerDirective, templateId, motif, pacingCaps: caps }) => {
       const templateRole = helpers.normalizeSwarmRole?.(
-        templateLibrary.find((t) => String(t?.id || '') === String(templateId || ''))?.role || '',
+        templateById.get(String(templateId || ''))?.role || '',
         ''
       );
       const role = templateRole || helpers.normalizeSwarmRole?.(motif?.role || 'lead', constants.leadRole);
@@ -170,7 +202,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   for (const group of composerEnemyGroups) {
     if (!group || group.retiring || group.active === false) continue;
     const templateRole = helpers.normalizeSwarmRole?.(
-      templateLibrary.find((t) => String(t?.id || '') === String(group?.templateId || ''))?.role || '',
+      templateById.get(String(group?.templateId || ''))?.role || '',
       ''
     );
     if (templateRole) {
@@ -186,8 +218,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       }
     }
     const memberLifecycleState = helpers.normalizeMusicLifecycleState?.(group.lifecycleState, 'active');
-    const aliveMembers = (helpers.getAliveEnemiesByIds?.(group.memberIds) || [])
-      .filter((e) => String(e?.enemyType || '') === 'composer-group-member');
+    const aliveMembers = getAliveComposerEnemiesByIds(group.memberIds);
     for (const enemy of aliveMembers) {
       enemy.lifecycleState = memberLifecycleState;
       helpers.ensureMusicLaneAssignment?.({

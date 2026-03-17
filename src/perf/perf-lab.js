@@ -3078,6 +3078,41 @@ function getMusicLabApiGlobal() {
   return api;
 }
 
+function getBeatSwarmPerfSnapshotGlobal() {
+  const api = window.__beatSwarmDebug;
+  if (!api || typeof api !== 'object') return null;
+  if (typeof api.getPerfSnapshot !== 'function') return null;
+  try {
+    return api.getPerfSnapshot();
+  } catch {
+    return null;
+  }
+}
+
+function getBeatSwarmStepEventsPerfSnapshotGlobal() {
+  const api = window.__beatSwarmDebug;
+  try {
+    if (api && typeof api === 'object' && typeof api.getStepEventsPerfSnapshot === 'function') {
+      const snapshot = api.getStepEventsPerfSnapshot();
+      if (snapshot && typeof snapshot === 'object') return snapshot;
+    }
+  } catch {
+    // fall through
+  }
+  try {
+    const fallback = window.__LAST_BEAT_SWARM_STEP_EVENTS_PERF_SNAPSHOT;
+    if (fallback && typeof fallback === 'object') return fallback;
+  } catch {}
+  try {
+    const modeApi = window.BeatSwarmMode;
+    if (modeApi && typeof modeApi === 'object' && typeof modeApi.getStepEventsPerfSnapshot === 'function') {
+      const snapshot = modeApi.getStepEventsPerfSnapshot();
+      if (snapshot && typeof snapshot === 'object') return snapshot;
+    }
+  } catch {}
+  return null;
+}
+
 function compactMusicLabPayloadForSave(payload = null) {
   const src = payload && typeof payload === 'object' ? payload : null;
   if (!src) return { payload: src, compacted: false, detail: '' };
@@ -3195,6 +3230,12 @@ function compactMusicLabPayloadForSave(payload = null) {
     ...src,
     eventTimeline: compactEventTimeline,
     enemyRemovals: compactEnemyRemovals,
+    beatSwarmPerfSnapshot: src?.beatSwarmPerfSnapshot && typeof src.beatSwarmPerfSnapshot === 'object'
+      ? src.beatSwarmPerfSnapshot
+      : null,
+    beatSwarmStepEventsPerfSnapshot: src?.beatSwarmStepEventsPerfSnapshot && typeof src.beatSwarmStepEventsPerfSnapshot === 'object'
+      ? src.beatSwarmStepEventsPerfSnapshot
+      : null,
     systemEvents: [],
     systemEventSummary: {
       totalCount: systemEvents.length,
@@ -3268,6 +3309,14 @@ async function saveMusicLabSessionToResourcesGlobal({
     try { console.warn('[PerfLab] Music Lab export failed', { ...result, runId, label, notes }); } catch {}
     return result;
   }
+  const beatSwarmPerfSnapshot = getBeatSwarmPerfSnapshotGlobal();
+  const beatSwarmStepEventsPerfSnapshot = getBeatSwarmStepEventsPerfSnapshotGlobal();
+  if (payload && typeof payload === 'object' && beatSwarmPerfSnapshot && typeof beatSwarmPerfSnapshot === 'object') {
+    payload.beatSwarmPerfSnapshot = beatSwarmPerfSnapshot;
+  }
+  if (payload && typeof payload === 'object' && beatSwarmStepEventsPerfSnapshot && typeof beatSwarmStepEventsPerfSnapshot === 'object') {
+    payload.beatSwarmStepEventsPerfSnapshot = beatSwarmStepEventsPerfSnapshot;
+  }
   const payloadDebug = {
     sessionId: String(payload?.sessionId || ''),
     eventTimelineCount: Array.isArray(payload?.eventTimeline) ? payload.eventTimeline.length : 0,
@@ -3275,6 +3324,12 @@ async function saveMusicLabSessionToResourcesGlobal({
     createdEventCount: Array.isArray(payload?.session?.createdEvents) ? payload.session.createdEvents.length : 0,
     spawnerPipelineEventCount: Array.isArray(payload?.session?.spawnerPipelineEvents) ? payload.session.spawnerPipelineEvents.length : 0,
     metricsHistoryCount: Array.isArray(payload?.metricsHistory) ? payload.metricsHistory.length : 0,
+    beatSwarmPerfBucketCount: beatSwarmPerfSnapshot && typeof beatSwarmPerfSnapshot?.buckets === 'object'
+      ? Object.keys(beatSwarmPerfSnapshot.buckets).length
+      : 0,
+    beatSwarmStepEventsPerfBucketCount: beatSwarmStepEventsPerfSnapshot && typeof beatSwarmStepEventsPerfSnapshot?.buckets === 'object'
+      ? Object.keys(beatSwarmStepEventsPerfSnapshot.buckets).length
+      : 0,
   };
   const cfg = await resolveResultsConfig();
   const postUrl = resolveLabPostUrl(cfg, 'music');

@@ -332,6 +332,12 @@ export function installBeatSwarmDebugGlobalRuntime(deps = {}) {
       getPerfAutoMove() {
         return api.getPerfAutoMove();
       },
+      getPerfSnapshot() {
+        return api.getPerfSnapshot();
+      },
+      resetPerfSnapshot() {
+        return api.resetPerfSnapshot();
+      },
       spawnPerfEnemyDistribution(nextCount) {
         return api.spawnPerfEnemyDistribution(nextCount);
       },
@@ -454,6 +460,18 @@ export function createBeatSwarmDebugApiRuntime(deps = {}) {
     getPerfAutoMove() {
       return helpers.getPerfAutoMove?.();
     },
+    getPerfSnapshot() {
+      return helpers.getBeatSwarmPerfSnapshot?.() || null;
+    },
+    getStepEventsPerfSnapshot() {
+      return helpers.getBeatSwarmStepEventsPerfSnapshot?.() || null;
+    },
+    resetPerfSnapshot() {
+      return helpers.resetBeatSwarmPerfSnapshot?.() || null;
+    },
+    resetStepEventsPerfSnapshot() {
+      return helpers.resetBeatSwarmStepEventsPerfSnapshot?.() || null;
+    },
     spawnPerfEnemyDistribution(nextCount = constants.enemyTargetActiveCount) {
       return helpers.spawnPerfEnemyDistribution?.(nextCount);
     },
@@ -511,7 +529,21 @@ export function createBeatSwarmMusicLabApiRuntime(deps = {}) {
       return helpers.swarmMusicLab?.getSessionSnapshot?.();
     },
     exportSession() {
-      return helpers.swarmMusicLab?.exportSession?.();
+      const payload = helpers.swarmMusicLab?.exportSession?.();
+      if (!payload || typeof payload !== 'object') return payload;
+      try {
+        const beatSwarmPerfSnapshot = helpers.getBeatSwarmPerfSnapshot?.();
+        if (beatSwarmPerfSnapshot && typeof beatSwarmPerfSnapshot === 'object') {
+          payload.beatSwarmPerfSnapshot = beatSwarmPerfSnapshot;
+        }
+      } catch {}
+      try {
+        const beatSwarmStepEventsPerfSnapshot = helpers.getBeatSwarmStepEventsPerfSnapshot?.();
+        if (beatSwarmStepEventsPerfSnapshot && typeof beatSwarmStepEventsPerfSnapshot === 'object') {
+          payload.beatSwarmStepEventsPerfSnapshot = beatSwarmStepEventsPerfSnapshot;
+        }
+      } catch {}
+      return payload;
     },
     downloadSession(fileName = '') {
       return helpers.swarmMusicLab?.downloadSession?.(fileName);

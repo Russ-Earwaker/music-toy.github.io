@@ -59,6 +59,8 @@ SynthStrike.wav,synth,synth,short note,Synth Strike,,SYNTH STRIKE,,5,Pop;  ,draw
 RubberBand.wav,synth,natural,short note,Rubber Band,,RUBBER BAND,,5,Toybox,drawgrid,,lead,high,melodic
 RetroExplosionSubtle.wav,percussion,synth,short note,Retro Explosion Subtle,,RETRO EXPLOSION SUBTLE,,3,Gaming; beat-swarm-shmup,loopgrid,1,bass,low,foundation
 RetroProjectileSubtle.wav,synth,synth,short note,Retro Projectile Subtle,,RETRO PROJECTILE SUBTLE,,4,Gaming; beat-swarm-shmup,drawgrid,1,bass,mid,foundation
+RetroSynthBrassStab.wav,synth,synth,short note,Retro Synth Brass Stab,,RETRO SYNTH BRASS STAB,,3,Gaming; beat-swarm-shmup,drawgrid,1,bass,mid,foundation
+RetroAnalogSynthBass.wav,synth,synth,short note,Retro Analog Synth Bass,,RETRO ANALOG SYNTH BASS,,2,Gaming; beat-swarm-shmup,drawgrid,1,bass,mid,foundation
 ,,,,,,,,,,,,,,
 # --- Synths (no filename; specify synth_id from engine) ---,,,,,,,,,,,,,,
 ,synth,synth,sustain,Tone (Sine),tone,TONE,,4,Gaming; beat-swarm-shmup,drawgrid,1,lead,mid,melodic

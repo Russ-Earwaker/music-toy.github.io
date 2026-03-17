@@ -1,5 +1,17 @@
 const DEFAULT_BEATS_PER_BAR = 4;
 const DEFAULT_METRICS_EVERY_BARS = 4;
+const SYSTEM_EVENT_SUMMARY_ONLY_TYPES = new Set([
+  'music_step_arbitration',
+  'music_primary_loop_lane_emitted',
+  'music_bass_keepalive_injected',
+  'music_spawner_gameplay_event',
+  'music_spawner_audio_event',
+  'music_spawner_audio_muted',
+  'music_spawner_visual_event',
+  'music_spawner_loopgrid_event',
+  'music_spawner_pipeline_mismatch',
+  'music_foundation_prominence_decision',
+]);
 
 function clampInt(value, fallback = 0, min = 0) {
   const n = Math.trunc(Number(value));
@@ -327,6 +339,67 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     damageScale: Number(payload?.damageScale) || 0,
     detonationSource: String(payload?.detonationSource || '').trim().toLowerCase(),
   };
+}
+
+function summarizeSystemEvent(sessionLike, record) {
+  const session = sessionLike && typeof sessionLike === 'object' ? sessionLike : null;
+  const rec = record && typeof record === 'object' ? record : {};
+  if (!session) return;
+  if (!session.systemEventSummary || typeof session.systemEventSummary !== 'object') {
+    session.systemEventSummary = {
+      byType: {},
+      rawStoredByType: {},
+      rawSuppressedByType: {},
+      spawnerPipeline: {
+        spawnerGameplayEvents: 0,
+        spawnerAudioEvents: 0,
+        spawnerAudioMutedEvents: 0,
+        spawnerVisualEvents: 0,
+        spawnerLoopgridEvents: 0,
+        spawnerPipelineMismatches: 0,
+      },
+      foundationProminence: {
+        total: 0,
+        full: 0,
+        quiet: 0,
+        trace: 0,
+        suppressed: 0,
+        changedByDeconflict: 0,
+      },
+    };
+  }
+  const type = String(rec?.eventType || '').trim().toLowerCase();
+  if (!type) return;
+  const byType = session.systemEventSummary.byType;
+  byType[type] = clampInt(byType[type], 0, 0) + 1;
+  if (type === 'music_spawner_gameplay_event') {
+    session.systemEventSummary.spawnerPipeline.spawnerGameplayEvents += 1;
+  } else if (type === 'music_spawner_audio_event') {
+    session.systemEventSummary.spawnerPipeline.spawnerAudioEvents += 1;
+  } else if (type === 'music_spawner_audio_muted') {
+    session.systemEventSummary.spawnerPipeline.spawnerAudioMutedEvents += 1;
+  } else if (type === 'music_spawner_visual_event') {
+    session.systemEventSummary.spawnerPipeline.spawnerVisualEvents += 1;
+  } else if (type === 'music_spawner_loopgrid_event') {
+    session.systemEventSummary.spawnerPipeline.spawnerLoopgridEvents += 1;
+  } else if (type === 'music_spawner_pipeline_mismatch') {
+    session.systemEventSummary.spawnerPipeline.spawnerPipelineMismatches += 1;
+  } else if (type === 'music_foundation_prominence_decision') {
+    const summary = session.systemEventSummary.foundationProminence;
+    summary.total += 1;
+    const finalProminence = String(rec?.finalProminence || '').trim().toLowerCase();
+    if (finalProminence === 'full') summary.full += 1;
+    else if (finalProminence === 'quiet') summary.quiet += 1;
+    else if (finalProminence === 'trace') summary.trace += 1;
+    else if (finalProminence === 'suppressed') summary.suppressed += 1;
+    if (rec?.changedByDeconflict === true) summary.changedByDeconflict += 1;
+  }
+}
+
+function shouldStoreRawSystemEvent(eventType) {
+  const type = String(eventType || '').trim().toLowerCase();
+  if (!type) return false;
+  return !SYSTEM_EVENT_SUMMARY_ONLY_TYPES.has(type);
 }
 
 function isAudibleEvent(eventLike) {
@@ -1299,14 +1372,15 @@ function collectSpawnerSync(events) {
 }
 
 function collectSpawnerPipelineDiagnostics(session, maxBarIndex) {
+  const summary = session?.systemEventSummary?.spawnerPipeline || {};
   const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
     .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
-  let spawnerGameplayEvents = 0;
-  let spawnerAudioEvents = 0;
-  let spawnerAudioMutedEvents = 0;
-  let spawnerVisualEvents = 0;
-  let spawnerLoopgridEvents = 0;
-  let spawnerPipelineMismatches = 0;
+  let spawnerGameplayEvents = clampInt(summary?.spawnerGameplayEvents, 0, 0);
+  let spawnerAudioEvents = clampInt(summary?.spawnerAudioEvents, 0, 0);
+  let spawnerAudioMutedEvents = clampInt(summary?.spawnerAudioMutedEvents, 0, 0);
+  let spawnerVisualEvents = clampInt(summary?.spawnerVisualEvents, 0, 0);
+  let spawnerLoopgridEvents = clampInt(summary?.spawnerLoopgridEvents, 0, 0);
+  let spawnerPipelineMismatches = clampInt(summary?.spawnerPipelineMismatches, 0, 0);
   for (const e of logs) {
     const type = String(e?.eventType || '').trim().toLowerCase();
     if (type === 'music_spawner_gameplay_event') spawnerGameplayEvents += 1;
@@ -1335,15 +1409,16 @@ function collectSpawnerPipelineDiagnostics(session, maxBarIndex) {
 }
 
 function collectFoundationProminenceDiagnostics(session, maxBarIndex) {
+  const summary = session?.systemEventSummary?.foundationProminence || {};
   const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
     .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
     .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_foundation_prominence_decision');
-  let total = 0;
-  let full = 0;
-  let quiet = 0;
-  let trace = 0;
-  let suppressed = 0;
-  let changedByDeconflict = 0;
+  let total = clampInt(summary?.total, 0, 0);
+  let full = clampInt(summary?.full, 0, 0);
+  let quiet = clampInt(summary?.quiet, 0, 0);
+  let trace = clampInt(summary?.trace, 0, 0);
+  let suppressed = clampInt(summary?.suppressed, 0, 0);
+  let changedByDeconflict = clampInt(summary?.changedByDeconflict, 0, 0);
   for (const e of logs) {
     total += 1;
     const finalProminence = String(e?.finalProminence || '').trim().toLowerCase();
@@ -2093,6 +2168,27 @@ export function createBeatSwarmMusicLab(options = null) {
       pacingChanges: [],
       enemyRemovals: [],
       systemEvents: [],
+      systemEventSummary: {
+        byType: {},
+        rawStoredByType: {},
+        rawSuppressedByType: {},
+        spawnerPipeline: {
+          spawnerGameplayEvents: 0,
+          spawnerAudioEvents: 0,
+          spawnerAudioMutedEvents: 0,
+          spawnerVisualEvents: 0,
+          spawnerLoopgridEvents: 0,
+          spawnerPipelineMismatches: 0,
+        },
+        foundationProminence: {
+          total: 0,
+          full: 0,
+          quiet: 0,
+          trace: 0,
+          suppressed: 0,
+          changedByDeconflict: 0,
+        },
+      },
       threatBudgetSnapshots: [],
       metricsHistory: [],
       metrics: null,
@@ -2207,7 +2303,14 @@ export function createBeatSwarmMusicLab(options = null) {
       usage: snap?.usage && typeof snap.usage === 'object' ? { ...snap.usage } : {},
       remaining: snap?.remaining && typeof snap.remaining === 'object' ? { ...snap.remaining } : {},
     };
-    s.threatBudgetSnapshots.push(rec);
+    const last = s.threatBudgetSnapshots.length > 0
+      ? s.threatBudgetSnapshots[s.threatBudgetSnapshots.length - 1]
+      : null;
+    const sameBeat = last
+      && clampInt(last?.barIndex, -1, -1) === rec.barIndex
+      && clampInt(last?.beatIndex, -1, -1) === rec.beatIndex;
+    if (sameBeat) s.threatBudgetSnapshots[s.threatBudgetSnapshots.length - 1] = rec;
+    else s.threatBudgetSnapshots.push(rec);
     recordMetricsCheckpoint(rec.barIndex);
     return rec;
   }
@@ -2217,7 +2320,13 @@ export function createBeatSwarmMusicLab(options = null) {
     const s = ensureSession(context);
     const rec = makeSystemEventRecord(eventType, payload, context || {}, beatsPerBar);
     if (!rec.eventType) return null;
-    s.systemEvents.push(rec);
+    summarizeSystemEvent(s, rec);
+    const shouldStoreRaw = shouldStoreRawSystemEvent(rec.eventType);
+    const summaryBucket = shouldStoreRaw
+      ? s.systemEventSummary.rawStoredByType
+      : s.systemEventSummary.rawSuppressedByType;
+    summaryBucket[rec.eventType] = clampInt(summaryBucket[rec.eventType], 0, 0) + 1;
+    if (shouldStoreRaw) s.systemEvents.push(rec);
     recordMetricsCheckpoint(rec.barIndex);
     return rec;
   }
@@ -2242,6 +2351,7 @@ export function createBeatSwarmMusicLab(options = null) {
       pacingChanges: s.pacingChanges,
       enemyRemovals: s.enemyRemovals,
       systemEvents: s.systemEvents,
+      systemEventSummary: s.systemEventSummary,
       threatBudgetSnapshots: s.threatBudgetSnapshots,
       metricsHistory: s.metricsHistory,
       metrics: s.metrics,

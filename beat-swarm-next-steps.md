@@ -1,148 +1,231 @@
-### Beat Swarm music fix task list
+# ✅ New Codex Task List (Musical Focus Only)
 
-1. **Add a final per-step note arbitration pass**
+## 1. Make intro drums a real loop (highest impact)
 
-   * Before any enemy note is actually played, gather all candidate enemy notes for that step and choose which ones survive.
-   * Hard cap simultaneous enemy notes by musical role.
-   * Suggested priority:
+**Task**
 
-     * foundation bass
-     * newly introduced loop notes
-     * established loop notes
-     * accents / sparkle
-     * duplicate or low-value extras get dropped
-   * Goal: stop the mix from turning into a pile of valid-but-bad simultaneous notes.
+* Generate a **4-bar drum pattern** at intro
+* Lock it as a loop
+* Do NOT regenerate every bar
 
-2. **Protect foundation / bass from being ducked too often**
+Rules:
 
-   * Right now bass events are being created and executed, but they’re frequently marked `musicProminence: "quiet"` and often collide with player steps, which makes them feel absent rather than foundational.  
-   * Add a rule so foundation is usually `full` unless there is a very strong reason not to be.
-   * On steps where player weapon audio overlaps foundation:
+* kick + snare + hat pattern
+* slight variation every 4 bars max
+* persists until next phase
 
-     * prefer suppressing less important enemy notes
-     * or duck player layer slightly
-     * or offset non-foundation enemy notes
-   * Do **not** keep sacrificing bass readability.
+**Goal**
+👉 intro sounds like *music*, not noise
 
-3. **Create an “establishment window” for new loops**
+---
 
-   * When a new loop/riff is introduced, protect it for at least 2 bars.
-   * During that window:
+## 2. Force instrument rotation system
 
-     * it should stay audible
-     * it should not instantly be demoted to `trace`
-     * avoid replacing it with other loop material too quickly
-   * Goal: when a loop enters, the player can actually hear and learn it.
+**Task**
 
-4. **Promote loops out of permanent trace mode**
+* Add instrument pools per role:
 
-   * We’re seeing loop events regularly marked as `musicLayer: "loops"` with `musicProminence: "trace"`, which means they exist technically but don’t really read musically. 
-   * Add a clearer loop lifecycle:
+  * bass pool (3–5 sounds)
+  * accent pool (3–5 sounds)
+  * loop pool (3–5 sounds)
 
-     * introduced
-     * established
-     * background support
-     * retired
-   * Only use `trace` for very low-priority decorative material, not for main riff ideas.
+* Assign instrument per:
 
-5. **Stop same-note pileups on the same step**
+  * section OR
+  * loop lifecycle
 
-   * Add de-duplication at playback-selection time.
-   * If multiple enemy sources want the same note / same register / same role on the same step:
+Rules:
 
-     * keep the best one
-     * optionally octave-shift one
-     * or merge into a single representative note
-   * Goal: prevent stacked identical notes making the mix too loud or ugly.
+* no same instrument reused for same role > X bars
+* avoid repeating same instrument for same enemy type
 
-6. **Strengthen spawner anti-duplication**
+**Goal**
+👉 stop “same sound forever” problem
 
-   * The perf results show 1 perfect-sync spawner pair and 16 near-duplicate spawner pairs, which matches the “multiples of the same note at the same time” problem. 
-   * Existing dedupe is not enough.
-   * Add live checks when assigning a new spawner pattern:
+---
 
-     * rhythm similarity against active spawners
-     * note similarity against active spawners
-     * phase alignment checks
-   * Reject or mutate patterns that are too close.
+## 3. Snap ALL gameplay-triggered sounds to grid
 
-7. **Guarantee one clear foreground musical idea at a time**
+**Task**
 
-   * Decide what the current “foreground idea” is for each phrase/section:
+* player/projectile events:
 
-     * bass foundation
-     * one loop
-     * one accent layer
-   * Avoid letting multiple competing riffs all try to lead at once.
-   * New loop enters -> it becomes foreground briefly.
-   * Existing loop supporting -> it moves to background.
-   * Goal: the music feels authored, not accumulated.
+  * quantize to nearest step (or next step)
+* optionally:
 
-8. **Add role-based lane budgets**
+  * small latency buffer (e.g. 30–80ms)
 
-   * Define simple budgets such as:
+Rules:
 
-     * 1 foundation event
-     * 1 loop lead event
-     * 0–1 accent event
-     * 0–1 death accent
-   * Enforce those budgets in the arbitration pass.
-   * This should dramatically reduce clutter without breaking the system.
+* NEVER play off-grid
+* late is better than off-beat
 
-9. **Improve section-level loop persistence**
+**Goal**
+👉 restore groove immediately
 
-   * If a loop is intended to “hang around”, give it a minimum life before replacement.
-   * Don’t allow constant churn of loop ownership within the same section unless the section is explicitly chaotic.
-   * Add rules like:
+---
 
-     * minimum bars before replacement
-     * minimum heard count before retirement
-     * avoid replacing a loop before it has properly surfaced
+## 4. Add global gain staging per step
 
-10. **Add better diagnostics for audibility, not just delivery**
+**Task**
 
-* Delivery is not the main problem: created/executed rates are hitting 1.0 for enemy, spawner, and bass events. 
-* Add new debug metrics:
+* before playback:
 
-  * same-step note collisions
-  * same-note same-register collisions
-  * suppressed-by-arbitration counts
-  * new loop establishment success rate
-  * foundation survival rate on player-audible steps
-  * average simultaneous audible notes by step
-* Goal: measure what is actually heard, not just what was scheduled.
+  * count active sounds
+  * apply gain scaling
 
-11. **Tune player-vs-enemy masking rules**
+Example:
 
-* Nearly half of enemy audible events are landing on player-audible steps, so player audio is masking too much of the musical content. 
-* Add explicit masking policy:
+```
+1 sound → 1.0
+2 sounds → 0.8
+3 sounds → 0.65
+4+ → 0.5
+```
 
-  * player can dominate accents
-  * player should not erase foundation
-  * player should not immediately bury newly introduced loops
-* Make the music system protect important content from player spam.
+Also:
 
-12. **Re-test with focused acceptance criteria**
+* cap same-note stacking
 
-* After implementing the above, run Music Lab again and verify:
+**Goal**
+👉 stop loudness spikes and mush
 
-  * bass stays clearly present throughout
-  * new loop is clearly heard when introduced
-  * identical spawner notes are no longer stacked badly
-  * fewer steps contain messy simultaneous enemy notes
-  * player weapons still feel responsive, but no longer dominate the whole song
+---
 
-### Suggested acceptance criteria
+## 5. Fix spawner identity + dedupe
 
-Give Codex this as the success target:
+**Task**
 
-* Bass/foundation should remain clearly audible for the full run unless intentionally dropped for arrangement reasons.
-* A newly introduced loop should be clearly heard for at least 2 bars.
-* No obvious same-note spawner pileups.
-* Enemy notes should sound curated, not accumulated.
-* Player weapons/components should enhance the track, not bury the arrangement.
+* enforce:
 
-### One-line summary for Codex
+  * one pattern per spawner identity
+* when spawning:
 
-**The scheduler is mostly working; now build a musical arbitration/arrangement layer so foundation is protected, loops get establishment time, and duplicate enemy notes are culled before playback.**
+  * check similarity vs active patterns
+  * reject or mutate if too close
 
+Also:
+
+* ensure trigger reliability:
+
+  * debug: created vs triggered per spawner
+
+**Goal**
+👉 no duplicate musical voices
+
+---
+
+## 6. Introduce loop ownership (CRITICAL)
+
+**Task**
+
+* at any time:
+
+  * exactly 1 “active loop owner”
+
+Lifecycle:
+
+```
+introduced → establishing → active → support → retired
+```
+
+Rules:
+
+* only 1 loop can be foreground
+* others must be background or silent
+
+**Goal**
+👉 music feels intentional
+
+---
+
+## 7. Separate “music timing” from “game timing”
+
+**Task**
+
+* music system owns:
+
+  * beat grid
+  * step timing
+
+Gameplay:
+
+* submits “intent to fire”
+* music system decides WHEN it plays
+
+**Goal**
+👉 audio becomes authoritative, not reactive
+
+---
+
+## 8. Add per-role note limits (hard caps)
+
+Per step:
+
+* 1 bass
+* 1 loop note
+* 1 accent
+* optional player
+
+Everything else:
+👉 dropped or deferred
+
+**Goal**
+👉 instant clarity improvement
+
+---
+
+## 9. Fix death accents (they’re currently spammy)
+
+From timeline:
+
+* lots of identical `C4 TONE` accents
+
+**Task**
+
+* limit:
+
+  * max 1 death accent per step
+* vary:
+
+  * pitch OR instrument
+* downgrade most to background
+
+**Goal**
+👉 stop “C4 spam noise”
+
+---
+
+## 10. Add “musical sanity checks” to Music Lab
+
+Add:
+
+* same-note collisions per step
+* off-grid events count
+* instrument repetition rate
+* loop ownership changes
+* per-step sound count
+
+**Goal**
+👉 make musical problems visible automatically
+
+---
+
+# 🧪 Acceptance Criteria (very important)
+
+Codex should aim for:
+
+* intro clearly sounds like a **repeatable drum loop**
+* bass is **audible and consistent**
+* player shots feel **locked to rhythm**
+* no obvious **volume spikes**
+* sounds **change over time**
+* no more “same C4 spam”
+* at any moment, you can answer:
+  👉 “what is the main musical idea right now?”
+
+---
+
+# 🔥 One-line direction for Codex
+
+> **Stop treating music as simultaneous events — enforce ownership, timing authority, and voice limits so it behaves like a composed track.**

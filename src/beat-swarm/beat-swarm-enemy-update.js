@@ -12,6 +12,11 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
   const hitRadiusWorld = (Number(constants.enemyHitRadius) || 0) / Math.max(0.001, scale || 1);
   const offscreenRemovePad = 80;
   const offscreenGraceSeconds = 2.4;
+  const frameIndex = Math.max(0, Math.trunc(Number(state.frameIndex) || 0));
+  const projectileCount = Math.max(0, Math.trunc(Number(state.projectileCount) || 0));
+  const effectCount = Math.max(0, Math.trunc(Number(state.effectCount) || 0));
+  const liveObjectPressure = enemies.length + projectileCount + effectCount;
+  const drawSnakeVisualStride = liveObjectPressure >= 72 ? 3 : (liveObjectPressure >= 40 ? 2 : 1);
 
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
@@ -82,7 +87,9 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${(spawnScale * rolePulseScale).toFixed(3)})`;
       }
       if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
-      if (enemyType === 'drawsnake') helpers.updateDrawSnakeVisual?.(e, scale, state.dt);
+      if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {
+        helpers.updateDrawSnakeVisual?.(e, scale, state.dt);
+      }
       continue;
     }
     const dx = centerWorld.x - e.wx;
@@ -256,7 +263,9 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${(spawnScale * actionScale * rolePulseScale).toFixed(3)})`;
     }
     if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
-    if (enemyType === 'drawsnake') helpers.updateDrawSnakeVisual?.(e, scale, state.dt);
+    if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {
+      helpers.updateDrawSnakeVisual?.(e, scale, state.dt);
+    }
   }
 }
 

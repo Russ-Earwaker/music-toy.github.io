@@ -96,6 +96,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const stepIndex = Math.trunc(Number(options?.stepIndex) || 0);
   const beatIndex = Math.trunc(Number(options?.beatIndex) || 0);
+  const barIndex = Math.max(0, Math.trunc(Number(options?.barIndex) || 0));
   const stepAbs = Math.max(0, stepIndex);
   const stepsPerBar = Math.max(1, Math.trunc(Number(constants.stepsPerBar) || 8));
   const step = ((stepIndex % stepsPerBar) + stepsPerBar) % stepsPerBar;
@@ -110,6 +111,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const callResponseRuntime = options?.callResponseRuntime && typeof options.callResponseRuntime === 'object' ? options.callResponseRuntime : {};
 
   const getAliveEnemiesByIds = typeof options?.getAliveEnemiesByIds === 'function' ? options.getAliveEnemiesByIds : (() => []);
+  const getFoundationLaneSnapshot = typeof options?.getFoundationLaneSnapshot === 'function'
+    ? options.getFoundationLaneSnapshot
+    : null;
   const clampNoteToDirectorPool = typeof options?.clampNoteToDirectorPool === 'function' ? options.clampNoteToDirectorPool : ((n) => String(n || ''));
   const normalizeSwarmNoteName = typeof options?.normalizeSwarmNoteName === 'function' ? options.normalizeSwarmNoteName : ((n) => String(n || '').trim());
   const getRandomSwarmPentatonicNote = typeof options?.getRandomSwarmPentatonicNote === 'function' ? options.getRandomSwarmPentatonicNote : (() => 'C4');
@@ -133,6 +137,8 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const motifRepeatBias = Math.max(0, Math.min(1, Number(styleProfile?.motifRepeatBias) || 0));
   const leadLeapChance = Math.max(0, Math.min(1, Number(styleProfile?.leadLeapChance) || 1));
   const accentPitchVariance = Math.max(0, Math.min(1, Number(styleProfile?.accentPitchVariance) || 1));
+  const laneDrivenFoundation = options?.laneDrivenFoundation === true;
+  const laneDrivenPrimaryLoop = options?.laneDrivenPrimaryLoop === true;
 
   for (const group of composerEnemyGroups) {
     if (!group || !group.active || group.retiring) continue;
@@ -158,9 +164,15 @@ export function collectComposerGroupStepBeatEvents(options = null) {
 
     const groupRole = normalizeSwarmRole(group?.role || roles.lead, roles.lead);
     const isBassRole = groupRole === String(roles?.bass || 'bass');
+    if (laneDrivenFoundation && isBassRole) continue;
+    if (laneDrivenPrimaryLoop && groupRole === String(roles?.lead || 'lead') && String(group?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane') continue;
     const performerCount = isBassRole
       ? 1
       : Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
+    if (isBassRole && getFoundationLaneSnapshot) {
+      const lane = getFoundationLaneSnapshot(stepAbs, barIndex);
+      if (!lane?.isActiveStep) continue;
+    }
     const notesLen = Math.max(1, Array.isArray(group?.notes) ? group.notes.length : 0);
     // Bass should stay phase-locked and fixed-pitch like a simple rhythm toy.
     const noteIdx = isBassRole

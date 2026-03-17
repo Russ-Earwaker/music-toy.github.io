@@ -516,8 +516,10 @@ export function triggerWeaponStageRuntime(options = null) {
   const directSound = !!context?.directSound;
   const playerSoundVolumeMult = Math.max(0.1, Math.min(1, Number(context?.playerSoundVolumeMult) || 1));
   const gameplayWeaponSoundVolume = (() => {
+    const volumeArchetype = (archetype === 'laser' && variant === 'hitscan') ? 'projectile' : archetype;
+    const volumeVariant = (archetype === 'laser' && variant === 'hitscan') ? 'standard' : variant;
     if (typeof helpers.getGameplayWeaponSoundVolume === 'function') {
-      return Math.max(0, Math.min(1, (Number(helpers.getGameplayWeaponSoundVolume(archetype, variant, stageIndex)) || 0) * 0.58 * playerSoundVolumeMult));
+      return Math.max(0, Math.min(1, (Number(helpers.getGameplayWeaponSoundVolume(volumeArchetype, volumeVariant, stageIndex)) || 0) * 0.58 * playerSoundVolumeMult));
     }
     return Math.max(0, Math.min(1, (Number(helpers.getStageSoundVolume?.(stageIndex)) || 0) * 0.58 * playerSoundVolumeMult));
   })();

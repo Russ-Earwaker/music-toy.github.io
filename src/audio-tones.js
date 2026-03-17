@@ -259,13 +259,15 @@ function playDropletAt(freq, when, dest){
 }
 export function playById(id, freq, when, dest, velocity = 1.0, options = {}){
   const s=String(id||'tone').toLowerCase();
-  const f=Math.max(20, Number(freq)||440); const t=Math.max(0, Number(when)||ensureAudioContext().currentTime);
+  const acx = ensureAudioContext();
+  const f=Math.max(20, Number(freq)||440); const t=Math.max(0, Number(when)||acx.currentTime);
+  const baseDest = dest || acx.destination;
+  const velClamped = Math.max(0.001, Math.min(1, Number(velocity) || 1));
 
   // NEW: Check for a strum envelope first. If present, use a generic oscillator
   // that respects the longer decay time. This is crucial for the Chord Wheel.
   const env = options?.env || options?.strumEnv;
   if (env && typeof env.decaySec === 'number' && env.decaySec > 0) {
-    const acx = ensureAudioContext();
     const o = acx.createOscillator();
     // Try to use the specified wave type, default to triangle for a pleasant tone.
     const waveType = TONE_NAMES.includes(s.replace('retro-','')) ? s.replace('retro-','') : 'triangle';
@@ -275,26 +277,34 @@ export function playById(id, freq, when, dest, velocity = 1.0, options = {}){
     const d = Math.max(0.08, env.decaySec);
     const atk = Math.min(0.006, d * 0.08);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.001, velocity), t + atk);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.001, velClamped), t + atk);
     g.gain.exponentialRampToValueAtTime(0.0001, t + d);
-    o.connect(g).connect(dest || acx.destination);
+    o.connect(g).connect(baseDest);
     o.start(t);
     o.stop(t + d + 0.12);
     try{ registerActiveNode(o); }catch{}
     return true; // Handled
   }
 
+  let noteDest = baseDest;
+  if (velClamped < 0.999) {
+    const velocityGain = acx.createGain();
+    velocityGain.gain.setValueAtTime(velClamped, t);
+    velocityGain.connect(baseDest);
+    noteDest = velocityGain;
+  }
+
   // Original logic for short, percussive synth sounds
-  if (s.includes('keypad')||s.includes('chime')) return playKeypadAt(f,t,dest);
-  if (s.includes('pop')||s.includes('pluck'))  return playPopAt(f,t,dest);
-  if (s.includes('pad'))                       return playPadAt(f,t,dest);
-  if (s.includes('retro-square'))              return playRetroAt(f,t,'square',dest);
-  if (s.includes('retro-saw'))                 return playRetroAt(f,t,'sawtooth',dest);
-  if (s.includes('retro-tri')||s.includes('retro-triangle')) return playRetroAt(f,t,'triangle',dest);
-  if (s.includes('laser'))                     return playLaserAt(f,t,dest);
-  if (s.includes('wind'))                      return playWindyAt(f,t,dest);
-  if (s.includes('alien')||s.includes('fm'))   return playAlienAt(f,t,dest);
-  if (s.includes('organ'))                     return playOrganishAt(f,t,dest);
-  if (s.includes('drop')||s.includes('bleep')) return playDropletAt(f,t,dest);
-  return playToneAt(f,t,dest);
+  if (s.includes('keypad')||s.includes('chime')) return playKeypadAt(f,t,noteDest);
+  if (s.includes('pop')||s.includes('pluck'))  return playPopAt(f,t,noteDest);
+  if (s.includes('pad'))                       return playPadAt(f,t,noteDest);
+  if (s.includes('retro-square'))              return playRetroAt(f,t,'square',noteDest);
+  if (s.includes('retro-saw'))                 return playRetroAt(f,t,'sawtooth',noteDest);
+  if (s.includes('retro-tri')||s.includes('retro-triangle')) return playRetroAt(f,t,'triangle',noteDest);
+  if (s.includes('laser'))                     return playLaserAt(f,t,noteDest);
+  if (s.includes('wind'))                      return playWindyAt(f,t,noteDest);
+  if (s.includes('alien')||s.includes('fm'))   return playAlienAt(f,t,noteDest);
+  if (s.includes('organ'))                     return playOrganishAt(f,t,noteDest);
+  if (s.includes('drop')||s.includes('bleep')) return playDropletAt(f,t,noteDest);
+  return playToneAt(f,t,noteDest);
 }
