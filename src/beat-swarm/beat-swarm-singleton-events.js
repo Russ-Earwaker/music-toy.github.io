@@ -7,6 +7,7 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
     : (() => ({ responseMode: 'none' }));
   const pacingCaps = getCurrentPacingCaps();
   const responseMode = String(pacingCaps?.responseMode || 'none');
+  const maxDrawSnakes = Math.max(0, Math.trunc(Number(pacingCaps?.maxDrawSnakes) || 0));
   const forceIntroPrimaryLoopWindow = options?.forceIntroPrimaryLoopWindow === true;
   if (!forceIntroPrimaryLoopWindow && (responseMode === 'none' || responseMode === 'group')) return events;
 
@@ -74,12 +75,21 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
   const snakes = enemies.filter((e) => String(e?.enemyType || '') === 'drawsnake');
   for (const enemy of snakes) {
     if (enemy?.retreating) continue;
+    const actorId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
     const group = getEnemyMusicGroup(enemy, 'drawsnake-projectile');
     if (!group) continue;
     const musicLaneId = String(group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
     if (laneDrivenPrimaryLoop && musicLaneId === 'primary_loop_lane') continue;
     const lifecycleState = normalizeMusicLifecycleState(group?.lifecycleState || enemy?.lifecycleState || 'active', 'active');
     if (lifecycleState === 'retiring') continue;
+    if (!forceIntroPrimaryLoopWindow && maxDrawSnakes > 1 && snakes.length > 1) {
+      const snakeStepOffset = actorId % 2;
+      if (((stepAbs + snakeStepOffset) % 2) !== 0) continue;
+    }
+    if (!forceIntroPrimaryLoopWindow && musicLaneId !== 'primary_loop_lane') {
+      const pacingGateStepModulo = maxDrawSnakes > 1 ? 4 : 2;
+      if ((stepAbs % pacingGateStepModulo) !== (actorId % pacingGateStepModulo)) continue;
+    }
     if (!forceIntroPrimaryLoopWindow && !isCallResponseLaneActive(enemy?.callResponseLane, stepAbs, snakes.length)) continue;
     const steps = Array.isArray(group?.steps) ? group.steps : [];
     if (!steps[step]) continue;
@@ -131,7 +141,7 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
     enemy.__bsLastDrawsnakeNote = normalizeSwarmNoteName(noteNameRaw) || noteNameRaw;
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
     events.push(createLoggedPerformedBeatEvent({
-      actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
+      actorId,
       beatIndex,
       stepIndex: stepAbs,
       role: normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.lead), roles.lead),

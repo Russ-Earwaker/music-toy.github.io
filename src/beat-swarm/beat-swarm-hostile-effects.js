@@ -22,6 +22,19 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   if (!enemyLayerEl || !projectiles || !origin) return;
   const ang = Number.isFinite(opts?.angle) ? Number(opts.angle) : (Math.random() * Math.PI * 2);
   const speed = Math.max(120, Number(opts?.speed) || Number(constants.composerGroupProjectileSpeed) || 0);
+  const hostileNoteName = String(
+    opts?.noteNameResolved
+      || helpers.normalizeSwarmNoteName?.(opts?.noteName)
+      || 'C4'
+  ).trim() || 'C4';
+  const hostileInstrument = String(
+    opts?.instrumentResolved
+      || helpers.resolveInstrumentIdOrFallback?.(
+        opts?.instrument,
+        helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
+      )
+      || 'tone'
+  ).trim() || 'tone';
   const pooledEl = pooledHostileRedProjectiles && pooledHostileRedProjectiles.length
     ? pooledHostileRedProjectiles.pop()
     : null;
@@ -58,11 +71,8 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
     ignoreEnemyId: null,
     hasEnteredScreen: false,
     hostileToEnemies: false,
-    hostileNoteName: helpers.normalizeSwarmNoteName?.(opts?.noteName) || 'C4',
-    hostileInstrument: helpers.resolveInstrumentIdOrFallback?.(
-      opts?.instrument,
-      helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
-    ),
+    hostileNoteName,
+    hostileInstrument,
     el,
   });
 }

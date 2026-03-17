@@ -486,7 +486,7 @@ export const COMPOSER_SECTIONS = Object.freeze([
   Object.freeze({ id: 'opening_movement', bars: 8, directive: Object.freeze({ drumLoops: 1, drawSnakes: 0, intensity: 0.5 }) }),
   Object.freeze({ id: 'bassline_awakens', bars: 8, directive: Object.freeze({ drumLoops: 1, drawSnakes: 1, intensity: 0.62 }) }),
   Object.freeze({ id: 'counterpoint_engaged', bars: 10, directive: Object.freeze({ drumLoops: 2, drawSnakes: 1, intensity: 0.8 }) }),
-  Object.freeze({ id: 'rising_tension', bars: 10, directive: Object.freeze({ drumLoops: 2, drawSnakes: 2, intensity: 0.96 }) }),
+  Object.freeze({ id: 'rising_tension', bars: 10, directive: Object.freeze({ drumLoops: 2, drawSnakes: 1, intensity: 0.88 }) }),
   Object.freeze({ id: 'breakdown', bars: 6, directive: Object.freeze({ drumLoops: 1, drawSnakes: 0, intensity: 0.58 }) }),
   Object.freeze({ id: 'crescendo', bars: 8, directive: Object.freeze({ drumLoops: 2, drawSnakes: 2, intensity: 1.02 }) }),
   Object.freeze({ id: 'final_movement', bars: 10, directive: Object.freeze({ drumLoops: 3, drawSnakes: 2, intensity: 1.08 }) }),

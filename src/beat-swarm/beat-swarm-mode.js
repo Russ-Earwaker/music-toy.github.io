@@ -9301,51 +9301,23 @@ function getDrawSnakeNodeIndexForStep(stepIndex, nodeCount) {
   return Math.max(0, Math.min(count - 1, Math.round(t * (count - 1))));
 }
 function fireDrawSnakeProjectile(enemy, nodeIndex, noteName, aggressionScale = 1) {
-  if (!enemyLayerEl) return;
   const nodes = Array.isArray(enemy?.drawsnakeNodeWorld) ? enemy.drawsnakeNodeWorld : [];
   const idx = Math.max(0, Math.min(nodes.length - 1, Math.trunc(Number(nodeIndex) || 0)));
   flashDrawSnakeNode(enemy, idx);
   const origin = nodes[idx] || { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 };
   const dirAng = Math.random() * Math.PI * 2;
   const scale = Math.max(0.35, Math.min(1, Number(aggressionScale) || 1));
-  const el = document.createElement('div');
-  el.className = 'beat-swarm-projectile is-hostile-red';
-  enemyLayerEl.appendChild(el);
-  projectiles.push({
-    wx: Number(origin.x) || 0,
-    wy: Number(origin.y) || 0,
-    vx: Math.cos(dirAng) * DRAW_SNAKE_PROJECTILE_SPEED * scale,
-    vy: Math.sin(dirAng) * DRAW_SNAKE_PROJECTILE_SPEED * scale,
-    ttl: PROJECTILE_LIFETIME,
+  const resolvedNoteName = normalizeSwarmNoteName(noteName) || 'C4';
+  const resolvedInstrument = resolveSwarmRoleInstrumentId(
+    getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.LEAD),
+    resolveSwarmSoundInstrumentId('projectile') || 'tone'
+  );
+  spawnHostileRedProjectileAt(origin, {
+    angle: dirAng,
+    speed: DRAW_SNAKE_PROJECTILE_SPEED * scale,
     damage: DRAW_SNAKE_PROJECTILE_DAMAGE * Math.max(0.3, scale),
-    kind: 'hostile-red',
-    hitEnemyIds: new Set(),
-    boomCenterX: 0,
-    boomCenterY: 0,
-    boomDirX: 0,
-    boomDirY: 0,
-    boomPerpX: 0,
-    boomPerpY: 0,
-    boomRadius: 0,
-    boomTheta: 0,
-    boomOmega: 0,
-    homingState: '',
-    targetEnemyId: null,
-    orbitAngle: 0,
-    orbitAngVel: 0,
-    orbitRadius: 0,
-    chainWeaponSlotIndex: null,
-    chainStageIndex: null,
-    nextStages: [],
-    nextBeatIndex: null,
-    ignoreEnemyId: null,
-    hostileToEnemies: false,
-    hostileNoteName: normalizeSwarmNoteName(noteName) || 'C4',
-    hostileInstrument: resolveSwarmRoleInstrumentId(
-      getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.LEAD),
-      resolveSwarmSoundInstrumentId('projectile') || 'tone'
-    ),
-    el,
+    noteNameResolved: resolvedNoteName,
+    instrumentResolved: resolvedInstrument,
   });
 }
 function getSwarmEnemyById(enemyId) {
@@ -10964,6 +10936,7 @@ function spawnHostileRedProjectileAt(origin, opts = null) {
     state: {
       enemyLayerEl,
       projectiles,
+      pooledHostileRedProjectiles,
     },
     constants: {
       composerGroupProjectileSpeed: COMPOSER_GROUP_PROJECTILE_SPEED,
