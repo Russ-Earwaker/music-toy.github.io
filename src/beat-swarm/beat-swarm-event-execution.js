@@ -113,55 +113,68 @@ export function executePerformedBeatEventRuntime(options = null) {
       } catch {}
     };
     const aggressionScale = helpers.getEnemyAggressionScale?.(enemy, group?.lifecycleState || 'active');
-    const lockedInstrumentId = String(
-      ev?.instrumentId
-        || group?.instrumentId
-        || enemy?.spawnerInstrument
-        || enemy?.instrumentId
-        || enemy?.musicInstrumentId
-        || ''
-    ).trim();
-    const lockedLane = inferInstrumentLaneFromCatalogId(lockedInstrumentId, constants.roles?.bass || 'bass');
-    const normalizedGroupRole = lockedLane === String(constants?.roles?.bass || 'bass')
-      ? String(constants?.roles?.bass || 'bass')
-      : helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.bass);
-    const instrumentId = lockedInstrumentId || helpers.resolveSwarmRoleInstrumentId?.(
-      normalizedGroupRole,
-      helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
-    );
-    group.instrumentId = instrumentId;
-    group.role = normalizedGroupRole;
-    const duckForPlayer = false;
-    const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
-    const musicProminence = normalizeEnemyProminenceForPlayerStep(
-      String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
-    );
-    const prominenceGain = resolveMusicProminenceGain(musicProminence);
-    const enemyAudible = isMaskingAudibleProminence(musicProminence);
-    const audioMutedExplicitly = ev?.payload?.muteAudio === true || ev?.payload?.audioMuted === true;
-    const shouldTriggerAudio = !audioMutedExplicitly;
-    const triggerVolume = (Number(constants.spawnerTriggerSoundVolume) || 0)
-      * (duckForPlayer ? (Number(constants.playerMaskDuckEnemyVolumeMult) || 1) : 1)
-      * (Number(audioGain) || 0)
-      * Math.max(0.18, prominenceGain)
-      * (0.7 + ((Number(aggressionScale) || 0) * 0.3));
-    const requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
-    let noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
-    if (String(normalizedGroupRole || '') === String(constants?.roles?.bass || 'bass')) {
-      noteName = hasExplicitOctave(requestedNote)
-        ? String(requestedNote).trim()
-        : normalizeBassRegister(noteName, normalizeBassRegister(requestedNote || 'C3', 'C3'));
-    }
-    group.note = noteName;
-    const audioDedupKey = [
-      sourceGroupId,
-      String(group?.continuityId || enemy?.musicContinuityId || ''),
-      beatIndex,
-      stepIndex,
-      String(instrumentId || ''),
-      String(noteName || ''),
-      String(musicProminence || ''),
-    ].join('|');
+    let normalizedGroupRole = '';
+    let instrumentId = '';
+    let musicProminence = 'full';
+    let prominenceGain = 1;
+    let enemyAudible = true;
+    let audioMutedExplicitly = false;
+    let shouldTriggerAudio = true;
+    let triggerVolume = 0;
+    let requestedNote = '';
+    let noteName = '';
+    let audioDedupKey = '';
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.prep', () => {
+      const lockedInstrumentId = String(
+        ev?.instrumentId
+          || group?.instrumentId
+          || enemy?.spawnerInstrument
+          || enemy?.instrumentId
+          || enemy?.musicInstrumentId
+          || ''
+      ).trim();
+      const lockedLane = inferInstrumentLaneFromCatalogId(lockedInstrumentId, constants.roles?.bass || 'bass');
+      normalizedGroupRole = lockedLane === String(constants?.roles?.bass || 'bass')
+        ? String(constants?.roles?.bass || 'bass')
+        : helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.bass);
+      instrumentId = lockedInstrumentId || helpers.resolveSwarmRoleInstrumentId?.(
+        normalizedGroupRole,
+        helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
+      );
+      group.instrumentId = instrumentId;
+      group.role = normalizedGroupRole;
+      const duckForPlayer = false;
+      const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
+      musicProminence = normalizeEnemyProminenceForPlayerStep(
+        String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
+      );
+      prominenceGain = resolveMusicProminenceGain(musicProminence);
+      enemyAudible = isMaskingAudibleProminence(musicProminence);
+      audioMutedExplicitly = ev?.payload?.muteAudio === true || ev?.payload?.audioMuted === true;
+      shouldTriggerAudio = !audioMutedExplicitly;
+      triggerVolume = (Number(constants.spawnerTriggerSoundVolume) || 0)
+        * (duckForPlayer ? (Number(constants.playerMaskDuckEnemyVolumeMult) || 1) : 1)
+        * (Number(audioGain) || 0)
+        * Math.max(0.18, prominenceGain)
+        * (0.7 + ((Number(aggressionScale) || 0) * 0.3));
+      requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
+      noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
+      if (String(normalizedGroupRole || '') === String(constants?.roles?.bass || 'bass')) {
+        noteName = hasExplicitOctave(requestedNote)
+          ? String(requestedNote).trim()
+          : normalizeBassRegister(noteName, normalizeBassRegister(requestedNote || 'C3', 'C3'));
+      }
+      group.note = noteName;
+      audioDedupKey = [
+        sourceGroupId,
+        String(group?.continuityId || enemy?.musicContinuityId || ''),
+        beatIndex,
+        stepIndex,
+        String(instrumentId || ''),
+        String(noteName || ''),
+        String(musicProminence || ''),
+      ].join('|');
+    });
     withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.audioVisual', () => {
       enemy.musicalRole = normalizedGroupRole;
       enemy.composerRole = normalizedGroupRole;
@@ -240,11 +253,6 @@ export function executePerformedBeatEventRuntime(options = null) {
         return true;
       });
       if (!spawned) return false;
-      emitSpawnerSystemEvent('music_spawner_gameplay_event', {
-        sourceEnemyId,
-        sourceGroupId,
-        reason: 'spawn_linked_enemy',
-      });
       if ((shouldFlashSpawnerCell && !visualTriggered) || (!audioTriggered && !audioMutedExplicitly)) {
         emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
           sourceEnemyId,
@@ -276,12 +284,6 @@ export function executePerformedBeatEventRuntime(options = null) {
         damage: Math.max(0.2, aggressionScale),
       });
     });
-    emitSpawnerSystemEvent('music_spawner_gameplay_event', {
-      sourceEnemyId,
-      sourceGroupId,
-      targetEnemyId: Math.max(0, Math.trunc(Number(linkedEnemy?.id) || 0)),
-      reason: 'launch_linked_projectile',
-    });
     if ((shouldFlashSpawnerCell && !visualTriggered) || (!audioTriggered && !audioMutedExplicitly)) {
       emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
         sourceEnemyId,
@@ -290,7 +292,9 @@ export function executePerformedBeatEventRuntime(options = null) {
         failureReason: (!visualTriggered && shouldFlashSpawnerCell) ? 'visual_missing' : 'audio_missing',
       });
     }
-    helpers.pulseHitFlash?.(linkedEnemy.el);
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.linkedVisual', () => {
+      helpers.pulseHitFlash?.(linkedEnemy.el);
+    });
     withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.logging', () => {
       logMusicLabExecution({
         sourceSystem: 'spawner',
@@ -480,19 +484,28 @@ export function executePerformedBeatEventRuntime(options = null) {
 
   if (actionType === 'player-weapon-step') {
     return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player', () => {
-    const origin = ev?.payload?.centerWorld;
-    const centerWorld = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)
-      ? { x: Number(origin.x) || 0, y: Number(origin.y) || 0 }
-      : helpers.getViewportCenterWorld?.();
-    const fireResult = helpers.fireConfiguredWeaponsOnBeat?.(
-      centerWorld,
-      Math.trunc(Number(ev.stepIndex) || 0),
-      beatIndex,
-      {
+    let centerWorld = null;
+    let playerStepIndex = 0;
+    let playerFireOptions = null;
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.prep', () => {
+      const origin = ev?.payload?.centerWorld;
+      centerWorld = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)
+        ? { x: Number(origin.x) || 0, y: Number(origin.y) || 0 }
+        : helpers.getViewportCenterWorld?.();
+      playerStepIndex = Math.trunc(Number(ev.stepIndex) || 0);
+      playerFireOptions = {
         playerSoundVolumeMult: Math.max(0.1, Math.min(1, Number(ev?.payload?.playerSoundVolumeMult) || 1)),
         foundationPresent: ev?.payload?.foundationPresent === true,
-      }
-    );
+      };
+    });
+    const fireResult = withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire', () => (
+      helpers.fireConfiguredWeaponsOnBeat?.(
+        centerWorld,
+        playerStepIndex,
+        beatIndex,
+        playerFireOptions
+      )
+    ));
     logMusicLabExecution({
       sourceSystem: 'player',
       playerAudible: fireResult?.playerAudible === true,

@@ -18,9 +18,7 @@ export function pulseHitFlashRuntime(options = null) {
   const last = Number(el.dataset?.hitFlashTs || 0);
   if ((now - last) < 60) return;
   if (el.dataset) el.dataset.hitFlashTs = `${now}`;
-  el.classList.remove('is-hit-flash');
-  void el.offsetWidth;
-  el.classList.add('is-hit-flash');
+  if (!el.classList.contains('is-hit-flash')) el.classList.add('is-hit-flash');
 }
 
 export function getOffsetPointRuntime(options = null) {

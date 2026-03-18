@@ -8683,9 +8683,7 @@ function flashDrawSnakeNode(enemy, nodeIndex) {
   enemy.drawsnakeNodePulseTs[idx] = DRAW_SNAKE_NODE_PULSE_SECONDS;
   enemy.drawsnakeNodePulseDur[idx] = DRAW_SNAKE_NODE_PULSE_SECONDS;
   node.style.setProperty('--bs-drawsnake-node-pulse', '1');
-  node.classList.remove('is-spawn');
-  void node.offsetWidth;
-  node.classList.add('is-spawn');
+  if (!node.classList.contains('is-spawn')) node.classList.add('is-spawn');
 }
 function getOffscreenSeedDirection(clientX, clientY) {
   const screenW = Math.max(1, Number(window.innerWidth) || 0);
@@ -10589,11 +10587,13 @@ function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex, contextBeatIndex = 
       clearPendingWeaponChainsForSlot,
       damageEnemy,
       getNearestEnemy,
+      getPerfNow: getBeatSwarmPerfNow,
       getWeaponTuneActivityStats,
       getWeaponTuneDamageScale,
       getWeaponTuneStepNotes,
       logWeaponTuneFireDebug,
       pulsePlayerShipNoteFlash,
+      recordStepEventsPerfSample: recordBeatSwarmStepEventsPerfSample,
       sanitizeWeaponStages,
       spawnProjectile,
       triggerWeaponStage,

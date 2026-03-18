@@ -806,6 +806,22 @@ export function fireConfiguredWeaponsOnBeatRuntime(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
   const runtimeOptions = options?.options && typeof options.options === 'object' ? options.options : {};
+  const getPerfNow = typeof helpers.getPerfNow === 'function'
+    ? helpers.getPerfNow
+    : (() => (globalThis.performance?.now?.() ?? Date.now()));
+  const recordPerfSample = typeof helpers.recordStepEventsPerfSample === 'function'
+    ? helpers.recordStepEventsPerfSample
+    : null;
+  const withPerfSample = (name, fn) => {
+    if (typeof fn !== 'function') return undefined;
+    if (typeof recordPerfSample !== 'function') return fn();
+    const startedAt = getPerfNow();
+    try {
+      return fn();
+    } finally {
+      recordPerfSample(name, Math.max(0, getPerfNow() - startedAt));
+    }
+  };
 
   const weaponLoadout = Array.isArray(state.weaponLoadout) ? state.weaponLoadout : [];
   const equippedWeapons = state.equippedWeapons instanceof Set ? state.equippedWeapons : new Set();
@@ -822,10 +838,16 @@ export function fireConfiguredWeaponsOnBeatRuntime(options = null) {
   const weapon = weaponLoadout[slotIndex];
   const stages = helpers.sanitizeWeaponStages?.(weapon?.stages) || [];
   if (stages.length) {
-    const tuneStats = helpers.getWeaponTuneActivityStats?.(slotIndex) || null;
-    const damageScale = Number(helpers.getWeaponTuneDamageScale?.(slotIndex)) || 1;
-    const tuneNotes = helpers.getWeaponTuneStepNotes?.(slotIndex, beatIndex) || [];
-    const noteName = tuneNotes.length ? tuneNotes[0] : null;
+    let tuneStats = null;
+    let damageScale = 1;
+    let tuneNotes = [];
+    let noteName = null;
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tune', () => {
+      tuneStats = helpers.getWeaponTuneActivityStats?.(slotIndex) || null;
+      damageScale = Number(helpers.getWeaponTuneDamageScale?.(slotIndex)) || 1;
+      tuneNotes = helpers.getWeaponTuneStepNotes?.(slotIndex, beatIndex) || [];
+      noteName = tuneNotes.length ? tuneNotes[0] : null;
+    });
     helpers.logWeaponTuneFireDebug?.('step', {
       slotIndex,
       stepIndex: Math.trunc(Number(beatIndex) || 0),
@@ -839,54 +861,71 @@ export function fireConfiguredWeaponsOnBeatRuntime(options = null) {
       firstStage: `${String(stages[0]?.archetype || '')}:${String(stages[0]?.variant || '')}`,
     });
     if (!noteName) {
-      helpers.clearBeamEffectsForWeaponSlot?.(slotIndex);
-      helpers.clearPendingWeaponChainsForSlot?.(slotIndex);
-      beamSustainStateBySlot?.delete(slotIndex);
+      withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.clearIdle', () => {
+        helpers.clearBeamEffectsForWeaponSlot?.(slotIndex);
+        helpers.clearPendingWeaponChainsForSlot?.(slotIndex);
+        beamSustainStateBySlot?.delete(slotIndex);
+      });
       return { attempted: true, playerAudible: false };
     }
     const first = stages[0];
     const rest = stages.slice(1);
-    helpers.pulsePlayerShipNoteFlash?.();
-    helpers.triggerWeaponStage?.(first, centerWorld, contextBeatIndex, rest, {
-      origin: centerWorld,
-      impactPoint: centerWorld,
-      weaponSlotIndex: slotIndex,
-      stageIndex: 0,
-      damageScale,
-      forcedNoteName: noteName,
-      directSound: true,
-      playerSoundVolumeMult: Math.max(0.1, Math.min(1, Number(runtimeOptions?.playerSoundVolumeMult) || 1)),
-      debugSource: 'tune-primary',
-      debugStepIndex: Math.trunc(Number(beatIndex) || 0),
-      debugBeatIndex: Math.trunc(Number(contextBeatIndex) || 0),
-      debugNoteIndex: 0,
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage', () => {
+      helpers.pulsePlayerShipNoteFlash?.();
+      helpers.triggerWeaponStage?.(first, centerWorld, contextBeatIndex, rest, {
+        origin: centerWorld,
+        impactPoint: centerWorld,
+        weaponSlotIndex: slotIndex,
+        stageIndex: 0,
+        damageScale,
+        forcedNoteName: noteName,
+        directSound: true,
+        playerSoundVolumeMult: Math.max(0.1, Math.min(1, Number(runtimeOptions?.playerSoundVolumeMult) || 1)),
+        debugSource: 'tune-primary',
+        debugStepIndex: Math.trunc(Number(beatIndex) || 0),
+        debugBeatIndex: Math.trunc(Number(contextBeatIndex) || 0),
+        debugNoteIndex: 0,
+      });
     });
     return { attempted: true, playerAudible: true };
   }
-  helpers.clearBeamEffectsForWeaponSlot?.(slotIndex);
-  helpers.clearPendingWeaponChainsForSlot?.(slotIndex);
-  beamSustainStateBySlot?.delete(slotIndex);
+  withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.clearUntuned', () => {
+    helpers.clearBeamEffectsForWeaponSlot?.(slotIndex);
+    helpers.clearPendingWeaponChainsForSlot?.(slotIndex);
+    beamSustainStateBySlot?.delete(slotIndex);
+  });
   const anyConfigured = weaponLoadout.some((w) => Array.isArray(w?.stages) && w.stages.length > 0);
   if (anyConfigured) return { attempted: true, playerAudible: false };
   let playerAudible = false;
-  if (equippedWeapons.has('explosion')) helpers.applyAoeAt?.(centerWorld, 'explosion', contextBeatIndex);
-  if (equippedWeapons.has('explosion')) playerAudible = true;
-  const target = helpers.getNearestEnemy?.(centerWorld.x, centerWorld.y) || null;
+  withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.legacyExplosion', () => {
+    if (equippedWeapons.has('explosion')) {
+      helpers.applyAoeAt?.(centerWorld, 'explosion', contextBeatIndex);
+      playerAudible = true;
+    }
+  });
+  let target = null;
+  withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.legacyTarget', () => {
+    target = helpers.getNearestEnemy?.(centerWorld.x, centerWorld.y) || null;
+  });
   if (!target) return { attempted: true, playerAudible };
-  if (equippedWeapons.has('laser')) {
-    helpers.addLaserEffect?.(
-      centerWorld,
-      { x: target.wx, y: target.wy },
-      null,
-      null,
-      Number.isFinite(target.id) ? Math.trunc(target.id) : null
-    );
-    helpers.damageEnemy?.(target, Number(weaponDefs?.laser?.damage) || 0);
-    playerAudible = true;
-  }
-  if (equippedWeapons.has('projectile')) {
-    helpers.spawnProjectile?.(centerWorld, target, Number(weaponDefs?.projectile?.damage) || 0, null, null);
-    playerAudible = true;
-  }
+  withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.legacyLaser', () => {
+    if (equippedWeapons.has('laser')) {
+      helpers.addLaserEffect?.(
+        centerWorld,
+        { x: target.wx, y: target.wy },
+        null,
+        null,
+        Number.isFinite(target.id) ? Math.trunc(target.id) : null
+      );
+      helpers.damageEnemy?.(target, Number(weaponDefs?.laser?.damage) || 0);
+      playerAudible = true;
+    }
+  });
+  withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.legacyProjectile', () => {
+    if (equippedWeapons.has('projectile')) {
+      helpers.spawnProjectile?.(centerWorld, target, Number(weaponDefs?.projectile?.damage) || 0, null, null);
+      playerAudible = true;
+    }
+  });
   return { attempted: true, playerAudible };
 }
