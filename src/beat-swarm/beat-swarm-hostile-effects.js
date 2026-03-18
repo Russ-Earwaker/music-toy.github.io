@@ -19,6 +19,7 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   const enemyLayerEl = state.enemyLayerEl || null;
   const projectiles = Array.isArray(state.projectiles) ? state.projectiles : null;
   const pooledHostileRedProjectiles = Array.isArray(state.pooledHostileRedProjectiles) ? state.pooledHostileRedProjectiles : null;
+  const pooledHostileRedProjectileStates = Array.isArray(state.pooledHostileRedProjectileStates) ? state.pooledHostileRedProjectileStates : null;
   if (!enemyLayerEl || !projectiles || !origin) return;
   const ang = Number.isFinite(opts?.angle) ? Number(opts.angle) : (Math.random() * Math.PI * 2);
   const speed = Math.max(120, Number(opts?.speed) || Number(constants.composerGroupProjectileSpeed) || 0);
@@ -41,40 +42,48 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   const el = pooledEl instanceof HTMLElement ? pooledEl : document.createElement('div');
   el.className = 'beat-swarm-projectile is-hostile-red';
   enemyLayerEl.appendChild(el);
-  projectiles.push({
-    wx: Number(origin.x) || 0,
-    wy: Number(origin.y) || 0,
-    vx: Math.cos(ang) * speed,
-    vy: Math.sin(ang) * speed,
-    ttl: Number(constants.projectileLifetime) || 1.5,
-    damage: Math.max(0.1, Number(opts?.damage) || 1),
-    kind: 'hostile-red',
-    hitEnemyIds: new Set(),
-    boomCenterX: 0,
-    boomCenterY: 0,
-    boomDirX: 0,
-    boomDirY: 0,
-    boomPerpX: 0,
-    boomPerpY: 0,
-    boomRadius: 0,
-    boomTheta: 0,
-    boomOmega: 0,
-    homingState: '',
-    targetEnemyId: null,
-    orbitAngle: 0,
-    orbitAngVel: 0,
-    orbitRadius: 0,
-    chainWeaponSlotIndex: null,
-    chainStageIndex: null,
-    nextStages: [],
-    nextBeatIndex: null,
-    ignoreEnemyId: null,
-    hasEnteredScreen: false,
-    hostileToEnemies: false,
-    hostileNoteName,
-    hostileInstrument,
-    el,
-  });
+  const pooledProjectile = pooledHostileRedProjectileStates && pooledHostileRedProjectileStates.length
+    ? pooledHostileRedProjectileStates.pop()
+    : null;
+  const projectile = pooledProjectile && typeof pooledProjectile === 'object'
+    ? pooledProjectile
+    : {};
+  const hitEnemyIds = projectile.hitEnemyIds instanceof Set ? projectile.hitEnemyIds : new Set();
+  hitEnemyIds.clear();
+  projectile.wx = Number(origin.x) || 0;
+  projectile.wy = Number(origin.y) || 0;
+  projectile.vx = Math.cos(ang) * speed;
+  projectile.vy = Math.sin(ang) * speed;
+  projectile.ttl = Number(constants.projectileLifetime) || 1.5;
+  projectile.damage = Math.max(0.1, Number(opts?.damage) || 1);
+  projectile.kind = 'hostile-red';
+  projectile.hitEnemyIds = hitEnemyIds;
+  projectile.boomCenterX = 0;
+  projectile.boomCenterY = 0;
+  projectile.boomDirX = 0;
+  projectile.boomDirY = 0;
+  projectile.boomPerpX = 0;
+  projectile.boomPerpY = 0;
+  projectile.boomRadius = 0;
+  projectile.boomTheta = 0;
+  projectile.boomOmega = 0;
+  projectile.homingState = '';
+  projectile.targetEnemyId = null;
+  projectile.orbitAngle = 0;
+  projectile.orbitAngVel = 0;
+  projectile.orbitRadius = 0;
+  projectile.chainWeaponSlotIndex = null;
+  projectile.chainStageIndex = null;
+  projectile.nextStages = Array.isArray(projectile.nextStages) ? projectile.nextStages : [];
+  projectile.nextStages.length = 0;
+  projectile.nextBeatIndex = null;
+  projectile.ignoreEnemyId = null;
+  projectile.hasEnteredScreen = false;
+  projectile.hostileToEnemies = false;
+  projectile.hostileNoteName = hostileNoteName;
+  projectile.hostileInstrument = hostileInstrument;
+  projectile.el = el;
+  projectiles.push(projectile);
 }
 
 export function addHostileRedExplosionEffectRuntime(options = null) {

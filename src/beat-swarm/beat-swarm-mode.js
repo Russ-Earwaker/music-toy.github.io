@@ -163,6 +163,7 @@ const introDrumLoopRuntime = {
 const enemies = [];
 const pooledLinkedSpawnerChildren = [];
 const pooledHostileRedProjectiles = [];
+const pooledHostileRedProjectileStates = [];
 const pendingEnemyDeaths = [];
 const pickups = [];
 const projectiles = [];
@@ -10937,6 +10938,7 @@ function spawnHostileRedProjectileAt(origin, opts = null) {
       enemyLayerEl,
       projectiles,
       pooledHostileRedProjectiles,
+      pooledHostileRedProjectileStates,
     },
     constants: {
       composerGroupProjectileSpeed: COMPOSER_GROUP_PROJECTILE_SPEED,
@@ -11183,6 +11185,7 @@ function updatePickupsAndCombat(dt) {
       pickups,
       projectiles,
       pooledHostileRedProjectiles,
+      pooledHostileRedProjectileStates,
       effects,
       enemies,
       equippedWeapons,

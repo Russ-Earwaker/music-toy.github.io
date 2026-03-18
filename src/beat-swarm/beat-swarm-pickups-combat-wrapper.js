@@ -55,6 +55,7 @@ export function updatePickupsAndCombatRuntimeWrapper(options = null) {
       pickups: state.pickups,
       projectiles: state.projectiles,
       pooledHostileRedProjectiles: state.pooledHostileRedProjectiles,
+      pooledHostileRedProjectileStates: state.pooledHostileRedProjectileStates,
       effects: state.effects,
       enemies: state.enemies,
       equippedWeapons: state.equippedWeapons,

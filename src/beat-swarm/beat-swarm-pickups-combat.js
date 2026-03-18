@@ -310,6 +310,11 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           try { p.el.remove(); } catch {}
           p.el.style.transform = 'translate(-9999px, -9999px)';
           if (state.pooledHostileRedProjectiles.length < 256) state.pooledHostileRedProjectiles.push(p.el);
+          if (Array.isArray(state.pooledHostileRedProjectileStates) && state.pooledHostileRedProjectileStates.length < 256) {
+            if (p.hitEnemyIds instanceof Set) p.hitEnemyIds.clear();
+            if (Array.isArray(p.nextStages)) p.nextStages.length = 0;
+            state.pooledHostileRedProjectileStates.push(p);
+          }
         } else {
           try { p.el?.remove?.(); } catch {}
         }
@@ -331,6 +336,11 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           try { p.el.remove(); } catch {}
           p.el.style.transform = 'translate(-9999px, -9999px)';
           if (state.pooledHostileRedProjectiles.length < 256) state.pooledHostileRedProjectiles.push(p.el);
+          if (Array.isArray(state.pooledHostileRedProjectileStates) && state.pooledHostileRedProjectileStates.length < 256) {
+            if (p.hitEnemyIds instanceof Set) p.hitEnemyIds.clear();
+            if (Array.isArray(p.nextStages)) p.nextStages.length = 0;
+            state.pooledHostileRedProjectileStates.push(p);
+          }
         } else {
           try { p.el?.remove?.(); } catch {}
         }
