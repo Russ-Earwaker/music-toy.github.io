@@ -156,16 +156,16 @@ export function setReactiveArrowVisualRuntime(options = null) {
 export function pulseReactiveArrowChargeRuntime(options = null) {
   const reactiveArrowEl = options?.reactiveArrowEl || null;
   if (!reactiveArrowEl) return;
-  reactiveArrowEl.classList.remove('is-beat-pulse');
-  void reactiveArrowEl.offsetWidth;
-  reactiveArrowEl.classList.add('is-beat-pulse');
+  if (!reactiveArrowEl.classList.contains('is-beat-pulse')) {
+    reactiveArrowEl.classList.add('is-beat-pulse');
+  }
 }
 
 export function pulsePlayerShipNoteFlashRuntime(options = null) {
   const overlayEl = options?.overlayEl || null;
   const shipEl = overlayEl?.querySelector?.('.beat-swarm-ship');
   if (!(shipEl instanceof HTMLElement)) return;
-  shipEl.classList.remove('is-note-flash');
-  void shipEl.offsetWidth;
-  shipEl.classList.add('is-note-flash');
+  if (!shipEl.classList.contains('is-note-flash')) {
+    shipEl.classList.add('is-note-flash');
+  }
 }

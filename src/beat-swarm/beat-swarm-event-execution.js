@@ -362,13 +362,15 @@ export function executePerformedBeatEventRuntime(options = null) {
     withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.projectileFire', () => {
       helpers.fireDrawSnakeProjectile?.(enemy, nodeIndex, noteName, aggressionScale, instrumentId);
     });
-    logMusicLabExecution({
-      sourceSystem: 'drawsnake',
-      requestedNote,
-      resolvedNote: noteName,
-      noteWasClamped: requestedNote ? requestedNote !== noteName : false,
-      enemyAudible,
-      musicProminence,
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.logging', () => {
+      logMusicLabExecution({
+        sourceSystem: 'drawsnake',
+        requestedNote,
+        resolvedNote: noteName,
+        noteWasClamped: requestedNote ? requestedNote !== noteName : false,
+        enemyAudible,
+        musicProminence,
+      });
     });
     return true;
   });

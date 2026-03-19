@@ -2388,6 +2388,37 @@ function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context 
       targetEnemy: null,
     };
   }
+  if (isPrimaryLoopOwner) {
+    noteMusicSystemEvent('music_handoff_failed', {
+      sourceEnemyId: sourceId,
+      sourceEnemyType: sourceType,
+      sourceGroupId: Math.max(0, Math.trunc(Number(sourceGroup.id) || 0)),
+      continuityId,
+      laneRole: sourceRole,
+      actionType: String(sourceGroup.actionType || '').trim().toLowerCase(),
+      reason: handoffReason,
+      failureReason: 'primary_lane_recovery',
+    }, { beatIndex, stepIndex, ...context });
+    noteMusicSystemEvent('music_handoff_reset_phrase', {
+      sourceEnemyId: sourceId,
+      sourceEnemyType: sourceType,
+      sourceGroupId: Math.max(0, Math.trunc(Number(sourceGroup.id) || 0)),
+      continuityId,
+      laneRole: sourceRole,
+      actionType: String(sourceGroup.actionType || '').trim().toLowerCase(),
+      reason: handoffReason,
+      failureReason: 'primary_lane_recovery',
+    }, { beatIndex, stepIndex, ...context });
+    return {
+      attempted: true,
+      success: false,
+      reset: true,
+      reason: 'primary_lane_recovery',
+      sourceGroup,
+      targetGroup: null,
+      targetEnemy: null,
+    };
+  }
   const phraseState = clonePhraseState(sourceGroup.phraseState)
     || buildFallbackPhraseStateForHandoff(sourceGroup, beatIndex, stepIndex, continuityId);
   const sourceActionType = String(sourceGroup.actionType || '').trim().toLowerCase();
@@ -11252,6 +11283,7 @@ function maintainComposerEnemyGroups() {
       applyMusicalIdentityVisualToEnemy,
       clampNoteToDirectorPool,
       createComposerEnemyGroupProfile,
+      getPerfNow: getBeatSwarmPerfNow,
       getAliveEnemiesByIds,
       getComposerDirective,
       getComposerMotif,
@@ -11271,6 +11303,7 @@ function maintainComposerEnemyGroups() {
       pickComposerGroupShape,
       pickComposerGroupTemplate,
       ensureMusicLaneAssignment: assignMusicLaneIdentity,
+      recordPerfSample: recordBeatSwarmPerfSample,
       resolveInstrumentIdOrFallback,
       resolveSwarmSoundInstrumentId,
       sanitizeEnemyMusicInstrumentId,
