@@ -488,8 +488,8 @@ export const COMPOSER_SECTIONS = Object.freeze([
   Object.freeze({ id: 'counterpoint_engaged', bars: 10, directive: Object.freeze({ drumLoops: 2, drawSnakes: 1, intensity: 0.8 }) }),
   Object.freeze({ id: 'rising_tension', bars: 10, directive: Object.freeze({ drumLoops: 2, drawSnakes: 1, intensity: 0.88 }) }),
   Object.freeze({ id: 'breakdown', bars: 6, directive: Object.freeze({ drumLoops: 1, drawSnakes: 0, intensity: 0.58 }) }),
-  Object.freeze({ id: 'crescendo', bars: 8, directive: Object.freeze({ drumLoops: 2, drawSnakes: 2, intensity: 1.02 }) }),
-  Object.freeze({ id: 'final_movement', bars: 10, directive: Object.freeze({ drumLoops: 3, drawSnakes: 2, intensity: 1.08 }) }),
+  Object.freeze({ id: 'crescendo', bars: 8, directive: Object.freeze({ drumLoops: 2, drawSnakes: 1, intensity: 1.02 }) }),
+  Object.freeze({ id: 'final_movement', bars: 10, directive: Object.freeze({ drumLoops: 3, drawSnakes: 1, intensity: 1.08 }) }),
 ]);
 export const COMPOSER_GROUPS_ENABLED = true;
 export const COMPOSER_GROUP_SIZE_MIN = 4;
@@ -599,7 +599,7 @@ export const DIRECTOR_ENERGY_STATE_CONFIG = Object.freeze({
   }),
   peak: Object.freeze({
     budgets: Object.freeze({ maxFullThreatsPerBeat: 4, maxLightThreatsPerBeat: 7, maxAudibleAccentsPerBeat: 10, maxCosmeticPerBeat: 18 }),
-    composer: Object.freeze({ drumLoops: 2, drawSnakes: 2, intensity: 1.12 }),
+    composer: Object.freeze({ drumLoops: 2, drawSnakes: 1, intensity: 1.12 }),
   }),
 });
 export const DIRECTOR_ENERGY_STATE_ALIAS = Object.freeze({

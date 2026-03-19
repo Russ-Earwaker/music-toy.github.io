@@ -23,19 +23,24 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   if (!enemyLayerEl || !projectiles || !origin) return;
   const ang = Number.isFinite(opts?.angle) ? Number(opts.angle) : (Math.random() * Math.PI * 2);
   const speed = Math.max(120, Number(opts?.speed) || Number(constants.composerGroupProjectileSpeed) || 0);
-  const hostileNoteName = String(
-    opts?.noteNameResolved
-      || helpers.normalizeSwarmNoteName?.(opts?.noteName)
-      || 'C4'
-  ).trim() || 'C4';
-  const hostileInstrument = String(
-    opts?.instrumentResolved
-      || helpers.resolveInstrumentIdOrFallback?.(
-        opts?.instrument,
-        helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
-      )
-      || 'tone'
-  ).trim() || 'tone';
+  const fastResolved = opts?.fastResolved === true;
+  const hostileNoteName = fastResolved
+    ? (String(opts?.noteNameResolved || 'C4').trim() || 'C4')
+    : (String(
+      opts?.noteNameResolved
+        || helpers.normalizeSwarmNoteName?.(opts?.noteName)
+        || 'C4'
+    ).trim() || 'C4');
+  const hostileInstrument = fastResolved
+    ? (String(opts?.instrumentResolved || 'tone').trim() || 'tone')
+    : (String(
+      opts?.instrumentResolved
+        || helpers.resolveInstrumentIdOrFallback?.(
+          opts?.instrument,
+          helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
+        )
+        || 'tone'
+    ).trim() || 'tone');
   const pooledEl = pooledHostileRedProjectiles && pooledHostileRedProjectiles.length
     ? pooledHostileRedProjectiles.pop()
     : null;

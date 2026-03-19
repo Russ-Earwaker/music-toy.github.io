@@ -355,9 +355,12 @@ export function executePerformedBeatEventRuntime(options = null) {
     if (enemyAudible) {
       try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
     }
-    const nodeIndex = Math.trunc(Number(ev?.payload?.nodeIndex) || 0);
-    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.projectile', () => {
-      helpers.fireDrawSnakeProjectile?.(enemy, nodeIndex, noteName, aggressionScale);
+    let nodeIndex = 0;
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.projectilePrep', () => {
+      nodeIndex = Math.trunc(Number(ev?.payload?.nodeIndex) || 0);
+    });
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.projectileFire', () => {
+      helpers.fireDrawSnakeProjectile?.(enemy, nodeIndex, noteName, aggressionScale, instrumentId);
     });
     logMusicLabExecution({
       sourceSystem: 'drawsnake',
