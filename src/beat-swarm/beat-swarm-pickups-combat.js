@@ -277,8 +277,6 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
             helpers.withDamageSoundStage?.(p.chainStageIndex, () => helpers.damageEnemy?.(e, p.damage));
             if (Array.isArray(p.nextStages) && p.nextStages.length) {
               const stages = helpers.sanitizeWeaponStages?.(p.nextStages) || [];
-              const first = stages[0];
-              const rest = stages.slice(1);
               const nextBeat = Number.isFinite(p.nextBeatIndex)
                 ? Math.max(Math.trunc(p.nextBeatIndex), Math.max(0, currentBeatIndex) + 1)
                 : (Math.max(0, currentBeatIndex) + 1);
@@ -291,11 +289,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
                 sourceEnemyId: enemyId > 0 ? enemyId : null,
                 damageScale: Math.max(0.05, Number(p.chainDamageScale) || 1),
               };
-              if (first?.archetype === 'projectile') {
-                helpers.triggerWeaponStage?.(first, hitPoint, currentBeatIndex, rest, chainCtx);
-              } else {
-                helpers.queueWeaponChain?.(nextBeat, stages, chainCtx);
-              }
+              helpers.queueWeaponChain?.(nextBeat, stages, chainCtx);
             }
             if (!isBoomerang) {
               hit = true;

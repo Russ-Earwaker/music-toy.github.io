@@ -124,7 +124,9 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       : noteNameBase;
     if (styleId === 'retro_shooter') {
       const prevNote = normalizeSwarmNoteName(enemy?.__bsLastDrawsnakeNote);
-      if (prevNote && Math.random() < (motifRepeatBias * 0.45)) {
+      const prevRow = Math.max(0, Math.min(notePoolSize - 1, Math.trunc(Number(enemy?.__bsLastDrawsnakeRow) || row)));
+      const repeatChance = prevRow === row ? (motifRepeatBias * 0.18) : (motifRepeatBias * 0.06);
+      if (prevNote && Math.random() < repeatChance) {
         noteNameRaw = prevNote;
       }
     }
@@ -133,10 +135,17 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       : false;
     const phraseResolutionOpportunity = phraseGravityOpportunity && phraseStep.resolutionOpportunity;
     const phraseResolutionHit = phraseResolutionOpportunity && phraseGravityHit;
-    const instrumentId = resolveSwarmRoleInstrumentId(
-      normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.lead), roles.lead),
-      resolveSwarmSoundInstrumentId('projectile') || 'tone'
-    );
+    const instrumentId = String(
+      group?.instrumentId
+        || enemy?.drawsnakeInstrument
+        || enemy?.musicInstrumentId
+        || enemy?.instrumentId
+        || resolveSwarmRoleInstrumentId(
+          normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.lead), roles.lead),
+          resolveSwarmSoundInstrumentId('projectile') || 'tone'
+        )
+        || 'tone'
+    ).trim() || 'tone';
     enemy.__bsLastDrawsnakeRow = row;
     enemy.__bsLastDrawsnakeNote = normalizeSwarmNoteName(noteNameRaw) || noteNameRaw;
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;

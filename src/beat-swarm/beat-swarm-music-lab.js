@@ -75,6 +75,27 @@ function normalizeInstrumentLane(value, fallback = '') {
   if (raw === 'texture' || raw === 'cosmetic' || raw === 'ambient') return 'motion';
   return String(fallback || '').trim().toLowerCase();
 }
+function makeLaneOwnershipRecord(recordLike) {
+  const record = recordLike && typeof recordLike === 'object' ? recordLike : {};
+  return {
+    laneId: String(record.laneId || '').trim().toLowerCase(),
+    layer: String(record.layer || '').trim().toLowerCase(),
+    role: String(record.role || '').trim().toLowerCase(),
+    continuityId: String(record.continuityId || '').trim(),
+    instrumentId: String(record.instrumentId || '').trim(),
+    phraseId: String(record.phraseId || '').trim().toLowerCase(),
+    patternKey: String(record.patternKey || '').trim(),
+    performerEnemyId: clampInt(record.performerEnemyId, 0, 0),
+    performerGroupId: clampInt(record.performerGroupId, 0, 0),
+    performerType: String(record.performerType || '').trim().toLowerCase(),
+    handoffPolicy: String(record.handoffPolicy || '').trim().toLowerCase(),
+    identityChangeReason: String(record.identityChangeReason || '').trim().toLowerCase(),
+    sectionId: String(record.sectionId || '').trim().toLowerCase(),
+    activeSinceBar: clampInt(record.activeSinceBar, -1, -1),
+    lastAssignedBar: clampInt(record.lastAssignedBar, -1, -1),
+    lifetimeBars: clampInt(record.lifetimeBars, 0, 0),
+  };
+}
 
 function toMidi(noteName) {
   const raw = String(noteName || '').trim();
@@ -149,6 +170,7 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     : (payload?.playerManualOverrideActive === true);
   const musicLayer = String(context?.musicLayer ?? payload?.musicLayer ?? '').trim().toLowerCase();
   const musicProminence = String(context?.musicProminence ?? payload?.musicProminence ?? '').trim().toLowerCase();
+  const authoringClass = String(context?.authoringClass ?? payload?.authoringClass ?? '').trim().toLowerCase();
   return {
     tMs: nowMs(),
     phase: String(phase || '').trim() || 'queued',
@@ -188,6 +210,7 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     playerManualOverrideActive,
     musicLayer,
     musicProminence,
+    authoringClass,
   };
 }
 
@@ -237,9 +260,42 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     targetEnemyId: clampInt(payload?.targetEnemyId, 0, 0),
     targetEnemyType: String(payload?.targetEnemyType || '').trim().toLowerCase(),
     targetGroupId: clampInt(payload?.targetGroupId, 0, 0),
+    laneId: String(payload?.laneId || '').trim().toLowerCase(),
     laneRole: String(payload?.laneRole || '').trim().toLowerCase(),
     role: String(payload?.role || '').trim().toLowerCase(),
     actionType: String(payload?.actionType || '').trim().toLowerCase(),
+    instrumentId: String(payload?.instrumentId || '').trim(),
+    phraseId: String(payload?.phraseId || '').trim().toLowerCase(),
+    patternKey: String(payload?.patternKey || '').trim(),
+    performerEnemyId: clampInt(payload?.performerEnemyId, 0, 0),
+    performerGroupId: clampInt(payload?.performerGroupId, 0, 0),
+    performerType: String(payload?.performerType || '').trim().toLowerCase(),
+    previousContinuityId: String(payload?.previousContinuityId || '').trim(),
+    previousInstrumentId: String(payload?.previousInstrumentId || '').trim(),
+    previousPhraseId: String(payload?.previousPhraseId || '').trim().toLowerCase(),
+    previousPatternKey: String(payload?.previousPatternKey || '').trim(),
+    identityChangeReason: String(payload?.identityChangeReason || '').trim().toLowerCase(),
+    previousIdentityChangeReason: String(payload?.previousIdentityChangeReason || '').trim().toLowerCase(),
+    sectionId: String(payload?.sectionId || '').trim().toLowerCase(),
+    waitSteps: clampInt(payload?.waitSteps, 0, 0),
+    stepsUntilBoundary: clampInt(payload?.stepsUntilBoundary, 0, 0),
+    waitStepsBeforeReplace: clampInt(payload?.waitStepsBeforeReplace, 0, 0),
+    deferredBeatIndex: clampInt(payload?.deferredBeatIndex, 0, 0),
+    deferredStepIndex: clampInt(payload?.deferredStepIndex, 0, 0),
+    replacedPending: payload?.replacedPending === true,
+    previousPerformerEnemyId: clampInt(payload?.previousPerformerEnemyId, 0, 0),
+    previousPerformerGroupId: clampInt(payload?.previousPerformerGroupId, 0, 0),
+    previousPerformerType: String(payload?.previousPerformerType || '').trim().toLowerCase(),
+    ownerChanged: payload?.ownerChanged === true,
+    continuityChanged: payload?.continuityChanged === true,
+    continuityPreserved: payload?.continuityPreserved === true,
+    instrumentChanged: payload?.instrumentChanged === true,
+    phraseChanged: payload?.phraseChanged === true,
+    patternChanged: payload?.patternChanged === true,
+    performerTypeChanged: payload?.performerTypeChanged === true,
+    identityPreserved: payload?.identityPreserved === true,
+    intentionalIdentityChange: payload?.intentionalIdentityChange === true,
+    driftDetected: payload?.driftDetected === true,
     actorId: clampInt(payload?.actorId, 0, 0),
     phraseStep: clampInt(payload?.phraseStep, 0, 0),
     barPosition: clampInt(payload?.barPosition, 0, 0),
@@ -330,6 +386,13 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
       ? {
         knownIdentityCount: clampInt(payload.onboarding.knownIdentityCount, 0, 0),
         recentNovelIdentityCount: clampInt(payload.onboarding.recentNovelIdentityCount, 0, 0),
+      }
+      : null,
+    laneOwnership: payload?.laneOwnership && typeof payload.laneOwnership === 'object'
+      ? {
+        foundation: makeLaneOwnershipRecord(payload.laneOwnership.foundation),
+        primaryLoop: makeLaneOwnershipRecord(payload.laneOwnership.primaryLoop),
+        secondaryLoop: makeLaneOwnershipRecord(payload.laneOwnership.secondaryLoop),
       }
       : null,
     chainEventId: clampInt(payload?.chainEventId, 0, 0),
@@ -843,10 +906,200 @@ function collectIdentityStabilityDiagnostics(session, maxBarIndex) {
     enemiesWithColourChanges,
   };
 }
+function collectLaneOwnershipDiagnostics(session, maxBarIndex) {
+  const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
+    .filter((e) => {
+      const type = String(e?.eventType || '').trim().toLowerCase();
+      return type === 'music_lane_identity_started'
+        || type === 'music_lane_identity_changed'
+        || type === 'music_lane_identity_cleared'
+        || type === 'music_lane_identity_change_deferred'
+        || type === 'music_lane_identity_change_applied'
+        || type === 'music_lane_identity_change_replaced'
+        || type === 'music_lane_identity_change_dropped'
+        || type === 'music_lane_identity_change_rejected';
+    })
+    .sort((a, b) => clampInt(a?.timestamp, 0, 0) - clampInt(b?.timestamp, 0, 0));
+  const byLane = Object.create(null);
+  let laneStarts = 0;
+  let laneClears = 0;
+  let laneChanges = 0;
+  let ownerChanges = 0;
+  let preservedHandoffs = 0;
+  let resetHandoffs = 0;
+  let continuityBreaks = 0;
+  let sameContinuityInstrumentDrift = 0;
+  let sameContinuityPhraseDrift = 0;
+  let sameContinuityPatternDrift = 0;
+  let intentionalIdentityChanges = 0;
+  let deferredChanges = 0;
+  let appliedDeferredChanges = 0;
+  let replacedDeferredChanges = 0;
+  let droppedDeferredChanges = 0;
+  let rejectedDeferredChanges = 0;
+  let totalDeferredWaitSteps = 0;
+  let totalRejectedBoundaryDistance = 0;
+  const droppedDeferredByReason = {
+    continuityAdvanced: 0,
+    sectionAdvanced: 0,
+    timeout: 0,
+    other: 0,
+  };
+  for (const e of logs) {
+    const type = String(e?.eventType || '').trim().toLowerCase();
+    const laneId = String(e?.laneId || '').trim().toLowerCase() || 'unknown';
+    if (!byLane[laneId]) {
+      byLane[laneId] = {
+        starts: 0,
+        clears: 0,
+        changes: 0,
+        ownerChanges: 0,
+        preservedHandoffs: 0,
+        resetHandoffs: 0,
+        continuityBreaks: 0,
+        sameContinuityInstrumentDrift: 0,
+        sameContinuityPhraseDrift: 0,
+        sameContinuityPatternDrift: 0,
+        intentionalIdentityChanges: 0,
+        deferredChanges: 0,
+        appliedDeferredChanges: 0,
+        replacedDeferredChanges: 0,
+        droppedDeferredChanges: 0,
+        rejectedDeferredChanges: 0,
+        totalDeferredWaitSteps: 0,
+        totalRejectedBoundaryDistance: 0,
+        droppedDeferredByReason: {
+          continuityAdvanced: 0,
+          sectionAdvanced: 0,
+          timeout: 0,
+          other: 0,
+        },
+      };
+    }
+    const row = byLane[laneId];
+    if (type === 'music_lane_identity_change_deferred') {
+      deferredChanges += 1;
+      row.deferredChanges += 1;
+      continue;
+    }
+    if (type === 'music_lane_identity_change_applied') {
+      appliedDeferredChanges += 1;
+      row.appliedDeferredChanges += 1;
+      const waitSteps = Math.max(0, clampInt(e?.waitSteps, 0, 0));
+      totalDeferredWaitSteps += waitSteps;
+      row.totalDeferredWaitSteps += waitSteps;
+      continue;
+    }
+    if (type === 'music_lane_identity_change_replaced') {
+      replacedDeferredChanges += 1;
+      row.replacedDeferredChanges += 1;
+      continue;
+    }
+    if (type === 'music_lane_identity_change_dropped') {
+      droppedDeferredChanges += 1;
+      row.droppedDeferredChanges += 1;
+      const reason = String(e?.failureReason || '').trim().toLowerCase();
+      const bucket = reason === 'continuity_advanced'
+        ? 'continuityAdvanced'
+        : reason === 'section_advanced'
+          ? 'sectionAdvanced'
+          : reason === 'deferred_timeout'
+            ? 'timeout'
+            : 'other';
+      droppedDeferredByReason[bucket] += 1;
+      row.droppedDeferredByReason[bucket] += 1;
+      continue;
+    }
+    if (type === 'music_lane_identity_change_rejected') {
+      rejectedDeferredChanges += 1;
+      row.rejectedDeferredChanges += 1;
+      const stepsUntilBoundary = Math.max(0, clampInt(e?.stepsUntilBoundary, 0, 0));
+      totalRejectedBoundaryDistance += stepsUntilBoundary;
+      row.totalRejectedBoundaryDistance += stepsUntilBoundary;
+      continue;
+    }
+    if (type === 'music_lane_identity_started') {
+      laneStarts += 1;
+      row.starts += 1;
+      continue;
+    }
+    if (type === 'music_lane_identity_cleared') {
+      laneClears += 1;
+      row.clears += 1;
+      continue;
+    }
+    if (type !== 'music_lane_identity_changed') continue;
+    laneChanges += 1;
+    row.changes += 1;
+    const ownerChanged = e?.ownerChanged === true;
+    const continuityPreserved = e?.continuityPreserved === true;
+    const continuityChanged = e?.continuityChanged === true;
+    const instrumentChanged = e?.instrumentChanged === true;
+    const phraseChanged = e?.phraseChanged === true;
+    const patternChanged = e?.patternChanged === true;
+    const intentionalIdentityChange = e?.intentionalIdentityChange === true;
+    if (intentionalIdentityChange) {
+      intentionalIdentityChanges += 1;
+      row.intentionalIdentityChanges += 1;
+    }
+    if (ownerChanged) {
+      ownerChanges += 1;
+      row.ownerChanges += 1;
+      if (continuityPreserved && !instrumentChanged && !phraseChanged && !patternChanged) {
+        preservedHandoffs += 1;
+        row.preservedHandoffs += 1;
+      } else if (!intentionalIdentityChange) {
+        resetHandoffs += 1;
+        row.resetHandoffs += 1;
+      }
+    }
+    if (continuityChanged && !continuityPreserved && !intentionalIdentityChange) {
+      continuityBreaks += 1;
+      row.continuityBreaks += 1;
+    }
+    if (continuityPreserved && instrumentChanged && !intentionalIdentityChange) {
+      sameContinuityInstrumentDrift += 1;
+      row.sameContinuityInstrumentDrift += 1;
+    }
+    if (continuityPreserved && phraseChanged && !intentionalIdentityChange) {
+      sameContinuityPhraseDrift += 1;
+      row.sameContinuityPhraseDrift += 1;
+    }
+    if (continuityPreserved && patternChanged && !intentionalIdentityChange) {
+      sameContinuityPatternDrift += 1;
+      row.sameContinuityPatternDrift += 1;
+    }
+  }
+  return {
+    totalLogs: logs.length,
+    laneStarts,
+    laneClears,
+    laneChanges,
+    ownerChanges,
+    preservedHandoffs,
+    resetHandoffs,
+    continuityBreaks,
+    sameContinuityInstrumentDrift,
+    sameContinuityPhraseDrift,
+    sameContinuityPatternDrift,
+    intentionalIdentityChanges,
+    deferredChanges,
+    appliedDeferredChanges,
+    replacedDeferredChanges,
+    droppedDeferredChanges,
+    rejectedDeferredChanges,
+    droppedDeferredByReason,
+    avgDeferredWaitSteps: appliedDeferredChanges > 0 ? (totalDeferredWaitSteps / appliedDeferredChanges) : 0,
+    avgRejectedBoundaryDistance: rejectedDeferredChanges > 0 ? (totalRejectedBoundaryDistance / rejectedDeferredChanges) : 0,
+    byLane,
+  };
+}
 
 function collectPassDiagnostics(executedEvents, session, maxBarIndex, handoff, spawnerPipeline) {
   const bassStability = collectBassStabilityDiagnostics(executedEvents, handoff);
   const identityStability = collectIdentityStabilityDiagnostics(session, maxBarIndex);
+  const ownershipContinuity = collectLaneOwnershipDiagnostics(session, maxBarIndex);
   const delivery = collectDeliveryDiagnostics(session, maxBarIndex);
   const spawnerFeedback = {
     spawnerGameplayEvents: Math.max(0, clampInt(spawnerPipeline?.spawnerGameplayEvents, 0, 0)),
@@ -859,7 +1112,7 @@ function collectPassDiagnostics(executedEvents, session, maxBarIndex, handoff, s
       + Math.max(0, clampInt(spawnerPipeline?.loopgridShortfall, 0, 0))
     ),
   };
-  return { bassStability, identityStability, spawnerFeedback, delivery };
+  return { bassStability, identityStability, ownershipContinuity, spawnerFeedback, delivery };
 }
 
 function collectSectionStability(session, maxBarIndex) {
@@ -1217,7 +1470,7 @@ function collectHierarchyModelDiagnostics(
       ? (foregroundIdeaGaps.reduce((sum, gap) => sum + gap, 0) / foregroundIdeaGaps.length)
       : barsConsidered,
     laneReassignmentRate: barsConsidered > 0
-      ? (Math.max(0, clampInt(passDiagnostics?.bassStability?.bassPhraseResets, 0, 0)) / barsConsidered)
+      ? (Math.max(0, clampInt(passDiagnostics?.ownershipContinuity?.ownerChanges, 0, 0)) / barsConsidered)
       : 0,
     enemyColourMutationCount: Math.max(0, clampInt(passDiagnostics?.identityStability?.totalColourChanges, 0, 0)),
     enemyInstrumentMutationCount: Math.max(0, clampInt(passDiagnostics?.identityStability?.totalInstrumentChanges, 0, 0)),
@@ -1965,6 +2218,16 @@ function computeSummary(metrics) {
   const spawnerExecutedToCreatedRate = Number(metrics?.passDiagnostics?.delivery?.spawnerExecutedToCreatedRate);
   const bassExecutedToCreatedRate = Number(metrics?.passDiagnostics?.delivery?.bassExecutedToCreatedRate);
   const maxEnemyStepsWithoutBass = Math.max(0, clampInt(metrics?.passDiagnostics?.delivery?.maxEnemyStepsWithoutBass, 0, 0));
+  const preservedLaneHandoffs = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.preservedHandoffs, 0, 0));
+  const resetLaneHandoffs = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.resetHandoffs, 0, 0));
+  const sameContinuityInstrumentDrift = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.sameContinuityInstrumentDrift, 0, 0));
+  const sameContinuityPatternDrift = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.sameContinuityPatternDrift, 0, 0));
+  const deferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.deferredChanges, 0, 0));
+  const appliedDeferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.appliedDeferredChanges, 0, 0));
+  const replacedDeferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.replacedDeferredChanges, 0, 0));
+  const droppedDeferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.droppedDeferredChanges, 0, 0));
+  const rejectedDeferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.rejectedDeferredChanges, 0, 0));
+  const avgDeferredWaitSteps = Number(metrics?.passDiagnostics?.ownershipContinuity?.avgDeferredWaitSteps) || 0;
   return {
     notePoolCompliance: `${Math.round((Number(metrics?.notePoolCompliance?.poolComplianceRate) || 0) * 100)}%`,
     motifReuse: `${Math.round(motifReuse * 100)}%`,
@@ -2018,7 +2281,24 @@ function computeSummary(metrics) {
       && maxEnemyStepsWithoutBass <= 24
     ) ? 'stable' : 'drops_detected',
     bassFoundation: (bassLoopCycles >= 2 && bassPhraseResets === 0 && bassHandoffContinuityRate >= 0.9) ? 'stable' : 'at_risk',
-    identityStability: (instrumentChangesPerEnemy === 0 && colourChangesPerEnemy === 0) ? 'stable' : 'drift',
+    identityStability: (
+      instrumentChangesPerEnemy === 0
+      && colourChangesPerEnemy === 0
+      && sameContinuityInstrumentDrift === 0
+      && sameContinuityPatternDrift === 0
+      && resetLaneHandoffs === 0
+    ) ? 'stable' : 'drift',
+    ownershipContinuity: (resetLaneHandoffs === 0 && sameContinuityInstrumentDrift === 0 && sameContinuityPatternDrift === 0)
+      ? (preservedLaneHandoffs > 0 ? 'preserved' : 'stable')
+      : 'drift',
+    deferredOwnershipChanges: (
+      deferredLaneChanges === 0
+      || (
+        appliedDeferredLaneChanges >= Math.max(1, deferredLaneChanges - replacedDeferredLaneChanges - droppedDeferredLaneChanges)
+        && droppedDeferredLaneChanges === 0
+        && avgDeferredWaitSteps <= 8
+      )
+    ) ? 'healthy' : 'backlogged',
     spawnerFeedbackMismatchCount: spawnerMismatchCount,
     skippedCreatedEvents,
     spawnerSkippedCreatedEvents,
@@ -2094,6 +2374,23 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     bassLoopCycles: Number(passDiagnostics?.bassStability?.bassLoopCycles) || 0,
     bassPhraseResets: Number(passDiagnostics?.bassStability?.bassPhraseResets) || 0,
     bassHandoffContinuityRate: Number(passDiagnostics?.bassStability?.bassHandoffContinuityRate) || 0,
+    laneOwnerChanges: Number(passDiagnostics?.ownershipContinuity?.ownerChanges) || 0,
+    lanePreservedHandoffs: Number(passDiagnostics?.ownershipContinuity?.preservedHandoffs) || 0,
+    laneResetHandoffs: Number(passDiagnostics?.ownershipContinuity?.resetHandoffs) || 0,
+    laneIntentionalIdentityChanges: Number(passDiagnostics?.ownershipContinuity?.intentionalIdentityChanges) || 0,
+    laneDeferredChanges: Number(passDiagnostics?.ownershipContinuity?.deferredChanges) || 0,
+    laneAppliedDeferredChanges: Number(passDiagnostics?.ownershipContinuity?.appliedDeferredChanges) || 0,
+    laneReplacedDeferredChanges: Number(passDiagnostics?.ownershipContinuity?.replacedDeferredChanges) || 0,
+    laneDroppedDeferredChanges: Number(passDiagnostics?.ownershipContinuity?.droppedDeferredChanges) || 0,
+    laneRejectedDeferredChanges: Number(passDiagnostics?.ownershipContinuity?.rejectedDeferredChanges) || 0,
+    laneDroppedDeferredByContinuityAdvance: Number(passDiagnostics?.ownershipContinuity?.droppedDeferredByReason?.continuityAdvanced) || 0,
+    laneDroppedDeferredBySectionAdvance: Number(passDiagnostics?.ownershipContinuity?.droppedDeferredByReason?.sectionAdvanced) || 0,
+    laneDroppedDeferredByTimeout: Number(passDiagnostics?.ownershipContinuity?.droppedDeferredByReason?.timeout) || 0,
+    laneAvgDeferredWaitSteps: Number(passDiagnostics?.ownershipContinuity?.avgDeferredWaitSteps) || 0,
+    laneAvgRejectedBoundaryDistance: Number(passDiagnostics?.ownershipContinuity?.avgRejectedBoundaryDistance) || 0,
+    sameContinuityInstrumentDriftCount: Number(passDiagnostics?.ownershipContinuity?.sameContinuityInstrumentDrift) || 0,
+    sameContinuityPhraseDriftCount: Number(passDiagnostics?.ownershipContinuity?.sameContinuityPhraseDrift) || 0,
+    sameContinuityPatternDriftCount: Number(passDiagnostics?.ownershipContinuity?.sameContinuityPatternDrift) || 0,
     foundationCycleCount: Number(hierarchyModel?.foundationCycleCount) || 0,
     foundationPhraseResets: Number(hierarchyModel?.foundationPhraseResets) || 0,
     foundationContinuityRate: Number(hierarchyModel?.foundationContinuityRate) || 0,

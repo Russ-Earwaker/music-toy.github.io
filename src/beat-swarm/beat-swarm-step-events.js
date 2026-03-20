@@ -731,7 +731,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   }, shouldEmitPlayerStepFinal ? 1 : 0);
   const globalStepGainScale = stagedSoundCount <= 1
     ? 1
-    : (stagedSoundCount === 2 ? 0.8 : (stagedSoundCount === 3 ? 0.65 : 0.5));
+    : (stagedSoundCount === 2 ? 0.9 : (stagedSoundCount === 3 ? 0.8 : 0.72));
   const stagedEnemyEvents = emittedEnemyEvents.map((ev) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     const baseAudioGain = Number(payload.audioGain == null ? 1 : payload.audioGain);

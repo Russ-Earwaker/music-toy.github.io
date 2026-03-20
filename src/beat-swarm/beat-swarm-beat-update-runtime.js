@@ -198,6 +198,8 @@ export function handleBeatStepChangeRuntime(options = null) {
 
   if (stepChanged) {
     const tuneSteps = Math.max(1, Math.trunc(Number(constants.weaponTuneSteps) || 1));
+    helpers.prunePendingMusicLaneIdentityChangesRuntime?.({ beatIndex, stepIndex, barIndex });
+    helpers.applyDeferredMusicLaneIdentityChangesRuntime?.({ beatIndex, stepIndex, barIndex });
     if ((stepIndex % tuneSteps) === 0) {
       helpers.noteBassFoundationOwnerState?.('bar_boundary', { beatIndex, stepIndex, barIndex });
     }

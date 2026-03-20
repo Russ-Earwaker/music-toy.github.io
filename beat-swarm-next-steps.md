@@ -1,231 +1,430 @@
-# ✅ New Codex Task List (Musical Focus Only)
+# Beat Swarm - next tasks
 
-## 1. Make intro drums a real loop (highest impact)
+## Goal
 
-**Task**
+Make Beat Swarm behave like a **readable retro shmup arranger** where:
 
-* Generate a **4-bar drum pattern** at intro
-* Lock it as a loop
-* Do NOT regenerate every bar
-
-Rules:
-
-* kick + snare + hat pattern
-* slight variation every 4 bars max
-* persists until next phase
-
-**Goal**
-👉 intro sounds like *music*, not noise
+* the intro sounds like a real tune starting
+* bass and loops can establish clearly
+* gameplay can speed up or thin out without breaking the music
+* spawners and composition groups can preserve groove when battlefield state changes
+* special/boss enemies add controlled flourish rather than chaos
+* future player-authored toy patterns can eventually be mapped into the system without redesigning everything
 
 ---
 
-## 2. Force instrument rotation system
+## 1. Baseline to preserve
 
-**Task**
+These systems already exist and should be preserved while iterating:
 
-* Add instrument pools per role:
+* Beat Swarm-specific theme preset and role defaults
+* entry BPM on mode enter, with restore-on-exit
+* explicit lane ownership and source-to-lane mapping
+* controlled palette variation within stable role/lane identity
 
-  * bass pool (3–5 sounds)
-  * accent pool (3–5 sounds)
-  * loop pool (3–5 sounds)
+These are not the current implementation priority unless a regression is found.
 
-* Assign instrument per:
+### Follow-up cleanup: remove heuristic ownership from critical paths
 
-  * section OR
-  * loop lifecycle
+### Task
 
-Rules:
+Tighten role/lane assignment so primary musical ownership in critical Beat Swarm paths does not depend on catalog or fallback heuristics.
 
-* no same instrument reused for same role > X bars
-* avoid repeating same instrument for same enemy type
+### Notes
 
-**Goal**
-👉 stop “same sound forever” problem
+Stable role/lane ownership should be explicit for foundation, loop leadership, pulse/drum roles, and major foreground claims.
 
----
+Palette reseeds may vary timbre within a locked role, but should not change musical ownership.
 
-## 3. Snap ALL gameplay-triggered sounds to grid
+Heuristic fallback is acceptable only for non-critical decoration or clearly marked fallback cases.
 
-**Task**
+### Goal
 
-* player/projectile events:
-
-  * quantize to nearest step (or next step)
-* optionally:
-
-  * small latency buffer (e.g. 30–80ms)
-
-Rules:
-
-* NEVER play off-grid
-* late is better than off-beat
-
-**Goal**
-👉 restore groove immediately
+Preserve Beat Swarm's authored musical model and avoid ownership drift caused by inference.
 
 ---
 
-## 4. Add global gain staging per step
+## 2. Rebuild intro drums as a real loop, not just event traffic
 
-**Task**
+This is now high priority.
 
-* before playback:
+### Tasks
 
-  * count active sounds
-  * apply gain scaling
+* Create a proper intro drum-pattern owner.
+* Generate a **4-bar or 8-bar loop** using the same pattern philosophy as Simple Rhythm / DrawGrid random:
 
-Example:
+  * coherent
+  * repeatable
+  * phrase-based
+  * not per-step chaos
+* Do not regenerate constantly.
+* Allow only light mutation on phrase boundaries.
 
-```
-1 sound → 1.0
-2 sounds → 0.8
-3 sounds → 0.65
-4+ → 0.5
-```
+### Ownership
 
-Also:
+* Prefer **spawners** as the machine-pulse/drum source.
+* Allow **composition groups** to continue the drum loop if the gameplay source disappears or pacing changes.
 
-* cap same-note stacking
+### Goal
 
-**Goal**
-👉 stop loudness spikes and mush
-
----
-
-## 5. Fix spawner identity + dedupe
-
-**Task**
-
-* enforce:
-
-  * one pattern per spawner identity
-* when spawning:
-
-  * check similarity vs active patterns
-  * reject or mutate if too close
-
-Also:
-
-* ensure trigger reliability:
-
-  * debug: created vs triggered per spawner
-
-**Goal**
-👉 no duplicate musical voices
+The first bars should feel like an actual arcade loop beginning, not just player events on the grid. The intro timeline is still dominated by `player-weapon-step` events in `intro_solo`, which supports your concern here.
 
 ---
 
-## 6. Introduce loop ownership (CRITICAL)
+## 3. Keep bass phrase generation pattern-based, but make it lane-owned and continuation-safe
 
-**Task**
+This stays from the old plan, but with a clearer continuity goal.
 
-* at any time:
+### Tasks
 
-  * exactly 1 “active loop owner”
+* Keep using phrase/pattern selection instead of beat-by-beat randomisation.
+* Make the **foundation lane** own:
 
-Lifecycle:
+  * phrase pattern
+  * phrase id
+  * step offset
+  * continuity id
+  * instrument role
+* Performer enemies should render the lane, not define it.
+* When a performer dies or disappears, prefer a **composition group handoff** before redesigning the phrase.
 
-```
-introduced → establishing → active → support → retired
-```
+### Important
 
-Rules:
+Do not flatten back into quarter-note keepalive just because the battlefield gets awkward.
 
-* only 1 loop can be foreground
-* others must be background or silent
+### Goal
 
-**Goal**
-👉 music feels intentional
-
----
-
-## 7. Separate “music timing” from “game timing”
-
-**Task**
-
-* music system owns:
-
-  * beat grid
-  * step timing
-
-Gameplay:
-
-* submits “intent to fire”
-* music system decides WHEN it plays
-
-**Goal**
-👉 audio becomes authoritative, not reactive
+Bass should survive churn as a musical phrase, not as a series of emergency replacements. Current lab still shows `foundationProminence: heavily_ducked`, `bassFoundation: at_risk`, and `maxEnemyStepsWithoutBass: 27`, so this is still not solved.
 
 ---
 
-## 8. Add per-role note limits (hard caps)
+## 4. Formalise composition groups as the musical continuity buffer
 
-Per step:
+This is your new direction, and I think it's the right one.
 
-* 1 bass
-* 1 loop note
-* 1 accent
-* optional player
+### Tasks
 
-Everything else:
-👉 dropped or deferred
+* Make composition groups responsible for:
 
-**Goal**
-👉 instant clarity improvement
+  * phrase continuation
+  * loop completion
+  * handoff smoothing
+  * temporary coverage when gameplay actors can't maintain the musical part
+* Use them to preserve:
 
----
+  * drum loops
+  * snake melodies
+  * bass ostinatos
+* Do not let them become the main source of all interesting music all the time.
 
-## 9. Fix death accents (they’re currently spammy)
+### Rules
 
-From timeline:
+* Gameplay actors can **introduce** or **suggest** an idea.
+* Composition groups can **continue** it long enough for it to read.
+* When live gameplay support returns, hand musical ownership back cleanly.
 
-* lots of identical `C4 TONE` accents
+### Goal
 
-**Task**
-
-* limit:
-
-  * max 1 death accent per step
-* vary:
-
-  * pitch OR instrument
-* downgrade most to background
-
-**Goal**
-👉 stop “C4 spam noise”
+Gameplay pacing can stay free to change without constantly breaking musical obligations.
 
 ---
 
-## 10. Add “musical sanity checks” to Music Lab
+## 5. Split timing authority properly: fire/spawn can be musical, impacts stay gameplay-driven
 
-Add:
+This replaces the too-broad "align all gameplay events to the beat" idea.
 
-* same-note collisions per step
-* off-grid events count
-* instrument repetition rate
-* loop ownership changes
-* per-step sound count
+### Tasks
 
-**Goal**
-👉 make musical problems visible automatically
+Treat events in two classes:
+
+**Musically authored / grid-eligible**
+
+* player fire trigger
+* hitscan fire
+* enemy spawn cues
+* loop note emissions
+* special telegraph accents
+* composition-group continuation notes
+
+**Gameplay-authored / not forced to grid**
+
+* moving projectile impacts
+* collision hits
+* physics-driven contact moments
+* anything whose timing comes from world simulation
+
+### Current status
+
+This is now partially implemented:
+
+* `musicAuthoredEvents` vs `gameplayAuthoredEvents` are tracked in diagnostics
+* direct gameplay sound families are being thinned in dense established sections
+* impact and death accents now use short cooldown/priority handling so they read more like punctuation than a parallel rhythm layer
+
+### Next refinement
+
+Keep refining by family only if lab evidence says one family is still dominating bars that should stay grid-led.
+
+### Goal
+
+Keep the groove strong without making projectile travel feel fake.
+
+### Notes
+
+The player weapon layer is still logged as `player-weapon-step` with `guided_fire`, so the fire stage is already partly musically authored.
 
 ---
 
-# 🧪 Acceptance Criteria (very important)
+## 6. Replace crude per-step hard caps with lane-aware collision control
 
-Codex should aim for:
+This is the big correction to the old doc.
 
-* intro clearly sounds like a **repeatable drum loop**
-* bass is **audible and consistent**
-* player shots feel **locked to rhythm**
-* no obvious **volume spikes**
-* sounds **change over time**
-* no more “same C4 spam”
-* at any moment, you can answer:
-  👉 “what is the main musical idea right now?”
+### Do not do
+
+* one-note-only style caps that kill percussion layering
+
+### Do instead
+
+Per step, allow:
+
+* one clear foundation voice
+* one clear foreground melodic owner
+* multiple percussion/support voices where sensible
+
+But suppress:
+
+* identical same-note same-role pileups
+* too many simultaneous foreground claims
+* duplicate melodic voices in the same register
+* redundant accents that add volume without clarity
+
+### Goal
+
+Preserve drum-machine richness while stopping mush.
 
 ---
 
-# 🔥 One-line direction for Codex
+## 7. Make spawners more drum-machine-like
 
-> **Stop treating music as simultaneous events — enforce ownership, timing authority, and voice limits so it behaves like a composed track.**
+This remains a strong direction.
+
+### Tasks
+
+* Bias spawners toward:
+
+  * kick / low pulse
+  * snare / punctuation
+  * hats / machine motion
+  * simple repeatable step patterns
+* Reduce their tendency to behave like free melodic contributors.
+* Use them as the primary source of rhythmic machine energy.
+
+### Rules
+
+* spawners = pulse
+* composition groups = continuation and phrase support
+* drawsnake / loop systems = melodic identity
+* specials / bosses = flourish and disruption
+
+### Goal
+
+Make the system sound more like a shmup track and less like many equal note emitters.
+
+Earlier runs already showed spawner bass events acting as foundation on `spawner-spawn`, which is a useful base to lean into.
+
+---
+
+## 8. Give each enemy class a rhythm privilege tier
+
+This is one of the biggest musical-model wins available now.
+
+### Tasks
+
+Define rhythm rights by enemy class:
+
+* **fodder/common**: quarters and simple 8ths
+* **medium/special**: syncopated 8ths, pickups, offbeat accents
+* **elite**: occasional short 16th flourishes
+* **boss**: controlled 16th-note phrases, attack tells, fills, cadential bursts
+
+### Important
+
+* 16ths are a privilege, not the default.
+* Boss/special density should come in phrase moments, not permanently.
+
+### Goal
+
+More arcade authored feel, less generic procedural clutter.
+
+---
+
+## 9. Protect the intro arrangement harder
+
+Keep this from the old doc, but wire it through the new ownership model.
+
+### Suggested intro plan
+
+* bars 0-3: pulse setup / player punctuation / very light machine rhythm
+* bars 4-11: foundation established clearly
+* bars 12-19: allow one primary melodic loop
+* only after that: allow secondary support and extra response
+
+### Tasks
+
+* prevent too many foreground ideas during intro
+* keep intro bass phrase stable
+* use composition groups to preserve the first strong ideas if gameplay churns
+
+### Goal
+
+The player should be able to say:
+
+* "that's the bass"
+* "that's the loop"
+* "that's the pulse"
+
+---
+
+## 10. Slow post-intro admissions, but think in phrases not just counts
+
+This stays relevant.
+
+### Tasks
+
+* no new major foreground idea until the current one has had time to register
+* minimum spacing between major foreground arrivals
+* after a section change, add a short lockout before another major idea can claim foreground
+* let composition groups carry existing material during the lockout if needed
+
+### Goal
+
+The tune builds digestibly instead of constantly introducing fresh claims.
+
+The current lab still reports `readabilityDensity: busy`, which means this still needs work.
+
+---
+
+## 11. Stabilise enemy identity, but let lane identity be the stronger truth
+
+This stays, with one refinement.
+
+### Tasks
+
+* keep enemy colour/instrument stable during life unless there is explicit re-orchestration
+* log illegal identity drift
+* make lane identity even more stable than performer identity
+* when handoff happens, the replacement should inherit enough of the lane identity that the player hears continuity rather than "new random sound"
+
+### Goal
+
+Band membership stays readable.
+
+Current lab still reports `identityStability: drift`, so this remains relevant.
+
+---
+
+## 12. Make sparkle and death accents obey the arrangement
+
+Still relevant.
+
+### Tasks
+
+* duck sparkle during loop registration
+* cap sparkle as decoration, not melody
+* limit death-accent spam
+* vary death accents more intelligently, or suppress most of them when the foreground is already busy
+
+### Current status
+
+Death-accent discipline is partly in place via gameplay-family suppression and cooldown windows. This section remains relevant mainly as a tuning pass, not as a missing system.
+
+### Goal
+
+Decoration supports the tune instead of stepping on it.
+
+Death accents are still showing up as repeated `TONE` accents in the logs, so this is still worth cleaning up.
+
+---
+
+## 13. Expand diagnostics toward musical ownership and continuity
+
+Keep the old diagnostics push, but add the new model's needs.
+
+This is now the next implementation priority.
+
+### Add metrics for
+
+* foundationRestShare
+* foundationOffbeatShare
+* foundationPatternChangeRate
+* audibleForegroundLaneCount
+* barsSinceNewForegroundIdea
+* laneReassignmentRate
+* same-note same-role collisions
+* same-register melodic collisions
+* composition-group handoff count
+* phrase-completed-by-buffer count
+* phrase-broken-before-resolution count
+* fire-authored vs impact-authored event counts
+* boss/special 16th-note usage rate
+
+### Focus now
+
+Add ownership-drift diagnostics that make it obvious when:
+
+* a lane changes owner without a musical reason
+* a lane changes instrument without an intentional re-orchestration
+* a lane changes pattern/phrase identity unexpectedly under combat churn
+* a handoff succeeds mechanically but still sounds like a new random part
+
+### Goal
+
+Let the lab tell us whether the music is arranged well, not just whether events fired.
+
+---
+
+## 14. Keep future toy-import compatibility as a design constraint
+
+Do not implement yet, but avoid blocking it.
+
+### Tasks
+
+Design Beat Swarm pattern data so it can eventually accept:
+
+* rhythm grid
+* note set / pitch choices
+* phrase identity
+* lane assignment
+* mutation rules
+
+from a toy-authored source like Simple Rhythm.
+
+### Important
+
+Beat Swarm should be able to **adapt** imported patterns, not necessarily play them raw.
+
+### Goal
+
+Later, a player-authored toy pattern can be rolled into Beat Swarm without breaking the arranger.
+
+---
+
+# Priority order
+
+1. Intro drums as a real loop
+2. Composition groups as continuity buffer
+3. Bass phrase continuity and lane ownership
+4. Timing split: musical fire/spawn vs gameplay impacts
+5. Ownership-drift diagnostics and handoff clarity
+6. Replace hard caps with collision control
+7. Make spawners more drum-machine-like
+8. Rhythm privilege tiers by enemy class
+9. Protect intro arrangement
+10. Slow post-intro admissions
+11. Sparkle / death-accent discipline
+12. Better musical diagnostics
+13. Future toy-import-compatible pattern format
+
+# One-line brief for Codex
+
+Build Beat Swarm as a **retro shmup arranger with continuity**: let spawners provide machine pulse, let composition groups preserve phrases when gameplay gets messy, keep bass and loops lane-owned and readable, grid-author fire/spawn events but not physical impacts, and control collisions by musical lane rather than crude one-note-per-step caps.

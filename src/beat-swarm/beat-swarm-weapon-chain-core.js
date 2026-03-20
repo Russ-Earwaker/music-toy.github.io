@@ -574,7 +574,11 @@ export function triggerWeaponStageRuntime(options = null) {
         if (directSound) {
           helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, gameplayWeaponSoundVolume, noteName);
         } else {
-          helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName);
+          helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName, {
+            authoringClass: 'gameplayauthored',
+            sourceSystem: 'player',
+            actionType: `${archetype}-${variant}`,
+          });
         }
       }
       const facingDir = helpers.getShipFacingDirWorld?.() || { x: 1, y: 0 };
@@ -652,7 +656,11 @@ export function triggerWeaponStageRuntime(options = null) {
           if (directSound) {
             helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, beamVol, noteName);
           } else {
-            helpers.noteSwarmSoundEvent?.(weaponSoundKey, beamVol, beatIndex, noteName);
+            helpers.noteSwarmSoundEvent?.(weaponSoundKey, beamVol, beatIndex, noteName, {
+              authoringClass: 'gameplayauthored',
+              sourceSystem: 'player',
+              actionType: `${archetype}-${variant}`,
+            });
           }
         }
         beamSustainStateBySlot?.set(slotKey, {
@@ -730,7 +738,11 @@ export function triggerWeaponStageRuntime(options = null) {
         if (directSound) {
           helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, gameplayWeaponSoundVolume, noteName);
         } else {
-          helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName);
+          helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName, {
+            authoringClass: 'gameplayauthored',
+            sourceSystem: 'player',
+            actionType: `${archetype}-${variant}`,
+          });
         }
       }
       if (!nearest) {
@@ -813,7 +825,11 @@ export function triggerWeaponStageRuntime(options = null) {
         if (directSound) {
           helpers.playSwarmSoundEventImmediate?.(explosionSoundKey, gameplayWeaponSoundVolume, defaultExplosionNote);
         } else {
-          helpers.noteSwarmSoundEvent?.(explosionSoundKey, gameplayWeaponSoundVolume, beatIndex, defaultExplosionNote);
+          helpers.noteSwarmSoundEvent?.(explosionSoundKey, gameplayWeaponSoundVolume, beatIndex, defaultExplosionNote, {
+            authoringClass: 'gameplayauthored',
+            sourceSystem: 'player',
+            actionType: `${archetype}-${variant}`,
+          });
         }
       }
       if (continuation.length) {

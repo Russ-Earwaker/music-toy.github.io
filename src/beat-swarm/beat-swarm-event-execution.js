@@ -191,10 +191,21 @@ export function executePerformedBeatEventRuntime(options = null) {
     let visualTriggered = false;
     let audioTriggered = false;
     const nodeStepIndex = ((Math.trunc(Number(ev?.payload?.nodeStepIndex) || ev.stepIndex || 0) % 8) + 8) % 8;
-    const shouldFlashSpawnerCell = musicProminence === 'full' && prominenceGain > 0;
+    const shouldFlashSpawnerCell = prominenceGain > 0;
+    const spawnerFlashMode = musicProminence === 'full' ? 'strong' : 'soft';
     if (shouldFlashSpawnerCell) {
       withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.flash', () => {
-        helpers.flashSpawnerEnemyCell?.(enemy, nodeStepIndex, 'strong');
+        helpers.flashSpawnerEnemyCell?.(enemy, nodeStepIndex, spawnerFlashMode);
+        const peerSignature = String(enemy?.__bsSpawnerSyncSignature || '').trim();
+        if (!peerSignature || !Array.isArray(state?.enemies)) return;
+        for (const peer of state.enemies) {
+          if (!peer || peer === enemy) continue;
+          if (String(peer?.enemyType || '').trim().toLowerCase() !== 'spawner') continue;
+          if (String(peer?.__bsSpawnerSyncSignature || '').trim() !== peerSignature) continue;
+          const peerSteps = Array.isArray(peer?.spawnerSteps) ? peer.spawnerSteps : [];
+          if (!peerSteps[nodeStepIndex]) continue;
+          helpers.flashSpawnerEnemyCell?.(peer, nodeStepIndex, 'soft');
+        }
       });
       visualTriggered = true;
     }
@@ -318,10 +329,18 @@ export function executePerformedBeatEventRuntime(options = null) {
     ));
     if (!group) return false;
     const aggressionScale = helpers.getEnemyAggressionScale?.(enemy, group?.lifecycleState || 'active');
-    const instrumentId = helpers.resolveSwarmRoleInstrumentId?.(
-      ev.role || group.role || helpers.getSwarmRoleForEnemy?.(enemy, constants.roles?.lead),
-      helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
-    );
+    const instrumentId = String(
+      ev?.instrumentId
+        || group?.instrumentId
+        || enemy?.drawsnakeInstrument
+        || enemy?.musicInstrumentId
+        || enemy?.instrumentId
+        || helpers.resolveSwarmRoleInstrumentId?.(
+          ev.role || group.role || helpers.getSwarmRoleForEnemy?.(enemy, constants.roles?.lead),
+          helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
+        )
+        || 'tone'
+    ).trim() || 'tone';
     group.instrumentId = instrumentId;
     group.instrument = instrumentId;
     group.role = helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.lead);
@@ -474,7 +493,13 @@ export function executePerformedBeatEventRuntime(options = null) {
         eventKey,
         Math.max(0.001, Math.min(1, (Number(ev?.payload?.volume) || 0) * prominenceGain)),
         beatIndex,
-        noteName
+        noteName,
+        {
+          authoringClass: String(ev?.payload?.authoringClass || 'gameplayauthored').trim().toLowerCase(),
+          sourceSystem: String(ev?.sourceSystem || 'death').trim().toLowerCase(),
+          actionType,
+          countInTimingAuthority: false,
+        }
       );
     }
     logMusicLabExecution({
