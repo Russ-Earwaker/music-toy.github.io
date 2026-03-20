@@ -353,7 +353,9 @@ export function executePerformedBeatEventRuntime(options = null) {
       helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
     });
     if (enemyAudible) {
-      try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
+      withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.audioTrigger', () => {
+        try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
+      });
     }
     let nodeIndex = 0;
     withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.projectilePrep', () => {

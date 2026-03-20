@@ -8627,6 +8627,13 @@ function spawnSpawnerEnemyOffscreen(options = null) {
 }
 function maintainSpawnerEnemyPopulation() {
   if (!SPAWNER_ENEMY_ENABLED) return;
+  const buildSpawnerStepsSignature = (stepsLike = null) => {
+    if (!Array.isArray(stepsLike) || !stepsLike.length) return '';
+    return stepsLike.map((step) => (step ? '1' : '0')).join('');
+  };
+  const markSpawnerPerf = (bucket, startMs) => {
+    recordBeatSwarmPerfSample(bucket, Math.max(0, getBeatSwarmPerfNow() - startMs));
+  };
   const pacingCaps = getCurrentPacingCaps();
   const stepAbs = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
   const pacingState = getCurrentPacingStateName();
@@ -8667,80 +8674,181 @@ function maintainSpawnerEnemyPopulation() {
       ? lockedIntroSpawnerIndex
       : ((rotationBucket * Math.max(1, pacedTarget)) % rankedSpawners.length))
     : 0;
-  for (let i = 0; i < rankedSpawners.length; i++) {
-    const enemy = rankedSpawners[i];
-    if (enemy?.retreating) {
-      enemy.musicParticipationGain = 0;
-      enemy.lifecycleState = 'retiring';
-    } else {
-      const shouldScheduleBase = (() => {
-        if (!(pacedTarget > 0)) return false;
-        if (pacedTarget >= rankedSpawners.length) return true;
-        const rel = ((i - activeStart) + rankedSpawners.length) % rankedSpawners.length;
-        return rel < pacedTarget;
-      })();
-      const shouldSchedule = forceIntroFoundationWindow
-        ? shouldScheduleBase
-        : (shouldScheduleBase || (pacedTarget > 0 && isEnemyLikelyVisibleForAudio(enemy, 120)));
-      enemy.musicParticipationGain = shouldSchedule ? 1 : (forceIntroFoundationWindow ? 0 : 0.6);
-      enemy.lifecycleState = shouldSchedule ? 'active' : 'inactiveForScheduling';
+  {
+    const perfStart = getBeatSwarmPerfNow();
+    for (let i = 0; i < rankedSpawners.length; i++) {
+      const enemy = rankedSpawners[i];
+      if (enemy?.retreating) {
+        enemy.musicParticipationGain = 0;
+        enemy.lifecycleState = 'retiring';
+      } else {
+        const shouldScheduleBase = (() => {
+          if (!(pacedTarget > 0)) return false;
+          if (pacedTarget >= rankedSpawners.length) return true;
+          const rel = ((i - activeStart) + rankedSpawners.length) % rankedSpawners.length;
+          return rel < pacedTarget;
+        })();
+        const shouldSchedule = forceIntroFoundationWindow
+          ? shouldScheduleBase
+          : (shouldScheduleBase || (pacedTarget > 0 && isEnemyLikelyVisibleForAudio(enemy, 120)));
+        enemy.musicParticipationGain = shouldSchedule ? 1 : (forceIntroFoundationWindow ? 0 : 0.6);
+        enemy.lifecycleState = shouldSchedule ? 'active' : 'inactiveForScheduling';
+      }
     }
-    const syncGroup = ensureSingletonMusicGroupForEnemy(enemy, {
-      role: getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.BASS),
-      actionType: 'spawner-spawn',
-      note: enemy?.spawnerNoteName,
-      instrumentId: enemy?.spawnerInstrument,
-      steps: enemy?.spawnerSteps,
-      lifecycleState: enemy?.lifecycleState || 'active',
-    });
-    syncSingletonEnemyStateFromMusicGroup(enemy, syncGroup);
-    updateSpawnerEnemyActiveCells(enemy, Array.isArray(syncGroup?.steps) ? syncGroup.steps : enemy?.spawnerSteps);
+    markSpawnerPerf('maintainSpawners.schedule', perfStart);
   }
   const motif = introDrumProfile || getComposerMotif(motifScopeKey, 'spawner-drum', () => createSpawnerEnemyRhythmProfile({ role: 'drum' }));
-  for (const enemy of spawners) {
-    if (enemy?.retreating) continue;
-    enemy.motifScopeKey = motifScopeKey;
-    enemy.spawnerSteps = Array.isArray(motif?.steps) ? motif.steps.slice(0, 8) : enemy.spawnerSteps;
-    enemy.spawnerNoteIndices = Array.isArray(motif?.noteIndices) ? motif.noteIndices.slice(0, 8) : enemy.spawnerNoteIndices;
-    enemy.spawnerNotePalette = Array.isArray(motif?.notePalette) ? motif.notePalette.slice() : enemy.spawnerNotePalette;
-    enemy.spawnerNoteName = clampNoteToDirectorPool(
-      normalizeSwarmNoteName(motif?.baseNoteName) || enemy.spawnerNoteName || 'C4',
-      Math.trunc(Number(enemy?.id) || 0)
-    );
-    enemy.spawnerInstrument = sanitizeEnemyMusicInstrumentId(
-      motif?.instrument,
-      enemy.spawnerInstrument || resolveSwarmSoundInstrumentId('projectile') || 'tone',
-      { role: BEAT_EVENT_ROLES.BASS }
-    );
-    const syncGroup = ensureSingletonMusicGroupForEnemy(enemy, {
-      role: getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.BASS),
-      actionType: 'spawner-spawn',
-      note: enemy.spawnerNoteName,
-      instrumentId: enemy.spawnerInstrument,
-      steps: enemy.spawnerSteps,
-      lifecycleState: enemy.lifecycleState,
-    });
-    syncSingletonEnemyStateFromMusicGroup(enemy, syncGroup);
-    updateSpawnerEnemyActiveCells(enemy, Array.isArray(syncGroup?.steps) ? syncGroup.steps : enemy?.spawnerSteps);
-    if (!Array.isArray(enemy.spawnerNodeEnemyIds)) enemy.spawnerNodeEnemyIds = Array.from({ length: 8 }, () => 0);
-    const groupSteps = Array.isArray(syncGroup?.steps) ? syncGroup.steps : [];
-    for (let i = 0; i < 8; i++) {
-      if (groupSteps[i]) continue;
-      const linkedId = Math.trunc(Number(enemy.spawnerNodeEnemyIds[i]) || 0);
-      if (!(linkedId > 0)) continue;
-      const linkedEnemy = enemies.find((e) => Math.trunc(Number(e?.id) || 0) === linkedId) || null;
-      if (linkedEnemy) {
-        removeEnemy(linkedEnemy, 'expired');
-        const linkedIdx = enemies.indexOf(linkedEnemy);
-        if (linkedIdx >= 0) enemies.splice(linkedIdx, 1);
-      }
-      enemy.spawnerNodeEnemyIds[i] = 0;
+  const enemyById = new Map();
+  {
+    const perfStart = getBeatSwarmPerfNow();
+    for (const enemy of enemies) {
+      const enemyId = Math.trunc(Number(enemy?.id) || 0);
+      if (enemyId > 0) enemyById.set(enemyId, enemy);
     }
+    markSpawnerPerf('maintainSpawners.enemyIndex', perfStart);
+  }
+  {
+    const perfStart = getBeatSwarmPerfNow();
+    for (const enemy of spawners) {
+      if (enemy?.retreating) continue;
+      enemy.motifScopeKey = motifScopeKey;
+      let phasePerfStart = getBeatSwarmPerfNow();
+      const desiredSteps = Array.isArray(motif?.steps) ? motif.steps.slice(0, 8) : (Array.isArray(enemy?.spawnerSteps) ? enemy.spawnerSteps : []);
+      const desiredNoteIndices = Array.isArray(motif?.noteIndices) ? motif.noteIndices.slice(0, 8) : enemy.spawnerNoteIndices;
+      const desiredNotePalette = Array.isArray(motif?.notePalette) ? motif.notePalette.slice() : enemy.spawnerNotePalette;
+      const desiredNoteName = clampNoteToDirectorPool(
+        normalizeSwarmNoteName(motif?.baseNoteName) || enemy.spawnerNoteName || 'C4',
+        Math.trunc(Number(enemy?.id) || 0)
+      );
+      const desiredInstrument = sanitizeEnemyMusicInstrumentId(
+        motif?.instrument,
+        enemy.spawnerInstrument || resolveSwarmSoundInstrumentId('projectile') || 'tone',
+        { role: BEAT_EVENT_ROLES.BASS }
+      );
+      markSpawnerPerf('maintainSpawners.sync.resolve', phasePerfStart);
+      phasePerfStart = getBeatSwarmPerfNow();
+      const desiredRole = getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.BASS);
+      const desiredLifecycle = String(enemy?.lifecycleState || 'active');
+      const desiredStepsSignature = buildSpawnerStepsSignature(desiredSteps);
+      const desiredSyncSignature = [
+        String(desiredRole || ''),
+        String(desiredNoteName || ''),
+        String(desiredInstrument || ''),
+        desiredStepsSignature,
+      ].join('|');
+      let syncSteps = desiredSteps;
+      if (String(enemy?.__bsSpawnerSyncSignature || '') !== desiredSyncSignature || !singletonEnemyMusicGroups.get(Math.trunc(Number(enemy?.id) || 0))) {
+        enemy.spawnerSteps = desiredSteps;
+        enemy.spawnerNoteIndices = desiredNoteIndices;
+        enemy.spawnerNotePalette = desiredNotePalette;
+        enemy.spawnerNoteName = desiredNoteName;
+        enemy.spawnerInstrument = desiredInstrument;
+        markSpawnerPerf('maintainSpawners.sync.assign', phasePerfStart);
+        phasePerfStart = getBeatSwarmPerfNow();
+        const enemyId = Math.trunc(Number(enemy?.id) || 0);
+        let syncGroup = singletonEnemyMusicGroups.get(enemyId) || null;
+        if (syncGroup) {
+          syncGroup.enemyType = 'spawner';
+          syncGroup.role = desiredRole;
+          syncGroup.actionType = 'spawner-spawn';
+          syncGroup.note = enemy.spawnerNoteName;
+          syncGroup.instrumentId = enemy.spawnerInstrument;
+          syncGroup.steps = Array.isArray(enemy.spawnerSteps) ? enemy.spawnerSteps.map((step) => !!step) : [];
+          syncGroup.rows = null;
+          syncGroup.memberIds = new Set([enemyId]);
+          syncGroup.active = true;
+          syncGroup.lifecycleState = desiredLifecycle;
+          syncGroup.size = 1;
+          syncGroup.performers = 1;
+          enemy.musicGroupId = Math.trunc(Number(syncGroup.id) || 0);
+          enemy.musicGroupType = 'singleton';
+          enemy.instrumentId = String(syncGroup.instrumentId || enemy.spawnerInstrument || enemy.instrumentId || 'tone');
+          enemy.musicInstrumentId = String(syncGroup.instrumentId || enemy.spawnerInstrument || enemy.musicInstrumentId || 'tone');
+          if (!String(syncGroup.continuityId || '').trim()) {
+            syncGroup.continuityId = String(enemy.musicContinuityId || enemy.continuityId || getNextMusicContinuityId()).trim();
+          }
+          enemy.musicContinuityId = String(syncGroup.continuityId || '');
+          enemy.continuityId = String(syncGroup.continuityId || '');
+        } else {
+          syncGroup = ensureSingletonMusicGroupForEnemy(enemy, {
+            role: desiredRole,
+            actionType: 'spawner-spawn',
+            note: enemy.spawnerNoteName,
+            instrumentId: enemy.spawnerInstrument,
+            steps: enemy.spawnerSteps,
+            lifecycleState: desiredLifecycle,
+          });
+        }
+        markSpawnerPerf('maintainSpawners.sync.group', phasePerfStart);
+        phasePerfStart = getBeatSwarmPerfNow();
+        syncSteps = Array.isArray(syncGroup?.steps) ? syncGroup.steps : enemy?.spawnerSteps;
+        const syncSignature = [
+          String(desiredRole || ''),
+          String(enemy?.spawnerNoteName || ''),
+          String(enemy?.spawnerInstrument || ''),
+          buildSpawnerStepsSignature(syncSteps),
+        ].join('|');
+        if (!(syncGroup && Math.trunc(Number(syncGroup?.id) || 0) > 0 && Math.trunc(Number(syncGroup?.memberIds?.size) || 0) === 1)) {
+          syncSingletonEnemyStateFromMusicGroup(enemy, syncGroup);
+        }
+        enemy.__bsSpawnerSyncSignature = syncSignature;
+        markSpawnerPerf('maintainSpawners.sync.state', phasePerfStart);
+      } else {
+        const existingGroup = singletonEnemyMusicGroups.get(Math.trunc(Number(enemy?.id) || 0)) || null;
+        if (existingGroup) existingGroup.lifecycleState = desiredLifecycle;
+        markSpawnerPerf('maintainSpawners.sync.assign', phasePerfStart);
+      }
+      phasePerfStart = getBeatSwarmPerfNow();
+      const activeCellsSignature = buildSpawnerStepsSignature(syncSteps);
+      if (String(enemy?.__bsSpawnerActiveCellsSignature || '') !== activeCellsSignature) {
+        updateSpawnerEnemyActiveCells(enemy, syncSteps);
+        enemy.__bsSpawnerActiveCellsSignature = activeCellsSignature;
+      }
+      markSpawnerPerf('maintainSpawners.sync.cells', phasePerfStart);
+      if (!Array.isArray(enemy?.spawnerSteps) || String(enemy?.__bsSpawnerSyncSignature || '') !== desiredSyncSignature) {
+        enemy.spawnerSteps = desiredSteps;
+        enemy.spawnerNoteIndices = desiredNoteIndices;
+        enemy.spawnerNotePalette = desiredNotePalette;
+        enemy.spawnerNoteName = desiredNoteName;
+        enemy.spawnerInstrument = desiredInstrument;
+      }
+    }
+    markSpawnerPerf('maintainSpawners.sync', perfStart);
+  }
+  {
+    const perfStart = getBeatSwarmPerfNow();
+    for (const enemy of spawners) {
+      if (enemy?.retreating) continue;
+      if (!Array.isArray(enemy.spawnerNodeEnemyIds)) enemy.spawnerNodeEnemyIds = Array.from({ length: 8 }, () => 0);
+      const groupSteps = Array.isArray(enemy?.spawnerSteps) ? enemy.spawnerSteps : [];
+      const groupStepsSignature = buildSpawnerStepsSignature(groupSteps);
+      if (String(enemy?.__bsSpawnerLinkedCleanupSignature || '') !== groupStepsSignature) {
+        for (let i = 0; i < 8; i++) {
+          if (groupSteps[i]) continue;
+          const linkedId = Math.trunc(Number(enemy.spawnerNodeEnemyIds[i]) || 0);
+          if (!(linkedId > 0)) continue;
+          const linkedEnemy = enemyById.get(linkedId) || null;
+          if (linkedEnemy) {
+            removeEnemy(linkedEnemy, 'expired');
+            const linkedIdx = enemies.indexOf(linkedEnemy);
+            if (linkedIdx >= 0) enemies.splice(linkedIdx, 1);
+            enemyById.delete(linkedId);
+          }
+          enemy.spawnerNodeEnemyIds[i] = 0;
+        }
+        enemy.__bsSpawnerLinkedCleanupSignature = groupStepsSignature;
+      }
+    }
+    markSpawnerPerf('maintainSpawners.cleanup', perfStart);
   }
   const activeCount = spawners.length;
   if (activeCount >= pacedTarget) return;
   const spawnCount = Math.min(pacedTarget - activeCount, Math.max(0, ENEMY_CAP - enemies.length));
-  for (let i = 0; i < spawnCount; i++) spawnSpawnerEnemyOffscreen({ role: 'drum', profile: motif });
+  {
+    const perfStart = getBeatSwarmPerfNow();
+    for (let i = 0; i < spawnCount; i++) spawnSpawnerEnemyOffscreen({ role: 'drum', profile: motif });
+    markSpawnerPerf('maintainSpawners.spawn', perfStart);
+  }
 }
 function flashSpawnerEnemyCell(enemy, stepIndex, mode = 'soft') {
   const idx = ((Math.trunc(Number(stepIndex) || 0) % 8) + 8) % 8;

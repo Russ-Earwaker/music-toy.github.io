@@ -252,6 +252,23 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       const effectiveInstrumentId = String(group?.musicLaneInstrumentId || group?.instrumentId || '').trim();
       const effectiveContinuityId = String(group?.musicLaneContinuityId || group?.continuityId || '').trim();
       const effectivePhraseId = String(group?.musicLanePhraseId || group?.motif?.id || '');
+      const groupMemberCount = group?.memberIds instanceof Set
+        ? group.memberIds.size
+        : (Array.isArray(group?.memberIds) ? group.memberIds.length : 0);
+      const groupSyncSignature = [
+        String(effectiveRole || ''),
+        effectiveLayer,
+        effectiveInstrumentId,
+        effectiveContinuityId,
+        effectivePhraseId,
+        memberLifecycleState,
+      ].join('|');
+      if (
+        String(group?.__bsComposerMemberSyncSignature || '') === groupSyncSignature
+        && Math.trunc(Number(group?.__bsComposerMemberSyncCount) || 0) === Math.max(0, Math.trunc(Number(groupMemberCount) || 0))
+      ) {
+        continue;
+      }
       const aliveMembers = getAliveComposerEnemiesByIds(group.memberIds);
       for (const enemy of aliveMembers) {
         enemy.lifecycleState = memberLifecycleState;
@@ -301,6 +318,8 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         helpers.applyMusicalIdentityVisualToEnemy?.(enemy, group);
         enemy.__bsComposerSyncSignature = memberSyncSignature;
       }
+      group.__bsComposerMemberSyncSignature = groupSyncSignature;
+      group.__bsComposerMemberSyncCount = Math.max(0, Math.trunc(Number(groupMemberCount) || 0));
     }
   });
 }
