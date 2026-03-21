@@ -356,6 +356,10 @@ export const MUSIC_LAYER_POLICY = Object.freeze({
   secondaryLoopIdentityLimit: 1,
   supportTraceGain: 0.58,
   supportQuietGain: 0.92,
+  densityReliefFoundation: 0.22,
+  densityReliefPrimaryLoop: 0.12,
+  densityPenaltySupport: 0.08,
+  densityPenaltySparkle: 0.18,
 });
 export const LOOP_ADMISSION_POLICY = Object.freeze({
   loopLengthSteps: WEAPON_TUNE_STEPS,

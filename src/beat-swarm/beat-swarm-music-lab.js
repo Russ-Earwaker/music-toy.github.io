@@ -1095,11 +1095,70 @@ function collectLaneOwnershipDiagnostics(session, maxBarIndex) {
     byLane,
   };
 }
+function collectDecisionMakingDiagnostics(session, maxBarIndex) {
+  const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
+  const byDecisionReason = Object.create(null);
+  let gameplaySuppressionEvents = 0;
+  let gameplaySuppressionDrops = 0;
+  let gameplaySuppressionSoftens = 0;
+  let stepArbitrationChanges = 0;
+  let bassOwnerChoices = 0;
+  let rhythmTierSelections = 0;
+  let protectedLaneClaimsInferred = 0;
+  let protectedLaneClaimsMissing = 0;
+  for (const e of logs) {
+    const type = String(e?.eventType || '').trim().toLowerCase();
+    if (type === 'music_gameplay_suppression_decision') {
+      gameplaySuppressionEvents += 1;
+      const decision = String(e?.decision || '').trim().toLowerCase();
+      if (decision === 'drop') gameplaySuppressionDrops += 1;
+      else if (decision === 'soften') gameplaySuppressionSoftens += 1;
+      const reason = String(e?.reason || '').trim().toLowerCase() || 'unknown';
+      byDecisionReason[reason] = clampInt(byDecisionReason[reason], 0, 0) + 1;
+      continue;
+    }
+    if (type === 'music_step_arbitration') {
+      stepArbitrationChanges += 1;
+      const reason = String(e?.decisionReason || '').trim().toLowerCase() || 'unknown';
+      byDecisionReason[reason] = clampInt(byDecisionReason[reason], 0, 0) + 1;
+      continue;
+    }
+    if (type === 'music_bass_foundation_owner_choice') {
+      bassOwnerChoices += 1;
+      continue;
+    }
+    if (type === 'music_rhythm_tier_selected') {
+      rhythmTierSelections += 1;
+      continue;
+    }
+    if (type === 'music_protected_lane_claim_inferred') {
+      protectedLaneClaimsInferred += 1;
+      continue;
+    }
+    if (type === 'music_protected_lane_claim_missing') {
+      protectedLaneClaimsMissing += 1;
+      continue;
+    }
+  }
+  return {
+    gameplaySuppressionEvents,
+    gameplaySuppressionDrops,
+    gameplaySuppressionSoftens,
+    stepArbitrationChanges,
+    bassOwnerChoices,
+    rhythmTierSelections,
+    protectedLaneClaimsInferred,
+    protectedLaneClaimsMissing,
+    byDecisionReason,
+  };
+}
 
 function collectPassDiagnostics(executedEvents, session, maxBarIndex, handoff, spawnerPipeline) {
   const bassStability = collectBassStabilityDiagnostics(executedEvents, handoff);
   const identityStability = collectIdentityStabilityDiagnostics(session, maxBarIndex);
   const ownershipContinuity = collectLaneOwnershipDiagnostics(session, maxBarIndex);
+  const decisionMaking = collectDecisionMakingDiagnostics(session, maxBarIndex);
   const delivery = collectDeliveryDiagnostics(session, maxBarIndex);
   const spawnerFeedback = {
     spawnerGameplayEvents: Math.max(0, clampInt(spawnerPipeline?.spawnerGameplayEvents, 0, 0)),
@@ -1112,7 +1171,7 @@ function collectPassDiagnostics(executedEvents, session, maxBarIndex, handoff, s
       + Math.max(0, clampInt(spawnerPipeline?.loopgridShortfall, 0, 0))
     ),
   };
-  return { bassStability, identityStability, ownershipContinuity, spawnerFeedback, delivery };
+  return { bassStability, identityStability, ownershipContinuity, decisionMaking, spawnerFeedback, delivery };
 }
 
 function collectSectionStability(session, maxBarIndex) {
@@ -2391,6 +2450,14 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     sameContinuityInstrumentDriftCount: Number(passDiagnostics?.ownershipContinuity?.sameContinuityInstrumentDrift) || 0,
     sameContinuityPhraseDriftCount: Number(passDiagnostics?.ownershipContinuity?.sameContinuityPhraseDrift) || 0,
     sameContinuityPatternDriftCount: Number(passDiagnostics?.ownershipContinuity?.sameContinuityPatternDrift) || 0,
+    gameplaySuppressionDecisions: Number(passDiagnostics?.decisionMaking?.gameplaySuppressionEvents) || 0,
+    gameplaySuppressionDrops: Number(passDiagnostics?.decisionMaking?.gameplaySuppressionDrops) || 0,
+    gameplaySuppressionSoftens: Number(passDiagnostics?.decisionMaking?.gameplaySuppressionSoftens) || 0,
+    stepArbitrationChanges: Number(passDiagnostics?.decisionMaking?.stepArbitrationChanges) || 0,
+    bassOwnerChoiceCount: Number(passDiagnostics?.decisionMaking?.bassOwnerChoices) || 0,
+    rhythmTierSelectionCount: Number(passDiagnostics?.decisionMaking?.rhythmTierSelections) || 0,
+    protectedLaneClaimsInferred: Number(passDiagnostics?.decisionMaking?.protectedLaneClaimsInferred) || 0,
+    protectedLaneClaimsMissing: Number(passDiagnostics?.decisionMaking?.protectedLaneClaimsMissing) || 0,
     foundationCycleCount: Number(hierarchyModel?.foundationCycleCount) || 0,
     foundationPhraseResets: Number(hierarchyModel?.foundationPhraseResets) || 0,
     foundationContinuityRate: Number(hierarchyModel?.foundationContinuityRate) || 0,
