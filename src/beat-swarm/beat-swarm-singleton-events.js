@@ -9,7 +9,6 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
   const responseMode = String(pacingCaps?.responseMode || 'none');
   const maxDrawSnakes = Math.max(0, Math.trunc(Number(pacingCaps?.maxDrawSnakes) || 0));
   const forceIntroPrimaryLoopWindow = options?.forceIntroPrimaryLoopWindow === true;
-  if (!forceIntroPrimaryLoopWindow && (responseMode === 'none' || responseMode === 'group')) return events;
 
   const stepIndex = Math.trunc(Number(options?.stepIndex) || 0);
   const beatIndex = Math.trunc(Number(options?.beatIndex) || 0);
@@ -56,6 +55,9 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
   const createLoggedPerformedBeatEvent = typeof options?.createLoggedPerformedBeatEvent === 'function'
     ? options.createLoggedPerformedBeatEvent
     : ((evt) => evt);
+  const musicLaneRuntime = options?.musicLaneRuntime && typeof options.musicLaneRuntime === 'object'
+    ? options.musicLaneRuntime
+    : null;
   const getDrawSnakeNodeIndexForStep = typeof options?.getDrawSnakeNodeIndexForStep === 'function'
     ? options.getDrawSnakeNodeIndexForStep
     : (() => 0);
@@ -73,24 +75,42 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
   const leadLeapChance = Math.max(0, Math.min(1, Number(styleProfile?.leadLeapChance) || 1));
 
   const snakes = enemies.filter((e) => String(e?.enemyType || '') === 'drawsnake');
+  const primaryLoopLaneRuntime = musicLaneRuntime?.primaryLoopLane && typeof musicLaneRuntime.primaryLoopLane === 'object'
+    ? musicLaneRuntime.primaryLoopLane
+    : null;
+  const primaryLoopOwnerEnemyId = Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime?.performerEnemyId) || 0));
+  const primaryLoopOwnerGroupId = Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime?.performerGroupId) || 0));
+  const lanePrimaryLoopActive = !!primaryLoopLaneRuntime
+    && primaryLoopOwnerEnemyId > 0
+    && !!String(primaryLoopLaneRuntime?.continuityId || '').trim();
+  const loneStartupSnakeWindow = !forceIntroPrimaryLoopWindow
+    && snakes.length === 1
+    && !lanePrimaryLoopActive;
+  if (!forceIntroPrimaryLoopWindow && (responseMode === 'none' || responseMode === 'group') && !loneStartupSnakeWindow) return events;
   for (const enemy of snakes) {
     if (enemy?.retreating) continue;
     const actorId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
     const group = getEnemyMusicGroup(enemy, 'drawsnake-projectile');
     if (!group) continue;
     const musicLaneId = String(group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
-    if (laneDrivenPrimaryLoop && musicLaneId === 'primary_loop_lane') continue;
+    const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+    const isPrimaryLoopOwner = (
+      (primaryLoopOwnerEnemyId > 0 && primaryLoopOwnerEnemyId === actorId)
+      || (primaryLoopOwnerGroupId > 0 && primaryLoopOwnerGroupId === groupId)
+    );
     const lifecycleState = normalizeMusicLifecycleState(group?.lifecycleState || enemy?.lifecycleState || 'active', 'active');
     if (lifecycleState === 'retiring') continue;
+    const lastEmitStep = Math.max(-1000000, Math.trunc(Number(enemy?.__bsLastDrawsnakeEmitStep) || -1000000));
+    const idleRescueWindow = (stepAbs - lastEmitStep) >= Math.max(stepsPerBar, 8);
     if (!forceIntroPrimaryLoopWindow && maxDrawSnakes > 1 && snakes.length > 1) {
       const snakeStepOffset = actorId % 2;
-      if (((stepAbs + snakeStepOffset) % 2) !== 0) continue;
+      if (((stepAbs + snakeStepOffset) % 2) !== 0 && !idleRescueWindow && !isPrimaryLoopOwner) continue;
     }
-    if (!forceIntroPrimaryLoopWindow && musicLaneId !== 'primary_loop_lane') {
+    if (!forceIntroPrimaryLoopWindow && !loneStartupSnakeWindow && musicLaneId !== 'primary_loop_lane') {
       const pacingGateStepModulo = maxDrawSnakes > 1 ? 4 : 2;
-      if ((stepAbs % pacingGateStepModulo) !== (actorId % pacingGateStepModulo)) continue;
+      if ((stepAbs % pacingGateStepModulo) !== (actorId % pacingGateStepModulo) && !idleRescueWindow) continue;
     }
-    if (!forceIntroPrimaryLoopWindow && !isCallResponseLaneActive(enemy?.callResponseLane, stepAbs, snakes.length)) continue;
+    if (!forceIntroPrimaryLoopWindow && !loneStartupSnakeWindow && !isCallResponseLaneActive(enemy?.callResponseLane, stepAbs, snakes.length) && !idleRescueWindow && !isPrimaryLoopOwner) continue;
     const steps = Array.isArray(group?.steps) ? group.steps : [];
     if (!steps[step]) continue;
     const rows = Array.isArray(group?.rows) ? group.rows : [];
@@ -148,7 +168,12 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
     ).trim() || 'tone';
     enemy.__bsLastDrawsnakeRow = row;
     enemy.__bsLastDrawsnakeNote = normalizeSwarmNoteName(noteNameRaw) || noteNameRaw;
+    enemy.__bsLastDrawsnakeEmitStep = stepAbs;
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
+    const baseAudioGain = clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain) * lifecycleAudioGain);
+    const deconflictedAudioGain = (laneDrivenPrimaryLoop && lanePrimaryLoopActive && !isPrimaryLoopOwner)
+      ? clamp01(baseAudioGain * 0.72)
+      : baseAudioGain;
     events.push(createLoggedPerformedBeatEvent({
       actorId,
       beatIndex,
@@ -160,15 +185,17 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       threatClass: String(threat.full || 'full'),
       visualSyncType: 'node-pulse',
       payload: {
-        groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+        groupId,
         continuityId: String(group?.continuityId || enemy?.musicContinuityId || '').trim(),
         nodeIndex: getDrawSnakeNodeIndexForStep(step, drawSnakeSegmentCount),
-        audioGain: clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain) * lifecycleAudioGain),
+        audioGain: deconflictedAudioGain,
         requestedNoteRaw: noteNameRaw,
         phraseGravityTarget,
         phraseGravityHit,
         phraseResolutionOpportunity,
         phraseResolutionHit,
+        drawsnakeIdleRescue: idleRescueWindow,
+        drawsnakePrimaryLoopOwner: isPrimaryLoopOwner,
       },
     }, {
       beatIndex,
@@ -255,22 +282,28 @@ export function collectSpawnerStepBeatEvents(options = null) {
   const foundationLaneStep = getFoundationLaneSnapshot
     ? getFoundationLaneSnapshot(stepAbs, barIndex)
     : null;
-  const foundationLaneActive = foundationLaneStep?.isActiveStep === true;
 
   for (const enemy of enemies) {
     if (String(enemy?.enemyType || '') !== 'spawner') continue;
-    if (enemy?.retreating) continue;
     const finishGroupPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.spawner.group');
     const group = getEnemyMusicGroup(enemy, 'spawner-spawn', { sync: false });
     finishGroupPerf();
     if (!group) continue;
     const lifecycleState = normalizeMusicLifecycleState(group?.lifecycleState || enemy?.lifecycleState || 'active', 'active');
-    if (lifecycleState === 'retiring') continue;
+    const loopTailUntilStep = Math.max(0, Math.trunc(Number(enemy?.musicLoopTailUntilStep) || 0));
+    const tailContinuationActive = (
+      (enemy?.retreating || lifecycleState === 'retiring')
+      && loopTailUntilStep >= stepAbs
+    );
+    if (enemy?.retreating && !tailContinuationActive) continue;
+    if (lifecycleState === 'retiring' && !tailContinuationActive) continue;
     const actorId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
     stats.activeSpawners += 1;
     const steps = Array.isArray(group?.steps) ? group.steps : [];
     const isActiveStep = !!steps[step];
-    const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.6 : 1;
+    const lifecycleAudioGain = tailContinuationActive
+      ? 0.82
+      : (lifecycleState === 'inactiveForScheduling' ? 0.6 : 1);
     if (!isActiveStep) continue;
     stats.triggeredSpawners += 1;
     const lockedInstrumentId = String(
@@ -288,10 +321,12 @@ export function collectSpawnerStepBeatEvents(options = null) {
       ? bassRoleKey
       : normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, bassRoleKey), bassRoleKey);
     const isBassRole = roleName === bassRoleKey;
-    if (laneDrivenFoundation && isBassRole) continue;
-    if (isBassRole) {
-      if (!foundationLaneActive) continue;
-    }
+    const foundationOwnerEnemyId = Math.max(0, Math.trunc(Number(foundationLaneStep?.performerEnemyId) || 0));
+    const foundationOwnerGroupId = Math.max(0, Math.trunc(Number(foundationLaneStep?.performerGroupId) || 0));
+    const isFoundationOwner = (
+      (foundationOwnerEnemyId > 0 && foundationOwnerEnemyId === actorId)
+      || (foundationOwnerGroupId > 0 && foundationOwnerGroupId === Math.max(0, Math.trunc(Number(group?.id) || 0)))
+    );
     let noteNameRaw = normalizeSwarmNoteName(group?.note) || (isBassRole ? 'C3' : 'C4');
     if (isBassRole) {
       const locked = normalizeSwarmNoteName(enemy?.__bsLockedBassNote) || noteNameRaw || 'C3';
@@ -315,6 +350,10 @@ export function collectSpawnerStepBeatEvents(options = null) {
     );
     finishShapePerf();
     const finishEventPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.spawner.event');
+    const baseAudioGain = clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain) * lifecycleAudioGain);
+    const deconflictedAudioGain = (laneDrivenFoundation && isBassRole && !isFoundationOwner)
+      ? clamp01(baseAudioGain * 0.78)
+      : baseAudioGain;
     events.push(createLoggedPerformedBeatEvent({
       actorId,
       beatIndex,
@@ -329,8 +368,10 @@ export function collectSpawnerStepBeatEvents(options = null) {
         groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
         continuityId: String(group?.continuityId || enemy?.musicContinuityId || '').trim(),
         nodeStepIndex: step,
-        audioGain: clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain) * lifecycleAudioGain),
+        audioGain: deconflictedAudioGain,
         requestedNoteRaw: noteNameRaw,
+        spawnerTailContinuation: tailContinuationActive,
+        spawnerFoundationOwner: isFoundationOwner,
       },
     }, {
       beatIndex,

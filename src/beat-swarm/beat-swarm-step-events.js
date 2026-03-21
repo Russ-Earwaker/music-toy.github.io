@@ -32,9 +32,32 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const beatIndex = Math.max(0, Math.trunc(Number(state.beatIndex) || 0));
   const stepIndex = Math.max(0, Math.trunc(Number(state.stepIndex) || 0));
   const barIndex = Math.max(0, Math.trunc(Number(state.barIndex) || 0));
+  const entryAudibilityRuntime = state.entryAudibilityRuntime && typeof state.entryAudibilityRuntime === 'object'
+    ? state.entryAudibilityRuntime
+    : (state.entryAudibilityRuntime = { byKey: new Map(), lastStepIndex: -1 });
+  const gainSmoothingRuntime = state.gainSmoothingRuntime && typeof state.gainSmoothingRuntime === 'object'
+    ? state.gainSmoothingRuntime
+    : (state.gainSmoothingRuntime = { byLineKey: new Map(), lastStepIndex: -1 });
   const centerWorld = state.centerWorld && typeof state.centerWorld === 'object'
     ? state.centerWorld
     : { x: 0, y: 0 };
+  const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+  if (!(entryAudibilityRuntime.byKey instanceof Map)) entryAudibilityRuntime.byKey = new Map();
+  if (entryAudibilityRuntime.lastStepIndex !== stepIndex) {
+    entryAudibilityRuntime.lastStepIndex = stepIndex;
+    for (const [entryKey, entry] of entryAudibilityRuntime.byKey.entries()) {
+      const lastAudibleStep = Math.max(-1000000, Math.trunc(Number(entry?.lastAudibleStep) || -1000000));
+      if ((stepIndex - lastAudibleStep) > 32) entryAudibilityRuntime.byKey.delete(entryKey);
+    }
+  }
+  if (!(gainSmoothingRuntime.byLineKey instanceof Map)) gainSmoothingRuntime.byLineKey = new Map();
+  if (gainSmoothingRuntime.lastStepIndex !== stepIndex) {
+    gainSmoothingRuntime.lastStepIndex = stepIndex;
+    for (const [lineKey, entry] of gainSmoothingRuntime.byLineKey.entries()) {
+      const lastSeenStep = Math.max(-1000000, Math.trunc(Number(entry?.lastSeenStep) || -1000000));
+      if ((stepIndex - lastSeenStep) > 16) gainSmoothingRuntime.byLineKey.delete(lineKey);
+    }
+  }
 
   let spawnerStepStats = { activeSpawners: 0, triggeredSpawners: 0, spawnedEnemies: 0 };
   const onboardingDirective = helpers.getOnboardingReadabilityDirective?.(barIndex) || null;
@@ -225,6 +248,30 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       || action === 'composer-group-explosion';
     if (!actionIsLoopLike) return false;
     return resolveProtectedLaneClaim(ev, primaryLoopLaneRuntime, 'primary_loop_lane');
+  };
+  const resolveEntryAudibilityKey = (ev) => {
+    if (!ev || typeof ev !== 'object') return '';
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const action = String(ev?.actionType || '').trim().toLowerCase();
+    if (
+      action !== 'spawner-spawn'
+      && action !== 'drawsnake-projectile'
+      && action !== 'composer-group-projectile'
+      && action !== 'composer-group-explosion'
+    ) return '';
+    const continuityId = String(payload?.continuityId || '').trim().toLowerCase();
+    const laneId = String(payload?.musicLaneId || payload?.foundationLaneId || '').trim().toLowerCase();
+    const actorId = Math.max(0, Math.trunc(Number(ev?.actorId) || 0));
+    return String(laneId || continuityId || `${action}:${actorId}`).trim().toLowerCase();
+  };
+  const isFreshEntryAudibility = (ev) => {
+    const entryKey = resolveEntryAudibilityKey(ev);
+    if (!entryKey) return false;
+    const entry = entryAudibilityRuntime.byKey.get(entryKey);
+    if (!entry) return true;
+    const firstSeenStep = Math.max(-1000000, Math.trunc(Number(entry?.firstSeenStep) || -1000000));
+    const audibleCount = Math.max(0, Math.trunc(Number(entry?.audibleCount) || 0));
+    return (stepIndex - firstSeenStep) <= 8 || audibleCount < 3;
   };
   const scorePrimaryLoopLaneCandidate = (ev, idx = 0) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
@@ -602,6 +649,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const foundationSelected = keptByLayer.foundation.length > 0;
 
   const arbitratedEnemyEvents = profiledAnnotated.map((item) => {
+    const freshEntryAudibility = isFreshEntryAudibility(item?.ev);
     const finalProminence = (() => {
       if (selectedIds.has(item.idx)) {
         if (item.layer === 'foundation') return 'full';
@@ -609,19 +657,22 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
           if (item.isPrimaryLoopLaneEvent) {
             if (foundationSelected) {
               if (item.isEstablishingForegroundLoop && !playerLikelyAudible) return 'full';
-              return 'quiet';
+              return freshEntryAudibility ? 'quiet' : 'quiet';
             }
             if (playerLikelyAudible) return item.isEstablishingForegroundLoop ? 'full' : 'quiet';
             return 'full';
           }
           if (foundationSelected && playerLikelyAudible) {
             if (item.isEstablishingForegroundLoop) return 'quiet';
+            if (freshEntryAudibility) return 'quiet';
             return item.isCurrentForegroundLoop ? 'quiet' : 'trace';
           }
           if (!item.isPrimaryLoopLaneEvent && item.register && item.register !== 'low' && item.register !== 'sub') {
+            if (freshEntryAudibility) return 'quiet';
             return item.isCurrentForegroundLoop ? 'quiet' : 'trace';
           }
           if (item.isEstablishingForegroundLoop) return 'full';
+          if (freshEntryAudibility && item.prominence === 'trace') return 'quiet';
           return item.isCurrentForegroundLoop ? 'full' : (item.prominence === 'trace' ? 'quiet' : item.prominence);
         }
         if (foundationSelected && playerLikelyAudible) return 'suppressed';
@@ -733,6 +784,19 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     return String(payload.musicProminence || 'full').trim().toLowerCase() !== 'suppressed';
   });
+  for (const ev of emittedEnemyEvents) {
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
+    if (!(prominence === 'full' || prominence === 'quiet')) continue;
+    const entryKey = resolveEntryAudibilityKey(ev);
+    if (!entryKey) continue;
+    const prev = entryAudibilityRuntime.byKey.get(entryKey) || null;
+    entryAudibilityRuntime.byKey.set(entryKey, {
+      firstSeenStep: prev ? Math.max(0, Math.trunc(Number(prev.firstSeenStep) || stepIndex)) : stepIndex,
+      lastAudibleStep: stepIndex,
+      audibleCount: Math.max(0, Math.trunc(Number(prev?.audibleCount) || 0)) + 1,
+    });
+  }
   const hasEmittedFoundationEvent = emittedEnemyEvents.some((ev) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     return String(payload.musicLayer || '').trim().toLowerCase() === 'foundation'
@@ -779,7 +843,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     return false;
   })();
   const basePlayerSoundVolumeMult = foundationSelected
-    ? (primaryLoopForegroundPresent ? 0.58 : 0.72)
+    ? (primaryLoopForegroundPresent ? 0.46 : 0.68)
     : 1;
   const stagedSoundCount = emittedEnemyEvents.reduce((sum, ev) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
@@ -788,7 +852,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   }, shouldEmitPlayerStepFinal ? 1 : 0);
   const globalStepGainScale = stagedSoundCount <= 1
     ? 1
-    : (stagedSoundCount === 2 ? 0.9 : (stagedSoundCount === 3 ? 0.8 : 0.72));
+    : (stagedSoundCount === 2 ? 0.94 : (stagedSoundCount === 3 ? 0.88 : 0.82));
   const densityPressure = stagedSoundCount <= 2
     ? 0
     : (stagedSoundCount === 3 ? 0.45 : 1);
@@ -802,6 +866,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const musicLayer = String(payload.musicLayer || 'sparkle').trim().toLowerCase();
     const musicProminence = String(payload.musicProminence || 'full').trim().toLowerCase();
     const isPrimaryLoopLaneEvent = String(payload.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane';
+    const isFoundationLaneEvent = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase() === 'foundation_lane'
+      || musicLayer === 'foundation';
     const hierarchyGainScale = (() => {
       if (!(densityPressure > 0)) return 1;
       if (musicLayer === 'foundation') return 1 + (densityReliefFoundation * densityPressure);
@@ -813,10 +879,47 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       }
       return Math.max(0.45, 1 - (densityPenaltySparkle * densityPressure));
     })();
-    const nextAudioGain = Math.max(
+    let nextAudioGain = Math.max(
       0,
       Math.min(1, (Number.isFinite(baseAudioGain) ? baseAudioGain : 1) * globalStepGainScale * hierarchyGainScale)
     );
+    if (isPrimaryLoopLaneEvent) {
+      const loopFloor = musicProminence === 'full' ? 0.5 : 0.4;
+      nextAudioGain = Math.max(loopFloor, nextAudioGain);
+    } else if (isFoundationLaneEvent) {
+      const foundationFloor = musicProminence === 'full' ? 0.54 : 0.44;
+      nextAudioGain = Math.max(foundationFloor, nextAudioGain);
+    }
+    const continuityId = String(payload.continuityId || '').trim();
+    const lineKey = String(
+      payload.musicLaneId
+        || payload.foundationLaneId
+        || (continuityId ? `${musicLayer}:${continuityId}` : '')
+        || `${musicLayer}:${String(ev?.actionType || '').trim().toLowerCase()}:${Math.max(0, Math.trunc(Number(ev?.actorId) || 0))}`
+    ).trim().toLowerCase();
+    const previousLineState = lineKey ? gainSmoothingRuntime.byLineKey.get(lineKey) : null;
+    if (lineKey) {
+      const previousGain = clamp01(previousLineState?.gain);
+      const isProtectedLaneEvent = isPrimaryLoopLaneEvent || isFoundationLaneEvent;
+      const attack = isProtectedLaneEvent ? 0.72 : 0.62;
+      const release = isProtectedLaneEvent ? 0.24 : 0.34;
+      const smoothingAlpha = nextAudioGain >= previousGain ? attack : release;
+      const smoothedAudioGain = previousLineState
+        ? (previousGain + ((nextAudioGain - previousGain) * smoothingAlpha))
+        : nextAudioGain;
+      nextAudioGain = clamp01(smoothedAudioGain);
+      if (isPrimaryLoopLaneEvent) {
+        const loopSmoothedFloor = musicProminence === 'full' ? 0.5 : 0.4;
+        nextAudioGain = Math.max(loopSmoothedFloor, nextAudioGain);
+      } else if (isFoundationLaneEvent) {
+        const foundationSmoothedFloor = musicProminence === 'full' ? 0.54 : 0.44;
+        nextAudioGain = Math.max(foundationSmoothedFloor, nextAudioGain);
+      }
+      gainSmoothingRuntime.byLineKey.set(lineKey, {
+        gain: nextAudioGain,
+        lastSeenStep: stepIndex,
+      });
+    }
     if (nextAudioGain === baseAudioGain) return ev;
     return {
       ...ev,
@@ -826,6 +929,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         globalStepGainScale,
         hierarchyGainScale,
         stagedSoundCount,
+        gainSmoothingApplied: lineKey ? true : false,
       },
     };
   });

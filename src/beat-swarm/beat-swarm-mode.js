@@ -755,6 +755,59 @@ function assignMusicLaneIdentity(options = null) {
     handoffPolicy: lane.handoffPolicy,
   };
 }
+function resolveProtectedLaneInstrumentIdentity(lane = null, group = null, enemy = null, fallbackInstrumentId = '', role = BEAT_EVENT_ROLES.LEAD) {
+  const laneEntry = lane && typeof lane === 'object' ? lane : null;
+  const groupEntry = group && typeof group === 'object' ? group : null;
+  const enemyEntry = enemy && typeof enemy === 'object' ? enemy : null;
+  const laneContinuityId = String(laneEntry?.continuityId || '').trim();
+  const ownerContinuityId = String(
+    groupEntry?.musicLaneContinuityId
+      || groupEntry?.continuityId
+      || enemyEntry?.musicLaneContinuityId
+      || enemyEntry?.musicContinuityId
+      || enemyEntry?.continuityId
+      || ''
+  ).trim();
+  const continuityMatchesLane = !!laneContinuityId && !!ownerContinuityId && laneContinuityId === ownerContinuityId;
+  const preferredInstrumentId = String(
+    (continuityMatchesLane
+      ? (
+        laneEntry?.instrumentId
+          || groupEntry?.musicLaneInstrumentId
+          || enemyEntry?.musicLaneInstrumentId
+          || groupEntry?.instrumentId
+          || enemyEntry?.musicInstrumentId
+      )
+      : (
+        groupEntry?.musicLaneInstrumentId
+          || enemyEntry?.musicLaneInstrumentId
+          || groupEntry?.instrumentId
+          || enemyEntry?.musicInstrumentId
+          || laneEntry?.instrumentId
+      ))
+      || fallbackInstrumentId
+      || ''
+  ).trim();
+  const instrumentId = resolveLockedEnemyInstrumentId(
+    enemyEntry,
+    preferredInstrumentId || resolveSwarmSoundInstrumentId('projectile') || 'tone',
+    false,
+    role
+  );
+  if (continuityMatchesLane && instrumentId) {
+    if (groupEntry) {
+      groupEntry.musicLaneInstrumentId = instrumentId;
+      groupEntry.instrumentId = instrumentId;
+      groupEntry.instrument = instrumentId;
+    }
+    if (enemyEntry) {
+      enemyEntry.musicLaneInstrumentId = instrumentId;
+      enemyEntry.musicInstrumentId = instrumentId;
+      enemyEntry.instrumentId = instrumentId;
+    }
+  }
+  return instrumentId;
+}
 function clampHslHue(value = 0) {
   const n = Number(value) || 0;
   return ((n % 360) + 360) % 360;
@@ -2157,10 +2210,11 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
     || normalizeSwarmNoteName(ownerEnemy?.__bsLastDrawsnakeNote)
     || getSwarmPentatonicNoteByIndex(0);
   const note = clampNoteToDirectorPool(requestedNoteRaw, beatIndex + stepIndex + ownerId) || requestedNoteRaw;
-  const instrumentId = resolveLockedEnemyInstrumentId(
+  const instrumentId = resolveProtectedLaneInstrumentIdentity(
+    foundationLane,
+    group,
     ownerEnemy,
-    String(group?.instrumentId || ownerEnemy?.musicInstrumentId || '').trim() || resolveSwarmSoundInstrumentId('projectile') || 'tone',
-    false,
+    String(group?.instrumentId || ownerEnemy?.musicInstrumentId || '').trim(),
     role
   );
   const groupActionType = String(group?.actionType || fallbackActionType || 'spawner-spawn').trim().toLowerCase() || 'spawner-spawn';
@@ -2278,7 +2332,10 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
   let event = null;
   if (ownerType === 'drawsnake') {
     const snakes = enemies.filter((e) => String(e?.enemyType || '') === 'drawsnake' && !e?.retreating);
-    if (!forceIntroPrimaryLoopWindow && !isCallResponseLaneActive(ownerEnemy?.callResponseLane, stepIndex, snakes.length)) return null;
+    const loneStartupSnakeWindow = !forceIntroPrimaryLoopWindow && snakes.length <= 1;
+    const lastEmitStep = Math.max(-1000000, Math.trunc(Number(ownerEnemy?.__bsLastDrawsnakeEmitStep) || -1000000));
+    const idleRescueWindow = (stepIndex - lastEmitStep) >= Math.max(WEAPON_TUNE_STEPS, 8);
+    if (!forceIntroPrimaryLoopWindow && !loneStartupSnakeWindow && !isCallResponseLaneActive(ownerEnemy?.callResponseLane, stepIndex, snakes.length) && !idleRescueWindow) return null;
     const steps = Array.isArray(group?.steps) ? group.steps : [];
     if (!steps[step]) return null;
     const rows = Array.isArray(group?.rows) ? group.rows : [];
@@ -2323,10 +2380,12 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     const phraseResolutionHit = phraseResolutionOpportunity && phraseGravityHit;
     ownerEnemy.__bsLastDrawsnakeRow = row;
     ownerEnemy.__bsLastDrawsnakeNote = normalizeSwarmNoteName(noteNameRaw) || noteNameRaw;
-    const instrumentId = resolveLockedEnemyInstrumentId(
+    ownerEnemy.__bsLastDrawsnakeEmitStep = stepIndex;
+    const instrumentId = resolveProtectedLaneInstrumentIdentity(
+      lane,
+      group,
       ownerEnemy,
-      String(group?.instrumentId || ownerEnemy?.musicInstrumentId || '').trim() || resolveSwarmSoundInstrumentId('projectile') || 'tone',
-      false,
+      String(group?.instrumentId || ownerEnemy?.musicInstrumentId || '').trim(),
       role
     );
     event = createLoggedPerformedBeatEvent({
@@ -2349,6 +2408,7 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         phraseGravityHit,
         phraseResolutionOpportunity,
         phraseResolutionHit,
+        drawsnakeIdleRescue: idleRescueWindow,
         musicLayer: 'loops',
         musicProminence: 'full',
         musicLaneId: 'primary_loop_lane',
@@ -2420,10 +2480,11 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     const phraseResolutionHit = phraseResolutionOpportunity && phraseGravityHit;
     group.noteCursor = noteIdx + 1;
     group.__bsLastComposerNote = normalizeSwarmNoteName(styledNoteName) || styledNoteName;
-    const instrumentId = resolveLockedEnemyInstrumentId(
+    const instrumentId = resolveProtectedLaneInstrumentIdentity(
+      lane,
+      group,
       ownerEnemy,
-      String(group?.instrumentId || ownerEnemy?.musicInstrumentId || '').trim() || resolveSwarmSoundInstrumentId('projectile') || 'tone',
-      false,
+      String(group?.instrumentId || ownerEnemy?.musicInstrumentId || '').trim(),
       role
     );
     event = createLoggedPerformedBeatEvent({
@@ -3386,37 +3447,6 @@ function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context 
   if (isBassSource && !shouldProtectBassContinuity) {
     return { attempted: false, success: false, reason: 'not_active_bass_owner' };
   }
-  if (isPrimaryLoopOwner) {
-    noteMusicSystemEvent('music_handoff_failed', {
-      sourceEnemyId: sourceId,
-      sourceEnemyType: sourceType,
-      sourceGroupId: Math.max(0, Math.trunc(Number(sourceGroup.id) || 0)),
-      continuityId,
-      laneRole: sourceRole,
-      actionType: String(sourceGroup.actionType || '').trim().toLowerCase(),
-      reason: handoffReason,
-      failureReason: 'primary_lane_recovery',
-    }, { beatIndex, stepIndex, ...context });
-    noteMusicSystemEvent('music_handoff_reset_phrase', {
-      sourceEnemyId: sourceId,
-      sourceEnemyType: sourceType,
-      sourceGroupId: Math.max(0, Math.trunc(Number(sourceGroup.id) || 0)),
-      continuityId,
-      laneRole: sourceRole,
-      actionType: String(sourceGroup.actionType || '').trim().toLowerCase(),
-      reason: handoffReason,
-      failureReason: 'primary_lane_recovery',
-    }, { beatIndex, stepIndex, ...context });
-    return {
-      attempted: true,
-      success: false,
-      reset: true,
-      reason: 'primary_lane_recovery',
-      sourceGroup,
-      targetGroup: null,
-      targetEnemy: null,
-    };
-  }
   const phraseState = clonePhraseState(sourceGroup.phraseState)
     || buildFallbackPhraseStateForHandoff(sourceGroup, beatIndex, stepIndex, continuityId);
   const sourceActionType = String(sourceGroup.actionType || '').trim().toLowerCase();
@@ -3528,7 +3558,7 @@ function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context 
     // Bass is the foundation: always hand off onto a freshly spawned receiver to avoid fragile live-target transfers.
     targetEnemy = null;
   }
-  if (!targetEnemy && shouldProtectBassContinuity && !perfEnemyRepeatRuntime.enabled) {
+  if (!targetEnemy && (shouldProtectBassContinuity || isPrimaryLoopOwner) && !perfEnemyRepeatRuntime.enabled) {
     const emergencyProfileInstrument = sourceGroup.instrumentId || source?.spawnerInstrument || source?.drawsnakeInstrument || resolveSwarmSoundInstrumentId('projectile') || 'tone';
     targetEnemy = withPerfSample(
       'pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove.musicCleanup.handoff.emergencySpawn',
@@ -3572,7 +3602,9 @@ function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context 
       }
     );
     if (targetEnemy) {
-      compatibleReceiverFound = isCompatibleBassHandoffCandidate(source, sourceGroup, targetEnemy);
+      compatibleReceiverFound = shouldProtectBassContinuity
+        ? isCompatibleBassHandoffCandidate(source, sourceGroup, targetEnemy)
+        : true;
       noteMusicSystemEvent('music_handoff_emergency_receiver_spawned', {
         ...startedPayload,
         targetEnemyId: Math.max(0, Math.trunc(Number(targetEnemy.id) || 0)),
@@ -6610,8 +6642,32 @@ function normalizeEnemyRemovalReason(reason = 'unknown') {
   if (raw === 'debug_clear') return 'debug_clear';
   return raw;
 }
+function extendEnemyLoopTailOnRetreat(enemy = null, stepIndex = null) {
+  const entry = enemy && typeof enemy === 'object' ? enemy : null;
+  if (!entry) return;
+  const enemyType = String(entry?.enemyType || '').trim().toLowerCase();
+  if (enemyType !== 'spawner' && enemyType !== 'drawsnake') return;
+  const nowStep = Math.max(0, Math.trunc(
+    Number(stepIndex)
+      || Number(ensureSwarmDirector().getSnapshot?.()?.stepIndex)
+      || Number(currentBeatIndex)
+      || 0
+  ));
+  const phraseLength = Math.max(1, WEAPON_TUNE_STEPS);
+  const stepInPhrase = ((nowStep % phraseLength) + phraseLength) % phraseLength;
+  const remainingSteps = stepInPhrase === 0 ? phraseLength : (phraseLength - stepInPhrase);
+  const tailUntilStep = nowStep + Math.max(1, remainingSteps);
+  entry.musicLoopTailStartedStep = nowStep;
+  entry.musicLoopTailUntilStep = Math.max(
+    nowStep,
+    Math.trunc(Number(entry.musicLoopTailUntilStep) || 0),
+    tailUntilStep
+  );
+  entry.musicLoopTailLaneId = String(entry.musicLaneId || '').trim().toLowerCase();
+}
 function startEnemyRetreat(enemy, reason = 'retreated', origin = '') {
   if (!enemy || typeof enemy !== 'object') return false;
+  extendEnemyLoopTailOnRetreat(enemy);
   enemy.retreating = true;
   enemy.lifecycleState = 'retiring';
   if (String(enemy?.enemyType || '') !== 'composer-group-member') {
@@ -10039,8 +10095,8 @@ function createDrawSnakeEnemyProfile() {
   const style = getSwarmStyleProfile();
   const fallbackInstrument = resolveSwarmSoundInstrumentId('projectile') || getIdForDisplayName('Tone (Sine)') || 'tone';
   const theme = getEnergyStateThemePreset();
-  const phrase = pickRandomArrayItem(theme?.drawsnakePhrases, null);
-  const lockedHook = getLockedMotifHook(getComposerMotifScopeKey(), 4);
+  const useThemePhrase = Math.random() < 0.22;
+  const phrase = useThemePhrase ? pickRandomArrayItem(theme?.drawsnakePhrases, null) : null;
   const steps = Array.isArray(phrase?.steps)
     ? createStepPattern(phrase.steps, WEAPON_TUNE_STEPS)
     : Array.from({ length: WEAPON_TUNE_STEPS }, () => Math.random() >= 0.5);
@@ -10068,18 +10124,33 @@ function createDrawSnakeEnemyProfile() {
       resultingHits: densitySteps.reduce((sum, step) => sum + (step ? 1 : 0), 0),
     });
   } catch {}
-  const hookRows = Array.isArray(lockedHook?.notes)
-    ? lockedHook.notes.map((n) => {
-      const idx = getNotePoolIndex(n);
-      return idx >= 0 ? idx : 0;
-    })
-    : [];
   const rows = Array.isArray(phrase?.rows)
     ? createRowPattern(phrase.rows, WEAPON_TUNE_STEPS, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length)
-    : Array.from({ length: WEAPON_TUNE_STEPS }, (_, i) => {
-      if (hookRows.length) return hookRows[i % hookRows.length];
-      return Math.max(0, Math.min(SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1, Math.trunc(Math.random() * SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length)));
-    });
+    : (() => {
+      const maxRow = Math.max(0, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1);
+      const startRow = Math.max(0, Math.min(maxRow, Math.trunc(Math.random() * SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length)));
+      const generated = Array.from({ length: WEAPON_TUNE_STEPS }, () => startRow);
+      for (let i = 1; i < generated.length; i += 1) {
+        const prev = Math.max(0, Math.min(maxRow, Math.trunc(Number(generated[i - 1]) || startRow)));
+        const phraseAnchor = i === 0 || i === Math.floor(generated.length * 0.5) || i === (generated.length - 1);
+        const stepActive = !!steps[i];
+        let next = prev;
+        const roll = Math.random();
+        if (!stepActive) {
+          next = roll < 0.78 ? prev : Math.max(0, Math.min(maxRow, prev + (Math.random() < 0.5 ? -1 : 1)));
+        } else if (phraseAnchor) {
+          next = Math.max(0, Math.min(maxRow, prev + (Math.random() < 0.5 ? -1 : 1)));
+        } else if (roll < 0.5) {
+          next = Math.max(0, Math.min(maxRow, prev + (Math.random() < 0.5 ? -1 : 1)));
+        } else if (roll < 0.8) {
+          next = Math.max(0, Math.min(maxRow, prev + (Math.random() < 0.5 ? -2 : 2)));
+        } else {
+          next = Math.max(0, Math.min(maxRow, Math.trunc(Math.random() * SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length)));
+        }
+        generated[i] = next;
+      }
+      return generated;
+    })();
   const midRow = Math.max(0, Math.floor((SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1) * 0.5));
   const spread = 0.34 + (arrangement.octaveEmphasis * 0.66);
   for (let i = 0; i < rows.length; i++) {
@@ -11758,7 +11829,16 @@ function getEnemyEventMusicProminence(ev, context = null) {
       return commitFoundationProminence('full');
     }
     if (playerLikelyAudible) {
-      return commitFoundationProminence(shouldForceFull ? 'full' : 'quiet');
+      const foundationStepIndex = Math.max(
+        0,
+        Math.trunc(Number(ev?.payload?.foundationStepIndex) || (stepAbs % Math.max(1, loopTunables.loopLengthSteps)))
+      );
+      const structurallyStrongFoundationStep = foundationStepIndex === 0 || foundationStepIndex === 3 || foundationStepIndex === 4;
+      const protectFoundationNow = shouldForceFull
+        || !foundationAssigned
+        || continuityBars <= Math.max(foundationMinBars + 2, foundationMinBars)
+        || structurallyStrongFoundationStep;
+      return commitFoundationProminence(protectFoundationNow ? 'full' : 'quiet');
     }
     if (shouldForceFull) return commitFoundationProminence('full');
     return commitFoundationProminence(roll < 0.62 ? 'full' : 'quiet');
@@ -11875,6 +11955,7 @@ function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex)
       full: BEAT_EVENT_THREAT.FULL,
     },
     styleProfile: getSwarmStyleProfile(),
+    musicLaneRuntime,
     laneDrivenPrimaryLoop: true,
     forceIntroPrimaryLoopWindow: isForcedIntroPrimaryLoopWindow(barIndex),
   });
