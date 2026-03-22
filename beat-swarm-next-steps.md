@@ -205,6 +205,102 @@ Present the right things clearly.
 
 ---
 
+## Sample Metadata Migration
+
+### Goal
+
+Move `samples.csv` from mostly sound-family tagging toward a small musical-role and behavior model, without breaking existing palette, theme, or legacy runtime paths.
+
+This matters because the current problems are mostly about:
+
+- hierarchy
+- audibility
+- protected-loop eligibility
+- call/answer eligibility
+- support restraint
+
+not simple instrument-family browsing.
+
+### Migration Principles
+
+- do not remove legacy tags yet
+- add new metadata alongside old metadata
+- keep runtime fallback paths safe
+- keep the taxonomy small and reliable
+- prefer conservative inference over false certainty
+
+### Proposed Metadata
+
+Required:
+
+- `music_role`
+  - `foundation`
+  - `foreground`
+  - `support`
+  - `accent`
+- `music_behavior`
+  - `loop`
+  - `oneshot`
+  - `short`
+  - `sustain`
+  - `rhythmic`
+  - `melodic`
+- `runtime_family`
+  - optional browsing / compatibility family such as `bass`, `percussion`, `lead`, `fx`, `synth`
+- `needs_review`
+  - marks rows where inference is uncertain
+
+Optional:
+
+- `music_eligibility`
+  - small runtime-facing eligibility flags such as:
+  - `protected_loop`
+  - `call_source`
+  - `answer_source`
+  - `accent_only`
+
+### Important Documentation Requirement
+
+Each new metadata category must be clearly described inside or alongside `samples.csv`.
+
+This is not only for runtime migration.
+It also needs to work as guidance for future sound creation and sound sourcing.
+
+For every new field, the project should explain:
+
+- what the category means musically
+- what it is for in Beat Swarm/runtime selection
+- what it is not for
+- example sample types that fit it
+- example sample types that should not be tagged that way
+
+That note is important because `samples.csv` is also going to be used as a human-facing guide when making or finding new sounds.
+
+### Suggested Phases
+
+1. Preserve all existing columns and tags.
+2. Add the new metadata columns without changing runtime behavior.
+3. Build a deterministic migration script that infers new fields conservatively and marks uncertain rows.
+4. Add compatibility helpers so code can prefer new metadata and safely fall back to legacy data.
+5. Manually review the Beat Swarm-critical sample set first.
+6. Migrate Beat Swarm runtime decisions to prefer the new metadata.
+7. Add validation/reporting for bad or conflicting metadata.
+8. Only later reduce legacy-tag influence.
+
+### Why This Is Valuable
+
+Done well, this gives Beat Swarm a better basis for deciding:
+
+- what must stay audible
+- what may own a protected loop
+- what should act as support
+- what should stay brief
+- what is appropriate for call-and-answer
+
+without exploding the tag system into a large taxonomy.
+
+---
+
 ## Call-and-Answer System - Current State
 
 The call-and-answer system is now functioning technically and beginning to work musically, but it still needs hierarchy control.
