@@ -179,3 +179,79 @@ It can also mean:
 
 Stop preserving everything equally.
 Present the right things clearly.
+
+
+---
+
+## ⚠️ Call-and-Answer System – Current Issue
+
+The call-and-answer system is **functioning technically but not yet working musically**.
+
+### Observed behaviour
+
+* The system is generating valid call/response pairs (response rate ~0.29 in latest run)
+* However, these are mostly **single-note or near-immediate follow-ups (deltaSteps ≈ 1)**
+* In practice, this sounds like:
+
+  * “one loop plays a few notes, another fills a gap”
+  * rather than a clear musical reply
+
+### Key problems
+
+1. **Calls are too frequent and too weak**
+
+   * Too many events qualify as “calls”
+   * No clear ownership of the active musical statement
+
+2. **Responses are too small and not phrase-based**
+
+   * Often just a single note
+   * Do not preserve rhythm, contour, or motif identity
+
+3. **Timing is too immediate**
+
+   * Most responses occur 1 step later
+   * Feels like stitching notes together, not replying
+
+4. **Mix/masking hides responses**
+
+   * High player masking and busy density mean responses often aren’t clearly heard
+   * Even valid responses fail perceptually
+
+5. **System measures adjacency, not musical success**
+
+   * Current `responseRate` reflects timing proximity
+   * Does not reflect whether the response was audible, meaningful, or recognisable
+
+---
+
+### Result
+
+> The system produces **interleaved note activity**, not a clear
+> **“statement → space → reply” musical conversation**
+
+---
+
+### Required direction
+
+Call-and-answer should become **phrase-based and ownership-driven**, not event-based:
+
+* Only strong musical events should create calls (foreground, specials, key phrases)
+* Responses should be **short phrase fragments (2–4 notes)**, not single notes
+* Responses should preserve **rhythm or contour identity**
+* Introduce more varied response timing (not just immediate next-step replies)
+* Add metrics for **audible and meaningful responses**, not just proximity
+
+---
+
+### Goal
+
+> The player should clearly hear:
+>
+> * one idea speak
+> * a moment of space
+> * a recognisable reply
+
+instead of layered note chatter.
+
+---

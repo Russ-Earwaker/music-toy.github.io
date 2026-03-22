@@ -37,12 +37,29 @@ export function executePerformedBeatEventRuntime(options = null) {
   const payloadGroupId = Math.max(0, Math.trunc(Number(ev?.payload?.groupId) || 0));
   const logMusicLabExecution = (context = null) => {
     const base = context && typeof context === 'object' ? context : {};
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     try {
       state.swarmMusicLab?.logExecutedEvent?.(ev, helpers.getMusicLabContext?.({
         beatIndex,
         stepIndex,
         barIndex,
         groupId: payloadGroupId,
+        callResponseLane: String(base?.callResponseLane || payload?.callResponseLane || '').trim().toLowerCase(),
+        callResponseQualified: base?.callResponseQualified === true
+          ? true
+          : (base?.callResponseQualified === false
+            ? false
+            : (payload?.callResponseQualified === true
+              ? true
+              : (payload?.callResponseQualified === false ? false : null))),
+        callResponsePhraseProgress: Math.max(
+          0,
+          Math.trunc(Number(
+            base?.callResponsePhraseProgress != null
+              ? base.callResponsePhraseProgress
+              : payload?.callResponsePhraseProgress
+          ) || 0)
+        ),
         ...base,
       }));
     } catch {}

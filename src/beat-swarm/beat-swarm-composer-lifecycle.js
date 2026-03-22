@@ -31,6 +31,14 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     ? Math.max(0, Math.min(desiredGroupsRaw, Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0))))
     : 0;
   const sectionKey = `${String(composer.sectionId || 'default')}:${Math.max(0, Math.trunc(Number(composer.cycle) || 0))}:${motifScopeKey}`;
+  const isFoundationBufferGroup = (group) => (
+    !!group
+    && (
+      String(group?.templateId || '').trim() === 'foundation-buffer'
+      || String(group?.sectionId || '').trim() === 'foundation-buffer'
+      || String(group?.sectionKey || '').trim() === 'foundation-buffer'
+    )
+  );
 
   for (let i = composerEnemyGroups.length - 1; i >= 0; i--) {
     const g = composerEnemyGroups[i];
@@ -60,7 +68,13 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (need > 0) spawnComposerGroupOffscreenMembers(g, need);
   }
 
-  const sameSection = composerEnemyGroups.filter((g) => g && g.sectionKey === sectionKey && g.active && !g.retiring);
+  const sameSection = composerEnemyGroups.filter((g) => (
+    g
+    && g.sectionKey === sectionKey
+    && g.active
+    && !g.retiring
+    && !isFoundationBufferGroup(g)
+  ));
   const rankedGroups = sameSection
     .slice()
     .sort((a, b) => (Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0)));
@@ -72,7 +86,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   }
 
   const currentSectionCount = composerEnemyGroups
-    .filter((g) => g && g.sectionKey === sectionKey && g.active && !g.retiring)
+    .filter((g) => g && g.sectionKey === sectionKey && g.active && !g.retiring && !isFoundationBufferGroup(g))
     .length;
   const spawnCount = Math.max(0, desiredGroups - currentSectionCount);
   for (let i = 0; i < spawnCount; i++) {

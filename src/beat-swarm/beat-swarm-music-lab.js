@@ -161,10 +161,21 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
       ? false
       : (payload?.phraseResolutionHit === true ? true : (payload?.phraseResolutionHit === false ? false : null)));
   const continuityId = String(context?.continuityId ?? payload?.continuityId ?? '').trim();
+  const musicLaneId = String(context?.musicLaneId ?? payload?.musicLaneId ?? '').trim().toLowerCase();
+  const foundationLaneId = String(context?.foundationLaneId ?? payload?.foundationLaneId ?? '').trim().toLowerCase();
   const enemyVisualId = String(context?.enemyVisualId ?? payload?.enemyVisualId ?? payload?.musicRoleVisualId ?? '').trim().toLowerCase();
   const enemyRoleColor = String(context?.enemyRoleColor ?? payload?.enemyRoleColor ?? payload?.musicRoleColor ?? '').trim().toLowerCase();
   const playerCadenceMode = String(context?.playerCadenceMode ?? payload?.playerCadenceMode ?? '').trim().toLowerCase();
   const playerCadenceReason = String(context?.playerCadenceReason ?? payload?.playerCadenceReason ?? '').trim().toLowerCase();
+  const callResponseLane = String(context?.callResponseLane ?? payload?.callResponseLane ?? '').trim().toLowerCase();
+  const callResponseQualified = context?.callResponseQualified === true
+    ? true
+    : (context?.callResponseQualified === false
+      ? false
+      : (payload?.callResponseQualified === true
+        ? true
+        : (payload?.callResponseQualified === false ? false : null)));
+  const callResponsePhraseProgress = clampInt(context?.callResponsePhraseProgress ?? payload?.callResponsePhraseProgress, 0, 0);
   const playerManualOverrideActive = context?.playerManualOverrideActive === true
     ? true
     : (payload?.playerManualOverrideActive === true);
@@ -203,10 +214,15 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     phraseResolutionOpportunity,
     phraseResolutionHit,
     continuityId,
+    musicLaneId,
+    foundationLaneId,
     enemyVisualId,
     enemyRoleColor,
     playerCadenceMode,
     playerCadenceReason,
+    callResponseLane,
+    callResponseQualified,
+    callResponsePhraseProgress,
     playerManualOverrideActive,
     musicLayer,
     musicProminence,
@@ -255,6 +271,7 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     tMs: nowMs(),
     timestamp: Date.now(),
     eventType: String(eventType || '').trim().toLowerCase(),
+    phase: String(payload?.phase || '').trim().toLowerCase(),
     barIndex,
     beatIndex,
     stepIndex: clampInt(context?.stepIndex, 0, 0),
@@ -264,11 +281,13 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     sourceEnemyType: String(payload?.sourceEnemyType || '').trim().toLowerCase(),
     sourceGroupId: clampInt(payload?.sourceGroupId, 0, 0),
     groupId: clampInt(payload?.groupId, 0, 0),
+    templateId: String(payload?.templateId || '').trim(),
     targetEnemyId: clampInt(payload?.targetEnemyId, 0, 0),
     targetEnemyType: String(payload?.targetEnemyType || '').trim().toLowerCase(),
     targetGroupId: clampInt(payload?.targetGroupId, 0, 0),
     laneId: String(payload?.laneId || '').trim().toLowerCase(),
     laneRole: String(payload?.laneRole || '').trim().toLowerCase(),
+    callResponseLane: String(payload?.callResponseLane || '').trim().toLowerCase(),
     role: String(payload?.role || '').trim().toLowerCase(),
     actionType: String(payload?.actionType || '').trim().toLowerCase(),
     instrumentId: String(payload?.instrumentId || '').trim(),
@@ -367,6 +386,7 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     reason: String(payload?.reason || '').trim().toLowerCase(),
     failureReason: String(payload?.failureReason || '').trim().toLowerCase(),
     active: payload?.active === true,
+    retiring: payload?.retiring === true,
     assignedAtBeat: clampInt(payload?.assignedAtBeat, -1, -1),
     transferCount: clampInt(payload?.transferCount, 0, 0),
     loopIdentity: String(payload?.loopIdentity || '').trim().toLowerCase(),
@@ -871,6 +891,89 @@ function collectVisibleEnemyAudibility(events) {
     visibleEnemyEvents,
     barelyAudibleVisibleEnemyEvents,
     barelyAudibleVisibleEnemyRate: visibleEnemyEvents > 0 ? (barelyAudibleVisibleEnemyEvents / visibleEnemyEvents) : 0,
+  };
+}
+
+function collectPresentationMetrics(executedEvents, session, maxBarIndex, inputs = null) {
+  const list = Array.isArray(executedEvents) ? executedEvents : [];
+  const createdEvents = (Array.isArray(session?.events) ? session.events : [])
+    .filter((ev) => String(ev?.phase || '').trim().toLowerCase() === 'created')
+    .filter((ev) => clampInt(ev?.barIndex, 0, 0) <= maxBarIndex);
+  const actionableExecuted = list.filter((ev) => {
+    const src = String(ev?.sourceSystem || '').trim().toLowerCase();
+    return src !== 'player' && src !== 'death' && src !== 'unknown';
+  });
+  let protectedLoopWeightedAudibility = 0;
+  let protectedLoopEventCount = 0;
+  const audibleVoicesByStep = new Map();
+  let groupBackedEvents = 0;
+  let actionableEventCount = 0;
+  for (const ev of actionableExecuted) {
+    const prominence = String(ev?.musicProminence || '').trim().toLowerCase();
+    const laneId = String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase();
+    const musicLayer = String(ev?.musicLayer || '').trim().toLowerCase();
+    const role = String(ev?.role || '').trim().toLowerCase();
+    const actorId = clampInt(ev?.actorId, 0, 0);
+    actionableEventCount += 1;
+    if (clampInt(ev?.groupId, 0, 0) > 0 && actorId > 0) groupBackedEvents += 1;
+    const protectedLaneLike = (
+      laneId === 'primary_loop_lane'
+      || laneId === 'foundation_lane'
+      || (musicLayer === 'foundation' && role === 'bass')
+      || (musicLayer === 'loops' && role === 'lead')
+    );
+    if (protectedLaneLike) {
+      protectedLoopEventCount += 1;
+      if (prominence === 'full') protectedLoopWeightedAudibility += 1;
+      else if (prominence === 'quiet') protectedLoopWeightedAudibility += 0.68;
+      else if (prominence === 'trace') protectedLoopWeightedAudibility += 0.24;
+    }
+    if (prominence === 'suppressed') continue;
+    const key = `${clampInt(ev?.beatIndex, 0, 0)}:${clampInt(ev?.stepIndex, 0, 0)}`;
+    audibleVoicesByStep.set(key, clampInt(audibleVoicesByStep.get(key), 0, 0) + 1);
+  }
+  let suppressedEventCount = 0;
+  for (const ev of createdEvents) {
+    const src = String(ev?.sourceSystem || '').trim().toLowerCase();
+    if (src === 'player' || src === 'death' || src === 'unknown') continue;
+    if (String(ev?.musicProminence || '').trim().toLowerCase() === 'suppressed') suppressedEventCount += 1;
+  }
+  const simultaneousVoiceCounts = Array.from(audibleVoicesByStep.values());
+  const avgSimultaneousVoiceCount = simultaneousVoiceCounts.length
+    ? (simultaneousVoiceCounts.reduce((sum, count) => sum + count, 0) / simultaneousVoiceCounts.length)
+    : 0;
+  const maxSimultaneousVoiceCount = simultaneousVoiceCounts.length ? Math.max(...simultaneousVoiceCounts) : 0;
+  const foregroundLoopChurnRate = Number(inputs?.hierarchyModel?.foregroundLoopChurnRate) || 0;
+  const avgEnemyCompetitionShare = Number(inputs?.readability?.avgEnemyCompetitionShare) || 0;
+  const avgEnemyForegroundShare = Number(inputs?.readability?.avgEnemyForegroundShare) || 0;
+  const sparkleForegroundShare = Number(inputs?.hierarchyModel?.sparkleForegroundShare) || 0;
+  const barelyAudibleVisibleEnemyRate = Number(inputs?.visibleEnemyAudibility?.barelyAudibleVisibleEnemyRate) || 0;
+  const foregroundClarityScore = Math.max(
+    0,
+    Math.min(
+      1,
+      1
+        - (foregroundLoopChurnRate * 1.1)
+        - (avgEnemyCompetitionShare * 0.75)
+        - (sparkleForegroundShare * 0.45)
+        - (barelyAudibleVisibleEnemyRate * 0.55)
+        + (Math.min(0.45, avgEnemyForegroundShare) * 0.35)
+    )
+  );
+  const decisionMaking = inputs?.passDiagnostics?.decisionMaking && typeof inputs.passDiagnostics.decisionMaking === 'object'
+    ? inputs.passDiagnostics.decisionMaking
+    : {};
+  const ghostLoopCount = Math.max(0, clampInt(decisionMaking?.executionInstrumentChangesRetiringOwner, 0, 0));
+  return {
+    protectedLoopAudibility: protectedLoopEventCount > 0 ? (protectedLoopWeightedAudibility / protectedLoopEventCount) : 0,
+    protectedLoopEventCount,
+    foregroundClarityScore,
+    simultaneousVoiceCount: avgSimultaneousVoiceCount,
+    maxSimultaneousVoiceCount,
+    suppressedEventCount,
+    suppressedEventRate: createdEvents.length > 0 ? (suppressedEventCount / createdEvents.length) : 0,
+    groupParticipationRate: actionableEventCount > 0 ? (groupBackedEvents / actionableEventCount) : 0,
+    ghostLoopCount,
   };
 }
 
@@ -2228,21 +2331,45 @@ function toAbsStepIndex(eventLike, stepsPerBeat = 8) {
   const ev = eventLike && typeof eventLike === 'object' ? eventLike : {};
   const beat = clampInt(ev?.beatIndex, 0, 0);
   const step = clampInt(ev?.stepIndex, 0, 0);
-  return (beat * Math.max(1, clampInt(stepsPerBeat, 8, 1))) + step;
+  const stepsPer = Math.max(1, clampInt(stepsPerBeat, 8, 1));
+  const beatDerived = beat * stepsPer;
+  // Beat Swarm records absolute step indices in stepIndex already.
+  // Prefer that absolute position when present; otherwise fall back to beat-derived.
+  if (step >= beatDerived) return step;
+  return beatDerived + step;
 }
 
 function collectCallResponse(events, options = null) {
   const responseWindowSteps = Math.max(1, clampInt(options?.responseWindowSteps, 8, 1));
+  const audibleWeightForEvent = (ev) => {
+    const prominence = String(ev?.musicProminence || '').trim().toLowerCase();
+    if (prominence === 'suppressed') return 0;
+    if (prominence === 'full') return 1;
+    if (prominence === 'quiet') return 0.68;
+    if (prominence === 'trace') return 0.24;
+    const audioGain = Math.max(0, Number(ev?.audioGain) || 0);
+    if (audioGain >= 0.5) return 1;
+    if (audioGain >= 0.26) return 0.68;
+    if (audioGain > 0) return 0.24;
+    return 0;
+  };
   const actionable = events
     .filter((ev) => {
       const src = String(ev?.sourceSystem || '').trim().toLowerCase();
       if (src === 'player' || src === 'death' || src === 'unknown') return false;
+      const lane = String(ev?.callResponseLane || '').trim().toLowerCase();
+      if (lane !== 'call' && lane !== 'response') return false;
       return true;
     })
     .sort((a, b) => clampInt(a?.timestamp, 0, 0) - clampInt(b?.timestamp, 0, 0));
 
   let responsePairs = 0;
   let callCount = 0;
+  let audibleResponsePairs = 0;
+  let delayedResponsePairs = 0;
+  let immediateResponsePairs = 0;
+  let totalResponseSize = 0;
+  let totalResponseAudibility = 0;
   const pairExamples = [];
 
   const actorKey = (ev) => {
@@ -2255,18 +2382,42 @@ function collectCallResponse(events, options = null) {
 
   for (let i = 0; i < actionable.length; i++) {
     const call = actionable[i];
+    const callLane = String(call?.callResponseLane || '').trim().toLowerCase();
+    if (callLane !== 'call') continue;
+    const callQualified = call?.callResponseQualified !== false;
+    if (!callQualified) continue;
     callCount += 1;
     const callActor = actorKey(call);
     const callStep = toAbsStepIndex(call, options?.stepsPerBeat || 8);
     let matched = false;
     for (let j = i + 1; j < actionable.length; j++) {
       const resp = actionable[j];
+      if (String(resp?.callResponseLane || '').trim().toLowerCase() !== 'response') continue;
       const respStep = toAbsStepIndex(resp, options?.stepsPerBeat || 8);
       const delta = respStep - callStep;
       if (delta <= 0) continue;
       if (delta > responseWindowSteps) break;
       if (actorKey(resp) === callActor) continue;
+      const respActor = actorKey(resp);
+      let responseSize = 1;
+      let bestAudibility = audibleWeightForEvent(resp);
+      for (let k = j + 1; k < actionable.length; k++) {
+        const follow = actionable[k];
+        if (String(follow?.callResponseLane || '').trim().toLowerCase() !== 'response') continue;
+        const followStep = toAbsStepIndex(follow, options?.stepsPerBeat || 8);
+        const followDelta = followStep - callStep;
+        if (followDelta <= delta) continue;
+        if (followDelta > responseWindowSteps) break;
+        if (actorKey(follow) !== respActor) break;
+        responseSize += 1;
+        bestAudibility = Math.max(bestAudibility, audibleWeightForEvent(follow));
+      }
       responsePairs += 1;
+      totalResponseSize += responseSize;
+      totalResponseAudibility += bestAudibility;
+      if (bestAudibility >= 0.68) audibleResponsePairs += 1;
+      if (delta <= 1) immediateResponsePairs += 1;
+      else delayedResponsePairs += 1;
       matched = true;
       if (pairExamples.length < 24) {
         pairExamples.push({
@@ -2285,6 +2436,8 @@ function collectCallResponse(events, options = null) {
             groupId: clampInt(resp?.groupId, 0, 0),
           },
           deltaSteps: delta,
+          responseSize,
+          responseAudibility: Number(bestAudibility.toFixed(3)),
         });
       }
       break;
@@ -2296,6 +2449,14 @@ function collectCallResponse(events, options = null) {
     callCount,
     responsePairs,
     responseRate: callCount > 0 ? (responsePairs / callCount) : 0,
+    audibleResponsePairs,
+    audibleResponseRate: callCount > 0 ? (audibleResponsePairs / callCount) : 0,
+    avgResponseSize: responsePairs > 0 ? (totalResponseSize / responsePairs) : 0,
+    avgResponseAudibility: responsePairs > 0 ? (totalResponseAudibility / responsePairs) : 0,
+    delayedResponsePairs,
+    delayedResponseRate: responsePairs > 0 ? (delayedResponsePairs / responsePairs) : 0,
+    immediateResponsePairs,
+    immediateResponseRate: responsePairs > 0 ? (immediateResponsePairs / responsePairs) : 0,
     responseWindowSteps,
     pairExamples,
   };
@@ -2365,6 +2526,11 @@ function computeSummary(metrics) {
   const gravityHitRate = Number(metrics?.phraseGravity?.gravityHitRate) || 0;
   const phraseResolutionRate = Number(metrics?.phraseGravity?.phraseResolutionRate) || 0;
   const responseRate = Number(metrics?.callResponse?.responseRate) || 0;
+  const audibleResponseRate = Number(metrics?.callResponse?.audibleResponseRate) || 0;
+  const avgResponseSize = Number(metrics?.callResponse?.avgResponseSize) || 0;
+  const avgResponseAudibility = Number(metrics?.callResponse?.avgResponseAudibility) || 0;
+  const delayedResponseRate = Number(metrics?.callResponse?.delayedResponseRate) || 0;
+  const immediateResponseRate = Number(metrics?.callResponse?.immediateResponseRate) || 0;
   const pitchEntropy = Number(metrics?.pitchEntropy?.entropyOverall) || 0;
   const contourLargeLeapRate = Number(metrics?.melodicContour?.largeLeapRate) || 0;
   const motifPersistence = Number(metrics?.motifPersistence?.weightedPersistence) || 0;
@@ -2429,6 +2595,11 @@ function computeSummary(metrics) {
     leadIntervalSmoothness: smooth >= 0.8 ? 'good' : (smooth >= 0.62 ? 'acceptable' : 'rough'),
     roleBalance: maxRoleShare <= 0.58 ? 'acceptable' : 'skewed',
     responseRate: Number(responseRate.toFixed(3)),
+    audibleResponseRate: Number(audibleResponseRate.toFixed(3)),
+    avgResponseSize: Number(avgResponseSize.toFixed(3)),
+    avgResponseAudibility: Number(avgResponseAudibility.toFixed(3)),
+    delayedResponseRate: Number(delayedResponseRate.toFixed(3)),
+    immediateResponseRate: Number(immediateResponseRate.toFixed(3)),
     pitchEntropy: Number(pitchEntropy.toFixed(3)),
     melodicContour: contourLargeLeapRate <= 0.18 ? 'stable' : (contourLargeLeapRate <= 0.32 ? 'mixed' : 'jumpy'),
     motifPersistence: Number(motifPersistence.toFixed(3)),
@@ -2517,9 +2688,22 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const phraseGravity = collectPhraseGravity(executedEvents);
   const createdEvents = (Array.isArray(session?.events) ? session.events : [])
     .filter((e) => String(e?.phase || '').trim().toLowerCase() === 'created' && clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
+  const callResponseSourceEvents = (() => {
+    const taggedByLane = (list, wantedLane) => list.filter((e) => {
+      const lane = String(e?.callResponseLane || '').trim().toLowerCase();
+      return lane === wantedLane;
+    });
+    const executedCalls = taggedByLane(executedEvents, 'call');
+    const executedResponses = taggedByLane(executedEvents, 'response');
+    const createdCalls = taggedByLane(createdEvents, 'call');
+    const createdResponses = taggedByLane(createdEvents, 'response');
+    const chosenCalls = executedCalls.length > 0 ? executedCalls : createdCalls;
+    const chosenResponses = executedResponses.length > 0 ? executedResponses : createdResponses;
+    return [...chosenCalls, ...chosenResponses];
+  })();
   const laneCompliance = collectLaneCompliance(createdEvents);
-  const callResponse = collectCallResponse(executedEvents, {
-    responseWindowSteps: 8,
+  const callResponse = collectCallResponse(callResponseSourceEvents, {
+    responseWindowSteps: 16,
     stepsPerBeat: 8,
   });
   const paletteContinuity = collectPaletteContinuity(session, maxBarIndex);
@@ -2541,6 +2725,12 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     motifReuse,
     motifPersistence
   );
+  const presentationMetrics = collectPresentationMetrics(executedEvents, session, maxBarIndex, {
+    hierarchyModel,
+    readability: readabilityStructureOnboarding?.readability,
+    visibleEnemyAudibility,
+    passDiagnostics,
+  });
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -2650,10 +2840,20 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     structure: readabilityStructureOnboarding.structure,
     onboarding: readabilityStructureOnboarding.onboarding,
     grooveStability,
+    presentationMetrics,
     explosionPrimesCreated: Number(explosionReliability?.explosionPrimesCreated) || 0,
     explosionApplications: Number(explosionReliability?.explosionApplications) || 0,
     explosionPrimeWithoutApplicationCount: Number(explosionReliability?.explosionPrimeWithoutApplicationCount) || 0,
     explosionReliabilityRate: Number(explosionReliability?.explosionReliabilityRate) || 0,
+    protectedLoopAudibility: Number(presentationMetrics?.protectedLoopAudibility) || 0,
+    protectedLoopEventCount: Number(presentationMetrics?.protectedLoopEventCount) || 0,
+    foregroundClarityScore: Number(presentationMetrics?.foregroundClarityScore) || 0,
+    simultaneousVoiceCount: Number(presentationMetrics?.simultaneousVoiceCount) || 0,
+    maxSimultaneousVoiceCount: Number(presentationMetrics?.maxSimultaneousVoiceCount) || 0,
+    suppressedEventCount: Number(presentationMetrics?.suppressedEventCount) || 0,
+    suppressedEventRate: Number(presentationMetrics?.suppressedEventRate) || 0,
+    groupParticipationRate: Number(presentationMetrics?.groupParticipationRate) || 0,
+    ghostLoopCount: Number(presentationMetrics?.ghostLoopCount) || 0,
   };
   return {
     metrics,

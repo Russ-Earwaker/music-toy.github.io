@@ -1974,6 +1974,12 @@ function syncSingletonEnemyStateFromMusicGroup(enemyLike, groupLike = null) {
   const enemyType = String(enemy?.enemyType || '').trim().toLowerCase();
   if (enemyType === 'spawner') {
     if (Array.isArray(group.steps)) enemy.spawnerSteps = group.steps.slice(0, 8);
+    if (Array.isArray(group.noteIndices)) {
+      enemy.spawnerNoteIndices = group.noteIndices.slice(0, 8).map((n) => Math.max(0, Math.trunc(Number(n) || 0)));
+    }
+    if (Array.isArray(group.notePalette) && group.notePalette.length) {
+      enemy.spawnerNotePalette = group.notePalette.slice();
+    }
     if (group.note) enemy.spawnerNoteName = String(group.note);
     if (syncedInstrumentId) enemy.spawnerInstrument = String(syncedInstrumentId);
     return;
@@ -2485,33 +2491,93 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
     });
   } else if (ownerType === 'composer-group-member') {
+    const minResponseDelaySteps = 2;
+    const responseWindowGraceSteps = 2;
     const laneMode = normalizeCallResponseLane(group?.callResponseLane, 'call');
     const activeGroups = composerEnemyGroups.filter((g) => g && g.active && !g.retiring);
-    if (!isCallResponseLaneActive(laneMode, stepIndex, activeGroups.length)) return null;
+    const getPendingCallExpiry = (callStepAbs, targetLength) => {
+      const lastCallStep = Math.max(-1, Math.trunc(Number(callStepAbs) || -1));
+      if (lastCallStep < 0) return -1;
+      const responseWindowSteps = Math.max(1, Math.trunc(Number(getCallResponseWindowSteps()) || 1));
+      const target = Math.max(1, Math.trunc(Number(targetLength) || 2));
+      return lastCallStep + responseWindowSteps + responseWindowGraceSteps + Math.max(1, target);
+    };
+    let continuingResponsePhrase = false;
+    let responseOverrideHit = false;
+    let hasLiveCallWindow = false;
+    let laneActive = isCallResponseLaneActive(laneMode, stepIndex, activeGroups.length);
     if (laneMode === 'response') {
       const lastCallStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1));
       const sinceCall = lastCallStep >= 0 ? (stepIndex - lastCallStep) : -1;
       const responseWindowSteps = Math.max(1, Math.trunc(Number(getCallResponseWindowSteps()) || 1));
-      if (!(lastCallStep >= 0 && sinceCall > 0 && sinceCall <= responseWindowSteps)) return null;
+      const pendingCallExpiresStepAbs = Math.max(
+        Math.trunc(Number(callResponseRuntime.pendingCallExpiresStepAbs) || -1),
+        getPendingCallExpiry(lastCallStep, callResponseRuntime.responsePhraseTargetLength)
+      );
+      continuingResponsePhrase = laneGroupId > 0
+        && laneGroupId === Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0))
+        && stepIndex <= Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1));
+      hasLiveCallWindow = lastCallStep >= 0 && sinceCall >= minResponseDelaySteps && stepIndex <= pendingCallExpiresStepAbs;
+      if (!laneActive && (continuingResponsePhrase || hasLiveCallWindow)) laneActive = true;
+    }
+    if (!laneActive) return null;
+    if (laneMode === 'response') {
+      if (!continuingResponsePhrase) {
+        if (!hasLiveCallWindow) return null;
+      }
       if (laneGroupId > 0 && laneGroupId === Math.max(0, Math.trunc(Number(callResponseRuntime.lastCallGroupId) || 0))) return null;
       const lastRespStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastResponseStepAbs) || -1));
       const sameRespGroup = laneGroupId > 0 && laneGroupId === Math.max(0, Math.trunc(Number(callResponseRuntime.lastResponseGroupId) || 0));
-      if (sameRespGroup && lastRespStep >= 0 && (stepIndex - lastRespStep) <= responseWindowSteps) return null;
+      const responseWindowWithGrace = responseWindowSteps + responseWindowGraceSteps;
+      if (!continuingResponsePhrase && sameRespGroup && lastRespStep >= 0 && (stepIndex - lastRespStep) <= responseWindowWithGrace) return null;
+      responseOverrideHit = !continuingResponsePhrase
+        && (sinceCall === minResponseDelaySteps || sinceCall === (minResponseDelaySteps + 1));
     }
-    if (!Array.isArray(group?.steps) || !group.steps[step]) return null;
+    const stepActive = Array.isArray(group?.steps) && !!group.steps[step];
+    if (!stepActive && !responseOverrideHit) return null;
     const notesLen = Math.max(1, Array.isArray(group?.notes) ? group.notes.length : 0);
     const noteIdx = Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen;
     const noteNameBaseRaw = normalizeSwarmNoteName(group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
     const noteNameBase = clampNoteToDirectorPool(noteNameBaseRaw, stepIndex + noteIdx);
-    const noteNameRaw = laneMode === 'response'
-      ? normalizeSwarmNoteName(chooseResponseNoteFromPool({
-        callNote: callResponseRuntime.lastCallNote,
-        fallbackNote: noteNameBaseRaw,
-        stepAbs: stepIndex,
-        notePool: ensureSwarmDirector().getNotePool(),
-        normalizeNoteName: normalizeSwarmNoteName,
-      })) || noteNameBaseRaw
-      : noteNameBaseRaw;
+    const responsePool = ensureSwarmDirector().getNotePool();
+    const responseSeedNote = normalizeSwarmNoteName(chooseResponseNoteFromPool({
+      callNote: callResponseRuntime.lastCallNote,
+      fallbackNote: noteNameBaseRaw,
+      stepAbs: stepIndex,
+      notePool: responsePool,
+      normalizeNoteName: normalizeSwarmNoteName,
+    })) || noteNameBaseRaw;
+    let noteNameRaw = noteNameBaseRaw;
+    if (laneMode === 'response') {
+      const callNote = normalizeSwarmNoteName(callResponseRuntime.lastCallNote);
+      const callIdx = callNote ? getNotePoolIndex(callNote) : -1;
+      const seedIdx = getNotePoolIndex(responseSeedNote);
+      const defaultDir = seedIdx >= 0 && callIdx >= 0 && seedIdx < callIdx ? -1 : 1;
+      const responseDir = continuingResponsePhrase
+        ? (Math.trunc(Number(callResponseRuntime.responseDirection) || defaultDir) || defaultDir)
+        : defaultDir;
+      const responseProgress = continuingResponsePhrase
+        ? Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0))
+        : 0;
+      const responseTargetLength = Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2));
+      const responseOffsets = (() => {
+        if (responseTargetLength <= 1) return [responseDir];
+        if (responseTargetLength === 2) return [responseDir, 0];
+        if (responseTargetLength === 3) return [responseDir, responseDir * 2, responseDir];
+        return [responseDir, responseDir * 2, responseDir, 0];
+      })();
+      const responseIdx = callIdx >= 0
+        ? (((callIdx + responseOffsets[Math.min(responseProgress, responseOffsets.length - 1)]) % responsePool.length) + responsePool.length) % responsePool.length
+        : -1;
+      noteNameRaw = responseIdx >= 0
+        ? (normalizeSwarmNoteName(responsePool[responseIdx]) || responseSeedNote)
+        : responseSeedNote;
+    }
+    const responsePhraseProgressForEvent = laneMode === 'response'
+      ? (continuingResponsePhrase
+        ? (Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0)) + 1)
+        : 1)
+      : 0;
     const noteName = clampNoteToDirectorPool(noteNameRaw, stepIndex + noteIdx + (laneMode === 'response' ? 1 : 0));
     const phraseStep = getPhraseStepState(stepIndex, getCallResponseWindowSteps());
     const phraseTargets = [
@@ -2550,6 +2616,30 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       String(group?.instrumentId || ownerEnemy?.musicInstrumentId || '').trim(),
       role
     );
+    const strongCallCandidate = laneMode === 'call'
+      ? (phraseStep.stepInPhrase <= 1
+        || phraseResolutionOpportunity
+        || phraseGravityOpportunity
+        || phraseResolutionHit
+        || phraseGravityHit)
+      : false;
+    const acceptedStrongCall = (() => {
+      if (!strongCallCandidate) return false;
+      const lastCallStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1));
+      const pendingCallExpiresStepAbs = Math.max(
+        Math.trunc(Number(callResponseRuntime.pendingCallExpiresStepAbs) || -1),
+        getPendingCallExpiry(lastCallStep, callResponseRuntime.responsePhraseTargetLength)
+      );
+      const pendingResponse = (
+        Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0)) > 0
+        && stepIndex <= Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1))
+      );
+      if (pendingResponse) return false;
+      if (lastCallStep < 0) return true;
+      const answeredCurrentCall = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastResponseStepAbs) || -1)) >= lastCallStep;
+      if (!answeredCurrentCall && stepIndex <= pendingCallExpiresStepAbs) return false;
+      return true;
+    })();
     event = createLoggedPerformedBeatEvent({
       actorId: Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0)),
       beatIndex,
@@ -2566,6 +2656,8 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
         continuityId,
         callResponseLane: laneMode,
+        callResponseQualified: laneMode === 'call' ? acceptedStrongCall : true,
+        callResponsePhraseProgress: responsePhraseProgressForEvent,
         audioGain: clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain),
         requestedNoteRaw: gravityNoteNameRaw,
         phraseGravityTarget,
@@ -2585,12 +2677,42 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
     });
     if (laneMode === 'call') {
-      callResponseRuntime.lastCallStepAbs = stepIndex;
-      callResponseRuntime.lastCallGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
-      callResponseRuntime.lastCallNote = styledNoteName;
+      if (acceptedStrongCall) {
+        const responseTargetLength = (() => {
+          if (phraseResolutionHit && phraseGravityHit) return 4;
+          if (phraseResolutionHit || phraseGravityHit) return Math.random() < 0.35 ? 4 : 3;
+          return Math.random() < 0.2 ? 1 : 2;
+        })();
+        callResponseRuntime.lastCallStepAbs = stepIndex;
+        callResponseRuntime.lastCallGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+        callResponseRuntime.lastCallNote = styledNoteName;
+        callResponseRuntime.pendingCallExpiresStepAbs = getPendingCallExpiry(stepIndex, responseTargetLength);
+        callResponseRuntime.lastResponseNote = '';
+        callResponseRuntime.activeResponseGroupId = 0;
+        callResponseRuntime.responseHoldUntilStepAbs = -1;
+        callResponseRuntime.responsePhraseProgress = 0;
+        callResponseRuntime.responsePhraseTargetLength = responseTargetLength;
+      }
     } else {
+      const responseTargetLength = Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2));
       callResponseRuntime.lastResponseStepAbs = stepIndex;
       callResponseRuntime.lastResponseGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+      callResponseRuntime.lastResponseNote = normalizeSwarmNoteName(styledNoteName) || styledNoteName;
+      callResponseRuntime.pendingCallExpiresStepAbs = -1;
+      callResponseRuntime.activeResponseGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+      callResponseRuntime.responseDirection = continuingResponsePhrase
+        ? (Math.trunc(Number(callResponseRuntime.responseDirection) || 1) || 1)
+        : (((getNotePoolIndex(callResponseRuntime.lastResponseNote) >= 0 && getNotePoolIndex(callResponseRuntime.lastCallNote) >= 0 && getNotePoolIndex(callResponseRuntime.lastResponseNote) < getNotePoolIndex(callResponseRuntime.lastCallNote)) ? -1 : 1) || 1);
+      callResponseRuntime.responsePhraseProgress = continuingResponsePhrase
+        ? (Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0)) + 1)
+        : 1;
+      callResponseRuntime.responseHoldUntilStepAbs = Math.max(
+        stepIndex,
+        Math.min(
+          stepIndex + Math.max(0, responseTargetLength - 1),
+          Math.max(stepIndex, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || stepIndex) + Math.max(1, Math.trunc(Number(getCallResponseWindowSteps()) || 1)))
+        )
+      );
     }
   }
   if (!event) return null;
@@ -4779,8 +4901,15 @@ function resetSwarmDirector(beatIndex = 0) {
   callResponseRuntime.lastCallStepAbs = -1;
   callResponseRuntime.lastCallGroupId = 0;
   callResponseRuntime.lastCallNote = '';
+  callResponseRuntime.pendingCallExpiresStepAbs = -1;
   callResponseRuntime.lastResponseStepAbs = -1;
   callResponseRuntime.lastResponseGroupId = 0;
+  callResponseRuntime.lastResponseNote = '';
+  callResponseRuntime.activeResponseGroupId = 0;
+  callResponseRuntime.responseHoldUntilStepAbs = -1;
+  callResponseRuntime.responseDirection = 1;
+  callResponseRuntime.responsePhraseProgress = 0;
+  callResponseRuntime.responsePhraseTargetLength = 0;
   return director;
 }
 function reportSwarmThreatIntent(threatClass = 'full', amount = 1, beatIndex = currentBeatIndex, reason = '') {
@@ -6618,6 +6747,20 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
       created.payload.authoringClass = authoringClass;
     } else if (created) {
       created.payload = { authoringClass };
+    }
+    if (created?.payload && typeof created.payload === 'object') {
+      if (!String(created.payload.callResponseLane || '').trim() && String(input?.callResponseLane || '').trim()) {
+        created.payload.callResponseLane = String(input.callResponseLane).trim().toLowerCase();
+      }
+      if (created.payload.callResponseQualified !== true && input?.callResponseQualified === true) {
+        created.payload.callResponseQualified = true;
+      }
+      if (
+        !(Math.max(0, Math.trunc(Number(created.payload.callResponsePhraseProgress) || 0)) > 0)
+        && (Math.max(0, Math.trunc(Number(input?.callResponsePhraseProgress) || 0)) > 0)
+      ) {
+        created.payload.callResponsePhraseProgress = Math.max(0, Math.trunc(Number(input.callResponsePhraseProgress) || 0));
+      }
     }
     if (protectedLaneClaim && created?.payload && typeof created.payload === 'object' && !String(created.payload.musicLaneId || '').trim()) {
       created.payload.musicLaneId = protectedLaneClaim;
@@ -10309,6 +10452,66 @@ function createDrawSnakeEnemyProfile() {
     }
     return steps;
   };
+  const transformDrawgridLikePattern = (stepsLike = null, offset = 0) => {
+    let steps = Array.isArray(stepsLike) ? stepsLike.map((step) => !!step) : Array.from({ length: WEAPON_TUNE_STEPS }, () => false);
+    if (seededBool(240 + offset, 0.22)) steps = steps.slice().reverse();
+    if (seededBool(241 + offset, 0.28)) {
+      const mirrored = steps.slice();
+      for (let i = 0; i < Math.floor(mirrored.length * 0.5); i += 1) {
+        const a = mirrored[i];
+        mirrored[i] = mirrored[mirrored.length - 1 - i];
+        mirrored[mirrored.length - 1 - i] = a;
+      }
+      steps = mirrored;
+    }
+    if (seededBool(242 + offset, 0.34)) {
+      const shift = 1 + (seededRangeInt(243 + offset, Math.max(1, steps.length - 1)) % Math.max(1, steps.length - 1));
+      steps = rotatePattern(steps, shift);
+    }
+    if (seededBool(244 + offset, 0.3)) {
+      const silenceTarget = seededRangeInt(245 + offset, steps.length);
+      if ((silenceTarget % 2) === 0 && steps.filter(Boolean).length > 3) steps[silenceTarget] = false;
+    }
+    return injectDrawgridOffbeatActivity(steps, 260 + offset);
+  };
+  const evolveDrawgridLikePattern = (stepsLike = null, offset = 0) => {
+    let steps = Array.isArray(stepsLike) ? stepsLike.map((step) => !!step) : Array.from({ length: WEAPON_TUNE_STEPS }, () => false);
+    const activeCount = steps.filter(Boolean).length;
+    if (activeCount <= 1) return injectDrawgridOffbeatActivity(steps, 320 + offset);
+    if (seededBool(300 + offset, 0.34)) {
+      const sourceActive = steps
+        .map((step, idx) => step ? idx : -1)
+        .filter((idx) => idx >= 0);
+      if (sourceActive.length) {
+        const src = sourceActive[seededRangeInt(301 + offset, sourceActive.length)];
+        const drift = seededBool(302 + offset, 0.5) ? 2 : 3;
+        const target = (src + drift) % Math.max(1, steps.length);
+        steps[target] = true;
+        if (sourceActive.length >= 4 && seededBool(303 + offset, 0.42) && (src % 2) === 0) {
+          steps[src] = false;
+        }
+      }
+    }
+    if (seededBool(304 + offset, 0.28)) {
+      const activeOdd = steps.some((step, idx) => step && (idx % 2) === 1);
+      if (!activeOdd) {
+        const oddTargets = steps
+          .map((step, idx) => (!step && (idx % 2) === 1) ? idx : -1)
+          .filter((idx) => idx >= 0);
+        if (oddTargets.length) {
+          steps[oddTargets[seededRangeInt(305 + offset, oddTargets.length)]] = true;
+        }
+      }
+    }
+    if (seededBool(306 + offset, 0.18) && steps.filter(Boolean).length > 3) {
+      const active = steps
+        .map((step, idx) => step ? idx : -1)
+        .filter((idx) => idx >= 0);
+      const pick = active[seededRangeInt(307 + offset, active.length)];
+      if (pick > 0 && pick < (steps.length - 1)) steps[pick] = false;
+    }
+    return injectDrawgridOffbeatActivity(steps, 340 + offset);
+  };
   const buildVirtualDrawgridSeed = () => {
     const patternFamilies = [
       [1, 0, 1, 0, 0, 1, 0, 0],
@@ -10321,11 +10524,19 @@ function createDrawSnakeEnemyProfile() {
       [1, 0, 1, 1, 0, 1, 0, 0],
       [1, 0, 0, 1, 0, 1, 1, 0],
       [1, 1, 0, 0, 1, 0, 1, 0],
+      [1, 0, 1, 0, 1, 1, 0, 0],
+      [1, 1, 0, 1, 0, 0, 0, 1],
+      [1, 0, 0, 1, 1, 0, 1, 0],
+      [1, 1, 0, 0, 1, 0, 0, 1],
+      [1, 0, 1, 1, 0, 0, 0, 1],
+      [1, 0, 0, 1, 0, 1, 0, 1],
+      [1, 1, 0, 0, 1, 1, 0, 0],
+      [1, 0, 1, 0, 0, 1, 1, 0],
     ];
-    const baseSteps = injectDrawgridOffbeatActivity(rotatePattern(
+    const baseSteps = evolveDrawgridLikePattern(transformDrawgridLikePattern(rotatePattern(
       patternFamilies[seededRangeInt(2, patternFamilies.length)] || patternFamilies[0],
       seededRangeInt(3, WEAPON_TUNE_STEPS)
-    ).map((step) => !!step), 0);
+    ).map((step) => !!step), 0), 20);
     const maxRow = Math.max(0, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1);
     const anchorSteps = baseSteps
       .map((step, idx) => step ? idx : -1)
@@ -10368,6 +10579,7 @@ function createDrawSnakeEnemyProfile() {
         rows[i] = Math.max(0, Math.min(maxRow, Math.round((rows[i - 1] + rows[i] + rows[i + 1]) / 3)));
       }
     }
+    if (seededBool(96, 0.24)) rows.reverse();
     return { steps: baseSteps, rows };
   };
   const virtualDrawgridSeed = buildVirtualDrawgridSeed();
@@ -10386,9 +10598,18 @@ function createDrawSnakeEnemyProfile() {
       [1, 1, 0, 1, 0, 1, 0, 0],
       [1, 0, 1, 1, 0, 0, 1, 0],
       [1, 0, 0, 1, 0, 1, 1, 0],
+      [1, 1, 0, 0, 1, 0, 1, 0],
+      [1, 0, 1, 0, 1, 1, 0, 0],
+      [1, 0, 1, 1, 0, 0, 0, 1],
+      [1, 0, 0, 1, 0, 1, 0, 1],
+      [1, 1, 0, 0, 1, 1, 0, 0],
+      [1, 0, 1, 0, 0, 1, 1, 0],
     ];
     const basePattern = contourFamilies[seededRangeInt(3, contourFamilies.length)] || contourFamilies[0];
-    const rotated = injectDrawgridOffbeatActivity(rotatePattern(basePattern, seededRangeInt(5, basePattern.length)), 40);
+    const rotated = evolveDrawgridLikePattern(
+      transformDrawgridLikePattern(rotatePattern(basePattern, seededRangeInt(5, basePattern.length)), 40),
+      60
+    );
     const mutated = rotated.slice();
     const mutationCount = 1 + (seededBool(7, 0.28) ? 1 : 0) + (seededBool(8, 0.12) ? 1 : 0);
     for (let i = 0; i < mutationCount; i += 1) {
@@ -10403,7 +10624,7 @@ function createDrawSnakeEnemyProfile() {
       const restIdx = seededRangeInt(22, mutated.length);
       mutated[restIdx] = false;
     }
-    return injectDrawgridOffbeatActivity(mutated, 80);
+    return evolveDrawgridLikePattern(transformDrawgridLikePattern(mutated, 80), 100);
   })();
   const steps = Array.isArray(phrase?.steps)
     ? createStepPattern(phrase.steps, WEAPON_TUNE_STEPS)
@@ -10432,6 +10653,10 @@ function createDrawSnakeEnemyProfile() {
   for (let i = 0; i < steps.length; i++) steps[i] = !!densitySteps[i];
   const offbeatRebalancedSteps = injectDrawgridOffbeatActivity(steps, 120);
   for (let i = 0; i < steps.length; i += 1) steps[i] = !!offbeatRebalancedSteps[i];
+  if (seededBool(122, 0.18) && steps.filter(Boolean).length >= 3) {
+    const silenceStep = seededRangeInt(123, steps.length);
+    if (!((silenceStep % 2) === 1 && steps[silenceStep])) steps[silenceStep] = false;
+  }
   try {
     noteMusicSystemEvent('music_rhythm_tier_selected', {
       sourceType: 'drawsnake_profile',
@@ -10449,6 +10674,7 @@ function createDrawSnakeEnemyProfile() {
       const anchorA = seededRangeInt(33, Math.max(1, maxRow + 1));
       const anchorB = seededRangeInt(34, Math.max(1, maxRow + 1));
       const contourBias = seededRangeInt(35, 4);
+      const contourMode = seededRangeInt(36, 4);
       for (let i = 1; i < generated.length; i += 1) {
         const prev = Math.max(0, Math.min(maxRow, Math.trunc(Number(generated[i - 1]) || startRow)));
         const phraseAnchor = i === 0 || i === Math.floor(generated.length * 0.5) || i === (generated.length - 1);
@@ -10466,6 +10692,13 @@ function createDrawSnakeEnemyProfile() {
           next = Math.max(0, Math.min(maxRow, prev + direction));
         } else if (roll < 0.68) {
           next = Math.max(0, Math.min(maxRow, prev + (direction * 2)));
+        } else if (roll < 0.78 && contourMode === 1) {
+          next = Math.max(0, Math.min(maxRow, prev + (direction * 3)));
+        } else if (roll < 0.82 && contourMode === 2) {
+          next = Math.max(0, Math.min(maxRow, prev - direction));
+        } else if (roll < 0.86 && contourMode === 3) {
+          const echoSource = Math.max(0, i - 3);
+          next = Math.max(0, Math.min(maxRow, Math.trunc(Number(generated[echoSource]) || prev)));
         } else if (roll < 0.84) {
           next = Math.max(0, Math.min(maxRow, prev + ((contourBias % 2) === 0 ? 1 : -1)));
         } else {
@@ -10487,6 +10720,12 @@ function createDrawSnakeEnemyProfile() {
       SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1,
       Math.trunc(Math.round(midRow + ((raw - midRow) * spread)))
     ));
+  }
+  if (seededBool(160, 0.22)) {
+    const maxRow = Math.max(0, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1);
+    for (let i = 0; i < rows.length; i += 1) {
+      rows[i] = Math.max(0, Math.min(maxRow, maxRow - Math.trunc(Number(rows[i]) || 0)));
+    }
   }
   const activeIndices = steps
     .map((step, idx) => step ? idx : -1)
@@ -10715,6 +10954,13 @@ function maintainSpawnerEnemyPopulation() {
     if (!Array.isArray(stepsLike) || !stepsLike.length) return '';
     return stepsLike.map((step) => (step ? '1' : '0')).join('');
   };
+  const buildSpawnerNoteSignature = (noteIndicesLike = null, notePaletteLike = null) => {
+    const noteIndices = Array.isArray(noteIndicesLike)
+      ? noteIndicesLike.slice(0, 8).map((n) => Math.max(0, Math.trunc(Number(n) || 0)))
+      : [];
+    const notePalette = Array.isArray(notePaletteLike) ? notePaletteLike.slice() : [];
+    return `${noteIndices.join(',')}|${notePalette.join(',')}`;
+  };
   const markSpawnerPerf = (bucket, startMs) => {
     recordBeatSwarmPerfSample(bucket, Math.max(0, getBeatSwarmPerfNow() - startMs));
   };
@@ -10818,11 +11064,13 @@ function maintainSpawnerEnemyPopulation() {
       const desiredRole = getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.BASS);
       const desiredLifecycle = String(enemy?.lifecycleState || 'active');
       const desiredStepsSignature = buildSpawnerStepsSignature(desiredSteps);
+      const desiredNoteSignature = buildSpawnerNoteSignature(desiredNoteIndices, desiredNotePalette);
       const desiredSyncSignature = [
         String(desiredRole || ''),
         String(desiredNoteName || ''),
         String(desiredInstrument || ''),
         desiredStepsSignature,
+        desiredNoteSignature,
       ].join('|');
       let syncSteps = desiredSteps;
       if (String(enemy?.__bsSpawnerSyncSignature || '') !== desiredSyncSignature || !singletonEnemyMusicGroups.get(Math.trunc(Number(enemy?.id) || 0))) {
@@ -10843,6 +11091,10 @@ function maintainSpawnerEnemyPopulation() {
           syncGroup.note = enemy.spawnerNoteName;
           syncGroup.instrumentId = enemy.spawnerInstrument;
           syncGroup.steps = Array.isArray(enemy.spawnerSteps) ? enemy.spawnerSteps.map((step) => !!step) : [];
+          syncGroup.noteIndices = Array.isArray(enemy.spawnerNoteIndices)
+            ? enemy.spawnerNoteIndices.slice(0, 8).map((n) => Math.max(0, Math.trunc(Number(n) || 0)))
+            : [];
+          syncGroup.notePalette = Array.isArray(enemy.spawnerNotePalette) ? enemy.spawnerNotePalette.slice() : [];
           syncGroup.rows = null;
           const nextMembers = sharedSpawnerGroupsBySignature.has(desiredSyncSignature)
             ? new Set(syncGroup.memberIds instanceof Set ? syncGroup.memberIds : [])
@@ -10883,11 +11135,14 @@ function maintainSpawnerEnemyPopulation() {
         markSpawnerPerf('maintainSpawners.sync.group', phasePerfStart);
         phasePerfStart = getBeatSwarmPerfNow();
         syncSteps = Array.isArray(syncGroup?.steps) ? syncGroup.steps : enemy?.spawnerSteps;
+        const syncNoteIndices = Array.isArray(syncGroup?.noteIndices) ? syncGroup.noteIndices : enemy?.spawnerNoteIndices;
+        const syncNotePalette = Array.isArray(syncGroup?.notePalette) ? syncGroup.notePalette : enemy?.spawnerNotePalette;
         const syncSignature = [
           String(desiredRole || ''),
-          String(enemy?.spawnerNoteName || ''),
-          String(enemy?.spawnerInstrument || ''),
+          String(syncGroup?.note || enemy?.spawnerNoteName || ''),
+          String(syncGroup?.instrumentId || enemy?.spawnerInstrument || ''),
           buildSpawnerStepsSignature(syncSteps),
+          buildSpawnerNoteSignature(syncNoteIndices, syncNotePalette),
         ].join('|');
         if (!(syncGroup && Math.trunc(Number(syncGroup?.id) || 0) > 0 && Math.trunc(Number(syncGroup?.memberIds?.size) || 0) === 1)) {
           syncSingletonEnemyStateFromMusicGroup(enemy, syncGroup);
@@ -10902,6 +11157,26 @@ function maintainSpawnerEnemyPopulation() {
             sharedGroup.memberIds = new Set();
             sharedSpawnerGroupsBySignature.set(desiredSyncSignature, sharedGroup);
           }
+          sharedGroup.enemyType = 'spawner';
+          sharedGroup.role = desiredRole;
+          sharedGroup.actionType = 'spawner-spawn';
+          if (!String(sharedGroup.note || '').trim()) {
+            sharedGroup.note = enemy.spawnerNoteName;
+          }
+          if (!String(sharedGroup.instrumentId || '').trim()) {
+            sharedGroup.instrumentId = enemy.spawnerInstrument;
+          }
+          if (!Array.isArray(sharedGroup.steps) || !sharedGroup.steps.length) {
+            sharedGroup.steps = Array.isArray(enemy.spawnerSteps) ? enemy.spawnerSteps.map((step) => !!step) : [];
+          }
+          if (!Array.isArray(sharedGroup.noteIndices) || !sharedGroup.noteIndices.length) {
+            sharedGroup.noteIndices = Array.isArray(enemy.spawnerNoteIndices)
+              ? enemy.spawnerNoteIndices.slice(0, 8).map((n) => Math.max(0, Math.trunc(Number(n) || 0)))
+              : [];
+          }
+          if (!Array.isArray(sharedGroup.notePalette) || !sharedGroup.notePalette.length) {
+            sharedGroup.notePalette = Array.isArray(enemy.spawnerNotePalette) ? enemy.spawnerNotePalette.slice() : [];
+          }
           const enemyId = Math.trunc(Number(enemy?.id) || 0);
           sharedGroup.memberIds.add(enemyId);
           sharedGroup.lifecycleState = desiredLifecycle;
@@ -10911,6 +11186,9 @@ function maintainSpawnerEnemyPopulation() {
           enemy.musicGroupType = sharedGroup.size > 1 ? 'spawner-sync' : 'singleton';
           singletonEnemyMusicGroups.set(enemyId, sharedGroup);
           syncSteps = Array.isArray(sharedGroup?.steps) ? sharedGroup.steps : syncSteps;
+          if (!(sharedGroup && Math.trunc(Number(sharedGroup?.id) || 0) > 0 && Math.trunc(Number(sharedGroup?.memberIds?.size) || 0) === 1)) {
+            syncSingletonEnemyStateFromMusicGroup(enemy, sharedGroup);
+          }
         }
         markSpawnerPerf('maintainSpawners.sync.assign', phasePerfStart);
       }
@@ -13604,6 +13882,7 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
     getCurrentPacingCaps,
     getCallResponseWindowSteps,
     isCallResponseLaneActive,
+    noteMusicSystemEvent,
     getAliveEnemiesByIds,
     getFoundationLaneSnapshot,
     clampNoteToDirectorPool,
@@ -13630,6 +13909,9 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
       groupId: Math.max(0, Math.trunc(Number(evt?.payload?.groupId) || 0)),
       beatIndex: Math.max(0, Math.trunc(Number(evt?.beatIndex) || 0)),
       stepIndex: Math.max(0, Math.trunc(Number(evt?.stepIndex) || 0)),
+      callResponseLane: String(evt?.payload?.callResponseLane || '').trim().toLowerCase(),
+      callResponseQualified: evt?.payload?.callResponseQualified === true,
+      callResponsePhraseProgress: Math.max(0, Math.trunc(Number(evt?.payload?.callResponsePhraseProgress) || 0)),
     }),
     isLifecycleSchedulable,
     styleProfile: getSwarmStyleProfile(),
@@ -13687,6 +13969,7 @@ function maintainComposerEnemyGroups() {
       normalizeMusicLifecycleState,
       normalizeSwarmNoteName,
       normalizeSwarmRole,
+      noteMusicSystemEvent,
       pickComposerGroupColor,
       pickComposerGroupShape,
       pickComposerGroupTemplate,

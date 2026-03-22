@@ -31,6 +31,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const sanitizeEnemyMusicInstrumentId = typeof helpers.sanitizeEnemyMusicInstrumentId === 'function'
     ? helpers.sanitizeEnemyMusicInstrumentId
     : ((instrumentId, fallback) => helpers.resolveInstrumentIdOrFallback?.(instrumentId, fallback) || fallback || 'tone');
+  const noteMusicSystemEvent = typeof helpers.noteMusicSystemEvent === 'function'
+    ? helpers.noteMusicSystemEvent
+    : null;
   const enemyById = withPerfSample('maintainComposerGroups.enemyIndex', () => {
     const index = new Map();
     for (let i = 0; i < enemies.length; i++) {
@@ -74,6 +77,22 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       maxComposerPerformers: Math.max(1, Math.trunc(Number(pacingCaps?.maxComposerPerformers) || 1)),
     }
     : pacingCaps);
+  if (
+    !introWindowActive
+    && !introHoldActive
+    && String(effectivePacingCaps?.responseMode || '').trim().toLowerCase() === 'group'
+  ) {
+    effectivePacingCaps.maxComposerGroups = Math.max(2, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
+    const activeFoundationBufferGroups = composerEnemyGroups.filter((group) => (
+      group
+      && group.active
+      && !group.retiring
+      && String(group?.templateId || '').trim() === 'foundation-buffer'
+    )).length;
+    if (activeFoundationBufferGroups > 0) {
+      effectivePacingCaps.maxComposerGroups += activeFoundationBufferGroups;
+    }
+  }
   const templateLibrary = Array.isArray(constants.composerGroupTemplateLibrary) ? constants.composerGroupTemplateLibrary : [];
   const templateById = new Map();
   for (let i = 0; i < templateLibrary.length; i++) {
@@ -84,8 +103,45 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const forcedIntroBassTemplate = templateLibrary.find(
     (t) => helpers.normalizeSwarmRole?.(t?.role || '', constants.leadRole) === constants.bassRole
   ) || null;
+  const defaultResponseTemplate = templateLibrary.find((t) => String(t?.id || '').trim() === 'response_group')
+    || templateLibrary.find((t) => {
+      const lane = helpers.normalizeCallResponseLane?.(t?.callResponseLane || '', '') || String(t?.callResponseLane || '').trim().toLowerCase();
+      const role = helpers.normalizeSwarmRole?.(t?.role || '', constants.leadRole) || '';
+      return lane === 'response' && role !== constants.bassRole;
+    })
+    || null;
+  const defaultCallTemplate = templateLibrary.find((t) => {
+    const lane = helpers.normalizeCallResponseLane?.(t?.callResponseLane || '', 'call') || String(t?.callResponseLane || '').trim().toLowerCase() || 'call';
+    const role = helpers.normalizeSwarmRole?.(t?.role || '', constants.leadRole) || '';
+    const templateId = String(t?.id || '').trim();
+    return lane !== 'response' && role !== constants.bassRole && templateId !== 'foundation-buffer';
+  }) || null;
   const composer = helpers.getComposerDirective?.() || {};
   const motifScopeKey = helpers.getComposerMotifScopeKey?.() || '';
+  const getActiveComposerLaneCoverage = () => {
+    const activeGroups = composerEnemyGroups.filter((g) => g && g.active && !g.retiring);
+    let hasNonBassCall = false;
+    let hasResponse = false;
+    for (const g of activeGroups) {
+      const lane = helpers.normalizeCallResponseLane?.(g?.callResponseLane || '', 'call') || String(g?.callResponseLane || '').trim().toLowerCase() || 'call';
+      const templateId = String(g?.templateId || '').trim();
+      const role = helpers.normalizeSwarmRole?.(g?.role || templateById.get(templateId)?.role || '', constants.leadRole) || '';
+      if (lane === 'response' && role !== constants.bassRole && templateId !== 'foundation-buffer') hasResponse = true;
+      if (lane !== 'response' && role !== constants.bassRole && templateId !== 'foundation-buffer') hasNonBassCall = true;
+    }
+    return { hasNonBassCall, hasResponse };
+  };
+  const getDesiredComposerLane = (groupIndex) => {
+    const parityLane = helpers.normalizeCallResponseLane?.((groupIndex % 2) === 0 ? 'call' : 'response', 'call')
+      || ((groupIndex % 2) === 0 ? 'call' : 'response');
+    if (introWindowActive || introHoldActive || String(effectivePacingCaps?.responseMode || '').trim().toLowerCase() !== 'group') {
+      return parityLane;
+    }
+    const coverage = getActiveComposerLaneCoverage();
+    if (!coverage.hasNonBassCall) return 'call';
+    if (!coverage.hasResponse) return 'response';
+    return parityLane;
+  };
   const retireGroup = (group, reason) => {
     if (!group || group.retiring) return;
     group.active = false;
@@ -120,8 +176,26 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         if ((pacingState === 'intro_bass' || pacingState === 'intro_response' || introHoldActive) && forcedIntroBassTemplate) {
           return forcedIntroBassTemplate;
         }
+        const desiredLane = getDesiredComposerLane(groupIndex);
+        const laneMatchedTemplates = templateLibrary.filter((template) => {
+          const lane = helpers.normalizeCallResponseLane?.(template?.callResponseLane || '', '') || String(template?.callResponseLane || '').trim().toLowerCase();
+          if (lane !== desiredLane) return false;
+          const templateId = String(template?.id || '').trim();
+          const role = helpers.normalizeSwarmRole?.(template?.role || '', constants.leadRole) || '';
+          const coverage = getActiveComposerLaneCoverage();
+          if (desiredLane === 'response') return templateId !== 'foundation-buffer' && role !== constants.bassRole;
+          if (!coverage.hasNonBassCall) return templateId !== 'foundation-buffer' && role !== constants.bassRole;
+          return true;
+        });
+        const templatePool = laneMatchedTemplates.length
+          ? laneMatchedTemplates
+          : (
+            desiredLane === 'response' && defaultResponseTemplate
+              ? [defaultResponseTemplate]
+              : ((!getActiveComposerLaneCoverage().hasNonBassCall && defaultCallTemplate) ? [defaultCallTemplate] : templateLibrary)
+          );
         return helpers.pickComposerGroupTemplate?.({
-          templates: templateLibrary,
+          templates: templatePool,
           groupIndex,
           energyState: helpers.getCurrentSwarmEnergyStateName?.(),
           normalizeRole: (roleName) => helpers.normalizeSwarmRole?.(roleName, constants.leadRole),
@@ -133,8 +207,47 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       createComposerEnemyGroupProfile: helpers.createComposerEnemyGroupProfile,
       createGroupFromMotif: ({ groupIndex, sectionKey, composer: composerDirective, templateId, motif, pacingCaps: caps }) => {
         return withPerfSample('maintainComposerGroups.createGroup', () => {
+          const desiredLane = getDesiredComposerLane(groupIndex);
+          const coverage = getActiveComposerLaneCoverage();
+          const forcedResponseTemplateId = desiredLane === 'response' && defaultResponseTemplate
+            ? String(defaultResponseTemplate.id || '').trim()
+            : '';
+          const forcedCallTemplateId = desiredLane !== 'response' && !coverage.hasNonBassCall && defaultCallTemplate
+            ? String(defaultCallTemplate.id || '').trim()
+            : '';
+          const requestedTemplateId = String(motif?.templateId || templateId || '').trim();
+          const requestedTemplateRole = helpers.normalizeSwarmRole?.(
+            templateById.get(requestedTemplateId)?.role || '',
+            ''
+          ) || '';
+          const effectiveTemplateId = desiredLane === 'response'
+            && (
+              requestedTemplateId === 'foundation-buffer'
+              || requestedTemplateRole === constants.bassRole
+            )
+            && forcedResponseTemplateId
+            ? forcedResponseTemplateId
+            : (
+              desiredLane !== 'response'
+              && !coverage.hasNonBassCall
+              && (
+                requestedTemplateId === 'foundation-buffer'
+                || requestedTemplateRole === constants.bassRole
+              )
+              && forcedCallTemplateId
+                ? forcedCallTemplateId
+                : requestedTemplateId
+            );
+          const templateLane = helpers.normalizeCallResponseLane?.(
+            templateById.get(effectiveTemplateId)?.callResponseLane || '',
+            ''
+          ) || '';
+          const motifLane = helpers.normalizeCallResponseLane?.(motif?.callResponseLane || '', '') || '';
+          const resolvedCallResponseLane = desiredLane === 'response'
+            ? 'response'
+            : (motifLane || templateLane || desiredLane);
           const templateRole = helpers.normalizeSwarmRole?.(
-            templateById.get(String(templateId || ''))?.role || '',
+            templateById.get(effectiveTemplateId)?.role || '',
             ''
           );
           const role = templateRole || helpers.normalizeSwarmRole?.(motif?.role || 'lead', constants.leadRole);
@@ -148,9 +261,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             id: helpers.getNextComposerEnemyGroupId?.(),
             sectionKey,
             sectionId: String(composerDirective?.sectionId || 'default'),
-            templateId: String(motif?.templateId || templateId),
+            templateId: effectiveTemplateId,
             role,
-            callResponseLane: helpers.normalizeCallResponseLane?.(motif?.callResponseLane || ((groupIndex % 2) === 0 ? 'call' : 'response')),
+            callResponseLane: resolvedCallResponseLane,
             shape: String(motif?.shape || helpers.pickComposerGroupShape?.({ shapes: constants.composerGroupShapes, index: groupIndex })),
             color: String(motif?.color || helpers.pickComposerGroupColor?.({ colors: constants.composerGroupColors, index: groupIndex })),
             actionType: String(motif?.actionType || 'projectile'),
@@ -222,6 +335,21 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             performerGroupId: Math.trunc(Number(created.id) || 0),
             performerType: 'composer-group',
           });
+          if (noteMusicSystemEvent) {
+            noteMusicSystemEvent('music_composer_group_state', {
+              phase: 'created',
+              groupId: Math.trunc(Number(created?.id) || 0),
+              templateId: String(created?.templateId || '').trim(),
+              callResponseLane: String(created?.callResponseLane || '').trim().toLowerCase(),
+              sectionId: String(created?.sectionId || '').trim().toLowerCase(),
+              active: created?.active === true,
+              retiring: created?.retiring === true,
+              lifecycleState: String(created?.lifecycleState || '').trim().toLowerCase(),
+              role: String(created?.role || '').trim().toLowerCase(),
+            }, {
+              beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+            });
+          }
           return created;
         });
       },
@@ -267,7 +395,37 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         String(group?.__bsComposerMemberSyncSignature || '') === groupSyncSignature
         && Math.trunc(Number(group?.__bsComposerMemberSyncCount) || 0) === Math.max(0, Math.trunc(Number(groupMemberCount) || 0))
       ) {
+        if (noteMusicSystemEvent) {
+          noteMusicSystemEvent('music_composer_group_state', {
+            phase: 'steady',
+            groupId: Math.trunc(Number(group?.id) || 0),
+            templateId: String(group?.templateId || '').trim(),
+            callResponseLane: String(group?.callResponseLane || '').trim().toLowerCase(),
+            sectionId: String(group?.sectionId || '').trim().toLowerCase(),
+            active: group?.active === true,
+            retiring: group?.retiring === true,
+            lifecycleState: String(group?.lifecycleState || '').trim().toLowerCase(),
+            role: String(effectiveRole || '').trim().toLowerCase(),
+          }, {
+            beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+          });
+        }
         continue;
+      }
+      if (noteMusicSystemEvent) {
+        noteMusicSystemEvent('music_composer_group_state', {
+          phase: 'updated',
+          groupId: Math.trunc(Number(group?.id) || 0),
+          templateId: String(group?.templateId || '').trim(),
+          callResponseLane: String(group?.callResponseLane || '').trim().toLowerCase(),
+          sectionId: String(group?.sectionId || '').trim().toLowerCase(),
+          active: group?.active === true,
+          retiring: group?.retiring === true,
+          lifecycleState: String(group?.lifecycleState || '').trim().toLowerCase(),
+          role: String(effectiveRole || '').trim().toLowerCase(),
+        }, {
+          beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+        });
       }
       const aliveMembers = getAliveComposerEnemiesByIds(group.memberIds);
       for (const enemy of aliveMembers) {

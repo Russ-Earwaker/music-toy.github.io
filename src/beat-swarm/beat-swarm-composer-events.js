@@ -109,6 +109,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const responseWindowSteps = Math.max(1, Math.trunc(Number(getCallResponseWindowSteps()) || 1));
   const isCallResponseLaneActive = typeof options?.isCallResponseLaneActive === 'function' ? options.isCallResponseLaneActive : (() => true);
   const callResponseRuntime = options?.callResponseRuntime && typeof options.callResponseRuntime === 'object' ? options.callResponseRuntime : {};
+  const noteMusicSystemEvent = typeof options?.noteMusicSystemEvent === 'function' ? options.noteMusicSystemEvent : null;
 
   const getAliveEnemiesByIds = typeof options?.getAliveEnemiesByIds === 'function' ? options.getAliveEnemiesByIds : (() => []);
   const getFoundationLaneSnapshot = typeof options?.getFoundationLaneSnapshot === 'function'
@@ -139,39 +140,139 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const accentPitchVariance = Math.max(0, Math.min(1, Number(styleProfile?.accentPitchVariance) || 1));
   const laneDrivenFoundation = options?.laneDrivenFoundation === true;
   const laneDrivenPrimaryLoop = options?.laneDrivenPrimaryLoop === true;
+  const minResponseDelaySteps = 2;
+  const responseWindowGraceSteps = 2;
+  const responsePhraseSteps = 2;
+  const getPendingCallExpiry = (callStepAbs, targetLength) => {
+    const lastCallStep = Math.max(-1, Math.trunc(Number(callStepAbs) || -1));
+    if (lastCallStep < 0) return -1;
+    const target = Math.max(1, Math.trunc(Number(targetLength) || 2));
+    return lastCallStep + responseWindowSteps + responseWindowGraceSteps + Math.max(1, target);
+  };
 
   for (const group of composerEnemyGroups) {
     if (!group || !group.active || group.retiring) continue;
     const lifecycleState = normalizeLifecycleState(group?.lifecycleState, 'active');
     if (lifecycleState === 'retiring') continue;
     const lane = normalizeCallResponseLane(group?.callResponseLane, 'call');
-    if (!isCallResponseLaneActive(lane, stepAbs, activeGroups.length)) continue;
     const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
-
+    const noteResponseDiagnostic = (reason, extra = null) => {
+      if (lane !== 'response' || !noteMusicSystemEvent) return;
+      noteMusicSystemEvent('music_call_response_response_group_state', {
+        groupId,
+        stepIndex: stepAbs,
+        beatIndex,
+        reason: String(reason || '').trim().toLowerCase(),
+        callStepAbs: Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1)),
+        responseHoldUntilStepAbs: Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1)),
+        activeResponseGroupId: Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0)),
+        lifecycleState,
+        ...(extra && typeof extra === 'object' ? extra : {}),
+      });
+    };
+    let continuingResponsePhrase = false;
+    let responseOverrideHit = false;
+    let hasLiveCallWindow = false;
+    let sinceCall = -1;
+    let laneActive = isCallResponseLaneActive(lane, stepAbs, activeGroups.length);
     if (lane === 'response') {
       const lastCallStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1));
-      const sinceCall = lastCallStep >= 0 ? (stepAbs - lastCallStep) : -1;
-      if (!(lastCallStep >= 0 && sinceCall > 0 && sinceCall <= responseWindowSteps)) continue;
-      if (groupId > 0 && groupId === Math.max(0, Math.trunc(Number(callResponseRuntime.lastCallGroupId) || 0))) continue;
+      sinceCall = lastCallStep >= 0 ? (stepAbs - lastCallStep) : -1;
+      const pendingCallExpiresStepAbs = Math.max(
+        Math.trunc(Number(callResponseRuntime.pendingCallExpiresStepAbs) || -1),
+        getPendingCallExpiry(lastCallStep, callResponseRuntime.responsePhraseTargetLength)
+      );
+      continuingResponsePhrase = groupId > 0
+        && groupId === Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0))
+        && stepAbs <= Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1));
+      hasLiveCallWindow = lastCallStep >= 0 && sinceCall >= minResponseDelaySteps && stepAbs <= pendingCallExpiresStepAbs;
+      if (!laneActive && (continuingResponsePhrase || hasLiveCallWindow)) laneActive = true;
+    }
+    if (!laneActive) {
+      noteResponseDiagnostic('lane_inactive', lane === 'response'
+        ? {
+          continuingResponsePhrase,
+          hasLiveCallWindow,
+        }
+        : null);
+      continue;
+    }
+    if (lane === 'response') {
+      if (!continuingResponsePhrase) {
+        if (!hasLiveCallWindow) {
+          noteResponseDiagnostic('no_call_window', {
+            sinceCall,
+            pendingCallExpiresStepAbs: Math.max(-1, Math.trunc(Number(callResponseRuntime.pendingCallExpiresStepAbs) || -1)),
+          });
+          continue;
+        }
+      }
+      if (groupId > 0 && groupId === Math.max(0, Math.trunc(Number(callResponseRuntime.lastCallGroupId) || 0))) {
+        noteResponseDiagnostic('same_group_as_call');
+        continue;
+      }
       const lastRespStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastResponseStepAbs) || -1));
       const sameRespGroup = groupId > 0 && groupId === Math.max(0, Math.trunc(Number(callResponseRuntime.lastResponseGroupId) || 0));
-      if (sameRespGroup && lastRespStep >= 0 && (stepAbs - lastRespStep) <= responseWindowSteps) continue;
+      const responseWindowWithGrace = responseWindowSteps + responseWindowGraceSteps;
+      if (!continuingResponsePhrase && sameRespGroup && lastRespStep >= 0 && (stepAbs - lastRespStep) <= responseWindowWithGrace) {
+        noteResponseDiagnostic('response_cooldown', { lastRespStep, sinceLastResponse: stepAbs - lastRespStep });
+        continue;
+      }
+      const responseProgressNow = Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0));
+      const responseTargetNow = Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2));
+      const sinceLastResponse = Math.max(
+        -1,
+        stepAbs - Math.max(-1, Math.trunc(Number(callResponseRuntime.lastResponseStepAbs) || -1))
+      );
+      responseOverrideHit = (
+        !continuingResponsePhrase
+        && (sinceCall === minResponseDelaySteps || sinceCall === (minResponseDelaySteps + 1))
+      ) || (
+        continuingResponsePhrase
+        && responseProgressNow < responseTargetNow
+        && sinceLastResponse >= responsePhraseSteps
+        && sinceLastResponse <= (responsePhraseSteps + 1)
+      );
     }
 
-    if (!Array.isArray(group.steps) || !group.steps[step]) continue;
+    const stepActive = Array.isArray(group.steps) && !!group.steps[step];
+    if (!stepActive && !responseOverrideHit) {
+      noteResponseDiagnostic('step_inactive');
+      continue;
+    }
     const aliveMembers = getAliveEnemiesByIds(group.memberIds).filter((e) => String(e?.enemyType || '') === 'composer-group-member' && !e?.retreating);
-    if (!aliveMembers.length) continue;
+    if (!aliveMembers.length) {
+      noteResponseDiagnostic('no_alive_members');
+      continue;
+    }
 
     const groupRole = normalizeSwarmRole(group?.role || roles.lead, roles.lead);
     const isBassRole = groupRole === String(roles?.bass || 'bass');
-    if (laneDrivenFoundation && isBassRole) continue;
-    if (laneDrivenPrimaryLoop && groupRole === String(roles?.lead || 'lead') && String(group?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane') continue;
-    const performerCount = isBassRole
+    const groupLaneId = String(group?.musicLaneId || '').trim().toLowerCase();
+    const isPrimaryLoopOwnerGroup = groupLaneId === 'primary_loop_lane';
+    const isFoundationBufferGroup = String(group?.sectionId || '').trim().toLowerCase() === 'foundation-buffer';
+    if (laneDrivenFoundation && isBassRole) {
+      noteResponseDiagnostic('lane_driven_foundation');
+      continue;
+    }
+    if (
+      laneDrivenPrimaryLoop
+      && lane !== 'response'
+      && groupRole === String(roles?.lead || 'lead')
+      && groupLaneId === 'primary_loop_lane'
+    ) {
+      noteResponseDiagnostic('lane_driven_primary_loop');
+      continue;
+    }
+    const performerCount = (isBassRole || isFoundationBufferGroup || !isPrimaryLoopOwnerGroup)
       ? 1
       : Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
     if (isBassRole && getFoundationLaneSnapshot) {
       const lane = getFoundationLaneSnapshot(stepAbs, barIndex);
-      if (!lane?.isActiveStep) continue;
+      if (!lane?.isActiveStep) {
+        noteResponseDiagnostic('foundation_step_inactive');
+        continue;
+      }
     }
     const notesLen = Math.max(1, Array.isArray(group?.notes) ? group.notes.length : 0);
     // Bass should stay phase-locked and fixed-pitch like a simple rhythm toy.
@@ -185,17 +286,49 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         noteNameBaseRaw,
         stepAbs + noteIdx
       );
-    const noteNameRaw = lane === 'response'
-      ? normalizeSwarmNoteName(
-        chooseResponseNoteFromPool({
-          callNote: callResponseRuntime.lastCallNote,
-          fallbackNote: noteNameBaseRaw,
-          stepAbs,
-          notePool: getDirectorNotePool(),
-          normalizeNoteName: normalizeSwarmNoteName,
-        })
-      ) || noteNameBaseRaw
-      : noteNameBaseRaw;
+    const responsePool = getDirectorNotePool();
+    const responseSeedNote = normalizeSwarmNoteName(
+      chooseResponseNoteFromPool({
+        callNote: callResponseRuntime.lastCallNote,
+        fallbackNote: noteNameBaseRaw,
+        stepAbs,
+        notePool: responsePool,
+        normalizeNoteName: normalizeSwarmNoteName,
+      })
+    ) || noteNameBaseRaw;
+    let noteNameRaw = noteNameBaseRaw;
+    if (lane === 'response') {
+      const callNote = normalizeSwarmNoteName(callResponseRuntime.lastCallNote);
+      const callIdx = callNote ? getNotePoolIndex(callNote) : -1;
+      const seedIdx = getNotePoolIndex(responseSeedNote);
+      const defaultDir = seedIdx >= 0 && callIdx >= 0 && seedIdx < callIdx ? -1 : 1;
+      const responseDir = continuingResponsePhrase
+        ? (Math.trunc(Number(callResponseRuntime.responseDirection) || defaultDir) || defaultDir)
+        : defaultDir;
+      const responseProgress = continuingResponsePhrase
+        ? Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0))
+        : 0;
+      const responseTargetLength = continuingResponsePhrase
+        ? Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2))
+        : Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2));
+      const responseOffsets = (() => {
+        if (responseTargetLength <= 1) return [responseDir];
+        if (responseTargetLength === 2) return [responseDir, 0];
+        if (responseTargetLength === 3) return [responseDir, responseDir * 2, responseDir];
+        return [responseDir, responseDir * 2, responseDir, 0];
+      })();
+      const responseIdx = callIdx >= 0
+        ? (((callIdx + responseOffsets[Math.min(responseProgress, responseOffsets.length - 1)]) % responsePool.length) + responsePool.length) % responsePool.length
+        : -1;
+      noteNameRaw = responseIdx >= 0
+        ? (normalizeSwarmNoteName(responsePool[responseIdx]) || responseSeedNote)
+        : responseSeedNote;
+    }
+    const responsePhraseProgressForEvent = lane === 'response'
+      ? (continuingResponsePhrase
+        ? (Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0)) + 1)
+        : 1)
+      : 0;
     const noteName = isBassRole
       ? noteNameRaw
       : clampNoteToDirectorPool(
@@ -275,6 +408,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       performers.push(enemy);
     }
     if (!performers.length) continue;
+    noteResponseDiagnostic('emitted', {
+      continuingResponsePhrase,
+      responseOverrideHit,
+      performerCount: performers.length,
+    });
 
     const threatClass = (() => {
       const t = String(group?.threatLevel || threat.full || 'full').trim().toLowerCase();
@@ -298,6 +436,61 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       resolveSwarmSoundInstrumentId('projectile') || 'tone'
     );
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
+    const musicProminence = (() => {
+      if (isPrimaryLoopOwnerGroup) return 'full';
+      if (isFoundationBufferGroup) return 'trace';
+      if (isBassRole) return 'quiet';
+      if (lane === 'response') return 'trace';
+      return 'trace';
+    })();
+    const musicLayer = isBassRole ? 'foundation' : 'loops';
+    const restrainedGroupGain = (() => {
+      if (isPrimaryLoopOwnerGroup) return 1;
+      if (isFoundationBufferGroup) return 0.4;
+      if (isBassRole) return 0.56;
+      if (lane === 'response') return 0.5;
+      return 0.46;
+    })();
+    const strongCallCandidate = lane === 'call'
+      ? (isPrimaryLoopOwnerGroup
+        || phraseStep.stepInPhrase <= 1
+        || phraseResolutionOpportunity
+        || phraseGravityOpportunity
+        || phraseResolutionHit
+        || phraseGravityHit)
+      : false;
+    const acceptedStrongCall = (() => {
+      if (!strongCallCandidate) return false;
+      const lastCallStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1));
+      const pendingCallExpiresStepAbs = Math.max(
+        Math.trunc(Number(callResponseRuntime.pendingCallExpiresStepAbs) || -1),
+        getPendingCallExpiry(lastCallStep, callResponseRuntime.responsePhraseTargetLength)
+      );
+      const pendingResponse = (
+        Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0)) > 0
+        && stepAbs <= Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1))
+      );
+      if (pendingResponse) return false;
+      if (lastCallStep < 0) return true;
+      const answeredCurrentCall = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastResponseStepAbs) || -1)) >= lastCallStep;
+      if (!answeredCurrentCall && stepAbs <= pendingCallExpiresStepAbs) return false;
+      return true;
+    })();
+    const suppressInactiveSupportCall = (
+      lane === 'call'
+      && !isPrimaryLoopOwnerGroup
+      && !isFoundationBufferGroup
+      && !isBassRole
+      && lifecycleState === 'inactiveForScheduling'
+      && !acceptedStrongCall
+      && !phraseResolutionOpportunity
+      && !phraseGravityOpportunity
+      && phraseStep.stepInPhrase > 1
+    );
+    if (suppressInactiveSupportCall) {
+      noteResponseDiagnostic('inactive_support_suppressed');
+      continue;
+    }
     for (const enemy of performers) {
       events.push(createPerformedBeatEvent({
         actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
@@ -316,8 +509,13 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         payload: {
           groupId,
           continuityId: String(group?.continuityId || '').trim(),
+          musicLayer,
+          musicProminence,
+          musicLaneId: isPrimaryLoopOwnerGroup ? 'primary_loop_lane' : '',
           callResponseLane: lane,
-          audioGain: clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain),
+          callResponseQualified: lane === 'call' ? acceptedStrongCall : true,
+          callResponsePhraseProgress: responsePhraseProgressForEvent,
+          audioGain: clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain * restrainedGroupGain),
           requestedNoteRaw: gravityNoteNameRaw,
           phraseGravityTarget,
           phraseGravityHit,
@@ -328,12 +526,42 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     }
 
     if (lane === 'call') {
-      callResponseRuntime.lastCallStepAbs = stepAbs;
-      callResponseRuntime.lastCallGroupId = groupId;
-      callResponseRuntime.lastCallNote = styledNoteName;
+      if (acceptedStrongCall) {
+        const responseTargetLength = (() => {
+          if (isPrimaryLoopOwnerGroup && phraseResolutionHit) return 4;
+          if (phraseResolutionHit || phraseGravityHit || isPrimaryLoopOwnerGroup) return Math.random() < 0.35 ? 4 : 3;
+          return Math.random() < 0.2 ? 1 : 2;
+        })();
+        callResponseRuntime.lastCallStepAbs = stepAbs;
+        callResponseRuntime.lastCallGroupId = groupId;
+        callResponseRuntime.lastCallNote = styledNoteName;
+        callResponseRuntime.pendingCallExpiresStepAbs = getPendingCallExpiry(stepAbs, responseTargetLength);
+        callResponseRuntime.lastResponseNote = '';
+        callResponseRuntime.activeResponseGroupId = 0;
+        callResponseRuntime.responseHoldUntilStepAbs = -1;
+        callResponseRuntime.responsePhraseProgress = 0;
+        callResponseRuntime.responsePhraseTargetLength = responseTargetLength;
+      }
     } else {
+      const responseTargetLength = Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2));
       callResponseRuntime.lastResponseStepAbs = stepAbs;
       callResponseRuntime.lastResponseGroupId = groupId;
+      callResponseRuntime.lastResponseNote = normalizeSwarmNoteName(styledNoteName) || styledNoteName;
+      callResponseRuntime.pendingCallExpiresStepAbs = -1;
+      callResponseRuntime.activeResponseGroupId = groupId;
+      callResponseRuntime.responseDirection = continuingResponsePhrase
+        ? (Math.trunc(Number(callResponseRuntime.responseDirection) || 1) || 1)
+        : (((getNotePoolIndex(callResponseRuntime.lastResponseNote) >= 0 && getNotePoolIndex(callResponseRuntime.lastCallNote) >= 0 && getNotePoolIndex(callResponseRuntime.lastResponseNote) < getNotePoolIndex(callResponseRuntime.lastCallNote)) ? -1 : 1) || 1);
+      callResponseRuntime.responsePhraseProgress = continuingResponsePhrase
+        ? (Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0)) + 1)
+        : 1;
+      callResponseRuntime.responseHoldUntilStepAbs = Math.max(
+        stepAbs,
+        Math.min(
+          stepAbs + Math.max(0, (responseTargetLength - 1) * responsePhraseSteps),
+          Math.max(stepAbs, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || stepAbs) + responseWindowSteps + responseWindowGraceSteps)
+        )
+      );
     }
     group.__bsLastComposerNote = normalizeSwarmNoteName(styledNoteName) || styledNoteName;
   }

@@ -3142,8 +3142,14 @@ function compactMusicLabPayloadForSave(payload = null) {
       enemyVisualId: String(event.enemyVisualId || ''),
       enemyRoleColor: String(event.enemyRoleColor || ''),
       playerCadenceMode: String(event.playerCadenceMode || ''),
+      callResponseLane: String(event.callResponseLane || '').trim().toLowerCase(),
+      callResponseQualified: event.callResponseQualified === true
+        ? true
+        : (event.callResponseQualified === false ? false : null),
+      callResponsePhraseProgress: Number(event.callResponsePhraseProgress) || 0,
       musicLayer: String(event.musicLayer || ''),
       musicProminence: String(event.musicProminence || ''),
+      audioGain: Number(event.audioGain) || 0,
     };
   });
   const enemyRemovals = Array.isArray(src.enemyRemovals) ? src.enemyRemovals : [];
@@ -3163,6 +3169,33 @@ function compactMusicLabPayloadForSave(payload = null) {
     };
   });
   const systemEvents = Array.isArray(src.systemEvents) ? src.systemEvents : [];
+  const compactSystemEventTypesToKeep = new Set([
+    'music_composer_group_state',
+    'music_call_response_response_group_state',
+  ]);
+  const compactSystemEvents = systemEvents
+    .filter((ev) => compactSystemEventTypesToKeep.has(String(ev?.eventType || '').trim().toLowerCase()))
+    .map((ev) => {
+      const item = ev && typeof ev === 'object' ? ev : {};
+      return {
+        tMs: Number(item.tMs) || 0,
+        timestamp: Number(item.timestamp) || 0,
+        eventType: String(item.eventType || '').trim().toLowerCase(),
+        phase: String(item.phase || '').trim().toLowerCase(),
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        groupId: Number(item.groupId) || 0,
+        templateId: String(item.templateId || '').trim(),
+        callResponseLane: String(item.callResponseLane || '').trim().toLowerCase(),
+        sectionId: String(item.sectionId || '').trim().toLowerCase(),
+        role: String(item.role || '').trim().toLowerCase(),
+        reason: String(item.reason || '').trim().toLowerCase(),
+        active: item.active === true,
+        retiring: item.retiring === true,
+        lifecycleState: String(item.lifecycleState || '').trim().toLowerCase(),
+      };
+    });
   const systemEventCountsByType = Object.create(null);
   const systemEventCountsByReason = Object.create(null);
   const sectionIds = new Set();
@@ -3236,7 +3269,7 @@ function compactMusicLabPayloadForSave(payload = null) {
     beatSwarmStepEventsPerfSnapshot: src?.beatSwarmStepEventsPerfSnapshot && typeof src.beatSwarmStepEventsPerfSnapshot === 'object'
       ? src.beatSwarmStepEventsPerfSnapshot
       : null,
-    systemEvents: [],
+    systemEvents: compactSystemEvents,
     systemEventSummary: {
       totalCount: systemEvents.length,
       countsByType: systemEventCountsByType,
@@ -3265,6 +3298,7 @@ function compactMusicLabPayloadForSave(payload = null) {
       originalQueuedEventCount: Array.isArray(src?.session?.queuedEvents) ? src.session.queuedEvents.length : 0,
       originalSpawnerPipelineEventCount: Array.isArray(src?.session?.spawnerPipelineEvents) ? src.session.spawnerPipelineEvents.length : 0,
       originalSystemEventCount: systemEvents.length,
+      keptSystemEventCount: compactSystemEvents.length,
       originalThreatBudgetSnapshotCount: threatBudgetSnapshots.length,
       originalMetricsHistoryCount: metricsHistory.length,
       originalExecutedEventCount: Array.isArray(src?.session?.executedEvents) ? src.session.executedEvents.length : 0,
