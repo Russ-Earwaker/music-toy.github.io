@@ -288,6 +288,9 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     laneId: String(payload?.laneId || '').trim().toLowerCase(),
     laneRole: String(payload?.laneRole || '').trim().toLowerCase(),
     callResponseLane: String(payload?.callResponseLane || '').trim().toLowerCase(),
+    callResponseQualified: payload?.callResponseQualified === true
+      ? true
+      : (payload?.callResponseQualified === false ? false : null),
     role: String(payload?.role || '').trim().toLowerCase(),
     actionType: String(payload?.actionType || '').trim().toLowerCase(),
     instrumentId: String(payload?.instrumentId || '').trim(),
@@ -314,6 +317,18 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     previousIdentityChangeReason: String(payload?.previousIdentityChangeReason || '').trim().toLowerCase(),
     sectionId: String(payload?.sectionId || '').trim().toLowerCase(),
     waitSteps: clampInt(payload?.waitSteps, 0, 0),
+    callStepAbs: clampInt(payload?.callStepAbs, 0, -1),
+    lastResponseStepAbs: clampInt(payload?.lastResponseStepAbs, 0, -1),
+    pendingCallExpiresStepAbs: clampInt(payload?.pendingCallExpiresStepAbs, 0, -1),
+    activeResponseGroupId: clampInt(payload?.activeResponseGroupId, 0, 0),
+    performerCount: clampInt(payload?.performerCount, 0, 0),
+    stepInPhrase: clampInt(payload?.stepInPhrase, 0, 0),
+    strongCallCandidate: payload?.strongCallCandidate === true,
+    acceptedStrongCall: payload?.acceptedStrongCall === true,
+    hasLiveCallWindow: payload?.hasLiveCallWindow === true,
+    continuingResponsePhrase: payload?.continuingResponsePhrase === true,
+    responseOverrideHit: payload?.responseOverrideHit === true,
+    admissionReason: String(payload?.admissionReason || '').trim().toLowerCase(),
     stepsUntilBoundary: clampInt(payload?.stepsUntilBoundary, 0, 0),
     waitStepsBeforeReplace: clampInt(payload?.waitStepsBeforeReplace, 0, 0),
     deferredBeatIndex: clampInt(payload?.deferredBeatIndex, 0, 0),
@@ -2708,7 +2723,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
           String(ev?.actionType || '').trim().toLowerCase(),
           String(ev?.callResponseLane || '').trim().toLowerCase(),
         ].join('|');
-        const key = eventId >= 0 ? `id:${eventId}` : `fallback:${fallbackKey}`;
+        const key = eventId > 0 ? `id:${eventId}` : `fallback:${fallbackKey}`;
         if (seen.has(key)) return;
         seen.add(key);
         merged.push(ev);
@@ -2768,6 +2783,17 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     threatBalance,
     threatBudgetUsage,
     callResponse,
+    callCount: Number(callResponse?.callCount) || 0,
+    responsePairs: Number(callResponse?.responsePairs) || 0,
+    responseRate: Number(callResponse?.responseRate) || 0,
+    audibleResponsePairs: Number(callResponse?.audibleResponsePairs) || 0,
+    audibleResponseRate: Number(callResponse?.audibleResponseRate) || 0,
+    avgResponseSize: Number(callResponse?.avgResponseSize) || 0,
+    avgResponseAudibility: Number(callResponse?.avgResponseAudibility) || 0,
+    delayedResponsePairs: Number(callResponse?.delayedResponsePairs) || 0,
+    delayedResponseRate: Number(callResponse?.delayedResponseRate) || 0,
+    immediateResponsePairs: Number(callResponse?.immediateResponsePairs) || 0,
+    immediateResponseRate: Number(callResponse?.immediateResponseRate) || 0,
     deathDensity,
     playerMasking,
     visibleEnemyAudibility,

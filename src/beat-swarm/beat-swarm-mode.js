@@ -2505,11 +2505,13 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     let continuingResponsePhrase = false;
     let responseOverrideHit = false;
     let hasLiveCallWindow = false;
+    let sinceCall = -1;
+    let responseWindowSteps = Math.max(1, Math.trunc(Number(getCallResponseWindowSteps()) || 1));
     let laneActive = isCallResponseLaneActive(laneMode, stepIndex, activeGroups.length);
     if (laneMode === 'response') {
       const lastCallStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1));
-      const sinceCall = lastCallStep >= 0 ? (stepIndex - lastCallStep) : -1;
-      const responseWindowSteps = Math.max(1, Math.trunc(Number(getCallResponseWindowSteps()) || 1));
+      sinceCall = lastCallStep >= 0 ? (stepIndex - lastCallStep) : -1;
+      responseWindowSteps = Math.max(1, Math.trunc(Number(getCallResponseWindowSteps()) || 1));
       const pendingCallExpiresStepAbs = Math.max(
         Math.trunc(Number(callResponseRuntime.pendingCallExpiresStepAbs) || -1),
         getPendingCallExpiry(lastCallStep, callResponseRuntime.responsePhraseTargetLength)
@@ -2675,6 +2677,9 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       sourceSystem: 'group',
       enemyType: 'composer-group-member',
       groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+      callResponseLane: laneMode,
+      callResponseQualified: laneMode === 'call' ? acceptedStrongCall : true,
+      callResponsePhraseProgress: responsePhraseProgressForEvent,
     });
     if (laneMode === 'call') {
       if (acceptedStrongCall) {

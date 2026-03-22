@@ -1,0 +1,36 @@
+{
+  "createdAt": "2026-03-22T20:09:02.665Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+  "meta": {
+    "runId": "BS0_stage3_beatswarm_static_fire_musiclab_1x3m__BS0S3MusicLab1x3m",
+    "notes": "",
+    "runMode": "manual",
+    "scenarioName": "perf-run-lifecycle-debug",
+    "testCategory": "perf-run-lifecycle-debug",
+    "labType": "perf",
+    "kind": "perf-lab-debug"
+  },
+  "results": [
+    {
+      "label": "perf-run-lifecycle-debug",
+      "createdAt": "2026-03-22T20:09:02.665Z",
+      "runId": "BS0_stage3_beatswarm_static_fire_musiclab_1x3m__BS0S3MusicLab1x3m",
+      "perfRunLifecycleDebug": {
+        "stage": "error",
+        "sourceLabel": "BS0_stage3_beatswarm_static_fire_musiclab_1x3m__BS0S3MusicLab1x3m",
+        "durationMs": 180000,
+        "elapsedMs": 95530.70000000298,
+        "frameCount": 2947,
+        "perfRunTag": "BS0S3MusicLab1x3m",
+        "transportRunning": true,
+        "beatSwarmActive": true,
+        "detail": "Uncaught ReferenceError: Cannot access 'strongCallCandidate' before initialization",
+        "href": "http://192.168.0.62:5500/index.html",
+        "startedAt": "2026-03-22T20:06:00.787Z",
+        "capturedAt": "2026-03-22T20:07:36.317Z"
+      },
+      "labType": "perf"
+    }
+  ]
+}

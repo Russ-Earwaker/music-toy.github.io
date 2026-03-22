@@ -170,6 +170,21 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         ...(extra && typeof extra === 'object' ? extra : {}),
       });
     };
+    const noteCallDiagnostic = (reason, extra = null) => {
+      if (lane !== 'call' || !noteMusicSystemEvent) return;
+      noteMusicSystemEvent('music_call_response_call_group_state', {
+        groupId,
+        stepIndex: stepAbs,
+        beatIndex,
+        reason: String(reason || '').trim().toLowerCase(),
+        callStepAbs: Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1)),
+        lastResponseStepAbs: Math.max(-1, Math.trunc(Number(callResponseRuntime.lastResponseStepAbs) || -1)),
+        pendingCallExpiresStepAbs: Math.max(-1, Math.trunc(Number(callResponseRuntime.pendingCallExpiresStepAbs) || -1)),
+        activeResponseGroupId: Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0)),
+        lifecycleState,
+        ...(extra && typeof extra === 'object' ? extra : {}),
+      });
+    };
     let continuingResponsePhrase = false;
     let responseOverrideHit = false;
     let hasLiveCallWindow = false;
@@ -189,6 +204,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       if (!laneActive && (continuingResponsePhrase || hasLiveCallWindow)) laneActive = true;
     }
     if (!laneActive) {
+      noteCallDiagnostic('lane_inactive');
       noteResponseDiagnostic('lane_inactive', lane === 'response'
         ? {
           continuingResponsePhrase,
@@ -237,11 +253,13 @@ export function collectComposerGroupStepBeatEvents(options = null) {
 
     const stepActive = Array.isArray(group.steps) && !!group.steps[step];
     if (!stepActive && !responseOverrideHit) {
+      noteCallDiagnostic('step_inactive');
       noteResponseDiagnostic('step_inactive');
       continue;
     }
     const aliveMembers = getAliveEnemiesByIds(group.memberIds).filter((e) => String(e?.enemyType || '') === 'composer-group-member' && !e?.retreating);
     if (!aliveMembers.length) {
+      noteCallDiagnostic('no_alive_members');
       noteResponseDiagnostic('no_alive_members');
       continue;
     }
@@ -252,15 +270,18 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const isPrimaryLoopOwnerGroup = groupLaneId === 'primary_loop_lane';
     const isFoundationBufferGroup = String(group?.sectionId || '').trim().toLowerCase() === 'foundation-buffer';
     if (laneDrivenFoundation && isBassRole) {
+      noteCallDiagnostic('lane_driven_foundation');
       noteResponseDiagnostic('lane_driven_foundation');
       continue;
     }
     if (
       laneDrivenPrimaryLoop
       && lane !== 'response'
+      && lane !== 'call'
       && groupRole === String(roles?.lead || 'lead')
       && groupLaneId === 'primary_loop_lane'
     ) {
+      noteCallDiagnostic('lane_driven_primary_loop');
       noteResponseDiagnostic('lane_driven_primary_loop');
       continue;
     }
@@ -270,6 +291,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (isBassRole && getFoundationLaneSnapshot) {
       const lane = getFoundationLaneSnapshot(stepAbs, barIndex);
       if (!lane?.isActiveStep) {
+        noteCallDiagnostic('foundation_step_inactive');
         noteResponseDiagnostic('foundation_step_inactive');
         continue;
       }
@@ -451,16 +473,33 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       if (lane === 'response') return 0.5;
       return 0.46;
     })();
-    const strongCallCandidate = lane === 'call'
+    const melodicCallGroup = (
+      lane === 'call'
+      && !isBassRole
+      && !isFoundationBufferGroup
+    );
+    const suppressNonMelodicCallLane = (
+      lane === 'call'
+      && !melodicCallGroup
+    );
+    if (suppressNonMelodicCallLane) {
+      noteCallDiagnostic('non_melodic_call_suppressed', {
+        isBassRole,
+        isFoundationBufferGroup,
+      });
+      continue;
+    }
+    const strongCallCandidate = melodicCallGroup
       ? (isPrimaryLoopOwnerGroup
-        || phraseStep.stepInPhrase <= 1
+        || phraseStep.stepInPhrase <= 2
         || phraseResolutionOpportunity
         || phraseGravityOpportunity
         || phraseResolutionHit
-        || phraseGravityHit)
+        || phraseGravityHit
+        || phraseStep.stepInPhrase === Math.max(0, responsePhraseSteps - 1))
       : false;
-    const acceptedStrongCall = (() => {
-      if (!strongCallCandidate) return false;
+    const callAdmission = (() => {
+      if (!strongCallCandidate) return { accepted: false, reason: 'not_strong_call' };
       const lastCallStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1));
       const pendingCallExpiresStepAbs = Math.max(
         Math.trunc(Number(callResponseRuntime.pendingCallExpiresStepAbs) || -1),
@@ -470,14 +509,17 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0)) > 0
         && stepAbs <= Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1))
       );
-      if (pendingResponse) return false;
-      if (lastCallStep < 0) return true;
+      if (pendingResponse) return { accepted: false, reason: 'pending_response' };
+      if (lastCallStep < 0) return { accepted: true, reason: 'accepted' };
       const answeredCurrentCall = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastResponseStepAbs) || -1)) >= lastCallStep;
-      if (!answeredCurrentCall && stepAbs <= pendingCallExpiresStepAbs) return false;
-      return true;
+      if (!answeredCurrentCall && stepAbs <= pendingCallExpiresStepAbs) {
+        return { accepted: false, reason: 'pending_call_exists' };
+      }
+      return { accepted: true, reason: 'accepted' };
     })();
+    const acceptedStrongCall = callAdmission.accepted === true;
     const suppressInactiveSupportCall = (
-      lane === 'call'
+      melodicCallGroup
       && !isPrimaryLoopOwnerGroup
       && !isFoundationBufferGroup
       && !isBassRole
@@ -485,12 +527,48 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       && !acceptedStrongCall
       && !phraseResolutionOpportunity
       && !phraseGravityOpportunity
-      && phraseStep.stepInPhrase > 1
+      && phraseStep.stepInPhrase > 2
     );
     if (suppressInactiveSupportCall) {
+      noteCallDiagnostic('inactive_support_suppressed', {
+        strongCallCandidate,
+        acceptedStrongCall,
+        admissionReason: callAdmission.reason,
+        stepInPhrase: Math.max(0, Math.trunc(Number(phraseStep?.stepInPhrase) || 0)),
+      });
       noteResponseDiagnostic('inactive_support_suppressed');
       continue;
     }
+    const suppressRedundantCallEmission = (
+      melodicCallGroup
+      && !acceptedStrongCall
+      && (
+        !strongCallCandidate
+        || callAdmission.reason === 'pending_call_exists'
+        || callAdmission.reason === 'pending_response'
+        || callAdmission.reason === 'not_strong_call'
+      )
+    );
+    if (suppressRedundantCallEmission) {
+      noteCallDiagnostic('redundant_call_suppressed', {
+        strongCallCandidate,
+        acceptedStrongCall,
+        admissionReason: callAdmission.reason,
+        stepInPhrase: Math.max(0, Math.trunc(Number(phraseStep?.stepInPhrase) || 0)),
+      });
+      continue;
+    }
+    noteCallDiagnostic('emitted', {
+      performerCount: performers.length,
+      strongCallCandidate,
+      acceptedStrongCall,
+      admissionReason: callAdmission.reason,
+      stepInPhrase: Math.max(0, Math.trunc(Number(phraseStep?.stepInPhrase) || 0)),
+      phraseGravityOpportunity,
+      phraseResolutionOpportunity,
+      phraseGravityHit,
+      phraseResolutionHit,
+    });
     for (const enemy of performers) {
       events.push(createPerformedBeatEvent({
         actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),

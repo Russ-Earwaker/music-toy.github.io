@@ -3117,11 +3117,18 @@ function compactMusicLabPayloadForSave(payload = null) {
   const src = payload && typeof payload === 'object' ? payload : null;
   if (!src) return { payload: src, compacted: false, detail: '' };
   const fullTimeline = Array.isArray(src.eventTimeline) ? src.eventTimeline : [];
-  const executedTimeline = fullTimeline.filter((ev) => String(ev?.phase || '').trim().toLowerCase() === 'executed');
-  const compactEventTimeline = executedTimeline.map((ev) => {
+  const compactTimelineSource = fullTimeline.filter((ev) => {
+    const phase = String(ev?.phase || '').trim().toLowerCase();
+    if (phase === 'executed') return true;
+    if (phase !== 'created') return false;
+    const lane = String(ev?.callResponseLane || '').trim().toLowerCase();
+    return lane === 'call' || lane === 'response';
+  });
+  const compactEventTimeline = compactTimelineSource.map((ev) => {
     const event = ev && typeof ev === 'object' ? ev : {};
     return {
       tMs: Number(event.tMs) || 0,
+      phase: String(event.phase || '').trim().toLowerCase(),
       eventId: Number(event.eventId) || 0,
       barIndex: Number(event.barIndex) || 0,
       beatIndex: Number(event.beatIndex) || 0,
@@ -3171,6 +3178,7 @@ function compactMusicLabPayloadForSave(payload = null) {
   const systemEvents = Array.isArray(src.systemEvents) ? src.systemEvents : [];
   const compactSystemEventTypesToKeep = new Set([
     'music_composer_group_state',
+    'music_call_response_call_group_state',
     'music_call_response_response_group_state',
   ]);
   const compactSystemEvents = systemEvents
@@ -3188,12 +3196,27 @@ function compactMusicLabPayloadForSave(payload = null) {
         groupId: Number(item.groupId) || 0,
         templateId: String(item.templateId || '').trim(),
         callResponseLane: String(item.callResponseLane || '').trim().toLowerCase(),
+        callResponseQualified: item.callResponseQualified === true
+          ? true
+          : (item.callResponseQualified === false ? false : null),
         sectionId: String(item.sectionId || '').trim().toLowerCase(),
         role: String(item.role || '').trim().toLowerCase(),
         reason: String(item.reason || '').trim().toLowerCase(),
         active: item.active === true,
         retiring: item.retiring === true,
         lifecycleState: String(item.lifecycleState || '').trim().toLowerCase(),
+        callStepAbs: Number(item.callStepAbs) || -1,
+        lastResponseStepAbs: Number(item.lastResponseStepAbs) || -1,
+        pendingCallExpiresStepAbs: Number(item.pendingCallExpiresStepAbs) || -1,
+        activeResponseGroupId: Number(item.activeResponseGroupId) || 0,
+        performerCount: Number(item.performerCount) || 0,
+        stepInPhrase: Number(item.stepInPhrase) || 0,
+        strongCallCandidate: item.strongCallCandidate === true,
+        acceptedStrongCall: item.acceptedStrongCall === true,
+        hasLiveCallWindow: item.hasLiveCallWindow === true,
+        continuingResponsePhrase: item.continuingResponsePhrase === true,
+        responseOverrideHit: item.responseOverrideHit === true,
+        admissionReason: String(item.admissionReason || '').trim().toLowerCase(),
       };
     });
   const systemEventCountsByType = Object.create(null);
@@ -3293,7 +3316,7 @@ function compactMusicLabPayloadForSave(payload = null) {
       detail: 'executed_timeline_and_summaries',
       originalEventTimelineCount: fullTimeline.length,
       keptEventTimelineCount: compactEventTimeline.length,
-      droppedEventTimelineCount: Math.max(0, fullTimeline.length - executedTimeline.length),
+      droppedEventTimelineCount: Math.max(0, fullTimeline.length - compactTimelineSource.length),
       originalCreatedEventCount: Array.isArray(src?.session?.createdEvents) ? src.session.createdEvents.length : 0,
       originalQueuedEventCount: Array.isArray(src?.session?.queuedEvents) ? src.session.queuedEvents.length : 0,
       originalSpawnerPipelineEventCount: Array.isArray(src?.session?.spawnerPipelineEvents) ? src.session.spawnerPipelineEvents.length : 0,
