@@ -1,0 +1,36 @@
+{
+  "createdAt": "2026-03-22T10:35:59.651Z",
+  "href": "http://192.168.0.62:5500/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+  "meta": {
+    "runId": "BS0_stage3_beatswarm_static_fire_musiclab_1x3m__BS0S3MusicLab1x3m",
+    "notes": "",
+    "runMode": "manual",
+    "scenarioName": "perf-run-lifecycle-debug",
+    "testCategory": "perf-run-lifecycle-debug",
+    "labType": "perf",
+    "kind": "perf-lab-debug"
+  },
+  "results": [
+    {
+      "label": "perf-run-lifecycle-debug",
+      "createdAt": "2026-03-22T10:35:59.651Z",
+      "runId": "BS0_stage3_beatswarm_static_fire_musiclab_1x3m__BS0S3MusicLab1x3m",
+      "perfRunLifecycleDebug": {
+        "stage": "pagehide",
+        "sourceLabel": "BS0_stage3_beatswarm_static_fire_musiclab_1x3m__BS0S3MusicLab1x3m",
+        "durationMs": 180000,
+        "elapsedMs": 17266.20000000001,
+        "frameCount": 819,
+        "perfRunTag": "BS0S3MusicLab1x3m",
+        "transportRunning": true,
+        "beatSwarmActive": false,
+        "detail": "",
+        "href": "http://192.168.0.62:5500/index.html",
+        "startedAt": "2026-03-22T10:35:42.130Z",
+        "capturedAt": "2026-03-22T10:35:59.396Z"
+      },
+      "labType": "perf"
+    }
+  ]
+}

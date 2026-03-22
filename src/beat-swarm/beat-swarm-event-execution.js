@@ -85,6 +85,31 @@ export function executePerformedBeatEventRuntime(options = null) {
       if (musicLayer === 'loops') return 'support_lane';
       return 'unscoped';
     })();
+    const identityChangeReason = String(
+      payload?.identityChangeReason
+        || group?.musicLaneIdentityChangeReason
+        || enemy?.musicLaneIdentityChangeReason
+        || ''
+    ).trim().toLowerCase();
+    const sectionId = String(
+      payload?.sectionId
+        || group?.sectionId
+        || group?.sectionKey
+        || enemy?.sectionId
+        || ''
+    ).trim().toLowerCase();
+    const motifScopeKey = String(
+      payload?.motifScopeKey
+        || group?.motifScopeKey
+        || enemy?.motifScopeKey
+        || ''
+    ).trim().toLowerCase();
+    const lifecycleState = String(
+      payload?.lifecycleState
+        || group?.lifecycleState
+        || enemy?.lifecycleState
+        || ''
+    ).trim().toLowerCase();
     const previous = executionInstrumentRuntime.bySourceKey.get(sourceKey) || null;
     const continuityClass = previous
       ? (
@@ -94,6 +119,18 @@ export function executePerformedBeatEventRuntime(options = null) {
       )
       : 'first_seen';
     if (previous && previous.instrumentId && previous.instrumentId !== instrumentId) {
+      const cause = (() => {
+        if (identityChangeReason === 'reorchestrate_lane') return 'explicit_reorchestration';
+        if (identityChangeReason === 'continuity_reset') return 'continuity_reset';
+        if (previous.actorId > 0 && actorId > 0 && previous.actorId !== actorId) return 'performer_change';
+        if (previous.groupId > 0 && groupId > 0 && previous.groupId !== groupId) return 'group_change';
+        if (previous.sectionId && sectionId && previous.sectionId !== sectionId) return 'section_change';
+        if (previous.motifScopeKey && motifScopeKey && previous.motifScopeKey !== motifScopeKey) return 'motif_scope_change';
+        if (previous.lifecycleState === 'retiring' || lifecycleState === 'retiring') return 'retiring_owner';
+        if (identityChangeReason === 'section_restatement') return 'section_restatement';
+        if (identityChangeReason === 'phrase_boundary_mutation') return 'phrase_boundary_mutation';
+        return 'unknown';
+      })();
       try {
         helpers.noteMusicSystemEvent?.('music_execution_instrument_change', {
           actorId,
@@ -111,6 +148,16 @@ export function executePerformedBeatEventRuntime(options = null) {
           continuityClass,
           laneScope,
           sourceKey,
+          identityChangeReason,
+          sectionId,
+          motifScopeKey,
+          lifecycleState,
+          previousActorId: Math.max(0, Math.trunc(Number(previous.actorId) || 0)),
+          previousGroupId: Math.max(0, Math.trunc(Number(previous.groupId) || 0)),
+          previousSectionId: String(previous.sectionId || '').trim().toLowerCase(),
+          previousMotifScopeKey: String(previous.motifScopeKey || '').trim().toLowerCase(),
+          previousLifecycleState: String(previous.lifecycleState || '').trim().toLowerCase(),
+          cause,
         }, {
           beatIndex,
           stepIndex,
@@ -125,6 +172,11 @@ export function executePerformedBeatEventRuntime(options = null) {
       lastBeatIndex: beatIndex,
       lastStepIndex: stepIndex,
       laneScope,
+      actorId,
+      groupId,
+      sectionId,
+      motifScopeKey,
+      lifecycleState,
     });
   };
   const resolveContinuitySafeExecutionInstrument = (

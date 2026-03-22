@@ -282,6 +282,13 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     continuityClass: String(payload?.continuityClass || '').trim().toLowerCase(),
     laneScope: String(payload?.laneScope || '').trim().toLowerCase(),
     sourceKey: String(payload?.sourceKey || '').trim().toLowerCase(),
+    cause: String(payload?.cause || '').trim().toLowerCase(),
+    motifScopeKey: String(payload?.motifScopeKey || '').trim().toLowerCase(),
+    previousMotifScopeKey: String(payload?.previousMotifScopeKey || '').trim().toLowerCase(),
+    lifecycleState: String(payload?.lifecycleState || '').trim().toLowerCase(),
+    previousLifecycleState: String(payload?.previousLifecycleState || '').trim().toLowerCase(),
+    previousActorId: clampInt(payload?.previousActorId, 0, 0),
+    previousGroupId: clampInt(payload?.previousGroupId, 0, 0),
     previousPhraseId: String(payload?.previousPhraseId || '').trim().toLowerCase(),
     previousPatternKey: String(payload?.previousPatternKey || '').trim(),
     identityChangeReason: String(payload?.identityChangeReason || '').trim().toLowerCase(),
@@ -1153,6 +1160,14 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
   let executionInstrumentChangesSupportLane = 0;
   let executionInstrumentChangesBufferTakeover = 0;
   let executionInstrumentChangesUnscoped = 0;
+  let executionInstrumentChangesPerformerChange = 0;
+  let executionInstrumentChangesGroupChange = 0;
+  let executionInstrumentChangesSectionChange = 0;
+  let executionInstrumentChangesMotifScopeChange = 0;
+  let executionInstrumentChangesRetiringOwner = 0;
+  let executionInstrumentChangesExplicitReorchestration = 0;
+  let executionInstrumentChangesContinuityReset = 0;
+  let executionInstrumentChangesUnknownCause = 0;
   let instrumentPoolAuditEvents = 0;
   let instrumentPoolEligibleTotal = 0;
   let instrumentPoolUnusedEligibleTotal = 0;
@@ -1201,6 +1216,15 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
       else if (laneScope === 'support_lane') executionInstrumentChangesSupportLane += 1;
       else if (laneScope === 'buffer_takeover') executionInstrumentChangesBufferTakeover += 1;
       else executionInstrumentChangesUnscoped += 1;
+      const cause = String(e?.cause || '').trim().toLowerCase();
+      if (cause === 'performer_change') executionInstrumentChangesPerformerChange += 1;
+      else if (cause === 'group_change') executionInstrumentChangesGroupChange += 1;
+      else if (cause === 'section_change' || cause === 'section_restatement') executionInstrumentChangesSectionChange += 1;
+      else if (cause === 'motif_scope_change') executionInstrumentChangesMotifScopeChange += 1;
+      else if (cause === 'retiring_owner') executionInstrumentChangesRetiringOwner += 1;
+      else if (cause === 'explicit_reorchestration') executionInstrumentChangesExplicitReorchestration += 1;
+      else if (cause === 'continuity_reset') executionInstrumentChangesContinuityReset += 1;
+      else executionInstrumentChangesUnknownCause += 1;
       continue;
     }
     if (type === 'music_enemy_instrument_pool_audit') {
@@ -1231,6 +1255,14 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
     executionInstrumentChangesSupportLane,
     executionInstrumentChangesBufferTakeover,
     executionInstrumentChangesUnscoped,
+    executionInstrumentChangesPerformerChange,
+    executionInstrumentChangesGroupChange,
+    executionInstrumentChangesSectionChange,
+    executionInstrumentChangesMotifScopeChange,
+    executionInstrumentChangesRetiringOwner,
+    executionInstrumentChangesExplicitReorchestration,
+    executionInstrumentChangesContinuityReset,
+    executionInstrumentChangesUnknownCause,
     instrumentPoolAuditEvents,
     instrumentPoolEligibleTotal,
     instrumentPoolUnusedEligibleTotal,
