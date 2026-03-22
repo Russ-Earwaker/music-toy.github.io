@@ -136,6 +136,8 @@ function entryMatchesTheme(entry, themeKey) {
 
 function entryRoleCompatible(entry, roleKey) {
   if (!entry || !roleKey) return false;
+  const combatRole = String(entry?.combatRole || '').trim().toLowerCase();
+  if (combatRole === 'player_weapon' || combatRole === 'player-reserved') return false;
   const laneRole = normalizeLaneRoleToken(entry?.laneRole);
   if (roleKey === BEAT_EVENT_ROLES.BASS) {
     // Bass foundation should stay on explicit bass-lane instruments.
@@ -264,8 +266,6 @@ function pickRoleInstrument(themeKey, role, usedIds = null, previousId = '') {
     if (roleScoringPool.length) {
       const explicitLanePool = roleScoringPool.filter((entry) => normalizeLaneRoleToken(entry?.laneRole) === roleKey);
       const weightedPool = explicitLanePool.length ? explicitLanePool : roleScoringPool;
-      const priorityWeightedPool = weightedPool.filter((entry) => entry?.priority === true);
-      const selectionPool = priorityWeightedPool.length ? priorityWeightedPool : weightedPool;
       const ranked = weightedPool
         .slice()
         .sort((a, b) => {
@@ -274,18 +274,23 @@ function pickRoleInstrument(themeKey, role, usedIds = null, previousId = '') {
           if (sb !== sa) return sb - sa;
           return String(a?.id || '').localeCompare(String(b?.id || ''));
         });
-      const rankedFromSelection = selectionPool
-        .slice()
-        .sort((a, b) => {
-          const sa = entryLaneScore(a, roleKey, roleToys);
-          const sb = entryLaneScore(b, roleKey, roleToys);
-          if (sb !== sa) return sb - sa;
-          return String(a?.id || '').localeCompare(String(b?.id || ''));
-        });
-      const topScore = entryLaneScore(rankedFromSelection[0], roleKey, roleToys);
-      const nearBest = rankedFromSelection.filter((e) => (topScore - entryLaneScore(e, roleKey, roleToys)) <= 0.75);
-      const pickPool = nearBest.length ? nearBest : rankedFromSelection;
-      const picked = pickPool[Math.floor(Math.random() * pickPool.length)] || rankedFromSelection[0];
+      const topScore = entryLaneScore(ranked[0], roleKey, roleToys);
+      const nearBest = ranked.filter((e) => (topScore - entryLaneScore(e, roleKey, roleToys)) <= 1.4);
+      const weightedPickPool = nearBest.length ? nearBest : ranked.slice(0, Math.min(4, ranked.length));
+      const weighted = weightedPickPool.map((entry) => ({
+        entry,
+        weight: Math.max(0.2, 1 + ((entry?.priority === true) ? 1.2 : 0) + ((topScore - entryLaneScore(entry, roleKey, roleToys)) * -0.35)),
+      }));
+      const totalWeight = weighted.reduce((sum, item) => sum + Math.max(0.2, Number(item.weight) || 0), 0);
+      let roll = Math.random() * Math.max(0.2, totalWeight);
+      let picked = weighted[weighted.length - 1]?.entry || ranked[0];
+      for (const item of weighted) {
+        roll -= Math.max(0.2, Number(item.weight) || 0);
+        if (roll <= 0) {
+          picked = item.entry;
+          break;
+        }
+      }
       const pickedId = String(picked?.id || '').trim();
       if (pickedId) return pickedId;
     }

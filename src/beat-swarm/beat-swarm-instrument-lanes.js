@@ -48,6 +48,11 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     return Array.isArray(entry?.recommendedToys) && entry.recommendedToys.map((t) => String(t || '').toLowerCase()).includes(key);
   }
 
+  function entryExcludedFromEnemyPools(entry) {
+    const combatRole = String(entry?.combatRole || '').trim().toLowerCase();
+    return combatRole === 'player_weapon' || combatRole === 'player-reserved';
+  }
+
   function normalizeEnemyInstrumentLane(laneLike, fallback = 'lead') {
     const raw = String(laneLike || '').trim().toLowerCase();
     if (raw === 'bass' || raw === 'lead' || raw === 'accent' || raw === 'motion') return raw;
@@ -226,10 +231,67 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
   function pickEntryIdWithPriority(entries) {
     const list = Array.isArray(entries) ? entries.filter((e) => String(e?.id || '').trim()) : [];
     if (!list.length) return '';
-    const pri = list.filter((e) => e?.priority);
-    const pool = pri.length ? pri : list;
-    const picked = pool[Math.max(0, Math.min(pool.length - 1, Math.trunc(Math.random() * pool.length)))] || null;
+    const weighted = list.map((entry, idx) => ({
+      entry,
+      idx,
+      weight: (entry?.priority ? 2.4 : 1),
+    }));
+    const totalWeight = weighted.reduce((sum, item) => sum + Math.max(0.001, Number(item.weight) || 0), 0);
+    let roll = Math.random() * Math.max(0.001, totalWeight);
+    let picked = weighted[weighted.length - 1]?.entry || null;
+    for (const item of weighted) {
+      roll -= Math.max(0.001, Number(item.weight) || 0);
+      if (roll <= 0) {
+        picked = item.entry;
+        break;
+      }
+    }
     return String(picked?.id || '').trim();
+  }
+
+  function auditEnemyInstrumentPool(toyKey, optionsLike = null) {
+    const style = getStyleProfileSnapshot();
+    const theme = getSoundThemeKey() || '';
+    const candidates = getEnemyToyKeyCandidates(toyKey);
+    const lane = normalizeEnemyInstrumentLane(
+      optionsLike?.lane || inferEnemyLaneFromRole(optionsLike?.role, inferEnemyLaneFromToyKey(toyKey)),
+      inferEnemyLaneFromToyKey(toyKey)
+    );
+    const laneBias = Number(style?.styleLaneBias?.[lane]);
+    const laneEnabled = !Number.isFinite(laneBias) || laneBias > 0.15;
+    const effectiveLane = laneEnabled ? lane : 'accent';
+    const used = new Set();
+    for (const id of getUsedWeaponInstrumentIds()) used.add(id);
+    for (const id of getUsedEnemyInstrumentIds()) used.add(id);
+    const entries = Array.isArray(getInstrumentEntries()) ? getInstrumentEntries() : [];
+    const themed = [];
+    const eligible = [];
+    const priorityEligible = [];
+    for (const entry of entries) {
+      const id = String(entry?.id || '').trim();
+      if (!id) continue;
+      if (entryExcludedFromEnemyPools(entry)) continue;
+      if (!candidates.some((k) => entryMatchesToy(entry, k))) continue;
+      if (!entryMatchesLane(entry, effectiveLane, candidates)) continue;
+      if (entryMatchesTheme(entry, theme)) themed.push(id);
+      const themeOk = entryMatchesTheme(entry, theme);
+      if (!themeOk) continue;
+      eligible.push(id);
+      if (entry?.priority === true) priorityEligible.push(id);
+    }
+    const unusedEligible = eligible.filter((id) => !used.has(id));
+    return {
+      toyKey: String(toyKey || '').trim().toLowerCase(),
+      lane: effectiveLane,
+      theme: String(theme || '').trim(),
+      eligibleCount: eligible.length,
+      eligibleIds: eligible.slice(),
+      unusedEligibleCount: unusedEligible.length,
+      unusedEligibleIds: unusedEligible.slice(),
+      priorityEligibleCount: priorityEligible.length,
+      priorityEligibleIds: priorityEligible.slice(),
+      themedMatchCount: themed.length,
+    };
   }
 
   function pickEnemyInstrumentIdForToy(toyKey, preferredId = '', extraUsed = null, optionsLike = null) {
@@ -253,15 +315,18 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
       const preferredEntry = entries.find((e) => String(e?.id || '').trim() === preferred);
       const preferredOk = preferredEntry
         ? (
+          !entryExcludedFromEnemyPools(preferredEntry)
+          && (
           candidates.some((k) => entryMatchesToy(preferredEntry, k))
           && entryMatchesLane(preferredEntry, effectiveLane, candidates)
-        )
+          ))
         : false;
       if (preferredOk) return preferred;
     }
     const lanePoolUnused = entries.filter((entry) => {
       const id = String(entry?.id || '').trim();
       if (!id || used.has(id)) return false;
+      if (entryExcludedFromEnemyPools(entry)) return false;
       if (!entryMatchesTheme(entry, theme)) return false;
       if (!candidates.some((k) => entryMatchesToy(entry, k))) return false;
       return entryMatchesLane(entry, effectiveLane, candidates);
@@ -269,6 +334,7 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const lanePick = pickEntryIdWithPriority(lanePoolUnused);
     if (lanePick) return lanePick;
     const lanePoolAny = entries.filter((entry) => {
+      if (entryExcludedFromEnemyPools(entry)) return false;
       if (!entryMatchesTheme(entry, theme)) return false;
       if (!candidates.some((k) => entryMatchesToy(entry, k))) return false;
       return entryMatchesLane(entry, effectiveLane, candidates);
@@ -298,5 +364,7 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     pickEnemyInstrumentIdForToy,
     pickEnemyInstrumentIdForToyRandom,
     pickSpawnerEnemyInstrumentId,
+    auditEnemyInstrumentPool,
+    entryExcludedFromEnemyPools,
   };
 }

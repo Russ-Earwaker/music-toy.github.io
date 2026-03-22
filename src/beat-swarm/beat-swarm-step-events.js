@@ -264,14 +264,60 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const actorId = Math.max(0, Math.trunc(Number(ev?.actorId) || 0));
     return String(laneId || continuityId || `${action}:${actorId}`).trim().toLowerCase();
   };
+  const isContinuityPreservingRestatement = (ev) => {
+    if (!ev || typeof ev !== 'object') return false;
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const continuityId = String(payload?.continuityId || '').trim();
+    if (!continuityId) return false;
+    const identityChangeReason = String(payload?.identityChangeReason || '').trim().toLowerCase();
+    return identityChangeReason === 'phrase_boundary_mutation'
+      || identityChangeReason === 'section_restatement';
+  };
   const isFreshEntryAudibility = (ev) => {
+    if (isContinuityPreservingRestatement(ev)) return false;
     const entryKey = resolveEntryAudibilityKey(ev);
     if (!entryKey) return false;
     const entry = entryAudibilityRuntime.byKey.get(entryKey);
+    const entryWindowSteps = Math.max(1, Math.trunc(Number(constants.entryAudibilityWindowSteps) || 8));
+    const minAudibleEvents = Math.max(1, Math.trunc(Number(constants.entryAudibilityMinAudibleEvents) || 3));
     if (!entry) return true;
     const firstSeenStep = Math.max(-1000000, Math.trunc(Number(entry?.firstSeenStep) || -1000000));
     const audibleCount = Math.max(0, Math.trunc(Number(entry?.audibleCount) || 0));
-    return (stepIndex - firstSeenStep) <= 8 || audibleCount < 3;
+    return (stepIndex - firstSeenStep) <= entryWindowSteps || audibleCount < minAudibleEvents;
+  };
+  const isEntryPhraseAudibility = (ev) => {
+    if (!ev || typeof ev !== 'object') return false;
+    if (isContinuityPreservingRestatement(ev)) return false;
+    const action = String(ev?.actionType || '').trim().toLowerCase();
+    if (
+      action !== 'spawner-spawn'
+      && action !== 'drawsnake-projectile'
+      && action !== 'composer-group-projectile'
+      && action !== 'composer-group-explosion'
+    ) return false;
+    const entryKey = resolveEntryAudibilityKey(ev);
+    if (!entryKey) return false;
+    const entry = entryAudibilityRuntime.byKey.get(entryKey);
+    const phraseWindowSteps = Math.max(1, Math.trunc(Number(constants.entryAudibilityPhraseWindowSteps) || 16));
+    const minPhraseAudibleEvents = Math.max(1, Math.trunc(Number(constants.entryAudibilityPhraseMinAudibleEvents) || 6));
+    if (!entry) return true;
+    const firstSeenStep = Math.max(-1000000, Math.trunc(Number(entry?.firstSeenStep) || -1000000));
+    const audibleCount = Math.max(0, Math.trunc(Number(entry?.audibleCount) || 0));
+    return (stepIndex - firstSeenStep) <= phraseWindowSteps || audibleCount < minPhraseAudibleEvents;
+  };
+  const isVisibleGameplayLinkedCue = (ev) => {
+    if (!ev || typeof ev !== 'object') return false;
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const action = String(ev?.actionType || '').trim().toLowerCase();
+    const actorId = Math.max(0, Math.trunc(Number(ev?.actorId) || 0));
+    if (!(actorId > 0)) return false;
+    if (
+      action === 'spawner-spawn'
+      || action === 'drawsnake-projectile'
+      || action === 'composer-group-projectile'
+      || action === 'composer-group-explosion'
+    ) return true;
+    return payload?.musicLaneDriven === true;
   };
   const scorePrimaryLoopLaneCandidate = (ev, idx = 0) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
@@ -522,9 +568,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     -1,
     Math.trunc(Number(state?.loopAdmissionRuntime?.currentForegroundIdentityStartStep) || -1)
   );
+  const loopLengthSteps = Math.max(1, Math.trunc(Number(constants?.loopLengthSteps) || 8));
   const loopEstablishingWindowSteps = 16;
   const prominenceRank = { suppressed: 0, trace: 1, quiet: 2, full: 3 };
   const layerBudgets = { foundation: 1, loops: 2, sparkle: 1 };
+  const foundationStepIndexNow = Math.max(0, Math.trunc(Number(foundationLaneSnapshot?.stepIndex) || 0));
   const profiledAnnotated = profiledEnemyEvents.map((ev, idx) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     const layer = String(payload.musicLayer || 'sparkle').trim().toLowerCase();
@@ -550,18 +598,33 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       && currentForegroundIdentityLayer === 'loops'
       && !!currentForegroundIdentityKey
       && identityKey === currentForegroundIdentityKey;
+    const isCompetingForegroundLoop = safeLayer === 'loops'
+      && currentForegroundIdentityLayer === 'loops'
+      && !!currentForegroundIdentityKey
+      && !!identityKey
+      && identityKey !== currentForegroundIdentityKey;
     const isEstablishingForegroundLoop = isCurrentForegroundLoop
       && currentForegroundIdentityStartStep >= 0
       && (stepIndex - currentForegroundIdentityStartStep) < loopEstablishingWindowSteps;
+    const currentForegroundHeldLoops = currentForegroundIdentityStartStep >= 0 && stepIndex > currentForegroundIdentityStartStep
+      ? Math.max(0, Math.floor((stepIndex - currentForegroundIdentityStartStep) / loopLengthSteps))
+      : 0;
+    const foregroundLockLoops = Math.max(0, Math.trunc(Number(constants.foregroundLockLoops) || 0));
+    const foregroundLockActive = isCompetingForegroundLoop && currentForegroundHeldLoops < foregroundLockLoops;
+    const isFoundationStructuralStep = safeLayer === 'foundation'
+      && (foundationStepIndexNow === 0 || foundationStepIndexNow === 3 || foundationStepIndexNow === 4);
     let score = 0;
     if (safeLayer === 'foundation') score += 1000;
     else if (safeLayer === 'loops') score += 700;
     else score += 300;
+    if (isFreshEntryAudibility(ev)) score += Math.max(0, Number(constants.entryAudibilityScoreBoost) || 110);
     if (isPrimaryLoopLaneEvent) score += 220;
     score += (prominenceRank[safeProminence] || 0) * 40;
     if (safeLayer === 'foundation' && playerLikelyAudible) score += 180;
-    if (isCurrentForegroundLoop) score += 140;
-    if (isEstablishingForegroundLoop) score += 120;
+    if (isCurrentForegroundLoop) score += Math.max(0, Number(constants.currentForegroundScoreBoost) || 120);
+    if (isEstablishingForegroundLoop) score += Math.max(0, Number(constants.establishingForegroundScoreBoost) || 90);
+    if (foregroundLockActive) score -= Math.max(0, Number(constants.competingForegroundScorePenalty) || 110);
+    if (isFoundationStructuralStep) score += Math.max(0, Number(constants.foundationStructuralScoreBoost) || 120);
     if (safeLayer === 'loops' && safeProminence === 'full') score += 60;
     if (safeLayer === 'sparkle' && String(ev?.actionType || '').trim().toLowerCase() === 'enemy-death-accent') score += 40;
     score += Math.max(0, Math.min(1, Number(payload.onboardingPriority) || 0)) * 25;
@@ -579,7 +642,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       noteResolved,
       identityKey,
       isCurrentForegroundLoop,
+      isCompetingForegroundLoop,
+      foregroundLockActive,
       isEstablishingForegroundLoop,
+      isFoundationStructuralStep,
       isPrimaryLoopLaneEvent,
       score,
       duplicateKey: [
@@ -648,8 +714,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   }
   const foundationSelected = keptByLayer.foundation.length > 0;
 
+  const arbitrationMetaByEvent = new WeakMap();
   const arbitratedEnemyEvents = profiledAnnotated.map((item) => {
     const freshEntryAudibility = isFreshEntryAudibility(item?.ev);
+    const entryPhraseAudibility = isEntryPhraseAudibility(item?.ev);
     const finalProminence = (() => {
       if (selectedIds.has(item.idx)) {
         if (item.layer === 'foundation') return 'full';
@@ -681,14 +749,24 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       if (item.layer === 'foundation') return 'suppressed';
       return 'suppressed';
     })();
-    if (finalProminence === item.prominence) return item.ev;
-    return {
+    const resultEvent = finalProminence === item.prominence ? item.ev : {
       ...item.ev,
       payload: {
         ...item.payload,
         musicProminence: finalProminence,
+        entryAudibilityGrace: freshEntryAudibility,
+        entryPhraseAudibilityGrace: entryPhraseAudibility,
       },
     };
+    arbitrationMetaByEvent.set(resultEvent, {
+      isCurrentForegroundLoop: item.isCurrentForegroundLoop === true,
+      isCompetingForegroundLoop: item.isCompetingForegroundLoop === true,
+      foregroundLockActive: item.foregroundLockActive === true,
+      isFoundationStructuralStep: item.isFoundationStructuralStep === true,
+      isVisibleGameplayLinkedCue: isVisibleGameplayLinkedCue(item?.ev),
+      entryPhraseAudibilityGrace: entryPhraseAudibility,
+    });
+    return resultEvent;
   });
 
   for (let idx = 0; idx < arbitratedEnemyEvents.length; idx += 1) {
@@ -862,18 +940,36 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const densityPenaltySparkle = Math.max(0, Math.min(1, Number(constants.densityPenaltySparkle) || 0.18));
   const stagedEnemyEvents = emittedEnemyEvents.map((ev) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const arbitrationMeta = arbitrationMetaByEvent.get(ev) || null;
     const baseAudioGain = Number(payload.audioGain == null ? 1 : payload.audioGain);
     const musicLayer = String(payload.musicLayer || 'sparkle').trim().toLowerCase();
     const musicProminence = String(payload.musicProminence || 'full').trim().toLowerCase();
     const isPrimaryLoopLaneEvent = String(payload.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane';
     const isFoundationLaneEvent = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase() === 'foundation_lane'
       || musicLayer === 'foundation';
+    const isCurrentForegroundLoop = arbitrationMeta?.isCurrentForegroundLoop === true;
+    const isCompetingForegroundLoop = arbitrationMeta?.isCompetingForegroundLoop === true;
+    const foregroundLockActive = arbitrationMeta?.foregroundLockActive === true;
+    const isFoundationStructuralStep = arbitrationMeta?.isFoundationStructuralStep === true;
+    const isVisibleGameplayCue = arbitrationMeta?.isVisibleGameplayLinkedCue === true;
+    const entryPhraseAudibilityGrace = arbitrationMeta?.entryPhraseAudibilityGrace === true;
     const hierarchyGainScale = (() => {
       if (!(densityPressure > 0)) return 1;
-      if (musicLayer === 'foundation') return 1 + (densityReliefFoundation * densityPressure);
+      if (musicLayer === 'foundation') {
+        const structuralBoost = isFoundationStructuralStep
+          ? Math.max(0, Number(constants.foundationStructuralGainBoost) || 0.12)
+          : 0;
+        return 1 + ((densityReliefFoundation + structuralBoost) * densityPressure);
+      }
       if (musicLayer === 'loops') {
         if (isPrimaryLoopLaneEvent || musicProminence === 'full') {
-          return 1 + (densityReliefPrimaryLoop * densityPressure);
+          const foregroundBoost = isCurrentForegroundLoop
+            ? Math.max(0, Number(constants.currentForegroundGainBoost) || 0.08)
+            : 0;
+          const competingPenalty = (foregroundLockActive && isCompetingForegroundLoop)
+            ? Math.max(0, Number(constants.competingForegroundGainPenalty) || 0.12)
+            : 0;
+          return Math.max(0.55, (1 + ((densityReliefPrimaryLoop + foregroundBoost) * densityPressure)) - competingPenalty);
         }
         return Math.max(0.55, 1 - (densityPenaltySupport * densityPressure));
       }
@@ -884,11 +980,27 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       Math.min(1, (Number.isFinite(baseAudioGain) ? baseAudioGain : 1) * globalStepGainScale * hierarchyGainScale)
     );
     if (isPrimaryLoopLaneEvent) {
-      const loopFloor = musicProminence === 'full' ? 0.5 : 0.4;
+      const loopFloor = musicProminence === 'full'
+        ? Math.max(0, Math.min(1, Number(constants.protectedLoopFullFloor) || 0.56))
+        : Math.max(0, Math.min(1, Number(constants.protectedLoopQuietFloor) || 0.46));
       nextAudioGain = Math.max(loopFloor, nextAudioGain);
     } else if (isFoundationLaneEvent) {
-      const foundationFloor = musicProminence === 'full' ? 0.54 : 0.44;
+      const foundationFloor = musicProminence === 'full'
+        ? Math.max(0, Math.min(1, Number(constants.protectedFoundationFullFloor) || 0.6))
+        : Math.max(0, Math.min(1, Number(constants.protectedFoundationQuietFloor) || 0.48));
       nextAudioGain = Math.max(foundationFloor, nextAudioGain);
+    }
+    if (entryPhraseAudibilityGrace && musicLayer === 'loops') {
+      const phraseLoopFloor = musicProminence === 'full'
+        ? Math.max(0, Math.min(1, Number(constants.entryPhraseLoopFullFloor) || 0.48))
+        : Math.max(0, Math.min(1, Number(constants.entryPhraseLoopQuietFloor) || 0.38));
+      nextAudioGain = Math.max(phraseLoopFloor, nextAudioGain);
+    }
+    if (isVisibleGameplayCue) {
+      const visibleCueFloor = musicProminence === 'full'
+        ? Math.max(0, Math.min(1, Number(constants.visibleCueFullFloor) || 0.42))
+        : Math.max(0, Math.min(1, Number(constants.visibleCueQuietFloor) || 0.32));
+      nextAudioGain = Math.max(visibleCueFloor, nextAudioGain);
     }
     const continuityId = String(payload.continuityId || '').trim();
     const lineKey = String(
@@ -901,19 +1013,36 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (lineKey) {
       const previousGain = clamp01(previousLineState?.gain);
       const isProtectedLaneEvent = isPrimaryLoopLaneEvent || isFoundationLaneEvent;
-      const attack = isProtectedLaneEvent ? 0.72 : 0.62;
-      const release = isProtectedLaneEvent ? 0.24 : 0.34;
+      const isStableAudibilityLine = isProtectedLaneEvent || isVisibleGameplayCue || entryPhraseAudibilityGrace;
+      const attack = isStableAudibilityLine ? 0.68 : 0.62;
+      const release = isStableAudibilityLine ? 0.18 : 0.34;
       const smoothingAlpha = nextAudioGain >= previousGain ? attack : release;
       const smoothedAudioGain = previousLineState
         ? (previousGain + ((nextAudioGain - previousGain) * smoothingAlpha))
         : nextAudioGain;
       nextAudioGain = clamp01(smoothedAudioGain);
       if (isPrimaryLoopLaneEvent) {
-        const loopSmoothedFloor = musicProminence === 'full' ? 0.5 : 0.4;
+        const loopSmoothedFloor = musicProminence === 'full'
+          ? Math.max(0, Math.min(1, Number(constants.protectedLoopFullFloor) || 0.56))
+          : Math.max(0, Math.min(1, Number(constants.protectedLoopQuietFloor) || 0.46));
         nextAudioGain = Math.max(loopSmoothedFloor, nextAudioGain);
       } else if (isFoundationLaneEvent) {
-        const foundationSmoothedFloor = musicProminence === 'full' ? 0.54 : 0.44;
+        const foundationSmoothedFloor = musicProminence === 'full'
+          ? Math.max(0, Math.min(1, Number(constants.protectedFoundationFullFloor) || 0.6))
+          : Math.max(0, Math.min(1, Number(constants.protectedFoundationQuietFloor) || 0.48));
         nextAudioGain = Math.max(foundationSmoothedFloor, nextAudioGain);
+      }
+      if (entryPhraseAudibilityGrace && musicLayer === 'loops') {
+        const phraseLoopSmoothedFloor = musicProminence === 'full'
+          ? Math.max(0, Math.min(1, Number(constants.entryPhraseLoopFullFloor) || 0.48))
+          : Math.max(0, Math.min(1, Number(constants.entryPhraseLoopQuietFloor) || 0.38));
+        nextAudioGain = Math.max(phraseLoopSmoothedFloor, nextAudioGain);
+      }
+      if (isVisibleGameplayCue) {
+        const visibleCueSmoothedFloor = musicProminence === 'full'
+          ? Math.max(0, Math.min(1, Number(constants.visibleCueFullFloor) || 0.42))
+          : Math.max(0, Math.min(1, Number(constants.visibleCueQuietFloor) || 0.32));
+        nextAudioGain = Math.max(visibleCueSmoothedFloor, nextAudioGain);
       }
       gainSmoothingRuntime.byLineKey.set(lineKey, {
         gain: nextAudioGain,
@@ -930,6 +1059,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         hierarchyGainScale,
         stagedSoundCount,
         gainSmoothingApplied: lineKey ? true : false,
+        visibleCueAudibilityFloor: isVisibleGameplayCue,
+        entryPhraseAudibilityGrace,
       },
     };
   });

@@ -145,7 +145,7 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
     if (styleId === 'retro_shooter') {
       const prevNote = normalizeSwarmNoteName(enemy?.__bsLastDrawsnakeNote);
       const prevRow = Math.max(0, Math.min(notePoolSize - 1, Math.trunc(Number(enemy?.__bsLastDrawsnakeRow) || row)));
-      const repeatChance = prevRow === row ? (motifRepeatBias * 0.18) : (motifRepeatBias * 0.06);
+      const repeatChance = prevRow === row ? (motifRepeatBias * 0.04) : (motifRepeatBias * 0.008);
       if (prevNote && Math.random() < repeatChance) {
         noteNameRaw = prevNote;
       }
@@ -264,6 +264,9 @@ export function collectSpawnerStepBeatEvents(options = null) {
   const styleId = String(styleProfile?.id || '').trim().toLowerCase();
   const motifRepeatBias = Math.max(0, Math.min(1, Number(styleProfile?.motifRepeatBias) || 0));
   const laneDrivenFoundation = options?.laneDrivenFoundation === true;
+  const musicLaneRuntime = options?.musicLaneRuntime && typeof options.musicLaneRuntime === 'object'
+    ? options.musicLaneRuntime
+    : null;
   const getPerfNow = typeof options?.getPerfNow === 'function'
     ? options.getPerfNow
     : (() => (globalThis.performance?.now?.() ?? Date.now()));
@@ -281,6 +284,9 @@ export function collectSpawnerStepBeatEvents(options = null) {
   const bassRoleKey = String(roles?.bass || 'bass');
   const foundationLaneStep = getFoundationLaneSnapshot
     ? getFoundationLaneSnapshot(stepAbs, barIndex)
+    : null;
+  const foundationLaneRuntime = musicLaneRuntime?.foundationLane && typeof musicLaneRuntime.foundationLane === 'object'
+    ? musicLaneRuntime.foundationLane
     : null;
 
   for (const enemy of enemies) {
@@ -327,6 +333,37 @@ export function collectSpawnerStepBeatEvents(options = null) {
       (foundationOwnerEnemyId > 0 && foundationOwnerEnemyId === actorId)
       || (foundationOwnerGroupId > 0 && foundationOwnerGroupId === Math.max(0, Math.trunc(Number(group?.id) || 0)))
     );
+    const continuityId = String(group?.continuityId || enemy?.musicContinuityId || '').trim();
+    const liveSameContinuitySuccessor = tailContinuationActive
+      ? enemies.find((candidate) => {
+        if (!candidate || candidate === enemy || candidate?.retreating) return false;
+        const candidateId = Math.max(0, Math.trunc(Number(candidate?.id) || 0));
+        if (!(candidateId > 0)) return false;
+        const candidateGroup = getEnemyMusicGroup(candidate, 'spawner-spawn', { sync: false });
+        if (!candidateGroup) return false;
+        const candidateLifecycle = normalizeMusicLifecycleState(candidateGroup?.lifecycleState || candidate?.lifecycleState || 'active', 'active');
+        if (candidateLifecycle === 'retiring') return false;
+        const candidateRole = normalizeSwarmRole(candidateGroup?.role || getSwarmRoleForEnemy(candidate, bassRoleKey), bassRoleKey);
+        if (candidateRole !== bassRoleKey) return false;
+        const candidateContinuityId = String(candidateGroup?.continuityId || candidate?.musicContinuityId || '').trim();
+        if (!candidateContinuityId || candidateContinuityId !== continuityId) return false;
+        if (
+          Math.max(0, Math.trunc(Number(foundationLaneRuntime?.performerEnemyId) || 0)) === candidateId
+          || Math.max(0, Math.trunc(Number(foundationLaneRuntime?.performerGroupId) || 0)) === Math.max(0, Math.trunc(Number(candidateGroup?.id) || 0))
+        ) return true;
+        return candidateLifecycle === 'active';
+      }) || null
+      : null;
+    if (tailContinuationActive && liveSameContinuitySuccessor) {
+      enemy.musicLoopTailStartedStep = 0;
+      enemy.musicLoopTailUntilStep = stepAbs;
+      enemy.musicLoopTailLaneId = '';
+      continue;
+    }
+    if (tailContinuationActive && isBassRole && !isFoundationOwner && (foundationOwnerEnemyId > 0 || foundationOwnerGroupId > 0)) {
+      enemy.musicLoopTailUntilStep = stepAbs;
+      continue;
+    }
     let noteNameRaw = normalizeSwarmNoteName(group?.note) || (isBassRole ? 'C3' : 'C4');
     if (isBassRole) {
       const locked = normalizeSwarmNoteName(enemy?.__bsLockedBassNote) || noteNameRaw || 'C3';
@@ -366,7 +403,7 @@ export function collectSpawnerStepBeatEvents(options = null) {
       visualSyncType: 'spawn-burst',
       payload: {
         groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-        continuityId: String(group?.continuityId || enemy?.musicContinuityId || '').trim(),
+        continuityId,
         nodeStepIndex: step,
         audioGain: deconflictedAudioGain,
         requestedNoteRaw: noteNameRaw,
@@ -382,6 +419,11 @@ export function collectSpawnerStepBeatEvents(options = null) {
     }));
     finishEventPerf();
     enemy.__bsLastSpawnerNote = noteName;
+    if (tailContinuationActive && loopTailUntilStep <= stepAbs) {
+      enemy.musicLoopTailStartedStep = 0;
+      enemy.musicLoopTailUntilStep = 0;
+      enemy.musicLoopTailLaneId = '';
+    }
     stats.spawnedEnemies += 1;
   }
   return { events, stats };

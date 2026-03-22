@@ -211,6 +211,13 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     musicLayer,
     musicProminence,
     authoringClass,
+    audioGain: Number(context?.audioGain ?? payload?.audioGain) || 0,
+    visibleCueAudibilityFloor: context?.visibleCueAudibilityFloor === true
+      ? true
+      : (payload?.visibleCueAudibilityFloor === true),
+    entryPhraseAudibilityGrace: context?.entryPhraseAudibilityGrace === true
+      ? true
+      : (payload?.entryPhraseAudibilityGrace === true),
   };
 }
 
@@ -272,6 +279,9 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     performerType: String(payload?.performerType || '').trim().toLowerCase(),
     previousContinuityId: String(payload?.previousContinuityId || '').trim(),
     previousInstrumentId: String(payload?.previousInstrumentId || '').trim(),
+    continuityClass: String(payload?.continuityClass || '').trim().toLowerCase(),
+    laneScope: String(payload?.laneScope || '').trim().toLowerCase(),
+    sourceKey: String(payload?.sourceKey || '').trim().toLowerCase(),
     previousPhraseId: String(payload?.previousPhraseId || '').trim().toLowerCase(),
     previousPatternKey: String(payload?.previousPatternKey || '').trim(),
     identityChangeReason: String(payload?.identityChangeReason || '').trim().toLowerCase(),
@@ -828,6 +838,35 @@ function collectHandoffDiagnostics(session, maxBarIndex) {
   };
 }
 
+function collectVisibleEnemyAudibility(events) {
+  let visibleEnemyEvents = 0;
+  let barelyAudibleVisibleEnemyEvents = 0;
+  for (const ev of events) {
+    const src = String(ev?.sourceSystem || '').trim().toLowerCase();
+    if (src === 'player') continue;
+    const actorId = Math.max(0, clampInt(ev?.actorId, 0, 0));
+    if (!(actorId > 0)) continue;
+    const action = String(ev?.actionType || '').trim().toLowerCase();
+    const visibleCueLike = ev?.visibleCueAudibilityFloor === true
+      || action === 'spawner-spawn'
+      || action === 'drawsnake-projectile'
+      || action === 'composer-group-projectile'
+      || action === 'composer-group-explosion';
+    if (!visibleCueLike) continue;
+    visibleEnemyEvents += 1;
+    const audioGain = Math.max(0, Number(ev?.audioGain) || 0);
+    const prominence = String(ev?.musicProminence || '').trim().toLowerCase();
+    if (prominence !== 'suppressed' && audioGain > 0 && audioGain < 0.26) {
+      barelyAudibleVisibleEnemyEvents += 1;
+    }
+  }
+  return {
+    visibleEnemyEvents,
+    barelyAudibleVisibleEnemyEvents,
+    barelyAudibleVisibleEnemyRate: visibleEnemyEvents > 0 ? (barelyAudibleVisibleEnemyEvents / visibleEnemyEvents) : 0,
+  };
+}
+
 function collectBassStabilityDiagnostics(executedEvents, handoff = null) {
   const bassEvents = (Array.isArray(executedEvents) ? executedEvents : [])
     .filter((ev) => {
@@ -1107,6 +1146,18 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
   let rhythmTierSelections = 0;
   let protectedLaneClaimsInferred = 0;
   let protectedLaneClaimsMissing = 0;
+  let executionInstrumentChanges = 0;
+  let executionInstrumentChangesSameContinuity = 0;
+  let executionInstrumentChangesNewContinuity = 0;
+  let executionInstrumentChangesProtectedLane = 0;
+  let executionInstrumentChangesSupportLane = 0;
+  let executionInstrumentChangesBufferTakeover = 0;
+  let executionInstrumentChangesUnscoped = 0;
+  let instrumentPoolAuditEvents = 0;
+  let instrumentPoolEligibleTotal = 0;
+  let instrumentPoolUnusedEligibleTotal = 0;
+  let instrumentPoolPriorityEligibleTotal = 0;
+  let instrumentPoolUnreachableCount = 0;
   for (const e of logs) {
     const type = String(e?.eventType || '').trim().toLowerCase();
     if (type === 'music_gameplay_suppression_decision') {
@@ -1140,6 +1191,29 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
       protectedLaneClaimsMissing += 1;
       continue;
     }
+    if (type === 'music_execution_instrument_change') {
+      executionInstrumentChanges += 1;
+      const continuityClass = String(e?.continuityClass || '').trim().toLowerCase();
+      if (continuityClass === 'same_continuity') executionInstrumentChangesSameContinuity += 1;
+      else if (continuityClass === 'new_continuity') executionInstrumentChangesNewContinuity += 1;
+      const laneScope = String(e?.laneScope || '').trim().toLowerCase();
+      if (laneScope === 'protected_lane') executionInstrumentChangesProtectedLane += 1;
+      else if (laneScope === 'support_lane') executionInstrumentChangesSupportLane += 1;
+      else if (laneScope === 'buffer_takeover') executionInstrumentChangesBufferTakeover += 1;
+      else executionInstrumentChangesUnscoped += 1;
+      continue;
+    }
+    if (type === 'music_enemy_instrument_pool_audit') {
+      instrumentPoolAuditEvents += 1;
+      instrumentPoolEligibleTotal += Math.max(0, clampInt(e?.eligibleCount, 0, 0));
+      instrumentPoolUnusedEligibleTotal += Math.max(0, clampInt(e?.unusedEligibleCount, 0, 0));
+      instrumentPoolPriorityEligibleTotal += Math.max(0, clampInt(e?.priorityEligibleCount, 0, 0));
+      continue;
+    }
+    if (type === 'music_enemy_instrument_pool_unreachable') {
+      instrumentPoolUnreachableCount += Math.max(0, clampInt(e?.unreachableCount, 0, 0));
+      continue;
+    }
   }
   return {
     gameplaySuppressionEvents,
@@ -1150,6 +1224,18 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
     rhythmTierSelections,
     protectedLaneClaimsInferred,
     protectedLaneClaimsMissing,
+    executionInstrumentChanges,
+    executionInstrumentChangesSameContinuity,
+    executionInstrumentChangesNewContinuity,
+    executionInstrumentChangesProtectedLane,
+    executionInstrumentChangesSupportLane,
+    executionInstrumentChangesBufferTakeover,
+    executionInstrumentChangesUnscoped,
+    instrumentPoolAuditEvents,
+    instrumentPoolEligibleTotal,
+    instrumentPoolUnusedEligibleTotal,
+    instrumentPoolPriorityEligibleTotal,
+    instrumentPoolUnreachableCount,
     byDecisionReason,
   };
 }
@@ -1435,6 +1521,7 @@ function collectHierarchyModelDiagnostics(
   const foundationPatternsByBar = new Map();
   const foregroundLanesByBar = new Map();
   const firstForegroundBarByIdentity = new Map();
+  const orderedForegroundLoopIdentityByBar = new Map();
   let onBeatRun = 0;
   let maxOnBeatRun = 0;
   for (const ev of actionable) {
@@ -1485,6 +1572,12 @@ function collectHierarchyModelDiagnostics(
     if (identityKey && !firstForegroundBarByIdentity.has(identityKey)) {
       firstForegroundBarByIdentity.set(identityKey, bar);
     }
+    if (String(ev?.musicLayer || '').trim().toLowerCase() === 'loops') {
+      const loopIdentityKey = String(ev?.continuityId || identityKey).trim().toLowerCase() || identityKey;
+      if (loopIdentityKey && !orderedForegroundLoopIdentityByBar.has(bar)) {
+        orderedForegroundLoopIdentityByBar.set(bar, loopIdentityKey);
+      }
+    }
   }
   const foundationPatternStrings = Array.from(foundationPatternsByBar.values()).map((steps) => steps.join(''));
   let foundationPatternChanges = 0;
@@ -1495,6 +1588,13 @@ function collectHierarchyModelDiagnostics(
   const foregroundIdeaGaps = [];
   for (let i = 1; i < orderedNewForegroundBars.length; i++) {
     foregroundIdeaGaps.push(Math.max(0, orderedNewForegroundBars[i] - orderedNewForegroundBars[i - 1]));
+  }
+  let foregroundLoopOwnerChanges = 0;
+  const orderedForegroundLoopBars = Array.from(orderedForegroundLoopIdentityByBar.keys()).sort((a, b) => a - b);
+  for (let i = 1; i < orderedForegroundLoopBars.length; i++) {
+    const prevIdentity = String(orderedForegroundLoopIdentityByBar.get(orderedForegroundLoopBars[i - 1]) || '').trim().toLowerCase();
+    const nextIdentity = String(orderedForegroundLoopIdentityByBar.get(orderedForegroundLoopBars[i]) || '').trim().toLowerCase();
+    if (prevIdentity && nextIdentity && prevIdentity !== nextIdentity) foregroundLoopOwnerChanges += 1;
   }
   const avgForegroundLaneCount = foregroundLanesByBar.size > 0
     ? Array.from(foregroundLanesByBar.values()).reduce((sum, set) => sum + set.size, 0) / foregroundLanesByBar.size
@@ -1525,6 +1625,8 @@ function collectHierarchyModelDiagnostics(
     sparkleDensity: sparkleAudibleEvents / barsConsidered,
     sparkleForegroundShare: totalForegroundEvents > 0 ? (sparkleForegroundEvents / totalForegroundEvents) : 0,
     audibleForegroundLaneCount: avgForegroundLaneCount,
+    foregroundLoopOwnerChanges,
+    foregroundLoopChurnRate: barsConsidered > 0 ? (foregroundLoopOwnerChanges / barsConsidered) : 0,
     barsSinceNewForegroundIdea: foregroundIdeaGaps.length > 0
       ? (foregroundIdeaGaps.reduce((sum, gap) => sum + gap, 0) / foregroundIdeaGaps.length)
       : barsConsidered,
@@ -2375,6 +2477,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const pitchEntropy = collectPitchEntropy(executedEvents);
   const deathDensity = collectDeathDensity(executedEvents);
   const playerMasking = collectPlayerMasking(executedEvents);
+  const visibleEnemyAudibility = collectVisibleEnemyAudibility(executedEvents);
   const playerInstrument = collectPlayerInstrumentMetrics(executedEvents);
   const notePoolCompliance = collectNotePoolCompliance(executedEvents);
   const motifReuse = collectMotifReuse(executedEvents);
@@ -2421,6 +2524,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     callResponse,
     deathDensity,
     playerMasking,
+    visibleEnemyAudibility,
     playerInstrument,
     paletteContinuity,
     enemyRemovals,
@@ -2458,6 +2562,21 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     rhythmTierSelectionCount: Number(passDiagnostics?.decisionMaking?.rhythmTierSelections) || 0,
     protectedLaneClaimsInferred: Number(passDiagnostics?.decisionMaking?.protectedLaneClaimsInferred) || 0,
     protectedLaneClaimsMissing: Number(passDiagnostics?.decisionMaking?.protectedLaneClaimsMissing) || 0,
+    executionInstrumentChangeCount: Number(passDiagnostics?.decisionMaking?.executionInstrumentChanges) || 0,
+    executionInstrumentChangeSameContinuityCount: Number(passDiagnostics?.decisionMaking?.executionInstrumentChangesSameContinuity) || 0,
+    executionInstrumentChangeNewContinuityCount: Number(passDiagnostics?.decisionMaking?.executionInstrumentChangesNewContinuity) || 0,
+    executionInstrumentChangeProtectedLaneCount: Number(passDiagnostics?.decisionMaking?.executionInstrumentChangesProtectedLane) || 0,
+    executionInstrumentChangeSupportLaneCount: Number(passDiagnostics?.decisionMaking?.executionInstrumentChangesSupportLane) || 0,
+    executionInstrumentChangeBufferTakeoverCount: Number(passDiagnostics?.decisionMaking?.executionInstrumentChangesBufferTakeover) || 0,
+    executionInstrumentChangeUnscopedCount: Number(passDiagnostics?.decisionMaking?.executionInstrumentChangesUnscoped) || 0,
+    instrumentPoolAuditEvents: Number(passDiagnostics?.decisionMaking?.instrumentPoolAuditEvents) || 0,
+    instrumentPoolEligibleTotal: Number(passDiagnostics?.decisionMaking?.instrumentPoolEligibleTotal) || 0,
+    instrumentPoolUnusedEligibleTotal: Number(passDiagnostics?.decisionMaking?.instrumentPoolUnusedEligibleTotal) || 0,
+    instrumentPoolPriorityEligibleTotal: Number(passDiagnostics?.decisionMaking?.instrumentPoolPriorityEligibleTotal) || 0,
+    instrumentPoolUnreachableCount: Number(passDiagnostics?.decisionMaking?.instrumentPoolUnreachableCount) || 0,
+    visibleEnemyEvents: Number(visibleEnemyAudibility?.visibleEnemyEvents) || 0,
+    barelyAudibleVisibleEnemyEvents: Number(visibleEnemyAudibility?.barelyAudibleVisibleEnemyEvents) || 0,
+    barelyAudibleVisibleEnemyRate: Number(visibleEnemyAudibility?.barelyAudibleVisibleEnemyRate) || 0,
     foundationCycleCount: Number(hierarchyModel?.foundationCycleCount) || 0,
     foundationPhraseResets: Number(hierarchyModel?.foundationPhraseResets) || 0,
     foundationContinuityRate: Number(hierarchyModel?.foundationContinuityRate) || 0,
@@ -2467,6 +2586,8 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     sparkleDensity: Number(hierarchyModel?.sparkleDensity) || 0,
     sparkleForegroundShare: Number(hierarchyModel?.sparkleForegroundShare) || 0,
     audibleForegroundLaneCount: Number(hierarchyModel?.audibleForegroundLaneCount) || 0,
+    foregroundLoopOwnerChanges: Number(hierarchyModel?.foregroundLoopOwnerChanges) || 0,
+    foregroundLoopChurnRate: Number(hierarchyModel?.foregroundLoopChurnRate) || 0,
     barsSinceNewForegroundIdea: Number(hierarchyModel?.barsSinceNewForegroundIdea) || 0,
     laneReassignmentRate: Number(hierarchyModel?.laneReassignmentRate) || 0,
     enemyColourMutationCount: Number(hierarchyModel?.enemyColourMutationCount) || 0,

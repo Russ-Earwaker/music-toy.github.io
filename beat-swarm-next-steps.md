@@ -1,250 +1,181 @@
 # Beat Swarm - Next Steps
 
-## Goal
+## Current State
 
-Make Beat Swarm behave like a readable retro shmup track during gameplay:
+The core architecture is no longer the main problem.
 
-- clear foundation
-- one understandable foreground idea at a time
-- gameplay enhances the music instead of burying it
-- loops persist long enough to be learned
-- spawners read like a drum machine
-- continuity survives gameplay churn
+Implemented infrastructure now includes:
 
----
-
-## Current state
-
-The core architecture is now in place:
-
-- protected lane ownership for foundation and primary loop
-- continuity-preserving handoff with phrase-boundary gating and deferred application
+- protected lane ownership for `foundation` and `primary_loop`
+- continuity-preserving handoff with deferred phrase-boundary application
 - shared spawner loop ownership
-- intro loop persistence and composition-group continuity buffering
-- gameplay-vs-music timing split with family-aware suppression
-- source-side rhythm tiers
-- decision diagnostics and protected-lane guardrails
+- timing split between music-authored and gameplay-authored events
+- composition-group continuity buffering
+- ownership, queue, and decision diagnostics
+- protected-lane guardrails against heuristic drift
 
-The remaining work is mainly tuning and validation, not missing core systems.
+The current phase is not "invent the music system."
+The current phase is:
 
----
+> Musical clarity, delivery reliability, and perceptual stability
 
-## Baseline to preserve
+## Primary Problem: Delivery And Audibility
 
-These systems already exist and should remain unless a regression is found:
+The remaining failures are mostly perceptual:
 
-- Beat Swarm-specific theme preset and role defaults
-- entry BPM on mode enter, with restore-on-exit
-- explicit lane ownership and source-to-lane mapping
-- controlled palette variation within stable role identity
+- created events are not always heard clearly
+- important loops can still enter, speak once, then disappear perceptually
+- volume can still shift too sharply over short windows
+- some musical material is now over-preserved and becoming too recognizable
 
----
+This means the next work should optimize for presentation, not more architectural complexity.
 
-## Metrics review: Music Lab 2026-03-21
+## Metrics Review
 
-Current snapshot from [music-lab-results-2026-03-21T08-41-44-079Z.json](/d:/Desktop/music-toy/music-toy.github.io/resources/music-lab-results/music-lab-results-2026-03-21T08-41-44-079Z.json):
+Useful existing signals to preserve:
 
-- `readabilityDensity: busy`
-- `foundationProminence: heavily_ducked`
-- `ownershipContinuity: preserved`
-- `deferredOwnershipChanges: healthy`
-- `bassFoundation: stable`
-- `avgEnemyCompetitionShare: 0.213`
-- `avgEnemyForegroundShare: 0.525`
-- `avgPlayerMaskingRisk: 0.420`
-- `foundationTraceShare: 0.519`
-- `foundationSuppressedShare: 0`
-- `foundationDeconflictChangeRate: 0.519`
-- `laneResetHandoffs: 0`
-- `sameContinuityInstrumentDriftCount: 0`
-- `sameContinuityPatternDriftCount: 0`
+- ownership continuity health
+- deferred ownership queue health
+- protected-lane inferred/missing claim counts
+- spawner pipeline mismatches
+- gameplay-authored vs music-authored event balance
 
-Interpretation:
+Useful new signals to add:
 
-- ownership and continuity are healthy
-- deferred protected-lane behavior is healthy
-- bass continuity is healthy
-- the main remaining problem is readability under density, especially foundation being pushed into `trace`
+- `protectedLoopAudibility`
+- `foregroundClarityScore`
+- `simultaneousVoiceCount`
+- `ghostLoopCount`
+- `suppressedEventCount`
+- `groupParticipationRate`
 
----
+## Remaining Priorities
 
-## Completed infrastructure
+### 1. Mix Hierarchy And Protected Audibility
 
-These items are implemented enough to treat as baseline systems:
+Target behavior:
 
-- spawner color groups behave as one musical voice
-- mix hierarchy exists and has density-aware gain shaping
-- intro drums are a real persistent loop
-- composition groups act as a continuity buffer and can hand bass back to gameplay
-- protected-lane phrase persistence and deferred queue logic are in place
-- bass ownership uses explicit continuity-aware selection
-- collision discipline is register-aware instead of global hard caps
-- gameplay-vs-music timing split exists with family-aware suppression
-- rhythm tiers constrain source-side density
-- decision diagnostics expose suppression, arbitration, owner choice, tiering, and protected-lane guardrails
-- critical-path heuristic ownership has been reduced and protected-lane claims are guarded
+- foundation remains clearly trackable
+- one foreground idea is legible
+- support and sparkle sit underneath instead of competing
+- visible gameplay cues should usually have matching audible cues
 
-These are not the current build targets unless a regression is found.
+Biases to strengthen:
 
----
+- foundation should not collapse below support in dense bars
+- player fire should not bury protected loops
+- fresh loop entries should remain audible long enough to be learned
 
-## Remaining priorities
+This is a tuning/system-shaping task, not a new mixer architecture.
 
-## 1. Readability and masking tuning
+### 2. Ghost Loop Scope Correction
 
-### Problem
+Ghost continuation is useful, but only as phrase completion.
 
-Music Lab still reports `readabilityDensity: busy` and `foundationProminence: heavily_ducked`.
+Correct scope:
 
-### Task
+- finish the current phrase
+- do not start a new phrase
+- do not persist as a long-term invisible owner
+- do not stack multiple ghosts unnecessarily
 
-- keep foundation more often at `full` or `quiet`, less often at `trace`
-- keep one foreground idea clearly dominant
-- reduce masking pressure in dense bars without flattening sparse bars
+Goal:
 
-### Goal
+- preserve musical truth without adding invisible clutter
 
-The track should read clearly, not just remain technically consistent.
+### 3. Phrase Lock And Foreground Clarity
 
----
+The system should keep important ideas stable long enough to register.
 
-## 2. Phrase lock and foreground lifecycle
+Needed behavior:
 
-### Problem
+- foreground loops hold long enough to be understood
+- competing replacements do not constantly interrupt them
+- support material may still evolve around the locked idea
 
-Ideas still need to stay foreground long enough to be learned.
+This should be implemented as controlled persistence, not rigidity.
 
-### Task
+### 4. Anti-Repetition And Generative Base
 
-Add a stronger foreground "idea lock" policy:
+Some material, especially drawsnake phrases, is now too recognizable across sessions.
 
-- when a loop becomes foreground, hold it for a real musical window
-- do not allow competing foreground claims during that lock
-- demote or retire support voices around the locked idea instead of replacing it immediately
+Direction:
 
-### Lifecycle
+- lean more on seeded variation than authored chunks
+- use contour variation, pitch-pool movement, and mutation
+- reduce exact phrase reuse
+- preserve call/response and motif logic without sounding pre-baked
 
-introduced -> establishing -> locked active -> support -> retired
+### 5. Density And Collision Control
 
-### Suggested target
+The mix still needs better behavior when many valid events coincide.
 
-- lock foreground ideas for roughly `8-16` bars unless a real authored transition occurs
+Keep suppressing:
 
-### Goal
+- same-note same-role duplicates
+- same-register melodic pileups
+- redundant accents
 
-The player should be able to learn the current musical idea before it changes.
+Keep allowing:
 
----
+- layered percussion
+- bass plus one readable lead
+- limited support when it stays out of the main register
 
-## 3. Density and accent control
+### 6. Spawner Group Refinement
 
-### Problem
+Shared spawner ownership already exists.
+The remaining work is refinement:
 
-Dense bars still risk turning into undifferentiated activity.
+- validate that one group behaves like one loop owner
+- keep one audio event per intended step
+- ensure all visible members react consistently
+- prevent per-member identity drift
 
-### Task
+Goal:
 
-- keep impacts and deaths as punctuation, not a second rhythm layer
-- keep sparkle sparse and phrase-aware
-- continue suppressing repeated short-window clutter when structure is already established
+- spawners behave like one readable drum machine, not loosely synced individuals
 
-### Use current metrics
+### 7. Composition-Group Restraint
 
-- `gameplaySuppressionDecisions`
-- `gameplaySuppressionDrops`
-- `gameplaySuppressionSoftens`
-- `stepArbitrationChanges`
+Composition groups should remain a continuity tool, not become the dominant musical source.
 
-### Goal
+They should:
 
-Decoration supports structure instead of overwhelming it.
+- complete phrases
+- bridge ownership loss
+- support gameplay-driven music
 
----
+They should not:
 
-## 4. Metrics review cadence
+- replace gameplay ownership by default
+- dominate the foreground unnecessarily
 
-For each significant tuning pass:
+## Working Rule
 
-- run one Music Lab pass
-- compare readability and foundation metrics against the prior baseline
-- review decision metrics before changing suppression or arbitration again
+Use this as the tuning principle:
 
-Watch especially:
+> If a note cannot be clearly heard or understood, it should not compete for authority.
 
-- `readabilityDensity`
-- `foundationProminence`
-- `avgEnemyCompetitionShare`
-- `avgPlayerMaskingRisk`
-- `foundationTraceShare`
-- `foundationDeconflictChangeRate`
-- `protectedLaneClaimsInferred`
-- `protectedLaneClaimsMissing`
+That does not always mean "drop it."
+It can also mean:
 
-Interpretation rule:
+- defer it
+- demote it
+- soften it
+- keep it visual-only
 
-- if continuity metrics stay healthy but readability stays poor, keep tuning mix and arbitration
-- if protected-lane guardrails go nonzero, fix ownership before doing more musical tuning
+## Priority Order
 
----
+1. Mix hierarchy and protected audibility
+2. Ghost loop scope correction
+3. Phrase lock and foreground clarity
+4. Anti-repetition and generative base
+5. Density and collision control
+6. Spawner group refinement
+7. Composition-group restraint
 
-## 5. Composition continuity polish
+## Direction
 
-### Task
-
-- keep composition groups selective and musically quiet when acting as continuity buffers
-- preserve phrase, pattern, and instrument identity across temporary ownership changes
-- hand ownership back to gameplay cleanly when a compatible source returns
-
-### Goal
-
-Continuity remains audible without composition groups feeling like a second dominant system.
-
----
-
-## 6. Intro polish
-
-### Task
-
-- keep the intro loop simple, stable, and recognizable
-- preserve the player-only onboarding space before the intro loop enters
-- ensure intro ownership remains stable through spawner replacement
-
-### Goal
-
-The intro should feel like a track starting, not like event traffic ramping up.
-
----
-
-## 7. Future compatibility
-
-### Requirement
-
-Beat Swarm must later be able to accept:
-
-- rhythm grid
-- note set
-- pattern identity
-
-from toy-authored systems.
-
-### Rule
-
-Beat Swarm should adapt imported patterns to its authored musical model, not blindly play them.
-
----
-
-## Remaining priority order
-
-1. Readability and masking tuning
-2. Phrase lock and foreground lifecycle
-3. Density and accent control
-4. Metrics review cadence
-5. Composition continuity polish
-6. Intro polish
-7. Future compatibility
-
----
-
-## One-line brief for Codex
-
-Treat Beat Swarm as an arranger with the core systems already landed: preserve protected-lane ownership, use Music Lab metrics to tune readability and foreground clarity, and only change architecture again if guardrail metrics show ownership regression.
+Stop preserving everything equally.
+Present the right things clearly.

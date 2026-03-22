@@ -72,7 +72,16 @@ export async function loadInstrumentEntries(){
       const normalizeCombatRole = (value) => {
         const raw = String(value || '').trim().toLowerCase();
         if (!raw) return '';
-        if (raw === 'foundation' || raw === 'melodic' || raw === 'percussive' || raw === 'texture' || raw === 'punctuation') return raw;
+        if (
+          raw === 'foundation'
+          || raw === 'melodic'
+          || raw === 'percussive'
+          || raw === 'texture'
+          || raw === 'punctuation'
+          || raw === 'player_weapon'
+          || raw === 'player-reserved'
+        ) return raw.replace('-', '_');
+        if (raw.includes('player') || raw.includes('weapon')) return 'player_weapon';
         if (raw.includes('drum') || raw.includes('perc')) return 'percussive';
         if (raw.includes('lead') || raw.includes('melod')) return 'melodic';
         if (raw.includes('bass') || raw.includes('foundation')) return 'foundation';
