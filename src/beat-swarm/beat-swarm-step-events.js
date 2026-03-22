@@ -714,11 +714,22 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       && currentForegroundIdentityLayer === 'loops'
       && !!currentForegroundIdentityKey
     ) {
-      score -= 70;
+      score -= 95;
+    }
+    if (
+      safeLayer === 'loops'
+      && callResponseLane === 'call'
+      && !isPrimaryLoopLaneEvent
+      && currentForegroundIdentityLayer === 'loops'
+      && !!currentForegroundIdentityKey
+    ) {
+      score -= 45;
     }
     if (isFoundationStructuralStep) score += Math.max(0, Number(constants.foundationStructuralScoreBoost) || 120);
     if (safeLayer === 'loops' && safeProminence === 'full') score += 60;
-    if (safeLayer === 'loops' && !isPrimaryLoopLaneEvent && (register === 'mid' || register === 'mid_high')) score -= 45;
+    if (safeLayer === 'loops' && !isPrimaryLoopLaneEvent && (register === 'mid' || register === 'mid_high')) {
+      score -= (callResponseLane === 'call' || callResponseLane === 'response') ? 60 : 50;
+    }
     if (safeLayer === 'sparkle' && String(ev?.actionType || '').trim().toLowerCase() === 'enemy-death-accent') score += 40;
     if (safeLayer === 'sparkle' && (register === 'mid' || register === 'mid_high')) score -= 35;
     score += Math.max(0, Math.min(1, Number(payload.onboardingPriority) || 0)) * 25;
@@ -842,11 +853,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
             return 'full';
           }
           if (
-            item.callResponseLane === 'response'
+            (item.callResponseLane === 'response' || item.callResponseLane === 'call')
             && currentForegroundIdentityLayer === 'loops'
             && !!currentForegroundIdentityKey
           ) {
-            if (foundationSelected) return 'trace';
+            if (foundationSelected) return 'suppressed';
             return item.isCurrentForegroundLoop ? 'quiet' : 'trace';
           }
           if (foundationSelected && playerLikelyAudible) {
@@ -1066,6 +1077,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const isPrimaryLoopLaneEvent = String(payload.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane';
     const isFoundationLaneEvent = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase() === 'foundation_lane'
       || musicLayer === 'foundation';
+    const callResponseLane = String(payload.callResponseLane || '').trim().toLowerCase();
     const isCurrentForegroundLoop = arbitrationMeta?.isCurrentForegroundLoop === true;
     const isCompetingForegroundLoop = arbitrationMeta?.isCompetingForegroundLoop === true;
     const foregroundLockActive = arbitrationMeta?.foregroundLockActive === true;
@@ -1093,7 +1105,18 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
             : 0;
           return Math.max(0.58, (1 + ((densityReliefPrimaryLoop + foregroundBoost + visibilityBoost + phraseGraceBoost) * densityPressure)) - competingPenalty);
         }
-        return Math.max(0.55, 1 - (densityPenaltySupport * densityPressure));
+        const crowdedForegroundSupportStep = primaryLoopForegroundPresent && foundationSelected;
+        const callResponsePenalty = callResponseLane === 'response'
+          ? (crowdedForegroundSupportStep ? 0.18 : 0.12)
+          : (callResponseLane === 'call'
+            ? (crowdedForegroundSupportStep ? 0.08 : 0.05)
+            : 0);
+        const supportFloor = callResponseLane === 'response'
+          ? (crowdedForegroundSupportStep ? 0.36 : 0.46)
+          : (callResponseLane === 'call'
+            ? (crowdedForegroundSupportStep ? 0.44 : 0.5)
+            : 0.55);
+        return Math.max(supportFloor, 1 - ((densityPenaltySupport + callResponsePenalty) * densityPressure));
       }
       return Math.max(0.45, 1 - (densityPenaltySparkle * densityPressure));
     })();

@@ -10631,9 +10631,29 @@ function createDrawSnakeEnemyProfile() {
     }
     return evolveDrawgridLikePattern(transformDrawgridLikePattern(mutated, 80), 100);
   })();
+  const useVirtualSeedSteps = Array.isArray(virtualDrawgridSeed?.steps) && seededBool(24, 0.58);
+  const useHybridSeedSteps = Array.isArray(virtualDrawgridSeed?.steps) && seededBool(25, 0.32);
+  const hybridizedBaseSteps = (() => {
+    if (!Array.isArray(virtualDrawgridSeed?.steps)) return generatedBaseSteps.slice(0, WEAPON_TUNE_STEPS);
+    const merged = generatedBaseSteps.slice(0, WEAPON_TUNE_STEPS);
+    const virtualSteps = virtualDrawgridSeed.steps.slice(0, WEAPON_TUNE_STEPS);
+    for (let i = 0; i < merged.length; i += 1) {
+      if (virtualSteps[i] && seededBool(26 + (i * 7), 0.46)) merged[i] = true;
+      else if (merged[i] && !virtualSteps[i] && seededBool(27 + (i * 7), 0.18)) merged[i] = false;
+    }
+    return evolveDrawgridLikePattern(transformDrawgridLikePattern(merged, 108), 132);
+  })();
   const steps = Array.isArray(phrase?.steps)
     ? createStepPattern(phrase.steps, WEAPON_TUNE_STEPS)
-    : (Array.isArray(virtualDrawgridSeed?.steps) ? virtualDrawgridSeed.steps.slice(0, WEAPON_TUNE_STEPS) : generatedBaseSteps);
+    : (
+      useHybridSeedSteps
+        ? hybridizedBaseSteps
+        : (
+          useVirtualSeedSteps
+            ? virtualDrawgridSeed.steps.slice(0, WEAPON_TUNE_STEPS)
+            : generatedBaseSteps.slice(0, WEAPON_TUNE_STEPS)
+        )
+    );
   const mutationCount = 1 + (seededBool(52, 0.24) ? 1 : 0);
   for (let i = 0; i < mutationCount; i += 1) {
     const idx = seededRangeInt(53 + (i * 11), steps.length);
@@ -10669,54 +10689,83 @@ function createDrawSnakeEnemyProfile() {
       resultingHits: densitySteps.reduce((sum, step) => sum + (step ? 1 : 0), 0),
     });
   } catch {}
+  const generatedRows = (() => {
+    const maxRow = Math.max(0, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1);
+    const startRow = Math.max(0, Math.min(maxRow, seededRangeInt(31, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length)));
+    const generated = Array.from({ length: WEAPON_TUNE_STEPS }, () => startRow);
+    let direction = seededBool(32, 0.5) ? 1 : -1;
+    const anchorA = seededRangeInt(33, Math.max(1, maxRow + 1));
+    const anchorB = seededRangeInt(34, Math.max(1, maxRow + 1));
+    const contourBias = seededRangeInt(35, 4);
+    const contourMode = seededRangeInt(36, 4);
+    for (let i = 1; i < generated.length; i += 1) {
+      const prev = Math.max(0, Math.min(maxRow, Math.trunc(Number(generated[i - 1]) || startRow)));
+      const phraseAnchor = i === 0 || i === Math.floor(generated.length * 0.5) || i === (generated.length - 1);
+      const stepActive = !!steps[i];
+      let next = prev;
+      const roll = seededPick(40 + (i * 17));
+      if (seededBool(41 + (i * 17), 0.24)) direction *= -1;
+      if (!stepActive) {
+        next = roll < 0.76 ? prev : Math.max(0, Math.min(maxRow, prev + direction));
+      } else if (phraseAnchor) {
+        const anchorTarget = (i < Math.floor(generated.length * 0.5)) ? anchorA : anchorB;
+        const delta = anchorTarget === prev ? direction : Math.sign(anchorTarget - prev);
+        next = Math.max(0, Math.min(maxRow, prev + (delta || direction)));
+      } else if (roll < 0.42) {
+        next = Math.max(0, Math.min(maxRow, prev + direction));
+      } else if (roll < 0.68) {
+        next = Math.max(0, Math.min(maxRow, prev + (direction * 2)));
+      } else if (roll < 0.78 && contourMode === 1) {
+        next = Math.max(0, Math.min(maxRow, prev + (direction * 3)));
+      } else if (roll < 0.82 && contourMode === 2) {
+        next = Math.max(0, Math.min(maxRow, prev - direction));
+      } else if (roll < 0.86 && contourMode === 3) {
+        const echoSource = Math.max(0, i - 3);
+        next = Math.max(0, Math.min(maxRow, Math.trunc(Number(generated[echoSource]) || prev)));
+      } else if (roll < 0.84) {
+        next = Math.max(0, Math.min(maxRow, prev + ((contourBias % 2) === 0 ? 1 : -1)));
+      } else {
+        next = seededRangeInt(42 + (i * 19), SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length);
+      }
+      if (stepActive && i > 1 && seededBool(43 + (i * 23), 0.18)) {
+        const echoSource = Math.max(0, i - 2);
+        next = Math.max(0, Math.min(maxRow, Math.trunc(Number(generated[echoSource]) || next)));
+      }
+      generated[i] = next;
+    }
+    return generated;
+  })();
+  const useVirtualSeedRows = Array.isArray(virtualDrawgridSeed?.rows) && seededBool(150, 0.52);
+  const useHybridSeedRows = Array.isArray(virtualDrawgridSeed?.rows) && seededBool(151, 0.3);
+  const hybridizedRows = (() => {
+    if (!Array.isArray(virtualDrawgridSeed?.rows)) return generatedRows.slice(0, WEAPON_TUNE_STEPS);
+    const maxRow = Math.max(0, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1);
+    const merged = generatedRows.slice(0, WEAPON_TUNE_STEPS);
+    const virtualRows = virtualDrawgridSeed.rows.slice(0, WEAPON_TUNE_STEPS);
+    for (let i = 0; i < merged.length; i += 1) {
+      const generatedRow = Math.max(0, Math.min(maxRow, Math.trunc(Number(merged[i]) || 0)));
+      const virtualRow = Math.max(0, Math.min(maxRow, Math.trunc(Number(virtualRows[i]) || generatedRow)));
+      if (steps[i]) {
+        merged[i] = seededBool(152 + (i * 5), 0.5)
+          ? virtualRow
+          : Math.max(0, Math.min(maxRow, Math.round((generatedRow + virtualRow) * 0.5)));
+      } else if (seededBool(153 + (i * 5), 0.38)) {
+        merged[i] = Math.max(0, Math.min(maxRow, Math.round((generatedRow + virtualRow) * 0.5)));
+      }
+    }
+    return merged;
+  })();
   const rows = Array.isArray(phrase?.rows)
     ? createRowPattern(phrase.rows, WEAPON_TUNE_STEPS, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length)
-    : (Array.isArray(virtualDrawgridSeed?.rows) ? virtualDrawgridSeed.rows.slice(0, WEAPON_TUNE_STEPS) : (() => {
-      const maxRow = Math.max(0, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1);
-      const startRow = Math.max(0, Math.min(maxRow, seededRangeInt(31, SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length)));
-      const generated = Array.from({ length: WEAPON_TUNE_STEPS }, () => startRow);
-      let direction = seededBool(32, 0.5) ? 1 : -1;
-      const anchorA = seededRangeInt(33, Math.max(1, maxRow + 1));
-      const anchorB = seededRangeInt(34, Math.max(1, maxRow + 1));
-      const contourBias = seededRangeInt(35, 4);
-      const contourMode = seededRangeInt(36, 4);
-      for (let i = 1; i < generated.length; i += 1) {
-        const prev = Math.max(0, Math.min(maxRow, Math.trunc(Number(generated[i - 1]) || startRow)));
-        const phraseAnchor = i === 0 || i === Math.floor(generated.length * 0.5) || i === (generated.length - 1);
-        const stepActive = !!steps[i];
-        let next = prev;
-        const roll = seededPick(40 + (i * 17));
-        if (seededBool(41 + (i * 17), 0.24)) direction *= -1;
-        if (!stepActive) {
-          next = roll < 0.76 ? prev : Math.max(0, Math.min(maxRow, prev + direction));
-        } else if (phraseAnchor) {
-          const anchorTarget = (i < Math.floor(generated.length * 0.5)) ? anchorA : anchorB;
-          const delta = anchorTarget === prev ? direction : Math.sign(anchorTarget - prev);
-          next = Math.max(0, Math.min(maxRow, prev + (delta || direction)));
-        } else if (roll < 0.42) {
-          next = Math.max(0, Math.min(maxRow, prev + direction));
-        } else if (roll < 0.68) {
-          next = Math.max(0, Math.min(maxRow, prev + (direction * 2)));
-        } else if (roll < 0.78 && contourMode === 1) {
-          next = Math.max(0, Math.min(maxRow, prev + (direction * 3)));
-        } else if (roll < 0.82 && contourMode === 2) {
-          next = Math.max(0, Math.min(maxRow, prev - direction));
-        } else if (roll < 0.86 && contourMode === 3) {
-          const echoSource = Math.max(0, i - 3);
-          next = Math.max(0, Math.min(maxRow, Math.trunc(Number(generated[echoSource]) || prev)));
-        } else if (roll < 0.84) {
-          next = Math.max(0, Math.min(maxRow, prev + ((contourBias % 2) === 0 ? 1 : -1)));
-        } else {
-          next = seededRangeInt(42 + (i * 19), SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length);
-        }
-        if (stepActive && i > 1 && seededBool(43 + (i * 23), 0.18)) {
-          const echoSource = Math.max(0, i - 2);
-          next = Math.max(0, Math.min(maxRow, Math.trunc(Number(generated[echoSource]) || next)));
-        }
-        generated[i] = next;
-      }
-      return generated;
-    })());
+    : (
+      useHybridSeedRows
+        ? hybridizedRows
+        : (
+          useVirtualSeedRows
+            ? virtualDrawgridSeed.rows.slice(0, WEAPON_TUNE_STEPS)
+            : generatedRows.slice(0, WEAPON_TUNE_STEPS)
+        )
+    );
   const midRow = Math.max(0, Math.floor((SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1) * 0.5));
   const spread = 0.34 + (arrangement.octaveEmphasis * 0.66);
   for (let i = 0; i < rows.length; i++) {

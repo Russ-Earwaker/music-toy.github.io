@@ -19,6 +19,24 @@ The current phase is:
 
 > Musical clarity, delivery reliability, and perceptual stability
 
+## Progress Snapshot
+
+Recent work has materially improved the system:
+
+- protected `foundation` and `primary_loop` ownership now survive handoff much more reliably
+- phase-3 instrument churn is far lower than it was during the earlier sync/handoff bugs
+- ghost-loop cleanup is in much better shape and no longer looks like a main clutter source
+- call-and-answer is now alive, measurable, and no longer a blind-debug area
+- Music Lab export now preserves the fields needed to inspect call/response behavior directly
+
+Current working baseline:
+
+- delivery is acceptable again
+- delayed replies are real and can sustain short fragments instead of only single-note answers
+- foreground readability is improved overall, but still fragile when reply/support motion gets too assertive
+
+So the remaining work is refinement, not rescue.
+
 ## Primary Problem: Delivery And Audibility
 
 The remaining failures are mostly perceptual:
@@ -40,7 +58,7 @@ Useful existing signals to preserve:
 - spawner pipeline mismatches
 - gameplay-authored vs music-authored event balance
 
-Useful new signals to add:
+Useful live signals now in use:
 
 - `protectedLoopAudibility`
 - `foregroundClarityScore`
@@ -48,6 +66,11 @@ Useful new signals to add:
 - `ghostLoopCount`
 - `suppressedEventCount`
 - `groupParticipationRate`
+- `callCount`
+- `responsePairs`
+- `responseRate`
+- `audibleResponseRate`
+- `avgResponseSize`
 
 ## Remaining Priorities
 
@@ -180,67 +203,64 @@ It can also mean:
 Stop preserving everything equally.
 Present the right things clearly.
 
-
 ---
 
-## ⚠️ Call-and-Answer System – Current Issue
+## Call-and-Answer System - Current State
 
-The call-and-answer system is **functioning technically but not yet working musically**.
+The call-and-answer system is now functioning technically and beginning to work musically, but it still needs hierarchy control.
 
-### Observed behaviour
+### Observed Behaviour
 
-* The system is generating valid call/response pairs (response rate ~0.29 in latest run)
-* However, these are mostly **single-note or near-immediate follow-ups (deltaSteps ≈ 1)**
-* In practice, this sounds like:
+- The system now generates valid delayed call/response pairs and Music Lab can measure them reliably
+- Reply size is no longer stuck at single-note answers in every run
+- The remaining failure mode is not "no response exists"
+- The remaining failure mode is that response/support material can still become too present and muddy the foreground
 
-  * “one loop plays a few notes, another fills a gap”
-  * rather than a clear musical reply
+### Key Problems
 
-### Key problems
+1. **Calls still need admission discipline**
 
-1. **Calls are too frequent and too weak**
+This was previously a major problem.
+It has been reduced, but still needs watching when density rises.
 
-   * Too many events qualify as “calls”
-   * No clear ownership of the active musical statement
+2. **Responses still need better hierarchy**
 
-2. **Responses are too small and not phrase-based**
+Reply size and phrase shape have improved.
+The main risk now is replies reading like a second lead instead of support.
 
-   * Often just a single note
-   * Do not preserve rhythm, contour, or motif identity
+3. **Timing was too immediate**
 
-3. **Timing is too immediate**
+This has improved materially.
+Delayed replies now happen; immediate stitching is no longer the main issue.
 
-   * Most responses occur 1 step later
-   * Feels like stitching notes together, not replying
+4. **Mix/masking still matters**
 
-4. **Mix/masking hides responses**
+Responses can still become either too hidden or too assertive depending on density.
+The current risk is support motion muddying the main foreground line.
 
-   * High player masking and busy density mean responses often aren’t clearly heard
-   * Even valid responses fail perceptually
+5. **Metrics are finally usable**
 
-5. **System measures adjacency, not musical success**
-
-   * Current `responseRate` reflects timing proximity
-   * Does not reflect whether the response was audible, meaningful, or recognisable
+We now have usable measures for response rate, audible response rate, and average response size.
+The next task is using those metrics to keep replies subordinate while preserving their recognisability.
 
 ---
 
 ### Result
 
-> The system produces **interleaved note activity**, not a clear
-> **“statement → space → reply” musical conversation**
+> The system can now produce a real "statement -> space -> reply" pattern,
+> but it still needs better hierarchy so the reply reads as support rather than a competing lead.
 
 ---
 
-### Required direction
+### Required Direction
 
-Call-and-answer should become **phrase-based and ownership-driven**, not event-based:
+Call-and-answer should stay phrase-based and ownership-driven:
 
-* Only strong musical events should create calls (foreground, specials, key phrases)
-* Responses should be **short phrase fragments (2–4 notes)**, not single notes
-* Responses should preserve **rhythm or contour identity**
-* Introduce more varied response timing (not just immediate next-step replies)
-* Add metrics for **audible and meaningful responses**, not just proximity
+- Only strong musical events should create calls
+- Responses should stay in the **short phrase fragment (2-4 note)** range
+- Responses should preserve **rhythm or contour identity**
+- Responses should arrive with space, not immediate stitching
+- Responses should remain clearly subordinate when a real foreground loop is already active
 
 ---
 
@@ -248,9 +268,9 @@ Call-and-answer should become **phrase-based and ownership-driven**, not event-b
 
 > The player should clearly hear:
 >
-> * one idea speak
-> * a moment of space
-> * a recognisable reply
+> - one idea speak
+> - a moment of space
+> - a recognisable reply
 
 instead of layered note chatter.
 
