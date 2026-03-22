@@ -2693,12 +2693,36 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       const lane = String(e?.callResponseLane || '').trim().toLowerCase();
       return lane === wantedLane;
     });
+    const mergeByEventId = (primary, secondary) => {
+      const merged = [];
+      const seen = new Set();
+      const pushUnique = (ev) => {
+        if (!ev || typeof ev !== 'object') return;
+        const eventId = clampInt(ev?.eventId, -1, -1);
+        const fallbackKey = [
+          String(ev?.phase || '').trim().toLowerCase(),
+          clampInt(ev?.actorId, 0, 0),
+          clampInt(ev?.groupId, 0, 0),
+          clampInt(ev?.beatIndex, 0, 0),
+          clampInt(ev?.stepIndex, 0, 0),
+          String(ev?.actionType || '').trim().toLowerCase(),
+          String(ev?.callResponseLane || '').trim().toLowerCase(),
+        ].join('|');
+        const key = eventId >= 0 ? `id:${eventId}` : `fallback:${fallbackKey}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push(ev);
+      };
+      for (const ev of primary) pushUnique(ev);
+      for (const ev of secondary) pushUnique(ev);
+      return merged;
+    };
     const executedCalls = taggedByLane(executedEvents, 'call');
     const executedResponses = taggedByLane(executedEvents, 'response');
     const createdCalls = taggedByLane(createdEvents, 'call');
     const createdResponses = taggedByLane(createdEvents, 'response');
-    const chosenCalls = executedCalls.length > 0 ? executedCalls : createdCalls;
-    const chosenResponses = executedResponses.length > 0 ? executedResponses : createdResponses;
+    const chosenCalls = mergeByEventId(executedCalls, createdCalls);
+    const chosenResponses = mergeByEventId(executedResponses, createdResponses);
     return [...chosenCalls, ...chosenResponses];
   })();
   const laneCompliance = collectLaneCompliance(createdEvents);
