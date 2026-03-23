@@ -1,74 +1,74 @@
-filename,source_row_index,missing_fields_detected,suggested_base_note,suggested_base_oct,suggested_volume_peak_dbfs,suggested_volume_rms_dbfs,pitch_confidence,analysis_status,notes
-Punch1.wav,9,base_note|volume,,,-2.78,-17.03,,unpitched,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
-Punch2.wav,10,base_note|volume,,,-3.71,-13.43,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
-Punch3.wav,11,base_note|volume,,,-2.29,-18.28,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
-Punch4.wav,12,base_note|volume,,,-1.70,-16.20,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
-DrumSideStick.wav,13,base_note|volume,,,-0.54,-21.38,,unpitched,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
-DrumKick.wav,14,base_note|volume,,,0.00,-14.81,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
-DrumSnare1.wav,15,base_note|volume,,,-0.03,-17.55,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
-DrumBass.wav,16,base_note|volume,,,-0.20,-18.39,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
-Drum_HiHat_Closed.wav,17,base_note|volume,,,-0.00,-18.31,,unpitched,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
-Drum_HiHat_Open.wav,18,base_note|volume,,,-1.13,-17.02,,unpitched,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
-Piano.wav,19,base_note|volume,C,4,-13.17,-28.20,1.00,pitched,autocorr=0.987; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-DrumSnare2.wav,20,base_note|volume,,,-0.00,-12.81,,unpitched,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
-Clap.wav,21,base_note|volume,,,-3.03,-21.70,,unpitched,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
-BassTone5.wav,22,base_note|volume,,,-1.74,-12.19,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
-BassGuitarSlap.wav,23,base_note|volume,F,1,-4.97,-19.72,1.00,pitched,autocorr=0.969; cents_error=+5.6; volume_classification=ok; is_c_pitch_class=no; near_c=no
-BassGuitarMute.wav,24,base_note|volume,F#,1,-4.62,-20.84,1.00,pitched,autocorr=0.998; cents_error=+3.1; volume_classification=ok; is_c_pitch_class=no; near_c=no
-GuitarElectricDistorted.wav,25,base_note|volume,C,2,-4.50,-15.47,0.96,pitched,autocorr=0.877; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
-GuitarElectricDistorted2.wav,26,base_note|volume,C#,2,-0.69,-12.16,0.71,pitched,autocorr=0.738; cents_error=+21.8; volume_classification=too_hot; is_c_pitch_class=no; near_c=yes
-Kalimba.wav,27,base_note|volume,F,2,-5.22,-24.28,1.00,pitched,autocorr=0.997; cents_error=+18.3; volume_classification=quiet; is_c_pitch_class=no; near_c=no
-GuitarNylonString.wav,28,base_note|volume,C,3,-1.15,-18.21,1.00,pitched,autocorr=0.999; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
-PianoOldTimey.wav,29,base_note|volume,C,4,-16.66,-33.77,1.00,pitched,autocorr=0.995; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-Xylophone.wav,30,base_note|volume,C,3,-10.82,-27.23,1.00,pitched,autocorr=0.988; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-Xylophone2.wav,31,base_note|volume,G#,1,-6.05,-19.09,1.00,pitched,autocorr=0.998; cents_error=+11.2; volume_classification=ok; is_c_pitch_class=no; near_c=no
-XxylophoneToy.wav,32,base_note|volume,C,2,-5.33,-21.65,1.00,pitched,autocorr=0.964; cents_error=+4.4; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
-Marimba.wav,33,base_note|volume,C,3,-1.16,-11.35,1.00,pitched,autocorr=0.998; cents_error=+13.9; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
-PianoToy.wav,34,base_note|volume,C,5,-2.36,-21.02,1.00,pitched,autocorr=0.998; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
-GlockenSpielToy.wav,35,base_note|volume,F#,1,-4.32,-25.10,1.00,pitched,autocorr=0.902; cents_error=-10.2; volume_classification=quiet; is_c_pitch_class=no; near_c=no
-Ukulele.wav,36,base_note|volume,C,5,-8.01,-23.37,1.00,pitched,autocorr=1.000; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
-DjembeBass.wav,37,base_note|volume,,,-4.30,-22.61,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
-DjembeTone.wav,38,base_note|volume,G#,3,-0.27,-18.54,0.75,pitched,autocorr=0.765; cents_error=+23.8; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
-DjembeSlap.wav,39,base_note|volume,D#,3,-0.04,-19.28,0.73,pitched,autocorr=0.750; cents_error=+25.8; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
-GuitarAcoustic.wav,40,base_note|volume,F,1,-7.01,-22.18,1.00,pitched,autocorr=0.957; cents_error=-0.7; volume_classification=ok; is_c_pitch_class=no; near_c=no
-Cowbell.wav,41,base_note|volume,A#,1,-2.41,-20.87,1.00,pitched,autocorr=0.944; cents_error=-8.9; volume_classification=ok; is_c_pitch_class=no; near_c=no
-BassTone1.wav,42,base_note|volume,,,-7.27,-21.31,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
-BassTone2.wav,43,base_note|volume,,,-1.43,-12.36,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
-BassTone3.wav,44,base_note|volume,,,-0.14,-11.85,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
-BassTone4.wav,45,base_note|volume,,,-0.00,-10.45,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
-Accordian.wav,46,base_note|volume,C,3,-12.12,-27.33,0.98,pitched,autocorr=0.890; cents_error=+13.9; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-AcousticGuitar2.wav,47,base_note|volume,C,4,-5.58,-20.08,1.00,pitched,autocorr=0.999; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
-ClapElectro.wav,48,base_note|volume,,,0.00,-13.26,,unpitched,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
-Tamborine.wav,49,base_note|volume,,,-1.71,-19.87,,unpitched,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
-AcousticClap.wav,50,base_note|volume,,,-6.79,-28.55,,unpitched,No stable autocorrelation peak was found.; volume_classification=quiet; is_c_pitch_class=no; near_c=no
-FingerSnap.wav,51,base_note|volume,,,-0.00,-18.40,,too_short,Not enough post-transient audio for pitch detection.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
-Kazoo.wav,52,base_note|volume,A,3,-5.43,-25.16,0.49,pitched,autocorr=0.711; cents_error=-45.6; volume_classification=quiet; is_c_pitch_class=no; near_c=no
-PanFlute.wav,53,base_note|volume,C,4,-19.53,-25.97,0.75,pitched,autocorr=0.996; cents_error=+47.5; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-RetroGaming.wav,54,base_note|volume,E,4,-12.32,-20.93,0.26,low_confidence,autocorr=0.494; cents_error=+19.4; pitch estimate is weak; volume_classification=ok; is_c_pitch_class=no; near_c=no
-BellRing.wav,55,base_note|volume,G,1,-10.37,-26.30,1.00,pitched,autocorr=0.931; cents_error=-28.7; volume_classification=quiet; is_c_pitch_class=no; near_c=no
-DogBark.wav,56,base_note|volume,B,3,-0.18,-12.37,0.59,pitched,autocorr=0.677; cents_error=+21.3; volume_classification=too_hot; is_c_pitch_class=no; near_c=yes
-GamingNote.wav,57,base_note|volume,C,5,-6.99,-24.69,1.00,pitched,autocorr=0.985; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-SynthReverse.wav,58,base_note|volume,,,-3.01,-20.43,,unpitched,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
-SynthHighBack.wav,59,base_note|volume,G,1,-6.57,-22.29,0.90,pitched,autocorr=0.846; cents_error=-0.7; volume_classification=ok; is_c_pitch_class=no; near_c=no
-SynthFunk.wav,60,base_note|volume,D#,2,-5.56,-19.09,0.29,low_confidence,autocorr=0.511; cents_error=+3.1; pitch estimate is weak; volume_classification=ok; is_c_pitch_class=no; near_c=no
-SynthShimmer.wav,61,base_note|volume,A#,1,-7.14,-20.01,0.28,low_confidence,autocorr=0.502; cents_error=-34.4; pitch estimate is weak; volume_classification=ok; is_c_pitch_class=no; near_c=no
-SynthOrgan.wav,62,base_note|volume,F,3,-3.28,-19.05,0.54,pitched,autocorr=0.646; cents_error=-7.0; volume_classification=ok; is_c_pitch_class=no; near_c=no
-SynthStrike.wav,63,base_note|volume,C,4,-3.82,-21.00,1.00,pitched,autocorr=0.969; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
-RubberBand.wav,64,base_note|volume,G,2,0.00,-13.13,1.00,pitched,autocorr=0.992; cents_error=+6.4; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
-RetroExplosionSubtle.wav,65,base_note|volume,,,-11.49,-26.82,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=quiet; is_c_pitch_class=no; near_c=no"
-RetroProjectileSubtle.wav,66,base_note|volume,,,-13.10,-23.27,,unpitched,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
-RetroSynthBrassStab.wav,67,base_note|volume,C,2,-11.23,-25.47,1.00,pitched,autocorr=0.971; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-RetroAnalogSynthBass.wav,68,base_note|volume,C,2,-2.84,-11.89,1.00,pitched,autocorr=0.994; cents_error=-23.7; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
-SynthSubBass.wav,69,base_note|base_oct|volume,,,-7.13,-21.00,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
-SubtleBassPercussive.wav,70,base_note|base_oct|volume,,,0.00,-9.32,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
-RiserWhooshShort.wav,71,base_note|base_oct|volume,,,0.00,-13.33,,unpitched,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
-ClickPercussionShort.wav,72,base_note|base_oct|volume,C,5,-22.45,-38.04,1.00,pitched,autocorr=0.965; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-ClosedHatElectronicShort.wav,73,base_note|base_oct|volume,,,-13.86,-32.03,,unpitched,No stable autocorrelation peak was found.; volume_classification=quiet; is_c_pitch_class=no; near_c=no
-SoftSynthPadShort1.wav,74,base_note|base_oct|volume,C,4,-30.01,-43.52,1.00,pitched,autocorr=0.995; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-SoftSynthPadShort2.wav,75,base_note|base_oct|volume,C,3,-22.85,-37.23,1.00,pitched,autocorr=0.987; cents_error=+13.9; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-ChiptuneArp.wav,76,base_note|base_oct|volume,C,4,-0.00,-17.22,1.00,pitched,autocorr=0.933; cents_error=-5.0; volume_classification=too_hot; is_c_pitch_class=yes; near_c=yes
-SynthPluckLeadShort.wav,77,base_note|base_oct|volume,G,4,-2.81,-17.25,0.86,pitched,autocorr=0.821; cents_error=+7.7; volume_classification=ok; is_c_pitch_class=no; near_c=no
-DigitalSynthLeadShort.wav,78,base_note|base_oct|volume,C,3,-0.63,-15.63,1.00,pitched,autocorr=0.984; cents_error=-5.0; volume_classification=too_hot; is_c_pitch_class=yes; near_c=yes
-AnalogPluckArp.wav,79,base_note|base_oct|volume,C,3,-0.00,-21.51,1.00,pitched,autocorr=0.971; cents_error=-5.0; volume_classification=too_hot; is_c_pitch_class=yes; near_c=yes
-SoftSynthPadShort.wav,80,base_note|base_oct|volume,C,5,-19.90,-37.47,1.00,pitched,autocorr=0.999; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
-TightElectronicKick.wav,81,base_note|base_oct|volume,,,-0.11,-9.59,,unpitched,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
+filename,source_row_index,missing_fields_detected,suggested_base_note,suggested_base_oct,suggested_volume_peak_dbfs,suggested_volume_rms_dbfs,pitch_confidence,analysis_status,suggested_transpose_to_c,volume_classification,notes
+Punch1.wav,12,source_base_note|source_base_oct|volume,,,-2.78,-17.03,,unpitched,,ok,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
+Punch2.wav,13,source_base_note|source_base_oct|volume,,,-3.71,-13.43,,unpitched,,ok,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
+Punch3.wav,14,source_base_note|source_base_oct|volume,,,-2.29,-18.28,,unpitched,,ok,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
+Punch4.wav,15,source_base_note|source_base_oct|volume,,,-1.70,-16.20,,unpitched,,ok,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
+DrumSideStick.wav,16,source_base_note|source_base_oct|volume,,,-0.54,-21.38,,unpitched,,too_hot,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
+DrumKick.wav,17,source_base_note|source_base_oct|volume,,,0.00,-14.81,,unpitched,,too_hot,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
+DrumSnare1.wav,18,source_base_note|source_base_oct|volume,,,-0.03,-17.55,,unpitched,,too_hot,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
+DrumBass.wav,19,source_base_note|source_base_oct|volume,,,-0.20,-18.39,,unpitched,,too_hot,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
+Drum_HiHat_Closed.wav,20,source_base_note|source_base_oct|volume,,,-0.00,-18.31,,unpitched,,too_hot,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
+Drum_HiHat_Open.wav,21,source_base_note|source_base_oct|volume,,,-1.13,-17.02,,unpitched,,ok,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
+Piano.wav,22,volume,C,4,-13.17,-28.20,1.00,pitched,0,quiet,autocorr=0.987; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+DrumSnare2.wav,23,source_base_note|source_base_oct|volume,,,-0.00,-12.81,,unpitched,,too_hot,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
+Clap.wav,24,source_base_note|source_base_oct|volume,,,-3.03,-21.70,,unpitched,,ok,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
+BassTone5.wav,25,source_base_note|source_base_oct|volume,,,-1.74,-12.19,,unpitched,,ok,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
+BassGuitarSlap.wav,26,volume,F,1,-4.97,-19.72,1.00,pitched,-5,ok,autocorr=0.969; cents_error=+5.6; volume_classification=ok; is_c_pitch_class=no; near_c=no
+BassGuitarMute.wav,27,volume,F#,1,-4.62,-20.84,1.00,pitched,-6,ok,autocorr=0.998; cents_error=+3.1; volume_classification=ok; is_c_pitch_class=no; near_c=no
+GuitarElectricDistorted.wav,28,volume,C,2,-4.50,-15.47,0.96,pitched,0,ok,autocorr=0.877; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
+GuitarElectricDistorted2.wav,29,source_base_note|source_base_oct|volume,C#,2,-0.69,-12.16,0.71,pitched,-1,too_hot,autocorr=0.738; cents_error=+21.8; volume_classification=too_hot; is_c_pitch_class=no; near_c=yes
+Kalimba.wav,30,volume,F,2,-5.22,-24.28,1.00,pitched,-5,quiet,autocorr=0.997; cents_error=+18.3; volume_classification=quiet; is_c_pitch_class=no; near_c=no
+GuitarNylonString.wav,31,volume,C,3,-1.15,-18.21,1.00,pitched,0,ok,autocorr=0.999; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
+PianoOldTimey.wav,32,volume,C,4,-16.66,-33.77,1.00,pitched,0,quiet,autocorr=0.995; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+Xylophone.wav,33,volume,C,3,-10.82,-27.23,1.00,pitched,0,quiet,autocorr=0.988; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+Xylophone2.wav,34,volume,G#,1,-6.05,-19.09,1.00,pitched,4,ok,autocorr=0.998; cents_error=+11.2; volume_classification=ok; is_c_pitch_class=no; near_c=no
+XxylophoneToy.wav,35,volume,C,2,-5.33,-21.65,1.00,pitched,0,ok,autocorr=0.964; cents_error=+4.4; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
+Marimba.wav,36,volume,C,3,-1.16,-11.35,1.00,pitched,0,ok,autocorr=0.998; cents_error=+13.9; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
+PianoToy.wav,37,volume,C,5,-2.36,-21.02,1.00,pitched,0,ok,autocorr=0.998; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
+GlockenSpielToy.wav,38,volume,F#,1,-4.32,-25.10,1.00,pitched,-6,quiet,autocorr=0.902; cents_error=-10.2; volume_classification=quiet; is_c_pitch_class=no; near_c=no
+Ukulele.wav,39,volume,C,5,-8.01,-23.37,1.00,pitched,0,ok,autocorr=1.000; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
+DjembeBass.wav,40,source_base_note|source_base_oct|volume,,,-4.30,-22.61,,unpitched,,ok,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
+DjembeTone.wav,41,source_base_note|source_base_oct|volume,G#,3,-0.27,-18.54,0.75,pitched,4,too_hot,autocorr=0.765; cents_error=+23.8; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
+DjembeSlap.wav,42,source_base_note|source_base_oct|volume,D#,3,-0.04,-19.28,0.73,pitched,-3,too_hot,autocorr=0.750; cents_error=+25.8; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
+GuitarAcoustic.wav,43,volume,F,1,-7.01,-22.18,1.00,pitched,-5,ok,autocorr=0.957; cents_error=-0.7; volume_classification=ok; is_c_pitch_class=no; near_c=no
+Cowbell.wav,44,volume,A#,1,-2.41,-20.87,1.00,pitched,2,ok,autocorr=0.944; cents_error=-8.9; volume_classification=ok; is_c_pitch_class=no; near_c=no
+BassTone1.wav,45,source_base_note|source_base_oct|volume,,,-7.27,-21.31,,unpitched,,ok,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
+BassTone2.wav,46,source_base_note|source_base_oct|volume,,,-1.43,-12.36,,unpitched,,ok,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
+BassTone3.wav,47,source_base_note|source_base_oct|volume,,,-0.14,-11.85,,unpitched,,too_hot,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
+BassTone4.wav,48,source_base_note|source_base_oct|volume,,,-0.00,-10.45,,unpitched,,too_hot,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
+Accordian.wav,49,volume,C,3,-12.12,-27.33,0.98,pitched,0,quiet,autocorr=0.890; cents_error=+13.9; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+AcousticGuitar2.wav,50,volume,C,4,-5.58,-20.08,1.00,pitched,0,ok,autocorr=0.999; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
+ClapElectro.wav,51,source_base_note|source_base_oct|volume,,,0.00,-13.26,,unpitched,,too_hot,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
+Tamborine.wav,52,source_base_note|source_base_oct|volume,,,-1.71,-19.87,,unpitched,,ok,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
+AcousticClap.wav,53,source_base_note|source_base_oct|volume,,,-6.79,-28.55,,unpitched,,quiet,No stable autocorrelation peak was found.; volume_classification=quiet; is_c_pitch_class=no; near_c=no
+FingerSnap.wav,54,source_base_note|source_base_oct|volume,,,-0.00,-18.40,,too_short,,too_hot,Not enough post-transient audio for pitch detection.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
+Kazoo.wav,55,source_base_note|source_base_oct|volume,A,3,-5.43,-25.16,0.49,pitched,3,quiet,autocorr=0.711; cents_error=-45.6; volume_classification=quiet; is_c_pitch_class=no; near_c=no
+PanFlute.wav,56,source_base_note|source_base_oct|volume,C,4,-19.53,-25.97,0.75,pitched,0,quiet,autocorr=0.996; cents_error=+47.5; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+RetroGaming.wav,57,source_base_note|source_base_oct|volume,E,4,-12.32,-20.93,0.26,low_confidence,-4,ok,autocorr=0.494; cents_error=+19.4; pitch estimate is weak; volume_classification=ok; is_c_pitch_class=no; near_c=no
+BellRing.wav,58,volume,G,1,-10.37,-26.30,1.00,pitched,5,quiet,autocorr=0.931; cents_error=-28.7; volume_classification=quiet; is_c_pitch_class=no; near_c=no
+DogBark.wav,59,source_base_note|source_base_oct|volume,B,3,-0.18,-12.37,0.59,pitched,1,too_hot,autocorr=0.677; cents_error=+21.3; volume_classification=too_hot; is_c_pitch_class=no; near_c=yes
+GamingNote.wav,60,volume,C,5,-6.99,-24.69,1.00,pitched,0,quiet,autocorr=0.985; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+SynthReverse.wav,61,source_base_note|source_base_oct|volume,,,-3.01,-20.43,,unpitched,,ok,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
+SynthHighBack.wav,62,volume,G,1,-6.57,-22.29,0.90,pitched,5,ok,autocorr=0.846; cents_error=-0.7; volume_classification=ok; is_c_pitch_class=no; near_c=no
+SynthFunk.wav,63,source_base_note|source_base_oct|volume,D#,2,-5.56,-19.09,0.29,low_confidence,-3,ok,autocorr=0.511; cents_error=+3.1; pitch estimate is weak; volume_classification=ok; is_c_pitch_class=no; near_c=no
+SynthShimmer.wav,64,source_base_note|source_base_oct|volume,A#,1,-7.14,-20.01,0.28,low_confidence,2,ok,autocorr=0.502; cents_error=-34.4; pitch estimate is weak; volume_classification=ok; is_c_pitch_class=no; near_c=no
+SynthOrgan.wav,65,source_base_note|source_base_oct|volume,F,3,-3.28,-19.05,0.54,pitched,-5,ok,autocorr=0.646; cents_error=-7.0; volume_classification=ok; is_c_pitch_class=no; near_c=no
+SynthStrike.wav,66,volume,C,4,-3.82,-21.00,1.00,pitched,0,ok,autocorr=0.969; cents_error=-5.0; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
+RubberBand.wav,67,volume,G,2,0.00,-13.13,1.00,pitched,5,too_hot,autocorr=0.992; cents_error=+6.4; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
+RetroExplosionSubtle.wav,68,source_base_note|source_base_oct|volume,,,-11.49,-26.82,,unpitched,,quiet,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=quiet; is_c_pitch_class=no; near_c=no"
+RetroProjectileSubtle.wav,69,source_base_note|source_base_oct|volume,,,-13.10,-23.27,,unpitched,,ok,No stable autocorrelation peak was found.; volume_classification=ok; is_c_pitch_class=no; near_c=no
+RetroSynthBrassStab.wav,70,volume,C,2,-11.23,-25.47,1.00,pitched,0,quiet,autocorr=0.971; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+RetroAnalogSynthBass.wav,71,volume,C,2,-2.84,-11.89,1.00,pitched,0,ok,autocorr=0.994; cents_error=-23.7; volume_classification=ok; is_c_pitch_class=yes; near_c=yes
+SynthSubBass.wav,72,source_base_note|source_base_oct|volume,,,-7.13,-21.00,,unpitched,,ok,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=ok; is_c_pitch_class=no; near_c=no"
+SubtleBassPercussive.wav,73,source_base_note|source_base_oct|volume,,,0.00,-9.32,,unpitched,,too_hot,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"
+RiserWhooshShort.wav,74,source_base_note|source_base_oct|volume,,,0.00,-13.33,,unpitched,,too_hot,No stable autocorrelation peak was found.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no
+ClickPercussionShort.wav,75,volume,C,5,-22.45,-38.04,1.00,pitched,0,quiet,autocorr=0.965; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+ClosedHatElectronicShort.wav,76,source_base_note|source_base_oct|volume,,,-13.86,-32.03,,unpitched,,quiet,No stable autocorrelation peak was found.; volume_classification=quiet; is_c_pitch_class=no; near_c=no
+SoftSynthPadShort1.wav,77,volume,C,4,-30.01,-43.52,1.00,pitched,0,quiet,autocorr=0.995; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+SoftSynthPadShort2.wav,78,volume,C,3,-22.85,-37.23,1.00,pitched,0,quiet,autocorr=0.987; cents_error=+13.9; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+ChiptuneArp.wav,79,volume,C,4,-0.00,-17.22,1.00,pitched,0,too_hot,autocorr=0.933; cents_error=-5.0; volume_classification=too_hot; is_c_pitch_class=yes; near_c=yes
+SynthPluckLeadShort.wav,80,volume,G,4,-2.81,-17.25,0.86,pitched,5,ok,autocorr=0.821; cents_error=+7.7; volume_classification=ok; is_c_pitch_class=no; near_c=no
+DigitalSynthLeadShort.wav,81,volume,C,3,-0.63,-15.63,1.00,pitched,0,too_hot,autocorr=0.984; cents_error=-5.0; volume_classification=too_hot; is_c_pitch_class=yes; near_c=yes
+AnalogPluckArp.wav,82,volume,C,3,-0.00,-21.51,1.00,pitched,0,too_hot,autocorr=0.971; cents_error=-5.0; volume_classification=too_hot; is_c_pitch_class=yes; near_c=yes
+SoftSynthPadShort.wav,83,volume,C,5,-19.90,-37.47,1.00,pitched,0,quiet,autocorr=0.999; cents_error=-5.0; volume_classification=quiet; is_c_pitch_class=yes; near_c=yes
+TightElectronicKick.wav,84,source_base_note|source_base_oct|volume,,,-0.11,-9.59,,unpitched,,too_hot,"Best pitch candidate landed on the search boundary, so it is treated as unreliable.; volume_classification=too_hot; is_c_pitch_class=no; near_c=no"

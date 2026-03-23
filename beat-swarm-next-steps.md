@@ -382,12 +382,14 @@ Why this matters:
 - some samples are not rooted on `C`
 - the project needs to preserve those real note centers instead of silently forcing everything toward `C`
 - wrong base note or octave data will undermine harmony, cadence, and register ownership work
+- but shared toys still need a stable playback anchor so switching instruments does not silently change the played note
 
 Target behavior:
 
 - pitched samples should import their detected base note and octave when the analysis confidence is good enough
 - non-`C` notes should be preserved as first-class metadata, not treated like an error
 - unpitched or low-confidence samples should stay unresolved until reviewed, not get fake note data
+- raw detected pitch should be kept separate from the playback anchor used by toys when those two meanings differ
 
 Backlog tasks:
 
@@ -405,7 +407,10 @@ Important rule:
 > Preserve true pitch centers when known; leave them blank when not known.
 
 The goal is not to normalize everything to `C`.
-The goal is to make `samples.csv` reflect the real playable root of each sample, including non-`C` notes and the correct octave.
+The goal is to let `samples.csv` record both:
+
+- the real source pitch center when known
+- and the shared playback anchor when toys need stable note behavior across instrument changes
 
 ### 13. Player Weapon Loop As Musical Material
 

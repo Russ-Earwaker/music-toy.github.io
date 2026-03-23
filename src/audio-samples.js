@@ -205,6 +205,9 @@ export async function initAudioAssets(csvUrl='./samples.csv'){
     aliases: head.findIndex(h => h.startsWith('aliases')),
     base_note: head.findIndex(h => /^(base\s*_?note|baseNote|note_base)$/i.test(h)),
     base_oct: head.findIndex(h => /^(base\s*_?oct(ave)?|baseOct(ave)?|octave)$/i.test(h)),
+    source_base_note: head.findIndex(h => /^(source[_-]?base[_-]?note|sample[_-]?base[_-]?note|detected[_-]?base[_-]?note)$/i.test(h)),
+    source_base_oct: head.findIndex(h => /^(source[_-]?base[_-]?oct(ave)?|sample[_-]?base[_-]?oct(ave)?|detected[_-]?base[_-]?oct(ave)?)$/i.test(h)),
+    volume: head.findIndex(h => /^(volume|volume[_-]?db|level[_-]?db|gain[_-]?db)$/i.test(h)),
   };
 
   // Build entries and decode buffers
@@ -233,13 +236,25 @@ export async function initAudioAssets(csvUrl='./samples.csv'){
       // Interpret as C{oct}
       baseNoteCsv = `C${baseOctCsv}`;
     }
+    let sourceBaseNoteCsv = (col.source_base_note>=0 ? parts[col.source_base_note] : '').trim();
+    const sourceBaseOctCsv = (col.source_base_oct>=0 ? parts[col.source_base_oct] : '').trim();
+    if (!sourceBaseNoteCsv && sourceBaseOctCsv){
+      sourceBaseNoteCsv = `C${sourceBaseOctCsv}`;
+    }
+    const volumeCsv = (col.volume>=0 ? parts[col.volume] : '').trim();
 
     // The canonical ID is the new `instrument_id` column.
     // Fall back to the `instrument` column, then `synth_id`.
     const canonicalId = instId || idCsv || synth;
     if (!canonicalId) continue;
 
-    const data = { url, synth, baseNote: baseNoteCsv || undefined };
+    const data = {
+      url,
+      synth,
+      baseNote: baseNoteCsv || undefined,
+      sourceBaseNote: sourceBaseNoteCsv || undefined,
+      volume: volumeCsv || undefined,
+    };
     const allNames = new Set();
     allNames.add(normId(canonicalId));
     // The user is renaming 'aliases' to 'instrument_id'. To be safe, we'll
@@ -308,8 +323,10 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
     if (options && typeof options.playbackRate === 'number') {
       src.playbackRate.value = options.playbackRate;
     } else {
-      // Adjust playback rate for pitch. Assume base note is C4 for all samples.
-      // Prefer explicit baseNote from options, then entry metadata, else C4
+      // Adjust playback rate for pitch using the shared playback anchor.
+      // Do not silently swap this to sourceBaseNote/raw detected pitch metadata,
+      // or instrument changes across toys would stop preserving the same note.
+      // Prefer explicit baseNote from options, then entry metadata, else C4.
       let baseNoteName = (options && options.baseNote) || (ent && ent.baseNote) || 'C4';
       // Basic sanitize: ensure like 'C4'
       try{ baseNoteName = String(baseNoteName).trim(); }catch{}

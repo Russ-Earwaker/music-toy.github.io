@@ -11,6 +11,39 @@ The goal is a small, reliable role system, not a large taxonomy.
 
 ## Fields
 
+### `base_note` / `base_oct`
+
+Shared playback anchor for the sample across toys.
+
+This is the important compatibility field:
+
+- it tells the runtime what note the sample should behave like when no toy-level pitch shift is active
+- it is how instrument changes can still preserve the same musical note
+- it should stay stable unless you intentionally want to change playback behavior
+
+Important:
+
+- do not blindly overwrite this from raw analysis output
+- many older samples were deliberately prepared around `C` so toy note behavior stays consistent
+- if this field changes, normal toys can start playing a different sounding note for the same requested note
+
+### `source_base_note` / `source_base_oct`
+
+Raw sample-pitch metadata from offline analysis or manual review.
+
+Use this when you want to record what the source sample actually seems to be centered on, even if the playback anchor remains different.
+
+This field is for:
+
+- analysis-backed documentation
+- future retuning workflows
+- understanding which samples were originally non-`C`
+
+This field is not for:
+
+- silently replacing `base_note`
+- changing toy playback behavior by accident
+
 ### `music_role`
 
 Primary musical job of the sample.
@@ -113,6 +146,18 @@ Use `true` when:
 - the role is ambiguous
 - behavior is unclear from legacy tags alone
 - the sample is important enough that it should be reviewed before runtime depends on it
+
+### `volume`
+
+Optional per-sample level hint in dB.
+
+Use this as the authoring-side loudness adjustment you want applied for the sample family once leveling is wired up properly.
+
+Guidance:
+
+- keep it simple and future-parseable, e.g. `-3`, `+3`, `-6`
+- use the analysis outputs as triage, not blind truth
+- check important samples by ear before finalizing
 
 ## Tagging Guidance
 

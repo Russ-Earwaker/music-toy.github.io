@@ -5,10 +5,13 @@ Usage:
     python tools/analyze_samples.py
     python tools/analyze_samples.py --input samples.csv --samples-dir assets/samples --output tools/output/sample-analysis-suggestions.csv
 
-Reads samples.csv, detects which schema columns represent note / octave /
-volume targets, finds rows with missing note, octave, or volume values, analyzes the
+Reads samples.csv, detects which schema columns represent raw source-note /
+octave / volume targets, finds rows with missing values, analyzes the
 corresponding WAV files, and writes separate review CSVs for manual use. The
 source samples.csv is never modified.
+
+If raw source-pitch columns exist they are preferred over playback anchor
+columns so note playback behavior can remain stable across toys.
 """
 
 from __future__ import annotations
@@ -28,8 +31,26 @@ DEFAULT_DEBUG_OUTPUT = Path("tools/output/sample-analysis-debug.csv")
 
 # Adjust these candidate names or thresholds if the CSV schema evolves.
 TARGET_COLUMN_CANDIDATES = {
-    "note": ("base_note", "note", "baseNote", "root_note"),
-    "octave": ("base_oct", "base_octave", "octave", "root_octave"),
+    "note": (
+        "source_base_note",
+        "sample_base_note",
+        "detected_base_note",
+        "base_note",
+        "note",
+        "baseNote",
+        "root_note",
+    ),
+    "octave": (
+        "source_base_oct",
+        "source_base_octave",
+        "sample_base_oct",
+        "sample_base_octave",
+        "detected_base_oct",
+        "base_oct",
+        "base_octave",
+        "octave",
+        "root_octave",
+    ),
     "volume": ("volume", "base_volume", "volume_dbfs", "level_dbfs", "gain_dbfs"),
 }
 VOLUME_THRESHOLDS_DBFS = {
@@ -481,6 +502,8 @@ def main() -> int:
                 "suggested_volume_rms_dbfs": result.get("rms_dbfs", ""),
                 "pitch_confidence": result.get("pitch_confidence", ""),
                 "analysis_status": result.get("analysis_status", ""),
+                "suggested_transpose_to_c": result.get("suggested_transpose_to_c", ""),
+                "volume_classification": volume_classification,
                 "notes": notes,
             }
         )
@@ -518,6 +541,8 @@ def main() -> int:
         "suggested_volume_rms_dbfs",
         "pitch_confidence",
         "analysis_status",
+        "suggested_transpose_to_c",
+        "volume_classification",
         "notes",
     ]
     with args.output.open("w", encoding="utf-8", newline="") as handle:

@@ -218,9 +218,12 @@ export async function loadInstrumentEntries(){
       const runtimeFamilyIdx = header.findIndex(h=>/^(runtime[_-]?family)$/i.test(h));
       const musicEligibilityIdx = header.findIndex(h=>/^(music[_-]?eligibility)$/i.test(h));
       const needsReviewIdx = header.findIndex(h=>/^(needs[_-]?review)$/i.test(h));
+      const volumeIdx = header.findIndex(h=>/^(volume|volume[_-]?db|level[_-]?db|gain[_-]?db)$/i.test(h));
       const pitchIdx = header.findIndex(h=>/^(pitch|pitch[_-]?grade|pitch[_-]?band|register)$/i.test(h));
       const baseNoteIdx = header.findIndex(h=>/^(base\s*_?note|baseNote|note_base)$/i.test(h));
       const baseOctIdx = header.findIndex(h=>/^(base\s*_?oct(ave)?|baseOct(ave)?|octave)$/i.test(h));
+      const sourceBaseNoteIdx = header.findIndex(h=>/^(source[_-]?base[_-]?note|sample[_-]?base[_-]?note|detected[_-]?base[_-]?note)$/i.test(h));
+      const sourceBaseOctIdx = header.findIndex(h=>/^(source[_-]?base[_-]?oct(ave)?|sample[_-]?base[_-]?oct(ave)?|detected[_-]?base[_-]?oct(ave)?)$/i.test(h));
       const priIdx  = header.findIndex(h=>/^(priority|is_priority|ispriority|first_pick|firstpick)$/i.test(h));
       const mapLaneToken = (rawToken) => {
         const t = String(rawToken || '').trim().toLowerCase();
@@ -304,6 +307,9 @@ export async function loadInstrumentEntries(){
         let baseNote = String((baseNoteIdx >= 0 ? cells[baseNoteIdx] : '') || '').trim();
         const baseOct = String((baseOctIdx >= 0 ? cells[baseOctIdx] : '') || '').trim();
         if (!baseNote && baseOct) baseNote = `C${baseOct}`;
+        let sourceBaseNote = String((sourceBaseNoteIdx >= 0 ? cells[sourceBaseNoteIdx] : '') || '').trim();
+        const sourceBaseOct = String((sourceBaseOctIdx >= 0 ? cells[sourceBaseOctIdx] : '') || '').trim();
+        if (!sourceBaseNote && sourceBaseOct) sourceBaseNote = `C${sourceBaseOct}`;
         const themesRaw = themeIdx >= 0 ? String(cells[themeIdx] || '') : '';
         const themes = themesRaw.split(/[;|]/).map(t=>t.trim()).filter(Boolean);
         const recoRaw = recoIdx >= 0 ? String(cells[recoIdx] || '') : '';
@@ -332,6 +338,7 @@ export async function loadInstrumentEntries(){
         const musicEligibility = uniqueTokens(splitEligibilityTokens(musicEligibilityRaw));
         const needsReviewRaw = needsReviewIdx >= 0 ? String(cells[needsReviewIdx] || '') : '';
         const needsReview = normalizeNeedsReviewToken(needsReviewRaw);
+        const volume = String((volumeIdx >= 0 ? cells[volumeIdx] : '') || '').trim();
         const priRaw = priIdx >= 0 ? String(cells[priIdx] || '') : '';
         const priority = /^(1|true|yes|y|prio|priority)$/i.test(priRaw.trim());
         if (!id || !display) continue;
@@ -357,6 +364,8 @@ export async function loadInstrumentEntries(){
           pitchRank: Number.isFinite(pitchRank) ? pitchRank : undefined,
           priority,
           baseNote: baseNote || undefined,
+          sourceBaseNote: sourceBaseNote || undefined,
+          volume: volume || undefined,
         };
         entry.resolvedMusicRole = getSampleMusicRole(entry) || undefined;
         entry.resolvedMusicBehavior = getSampleBehaviors(entry);

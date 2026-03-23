@@ -1,7 +1,11 @@
 // src/samplelib.js
 // Minimal CSV-driven sample/synth library.
-// CSV columns: filename,instrument_type,instrument,function,display_name,synth_id(optional),instrument_id,base_note,base_oct,theme,recommended_toys,...
-// Optional metadata columns may include music_role, music_behavior, runtime_family, and needs_review.
+// CSV columns: filename,instrument_type,instrument,function,display_name,synth_id(optional),instrument_id,
+// base_note,base_oct,source_base_note,source_base_oct,theme,recommended_toys,...
+// Optional metadata columns may include music_role, music_behavior, runtime_family, needs_review, and volume.
+// `base_note` / `base_oct` remain the shared playback anchor used by toys.
+// `source_base_note` / `source_base_oct` hold raw sample-pitch metadata from analysis and should not
+// silently replace playback behavior.
 // - If filename is provided -> sample in ./assets/samples/<filename>
 // - Else if synth_id is provided -> a synth instrument, resolved by your audio engine
 // - `theme` can list multiple tags separated by `;` (e.g., "Drum and Bass; Gaming")
