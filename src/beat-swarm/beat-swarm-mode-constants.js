@@ -767,6 +767,14 @@ export const DIRECTOR_HARMONY_CONFIG = Object.freeze({
   epochMinBars: 24,
   baseRoot: 'C4',
   scaleId: 'minor_pentatonic',
+  sectionRootOffsets: Object.freeze({
+    intro: 0,
+    build: 0,
+    drive: 7,
+    drop: 0,
+    peak: 7,
+  }),
+  preDropOffset: 7,
 });
 export const DIRECTOR_MOTIF_RETURN_CONFIG = Object.freeze({
   enabled: true,
@@ -842,10 +850,17 @@ export const structureIntentRuntime = {
 };
 export const harmonyRuntime = {
   epochIndex: -1,
+  tonicRootNote: 'C4',
   rootNote: 'C4',
   transposeSemitones: 0,
   scaleId: 'minor_pentatonic',
   notePool: [],
+  authoritySource: 'fallback_seeded',
+  fallbackUsed: true,
+  authorityWeaponSlotIndex: -1,
+  authorityDistinctNoteCount: 0,
+  authorityActiveNoteCount: 0,
+  authoritySourceNotes: [],
 };
 export const percussionGrooveRuntime = {
   lastPlanBar: -1,

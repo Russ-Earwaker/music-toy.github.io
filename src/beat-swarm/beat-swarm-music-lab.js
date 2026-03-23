@@ -373,6 +373,20 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     preDropActive: payload?.preDropActive === true,
     preDropBarsRemaining: clampInt(payload?.preDropBarsRemaining, 0, -1),
     barsUntilBreak: clampInt(payload?.barsUntilBreak, 0, -1),
+    authoritySource: String(payload?.authoritySource || '').trim().toLowerCase(),
+    fallbackUsed: payload?.fallbackUsed === true,
+    tonicRootNote: String(payload?.tonicRootNote || '').trim(),
+    rootNote: String(payload?.rootNote || '').trim(),
+    transposeSemitones: clampInt(payload?.transposeSemitones, 0, -24),
+    relativeShiftActive: payload?.relativeShiftActive === true,
+    authorityWeaponSlotIndex: clampInt(payload?.authorityWeaponSlotIndex, -1, -1),
+    authorityDistinctNoteCount: clampInt(payload?.authorityDistinctNoteCount, 0, 0),
+    authorityActiveNoteCount: clampInt(payload?.authorityActiveNoteCount, 0, 0),
+    notePoolSize: clampInt(payload?.notePoolSize, 0, 0),
+    weaponOutsidePoolCount: clampInt(payload?.weaponOutsidePoolCount, 0, 0),
+    weaponOutsidePoolNotes: Array.isArray(payload?.weaponOutsidePoolNotes)
+      ? payload.weaponOutsidePoolNotes.slice(0, 12).map((note) => String(note || '').trim()).filter(Boolean)
+      : [],
     previousVoiceDensity: clampInt(payload?.previousVoiceDensity, 0, 0),
     auditId: String(payload?.auditId || '').trim().toLowerCase(),
     themeId: String(payload?.themeId || '').trim(),
@@ -1372,6 +1386,12 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
   let foregroundMotifReturnBars = 0;
   let foregroundMotifReturnMatchingBars = 0;
   let foregroundMotifPrimaryLoopReturnBars = 0;
+  let harmonyAuthorityEvents = 0;
+  let harmonyWeaponAnchorBars = 0;
+  let harmonyFallbackBars = 0;
+  let harmonyRelativeShiftBars = 0;
+  let harmonyWeaponOutsidePoolBars = 0;
+  let harmonyWeaponOutsidePoolCount = 0;
   for (const e of logs) {
     const type = String(e?.eventType || '').trim().toLowerCase();
     if (type === 'music_gameplay_suppression_decision') {
@@ -1476,6 +1496,16 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
       }
       continue;
     }
+    if (type === 'music_harmony_authority_state') {
+      harmonyAuthorityEvents += 1;
+      if (String(e?.authoritySource || '').trim().toLowerCase() === 'weapon_active_slot') harmonyWeaponAnchorBars += 1;
+      if (e?.fallbackUsed === true) harmonyFallbackBars += 1;
+      if (e?.relativeShiftActive === true) harmonyRelativeShiftBars += 1;
+      const outsidePoolCount = Math.max(0, clampInt(e?.weaponOutsidePoolCount, 0, 0));
+      harmonyWeaponOutsidePoolCount += outsidePoolCount;
+      if (outsidePoolCount > 0) harmonyWeaponOutsidePoolBars += 1;
+      continue;
+    }
   }
   return {
     gameplaySuppressionEvents,
@@ -1522,6 +1552,12 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
     foregroundMotifReturnBars,
     foregroundMotifReturnMatchingBars,
     foregroundMotifPrimaryLoopReturnBars,
+    harmonyAuthorityEvents,
+    harmonyWeaponAnchorBars,
+    harmonyFallbackBars,
+    harmonyRelativeShiftBars,
+    harmonyWeaponOutsidePoolBars,
+    harmonyWeaponOutsidePoolCount,
     byDecisionReason,
   };
 }
@@ -2998,6 +3034,12 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     foregroundMotifReturnBars: Number(passDiagnostics?.decisionMaking?.foregroundMotifReturnBars) || 0,
     foregroundMotifReturnMatchingBars: Number(passDiagnostics?.decisionMaking?.foregroundMotifReturnMatchingBars) || 0,
     foregroundMotifPrimaryLoopReturnBars: Number(passDiagnostics?.decisionMaking?.foregroundMotifPrimaryLoopReturnBars) || 0,
+    harmonyAuthorityEvents: Number(passDiagnostics?.decisionMaking?.harmonyAuthorityEvents) || 0,
+    harmonyWeaponAnchorBars: Number(passDiagnostics?.decisionMaking?.harmonyWeaponAnchorBars) || 0,
+    harmonyFallbackBars: Number(passDiagnostics?.decisionMaking?.harmonyFallbackBars) || 0,
+    harmonyRelativeShiftBars: Number(passDiagnostics?.decisionMaking?.harmonyRelativeShiftBars) || 0,
+    harmonyWeaponOutsidePoolBars: Number(passDiagnostics?.decisionMaking?.harmonyWeaponOutsidePoolBars) || 0,
+    harmonyWeaponOutsidePoolCount: Number(passDiagnostics?.decisionMaking?.harmonyWeaponOutsidePoolCount) || 0,
     visibleEnemyEvents: Number(visibleEnemyAudibility?.visibleEnemyEvents) || 0,
     barelyAudibleVisibleEnemyEvents: Number(visibleEnemyAudibility?.barelyAudibleVisibleEnemyEvents) || 0,
     barelyAudibleVisibleEnemyRate: Number(visibleEnemyAudibility?.barelyAudibleVisibleEnemyRate) || 0,

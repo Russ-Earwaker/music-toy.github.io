@@ -4166,6 +4166,174 @@ function noteNameToMidiRuntime(noteName = '') {
   else if (accidental === 'b') semi -= 1;
   return ((octave + 1) * 12) + semi;
 }
+function midiToPitchClassRuntime(midiValue) {
+  const midi = Math.trunc(Number(midiValue));
+  if (!Number.isFinite(midi)) return -1;
+  return ((midi % 12) + 12) % 12;
+}
+function getActiveWeaponHarmonySlotIndex() {
+  return Math.max(0, Math.min(weaponLoadout.length - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
+}
+function collectWeaponTuneAuthorityState(slotIndex = getActiveWeaponHarmonySlotIndex()) {
+  const idx = Math.max(0, Math.min(weaponLoadout.length - 1, Math.trunc(Number(slotIndex) || 0)));
+  const weapon = weaponLoadout[idx];
+  const stages = sanitizeWeaponStages(weapon?.stages);
+  if (!stages.length || !hasWeaponTuneContent(idx)) return null;
+  const chain = getWeaponSlotTuneChain(idx);
+  if (!Array.isArray(chain) || !chain.length) return null;
+  const noteCounts = new Map();
+  const pitchClassCounts = new Map();
+  let activeNoteCount = 0;
+  for (const tune of chain) {
+    const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
+    const active = Array.isArray(tune?.active) ? tune.active : [];
+    const list = Array.isArray(tune?.list) ? tune.list : [];
+    const notes = Array.isArray(tune?.notes) ? tune.notes : [];
+    for (let step = 0; step < steps; step++) {
+      if (!active[step]) continue;
+      const rows = Array.isArray(list[step]) ? list[step] : [];
+      for (const rowRaw of rows) {
+        const row = Math.trunc(Number(rowRaw));
+        if (!(row >= 0 && row < notes.length)) continue;
+        const noteName = normalizeSwarmNoteName(notes[row]);
+        if (!noteName) continue;
+        activeNoteCount += 1;
+        noteCounts.set(noteName, Math.max(0, Math.trunc(Number(noteCounts.get(noteName)) || 0)) + 1);
+        const pitchClass = midiToPitchClassRuntime(noteNameToMidiRuntime(noteName));
+        if (pitchClass >= 0) {
+          pitchClassCounts.set(pitchClass, Math.max(0, Math.trunc(Number(pitchClassCounts.get(pitchClass)) || 0)) + 1);
+        }
+      }
+    }
+  }
+  const distinctNotes = Array.from(noteCounts.keys());
+  if (!distinctNotes.length) return null;
+  return {
+    slotIndex: idx,
+    distinctNotes,
+    distinctNoteCount: distinctNotes.length,
+    activeNoteCount,
+    noteCounts,
+    pitchClassCounts,
+  };
+}
+function getTransposedHarmonyPoolForRoot(rootNote = '') {
+  const tonic = normalizeSwarmNoteName(rootNote);
+  const baseRoot = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
+  const tonicMidi = noteNameToMidiRuntime(tonic);
+  const baseMidi = noteNameToMidiRuntime(baseRoot);
+  const transposeSemitones = Number.isFinite(tonicMidi) && Number.isFinite(baseMidi)
+    ? Math.trunc(tonicMidi - baseMidi)
+    : 0;
+  return SWARM_PENTATONIC_NOTES_ONE_OCTAVE
+    .map((note) => normalizeSwarmNoteName(transposeSwarmNoteName(note, transposeSemitones) || note))
+    .filter(Boolean);
+}
+function deriveWeaponHarmonyAuthority(slotIndex = getActiveWeaponHarmonySlotIndex()) {
+  const authorityState = collectWeaponTuneAuthorityState(slotIndex);
+  if (!authorityState) {
+    return {
+      authoritySource: 'fallback_seeded',
+      fallbackUsed: true,
+      weaponSlotIndex: -1,
+      tonicRootNote: '',
+      distinctNotes: [],
+      distinctNoteCount: 0,
+      activeNoteCount: 0,
+    };
+  }
+  const roots = Array.isArray(DIRECTOR_HARMONY_CONFIG.rootCandidates) && DIRECTOR_HARMONY_CONFIG.rootCandidates.length
+    ? DIRECTOR_HARMONY_CONFIG.rootCandidates
+    : [DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4'];
+  let best = null;
+  for (const rootCandidateRaw of roots) {
+    const rootCandidate = normalizeSwarmNoteName(rootCandidateRaw) || normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
+    const candidatePool = getTransposedHarmonyPoolForRoot(rootCandidate);
+    const candidatePoolPitchClasses = new Set(
+      candidatePool
+        .map((note) => midiToPitchClassRuntime(noteNameToMidiRuntime(note)))
+        .filter((value) => value >= 0)
+    );
+    const candidateRootPitchClass = midiToPitchClassRuntime(noteNameToMidiRuntime(rootCandidate));
+    let score = 0;
+    let fitCount = 0;
+    let rootCount = 0;
+    let exactCount = 0;
+    for (const [noteName, countValue] of authorityState.noteCounts.entries()) {
+      const count = Math.max(0, Math.trunc(Number(countValue) || 0));
+      if (!(count > 0)) continue;
+      const pitchClass = midiToPitchClassRuntime(noteNameToMidiRuntime(noteName));
+      if (candidatePoolPitchClasses.has(pitchClass)) {
+        fitCount += count;
+        score += count * 2;
+      }
+      if (pitchClass === candidateRootPitchClass) {
+        rootCount += count;
+        score += count * 1.5;
+      }
+      if (candidatePool.includes(noteName)) {
+        exactCount += count;
+        score += count * 0.35;
+      }
+    }
+    const candidate = {
+      rootCandidate,
+      score,
+      fitCount,
+      rootCount,
+      exactCount,
+    };
+    if (
+      !best
+      || candidate.score > best.score
+      || (candidate.score === best.score && candidate.fitCount > best.fitCount)
+      || (candidate.score === best.score && candidate.fitCount === best.fitCount && candidate.rootCount > best.rootCount)
+      || (candidate.score === best.score && candidate.fitCount === best.fitCount && candidate.rootCount === best.rootCount && candidate.exactCount > best.exactCount)
+    ) {
+      best = candidate;
+    }
+  }
+  return {
+    authoritySource: 'weapon_active_slot',
+    fallbackUsed: false,
+    weaponSlotIndex: authorityState.slotIndex,
+    tonicRootNote: normalizeSwarmNoteName(best?.rootCandidate) || normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4',
+    distinctNotes: authorityState.distinctNotes.slice(),
+    distinctNoteCount: authorityState.distinctNoteCount,
+    activeNoteCount: authorityState.activeNoteCount,
+  };
+}
+function mapWeaponTuneNoteToHarmony(noteName, beatIndex = currentBeatIndex) {
+  const rawNote = normalizeSwarmNoteName(noteName);
+  if (!rawNote) return getRandomSwarmPentatonicNote();
+  const harmony = ensureHarmonyRuntimeForBeat(beatIndex);
+  const tonicRootNote = normalizeSwarmNoteName(harmony?.tonicRootNote || DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
+  const activeRootNote = normalizeSwarmNoteName(harmony?.rootNote || tonicRootNote) || tonicRootNote;
+  const tonicMidi = noteNameToMidiRuntime(tonicRootNote);
+  const activeMidi = noteNameToMidiRuntime(activeRootNote);
+  const transposeSemitones = Number.isFinite(activeMidi) && Number.isFinite(tonicMidi)
+    ? Math.trunc(activeMidi - tonicMidi)
+    : 0;
+  return normalizeSwarmNoteName(transposeSwarmNoteName(rawNote, transposeSemitones) || rawNote) || rawNote;
+}
+function getWeaponTuneStepNotesHarmonic(slotIndex, beatIndex) {
+  const rawNotes = Array.isArray(getWeaponTuneStepNotes(slotIndex, beatIndex))
+    ? getWeaponTuneStepNotes(slotIndex, beatIndex)
+    : [];
+  if (!rawNotes.length) return [];
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < rawNotes.length; i += 1) {
+    const rawNote = normalizeSwarmNoteName(rawNotes[i]);
+    if (!rawNote) continue;
+    const mapped = mapWeaponTuneNoteToHarmony(rawNote, Math.max(0, Math.trunc(Number(beatIndex) || 0)) + i);
+    const normalized = normalizeSwarmNoteName(mapped) || rawNote;
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
 function ensureHarmonyRuntimeForBeat(beatIndex = currentBeatIndex) {
   const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
   const bar = Math.max(0, Math.floor(beat / Math.max(1, COMPOSER_BEATS_PER_BAR)));
@@ -4177,25 +4345,94 @@ function ensureHarmonyRuntimeForBeat(beatIndex = currentBeatIndex) {
     )
   );
   const epochIndex = Math.floor(bar / epochBars);
-  if (harmonyRuntime.epochIndex === epochIndex && String(harmonyRuntime.rootNote || '').trim()) return harmonyRuntime;
+  const structureIntent = String(structureIntentRuntime.intent || '').trim().toLowerCase() || 'intro';
+  const preDropActive = structureIntentRuntime.preDropActive === true;
   const roots = Array.isArray(DIRECTOR_HARMONY_CONFIG.rootCandidates) && DIRECTOR_HARMONY_CONFIG.rootCandidates.length
     ? DIRECTOR_HARMONY_CONFIG.rootCandidates
     : ['C4'];
-  const seed = hashStringSeed(`harmony|${getSwarmStyleId()}|epoch-${epochIndex}`);
-  const rootNote = normalizeSwarmNoteName(roots[Math.max(0, seed % roots.length)]) || String(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4');
+  const weaponAuthority = deriveWeaponHarmonyAuthority(getActiveWeaponHarmonySlotIndex());
+  if (weaponAuthority.fallbackUsed !== true) {
+    harmonyRuntime.epochIndex = epochIndex;
+    harmonyRuntime.tonicRootNote = normalizeSwarmNoteName(weaponAuthority.tonicRootNote || DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
+  } else if (harmonyRuntime.epochIndex !== epochIndex || !String(harmonyRuntime.tonicRootNote || '').trim()) {
+    const seed = hashStringSeed(`harmony|${getSwarmStyleId()}|epoch-${epochIndex}`);
+    const tonicRootNote = normalizeSwarmNoteName(roots[Math.max(0, seed % roots.length)]) || String(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4');
+    harmonyRuntime.epochIndex = epochIndex;
+    harmonyRuntime.tonicRootNote = tonicRootNote;
+  }
+  const tonicRootNote = normalizeSwarmNoteName(harmonyRuntime.tonicRootNote || DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
   const baseRoot = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
+  const sectionOffsets = DIRECTOR_HARMONY_CONFIG.sectionRootOffsets && typeof DIRECTOR_HARMONY_CONFIG.sectionRootOffsets === 'object'
+    ? DIRECTOR_HARMONY_CONFIG.sectionRootOffsets
+    : null;
+  const structureOffset = preDropActive
+    ? Math.trunc(Number(DIRECTOR_HARMONY_CONFIG.preDropOffset) || 0)
+    : Math.trunc(Number(sectionOffsets?.[structureIntent] || 0));
+  const rootNote = normalizeSwarmNoteName(transposeSwarmNoteName(tonicRootNote, structureOffset) || tonicRootNote) || tonicRootNote;
   const transposeSemitones = (() => {
     const rootMidi = noteNameToMidiRuntime(rootNote);
     const baseMidi = noteNameToMidiRuntime(baseRoot);
     if (!Number.isFinite(rootMidi) || !Number.isFinite(baseMidi)) return 0;
     return Math.trunc(rootMidi - baseMidi);
   })();
-  harmonyRuntime.epochIndex = epochIndex;
   harmonyRuntime.rootNote = rootNote;
   harmonyRuntime.transposeSemitones = transposeSemitones;
   harmonyRuntime.scaleId = String(DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic');
   harmonyRuntime.notePool = [];
+  harmonyRuntime.authoritySource = String(weaponAuthority.authoritySource || 'fallback_seeded').trim().toLowerCase() || 'fallback_seeded';
+  harmonyRuntime.fallbackUsed = weaponAuthority.fallbackUsed === true;
+  harmonyRuntime.authorityWeaponSlotIndex = Math.trunc(Number(weaponAuthority.weaponSlotIndex) || -1);
+  harmonyRuntime.authorityDistinctNoteCount = Math.max(0, Math.trunc(Number(weaponAuthority.distinctNoteCount) || 0));
+  harmonyRuntime.authorityActiveNoteCount = Math.max(0, Math.trunc(Number(weaponAuthority.activeNoteCount) || 0));
+  harmonyRuntime.authoritySourceNotes = Array.isArray(weaponAuthority.distinctNotes) ? weaponAuthority.distinctNotes.slice(0, 16) : [];
   return harmonyRuntime;
+}
+function noteHarmonyAuthorityStateForBar(barIndex = 0, notePool = null) {
+  const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const beatIndex = bar * Math.max(1, COMPOSER_BEATS_PER_BAR);
+  const director = ensureSwarmDirector();
+  const pool = Array.isArray(notePool) && notePool.length
+    ? notePool
+    : (Array.isArray(director.getNotePool?.()) ? director.getNotePool() : []);
+  const poolPitchClasses = new Set(
+    (Array.isArray(pool) ? pool : [])
+      .map((note) => midiToPitchClassRuntime(noteNameToMidiRuntime(note)))
+      .filter((value) => value >= 0)
+  );
+  const authorityNotes = [];
+  for (let beatOffset = 0; beatOffset < Math.max(1, COMPOSER_BEATS_PER_BAR); beatOffset += 1) {
+    const beatNotes = getWeaponTuneStepNotesHarmonic(getActiveWeaponHarmonySlotIndex(), beatIndex + beatOffset);
+    for (const noteName of beatNotes) authorityNotes.push(noteName);
+  }
+  const weaponOutsidePoolNotes = [];
+  let weaponOutsidePoolCount = 0;
+  for (let i = 0; i < authorityNotes.length; i++) {
+    const noteName = normalizeSwarmNoteName(authorityNotes[i]);
+    if (!noteName) continue;
+    const pitchClass = midiToPitchClassRuntime(noteNameToMidiRuntime(noteName));
+    if (!poolPitchClasses.has(pitchClass)) {
+      weaponOutsidePoolCount += 1;
+      weaponOutsidePoolNotes.push(noteName);
+    }
+  }
+  noteMusicSystemEvent('music_harmony_authority_state', {
+    authoritySource: String(harmonyRuntime.authoritySource || '').trim().toLowerCase() || 'fallback_seeded',
+    fallbackUsed: harmonyRuntime.fallbackUsed === true,
+    tonicRootNote: normalizeSwarmNoteName(harmonyRuntime.tonicRootNote || '') || '',
+    rootNote: normalizeSwarmNoteName(harmonyRuntime.rootNote || '') || '',
+    transposeSemitones: Math.trunc(Number(harmonyRuntime.transposeSemitones) || 0),
+    relativeShiftActive: normalizeSwarmNoteName(harmonyRuntime.rootNote || '') !== normalizeSwarmNoteName(harmonyRuntime.tonicRootNote || ''),
+    authorityWeaponSlotIndex: Math.trunc(Number(harmonyRuntime.authorityWeaponSlotIndex) || -1),
+    authorityDistinctNoteCount: Math.max(0, Math.trunc(Number(harmonyRuntime.authorityDistinctNoteCount) || 0)),
+    authorityActiveNoteCount: Math.max(0, Math.trunc(Number(harmonyRuntime.authorityActiveNoteCount) || 0)),
+    notePoolSize: Array.isArray(pool) ? pool.length : 0,
+    weaponOutsidePoolCount,
+    weaponOutsidePoolNotes: weaponOutsidePoolNotes.slice(0, 12),
+  }, {
+    barIndex: bar,
+    beatIndex,
+    stepIndex: 0,
+  });
 }
 function getPlayerInstrumentStepDirective(stepIndex, beatIndex) {
   const style = getSwarmStyleProfile();
@@ -5158,10 +5395,17 @@ function resetSwarmDirector(beatIndex = 0) {
   callResponseRuntime.responsePhraseProgress = 0;
   callResponseRuntime.responsePhraseTargetLength = 0;
   harmonyRuntime.epochIndex = -1;
+  harmonyRuntime.tonicRootNote = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
   harmonyRuntime.rootNote = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
   harmonyRuntime.transposeSemitones = 0;
   harmonyRuntime.scaleId = String(DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic');
   harmonyRuntime.notePool = [];
+  harmonyRuntime.authoritySource = 'fallback_seeded';
+  harmonyRuntime.fallbackUsed = true;
+  harmonyRuntime.authorityWeaponSlotIndex = -1;
+  harmonyRuntime.authorityDistinctNoteCount = 0;
+  harmonyRuntime.authorityActiveNoteCount = 0;
+  harmonyRuntime.authoritySourceNotes = [];
   structureIntentRuntime.intent = 'intro';
   structureIntentRuntime.sourceEnergyState = 'intro';
   structureIntentRuntime.stateStartBar = Math.max(0, Math.floor(Math.max(0, Math.trunc(Number(beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR)));
@@ -5336,6 +5580,7 @@ function applyEnergyStateForBar(barIndex = 0) {
   if (!(energyStateRuntime.stateStartBar >= 0)) resetEnergyStateRuntime(bar);
   advanceEnergyStateRuntimeForBar(bar);
   const stateName = String(energyStateRuntime.state || 'intro');
+  applyStructureIntentForBar(bar);
   const cfg = getDirectorEnergyStateConfig(stateName);
   const theme = getEnergyStateThemePreset(stateName);
   const budgets = applyEnergyGravityToBudgets(cfg?.budgets || {});
@@ -5343,7 +5588,7 @@ function applyEnergyStateForBar(barIndex = 0) {
   director.setEnergyState(stateName);
   director.setNotePool(Array.isArray(theme?.notePool) && theme.notePool.length ? theme.notePool : SWARM_PENTATONIC_NOTES_ONE_OCTAVE);
   director.setBudgets(budgets);
-  applyStructureIntentForBar(bar);
+  noteHarmonyAuthorityStateForBar(bar, theme?.notePool);
   energyStateRuntime.lastAppliedBar = bar;
 }
 function applyEnergyStateToComposerDirective(baseDirective) {
@@ -5455,6 +5700,7 @@ function updateSwarmDirectorDebugHud(payload = null) {
   lines.push(`active=${snap.active ? 1 : 0} paused=${snap.paused ? 1 : 0} transport=${isRunning?.() ? 1 : 0}`);
   lines.push(`beat=${Math.trunc(Number(ds?.beatIndex) || 0)} bar=${Math.trunc(Number(ds?.barIndex) || 0)} step=${Math.trunc(Number(ds?.stepIndex) || 0)} phase=${(Number(ds?.phase01) || 0).toFixed(3)}`);
   lines.push(`energy=${String(ds?.energyState || '')} cycle=${Math.max(0, Math.trunc(Number(energyStateRuntime.cycle) || 0))} seq=${Math.max(0, Math.trunc(Number(energyStateRuntime.sequenceIndex) || 0))} pool=[${Array.isArray(ds?.notePool) ? ds.notePool.join(',') : ''}]`);
+  lines.push(`harmony=src:${String(harmonyRuntime.authoritySource || '')} slot:${Math.trunc(Number(harmonyRuntime.authorityWeaponSlotIndex) || -1)} tonic:${String(harmonyRuntime.tonicRootNote || '')} active:${String(harmonyRuntime.rootNote || '')} trans:${Math.trunc(Number(harmonyRuntime.transposeSemitones) || 0)} intent:${String(structureIntentRuntime.intent || '')} preDrop=${structureIntentRuntime.preDropActive ? 1 : 0}`);
   const pace = swarmPacingRuntime.getSnapshot();
   lines.push(`pacing=${String(pace?.state || '')} startBar=${Math.trunc(Number(pace?.stateStartBar) || 0)} durBars=${Math.trunc(Number(pace?.barsInState) || 0)} mode=${String(pace?.responseMode || '')}`);
   const gravityMetrics = getEnergyGravityMetrics();
@@ -7130,10 +7376,17 @@ function startMusicLabSession(reason = 'unknown') {
   try { composerRuntime.motifThemeState?.clear?.(); } catch {}
   composerRuntime.lastForegroundMotifUsageBar = -1;
   harmonyRuntime.epochIndex = -1;
+  harmonyRuntime.tonicRootNote = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
   harmonyRuntime.rootNote = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
   harmonyRuntime.transposeSemitones = 0;
   harmonyRuntime.scaleId = String(DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic');
   harmonyRuntime.notePool = [];
+  harmonyRuntime.authoritySource = 'fallback_seeded';
+  harmonyRuntime.fallbackUsed = true;
+  harmonyRuntime.authorityWeaponSlotIndex = -1;
+  harmonyRuntime.authorityDistinctNoteCount = 0;
+  harmonyRuntime.authorityActiveNoteCount = 0;
+  harmonyRuntime.authoritySourceNotes = [];
   structureIntentRuntime.intent = 'intro';
   structureIntentRuntime.sourceEnergyState = 'intro';
   structureIntentRuntime.stateStartBar = 0;
@@ -8706,7 +8959,8 @@ function ensureWeaponSubBoardArtToy(slotIndex) {
 function weaponSubBoardRowToNoteName(rowIndex) {
   const row = Math.trunc(Number(rowIndex));
   if (!(row >= 0 && row < DRAWGRID_TUNE_NOTE_PALETTE.length)) return getRandomSwarmPentatonicNote();
-  return normalizeSwarmNoteName(DRAWGRID_TUNE_NOTE_PALETTE[row]) || getRandomSwarmPentatonicNote();
+  const rawNote = normalizeSwarmNoteName(DRAWGRID_TUNE_NOTE_PALETTE[row]) || getRandomSwarmPentatonicNote();
+  return mapWeaponTuneNoteToHarmony(rawNote, currentBeatIndex);
 }
 function snapshotWeaponSubBoardTuneChain(slotIndex) {
   const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
@@ -12714,10 +12968,10 @@ function isEnemyLikelyVisibleForAudio(enemy, marginPx = 96) {
 }
 function isPlayerWeaponStepLikelyAudible(stepIndex = 0) {
   const slotIndex = Math.max(0, Math.min(weaponLoadout.length - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
-  const weapon = weaponLoadout[slotIndex];
-  const stages = sanitizeWeaponStages(weapon?.stages);
+    const weapon = weaponLoadout[slotIndex];
+    const stages = sanitizeWeaponStages(weapon?.stages);
   if (stages.length) {
-    const notes = getWeaponTuneStepNotes(slotIndex, Math.trunc(Number(stepIndex) || 0));
+    const notes = getWeaponTuneStepNotesHarmonic(slotIndex, Math.trunc(Number(stepIndex) || 0));
     return Array.isArray(notes) && notes.length > 0;
   }
   const anyConfigured = weaponLoadout.some((w) => Array.isArray(w?.stages) && w.stages.length > 0);
@@ -12729,7 +12983,7 @@ function isPlayerWeaponTuneStepAuthoredActive(stepIndex = 0) {
   const weapon = weaponLoadout[slotIndex];
   const stages = sanitizeWeaponStages(weapon?.stages);
   if (!stages.length) return false;
-  const notes = getWeaponTuneStepNotes(slotIndex, Math.trunc(Number(stepIndex) || 0));
+  const notes = getWeaponTuneStepNotesHarmonic(slotIndex, Math.trunc(Number(stepIndex) || 0));
   return Array.isArray(notes) && notes.length > 0;
 }
 function shouldKeepEnemyAudibleDuringPlayerDuck(ev, channel = '') {
@@ -14054,7 +14308,7 @@ function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex, contextBeatIndex = 
       getPerfNow: getBeatSwarmPerfNow,
       getWeaponTuneActivityStats,
       getWeaponTuneDamageScale,
-      getWeaponTuneStepNotes,
+      getWeaponTuneStepNotes: getWeaponTuneStepNotesHarmonic,
       logWeaponTuneFireDebug,
       pulsePlayerShipNoteFlash,
       recordStepEventsPerfSample: recordBeatSwarmStepEventsPerfSample,

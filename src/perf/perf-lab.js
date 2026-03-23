@@ -3185,6 +3185,7 @@ function compactMusicLabPayloadForSave(payload = null) {
     'music_structure_intent_state',
     'music_motif_return_state',
     'music_foreground_motif_usage',
+    'music_harmony_authority_state',
   ]);
   const compactSystemEvents = systemEvents
     .filter((ev) => compactSystemEventTypesToKeep.has(String(ev?.eventType || '').trim().toLowerCase()))
@@ -3249,6 +3250,20 @@ function compactMusicLabPayloadForSave(payload = null) {
         preDropActive: item.preDropActive === true,
         preDropBarsRemaining: Number(item.preDropBarsRemaining) || -1,
         barsUntilBreak: Number(item.barsUntilBreak) || -1,
+        authoritySource: String(item.authoritySource || '').trim().toLowerCase(),
+        fallbackUsed: item.fallbackUsed === true,
+        tonicRootNote: String(item.tonicRootNote || '').trim(),
+        rootNote: String(item.rootNote || '').trim(),
+        transposeSemitones: Number(item.transposeSemitones) || 0,
+        relativeShiftActive: item.relativeShiftActive === true,
+        authorityWeaponSlotIndex: Number.isFinite(Number(item.authorityWeaponSlotIndex))
+          ? Math.trunc(Number(item.authorityWeaponSlotIndex))
+          : -1,
+        authorityDistinctNoteCount: Number(item.authorityDistinctNoteCount) || 0,
+        authorityActiveNoteCount: Number(item.authorityActiveNoteCount) || 0,
+        notePoolSize: Number(item.notePoolSize) || 0,
+        weaponOutsidePoolCount: Number(item.weaponOutsidePoolCount) || 0,
+        weaponOutsidePoolNotes: Array.isArray(item.weaponOutsidePoolNotes) ? item.weaponOutsidePoolNotes.slice(0, 12) : [],
       };
     });
   const systemEventCountsByType = Object.create(null);

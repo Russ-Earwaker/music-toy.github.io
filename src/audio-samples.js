@@ -88,6 +88,17 @@ function normId(s){
   return x;
 }
 
+function getEntryVolumeMultiplier(entry){
+  const raw = String(entry?.volume || '').trim();
+  if (!raw) return 1;
+  const db = Number(raw);
+  if (!Number.isFinite(db)) return 1;
+  const clampedDb = Math.max(-24, Math.min(24, db));
+  const linear = Math.pow(10, clampedDb / 20);
+  if (!Number.isFinite(linear) || linear <= 0) return 1;
+  return Math.max(0.05, Math.min(2.5, linear));
+}
+
 function resolveOctaveForToy(noteName, toyId, options = {}, instrumentId = ''){
   if (!toyId || typeof document === 'undefined') return noteName;
   const findChainHeadPanel = (panel) => {
@@ -313,6 +324,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
   const buf = buffers.get(key);
   const ent = entries.get(key);
   if (!buf && !ent) return false;
+  const effectiveGain = Math.max(0.0005, Number(gain) || 0) * getEntryVolumeMultiplier(ent);
 
   const ctx = ensureAudioContext();
   const tStart = safeStartTime(ctx, when);
@@ -348,16 +360,16 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
         const atk = Math.min(0.012, d * 0.06); // tiny fade-in to avoid clicks
         g.gain.setValueAtTime(0.0001, tStart);
         // Attack to full gain
-        g.gain.exponentialRampToValueAtTime(Math.max(0.002, gain), tStart + atk);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.002, effectiveGain), tStart + atk);
         // Decay down to sustain level over d seconds
-        g.gain.linearRampToValueAtTime(Math.max(0.001, gain * sustainLevel), tStart + d);
+        g.gain.linearRampToValueAtTime(Math.max(0.001, effectiveGain * sustainLevel), tStart + d);
         // Release to silence over r seconds
         g.gain.exponentialRampToValueAtTime(0.0001, tStart + d + r);
       }catch{
-        g.gain.value = gain;
+        g.gain.value = effectiveGain;
       }
     } else {
-      g.gain.value = gain;
+      g.gain.value = effectiveGain;
     }
     src.connect(g).connect(getToyGain(toyId||'master'));
     try{ registerActiveNode(src); }catch{}
@@ -383,7 +395,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
   if (synthId){
     const sNorm = String(synthId||'').toLowerCase().replace(/_/g,'-');
     const toneId = TONE_NAMES.includes(sNorm) ? sNorm : 'tone';
-    return playById(toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(toyId||'master'), gain, options);
+    return playById(toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(toyId||'master'), effectiveGain, options);
   }
   return false;
 }
@@ -480,7 +492,8 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
       const iNorm = id.replace(/[()]/g,'').replace(/[_\s]+/g,'-');
       if (s && (s === id || sNorm === id || s === iNorm || sNorm === iNorm)){
         const toneId2 = TONE_NAMES.includes(sNorm) ? sNorm : (TONE_NAMES.includes(s) ? s : 'tone');
-        const ok = playById(toneId2, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel);
+        const effectiveVel = vel * getEntryVolumeMultiplier(ent);
+        const ok = playById(toneId2, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), effectiveVel);
         if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
         return ok;
       }

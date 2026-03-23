@@ -1127,7 +1127,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ? 0
     : (stagedSoundCount === 3 ? 0.45 : 1);
   const densityReliefFoundation = Math.max(0, Math.min(1, Number(constants.densityReliefFoundation) || 0.22));
-  const densityReliefPrimaryLoop = Math.max(0, Math.min(1, Number(constants.densityReliefPrimaryLoop) || 0.12));
+  const densityReliefPrimaryLoop = Math.max(0, Math.min(1, Number(constants.densityReliefPrimaryLoop) || 0.09));
   const densityPenaltySupport = Math.max(0, Math.min(1, Number(constants.densityPenaltySupport) || 0.08));
   const densityPenaltySparkle = Math.max(0, Math.min(1, Number(constants.densityPenaltySparkle) || 0.18));
   const stagedEnemyEvents = emittedEnemyEvents.map((ev) => {
@@ -1158,14 +1158,15 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       if (musicLayer === 'loops') {
         if (isPrimaryLoopLaneEvent || musicProminence === 'full') {
           const foregroundBoost = isCurrentForegroundLoop
-            ? Math.max(0, Number(constants.currentForegroundGainBoost) || 0.08)
+            ? Math.max(0, Number(constants.currentForegroundGainBoost) || 0.06)
             : 0;
-          const visibilityBoost = isVisibleGameplayCue ? 0.06 : 0;
-          const phraseGraceBoost = entryPhraseAudibilityGrace ? 0.04 : 0;
+          const visibilityBoost = isVisibleGameplayCue ? 0.04 : 0;
+          const phraseGraceBoost = entryPhraseAudibilityGrace ? 0.03 : 0;
           const competingPenalty = (foregroundLockActive && isCompetingForegroundLoop)
             ? Math.max(0, Number(constants.competingForegroundGainPenalty) || 0.12) * 1.35
             : 0;
-          return Math.max(0.58, (1 + ((densityReliefPrimaryLoop + foregroundBoost + visibilityBoost + phraseGraceBoost) * densityPressure)) - competingPenalty);
+          const crowdPenalty = (foundationSelected && stagedSoundCount >= 2) ? 0.08 : 0;
+          return Math.max(0.52, (1 + ((densityReliefPrimaryLoop + foregroundBoost + visibilityBoost + phraseGraceBoost) * densityPressure)) - competingPenalty - crowdPenalty);
         }
         const crowdedForegroundSupportStep = primaryLoopForegroundPresent && foundationSelected;
         const callResponsePenalty = callResponseLane === 'response'
@@ -1188,8 +1189,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     );
     if (isPrimaryLoopLaneEvent) {
       const loopFloor = musicProminence === 'full'
-        ? Math.max(0, Math.min(1, Number(constants.protectedLoopFullFloor) || 0.56))
-        : Math.max(0, Math.min(1, Number(constants.protectedLoopQuietFloor) || 0.46));
+        ? Math.max(0, Math.min(1, Number(constants.protectedLoopFullFloor) || 0.53))
+        : Math.max(0, Math.min(1, Number(constants.protectedLoopQuietFloor) || 0.44));
       nextAudioGain = Math.max(loopFloor, nextAudioGain);
     } else if (isFoundationLaneEvent) {
       const foundationFloor = musicProminence === 'full'
@@ -1230,8 +1231,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       nextAudioGain = clamp01(smoothedAudioGain);
       if (isPrimaryLoopLaneEvent) {
         const loopSmoothedFloor = musicProminence === 'full'
-          ? Math.max(0, Math.min(1, Number(constants.protectedLoopFullFloor) || 0.56))
-          : Math.max(0, Math.min(1, Number(constants.protectedLoopQuietFloor) || 0.46));
+          ? Math.max(0, Math.min(1, Number(constants.protectedLoopFullFloor) || 0.53))
+          : Math.max(0, Math.min(1, Number(constants.protectedLoopQuietFloor) || 0.44));
         nextAudioGain = Math.max(loopSmoothedFloor, nextAudioGain);
       } else if (isFoundationLaneEvent) {
         const foundationSmoothedFloor = musicProminence === 'full'

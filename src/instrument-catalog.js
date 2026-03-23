@@ -178,6 +178,43 @@ export function getSampleRuntimeFamily(sample) {
   return String(sample?.instrumentFamily || sample?.type || '').trim().toLowerCase();
 }
 
+export function getSamplePlaybackBaseNote(sample) {
+  const baseNote = String(sample?.baseNote ?? sample?.base_note ?? '').trim();
+  const baseOct = String(sample?.baseOct ?? sample?.base_oct ?? '').trim();
+  if (baseNote) return baseNote;
+  if (baseOct) return `C${baseOct}`;
+  return '';
+}
+
+export function getSampleSourceBaseNote(sample) {
+  const sourceBaseNote = String(
+    sample?.sourceBaseNote
+      ?? sample?.source_base_note
+      ?? sample?.sample_base_note
+      ?? sample?.detected_base_note
+      ?? ''
+  ).trim();
+  const sourceBaseOct = String(
+    sample?.sourceBaseOct
+      ?? sample?.source_base_oct
+      ?? sample?.sample_base_oct
+      ?? sample?.detected_base_oct
+      ?? ''
+  ).trim();
+  if (sourceBaseNote) return sourceBaseNote;
+  if (sourceBaseOct) return `C${sourceBaseOct}`;
+  return '';
+}
+
+export function getSampleVolumeHint(sample) {
+  const raw = String(sample?.volume ?? '').trim();
+  if (!raw) return '';
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return '';
+  const clamped = Math.max(-24, Math.min(24, n));
+  return String(clamped);
+}
+
 export function sampleNeedsReview(sample) {
   const explicit = normalizeNeedsReviewToken(sample?.needsReview ?? sample?.needs_review);
   if (explicit != null) return explicit;
@@ -371,6 +408,9 @@ export async function loadInstrumentEntries(){
         entry.resolvedMusicBehavior = getSampleBehaviors(entry);
         entry.resolvedRuntimeFamily = getSampleRuntimeFamily(entry) || undefined;
         entry.resolvedMusicEligibility = getSampleEligibility(entry);
+        entry.resolvedPlaybackBaseNote = getSamplePlaybackBaseNote(entry) || undefined;
+        entry.resolvedSourceBaseNote = getSampleSourceBaseNote(entry) || undefined;
+        entry.resolvedVolumeHint = getSampleVolumeHint(entry) || undefined;
         entry.resolvedNeedsReview = sampleNeedsReview(entry);
         out.push(entry);
         ID_TO_DISPLAY_NAME.set(id, display);

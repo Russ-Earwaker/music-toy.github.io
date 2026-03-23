@@ -452,6 +452,32 @@ Design constraint:
 - this should integrate with the piece while preserving gameplay readability and weapon feel
 - player-owned sound should usually reinforce the track, not replace the protected main idea unless explicitly designed to do so
 
+### 14. Legacy `composition` Sample Role Cleanup
+
+There are still samples in [samples.csv](/d:/Desktop/music-toy/music-toy.github.io/samples.csv) with `combatRole=composition`, but there is no current live `recommended_toys=composition` runtime path.
+
+Current truth:
+
+- these rows are effectively dormant in the current codebase unless they are also selected through other live role metadata
+- that makes them ambiguous authoring state, not clearly active content
+
+Backlog tasks:
+
+- decide whether these legacy `composition` rows should be:
+  - retagged into live Beat Swarm/sample metadata roles
+  - reserved for a future dedicated runtime or toy path
+  - explicitly documented as dormant legacy content
+- review the current affected support/pad/arp samples and decide whether they are actually:
+  - `support`
+  - `answer_source`
+  - `motion`
+  - or non-runtime library content
+- avoid silent cleanup that changes sample behavior accidentally; document the current dormant state first
+
+Important rule:
+
+> Do not leave legacy tags in a half-live state if they no longer correspond to any real runtime path.
+
 ## Working Rule
 
 Use this as the tuning principle:
