@@ -166,6 +166,10 @@ const introDrumLoopRuntime = {
   phraseId: '',
   patternKey: '',
 };
+const instrumentPoolAuditRuntime = {
+  pending: false,
+  logged: false,
+};
 const enemies = [];
 const pooledLinkedSpawnerChildren = [];
 const pooledHostileRedProjectiles = [];
@@ -9938,7 +9942,10 @@ function pickEnemyInstrumentIdForToyRandom(toyKey, extraUsed = null, options = n
 function auditEnemyInstrumentPool(toyKey, options = null) {
   return beatSwarmInstrumentLaneTools.auditEnemyInstrumentPool(toyKey, options);
 }
-function noteBeatSwarmInstrumentPoolAudit() {
+function noteBeatSwarmInstrumentPoolAudit(context = null) {
+  const beatIndex = Math.max(0, Math.trunc(Number(context?.beatIndex) || 0));
+  const stepIndex = Math.max(0, Math.trunc(Number(context?.stepIndex) || 0));
+  const barIndex = Math.max(0, Math.trunc(Number(context?.barIndex) || 0));
   const poolSpecs = [
     { auditId: 'spawner_bass', toyKey: 'loopgrid-drum', role: BEAT_EVENT_ROLES.BASS, lane: 'bass' },
     { auditId: 'drawsnake_lead', toyKey: 'drawgrid', role: BEAT_EVENT_ROLES.LEAD, lane: 'lead' },
@@ -9963,9 +9970,9 @@ function noteBeatSwarmInstrumentPoolAudit() {
       unusedEligibleIds: Array.isArray(audit?.unusedEligibleIds) ? audit.unusedEligibleIds.slice(0, 12) : [],
       priorityEligibleIds: Array.isArray(audit?.priorityEligibleIds) ? audit.priorityEligibleIds.slice(0, 12) : [],
     }, {
-      beatIndex: 0,
-      stepIndex: 0,
-      barIndex: 0,
+      beatIndex,
+      stepIndex,
+      barIndex,
     });
   }
   const themeId = String(getSoundThemeKey?.() || '').trim();
@@ -9986,9 +9993,9 @@ function noteBeatSwarmInstrumentPoolAudit() {
       unreachableCount: unreachable.length,
       unreachableIds: unreachable.slice(0, 16),
     }, {
-      beatIndex: 0,
-      stepIndex: 0,
-      barIndex: 0,
+      beatIndex,
+      stepIndex,
+      barIndex,
     });
   }
 }
@@ -13580,6 +13587,11 @@ function updateBeatWeapons(centerWorld) {
   const beatIndex = prelude.beatIndex;
   const stepIndex = prelude.stepIndex;
   const barIndex = prelude.barIndex;
+  if (instrumentPoolAuditRuntime.pending && !instrumentPoolAuditRuntime.logged) {
+    noteBeatSwarmInstrumentPoolAudit({ beatIndex, stepIndex, barIndex });
+    instrumentPoolAuditRuntime.logged = true;
+    instrumentPoolAuditRuntime.pending = false;
+  }
   const pacingSnapshot = prelude.pacingSnapshot;
   const paletteSnapshot = prelude.paletteSnapshot;
   const signatureState = {
@@ -14791,7 +14803,8 @@ export function enterBeatSwarmMode(options = null) {
   musicLaneOwnershipDiagnosticsRuntime.byLane = Object.create(null);
   playerInstrumentRuntime.reset();
   startMusicLabSession('enter');
-  noteBeatSwarmInstrumentPoolAudit();
+  instrumentPoolAuditRuntime.pending = true;
+  instrumentPoolAuditRuntime.logged = false;
   swarmSoundEventState.beatIndex = null;
   swarmSoundEventState.played = Object.create(null);
   swarmSoundEventState.maxVolume = Object.create(null);
