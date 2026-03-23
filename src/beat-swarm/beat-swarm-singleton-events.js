@@ -134,11 +134,14 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       getSwarmPentatonicNoteByIndex(rowHead),
       getSwarmPentatonicNoteByIndex(rowMiddle),
     ]);
-    const phraseGravityTarget = phraseStep.nearPhraseEnd
+    const phraseGravityTargetBase = phraseStep.nearPhraseEnd
       ? pickClosestPhraseGravityTarget(noteNameBase, phraseTargets)
       : '';
+    const phraseGravityTarget = phraseStep.resolutionOpportunity
+      ? (normalizeSwarmNoteName(group?.phraseRoot) || phraseGravityTargetBase)
+      : phraseGravityTargetBase;
     const phraseGravityOpportunity = !!phraseGravityTarget && phraseStep.nearPhraseEnd;
-    const gravityBiasChance = phraseStep.resolutionOpportunity ? 0.74 : 0.52;
+    const gravityBiasChance = phraseStep.resolutionOpportunity ? 0.94 : 0.56;
     let noteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
       ? phraseGravityTarget
       : noteNameBase;
@@ -146,9 +149,12 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       const prevNote = normalizeSwarmNoteName(enemy?.__bsLastDrawsnakeNote);
       const prevRow = Math.max(0, Math.min(notePoolSize - 1, Math.trunc(Number(enemy?.__bsLastDrawsnakeRow) || row)));
       const repeatChance = prevRow === row ? (motifRepeatBias * 0.04) : (motifRepeatBias * 0.008);
-      if (prevNote && Math.random() < repeatChance) {
+      if (!phraseStep.resolutionOpportunity && prevNote && Math.random() < repeatChance) {
         noteNameRaw = prevNote;
       }
+    }
+    if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && Math.random() < 0.88) {
+      noteNameRaw = phraseGravityTarget;
     }
     const phraseGravityHit = phraseGravityOpportunity
       ? normalizeSwarmNoteName(noteNameRaw) === normalizeSwarmNoteName(phraseGravityTarget)

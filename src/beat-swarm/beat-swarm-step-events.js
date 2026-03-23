@@ -646,6 +646,54 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     -1,
     Math.trunc(Number(state?.loopAdmissionRuntime?.currentForegroundIdentityStartStep) || -1)
   );
+  const structureIntent = state?.structureIntentRuntime && typeof state.structureIntentRuntime === 'object'
+    ? state.structureIntentRuntime
+    : null;
+  const structureIntentName = String(structureIntent?.intent || '').trim().toLowerCase();
+  const preDropActive = structureIntent?.preDropActive === true;
+  const peakActive = structureIntentName === 'peak';
+  const normalizeRegisterClass = (registerLike = '') => {
+    const raw = String(registerLike || '').trim().toLowerCase();
+    if (raw === 'sub') return 'low';
+    if (raw === 'mid_high' || raw === 'mid-high' || raw === 'midhigh') return 'high';
+    if (raw === 'low' || raw === 'mid' || raw === 'high') return raw;
+    return '';
+  };
+  const getRoleRegisterPenalty = ({
+    layer = '',
+    role = '',
+    register = '',
+    isPrimaryLoopLaneEvent = false,
+    callResponseLane = '',
+  }) => {
+    const registerClass = normalizeRegisterClass(register);
+    if (!registerClass) return 0;
+    if (layer === 'foundation') {
+      if (registerClass === 'low') return 0;
+      if (registerClass === 'mid') return 110;
+      return 180;
+    }
+    if (layer === 'loops') {
+      if (isPrimaryLoopLaneEvent || role === 'lead' || role === 'foreground') {
+        if (registerClass === 'mid') return 0;
+        if (registerClass === 'high') return 35;
+        return 140;
+      }
+      if (callResponseLane === 'call' || callResponseLane === 'response' || role === 'support') {
+        if (registerClass === 'high') return 0;
+        if (registerClass === 'mid') return 55;
+        return 150;
+      }
+      if (registerClass === 'low') return 85;
+      return 0;
+    }
+    if (layer === 'sparkle') {
+      if (registerClass === 'high') return 0;
+      if (registerClass === 'mid') return 30;
+      return 90;
+    }
+    return 0;
+  };
   const loopLengthSteps = Math.max(1, Math.trunc(Number(constants?.loopLengthSteps) || 8));
   const loopEstablishingWindowSteps = 16;
   const prominenceRank = { suppressed: 0, trace: 1, quiet: 2, full: 3 };
@@ -732,6 +780,20 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     if (safeLayer === 'sparkle' && String(ev?.actionType || '').trim().toLowerCase() === 'enemy-death-accent') score += 40;
     if (safeLayer === 'sparkle' && (register === 'mid' || register === 'mid_high')) score -= 35;
+    if (safeLayer === 'loops' && !isPrimaryLoopLaneEvent) {
+      if (preDropActive) {
+        score -= callResponseLane === 'response' ? 45 : 65;
+      } else if (peakActive) {
+        score -= (callResponseLane === 'call' || callResponseLane === 'response') ? 20 : 55;
+      }
+    }
+    score -= getRoleRegisterPenalty({
+      layer: safeLayer,
+      role,
+      register,
+      isPrimaryLoopLaneEvent,
+      callResponseLane,
+    });
     score += Math.max(0, Math.min(1, Number(payload.onboardingPriority) || 0)) * 25;
     score -= idx * 0.01;
     return {

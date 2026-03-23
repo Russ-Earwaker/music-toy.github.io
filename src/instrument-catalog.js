@@ -33,6 +33,24 @@ function splitBehaviorTokens(value) {
     .filter(Boolean);
 }
 
+function normalizeEligibilityToken(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (
+    raw === 'protected_loop'
+    || raw === 'call_source'
+    || raw === 'answer_source'
+    || raw === 'accent_only'
+  ) return raw;
+  return '';
+}
+
+function splitEligibilityTokens(value) {
+  return String(value || '')
+    .split(/[;|,/]/)
+    .map((token) => normalizeEligibilityToken(token))
+    .filter(Boolean);
+}
+
 function uniqueTokens(values) {
   const out = [];
   const seen = new Set();
@@ -94,6 +112,27 @@ function inferMusicBehaviorFallback(entry) {
   return uniqueTokens(out);
 }
 
+function inferSampleEligibilityFallback(entry) {
+  const musicRole = getSampleMusicRole(entry);
+  const behaviors = getSampleBehaviors(entry);
+  const loopLike = behaviors.includes('loop');
+  const melodicLike = behaviors.includes('melodic');
+  const shortLike = behaviors.includes('short') || behaviors.includes('oneshot');
+  const out = [];
+  if (musicRole === 'foundation') out.push('protected_loop');
+  if (musicRole === 'foreground') {
+    out.push('call_source');
+    out.push('answer_source');
+    if (loopLike || melodicLike) out.push('protected_loop');
+  }
+  if (musicRole === 'support') {
+    if (melodicLike) out.push('answer_source');
+    if (melodicLike && shortLike) out.push('call_source');
+  }
+  if (musicRole === 'accent') out.push('accent_only');
+  return uniqueTokens(out);
+}
+
 function normalizeNeedsReviewToken(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (raw === 'true' || raw === 'yes' || raw === '1') return true;
@@ -117,6 +156,18 @@ export function hasSampleBehavior(sample, tag) {
   const key = normalizeBehaviorToken(tag);
   if (!key) return false;
   return getSampleBehaviors(sample).includes(key);
+}
+
+export function getSampleEligibility(sample) {
+  const explicit = uniqueTokens(splitEligibilityTokens(sample?.musicEligibility || sample?.music_eligibility || ''));
+  if (explicit.length) return explicit;
+  return inferSampleEligibilityFallback(sample);
+}
+
+export function hasSampleEligibility(sample, tag) {
+  const key = normalizeEligibilityToken(tag);
+  if (!key) return false;
+  return getSampleEligibility(sample).includes(key);
 }
 
 export function getSampleRuntimeFamily(sample) {
@@ -165,6 +216,7 @@ export async function loadInstrumentEntries(){
       const musicRoleIdx = header.findIndex(h=>/^(music[_-]?role)$/i.test(h));
       const musicBehaviorIdx = header.findIndex(h=>/^(music[_-]?behavior)$/i.test(h));
       const runtimeFamilyIdx = header.findIndex(h=>/^(runtime[_-]?family)$/i.test(h));
+      const musicEligibilityIdx = header.findIndex(h=>/^(music[_-]?eligibility)$/i.test(h));
       const needsReviewIdx = header.findIndex(h=>/^(needs[_-]?review)$/i.test(h));
       const pitchIdx = header.findIndex(h=>/^(pitch|pitch[_-]?grade|pitch[_-]?band|register)$/i.test(h));
       const baseNoteIdx = header.findIndex(h=>/^(base\s*_?note|baseNote|note_base)$/i.test(h));
@@ -276,6 +328,8 @@ export async function loadInstrumentEntries(){
         const musicBehavior = uniqueTokens(splitBehaviorTokens(musicBehaviorRaw));
         const runtimeFamilyRaw = runtimeFamilyIdx >= 0 ? String(cells[runtimeFamilyIdx] || '') : '';
         const runtimeFamily = String(runtimeFamilyRaw || '').trim().toLowerCase();
+        const musicEligibilityRaw = musicEligibilityIdx >= 0 ? String(cells[musicEligibilityIdx] || '') : '';
+        const musicEligibility = uniqueTokens(splitEligibilityTokens(musicEligibilityRaw));
         const needsReviewRaw = needsReviewIdx >= 0 ? String(cells[needsReviewIdx] || '') : '';
         const needsReview = normalizeNeedsReviewToken(needsReviewRaw);
         const priRaw = priIdx >= 0 ? String(cells[priIdx] || '') : '';
@@ -297,6 +351,7 @@ export async function loadInstrumentEntries(){
           musicRole: musicRole || undefined,
           musicBehavior: musicBehavior.length ? musicBehavior : undefined,
           runtimeFamily: runtimeFamily || undefined,
+          musicEligibility: musicEligibility.length ? musicEligibility : undefined,
           needsReview: needsReview == null ? undefined : needsReview,
           pitchGrade: pitchGrade || undefined,
           pitchRank: Number.isFinite(pitchRank) ? pitchRank : undefined,
@@ -306,6 +361,7 @@ export async function loadInstrumentEntries(){
         entry.resolvedMusicRole = getSampleMusicRole(entry) || undefined;
         entry.resolvedMusicBehavior = getSampleBehaviors(entry);
         entry.resolvedRuntimeFamily = getSampleRuntimeFamily(entry) || undefined;
+        entry.resolvedMusicEligibility = getSampleEligibility(entry);
         entry.resolvedNeedsReview = sampleNeedsReview(entry);
         out.push(entry);
         ID_TO_DISPLAY_NAME.set(id, display);

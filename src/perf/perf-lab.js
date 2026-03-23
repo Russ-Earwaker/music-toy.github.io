@@ -3180,6 +3180,11 @@ function compactMusicLabPayloadForSave(payload = null) {
     'music_composer_group_state',
     'music_call_response_call_group_state',
     'music_call_response_response_group_state',
+    'music_enemy_instrument_pool_audit',
+    'music_enemy_instrument_pool_unreachable',
+    'music_structure_intent_state',
+    'music_motif_return_state',
+    'music_foreground_motif_usage',
   ]);
   const compactSystemEvents = systemEvents
     .filter((ev) => compactSystemEventTypesToKeep.has(String(ev?.eventType || '').trim().toLowerCase()))
@@ -3200,6 +3205,15 @@ function compactMusicLabPayloadForSave(payload = null) {
           ? true
           : (item.callResponseQualified === false ? false : null),
         sectionId: String(item.sectionId || '').trim().toLowerCase(),
+        intent: String(item.intent || '').trim().toLowerCase(),
+        motifEpoch: Number(item.motifEpoch) || 0,
+        requestedLockIndex: Number(item.requestedLockIndex) || 0,
+        effectiveLockIndex: Number(item.effectiveLockIndex) || 0,
+        lookbackLocks: Number(item.lookbackLocks) || 0,
+        returnActive: item.returnActive === true,
+        liveSnakeCount: Number(item.liveSnakeCount) || 0,
+        matchingScopeSnakeCount: Number(item.matchingScopeSnakeCount) || 0,
+        primaryLoopUsesScope: item.primaryLoopUsesScope === true,
         role: String(item.role || '').trim().toLowerCase(),
         reason: String(item.reason || '').trim().toLowerCase(),
         active: item.active === true,
@@ -3217,6 +3231,24 @@ function compactMusicLabPayloadForSave(payload = null) {
         continuingResponsePhrase: item.continuingResponsePhrase === true,
         responseOverrideHit: item.responseOverrideHit === true,
         admissionReason: String(item.admissionReason || '').trim().toLowerCase(),
+        auditId: String(item.auditId || '').trim().toLowerCase(),
+        themeId: String(item.themeId || '').trim(),
+        toyKey: String(item.toyKey || '').trim().toLowerCase(),
+        eligibleCount: Number(item.eligibleCount) || 0,
+        unusedEligibleCount: Number(item.unusedEligibleCount) || 0,
+        priorityEligibleCount: Number(item.priorityEligibleCount) || 0,
+        unreachableCount: Number(item.unreachableCount) || 0,
+        eligibleIds: Array.isArray(item.eligibleIds) ? item.eligibleIds.slice(0, 16) : [],
+        unusedEligibleIds: Array.isArray(item.unusedEligibleIds) ? item.unusedEligibleIds.slice(0, 16) : [],
+        priorityEligibleIds: Array.isArray(item.priorityEligibleIds) ? item.priorityEligibleIds.slice(0, 16) : [],
+        unreachableIds: Array.isArray(item.unreachableIds) ? item.unreachableIds.slice(0, 16) : [],
+        intent: String(item.intent || '').trim().toLowerCase(),
+        sourceEnergyState: String(item.sourceEnergyState || '').trim().toLowerCase(),
+        stateStartBar: Number(item.stateStartBar) || 0,
+        stateAgeBars: Number(item.stateAgeBars) || 0,
+        preDropActive: item.preDropActive === true,
+        preDropBarsRemaining: Number(item.preDropBarsRemaining) || -1,
+        barsUntilBreak: Number(item.barsUntilBreak) || -1,
       };
     });
   const systemEventCountsByType = Object.create(null);

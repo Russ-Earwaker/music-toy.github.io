@@ -344,6 +344,12 @@ export function installBeatSwarmDebugGlobalRuntime(deps = {}) {
       spawnPerfEnemyType(enemyType) {
         return api.spawnPerfEnemyType(enemyType);
       },
+      spawnInstrumentInfluenceEnemy(enemyType = 'drawsnake', influence = null, options = null) {
+        return api.spawnInstrumentInfluenceEnemy(enemyType, influence, options);
+      },
+      spawnPianoEnemy(enemyType = 'drawsnake', options = null) {
+        return api.spawnPianoEnemy(enemyType, options);
+      },
       setPerfEnemyRepeatMode(enemyType, enabled, options) {
         return api.setPerfEnemyRepeatMode(enemyType, enabled, options);
       },
@@ -477,6 +483,15 @@ export function createBeatSwarmDebugApiRuntime(deps = {}) {
     },
     spawnPerfEnemyType(enemyType = 'drawsnake') {
       return helpers.spawnPerfEnemyType?.(enemyType) || null;
+    },
+    spawnInstrumentInfluenceEnemy(enemyType = 'drawsnake', influence = null, options = null) {
+      return helpers.spawnInstrumentInfluenceEnemy?.(enemyType, influence, options) || null;
+    },
+    spawnPianoEnemy(enemyType = 'drawsnake', options = null) {
+      return helpers.spawnInstrumentInfluenceEnemy?.(enemyType, {
+        instrumentIds: ['PIANO'],
+        mode: 'require',
+      }, options) || null;
     },
     setPerfEnemyRepeatMode(enemyType = '', enabled = true, options = null) {
       return helpers.setPerfEnemyRepeatMode?.(enemyType, enabled, options) || { enabled: false, enemyType: '', targetCount: 0, persistent: true };

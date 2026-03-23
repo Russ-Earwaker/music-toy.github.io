@@ -79,6 +79,31 @@ Examples: `bass`, `percussion`, `lead`, `fx`, `synth`.
 This is for browsing and compatibility only.
 It should not be treated as the main authority for mix hierarchy.
 
+### `music_eligibility`
+
+Optional runtime-facing eligibility tags.
+Use these when a sample can do a musical job in principle, but should not automatically be trusted for every role that `music_role` might imply.
+
+Allowed values:
+
+- `protected_loop`
+- `call_source`
+- `answer_source`
+- `accent_only`
+
+Definitions:
+
+- `protected_loop`
+  - safe to use as a protected owner or main readable loop carrier
+  - use this sparingly
+- `call_source`
+  - suitable for opening a call-and-answer phrase
+- `answer_source`
+  - suitable for answering a call without necessarily owning the foreground
+- `accent_only`
+  - should stay punctuation only
+  - not suitable for protected loop ownership
+
 ### `needs_review`
 
 Marks rows where the inferred metadata is uncertain or manually incomplete.
@@ -104,6 +129,7 @@ Examples:
 
 - do not assign multiple `music_role` values
 - do not use `runtime_family` as a substitute for `music_role`
+- do not use `music_eligibility` as a replacement for `music_role`
 - do not label brief impacts as `foreground` just because they are pitched
 - do not label every musical sound as `melodic`; only use it when pitch identity matters
 - do not force certainty; use `needs_review=true` when unclear

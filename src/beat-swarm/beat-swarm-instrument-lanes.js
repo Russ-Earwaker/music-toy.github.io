@@ -41,12 +41,31 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
         .map((token) => String(token || '').trim().toLowerCase())
         .filter(Boolean);
     });
+  const getSampleRuntimeFamily = typeof options?.getSampleRuntimeFamily === 'function'
+    ? options.getSampleRuntimeFamily
+    : ((entry) => String(entry?.runtimeFamily || entry?.runtime_family || entry?.instrumentFamily || entry?.type || '').trim().toLowerCase());
+  const getSampleEligibility = typeof options?.getSampleEligibility === 'function'
+    ? options.getSampleEligibility
+    : ((entry) => {
+      const raw = entry?.musicEligibility || entry?.music_eligibility || '';
+      return String(raw || '')
+        .split(/[;|,/]/)
+        .map((token) => String(token || '').trim().toLowerCase())
+        .filter(Boolean);
+    });
   const hasSampleBehavior = typeof options?.hasSampleBehavior === 'function'
     ? options.hasSampleBehavior
     : ((entry, tag) => {
       const key = String(tag || '').trim().toLowerCase();
       if (!key) return false;
       return getSampleBehaviors(entry).includes(key);
+    });
+  const hasSampleEligibility = typeof options?.hasSampleEligibility === 'function'
+    ? options.hasSampleEligibility
+    : ((entry, tag) => {
+      const key = String(tag || '').trim().toLowerCase();
+      if (!key) return false;
+      return getSampleEligibility(entry).includes(key);
     });
 
   function getStyleProfileSnapshot() {
@@ -182,6 +201,38 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     return Array.isArray(entry?.themes) && entry.themes.includes(theme);
   }
 
+  function normalizeInstrumentInfluenceSpec(specLike = null) {
+    const spec = specLike && typeof specLike === 'object' ? specLike : null;
+    if (!spec) return null;
+    const ids = []
+      .concat(spec.instrumentIds || spec.ids || [])
+      .concat(spec.instrumentId ? [spec.instrumentId] : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+    const runtimeFamilies = []
+      .concat(spec.runtimeFamilies || [])
+      .concat(spec.runtimeFamily ? [spec.runtimeFamily] : [])
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean);
+    const mode = String(spec.mode || spec.matchMode || '').trim().toLowerCase();
+    if (!ids.length && !runtimeFamilies.length) return null;
+    return {
+      instrumentIds: Array.from(new Set(ids)),
+      runtimeFamilies: Array.from(new Set(runtimeFamilies)),
+      mode: mode === 'require' ? 'require' : 'prefer',
+    };
+  }
+
+  function entryMatchesInstrumentInfluence(entry, specLike = null) {
+    const spec = normalizeInstrumentInfluenceSpec(specLike);
+    if (!spec) return true;
+    const id = String(entry?.id || '').trim();
+    const runtimeFamily = String(getSampleRuntimeFamily(entry) || '').trim().toLowerCase();
+    if (spec.instrumentIds.length && spec.instrumentIds.includes(id)) return true;
+    if (spec.runtimeFamilies.length && runtimeFamily && spec.runtimeFamilies.includes(runtimeFamily)) return true;
+    return false;
+  }
+
   function entryMatchesLane(entry, lane = 'lead', toyCandidates = null) {
     const style = getStyleProfileSnapshot();
     const laneKey = normalizeEnemyInstrumentLane(lane, 'lead');
@@ -199,15 +250,18 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const melodicLike = hasSampleBehavior(entry, 'melodic');
     const shortLike = hasSampleBehavior(entry, 'short') || hasSampleBehavior(entry, 'oneshot');
     const rhythmicLike = hasSampleBehavior(entry, 'rhythmic');
+    const explicitEligibility = getSampleEligibility(entry).length > 0;
+    const protectedLoopEligible = hasSampleEligibility(entry, 'protected_loop');
     const candidates = Array.isArray(toyCandidates) ? toyCandidates : [];
     const isLoopgridRecommended = candidates.some((k) => k === 'loopgrid' || k === 'loopgrid-drum')
       && (entryMatchesToy(entry, 'loopgrid') || entryMatchesToy(entry, 'loopgrid-drum'));
     const isDrawgridRecommended = candidates.includes('drawgrid') && entryMatchesToy(entry, 'drawgrid');
     if (explicitLaneRole && explicitLaneRole !== laneKey) return false;
     if (laneKey === 'bass' && musicRole && musicRole !== 'foundation') return false;
-    if (laneKey === 'lead' && (musicRole === 'foundation' || musicRole === 'accent')) return false;
+    if (laneKey === 'lead' && (musicRole === 'foundation' || musicRole === 'accent' || musicRole === 'support')) return false;
     if (laneKey === 'accent' && (musicRole === 'foundation' || musicRole === 'foreground')) return false;
     if (laneKey === 'motion' && musicRole === 'foundation') return false;
+    if ((laneKey === 'bass' || laneKey === 'lead') && explicitEligibility && !protectedLoopEligible) return false;
     let laneMatch = explicitLaneRole === laneKey || laneHints.includes(laneKey);
     if (laneKey === 'bass') {
       if (musicRole === 'foundation') laneMatch = true;
@@ -218,7 +272,6 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     }
     if (!laneMatch && laneKey === 'lead') {
       if (musicRole === 'foreground') laneMatch = true;
-      else if (musicRole === 'support') laneMatch = melodicLike || isDrawgridRecommended;
       if (registerClass === 'high') laneMatch = true;
       if (Number.isFinite(pitchRank) && pitchRank >= 3) laneMatch = isDrawgridRecommended || !isLoopgridRecommended;
       if (
@@ -299,6 +352,7 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const laneBias = Number(style?.styleLaneBias?.[lane]);
     const laneEnabled = !Number.isFinite(laneBias) || laneBias > 0.15;
     const effectiveLane = laneEnabled ? lane : 'accent';
+    const influence = normalizeInstrumentInfluenceSpec(optionsLike?.instrumentInfluence || optionsLike?.musicPaletteOverride);
     const used = new Set();
     for (const id of getUsedWeaponInstrumentIds()) used.add(id);
     for (const id of getUsedEnemyInstrumentIds()) used.add(id);
@@ -312,6 +366,7 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
       if (entryExcludedFromEnemyPools(entry)) continue;
       if (!candidates.some((k) => entryMatchesToy(entry, k))) continue;
       if (!entryMatchesLane(entry, effectiveLane, candidates)) continue;
+      if (!entryMatchesInstrumentInfluence(entry, influence)) continue;
       if (entryMatchesTheme(entry, theme)) themed.push(id);
       const themeOk = entryMatchesTheme(entry, theme);
       if (!themeOk) continue;
@@ -345,6 +400,7 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const laneBias = Number(style?.styleLaneBias?.[lane]);
     const laneEnabled = !Number.isFinite(laneBias) || laneBias > 0.15;
     const effectiveLane = laneEnabled ? lane : 'accent';
+    const influence = normalizeInstrumentInfluenceSpec(optionsLike?.instrumentInfluence || optionsLike?.musicPaletteOverride);
     const used = new Set();
     for (const id of getUsedWeaponInstrumentIds()) used.add(id);
     for (const id of getUsedEnemyInstrumentIds()) used.add(id);
@@ -358,6 +414,7 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
           && (
           candidates.some((k) => entryMatchesToy(preferredEntry, k))
           && entryMatchesLane(preferredEntry, effectiveLane, candidates)
+          && entryMatchesInstrumentInfluence(preferredEntry, influence)
           ))
         : false;
       if (preferredOk) return preferred;
@@ -368,7 +425,8 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
       if (entryExcludedFromEnemyPools(entry)) return false;
       if (!entryMatchesTheme(entry, theme)) return false;
       if (!candidates.some((k) => entryMatchesToy(entry, k))) return false;
-      return entryMatchesLane(entry, effectiveLane, candidates);
+      if (!entryMatchesLane(entry, effectiveLane, candidates)) return false;
+      return entryMatchesInstrumentInfluence(entry, influence);
     });
     const lanePick = pickEntryIdWithPriority(lanePoolUnused);
     if (lanePick) return lanePick;
@@ -376,7 +434,8 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
       if (entryExcludedFromEnemyPools(entry)) return false;
       if (!entryMatchesTheme(entry, theme)) return false;
       if (!candidates.some((k) => entryMatchesToy(entry, k))) return false;
-      return entryMatchesLane(entry, effectiveLane, candidates);
+      if (!entryMatchesLane(entry, effectiveLane, candidates)) return false;
+      return entryMatchesInstrumentInfluence(entry, influence);
     });
     const laneAnyPick = pickEntryIdWithPriority(lanePoolAny);
     if (laneAnyPick) return laneAnyPick;

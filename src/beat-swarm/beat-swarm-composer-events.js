@@ -109,6 +109,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const responseWindowSteps = Math.max(1, Math.trunc(Number(getCallResponseWindowSteps()) || 1));
   const isCallResponseLaneActive = typeof options?.isCallResponseLaneActive === 'function' ? options.isCallResponseLaneActive : (() => true);
   const callResponseRuntime = options?.callResponseRuntime && typeof options.callResponseRuntime === 'object' ? options.callResponseRuntime : {};
+  const structureIntentRuntime = options?.structureIntentRuntime && typeof options.structureIntentRuntime === 'object'
+    ? options.structureIntentRuntime
+    : null;
   const noteMusicSystemEvent = typeof options?.noteMusicSystemEvent === 'function' ? options.noteMusicSystemEvent : null;
 
   const getAliveEnemiesByIds = typeof options?.getAliveEnemiesByIds === 'function' ? options.getAliveEnemiesByIds : (() => []);
@@ -143,6 +146,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const minResponseDelaySteps = 2;
   const responseWindowGraceSteps = 2;
   const responsePhraseSteps = 2;
+  const structureIntent = String(structureIntentRuntime?.intent || '').trim().toLowerCase();
+  const preDropActive = structureIntentRuntime?.preDropActive === true;
+  const responseLengthCap = preDropActive
+    ? 1
+    : (structureIntent === 'build' ? 3 : 4);
   const getPendingCallExpiry = (callStepAbs, targetLength) => {
     const lastCallStep = Math.max(-1, Math.trunc(Number(callStepAbs) || -1));
     if (lastCallStep < 0) return -1;
@@ -364,13 +372,16 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       group?.phraseFifth,
       ...(Array.isArray(group?.gravityNotes) ? group.gravityNotes : []),
     ], normalizeSwarmNoteName);
-    const phraseGravityTarget = phraseStep.nearPhraseEnd
+    const phraseGravityTargetBase = phraseStep.nearPhraseEnd
       ? pickClosestPhraseTarget(noteName, phraseTargets, {
         normalizeNoteName: normalizeSwarmNoteName,
         getNotePoolIndex,
       })
       : '';
-    const gravityBiasChance = phraseStep.resolutionOpportunity ? 0.72 : 0.5;
+    const phraseGravityTarget = phraseStep.resolutionOpportunity
+      ? (normalizeSwarmNoteName(group?.phraseRoot) || phraseGravityTargetBase)
+      : phraseGravityTargetBase;
+    const gravityBiasChance = phraseStep.resolutionOpportunity ? 0.92 : 0.54;
     const phraseGravityOpportunity = !!phraseGravityTarget && phraseStep.nearPhraseEnd;
     const gravityNoteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
       ? phraseGravityTarget
@@ -390,13 +401,19 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       const currIdx = currentNote ? getNotePoolIndex(currentNote) : -1;
       if (roleForStyle === String(roles?.bass || 'bass')) {
         styledNoteName = gravityNoteName;
-      } else if (prevNote && Math.random() < (motifRepeatBias * 0.5)) {
+      } else if (!phraseStep.resolutionOpportunity && prevNote && Math.random() < (motifRepeatBias * 0.5)) {
         styledNoteName = prevNote;
       } else if (prevIdx >= 0 && currIdx >= 0 && Math.abs(currIdx - prevIdx) > 1 && Math.random() > leadLeapChance) {
         styledNoteName = prevNote;
       } else if (roleForStyle === String(roles?.accent || 'accent') && prevNote && Math.random() > accentPitchVariance) {
         styledNoteName = prevNote;
       }
+    }
+    if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && !isBassRole && Math.random() < 0.84) {
+      styledNoteName = clampNoteToDirectorPool(
+        phraseGravityTarget,
+        stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
+      );
     }
     const phraseGravityHit = phraseGravityOpportunity
       ? normalizeSwarmNoteName(styledNoteName) === normalizeSwarmNoteName(phraseGravityTarget)
@@ -610,18 +627,22 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           if (phraseResolutionHit || phraseGravityHit || isPrimaryLoopOwnerGroup) return Math.random() < 0.35 ? 4 : 3;
           return Math.random() < 0.2 ? 1 : 2;
         })();
+        const cappedResponseTargetLength = Math.max(1, Math.min(responseLengthCap, responseTargetLength));
         callResponseRuntime.lastCallStepAbs = stepAbs;
         callResponseRuntime.lastCallGroupId = groupId;
         callResponseRuntime.lastCallNote = styledNoteName;
-        callResponseRuntime.pendingCallExpiresStepAbs = getPendingCallExpiry(stepAbs, responseTargetLength);
+        callResponseRuntime.pendingCallExpiresStepAbs = getPendingCallExpiry(stepAbs, cappedResponseTargetLength);
         callResponseRuntime.lastResponseNote = '';
         callResponseRuntime.activeResponseGroupId = 0;
         callResponseRuntime.responseHoldUntilStepAbs = -1;
         callResponseRuntime.responsePhraseProgress = 0;
-        callResponseRuntime.responsePhraseTargetLength = responseTargetLength;
+        callResponseRuntime.responsePhraseTargetLength = cappedResponseTargetLength;
       }
     } else {
-      const responseTargetLength = Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2));
+      const responseTargetLength = Math.max(1, Math.min(
+        responseLengthCap,
+        Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2)
+      ));
       callResponseRuntime.lastResponseStepAbs = stepAbs;
       callResponseRuntime.lastResponseGroupId = groupId;
       callResponseRuntime.lastResponseNote = normalizeSwarmNoteName(styledNoteName) || styledNoteName;

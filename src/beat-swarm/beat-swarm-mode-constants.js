@@ -599,10 +599,10 @@ export const COMPOSER_GROUP_TEMPLATE_LIBRARY = Object.freeze([
 ]);
 export const DIRECTOR_ENERGY_STATE_SEQUENCE = Object.freeze([
   Object.freeze({ state: 'intro', bars: 4 }),
-  Object.freeze({ state: 'build', bars: 6 }),
+  Object.freeze({ state: 'build', bars: 8 }),
   Object.freeze({ state: 'clash', bars: 8 }),
   Object.freeze({ state: 'break', bars: 4 }),
-  Object.freeze({ state: 'build', bars: 6 }),
+  Object.freeze({ state: 'build', bars: 8 }),
   Object.freeze({ state: 'clash', bars: 8 }),
   Object.freeze({ state: 'peak', bars: 4 }),
   Object.freeze({ state: 'break', bars: 4 }),
@@ -747,6 +747,36 @@ export const ENERGY_GRAVITY_CONFIG = Object.freeze({
   transitionUpThreshold: 0.55,
   nudgeThreshold: 0.35,
 });
+export const DIRECTOR_STRUCTURE_INTENT_CONFIG = Object.freeze({
+  intro: Object.freeze({ intent: 'intro', drawSnakeDelta: -1, drumLoopDelta: 0, intensityMul: 0.94, responseStepsDelta: 1, responseEnabled: false }),
+  build: Object.freeze({ intent: 'build', drawSnakeDelta: 0, drumLoopDelta: 0, intensityMul: 0.98, responseStepsDelta: 1, responseEnabled: true }),
+  clash: Object.freeze({ intent: 'drive', drawSnakeDelta: 0, drumLoopDelta: 0, intensityMul: 1.02, responseStepsDelta: 0, responseEnabled: true }),
+  break: Object.freeze({ intent: 'drop', drawSnakeDelta: -1, drumLoopDelta: 0, intensityMul: 0.82, responseStepsDelta: 1, responseEnabled: true }),
+  peak: Object.freeze({ intent: 'peak', drawSnakeDelta: 0, drumLoopDelta: 0, intensityMul: 1.08, responseStepsDelta: -1, responseEnabled: true }),
+});
+export const DIRECTOR_PRE_DROP_CONFIG = Object.freeze({
+  leadInBars: 8,
+  intensityMulStart: 1.05,
+  intensityMulNearDrop: 1.12,
+  drawSnakeDeltaStart: 0,
+  drawSnakeDeltaNearDrop: 1,
+  responseStepsDelta: -1,
+});
+export const DIRECTOR_HARMONY_CONFIG = Object.freeze({
+  rootCandidates: Object.freeze(['C4', 'D4', 'D#4', 'F4', 'G4', 'A#4']),
+  epochMinBars: 24,
+  baseRoot: 'C4',
+  scaleId: 'minor_pentatonic',
+});
+export const DIRECTOR_MOTIF_RETURN_CONFIG = Object.freeze({
+  enabled: true,
+  minLockIndexForReturn: 2,
+  buildMinStateAgeBars: 4,
+  driveMinStateAgeBars: 4,
+  buildLookbackLocks: 2,
+  driveLookbackLocks: 1,
+  peakLookbackLocks: 2,
+});
 export const SECTION_PACING_POLICY = Object.freeze({
   sectionMinBars: 8,
   sectionChangeRequiresStableFoundation: true,
@@ -759,6 +789,11 @@ export const THEME_PERSISTENCE_POLICY = Object.freeze({
 });
 export const DRAW_SNAKE_NODE_PULSE_SECONDS = 0.22;
 export const DRAW_SNAKE_NODE_PULSE_SCALE = 0.72;
+export const SPAWNER_PERCUSSION_LAYER_LOCK_BARS = Object.freeze({
+  pulse: 16,
+  backbeat: 8,
+  motion: 4,
+});
 export const composerRuntime = {
   enabled: COMPOSER_ENABLED,
   lastSectionKey: '',
@@ -773,6 +808,7 @@ export const composerRuntime = {
   motifEpochStartBar: 0,
   motifCache: new Map(),
   motifThemeState: new Map(),
+  lastForegroundMotifUsageBar: -1,
 };
 export const callResponseRuntime = {
   lastCallStepAbs: -1,
@@ -794,6 +830,48 @@ export const energyStateRuntime = {
   state: 'intro',
   cycle: 0,
   lastAppliedBar: -1,
+};
+export const structureIntentRuntime = {
+  intent: 'intro',
+  sourceEnergyState: 'intro',
+  stateStartBar: 0,
+  stateAgeBars: 0,
+  preDropActive: false,
+  preDropBarsRemaining: -1,
+  lastAppliedBar: -1,
+};
+export const harmonyRuntime = {
+  epochIndex: -1,
+  rootNote: 'C4',
+  transposeSemitones: 0,
+  scaleId: 'minor_pentatonic',
+  notePool: [],
+};
+export const percussionGrooveRuntime = {
+  lastPlanBar: -1,
+  lastSectionId: '',
+  lastEnergyState: '',
+  pulse: {
+    active: false,
+    steps: [],
+    patternId: '',
+    lockedUntilBar: -1,
+    introducedBar: -1,
+  },
+  backbeat: {
+    active: false,
+    steps: [],
+    patternId: '',
+    lockedUntilBar: -1,
+    introducedBar: -1,
+  },
+  motion: {
+    active: false,
+    steps: [],
+    patternId: '',
+    lockedUntilBar: -1,
+    introducedBar: -1,
+  },
 };
 export const energyGravityRuntime = {
   pressure: 0,

@@ -307,6 +307,15 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     cause: String(payload?.cause || '').trim().toLowerCase(),
     motifScopeKey: String(payload?.motifScopeKey || '').trim().toLowerCase(),
     previousMotifScopeKey: String(payload?.previousMotifScopeKey || '').trim().toLowerCase(),
+    intent: String(payload?.intent || '').trim().toLowerCase(),
+    motifEpoch: clampInt(payload?.motifEpoch, 0, 0),
+    requestedLockIndex: clampInt(payload?.requestedLockIndex, 0, 0),
+    effectiveLockIndex: clampInt(payload?.effectiveLockIndex, 0, 0),
+    lookbackLocks: clampInt(payload?.lookbackLocks, 0, 0),
+    returnActive: payload?.returnActive === true,
+    liveSnakeCount: clampInt(payload?.liveSnakeCount, 0, 0),
+    matchingScopeSnakeCount: clampInt(payload?.matchingScopeSnakeCount, 0, 0),
+    primaryLoopUsesScope: payload?.primaryLoopUsesScope === true,
     lifecycleState: String(payload?.lifecycleState || '').trim().toLowerCase(),
     previousLifecycleState: String(payload?.previousLifecycleState || '').trim().toLowerCase(),
     previousActorId: clampInt(payload?.previousActorId, 0, 0),
@@ -357,7 +366,25 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     sectionDurationBars: clampInt(payload?.sectionDurationBars, 0, 0),
     previousIntensity: Number(payload?.previousIntensity) || 0,
     intensity: Number(payload?.intensity) || 0,
+    intent: String(payload?.intent || '').trim().toLowerCase(),
+    sourceEnergyState: String(payload?.sourceEnergyState || '').trim().toLowerCase(),
+    stateStartBar: clampInt(payload?.stateStartBar, 0, -1),
+    stateAgeBars: clampInt(payload?.stateAgeBars, 0, 0),
+    preDropActive: payload?.preDropActive === true,
+    preDropBarsRemaining: clampInt(payload?.preDropBarsRemaining, 0, -1),
+    barsUntilBreak: clampInt(payload?.barsUntilBreak, 0, -1),
     previousVoiceDensity: clampInt(payload?.previousVoiceDensity, 0, 0),
+    auditId: String(payload?.auditId || '').trim().toLowerCase(),
+    themeId: String(payload?.themeId || '').trim(),
+    toyKey: String(payload?.toyKey || '').trim().toLowerCase(),
+    eligibleCount: clampInt(payload?.eligibleCount, 0, 0),
+    unusedEligibleCount: clampInt(payload?.unusedEligibleCount, 0, 0),
+    priorityEligibleCount: clampInt(payload?.priorityEligibleCount, 0, 0),
+    unreachableCount: clampInt(payload?.unreachableCount, 0, 0),
+    eligibleIds: Array.isArray(payload?.eligibleIds) ? payload.eligibleIds.slice(0, 16).map((id) => String(id || '').trim()).filter(Boolean) : [],
+    unusedEligibleIds: Array.isArray(payload?.unusedEligibleIds) ? payload.unusedEligibleIds.slice(0, 16).map((id) => String(id || '').trim()).filter(Boolean) : [],
+    priorityEligibleIds: Array.isArray(payload?.priorityEligibleIds) ? payload.priorityEligibleIds.slice(0, 16).map((id) => String(id || '').trim()).filter(Boolean) : [],
+    unreachableIds: Array.isArray(payload?.unreachableIds) ? payload.unreachableIds.slice(0, 16).map((id) => String(id || '').trim()).filter(Boolean) : [],
     voiceDensity: clampInt(payload?.voiceDensity, 0, 0),
     gameplayBefore: payload?.gameplayBefore && typeof payload.gameplayBefore === 'object'
       ? {
@@ -921,8 +948,21 @@ function collectPresentationMetrics(executedEvents, session, maxBarIndex, inputs
   let protectedLoopWeightedAudibility = 0;
   let protectedLoopEventCount = 0;
   const audibleVoicesByStep = new Map();
+  const stepBarByKey = new Map();
   let groupBackedEvents = 0;
   let actionableEventCount = 0;
+  const structureEvents = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_structure_intent_state')
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
+    .sort((a, b) => clampInt(a?.timestamp, 0, 0) - clampInt(b?.timestamp, 0, 0));
+  const structureByBar = new Map();
+  for (const e of structureEvents) {
+    const barIndex = clampInt(e?.barIndex, 0, 0);
+    structureByBar.set(barIndex, {
+      intent: String(e?.intent || '').trim().toLowerCase(),
+      preDropActive: e?.preDropActive === true,
+    });
+  }
   for (const ev of actionableExecuted) {
     const prominence = String(ev?.musicProminence || '').trim().toLowerCase();
     const laneId = String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase();
@@ -946,6 +986,7 @@ function collectPresentationMetrics(executedEvents, session, maxBarIndex, inputs
     if (prominence === 'suppressed') continue;
     const key = `${clampInt(ev?.beatIndex, 0, 0)}:${clampInt(ev?.stepIndex, 0, 0)}`;
     audibleVoicesByStep.set(key, clampInt(audibleVoicesByStep.get(key), 0, 0) + 1);
+    stepBarByKey.set(key, clampInt(ev?.barIndex, 0, 0));
   }
   let suppressedEventCount = 0;
   for (const ev of createdEvents) {
@@ -958,6 +999,25 @@ function collectPresentationMetrics(executedEvents, session, maxBarIndex, inputs
     ? (simultaneousVoiceCounts.reduce((sum, count) => sum + count, 0) / simultaneousVoiceCounts.length)
     : 0;
   const maxSimultaneousVoiceCount = simultaneousVoiceCounts.length ? Math.max(...simultaneousVoiceCounts) : 0;
+  const buildVoiceCounts = [];
+  const driveVoiceCounts = [];
+  const dropVoiceCounts = [];
+  const peakVoiceCounts = [];
+  const preDropVoiceCounts = [];
+  for (const [key, count] of audibleVoicesByStep.entries()) {
+    const barIndex = clampInt(stepBarByKey.get(key), 0, 0);
+    const structure = structureByBar.get(barIndex) || null;
+    const intent = String(structure?.intent || '').trim().toLowerCase();
+    if (intent === 'build') buildVoiceCounts.push(count);
+    else if (intent === 'drive') driveVoiceCounts.push(count);
+    else if (intent === 'drop') dropVoiceCounts.push(count);
+    else if (intent === 'peak') peakVoiceCounts.push(count);
+    if (structure?.preDropActive === true) preDropVoiceCounts.push(count);
+  }
+  const avgOf = (listLike) => {
+    const values = Array.isArray(listLike) ? listLike : [];
+    return values.length ? (values.reduce((sum, count) => sum + count, 0) / values.length) : 0;
+  };
   const foregroundLoopChurnRate = Number(inputs?.hierarchyModel?.foregroundLoopChurnRate) || 0;
   const avgEnemyCompetitionShare = Number(inputs?.readability?.avgEnemyCompetitionShare) || 0;
   const avgEnemyForegroundShare = Number(inputs?.readability?.avgEnemyForegroundShare) || 0;
@@ -985,6 +1045,11 @@ function collectPresentationMetrics(executedEvents, session, maxBarIndex, inputs
     foregroundClarityScore,
     simultaneousVoiceCount: avgSimultaneousVoiceCount,
     maxSimultaneousVoiceCount,
+    buildSimultaneousVoiceCount: avgOf(buildVoiceCounts),
+    driveSimultaneousVoiceCount: avgOf(driveVoiceCounts),
+    dropSimultaneousVoiceCount: avgOf(dropVoiceCounts),
+    peakSimultaneousVoiceCount: avgOf(peakVoiceCounts),
+    preDropSimultaneousVoiceCount: avgOf(preDropVoiceCounts),
     suppressedEventCount,
     suppressedEventRate: createdEvents.length > 0 ? (suppressedEventCount / createdEvents.length) : 0,
     groupParticipationRate: actionableEventCount > 0 ? (groupBackedEvents / actionableEventCount) : 0,
@@ -1291,6 +1356,22 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
   let instrumentPoolUnusedEligibleTotal = 0;
   let instrumentPoolPriorityEligibleTotal = 0;
   let instrumentPoolUnreachableCount = 0;
+  let structureIntentEvents = 0;
+  let structureBuildBars = 0;
+  let structureDriveBars = 0;
+  let structureDropBars = 0;
+  let structurePeakBars = 0;
+  let structurePreDropBars = 0;
+  let structurePreDropNearBars = 0;
+  let motifReturnEvents = 0;
+  let motifReturnActiveBars = 0;
+  let motifReturnBuildBars = 0;
+  let motifReturnDriveBars = 0;
+  let motifReturnPeakBars = 0;
+  let foregroundMotifUsageEvents = 0;
+  let foregroundMotifReturnBars = 0;
+  let foregroundMotifReturnMatchingBars = 0;
+  let foregroundMotifPrimaryLoopReturnBars = 0;
   for (const e of logs) {
     const type = String(e?.eventType || '').trim().toLowerCase();
     if (type === 'music_gameplay_suppression_decision') {
@@ -1356,6 +1437,45 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
       instrumentPoolUnreachableCount += Math.max(0, clampInt(e?.unreachableCount, 0, 0));
       continue;
     }
+    if (type === 'music_structure_intent_state') {
+      structureIntentEvents += 1;
+      const intent = String(e?.intent || '').trim().toLowerCase();
+      if (intent === 'build') structureBuildBars += 1;
+      else if (intent === 'drive') structureDriveBars += 1;
+      else if (intent === 'drop') structureDropBars += 1;
+      else if (intent === 'peak') structurePeakBars += 1;
+      if (e?.preDropActive === true) {
+        structurePreDropBars += 1;
+        if (Math.max(-1, clampInt(e?.preDropBarsRemaining, -1, -1)) >= 0 && Math.max(-1, clampInt(e?.preDropBarsRemaining, -1, -1)) <= 2) {
+          structurePreDropNearBars += 1;
+        }
+      }
+      continue;
+    }
+    if (type === 'music_motif_return_state') {
+      motifReturnEvents += 1;
+      if (e?.returnActive === true) {
+        motifReturnActiveBars += 1;
+        const intent = String(e?.intent || '').trim().toLowerCase();
+        if (intent === 'build') motifReturnBuildBars += 1;
+        else if (intent === 'drive') motifReturnDriveBars += 1;
+        else if (intent === 'peak') motifReturnPeakBars += 1;
+      }
+      continue;
+    }
+    if (type === 'music_foreground_motif_usage') {
+      foregroundMotifUsageEvents += 1;
+      if (e?.returnActive === true) {
+        foregroundMotifReturnBars += 1;
+        if (Math.max(0, clampInt(e?.matchingScopeSnakeCount, 0, 0)) > 0) {
+          foregroundMotifReturnMatchingBars += 1;
+        }
+        if (e?.primaryLoopUsesScope === true) {
+          foregroundMotifPrimaryLoopReturnBars += 1;
+        }
+      }
+      continue;
+    }
   }
   return {
     gameplaySuppressionEvents,
@@ -1386,6 +1506,22 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
     instrumentPoolUnusedEligibleTotal,
     instrumentPoolPriorityEligibleTotal,
     instrumentPoolUnreachableCount,
+    structureIntentEvents,
+    structureBuildBars,
+    structureDriveBars,
+    structureDropBars,
+    structurePeakBars,
+    structurePreDropBars,
+    structurePreDropNearBars,
+    motifReturnEvents,
+    motifReturnActiveBars,
+    motifReturnBuildBars,
+    motifReturnDriveBars,
+    motifReturnPeakBars,
+    foregroundMotifUsageEvents,
+    foregroundMotifReturnBars,
+    foregroundMotifReturnMatchingBars,
+    foregroundMotifPrimaryLoopReturnBars,
     byDecisionReason,
   };
 }
@@ -2846,6 +2982,22 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     instrumentPoolUnusedEligibleTotal: Number(passDiagnostics?.decisionMaking?.instrumentPoolUnusedEligibleTotal) || 0,
     instrumentPoolPriorityEligibleTotal: Number(passDiagnostics?.decisionMaking?.instrumentPoolPriorityEligibleTotal) || 0,
     instrumentPoolUnreachableCount: Number(passDiagnostics?.decisionMaking?.instrumentPoolUnreachableCount) || 0,
+    structureIntentEvents: Number(passDiagnostics?.decisionMaking?.structureIntentEvents) || 0,
+    structureBuildBars: Number(passDiagnostics?.decisionMaking?.structureBuildBars) || 0,
+    structureDriveBars: Number(passDiagnostics?.decisionMaking?.structureDriveBars) || 0,
+    structureDropBars: Number(passDiagnostics?.decisionMaking?.structureDropBars) || 0,
+    structurePeakBars: Number(passDiagnostics?.decisionMaking?.structurePeakBars) || 0,
+    structurePreDropBars: Number(passDiagnostics?.decisionMaking?.structurePreDropBars) || 0,
+    structurePreDropNearBars: Number(passDiagnostics?.decisionMaking?.structurePreDropNearBars) || 0,
+    motifReturnEvents: Number(passDiagnostics?.decisionMaking?.motifReturnEvents) || 0,
+    motifReturnActiveBars: Number(passDiagnostics?.decisionMaking?.motifReturnActiveBars) || 0,
+    motifReturnBuildBars: Number(passDiagnostics?.decisionMaking?.motifReturnBuildBars) || 0,
+    motifReturnDriveBars: Number(passDiagnostics?.decisionMaking?.motifReturnDriveBars) || 0,
+    motifReturnPeakBars: Number(passDiagnostics?.decisionMaking?.motifReturnPeakBars) || 0,
+    foregroundMotifUsageEvents: Number(passDiagnostics?.decisionMaking?.foregroundMotifUsageEvents) || 0,
+    foregroundMotifReturnBars: Number(passDiagnostics?.decisionMaking?.foregroundMotifReturnBars) || 0,
+    foregroundMotifReturnMatchingBars: Number(passDiagnostics?.decisionMaking?.foregroundMotifReturnMatchingBars) || 0,
+    foregroundMotifPrimaryLoopReturnBars: Number(passDiagnostics?.decisionMaking?.foregroundMotifPrimaryLoopReturnBars) || 0,
     visibleEnemyEvents: Number(visibleEnemyAudibility?.visibleEnemyEvents) || 0,
     barelyAudibleVisibleEnemyEvents: Number(visibleEnemyAudibility?.barelyAudibleVisibleEnemyEvents) || 0,
     barelyAudibleVisibleEnemyRate: Number(visibleEnemyAudibility?.barelyAudibleVisibleEnemyRate) || 0,
@@ -2900,6 +3052,11 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     foregroundClarityScore: Number(presentationMetrics?.foregroundClarityScore) || 0,
     simultaneousVoiceCount: Number(presentationMetrics?.simultaneousVoiceCount) || 0,
     maxSimultaneousVoiceCount: Number(presentationMetrics?.maxSimultaneousVoiceCount) || 0,
+    buildSimultaneousVoiceCount: Number(presentationMetrics?.buildSimultaneousVoiceCount) || 0,
+    driveSimultaneousVoiceCount: Number(presentationMetrics?.driveSimultaneousVoiceCount) || 0,
+    dropSimultaneousVoiceCount: Number(presentationMetrics?.dropSimultaneousVoiceCount) || 0,
+    peakSimultaneousVoiceCount: Number(presentationMetrics?.peakSimultaneousVoiceCount) || 0,
+    preDropSimultaneousVoiceCount: Number(presentationMetrics?.preDropSimultaneousVoiceCount) || 0,
     suppressedEventCount: Number(presentationMetrics?.suppressedEventCount) || 0,
     suppressedEventRate: Number(presentationMetrics?.suppressedEventRate) || 0,
     groupParticipationRate: Number(presentationMetrics?.groupParticipationRate) || 0,
