@@ -1,4 +1,4 @@
-import { getIdForDisplayName, getInstrumentEntries } from '../instrument-catalog.js';
+import { getIdForDisplayName, getInstrumentEntries, getSampleBehaviors, getSampleMusicRole, getSampleRuntimeFamily, hasSampleBehavior } from '../instrument-catalog.js';
 import { getSoundThemeKey, pickInstrumentForToy } from '../sound-theme.js';
 import { BEAT_EVENT_ROLES } from './beat-events.js';
 
@@ -138,17 +138,17 @@ function entryRoleCompatible(entry, roleKey) {
   if (!entry || !roleKey) return false;
   const combatRole = String(entry?.combatRole || '').trim().toLowerCase();
   if (combatRole === 'player_weapon' || combatRole === 'player-reserved') return false;
+  const musicRole = getSampleMusicRole(entry);
   const laneRole = normalizeLaneRoleToken(entry?.laneRole);
   if (roleKey === BEAT_EVENT_ROLES.BASS) {
-    // Bass foundation should stay on explicit bass-lane instruments.
-    return laneRole === BEAT_EVENT_ROLES.BASS;
+    return musicRole === 'foundation' || laneRole === BEAT_EVENT_ROLES.BASS;
   }
   return true;
 }
 
 function entryLaneScore(entry, roleKey, roleToys) {
   const type = String(entry?.type || '').trim().toLowerCase();
-  const family = String(entry?.instrumentFamily || '').trim().toLowerCase();
+  const family = String(getSampleRuntimeFamily(entry) || entry?.instrumentFamily || '').trim().toLowerCase();
   const fn = String(entry?.functionTag || '').trim().toLowerCase();
   const id = String(entry?.id || '').trim().toLowerCase();
   const display = String(entry?.display || '').trim().toLowerCase();
@@ -156,6 +156,12 @@ function entryLaneScore(entry, roleKey, roleToys) {
   const laneRole = normalizeLaneRoleToken(entry?.laneRole);
   const registerClass = normalizeRegisterClassToken(entry?.registerClass);
   const combatRole = normalizeCombatRoleToken(entry?.combatRole);
+  const musicRole = getSampleMusicRole(entry);
+  const behaviors = getSampleBehaviors(entry);
+  const hasLoopBehavior = behaviors.includes('loop');
+  const hasMelodicBehavior = behaviors.includes('melodic');
+  const hasRhythmicBehavior = behaviors.includes('rhythmic');
+  const hasShortBehavior = behaviors.includes('short') || behaviors.includes('oneshot');
   const laneHints = Array.isArray(entry?.laneHints) ? entry.laneHints.map((h) => String(h || '').trim().toLowerCase()) : [];
   const hasLoop = roleToys.some((t) => t === 'loopgrid' || t === 'loopgrid-drum') && (entryHasToy(entry, 'loopgrid') || entryHasToy(entry, 'loopgrid-drum'));
   const hasDraw = roleToys.includes('drawgrid') && entryHasToy(entry, 'drawgrid');
@@ -175,10 +181,14 @@ function entryLaneScore(entry, roleKey, roleToys) {
     if (registerClass === 'low') score += 2.6;
     else if (registerClass === 'mid') score += 0.8;
     else if (registerClass === 'high') score -= 1.6;
+    if (musicRole === 'foundation') score += 3.2;
+    else if (musicRole === 'accent') score -= 1.8;
     if (combatRole === 'foundation') score += 2.8;
     else if (combatRole === 'percussive') score += 0.9;
     else if (combatRole === 'melodic') score -= 0.8;
-    if (hasLoop) score += 3;
+    if (hasLoop || hasLoopBehavior) score += 3;
+    if (hasRhythmicBehavior) score += 1.2;
+    if (hasMelodicBehavior) score += 0.6;
     if (isBassLike) score += 3;
     if (isPercussive) score += 1.5;
     if (Number.isFinite(pitchRank)) {
@@ -195,10 +205,15 @@ function entryLaneScore(entry, roleKey, roleToys) {
     if (registerClass === 'high') score += 2;
     else if (registerClass === 'mid') score += 1.2;
     else if (registerClass === 'low') score -= 1.6;
+    if (musicRole === 'foreground') score += 3;
+    else if (musicRole === 'support') score += 1.1;
+    else if (musicRole === 'accent' || musicRole === 'foundation') score -= 1.8;
     if (combatRole === 'melodic') score += 2.2;
     else if (combatRole === 'foundation') score -= 1;
     if (hasDraw) score += 3;
-    if (hasLoop) score += 0.8;
+    if (hasLoop || hasLoopBehavior) score += 0.8;
+    if (hasMelodicBehavior) score += 1.8;
+    if (hasShortBehavior) score -= 0.3;
     if (isTonalLeadLike) score += 2;
     if (isPercussive) score -= 1.5;
     if (Number.isFinite(pitchRank)) {
@@ -210,6 +225,9 @@ function entryLaneScore(entry, roleKey, roleToys) {
   }
 
   if (roleKey === BEAT_EVENT_ROLES.MOTION) {
+    if (musicRole === 'support') score += 1.6;
+    else if (musicRole === 'accent') score += 0.5;
+    else if (musicRole === 'foundation' || musicRole === 'foreground') score -= 1.2;
     if (combatRole === 'texture') score += 2.4;
     else if (combatRole === 'melodic') score -= 0.6;
     if (hasDraw) score += 1.5;
@@ -225,9 +243,15 @@ function entryLaneScore(entry, roleKey, roleToys) {
 
   // Accent lane
   if (registerClass === 'mid') score += 1.1;
+  if (musicRole === 'accent') score += 2.8;
+  else if (musicRole === 'support') score += 0.8;
+  else if (musicRole === 'foundation' || musicRole === 'foreground') score -= 1.2;
   if (combatRole === 'percussive' || combatRole === 'punctuation') score += 1.8;
   else if (combatRole === 'foundation') score -= 0.6;
   if (hasLoop || hasDraw) score += 1.5;
+  if (hasShortBehavior) score += 1.1;
+  if (hasRhythmicBehavior) score += 1.2;
+  if (hasMelodicBehavior && !hasShortBehavior) score -= 0.4;
   if (isPercussive) score += 2;
   if (isMotionLike) score += 0.5;
   if (isBassLike) score -= 0.5;

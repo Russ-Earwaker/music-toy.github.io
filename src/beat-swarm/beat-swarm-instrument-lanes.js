@@ -29,6 +29,25 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
   const resolveInstrumentIdOrFallback = typeof options?.resolveInstrumentIdOrFallback === 'function'
     ? options.resolveInstrumentIdOrFallback
     : ((candidate, fallback = 'tone') => String(candidate || fallback || 'tone').trim() || 'tone');
+  const getSampleMusicRole = typeof options?.getSampleMusicRole === 'function'
+    ? options.getSampleMusicRole
+    : ((entry) => String(entry?.musicRole || entry?.music_role || '').trim().toLowerCase());
+  const getSampleBehaviors = typeof options?.getSampleBehaviors === 'function'
+    ? options.getSampleBehaviors
+    : ((entry) => {
+      const raw = entry?.musicBehavior || entry?.music_behavior || '';
+      return String(raw || '')
+        .split(/[;|,/]/)
+        .map((token) => String(token || '').trim().toLowerCase())
+        .filter(Boolean);
+    });
+  const hasSampleBehavior = typeof options?.hasSampleBehavior === 'function'
+    ? options.hasSampleBehavior
+    : ((entry, tag) => {
+      const key = String(tag || '').trim().toLowerCase();
+      if (!key) return false;
+      return getSampleBehaviors(entry).includes(key);
+    });
 
   function getStyleProfileSnapshot() {
     const profile = getStyleProfile();
@@ -132,8 +151,13 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const type = String(entry?.type || '').trim().toLowerCase();
     const family = String(entry?.instrumentFamily || '').trim().toLowerCase();
     const functionTag = String(entry?.functionTag || '').trim().toLowerCase();
+    const musicRole = getSampleMusicRole(entry);
     const registerClass = normalizeRegisterClassToken(entry?.registerClass || '');
     const pitchRank = Number(entry?.pitchRank);
+    if (musicRole === 'foundation') return 'bass';
+    if (musicRole === 'foreground') return 'lead';
+    if (musicRole === 'accent') return 'accent';
+    if (musicRole === 'support' && (type.includes('effects') || functionTag.includes('ambient') || functionTag.includes('texture'))) return 'motion';
     if (type.includes('effects')) return 'motion';
     if (functionTag.includes('ambient') || functionTag.includes('texture')) return 'motion';
     if (family.includes('bass') || family.includes('drum') || family.includes('kick') || family.includes('djembe')) return 'bass';
@@ -170,19 +194,31 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
     const family = String(entry?.instrumentFamily || '').trim().toLowerCase();
     const functionTag = String(entry?.functionTag || '').trim().toLowerCase();
     const type = String(entry?.type || '').trim().toLowerCase();
+    const musicRole = getSampleMusicRole(entry);
+    const loopLike = hasSampleBehavior(entry, 'loop');
+    const melodicLike = hasSampleBehavior(entry, 'melodic');
+    const shortLike = hasSampleBehavior(entry, 'short') || hasSampleBehavior(entry, 'oneshot');
+    const rhythmicLike = hasSampleBehavior(entry, 'rhythmic');
     const candidates = Array.isArray(toyCandidates) ? toyCandidates : [];
     const isLoopgridRecommended = candidates.some((k) => k === 'loopgrid' || k === 'loopgrid-drum')
       && (entryMatchesToy(entry, 'loopgrid') || entryMatchesToy(entry, 'loopgrid-drum'));
     const isDrawgridRecommended = candidates.includes('drawgrid') && entryMatchesToy(entry, 'drawgrid');
     if (explicitLaneRole && explicitLaneRole !== laneKey) return false;
+    if (laneKey === 'bass' && musicRole && musicRole !== 'foundation') return false;
+    if (laneKey === 'lead' && (musicRole === 'foundation' || musicRole === 'accent')) return false;
+    if (laneKey === 'accent' && (musicRole === 'foundation' || musicRole === 'foreground')) return false;
+    if (laneKey === 'motion' && musicRole === 'foundation') return false;
     let laneMatch = explicitLaneRole === laneKey || laneHints.includes(laneKey);
     if (laneKey === 'bass') {
+      if (musicRole === 'foundation') laneMatch = true;
       if (registerClass === 'low') laneMatch = true;
       if (Number.isFinite(pitchRank) && pitchRank <= 3) laneMatch = true;
       if (family.includes('bass') || family.includes('drum') || family.includes('kick') || family.includes('djembe')) laneMatch = true;
-      if (isLoopgridRecommended) laneMatch = true;
+      if (isLoopgridRecommended && (loopLike || rhythmicLike || musicRole === 'foundation')) laneMatch = true;
     }
     if (!laneMatch && laneKey === 'lead') {
+      if (musicRole === 'foreground') laneMatch = true;
+      else if (musicRole === 'support') laneMatch = melodicLike || isDrawgridRecommended;
       if (registerClass === 'high') laneMatch = true;
       if (Number.isFinite(pitchRank) && pitchRank >= 3) laneMatch = isDrawgridRecommended || !isLoopgridRecommended;
       if (
@@ -196,6 +232,8 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
       if (isDrawgridRecommended) laneMatch = true;
     }
     if (!laneMatch && laneKey === 'accent') {
+      if (musicRole === 'accent') laneMatch = true;
+      else if (musicRole === 'support') laneMatch = shortLike;
       if (registerClass === 'mid') laneMatch = true;
       if (functionTag.includes('short')) laneMatch = true;
       if (
@@ -208,6 +246,7 @@ export function createBeatSwarmInstrumentLaneTools(options = null) {
       if (!laneMatch) laneMatch = Number.isFinite(pitchRank) ? (pitchRank >= 3 && pitchRank <= 4) : false;
     }
     if (!laneMatch && laneKey === 'motion') {
+      if (musicRole === 'support' && !melodicLike) laneMatch = true;
       if (type.includes('effects')) laneMatch = true;
       if (functionTag.includes('ambient') || functionTag.includes('texture')) laneMatch = true;
       if (laneHints.includes('motion')) laneMatch = true;

@@ -3,7 +3,7 @@ import { screenToWorld, worldToScreen } from '../board-viewport.js';
 import { createBeatSwarmSpawnerRuntime, registerLoopgridSpawnerType } from './spawner-runtime.js';
 import { DEFAULT_BPM, bpm as currentBpm, getLoopInfo, isRunning, setBpm, start as startTransport, stop as stopTransport } from '../audio-core.js';
 import { triggerInstrument } from '../audio-samples.js';
-import { getAllIds, getIdForDisplayName, getInstrumentEntries } from '../instrument-catalog.js';
+import { getAllIds, getIdForDisplayName, getInstrumentEntries, getSampleBehaviors, getSampleMusicRole, hasSampleBehavior } from '../instrument-catalog.js';
 import { getSoundThemeKey, pickInstrumentForToy } from '../sound-theme.js';
 import { buildPalette, midiToName } from '../note-helpers.js';
 import { createArtToyAt } from '../art/art-toy-factory.js';
@@ -1677,6 +1677,11 @@ function entryMatchesSanitizedRole(entryLike = null, roleName = '') {
   const registerClass = String(entry?.registerClass || '').trim().toLowerCase();
   const pitchRank = Math.trunc(Number(entry?.pitchRank));
   const combatRole = String(entry?.combatRole || '').trim().toLowerCase();
+  const musicRole = getSampleMusicRole(entry);
+  const behaviors = getSampleBehaviors(entry);
+  const loopLike = behaviors.includes('loop');
+  const melodicLike = behaviors.includes('melodic');
+  const rhythmicLike = behaviors.includes('rhythmic');
   const family = String(entry?.instrumentFamily || '').trim().toLowerCase();
   const type = String(entry?.type || '').trim().toLowerCase();
   const id = String(entry?.id || '').trim().toLowerCase();
@@ -1689,15 +1694,19 @@ function entryMatchesSanitizedRole(entryLike = null, roleName = '') {
     const hasLoopgridRecommendation = recommendedToys.includes('loopgrid') || recommendedToys.includes('loopgrid-drum');
     if (!hasLoopgridRecommendation) return false;
     if (laneRole && laneRole !== BEAT_EVENT_ROLES.BASS) return false;
+    if (musicRole && musicRole !== 'foundation') return false;
     if (registerClass === 'high') return false;
     if (Number.isFinite(pitchRank) && pitchRank >= 4) return false;
     if (/xylophone|marimba|vibraphone|glock|bell|chime|celesta/.test(text)) return false;
     const foundationLike = combatRole === 'foundation' || /bass|kick|sub|drum|djembe/.test(text);
     const lowRegister = registerClass === 'low' || (Number.isFinite(pitchRank) && pitchRank <= 3);
-    return foundationLike || laneRole === BEAT_EVENT_ROLES.BASS || (lowRegister && /tom|taiko|conga|bongo|tabla|perc/.test(text));
+    return foundationLike || musicRole === 'foundation' || laneRole === BEAT_EVENT_ROLES.BASS || (lowRegister && rhythmicLike && /tom|taiko|conga|bongo|tabla|perc/.test(text));
   }
   if (role === BEAT_EVENT_ROLES.LEAD) {
-    if (laneRole === BEAT_EVENT_ROLES.BASS || combatRole === 'foundation') return false;
+    if (laneRole === BEAT_EVENT_ROLES.BASS || combatRole === 'foundation' || musicRole === 'foundation') return false;
+    if (musicRole === 'accent') return false;
+    if (musicRole === 'foreground') return melodicLike || loopLike || true;
+    if (musicRole === 'support') return melodicLike || registerClass !== 'low';
     if (laneRole) return laneRole === BEAT_EVENT_ROLES.LEAD;
     if (registerClass === 'low') return false;
     if (combatRole === 'punctuation' || combatRole === 'accent') return false;
@@ -1705,6 +1714,9 @@ function entryMatchesSanitizedRole(entryLike = null, roleName = '') {
   }
   if (role === BEAT_EVENT_ROLES.ACCENT) {
     if (laneRole === BEAT_EVENT_ROLES.BASS) return false;
+    if (musicRole === 'foundation' || musicRole === 'foreground') return false;
+    if (musicRole === 'accent') return true;
+    if (musicRole === 'support') return !loopLike || hasSampleBehavior(entry, 'short');
     if (laneRole) return laneRole === BEAT_EVENT_ROLES.ACCENT || laneRole === BEAT_EVENT_ROLES.MOTION;
     if (combatRole === 'foundation') return false;
     return registerClass !== 'low';
@@ -9898,6 +9910,9 @@ const beatSwarmInstrumentLaneTools = createBeatSwarmInstrumentLaneTools({
   getStyleProfile: getSwarmStyleProfile,
   resolveSwarmSoundInstrumentId,
   resolveInstrumentIdOrFallback,
+  getSampleMusicRole,
+  getSampleBehaviors,
+  hasSampleBehavior,
 });
 function normalizeEnemyInstrumentLane(laneLike, fallback = 'lead') {
   return beatSwarmInstrumentLaneTools.normalizeEnemyInstrumentLane(laneLike, fallback);

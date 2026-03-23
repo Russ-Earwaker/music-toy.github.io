@@ -7,6 +7,132 @@ const ID_TO_THEMES = new Map();
 const ALL_THEMES = new Set();
 let LAST_ENTRIES = [];
 
+function normalizeMusicRoleToken(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'foundation' || raw === 'foreground' || raw === 'support' || raw === 'accent') return raw;
+  return '';
+}
+
+function normalizeBehaviorToken(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (
+    raw === 'loop'
+    || raw === 'oneshot'
+    || raw === 'short'
+    || raw === 'sustain'
+    || raw === 'rhythmic'
+    || raw === 'melodic'
+  ) return raw;
+  return '';
+}
+
+function splitBehaviorTokens(value) {
+  return String(value || '')
+    .split(/[;|,/]/)
+    .map((token) => normalizeBehaviorToken(token))
+    .filter(Boolean);
+}
+
+function uniqueTokens(values) {
+  const out = [];
+  const seen = new Set();
+  for (const value of values) {
+    const token = String(value || '').trim().toLowerCase();
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    out.push(token);
+  }
+  return out;
+}
+
+function inferMusicRoleFallback(entry) {
+  const combatRole = String(entry?.combatRole || '').trim().toLowerCase();
+  const laneRole = String(entry?.laneRole || '').trim().toLowerCase();
+  if (combatRole === 'foundation' || laneRole === 'bass') return 'foundation';
+  if (laneRole === 'lead' || combatRole === 'melodic') return 'foreground';
+  if (laneRole === 'motion' || combatRole === 'texture') return 'support';
+  if (laneRole === 'accent' || combatRole === 'percussive' || combatRole === 'punctuation' || combatRole === 'player_weapon') return 'accent';
+  return '';
+}
+
+function inferMusicBehaviorFallback(entry) {
+  const out = [];
+  const functionTag = String(entry?.functionTag || '').trim().toLowerCase();
+  const type = String(entry?.type || '').trim().toLowerCase();
+  const instrumentFamily = String(entry?.instrumentFamily || '').trim().toLowerCase();
+  const combatRole = String(entry?.combatRole || '').trim().toLowerCase();
+  const laneRole = String(entry?.laneRole || '').trim().toLowerCase();
+  const recommendedToys = Array.isArray(entry?.recommendedToys)
+    ? entry.recommendedToys.map((t) => String(t || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+  const display = String(entry?.display || '').trim().toLowerCase();
+  const hasBaseNote = !!String(entry?.baseNote || '').trim();
+
+  if (
+    recommendedToys.includes('loopgrid')
+    || recommendedToys.includes('loopgrid-drum')
+    || recommendedToys.includes('drawgrid')
+    || laneRole === 'lead'
+    || laneRole === 'bass'
+    || combatRole === 'foundation'
+  ) out.push('loop');
+  if (
+    functionTag.includes('short')
+    || functionTag.includes('hit')
+    || functionTag.includes('pluck')
+    || display.includes('explosion')
+    || display.includes('impact')
+    || display.includes('punch')
+    || display.includes('bling')
+  ) {
+    out.push('oneshot');
+    out.push('short');
+  }
+  if (functionTag.includes('sustain') || functionTag.includes('drone') || functionTag.includes('pad') || functionTag.includes('long')) out.push('sustain');
+  if (type === 'percussion' || instrumentFamily === 'drum' || combatRole === 'percussive' || laneRole === 'accent' || laneRole === 'motion' || laneRole === 'bass') out.push('rhythmic');
+  if (laneRole === 'lead' || laneRole === 'bass' || combatRole === 'foundation' || combatRole === 'melodic' || hasBaseNote) out.push('melodic');
+  return uniqueTokens(out);
+}
+
+function normalizeNeedsReviewToken(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'true' || raw === 'yes' || raw === '1') return true;
+  if (raw === 'false' || raw === 'no' || raw === '0') return false;
+  return null;
+}
+
+export function getSampleMusicRole(sample) {
+  const explicit = normalizeMusicRoleToken(sample?.musicRole || sample?.music_role || '');
+  if (explicit) return explicit;
+  return inferMusicRoleFallback(sample);
+}
+
+export function getSampleBehaviors(sample) {
+  const explicit = uniqueTokens(splitBehaviorTokens(sample?.musicBehavior || sample?.music_behavior || ''));
+  if (explicit.length) return explicit;
+  return inferMusicBehaviorFallback(sample);
+}
+
+export function hasSampleBehavior(sample, tag) {
+  const key = normalizeBehaviorToken(tag);
+  if (!key) return false;
+  return getSampleBehaviors(sample).includes(key);
+}
+
+export function getSampleRuntimeFamily(sample) {
+  const explicit = String(sample?.runtimeFamily || sample?.runtime_family || '').trim().toLowerCase();
+  if (explicit) return explicit;
+  const combatRole = String(sample?.combatRole || '').trim().toLowerCase();
+  if (combatRole === 'foundation') return 'bass';
+  return String(sample?.instrumentFamily || sample?.type || '').trim().toLowerCase();
+}
+
+export function sampleNeedsReview(sample) {
+  const explicit = normalizeNeedsReviewToken(sample?.needsReview ?? sample?.needs_review);
+  if (explicit != null) return explicit;
+  return !(getSampleMusicRole(sample) && getSampleBehaviors(sample).length);
+}
+
 export function getDisplayNameForId(id) { return ID_TO_DISPLAY_NAME.get(id); }
 export function getIdForDisplayName(displayName) { return DISPLAY_NAME_TO_ID.get(displayName); }
 export function getAllIds() { return Array.from(ID_TO_DISPLAY_NAME.keys()); }
@@ -36,6 +162,10 @@ export async function loadInstrumentEntries(){
       const laneRoleIdx = header.findIndex(h=>/^(lane[_-]?role|role[_-]?lane)$/i.test(h));
       const registerClassIdx = header.findIndex(h=>/^(register[_-]?class|register[_-]?band)$/i.test(h));
       const combatRoleIdx = header.findIndex(h=>/^(combat[_-]?role|usage[_-]?role)$/i.test(h));
+      const musicRoleIdx = header.findIndex(h=>/^(music[_-]?role)$/i.test(h));
+      const musicBehaviorIdx = header.findIndex(h=>/^(music[_-]?behavior)$/i.test(h));
+      const runtimeFamilyIdx = header.findIndex(h=>/^(runtime[_-]?family)$/i.test(h));
+      const needsReviewIdx = header.findIndex(h=>/^(needs[_-]?review)$/i.test(h));
       const pitchIdx = header.findIndex(h=>/^(pitch|pitch[_-]?grade|pitch[_-]?band|register)$/i.test(h));
       const baseNoteIdx = header.findIndex(h=>/^(base\s*_?note|baseNote|note_base)$/i.test(h));
       const baseOctIdx = header.findIndex(h=>/^(base\s*_?oct(ave)?|baseOct(ave)?|octave)$/i.test(h));
@@ -140,10 +270,18 @@ export async function loadInstrumentEntries(){
         const registerClass = normalizeRegisterClass(registerClassRaw, pitchRank, baseOct);
         const combatRoleRaw = combatRoleIdx >= 0 ? String(cells[combatRoleIdx] || '') : '';
         const combatRole = normalizeCombatRole(combatRoleRaw);
+        const musicRoleRaw = musicRoleIdx >= 0 ? String(cells[musicRoleIdx] || '') : '';
+        const musicRole = normalizeMusicRoleToken(musicRoleRaw);
+        const musicBehaviorRaw = musicBehaviorIdx >= 0 ? String(cells[musicBehaviorIdx] || '') : '';
+        const musicBehavior = uniqueTokens(splitBehaviorTokens(musicBehaviorRaw));
+        const runtimeFamilyRaw = runtimeFamilyIdx >= 0 ? String(cells[runtimeFamilyIdx] || '') : '';
+        const runtimeFamily = String(runtimeFamilyRaw || '').trim().toLowerCase();
+        const needsReviewRaw = needsReviewIdx >= 0 ? String(cells[needsReviewIdx] || '') : '';
+        const needsReview = normalizeNeedsReviewToken(needsReviewRaw);
         const priRaw = priIdx >= 0 ? String(cells[priIdx] || '') : '';
         const priority = /^(1|true|yes|y|prio|priority)$/i.test(priRaw.trim());
         if (!id || !display) continue;
-        out.push({
+        const entry = {
           id,
           display,
           type,
@@ -156,11 +294,20 @@ export async function loadInstrumentEntries(){
           laneRole: laneRole || undefined,
           registerClass: registerClass || undefined,
           combatRole: combatRole || undefined,
+          musicRole: musicRole || undefined,
+          musicBehavior: musicBehavior.length ? musicBehavior : undefined,
+          runtimeFamily: runtimeFamily || undefined,
+          needsReview: needsReview == null ? undefined : needsReview,
           pitchGrade: pitchGrade || undefined,
           pitchRank: Number.isFinite(pitchRank) ? pitchRank : undefined,
           priority,
           baseNote: baseNote || undefined,
-        });
+        };
+        entry.resolvedMusicRole = getSampleMusicRole(entry) || undefined;
+        entry.resolvedMusicBehavior = getSampleBehaviors(entry);
+        entry.resolvedRuntimeFamily = getSampleRuntimeFamily(entry) || undefined;
+        entry.resolvedNeedsReview = sampleNeedsReview(entry);
+        out.push(entry);
         ID_TO_DISPLAY_NAME.set(id, display);
         DISPLAY_NAME_TO_ID.set(display, id);
         if (themes.length){
