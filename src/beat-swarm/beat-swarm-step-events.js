@@ -248,6 +248,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const primaryLoopLaneRuntime = state?.musicLaneRuntime && typeof state.musicLaneRuntime === 'object'
     ? state.musicLaneRuntime.primaryLoopLane
     : null;
+  const secondaryLoopLaneRuntime = state?.musicLaneRuntime && typeof state.musicLaneRuntime === 'object'
+    ? state.musicLaneRuntime.secondaryLoopLane
+    : null;
   const foundationLaneRuntime = state?.musicLaneRuntime && typeof state.musicLaneRuntime === 'object'
     ? state.musicLaneRuntime.foundationLane
     : null;
@@ -255,6 +258,13 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     && typeof primaryLoopLaneRuntime === 'object'
     && Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime.performerEnemyId) || 0)) > 0
     && String(primaryLoopLaneRuntime.continuityId || '').trim();
+  const secondaryLoopLaneActive = secondaryLoopLaneRuntime
+    && typeof secondaryLoopLaneRuntime === 'object'
+    && (
+      Math.max(0, Math.trunc(Number(secondaryLoopLaneRuntime.performerEnemyId) || 0)) > 0
+      || Math.max(0, Math.trunc(Number(secondaryLoopLaneRuntime.performerGroupId) || 0)) > 0
+    )
+    && String(secondaryLoopLaneRuntime.continuityId || '').trim();
   const resolveProtectedLaneClaim = (ev, laneRuntime = null, laneId = '') => {
     if (!ev || typeof ev !== 'object' || !laneRuntime || typeof laneRuntime !== 'object') return false;
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
@@ -280,6 +290,17 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       || action === 'composer-group-explosion';
     if (!actionIsLoopLike) return false;
     return resolveProtectedLaneClaim(ev, primaryLoopLaneRuntime, 'primary_loop_lane');
+  };
+  const isSecondaryLoopLaneCandidate = (ev) => {
+    if (!secondaryLoopLaneActive || !ev || typeof ev !== 'object') return false;
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const action = String(ev?.actionType || '').trim().toLowerCase();
+    const actionIsLoopLike = action === 'spawner-spawn'
+      || action === 'drawsnake-projectile'
+      || action === 'composer-group-projectile'
+      || action === 'composer-group-explosion';
+    if (!actionIsLoopLike) return false;
+    return resolveProtectedLaneClaim(ev, secondaryLoopLaneRuntime, 'secondary_loop_lane');
   };
   const resolveEntryAudibilityKey = (ev) => {
     if (!ev || typeof ev !== 'object') return '';
@@ -381,6 +402,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     let score = 0;
     if (laneId === 'primary_loop_lane') score += 600;
     if (laneId === 'foundation_lane') score += 560;
+    if (laneId === 'secondary_loop_lane') score += 520;
     if (continuityId) score += 80;
     if (layer === 'foundation') score += 220;
     else if (layer === 'loops') score += 180;
@@ -396,6 +418,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const structuralContinuityCollapseKey = (ev) => {
     if (!ev || typeof ev !== 'object') return '';
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    if (payload?.introDrumProtected === true) return '';
     const layer = String(payload?.musicLayer || '').trim().toLowerCase();
     if (layer !== 'foundation' && layer !== 'loops') return '';
     const callResponseLane = String(payload?.callResponseLane || '').trim().toLowerCase();
@@ -404,7 +427,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const continuityId = String(payload?.continuityId || '').trim().toLowerCase();
     const role = String(payload?.musicRole || ev?.role || '').trim().toLowerCase();
     const action = String(ev?.actionType || '').trim().toLowerCase();
-    if (laneId === 'primary_loop_lane' || laneId === 'foundation_lane') {
+    if (
+      laneId === 'primary_loop_lane'
+      || laneId === 'foundation_lane'
+      || laneId === 'secondary_loop_lane'
+    ) {
       return `${laneId}|${continuityId || 'continuity'}|${action || 'action'}`;
     }
     if (!continuityId) return '';
@@ -460,6 +487,50 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
               continuityId: String(chosenPayload.continuityId || primaryLoopLaneRuntime?.continuityId || '').trim(),
               musicLayer: 'loops',
               musicLaneId: 'primary_loop_lane',
+              musicLaneDriven: true,
+            },
+          }
+          : ev
+      ));
+    }
+    const secondaryLoopLaneCandidates = secondaryLoopLaneActive
+      ? effectiveEnemyEvents.filter((ev) => isSecondaryLoopLaneCandidate(ev))
+      : [];
+    if (secondaryLoopLaneCandidates.length > 1) {
+      const ranked = secondaryLoopLaneCandidates
+        .map((ev, idx) => ({ ev, idx, score: scoreStructuralContinuityCandidate(ev, idx) }))
+        .sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
+      const chosenSecondaryLoop = ranked[0]?.ev || null;
+      if (chosenSecondaryLoop) {
+        const chosenPayload = chosenSecondaryLoop?.payload && typeof chosenSecondaryLoop.payload === 'object'
+          ? chosenSecondaryLoop.payload
+          : {};
+        effectiveEnemyEvents = effectiveEnemyEvents.filter((ev) => !isSecondaryLoopLaneCandidate(ev));
+        effectiveEnemyEvents.push({
+          ...chosenSecondaryLoop,
+          payload: {
+            ...chosenPayload,
+            continuityId: String(chosenPayload.continuityId || secondaryLoopLaneRuntime?.continuityId || '').trim(),
+            musicLayer: 'loops',
+            musicLaneId: 'secondary_loop_lane',
+            musicLaneDriven: true,
+          },
+        });
+      }
+    } else if (secondaryLoopLaneCandidates.length === 1) {
+      const chosenSecondaryLoop = secondaryLoopLaneCandidates[0];
+      const chosenPayload = chosenSecondaryLoop?.payload && typeof chosenSecondaryLoop.payload === 'object'
+        ? chosenSecondaryLoop.payload
+        : {};
+      effectiveEnemyEvents = effectiveEnemyEvents.map((ev) => (
+        ev === chosenSecondaryLoop
+          ? {
+            ...ev,
+            payload: {
+              ...chosenPayload,
+              continuityId: String(chosenPayload.continuityId || secondaryLoopLaneRuntime?.continuityId || '').trim(),
+              musicLayer: 'loops',
+              musicLaneId: 'secondary_loop_lane',
               musicLaneDriven: true,
             },
           }
@@ -750,6 +821,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const profiledAnnotated = profiledEnemyEvents.map((ev, idx) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     const musicVoiceKey = String(payload.musicVoiceKey || '').trim().toLowerCase();
+    const isProtectedIntroDrum = payload?.introDrumProtected === true;
     const layer = String(payload.musicLayer || 'sparkle').trim().toLowerCase();
     const safeLayer = (layer === 'foundation' || layer === 'loops' || layer === 'sparkle') ? layer : 'sparkle';
     const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
@@ -860,6 +932,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       isPrimaryLoopLaneEvent,
       callResponseLane,
       musicVoiceKey,
+      isProtectedIntroDrum,
       isReservedPercussionCompanion: musicVoiceKey === 'percussion_backbeat' && safeLayer === 'loops',
       score,
       duplicateKey: [
@@ -915,11 +988,17 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     const bucket = keptByLayer[item.layer] || [];
     const budget = Math.max(0, Math.trunc(Number(layerBudgets[item.layer]) || 0));
-    if (item.isReservedPercussionCompanion) {
+    if (item.isProtectedIntroDrum) {
+      // During the intro drum-to-lead blend window, keep the pulse/backbeat
+      // slots alive as first-class material instead of making them compete
+      // with the newly entering lead.
+    } else if (item.isReservedPercussionCompanion) {
       if (reservedPercussionCompanionSelected) continue;
     } else if (bucket.length >= budget) continue;
     const registerCount = Math.max(0, Math.trunc(Number(selectedRegisterCounts.get(item.collisionRegisterKey) || 0)));
     if (
+      !item.isProtectedIntroDrum
+      &&
       !item.isReservedPercussionCompanion
       &&
       item.layer === 'loops'
@@ -930,7 +1009,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ) {
       continue;
     }
-    if (!item.isReservedPercussionCompanion && item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
+    if (!item.isProtectedIntroDrum && !item.isReservedPercussionCompanion && item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
     bucket.push(item);
     selectedIds.add(item.idx);
     selectedRegisterCounts.set(item.collisionRegisterKey, registerCount + 1);
@@ -964,6 +1043,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       if (selectedIds.has(item.idx)) {
         if (item.layer === 'foundation') return 'full';
         if (item.layer === 'loops') {
+          if (item.isProtectedIntroDrum) return 'quiet';
           if (item.isPrimaryLoopLaneEvent) {
             if (foundationSelected) {
               if (item.isEstablishingForegroundLoop && !playerLikelyAudible) return 'full';

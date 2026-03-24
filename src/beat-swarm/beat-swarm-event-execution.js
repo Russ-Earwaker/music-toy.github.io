@@ -540,6 +540,25 @@ export function executePerformedBeatEventRuntime(options = null) {
           helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume);
           audioTriggered = true;
           group.lastAudioDedupKey = audioDedupKey;
+          if (
+            slotOwnedSpawner
+            && String(enemy?.musicVoiceKey || '').trim().toLowerCase() === 'percussion_pulse'
+            && !enemy.__bsLoggedFirstIntroPulseNote
+            && barIndex < 24
+          ) {
+            enemy.__bsLoggedFirstIntroPulseNote = true;
+            try {
+              helpers.noteMusicSystemEvent?.('music_intro_drum_first_note', {
+                actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
+                musicVoiceKey: String(enemy?.musicVoiceKey || '').trim().toLowerCase(),
+                requestedNote: String(requestedNote || '').trim(),
+                resolvedNote: String(noteName || '').trim(),
+                instrumentId: String(instrumentId || '').trim(),
+                nodeStepIndex,
+                introPrimaryLoopBlendWindow: barIndex >= 20 && barIndex < 24,
+              }, { beatIndex, stepIndex, barIndex });
+            } catch {}
+          }
           noteSlotSpawnerExecutionReason(enemy, {
             reason: 'audio_triggered',
             instrumentId,

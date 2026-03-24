@@ -3195,6 +3195,9 @@ function compactMusicLabPayloadForSave(payload = null) {
     'music_slot_spawner_stage',
     'music_slot_spawner_execution_reason',
     'music_slot_spawner_admission',
+    'music_slot_spawner_loop_state_change',
+    'music_slot_spawner_emit_identity',
+    'music_intro_drum_first_note',
   ]);
   const compactSystemEvents = systemEvents
     .filter((ev) => compactSystemEventTypesToKeep.has(String(ev?.eventType || '').trim().toLowerCase()))
@@ -3208,7 +3211,14 @@ function compactMusicLabPayloadForSave(payload = null) {
         barIndex: Number(item.barIndex) || 0,
         beatIndex: Number(item.beatIndex) || 0,
         stepIndex: Number(item.stepIndex) || 0,
+        actorId: Number(item.actorId) || 0,
         groupId: Number(item.groupId) || 0,
+        continuityId: String(item.continuityId || '').trim(),
+        musicVoiceKey: String(item.musicVoiceKey || '').trim().toLowerCase(),
+        musicLayer: String(item.musicLayer || '').trim().toLowerCase(),
+        musicLaneId: String(item.musicLaneId || '').trim().toLowerCase(),
+        instrumentId: String(item.instrumentId || '').trim(),
+        note: String(item.note || '').trim(),
         templateId: String(item.templateId || '').trim(),
         callResponseLane: String(item.callResponseLane || '').trim().toLowerCase(),
         callResponseQualified: item.callResponseQualified === true

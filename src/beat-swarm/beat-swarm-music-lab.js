@@ -549,6 +549,17 @@ function summarizeSystemEvent(sessionLike, record) {
         executedPulse: 0,
         executedBackbeat: 0,
       },
+      slotSpawnerLoopState: {
+        totalChanges: 0,
+        introProtectedChanges: 0,
+        blendWindowChanges: 0,
+        pulseChanges: 0,
+        backbeatChanges: 0,
+      },
+      introDrumFirstNote: {
+        events: 0,
+        offC3Events: 0,
+      },
     };
   }
   const type = String(rec?.eventType || '').trim().toLowerCase();
@@ -595,6 +606,19 @@ function summarizeSystemEvent(sessionLike, record) {
       else if (stage === 'shaped') summary.shapedBackbeat += 1;
       else if (stage === 'executed') summary.executedBackbeat += 1;
     }
+  } else if (type === 'music_slot_spawner_loop_state_change') {
+    const summary = session.systemEventSummary.slotSpawnerLoopState;
+    summary.totalChanges += 1;
+    if (rec?.introDrumProtected === true) summary.introProtectedChanges += 1;
+    if (rec?.introPrimaryLoopBlendWindow === true) summary.blendWindowChanges += 1;
+    const key = String(rec?.musicVoiceKey || '').trim().toLowerCase();
+    if (key === 'percussion_pulse') summary.pulseChanges += 1;
+    else if (key === 'percussion_backbeat') summary.backbeatChanges += 1;
+  } else if (type === 'music_intro_drum_first_note') {
+    const summary = session.systemEventSummary.introDrumFirstNote;
+    summary.events += 1;
+    const resolvedNote = String(rec?.resolvedNote || '').trim().toUpperCase();
+    if (resolvedNote && resolvedNote !== 'C3') summary.offC3Events += 1;
   }
 }
 
@@ -1452,6 +1476,14 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
   let slotSpawnerShapedBackbeatEvents = 0;
   let slotSpawnerExecutedPulseEvents = 0;
   let slotSpawnerExecutedBackbeatEvents = 0;
+  let slotSpawnerLoopStateChanges = 0;
+  let slotSpawnerLoopStateIntroProtectedChanges = 0;
+  let slotSpawnerLoopStateBlendWindowChanges = 0;
+  let introDrumFirstNoteEvents = 0;
+  let introDrumFirstNoteOffC3Events = 0;
+  let slotSpawnerEmitIdentityEvents = 0;
+  let slotSpawnerEmitPulseIdentityEvents = 0;
+  let slotSpawnerEmitBackbeatIdentityEvents = 0;
   for (const e of logs) {
     const type = String(e?.eventType || '').trim().toLowerCase();
     if (type === 'music_gameplay_suppression_decision') {
@@ -1589,6 +1621,24 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
       }
       continue;
     }
+    if (type === 'music_slot_spawner_loop_state_change') {
+      slotSpawnerLoopStateChanges += 1;
+      if (e?.introDrumProtected === true) slotSpawnerLoopStateIntroProtectedChanges += 1;
+      if (e?.introPrimaryLoopBlendWindow === true) slotSpawnerLoopStateBlendWindowChanges += 1;
+      continue;
+    }
+    if (type === 'music_intro_drum_first_note') {
+      introDrumFirstNoteEvents += 1;
+      if (String(e?.resolvedNote || '').trim().toUpperCase() !== 'C3') introDrumFirstNoteOffC3Events += 1;
+      continue;
+    }
+    if (type === 'music_slot_spawner_emit_identity') {
+      slotSpawnerEmitIdentityEvents += 1;
+      const key = String(e?.musicVoiceKey || '').trim().toLowerCase();
+      if (key === 'percussion_pulse') slotSpawnerEmitPulseIdentityEvents += 1;
+      else if (key === 'percussion_backbeat') slotSpawnerEmitBackbeatIdentityEvents += 1;
+      continue;
+    }
   }
   return {
     gameplaySuppressionEvents,
@@ -1655,6 +1705,14 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
     slotSpawnerShapedBackbeatEvents,
     slotSpawnerExecutedPulseEvents,
     slotSpawnerExecutedBackbeatEvents,
+    slotSpawnerLoopStateChanges,
+    slotSpawnerLoopStateIntroProtectedChanges,
+    slotSpawnerLoopStateBlendWindowChanges,
+    introDrumFirstNoteEvents,
+    introDrumFirstNoteOffC3Events,
+    slotSpawnerEmitIdentityEvents,
+    slotSpawnerEmitPulseIdentityEvents,
+    slotSpawnerEmitBackbeatIdentityEvents,
     byDecisionReason,
   };
 }

@@ -485,6 +485,9 @@ export function collectSpawnerStepBeatEvents(options = null) {
     const explicitMusicLayer = musicVoiceKey === 'percussion_backbeat'
       ? 'loops'
       : (musicVoiceKey === 'percussion_motion' ? 'sparkle' : 'foundation');
+    const explicitMusicLaneId = musicVoiceKey === 'percussion_backbeat'
+      ? 'secondary_loop_lane'
+      : (musicVoiceKey === 'percussion_motion' ? 'sparkle_lane' : 'foundation_lane');
     events.push(createLoggedPerformedBeatEvent({
       actorId,
       beatIndex,
@@ -506,6 +509,9 @@ export function collectSpawnerStepBeatEvents(options = null) {
         spawnerReadabilityPulse: false,
         musicVoiceKey,
         musicLayer: explicitMusicLayer,
+        musicLaneId: explicitMusicLaneId,
+        musicLaneDriven: true,
+        introDrumProtected: slotOwnedSpawner && barIndex < 24,
       },
     }, {
       beatIndex,
@@ -514,6 +520,27 @@ export function collectSpawnerStepBeatEvents(options = null) {
       enemyType: 'spawner',
       groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
     }));
+    if (slotOwnedSpawner && typeof options?.noteMusicSystemEvent === 'function') {
+      try {
+        options.noteMusicSystemEvent('music_slot_spawner_emit_identity', {
+          actorId,
+          groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+          continuityId,
+          musicVoiceKey,
+          musicLayer: explicitMusicLayer,
+          musicLaneId: explicitMusicLaneId,
+          instrumentId,
+          note: noteName,
+          lifecycleState,
+          introDrumProtected: barIndex < 24,
+          introPrimaryLoopBlendWindow: barIndex >= 20 && barIndex < 24,
+        }, {
+          beatIndex,
+          stepIndex: stepAbs,
+          barIndex,
+        });
+      } catch {}
+    }
     finishEventPerf();
     enemy.__bsLastSpawnerNote = noteName;
     if (tailContinuationActive && loopTailUntilStep <= stepAbs) {
