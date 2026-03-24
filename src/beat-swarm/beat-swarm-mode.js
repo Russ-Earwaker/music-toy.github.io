@@ -2370,6 +2370,8 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   if (!(ownerId > 0)) return null;
   const forcedIntroFoundationWindow = isForcedIntroFoundationWindow(barIndex);
   const introLockedLoop = !!introDrumProfile && ownerType === 'spawner';
+  const slotOwnedSpawnerOwner = ownerType === 'spawner' && !!String(ownerEnemy?.musicVoiceKey || '').trim();
+  if (introLockedLoop && slotOwnedSpawnerOwner) return null;
   const requestedNoteRaw = normalizeSwarmNoteName(group?.note)
     || normalizeSwarmNoteName(ownerEnemy?.spawnerNoteName)
     || normalizeSwarmNoteName(ownerEnemy?.drawsnakePrimaryNote)
@@ -4363,8 +4365,10 @@ function getWeaponTuneStepNotesHarmonic(slotIndex, beatIndex) {
   for (let i = 0; i < rawNotes.length; i += 1) {
     const rawNote = normalizeSwarmNoteName(rawNotes[i]);
     if (!rawNote) continue;
-    const mapped = mapWeaponTuneNoteToHarmony(rawNote, Math.max(0, Math.trunc(Number(beatIndex) || 0)) + i);
-    const normalized = normalizeSwarmNoteName(mapped) || rawNote;
+    // The player's authored DrawGrid loop is the source of truth and should not
+    // be reharmonized at playback time. Beat Swarm follows the weapon; the
+    // weapon does not mutate with the section.
+    const normalized = rawNote;
     if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
     out.push(normalized);
@@ -4442,7 +4446,7 @@ function noteHarmonyAuthorityStateForBar(barIndex = 0, notePool = null) {
     for (let i = 0; i < rawNotes.length; i += 1) {
       const rawNote = normalizeSwarmNoteName(rawNotes[i]);
       if (!rawNote) continue;
-      const expectedMapped = normalizeSwarmNoteName(mapWeaponTuneNoteToHarmony(rawNote, beatIndex + beatOffset + i));
+      const expectedMapped = rawNote;
       if (!expectedMapped || !mappedSet.has(expectedMapped)) {
         mappingMismatchCount += 1;
         mappingMismatchNotes.push(`${rawNote}->${expectedMapped || ''}`);
@@ -4604,33 +4608,29 @@ function getLockedIntroDrumSpawnerProfile(barIndex = 0, pacingState = '') {
   if (!(introDrumLoopRuntime.anchorBar >= 0) || introDrumLoopRuntime.phaseFamily !== 'intro') {
     const seedProfile = createSpawnerEnemyRhythmProfile({ role: 'drum' }) || {};
     const continuityId = String(seedProfile.continuityId || introDrumLoopRuntime.continuityId || getNextMusicContinuityId()).trim();
-    const pseudoEnemyId = 1 + (Math.max(0, hashStringSeed(`intro-spawner|${continuityId}|${seedProfile.instrument || ''}`)) % 997);
-    const variantProfile = buildSpawnerProfileVariant(
-      {
-        ...seedProfile,
-        continuityId,
-      },
-      pseudoEnemyId,
-      `intro|${continuityId}`
-    ) || seedProfile;
+    const lockedSeedProfile = {
+      ...seedProfile,
+      continuityId,
+      baseNoteName: normalizeSwarmNoteName(seedProfile.baseNoteName) || 'C3',
+    };
     introDrumLoopRuntime.phaseFamily = 'intro';
     introDrumLoopRuntime.anchorBar = Math.max(4, safeBar);
     introDrumLoopRuntime.phraseLengthBars = 1;
-    introDrumLoopRuntime.seedSteps8 = Array.isArray(variantProfile.steps) ? variantProfile.steps.slice(0, 8).map((step) => !!step) : [];
-    introDrumLoopRuntime.seedNoteIndices8 = Array.isArray(variantProfile.noteIndices)
-      ? variantProfile.noteIndices.slice(0, 8).map((n) => Math.max(0, Math.trunc(Number(n) || 0)))
+    introDrumLoopRuntime.seedSteps8 = Array.isArray(lockedSeedProfile.steps) ? lockedSeedProfile.steps.slice(0, 8).map((step) => !!step) : [];
+    introDrumLoopRuntime.seedNoteIndices8 = Array.isArray(lockedSeedProfile.noteIndices)
+      ? lockedSeedProfile.noteIndices.slice(0, 8).map((n) => Math.max(0, Math.trunc(Number(n) || 0)))
       : [];
-    introDrumLoopRuntime.notePalette = Array.isArray(variantProfile.notePalette) && variantProfile.notePalette.length
-      ? variantProfile.notePalette.slice()
+    introDrumLoopRuntime.notePalette = Array.isArray(lockedSeedProfile.notePalette) && lockedSeedProfile.notePalette.length
+      ? lockedSeedProfile.notePalette.slice()
       : Array.from(LOOPGRID_FALLBACK_NOTE_PALETTE);
-    introDrumLoopRuntime.instrument = String(variantProfile.instrument || resolveSwarmSoundInstrumentId('explosion') || 'tone').trim();
-    introDrumLoopRuntime.baseNoteName = normalizeSwarmNoteName(variantProfile.baseNoteName) || 'C3';
+    introDrumLoopRuntime.instrument = String(lockedSeedProfile.instrument || resolveSwarmSoundInstrumentId('explosion') || 'tone').trim();
+    introDrumLoopRuntime.baseNoteName = normalizeSwarmNoteName(lockedSeedProfile.baseNoteName) || 'C3';
     introDrumLoopRuntime.continuityId = continuityId;
     introDrumLoopRuntime.phraseId = `intro_drum_loop_${String(introDrumLoopRuntime.continuityId || 'v0').trim().toLowerCase() || 'v0'}`;
     introDrumLoopRuntime.steps32 = Array.from({ length: 32 }, (_, idx) => !!introDrumLoopRuntime.seedSteps8[idx % 8]);
     introDrumLoopRuntime.noteIndices32 = Array.from({ length: 32 }, (_, idx) => Math.max(0, Math.trunc(Number(introDrumLoopRuntime.seedNoteIndices8[idx % 8]) || 0)));
     introDrumLoopRuntime.patternKey = introDrumLoopRuntime.seedSteps8.map((step) => (step ? '1' : '0')).join('');
-    introDrumLoopRuntime.variationIndex = Math.max(0, Math.trunc(Number(variantProfile?.variation?.rotation) || 0));
+    introDrumLoopRuntime.variationIndex = 0;
   }
   if (pacingKey === 'intro_solo') return null;
   const variationIndex = Math.max(0, Math.trunc(Number(introDrumLoopRuntime.variationIndex) || 0));
@@ -4991,11 +4991,15 @@ function applyFoundationLaneToPerformer(enemyLike = null, groupLike = null, cont
   if (!enemy || !group) return null;
   const role = normalizeSwarmRole(group.role || getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.ACCENT), BEAT_EVENT_ROLES.ACCENT);
   if (role !== BEAT_EVENT_ROLES.BASS) return null;
+  const slotOwnedSpawner = String(enemy?.enemyType || '').trim().toLowerCase() === 'spawner'
+    && !!String(enemy?.musicVoiceKey || '').trim();
   const beatIndex = Math.max(0, Math.trunc(Number(context?.beatIndex) || Number(currentBeatIndex) || 0));
   const barIndex = Math.max(0, Math.trunc(Number(context?.barIndex) || Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR))));
   const lane = getFoundationLaneSnapshot(Math.max(0, Math.trunc(Number(context?.stepIndex) || beatIndex)), barIndex);
   const steps = lane.steps.slice(0, WEAPON_TUNE_STEPS);
-  group.steps = steps.slice();
+  if (!slotOwnedSpawner) {
+    group.steps = steps.slice();
+  }
   group.foundationLaneId = lane.laneId;
   group.foundationPhraseId = lane.phraseId;
   group.foundationPatternKey = lane.patternKey;
@@ -5005,7 +5009,7 @@ function applyFoundationLaneToPerformer(enemyLike = null, groupLike = null, cont
   if (String(enemy.enemyType || '').trim().toLowerCase() === 'drawsnake') {
     enemy.drawsnakeSteps = steps.slice();
   }
-  if (String(enemy.enemyType || '').trim().toLowerCase() === 'spawner') {
+  if (String(enemy.enemyType || '').trim().toLowerCase() === 'spawner' && !slotOwnedSpawner) {
     enemy.spawnerSteps = steps.slice(0, 8);
   }
   assignMusicLaneIdentity({
@@ -9080,7 +9084,7 @@ function weaponSubBoardRowToNoteName(rowIndex) {
   const row = Math.trunc(Number(rowIndex));
   if (!(row >= 0 && row < DRAWGRID_TUNE_NOTE_PALETTE.length)) return getRandomSwarmPentatonicNote();
   const rawNote = normalizeSwarmNoteName(DRAWGRID_TUNE_NOTE_PALETTE[row]) || getRandomSwarmPentatonicNote();
-  return mapWeaponTuneNoteToHarmony(rawNote, currentBeatIndex);
+  return rawNote;
 }
 function snapshotWeaponSubBoardTuneChain(slotIndex) {
   const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
@@ -12669,6 +12673,11 @@ function maintainPerfEnemyRepeatMode() {
   if (targetType === 'spawner') {
     for (const enemy of aliveEnemies) {
       if (!enemy) continue;
+      const slotOwnedSpawner = !!String(enemy?.musicVoiceKey || '').trim();
+      if (slotOwnedSpawner) {
+        updateSpawnerEnemyActiveCells(enemy, enemy?.spawnerSteps);
+        continue;
+      }
       const group = getEnemyMusicGroup(enemy, 'spawner-spawn');
       updateSpawnerEnemyActiveCells(enemy, Array.isArray(group?.steps) ? group.steps : enemy?.spawnerSteps);
     }
@@ -12971,7 +12980,7 @@ function maintainDrawSnakeEnemyPopulation() {
         ? (lockedPrimaryLoopSnakeIndex >= 0 && i === lockedPrimaryLoopSnakeIndex && pacedTarget > 0)
         : (i < pacedTarget);
       enemy.musicParticipationGain = shouldSchedule
-        ? (introPrimaryLoopBlendWindow ? 0.72 : 1)
+        ? (introPrimaryLoopBlendWindow ? 0.52 : 1)
         : (forceIntroPrimaryLoopWindow ? 0 : 0.42);
       enemy.lifecycleState = shouldSchedule ? 'active' : 'deEmphasized';
     }

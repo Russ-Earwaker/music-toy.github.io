@@ -487,8 +487,10 @@ export function executePerformedBeatEventRuntime(options = null) {
       enemy.composerRole = normalizedGroupRole;
       enemy.musicInstrumentId = instrumentId;
       enemy.instrumentId = instrumentId;
-      enemy.spawnerInstrument = instrumentId;
-      enemy.spawnerNoteName = noteName;
+      if (!slotOwnedSpawner) {
+        enemy.spawnerInstrument = instrumentId;
+        enemy.spawnerNoteName = noteName;
+      }
       if (group?.continuityId) {
         enemy.musicContinuityId = String(group.continuityId);
         enemy.continuityId = String(group.continuityId);
