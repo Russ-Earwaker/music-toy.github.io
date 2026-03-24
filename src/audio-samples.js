@@ -99,6 +99,43 @@ function getEntryVolumeMultiplier(entry){
   return Math.max(0.05, Math.min(2.5, linear));
 }
 
+export function getInstrumentPlaybackMetadata(instrument = ''){
+  const id = normId(instrument || '');
+  const idLoose = id.toLowerCase().replace(/[()]/g,'').replace(/[_\s]+/g,'-');
+  const familyId = id.split('_')[0];
+  const pickEntryMeta = (entry, resolvedId, playbackKind) => ({
+    instrumentId: String(resolvedId || instrument || '').trim(),
+    playbackKind,
+    sampleVolumeHint: String(entry?.volume || '').trim(),
+    sampleVolumeMultiplier: getEntryVolumeMultiplier(entry),
+    hasCatalogEntry: !!entry,
+  });
+  const exactEntry = entries.get(id);
+  if (buffers.has(id) || exactEntry) {
+    return pickEntryMeta(exactEntry || null, id, buffers.has(id) ? 'sample' : (exactEntry?.synth ? 'synth_fallback' : 'unknown'));
+  }
+  if (familyId && familyId !== id) {
+    const familyEntry = entries.get(familyId);
+    if (buffers.has(familyId) || familyEntry) {
+      return pickEntryMeta(familyEntry || null, familyId, buffers.has(familyId) ? 'sample_family_fallback' : (familyEntry?.synth ? 'synth_family_fallback' : 'unknown'));
+    }
+  }
+  for (const [entryId, ent] of entries.entries()) {
+    const s = (ent && ent.synth) ? String(ent.synth).toLowerCase() : '';
+    const sNorm = s.replace(/_/g,'-');
+    if (s && (s === id || sNorm === id || s === idLoose || sNorm === idLoose)) {
+      return pickEntryMeta(ent, entryId, 'synth_alias_fallback');
+    }
+  }
+  return {
+    instrumentId: String(instrument || '').trim(),
+    playbackKind: TONE_NAMES.includes(idLoose) || TONE_NAMES.includes(id) ? 'tone' : 'tone_fallback',
+    sampleVolumeHint: '',
+    sampleVolumeMultiplier: 1,
+    hasCatalogEntry: false,
+  };
+}
+
 function resolveOctaveForToy(noteName, toyId, options = {}, instrumentId = ''){
   if (!toyId || typeof document === 'undefined') return noteName;
   const findChainHeadPanel = (panel) => {

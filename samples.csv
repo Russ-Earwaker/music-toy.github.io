@@ -7,7 +7,7 @@ filename,instrument_type,instrument,function,display_name,synth_id,instrument_id
 # runtime_family: optional browsing / compatibility family only; not hierarchy authority,,,,,,,,,,,,,,,,,,,,,,
 # music_eligibility: protected_loop | call_source | answer_source | accent_only,,,,,,,,,,,,,,,,,,,,,,
 # needs_review: mark uncertain rows true during migration or manual review,,,,,,,,,,,,,,,,,,,,,,
-# volume: optional per-sample level hint in dB; schema only for now, not wired into runtime yet,,,,,,,,,,,,,,,,,,,,,
+# volume: optional per-sample level hint in dB; loaded by shared sample playback and multiplied into runtime gain,,,,,,,,,,,,,,,,,,,,,
 # --- Samples ---,,,,,,,,,,,,,,,,,,,,,,
 Punch1.wav,effects,effects,short note,Punch 1,,PUNCH 1,,5,,,,,,motion,high,texture,,,,,,
 Punch2.wav,effects,effects,short note,Punch 2,,PUNCH 2,,5,,,,,,motion,high,texture,,,,,,
@@ -77,7 +77,7 @@ ClosedHatElectronicShort.wav,support,synth,short note,Closed Hat Electronic Shor
 SoftSynthPadShort1.wav,support,synth,short note,Soft Synth Pad Short 1,,SOFT SYNTH PAD SHORT 1,,,C,4,Gaming; beat-swarm-shmup,,1,support,mid,composition,support,sustain|melodic,synth,answer_source,TRUE,9
 SoftSynthPadShort2.wav,support,synth,short note,Soft Synth Pad Short 2,,SOFT SYNTH PAD SHORT 2,,,C,3,Gaming; beat-swarm-shmup,,1,support,mid,composition,support,sustain|melodic,synth,answer_source,TRUE,9
 ChiptuneArp.wav,support,synth,short note,Chiptune Arp,,CHIPTUNE ARP,,,C,4,Gaming; beat-swarm-shmup,,1,motion,high,composition,support,loop|rhythmic|melodic,synth,answer_source,,-6
-SynthPluckLeadShort.wav,foreground,synth,short note,Synth Pluck Lead Short,,SYNTH PLUCK LEAD SHORT,,,G,4,Gaming; beat-swarm-shmup,loopgrid; drawgrid,1,lead,mid,drawsnake,foreground,loop|short|melodic,synth,protected_loop|call_source|answer_source,,
+SynthPluckLeadShort.wav,foreground,synth,short note,Synth Pluck Lead Short,,SYNTH PLUCK LEAD SHORT,,,G,4,Gaming; beat-swarm-shmup,loopgrid; drawgrid,1,lead,mid,drawsnake,foreground,loop|short|melodic,synth,protected_loop|call_source|answer_source,,-2
 DigitalSynthLeadShort.wav,foreground,synth,short note,Digital Synth Lead Short,,DIGITAL SYNTH LEAD SHORT,,,C,3,Gaming; beat-swarm-shmup,loopgrid; drawgrid,1,lead,mid,drawsnake,foreground,loop|short|melodic,synth,protected_loop|call_source|answer_source,,-3
 AnalogPluckArp.wav,support,synth,short note,Analog Pluck Arp,,ANALOG PLUCK ARP,,,C,3,Gaming; beat-swarm-shmup,,1,motion,mid,composition,support,loop|rhythmic|melodic,synth,answer_source,,-6
 SoftSynthPadShort.wav,support,synth,short note,Soft Synth Pad Short,,SOFT SYNTH PAD SHORT,,,C,5,Gaming; beat-swarm-shmup,,1,support,mid,composition,support,sustain|melodic,synth,answer_source,TRUE,9
@@ -93,8 +93,8 @@ TightElectronicKick.wav,foundation,synth,short note,Tight Electronic Kick,,TIGHT
 ,synth,synth,sustain,Tone (Sine),tone,TONE,,4,,,Gaming; beat-swarm-shmup,drawgrid,1,lead,mid,melodic,support,sustain|melodic,synth,answer_source,,
 ,synth,synth,short note,Pop,pop,POP,,4,,,Toybox,drawgrid,1,lead,mid,melodic,,,,,,
 ,synth,synth,sustain,Pad,pad,PAD,,4,,,Toybox,drawgrid,,lead,mid,melodic,,,,,,
-,synth,synth,short note,Retro Square,retro-square,RETRO SQUARE,,4,,,Gaming; beat-swarm-shmup,drawgrid; loopgrid,1,lead,mid,melodic,foreground,loop|short|melodic,synth,protected_loop|call_source|answer_source,,
-,synth,synth,short note,Retro Saw,retro-saw,RETRO SAW,,4,,,Gaming; beat-swarm-shmup,drawgrid; loopgrid,1,lead,mid,melodic,foreground,loop|short|melodic,synth,protected_loop|call_source|answer_source,,
+,synth,synth,short note,Retro Square,retro-square,RETRO SQUARE,,4,,,Gaming; beat-swarm-shmup,drawgrid; loopgrid,1,lead,mid,melodic,foreground,loop|short|melodic,synth,protected_loop|call_source|answer_source,,-2
+,synth,synth,short note,Retro Saw,retro-saw,RETRO SAW,,4,,,Gaming; beat-swarm-shmup,drawgrid; loopgrid,1,lead,mid,melodic,foreground,loop|short|melodic,synth,protected_loop|call_source|answer_source,,-3
 ,synth,synth,short note,Retro Triangle,retro-tri,RETRO TRIANGLE,,4,,,Gaming; beat-swarm-shmup,drawgrid; loopgrid,1,lead,mid,melodic,support,loop|short|melodic,synth,answer_source,,
 ,synth,synth,short note,Laser,laser,LASER,,4,,,Gaming; beat-swarm-shmup,drawgrid,,lead,mid,melodic,accent,oneshot|short|melodic,fx,accent_only,,
 ,synth,synth,short note,Alien,alien,ALIEN,,4,,,Toybox,drawgrid,,lead,mid,melodic,,,,,,

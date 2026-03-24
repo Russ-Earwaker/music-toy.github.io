@@ -4,9 +4,11 @@ function normalizeLifecycleState(value, fallback = 'active') {
   const raw = String(value || '').trim().toLowerCase();
   if (raw === 'active') return 'active';
   if (raw === 'retiring') return 'retiring';
+  if (raw === 'deemphasized' || raw === 'de_emphasized' || raw === 'de-emphasized') return 'deEmphasized';
   if (raw === 'inactiveforscheduling' || raw === 'inactive_for_scheduling' || raw === 'inactive-for-scheduling') return 'inactiveForScheduling';
   const fb = String(fallback || 'active').trim().toLowerCase();
   if (fb === 'retiring') return 'retiring';
+  if (fb === 'deemphasized' || fb === 'de_emphasized' || fb === 'de-emphasized') return 'deEmphasized';
   if (fb.includes('inactive')) return 'inactiveForScheduling';
   return 'active';
 }
@@ -87,6 +89,7 @@ export function chooseComposerGroupEnemyForNote(options = null) {
 export function collectComposerGroupStepBeatEvents(options = null) {
   const events = [];
   if (!options?.active || options?.gameplayPaused) return events;
+  if (options?.introLeadStabilizationActive === true) return events;
 
   const getCurrentPacingCaps = typeof options?.getCurrentPacingCaps === 'function' ? options.getCurrentPacingCaps : (() => ({ responseMode: 'none' }));
   const pacingCaps = getCurrentPacingCaps();
@@ -474,7 +477,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       resolvedRole,
       resolveSwarmSoundInstrumentId('projectile') || 'tone'
     );
-    const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
+    const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling'
+      ? 0.35
+      : (lifecycleState === 'deEmphasized' ? 0.52 : 1);
     const musicProminence = (() => {
       if (isPrimaryLoopOwnerGroup) return 'full';
       if (isFoundationBufferGroup) return 'trace';
@@ -540,7 +545,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       && !isPrimaryLoopOwnerGroup
       && !isFoundationBufferGroup
       && !isBassRole
-      && lifecycleState === 'inactiveForScheduling'
+      && (lifecycleState === 'inactiveForScheduling' || lifecycleState === 'deEmphasized')
       && !acceptedStrongCall
       && !phraseResolutionOpportunity
       && !phraseGravityOpportunity

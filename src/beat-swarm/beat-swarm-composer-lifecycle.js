@@ -17,9 +17,11 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     const raw = String(value || '').trim().toLowerCase();
     if (raw === 'active') return 'active';
     if (raw === 'retiring') return 'retiring';
+    if (raw === 'deemphasized' || raw === 'de_emphasized' || raw === 'de-emphasized') return 'deEmphasized';
     if (raw === 'inactiveforscheduling' || raw === 'inactive_for_scheduling' || raw === 'inactive-for-scheduling') return 'inactiveForScheduling';
     const fb = String(fallback || 'active').trim().toLowerCase();
     if (fb === 'retiring') return 'retiring';
+    if (fb === 'deemphasized' || fb === 'de_emphasized' || fb === 'de-emphasized') return 'deEmphasized';
     if (fb.includes('inactive')) return 'inactiveForScheduling';
     return 'active';
   };
@@ -81,8 +83,8 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   for (let i = 0; i < rankedGroups.length; i++) {
     const group = rankedGroups[i];
     const shouldSchedule = i < desiredGroups;
-    group.musicParticipationGain = shouldSchedule ? 1 : 0.35;
-    group.lifecycleState = shouldSchedule ? 'active' : 'inactiveForScheduling';
+    group.musicParticipationGain = shouldSchedule ? 1 : 0.42;
+    group.lifecycleState = shouldSchedule ? 'active' : 'deEmphasized';
   }
 
   const currentSectionCount = composerEnemyGroups

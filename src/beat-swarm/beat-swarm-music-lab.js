@@ -228,6 +228,12 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     musicProminence,
     authoringClass,
     audioGain: Number(context?.audioGain ?? payload?.audioGain) || 0,
+    resolvedPlaybackInstrumentId: String(context?.resolvedPlaybackInstrumentId || '').trim(),
+    playbackKind: String(context?.playbackKind || '').trim().toLowerCase(),
+    sampleVolumeHint: String(context?.sampleVolumeHint || '').trim(),
+    sampleVolumeMultiplier: Number(context?.sampleVolumeMultiplier) || 0,
+    triggerVolume: Number(context?.triggerVolume) || 0,
+    approxPlaybackVolume: Number(context?.approxPlaybackVolume) || 0,
     visibleCueAudibilityFloor: context?.visibleCueAudibilityFloor === true
       ? true
       : (payload?.visibleCueAudibilityFloor === true),
@@ -294,6 +300,9 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     role: String(payload?.role || '').trim().toLowerCase(),
     actionType: String(payload?.actionType || '').trim().toLowerCase(),
     instrumentId: String(payload?.instrumentId || '').trim(),
+    stage: String(payload?.stage || '').trim().toLowerCase(),
+    musicVoiceKey: String(payload?.musicVoiceKey || '').trim().toLowerCase(),
+    musicLayer: String(payload?.musicLayer || '').trim().toLowerCase(),
     phraseId: String(payload?.phraseId || '').trim().toLowerCase(),
     patternKey: String(payload?.patternKey || '').trim(),
     performerEnemyId: clampInt(payload?.performerEnemyId, 0, 0),
@@ -383,6 +392,10 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     authorityDistinctNoteCount: clampInt(payload?.authorityDistinctNoteCount, 0, 0),
     authorityActiveNoteCount: clampInt(payload?.authorityActiveNoteCount, 0, 0),
     notePoolSize: clampInt(payload?.notePoolSize, 0, 0),
+    weaponMappingMismatchCount: clampInt(payload?.weaponMappingMismatchCount, 0, 0),
+    weaponMappingMismatchNotes: Array.isArray(payload?.weaponMappingMismatchNotes)
+      ? payload.weaponMappingMismatchNotes.slice(0, 12).map((note) => String(note || '').trim()).filter(Boolean)
+      : [],
     weaponOutsidePoolCount: clampInt(payload?.weaponOutsidePoolCount, 0, 0),
     weaponOutsidePoolNotes: Array.isArray(payload?.weaponOutsidePoolNotes)
       ? payload.weaponOutsidePoolNotes.slice(0, 12).map((note) => String(note || '').trim()).filter(Boolean)
@@ -522,6 +535,20 @@ function summarizeSystemEvent(sessionLike, record) {
         suppressed: 0,
         changedByDeconflict: 0,
       },
+      slotSpawnerStages: {
+        rawPulse: 0,
+        rawBackbeat: 0,
+        queuedPulse: 0,
+        queuedBackbeat: 0,
+        drainedPulse: 0,
+        drainedBackbeat: 0,
+        filteredPulse: 0,
+        filteredBackbeat: 0,
+        shapedPulse: 0,
+        shapedBackbeat: 0,
+        executedPulse: 0,
+        executedBackbeat: 0,
+      },
     };
   }
   const type = String(rec?.eventType || '').trim().toLowerCase();
@@ -549,6 +576,25 @@ function summarizeSystemEvent(sessionLike, record) {
     else if (finalProminence === 'trace') summary.trace += 1;
     else if (finalProminence === 'suppressed') summary.suppressed += 1;
     if (rec?.changedByDeconflict === true) summary.changedByDeconflict += 1;
+  } else if (type === 'music_slot_spawner_stage') {
+    const summary = session.systemEventSummary.slotSpawnerStages;
+    const stage = String(rec?.stage || '').trim().toLowerCase();
+    const key = String(rec?.musicVoiceKey || '').trim().toLowerCase();
+    if (key === 'percussion_pulse') {
+      if (stage === 'raw') summary.rawPulse += 1;
+      else if (stage === 'queued') summary.queuedPulse += 1;
+      else if (stage === 'drained') summary.drainedPulse += 1;
+      else if (stage === 'filtered') summary.filteredPulse += 1;
+      else if (stage === 'shaped') summary.shapedPulse += 1;
+      else if (stage === 'executed') summary.executedPulse += 1;
+    } else if (key === 'percussion_backbeat') {
+      if (stage === 'raw') summary.rawBackbeat += 1;
+      else if (stage === 'queued') summary.queuedBackbeat += 1;
+      else if (stage === 'drained') summary.drainedBackbeat += 1;
+      else if (stage === 'filtered') summary.filteredBackbeat += 1;
+      else if (stage === 'shaped') summary.shapedBackbeat += 1;
+      else if (stage === 'executed') summary.executedBackbeat += 1;
+    }
   }
 }
 
@@ -1390,8 +1436,22 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
   let harmonyWeaponAnchorBars = 0;
   let harmonyFallbackBars = 0;
   let harmonyRelativeShiftBars = 0;
+  let harmonyWeaponMappingMismatchBars = 0;
+  let harmonyWeaponMappingMismatchCount = 0;
   let harmonyWeaponOutsidePoolBars = 0;
   let harmonyWeaponOutsidePoolCount = 0;
+  let slotSpawnerRawPulseEvents = 0;
+  let slotSpawnerRawBackbeatEvents = 0;
+  let slotSpawnerQueuedPulseEvents = 0;
+  let slotSpawnerQueuedBackbeatEvents = 0;
+  let slotSpawnerDrainedPulseEvents = 0;
+  let slotSpawnerDrainedBackbeatEvents = 0;
+  let slotSpawnerFilteredPulseEvents = 0;
+  let slotSpawnerFilteredBackbeatEvents = 0;
+  let slotSpawnerShapedPulseEvents = 0;
+  let slotSpawnerShapedBackbeatEvents = 0;
+  let slotSpawnerExecutedPulseEvents = 0;
+  let slotSpawnerExecutedBackbeatEvents = 0;
   for (const e of logs) {
     const type = String(e?.eventType || '').trim().toLowerCase();
     if (type === 'music_gameplay_suppression_decision') {
@@ -1501,9 +1561,32 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
       if (String(e?.authoritySource || '').trim().toLowerCase() === 'weapon_active_slot') harmonyWeaponAnchorBars += 1;
       if (e?.fallbackUsed === true) harmonyFallbackBars += 1;
       if (e?.relativeShiftActive === true) harmonyRelativeShiftBars += 1;
+      const mappingMismatchCount = Math.max(0, clampInt(e?.weaponMappingMismatchCount, 0, 0));
+      harmonyWeaponMappingMismatchCount += mappingMismatchCount;
+      if (mappingMismatchCount > 0) harmonyWeaponMappingMismatchBars += 1;
       const outsidePoolCount = Math.max(0, clampInt(e?.weaponOutsidePoolCount, 0, 0));
       harmonyWeaponOutsidePoolCount += outsidePoolCount;
       if (outsidePoolCount > 0) harmonyWeaponOutsidePoolBars += 1;
+      continue;
+    }
+    if (type === 'music_slot_spawner_stage') {
+      const stage = String(e?.stage || '').trim().toLowerCase();
+      const key = String(e?.musicVoiceKey || '').trim().toLowerCase();
+      if (key === 'percussion_pulse') {
+        if (stage === 'raw') slotSpawnerRawPulseEvents += 1;
+        else if (stage === 'queued') slotSpawnerQueuedPulseEvents += 1;
+        else if (stage === 'drained') slotSpawnerDrainedPulseEvents += 1;
+        else if (stage === 'filtered') slotSpawnerFilteredPulseEvents += 1;
+        else if (stage === 'shaped') slotSpawnerShapedPulseEvents += 1;
+        else if (stage === 'executed') slotSpawnerExecutedPulseEvents += 1;
+      } else if (key === 'percussion_backbeat') {
+        if (stage === 'raw') slotSpawnerRawBackbeatEvents += 1;
+        else if (stage === 'queued') slotSpawnerQueuedBackbeatEvents += 1;
+        else if (stage === 'drained') slotSpawnerDrainedBackbeatEvents += 1;
+        else if (stage === 'filtered') slotSpawnerFilteredBackbeatEvents += 1;
+        else if (stage === 'shaped') slotSpawnerShapedBackbeatEvents += 1;
+        else if (stage === 'executed') slotSpawnerExecutedBackbeatEvents += 1;
+      }
       continue;
     }
   }
@@ -1556,8 +1639,22 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
     harmonyWeaponAnchorBars,
     harmonyFallbackBars,
     harmonyRelativeShiftBars,
+    harmonyWeaponMappingMismatchBars,
+    harmonyWeaponMappingMismatchCount,
     harmonyWeaponOutsidePoolBars,
     harmonyWeaponOutsidePoolCount,
+    slotSpawnerRawPulseEvents,
+    slotSpawnerRawBackbeatEvents,
+    slotSpawnerQueuedPulseEvents,
+    slotSpawnerQueuedBackbeatEvents,
+    slotSpawnerDrainedPulseEvents,
+    slotSpawnerDrainedBackbeatEvents,
+    slotSpawnerFilteredPulseEvents,
+    slotSpawnerFilteredBackbeatEvents,
+    slotSpawnerShapedPulseEvents,
+    slotSpawnerShapedBackbeatEvents,
+    slotSpawnerExecutedPulseEvents,
+    slotSpawnerExecutedBackbeatEvents,
     byDecisionReason,
   };
 }
@@ -3038,8 +3135,22 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     harmonyWeaponAnchorBars: Number(passDiagnostics?.decisionMaking?.harmonyWeaponAnchorBars) || 0,
     harmonyFallbackBars: Number(passDiagnostics?.decisionMaking?.harmonyFallbackBars) || 0,
     harmonyRelativeShiftBars: Number(passDiagnostics?.decisionMaking?.harmonyRelativeShiftBars) || 0,
+    harmonyWeaponMappingMismatchBars: Number(passDiagnostics?.decisionMaking?.harmonyWeaponMappingMismatchBars) || 0,
+    harmonyWeaponMappingMismatchCount: Number(passDiagnostics?.decisionMaking?.harmonyWeaponMappingMismatchCount) || 0,
     harmonyWeaponOutsidePoolBars: Number(passDiagnostics?.decisionMaking?.harmonyWeaponOutsidePoolBars) || 0,
     harmonyWeaponOutsidePoolCount: Number(passDiagnostics?.decisionMaking?.harmonyWeaponOutsidePoolCount) || 0,
+    slotSpawnerRawPulseEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerRawPulseEvents) || 0,
+    slotSpawnerRawBackbeatEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerRawBackbeatEvents) || 0,
+    slotSpawnerQueuedPulseEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerQueuedPulseEvents) || 0,
+    slotSpawnerQueuedBackbeatEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerQueuedBackbeatEvents) || 0,
+    slotSpawnerDrainedPulseEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerDrainedPulseEvents) || 0,
+    slotSpawnerDrainedBackbeatEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerDrainedBackbeatEvents) || 0,
+    slotSpawnerFilteredPulseEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerFilteredPulseEvents) || 0,
+    slotSpawnerFilteredBackbeatEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerFilteredBackbeatEvents) || 0,
+    slotSpawnerShapedPulseEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerShapedPulseEvents) || 0,
+    slotSpawnerShapedBackbeatEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerShapedBackbeatEvents) || 0,
+    slotSpawnerExecutedPulseEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerExecutedPulseEvents) || 0,
+    slotSpawnerExecutedBackbeatEvents: Number(passDiagnostics?.decisionMaking?.slotSpawnerExecutedBackbeatEvents) || 0,
     visibleEnemyEvents: Number(visibleEnemyAudibility?.visibleEnemyEvents) || 0,
     barelyAudibleVisibleEnemyEvents: Number(visibleEnemyAudibility?.barelyAudibleVisibleEnemyEvents) || 0,
     barelyAudibleVisibleEnemyRate: Number(visibleEnemyAudibility?.barelyAudibleVisibleEnemyRate) || 0,
@@ -3153,6 +3264,16 @@ export function createBeatSwarmMusicLab(options = null) {
           trace: 0,
           suppressed: 0,
           changedByDeconflict: 0,
+        },
+        slotSpawnerStages: {
+          rawPulse: 0,
+          rawBackbeat: 0,
+          filteredPulse: 0,
+          filteredBackbeat: 0,
+          shapedPulse: 0,
+          shapedBackbeat: 0,
+          executedPulse: 0,
+          executedBackbeat: 0,
         },
       },
       threatBudgetSnapshots: [],

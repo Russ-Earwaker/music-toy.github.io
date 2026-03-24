@@ -309,13 +309,13 @@ export const ENEMY_FALLBACK_SPAWN_MARGIN_PX = 42;
 export const SPAWNER_ENEMY_ENABLED = true;
 export const SPAWNER_ENEMY_TARGET_COUNT = 1; // test mode
 export const SPAWNER_ENEMY_HEALTH_MULTIPLIER = 18;
-export const SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME = 0.16;
+export const SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME = 0.24;
 export const SPAWNER_ENEMY_GRID_WORLD_OFFSET = 86;
 export const SPAWNER_ENEMY_SPEED_MULTIPLIER = 0.5;
 export const SPAWNER_ENEMY_BURST_MIN_PX = 48;
 export const SPAWNER_ENEMY_BURST_MAX_PX = 180;
 export const SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX = 86;
-export const SPAWNER_SCHEDULING_ROTATION_BARS = 1;
+export const SPAWNER_SCHEDULING_ROTATION_BARS = 8;
 export const SPAWNER_LINKED_ATTACK_SPEED = 760;
 export const DRAW_SNAKE_ENEMY_ENABLED = true;
 export const DRAW_SNAKE_ENEMY_TARGET_COUNT = 1;
@@ -799,8 +799,8 @@ export const DRAW_SNAKE_NODE_PULSE_SECONDS = 0.22;
 export const DRAW_SNAKE_NODE_PULSE_SCALE = 0.72;
 export const SPAWNER_PERCUSSION_LAYER_LOCK_BARS = Object.freeze({
   pulse: 16,
-  backbeat: 8,
-  motion: 4,
+  backbeat: 16,
+  motion: 8,
 });
 export const composerRuntime = {
   enabled: COMPOSER_ENABLED,

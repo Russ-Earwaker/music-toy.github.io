@@ -34,6 +34,9 @@ export function executePerformedBeatEventRuntime(options = null) {
   const inferInstrumentLaneFromCatalogId = typeof helpers.inferInstrumentLaneFromCatalogId === 'function'
     ? helpers.inferInstrumentLaneFromCatalogId
     : ((_, fallbackLane = 'lead') => String(fallbackLane || 'lead').trim().toLowerCase() || 'lead');
+  const getInstrumentPlaybackMetadata = typeof helpers.getInstrumentPlaybackMetadata === 'function'
+    ? helpers.getInstrumentPlaybackMetadata
+    : (() => null);
   const payloadGroupId = Math.max(0, Math.trunc(Number(ev?.payload?.groupId) || 0));
   const logMusicLabExecution = (context = null) => {
     const base = context && typeof context === 'object' ? context : {};
@@ -311,8 +314,39 @@ export function executePerformedBeatEventRuntime(options = null) {
     const clamped = octave >= 4 ? (octave - 1) : (octave < 2 ? 2 : octave);
     return `${letter}${accidental}${clamped}`;
   };
+  const buildPlaybackLoggingContext = (instrumentIdLike, triggerVolumeLike) => {
+    const meta = getInstrumentPlaybackMetadata(instrumentIdLike) || null;
+    const triggerVolume = Math.max(0, Number(triggerVolumeLike) || 0);
+    const sampleVolumeMultiplier = Math.max(0.0001, Number(meta?.sampleVolumeMultiplier) || 1);
+    return {
+      resolvedPlaybackInstrumentId: String(meta?.instrumentId || instrumentIdLike || '').trim(),
+      playbackKind: String(meta?.playbackKind || '').trim().toLowerCase(),
+      sampleVolumeHint: String(meta?.sampleVolumeHint || '').trim(),
+      sampleVolumeMultiplier,
+      triggerVolume,
+      approxPlaybackVolume: triggerVolume * sampleVolumeMultiplier,
+    };
+  };
   const hasExplicitOctave = (noteLike) => /^([A-Ga-g])([#b]?)(-?\d+)$/.test(String(noteLike || '').trim());
   const enemyForAction = helpers.getSwarmEnemyById?.(ev.actorId) || null;
+  const noteSlotSpawnerExecutionReason = (enemyLike, payload = null) => {
+    const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
+    const musicVoiceKey = String(enemy?.musicVoiceKey || ev?.payload?.musicVoiceKey || '').trim().toLowerCase();
+    if (!musicVoiceKey) return;
+    try {
+      helpers.noteMusicSystemEvent?.('music_slot_spawner_execution_reason', {
+        actorId: Math.max(0, Math.trunc(Number(enemy?.id || ev?.actorId) || 0)),
+        groupId: Math.max(0, Math.trunc(Number(ev?.payload?.groupId) || 0)),
+        musicVoiceKey,
+        musicLayer: String(ev?.payload?.musicLayer || '').trim().toLowerCase(),
+        continuityId: String(enemy?.musicContinuityId || enemy?.continuityId || '').trim(),
+        reason: String(payload?.reason || '').trim().toLowerCase(),
+        failureReason: String(payload?.failureReason || '').trim().toLowerCase(),
+        instrumentId: String(payload?.instrumentId || '').trim(),
+        phase: String(payload?.phase || '').trim().toLowerCase(),
+      }, { beatIndex, stepIndex, barIndex });
+    } catch {}
+  };
   if (actionType === 'projectile' && enemyForAction) {
     const enemyType = String(enemyForAction?.enemyType || '').trim().toLowerCase();
     if (enemyType === 'spawner') actionType = 'spawner-spawn';
@@ -323,11 +357,46 @@ export function executePerformedBeatEventRuntime(options = null) {
   if (actionType === 'spawner-spawn') {
     return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner', () => {
     const enemy = helpers.getSwarmEnemyById?.(ev.actorId);
-    if (!enemy || String(enemy?.enemyType || '') !== 'spawner') return false;
-    const group = withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.group', () => (
+    if (!enemy || String(enemy?.enemyType || '') !== 'spawner') {
+      noteSlotSpawnerExecutionReason(enemy, { reason: 'missing_enemy', failureReason: 'missing_enemy' });
+      return false;
+    }
+    const liveGroup = withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.group', () => (
       helpers.getEnemyMusicGroup?.(enemy, 'spawner-spawn', { sync: false })
     ));
-    if (!group) return false;
+    const slotOwnedSpawner = !!String(enemy?.musicVoiceKey || '').trim();
+    if (slotOwnedSpawner) {
+      try {
+        helpers.noteMusicSystemEvent?.('music_slot_spawner_stage', {
+          stage: 'executed',
+          actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
+          groupId: Math.max(0, Math.trunc(Number(ev?.payload?.groupId) || 0)),
+          musicVoiceKey: String(enemy?.musicVoiceKey || '').trim().toLowerCase(),
+          musicLayer: String(ev?.payload?.musicLayer || '').trim().toLowerCase(),
+          continuityId: String(enemy?.musicContinuityId || enemy?.continuityId || '').trim(),
+          actionType: 'spawner-spawn',
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    }
+    const group = slotOwnedSpawner
+      ? {
+        id: 0,
+        role: String(ev.role || enemy?.musicalRole || constants?.roles?.bass || 'bass').trim().toLowerCase(),
+        actionType: 'spawner-spawn',
+        note: String(enemy?.spawnerNoteName || '').trim(),
+        instrumentId: String(enemy?.spawnerInstrument || enemy?.musicInstrumentId || enemy?.instrumentId || '').trim(),
+        steps: Array.isArray(enemy?.spawnerSteps) ? enemy.spawnerSteps.slice(0, 8) : [],
+        noteIndices: Array.isArray(enemy?.spawnerNoteIndices) ? enemy.spawnerNoteIndices.slice(0, 8) : [],
+        notePalette: Array.isArray(enemy?.spawnerNotePalette) ? enemy.spawnerNotePalette.slice() : [],
+        continuityId: String(enemy?.musicContinuityId || enemy?.continuityId || '').trim(),
+        lifecycleState: String(enemy?.lifecycleState || 'active').trim(),
+      }
+      : (liveGroup || null);
+    if (!group) {
+      noteSlotSpawnerExecutionReason(enemy, { reason: 'missing_group', failureReason: 'missing_group' });
+      return false;
+    }
+    noteSlotSpawnerExecutionReason(enemy, { reason: 'entered', instrumentId: String(group?.instrumentId || enemy?.spawnerInstrument || '').trim() });
     const sourceEnemyId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
     const sourceGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
     const emitSpawnerSystemEvent = (eventType, payload = null) => {
@@ -450,12 +519,29 @@ export function executePerformedBeatEventRuntime(options = null) {
     }
     const shouldTriggerGroupAudio = shouldTriggerAudio
       && String(group?.lastAudioDedupKey || '') !== audioDedupKey;
+    if (audioMutedExplicitly) {
+      noteSlotSpawnerExecutionReason(enemy, {
+        reason: 'audio_muted',
+        failureReason: 'audio_muted',
+        instrumentId,
+      });
+    } else if (!shouldTriggerGroupAudio) {
+      noteSlotSpawnerExecutionReason(enemy, {
+        reason: 'audio_deduped',
+        failureReason: 'audio_deduped',
+        instrumentId,
+      });
+    }
     if (shouldTriggerGroupAudio) {
       withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.audioTrigger', () => {
         try {
           helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume);
           audioTriggered = true;
           group.lastAudioDedupKey = audioDedupKey;
+          noteSlotSpawnerExecutionReason(enemy, {
+            reason: 'audio_triggered',
+            instrumentId,
+          });
         } catch {}
       });
     }
@@ -502,7 +588,14 @@ export function executePerformedBeatEventRuntime(options = null) {
         }
         return true;
       });
-      if (!spawned) return false;
+      if (!spawned) {
+        noteSlotSpawnerExecutionReason(enemy, {
+          reason: 'spawn_link_failed',
+          failureReason: 'spawn_link_failed',
+          instrumentId,
+        });
+        return false;
+      }
       if ((shouldFlashSpawnerCell && !visualTriggered) || (!audioTriggered && !audioMutedExplicitly)) {
         emitSpawnerSystemEvent('music_spawner_pipeline_mismatch', {
           sourceEnemyId,
@@ -518,7 +611,12 @@ export function executePerformedBeatEventRuntime(options = null) {
           noteWasClamped: requestedNote ? requestedNote !== noteName : false,
           enemyAudible,
           musicProminence,
+          ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
         });
+      });
+      noteSlotSpawnerExecutionReason(enemy, {
+        reason: 'completed_spawned_link',
+        instrumentId,
       });
       return true;
     }
@@ -553,7 +651,12 @@ export function executePerformedBeatEventRuntime(options = null) {
         noteWasClamped: requestedNote ? requestedNote !== noteName : false,
         enemyAudible,
         musicProminence,
+        ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
       });
+    });
+    noteSlotSpawnerExecutionReason(enemy, {
+      reason: 'completed_existing_link',
+      instrumentId,
     });
     return true;
   });
@@ -642,6 +745,7 @@ export function executePerformedBeatEventRuntime(options = null) {
         noteWasClamped: requestedNote ? requestedNote !== noteName : false,
         enemyAudible,
         musicProminence,
+        ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
       });
     });
     return true;
@@ -845,6 +949,7 @@ export function executePerformedBeatEventRuntime(options = null) {
       noteWasClamped: requestedNote ? requestedNote !== noteName : false,
       enemyAudible,
       musicProminence,
+      ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
     });
     return true;
   });

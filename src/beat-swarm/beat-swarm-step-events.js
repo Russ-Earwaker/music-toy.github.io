@@ -76,7 +76,18 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   };
   let queuedStepEvents = 0;
   let drainedStepEvents = 0;
-  const playerStepDirective = helpers.getPlayerInstrumentStepDirective?.(stepIndex, beatIndex) || { emit: true, mode: 'free_fire', reason: 'default' };
+  const playerStepDirective = helpers.getPlayerInstrumentStepDirective?.(stepIndex, beatIndex) || {
+    emit: true,
+    mode: 'free_fire',
+    reason: 'default',
+    musicRole: 'support',
+    musicLayer: 'loops',
+    presentation: 'supportive',
+    registerTarget: 'mid_high',
+    volumeMult: 0.82,
+    structureIntent: 'intro',
+    effectiveIntent: 'intro',
+  };
 
   const playerTuneAuthoredStep = helpers.isPlayerWeaponTuneStepAuthoredActive?.(stepIndex) === true;
   const shouldEmitPlayerStep = (() => {
@@ -90,6 +101,25 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   let spawnerStep = null;
   let rawEnemyEvents = [];
   let filteredEnemyEvents = [];
+  const noteSlotSpawnerStage = (stage, eventsLike = null) => {
+    const events = Array.isArray(eventsLike) ? eventsLike : [];
+    for (const ev of events) {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const musicVoiceKey = String(payload?.musicVoiceKey || '').trim().toLowerCase();
+      if (!musicVoiceKey) continue;
+      try {
+        helpers.noteMusicSystemEvent?.('music_slot_spawner_stage', {
+          stage: String(stage || '').trim().toLowerCase(),
+          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
+          groupId: Math.max(0, Math.trunc(Number(payload?.groupId) || 0)),
+          musicVoiceKey,
+          musicLayer: String(payload?.musicLayer || '').trim().toLowerCase(),
+          continuityId: String(payload?.continuityId || '').trim(),
+          actionType: String(ev?.actionType || '').trim().toLowerCase(),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    }
+  };
   {
     const finishCollectPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect');
     let spawnerEvents = [];
@@ -116,6 +146,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       ...drawSnakeEvents,
       ...composerEvents,
     ];
+    noteSlotSpawnerStage('raw', rawEnemyEvents);
 
     let enemyKeepCount = 0;
     if (playerLikelyAudible) {
@@ -129,6 +160,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     } else {
       filteredEnemyEvents = rawEnemyEvents;
     }
+    noteSlotSpawnerStage('filtered', filteredEnemyEvents);
     finishCollectPerf();
   }
 
@@ -437,7 +469,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const foundationCandidates = effectiveEnemyEvents.filter((ev) => {
       const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
       const action = String(ev?.actionType || '').trim().toLowerCase();
-      const actionIsFoundationLike = action === 'spawner-spawn' || action === 'composer-group-projectile';
+      const explicitLayer = String(payload?.musicLayer || '').trim().toLowerCase();
+      const actionIsFoundationLike = action === 'composer-group-projectile'
+        || (action === 'spawner-spawn' && (!explicitLayer || explicitLayer === 'foundation'));
       if (!actionIsFoundationLike && String(payload?.musicLayer || '').trim().toLowerCase() !== 'foundation') return false;
       return resolveProtectedLaneClaim(ev, foundationLaneRuntime, 'foundation_lane');
     });
@@ -464,9 +498,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       effectiveEnemyEvents = effectiveEnemyEvents.filter((ev) => {
         const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
         const action = String(ev?.actionType || '').trim().toLowerCase();
+        const explicitLayer = String(payload?.musicLayer || '').trim().toLowerCase();
         const isFoundation = (
           String(payload?.musicLayer || '').trim().toLowerCase() === 'foundation'
-          || action === 'spawner-spawn'
+          || (action === 'spawner-spawn' && (!explicitLayer || explicitLayer === 'foundation'))
           || action === 'composer-group-projectile'
         ) && resolveProtectedLaneClaim(ev, foundationLaneRuntime, 'foundation_lane');
         return !isFoundation || ev === chosenFoundation;
@@ -485,7 +520,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const hasProtectedFoundationEvent = effectiveEnemyEvents.some((ev) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     const action = String(ev?.actionType || '').trim().toLowerCase();
-    const actionIsFoundationLike = action === 'spawner-spawn' || action === 'composer-group-projectile';
+    const explicitLayer = String(payload?.musicLayer || '').trim().toLowerCase();
+    const actionIsFoundationLike = action === 'composer-group-projectile'
+      || (action === 'spawner-spawn' && (!explicitLayer || explicitLayer === 'foundation'));
     if (!actionIsFoundationLike && String(payload?.musicLayer || '').trim().toLowerCase() !== 'foundation') return false;
     return resolveProtectedLaneClaim(ev, foundationLaneRuntime, 'foundation_lane');
   });
@@ -508,7 +545,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         const finishShapeEmittersBassReplacePerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bassReplace');
         effectiveEnemyEvents = effectiveEnemyEvents.filter((ev) => {
           const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
-          return String(ev?.role || payload?.musicRole || '').trim().toLowerCase() !== 'bass';
+          const role = String(ev?.role || payload?.musicRole || '').trim().toLowerCase();
+          const explicitLayer = String(payload?.musicLayer || '').trim().toLowerCase();
+          if (role !== 'bass') return true;
+          // Preserve explicit loop-layer drum companions; foundation recovery should only replace
+          // missing foundation material, not wipe the backbeat slot.
+          return explicitLayer === 'loops' || explicitLayer === 'sparkle';
         });
         effectiveEnemyEvents.push(keepalive);
         try { helpers.noteNaturalBassStep?.(stepIndex); } catch {}
@@ -581,8 +623,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     finishShapeStructuralCollapsePerf();
     finishShapeEmittersPerf();
-  }
-  finishShapePerf();
+    }
+    noteSlotSpawnerStage('shaped', effectiveEnemyEvents);
+    finishShapePerf();
   }
 
   let stepEvents = [];
@@ -706,6 +749,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const foundationStepIndexNow = Math.max(0, Math.trunc(Number(foundationLaneSnapshot?.stepIndex) || 0));
   const profiledAnnotated = profiledEnemyEvents.map((ev, idx) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const musicVoiceKey = String(payload.musicVoiceKey || '').trim().toLowerCase();
     const layer = String(payload.musicLayer || 'sparkle').trim().toLowerCase();
     const safeLayer = (layer === 'foundation' || layer === 'loops' || layer === 'sparkle') ? layer : 'sparkle';
     const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
@@ -815,6 +859,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       isFoundationStructuralStep,
       isPrimaryLoopLaneEvent,
       callResponseLane,
+      musicVoiceKey,
+      isReservedPercussionCompanion: musicVoiceKey === 'percussion_backbeat' && safeLayer === 'loops',
       score,
       duplicateKey: [
         safeLayer,
@@ -854,6 +900,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const selectedIds = new Set();
   const selectedRegisterCounts = new Map();
   const selectedMelodicCollisionKeys = new Set();
+  let reservedPercussionCompanionSelected = false;
   const sortedForSelection = profiledAnnotated
     .slice()
     .sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
@@ -868,9 +915,13 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     const bucket = keptByLayer[item.layer] || [];
     const budget = Math.max(0, Math.trunc(Number(layerBudgets[item.layer]) || 0));
-    if (bucket.length >= budget) continue;
+    if (item.isReservedPercussionCompanion) {
+      if (reservedPercussionCompanionSelected) continue;
+    } else if (bucket.length >= budget) continue;
     const registerCount = Math.max(0, Math.trunc(Number(selectedRegisterCounts.get(item.collisionRegisterKey) || 0)));
     if (
+      !item.isReservedPercussionCompanion
+      &&
       item.layer === 'loops'
       && item.register
       && item.register !== 'low'
@@ -879,19 +930,26 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ) {
       continue;
     }
-    if (item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
+    if (!item.isReservedPercussionCompanion && item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
     bucket.push(item);
     selectedIds.add(item.idx);
     selectedRegisterCounts.set(item.collisionRegisterKey, registerCount + 1);
     if (item.melodicCollisionKey) selectedMelodicCollisionKeys.add(item.melodicCollisionKey);
+    if (item.isReservedPercussionCompanion) reservedPercussionCompanionSelected = true;
     if (keptByLayer[item.layer] !== bucket) keptByLayer[item.layer] = bucket;
   }
   const foundationSelected = keptByLayer.foundation.length > 0;
   if (foundationSelected && currentForegroundIdentityLayer === 'loops' && keptByLayer.loops.length > 1) {
-    keptByLayer.loops = keptByLayer.loops
+    const reservedCompanions = keptByLayer.loops.filter((item) => item.isReservedPercussionCompanion);
+    const nonReservedLoops = keptByLayer.loops.filter((item) => !item.isReservedPercussionCompanion);
+    const bestNonReserved = nonReservedLoops
       .slice()
       .sort((a, b) => (b.score - a.score) || (a.idx - b.idx))
       .slice(0, 1);
+    keptByLayer.loops = [
+      ...reservedCompanions.slice(0, 1),
+      ...bestNonReserved,
+    ];
     selectedIds.clear();
     for (const bucketName of Object.keys(keptByLayer)) {
       for (const item of keptByLayer[bucketName] || []) selectedIds.add(item.idx);
@@ -964,6 +1022,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   for (let idx = 0; idx < arbitratedEnemyEvents.length; idx += 1) {
     const profiled = arbitratedEnemyEvents[idx];
     const payload = profiled?.payload && typeof profiled.payload === 'object' ? profiled.payload : {};
+    const musicVoiceKey = String(payload.musicVoiceKey || '').trim().toLowerCase();
     const layer = String(payload.musicLayer || 'sparkle').trim().toLowerCase();
     const safeLayer = (layer === 'foundation' || layer === 'loops' || layer === 'sparkle') ? layer : 'sparkle';
     const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
@@ -1024,6 +1083,38 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
           suppressedByArbitration: safeProminence === 'suppressed',
           decisionReason,
           playerLikelyAudible,
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+      if (musicVoiceKey) {
+        try {
+          helpers.noteMusicSystemEvent?.('music_slot_spawner_admission', {
+            actorId: Math.max(0, Math.trunc(Number(profiled?.actorId) || 0)),
+            groupId: Math.max(0, Math.trunc(Number(payload?.groupId) || 0)),
+            actionType: String(profiled?.actionType || '').trim().toLowerCase(),
+            musicVoiceKey,
+            musicLayer: safeLayer,
+            continuityId: String(payload?.continuityId || '').trim(),
+            admitted: safeProminence !== 'suppressed',
+            requestedProminence: String(preArbitration.prominence || ''),
+            finalProminence: safeProminence,
+            reason: decisionReason,
+          }, { beatIndex, stepIndex, barIndex });
+        } catch {}
+      }
+    }
+    if (musicVoiceKey && (!preArbitration || safeProminence === preArbitration.prominence)) {
+      try {
+        helpers.noteMusicSystemEvent?.('music_slot_spawner_admission', {
+          actorId: Math.max(0, Math.trunc(Number(profiled?.actorId) || 0)),
+          groupId: Math.max(0, Math.trunc(Number(payload?.groupId) || 0)),
+          actionType: String(profiled?.actionType || '').trim().toLowerCase(),
+          musicVoiceKey,
+          musicLayer: safeLayer,
+          continuityId: String(payload?.continuityId || '').trim(),
+          admitted: safeProminence !== 'suppressed',
+          requestedProminence: String(preArbitration?.prominence || safeProminence),
+          finalProminence: safeProminence,
+          reason: safeProminence === 'suppressed' ? 'suppressed_unchanged' : 'admitted',
         }, { beatIndex, stepIndex, barIndex });
       } catch {}
     }
@@ -1107,14 +1198,18 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (!shouldEmitPlayerStep) return false;
     if (!crowdedMusicalStep) return true;
     if (playerStepDirective.manualOverrideActive === true) return true;
+    if (String(playerStepDirective.presentation || '').trim().toLowerCase() === 'restrained' && !playerTuneAuthoredStep) {
+      return false;
+    }
     if (playerTuneAuthoredStep) {
       return (stepIndex % 2) === 0;
     }
     return false;
   })();
-  const basePlayerSoundVolumeMult = foundationSelected
+  const playerSectionVolumeMult = Math.max(0.45, Math.min(1, Number(playerStepDirective.volumeMult) || 0.82));
+  const basePlayerSoundVolumeMult = (foundationSelected
     ? (primaryLoopForegroundPresent ? 0.46 : 0.68)
-    : 1;
+    : 1) * playerSectionVolumeMult;
   const stagedSoundCount = emittedEnemyEvents.reduce((sum, ev) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
@@ -1298,6 +1393,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
           playerSoundVolumeMult,
           globalStepGainScale,
           stagedSoundCount,
+          playerMusicRole: String(playerStepDirective.musicRole || 'support').trim().toLowerCase(),
+          playerMusicLayer: String(playerStepDirective.musicLayer || 'loops').trim().toLowerCase(),
+          playerPresentation: String(playerStepDirective.presentation || 'supportive').trim().toLowerCase(),
+          playerRegisterTarget: String(playerStepDirective.registerTarget || 'mid_high').trim().toLowerCase(),
+          playerStructureIntent: String(playerStepDirective.structureIntent || '').trim().toLowerCase(),
+          playerEffectiveIntent: String(playerStepDirective.effectiveIntent || '').trim().toLowerCase(),
           playerCadenceMode: String(playerStepDirective.mode || 'free_fire'),
           playerCadenceReason: playerTuneAuthoredStep
             ? 'tune_override'
@@ -1313,6 +1414,26 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       })
       : null,
   ].filter(Boolean);
+  if (shouldEmitPlayerStepFinal) {
+    try {
+      helpers.noteMusicSystemEvent?.('music_player_layer_state', {
+        foundationPresent: foundationSelected,
+        primaryLoopForegroundPresent,
+        crowdedMusicalStep,
+        playerLikelyAudible,
+        playerTuneAuthoredStep,
+        playerMusicRole: String(playerStepDirective.musicRole || 'support').trim().toLowerCase(),
+        playerMusicLayer: String(playerStepDirective.musicLayer || 'loops').trim().toLowerCase(),
+        playerPresentation: String(playerStepDirective.presentation || 'supportive').trim().toLowerCase(),
+        playerRegisterTarget: String(playerStepDirective.registerTarget || 'mid_high').trim().toLowerCase(),
+        playerStructureIntent: String(playerStepDirective.structureIntent || '').trim().toLowerCase(),
+        playerEffectiveIntent: String(playerStepDirective.effectiveIntent || '').trim().toLowerCase(),
+        playerCadenceMode: String(playerStepDirective.mode || 'free_fire').trim().toLowerCase(),
+        playerCadenceReason: playerTuneAuthoredStep ? 'tune_override' : String(playerStepDirective.reason || '').trim().toLowerCase(),
+        playerVolumeMult: playerSoundVolumeMult,
+      }, { beatIndex, stepIndex, barIndex });
+    } catch {}
+  }
   readabilityStepStats.playerStepEmitted = shouldEmitPlayerStep;
   readabilityStepStats.playerLikelyAudible = playerLikelyAudible;
   finishArbitratePerf();
@@ -1320,6 +1441,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
 
   {
   const finishQueuePerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.queue');
+  noteSlotSpawnerStage('queued', stepEvents);
   for (const ev of stepEvents) {
     const queued = helpers.director?.enqueueBeatEvent?.(ev);
     if (!queued) continue;
@@ -1338,6 +1460,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   {
     const finishExecutePerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.execute');
     const drained = helpers.director?.drainBeatEventsForStep?.(beatIndex, stepIndex) || [];
+    noteSlotSpawnerStage('drained', drained);
     for (const ev of drained) {
       if (helpers.executePerformedBeatEvent?.(ev)) drainedStepEvents += 1;
     }

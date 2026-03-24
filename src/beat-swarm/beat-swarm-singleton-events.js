@@ -19,9 +19,20 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
 
   const enemies = Array.isArray(options?.enemies) ? options.enemies : [];
   const getEnemyMusicGroup = typeof options?.getEnemyMusicGroup === 'function' ? options.getEnemyMusicGroup : (() => null);
-  const normalizeMusicLifecycleState = typeof options?.normalizeMusicLifecycleState === 'function'
+    const normalizeMusicLifecycleState = typeof options?.normalizeMusicLifecycleState === 'function'
     ? options.normalizeMusicLifecycleState
-    : ((value) => String(value || '').trim().toLowerCase() || 'active');
+    : ((value, fallback = 'active') => {
+      const raw = String(value || '').trim().toLowerCase();
+      if (raw === 'active') return 'active';
+      if (raw === 'retiring') return 'retiring';
+      if (raw === 'deemphasized' || raw === 'de_emphasized' || raw === 'de-emphasized') return 'deEmphasized';
+      if (raw === 'inactiveforscheduling' || raw === 'inactive_for_scheduling' || raw === 'inactive-for-scheduling') return 'inactiveForScheduling';
+      const fb = String(fallback || 'active').trim().toLowerCase();
+      if (fb === 'retiring') return 'retiring';
+      if (fb === 'deemphasized' || fb === 'de_emphasized' || fb === 'de-emphasized') return 'deEmphasized';
+      if (fb.includes('inactive')) return 'inactiveForScheduling';
+      return 'active';
+    });
   const isCallResponseLaneActive = typeof options?.isCallResponseLaneActive === 'function'
     ? options.isCallResponseLaneActive
     : (() => true);
@@ -175,16 +186,9 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
     enemy.__bsLastDrawsnakeRow = row;
     enemy.__bsLastDrawsnakeNote = normalizeSwarmNoteName(noteNameRaw) || noteNameRaw;
     enemy.__bsLastDrawsnakeEmitStep = stepAbs;
-    const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling' ? 0.35 : 1;
-    if (
-      laneDrivenPrimaryLoop
-      && lanePrimaryLoopActive
-      && !isPrimaryLoopOwner
-      && lifecycleState === 'inactiveForScheduling'
-      && !idleRescueWindow
-    ) {
-      continue;
-    }
+    const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling'
+      ? 0.35
+      : (lifecycleState === 'deEmphasized' ? 0.52 : 1);
     const baseAudioGain = clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain) * lifecycleAudioGain);
     const deconflictedAudioGain = (laneDrivenPrimaryLoop && lanePrimaryLoopActive && !isPrimaryLoopOwner)
       ? clamp01(baseAudioGain * 0.72)
@@ -242,7 +246,18 @@ export function collectSpawnerStepBeatEvents(options = null) {
   const getEnemyMusicGroup = typeof options?.getEnemyMusicGroup === 'function' ? options.getEnemyMusicGroup : (() => null);
   const normalizeMusicLifecycleState = typeof options?.normalizeMusicLifecycleState === 'function'
     ? options.normalizeMusicLifecycleState
-    : ((value) => String(value || '').trim().toLowerCase() || 'active');
+    : ((value, fallback = 'active') => {
+      const raw = String(value || '').trim().toLowerCase();
+      if (raw === 'active') return 'active';
+      if (raw === 'retiring') return 'retiring';
+      if (raw === 'deemphasized' || raw === 'de_emphasized' || raw === 'de-emphasized') return 'deEmphasized';
+      if (raw === 'inactiveforscheduling' || raw === 'inactive_for_scheduling' || raw === 'inactive-for-scheduling') return 'inactiveForScheduling';
+      const fb = String(fallback || 'active').trim().toLowerCase();
+      if (fb === 'retiring') return 'retiring';
+      if (fb === 'deemphasized' || fb === 'de_emphasized' || fb === 'de-emphasized') return 'deEmphasized';
+      if (fb.includes('inactive')) return 'inactiveForScheduling';
+      return 'active';
+    });
   const normalizeSwarmNoteName = typeof options?.normalizeSwarmNoteName === 'function'
     ? options.normalizeSwarmNoteName
     : ((n) => String(n || '').trim());
@@ -309,9 +324,25 @@ export function collectSpawnerStepBeatEvents(options = null) {
 
   for (const enemy of enemies) {
     if (String(enemy?.enemyType || '') !== 'spawner') continue;
+    const actorId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
+    const slotOwnedSpawner = !!String(enemy?.musicVoiceKey || '').trim();
     const finishGroupPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.spawner.group');
-    const group = getEnemyMusicGroup(enemy, 'spawner-spawn', { sync: false });
+    const liveGroup = getEnemyMusicGroup(enemy, 'spawner-spawn', { sync: false });
     finishGroupPerf();
+    const group = slotOwnedSpawner
+      ? {
+        id: 0,
+        role: getSwarmRoleForEnemy(enemy, bassRoleKey),
+        actionType: 'spawner-spawn',
+        note: String(enemy?.spawnerNoteName || '').trim(),
+        instrumentId: String(enemy?.spawnerInstrument || enemy?.musicInstrumentId || enemy?.instrumentId || '').trim(),
+        steps: Array.isArray(enemy?.spawnerSteps) ? enemy.spawnerSteps.slice(0, 8) : [],
+        noteIndices: Array.isArray(enemy?.spawnerNoteIndices) ? enemy.spawnerNoteIndices.slice(0, 8) : [],
+        notePalette: Array.isArray(enemy?.spawnerNotePalette) ? enemy.spawnerNotePalette.slice() : [],
+        continuityId: String(enemy?.musicContinuityId || enemy?.continuityId || '').trim(),
+        lifecycleState: String(enemy?.lifecycleState || 'active').trim(),
+      }
+      : (liveGroup || null);
     if (!group) continue;
     const lifecycleState = normalizeMusicLifecycleState(group?.lifecycleState || enemy?.lifecycleState || 'active', 'active');
     const loopTailUntilStep = Math.max(0, Math.trunc(Number(enemy?.musicLoopTailUntilStep) || 0));
@@ -321,13 +352,16 @@ export function collectSpawnerStepBeatEvents(options = null) {
     );
     if (enemy?.retreating && !tailContinuationActive) continue;
     if (lifecycleState === 'retiring' && !tailContinuationActive) continue;
-    const actorId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
+    const introDrumLayerIndex = Math.max(-1, Math.trunc(Number(enemy?.__bsIntroDrumLayerIndex) || -1));
+    const introDrumLayerActive = introDrumLayerIndex >= 0;
     stats.activeSpawners += 1;
-    const steps = Array.isArray(group?.steps) ? group.steps : [];
+    const steps = slotOwnedSpawner
+      ? (Array.isArray(enemy?.spawnerSteps) ? enemy.spawnerSteps : (Array.isArray(group?.steps) ? group.steps : []))
+      : (Array.isArray(group?.steps) ? group.steps : []);
     const isActiveStep = !!steps[step];
     const lifecycleAudioGain = tailContinuationActive
       ? 0.82
-      : (lifecycleState === 'inactiveForScheduling' ? 0.6 : 1);
+      : (lifecycleState === 'inactiveForScheduling' ? 0.6 : (lifecycleState === 'deEmphasized' ? 0.86 : 1));
     if (!isActiveStep) continue;
     stats.triggeredSpawners += 1;
     const lockedInstrumentId = String(
@@ -362,6 +396,8 @@ export function collectSpawnerStepBeatEvents(options = null) {
       && isBassRole
       && !isFoundationOwner
       && lifecycleState === 'inactiveForScheduling'
+      && !slotOwnedSpawner
+      && !introDrumLayerActive
       && !tailContinuationActive
     ) {
       continue;
@@ -411,7 +447,7 @@ export function collectSpawnerStepBeatEvents(options = null) {
       enemy.musicLoopTailLaneId = '';
       continue;
     }
-    let noteNameRaw = normalizeSwarmNoteName(group?.note) || (isBassRole ? 'C3' : 'C4');
+    let noteNameRaw = normalizeSwarmNoteName(slotOwnedSpawner ? enemy?.spawnerNoteName : group?.note) || normalizeSwarmNoteName(group?.note) || (isBassRole ? 'C3' : 'C4');
     if (isBassRole) {
       const locked = normalizeSwarmNoteName(enemy?.__bsLockedBassNote) || noteNameRaw || 'C3';
       enemy.__bsLockedBassNote = locked;
@@ -435,9 +471,20 @@ export function collectSpawnerStepBeatEvents(options = null) {
     finishShapePerf();
     const finishEventPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.spawner.event');
     const baseAudioGain = clamp01(Number(enemy?.musicParticipationGain == null ? 1 : enemy.musicParticipationGain) * lifecycleAudioGain);
-    const deconflictedAudioGain = (laneDrivenFoundation && isBassRole && !isFoundationOwner)
-      ? clamp01(baseAudioGain * 0.78)
-      : baseAudioGain;
+    const percussionPresenceGain = isBassRole
+      ? (introDrumLayerActive
+        ? (introDrumLayerIndex === 0 ? 1.28 : 1.18)
+        : (isFoundationOwner ? 1.12 : 1.04))
+      : 1;
+    const deconflictedAudioGain = (laneDrivenFoundation && isBassRole && !isFoundationOwner && !introDrumLayerActive && !slotOwnedSpawner)
+      ? Math.max(0.72, clamp01(baseAudioGain * 0.86 * percussionPresenceGain))
+      : ((introDrumLayerActive || slotOwnedSpawner)
+        ? Math.max(introDrumLayerIndex === 0 ? 1 : 0.94, clamp01(baseAudioGain * percussionPresenceGain))
+        : clamp01(baseAudioGain * percussionPresenceGain));
+    const musicVoiceKey = String(enemy?.musicVoiceKey || '').trim().toLowerCase();
+    const explicitMusicLayer = musicVoiceKey === 'percussion_backbeat'
+      ? 'loops'
+      : (musicVoiceKey === 'percussion_motion' ? 'sparkle' : 'foundation');
     events.push(createLoggedPerformedBeatEvent({
       actorId,
       beatIndex,
@@ -456,6 +503,9 @@ export function collectSpawnerStepBeatEvents(options = null) {
         requestedNoteRaw: noteNameRaw,
         spawnerTailContinuation: tailContinuationActive,
         spawnerFoundationOwner: isFoundationOwner,
+        spawnerReadabilityPulse: false,
+        musicVoiceKey,
+        musicLayer: explicitMusicLayer,
       },
     }, {
       beatIndex,

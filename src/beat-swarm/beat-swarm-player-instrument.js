@@ -36,6 +36,84 @@ function normalizePattern(patternLike, length = 8, fallback = null) {
   return out;
 }
 
+function normalizeStructureIntent(intentLike, fallback = 'drive') {
+  const raw = String(intentLike || '').trim().toLowerCase();
+  if (raw === 'intro' || raw === 'build' || raw === 'drive' || raw === 'drop' || raw === 'peak') return raw;
+  return String(fallback || 'drive').trim().toLowerCase() || 'drive';
+}
+
+function getSectionDirective(context = null, stepsPerBar = 8, baseSubdivision = 4) {
+  const structureIntent = normalizeStructureIntent(context?.structureIntent, 'drive');
+  const preDropActive = context?.preDropActive === true;
+  const hasAuthoredTune = context?.hasAuthoredTune === true;
+  const effectiveIntent = preDropActive ? 'predrop' : structureIntent;
+  const base = {
+    structureIntent,
+    effectiveIntent,
+    musicRole: 'support',
+    musicLayer: 'loops',
+    presentation: 'supportive',
+    registerTarget: 'mid_high',
+    volumeMult: 0.82,
+    targetSubdivision: Math.max(1, clampInt(baseSubdivision, 4, 1, stepsPerBar)),
+  };
+  if (effectiveIntent === 'intro') {
+    return {
+      ...base,
+      presentation: 'restrained',
+      registerTarget: 'high',
+      volumeMult: hasAuthoredTune ? 0.72 : 0.62,
+      targetSubdivision: Math.max(1, Math.min(base.targetSubdivision, 2)),
+    };
+  }
+  if (effectiveIntent === 'build') {
+    return {
+      ...base,
+      presentation: 'supportive',
+      registerTarget: 'mid_high',
+      volumeMult: hasAuthoredTune ? 0.84 : 0.76,
+      targetSubdivision: Math.max(1, Math.min(base.targetSubdivision, 4)),
+    };
+  }
+  if (effectiveIntent === 'predrop') {
+    return {
+      ...base,
+      presentation: 'tense_support',
+      registerTarget: 'mid_high',
+      volumeMult: hasAuthoredTune ? 0.76 : 0.66,
+      targetSubdivision: Math.max(1, Math.min(base.targetSubdivision, 4)),
+    };
+  }
+  if (effectiveIntent === 'peak') {
+    return {
+      ...base,
+      musicRole: 'accent',
+      presentation: 'assertive_support',
+      registerTarget: 'mid',
+      volumeMult: hasAuthoredTune ? 0.86 : 0.78,
+      targetSubdivision: Math.max(1, Math.min(base.targetSubdivision, 4)),
+    };
+  }
+  if (effectiveIntent === 'drop') {
+    return {
+      ...base,
+      musicRole: 'accent',
+      presentation: 'restrained',
+      registerTarget: 'high',
+      volumeMult: hasAuthoredTune ? 0.64 : 0.54,
+      targetSubdivision: Math.max(1, Math.min(base.targetSubdivision, 2)),
+    };
+  }
+  return {
+    ...base,
+    musicRole: 'support',
+    presentation: 'reinforcement',
+    registerTarget: 'mid',
+    volumeMult: hasAuthoredTune ? 0.9 : 0.8,
+    targetSubdivision: Math.max(1, Math.min(base.targetSubdivision, 4)),
+  };
+}
+
 export function createBeatSwarmPlayerInstrumentRuntime(options = null) {
   const stepsPerBar = Math.max(1, clampInt(options?.stepsPerBar, 8, 1, 128));
   const state = {
@@ -99,10 +177,11 @@ export function createBeatSwarmPlayerInstrumentRuntime(options = null) {
     return Array.isArray(pattern) && pattern.some(Boolean);
   }
 
-  function getStepDirective(stepIndex = 0, beatIndex = 0, styleProfile = null) {
+  function getStepDirective(stepIndex = 0, beatIndex = 0, styleProfile = null, musicalContext = null) {
     const step = ((Math.trunc(Number(stepIndex) || 0) % stepsPerBar) + stepsPerBar) % stepsPerBar;
     const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
     const styleId = String(styleProfile?.id || '').trim().toLowerCase();
+    const sectionDirective = getSectionDirective(musicalContext, stepsPerBar, state.grooveTargetSubdivision);
     const manualOverrideActive = beat <= Math.max(-1, Math.trunc(Number(state.manualOverrideUntilBeat) || -1));
     const modeBase = normalizeMode(state.mode, 'guided_fire');
     let mode = modeBase;
@@ -122,7 +201,7 @@ export function createBeatSwarmPlayerInstrumentRuntime(options = null) {
         emit = !!state.customPattern[step];
         reason = 'custom_pattern';
       } else {
-        emit = (step % Math.max(1, Math.round(stepsPerBar / Math.max(1, state.grooveTargetSubdivision)))) === 0;
+        emit = (step % Math.max(1, Math.round(stepsPerBar / Math.max(1, sectionDirective.targetSubdivision)))) === 0;
         reason = 'custom_fallback_guided';
       }
     } else {
@@ -130,7 +209,7 @@ export function createBeatSwarmPlayerInstrumentRuntime(options = null) {
         emit = !!state.customPattern[step];
         reason = 'guided_custom_override';
       } else {
-        const stride = Math.max(1, Math.round(stepsPerBar / Math.max(1, state.grooveTargetSubdivision)));
+        const stride = Math.max(1, Math.round(stepsPerBar / Math.max(1, sectionDirective.targetSubdivision)));
         emit = (step % stride) === 0;
         reason = 'guided_grid';
       }
@@ -146,6 +225,14 @@ export function createBeatSwarmPlayerInstrumentRuntime(options = null) {
       reason,
       manualOverrideActive,
       grooveTargetSubdivision: state.grooveTargetSubdivision,
+      targetSubdivision: sectionDirective.targetSubdivision,
+      musicRole: sectionDirective.musicRole,
+      musicLayer: sectionDirective.musicLayer,
+      presentation: sectionDirective.presentation,
+      registerTarget: sectionDirective.registerTarget,
+      volumeMult: sectionDirective.volumeMult,
+      structureIntent: sectionDirective.structureIntent,
+      effectiveIntent: sectionDirective.effectiveIntent,
       stepsPerBar,
     };
   }
@@ -162,4 +249,3 @@ export function createBeatSwarmPlayerInstrumentRuntime(options = null) {
     getStepDirective,
   };
 }
-

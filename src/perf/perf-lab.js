@@ -3157,6 +3157,12 @@ function compactMusicLabPayloadForSave(payload = null) {
       musicLayer: String(event.musicLayer || ''),
       musicProminence: String(event.musicProminence || ''),
       audioGain: Number(event.audioGain) || 0,
+      resolvedPlaybackInstrumentId: String(event.resolvedPlaybackInstrumentId || ''),
+      playbackKind: String(event.playbackKind || ''),
+      sampleVolumeHint: String(event.sampleVolumeHint || ''),
+      sampleVolumeMultiplier: Number(event.sampleVolumeMultiplier) || 0,
+      triggerVolume: Number(event.triggerVolume) || 0,
+      approxPlaybackVolume: Number(event.approxPlaybackVolume) || 0,
     };
   });
   const enemyRemovals = Array.isArray(src.enemyRemovals) ? src.enemyRemovals : [];
@@ -3186,6 +3192,9 @@ function compactMusicLabPayloadForSave(payload = null) {
     'music_motif_return_state',
     'music_foreground_motif_usage',
     'music_harmony_authority_state',
+    'music_slot_spawner_stage',
+    'music_slot_spawner_execution_reason',
+    'music_slot_spawner_admission',
   ]);
   const compactSystemEvents = systemEvents
     .filter((ev) => compactSystemEventTypesToKeep.has(String(ev?.eventType || '').trim().toLowerCase()))
@@ -3262,6 +3271,8 @@ function compactMusicLabPayloadForSave(payload = null) {
         authorityDistinctNoteCount: Number(item.authorityDistinctNoteCount) || 0,
         authorityActiveNoteCount: Number(item.authorityActiveNoteCount) || 0,
         notePoolSize: Number(item.notePoolSize) || 0,
+        weaponMappingMismatchCount: Number(item.weaponMappingMismatchCount) || 0,
+        weaponMappingMismatchNotes: Array.isArray(item.weaponMappingMismatchNotes) ? item.weaponMappingMismatchNotes.slice(0, 12) : [],
         weaponOutsidePoolCount: Number(item.weaponOutsidePoolCount) || 0,
         weaponOutsidePoolNotes: Array.isArray(item.weaponOutsidePoolNotes) ? item.weaponOutsidePoolNotes.slice(0, 12) : [],
       };
