@@ -392,6 +392,11 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     authorityDistinctNoteCount: clampInt(payload?.authorityDistinctNoteCount, 0, 0),
     authorityActiveNoteCount: clampInt(payload?.authorityActiveNoteCount, 0, 0),
     notePoolSize: clampInt(payload?.notePoolSize, 0, 0),
+    scheduledBeatIndex: clampInt(payload?.scheduledBeatIndex, 0, 0),
+    flushOffsetMs: Number(payload?.flushOffsetMs) || 0,
+    flushOffsetAbsMs: Number(payload?.flushOffsetAbsMs) || 0,
+    targetAudioTime: Number(payload?.targetAudioTime) || 0,
+    flushAudioTime: Number(payload?.flushAudioTime) || 0,
     weaponMappingMismatchCount: clampInt(payload?.weaponMappingMismatchCount, 0, 0),
     weaponMappingMismatchNotes: Array.isArray(payload?.weaponMappingMismatchNotes)
       ? payload.weaponMappingMismatchNotes.slice(0, 12).map((note) => String(note || '').trim()).filter(Boolean)
@@ -692,11 +697,41 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
     .filter((s) => clampInt(s?.barIndex, 0, 0) <= maxBarIndex);
   const perBeat = Object.create(null);
   const perBar = Object.create(null);
+  const laneActiveBeatCounts = Object.create(null);
+  const laneCarrierPreferenceCounts = Object.create(null);
+  const pressure = {
+    count: 0,
+    combatPressureSum: 0,
+    musicalPressureSum: 0,
+  };
+  const sectionIntentCounts = Object.create(null);
   for (const s of snaps) {
     const beatKey = String(clampInt(s?.beatIndex, 0, 0));
     const barKey = String(clampInt(s?.barIndex, 0, 0));
     const usage = s?.usage && typeof s.usage === 'object' ? s.usage : {};
     const budgets = s?.budgets && typeof s.budgets === 'object' ? s.budgets : {};
+    const lanePlan = s?.lanePlan && typeof s.lanePlan === 'object' ? s.lanePlan : {};
+    const pressureState = s?.pressureState && typeof s.pressureState === 'object' ? s.pressureState : {};
+    const beatLanes = Object.create(null);
+    for (const [laneId, lane] of Object.entries(lanePlan)) {
+      if (!lane || typeof lane !== 'object') continue;
+      const active = lane?.active === true;
+      const preferredCarrier = String(lane?.preferredCarrier || '').trim().toLowerCase();
+      beatLanes[laneId] = {
+        active,
+        targetCount: clampInt(lane?.targetCount, 0, 0),
+        preferredCarrier,
+        protected: lane?.protected === true,
+      };
+      if (active) laneActiveBeatCounts[laneId] = clampInt(laneActiveBeatCounts[laneId], 0, 0) + 1;
+      if (active && preferredCarrier) {
+        const carrierKey = `${laneId}:${preferredCarrier}`;
+        laneCarrierPreferenceCounts[carrierKey] = clampInt(laneCarrierPreferenceCounts[carrierKey], 0, 0) + 1;
+      }
+    }
+    const combatPressure = Math.max(0, Math.min(1, Number(pressureState?.combatPressure) || 0));
+    const musicalPressure = Math.max(0, Math.min(1, Number(pressureState?.musicalPressure) || 0));
+    const sectionIntent = String(pressureState?.sectionIntent || '').trim().toLowerCase();
     perBeat[beatKey] = {
       fullThreats: clampInt(usage?.fullThreats, 0, 0),
       lightThreats: clampInt(usage?.lightThreats, 0, 0),
@@ -706,6 +741,10 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
       maxLightThreatsPerBeat: clampInt(budgets?.maxLightThreatsPerBeat, 0, 0),
       maxAudibleAccentsPerBeat: clampInt(budgets?.maxAudibleAccentsPerBeat, 0, 0),
       maxCosmeticPerBeat: clampInt(budgets?.maxCosmeticPerBeat, 0, 0),
+      sectionIntent,
+      combatPressure,
+      musicalPressure,
+      lanePlan: beatLanes,
     };
     if (!perBar[barKey]) {
       perBar[barKey] = {
@@ -718,6 +757,9 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
         maxAudibleAccentsPerBeat: 0,
         maxCosmeticPerBeat: 0,
         beats: 0,
+        combatPressureSum: 0,
+        musicalPressureSum: 0,
+        sectionIntentCounts: Object.create(null),
       };
     }
     const b = perBar[barKey];
@@ -730,11 +772,25 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
     b.maxAudibleAccentsPerBeat += clampInt(budgets?.maxAudibleAccentsPerBeat, 0, 0);
     b.maxCosmeticPerBeat += clampInt(budgets?.maxCosmeticPerBeat, 0, 0);
     b.beats += 1;
+    b.combatPressureSum += combatPressure;
+    b.musicalPressureSum += musicalPressure;
+    if (sectionIntent) b.sectionIntentCounts[sectionIntent] = clampInt(b.sectionIntentCounts[sectionIntent], 0, 0) + 1;
+    pressure.count += 1;
+    pressure.combatPressureSum += combatPressure;
+    pressure.musicalPressureSum += musicalPressure;
+    if (sectionIntent) sectionIntentCounts[sectionIntent] = clampInt(sectionIntentCounts[sectionIntent], 0, 0) + 1;
   }
   return {
     snapshots: snaps.length,
     perBeat,
     perBar,
+    directorPlan: {
+      laneActiveBeatCounts,
+      laneCarrierPreferenceCounts,
+      sectionIntentCounts,
+      avgCombatPressure: pressure.count > 0 ? (pressure.combatPressureSum / pressure.count) : 0,
+      avgMusicalPressure: pressure.count > 0 ? (pressure.musicalPressureSum / pressure.count) : 0,
+    },
   };
 }
 
@@ -2700,6 +2756,37 @@ function toAbsStepIndex(eventLike, stepsPerBeat = 8) {
   return beatDerived + step;
 }
 
+function collectPlayerWeaponTiming(session, maxBarIndex) {
+  const events = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((ev) => String(ev?.eventType || '').trim().toLowerCase() === 'music_player_weapon_timing')
+    .filter((ev) => clampInt(ev?.barIndex, 0, 0) <= maxBarIndex);
+  let count = 0;
+  let lateCount = 0;
+  let earlyCount = 0;
+  let severeCount = 0;
+  let absOffsetSum = 0;
+  let maxAbsOffsetMs = 0;
+  for (const ev of events) {
+    const offsetMs = Number(ev?.flushOffsetMs);
+    if (!Number.isFinite(offsetMs)) continue;
+    const absOffsetMs = Math.abs(offsetMs);
+    count += 1;
+    absOffsetSum += absOffsetMs;
+    maxAbsOffsetMs = Math.max(maxAbsOffsetMs, absOffsetMs);
+    if (offsetMs > 0.5) lateCount += 1;
+    else if (offsetMs < -0.5) earlyCount += 1;
+    if (absOffsetMs > 20) severeCount += 1;
+  }
+  return {
+    count,
+    lateCount,
+    earlyCount,
+    severeCount,
+    avgAbsOffsetMs: count > 0 ? (absOffsetSum / count) : 0,
+    maxAbsOffsetMs,
+  };
+}
+
 function collectCallResponse(events, options = null) {
   const responseWindowSteps = Math.max(1, clampInt(options?.responseWindowSteps, 8, 1));
   const audibleWeightForEvent = (ev) => {
@@ -3047,6 +3134,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const motifReuse = collectMotifReuse(executedEvents);
   const motifPersistence = collectMotifPersistence(motifReuse);
   const phraseGravity = collectPhraseGravity(executedEvents);
+  const playerWeaponTiming = collectPlayerWeaponTiming(session, maxBarIndex);
   const createdEvents = (Array.isArray(session?.events) ? session.events : [])
     .filter((e) => String(e?.phase || '').trim().toLowerCase() === 'created' && clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
   const callResponseSourceEvents = (() => {
@@ -3124,10 +3212,23 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     motifReuse,
     motifPersistence,
     phraseGravity,
+    playerWeaponTiming,
+    playerWeaponTimingCount: Number(playerWeaponTiming?.count) || 0,
+    playerWeaponTimingAvgAbsOffsetMs: Number(playerWeaponTiming?.avgAbsOffsetMs) || 0,
+    playerWeaponTimingMaxAbsOffsetMs: Number(playerWeaponTiming?.maxAbsOffsetMs) || 0,
+    playerWeaponTimingSevereCount: Number(playerWeaponTiming?.severeCount) || 0,
     laneCompliance,
     roleBalance,
     threatBalance,
     threatBudgetUsage,
+    directorFoundationActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.foundation) || 0,
+    directorSecondaryLoopActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.secondary_loop) || 0,
+    directorPrimaryLoopActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.primary_loop) || 0,
+    directorSupportActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.support) || 0,
+    directorAnswerActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.answer) || 0,
+    directorSparkleActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.sparkle) || 0,
+    directorAvgCombatPressure: Number(threatBudgetUsage?.directorPlan?.avgCombatPressure) || 0,
+    directorAvgMusicalPressure: Number(threatBudgetUsage?.directorPlan?.avgMusicalPressure) || 0,
     callResponse,
     callCount: Number(callResponse?.callCount) || 0,
     responsePairs: Number(callResponse?.responsePairs) || 0,
@@ -3466,6 +3567,12 @@ export function createBeatSwarmMusicLab(options = null) {
       budgets: snap?.budgets && typeof snap.budgets === 'object' ? { ...snap.budgets } : {},
       usage: snap?.usage && typeof snap.usage === 'object' ? { ...snap.usage } : {},
       remaining: snap?.remaining && typeof snap.remaining === 'object' ? { ...snap.remaining } : {},
+      lanePlan: snap?.lanePlan && typeof snap.lanePlan === 'object'
+        ? JSON.parse(JSON.stringify(snap.lanePlan))
+        : {},
+      pressureState: snap?.pressureState && typeof snap.pressureState === 'object'
+        ? { ...snap.pressureState }
+        : {},
     };
     const last = s.threatBudgetSnapshots.length > 0
       ? s.threatBudgetSnapshots[s.threatBudgetSnapshots.length - 1]

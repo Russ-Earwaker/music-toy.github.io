@@ -5796,15 +5796,121 @@ function getCallResponseWindowSteps() {
   const arrangement = getPaletteArrangementControls();
   return Math.max(1, Math.trunc(Math.round(base * (0.8 + (arrangement.accentStrength * 0.4)))));
 }
+function buildDirectorLanePlanForBar(barIndex = 0) {
+  const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const energyState = String(energyStateRuntime.state || 'intro').trim().toLowerCase();
+  const structureIntent = String(structureIntentRuntime.intent || energyState || 'intro').trim().toLowerCase();
+  const caps = getCurrentPacingCaps();
+  const maxSpawners = Math.max(0, Math.trunc(Number(caps.maxSpawners) || 0));
+  const maxDrawSnakes = Math.max(0, Math.trunc(Number(caps.maxDrawSnakes) || 0));
+  const maxComposerGroups = Math.max(0, Math.trunc(Number(caps.maxComposerGroups) || 0));
+  const responseMode = String(caps.responseMode || 'none').trim().toLowerCase();
+  const introFoundationWindow = isForcedIntroFoundationWindow(bar);
+  const introPrimaryLoopWindow = isForcedIntroPrimaryLoopWindow(bar);
+  const introBackbeatActive = introFoundationWindow && bar >= 12;
+  const allowResponseGroups = responseMode === 'group' || responseMode === 'either';
+  const allowDrawsnake = responseMode === 'drawsnake' || responseMode === 'either';
+
+  const musicalPressure = structureIntent === 'peak'
+    ? 0.95
+    : (structureIntent === 'predrop'
+      ? 0.82
+      : (structureIntent === 'drive'
+        ? 0.74
+        : (structureIntent === 'build'
+          ? 0.58
+          : (structureIntent === 'drop' ? 0.48 : 0.34))));
+
+  const combatPressure = Math.max(0, Math.min(1,
+    0.18
+    + (Math.min(3, maxSpawners) * 0.16)
+    + (Math.min(2, maxDrawSnakes) * 0.12)
+    + (Math.min(2, maxComposerGroups) * 0.1)
+  ));
+
+  return {
+    foundation: {
+      active: true,
+      targetCount: 1,
+      preferredCarrier: 'spawner',
+      protected: true,
+      continuityBias: 'hold',
+      intensity: introFoundationWindow ? 0.62 : (structureIntent === 'drop' ? 0.56 : 0.48),
+    },
+    secondary_loop: {
+      active: introBackbeatActive || (!introFoundationWindow && maxSpawners >= 2 && structureIntent !== 'intro'),
+      targetCount: introBackbeatActive ? 1 : ((!introFoundationWindow && maxSpawners >= 2 && structureIntent !== 'intro') ? 1 : 0),
+      preferredCarrier: 'spawner',
+      protected: introFoundationWindow,
+      continuityBias: introFoundationWindow ? 'hold' : 'blend',
+      intensity: introFoundationWindow ? 0.52 : (structureIntent === 'peak' ? 0.58 : 0.46),
+    },
+    primary_loop: {
+      active: introPrimaryLoopWindow || (!introFoundationWindow && maxDrawSnakes > 0 && allowDrawsnake),
+      targetCount: introPrimaryLoopWindow ? 1 : ((!introFoundationWindow && maxDrawSnakes > 0 && allowDrawsnake) ? 1 : 0),
+      preferredCarrier: 'drawsnake',
+      protected: true,
+      continuityBias: introPrimaryLoopWindow ? 'blend' : 'hold',
+      intensity: introPrimaryLoopWindow ? 0.28 : (structureIntent === 'peak' ? 0.76 : (structureIntent === 'drive' ? 0.66 : 0.54)),
+    },
+    sparkle: {
+      active: !introFoundationWindow && ((maxSpawners >= 3) || structureIntent === 'drive' || structureIntent === 'peak'),
+      targetCount: (!introFoundationWindow && ((maxSpawners >= 3) || structureIntent === 'drive' || structureIntent === 'peak')) ? 1 : 0,
+      preferredCarrier: 'spawner',
+      protected: false,
+      continuityBias: 'follow',
+      intensity: structureIntent === 'peak' ? 0.62 : 0.34,
+    },
+    support: {
+      active: !introFoundationWindow && allowResponseGroups && maxComposerGroups > 0 && structureIntent !== 'peak',
+      targetCount: (!introFoundationWindow && allowResponseGroups && maxComposerGroups > 0 && structureIntent !== 'peak') ? 1 : 0,
+      preferredCarrier: 'group',
+      protected: false,
+      continuityBias: 'follow',
+      intensity: structureIntent === 'build' ? 0.38 : 0.3,
+    },
+    answer: {
+      active: !introFoundationWindow && allowResponseGroups && maxComposerGroups > 0 && structureIntent !== 'intro',
+      targetCount: (!introFoundationWindow && allowResponseGroups && maxComposerGroups > 0 && structureIntent !== 'intro') ? 1 : 0,
+      preferredCarrier: 'group',
+      protected: false,
+      continuityBias: 'follow',
+      intensity: structureIntent === 'predrop' ? 0.24 : 0.34,
+    },
+    __pressure: {
+      combatPressure,
+      musicalPressure,
+      sectionIntent: structureIntent,
+      responseMode,
+      pacingState: String(swarmPacingRuntime?.getSnapshot?.()?.state || '').trim().toLowerCase(),
+    },
+  };
+}
+function publishDirectorLanePlanForBar(barIndex = 0) {
+  const director = ensureSwarmDirector();
+  const plan = buildDirectorLanePlanForBar(barIndex);
+  const pressureState = plan.__pressure && typeof plan.__pressure === 'object' ? plan.__pressure : {};
+  delete plan.__pressure;
+  director.setLanePlan(plan);
+  director.setPressureState(pressureState);
+  return director.getSnapshot?.() || null;
+}
 function ensureSwarmDirector() {
   if (swarmDirector) return swarmDirector;
   const introTheme = getEnergyStateThemePreset('intro');
+  const initialLanePlan = buildDirectorLanePlanForBar(0);
+  const initialPressureState = initialLanePlan.__pressure && typeof initialLanePlan.__pressure === 'object'
+    ? initialLanePlan.__pressure
+    : {};
+  delete initialLanePlan.__pressure;
   swarmDirector = createSwarmDirector({
     beatsPerBar: COMPOSER_BEATS_PER_BAR,
     stepsPerBar: WEAPON_TUNE_STEPS,
     energyState: 'intro',
     notePool: Array.isArray(introTheme?.notePool) ? introTheme.notePool : SWARM_PENTATONIC_NOTES_ONE_OCTAVE,
     budgets: DIRECTOR_ENERGY_STATE_CONFIG.intro?.budgets || {},
+    lanePlan: initialLanePlan,
+    pressureState: initialPressureState,
   });
   return swarmDirector;
 }
@@ -5815,6 +5921,7 @@ function resetSwarmDirector(beatIndex = 0) {
   director.setEnergyState('intro');
   director.setNotePool(Array.isArray(introTheme?.notePool) ? introTheme.notePool : SWARM_PENTATONIC_NOTES_ONE_OCTAVE);
   director.setBudgets(DIRECTOR_ENERGY_STATE_CONFIG.intro?.budgets || {});
+  publishDirectorLanePlanForBar(Math.floor(Math.max(0, Math.trunc(Number(beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR)));
   director.syncToBeat(Math.max(0, Math.trunc(Number(beatIndex) || 0)));
   callResponseRuntime.lastCallStepAbs = -1;
   callResponseRuntime.lastCallGroupId = 0;
@@ -6022,6 +6129,7 @@ function applyEnergyStateForBar(barIndex = 0) {
   director.setEnergyState(stateName);
   director.setNotePool(Array.isArray(theme?.notePool) && theme.notePool.length ? theme.notePool : SWARM_PENTATONIC_NOTES_ONE_OCTAVE);
   director.setBudgets(budgets);
+  publishDirectorLanePlanForBar(bar);
   noteHarmonyAuthorityStateForBar(bar, theme?.notePool);
   energyStateRuntime.lastAppliedBar = bar;
 }
@@ -6163,6 +6271,7 @@ const swarmSoundEventState = {
   played: Object.create(null),
   maxVolume: Object.create(null),
   note: Object.create(null),
+  meta: Object.create(null),
   noteList: Object.create(null),
   count: Object.create(null),
   gameplayFamilyCount: Object.create(null),
@@ -8025,8 +8134,24 @@ function noteSwarmSoundEvent(eventKey, volume = 1, beatIndex = currentBeatIndex,
   if (vol > prev) {
     swarmSoundEventState.maxVolume[key] = vol;
     swarmSoundEventState.note[key] = note;
+    swarmSoundEventState.meta[key] = {
+      sourceSystem: String(info?.sourceSystem || '').trim().toLowerCase(),
+      actionType: String(info?.actionType || key).trim().toLowerCase(),
+      authoringClass: String(info?.authoringClass || '').trim().toLowerCase(),
+      beatIndex: beat,
+      eventKey: key,
+    };
   } else if (!swarmSoundEventState.note[key]) {
     swarmSoundEventState.note[key] = note;
+    if (!swarmSoundEventState.meta[key]) {
+      swarmSoundEventState.meta[key] = {
+        sourceSystem: String(info?.sourceSystem || '').trim().toLowerCase(),
+        actionType: String(info?.actionType || key).trim().toLowerCase(),
+        authoringClass: String(info?.authoringClass || '').trim().toLowerCase(),
+        beatIndex: beat,
+        eventKey: key,
+      };
+    }
   }
 }
 function flushSwarmSoundEventsForBeat(beatIndex = currentBeatIndex) {
@@ -8055,15 +8180,49 @@ function flushSwarmSoundEventsForBeat(beatIndex = currentBeatIndex) {
       return [normalizeSwarmNoteName(swarmSoundEventState.note[key]) || String(def?.note || getRandomSwarmPentatonicNote())];
     })();
     const nowAudio = Number(getLoopInfo?.()?.now);
+    const loopInfo = getLoopInfo?.() || null;
+    const beatLen = Number(loopInfo?.beatLen) || 0;
+    const loopStartTime = Number(loopInfo?.loopStartTime);
+    const targetAudioTime = getSwarmSoundEventTargetAudioTime(beat);
     const deathArpStepSec = Math.max(0.004, Number(def?.arpStepSec) || 0.028);
     const deathArpMaxNotes = Math.max(1, Math.trunc(Number(def?.arpMaxNotes) || SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length));
     const deathPitchDropSemitones = Math.max(0, Math.trunc(Number(def?.pitchDropSemitones) || 0));
     const defVolumeMult = Math.max(0.1, Math.min(1.6, Number(def?.volumeMult) || 1));
     const deathPitchList = isDeathKey ? notes.slice(0, deathArpMaxNotes) : notes;
+    const eventMeta = swarmSoundEventState.meta[key] && typeof swarmSoundEventState.meta[key] === 'object'
+      ? swarmSoundEventState.meta[key]
+      : null;
+    if (
+      eventMeta
+      && eventMeta.sourceSystem === 'player'
+      && Number.isFinite(nowAudio)
+      && Number.isFinite(loopStartTime)
+      && beatLen > 0
+    ) {
+      const flushOffsetMs = (nowAudio - targetAudioTime) * 1000;
+      noteMusicSystemEvent('music_player_weapon_timing', {
+        eventKey: key,
+        actionType: String(eventMeta.actionType || key).trim().toLowerCase(),
+        authoringClass: String(eventMeta.authoringClass || '').trim().toLowerCase(),
+        scheduledBeatIndex: beat,
+        flushOffsetMs,
+        flushOffsetAbsMs: Math.abs(flushOffsetMs),
+        targetAudioTime,
+        flushAudioTime: nowAudio,
+        note: normalizeSwarmNoteName(swarmSoundEventState.note[key]) || '',
+      }, {
+        beatIndex: beat,
+        stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+      });
+    }
     for (let i = 0; i < deathPitchList.length; i++) {
-      const when = (isDeathKey && Number.isFinite(nowAudio))
-        ? (nowAudio + (i * deathArpStepSec))
-        : undefined;
+      const when = isDeathKey
+        ? (Number.isFinite(nowAudio) ? (nowAudio + (i * deathArpStepSec)) : undefined)
+        : (
+          eventMeta?.sourceSystem === 'player' && Number.isFinite(targetAudioTime)
+            ? targetAudioTime
+            : undefined
+        );
       const rawPitch = isDeathKey && deathPitchDropSemitones > 0
         ? transposeSwarmNoteName(deathPitchList[i], -Math.min(deathPitchDropSemitones, i))
         : deathPitchList[i];
@@ -8222,6 +8381,25 @@ function playSwarmSoundEventImmediate(eventKey, volume = 1, noteName = null) {
   const inst = resolveSwarmSoundInstrumentId(key);
   const note = normalizeSwarmNoteName(noteName) || String(def?.note || getRandomSwarmPentatonicNote());
   try { triggerInstrument(inst, note, undefined, 'master', {}, vol); } catch {}
+}
+function getSwarmSoundEventTargetAudioTime(beatIndex = currentBeatIndex) {
+  const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
+  const info = getLoopInfo?.() || null;
+  const beatLen = Number(info?.beatLen) || 0;
+  const loopStartTime = Number(info?.loopStartTime);
+  if (!(beatLen > 0) || !Number.isFinite(loopStartTime)) return null;
+  const targetAudioTime = loopStartTime + (beat * beatLen);
+  return Number.isFinite(targetAudioTime) ? targetAudioTime : null;
+}
+function playSwarmSoundEventScheduled(eventKey, volume = 1, beatIndex = currentBeatIndex, noteName = null) {
+  const key = String(eventKey || '').trim();
+  if (!SWARM_SOUND_EVENTS[key]) return;
+  const vol = Math.max(0.001, Math.min(1, Number(volume) || 0));
+  const def = SWARM_SOUND_EVENTS[key];
+  const inst = resolveSwarmSoundInstrumentId(key);
+  const note = normalizeSwarmNoteName(noteName) || String(def?.note || getRandomSwarmPentatonicNote());
+  const when = getSwarmSoundEventTargetAudioTime(beatIndex);
+  try { triggerInstrument(inst, note, when ?? undefined, 'master', {}, vol); } catch {}
 }
 function createRandomWeaponStages() {
   const archetypes = Object.values(WEAPON_ARCHETYPES);
@@ -11186,14 +11364,29 @@ function buildSpawnerPercussionLayerProfile(layerKey = 'pulse', options = null) 
 }
 function getSpawnerPercussionVoiceSpecs(barIndex = 0, pacingState = '') {
   ensureSpawnerPercussionGroovePlan(Math.max(0, Math.trunc(Number(barIndex) || 0)), pacingState);
+  const directorLanePlan = ensureSwarmDirector().getLanePlan?.() || null;
   const specs = [];
-  for (const layerKey of ['pulse', 'backbeat', 'motion']) {
-    const profile = buildSpawnerPercussionLayerProfile(layerKey, { barIndex });
+  const slotConfigs = [
+    { laneId: 'foundation', layerKey: 'pulse', voiceKey: 'percussion_pulse' },
+    { laneId: 'secondary_loop', layerKey: 'backbeat', voiceKey: 'percussion_backbeat' },
+    { laneId: 'sparkle', layerKey: 'motion', voiceKey: 'percussion_motion' },
+  ];
+  for (const slotConfig of slotConfigs) {
+    const lanePlan = directorLanePlan && typeof directorLanePlan === 'object'
+      ? directorLanePlan[slotConfig.laneId]
+      : null;
+    if (lanePlan && !lanePlan.active) continue;
+    const preferredCarrier = String(lanePlan?.preferredCarrier || 'spawner').trim().toLowerCase();
+    if (preferredCarrier && preferredCarrier !== 'spawner') continue;
+    const profile = buildSpawnerPercussionLayerProfile(slotConfig.layerKey, { barIndex });
     if (!profile) continue;
     specs.push({
-      voiceKey: `percussion_${layerKey}`,
+      voiceKey: slotConfig.voiceKey,
       layerIndex: specs.length,
-      grooveLayerKey: layerKey,
+      grooveLayerKey: slotConfig.layerKey,
+      directorLaneId: slotConfig.laneId,
+      protectedLane: !!lanePlan?.protected,
+      preferredCarrier: preferredCarrier || 'spawner',
       profile,
     });
   }
@@ -12727,15 +12920,27 @@ function maintainSpawnerEnemyPopulation() {
     markSpawnerPerf('maintainSpawners.cleanup', perfStart);
   }
   const activeCount = spawners.length;
-  if (activeCount >= effectiveTarget) return;
-  const spawnCount = Math.min(effectiveTarget - activeCount, Math.max(0, ENEMY_CAP - enemies.length));
+  const unmetVoiceSpecs = voiceSpecs.filter((spec) => !rankedSpawners.some((enemy) => (
+    !enemy?.retreating
+    && String(enemy?.musicVoiceKey || '').trim().toLowerCase() === spec.voiceKey
+  )));
+  const genericSpawnNeed = Math.max(0, effectiveTarget - (activeCount + unmetVoiceSpecs.length));
+  const spawnRequests = [
+    ...unmetVoiceSpecs.map((spec) => ({ kind: 'lane', spec })),
+    ...Array.from({ length: genericSpawnNeed }, () => ({ kind: 'generic', spec: null })),
+  ];
+  if (!spawnRequests.length) return;
+  const spawnCount = Math.min(spawnRequests.length, Math.max(0, ENEMY_CAP - enemies.length));
   {
     const perfStart = getBeatSwarmPerfNow();
     for (let i = 0; i < spawnCount; i++) {
-      const introVoiceSpec = voiceSpecs.find((spec) => !rankedSpawners.some((enemy) => (
-        !enemy?.retreating
-        && String(enemy?.musicVoiceKey || '').trim().toLowerCase() === spec.voiceKey
-      ))) || null;
+      const spawnRequest = spawnRequests[i] || null;
+      const introVoiceSpec = spawnRequest?.kind === 'lane'
+        ? (spawnRequest.spec || null)
+        : (voiceSpecs.find((spec) => !rankedSpawners.some((enemy) => (
+          !enemy?.retreating
+          && String(enemy?.musicVoiceKey || '').trim().toLowerCase() === spec.voiceKey
+        ))) || null);
       const spawnProfile = introVoiceSpec
         ? introVoiceSpec.profile
         : (introPercussionLayeringWindow
@@ -13246,6 +13451,10 @@ function spawnInstrumentInfluenceEnemy(enemyType = 'drawsnake', influence = null
 function maintainDrawSnakeEnemyPopulation() {
   if (!DRAW_SNAKE_ENEMY_ENABLED) return;
   const pacingCaps = getCurrentPacingCaps();
+  const directorLanePlan = ensureSwarmDirector().getLanePlan?.() || null;
+  const primaryLoopPlan = directorLanePlan && typeof directorLanePlan === 'object'
+    ? directorLanePlan.primary_loop
+    : null;
   const stepAbs = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
   const pacingState = getCurrentPacingStateName();
   const introWindowActive = isIntroPacingStateName(pacingState);
@@ -13270,13 +13479,18 @@ function maintainDrawSnakeEnemyPopulation() {
     || String(structureIntent?.intent || '').trim().toLowerCase() === 'drive'
     || String(structureIntent?.intent || '').trim().toLowerCase() === 'peak';
   const suppressDrawSnakesForIntro = introWindowActive || forceIntroFoundationWindow || (!forceIntroPrimaryLoopWindow && introHoldActive);
+  const directorPrefersDrawsnake = !primaryLoopPlan || String(primaryLoopPlan?.preferredCarrier || 'drawsnake').trim().toLowerCase() === 'drawsnake';
+  const directorPrimaryLoopTarget = Math.max(0, Math.trunc(Number(primaryLoopPlan?.targetCount) || 0));
+  const directorAllowsPrimaryLoop = !!primaryLoopPlan?.active && directorPrefersDrawsnake;
   const pacedTargetBase = Math.max(
     0,
     Math.min(
-      forceIntroPrimaryLoopWindow ? Math.max(1, target) : target,
+      forceIntroPrimaryLoopWindow
+        ? Math.max(1, target, directorPrimaryLoopTarget)
+        : (directorAllowsPrimaryLoop ? Math.max(target, directorPrimaryLoopTarget) : 0),
       suppressDrawSnakesForIntro
         ? 0
-        : (forceIntroPrimaryLoopWindow ? 1 : pacingCaps.maxDrawSnakes)
+        : (forceIntroPrimaryLoopWindow ? 1 : (directorAllowsPrimaryLoop ? pacingCaps.maxDrawSnakes : 0))
     )
   );
   const snakes = enemies.filter((e) => String(e?.enemyType || '') === 'drawsnake');
@@ -14923,6 +15137,7 @@ function getTriggerWeaponStageRuntimeShared() {
       getPlayerWeaponSoundEventKeyForStage,
       getProjectileChainSpawnOffsetWorld,
       getShipFacingDirWorld,
+      getSwarmSoundEventTargetAudioTime,
       getStageSoundVolume: (stageIndex = 0) => {
         const base = Number(getStageSoundVolume(stageIndex)) || 0;
         return Math.max(0, Math.min(1, base * PLAYER_WEAPON_SOUND_MIX_MULT));
@@ -14932,6 +15147,7 @@ function getTriggerWeaponStageRuntimeShared() {
       normalizeDir,
       normalizeSwarmNoteName,
       noteSwarmSoundEvent,
+      playSwarmSoundEventScheduled,
       playSwarmSoundEventImmediate,
       queueWeaponChain,
       recordStepEventsPerfSample: recordBeatSwarmStepEventsPerfSample,
@@ -15550,6 +15766,7 @@ function maintainComposerEnemyGroups() {
       getCurrentPacingCaps,
       getCurrentPacingStateName,
       getCurrentSwarmEnergyStateName,
+      getDirectorLanePlan: () => ensureSwarmDirector().getLanePlan?.() || null,
       getNextComposerEnemyGroupId: () => composerEnemyGroupIdSeq++,
       getNextMusicContinuityId,
       getRandomSwarmPentatonicNote,
@@ -16317,6 +16534,7 @@ export function enterBeatSwarmMode(options = null) {
   swarmSoundEventState.played = Object.create(null);
   swarmSoundEventState.maxVolume = Object.create(null);
   swarmSoundEventState.note = Object.create(null);
+  swarmSoundEventState.meta = Object.create(null);
   swarmSoundEventState.noteList = Object.create(null);
   swarmSoundEventState.count = Object.create(null);
   swarmSoundEventState.gameplayFamilyCount = Object.create(null);

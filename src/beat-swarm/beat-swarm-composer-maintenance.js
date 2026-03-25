@@ -56,6 +56,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   };
 
   const pacingCaps = helpers.getCurrentPacingCaps?.() || {};
+  const directorLanePlan = helpers.getDirectorLanePlan?.() || null;
+  const supportLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.support : null;
+  const answerLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.answer : null;
   const pacingState = String(helpers.getCurrentPacingStateName?.() || '').trim().toLowerCase();
   const introWindowActive = pacingState === 'intro_solo' || pacingState === 'intro_bass' || pacingState === 'intro_response';
   const stepAbs = Math.max(0, Math.trunc(currentBeatIndex));
@@ -91,6 +94,22 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     )).length;
     if (activeFoundationBufferGroups > 0) {
       effectivePacingCaps.maxComposerGroups += activeFoundationBufferGroups;
+    }
+  }
+  const directorSupportGroups = (supportLanePlan?.active === true && String(supportLanePlan?.preferredCarrier || '').trim().toLowerCase() === 'group')
+    ? Math.max(0, Math.trunc(Number(supportLanePlan?.targetCount) || 0))
+    : 0;
+  const directorAnswerGroups = (answerLanePlan?.active === true && String(answerLanePlan?.preferredCarrier || '').trim().toLowerCase() === 'group')
+    ? Math.max(0, Math.trunc(Number(answerLanePlan?.targetCount) || 0))
+    : 0;
+  const directorRequestedGroupCount = directorSupportGroups + directorAnswerGroups;
+  if (!introWindowActive && !introHoldActive) {
+    effectivePacingCaps.maxComposerGroups = Math.max(
+      0,
+      Math.max(Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0), directorRequestedGroupCount)
+    );
+    if (!(directorSupportGroups > 0 || directorAnswerGroups > 0)) {
+      effectivePacingCaps.maxComposerGroups = 0;
     }
   }
   const templateLibrary = Array.isArray(constants.composerGroupTemplateLibrary) ? constants.composerGroupTemplateLibrary : [];

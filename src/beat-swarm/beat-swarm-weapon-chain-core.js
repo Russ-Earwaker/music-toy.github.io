@@ -572,7 +572,7 @@ export function triggerWeaponStageRuntime(options = null) {
         const noteName = forcedNoteName || helpers.getSwarmEnemySoundNoteById?.(nearest?.id);
         const weaponSoundKey = helpers.getPlayerWeaponSoundEventKeyForStage?.(archetype, variant) || 'projectile';
         if (directSound) {
-          helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, gameplayWeaponSoundVolume, noteName);
+          helpers.playSwarmSoundEventScheduled?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName);
         } else {
           helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName, {
             authoringClass: 'gameplayauthored',
@@ -654,7 +654,7 @@ export function triggerWeaponStageRuntime(options = null) {
         const beamVol = gameplayWeaponSoundVolume * (sustaining ? 0.36 : 0.82);
         if (helpers.shouldPlayBeamSoundForBeat?.(slotIndex, beatIndex)) {
           if (directSound) {
-            helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, beamVol, noteName);
+            helpers.playSwarmSoundEventScheduled?.(weaponSoundKey, beamVol, beatIndex, noteName);
           } else {
             helpers.noteSwarmSoundEvent?.(weaponSoundKey, beamVol, beatIndex, noteName, {
               authoringClass: 'gameplayauthored',
@@ -736,7 +736,7 @@ export function triggerWeaponStageRuntime(options = null) {
         const noteName = forcedNoteName || helpers.getSwarmEnemySoundNoteById?.(nearest?.id);
         const weaponSoundKey = helpers.getPlayerWeaponSoundEventKeyForStage?.(archetype, variant) || 'hitscan';
         if (directSound) {
-          helpers.playSwarmSoundEventImmediate?.(weaponSoundKey, gameplayWeaponSoundVolume, noteName);
+          helpers.playSwarmSoundEventScheduled?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName);
         } else {
           helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName, {
             authoringClass: 'gameplayauthored',
@@ -823,7 +823,7 @@ export function triggerWeaponStageRuntime(options = null) {
         const explosionSoundKey = helpers.getPlayerWeaponSoundEventKeyForStage?.(archetype, variant) || 'explosion';
         const defaultExplosionNote = helpers.normalizeSwarmNoteName?.(constants.swarmSoundEvents?.[explosionSoundKey]?.note) || 'C4';
         if (directSound) {
-          helpers.playSwarmSoundEventImmediate?.(explosionSoundKey, gameplayWeaponSoundVolume, defaultExplosionNote);
+          helpers.playSwarmSoundEventScheduled?.(explosionSoundKey, gameplayWeaponSoundVolume, beatIndex, defaultExplosionNote);
         } else {
           helpers.noteSwarmSoundEvent?.(explosionSoundKey, gameplayWeaponSoundVolume, beatIndex, defaultExplosionNote, {
             authoringClass: 'gameplayauthored',

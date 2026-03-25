@@ -3200,6 +3200,7 @@ function compactMusicLabPayloadForSave(payload = null) {
     'music_slot_spawner_assignment',
     'music_slot_spawner_visual_identity',
     'music_intro_drum_first_note',
+    'music_player_weapon_timing',
   ]);
   const compactSystemEvents = systemEvents
     .filter((ev) => compactSystemEventTypesToKeep.has(String(ev?.eventType || '').trim().toLowerCase()))
@@ -3293,6 +3294,11 @@ function compactMusicLabPayloadForSave(payload = null) {
         authorityDistinctNoteCount: Number(item.authorityDistinctNoteCount) || 0,
         authorityActiveNoteCount: Number(item.authorityActiveNoteCount) || 0,
         notePoolSize: Number(item.notePoolSize) || 0,
+        scheduledBeatIndex: Number(item.scheduledBeatIndex) || 0,
+        flushOffsetMs: Number(item.flushOffsetMs) || 0,
+        flushOffsetAbsMs: Number(item.flushOffsetAbsMs) || 0,
+        targetAudioTime: Number(item.targetAudioTime) || 0,
+        flushAudioTime: Number(item.flushAudioTime) || 0,
         weaponMappingMismatchCount: Number(item.weaponMappingMismatchCount) || 0,
         weaponMappingMismatchNotes: Array.isArray(item.weaponMappingMismatchNotes) ? item.weaponMappingMismatchNotes.slice(0, 12) : [],
         weaponOutsidePoolCount: Number(item.weaponOutsidePoolCount) || 0,
@@ -3314,6 +3320,11 @@ function compactMusicLabPayloadForSave(payload = null) {
   const threatBudgetSummary = {
     count: threatBudgetSnapshots.length,
     energyStateCounts: Object.create(null),
+    laneActiveBeatCounts: Object.create(null),
+    laneCarrierPreferenceCounts: Object.create(null),
+    sectionIntentCounts: Object.create(null),
+    avgCombatPressure: 0,
+    avgMusicalPressure: 0,
     maxUsage: {
       fullThreats: 0,
       lightThreats: 0,
@@ -3321,9 +3332,33 @@ function compactMusicLabPayloadForSave(payload = null) {
       cosmeticParticipants: 0,
     },
   };
+  let pressureSnapshotCount = 0;
+  let combatPressureSum = 0;
+  let musicalPressureSum = 0;
   for (const snap of threatBudgetSnapshots) {
     const energyState = String(snap?.energyState || '').trim();
     if (energyState) threatBudgetSummary.energyStateCounts[energyState] = (threatBudgetSummary.energyStateCounts[energyState] || 0) + 1;
+    const lanePlan = snap?.lanePlan && typeof snap.lanePlan === 'object' ? snap.lanePlan : null;
+    if (lanePlan) {
+      for (const [laneId, lane] of Object.entries(lanePlan)) {
+        if (!lane || typeof lane !== 'object') continue;
+        const active = lane?.active === true;
+        const preferredCarrier = String(lane?.preferredCarrier || '').trim().toLowerCase();
+        if (active) threatBudgetSummary.laneActiveBeatCounts[laneId] = (threatBudgetSummary.laneActiveBeatCounts[laneId] || 0) + 1;
+        if (active && preferredCarrier) {
+          const carrierKey = `${laneId}:${preferredCarrier}`;
+          threatBudgetSummary.laneCarrierPreferenceCounts[carrierKey] = (threatBudgetSummary.laneCarrierPreferenceCounts[carrierKey] || 0) + 1;
+        }
+      }
+    }
+    const pressureState = snap?.pressureState && typeof snap.pressureState === 'object' ? snap.pressureState : null;
+    if (pressureState) {
+      const sectionIntent = String(pressureState?.sectionIntent || '').trim().toLowerCase();
+      if (sectionIntent) threatBudgetSummary.sectionIntentCounts[sectionIntent] = (threatBudgetSummary.sectionIntentCounts[sectionIntent] || 0) + 1;
+      combatPressureSum += Math.max(0, Math.min(1, Number(pressureState?.combatPressure) || 0));
+      musicalPressureSum += Math.max(0, Math.min(1, Number(pressureState?.musicalPressure) || 0));
+      pressureSnapshotCount += 1;
+    }
     const usage = snap?.usage && typeof snap.usage === 'object' ? snap.usage : null;
     if (!usage) continue;
     threatBudgetSummary.maxUsage.fullThreats = Math.max(threatBudgetSummary.maxUsage.fullThreats, Number(usage.fullThreats) || 0);
@@ -3331,6 +3366,8 @@ function compactMusicLabPayloadForSave(payload = null) {
     threatBudgetSummary.maxUsage.audibleAccents = Math.max(threatBudgetSummary.maxUsage.audibleAccents, Number(usage.audibleAccents) || 0);
     threatBudgetSummary.maxUsage.cosmeticParticipants = Math.max(threatBudgetSummary.maxUsage.cosmeticParticipants, Number(usage.cosmeticParticipants) || 0);
   }
+  threatBudgetSummary.avgCombatPressure = pressureSnapshotCount > 0 ? (combatPressureSum / pressureSnapshotCount) : 0;
+  threatBudgetSummary.avgMusicalPressure = pressureSnapshotCount > 0 ? (musicalPressureSum / pressureSnapshotCount) : 0;
   const metricsHistory = Array.isArray(src.metricsHistory) ? src.metricsHistory : [];
   const compactMetricsHistory = metricsHistory.map((entry) => {
     const metrics = entry?.metrics && typeof entry.metrics === 'object' ? entry.metrics : {};

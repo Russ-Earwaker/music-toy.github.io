@@ -1,8 +1,17 @@
 const DEFAULT_BEATS_PER_BAR = 4;
 const DEFAULT_STEPS_PER_BAR = 8;
 const DEFAULT_ENERGY_STATE = 'intro';
+const DEFAULT_CARRIER_TYPE = 'none';
 
 const ENERGY_STATES = Object.freeze(['intro', 'build', 'clash', 'break', 'peak']);
+const DIRECTOR_LANE_IDS = Object.freeze([
+  'foundation',
+  'secondary_loop',
+  'primary_loop',
+  'sparkle',
+  'support',
+  'answer',
+]);
 
 const NOTE_RE = /^([A-G])([#b]?)(-?\d+)$/;
 const NOTE_BASE_SEMI = Object.freeze({
@@ -64,6 +73,122 @@ function createThreatBudgets(base = null) {
   };
 }
 
+function normalizeCarrierType(next, fallback = DEFAULT_CARRIER_TYPE) {
+  const value = String(next || '').trim().toLowerCase();
+  if (!value) return fallback;
+  return value;
+}
+
+function createDefaultLanePlan() {
+  return {
+    foundation: {
+      active: true,
+      targetCount: 1,
+      preferredCarrier: 'spawner',
+      protected: true,
+      continuityBias: 'hold',
+      intensity: 0.4,
+    },
+    secondary_loop: {
+      active: false,
+      targetCount: 0,
+      preferredCarrier: 'spawner',
+      protected: false,
+      continuityBias: 'hold',
+      intensity: 0.25,
+    },
+    primary_loop: {
+      active: false,
+      targetCount: 0,
+      preferredCarrier: 'drawsnake',
+      protected: true,
+      continuityBias: 'blend',
+      intensity: 0.35,
+    },
+    sparkle: {
+      active: false,
+      targetCount: 0,
+      preferredCarrier: 'spawner',
+      protected: false,
+      continuityBias: 'follow',
+      intensity: 0.2,
+    },
+    support: {
+      active: false,
+      targetCount: 0,
+      preferredCarrier: 'group',
+      protected: false,
+      continuityBias: 'follow',
+      intensity: 0.18,
+    },
+    answer: {
+      active: false,
+      targetCount: 0,
+      preferredCarrier: 'group',
+      protected: false,
+      continuityBias: 'follow',
+      intensity: 0.18,
+    },
+  };
+}
+
+function normalizeLanePlanEntry(entry, fallback = null) {
+  const base = fallback && typeof fallback === 'object' ? fallback : {};
+  const input = entry && typeof entry === 'object' ? entry : {};
+  const targetCount = Math.max(0, clampInt(input.targetCount, 0, 32, Math.max(0, clampInt(base.targetCount, 0, 32, 0))));
+  const active = input.active == null ? !!base.active : !!input.active;
+  const preferredCarrier = normalizeCarrierType(input.preferredCarrier, normalizeCarrierType(base.preferredCarrier, DEFAULT_CARRIER_TYPE));
+  const protectedLane = input.protected == null ? !!base.protected : !!input.protected;
+  const continuityBias = String(input.continuityBias || base.continuityBias || 'hold').trim().toLowerCase() || 'hold';
+  const intensityRaw = Number(input.intensity);
+  const fallbackIntensity = Number(base.intensity);
+  const intensity = Number.isFinite(intensityRaw)
+    ? Math.max(0, Math.min(1, intensityRaw))
+    : (Number.isFinite(fallbackIntensity) ? Math.max(0, Math.min(1, fallbackIntensity)) : 0);
+  return {
+    active: active && targetCount > 0,
+    targetCount: active ? Math.max(1, targetCount) : 0,
+    preferredCarrier,
+    protected: protectedLane,
+    continuityBias,
+    intensity,
+  };
+}
+
+function normalizeLanePlan(next, fallback = null) {
+  const base = fallback && typeof fallback === 'object' ? fallback : createDefaultLanePlan();
+  const input = next && typeof next === 'object' ? next : {};
+  const out = {};
+  for (const laneId of DIRECTOR_LANE_IDS) {
+    out[laneId] = normalizeLanePlanEntry(input[laneId], base[laneId]);
+  }
+  return out;
+}
+
+function cloneLanePlan(plan) {
+  return normalizeLanePlan(plan, plan);
+}
+
+function normalizePressureState(next, fallback = null) {
+  const base = fallback && typeof fallback === 'object' ? fallback : {};
+  const input = next && typeof next === 'object' ? next : {};
+  const combatPressureRaw = Number(input.combatPressure);
+  const musicalPressureRaw = Number(input.musicalPressure);
+  const fallbackCombat = Number(base.combatPressure);
+  const fallbackMusical = Number(base.musicalPressure);
+  return {
+    combatPressure: Number.isFinite(combatPressureRaw)
+      ? Math.max(0, Math.min(1, combatPressureRaw))
+      : (Number.isFinite(fallbackCombat) ? Math.max(0, Math.min(1, fallbackCombat)) : 0),
+    musicalPressure: Number.isFinite(musicalPressureRaw)
+      ? Math.max(0, Math.min(1, musicalPressureRaw))
+      : (Number.isFinite(fallbackMusical) ? Math.max(0, Math.min(1, fallbackMusical)) : 0),
+    sectionIntent: String(input.sectionIntent || base.sectionIntent || '').trim().toLowerCase(),
+    responseMode: String(input.responseMode || base.responseMode || '').trim().toLowerCase(),
+    pacingState: String(input.pacingState || base.pacingState || '').trim().toLowerCase(),
+  };
+}
+
 export function createSwarmDirector(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const beatsPerBar = Math.max(1, clampInt(opts.beatsPerBar, 1, 128, DEFAULT_BEATS_PER_BAR));
@@ -88,6 +213,14 @@ export function createSwarmDirector(options = null) {
       audibleAccents: 0,
       cosmeticParticipants: 0,
     },
+    lanePlan: normalizeLanePlan(opts.lanePlan, createDefaultLanePlan()),
+    pressureState: normalizePressureState(opts.pressureState, {
+      combatPressure: 0,
+      musicalPressure: 0,
+      sectionIntent: '',
+      responseMode: '',
+      pacingState: '',
+    }),
     eventQueue: [],
     eventSeq: 1,
   };
@@ -134,6 +267,8 @@ export function createSwarmDirector(options = null) {
         audibleAccents: accentRemaining,
         cosmeticParticipants: cosmeticRemaining,
       },
+      lanePlan: cloneLanePlan(state.lanePlan),
+      pressureState: { ...state.pressureState },
       queuedEventCount: Math.max(0, Math.trunc(state.eventQueue.length || 0)),
     };
   }
@@ -324,6 +459,20 @@ export function createSwarmDirector(options = null) {
     return { ...state.budgets };
   }
 
+  function setLanePlan(next) {
+    state.lanePlan = normalizeLanePlan(next, state.lanePlan);
+    return cloneLanePlan(state.lanePlan);
+  }
+
+  function getLanePlan() {
+    return cloneLanePlan(state.lanePlan);
+  }
+
+  function setPressureState(next) {
+    state.pressureState = normalizePressureState(next, state.pressureState);
+    return { ...state.pressureState };
+  }
+
   function reset() {
     state.barIndex = 0;
     state.beatIndex = 0;
@@ -332,6 +481,14 @@ export function createSwarmDirector(options = null) {
     state.lastBeatIndex = null;
     state.lastStepIndex = null;
     state.phase01 = 0;
+    state.lanePlan = normalizeLanePlan(null, createDefaultLanePlan());
+    state.pressureState = normalizePressureState(null, {
+      combatPressure: 0,
+      musicalPressure: 0,
+      sectionIntent: '',
+      responseMode: '',
+      pacingState: '',
+    });
     resetBeatUsage(null);
     clearBeatEvents();
   }
@@ -351,6 +508,9 @@ export function createSwarmDirector(options = null) {
     pickNoteFromPool,
     clampNoteToPool,
     setBudgets,
+    setLanePlan,
+    getLanePlan,
+    setPressureState,
     reset,
   });
 }
