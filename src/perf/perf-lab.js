@@ -3197,6 +3197,8 @@ function compactMusicLabPayloadForSave(payload = null) {
     'music_slot_spawner_admission',
     'music_slot_spawner_loop_state_change',
     'music_slot_spawner_emit_identity',
+    'music_slot_spawner_assignment',
+    'music_slot_spawner_visual_identity',
     'music_intro_drum_first_note',
   ]);
   const compactSystemEvents = systemEvents
@@ -3218,7 +3220,15 @@ function compactMusicLabPayloadForSave(payload = null) {
         musicLayer: String(item.musicLayer || '').trim().toLowerCase(),
         musicLaneId: String(item.musicLaneId || '').trim().toLowerCase(),
         instrumentId: String(item.instrumentId || '').trim(),
+        previousInstrumentId: String(item.previousInstrumentId || '').trim(),
         note: String(item.note || '').trim(),
+        requestedNote: String(item.requestedNote || '').trim(),
+        resolvedNote: String(item.resolvedNote || '').trim(),
+        stage: String(item.stage || '').trim().toLowerCase(),
+        reason: String(item.reason || '').trim().toLowerCase(),
+        previousContinuityId: String(item.previousContinuityId || '').trim(),
+        visualId: String(item.visualId || '').trim(),
+        roleColor: String(item.roleColor || '').trim(),
         templateId: String(item.templateId || '').trim(),
         callResponseLane: String(item.callResponseLane || '').trim().toLowerCase(),
         callResponseQualified: item.callResponseQualified === true
@@ -3233,6 +3243,8 @@ function compactMusicLabPayloadForSave(payload = null) {
         returnActive: item.returnActive === true,
         liveSnakeCount: Number(item.liveSnakeCount) || 0,
         matchingScopeSnakeCount: Number(item.matchingScopeSnakeCount) || 0,
+        introDrumProtected: item.introDrumProtected === true,
+        introPrimaryLoopBlendWindow: item.introPrimaryLoopBlendWindow === true,
         primaryLoopUsesScope: item.primaryLoopUsesScope === true,
         role: String(item.role || '').trim().toLowerCase(),
         reason: String(item.reason || '').trim().toLowerCase(),

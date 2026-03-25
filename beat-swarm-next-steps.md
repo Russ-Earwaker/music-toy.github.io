@@ -478,6 +478,74 @@ Important rule:
 
 > Do not leave legacy tags in a half-live state if they no longer correspond to any real runtime path.
 
+### 15. Unified Beat Swarm Director
+
+The current system has enough moving parts now that a more deliberate director layer is justified.
+
+Why this matters:
+
+- music lanes, carrier assignment, enemy spawning, and gameplay pacing are tightly related now
+- current behavior is still split across:
+  - lane ownership logic
+  - singleton-group sync
+  - carrier spawn/replace logic
+  - section and groove planners
+- that split makes it harder to guarantee that:
+  - a musical lane keeps its identity
+  - a replacement enemy inherits the correct role
+  - difficulty ramp and arrangement ramp reinforce each other
+
+Target behavior:
+
+- one director should own the intended active musical lanes
+- one director should also own how gameplay carriers are allocated to those lanes
+- enemy spawn pressure and combat pacing should be able to rise/fall alongside the music on purpose
+- musical progress and gameplay progress should feel linked, not coincidental
+
+Director responsibilities:
+
+- decide which lanes are active:
+  - `foundation`
+  - `secondary_loop`
+  - `primary_loop`
+  - `sparkle`
+  - later support / answer / special layers
+- decide which carrier type should serve each lane:
+  - spawner
+  - drawsnake
+  - composer group
+  - ghost/tail continuation
+- own replacement policy when a carrier dies
+- own section/density/difficulty ramp targets together instead of separately
+- expose explicit handoff policy rather than relying on scattered local heuristics
+
+Backlog tasks:
+
+- define a single runtime director state that represents:
+  - active lanes
+  - desired carrier counts
+  - current combat pressure
+  - current musical pressure
+- move lane activation and carrier assignment decisions behind that director state
+- make spawn requests lane-aware instead of only enemy-type-aware
+- add a pacing model where gameplay difficulty and musical density can co-ramp or intentionally diverge
+- make carrier replacement preserve lane identity by default
+- keep local systems as executors of director decisions, not independent policy owners
+
+Important rule:
+
+> The director should decide what the piece and encounter need; carriers and groups should execute that plan.
+
+Design constraint:
+
+- this should not become a giant rewrite before the current lane work stabilizes
+- treat it as the next architectural phase once the present slot/lane bugs are under control
+- use the current debugging lessons as input to its design, especially around:
+  - carrier replacement
+  - lane identity persistence
+  - gameplay readability
+  - difficulty/music co-pacing
+
 ## Working Rule
 
 Use this as the tuning principle:

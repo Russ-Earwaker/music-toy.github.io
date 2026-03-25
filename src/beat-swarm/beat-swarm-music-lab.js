@@ -1484,6 +1484,10 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
   let slotSpawnerEmitIdentityEvents = 0;
   let slotSpawnerEmitPulseIdentityEvents = 0;
   let slotSpawnerEmitBackbeatIdentityEvents = 0;
+  let slotSpawnerAssignmentEvents = 0;
+  let slotSpawnerAssignmentCreatedEvents = 0;
+  let slotSpawnerAssignmentSyncEvents = 0;
+  let slotSpawnerVisualIdentityEvents = 0;
   for (const e of logs) {
     const type = String(e?.eventType || '').trim().toLowerCase();
     if (type === 'music_gameplay_suppression_decision') {
@@ -1639,6 +1643,17 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
       else if (key === 'percussion_backbeat') slotSpawnerEmitBackbeatIdentityEvents += 1;
       continue;
     }
+    if (type === 'music_slot_spawner_assignment') {
+      slotSpawnerAssignmentEvents += 1;
+      const stage = String(e?.stage || '').trim().toLowerCase();
+      if (stage === 'ensure_created') slotSpawnerAssignmentCreatedEvents += 1;
+      else if (stage === 'sync_group') slotSpawnerAssignmentSyncEvents += 1;
+      continue;
+    }
+    if (type === 'music_slot_spawner_visual_identity') {
+      slotSpawnerVisualIdentityEvents += 1;
+      continue;
+    }
   }
   return {
     gameplaySuppressionEvents,
@@ -1713,6 +1728,10 @@ function collectDecisionMakingDiagnostics(session, maxBarIndex) {
     slotSpawnerEmitIdentityEvents,
     slotSpawnerEmitPulseIdentityEvents,
     slotSpawnerEmitBackbeatIdentityEvents,
+    slotSpawnerAssignmentEvents,
+    slotSpawnerAssignmentCreatedEvents,
+    slotSpawnerAssignmentSyncEvents,
+    slotSpawnerVisualIdentityEvents,
     byDecisionReason,
   };
 }
