@@ -6277,6 +6277,11 @@ const swarmSoundEventState = {
   gameplayFamilyCount: Object.create(null),
   gameplayFamilyWindow: Object.create(null),
 };
+const swarmSoundTimingRuntime = {
+  anchorBeatIndex: null,
+  anchorStepIndex: null,
+  anchorAudioTime: null,
+};
 const swarmSoundInstrumentCache = new Map();
 const swarmPaletteRuntime = createBeatSwarmPaletteRuntime({
   getThemeKey: getBeatSwarmEffectiveThemeId,
@@ -7948,6 +7953,7 @@ function startMusicLabSession(reason = 'unknown') {
   resetSpawnerPercussionGrooveRuntime();
   resetIntroDrumLoopRuntime();
   resetIntroDrumVoiceRuntime();
+  resetSwarmSoundTimingRuntime();
 }
 function normalizeEnemyRemovalReason(reason = 'unknown') {
   const raw = String(reason || '').trim().toLowerCase();
@@ -8022,6 +8028,7 @@ function noteSwarmSoundEvent(eventKey, volume = 1, beatIndex = currentBeatIndex,
     swarmSoundEventState.played = Object.create(null);
     swarmSoundEventState.maxVolume = Object.create(null);
     swarmSoundEventState.note = Object.create(null);
+    swarmSoundEventState.meta = Object.create(null);
     swarmSoundEventState.noteList = Object.create(null);
     swarmSoundEventState.count = Object.create(null);
     swarmSoundEventState.gameplayFamilyCount = Object.create(null);
@@ -8139,6 +8146,7 @@ function noteSwarmSoundEvent(eventKey, volume = 1, beatIndex = currentBeatIndex,
       actionType: String(info?.actionType || key).trim().toLowerCase(),
       authoringClass: String(info?.authoringClass || '').trim().toLowerCase(),
       beatIndex: beat,
+      scheduledStepIndex: Number.isFinite(Number(info?.scheduledStepIndex)) ? Math.max(0, Math.trunc(Number(info.scheduledStepIndex) || 0)) : null,
       eventKey: key,
     };
   } else if (!swarmSoundEventState.note[key]) {
@@ -8149,10 +8157,46 @@ function noteSwarmSoundEvent(eventKey, volume = 1, beatIndex = currentBeatIndex,
         actionType: String(info?.actionType || key).trim().toLowerCase(),
         authoringClass: String(info?.authoringClass || '').trim().toLowerCase(),
         beatIndex: beat,
+        scheduledStepIndex: Number.isFinite(Number(info?.scheduledStepIndex)) ? Math.max(0, Math.trunc(Number(info.scheduledStepIndex) || 0)) : null,
         eventKey: key,
       };
     }
   }
+}
+function resetSwarmSoundTimingRuntime() {
+  swarmSoundTimingRuntime.anchorBeatIndex = null;
+  swarmSoundTimingRuntime.anchorStepIndex = null;
+  swarmSoundTimingRuntime.anchorAudioTime = null;
+}
+function ensureSwarmSoundTimingAnchor() {
+  const info = getLoopInfo?.() || null;
+  const now = Number(info?.now);
+  if (!Number.isFinite(now)) return null;
+  const directorSnapshot = ensureSwarmDirector().getSnapshot?.() || null;
+  const liveBeatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
+  const liveStepIndex = Number.isFinite(Number(directorSnapshot?.stepIndex))
+    ? Math.max(0, Math.trunc(Number(directorSnapshot.stepIndex) || 0))
+    : null;
+  const anchorMissing = !Number.isFinite(Number(swarmSoundTimingRuntime.anchorAudioTime));
+  const beatRewound = Number.isFinite(Number(swarmSoundTimingRuntime.anchorBeatIndex))
+    && liveBeatIndex < Math.max(0, Math.trunc(Number(swarmSoundTimingRuntime.anchorBeatIndex) || 0));
+  const stepRewound = liveStepIndex != null
+    && Number.isFinite(Number(swarmSoundTimingRuntime.anchorStepIndex))
+    && liveStepIndex < Math.max(0, Math.trunc(Number(swarmSoundTimingRuntime.anchorStepIndex) || 0));
+  if (anchorMissing || beatRewound || stepRewound) {
+    swarmSoundTimingRuntime.anchorBeatIndex = liveBeatIndex;
+    swarmSoundTimingRuntime.anchorStepIndex = liveStepIndex;
+    swarmSoundTimingRuntime.anchorAudioTime = now;
+  }
+  return {
+    beatIndex: Math.max(0, Math.trunc(Number(swarmSoundTimingRuntime.anchorBeatIndex) || 0)),
+    stepIndex: Number.isFinite(Number(swarmSoundTimingRuntime.anchorStepIndex))
+      ? Math.max(0, Math.trunc(Number(swarmSoundTimingRuntime.anchorStepIndex) || 0))
+      : null,
+    audioTime: Number.isFinite(Number(swarmSoundTimingRuntime.anchorAudioTime))
+      ? Number(swarmSoundTimingRuntime.anchorAudioTime)
+      : now,
+  };
 }
 function flushSwarmSoundEventsForBeat(beatIndex = currentBeatIndex) {
   const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
@@ -8183,20 +8227,24 @@ function flushSwarmSoundEventsForBeat(beatIndex = currentBeatIndex) {
     const loopInfo = getLoopInfo?.() || null;
     const beatLen = Number(loopInfo?.beatLen) || 0;
     const loopStartTime = Number(loopInfo?.loopStartTime);
-    const targetAudioTime = getSwarmSoundEventTargetAudioTime(beat);
+    const eventMeta = swarmSoundEventState.meta[key] && typeof swarmSoundEventState.meta[key] === 'object'
+      ? swarmSoundEventState.meta[key]
+      : null;
+    const scheduledStepIndex = Number.isFinite(Number(eventMeta?.scheduledStepIndex))
+      ? Math.max(0, Math.trunc(Number(eventMeta?.scheduledStepIndex) || 0))
+      : null;
+    const targetAudioTime = getSwarmSoundEventTargetAudioTime(beat, scheduledStepIndex);
     const deathArpStepSec = Math.max(0.004, Number(def?.arpStepSec) || 0.028);
     const deathArpMaxNotes = Math.max(1, Math.trunc(Number(def?.arpMaxNotes) || SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length));
     const deathPitchDropSemitones = Math.max(0, Math.trunc(Number(def?.pitchDropSemitones) || 0));
     const defVolumeMult = Math.max(0.1, Math.min(1.6, Number(def?.volumeMult) || 1));
     const deathPitchList = isDeathKey ? notes.slice(0, deathArpMaxNotes) : notes;
-    const eventMeta = swarmSoundEventState.meta[key] && typeof swarmSoundEventState.meta[key] === 'object'
-      ? swarmSoundEventState.meta[key]
-      : null;
     if (
       eventMeta
       && eventMeta.sourceSystem === 'player'
+      && scheduledStepIndex != null
       && Number.isFinite(nowAudio)
-      && Number.isFinite(loopStartTime)
+      && Number.isFinite(targetAudioTime)
       && beatLen > 0
     ) {
       const flushOffsetMs = (nowAudio - targetAudioTime) * 1000;
@@ -8204,7 +8252,9 @@ function flushSwarmSoundEventsForBeat(beatIndex = currentBeatIndex) {
         eventKey: key,
         actionType: String(eventMeta.actionType || key).trim().toLowerCase(),
         authoringClass: String(eventMeta.authoringClass || '').trim().toLowerCase(),
+        reason: 'queued_flush',
         scheduledBeatIndex: beat,
+        scheduledStepIndex: scheduledStepIndex != null ? scheduledStepIndex : -1,
         flushOffsetMs,
         flushOffsetAbsMs: Math.abs(flushOffsetMs),
         targetAudioTime,
@@ -8382,23 +8432,58 @@ function playSwarmSoundEventImmediate(eventKey, volume = 1, noteName = null) {
   const note = normalizeSwarmNoteName(noteName) || String(def?.note || getRandomSwarmPentatonicNote());
   try { triggerInstrument(inst, note, undefined, 'master', {}, vol); } catch {}
 }
-function getSwarmSoundEventTargetAudioTime(beatIndex = currentBeatIndex) {
-  const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
+function getSwarmSoundEventTargetAudioTime(beatIndex = currentBeatIndex, stepIndex = null) {
   const info = getLoopInfo?.() || null;
   const beatLen = Number(info?.beatLen) || 0;
-  const loopStartTime = Number(info?.loopStartTime);
-  if (!(beatLen > 0) || !Number.isFinite(loopStartTime)) return null;
-  const targetAudioTime = loopStartTime + (beat * beatLen);
+  const barLen = Number(info?.barLen) || 0;
+  const anchor = ensureSwarmSoundTimingAnchor();
+  if (!anchor) return null;
+  const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
+  const step = Number.isFinite(Number(stepIndex)) ? Math.max(0, Math.trunc(Number(stepIndex) || 0)) : null;
+  if (step != null && barLen > 0 && anchor.stepIndex != null) {
+    const stepLen = barLen / Math.max(1, WEAPON_TUNE_STEPS);
+    if (stepLen > 0) {
+      const stepTargetAudioTime = anchor.audioTime + ((step - anchor.stepIndex) * stepLen);
+      if (Number.isFinite(stepTargetAudioTime)) return stepTargetAudioTime;
+    }
+  }
+  if (!(beatLen > 0)) return null;
+  const targetAudioTime = anchor.audioTime + ((beat - anchor.beatIndex) * beatLen);
   return Number.isFinite(targetAudioTime) ? targetAudioTime : null;
 }
-function playSwarmSoundEventScheduled(eventKey, volume = 1, beatIndex = currentBeatIndex, noteName = null) {
+function playSwarmSoundEventScheduled(eventKey, volume = 1, beatIndex = currentBeatIndex, noteName = null, options = null) {
   const key = String(eventKey || '').trim();
   if (!SWARM_SOUND_EVENTS[key]) return;
   const vol = Math.max(0.001, Math.min(1, Number(volume) || 0));
   const def = SWARM_SOUND_EVENTS[key];
   const inst = resolveSwarmSoundInstrumentId(key);
   const note = normalizeSwarmNoteName(noteName) || String(def?.note || getRandomSwarmPentatonicNote());
-  const when = getSwarmSoundEventTargetAudioTime(beatIndex);
+  const when = getSwarmSoundEventTargetAudioTime(beatIndex, options?.stepIndex);
+  const nowAudio = Number(getLoopInfo?.()?.now);
+  if (
+    String(options?.sourceSystem || '').trim().toLowerCase() === 'player'
+    && Number.isFinite(Number(options?.stepIndex))
+    && Number.isFinite(when)
+    && Number.isFinite(nowAudio)
+  ) {
+    const flushOffsetMs = (nowAudio - when) * 1000;
+    noteMusicSystemEvent('music_player_weapon_timing', {
+      eventKey: key,
+      actionType: String(options?.actionType || key).trim().toLowerCase(),
+      authoringClass: String(options?.authoringClass || '').trim().toLowerCase(),
+      reason: 'direct_schedule',
+      scheduledBeatIndex: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
+      scheduledStepIndex: Math.max(0, Math.trunc(Number(options?.stepIndex) || 0)),
+      flushOffsetMs,
+      flushOffsetAbsMs: Math.abs(flushOffsetMs),
+      targetAudioTime: when,
+      flushAudioTime: nowAudio,
+      note,
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
+      stepIndex: Math.max(0, Math.trunc(Number(options?.stepIndex) || 0)),
+    });
+  }
   try { triggerInstrument(inst, note, when ?? undefined, 'master', {}, vol); } catch {}
 }
 function createRandomWeaponStages() {
@@ -16558,6 +16643,7 @@ export function enterBeatSwarmMode(options = null) {
   resetEnergyStateRuntime(0);
   resetEnergyGravityRuntime();
   resetSwarmDirector(0);
+  resetSwarmSoundTimingRuntime();
   if (!restoreState) resetArenaPathState();
   lastBeatIndex = null;
   lastWeaponTuneStepIndex = null;

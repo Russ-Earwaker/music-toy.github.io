@@ -393,6 +393,7 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     authorityActiveNoteCount: clampInt(payload?.authorityActiveNoteCount, 0, 0),
     notePoolSize: clampInt(payload?.notePoolSize, 0, 0),
     scheduledBeatIndex: clampInt(payload?.scheduledBeatIndex, 0, 0),
+    scheduledStepIndex: clampInt(payload?.scheduledStepIndex, 0, -1),
     flushOffsetMs: Number(payload?.flushOffsetMs) || 0,
     flushOffsetAbsMs: Number(payload?.flushOffsetAbsMs) || 0,
     targetAudioTime: Number(payload?.targetAudioTime) || 0,

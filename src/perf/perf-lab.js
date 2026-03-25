@@ -3295,6 +3295,7 @@ function compactMusicLabPayloadForSave(payload = null) {
         authorityActiveNoteCount: Number(item.authorityActiveNoteCount) || 0,
         notePoolSize: Number(item.notePoolSize) || 0,
         scheduledBeatIndex: Number(item.scheduledBeatIndex) || 0,
+        scheduledStepIndex: Number(item.scheduledStepIndex) || -1,
         flushOffsetMs: Number(item.flushOffsetMs) || 0,
         flushOffsetAbsMs: Number(item.flushOffsetAbsMs) || 0,
         targetAudioTime: Number(item.targetAudioTime) || 0,

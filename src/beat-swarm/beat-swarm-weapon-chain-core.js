@@ -572,12 +572,24 @@ export function triggerWeaponStageRuntime(options = null) {
         const noteName = forcedNoteName || helpers.getSwarmEnemySoundNoteById?.(nearest?.id);
         const weaponSoundKey = helpers.getPlayerWeaponSoundEventKeyForStage?.(archetype, variant) || 'projectile';
         if (directSound) {
-          helpers.playSwarmSoundEventScheduled?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName);
+          helpers.playSwarmSoundEventScheduled?.(
+            weaponSoundKey,
+            gameplayWeaponSoundVolume,
+            beatIndex,
+            noteName,
+            {
+              stepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
+              sourceSystem: 'player',
+              actionType: `${archetype}-${variant}`,
+              authoringClass: 'gameplayauthored',
+            }
+          );
         } else {
           helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName, {
             authoringClass: 'gameplayauthored',
             sourceSystem: 'player',
             actionType: `${archetype}-${variant}`,
+            scheduledStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
           });
         }
       }
@@ -654,12 +666,24 @@ export function triggerWeaponStageRuntime(options = null) {
         const beamVol = gameplayWeaponSoundVolume * (sustaining ? 0.36 : 0.82);
         if (helpers.shouldPlayBeamSoundForBeat?.(slotIndex, beatIndex)) {
           if (directSound) {
-            helpers.playSwarmSoundEventScheduled?.(weaponSoundKey, beamVol, beatIndex, noteName);
+            helpers.playSwarmSoundEventScheduled?.(
+              weaponSoundKey,
+              beamVol,
+              beatIndex,
+              noteName,
+              {
+                stepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
+                sourceSystem: 'player',
+                actionType: `${archetype}-${variant}`,
+                authoringClass: 'gameplayauthored',
+              }
+            );
           } else {
             helpers.noteSwarmSoundEvent?.(weaponSoundKey, beamVol, beatIndex, noteName, {
               authoringClass: 'gameplayauthored',
               sourceSystem: 'player',
               actionType: `${archetype}-${variant}`,
+              scheduledStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
             });
           }
         }
@@ -736,12 +760,24 @@ export function triggerWeaponStageRuntime(options = null) {
         const noteName = forcedNoteName || helpers.getSwarmEnemySoundNoteById?.(nearest?.id);
         const weaponSoundKey = helpers.getPlayerWeaponSoundEventKeyForStage?.(archetype, variant) || 'hitscan';
         if (directSound) {
-          helpers.playSwarmSoundEventScheduled?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName);
+          helpers.playSwarmSoundEventScheduled?.(
+            weaponSoundKey,
+            gameplayWeaponSoundVolume,
+            beatIndex,
+            noteName,
+            {
+              stepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
+              sourceSystem: 'player',
+              actionType: `${archetype}-${variant}`,
+              authoringClass: 'gameplayauthored',
+            }
+          );
         } else {
           helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName, {
             authoringClass: 'gameplayauthored',
             sourceSystem: 'player',
             actionType: `${archetype}-${variant}`,
+            scheduledStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
           });
         }
       }
@@ -823,12 +859,24 @@ export function triggerWeaponStageRuntime(options = null) {
         const explosionSoundKey = helpers.getPlayerWeaponSoundEventKeyForStage?.(archetype, variant) || 'explosion';
         const defaultExplosionNote = helpers.normalizeSwarmNoteName?.(constants.swarmSoundEvents?.[explosionSoundKey]?.note) || 'C4';
         if (directSound) {
-          helpers.playSwarmSoundEventScheduled?.(explosionSoundKey, gameplayWeaponSoundVolume, beatIndex, defaultExplosionNote);
+          helpers.playSwarmSoundEventScheduled?.(
+            explosionSoundKey,
+            gameplayWeaponSoundVolume,
+            beatIndex,
+            defaultExplosionNote,
+            {
+              stepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
+              sourceSystem: 'player',
+              actionType: `${archetype}-${variant}`,
+              authoringClass: 'gameplayauthored',
+            }
+          );
         } else {
           helpers.noteSwarmSoundEvent?.(explosionSoundKey, gameplayWeaponSoundVolume, beatIndex, defaultExplosionNote, {
             authoringClass: 'gameplayauthored',
             sourceSystem: 'player',
             actionType: `${archetype}-${variant}`,
+            scheduledStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
           });
         }
       }
