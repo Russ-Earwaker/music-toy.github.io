@@ -2613,6 +2613,7 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
         role: BEAT_EVENT_ROLES.BASS,
         motifScopeKey: 'keepalive_recover',
         profile: introDrumProfile || null,
+        musicVoiceKey: introDrumProfile ? 'percussion_pulse' : '',
       }) || null;
       if (spawned) spawnedType = 'spawner';
     }
@@ -4904,9 +4905,10 @@ function getLockedIntroDrumSpawnerProfile(barIndex = 0, pacingState = '') {
     return null;
   }
   const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  if (safeBar < 4 && !isForcedIntroFoundationWindow(safeBar)) return null;
   if (!(introDrumLoopRuntime.anchorBar >= 0) || introDrumLoopRuntime.phaseFamily !== 'intro') {
-    const seedProfile = createSpawnerEnemyRhythmProfile({ role: 'drum' }) || {};
-    const continuityId = String(seedProfile.continuityId || introDrumLoopRuntime.continuityId || getNextMusicContinuityId()).trim();
+    const seedProfile = buildSpawnerPercussionLayerProfile('pulse', { barIndex: safeBar }) || createSpawnerEnemyRhythmProfile({ role: 'drum', barIndex: safeBar }) || {};
+    const continuityId = String(seedProfile.continuityId || 'spawner_percussion_pulse' || introDrumLoopRuntime.continuityId || getNextMusicContinuityId()).trim();
     const lockedSeedProfile = {
       ...seedProfile,
       continuityId,
@@ -4922,7 +4924,7 @@ function getLockedIntroDrumSpawnerProfile(barIndex = 0, pacingState = '') {
     introDrumLoopRuntime.notePalette = Array.isArray(lockedSeedProfile.notePalette) && lockedSeedProfile.notePalette.length
       ? lockedSeedProfile.notePalette.slice()
       : Array.from(LOOPGRID_FALLBACK_NOTE_PALETTE);
-    introDrumLoopRuntime.instrument = String(lockedSeedProfile.instrument || resolveSwarmSoundInstrumentId('explosion') || 'tone').trim();
+    introDrumLoopRuntime.instrument = String(lockedSeedProfile.instrument || resolveSpawnerPercussionSlotInstrument('percussion_pulse') || resolveSwarmSoundInstrumentId('explosion') || 'tone').trim();
     introDrumLoopRuntime.baseNoteName = normalizeSwarmNoteName(lockedSeedProfile.baseNoteName) || 'C3';
     introDrumLoopRuntime.continuityId = continuityId;
     introDrumLoopRuntime.phraseId = `intro_drum_loop_${String(introDrumLoopRuntime.continuityId || 'v0').trim().toLowerCase() || 'v0'}`;
@@ -4931,7 +4933,6 @@ function getLockedIntroDrumSpawnerProfile(barIndex = 0, pacingState = '') {
     introDrumLoopRuntime.patternKey = introDrumLoopRuntime.seedSteps8.map((step) => (step ? '1' : '0')).join('');
     introDrumLoopRuntime.variationIndex = 0;
   }
-  if (pacingKey === 'intro_solo') return null;
   const variationIndex = Math.max(0, Math.trunc(Number(introDrumLoopRuntime.variationIndex) || 0));
   const phraseLengthBars = 1;
   const barOffset = 0;
