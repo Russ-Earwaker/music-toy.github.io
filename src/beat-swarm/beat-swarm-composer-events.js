@@ -174,6 +174,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const responseLengthCap = preDropActive
     ? 1
     : (structureIntent === 'build' ? 3 : 4);
+  const responseCadenceRestSteps = directorWantsAnswerGroup
+    ? (preDropActive ? 2 : (strongLeadWindowActive ? 3 : 2))
+    : 1;
+  const callCadenceRestSteps = 1;
   const getPendingCallExpiry = (callStepAbs, targetLength) => {
     const lastCallStep = Math.max(-1, Math.trunc(Number(callStepAbs) || -1));
     if (lastCallStep < 0) return -1;
@@ -288,7 +292,13 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         noteResponseDiagnostic('response_cooldown', { lastRespStep, sinceLastResponse: stepAbs - lastRespStep });
         continue;
       }
-      const responseProgressNow = Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0));
+    const localCadenceRestSteps = lane === 'response'
+      ? responseCadenceRestSteps
+      : callCadenceRestSteps;
+    const postCadenceRestUntilStep = phraseStep.resolutionOpportunity
+      ? (stepAbs + localCadenceRestSteps)
+      : -1;
+    const responseProgressNow = Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0));
       const responseTargetNow = Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2));
       const sinceLastResponse = Math.max(
         -1,
@@ -309,6 +319,12 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (!stepActive && !responseOverrideHit) {
       noteCallDiagnostic('step_inactive');
       noteResponseDiagnostic('step_inactive');
+      continue;
+    }
+    const phraseRestUntilStepAbs = Math.max(-1, Math.trunc(Number(group?.__bsPhraseRestUntilStep) || -1));
+    if (phraseRestUntilStepAbs >= stepAbs) {
+      noteCallDiagnostic('post_cadence_rest', { restUntilStepAbs: phraseRestUntilStepAbs });
+      noteResponseDiagnostic('post_cadence_rest', { restUntilStepAbs: phraseRestUntilStepAbs });
       continue;
     }
     const aliveMembers = getAliveEnemiesByIds(group.memberIds).filter((e) => String(e?.enemyType || '') === 'composer-group-member' && !e?.retreating);
@@ -656,6 +672,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       });
       continue;
     }
+    group.__bsPhraseRestUntilStep = phraseResolutionHit
+      ? (stepAbs + localCadenceRestSteps)
+      : Math.max(-1, postCadenceRestUntilStep);
     noteCallDiagnostic('emitted', {
       performerCount: performers.length,
       strongCallCandidate,

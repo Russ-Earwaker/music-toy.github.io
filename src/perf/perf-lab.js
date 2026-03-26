@@ -440,6 +440,7 @@ function ensureUI() {
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
       btn('musicLabRunBS0S3x1m1m', 'Music Lab: Run BS0 S3 (1x1m, auto-save)', 'primary'),
       btn('musicLabRunBS0S3x1m', 'Music Lab: Run BS0 S3 (1x3m, auto-save)', 'primary'),
+      btn('musicLabRunBS0S3x1m5m', 'Music Lab: Run BS0 S3 (1x5m, auto-save)', 'primary'),
       btn('musicLabRunBS0S3x3m', 'Music Lab: Run BS0 S3 (3x3m each, auto-save)', 'primary'),
       btn('musicLabSnapshot', 'Music Lab: Show Snapshot'),
       btn('musicLabExport', 'Music Lab: Export JSON'),
@@ -1233,6 +1234,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3x1m') {
       await runBS0s3MusicLabSingle();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3x1m5m') {
+      await runBS0s3MusicLabSingle5m();
       return;
     }
     if (act === 'musicLabRunBS0S3x1m1m') {
@@ -4032,6 +4037,25 @@ async function runBS0s3MusicLabSingle() {
     tagPrefix: 'BS0S3MusicLab1x3m',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_1x3m',
     statusPrefix: 'Running BS0 S3 Music Lab quick playtest (3 minutes)',
+  });
+}
+
+async function runBS0s3MusicLabSingle5m() {
+  await runBS0Stage(3, {
+    durationMs: 300000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_bs0_s3_1x5m',
+    saveNotes: 'Beat Swarm Music Lab structure run: S3, 1 run x 5 minutes.',
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_1x5m',
+    groupedRunId: 'musicLab_bs0_s3_1x5m_scenario',
+    groupedNotes: 'Beat Swarm Music Lab grouped scenario: S3, 1 run x 5 minutes.',
+    tagPrefix: 'BS0S3MusicLab1x5m',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_1x5m',
+    statusPrefix: 'Running BS0 S3 Music Lab structure pass (5 minutes)',
   });
 }
 

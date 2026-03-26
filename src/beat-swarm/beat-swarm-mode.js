@@ -4676,16 +4676,104 @@ function collectWeaponTuneAuthorityState(slotIndex = getActiveWeaponHarmonySlotI
   };
 }
 function getTransposedHarmonyPoolForRoot(rootNote = '') {
-  const tonic = normalizeSwarmNoteName(rootNote);
+  return buildHarmonyScalePool(rootNote, String(DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic'));
+}
+const HARMONY_SCALE_LIBRARY = Object.freeze({
+  minor_pentatonic: Object.freeze({
+    id: 'minor_pentatonic',
+    intervals: Object.freeze([0, 3, 5, 7, 10]),
+  }),
+  natural_minor: Object.freeze({
+    id: 'natural_minor',
+    intervals: Object.freeze([0, 2, 3, 5, 7, 8, 10]),
+  }),
+  dorian: Object.freeze({
+    id: 'dorian',
+    intervals: Object.freeze([0, 2, 3, 5, 7, 9, 10]),
+  }),
+  major_pentatonic: Object.freeze({
+    id: 'major_pentatonic',
+    intervals: Object.freeze([0, 2, 4, 7, 9]),
+  }),
+});
+function getHarmonyScaleDefinition(scaleId = '') {
+  const key = String(scaleId || '').trim().toLowerCase();
+  return HARMONY_SCALE_LIBRARY[key] || HARMONY_SCALE_LIBRARY.minor_pentatonic;
+}
+function buildHarmonyScalePool(rootNote = '', scaleId = 'minor_pentatonic', octaveOffsets = [-1, 0, 1]) {
+  const normalizedRoot = normalizeSwarmNoteName(rootNote) || normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
+  const rootMidi = noteNameToMidiRuntime(normalizedRoot);
+  const scale = getHarmonyScaleDefinition(scaleId);
+  if (!Number.isFinite(rootMidi)) {
+    return SWARM_PENTATONIC_NOTES_ONE_OCTAVE.slice();
+  }
+  const out = [];
+  const seen = new Set();
+  const octaveList = Array.isArray(octaveOffsets) && octaveOffsets.length ? octaveOffsets : [0];
+  for (let octaveIdx = 0; octaveIdx < octaveList.length; octaveIdx += 1) {
+    const octaveOffset = Math.trunc(Number(octaveList[octaveIdx]) || 0) * 12;
+    for (let i = 0; i < scale.intervals.length; i += 1) {
+      const midi = rootMidi + octaveOffset + Math.trunc(Number(scale.intervals[i]) || 0);
+      const noteName = normalizeSwarmNoteName(midiToName(midi)) || '';
+      if (!noteName || seen.has(noteName)) continue;
+      seen.add(noteName);
+      out.push(noteName);
+    }
+  }
+  return out.length ? out : SWARM_PENTATONIC_NOTES_ONE_OCTAVE.slice();
+}
+function findClosestNoteInPool(noteName, pool, fallbackIndex = 0) {
+  const normalized = normalizeSwarmNoteName(noteName);
+  const list = Array.isArray(pool) ? pool.filter(Boolean) : [];
+  if (!list.length) return normalized || getRandomSwarmPentatonicNote();
+  if (normalized && list.includes(normalized)) return normalized;
+  const targetMidi = noteNameToMidiRuntime(normalized);
+  const fallback = list[((Math.trunc(Number(fallbackIndex) || 0) % list.length) + list.length) % list.length];
+  if (!Number.isFinite(targetMidi)) return normalizeSwarmNoteName(fallback) || getRandomSwarmPentatonicNote();
+  let bestNote = normalizeSwarmNoteName(fallback) || getRandomSwarmPentatonicNote();
+  let bestDelta = Infinity;
+  for (let i = 0; i < list.length; i += 1) {
+    const candidate = normalizeSwarmNoteName(list[i]);
+    const candidateMidi = noteNameToMidiRuntime(candidate);
+    if (!candidate || !Number.isFinite(candidateMidi)) continue;
+    const delta = Math.abs(candidateMidi - targetMidi);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestNote = candidate;
+    }
+  }
+  return bestNote;
+}
+function buildHarmonyAlignedThemeNotePool(basePool, rootNote, scaleId, maxUnique = 5) {
+  const sourcePool = Array.isArray(basePool) && basePool.length ? basePool : SWARM_PENTATONIC_NOTES_ONE_OCTAVE;
+  const harmonicPool = buildHarmonyScalePool(rootNote, scaleId, [-1, 0, 1]);
+  const normalizedRoot = normalizeSwarmNoteName(rootNote) || normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
   const baseRoot = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
-  const tonicMidi = noteNameToMidiRuntime(tonic);
-  const baseMidi = noteNameToMidiRuntime(baseRoot);
-  const transposeSemitones = Number.isFinite(tonicMidi) && Number.isFinite(baseMidi)
-    ? Math.trunc(tonicMidi - baseMidi)
+  const rootMidi = noteNameToMidiRuntime(normalizedRoot);
+  const baseRootMidi = noteNameToMidiRuntime(baseRoot);
+  const transposeSemitones = Number.isFinite(rootMidi) && Number.isFinite(baseRootMidi)
+    ? Math.trunc(rootMidi - baseRootMidi)
     : 0;
-  return SWARM_PENTATONIC_NOTES_ONE_OCTAVE
-    .map((note) => normalizeSwarmNoteName(transposeSwarmNoteName(note, transposeSemitones) || note))
-    .filter(Boolean);
+  const desiredCount = Math.max(1, Math.min(12, Math.trunc(Number(maxUnique) || sourcePool.length || 5)));
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < sourcePool.length; i += 1) {
+    const raw = normalizeSwarmNoteName(sourcePool[i]);
+    if (!raw) continue;
+    const transposed = normalizeSwarmNoteName(transposeSwarmNoteName(raw, transposeSemitones) || raw) || raw;
+    const fitted = findClosestNoteInPool(transposed, harmonicPool, i);
+    if (!fitted || seen.has(fitted)) continue;
+    seen.add(fitted);
+    out.push(fitted);
+    if (out.length >= desiredCount) break;
+  }
+  for (let i = 0; i < harmonicPool.length && out.length < desiredCount; i += 1) {
+    const fitted = normalizeSwarmNoteName(harmonicPool[i]);
+    if (!fitted || seen.has(fitted)) continue;
+    seen.add(fitted);
+    out.push(fitted);
+  }
+  return out.length ? out : harmonicPool.slice(0, desiredCount);
 }
 function deriveWeaponHarmonyAuthority(slotIndex = getActiveWeaponHarmonySlotIndex()) {
   const authorityState = collectWeaponTuneAuthorityState(slotIndex);
@@ -4695,6 +4783,7 @@ function deriveWeaponHarmonyAuthority(slotIndex = getActiveWeaponHarmonySlotInde
       fallbackUsed: true,
       weaponSlotIndex: -1,
       tonicRootNote: '',
+      scaleId: String(DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic'),
       distinctNotes: [],
       distinctNoteCount: 0,
       activeNoteCount: 0,
@@ -4706,49 +4795,53 @@ function deriveWeaponHarmonyAuthority(slotIndex = getActiveWeaponHarmonySlotInde
   let best = null;
   for (const rootCandidateRaw of roots) {
     const rootCandidate = normalizeSwarmNoteName(rootCandidateRaw) || normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
-    const candidatePool = getTransposedHarmonyPoolForRoot(rootCandidate);
-    const candidatePoolPitchClasses = new Set(
-      candidatePool
-        .map((note) => midiToPitchClassRuntime(noteNameToMidiRuntime(note)))
-        .filter((value) => value >= 0)
-    );
-    const candidateRootPitchClass = midiToPitchClassRuntime(noteNameToMidiRuntime(rootCandidate));
-    let score = 0;
-    let fitCount = 0;
-    let rootCount = 0;
-    let exactCount = 0;
-    for (const [noteName, countValue] of authorityState.noteCounts.entries()) {
-      const count = Math.max(0, Math.trunc(Number(countValue) || 0));
-      if (!(count > 0)) continue;
-      const pitchClass = midiToPitchClassRuntime(noteNameToMidiRuntime(noteName));
-      if (candidatePoolPitchClasses.has(pitchClass)) {
-        fitCount += count;
-        score += count * 2;
+    for (const scaleId of Object.keys(HARMONY_SCALE_LIBRARY)) {
+      const candidatePool = buildHarmonyScalePool(rootCandidate, scaleId, [0]);
+      const candidatePoolPitchClasses = new Set(
+        candidatePool
+          .map((note) => midiToPitchClassRuntime(noteNameToMidiRuntime(note)))
+          .filter((value) => value >= 0)
+      );
+      const candidateRootPitchClass = midiToPitchClassRuntime(noteNameToMidiRuntime(rootCandidate));
+      let score = 0;
+      let fitCount = 0;
+      let rootCount = 0;
+      let exactCount = 0;
+      for (const [noteName, countValue] of authorityState.noteCounts.entries()) {
+        const count = Math.max(0, Math.trunc(Number(countValue) || 0));
+        if (!(count > 0)) continue;
+        const pitchClass = midiToPitchClassRuntime(noteNameToMidiRuntime(noteName));
+        if (candidatePoolPitchClasses.has(pitchClass)) {
+          fitCount += count;
+          score += count * 2;
+        }
+        if (pitchClass === candidateRootPitchClass) {
+          rootCount += count;
+          score += count * 1.5;
+        }
+        if (candidatePool.includes(noteName)) {
+          exactCount += count;
+          score += count * 0.35;
+        }
       }
-      if (pitchClass === candidateRootPitchClass) {
-        rootCount += count;
-        score += count * 1.5;
+      if (scaleId !== 'minor_pentatonic') score += 0.25;
+      const candidate = {
+        rootCandidate,
+        scaleId,
+        score,
+        fitCount,
+        rootCount,
+        exactCount,
+      };
+      if (
+        !best
+        || candidate.score > best.score
+        || (candidate.score === best.score && candidate.fitCount > best.fitCount)
+        || (candidate.score === best.score && candidate.fitCount === best.fitCount && candidate.rootCount > best.rootCount)
+        || (candidate.score === best.score && candidate.fitCount === best.fitCount && candidate.rootCount === best.rootCount && candidate.exactCount > best.exactCount)
+      ) {
+        best = candidate;
       }
-      if (candidatePool.includes(noteName)) {
-        exactCount += count;
-        score += count * 0.35;
-      }
-    }
-    const candidate = {
-      rootCandidate,
-      score,
-      fitCount,
-      rootCount,
-      exactCount,
-    };
-    if (
-      !best
-      || candidate.score > best.score
-      || (candidate.score === best.score && candidate.fitCount > best.fitCount)
-      || (candidate.score === best.score && candidate.fitCount === best.fitCount && candidate.rootCount > best.rootCount)
-      || (candidate.score === best.score && candidate.fitCount === best.fitCount && candidate.rootCount === best.rootCount && candidate.exactCount > best.exactCount)
-    ) {
-      best = candidate;
     }
   }
   return {
@@ -4756,6 +4849,7 @@ function deriveWeaponHarmonyAuthority(slotIndex = getActiveWeaponHarmonySlotInde
     fallbackUsed: false,
     weaponSlotIndex: authorityState.slotIndex,
     tonicRootNote: normalizeSwarmNoteName(best?.rootCandidate) || normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4',
+    scaleId: String(best?.scaleId || DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic'),
     distinctNotes: authorityState.distinctNotes.slice(),
     distinctNoteCount: authorityState.distinctNoteCount,
     activeNoteCount: authorityState.activeNoteCount,
@@ -4814,20 +4908,24 @@ function ensureHarmonyRuntimeForBeat(beatIndex = currentBeatIndex) {
   if (weaponAuthority.fallbackUsed !== true) {
     harmonyRuntime.epochIndex = epochIndex;
     harmonyRuntime.tonicRootNote = normalizeSwarmNoteName(weaponAuthority.tonicRootNote || DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
+    harmonyRuntime.scaleId = String(weaponAuthority.scaleId || DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic');
   } else if (harmonyRuntime.epochIndex !== epochIndex || !String(harmonyRuntime.tonicRootNote || '').trim()) {
     const seed = hashStringSeed(`harmony|${getSwarmStyleId()}|epoch-${epochIndex}`);
     const tonicRootNote = normalizeSwarmNoteName(roots[Math.max(0, seed % roots.length)]) || String(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4');
     harmonyRuntime.epochIndex = epochIndex;
     harmonyRuntime.tonicRootNote = tonicRootNote;
+    harmonyRuntime.scaleId = String(DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic');
   }
   const tonicRootNote = normalizeSwarmNoteName(harmonyRuntime.tonicRootNote || DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
   const baseRoot = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
   const sectionOffsets = DIRECTOR_HARMONY_CONFIG.sectionRootOffsets && typeof DIRECTOR_HARMONY_CONFIG.sectionRootOffsets === 'object'
     ? DIRECTOR_HARMONY_CONFIG.sectionRootOffsets
     : null;
-  const structureOffset = preDropActive
-    ? Math.trunc(Number(DIRECTOR_HARMONY_CONFIG.preDropOffset) || 0)
-    : Math.trunc(Number(sectionOffsets?.[structureIntent] || 0));
+  const structureOffset = weaponAuthority.fallbackUsed === true
+    ? (preDropActive
+      ? Math.trunc(Number(DIRECTOR_HARMONY_CONFIG.preDropOffset) || 0)
+      : Math.trunc(Number(sectionOffsets?.[structureIntent] || 0)))
+    : 0;
   const rootNote = normalizeSwarmNoteName(transposeSwarmNoteName(tonicRootNote, structureOffset) || tonicRootNote) || tonicRootNote;
   const transposeSemitones = (() => {
     const rootMidi = noteNameToMidiRuntime(rootNote);
@@ -4837,7 +4935,7 @@ function ensureHarmonyRuntimeForBeat(beatIndex = currentBeatIndex) {
   })();
   harmonyRuntime.rootNote = rootNote;
   harmonyRuntime.transposeSemitones = transposeSemitones;
-  harmonyRuntime.scaleId = String(DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic');
+  harmonyRuntime.scaleId = String(harmonyRuntime.scaleId || DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic');
   harmonyRuntime.notePool = [];
   harmonyRuntime.authoritySource = String(weaponAuthority.authoritySource || 'fallback_seeded').trim().toLowerCase() || 'fallback_seeded';
   harmonyRuntime.fallbackUsed = weaponAuthority.fallbackUsed === true;
@@ -4910,12 +5008,21 @@ function getEnergyStateThemePreset(stateName = '') {
   const harmony = ensureHarmonyRuntimeForBeat(currentBeatIndex);
   const transposeSemitones = Math.trunc(Number(harmony?.transposeSemitones) || 0);
   if (getSwarmStyleId() !== 'retro_shooter') return base;
-  const maxUnique = Math.max(1, Math.trunc(Number(style?.notePoolMaxUnique) || 4));
+  const scaleDef = getHarmonyScaleDefinition(String(harmony?.scaleId || DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic'));
+  const maxUnique = Math.max(
+    1,
+    Math.max(
+      Math.trunc(Number(style?.notePoolMaxUnique) || 4),
+      Math.min(7, Math.max(5, scaleDef.intervals.length))
+    )
+  );
   const basePool = Array.isArray(base?.notePool) ? base.notePool : SWARM_PENTATONIC_NOTES_ONE_OCTAVE;
-  const notePool = basePool
-    .map((note) => normalizeSwarmNoteName(transposeSwarmNoteName(note, transposeSemitones) || note))
-    .filter(Boolean)
-    .slice(0, Math.min(basePool.length, maxUnique));
+  const notePool = buildHarmonyAlignedThemeNotePool(
+    basePool,
+    normalizeSwarmNoteName(harmony?.rootNote || harmony?.tonicRootNote || DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4',
+    String(harmony?.scaleId || DIRECTOR_HARMONY_CONFIG.scaleId || 'minor_pentatonic'),
+    Math.min(basePool.length || maxUnique, maxUnique)
+  );
   harmonyRuntime.notePool = notePool.slice();
   return {
     ...base,
@@ -5927,6 +6034,11 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const energyState = String(energyStateRuntime.state || 'intro').trim().toLowerCase();
   const structureIntent = String(structureIntentRuntime.intent || energyState || 'intro').trim().toLowerCase();
+  const stateAgeBars = Math.max(0, Math.trunc(Number(structureIntentRuntime.stateAgeBars) || 0));
+  const preDropActive = structureIntentRuntime.preDropActive === true;
+  const preDropBarsRemaining = Math.max(-1, Math.trunc(Number(structureIntentRuntime.preDropBarsRemaining) || -1));
+  const motifScopeState = getComposerMotifScopeState();
+  const motifReturnActive = motifScopeState?.returnActive === true;
   const caps = getCurrentPacingCaps();
   const maxSpawners = Math.max(0, Math.trunc(Number(caps.maxSpawners) || 0));
   const maxDrawSnakes = Math.max(0, Math.trunc(Number(caps.maxDrawSnakes) || 0));
@@ -5935,6 +6047,17 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
   const introFoundationWindow = isForcedIntroFoundationWindow(bar);
   const introPrimaryLoopWindow = isForcedIntroPrimaryLoopWindow(bar);
   const introBackbeatActive = introFoundationWindow && bar >= 12;
+  const currentSequenceIndex = Math.max(0, Math.trunc(Number(energyStateRuntime.sequenceIndex) || 0));
+  const previousSequenceIndex = ((currentSequenceIndex - 1) + DIRECTOR_ENERGY_STATE_SEQUENCE.length) % Math.max(1, DIRECTOR_ENERGY_STATE_SEQUENCE.length);
+  const previousEnergyState = String(DIRECTOR_ENERGY_STATE_SEQUENCE[previousSequenceIndex]?.state || '').trim().toLowerCase();
+  const preDropNegativeSpaceWindow = preDropActive && preDropBarsRemaining === 1;
+  const breakDropWindow = energyState === 'break' && stateAgeBars < 2;
+  const pulseOnlyBreakWindow = energyState === 'break' && stateAgeBars === 0;
+  const breakRebuildWindow = energyState === 'break' && stateAgeBars === 1;
+  const postBreakTransition = energyState === 'build' && previousEnergyState === 'break';
+  const postBreakReentryWindow = postBreakTransition && stateAgeBars === 0;
+  const postBreakRecoveryWindow = postBreakTransition && stateAgeBars <= 1;
+  const explicitNegativeSpaceWindow = preDropNegativeSpaceWindow || breakDropWindow;
   const allowResponseGroups = responseMode === 'group' || responseMode === 'either';
   const allowDrawsnake = responseMode === 'drawsnake' || responseMode === 'either';
 
@@ -5963,12 +6086,31 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
     && allowResponseGroups
     && maxComposerGroups > 0
     && structureIntent !== 'peak'
+    && !explicitNegativeSpaceWindow
+    && !motifReturnActive
+    && !postBreakRecoveryWindow
     && !strongPrimaryLoopWindow;
   const answerActive = !introFoundationWindow
     && allowResponseGroups
     && maxComposerGroups > 0
     && structureIntent !== 'intro'
+    && !explicitNegativeSpaceWindow
+    && !motifReturnActive
+    && energyState !== 'break'
+    && !postBreakRecoveryWindow
     && (!strongPrimaryLoopWindow || structureIntent === 'build' || structureIntent === 'predrop' || driveAnswerCadenceWindow);
+  const sparkleActive = !introFoundationWindow
+    && !explicitNegativeSpaceWindow
+    && energyState !== 'break'
+    && !motifReturnActive
+    && !postBreakRecoveryWindow
+    && ((maxSpawners >= 3) || structureIntent === 'drive' || structureIntent === 'peak');
+  const secondaryLoopActive = !pulseOnlyBreakWindow
+    && (introBackbeatActive || (!introFoundationWindow && maxSpawners >= 2 && structureIntent !== 'intro'));
+  const primaryLoopActive = !explicitNegativeSpaceWindow
+    && energyState !== 'break'
+    && !postBreakReentryWindow
+    && (introPrimaryLoopWindow || (!introFoundationWindow && maxDrawSnakes > 0 && allowDrawsnake));
 
   return {
     foundation: {
@@ -5977,31 +6119,49 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       preferredCarrier: 'spawner',
       protected: true,
       continuityBias: 'hold',
-      intensity: introFoundationWindow ? 0.62 : (structureIntent === 'drop' ? 0.56 : 0.48),
+      intensity: Math.min(
+        0.84,
+        (introFoundationWindow ? 0.62 : (structureIntent === 'drop' ? 0.56 : 0.48))
+        + (motifReturnActive ? 0.08 : 0)
+        + (pulseOnlyBreakWindow ? 0.14 : 0)
+        + (breakRebuildWindow ? 0.08 : 0)
+      ),
     },
     secondary_loop: {
-      active: introBackbeatActive || (!introFoundationWindow && maxSpawners >= 2 && structureIntent !== 'intro'),
-      targetCount: introBackbeatActive ? 1 : ((!introFoundationWindow && maxSpawners >= 2 && structureIntent !== 'intro') ? 1 : 0),
+      active: secondaryLoopActive,
+      targetCount: secondaryLoopActive ? 1 : 0,
       preferredCarrier: 'spawner',
-      protected: introFoundationWindow,
-      continuityBias: introFoundationWindow ? 'hold' : 'blend',
-      intensity: introFoundationWindow ? 0.52 : (structureIntent === 'peak' ? 0.58 : 0.46),
+      protected: introFoundationWindow || motifReturnActive,
+      continuityBias: (introFoundationWindow || motifReturnActive) ? 'hold' : 'blend',
+      intensity: Math.min(
+        0.78,
+        (introFoundationWindow ? 0.52 : (structureIntent === 'peak' ? 0.58 : 0.46))
+        + (motifReturnActive ? 0.1 : 0)
+        - (preDropNegativeSpaceWindow ? 0.14 : 0)
+        - (breakRebuildWindow ? 0.04 : 0)
+      ),
     },
     primary_loop: {
-      active: introPrimaryLoopWindow || (!introFoundationWindow && maxDrawSnakes > 0 && allowDrawsnake),
-      targetCount: introPrimaryLoopWindow ? 1 : ((!introFoundationWindow && maxDrawSnakes > 0 && allowDrawsnake) ? 1 : 0),
+      active: primaryLoopActive,
+      targetCount: primaryLoopActive ? 1 : 0,
       preferredCarrier: 'drawsnake',
       protected: true,
-      continuityBias: introPrimaryLoopWindow ? 'blend' : 'hold',
-      intensity: primaryLoopIntensity,
+      continuityBias: (introPrimaryLoopWindow || motifReturnActive) ? 'hold' : 'blend',
+      intensity: Math.min(
+        0.88,
+        primaryLoopIntensity
+        + (motifReturnActive ? 0.12 : 0)
+        - (preDropNegativeSpaceWindow ? 0.18 : 0)
+        - (postBreakRecoveryWindow ? 0.12 : 0)
+      ),
     },
     sparkle: {
-      active: !introFoundationWindow && ((maxSpawners >= 3) || structureIntent === 'drive' || structureIntent === 'peak'),
-      targetCount: (!introFoundationWindow && ((maxSpawners >= 3) || structureIntent === 'drive' || structureIntent === 'peak')) ? 1 : 0,
+      active: sparkleActive,
+      targetCount: sparkleActive ? 1 : 0,
       preferredCarrier: 'spawner',
       protected: false,
       continuityBias: 'follow',
-      intensity: structureIntent === 'peak' ? 0.62 : 0.34,
+      intensity: motifReturnActive ? 0.18 : (structureIntent === 'peak' ? 0.62 : 0.34),
     },
     support: {
       active: supportActive,
@@ -6027,6 +6187,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       sectionIntent: structureIntent,
       responseMode,
       pacingState: String(swarmPacingRuntime?.getSnapshot?.()?.state || '').trim().toLowerCase(),
+      motifReturnActive,
     },
   };
 }
