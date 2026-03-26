@@ -3324,6 +3324,18 @@ function compactMusicLabPayloadForSave(payload = null) {
     laneActiveBeatCounts: Object.create(null),
     laneCarrierPreferenceCounts: Object.create(null),
     sectionIntentCounts: Object.create(null),
+    spawnChosenCounts: Object.create(null),
+    spawnConfigLoadedCount: 0,
+    avgSpawnLiveBudgetMax: 0,
+    avgSpawnBudget: 0,
+    totalSpawnsNoted: 0,
+    matchedChosenSpawnCount: 0,
+    mismatchedChosenSpawnCount: 0,
+    spawnEvaluationCount: 0,
+    spawnNoChoiceCount: 0,
+    spawnAvgEligibleCount: 0,
+    spawnMaxEligibleCount: 0,
+    spawnRejectionReasonCounts: Object.create(null),
     avgCombatPressure: 0,
     avgMusicalPressure: 0,
     maxUsage: {
@@ -3336,6 +3348,7 @@ function compactMusicLabPayloadForSave(payload = null) {
   let pressureSnapshotCount = 0;
   let combatPressureSum = 0;
   let musicalPressureSum = 0;
+  let spawnSnapshotCount = 0;
   for (const snap of threatBudgetSnapshots) {
     const energyState = String(snap?.energyState || '').trim();
     if (energyState) threatBudgetSummary.energyStateCounts[energyState] = (threatBudgetSummary.energyStateCounts[energyState] || 0) + 1;
@@ -3360,6 +3373,56 @@ function compactMusicLabPayloadForSave(payload = null) {
       musicalPressureSum += Math.max(0, Math.min(1, Number(pressureState?.musicalPressure) || 0));
       pressureSnapshotCount += 1;
     }
+    const spawnState = snap?.spawnState && typeof snap.spawnState === 'object' ? snap.spawnState : null;
+    if (spawnState) {
+      const configStatus = String(spawnState?.configStatus || '').trim().toLowerCase();
+      if (configStatus === 'loaded') threatBudgetSummary.spawnConfigLoadedCount += 1;
+      const chosenId = String(spawnState?.lastEvaluation?.chosenId || '').trim().toLowerCase();
+      if (chosenId) threatBudgetSummary.spawnChosenCounts[chosenId] = (threatBudgetSummary.spawnChosenCounts[chosenId] || 0) + 1;
+      threatBudgetSummary.avgSpawnLiveBudgetMax += Math.max(0, Number(spawnState?.liveBudgetMax) || 0);
+      threatBudgetSummary.avgSpawnBudget += Math.max(0, Number(spawnState?.spawnBudget) || 0);
+      threatBudgetSummary.totalSpawnsNoted = Math.max(
+        Math.max(0, Math.trunc(Number(threatBudgetSummary.totalSpawnsNoted) || 0)),
+        Math.max(0, Math.trunc(Number(spawnState?.totalSpawnsNoted) || 0))
+      );
+      threatBudgetSummary.matchedChosenSpawnCount = Math.max(
+        Math.max(0, Math.trunc(Number(threatBudgetSummary.matchedChosenSpawnCount) || 0)),
+        Math.max(0, Math.trunc(Number(spawnState?.matchedChosenSpawnCount) || 0))
+      );
+      threatBudgetSummary.mismatchedChosenSpawnCount = Math.max(
+        Math.max(0, Math.trunc(Number(threatBudgetSummary.mismatchedChosenSpawnCount) || 0)),
+        Math.max(0, Math.trunc(Number(spawnState?.mismatchedChosenSpawnCount) || 0))
+      );
+      threatBudgetSummary.spawnEvaluationCount = Math.max(
+        Math.max(0, Math.trunc(Number(threatBudgetSummary.spawnEvaluationCount) || 0)),
+        Math.max(0, Math.trunc(Number(spawnState?.evaluationCount) || 0))
+      );
+      threatBudgetSummary.spawnNoChoiceCount = Math.max(
+        Math.max(0, Math.trunc(Number(threatBudgetSummary.spawnNoChoiceCount) || 0)),
+        Math.max(0, Math.trunc(Number(spawnState?.noChoiceCount) || 0))
+      );
+      threatBudgetSummary.spawnAvgEligibleCount = Math.max(
+        Number(threatBudgetSummary.spawnAvgEligibleCount) || 0,
+        Number(spawnState?.avgEligibleCount) || 0
+      );
+      threatBudgetSummary.spawnMaxEligibleCount = Math.max(
+        Math.max(0, Math.trunc(Number(threatBudgetSummary.spawnMaxEligibleCount) || 0)),
+        Math.max(0, Math.trunc(Number(spawnState?.maxEligibleCount) || 0))
+      );
+      const rejectionReasonCounts = spawnState?.rejectionReasonCounts && typeof spawnState.rejectionReasonCounts === 'object'
+        ? spawnState.rejectionReasonCounts
+        : {};
+      threatBudgetSummary.spawnRejectionReasonCounts ||= Object.create(null);
+      for (const [reason, countRaw] of Object.entries(rejectionReasonCounts)) {
+        const reasonKey = String(reason || '').trim().toLowerCase();
+        if (!reasonKey) continue;
+        threatBudgetSummary.spawnRejectionReasonCounts[reasonKey] = Math.max(
+          Math.max(0, Math.trunc(Number(threatBudgetSummary.spawnRejectionReasonCounts[reasonKey]) || 0)),
+          Math.max(0, Math.trunc(Number(countRaw) || 0))
+        );
+      }
+      spawnSnapshotCount += 1;
+    }
     const usage = snap?.usage && typeof snap.usage === 'object' ? snap.usage : null;
     if (!usage) continue;
     threatBudgetSummary.maxUsage.fullThreats = Math.max(threatBudgetSummary.maxUsage.fullThreats, Number(usage.fullThreats) || 0);
@@ -3369,6 +3432,8 @@ function compactMusicLabPayloadForSave(payload = null) {
   }
   threatBudgetSummary.avgCombatPressure = pressureSnapshotCount > 0 ? (combatPressureSum / pressureSnapshotCount) : 0;
   threatBudgetSummary.avgMusicalPressure = pressureSnapshotCount > 0 ? (musicalPressureSum / pressureSnapshotCount) : 0;
+  threatBudgetSummary.avgSpawnLiveBudgetMax = spawnSnapshotCount > 0 ? (threatBudgetSummary.avgSpawnLiveBudgetMax / spawnSnapshotCount) : 0;
+  threatBudgetSummary.avgSpawnBudget = spawnSnapshotCount > 0 ? (threatBudgetSummary.avgSpawnBudget / spawnSnapshotCount) : 0;
   const metricsHistory = Array.isArray(src.metricsHistory) ? src.metricsHistory : [];
   const compactMetricsHistory = metricsHistory.map((entry) => {
     const metrics = entry?.metrics && typeof entry.metrics === 'object' ? entry.metrics : {};

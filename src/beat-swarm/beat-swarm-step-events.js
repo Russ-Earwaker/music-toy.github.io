@@ -32,6 +32,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const beatIndex = Math.max(0, Math.trunc(Number(state.beatIndex) || 0));
   const stepIndex = Math.max(0, Math.trunc(Number(state.stepIndex) || 0));
   const barIndex = Math.max(0, Math.trunc(Number(state.barIndex) || 0));
+  const directorLanePlan = helpers?.director?.getLanePlan?.() || null;
   const entryAudibilityRuntime = state.entryAudibilityRuntime && typeof state.entryAudibilityRuntime === 'object'
     ? state.entryAudibilityRuntime
     : (state.entryAudibilityRuntime = { byKey: new Map(), lastStepIndex: -1 });
@@ -254,6 +255,15 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const foundationLaneRuntime = state?.musicLaneRuntime && typeof state.musicLaneRuntime === 'object'
     ? state.musicLaneRuntime.foundationLane
     : null;
+  const getDirectorLanePlanForMusicLane = (laneId = '') => {
+    const key = String(laneId || '').trim().toLowerCase();
+    if (!directorLanePlan || typeof directorLanePlan !== 'object') return null;
+    if (key === 'foundation_lane') return directorLanePlan.foundation || null;
+    if (key === 'primary_loop_lane') return directorLanePlan.primary_loop || null;
+    if (key === 'secondary_loop_lane') return directorLanePlan.secondary_loop || null;
+    if (key === 'sparkle_lane') return directorLanePlan.sparkle || null;
+    return null;
+  };
   const primaryLoopLaneActive = primaryLoopLaneRuntime
     && typeof primaryLoopLaneRuntime === 'object'
     && Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime.performerEnemyId) || 0)) > 0
@@ -833,6 +843,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const callResponseLane = String(payload.callResponseLane || '').trim().toLowerCase();
     const enemyType = String(ev?.enemyType || payload?.enemyType || '').trim().toLowerCase();
     const musicLaneId = String(payload.musicLaneId || '').trim().toLowerCase();
+    const directorLane = getDirectorLanePlanForMusicLane(musicLaneId);
     const isPrimaryLoopLaneEvent = musicLaneId === 'primary_loop_lane';
     const continuityId = String(payload.continuityId || '').trim().toLowerCase();
     const noteResolved = String(ev?.noteResolved || ev?.note || payload?.noteResolved || payload?.requestedNoteRaw || '').trim().toLowerCase();
@@ -896,6 +907,18 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     if (safeLayer === 'sparkle' && String(ev?.actionType || '').trim().toLowerCase() === 'enemy-death-accent') score += 40;
     if (safeLayer === 'sparkle' && (register === 'mid' || register === 'mid_high')) score -= 35;
+    if (directorLane) {
+      const intensity = Math.max(0, Math.min(1, Number(directorLane.intensity) || 0));
+      if (directorLane.active === true) {
+        score += 40 + (intensity * 140);
+      } else {
+        score -= 260;
+      }
+      if (directorLane.protected === true) score += 90;
+      const continuityBias = String(directorLane.continuityBias || '').trim().toLowerCase();
+      if (continuityBias === 'hold' && continuityId) score += 70;
+      else if (continuityBias === 'blend' && continuityId) score += 30;
+    }
     if (safeLayer === 'loops' && !isPrimaryLoopLaneEvent) {
       if (preDropActive) {
         score -= callResponseLane === 'response' ? 45 : 65;

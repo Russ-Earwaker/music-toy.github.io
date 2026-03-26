@@ -1,0 +1,6 @@
+id,displayName,roleTags,spawnCost,threatValue,musicValue,baseWeight,rarityClass,minPhase,maxPhase,maxAlive,cooldownBars,spawnOnBeat,spawnOnBar,spawnOnPhrase,preferredSectionTags,forbiddenSectionTags,preferredNeeds,forbiddenNeeds,groupMin,groupMax,variantTier,notes
+composer_basic,Composer Basic,filler|adaptive|foundation,1,1,1,100,common,0,99,20,0,1,1,0,intro|build|drop|break,,needFoundation,,2,5,1,Main common filler enemy
+spawner_basic,Spawner Basic,rhythm|special|drums,3,4,5,20,rare,0,99,1,8,0,1,1,build|drop,break,needRhythm|needEscalation|needFoundation,needRelief,1,1,1,Special rhythm anchor
+snake_basic,Snake Basic,melody|special|lead,5,8,8,10,very_rare,1,99,1,12,0,1,1,drop|peak,intro|break,needMelody|needEscalation,needRelief,1,1,1,Special melodic feature enemy
+
+

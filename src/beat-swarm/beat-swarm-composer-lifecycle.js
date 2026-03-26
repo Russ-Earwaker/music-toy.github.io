@@ -5,6 +5,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const composerEnemyGroups = Array.isArray(options?.composerEnemyGroups) ? options.composerEnemyGroups : [];
   const pacingCaps = options?.pacingCaps && typeof options.pacingCaps === 'object' ? options.pacingCaps : {};
   const composer = options?.composer && typeof options.composer === 'object' ? options.composer : {};
+  const directorLanePlan = options?.directorLanePlan && typeof options.directorLanePlan === 'object' ? options.directorLanePlan : null;
   const motifScopeKey = String(options?.motifScopeKey || 'default');
 
   const getAliveIdsForGroup = typeof options?.getAliveIdsForGroup === 'function' ? options.getAliveIdsForGroup : (() => new Set());
@@ -41,6 +42,15 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       || String(group?.sectionKey || '').trim() === 'foundation-buffer'
     )
   );
+  const getDirectorGroupFallbackGain = () => {
+    const supportPlan = directorLanePlan && typeof directorLanePlan === 'object' ? (directorLanePlan.support || null) : null;
+    const answerPlan = directorLanePlan && typeof directorLanePlan === 'object' ? (directorLanePlan.answer || null) : null;
+    const protectedHold = (plan) => !!plan && plan.protected === true && String(plan.continuityBias || '').trim().toLowerCase() === 'hold';
+    if (protectedHold(supportPlan) || protectedHold(answerPlan)) return 0.5;
+    const blend = (plan) => !!plan && String(plan.continuityBias || '').trim().toLowerCase() === 'blend';
+    if (blend(supportPlan) || blend(answerPlan)) return 0.46;
+    return 0.42;
+  };
 
   for (let i = composerEnemyGroups.length - 1; i >= 0; i--) {
     const g = composerEnemyGroups[i];
@@ -83,7 +93,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   for (let i = 0; i < rankedGroups.length; i++) {
     const group = rankedGroups[i];
     const shouldSchedule = i < desiredGroups;
-    group.musicParticipationGain = shouldSchedule ? 1 : 0.42;
+    group.musicParticipationGain = shouldSchedule ? 1 : getDirectorGroupFallbackGain();
     group.lifecycleState = shouldSchedule ? 'active' : 'deEmphasized';
   }
 

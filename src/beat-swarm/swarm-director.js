@@ -1,3 +1,5 @@
+import { createSpawnDirectorSubsystem, resetBeatSwarmEnemySpawnConfigCache } from './spawn-director.js';
+
 const DEFAULT_BEATS_PER_BAR = 4;
 const DEFAULT_STEPS_PER_BAR = 8;
 const DEFAULT_ENERGY_STATE = 'intro';
@@ -221,6 +223,9 @@ export function createSwarmDirector(options = null) {
       responseMode: '',
       pacingState: '',
     }),
+    spawnDirector: createSpawnDirectorSubsystem({
+      configUrl: String(opts.spawnConfigUrl || './data/beat-swarm/enemy_spawn_config.csv').trim() || './data/beat-swarm/enemy_spawn_config.csv',
+    }),
     eventQueue: [],
     eventSeq: 1,
   };
@@ -269,6 +274,7 @@ export function createSwarmDirector(options = null) {
       },
       lanePlan: cloneLanePlan(state.lanePlan),
       pressureState: { ...state.pressureState },
+      spawnState: state.spawnDirector?.getSnapshot?.() || null,
       queuedEventCount: Math.max(0, Math.trunc(state.eventQueue.length || 0)),
     };
   }
@@ -314,6 +320,10 @@ export function createSwarmDirector(options = null) {
     state.lastBeatIndex = beatIndex;
     state.lastStepIndex = stepIndex;
     state.lastBarIndex = barIndex;
+    try {
+      state.spawnDirector?.updateTimeline?.({ beatIndex, stepIndex, barIndex });
+      state.spawnDirector?.evaluateSpawnCandidates?.();
+    } catch {}
 
     return { valid: true, beatChanged, stepChanged, barChanged, beatIndex, stepIndex, barIndex, state: getSnapshot() };
   }
@@ -461,6 +471,7 @@ export function createSwarmDirector(options = null) {
 
   function setLanePlan(next) {
     state.lanePlan = normalizeLanePlan(next, state.lanePlan);
+    try { state.spawnDirector?.setLanePlan?.(state.lanePlan); } catch {}
     return cloneLanePlan(state.lanePlan);
   }
 
@@ -470,7 +481,30 @@ export function createSwarmDirector(options = null) {
 
   function setPressureState(next) {
     state.pressureState = normalizePressureState(next, state.pressureState);
+    try { state.spawnDirector?.setPressureState?.(state.pressureState); } catch {}
     return { ...state.pressureState };
+  }
+
+  function ensureSpawnConfigLoaded(fetchImpl = null) {
+    return state.spawnDirector?.ensureConfigLoaded?.(fetchImpl) || Promise.resolve([]);
+  }
+
+  function setSpawnBattlefieldState(next) {
+    const result = state.spawnDirector?.setBattlefieldState?.(next) || null;
+    try { state.spawnDirector?.evaluateSpawnCandidates?.(); } catch {}
+    return result;
+  }
+
+  function noteSpawn(next) {
+    const noted = !!state.spawnDirector?.noteSpawn?.(next);
+    if (noted) {
+      try { state.spawnDirector?.evaluateSpawnCandidates?.(); } catch {}
+    }
+    return noted;
+  }
+
+  function getSpawnState() {
+    return state.spawnDirector?.getSnapshot?.() || null;
   }
 
   function reset() {
@@ -489,6 +523,12 @@ export function createSwarmDirector(options = null) {
       responseMode: '',
       pacingState: '',
     });
+    try {
+      resetBeatSwarmEnemySpawnConfigCache();
+      state.spawnDirector?.reset?.();
+      state.spawnDirector?.setLanePlan?.(state.lanePlan);
+      state.spawnDirector?.setPressureState?.(state.pressureState);
+    } catch {}
     resetBeatUsage(null);
     clearBeatEvents();
   }
@@ -511,6 +551,10 @@ export function createSwarmDirector(options = null) {
     setLanePlan,
     getLanePlan,
     setPressureState,
+    ensureSpawnConfigLoaded,
+    setSpawnBattlefieldState,
+    noteSpawn,
+    getSpawnState,
     reset,
   });
 }

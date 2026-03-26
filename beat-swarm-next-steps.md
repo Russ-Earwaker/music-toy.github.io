@@ -546,6 +546,15 @@ Design constraint:
   - gameplay readability
   - difficulty/music co-pacing
 
+Related detailed plan:
+
+- [beat-swarm-enemy-director-plan.md](/d:/Desktop/music-toy/music-toy.github.io/beat-swarm-enemy-director-plan.md)
+
+Follow-up direction under that plan:
+
+- add future low-count `solo carrier` enemies that can hold a full rhythm or melody lane on their own
+- use them when the director needs lane continuity without flooding the battlefield with many specials
+
 ## Working Rule
 
 Use this as the tuning principle:

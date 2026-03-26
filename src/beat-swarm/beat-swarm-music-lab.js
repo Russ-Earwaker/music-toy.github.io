@@ -700,6 +700,22 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
   const perBar = Object.create(null);
   const laneActiveBeatCounts = Object.create(null);
   const laneCarrierPreferenceCounts = Object.create(null);
+  const spawnDirector = {
+    loadedBeatCount: 0,
+    chosenCounts: Object.create(null),
+    spawnedCounts: Object.create(null),
+    avgLiveBudgetMax: 0,
+    avgSpawnBudget: 0,
+    totalSpawnsNoted: 0,
+    matchedChosenSpawnCount: 0,
+    mismatchedChosenSpawnCount: 0,
+    evaluationCount: 0,
+    noChoiceCount: 0,
+    avgEligibleCount: 0,
+    maxEligibleCount: 0,
+    rejectionReasonCounts: Object.create(null),
+    count: 0,
+  };
   const pressure = {
     count: 0,
     combatPressureSum: 0,
@@ -713,6 +729,7 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
     const budgets = s?.budgets && typeof s.budgets === 'object' ? s.budgets : {};
     const lanePlan = s?.lanePlan && typeof s.lanePlan === 'object' ? s.lanePlan : {};
     const pressureState = s?.pressureState && typeof s.pressureState === 'object' ? s.pressureState : {};
+    const spawnState = s?.spawnState && typeof s.spawnState === 'object' ? s.spawnState : {};
     const beatLanes = Object.create(null);
     for (const [laneId, lane] of Object.entries(lanePlan)) {
       if (!lane || typeof lane !== 'object') continue;
@@ -733,6 +750,62 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
     const combatPressure = Math.max(0, Math.min(1, Number(pressureState?.combatPressure) || 0));
     const musicalPressure = Math.max(0, Math.min(1, Number(pressureState?.musicalPressure) || 0));
     const sectionIntent = String(pressureState?.sectionIntent || '').trim().toLowerCase();
+    if (String(spawnState?.configStatus || '').trim().toLowerCase() === 'loaded') spawnDirector.loadedBeatCount += 1;
+    const chosenId = String(spawnState?.lastEvaluation?.chosenId || '').trim().toLowerCase();
+    if (chosenId) spawnDirector.chosenCounts[chosenId] = clampInt(spawnDirector.chosenCounts[chosenId], 0, 0) + 1;
+    spawnDirector.avgLiveBudgetMax += Math.max(0, Number(spawnState?.liveBudgetMax) || 0);
+    spawnDirector.avgSpawnBudget += Math.max(0, Number(spawnState?.spawnBudget) || 0);
+    const spawnedCountsById = spawnState?.spawnedCountsById && typeof spawnState.spawnedCountsById === 'object'
+      ? spawnState.spawnedCountsById
+      : {};
+    for (const [spawnId, countRaw] of Object.entries(spawnedCountsById)) {
+      const spawnIdKey = String(spawnId || '').trim().toLowerCase();
+      if (!spawnIdKey) continue;
+      spawnDirector.spawnedCounts[spawnIdKey] = Math.max(
+        Math.max(0, Math.trunc(Number(spawnDirector.spawnedCounts[spawnIdKey]) || 0)),
+        Math.max(0, Math.trunc(Number(countRaw) || 0))
+      );
+    }
+    spawnDirector.totalSpawnsNoted = Math.max(
+      Math.max(0, Math.trunc(Number(spawnDirector.totalSpawnsNoted) || 0)),
+      Math.max(0, Math.trunc(Number(spawnState?.totalSpawnsNoted) || 0))
+    );
+    spawnDirector.matchedChosenSpawnCount = Math.max(
+      Math.max(0, Math.trunc(Number(spawnDirector.matchedChosenSpawnCount) || 0)),
+      Math.max(0, Math.trunc(Number(spawnState?.matchedChosenSpawnCount) || 0))
+    );
+    spawnDirector.mismatchedChosenSpawnCount = Math.max(
+      Math.max(0, Math.trunc(Number(spawnDirector.mismatchedChosenSpawnCount) || 0)),
+      Math.max(0, Math.trunc(Number(spawnState?.mismatchedChosenSpawnCount) || 0))
+    );
+    spawnDirector.evaluationCount = Math.max(
+      Math.max(0, Math.trunc(Number(spawnDirector.evaluationCount) || 0)),
+      Math.max(0, Math.trunc(Number(spawnState?.evaluationCount) || 0))
+    );
+    spawnDirector.noChoiceCount = Math.max(
+      Math.max(0, Math.trunc(Number(spawnDirector.noChoiceCount) || 0)),
+      Math.max(0, Math.trunc(Number(spawnState?.noChoiceCount) || 0))
+    );
+    spawnDirector.avgEligibleCount = Math.max(
+      Number(spawnDirector.avgEligibleCount) || 0,
+      Number(spawnState?.avgEligibleCount) || 0
+    );
+    spawnDirector.maxEligibleCount = Math.max(
+      Math.max(0, Math.trunc(Number(spawnDirector.maxEligibleCount) || 0)),
+      Math.max(0, Math.trunc(Number(spawnState?.maxEligibleCount) || 0))
+    );
+    const rejectionReasonCounts = spawnState?.rejectionReasonCounts && typeof spawnState.rejectionReasonCounts === 'object'
+      ? spawnState.rejectionReasonCounts
+      : {};
+    for (const [reason, countRaw] of Object.entries(rejectionReasonCounts)) {
+      const reasonKey = String(reason || '').trim().toLowerCase();
+      if (!reasonKey) continue;
+      spawnDirector.rejectionReasonCounts[reasonKey] = Math.max(
+        Math.max(0, Math.trunc(Number(spawnDirector.rejectionReasonCounts[reasonKey]) || 0)),
+        Math.max(0, Math.trunc(Number(countRaw) || 0))
+      );
+    }
+    spawnDirector.count += 1;
     perBeat[beatKey] = {
       fullThreats: clampInt(usage?.fullThreats, 0, 0),
       lightThreats: clampInt(usage?.lightThreats, 0, 0),
@@ -746,6 +819,22 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
       combatPressure,
       musicalPressure,
       lanePlan: beatLanes,
+      spawnState: spawnState && typeof spawnState === 'object'
+        ? {
+          configStatus: String(spawnState?.configStatus || '').trim().toLowerCase(),
+          liveBudgetMax: Math.max(0, Number(spawnState?.liveBudgetMax) || 0),
+          spawnBudget: Math.max(0, Number(spawnState?.spawnBudget) || 0),
+          totalSpawnsNoted: Math.max(0, Math.trunc(Number(spawnState?.totalSpawnsNoted) || 0)),
+          lastSpawnedId: String(spawnState?.lastSpawnedId || '').trim().toLowerCase(),
+          matchedChosenSpawnCount: Math.max(0, Math.trunc(Number(spawnState?.matchedChosenSpawnCount) || 0)),
+          mismatchedChosenSpawnCount: Math.max(0, Math.trunc(Number(spawnState?.mismatchedChosenSpawnCount) || 0)),
+          evaluationCount: Math.max(0, Math.trunc(Number(spawnState?.evaluationCount) || 0)),
+          noChoiceCount: Math.max(0, Math.trunc(Number(spawnState?.noChoiceCount) || 0)),
+          avgEligibleCount: Math.max(0, Number(spawnState?.avgEligibleCount) || 0),
+          maxEligibleCount: Math.max(0, Math.trunc(Number(spawnState?.maxEligibleCount) || 0)),
+          chosenId,
+        }
+        : {},
     };
     if (!perBar[barKey]) {
       perBar[barKey] = {
@@ -791,6 +880,21 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
       sectionIntentCounts,
       avgCombatPressure: pressure.count > 0 ? (pressure.combatPressureSum / pressure.count) : 0,
       avgMusicalPressure: pressure.count > 0 ? (pressure.musicalPressureSum / pressure.count) : 0,
+    },
+    spawnDirector: {
+      loadedBeatCount: spawnDirector.loadedBeatCount,
+      chosenCounts: spawnDirector.chosenCounts,
+      spawnedCounts: spawnDirector.spawnedCounts,
+      avgLiveBudgetMax: spawnDirector.count > 0 ? (spawnDirector.avgLiveBudgetMax / spawnDirector.count) : 0,
+      avgSpawnBudget: spawnDirector.count > 0 ? (spawnDirector.avgSpawnBudget / spawnDirector.count) : 0,
+      totalSpawnsNoted: spawnDirector.totalSpawnsNoted,
+      matchedChosenSpawnCount: spawnDirector.matchedChosenSpawnCount,
+      mismatchedChosenSpawnCount: spawnDirector.mismatchedChosenSpawnCount,
+      evaluationCount: spawnDirector.evaluationCount,
+      noChoiceCount: spawnDirector.noChoiceCount,
+      avgEligibleCount: spawnDirector.avgEligibleCount,
+      maxEligibleCount: spawnDirector.maxEligibleCount,
+      rejectionReasonCounts: spawnDirector.rejectionReasonCounts,
     },
   };
 }
@@ -2752,8 +2856,8 @@ function toAbsStepIndex(eventLike, stepsPerBeat = 8) {
   const stepsPer = Math.max(1, clampInt(stepsPerBeat, 8, 1));
   const beatDerived = beat * stepsPer;
   // Beat Swarm records absolute step indices in stepIndex already.
-  // Prefer that absolute position when present; otherwise fall back to beat-derived.
-  if (step >= beatDerived) return step;
+  // Prefer that absolute position whenever present; otherwise fall back to beat-derived.
+  if (step > 0 || beat <= 0) return step;
   return beatDerived + step;
 }
 
@@ -2848,7 +2952,7 @@ function collectCallResponse(events, options = null) {
       if (delta > responseWindowSteps) break;
       if (actorKey(resp) === callActor) continue;
       const respActor = actorKey(resp);
-      let responseSize = 1;
+      let responseSize = Math.max(1, clampInt(resp?.callResponsePhraseProgress, 0, 0));
       let bestAudibility = audibleWeightForEvent(resp);
       for (let k = j + 1; k < actionable.length; k++) {
         const follow = actionable[k];
@@ -2858,7 +2962,10 @@ function collectCallResponse(events, options = null) {
         if (followDelta <= delta) continue;
         if (followDelta > responseWindowSteps) break;
         if (actorKey(follow) !== respActor) break;
-        responseSize += 1;
+        responseSize = Math.max(
+          responseSize + 1,
+          clampInt(follow?.callResponsePhraseProgress, 0, 0)
+        );
         bestAudibility = Math.max(bestAudibility, audibleWeightForEvent(follow));
       }
       responsePairs += 1;
@@ -3230,6 +3337,28 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     directorSparkleActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.sparkle) || 0,
     directorAvgCombatPressure: Number(threatBudgetUsage?.directorPlan?.avgCombatPressure) || 0,
     directorAvgMusicalPressure: Number(threatBudgetUsage?.directorPlan?.avgMusicalPressure) || 0,
+    directorSpawnConfigLoadedBeats: Number(threatBudgetUsage?.spawnDirector?.loadedBeatCount) || 0,
+    directorSpawnAvgLiveBudgetMax: Number(threatBudgetUsage?.spawnDirector?.avgLiveBudgetMax) || 0,
+    directorSpawnAvgBudget: Number(threatBudgetUsage?.spawnDirector?.avgSpawnBudget) || 0,
+    directorSpawnChosenComposerBeats: Number(threatBudgetUsage?.spawnDirector?.chosenCounts?.composer_basic) || 0,
+    directorSpawnChosenSpawnerBeats: Number(threatBudgetUsage?.spawnDirector?.chosenCounts?.spawner_basic) || 0,
+    directorSpawnChosenSnakeBeats: Number(threatBudgetUsage?.spawnDirector?.chosenCounts?.snake_basic) || 0,
+    directorSpawnActualComposerCount: Number(threatBudgetUsage?.spawnDirector?.spawnedCounts?.composer_basic) || 0,
+    directorSpawnActualSpawnerCount: Number(threatBudgetUsage?.spawnDirector?.spawnedCounts?.spawner_basic) || 0,
+    directorSpawnActualSnakeCount: Number(threatBudgetUsage?.spawnDirector?.spawnedCounts?.snake_basic) || 0,
+    directorSpawnTotalSpawnsNoted: Number(threatBudgetUsage?.spawnDirector?.totalSpawnsNoted) || 0,
+    directorSpawnMatchedChosenCount: Number(threatBudgetUsage?.spawnDirector?.matchedChosenSpawnCount) || 0,
+    directorSpawnMismatchedChosenCount: Number(threatBudgetUsage?.spawnDirector?.mismatchedChosenSpawnCount) || 0,
+    directorSpawnEvaluationCount: Number(threatBudgetUsage?.spawnDirector?.evaluationCount) || 0,
+    directorSpawnNoChoiceCount: Number(threatBudgetUsage?.spawnDirector?.noChoiceCount) || 0,
+    directorSpawnAvgEligibleCount: Number(threatBudgetUsage?.spawnDirector?.avgEligibleCount) || 0,
+    directorSpawnMaxEligibleCount: Number(threatBudgetUsage?.spawnDirector?.maxEligibleCount) || 0,
+    directorSpawnRejectTimingCount: Number(threatBudgetUsage?.spawnDirector?.rejectionReasonCounts?.timing) || 0,
+    directorSpawnRejectMaxAliveCount: Number(threatBudgetUsage?.spawnDirector?.rejectionReasonCounts?.max_alive) || 0,
+    directorSpawnRejectLiveBudgetCount: Number(threatBudgetUsage?.spawnDirector?.rejectionReasonCounts?.live_budget) || 0,
+    directorSpawnRejectSpawnBudgetCount: Number(threatBudgetUsage?.spawnDirector?.rejectionReasonCounts?.spawn_budget) || 0,
+    directorSpawnRejectRhythmSlotCount: Number(threatBudgetUsage?.spawnDirector?.rejectionReasonCounts?.rhythm_slot) || 0,
+    directorSpawnRejectMelodySlotCount: Number(threatBudgetUsage?.spawnDirector?.rejectionReasonCounts?.melody_slot) || 0,
     callResponse,
     callCount: Number(callResponse?.callCount) || 0,
     responsePairs: Number(callResponse?.responsePairs) || 0,
@@ -3573,6 +3702,9 @@ export function createBeatSwarmMusicLab(options = null) {
         : {},
       pressureState: snap?.pressureState && typeof snap.pressureState === 'object'
         ? { ...snap.pressureState }
+        : {},
+      spawnState: snap?.spawnState && typeof snap.spawnState === 'object'
+        ? JSON.parse(JSON.stringify(snap.spawnState))
         : {},
     };
     const last = s.threatBudgetSnapshots.length > 0

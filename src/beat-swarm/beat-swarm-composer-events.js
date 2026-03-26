@@ -115,6 +115,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const structureIntentRuntime = options?.structureIntentRuntime && typeof options.structureIntentRuntime === 'object'
     ? options.structureIntentRuntime
     : null;
+  const directorLanePlan = options?.directorLanePlan && typeof options.directorLanePlan === 'object'
+    ? options.directorLanePlan
+    : null;
   const noteMusicSystemEvent = typeof options?.noteMusicSystemEvent === 'function' ? options.noteMusicSystemEvent : null;
 
   const getAliveEnemiesByIds = typeof options?.getAliveEnemiesByIds === 'function' ? options.getAliveEnemiesByIds : (() => []);
@@ -146,11 +149,28 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const accentPitchVariance = Math.max(0, Math.min(1, Number(styleProfile?.accentPitchVariance) || 1));
   const laneDrivenFoundation = options?.laneDrivenFoundation === true;
   const laneDrivenPrimaryLoop = options?.laneDrivenPrimaryLoop === true;
-  const minResponseDelaySteps = 2;
-  const responseWindowGraceSteps = 2;
-  const responsePhraseSteps = 2;
+  const answerLanePlan = directorLanePlan && typeof directorLanePlan === 'object'
+    ? (directorLanePlan.answer || null)
+    : null;
+  const directorWantsAnswerGroup = answerLanePlan?.active === true
+    && String(answerLanePlan?.preferredCarrier || '').trim().toLowerCase() === 'group';
+  const answerLaneIntensity = Math.max(0, Number(answerLanePlan?.intensity) || 0);
+  const primaryLoopLanePlan = directorLanePlan && typeof directorLanePlan === 'object'
+    ? (directorLanePlan.primary_loop || null)
+    : null;
+  const strongLeadWindowActive = primaryLoopLanePlan?.active === true
+    && Math.max(0, Number(primaryLoopLanePlan?.intensity) || 0) >= 0.66;
   const structureIntent = String(structureIntentRuntime?.intent || '').trim().toLowerCase();
   const preDropActive = structureIntentRuntime?.preDropActive === true;
+  const minResponseDelaySteps = 2;
+  const globalResponseCooldownSteps = directorWantsAnswerGroup
+    ? (preDropActive ? 8 : (answerLaneIntensity >= 0.72 ? 5 : 6))
+    : 0;
+  const callAdmissionCooldownSteps = directorWantsAnswerGroup
+    ? (preDropActive ? 12 : (answerLaneIntensity >= 0.72 ? 8 : 10))
+    : 0;
+  const responseWindowGraceSteps = 2;
+  const responsePhraseSteps = 2;
   const responseLengthCap = preDropActive
     ? 1
     : (structureIntent === 'build' ? 3 : 4);
@@ -213,6 +233,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         && stepAbs <= Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1));
       hasLiveCallWindow = lastCallStep >= 0 && sinceCall >= minResponseDelaySteps && stepAbs <= pendingCallExpiresStepAbs;
       if (!laneActive && (continuingResponsePhrase || hasLiveCallWindow)) laneActive = true;
+      if (!laneActive && directorWantsAnswerGroup && hasLiveCallWindow) laneActive = true;
     }
     if (!laneActive) {
       noteCallDiagnostic('lane_inactive');
@@ -223,6 +244,16 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         }
         : null);
       continue;
+    }
+    if (lane === 'call' && directorWantsAnswerGroup) {
+      const responsePhraseActive = (
+        Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0)) > 0
+        && stepAbs <= Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1))
+      );
+      if (responsePhraseActive) {
+        noteCallDiagnostic('response_phrase_active');
+        continue;
+      }
     }
     if (lane === 'response') {
       if (!continuingResponsePhrase) {
@@ -241,6 +272,18 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       const lastRespStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastResponseStepAbs) || -1));
       const sameRespGroup = groupId > 0 && groupId === Math.max(0, Math.trunc(Number(callResponseRuntime.lastResponseGroupId) || 0));
       const responseWindowWithGrace = responseWindowSteps + responseWindowGraceSteps;
+      if (
+        !continuingResponsePhrase
+        && globalResponseCooldownSteps > 0
+        && lastRespStep >= 0
+        && (stepAbs - lastRespStep) < globalResponseCooldownSteps
+      ) {
+        noteResponseDiagnostic('global_response_cooldown', {
+          lastRespStep,
+          sinceLastResponse: stepAbs - lastRespStep,
+        });
+        continue;
+      }
       if (!continuingResponsePhrase && sameRespGroup && lastRespStep >= 0 && (stepAbs - lastRespStep) <= responseWindowWithGrace) {
         noteResponseDiagnostic('response_cooldown', { lastRespStep, sinceLastResponse: stepAbs - lastRespStep });
         continue;
@@ -492,6 +535,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       if (isPrimaryLoopOwnerGroup) return 1;
       if (isFoundationBufferGroup) return 0.4;
       if (isBassRole) return 0.56;
+      if (strongLeadWindowActive && directorWantsAnswerGroup) {
+        if (lane === 'response') return 0.38;
+        if (lane === 'call') return 0.24;
+      }
       if (lane === 'response') return 0.5;
       return 0.46;
     })();
@@ -520,6 +567,27 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         || phraseGravityHit
         || phraseStep.stepInPhrase === Math.max(0, responsePhraseSteps - 1))
       : false;
+    const answerWindowSelectiveCallGate = (
+      lane === 'call'
+      && directorWantsAnswerGroup
+      && strongLeadWindowActive
+      && melodicCallGroup
+      && !isPrimaryLoopOwnerGroup
+      && !phraseResolutionOpportunity
+      && !phraseResolutionHit
+      && !phraseGravityHit
+      && phraseStep.stepInPhrase > 1
+    );
+    if (answerWindowSelectiveCallGate) {
+      noteCallDiagnostic('answer_window_selective_call_gate', {
+        stepInPhrase: Math.max(0, Math.trunc(Number(phraseStep?.stepInPhrase) || 0)),
+        phraseGravityOpportunity,
+        phraseResolutionOpportunity,
+        phraseResolutionHit,
+        phraseGravityHit,
+      });
+      continue;
+    }
     const callAdmission = (() => {
       if (!strongCallCandidate) return { accepted: false, reason: 'not_strong_call' };
       const lastCallStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1));
@@ -532,6 +600,14 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         && stepAbs <= Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1))
       );
       if (pendingResponse) return { accepted: false, reason: 'pending_response' };
+      if (
+        directorWantsAnswerGroup
+        && callAdmissionCooldownSteps > 0
+        && lastCallStep >= 0
+        && (stepAbs - lastCallStep) < callAdmissionCooldownSteps
+      ) {
+        return { accepted: false, reason: 'call_cooldown' };
+      }
       if (lastCallStep < 0) return { accepted: true, reason: 'accepted' };
       const answeredCurrentCall = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastResponseStepAbs) || -1)) >= lastCallStep;
       if (!answeredCurrentCall && stepAbs <= pendingCallExpiresStepAbs) {
@@ -632,7 +708,13 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           if (phraseResolutionHit || phraseGravityHit || isPrimaryLoopOwnerGroup) return Math.random() < 0.35 ? 4 : 3;
           return Math.random() < 0.2 ? 1 : 2;
         })();
-        const cappedResponseTargetLength = Math.max(1, Math.min(responseLengthCap, responseTargetLength));
+        const minimumDirectedResponseLength = directorWantsAnswerGroup
+          ? (preDropActive ? 1 : (answerLaneIntensity >= 0.72 ? 3 : 2))
+          : 1;
+        const cappedResponseTargetLength = Math.max(
+          minimumDirectedResponseLength,
+          Math.min(responseLengthCap, responseTargetLength)
+        );
         callResponseRuntime.lastCallStepAbs = stepAbs;
         callResponseRuntime.lastCallGroupId = groupId;
         callResponseRuntime.lastCallNote = styledNoteName;

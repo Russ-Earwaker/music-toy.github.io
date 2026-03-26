@@ -34,6 +34,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const noteMusicSystemEvent = typeof helpers.noteMusicSystemEvent === 'function'
     ? helpers.noteMusicSystemEvent
     : null;
+  const noteDirectorSpawnArchetype = typeof helpers.noteDirectorSpawnArchetype === 'function'
+    ? helpers.noteDirectorSpawnArchetype
+    : null;
   const enemyById = withPerfSample('maintainComposerGroups.enemyIndex', () => {
     const index = new Map();
     for (let i = 0; i < enemies.length; i++) {
@@ -57,8 +60,13 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
 
   const pacingCaps = helpers.getCurrentPacingCaps?.() || {};
   const directorLanePlan = helpers.getDirectorLanePlan?.() || null;
+  const spawnDirectorState = helpers.getSpawnDirectorState?.() || null;
+  const spawnConfigLoaded = String(spawnDirectorState?.configStatus || '').trim().toLowerCase() === 'loaded';
+  const spawnChosenId = String(spawnDirectorState?.lastEvaluation?.chosenId || '').trim().toLowerCase();
+  const spawnWantsComposer = spawnConfigLoaded && spawnChosenId === 'composer_basic';
   const supportLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.support : null;
   const answerLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.answer : null;
+  const primaryLoopLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.primary_loop : null;
   const pacingState = String(helpers.getCurrentPacingStateName?.() || '').trim().toLowerCase();
   const introWindowActive = pacingState === 'intro_solo' || pacingState === 'intro_bass' || pacingState === 'intro_response';
   const stepAbs = Math.max(0, Math.trunc(currentBeatIndex));
@@ -102,14 +110,36 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const directorAnswerGroups = (answerLanePlan?.active === true && String(answerLanePlan?.preferredCarrier || '').trim().toLowerCase() === 'group')
     ? Math.max(0, Math.trunc(Number(answerLanePlan?.targetCount) || 0))
     : 0;
-  const directorRequestedGroupCount = directorSupportGroups + directorAnswerGroups;
+  const activePrimaryLoopIntensity = Math.max(0, Number(primaryLoopLanePlan?.intensity) || 0);
+  const strongLeadWindowActive = primaryLoopLanePlan?.active === true && activePrimaryLoopIntensity >= 0.66;
+  const effectiveDirectorSupportGroups = strongLeadWindowActive && directorAnswerGroups > 0
+    ? 0
+    : directorSupportGroups;
+  const effectiveDirectorAnswerGroups = directorAnswerGroups;
+  const directorRequestedGroupCount = effectiveDirectorSupportGroups + effectiveDirectorAnswerGroups;
   if (!introWindowActive && !introHoldActive) {
     effectivePacingCaps.maxComposerGroups = Math.max(
       0,
       Math.max(Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0), directorRequestedGroupCount)
     );
-    if (!(directorSupportGroups > 0 || directorAnswerGroups > 0)) {
+    if (!(effectiveDirectorSupportGroups > 0 || effectiveDirectorAnswerGroups > 0) && !spawnWantsComposer) {
       effectivePacingCaps.maxComposerGroups = 0;
+    }
+    if (spawnWantsComposer) {
+      effectivePacingCaps.responseMode = 'group';
+      effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
+      effectivePacingCaps.maxComposerGroupSize = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 1));
+      effectivePacingCaps.maxComposerPerformers = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1));
+    }
+    if (strongLeadWindowActive && !spawnWantsComposer) {
+      effectivePacingCaps.maxComposerGroups = Math.min(Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0), 1);
+      effectivePacingCaps.maxComposerGroupSize = Math.min(Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 1), 1);
+      effectivePacingCaps.maxComposerPerformers = Math.min(Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1), 1);
+      if (effectiveDirectorAnswerGroups > 0) {
+        effectivePacingCaps.responseMode = 'group';
+        // Keep the strong-lead restraint, but leave room for one live answer group.
+        effectivePacingCaps.maxComposerGroups = Math.max(2, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
+      }
     }
   }
   const templateLibrary = Array.isArray(constants.composerGroupTemplateLibrary) ? constants.composerGroupTemplateLibrary : [];
@@ -369,6 +399,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
               beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
             });
           }
+          try { noteDirectorSpawnArchetype?.('composer_basic'); } catch {}
           return created;
         });
       },
