@@ -776,8 +776,42 @@ export function executePerformedBeatEventRuntime(options = null) {
   if (actionType === 'composer-group-projectile' || actionType === 'composer-group-explosion') {
     return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.composer', () => {
     const enemy = helpers.getSwarmEnemyById?.(ev.actorId);
+    const payloadSoloCarrierType = String(ev?.payload?.soloCarrierType || '').trim().toLowerCase();
+    const isSquareCandidate = payloadSoloCarrierType === 'rhythm'
+      || (
+        String(ev?.actionType || '').trim().toLowerCase() === 'composer-group-explosion'
+        && String(ev?.instrumentId || '').trim().toUpperCase() === 'BASS TONE 3'
+        && String(ev?.note || '').trim().toUpperCase() === 'C3'
+      );
+    try {
+      if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
+        globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
+          eventType: 'square_exec_lookup',
+          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
+          foundEnemy: !!enemy,
+          enemyType: String(enemy?.enemyType || '').trim().toLowerCase(),
+          enemySoloCarrierType: String(enemy?.soloCarrierType || '').trim().toLowerCase(),
+          actionType,
+          instrumentId: String(ev?.instrumentId || '').trim(),
+          noteName: String(ev?.note || '').trim(),
+          payloadSoloCarrierType,
+        }));
+      }
+    } catch {}
     if (!enemy || String(enemy?.enemyType || '') !== 'composer-group-member') return false;
     const group = helpers.getEnemyMusicGroup?.(enemy, actionType);
+    try {
+      if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
+        globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
+          eventType: 'square_exec_group',
+          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
+          foundGroup: !!group,
+          groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+          groupSoloCarrierType: String(group?.soloCarrierType || '').trim().toLowerCase(),
+          payloadSoloCarrierType: String(ev?.payload?.soloCarrierType || '').trim().toLowerCase(),
+        }));
+      }
+    } catch {}
     if (!group) return false;
     const aggressionScale = helpers.getEnemyAggressionScale?.(enemy, group?.lifecycleState || 'active');
     const requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
@@ -794,7 +828,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     const normalizedGroupRole = lockedLane === String(constants?.roles?.bass || 'bass')
       ? String(constants?.roles?.bass || 'bass')
       : helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.lead);
-    const instrumentId = resolveContinuitySafeExecutionInstrument(
+    let instrumentId = resolveContinuitySafeExecutionInstrument(
       lockedInstrumentId,
       enemy,
       group,
@@ -806,6 +840,15 @@ export function executePerformedBeatEventRuntime(options = null) {
       normalizedGroupRole,
       helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone'
     );
+    const execSoloType = String(
+      enemy?.soloCarrierType
+        || ev?.payload?.soloCarrierType
+        || group?.soloCarrierType
+        || ''
+    ).trim().toLowerCase();
+    if (execSoloType && !String(enemy?.soloCarrierType || '').trim()) {
+      enemy.soloCarrierType = execSoloType;
+    }
     group.instrumentId = instrumentId;
     group.role = normalizedGroupRole;
     if (String(normalizedGroupRole || '') === String(constants?.roles?.bass || 'bass')) {
@@ -820,7 +863,9 @@ export function executePerformedBeatEventRuntime(options = null) {
     );
     const prominenceGain = resolveMusicProminenceGain(musicProminence);
     const enemyAudible = isMaskingAudibleProminence(musicProminence);
-    const triggerVolume = 0.62
+    const triggerVolume = (execSoloType === 'rhythm'
+      ? (Number(constants.spawnerTriggerSoundVolume) || 0.24)
+      : 0.62)
       * (duckForPlayer ? (Number(constants.playerMaskDuckEnemyVolumeMult) || 1) : 1)
       * (Number(audioGain) || 0)
       * prominenceGain
@@ -829,11 +874,50 @@ export function executePerformedBeatEventRuntime(options = null) {
     noteExecutedInstrumentChange(instrumentId, enemy, group);
     helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
     if (enemyAudible) {
+      try {
+        if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
+          globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
+            eventType: 'square_exec_trigger',
+            actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
+            instrumentId: String(instrumentId || '').trim(),
+            noteName: String(noteName || '').trim(),
+            triggerVolume: Number(triggerVolume) || 0,
+            execSoloType,
+          }));
+        }
+      } catch {}
       try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
     }
     helpers.pulseHitFlash?.(enemy.el);
-    enemy.composerActionPulseDur = Number(constants.composerGroupActionPulseSeconds) || 0;
-    enemy.composerActionPulseT = Number(constants.composerGroupActionPulseSeconds) || 0;
+    helpers.pulseSoloCarrierActivationVisual?.(enemy);
+    if (execSoloType === 'rhythm') {
+      const directPulseDur = Math.max(
+        0.22,
+        (Number(enemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0.24) * 1.15
+      );
+      enemy.soloCarrierActivationPulseDur = directPulseDur;
+      enemy.soloCarrierActivationPulseT = directPulseDur;
+      enemy.soloCarrierActivationPulseScale = Math.max(0.14, Number(enemy?.soloCarrierActivationPulseScale) || 0);
+      if (enemy?.el instanceof HTMLElement) {
+        enemy.el.classList.add('is-solo-note-active');
+        try { enemy.el.style.setProperty('--bs-solo-pulse-level', '1'); } catch {}
+      }
+      try {
+        if (false && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
+          globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
+            eventType: 'square_exec_direct_pulse',
+            enemyId: Math.trunc(Number(enemy?.id) || 0),
+            groupId: Math.trunc(Number(group?.id) || 0),
+            soloCarrierType: execSoloType,
+            pulseDur: directPulseDur,
+            className: enemy?.el instanceof HTMLElement ? String(enemy.el.className || '') : '',
+            hasEl: enemy?.el instanceof HTMLElement,
+          }));
+        }
+      } catch {}
+    }
+    enemy.composerActionPulseDur = Math.max(0.01, Number(enemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);
+    enemy.composerActionPulseT = Math.max(0.01, Number(enemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);
     const origin = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
     if (actionType === 'composer-group-explosion') {
       helpers.addHostileRedExplosionEffect?.(origin);

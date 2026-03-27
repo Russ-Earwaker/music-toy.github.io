@@ -4545,6 +4545,16 @@ body.internal-board-active #board-main {
   box-shadow: 0 0 24px var(--bs-role-glow-color, rgba(223, 95, 73, 0.5));
 }
 
+.beat-swarm-enemy.is-spawner-enemy.is-solo-carrier {
+  width: 236px;
+  height: 236px;
+  margin-left: -118px;
+  margin-top: -118px;
+  border-radius: 46px;
+  border-width: 4px;
+  box-shadow: 0 0 42px var(--bs-role-glow-color, rgba(223, 95, 73, 0.62));
+}
+
 .beat-swarm-enemy.is-composer-group {
   width: 50px;
   height: 50px;
@@ -4554,6 +4564,71 @@ body.internal-board-active #board-main {
   background: var(--bs-role-color, var(--bs-group-color, #ff8b6e));
   border: 2px solid var(--bs-role-border-color, rgba(255, 236, 220, 0.72));
   box-shadow: 0 0 16px var(--bs-role-glow-color, rgba(255, 122, 86, 0.56));
+}
+
+.beat-swarm-enemy.is-composer-group.is-solo-carrier {
+  width: 88px;
+  height: 88px;
+  margin-left: -44px;
+  margin-top: -44px;
+  border-width: 3px;
+  box-shadow: 0 0 18px var(--bs-role-glow-color, rgba(255, 184, 96, 0.42));
+}
+
+.beat-swarm-enemy.is-composer-group.is-solo-rhythm-carrier {
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.beat-swarm-enemy.is-composer-group.is-solo-melody-carrier {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+.beat-swarm-enemy.is-composer-group.is-solo-carrier.is-solo-note-active {
+  filter: brightness(1.18) saturate(1.12);
+  box-shadow: 0 0 26px rgba(255, 242, 190, 0.72), 0 0 44px rgba(255, 190, 110, 0.3);
+  border-color: rgba(255, 250, 228, 0.9);
+}
+
+.beat-swarm-enemy.is-composer-group.is-solo-rhythm-carrier.is-solo-note-active {
+  filter: brightness(1.24) saturate(1.18);
+  box-shadow: 0 0 22px rgba(255, 245, 212, 0.42);
+}
+
+.beat-swarm-enemy.is-composer-group.is-solo-carrier.is-solo-note-active .beat-swarm-solo-badge {
+  transform: translate(-50%, -50%) scale(1.14);
+  box-shadow: 0 0 16px rgba(255, 244, 206, 0.58), inset 0 0 10px rgba(255, 255, 255, 0.3);
+  background: rgba(255, 246, 220, 0.18);
+}
+
+.beat-swarm-solo-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 3px solid rgba(255, 244, 214, 0.84);
+  box-shadow: 0 0 0 rgba(255, 235, 182, 0);
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.beat-swarm-enemy.is-composer-group.is-solo-melody-carrier .beat-swarm-solo-pulse {
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+.beat-swarm-enemy.is-composer-group.is-solo-carrier.is-solo-note-active .beat-swarm-solo-pulse {
+  opacity: 1;
+  transform: scale(1.1);
+  box-shadow: 0 0 18px rgba(255, 244, 190, 0.72), 0 0 34px rgba(255, 198, 118, 0.26);
+}
+
+.beat-swarm-enemy.is-composer-group.is-solo-rhythm-carrier.is-solo-note-active .beat-swarm-solo-pulse {
+  transform: scale(1.16);
+  border-width: 4px;
+  box-shadow: 0 0 24px rgba(255, 246, 206, 0.82), 0 0 42px rgba(255, 196, 104, 0.32);
 }
 
 .beat-swarm-enemy.is-composer-group.is-shape-square {
@@ -4575,6 +4650,79 @@ body.internal-board-active #board-main {
   border: 0;
   box-shadow: none;
   overflow: visible;
+}
+
+.beat-swarm-enemy.is-drawsnake-enemy.is-solo-carrier {
+  filter: drop-shadow(0 0 14px var(--bs-role-glow-color, rgba(255, 190, 126, 0.58)));
+}
+
+.beat-swarm-solo-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 3;
+  border: 2px solid rgba(255, 244, 230, 0.88);
+  box-shadow: 0 0 10px rgba(255, 214, 168, 0.28), inset 0 0 8px rgba(255, 255, 255, 0.16);
+}
+
+.beat-swarm-solo-badge-rhythm {
+  width: 70px;
+  height: 70px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,214,168,0.14));
+}
+
+.beat-swarm-solo-badge-rhythm::before,
+.beat-swarm-solo-badge-rhythm::after {
+  content: '';
+  position: absolute;
+  inset: 18px;
+  border: 3px solid rgba(255, 244, 230, 0.8);
+  border-radius: 18px;
+}
+
+.beat-swarm-solo-badge-rhythm::after {
+  inset: 24px;
+  border-radius: 6px;
+  background: rgba(255, 244, 230, 0.12);
+}
+
+.beat-swarm-solo-badge-melody {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.88), rgba(255,226,158,0.42) 60%, rgba(255,180,64,0.1) 100%);
+}
+
+.beat-swarm-solo-badge-melody::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 62px;
+  height: 62px;
+  margin-left: -31px;
+  margin-top: -31px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 233, 180, 0.64);
+  box-shadow: 0 0 10px rgba(255, 213, 102, 0.22);
+}
+
+.beat-swarm-solo-badge-melody::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 140px;
+  height: 24px;
+  margin-left: -70px;
+  margin-top: -12px;
+  border-radius: 999px;
+  border-top: 3px solid rgba(255, 240, 210, 0.88);
+  border-bottom: 3px solid rgba(255, 240, 210, 0.32);
+  transform: rotate(-18deg);
 }
 
 .beat-swarm-spawner-link {

@@ -96,8 +96,10 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     const dy = centerWorld.y - e.wy;
     const d = Math.hypot(dx, dy) || 0.0001;
     const typeSpeedMult = String(e?.enemyType || '') === 'spawner' ? (Number(constants.spawnerEnemySpeedMultiplier) || 1) : 1;
+    const enemySpeedScale = Math.max(0.35, Number(e?.enemySpeedMultiplier) || 1);
     const speedMult = Math.max(0.05, Number(state?.difficultyConfig?.enemySpeedMultiplier) || 1)
       * Math.max(0.05, Number(typeSpeedMult) || 1)
+      * enemySpeedScale
       * Math.max(0.35, Number(aggressionScale) || 0);
     let ax = (dx / d) * (Number(constants.enemyAccel) || 0) * speedMult;
     let ay = (dy / d) * (Number(constants.enemyAccel) || 0) * speedMult;
@@ -256,8 +258,71 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         const pulseT = Math.max(0, Number(e.composerActionPulseT) || 0);
         if (pulseT > 0) {
           const phase = 1 - Math.max(0, Math.min(1, pulseT / pulseDur));
-          actionScale = 1 + (Math.sin(phase * Math.PI) * (Number(constants.composerGroupActionPulseScale) || 0));
+          const localPulseScale = Math.max(0, Number(e?.composerActionPulseScale) || Number(constants.composerGroupActionPulseScale) || 0);
+          actionScale = 1 + (Math.sin(phase * Math.PI) * localPulseScale);
           e.composerActionPulseT = Math.max(0, pulseT - (Number(state.dt) || 0));
+        }
+        const soloPulseDur = Math.max(0.01, Number(e?.soloCarrierActivationPulseDur) || 0);
+        const soloPulseT = Math.max(0, Number(e?.soloCarrierActivationPulseT) || 0);
+        const soloCarrierType = String(e?.soloCarrierType || '').trim().toLowerCase();
+        const isSoloCarrier = soloCarrierType === 'rhythm' || soloCarrierType === 'melody';
+        if (isSoloCarrier && soloPulseT > 0) {
+          const soloPhase = 1 - Math.max(0, Math.min(1, soloPulseT / soloPulseDur));
+          const soloPulseStrength = Math.sin(soloPhase * Math.PI);
+          const soloPulseScale = Math.max(0, Number(e?.soloCarrierActivationPulseScale) || 0.18);
+          actionScale *= 1 + (soloPulseStrength * soloPulseScale);
+          const shouldLogRhythmPulse = soloCarrierType === 'rhythm'
+            && Number(e?.soloPulseDebugLastLoggedT) !== Number(soloPulseT);
+          e.soloCarrierActivationPulseT = Math.max(0, soloPulseT - (Number(state.dt) || 0));
+          if (e.el instanceof HTMLElement) {
+            e.el.classList.add('is-solo-note-active');
+            try {
+              e.el.style.setProperty('--bs-solo-pulse-level', soloPulseStrength.toFixed(3));
+            } catch {}
+            if (soloCarrierType === 'rhythm') {
+              try {
+                e.el.style.borderColor = 'rgba(255, 246, 224, 0.88)';
+                e.el.style.filter = `brightness(${(1.02 + (soloPulseStrength * 0.16)).toFixed(3)}) saturate(${(1.01 + (soloPulseStrength * 0.1)).toFixed(3)})`;
+              } catch {}
+            }
+          }
+          if (shouldLogRhythmPulse && typeof helpers.noteIntroDebug === 'function') {
+            try {
+              e.soloPulseDebugLastLoggedT = soloPulseT;
+              helpers.noteIntroDebug('square_visual_pulse_frame', {
+                enemyId: Math.trunc(Number(e?.id) || 0),
+                groupId: Math.trunc(Number(e?.composerGroupId) || e?.musicGroupId || 0),
+                soloPulseT: Number(soloPulseT) || 0,
+                soloPulseDur: Number(soloPulseDur) || 0,
+                soloPulseStrength,
+                hasEl: e.el instanceof HTMLElement,
+                className: e.el instanceof HTMLElement ? String(e.el.className || '') : '',
+                transform: e.el instanceof HTMLElement ? String(e.el.style.transform || '') : '',
+                background: e.el instanceof HTMLElement ? String(e.el.style.background || '') : '',
+                filter: e.el instanceof HTMLElement ? String(e.el.style.filter || '') : '',
+              });
+            } catch {}
+          }
+        } else if (isSoloCarrier && e.el instanceof HTMLElement) {
+          e.el.classList.remove('is-solo-note-active');
+          try { e.el.style.setProperty('--bs-solo-pulse-level', '0'); } catch {}
+          if (soloCarrierType === 'rhythm') {
+            try {
+              e.el.style.borderColor = '';
+              e.el.style.filter = '';
+            } catch {}
+          }
+          if (soloCarrierType === 'rhythm' && typeof helpers.noteIntroDebug === 'function' && e.soloPulseDebugLastLoggedT) {
+            try {
+              helpers.noteIntroDebug('square_visual_pulse_clear', {
+                enemyId: Math.trunc(Number(e?.id) || 0),
+                groupId: Math.trunc(Number(e?.composerGroupId) || e?.musicGroupId || 0),
+                hasEl: e.el instanceof HTMLElement,
+                className: e.el instanceof HTMLElement ? String(e.el.className || '') : '',
+              });
+            } catch {}
+          }
+          e.soloPulseDebugLastLoggedT = 0;
         }
       }
       e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${(spawnScale * actionScale * rolePulseScale).toFixed(3)})`;

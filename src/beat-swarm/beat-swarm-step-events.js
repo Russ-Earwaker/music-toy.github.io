@@ -1546,6 +1546,28 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const finishQueuePerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.queue');
   noteSlotSpawnerStage('queued', stepEvents);
   for (const ev of stepEvents) {
+    try {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const actionType = String(ev?.actionType || '').trim().toLowerCase();
+      const instrumentId = String(ev?.instrumentId || '').trim().toUpperCase();
+      const noteName = String(ev?.note || '').trim().toUpperCase();
+      const isSquareCandidate = String(payload?.soloCarrierType || '').trim().toLowerCase() === 'rhythm'
+        || (actionType === 'composer-group-explosion' && instrumentId === 'BASS TONE 3' && noteName === 'C3');
+      if (false && isSquareCandidate && typeof globalThis?.console?.log === 'function') {
+        globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
+          eventType: 'square_queue_event',
+          beatIndex,
+          stepIndex,
+          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
+          actionType,
+          instrumentId: String(ev?.instrumentId || '').trim(),
+          noteName: String(ev?.note || '').trim(),
+          musicProminence: String(payload?.musicProminence || '').trim().toLowerCase(),
+          audioGain: Number(payload?.audioGain) || 0,
+          soloCarrierType: String(payload?.soloCarrierType || '').trim().toLowerCase(),
+        }));
+      }
+    } catch {}
     const queued = helpers.director?.enqueueBeatEvent?.(ev);
     if (!queued) continue;
     queuedStepEvents += 1;
@@ -1563,6 +1585,30 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   {
     const finishExecutePerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.execute');
     const drained = helpers.director?.drainBeatEventsForStep?.(beatIndex, stepIndex) || [];
+    for (const ev of drained) {
+      try {
+        const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+        const actionType = String(ev?.actionType || '').trim().toLowerCase();
+        const instrumentId = String(ev?.instrumentId || '').trim().toUpperCase();
+        const noteName = String(ev?.note || '').trim().toUpperCase();
+        const isSquareCandidate = String(payload?.soloCarrierType || '').trim().toLowerCase() === 'rhythm'
+          || (actionType === 'composer-group-explosion' && instrumentId === 'BASS TONE 3' && noteName === 'C3');
+        if (false && isSquareCandidate && typeof globalThis?.console?.log === 'function') {
+          globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
+            eventType: 'square_drain_event',
+            beatIndex,
+            stepIndex,
+            actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
+            actionType,
+            instrumentId: String(ev?.instrumentId || '').trim(),
+            noteName: String(ev?.note || '').trim(),
+            musicProminence: String(payload?.musicProminence || '').trim().toLowerCase(),
+            audioGain: Number(payload?.audioGain) || 0,
+            soloCarrierType: String(payload?.soloCarrierType || '').trim().toLowerCase(),
+          }));
+        }
+      } catch {}
+    }
     noteSlotSpawnerStage('drained', drained);
     for (const ev of drained) {
       if (helpers.executePerformedBeatEvent?.(ev)) drainedStepEvents += 1;

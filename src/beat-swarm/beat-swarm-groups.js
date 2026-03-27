@@ -1,7 +1,10 @@
 export function normalizeCallResponseLane(lane, fallback = 'call') {
   const s = String(lane || '').trim().toLowerCase();
-  if (s === 'call' || s === 'response') return s;
-  return String(fallback || 'call').trim().toLowerCase() === 'response' ? 'response' : 'call';
+  if (s === 'call' || s === 'response' || s === 'solo') return s;
+  const fb = String(fallback || 'call').trim().toLowerCase();
+  if (fb === 'response') return 'response';
+  if (fb === 'solo') return 'solo';
+  return 'call';
 }
 
 export function chooseIndexed(items, index = 0, fallback = null) {

@@ -27,6 +27,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const composerEnemyGroups = Array.isArray(state.composerEnemyGroups) ? state.composerEnemyGroups : [];
   const composerRuntime = state.composerRuntime && typeof state.composerRuntime === 'object' ? state.composerRuntime : {};
   const currentBeatIndex = Number(state.currentBeatIndex) || 0;
+  const currentBarIndex = Math.max(0, Math.trunc(Number(state.currentBarIndex) || 0));
+  const introStateAgeBars = Math.max(0, Math.trunc(Number(state.introStateAgeBars) || 0));
+  const introStateAgeBeats = Math.max(0, Math.trunc(Number(state.introStateAgeBeats) || 0));
+  const currentEnergyStateName = String(state.currentEnergyStateName || '').trim().toLowerCase();
+  const introStage = String(state.introStage || 'none').trim().toLowerCase() || 'none';
   const enemies = Array.isArray(state.enemies) ? state.enemies : [];
   const sanitizeEnemyMusicInstrumentId = typeof helpers.sanitizeEnemyMusicInstrumentId === 'function'
     ? helpers.sanitizeEnemyMusicInstrumentId
@@ -63,15 +68,36 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const spawnDirectorState = helpers.getSpawnDirectorState?.() || null;
   const spawnConfigLoaded = String(spawnDirectorState?.configStatus || '').trim().toLowerCase() === 'loaded';
   const spawnChosenId = String(spawnDirectorState?.lastEvaluation?.chosenId || '').trim().toLowerCase();
-  const spawnWantsComposer = spawnConfigLoaded && spawnChosenId === 'composer_basic';
+  const spawnWantsComposer = spawnConfigLoaded && (spawnChosenId === 'composer_basic' || spawnChosenId === 'solo_rhythm_basic' || spawnChosenId === 'solo_melody_basic');
   const supportLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.support : null;
   const answerLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.answer : null;
   const primaryLoopLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.primary_loop : null;
   const pacingState = String(helpers.getCurrentPacingStateName?.() || '').trim().toLowerCase();
-  const introWindowActive = pacingState === 'intro_solo' || pacingState === 'intro_bass' || pacingState === 'intro_response';
+  const introWindowActive = introStage !== 'none';
+  const introComposerLockActive = introStage === 'player_only';
+  const introRhythmOnlyWindow = introStage === 'rhythm_only';
+  const introSoftRampWindow = introStage === 'soft_ramp';
+  const spawnWantsSoloRhythm = spawnConfigLoaded && spawnChosenId === 'solo_rhythm_basic' && !introRhythmOnlyWindow;
+  const spawnWantsSoloMelody = spawnConfigLoaded && spawnChosenId === 'solo_melody_basic' && !introRhythmOnlyWindow;
   const stepAbs = Math.max(0, Math.trunc(currentBeatIndex));
-  const introHoldActive = !!helpers.shouldHoldIntroLayerExpansion?.(stepAbs);
-  const effectivePacingCaps = introWindowActive
+  const legacyIntroHoldActive = !!helpers.shouldHoldIntroLayerExpansion?.(stepAbs);
+  const introHoldActive = false;
+  if (typeof helpers.noteIntroDebug === 'function' && currentBarIndex < 20) {
+    helpers.noteIntroDebug('composer_maint_state', {
+      introStage,
+      currentBeatIndex: stepAbs,
+      currentBarIndex,
+      introComposerLockActive,
+      introRhythmOnlyWindow,
+      introSoftRampWindow,
+      introHoldActive,
+      legacyIntroHoldActive,
+      responseMode: String(pacingCaps?.responseMode || '').trim().toLowerCase(),
+      maxComposerGroups: Math.max(0, Math.trunc(Number(pacingCaps?.maxComposerGroups) || 0)),
+      spawnChosenId,
+    });
+  }
+  const effectivePacingCaps = introComposerLockActive
     ? {
       ...pacingCaps,
       responseMode: 'group',
@@ -79,17 +105,25 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       maxComposerGroupSize: 0,
       maxComposerPerformers: 0,
     }
-    : (introHoldActive
+    : (introRhythmOnlyWindow
     ? {
       ...pacingCaps,
       responseMode: 'group',
-      maxComposerGroups: Math.max(1, Math.trunc(Number(pacingCaps?.maxComposerGroups) || 0)),
-      maxComposerGroupSize: Math.max(1, Math.trunc(Number(pacingCaps?.maxComposerGroupSize) || 1)),
-      maxComposerPerformers: Math.max(1, Math.trunc(Number(pacingCaps?.maxComposerPerformers) || 1)),
+      maxComposerGroups: 1,
+      maxComposerGroupSize: 1,
+      maxComposerPerformers: 1,
     }
-    : pacingCaps);
+    : (introSoftRampWindow
+    ? {
+      ...pacingCaps,
+      responseMode: 'group',
+      maxComposerGroups: Math.min(Math.max(1, Math.trunc(Number(pacingCaps?.maxComposerGroups) || 0)), 1),
+      maxComposerGroupSize: 1,
+      maxComposerPerformers: 1,
+    }
+    : pacingCaps));
   if (
-    !introWindowActive
+    !introComposerLockActive
     && !introHoldActive
     && String(effectivePacingCaps?.responseMode || '').trim().toLowerCase() === 'group'
   ) {
@@ -117,7 +151,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     : directorSupportGroups;
   const effectiveDirectorAnswerGroups = directorAnswerGroups;
   const directorRequestedGroupCount = effectiveDirectorSupportGroups + effectiveDirectorAnswerGroups;
-  if (!introWindowActive && !introHoldActive) {
+  if (!introComposerLockActive && !introHoldActive) {
     effectivePacingCaps.maxComposerGroups = Math.max(
       0,
       Math.max(Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0), directorRequestedGroupCount)
@@ -165,6 +199,14 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     const templateId = String(t?.id || '').trim();
     return lane !== 'response' && role !== constants.bassRole && templateId !== 'foundation-buffer';
   }) || null;
+  const forcedIntroRhythmTemplate = {
+    id: 'intro_percussion_group',
+    role: constants.leadRole,
+    callResponseLane: 'call',
+    shape: 'square',
+    color: '#ffd29a',
+    actionType: 'explosion',
+  };
   const composer = helpers.getComposerDirective?.() || {};
   const motifScopeKey = helpers.getComposerMotifScopeKey?.() || '';
   const getActiveComposerLaneCoverage = () => {
@@ -183,7 +225,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const getDesiredComposerLane = (groupIndex) => {
     const parityLane = helpers.normalizeCallResponseLane?.((groupIndex % 2) === 0 ? 'call' : 'response', 'call')
       || ((groupIndex % 2) === 0 ? 'call' : 'response');
-    if (introWindowActive || introHoldActive || String(effectivePacingCaps?.responseMode || '').trim().toLowerCase() !== 'group') {
+    if (introComposerLockActive || String(effectivePacingCaps?.responseMode || '').trim().toLowerCase() !== 'group') {
       return parityLane;
     }
     const coverage = getActiveComposerLaneCoverage();
@@ -206,6 +248,50 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       enemy.retirePhaseStartMs = Number(performance?.now?.() || 0);
     }
   };
+
+  const getActiveSoloCarrierCount = (soloType) => composerEnemyGroups.filter((group) => (
+    group
+    && group.active
+    && !group.retiring
+    && String(group?.soloCarrierType || '').trim().toLowerCase() === soloType
+  )).length;
+  const findReplaceableNonSoloGroup = () => {
+    const activeGroups = composerEnemyGroups.filter((group) => (
+      group
+      && group.active
+      && !group.retiring
+      && !String(group?.soloCarrierType || '').trim()
+      && String(group?.templateId || '').trim() !== 'foundation-buffer'
+    ));
+    activeGroups.sort((a, b) => {
+      const aLead = String(a?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane' ? 1 : 0;
+      const bLead = String(b?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane' ? 1 : 0;
+      if (aLead !== bLead) return aLead - bLead;
+      const aLife = String(a?.lifecycleState || '').trim().toLowerCase() === 'active' ? 1 : 0;
+      const bLife = String(b?.lifecycleState || '').trim().toLowerCase() === 'active' ? 1 : 0;
+      if (aLife !== bLife) return aLife - bLife;
+      return Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0);
+    });
+    return activeGroups[0] || null;
+  };
+  if (!introComposerLockActive) {
+    if (spawnWantsSoloRhythm && getActiveSoloCarrierCount('rhythm') === 0) {
+      const replaceable = findReplaceableNonSoloGroup();
+      if (replaceable) retireGroup(replaceable, 'solo_rhythm_turnover');
+      effectivePacingCaps.responseMode = 'group';
+      effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
+      effectivePacingCaps.maxComposerGroupSize = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 1));
+      effectivePacingCaps.maxComposerPerformers = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1));
+    }
+    if (spawnWantsSoloMelody && getActiveSoloCarrierCount('melody') === 0) {
+      const replaceable = findReplaceableNonSoloGroup();
+      if (replaceable) retireGroup(replaceable, 'solo_melody_turnover');
+      effectivePacingCaps.responseMode = 'group';
+      effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
+      effectivePacingCaps.maxComposerGroupSize = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 1));
+      effectivePacingCaps.maxComposerPerformers = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1));
+    }
+  }
   withPerfSample('maintainComposerGroups.lifecycle', () => {
     helpers.maintainComposerEnemyGroupsLifecycle?.({
       enabled: !!constants.composerGroupsEnabled && !!composerRuntime.enabled,
@@ -221,9 +307,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       ),
       spawnComposerGroupOffscreenMembers: helpers.spawnComposerGroupOffscreenMembers,
       pickTemplate: (groupIndex) => {
-        if (introWindowActive) return null;
-        if ((pacingState === 'intro_bass' || pacingState === 'intro_response' || introHoldActive) && forcedIntroBassTemplate) {
-          return forcedIntroBassTemplate;
+        if (introComposerLockActive) return null;
+        if (introRhythmOnlyWindow && forcedIntroRhythmTemplate) {
+          return forcedIntroRhythmTemplate;
         }
         const desiredLane = getDesiredComposerLane(groupIndex);
         const laneMatchedTemplates = templateLibrary.filter((template) => {
@@ -269,7 +355,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             templateById.get(requestedTemplateId)?.role || '',
             ''
           ) || '';
-          const effectiveTemplateId = desiredLane === 'response'
+          let effectiveTemplateId = desiredLane === 'response'
             && (
               requestedTemplateId === 'foundation-buffer'
               || requestedTemplateRole === constants.bassRole
@@ -300,40 +386,89 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             ''
           );
           const role = templateRole || helpers.normalizeSwarmRole?.(motif?.role || 'lead', constants.leadRole);
-          const fallbackInstrument = helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone';
+          const introStageSoloRhythmActive = (introRhythmOnlyWindow || introSoftRampWindow) && !spawnWantsSoloMelody;
+          const soloCarrierType = introStageSoloRhythmActive
+            ? 'rhythm'
+            : (spawnWantsSoloRhythm ? 'rhythm' : (spawnWantsSoloMelody ? 'melody' : ''));
+          const soloCarrierActive = !!soloCarrierType;
+          const introPercussionCarrierActive = introRhythmOnlyWindow && !soloCarrierActive;
+          if (introPercussionCarrierActive) effectiveTemplateId = 'intro_percussion_group';
+          const soloLaneId = soloCarrierType === 'rhythm'
+            ? 'secondary_loop_lane'
+            : (soloCarrierType === 'melody' ? 'primary_loop_lane' : '');
+          const soloStepPattern = soloCarrierType === 'melody'
+            ? [true, false, false, true, false, true, false, false]
+            : null;
+          const createdRole = introPercussionCarrierActive
+            ? constants.leadRole
+            : (soloCarrierType === 'melody'
+            ? constants.leadRole
+            : role);
+          const soloRhythmCarrierActive = soloCarrierType === 'rhythm';
+          const fallbackInstrument = introPercussionCarrierActive
+            ? (
+              helpers.getIdForDisplayName?.('Bass Tone 3')
+              || helpers.getIdForDisplayName?.('Bass Tone 4')
+              || 'tone'
+            )
+            : (
+              motif?.instrument
+              || helpers.resolveSwarmRoleInstrumentId?.(createdRole, helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone')
+              || helpers.resolveSwarmSoundInstrumentId?.('projectile')
+              || 'tone'
+            );
           const instrumentId = sanitizeEnemyMusicInstrumentId(
-            motif?.instrument,
+            introPercussionCarrierActive ? fallbackInstrument : motif?.instrument,
             fallbackInstrument,
-            { role }
+            { role: createdRole, toyKey: introPercussionCarrierActive ? 'loopgrid-drum' : undefined }
           );
           const created = ({
             id: helpers.getNextComposerEnemyGroupId?.(),
             sectionKey,
             sectionId: String(composerDirective?.sectionId || 'default'),
-            templateId: effectiveTemplateId,
-            role,
-            callResponseLane: resolvedCallResponseLane,
-            shape: String(motif?.shape || helpers.pickComposerGroupShape?.({ shapes: constants.composerGroupShapes, index: groupIndex })),
-            color: String(motif?.color || helpers.pickComposerGroupColor?.({ colors: constants.composerGroupColors, index: groupIndex })),
-            actionType: String(motif?.actionType || 'projectile'),
+            templateId: soloCarrierActive ? `solo-${soloCarrierType}-carrier` : effectiveTemplateId,
+            role: createdRole,
+            musicLaneId: introPercussionCarrierActive ? 'secondary_loop_lane' : soloLaneId,
+            musicLaneLayer: introPercussionCarrierActive ? 'loops' : (soloCarrierType === 'rhythm' ? 'loops' : (soloCarrierType === 'melody' ? 'loops' : '')),
+            callResponseLane: soloCarrierActive ? 'solo' : (introPercussionCarrierActive ? 'call' : (soloCarrierType === 'melody' ? 'call' : resolvedCallResponseLane)),
+            shape: soloCarrierActive
+              ? (soloCarrierType === 'rhythm' ? 'square' : 'diamond')
+              : String(motif?.shape || helpers.pickComposerGroupShape?.({ shapes: constants.composerGroupShapes, index: groupIndex })),
+            color: soloCarrierActive
+              ? (soloCarrierType === 'rhythm' ? '#ffd29a' : '#ffe7a6')
+              : String(motif?.color || helpers.pickComposerGroupColor?.({ colors: constants.composerGroupColors, index: groupIndex })),
+            actionType: introPercussionCarrierActive
+              ? 'explosion'
+              : (soloCarrierType === 'rhythm' ? 'explosion' : String(motif?.actionType || 'projectile')),
             threatLevel: String(motif?.threatLevel || constants.fullThreat),
-            performers: Math.max(
-              1,
-              Math.min(
-                Math.max(constants.composerGroupPerformersMin, Math.min(constants.composerGroupPerformersMax, Math.trunc(Number(motif?.performers) || 1))),
-                Math.max(1, caps?.maxComposerPerformers || constants.composerGroupPerformersMax)
-              )
-            ),
-            size: Math.max(
-              1,
-              Math.min(
-                Math.max(constants.composerGroupSizeMin, Math.min(constants.composerGroupSizeMax, Math.trunc(Number(motif?.size) || constants.composerGroupSizeMin))),
-                Math.max(1, caps?.maxComposerGroupSize || constants.composerGroupSizeMax)
-              )
-            ),
-            steps: Array.isArray(motif?.steps)
-              ? motif.steps.slice(0, constants.weaponTuneSteps)
-              : Array.from({ length: constants.weaponTuneSteps }, () => Math.random() >= 0.5),
+            introPercussionCarrier: introPercussionCarrierActive,
+            performers: soloCarrierActive
+              ? 1
+              : Math.max(
+                1,
+                Math.min(
+                  Math.max(constants.composerGroupPerformersMin, Math.min(constants.composerGroupPerformersMax, Math.trunc(Number(motif?.performers) || 1))),
+                  Math.max(1, caps?.maxComposerPerformers || constants.composerGroupPerformersMax)
+                )
+              ),
+            size: soloCarrierActive
+              ? 1
+              : Math.max(
+                1,
+                Math.min(
+                  Math.max(constants.composerGroupSizeMin, Math.min(constants.composerGroupSizeMax, Math.trunc(Number(motif?.size) || constants.composerGroupSizeMin))),
+                  Math.max(1, caps?.maxComposerGroupSize || constants.composerGroupSizeMax)
+                )
+              ),
+            steps: soloCarrierActive
+              ? ((Array.isArray(soloStepPattern) ? soloStepPattern : (Array.isArray(motif?.steps)
+                ? motif.steps.slice(0, constants.weaponTuneSteps)
+                : Array.from({ length: constants.weaponTuneSteps }, () => Math.random() >= 0.5))))
+              : (introPercussionCarrierActive
+                ? [true, false, true, false, true, false, true, false]
+              : (Array.isArray(motif?.steps)
+                ? motif.steps.slice(0, constants.weaponTuneSteps)
+                : Array.from({ length: constants.weaponTuneSteps }, () => Math.random() >= 0.5))),
             motif: motif?.motif && typeof motif.motif === 'object'
               ? {
                 id: String(motif.motif.id || `${templateId}-motif`),
@@ -343,29 +478,41 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
                 id: `${templateId}-motif`,
                 steps: Array.isArray(motif?.steps) ? motif.steps.slice(0, constants.weaponTuneSteps) : [],
               },
-            notes: (Array.isArray(motif?.notes) && motif.notes.length ? motif.notes : [helpers.getRandomSwarmPentatonicNote?.()])
-              .map((n, idx) => helpers.clampNoteToDirectorPool?.(helpers.normalizeSwarmNoteName?.(n) || helpers.getRandomSwarmPentatonicNote?.(), groupIndex + idx)),
+            notes: (introPercussionCarrierActive
+              ? ['C3']
+              : (Array.isArray(motif?.notes) && motif.notes.length ? motif.notes : [helpers.getRandomSwarmPentatonicNote?.()]))
+              .map((n, idx) => {
+                const normalized = helpers.normalizeSwarmNoteName?.(n) || helpers.getRandomSwarmPentatonicNote?.();
+                return introPercussionCarrierActive
+                  ? normalized
+                  : helpers.clampNoteToDirectorPool?.(normalized, groupIndex + idx);
+              }),
             gravityNotes: (Array.isArray(motif?.gravityNotes) ? motif.gravityNotes : [])
               .map((n, idx) => helpers.clampNoteToDirectorPool?.(helpers.normalizeSwarmNoteName?.(n) || helpers.getRandomSwarmPentatonicNote?.(), groupIndex + idx))
               .filter(Boolean),
-            phraseRoot: helpers.clampNoteToDirectorPool?.(
-              helpers.normalizeSwarmNoteName?.(motif?.phraseRoot)
-                || helpers.normalizeSwarmNoteName?.(Array.isArray(motif?.notes) ? motif.notes[0] : '')
-                || helpers.getRandomSwarmPentatonicNote?.(),
-              groupIndex
-            ),
-            phraseFifth: helpers.clampNoteToDirectorPool?.(
-              helpers.normalizeSwarmNoteName?.(motif?.phraseFifth)
-                || helpers.normalizeSwarmNoteName?.(Array.isArray(motif?.notes) ? motif.notes[Math.min(2, Math.max(0, motif.notes.length - 1))] : '')
-                || helpers.getRandomSwarmPentatonicNote?.(),
-              groupIndex + 2
-            ),
+            phraseRoot: introPercussionCarrierActive
+              ? 'C3'
+              : helpers.clampNoteToDirectorPool?.(
+                helpers.normalizeSwarmNoteName?.(motif?.phraseRoot)
+                  || helpers.normalizeSwarmNoteName?.(Array.isArray(motif?.notes) ? motif.notes[0] : '')
+                  || helpers.getRandomSwarmPentatonicNote?.(),
+                groupIndex
+              ),
+            phraseFifth: introPercussionCarrierActive
+              ? 'C3'
+              : helpers.clampNoteToDirectorPool?.(
+                helpers.normalizeSwarmNoteName?.(motif?.phraseFifth)
+                  || helpers.normalizeSwarmNoteName?.(Array.isArray(motif?.notes) ? motif.notes[Math.min(2, Math.max(0, motif.notes.length - 1))] : '')
+                  || helpers.getRandomSwarmPentatonicNote?.(),
+                groupIndex + 2
+              ),
             resolutionTargets: (Array.isArray(motif?.resolutionTargets) ? motif.resolutionTargets : [])
               .map((n, idx) => helpers.clampNoteToDirectorPool?.(helpers.normalizeSwarmNoteName?.(n) || helpers.getRandomSwarmPentatonicNote?.(), groupIndex + idx + 3))
               .filter(Boolean),
             instrument: instrumentId,
             instrumentId,
             continuityId: String(motif?.continuityId || '') || helpers.getNextMusicContinuityId?.(),
+            soloCarrierType,
             phraseState: null,
             noteToEnemyId: new Map(),
             memberIds: new Set(),
@@ -376,8 +523,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           });
           helpers.ensureMusicLaneAssignment?.({
             group: created,
-            role,
-            layer: role === constants.bassRole ? 'foundation' : 'loops',
+            role: created.role,
+            layer: created.role === constants.bassRole ? 'foundation' : 'loops',
+            preferredLaneId: soloLaneId,
             instrumentId,
             continuityId: created.continuityId,
             phraseId: String(created?.motif?.id || ''),
@@ -400,7 +548,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
               beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
             });
           }
-          try { noteDirectorSpawnArchetype?.('composer_basic'); } catch {}
+          try { noteDirectorSpawnArchetype?.(soloCarrierActive ? `solo_${soloCarrierType}_basic` : 'composer_basic'); } catch {}
           return created;
         });
       },
@@ -409,11 +557,13 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   withPerfSample('maintainComposerGroups.syncMembers', () => {
     for (const group of composerEnemyGroups) {
       if (!group || group.retiring || group.active === false) continue;
+      const introPercussionCarrier = group?.introPercussionCarrier === true;
+      const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
       const templateRole = helpers.normalizeSwarmRole?.(
         templateById.get(String(group?.templateId || ''))?.role || '',
         ''
       );
-      if (templateRole) {
+      if (templateRole && !introPercussionCarrier) {
         group.role = templateRole;
         const sanitizedInstrumentId = sanitizeEnemyMusicInstrumentId(
           group?.instrumentId || group?.instrument,
@@ -426,6 +576,26 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         }
       }
       const memberLifecycleState = helpers.normalizeMusicLifecycleState?.(group.lifecycleState, 'active');
+      const soloPreferredLaneId = soloCarrierType === 'rhythm'
+        ? 'secondary_loop_lane'
+        : (soloCarrierType === 'melody' ? 'primary_loop_lane' : '');
+      if (introPercussionCarrier) {
+        group.role = helpers.normalizeSwarmRole?.(group?.role || 'lead', constants.leadRole) || constants.leadRole;
+        group.actionType = 'explosion';
+        group.musicLaneId = 'secondary_loop_lane';
+        group.musicLaneLayer = 'loops';
+        const percussionInstrumentId = sanitizeEnemyMusicInstrumentId(
+          helpers.resolveSwarmSoundInstrumentId?.('explosion') || group?.instrumentId || group?.instrument,
+          helpers.resolveSwarmSoundInstrumentId?.('explosion') || 'tone',
+          { toyKey: 'loopgrid-drum' }
+        );
+        if (percussionInstrumentId) {
+          group.instrumentId = percussionInstrumentId;
+          group.instrument = percussionInstrumentId;
+        }
+      }
+      if (soloPreferredLaneId && !String(group?.musicLaneId || '').trim()) group.musicLaneId = soloPreferredLaneId;
+      if (soloCarrierType && !String(group?.musicLaneLayer || '').trim()) group.musicLaneLayer = 'loops';
       const effectiveRole = templateRole || group?.role;
       const effectiveLayer = String(group?.musicLaneLayer || (templateRole === constants.bassRole ? 'foundation' : 'loops'));
       const effectiveInstrumentId = String(group?.musicLaneInstrumentId || group?.instrumentId || '').trim();
@@ -508,6 +678,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           enemy,
           role: effectiveRole,
           layer: effectiveLayer,
+          preferredLaneId: soloPreferredLaneId,
           instrumentId: effectiveInstrumentId,
           continuityId: effectiveContinuityId,
           phraseId: effectivePhraseId,
