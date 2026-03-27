@@ -214,8 +214,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (lifecycleState === 'retiring') continue;
     const introPercussionCarrier = group?.introPercussionCarrier === true;
     const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
+    const musicProfileSourceType = String(group?.musicProfileSourceType || '').trim().toLowerCase();
     const soloRhythmCarrier = soloCarrierType === 'rhythm';
-    const rhythmPercussionCarrier = introPercussionCarrier;
+    const rhythmProfileCarrier = musicProfileSourceType === 'spawner_rhythm';
+    const melodyProfileCarrier = musicProfileSourceType === 'snake_melody';
+    const rhythmPercussionCarrier = introPercussionCarrier || rhythmProfileCarrier;
     const isSoloCarrier = soloCarrierType === 'rhythm' || soloCarrierType === 'melody';
     const lane = isSoloCarrier ? 'solo' : normalizeCallResponseLane(group?.callResponseLane, 'call');
     const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
@@ -414,13 +417,17 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         continue;
       }
     }
+    const melodyRows = Array.isArray(group?.rows) ? group.rows : [];
+    const melodyProfileNote = (soloCarrierType === 'melody' || melodyProfileCarrier) && melodyRows.length
+      ? (options?.getSwarmPentatonicNoteByIndex?.(Math.max(0, Math.trunc(Number(melodyRows[step] ?? melodyRows[0]) || 0)))
+        || getRandomSwarmPentatonicNote())
+      : '';
     const notesLen = Math.max(1, Array.isArray(group?.notes) ? group.notes.length : 0);
-    // Bass should stay phase-locked and fixed-pitch like a simple rhythm toy.
-    const noteIdx = (isBassRole || rhythmPercussionCarrier)
+    const noteIdx = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
       ? 0
       : (Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen);
-    const noteNameBaseRaw = normalizeSwarmNoteName(group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
-    const noteNameBase = (isBassRole || rhythmPercussionCarrier)
+    const noteNameBaseRaw = normalizeSwarmNoteName(melodyProfileNote || group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
+    const noteNameBase = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
       ? noteNameBaseRaw
       : clampNoteToDirectorPool(
         noteNameBaseRaw,
@@ -475,7 +482,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       isPrimaryLoopOwnerGroup,
       isFoundationBufferGroup,
     });
-    const noteName = (isBassRole || rhythmPercussionCarrier)
+    const noteName = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
       ? noteNameRaw
       : clampNoteToDirectorRegisterTarget(
         noteNameRaw,
@@ -503,7 +510,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const gravityNoteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
       ? phraseGravityTarget
       : noteNameRaw;
-    const gravityNoteName = (isBassRole || rhythmPercussionCarrier)
+    const gravityNoteName = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
       ? gravityNoteNameRaw
       : clampNoteToDirectorRegisterTarget(
         gravityNoteNameRaw,
@@ -613,6 +620,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       if (rhythmPercussionCarrier) return 'full';
       if (isSoloCarrier && soloCarrierType === 'melody') return 'full';
       if (isSoloCarrier && soloCarrierType === 'rhythm') return 'full';
+      if (melodyProfileCarrier || rhythmProfileCarrier) return 'full';
       if (isPrimaryLoopOwnerGroup) return 'full';
       if (isFoundationBufferGroup) return 'trace';
       if (isBassRole) return 'quiet';
@@ -623,6 +631,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const restrainedGroupGain = (() => {
       if (rhythmPercussionCarrier) return 1;
       if (isSoloCarrier) return 0.92;
+      if (melodyProfileCarrier || rhythmProfileCarrier) return 0.92;
       if (isPrimaryLoopOwnerGroup) return 1;
       if (isFoundationBufferGroup) return 0.4;
       if (isBassRole) return 0.56;
@@ -813,7 +822,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         soloCarrierType,
       });
     }
-    if ((introPercussionCarrier || soloRhythmCarrier) && directTriggerComposerCarrier) {
+    if ((introPercussionCarrier || rhythmProfileCarrier || soloRhythmCarrier) && directTriggerComposerCarrier) {
       for (const enemy of performers) {
         try {
           directTriggerComposerCarrier({
