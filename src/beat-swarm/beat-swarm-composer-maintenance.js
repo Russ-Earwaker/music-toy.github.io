@@ -383,6 +383,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             phraseId: String(created?.motif?.id || ''),
             performerGroupId: Math.trunc(Number(created.id) || 0),
             performerType: 'composer-group',
+            lockInstrument: true,
           });
           if (noteMusicSystemEvent) {
             noteMusicSystemEvent('music_composer_group_state', {

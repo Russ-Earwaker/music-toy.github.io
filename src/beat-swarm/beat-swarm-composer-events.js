@@ -125,6 +125,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     ? options.getFoundationLaneSnapshot
     : null;
   const clampNoteToDirectorPool = typeof options?.clampNoteToDirectorPool === 'function' ? options.clampNoteToDirectorPool : ((n) => String(n || ''));
+  const clampNoteToDirectorRegisterTarget = typeof options?.clampNoteToDirectorRegisterTarget === 'function'
+    ? options.clampNoteToDirectorRegisterTarget
+    : ((n, i) => clampNoteToDirectorPool(n, i));
   const normalizeSwarmNoteName = typeof options?.normalizeSwarmNoteName === 'function' ? options.normalizeSwarmNoteName : ((n) => String(n || '').trim());
   const getRandomSwarmPentatonicNote = typeof options?.getRandomSwarmPentatonicNote === 'function' ? options.getRandomSwarmPentatonicNote : (() => 'C4');
   const getDirectorNotePool = typeof options?.getDirectorNotePool === 'function' ? options.getDirectorNotePool : (() => []);
@@ -183,6 +186,13 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (lastCallStep < 0) return -1;
     const target = Math.max(1, Math.trunc(Number(targetLength) || 2));
     return lastCallStep + responseWindowSteps + responseWindowGraceSteps + Math.max(1, target);
+  };
+  const getGroupRegisterTarget = ({ lane = '', isBassRole = false, isPrimaryLoopOwnerGroup = false, isFoundationBufferGroup = false }) => {
+    if (isBassRole || isFoundationBufferGroup) return 'low';
+    if (isPrimaryLoopOwnerGroup) return 'mid';
+    if (lane === 'response') return 'high';
+    if (lane === 'call') return 'high';
+    return 'mid';
   };
 
   for (const group of composerEnemyGroups) {
@@ -292,12 +302,6 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         noteResponseDiagnostic('response_cooldown', { lastRespStep, sinceLastResponse: stepAbs - lastRespStep });
         continue;
       }
-    const localCadenceRestSteps = lane === 'response'
-      ? responseCadenceRestSteps
-      : callCadenceRestSteps;
-    const postCadenceRestUntilStep = phraseStep.resolutionOpportunity
-      ? (stepAbs + localCadenceRestSteps)
-      : -1;
     const responseProgressNow = Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0));
       const responseTargetNow = Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2));
       const sinceLastResponse = Math.max(
@@ -421,11 +425,18 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         ? (Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0)) + 1)
         : 1)
       : 0;
+    const registerTarget = getGroupRegisterTarget({
+      lane,
+      isBassRole,
+      isPrimaryLoopOwnerGroup,
+      isFoundationBufferGroup,
+    });
     const noteName = isBassRole
       ? noteNameRaw
-      : clampNoteToDirectorPool(
+      : clampNoteToDirectorRegisterTarget(
         noteNameRaw,
-        stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
+        stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
+        registerTarget
       );
     const phraseStep = getPhraseStepState(stepAbs, getPhraseLengthSteps(lane, group, stepAbs));
     const phraseTargets = normalizePhraseNoteList([
@@ -450,9 +461,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       : noteNameRaw;
     const gravityNoteName = isBassRole
       ? gravityNoteNameRaw
-      : clampNoteToDirectorPool(
+      : clampNoteToDirectorRegisterTarget(
         gravityNoteNameRaw,
-        stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
+        stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
+        registerTarget
       );
     let styledNoteName = gravityNoteName;
     if (styleId === 'retro_shooter') {
@@ -472,9 +484,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       }
     }
     if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && !isBassRole && Math.random() < 0.84) {
-      styledNoteName = clampNoteToDirectorPool(
+      styledNoteName = clampNoteToDirectorRegisterTarget(
         phraseGravityTarget,
-        stepAbs + noteIdx + (lane === 'response' ? 1 : 0)
+        stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
+        registerTarget
       );
     }
     const phraseGravityHit = phraseGravityOpportunity
@@ -482,6 +495,12 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       : false;
     const phraseResolutionOpportunity = phraseGravityOpportunity && phraseStep.resolutionOpportunity;
     const phraseResolutionHit = phraseResolutionOpportunity && phraseGravityHit;
+    const localCadenceRestSteps = lane === 'response'
+      ? responseCadenceRestSteps
+      : callCadenceRestSteps;
+    const postCadenceRestUntilStep = phraseStep.resolutionOpportunity
+      ? (stepAbs + localCadenceRestSteps)
+      : -1;
     group.noteCursor = noteIdx + 1;
 
     const performers = [];
@@ -710,6 +729,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           callResponseLane: lane,
           callResponseQualified: lane === 'call' ? acceptedStrongCall : true,
           callResponsePhraseProgress: responsePhraseProgressForEvent,
+          musicRegister: registerTarget,
           audioGain: clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain * restrainedGroupGain),
           requestedNoteRaw: gravityNoteNameRaw,
           phraseGravityTarget,

@@ -704,7 +704,7 @@ function assignMusicLaneIdentity(options = null) {
   const allowPatternChange = identityChangeReason === 'continuity_reset'
     ? requestedPatternChange
     : (requestedPatternChange && (!sameContinuity || phraseBoundary));
-  const allowInstrumentDrift = opts?.allowContinuityDrift === true
+  const allowInstrumentDrift = opts?.allowInstrumentDrift === true
     || identityChangeReason === 'reorchestrate_lane'
     || identityChangeReason === 'continuity_reset';
   const requestedIdentityChange = (
@@ -6058,6 +6058,10 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
   const postBreakReentryWindow = postBreakTransition && stateAgeBars === 0;
   const postBreakRecoveryWindow = postBreakTransition && stateAgeBars <= 1;
   const explicitNegativeSpaceWindow = preDropNegativeSpaceWindow || breakDropWindow;
+  const releaseWindow = motifReturnActive || breakDropWindow || breakRebuildWindow || postBreakRecoveryWindow;
+  const tensionWindow = preDropActive || structureIntent === 'drive' || structureIntent === 'peak';
+  const stableWindow = !releaseWindow && !tensionWindow && (structureIntent === 'build' || structureIntent === 'drop' || structureIntent === 'intro');
+  const tensionProfile = releaseWindow ? 'release' : (tensionWindow ? 'tense' : (stableWindow ? 'stable' : 'neutral'));
   const allowResponseGroups = responseMode === 'group' || responseMode === 'either';
   const allowDrawsnake = responseMode === 'drawsnake' || responseMode === 'either';
 
@@ -6089,6 +6093,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
     && !explicitNegativeSpaceWindow
     && !motifReturnActive
     && !postBreakRecoveryWindow
+    && !tensionWindow
     && !strongPrimaryLoopWindow;
   const answerActive = !introFoundationWindow
     && allowResponseGroups
@@ -6104,7 +6109,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
     && energyState !== 'break'
     && !motifReturnActive
     && !postBreakRecoveryWindow
-    && ((maxSpawners >= 3) || structureIntent === 'drive' || structureIntent === 'peak');
+    && (tensionWindow || maxSpawners >= 3);
   const secondaryLoopActive = !pulseOnlyBreakWindow
     && (introBackbeatActive || (!introFoundationWindow && maxSpawners >= 2 && structureIntent !== 'intro'));
   const primaryLoopActive = !explicitNegativeSpaceWindow
@@ -6118,13 +6123,15 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       targetCount: 1,
       preferredCarrier: 'spawner',
       protected: true,
-      continuityBias: 'hold',
+      continuityBias: releaseWindow || stableWindow ? 'hold' : 'blend',
       intensity: Math.min(
         0.84,
         (introFoundationWindow ? 0.62 : (structureIntent === 'drop' ? 0.56 : 0.48))
         + (motifReturnActive ? 0.08 : 0)
         + (pulseOnlyBreakWindow ? 0.14 : 0)
         + (breakRebuildWindow ? 0.08 : 0)
+        + (stableWindow ? 0.05 : 0)
+        - (tensionWindow ? 0.03 : 0)
       ),
     },
     secondary_loop: {
@@ -6132,13 +6139,15 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       targetCount: secondaryLoopActive ? 1 : 0,
       preferredCarrier: 'spawner',
       protected: introFoundationWindow || motifReturnActive,
-      continuityBias: (introFoundationWindow || motifReturnActive) ? 'hold' : 'blend',
+      continuityBias: (introFoundationWindow || motifReturnActive || stableWindow) ? 'hold' : 'blend',
       intensity: Math.min(
         0.78,
         (introFoundationWindow ? 0.52 : (structureIntent === 'peak' ? 0.58 : 0.46))
         + (motifReturnActive ? 0.1 : 0)
         - (preDropNegativeSpaceWindow ? 0.14 : 0)
         - (breakRebuildWindow ? 0.04 : 0)
+        + (tensionWindow ? 0.08 : 0)
+        - (releaseWindow ? 0.08 : 0)
       ),
     },
     primary_loop: {
@@ -6146,13 +6155,15 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       targetCount: primaryLoopActive ? 1 : 0,
       preferredCarrier: 'drawsnake',
       protected: true,
-      continuityBias: (introPrimaryLoopWindow || motifReturnActive) ? 'hold' : 'blend',
+      continuityBias: (introPrimaryLoopWindow || motifReturnActive || stableWindow) ? 'hold' : 'blend',
       intensity: Math.min(
         0.88,
         primaryLoopIntensity
         + (motifReturnActive ? 0.12 : 0)
         - (preDropNegativeSpaceWindow ? 0.18 : 0)
         - (postBreakRecoveryWindow ? 0.12 : 0)
+        + (tensionWindow ? 0.04 : 0)
+        - (releaseWindow ? 0.06 : 0)
       ),
     },
     sparkle: {
@@ -6161,25 +6172,25 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       preferredCarrier: 'spawner',
       protected: false,
       continuityBias: 'follow',
-      intensity: motifReturnActive ? 0.18 : (structureIntent === 'peak' ? 0.62 : 0.34),
+      intensity: motifReturnActive ? 0.18 : (structureIntent === 'peak' ? 0.62 : (tensionWindow ? 0.46 : 0.22)),
     },
     support: {
       active: supportActive,
       targetCount: supportActive ? 1 : 0,
       preferredCarrier: 'group',
       protected: false,
-      continuityBias: 'follow',
-      intensity: strongPrimaryLoopWindow ? 0.18 : (structureIntent === 'build' ? 0.38 : 0.3),
+      continuityBias: stableWindow ? 'blend' : 'follow',
+      intensity: stableWindow ? 0.34 : (strongPrimaryLoopWindow ? 0.18 : (structureIntent === 'build' ? 0.38 : 0.3)),
     },
     answer: {
       active: answerActive,
       targetCount: answerActive ? 1 : 0,
       preferredCarrier: 'group',
       protected: false,
-      continuityBias: 'follow',
+      continuityBias: stableWindow ? 'blend' : 'follow',
       intensity: strongPrimaryLoopWindow
         ? (structureIntent === 'predrop' ? 0.2 : (driveAnswerCadenceWindow ? 0.16 : 0.24))
-        : (structureIntent === 'predrop' ? 0.24 : 0.34),
+        : (stableWindow ? 0.28 : (structureIntent === 'predrop' ? 0.24 : 0.34)),
     },
     __pressure: {
       combatPressure,
@@ -6188,6 +6199,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       responseMode,
       pacingState: String(swarmPacingRuntime?.getSnapshot?.()?.state || '').trim().toLowerCase(),
       motifReturnActive,
+      tensionProfile,
     },
   };
 }
@@ -13739,6 +13751,7 @@ function createPerfComposerEnemyGroup() {
     patternKey: Array.isArray(group?.steps) ? group.steps.map((step) => (step ? '1' : '0')).join('') : '',
     performerGroupId: Math.trunc(Number(group.id) || 0),
     performerType: 'composer-group',
+    lockInstrument: true,
   });
   composerEnemyGroups.push(group);
   return group;
@@ -15162,6 +15175,45 @@ function clampNoteToDirectorPool(noteName, fallbackIndex = 0) {
   const clamped = director.clampNoteToPool(normalized || fallbackNote, fallbackIndex);
   return normalizeSwarmNoteName(clamped) || normalizeSwarmNoteName(fallbackNote) || getRandomSwarmPentatonicNote();
 }
+function classifyRegisterTarget(registerLike = '') {
+  const raw = String(registerLike || '').trim().toLowerCase();
+  if (raw === 'sub' || raw === 'low') return 'low';
+  if (raw === 'mid' || raw === 'mid_low' || raw === 'mid-low') return 'mid';
+  if (raw === 'mid_high' || raw === 'mid-high' || raw === 'high') return 'high';
+  return '';
+}
+function classifyMidiRegister(midiValue) {
+  const midi = Math.trunc(Number(midiValue));
+  if (!Number.isFinite(midi)) return '';
+  if (midi <= 59) return 'low';
+  if (midi >= 72) return 'high';
+  return 'mid';
+}
+function clampNoteToDirectorRegisterTarget(noteName, fallbackIndex = 0, registerTarget = '') {
+  const target = classifyRegisterTarget(registerTarget);
+  const baseNote = clampNoteToDirectorPool(noteName, fallbackIndex);
+  if (!target) return baseNote;
+  const director = ensureSwarmDirector();
+  const pool = Array.isArray(director.getNotePool?.()) ? director.getNotePool() : [];
+  if (!pool.length) return baseNote;
+  const baseMidi = noteNameToMidiRuntime(baseNote);
+  const candidates = pool
+    .map((candidate) => normalizeSwarmNoteName(candidate))
+    .filter(Boolean)
+    .map((candidate) => ({ note: candidate, midi: noteNameToMidiRuntime(candidate) }))
+    .filter((entry) => Number.isFinite(entry.midi) && classifyMidiRegister(entry.midi) === target);
+  if (!candidates.length || !Number.isFinite(baseMidi)) return baseNote;
+  let picked = candidates[0].note;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates) {
+    const dist = Math.abs(candidate.midi - baseMidi);
+    if (dist < bestDistance) {
+      bestDistance = dist;
+      picked = candidate.note;
+    }
+  }
+  return normalizeSwarmNoteName(picked) || baseNote;
+}
 function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex) {
   const barIndex = Math.floor(Math.max(0, Math.trunc(Number(beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR));
   return collectDrawSnakeStepEvents({
@@ -16368,6 +16420,7 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
     getAliveEnemiesByIds,
     getFoundationLaneSnapshot,
     clampNoteToDirectorPool,
+    clampNoteToDirectorRegisterTarget,
     normalizeSwarmNoteName,
     getRandomSwarmPentatonicNote,
     getDirectorNotePool: () => ensureSwarmDirector().getNotePool(),
