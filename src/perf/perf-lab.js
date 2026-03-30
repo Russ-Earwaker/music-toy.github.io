@@ -439,6 +439,8 @@ function ensureUI() {
       btn('musicLabDisable', 'Music Lab: Disable'),
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
       btn('musicLabRunBS0S3x1m1m', 'Music Lab: Run BS0 S3 (1x1m, auto-save)', 'primary'),
+      btn('musicLabRunSlotBodyProbe', 'Music Lab: Run Slot/Body Probe (3x45s, auto-save)', 'primary'),
+      btn('musicLabRunHandoffMatrixProbe', 'Music Lab: Run Handoff Matrix Probe (4x45s, auto-save)', 'primary'),
       btn('musicLabRunBS0S3x1m', 'Music Lab: Run BS0 S3 (1x3m, auto-save)', 'primary'),
       btn('musicLabRunBS0S3x1m5m', 'Music Lab: Run BS0 S3 (1x5m, auto-save)', 'primary'),
       btn('musicLabRunBS0S3x3m', 'Music Lab: Run BS0 S3 (3x3m each, auto-save)', 'primary'),
@@ -1242,6 +1244,14 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3x1m1m') {
       await runBS0s3MusicLabSingle1m();
+      return;
+    }
+    if (act === 'musicLabRunSlotBodyProbe') {
+      await runBS0SlotBodyProbeSuite();
+      return;
+    }
+    if (act === 'musicLabRunHandoffMatrixProbe') {
+      await runBS0HandoffMatrixProbeSuite();
       return;
     }
     if (act === 'musicLabSnapshot') {
@@ -3528,6 +3538,8 @@ async function saveMusicLabSessionToResourcesGlobal({
   notes = '',
   iterationIndex = 1,
   iterationCount = 1,
+  scenarioName = '',
+  testCategory = '',
 } = {}) {
   const api = getMusicLabApiGlobal();
   if (!api || typeof api.exportSession !== 'function') {
@@ -3608,8 +3620,8 @@ async function saveMusicLabSessionToResourcesGlobal({
       runId: String(runId || 'musicLabAutoSave'),
       notes: String(notes || ''),
       runMode: 'auto',
-      scenarioName: String(label || 'music-lab-session'),
-      testCategory: 'music-lab-session',
+      scenarioName: String(scenarioName || label || 'music-lab-session'),
+      testCategory: String(testCategory || 'music-lab-session'),
       iterationIndex: Math.max(1, Math.trunc(Number(iterationIndex) || 1)),
       iterationCount: Math.max(1, Math.trunc(Number(iterationCount) || 1)),
       labType: 'music',
@@ -3634,8 +3646,8 @@ async function saveMusicLabSessionToResourcesGlobal({
     runId: String(runId || 'musicLabAutoSave'),
     notes: String(notes || ''),
     runMode: 'auto',
-    scenarioName: String(label || 'music-lab-session'),
-    testCategory: 'music-lab-session',
+    scenarioName: String(scenarioName || label || 'music-lab-session'),
+    testCategory: String(testCategory || 'music-lab-session'),
     iterationIndex: Math.max(1, Math.trunc(Number(iterationIndex) || 1)),
     iterationCount: Math.max(1, Math.trunc(Number(iterationCount) || 1)),
     labType: 'music',
@@ -3763,13 +3775,362 @@ async function prepareBS0StaticStage(stageCount = 2, enemyCount = 24) {
   return true;
 }
 
+function clonePerfJson(value) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return null;
+  }
+}
+
+function captureMusicLaneCarrierPolicyOverrideState() {
+  const state = {
+    hasDirect: false,
+    direct: null,
+    hasNestedRoot: false,
+    hasNestedPolicy: false,
+    nestedPolicy: null,
+  };
+  try {
+    state.hasDirect = typeof window !== 'undefined'
+      && Object.prototype.hasOwnProperty.call(window, '__beatSwarmLaneCarrierPolicy');
+    state.direct = clonePerfJson(window.__beatSwarmLaneCarrierPolicy);
+  } catch {}
+  try {
+    const root = window.__beatSwarmTestOverrides;
+    state.hasNestedRoot = !!root && typeof root === 'object';
+    state.hasNestedPolicy = state.hasNestedRoot
+      && Object.prototype.hasOwnProperty.call(root, 'laneCarrierPolicy');
+    state.nestedPolicy = clonePerfJson(root?.laneCarrierPolicy);
+  } catch {}
+  return state;
+}
+
+function restoreMusicLaneCarrierPolicyOverrideState(stateLike = null) {
+  const state = stateLike && typeof stateLike === 'object' ? stateLike : null;
+  if (!state) return;
+  try {
+    if (state.hasDirect) window.__beatSwarmLaneCarrierPolicy = clonePerfJson(state.direct);
+    else delete window.__beatSwarmLaneCarrierPolicy;
+  } catch {}
+  try {
+    const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
+      ? window.__beatSwarmTestOverrides
+      : {};
+    if (state.hasNestedPolicy) {
+      root.laneCarrierPolicy = clonePerfJson(state.nestedPolicy);
+      window.__beatSwarmTestOverrides = root;
+    } else if (state.hasNestedRoot) {
+      delete root.laneCarrierPolicy;
+      window.__beatSwarmTestOverrides = root;
+    } else if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
+      delete window.__beatSwarmTestOverrides.laneCarrierPolicy;
+    }
+  } catch {}
+}
+
+function applyMusicLaneCarrierPolicyOverride(policyLike = null) {
+  const policy = policyLike && typeof policyLike === 'object' ? clonePerfJson(policyLike) : null;
+  try {
+    if (policy) {
+      window.__beatSwarmLaneCarrierPolicy = clonePerfJson(policy);
+      const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
+        ? window.__beatSwarmTestOverrides
+        : {};
+      root.laneCarrierPolicy = clonePerfJson(policy);
+      window.__beatSwarmTestOverrides = root;
+    } else {
+      delete window.__beatSwarmLaneCarrierPolicy;
+      if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
+        delete window.__beatSwarmTestOverrides.laneCarrierPolicy;
+      }
+    }
+  } catch {}
+}
+
+function captureMusicHandoffSlotPreferenceOverrideState() {
+  const state = {
+    hasDirect: false,
+    direct: null,
+    hasNestedRoot: false,
+    hasNestedPreference: false,
+    nestedPreference: null,
+  };
+  try {
+    state.hasDirect = typeof window !== 'undefined'
+      && Object.prototype.hasOwnProperty.call(window, '__beatSwarmHandoffSlotPreference');
+    state.direct = clonePerfJson(window.__beatSwarmHandoffSlotPreference);
+  } catch {}
+  try {
+    const root = window.__beatSwarmTestOverrides;
+    state.hasNestedRoot = !!root && typeof root === 'object';
+    state.hasNestedPreference = state.hasNestedRoot
+      && Object.prototype.hasOwnProperty.call(root, 'handoffSlotPreference');
+    state.nestedPreference = clonePerfJson(root?.handoffSlotPreference);
+  } catch {}
+  return state;
+}
+
+function restoreMusicHandoffSlotPreferenceOverrideState(stateLike = null) {
+  const state = stateLike && typeof stateLike === 'object' ? stateLike : null;
+  if (!state) return;
+  try {
+    if (state.hasDirect) window.__beatSwarmHandoffSlotPreference = clonePerfJson(state.direct);
+    else delete window.__beatSwarmHandoffSlotPreference;
+  } catch {}
+  try {
+    const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
+      ? window.__beatSwarmTestOverrides
+      : {};
+    if (state.hasNestedPreference) {
+      root.handoffSlotPreference = clonePerfJson(state.nestedPreference);
+      window.__beatSwarmTestOverrides = root;
+    } else if (state.hasNestedRoot) {
+      delete root.handoffSlotPreference;
+      window.__beatSwarmTestOverrides = root;
+    } else if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
+      delete window.__beatSwarmTestOverrides.handoffSlotPreference;
+    }
+  } catch {}
+}
+
+function applyMusicHandoffSlotPreferenceOverride(preferenceLike = null) {
+  const preference = preferenceLike && typeof preferenceLike === 'object' ? clonePerfJson(preferenceLike) : null;
+  try {
+    if (preference) {
+      window.__beatSwarmHandoffSlotPreference = clonePerfJson(preference);
+      const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
+        ? window.__beatSwarmTestOverrides
+        : {};
+      root.handoffSlotPreference = clonePerfJson(preference);
+      window.__beatSwarmTestOverrides = root;
+    } else {
+      delete window.__beatSwarmHandoffSlotPreference;
+      if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
+        delete window.__beatSwarmTestOverrides.handoffSlotPreference;
+      }
+    }
+  } catch {}
+}
+
+function captureMusicForcedHandoffReceiverSlotOverrideState() {
+  const state = {
+    hasDirect: false,
+    direct: null,
+    hasNestedRoot: false,
+    hasNestedForcedReceiverSlot: false,
+    nestedForcedReceiverSlot: null,
+  };
+  try {
+    state.hasDirect = typeof window !== 'undefined'
+      && Object.prototype.hasOwnProperty.call(window, '__beatSwarmForcedHandoffReceiverSlot');
+    state.direct = clonePerfJson(window.__beatSwarmForcedHandoffReceiverSlot);
+  } catch {}
+  try {
+    const root = window.__beatSwarmTestOverrides;
+    state.hasNestedRoot = !!root && typeof root === 'object';
+    state.hasNestedForcedReceiverSlot = state.hasNestedRoot
+      && Object.prototype.hasOwnProperty.call(root, 'forcedHandoffReceiverSlot');
+    state.nestedForcedReceiverSlot = clonePerfJson(root?.forcedHandoffReceiverSlot);
+  } catch {}
+  return state;
+}
+
+function restoreMusicForcedHandoffReceiverSlotOverrideState(stateLike = null) {
+  const state = stateLike && typeof stateLike === 'object' ? stateLike : null;
+  if (!state) return;
+  try {
+    if (state.hasDirect) window.__beatSwarmForcedHandoffReceiverSlot = clonePerfJson(state.direct);
+    else delete window.__beatSwarmForcedHandoffReceiverSlot;
+  } catch {}
+  try {
+    const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
+      ? window.__beatSwarmTestOverrides
+      : {};
+    if (state.hasNestedForcedReceiverSlot) {
+      root.forcedHandoffReceiverSlot = clonePerfJson(state.nestedForcedReceiverSlot);
+      window.__beatSwarmTestOverrides = root;
+    } else if (state.hasNestedRoot) {
+      delete root.forcedHandoffReceiverSlot;
+      window.__beatSwarmTestOverrides = root;
+    } else if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
+      delete window.__beatSwarmTestOverrides.forcedHandoffReceiverSlot;
+    }
+  } catch {}
+}
+
+function applyMusicForcedHandoffReceiverSlotOverride(overrideLike = null) {
+  const override = overrideLike && typeof overrideLike === 'object' ? clonePerfJson(overrideLike) : null;
+  try {
+    if (override) {
+      window.__beatSwarmForcedHandoffReceiverSlot = clonePerfJson(override);
+      const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
+        ? window.__beatSwarmTestOverrides
+        : {};
+      root.forcedHandoffReceiverSlot = clonePerfJson(override);
+      window.__beatSwarmTestOverrides = root;
+    } else {
+      delete window.__beatSwarmForcedHandoffReceiverSlot;
+      if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
+        delete window.__beatSwarmTestOverrides.forcedHandoffReceiverSlot;
+      }
+    }
+  } catch {}
+}
+
+function captureMusicForcedProbeHandoffOverrideState() {
+  const state = {
+    hasDirect: false,
+    direct: null,
+    hasNestedRoot: false,
+    hasNestedForcedProbeHandoff: false,
+    nestedForcedProbeHandoff: null,
+  };
+  try {
+    state.hasDirect = typeof window !== 'undefined'
+      && Object.prototype.hasOwnProperty.call(window, '__beatSwarmForcedProbeHandoff');
+    state.direct = clonePerfJson(window.__beatSwarmForcedProbeHandoff);
+  } catch {}
+  try {
+    const root = window.__beatSwarmTestOverrides;
+    state.hasNestedRoot = !!root && typeof root === 'object';
+    state.hasNestedForcedProbeHandoff = state.hasNestedRoot
+      && Object.prototype.hasOwnProperty.call(root, 'forcedProbeHandoff');
+    state.nestedForcedProbeHandoff = clonePerfJson(root?.forcedProbeHandoff);
+  } catch {}
+  return state;
+}
+
+function restoreMusicForcedProbeHandoffOverrideState(stateLike = null) {
+  const state = stateLike && typeof stateLike === 'object' ? stateLike : null;
+  if (!state) return;
+  try {
+    if (state.hasDirect) window.__beatSwarmForcedProbeHandoff = clonePerfJson(state.direct);
+    else delete window.__beatSwarmForcedProbeHandoff;
+  } catch {}
+  try {
+    const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
+      ? window.__beatSwarmTestOverrides
+      : {};
+    if (state.hasNestedForcedProbeHandoff) {
+      root.forcedProbeHandoff = clonePerfJson(state.nestedForcedProbeHandoff);
+      window.__beatSwarmTestOverrides = root;
+    } else if (state.hasNestedRoot) {
+      delete root.forcedProbeHandoff;
+      window.__beatSwarmTestOverrides = root;
+    } else if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
+      delete window.__beatSwarmTestOverrides.forcedProbeHandoff;
+    }
+  } catch {}
+}
+
+function applyMusicForcedProbeHandoffOverride(overrideLike = null) {
+  const override = overrideLike && typeof overrideLike === 'object' ? clonePerfJson(overrideLike) : null;
+  try {
+    if (override) {
+      window.__beatSwarmForcedProbeHandoff = clonePerfJson(override);
+      const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
+        ? window.__beatSwarmTestOverrides
+        : {};
+      root.forcedProbeHandoff = clonePerfJson(override);
+      window.__beatSwarmTestOverrides = root;
+    } else {
+      delete window.__beatSwarmForcedProbeHandoff;
+      if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
+        delete window.__beatSwarmTestOverrides.forcedProbeHandoff;
+      }
+    }
+  } catch {}
+}
+
+function sleepPerfLabMs(ms = 0) {
+  return new Promise((resolve) => {
+    try { setTimeout(resolve, Math.max(0, Math.trunc(Number(ms) || 0))); } catch { resolve(); }
+  });
+}
+
+const MUSIC_LAB_PROBE_SUPPORTED_POLICY = Object.freeze({
+  foundation_lane: Object.freeze(['group', 'spawner']),
+  primary_loop_lane: Object.freeze(['drawsnake']),
+  secondary_loop_lane: Object.freeze(['group', 'spawner']),
+  sparkle_lane: Object.freeze(['spawner', 'group']),
+});
+const MUSIC_LAB_PROBE_SUPPORTED_HANDOFF_SLOTS = Object.freeze(['group', 'special', 'large', 'generic']);
+
+function normalizeMusicLabProbeLaneCarrierPolicy(policy = null) {
+  const requestedPolicy = policy && typeof policy === 'object' ? policy : {};
+  const normalizedPolicy = {};
+  const unsupportedRequests = [];
+  for (const [laneId, supportedList] of Object.entries(MUSIC_LAB_PROBE_SUPPORTED_POLICY)) {
+    const requestedList = Array.isArray(requestedPolicy?.[laneId]) && requestedPolicy[laneId].length
+      ? requestedPolicy[laneId]
+      : supportedList;
+    const nextList = [];
+    const seen = new Set();
+    for (const value of requestedList) {
+      const carrier = String(value || '').trim().toLowerCase();
+      if (!carrier || seen.has(carrier)) continue;
+      seen.add(carrier);
+      if (supportedList.includes(carrier)) nextList.push(carrier);
+      else unsupportedRequests.push({ laneId, carrier });
+    }
+    normalizedPolicy[laneId] = nextList.length ? nextList : Array.from(supportedList);
+  }
+  return {
+    normalizedPolicy,
+    unsupportedRequests,
+  };
+}
+
+function normalizeMusicLabProbeHandoffSlotPreference(preference = null) {
+  const requestedPreference = preference && typeof preference === 'object' ? preference : {};
+  const normalizedPreference = {};
+  const unsupportedRequests = [];
+  for (const sourceSlot of MUSIC_LAB_PROBE_SUPPORTED_HANDOFF_SLOTS) {
+    const requestedList = Array.isArray(requestedPreference?.[sourceSlot]) && requestedPreference[sourceSlot].length
+      ? requestedPreference[sourceSlot]
+      : null;
+    if (!requestedList) continue;
+    const nextList = [];
+    const seen = new Set();
+    for (const value of requestedList) {
+      const slot = String(value || '').trim().toLowerCase();
+      if (!slot || seen.has(slot)) continue;
+      seen.add(slot);
+      if (MUSIC_LAB_PROBE_SUPPORTED_HANDOFF_SLOTS.includes(slot)) nextList.push(slot);
+      else unsupportedRequests.push({ sourceSlot, slot });
+    }
+    if (nextList.length) normalizedPreference[sourceSlot] = nextList;
+  }
+  return {
+    normalizedPreference,
+    unsupportedRequests,
+  };
+}
+
+function normalizeMusicLabProbeForcedHandoffReceiverSlot(overrideLike = null) {
+  const requestedOverride = overrideLike && typeof overrideLike === 'object' ? overrideLike : {};
+  const normalizedOverride = {};
+  const unsupportedRequests = [];
+  for (const sourceSlot of MUSIC_LAB_PROBE_SUPPORTED_HANDOFF_SLOTS) {
+    const slot = String(requestedOverride?.[sourceSlot] || '').trim().toLowerCase();
+    if (!slot) continue;
+    if (MUSIC_LAB_PROBE_SUPPORTED_HANDOFF_SLOTS.includes(slot)) normalizedOverride[sourceSlot] = slot;
+    else unsupportedRequests.push({ sourceSlot, slot });
+  }
+  return {
+    normalizedOverride,
+    unsupportedRequests,
+  };
+}
+
 async function runBS0Stage(stageCount = 1, opts = null) {
   const cfg = opts && typeof opts === 'object' ? opts : {};
   const durationMs = Math.max(1000, Number(cfg.durationMs) || 9000);
   const repeatCount = Math.max(1, Math.round(Number(cfg.repeatCount) || 1));
   const enemyCount = Math.max(1, Math.round(Number(cfg.enemyCount) || 24));
-  const freshResetEachRun = cfg.freshResetEachRun !== false && repeatCount > 1;
-  const restartTransportEachRun = cfg.restartTransportEachRun !== false && repeatCount > 1;
+  const freshResetEachRun = cfg.freshResetEachRun !== false;
+  const restartTransportEachRun = cfg.restartTransportEachRun !== false;
   const resetMusicLabEachRun = cfg.resetMusicLabEachRun !== false;
   const saveMusicLabEachRun = cfg.saveMusicLabEachRun === true;
   const publishPerfArtifacts = cfg.publishPerfArtifacts === true || !saveMusicLabEachRun;
@@ -3783,6 +4144,7 @@ async function runBS0Stage(stageCount = 1, opts = null) {
   const labelPrefix = String(cfg.labelPrefix || `BS0_stage${stageCount}_beatswarm_static_fire`).trim() || `BS0_stage${stageCount}_beatswarm_static_fire`;
   const statusPrefix = String(cfg.statusPrefix || `Running BS0 S${stageCount} (static player, ${stageCount} stage weapon, onscreen enemies)`).trim()
     || `Running BS0 S${stageCount} (static player, ${stageCount} stage weapon, onscreen enemies)`;
+  const suppressCompletionUi = cfg.suppressCompletionUi === true;
   const prevDur = window.__PERF_LAB_DURATION_MS;
   const prevTag = window.__PERF_RUN_TAG;
   const runOutcomes = [];
@@ -3794,13 +4156,13 @@ async function runBS0Stage(stageCount = 1, opts = null) {
         const rebuilt = await buildBS0();
         if (!rebuilt) {
           setStatus(`BS0 S${stageCount} failed (fresh reset failed)`);
-          return;
+          return { ok: false, reason: 'fresh_reset_failed', stageCount, runIndex, repeatCount, durationMs };
         }
       }
       const ok = await prepareBS0StaticStage(stageCount, enemyCount);
       if (!ok) {
         setStatus(`BS0 S${stageCount} failed (Beat Swarm debug API unavailable)`);
-        return;
+        return { ok: false, reason: 'debug_api_unavailable', stageCount, runIndex, repeatCount, durationMs };
       }
       if (restartTransportEachRun) {
         try { stopTransport(); } catch {}
@@ -3856,7 +4218,15 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           reason: 'run_variant_failed',
           error: String(err && err.message || err || 'unknown_error'),
         });
-        return;
+        return {
+          ok: false,
+          stageCount,
+          runIndex,
+          repeatCount,
+          durationMs,
+          reason: 'run_variant_failed',
+          error: String(err && err.message || err || 'unknown_error'),
+        };
       }
       if (publishPerfArtifacts) {
         try {
@@ -3901,6 +4271,8 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           notes: saveNotes || `Auto save for BS0 S${stageCount} run ${runIndex}/${repeatCount}`,
           iterationIndex: runIndex,
           iterationCount: repeatCount,
+          scenarioName: groupedScenarioName,
+          testCategory: groupedScenarioName,
         });
         runOutcomes.push({
           runIndex,
@@ -3963,7 +4335,15 @@ async function runBS0Stage(stageCount = 1, opts = null) {
             postUrl: String(save?.postUrl || ''),
             hint: 'Ensure perf-lab results server is running and music postUrl points to /music-lab-results.',
           });
-          return;
+          return {
+            ok: false,
+            stageCount,
+            runIndex,
+            repeatCount,
+            durationMs,
+            reason: String(save?.reason || 'save_failed'),
+            postUrl: String(save?.postUrl || ''),
+          };
         }
       }
     }
@@ -3980,8 +4360,19 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           runOutcomes,
         });
       }
-      setStatus(`BS0 S${stageCount} complete (${repeatCount} x ${(durationMs / 60000).toFixed(1)}m, total ${totalMinutes}m)`);
-      setOutput({
+      if (!suppressCompletionUi) {
+        setStatus(`BS0 S${stageCount} complete (${repeatCount} x ${(durationMs / 60000).toFixed(1)}m, total ${totalMinutes}m)`);
+        setOutput({
+          ok: true,
+          stageCount,
+          repeatCount,
+          durationMs,
+          totalMinutes,
+          saves: runOutcomes,
+          groupedScenario: groupedScenario || null,
+        });
+      }
+      return {
         ok: true,
         stageCount,
         repeatCount,
@@ -3989,8 +4380,9 @@ async function runBS0Stage(stageCount = 1, opts = null) {
         totalMinutes,
         saves: runOutcomes,
         groupedScenario: groupedScenario || null,
-      });
+      };
     }
+    return { ok: true, stageCount, repeatCount, durationMs, totalMinutes, saves: runOutcomes };
   } finally {
     try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
     try { window.__PERF_RUN_TAG = prevTag; } catch {}
@@ -4076,6 +4468,516 @@ async function runBS0s3MusicLabSingle1m() {
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_1x1m',
     statusPrefix: 'Running BS0 S3 Music Lab quick playtest (1 minute)',
   });
+}
+
+async function runBS0SlotBodyProbeSuite() {
+  const scenarios = [
+    {
+      id: 'intro_group_baseline',
+      label: 'Intro Group Baseline',
+      stageCount: 3,
+      durationMs: 45000,
+      laneCarrierPolicy: {
+        foundation_lane: ['group'],
+        primary_loop_lane: ['drawsnake', 'group'],
+        secondary_loop_lane: ['group'],
+        sparkle_lane: ['spawner', 'group'],
+      },
+      notes: 'Fast slot/body baseline: preserve intro group-first pulse/backbeat ownership while keeping primary loop drawsnake-first.',
+    },
+    {
+      id: 'foundation_spawner_swap',
+      label: 'Foundation Spawner Swap',
+      stageCount: 4,
+      durationMs: 60000,
+      laneCarrierPolicy: {
+        foundation_lane: ['spawner'],
+        primary_loop_lane: ['drawsnake', 'group'],
+        secondary_loop_lane: ['spawner', 'group'],
+        sparkle_lane: ['spawner', 'group'],
+      },
+      notes: 'Force foundation and secondary loop toward spawner where eligible to verify slot continuity under body substitution.',
+    },
+  ];
+  const previousOverrideState = captureMusicLaneCarrierPolicyOverrideState();
+  const suiteOutcomes = [];
+  try {
+    for (let i = 0; i < scenarios.length; i += 1) {
+      const scenario = scenarios[i];
+      const normalizedScenario = normalizeMusicLabProbeLaneCarrierPolicy(scenario.laneCarrierPolicy);
+      const effectiveLaneCarrierPolicy = normalizedScenario.normalizedPolicy;
+      const stageCount = Math.max(1, Math.trunc(Number(scenario.stageCount) || 3));
+      const unsupportedPolicyText = normalizedScenario.unsupportedRequests.length
+        ? ` unsupported=${JSON.stringify(normalizedScenario.unsupportedRequests)}`
+        : '';
+      try {
+        window.__LAST_SLOT_BODY_PROBE_SUITE = {
+          phase: 'starting_scenario',
+          scenarioIndex: i + 1,
+          scenarioCount: scenarios.length,
+          scenarioId: scenario.id,
+          label: scenario.label,
+          stageCount,
+          requestedLaneCarrierPolicy: clonePerfJson(scenario.laneCarrierPolicy),
+          effectiveLaneCarrierPolicy: clonePerfJson(effectiveLaneCarrierPolicy),
+          unsupportedRequests: clonePerfJson(normalizedScenario.unsupportedRequests),
+        };
+      } catch {}
+      applyMusicLaneCarrierPolicyOverride(effectiveLaneCarrierPolicy);
+      setStatus(`Running Slot/Body Probe ${i + 1}/${scenarios.length}: ${scenario.label}`);
+      let result = null;
+      try {
+        result = await runBS0Stage(stageCount, {
+          durationMs: Math.max(15000, Number(scenario.durationMs) || 45000),
+          repeatCount: 1,
+          freshResetEachRun: true,
+          restartTransportEachRun: true,
+          resetMusicLabEachRun: true,
+          saveMusicLabEachRun: true,
+          saveRunIdBase: `musicLab_slot_body_${scenario.id}`,
+          saveNotes: `${scenario.notes} policy=${JSON.stringify(effectiveLaneCarrierPolicy)}${unsupportedPolicyText}`,
+          groupedScenarioName: `slot_body_probe_${scenario.id}`,
+          groupedRunId: `musicLab_slot_body_${scenario.id}_scenario`,
+          groupedNotes: `${scenario.notes} policy=${JSON.stringify(effectiveLaneCarrierPolicy)}${unsupportedPolicyText}`,
+          tagPrefix: `SlotBodyProbe_${scenario.id}`,
+          labelPrefix: `BS0_stage${stageCount}_slot_body_probe_${scenario.id}`,
+          statusPrefix: `Running Slot/Body Probe: ${scenario.label}`,
+          suppressCompletionUi: true,
+        });
+      } catch (err) {
+        const errorText = String(err && err.message || err || 'unknown_error');
+        suiteOutcomes.push({
+          scenarioId: scenario.id,
+          label: scenario.label,
+          stageCount,
+          ok: false,
+          reason: errorText,
+          requestedLaneCarrierPolicy: clonePerfJson(scenario.laneCarrierPolicy),
+          effectiveLaneCarrierPolicy: clonePerfJson(effectiveLaneCarrierPolicy),
+          unsupportedRequests: clonePerfJson(normalizedScenario.unsupportedRequests),
+          saves: [],
+        });
+        try {
+          window.__LAST_SLOT_BODY_PROBE_SUITE = {
+            phase: 'scenario_threw',
+            scenarioIndex: i + 1,
+            scenarioCount: scenarios.length,
+            scenarioId: scenario.id,
+            label: scenario.label,
+            error: errorText,
+            suiteOutcomes,
+          };
+        } catch {}
+        setStatus(`Slot/Body probe threw at ${scenario.label}`);
+        setOutput({
+          ok: false,
+          scenarioId: scenario.id,
+          label: scenario.label,
+          reason: errorText,
+          suiteOutcomes,
+        });
+        return { ok: false, scenarioId: scenario.id, reason: errorText, suiteOutcomes };
+      }
+      suiteOutcomes.push({
+        scenarioId: scenario.id,
+        label: scenario.label,
+        stageCount,
+        ok: result?.ok === true,
+        reason: String(result?.reason || ''),
+        requestedLaneCarrierPolicy: clonePerfJson(scenario.laneCarrierPolicy),
+        effectiveLaneCarrierPolicy: clonePerfJson(effectiveLaneCarrierPolicy),
+        unsupportedRequests: clonePerfJson(normalizedScenario.unsupportedRequests),
+        saves: Array.isArray(result?.saves) ? result.saves : [],
+      });
+      try {
+        window.__LAST_SLOT_BODY_PROBE_SUITE = {
+          phase: 'completed_scenario',
+          scenarioIndex: i + 1,
+          scenarioCount: scenarios.length,
+          scenarioId: scenario.id,
+          label: scenario.label,
+          result,
+          suiteOutcomes,
+        };
+      } catch {}
+      if (result?.ok !== true) {
+        setStatus(`Slot/Body probe stopped at ${scenario.label}`);
+        setOutput({
+          ok: false,
+          scenarioId: scenario.id,
+          label: scenario.label,
+          reason: String(result?.reason || 'probe_failed'),
+          suiteOutcomes,
+        });
+        return { ok: false, scenarioId: scenario.id, reason: String(result?.reason || 'probe_failed'), suiteOutcomes };
+      }
+      setOutput({
+        ok: true,
+        phase: 'scenario-complete',
+        scenarioIndex: i + 1,
+        scenarioCount: scenarios.length,
+        scenarioId: scenario.id,
+        label: scenario.label,
+        suiteOutcomes,
+      });
+      await sleepPerfLabMs(250);
+    }
+    let groupedScenario = null;
+    try {
+      groupedScenario = await publishGroupedMusicLabScenarioBundle({
+        scenarioName: 'slot_body_probe_suite',
+        runId: 'musicLab_slot_body_probe_suite',
+        notes: 'Grouped scenario bundle for fast slot/body probe suite.',
+        stageCount: 3,
+        durationMs: scenarios.reduce((sum, scenario) => sum + Math.max(15000, Number(scenario.durationMs) || 45000), 0),
+        repeatCount: suiteOutcomes.length,
+        runOutcomes: suiteOutcomes.flatMap((scenario, idx) => {
+          const saves = Array.isArray(scenario.saves) ? scenario.saves : [];
+          return saves.map((save) => ({
+            runIndex: Math.max(1, Math.trunc(Number(save?.runIndex) || (idx + 1))),
+            runId: String(save?.runId || ''),
+            saved: !!save?.saved,
+            reason: String(save?.reason || ''),
+            sessionId: String(save?.sessionId || ''),
+            events: Math.max(0, Number(save?.events) || 0),
+            sessionSummary: (save?.sessionSummary && typeof save.sessionSummary === 'object') ? save.sessionSummary : null,
+          }));
+        }),
+      });
+    } catch {}
+    setStatus('Slot/Body probe suite complete');
+    setOutput({
+      ok: true,
+      scenarioCount: scenarios.length,
+      suiteOutcomes,
+      groupedScenario,
+    });
+    try {
+      window.__LAST_SLOT_BODY_PROBE_SUITE = {
+        phase: 'suite_complete',
+        scenarioCount: scenarios.length,
+        suiteOutcomes,
+        groupedScenario,
+      };
+    } catch {}
+    return { ok: true, scenarioCount: scenarios.length, suiteOutcomes, groupedScenario };
+  } finally {
+    restoreMusicLaneCarrierPolicyOverrideState(previousOverrideState);
+  }
+}
+
+async function runBS0HandoffMatrixProbeSuite() {
+  const scenarios = [
+    {
+      id: 'snake_group_large',
+      label: 'Snake -> Group -> Large',
+      stageCount: 4,
+      durationMs: 45000,
+      laneCarrierPolicy: {
+        foundation_lane: ['group'],
+        primary_loop_lane: ['drawsnake'],
+        secondary_loop_lane: ['group'],
+        sparkle_lane: ['group', 'spawner'],
+      },
+      handoffSlotPreference: {
+        special: ['group', 'large', 'generic', 'special'],
+        group: ['large', 'generic', 'group', 'special'],
+      },
+      forcedHandoffReceiverSlot: {
+        special: 'group',
+        group: 'large',
+      },
+      forcedProbeHandoff: {
+        sourceEnemyType: 'drawsnake',
+        minBeatIndex: 16,
+      },
+      notes: 'Force drawsnake handoff through groups first, then prefer large singleton receivers for follow-on continuity.',
+    },
+    {
+      id: 'snake_group_generic',
+      label: 'Snake -> Group -> Generic',
+      stageCount: 4,
+      durationMs: 45000,
+      laneCarrierPolicy: {
+        foundation_lane: ['group'],
+        primary_loop_lane: ['drawsnake'],
+        secondary_loop_lane: ['group'],
+        sparkle_lane: ['group', 'spawner'],
+      },
+      handoffSlotPreference: {
+        special: ['group', 'generic', 'large', 'special'],
+        group: ['generic', 'large', 'group', 'special'],
+      },
+      forcedHandoffReceiverSlot: {
+        special: 'group',
+        group: 'generic',
+      },
+      forcedProbeHandoff: {
+        sourceEnemyType: 'drawsnake',
+        minBeatIndex: 16,
+      },
+      notes: 'Force drawsnake handoff through groups first, then prefer generic singleton receivers for follow-on continuity.',
+    },
+    {
+      id: 'spawner_group_large',
+      label: 'Spawner -> Group -> Large',
+      stageCount: 4,
+      durationMs: 45000,
+      laneCarrierPolicy: {
+        foundation_lane: ['spawner', 'group'],
+        primary_loop_lane: ['drawsnake'],
+        secondary_loop_lane: ['spawner', 'group'],
+        sparkle_lane: ['spawner', 'group'],
+      },
+      handoffSlotPreference: {
+        special: ['group', 'large', 'generic', 'special'],
+        group: ['large', 'generic', 'group', 'special'],
+      },
+      forcedHandoffReceiverSlot: {
+        special: 'group',
+        group: 'large',
+      },
+      forcedProbeHandoff: {
+        sourceEnemyType: 'spawner',
+        minBeatIndex: 16,
+      },
+      notes: 'Force spawner handoff through groups first, then prefer large singleton receivers for follow-on continuity.',
+    },
+    {
+      id: 'spawner_group_generic',
+      label: 'Spawner -> Group -> Generic',
+      stageCount: 4,
+      durationMs: 45000,
+      laneCarrierPolicy: {
+        foundation_lane: ['spawner', 'group'],
+        primary_loop_lane: ['drawsnake'],
+        secondary_loop_lane: ['spawner', 'group'],
+        sparkle_lane: ['spawner', 'group'],
+      },
+      handoffSlotPreference: {
+        special: ['group', 'generic', 'large', 'special'],
+        group: ['generic', 'large', 'group', 'special'],
+      },
+      forcedHandoffReceiverSlot: {
+        special: 'group',
+        group: 'generic',
+      },
+      forcedProbeHandoff: {
+        sourceEnemyType: 'spawner',
+        minBeatIndex: 16,
+      },
+      notes: 'Force spawner handoff through groups first, then prefer generic singleton receivers for follow-on continuity.',
+    },
+  ];
+  const previousLanePolicyState = captureMusicLaneCarrierPolicyOverrideState();
+  const previousHandoffPreferenceState = captureMusicHandoffSlotPreferenceOverrideState();
+  const previousForcedReceiverSlotState = captureMusicForcedHandoffReceiverSlotOverrideState();
+  const previousForcedProbeHandoffState = captureMusicForcedProbeHandoffOverrideState();
+  const suiteOutcomes = [];
+  try {
+    for (let i = 0; i < scenarios.length; i += 1) {
+      const scenario = scenarios[i];
+      const normalizedScenario = normalizeMusicLabProbeLaneCarrierPolicy(scenario.laneCarrierPolicy);
+      const normalizedPreference = normalizeMusicLabProbeHandoffSlotPreference(scenario.handoffSlotPreference);
+      const normalizedForcedReceiverSlot = normalizeMusicLabProbeForcedHandoffReceiverSlot(scenario.forcedHandoffReceiverSlot);
+      const effectiveLaneCarrierPolicy = normalizedScenario.normalizedPolicy;
+      const effectiveHandoffSlotPreference = normalizedPreference.normalizedPreference;
+      const effectiveForcedReceiverSlot = normalizedForcedReceiverSlot.normalizedOverride;
+      const effectiveForcedProbeHandoff = clonePerfJson(scenario.forcedProbeHandoff) || null;
+      const stageCount = Math.max(1, Math.trunc(Number(scenario.stageCount) || 4));
+      const unsupportedPolicyText = normalizedScenario.unsupportedRequests.length
+        ? ` unsupportedPolicy=${JSON.stringify(normalizedScenario.unsupportedRequests)}`
+        : '';
+      const unsupportedPreferenceText = normalizedPreference.unsupportedRequests.length
+        ? ` unsupportedHandoff=${JSON.stringify(normalizedPreference.unsupportedRequests)}`
+        : '';
+      const unsupportedForcedReceiverText = normalizedForcedReceiverSlot.unsupportedRequests.length
+        ? ` unsupportedForcedReceiver=${JSON.stringify(normalizedForcedReceiverSlot.unsupportedRequests)}`
+        : '';
+      try {
+        window.__LAST_HANDOFF_MATRIX_PROBE_SUITE = {
+          phase: 'starting_scenario',
+          scenarioIndex: i + 1,
+          scenarioCount: scenarios.length,
+          scenarioId: scenario.id,
+          label: scenario.label,
+          stageCount,
+          requestedLaneCarrierPolicy: clonePerfJson(scenario.laneCarrierPolicy),
+          effectiveLaneCarrierPolicy: clonePerfJson(effectiveLaneCarrierPolicy),
+          requestedHandoffSlotPreference: clonePerfJson(scenario.handoffSlotPreference),
+          effectiveHandoffSlotPreference: clonePerfJson(effectiveHandoffSlotPreference),
+          requestedForcedHandoffReceiverSlot: clonePerfJson(scenario.forcedHandoffReceiverSlot),
+          effectiveForcedHandoffReceiverSlot: clonePerfJson(effectiveForcedReceiverSlot),
+          requestedForcedProbeHandoff: clonePerfJson(scenario.forcedProbeHandoff),
+          effectiveForcedProbeHandoff: clonePerfJson(effectiveForcedProbeHandoff),
+          unsupportedPolicyRequests: clonePerfJson(normalizedScenario.unsupportedRequests),
+          unsupportedHandoffRequests: clonePerfJson(normalizedPreference.unsupportedRequests),
+          unsupportedForcedReceiverRequests: clonePerfJson(normalizedForcedReceiverSlot.unsupportedRequests),
+        };
+      } catch {}
+      applyMusicLaneCarrierPolicyOverride(effectiveLaneCarrierPolicy);
+      applyMusicHandoffSlotPreferenceOverride(effectiveHandoffSlotPreference);
+      applyMusicForcedHandoffReceiverSlotOverride(effectiveForcedReceiverSlot);
+      applyMusicForcedProbeHandoffOverride(effectiveForcedProbeHandoff);
+      setStatus(`Running Handoff Matrix Probe ${i + 1}/${scenarios.length}: ${scenario.label}`);
+      let result = null;
+      try {
+        result = await runBS0Stage(stageCount, {
+          durationMs: Math.max(15000, Number(scenario.durationMs) || 45000),
+          repeatCount: 1,
+          freshResetEachRun: true,
+          restartTransportEachRun: true,
+          resetMusicLabEachRun: true,
+          saveMusicLabEachRun: true,
+          saveRunIdBase: `musicLab_handoff_matrix_${scenario.id}`,
+          saveNotes: `${scenario.notes} policy=${JSON.stringify(effectiveLaneCarrierPolicy)} handoff=${JSON.stringify(effectiveHandoffSlotPreference)} forcedReceiver=${JSON.stringify(effectiveForcedReceiverSlot)} forcedProbe=${JSON.stringify(effectiveForcedProbeHandoff)}${unsupportedPolicyText}${unsupportedPreferenceText}${unsupportedForcedReceiverText}`,
+          groupedScenarioName: `handoff_matrix_probe_${scenario.id}`,
+          groupedRunId: `musicLab_handoff_matrix_${scenario.id}_scenario`,
+          groupedNotes: `${scenario.notes} policy=${JSON.stringify(effectiveLaneCarrierPolicy)} handoff=${JSON.stringify(effectiveHandoffSlotPreference)} forcedReceiver=${JSON.stringify(effectiveForcedReceiverSlot)} forcedProbe=${JSON.stringify(effectiveForcedProbeHandoff)}${unsupportedPolicyText}${unsupportedPreferenceText}${unsupportedForcedReceiverText}`,
+          tagPrefix: `HandoffMatrix_${scenario.id}`,
+          labelPrefix: `BS0_stage${stageCount}_handoff_matrix_${scenario.id}`,
+          statusPrefix: `Running Handoff Matrix Probe: ${scenario.label}`,
+          suppressCompletionUi: true,
+        });
+      } catch (err) {
+        const errorText = String(err && err.message || err || 'unknown_error');
+        suiteOutcomes.push({
+          scenarioId: scenario.id,
+          label: scenario.label,
+          stageCount,
+          ok: false,
+          reason: errorText,
+          requestedLaneCarrierPolicy: clonePerfJson(scenario.laneCarrierPolicy),
+          effectiveLaneCarrierPolicy: clonePerfJson(effectiveLaneCarrierPolicy),
+          requestedHandoffSlotPreference: clonePerfJson(scenario.handoffSlotPreference),
+          effectiveHandoffSlotPreference: clonePerfJson(effectiveHandoffSlotPreference),
+          requestedForcedHandoffReceiverSlot: clonePerfJson(scenario.forcedHandoffReceiverSlot),
+          effectiveForcedHandoffReceiverSlot: clonePerfJson(effectiveForcedReceiverSlot),
+          requestedForcedProbeHandoff: clonePerfJson(scenario.forcedProbeHandoff),
+          effectiveForcedProbeHandoff: clonePerfJson(effectiveForcedProbeHandoff),
+          unsupportedPolicyRequests: clonePerfJson(normalizedScenario.unsupportedRequests),
+          unsupportedHandoffRequests: clonePerfJson(normalizedPreference.unsupportedRequests),
+          unsupportedForcedReceiverRequests: clonePerfJson(normalizedForcedReceiverSlot.unsupportedRequests),
+          saves: [],
+        });
+        try {
+          window.__LAST_HANDOFF_MATRIX_PROBE_SUITE = {
+            phase: 'scenario_threw',
+            scenarioIndex: i + 1,
+            scenarioCount: scenarios.length,
+            scenarioId: scenario.id,
+            label: scenario.label,
+            error: errorText,
+            suiteOutcomes,
+          };
+        } catch {}
+        setStatus(`Handoff matrix probe threw at ${scenario.label}`);
+        setOutput({
+          ok: false,
+          scenarioId: scenario.id,
+          label: scenario.label,
+          reason: errorText,
+          suiteOutcomes,
+        });
+        return { ok: false, scenarioId: scenario.id, reason: errorText, suiteOutcomes };
+      }
+      suiteOutcomes.push({
+        scenarioId: scenario.id,
+        label: scenario.label,
+        stageCount,
+        ok: result?.ok === true,
+        reason: String(result?.reason || ''),
+        requestedLaneCarrierPolicy: clonePerfJson(scenario.laneCarrierPolicy),
+        effectiveLaneCarrierPolicy: clonePerfJson(effectiveLaneCarrierPolicy),
+        requestedHandoffSlotPreference: clonePerfJson(scenario.handoffSlotPreference),
+        effectiveHandoffSlotPreference: clonePerfJson(effectiveHandoffSlotPreference),
+        requestedForcedHandoffReceiverSlot: clonePerfJson(scenario.forcedHandoffReceiverSlot),
+        effectiveForcedHandoffReceiverSlot: clonePerfJson(effectiveForcedReceiverSlot),
+        requestedForcedProbeHandoff: clonePerfJson(scenario.forcedProbeHandoff),
+        effectiveForcedProbeHandoff: clonePerfJson(effectiveForcedProbeHandoff),
+        unsupportedPolicyRequests: clonePerfJson(normalizedScenario.unsupportedRequests),
+        unsupportedHandoffRequests: clonePerfJson(normalizedPreference.unsupportedRequests),
+        unsupportedForcedReceiverRequests: clonePerfJson(normalizedForcedReceiverSlot.unsupportedRequests),
+        saves: Array.isArray(result?.saves) ? result.saves : [],
+      });
+      try {
+        window.__LAST_HANDOFF_MATRIX_PROBE_SUITE = {
+          phase: 'completed_scenario',
+          scenarioIndex: i + 1,
+          scenarioCount: scenarios.length,
+          scenarioId: scenario.id,
+          label: scenario.label,
+          result,
+          suiteOutcomes,
+        };
+      } catch {}
+      if (result?.ok !== true) {
+        setStatus(`Handoff matrix probe stopped at ${scenario.label}`);
+        setOutput({
+          ok: false,
+          scenarioId: scenario.id,
+          label: scenario.label,
+          reason: String(result?.reason || 'probe_failed'),
+          suiteOutcomes,
+        });
+        return { ok: false, scenarioId: scenario.id, reason: String(result?.reason || 'probe_failed'), suiteOutcomes };
+      }
+      setOutput({
+        ok: true,
+        phase: 'scenario-complete',
+        scenarioIndex: i + 1,
+        scenarioCount: scenarios.length,
+        scenarioId: scenario.id,
+        label: scenario.label,
+        suiteOutcomes,
+      });
+      await sleepPerfLabMs(250);
+    }
+    let groupedScenario = null;
+    try {
+      groupedScenario = await publishGroupedMusicLabScenarioBundle({
+        scenarioName: 'handoff_matrix_probe_suite',
+        runId: 'musicLab_handoff_matrix_probe_suite',
+        notes: 'Grouped scenario bundle for expanded handoff matrix probe suite.',
+        stageCount: 4,
+        durationMs: scenarios.reduce((sum, scenario) => sum + Math.max(15000, Number(scenario.durationMs) || 45000), 0),
+        repeatCount: suiteOutcomes.length,
+        runOutcomes: suiteOutcomes.flatMap((scenario, idx) => {
+          const saves = Array.isArray(scenario.saves) ? scenario.saves : [];
+          return saves.map((save) => ({
+            runIndex: Math.max(1, Math.trunc(Number(save?.runIndex) || (idx + 1))),
+            runId: String(save?.runId || ''),
+            saved: !!save?.saved,
+            reason: String(save?.reason || ''),
+            sessionId: String(save?.sessionId || ''),
+            events: Math.max(0, Number(save?.events) || 0),
+            sessionSummary: (save?.sessionSummary && typeof save.sessionSummary === 'object') ? save.sessionSummary : null,
+          }));
+        }),
+      });
+    } catch {}
+    setStatus('Handoff matrix probe suite complete');
+    setOutput({
+      ok: true,
+      scenarioCount: scenarios.length,
+      suiteOutcomes,
+      groupedScenario,
+    });
+    try {
+      window.__LAST_HANDOFF_MATRIX_PROBE_SUITE = {
+        phase: 'suite_complete',
+        scenarioCount: scenarios.length,
+        suiteOutcomes,
+        groupedScenario,
+      };
+    } catch {}
+    return { ok: true, scenarioCount: scenarios.length, suiteOutcomes, groupedScenario };
+  } finally {
+    restoreMusicForcedProbeHandoffOverrideState(previousForcedProbeHandoffState);
+    restoreMusicForcedHandoffReceiverSlotOverrideState(previousForcedReceiverSlotState);
+    restoreMusicHandoffSlotPreferenceOverrideState(previousHandoffPreferenceState);
+    restoreMusicLaneCarrierPolicyOverrideState(previousLanePolicyState);
+  }
 }
 
 async function runBS0a() {

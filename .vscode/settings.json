@@ -1,6 +1,8 @@
 {
   "liveServer.settings.ignoreFiles": [
     "resources/perf-lab-results.json",
-    "resources/perf-lab-results-*.json"
+    "resources/perf-lab-results-*.json",
+    "resources/music-lab-results/*.json",
+    "resources/music-lab-results-*.json"
   ]
 }

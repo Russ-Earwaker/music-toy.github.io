@@ -397,12 +397,21 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       && getIntroSlotProfileSourceType(group) === normalized
     ));
   };
-  const getIntroRhythmCarrierBodyType = (profileSourceType = '') => {
+  const INTRO_SLOT_BODY_POLICY = Object.freeze({
+    spawner_rhythm_pulse: Object.freeze(['group']),
+    spawner_rhythm_backbeat: Object.freeze(['group', 'solo']),
+    spawner_rhythm_motion: Object.freeze(['solo']),
+  });
+  const getEligibleIntroRhythmCarrierBodyTypes = (profileSourceType = '') => {
     const normalized = String(profileSourceType || '').trim().toLowerCase();
-    if (normalized === 'spawner_rhythm_pulse') return 'group';
-    if (normalized === 'spawner_rhythm_backbeat') return 'group';
-    if (normalized === 'spawner_rhythm_motion') return 'solo';
-    return 'solo';
+    const eligible = INTRO_SLOT_BODY_POLICY[normalized];
+    return Array.isArray(eligible) && eligible.length ? eligible.slice() : ['solo'];
+  };
+  const chooseIntroRhythmCarrierBodyType = (profileSourceType = '') => {
+    const eligible = getEligibleIntroRhythmCarrierBodyTypes(profileSourceType);
+    if (eligible.length <= 1) return String(eligible[0] || 'solo').trim().toLowerCase();
+    const seed = Math.max(0, Math.trunc(Number(sessionSeed) || 0));
+    return String(eligible[seed % eligible.length] || eligible[0] || 'solo').trim().toLowerCase();
   };
   const composer = helpers.getComposerDirective?.() || {};
   const motifScopeKey = helpers.getComposerMotifScopeKey?.() || '';
@@ -659,7 +668,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           const introSecondaryRhythmCarrierActive = introRhythmProfileSourceType === 'spawner_rhythm_backbeat';
           if (introStageSoloRhythmActive && !introRhythmProfileSourceType) return null;
           const introRhythmCarrierBodyType = introStageSoloRhythmActive
-            ? getIntroRhythmCarrierBodyType(introRhythmProfileSourceType)
+            ? chooseIntroRhythmCarrierBodyType(introRhythmProfileSourceType)
             : '';
           const introRhythmUsesGroupBody = introStageSoloRhythmActive && introRhythmCarrierBodyType === 'group';
           const visualSoloCarrierType = introRhythmUsesGroupBody ? '' : soloCarrierType;
