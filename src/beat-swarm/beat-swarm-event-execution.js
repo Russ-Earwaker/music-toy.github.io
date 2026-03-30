@@ -329,6 +329,7 @@ export function executePerformedBeatEventRuntime(options = null) {
   };
   const hasExplicitOctave = (noteLike) => /^([A-Ga-g])([#b]?)(-?\d+)$/.test(String(noteLike || '').trim());
   const enemyForAction = helpers.getSwarmEnemyById?.(ev.actorId) || null;
+  const composerEnemyGroups = Array.isArray(state?.composerEnemyGroups) ? state.composerEnemyGroups : [];
   const noteSlotSpawnerExecutionReason = (enemyLike, payload = null) => {
     const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
     const musicVoiceKey = String(enemy?.musicVoiceKey || ev?.payload?.musicVoiceKey || '').trim().toLowerCase();
@@ -775,7 +776,48 @@ export function executePerformedBeatEventRuntime(options = null) {
 
   if (actionType === 'composer-group-projectile' || actionType === 'composer-group-explosion') {
     return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.composer', () => {
-    const enemy = helpers.getSwarmEnemyById?.(ev.actorId);
+    let enemy = helpers.getSwarmEnemyById?.(ev.actorId);
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const ghostPlayback = payload?.ghostPlayback === true;
+    const payloadGroupId = Math.max(0, Math.trunc(Number(payload?.groupId) || 0));
+    const noteComposerExecutionStage = (stage, extra = null) => {
+      try {
+        helpers.noteMusicSystemEvent?.('music_composer_execution_stage', {
+          stage: String(stage || '').trim().toLowerCase(),
+          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
+          groupId: payloadGroupId,
+          actionType,
+          ghostPlayback,
+          enemyType: String(enemy?.enemyType || '').trim().toLowerCase(),
+          hasEnemy: !!enemy,
+          hasEnemyEl: !!(enemy?.el instanceof HTMLElement),
+          hasGroup: false,
+          instrumentId: String(ev?.instrumentId || '').trim(),
+          note: String(ev?.note || payload?.requestedNoteRaw || '').trim(),
+          musicLayer: String(payload?.musicLayer || '').trim().toLowerCase(),
+          callResponseLane: String(payload?.callResponseLane || '').trim().toLowerCase(),
+          ...(extra && typeof extra === 'object' ? extra : {}),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    };
+    const noteIntroSlotExecution = (phase, extra = null) => {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      if (!(barIndex <= 20) || !(payloadGroupId > 0)) return;
+      try {
+        helpers.noteMusicSystemEvent?.('music_composer_group_state', {
+          phase: String(phase || 'execute').trim().toLowerCase(),
+          groupId: payloadGroupId,
+          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
+          role: String(ev?.role || payload?.musicRole || '').trim().toLowerCase(),
+          musicLaneId: String(payload?.musicLaneId || payload?.foundationLaneId || '').trim().toLowerCase(),
+          instrumentId: String(ev?.instrumentId || '').trim(),
+          note: String(ev?.note || payload?.requestedNoteRaw || '').trim(),
+          reason: String(payload?.soloCarrierType || '').trim().toLowerCase(),
+          stage: String(phase || 'execute').trim().toLowerCase(),
+          ...(extra && typeof extra === 'object' ? extra : {}),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    };
     const payloadSoloCarrierType = String(ev?.payload?.soloCarrierType || '').trim().toLowerCase();
     const isSquareCandidate = payloadSoloCarrierType === 'rhythm'
       || (
@@ -798,8 +840,18 @@ export function executePerformedBeatEventRuntime(options = null) {
         }));
       }
     } catch {}
-    if (!enemy || String(enemy?.enemyType || '') !== 'composer-group-member') return false;
-    const group = helpers.getEnemyMusicGroup?.(enemy, actionType);
+    if ((!enemy || String(enemy?.enemyType || '') !== 'composer-group-member') && !ghostPlayback) {
+      noteComposerExecutionStage('missing_enemy', {
+        failureReason: !enemy ? 'missing_enemy' : 'wrong_enemy_type',
+      });
+      noteIntroSlotExecution('execute_missing_enemy', {
+        admissionReason: !enemy ? 'missing_enemy' : 'wrong_enemy_type',
+      });
+      return false;
+    }
+    const group = ghostPlayback
+      ? (composerEnemyGroups.find((g) => Math.max(0, Math.trunc(Number(g?.id) || 0)) === payloadGroupId) || null)
+      : helpers.getEnemyMusicGroup?.(enemy, actionType);
     try {
       if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
         globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
@@ -812,7 +864,22 @@ export function executePerformedBeatEventRuntime(options = null) {
         }));
       }
     } catch {}
-    if (!group) return false;
+    if (!group) {
+      noteComposerExecutionStage('missing_group', {
+        failureReason: 'missing_group',
+      });
+      noteIntroSlotExecution('execute_missing_group', {
+        admissionReason: 'missing_group',
+      });
+      return false;
+    }
+    noteComposerExecutionStage('entered', {
+      hasGroup: true,
+      instrumentId: String(group?.instrumentId || ev?.instrumentId || '').trim(),
+    });
+    noteIntroSlotExecution('execute_entered', {
+      admissionReason: '',
+    });
     const aggressionScale = helpers.getEnemyAggressionScale?.(enemy, group?.lifecycleState || 'active');
     const requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
     let noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
@@ -846,7 +913,7 @@ export function executePerformedBeatEventRuntime(options = null) {
         || group?.soloCarrierType
         || ''
     ).trim().toLowerCase();
-    if (execSoloType && !String(enemy?.soloCarrierType || '').trim()) {
+    if (enemy && execSoloType && !String(enemy?.soloCarrierType || '').trim()) {
       enemy.soloCarrierType = execSoloType;
     }
     group.instrumentId = instrumentId;
@@ -870,9 +937,9 @@ export function executePerformedBeatEventRuntime(options = null) {
       * (Number(audioGain) || 0)
       * prominenceGain
       * (0.72 + ((Number(aggressionScale) || 0) * 0.28));
-    helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
-    noteExecutedInstrumentChange(instrumentId, enemy, group);
-    helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
+    if (enemy) helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
+    noteExecutedInstrumentChange(instrumentId, enemy || null, group);
+    if (enemy) helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
     if (enemyAudible) {
       try {
         if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
@@ -887,9 +954,51 @@ export function executePerformedBeatEventRuntime(options = null) {
         }
       } catch {}
       try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
+      noteComposerExecutionStage('audio_triggered', {
+        hasGroup: true,
+        instrumentId: String(instrumentId || '').trim(),
+        note: String(noteName || '').trim(),
+        triggerVolume: Number(triggerVolume) || 0,
+      });
+    } else {
+      noteComposerExecutionStage('audio_suppressed', {
+        hasGroup: true,
+        instrumentId: String(instrumentId || '').trim(),
+        note: String(noteName || '').trim(),
+        musicProminence: String(musicProminence || '').trim().toLowerCase(),
+        triggerVolume: Number(triggerVolume) || 0,
+      });
+    }
+    if (ghostPlayback) {
+      logMusicLabExecution({
+        sourceSystem: 'group',
+        requestedNote,
+        resolvedNote: noteName,
+        noteWasClamped: requestedNote ? requestedNote !== noteName : false,
+        enemyAudible,
+        musicProminence,
+        enemyType: 'composer-group-member',
+        ghostPlayback: true,
+        ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
+      });
+      noteComposerExecutionStage('completed_ghost', {
+        hasGroup: true,
+        instrumentId: String(instrumentId || '').trim(),
+        note: String(noteName || '').trim(),
+      });
+      noteIntroSlotExecution('execute_completed', {
+        admissionReason: 'ghost_playback',
+      });
+      return true;
     }
     helpers.pulseHitFlash?.(enemy.el);
     helpers.pulseSoloCarrierActivationVisual?.(enemy);
+    noteComposerExecutionStage('visual_triggered', {
+      hasGroup: true,
+      hasEnemyEl: !!(enemy?.el instanceof HTMLElement),
+      instrumentId: String(instrumentId || '').trim(),
+      note: String(noteName || '').trim(),
+    });
     if (execSoloType === 'rhythm') {
       const directPulseDur = Math.max(
         0.22,
@@ -921,6 +1030,11 @@ export function executePerformedBeatEventRuntime(options = null) {
     const origin = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
     if (actionType === 'composer-group-explosion') {
       helpers.addHostileRedExplosionEffect?.(origin);
+      noteComposerExecutionStage('explosion_triggered', {
+        hasGroup: true,
+        instrumentId: String(instrumentId || '').trim(),
+        note: String(noteName || '').trim(),
+      });
     } else {
       const toPlayer = helpers.getViewportCenterWorld?.();
       const dir = Math.atan2((Number(toPlayer?.y) || 0) - origin.y, (Number(toPlayer?.x) || 0) - origin.x);
@@ -931,6 +1045,11 @@ export function executePerformedBeatEventRuntime(options = null) {
         instrument: instrumentId,
         damage: Math.max(0.2, aggressionScale),
       });
+      noteComposerExecutionStage('projectile_triggered', {
+        hasGroup: true,
+        instrumentId: String(instrumentId || '').trim(),
+        note: String(noteName || '').trim(),
+      });
     }
     logMusicLabExecution({
       sourceSystem: 'group',
@@ -939,6 +1058,14 @@ export function executePerformedBeatEventRuntime(options = null) {
       noteWasClamped: requestedNote ? requestedNote !== noteName : false,
       enemyAudible,
       musicProminence,
+    });
+    noteComposerExecutionStage('completed', {
+      hasGroup: true,
+      instrumentId: String(instrumentId || '').trim(),
+      note: String(noteName || '').trim(),
+    });
+    noteIntroSlotExecution('execute_completed', {
+      admissionReason: '',
     });
     return true;
   });

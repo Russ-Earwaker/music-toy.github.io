@@ -98,10 +98,17 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const soloCarrierType = String(g?.soloCarrierType || '').trim().toLowerCase();
     return soloCarrierType === 'rhythm' || soloCarrierType === 'melody';
   });
+  const hasIntroSlotRhythmCarrier = composerEnemyGroups.some((g) => {
+    if (!g || !g.active || g.retiring) return false;
+    const profile = String(g?.introSlotProfileSourceType || g?.musicProfileSourceType || '').trim().toLowerCase();
+    return profile === 'spawner_rhythm_pulse'
+      || profile === 'spawner_rhythm_backbeat'
+      || profile === 'spawner_rhythm_motion';
+  });
   const getCurrentPacingCaps = typeof options?.getCurrentPacingCaps === 'function' ? options.getCurrentPacingCaps : (() => ({ responseMode: 'none' }));
   const pacingCaps = getCurrentPacingCaps();
   const responseMode = String(pacingCaps?.responseMode || 'none');
-  if ((responseMode === 'none' || responseMode === 'drawsnake') && !hasIntroPercussionCarrier && !hasSoloCarrier) return events;
+  if ((responseMode === 'none' || responseMode === 'drawsnake') && !hasIntroPercussionCarrier && !hasSoloCarrier && !hasIntroSlotRhythmCarrier) return events;
 
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const stepIndex = Math.trunc(Number(options?.stepIndex) || 0);
@@ -213,15 +220,61 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const lifecycleState = normalizeLifecycleState(group?.lifecycleState, 'active');
     if (lifecycleState === 'retiring') continue;
     const introPercussionCarrier = group?.introPercussionCarrier === true;
+    const introStageCarrier = group?.introStageCarrier === true;
     const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
-    const musicProfileSourceType = String(group?.musicProfileSourceType || '').trim().toLowerCase();
+    const introSlotProfileSourceType = String(group?.introSlotProfileSourceType || '').trim().toLowerCase();
+    const introSlotIdentityLocked = group?.introSlotLock === true
+      && Math.max(-1, Math.trunc(Number(group?.introSlotLockUntilBar) || -1)) >= barIndex;
+    const introSlotIdentityActive = introSlotProfileSourceType === 'spawner_rhythm_pulse'
+      || introSlotProfileSourceType === 'spawner_rhythm_backbeat'
+      || introSlotProfileSourceType === 'spawner_rhythm_motion';
+    const musicProfileSourceType = (introSlotIdentityActive
+      ? (introSlotProfileSourceType || group?.musicProfileSourceType)
+      : group?.musicProfileSourceType) || '';
     const soloRhythmCarrier = soloCarrierType === 'rhythm';
-    const rhythmProfileCarrier = musicProfileSourceType === 'spawner_rhythm';
+    const rhythmProfileCarrier = musicProfileSourceType === 'spawner_rhythm'
+      || musicProfileSourceType === 'spawner_rhythm_secondary'
+      || musicProfileSourceType === 'spawner_rhythm_pulse'
+      || musicProfileSourceType === 'spawner_rhythm_backbeat'
+      || musicProfileSourceType === 'spawner_rhythm_motion';
+    const rhythmPulseCarrier = musicProfileSourceType === 'spawner_rhythm_pulse';
+    const rhythmBackbeatCarrier = musicProfileSourceType === 'spawner_rhythm_backbeat';
+    const rhythmMotionCarrier = musicProfileSourceType === 'spawner_rhythm_motion';
+    const slotRhythmCarrier = rhythmPulseCarrier || rhythmBackbeatCarrier || rhythmMotionCarrier;
     const melodyProfileCarrier = musicProfileSourceType === 'snake_melody';
     const rhythmPercussionCarrier = introPercussionCarrier || rhythmProfileCarrier;
     const isSoloCarrier = soloCarrierType === 'rhythm' || soloCarrierType === 'melody';
-    const lane = isSoloCarrier ? 'solo' : normalizeCallResponseLane(group?.callResponseLane, 'call');
+    const lockedIntroLane = introSlotIdentityActive
+      ? normalizeCallResponseLane(group?.introSlotCallResponseLane || group?.callResponseLane, 'solo')
+      : '';
+    const lane = introSlotIdentityActive
+      ? lockedIntroLane
+      : (isSoloCarrier ? 'solo' : normalizeCallResponseLane(group?.callResponseLane, 'call'));
     const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+    const noteIntroCollectorState = (phase, extra = null) => {
+      if (!noteMusicSystemEvent || !slotRhythmCarrier || barIndex > 20) return;
+      noteMusicSystemEvent('music_composer_group_state', {
+        phase: String(phase || 'collector').trim().toLowerCase(),
+        groupId,
+        role: String(group?.role || '').trim().toLowerCase(),
+        musicLaneId: String(group?.musicLaneId || group?.introSlotMusicLaneId || '').trim().toLowerCase(),
+        instrumentId: String(group?.instrumentId || group?.introSlotInstrumentId || '').trim(),
+        note: Array.isArray(group?.introSlotNotes) && group.introSlotNotes.length
+          ? String(group.introSlotNotes[0] || '').trim()
+          : (Array.isArray(group?.notes) && group.notes.length ? String(group.notes[0] || '').trim() : ''),
+        reason: String(musicProfileSourceType || '').trim().toLowerCase(),
+        stage: Array.isArray(group?.introSlotSteps) && group.introSlotSteps.length
+          ? group.introSlotSteps.map((stepOn) => (stepOn ? '1' : '0')).join('')
+          : (Array.isArray(group?.steps) ? group.steps.map((stepOn) => (stepOn ? '1' : '0')).join('') : ''),
+        callResponseLane: String(lane || '').trim().toLowerCase(),
+        lifecycleState,
+        ...(extra && typeof extra === 'object' ? extra : {}),
+      }, {
+        beatIndex,
+        stepIndex: stepAbs,
+        barIndex,
+      });
+    };
     const noteResponseDiagnostic = (reason, extra = null) => {
       if (lane !== 'response' || !noteMusicSystemEvent) return;
       noteMusicSystemEvent('music_call_response_response_group_state', {
@@ -255,7 +308,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     let responseOverrideHit = false;
     let hasLiveCallWindow = false;
     let sinceCall = -1;
-    let laneActive = (isSoloCarrier || introPercussionCarrier) ? true : isCallResponseLaneActive(lane, stepAbs, activeGroups.length);
+    let laneActive = (isSoloCarrier || introPercussionCarrier || slotRhythmCarrier)
+      ? true
+      : isCallResponseLaneActive(lane, stepAbs, activeGroups.length);
     if (!isSoloCarrier && lane === 'response') {
       const lastCallStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1));
       sinceCall = lastCallStep >= 0 ? (stepAbs - lastCallStep) : -1;
@@ -271,6 +326,20 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       if (!laneActive && directorWantsAnswerGroup && hasLiveCallWindow) laneActive = true;
     }
     if (!laneActive) {
+      noteIntroCollectorState('collector_suppressed', { admissionReason: 'lane_inactive' });
+      if (slotRhythmCarrier) {
+        const introSlotSuppressedPayload = {
+          reason: 'lane_inactive',
+          groupId,
+          stepIndex: stepAbs,
+          beatIndex,
+          slotProfile: musicProfileSourceType,
+          musicLaneId: String(group?.musicLaneId || '').trim().toLowerCase(),
+          callResponseLane: lane,
+        };
+        if (noteIntroDebug) noteIntroDebug('intro_slot_rhythm_suppressed', introSlotSuppressedPayload);
+        noteMusicSystemEvent?.('music_intro_slot_suppressed', introSlotSuppressedPayload, { beatIndex, stepIndex: stepAbs, barIndex });
+      }
       noteCallDiagnostic('lane_inactive');
       noteResponseDiagnostic('lane_inactive', lane === 'response'
         ? {
@@ -346,14 +415,73 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       );
     }
 
-    const stepActive = Array.isArray(group.steps) && !!group.steps[step];
+    const lockedIntroSteps = introSlotIdentityActive && Array.isArray(group?.introSlotSteps)
+      ? group.introSlotSteps
+      : null;
+    if (slotRhythmCarrier && barIndex <= 20) {
+      const introSlotStatePayload = {
+        groupId,
+        barIndex,
+        beatIndex,
+        stepIndex: stepAbs,
+        lifecycleState,
+        soloCarrierType,
+        musicProfileSourceType,
+        introSlotProfileSourceType,
+        introSlotIdentityLocked,
+        introSlotIdentityActive,
+        callResponseLane: lane,
+        musicLaneId: String(group?.musicLaneId || '').trim().toLowerCase(),
+        introSlotMusicLaneId: String(group?.introSlotMusicLaneId || '').trim().toLowerCase(),
+        liveSteps: Array.isArray(group?.steps) ? group.steps.map((v) => !!v) : [],
+        introSteps: Array.isArray(group?.introSlotSteps) ? group.introSlotSteps.map((v) => !!v) : [],
+        liveNotes: Array.isArray(group?.notes) ? group.notes.slice() : [],
+        introNotes: Array.isArray(group?.introSlotNotes) ? group.introSlotNotes.slice() : [],
+        memberCount: Array.isArray(group?.memberIds)
+          ? group.memberIds.length
+          : (group?.memberIds instanceof Set ? group.memberIds.size : 0),
+      };
+      if (noteIntroDebug) noteIntroDebug('intro_slot_state', introSlotStatePayload);
+      noteMusicSystemEvent?.('music_intro_slot_state', introSlotStatePayload, { beatIndex, stepIndex: stepAbs, barIndex });
+    }
+    const stepActive = Array.isArray(lockedIntroSteps)
+      ? !!lockedIntroSteps[step]
+      : (Array.isArray(group.steps) && !!group.steps[step]);
     if (!stepActive && !responseOverrideHit) {
+      noteIntroCollectorState('collector_suppressed', { admissionReason: 'step_inactive' });
+      if (slotRhythmCarrier) {
+        const introSlotSuppressedPayload = {
+          reason: 'step_inactive',
+          groupId,
+          stepIndex: stepAbs,
+          beatIndex,
+          slotProfile: musicProfileSourceType,
+          musicLaneId: String(group?.musicLaneId || '').trim().toLowerCase(),
+        };
+        if (noteIntroDebug) noteIntroDebug('intro_slot_rhythm_suppressed', introSlotSuppressedPayload);
+        noteMusicSystemEvent?.('music_intro_slot_suppressed', introSlotSuppressedPayload, { beatIndex, stepIndex: stepAbs, barIndex });
+      }
       noteCallDiagnostic('step_inactive');
       noteResponseDiagnostic('step_inactive');
       continue;
     }
-    const phraseRestUntilStepAbs = Math.max(-1, Math.trunc(Number(group?.__bsPhraseRestUntilStep) || -1));
+    const phraseRestUntilStepAbs = slotRhythmCarrier
+      ? -1
+      : Math.max(-1, Math.trunc(Number(group?.__bsPhraseRestUntilStep) || -1));
     if (phraseRestUntilStepAbs >= stepAbs) {
+      noteIntroCollectorState('collector_suppressed', { admissionReason: 'post_cadence_rest' });
+      if (slotRhythmCarrier) {
+        const introSlotSuppressedPayload = {
+          reason: 'post_cadence_rest',
+          groupId,
+          stepIndex: stepAbs,
+          beatIndex,
+          slotProfile: musicProfileSourceType,
+          restUntilStepAbs: phraseRestUntilStepAbs,
+        };
+        if (noteIntroDebug) noteIntroDebug('intro_slot_rhythm_suppressed', introSlotSuppressedPayload);
+        noteMusicSystemEvent?.('music_intro_slot_suppressed', introSlotSuppressedPayload, { beatIndex, stepIndex: stepAbs, barIndex });
+      }
       if (introPercussionCarrier && noteIntroDebug) {
         noteIntroDebug('intro_percussion_suppressed', {
           reason: 'post_cadence_rest',
@@ -373,6 +501,112 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       return tailUntilStep >= stepAbs;
     });
     if (!aliveMembers.length) {
+      const canGhostCarry = slotRhythmCarrier && introSlotIdentityActive;
+      if (canGhostCarry) {
+        const lockedRole = normalizeSwarmRole(
+          group?.introSlotRole || group?.role || (rhythmPulseCarrier ? roles.bass : roles.accent),
+          rhythmPulseCarrier ? roles.bass : roles.accent
+        );
+        const lockedLaneId = String(group?.introSlotMusicLaneId || group?.musicLaneId || '').trim().toLowerCase();
+        const lockedInstrumentIdRaw = String(
+          group?.introSlotInstrumentId
+            || group?.instrumentId
+            || group?.instrument
+            || ''
+        ).trim();
+        const lockedInstrumentLane = inferInstrumentLaneFromCatalogId(lockedInstrumentIdRaw, '');
+        const lockedResolvedRole = lockedInstrumentLane === 'bass'
+          ? 'bass'
+          : normalizeSwarmRole(lockedRole || roles.lead, roles.lead);
+        const lockedInstrumentId = lockedInstrumentIdRaw || resolveSwarmRoleInstrumentId(
+          lockedResolvedRole,
+          resolveSwarmSoundInstrumentId('projectile') || 'tone'
+        );
+        const lockedNoteName = normalizeSwarmNoteName(
+          Array.isArray(group?.introSlotNotes) && group.introSlotNotes.length
+            ? group.introSlotNotes[0]
+            : (Array.isArray(group?.notes) && group.notes.length ? group.notes[0] : '')
+        ) || getRandomSwarmPentatonicNote();
+        const lockedThreatClass = (() => {
+          const t = String(group?.threatLevel || threat.full || 'full').trim().toLowerCase();
+          if (t === String(threat.cosmetic || 'cosmetic')) return String(threat.cosmetic || 'cosmetic');
+          if (t === String(threat.light || 'light')) return String(threat.light || 'light');
+          return String(threat.full || 'full');
+        })();
+        const lockedMusicVoiceKey = rhythmPulseCarrier
+          ? 'percussion_pulse'
+          : (rhythmBackbeatCarrier ? 'percussion_backbeat' : (rhythmMotionCarrier ? 'percussion_motion' : ''));
+        const lockedMusicLayer = rhythmPulseCarrier
+          ? 'foundation'
+          : (rhythmMotionCarrier ? 'sparkle' : 'loops');
+        noteIntroCollectorState('collector_emit_strict', {
+          actorId: 0,
+          requestedNote: lockedNoteName,
+          admissionReason: 'ghost_playback',
+        });
+        events.push(createPerformedBeatEvent({
+          actorId: 0,
+          beatIndex,
+          stepIndex: stepAbs,
+          role: lockedInstrumentLane === 'bass' ? 'bass' : lockedResolvedRole,
+          note: lockedNoteName,
+          instrumentId: lockedInstrumentId,
+          actionType: String(group?.introSlotActionType || group?.actionType || 'explosion') === 'explosion'
+            ? 'composer-group-explosion'
+            : 'composer-group-projectile',
+          threatClass: lockedThreatClass,
+          visualSyncType: 'group-pulse',
+          payload: {
+            groupId,
+            ghostPlayback: true,
+            groupEventSource: 'intro_slot_strict',
+            continuityId: String(group?.continuityId || '').trim(),
+            musicVoiceKey: lockedMusicVoiceKey,
+            musicRole: lockedInstrumentLane === 'bass' ? 'bass' : lockedResolvedRole,
+            musicLayer: lockedMusicLayer,
+            musicProminence: 'full',
+            introDrumProtected: rhythmBackbeatCarrier || rhythmMotionCarrier,
+            soloCarrierType,
+            musicLaneId: lockedLaneId,
+            callResponseLane: lockedIntroLane || lane || 'solo',
+            callResponseQualified: true,
+            callResponsePhraseProgress: 0,
+            musicRegister: rhythmPulseCarrier ? 'low' : 'mid',
+            audioGain: 1,
+            requestedNoteRaw: lockedNoteName,
+            phraseGravityTarget: '',
+            phraseGravityHit: false,
+            phraseResolutionOpportunity: false,
+            phraseResolutionHit: false,
+          },
+        }));
+        const introSlotGhostPayload = {
+          groupId,
+          stepIndex: stepAbs,
+          beatIndex,
+          slotProfile: musicProfileSourceType,
+          note: lockedNoteName,
+          instrumentId: lockedInstrumentId,
+          musicLaneId: lockedLaneId,
+          callResponseLane: lockedIntroLane || lane || 'solo',
+          reason: 'ghost_playback',
+        };
+        if (noteIntroDebug) noteIntroDebug('intro_slot_strict_emit', introSlotGhostPayload);
+        noteMusicSystemEvent?.('music_intro_slot_strict_emit', introSlotGhostPayload, { beatIndex, stepIndex: stepAbs, barIndex });
+        continue;
+      }
+      noteIntroCollectorState('collector_suppressed', { admissionReason: 'no_alive_members' });
+      if (slotRhythmCarrier) {
+        const introSlotSuppressedPayload = {
+          reason: 'no_alive_members',
+          groupId,
+          stepIndex: stepAbs,
+          beatIndex,
+          slotProfile: musicProfileSourceType,
+        };
+        if (noteIntroDebug) noteIntroDebug('intro_slot_rhythm_suppressed', introSlotSuppressedPayload);
+        noteMusicSystemEvent?.('music_intro_slot_suppressed', introSlotSuppressedPayload, { beatIndex, stepIndex: stepAbs, barIndex });
+      }
       if (introPercussionCarrier && noteIntroDebug) {
         noteIntroDebug('intro_percussion_suppressed', {
           reason: 'no_alive_members',
@@ -385,12 +619,135 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       continue;
     }
 
-    const groupRole = normalizeSwarmRole(group?.role || roles.lead, roles.lead);
+    if (introSlotIdentityActive && slotRhythmCarrier) {
+      const lockedRole = normalizeSwarmRole(
+        group?.introSlotRole || group?.role || (rhythmPulseCarrier ? roles.bass : roles.accent),
+        rhythmPulseCarrier ? roles.bass : roles.accent
+      );
+      const lockedLaneId = String(group?.introSlotMusicLaneId || group?.musicLaneId || '').trim().toLowerCase();
+      const lockedInstrumentIdRaw = String(
+        group?.introSlotInstrumentId
+          || group?.instrumentId
+          || group?.instrument
+          || aliveMembers[0]?.composerInstrument
+          || aliveMembers[0]?.musicLaneInstrumentId
+          || ''
+      ).trim();
+      const lockedInstrumentLane = inferInstrumentLaneFromCatalogId(lockedInstrumentIdRaw, '');
+      const lockedResolvedRole = lockedInstrumentLane === 'bass'
+        ? 'bass'
+        : normalizeSwarmRole(lockedRole || getSwarmRoleForEnemy(aliveMembers[0], roles.lead), roles.lead);
+      const lockedInstrumentId = lockedInstrumentIdRaw || resolveSwarmRoleInstrumentId(
+        lockedResolvedRole,
+        resolveSwarmSoundInstrumentId('projectile') || 'tone'
+      );
+      const lockedNoteName = normalizeSwarmNoteName(
+        Array.isArray(group?.introSlotNotes) && group.introSlotNotes.length
+          ? group.introSlotNotes[0]
+          : (Array.isArray(group?.notes) && group.notes.length ? group.notes[0] : '')
+      ) || getRandomSwarmPentatonicNote();
+      const lockedPerformer = chooseEnemyForNote({
+        group,
+        noteName: lockedNoteName,
+        aliveMembers,
+        normalizeNoteName: normalizeSwarmNoteName,
+        getFallbackNote: getRandomSwarmPentatonicNote,
+      }) || aliveMembers[0] || null;
+      if (!lockedPerformer) continue;
+      noteIntroCollectorState('collector_emit_strict', {
+        actorId: Math.max(0, Math.trunc(Number(lockedPerformer?.id) || 0)),
+        requestedNote: lockedNoteName,
+      });
+      const lockedThreatClass = (() => {
+        const t = String(group?.threatLevel || threat.full || 'full').trim().toLowerCase();
+        if (t === String(threat.cosmetic || 'cosmetic')) return String(threat.cosmetic || 'cosmetic');
+        if (t === String(threat.light || 'light')) return String(threat.light || 'light');
+        return String(threat.full || 'full');
+      })();
+      const lockedMusicVoiceKey = rhythmPulseCarrier
+        ? 'percussion_pulse'
+        : (rhythmBackbeatCarrier ? 'percussion_backbeat' : (rhythmMotionCarrier ? 'percussion_motion' : ''));
+      const lockedMusicLayer = rhythmPulseCarrier
+        ? 'foundation'
+        : (rhythmMotionCarrier ? 'sparkle' : 'loops');
+      const lockedProminence = 'full';
+      group.__bsPhraseRestUntilStep = -1;
+      events.push(createPerformedBeatEvent({
+        actorId: Math.max(0, Math.trunc(Number(lockedPerformer?.id) || 0)),
+        beatIndex,
+        stepIndex: stepAbs,
+        role: lockedInstrumentLane === 'bass' ? 'bass' : lockedResolvedRole,
+        note: lockedNoteName,
+        instrumentId: lockedInstrumentId,
+        actionType: String(group?.introSlotActionType || group?.actionType || 'explosion') === 'explosion'
+          ? 'composer-group-explosion'
+          : 'composer-group-projectile',
+        threatClass: lockedThreatClass,
+        visualSyncType: 'group-pulse',
+        payload: {
+          groupId,
+          groupEventSource: 'intro_slot_strict',
+          continuityId: String(group?.continuityId || '').trim(),
+          musicVoiceKey: lockedMusicVoiceKey,
+          musicRole: lockedInstrumentLane === 'bass' ? 'bass' : lockedResolvedRole,
+          musicLayer: lockedMusicLayer,
+          musicProminence: lockedProminence,
+          introDrumProtected: rhythmBackbeatCarrier || rhythmMotionCarrier,
+          soloCarrierType,
+          musicLaneId: lockedLaneId,
+          callResponseLane: lockedIntroLane || lane || 'solo',
+          callResponseQualified: true,
+          callResponsePhraseProgress: 0,
+          musicRegister: rhythmPulseCarrier ? 'low' : 'mid',
+          audioGain: 1,
+          requestedNoteRaw: lockedNoteName,
+          phraseGravityTarget: '',
+          phraseGravityHit: false,
+          phraseResolutionOpportunity: false,
+          phraseResolutionHit: false,
+        },
+      }));
+      if (slotRhythmCarrier) {
+        const introSlotEmitPayload = {
+          groupId,
+          stepIndex: stepAbs,
+          beatIndex,
+          performerCount: 1,
+          instrumentId: lockedInstrumentId,
+          note: lockedNoteName,
+          slotProfile: musicProfileSourceType,
+          musicLaneId: lockedLaneId,
+        };
+        if (noteIntroDebug) noteIntroDebug('intro_slot_rhythm_emitted', introSlotEmitPayload);
+        const introSlotStrictPayload = {
+          groupId,
+          stepIndex: stepAbs,
+          beatIndex,
+          slotProfile: musicProfileSourceType,
+          note: lockedNoteName,
+          instrumentId: lockedInstrumentId,
+          musicLaneId: lockedLaneId,
+          callResponseLane: lockedIntroLane || lane || 'solo',
+        };
+        if (noteIntroDebug) noteIntroDebug('intro_slot_strict_emit', introSlotStrictPayload);
+        noteMusicSystemEvent?.('music_intro_slot_strict_emit', introSlotStrictPayload, { beatIndex, stepIndex: stepAbs, barIndex });
+      }
+      continue;
+    }
+
+    const groupRole = normalizeSwarmRole(
+      introSlotIdentityActive ? (group?.introSlotRole || group?.role || roles.lead) : (group?.role || roles.lead),
+      roles.lead
+    );
     const isBassRole = groupRole === String(roles?.bass || 'bass');
-    const groupLaneId = String(group?.musicLaneId || '').trim().toLowerCase();
+    const groupLaneId = String(
+      introSlotIdentityActive
+        ? (group?.introSlotMusicLaneId || group?.musicLaneId || '')
+        : (group?.musicLaneId || '')
+    ).trim().toLowerCase();
     const isPrimaryLoopOwnerGroup = groupLaneId === 'primary_loop_lane';
     const isFoundationBufferGroup = String(group?.sectionId || '').trim().toLowerCase() === 'foundation-buffer';
-    if (laneDrivenFoundation && isBassRole) {
+    if (laneDrivenFoundation && isBassRole && !rhythmProfileCarrier) {
       noteCallDiagnostic('lane_driven_foundation');
       noteResponseDiagnostic('lane_driven_foundation');
       continue;
@@ -409,24 +766,47 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const performerCount = (isBassRole || isFoundationBufferGroup || !isPrimaryLoopOwnerGroup)
       ? 1
       : Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
-    if (isBassRole && getFoundationLaneSnapshot) {
+    if ((isBassRole || rhythmPulseCarrier) && getFoundationLaneSnapshot && !(introSlotIdentityActive && rhythmPulseCarrier)) {
       const lane = getFoundationLaneSnapshot(stepAbs, barIndex);
       if (!lane?.isActiveStep) {
+        noteIntroCollectorState('collector_suppressed', { admissionReason: 'foundation_step_inactive' });
+        if (slotRhythmCarrier) {
+          const introSlotSuppressedPayload = {
+            reason: 'foundation_step_inactive',
+            groupId,
+            stepIndex: stepAbs,
+            beatIndex,
+            slotProfile: musicProfileSourceType,
+            musicLaneId: String(group?.musicLaneId || '').trim().toLowerCase(),
+          };
+          if (noteIntroDebug) noteIntroDebug('intro_slot_rhythm_suppressed', introSlotSuppressedPayload);
+          noteMusicSystemEvent?.('music_intro_slot_suppressed', introSlotSuppressedPayload, { beatIndex, stepIndex: stepAbs, barIndex });
+        }
         noteCallDiagnostic('foundation_step_inactive');
         noteResponseDiagnostic('foundation_step_inactive');
         continue;
       }
     }
-    const melodyRows = Array.isArray(group?.rows) ? group.rows : [];
+    const melodyRows = introSlotIdentityActive && Array.isArray(group?.introSlotRows)
+      ? group.introSlotRows
+      : (Array.isArray(group?.rows) ? group.rows : []);
     const melodyProfileNote = (soloCarrierType === 'melody' || melodyProfileCarrier) && melodyRows.length
       ? (options?.getSwarmPentatonicNoteByIndex?.(Math.max(0, Math.trunc(Number(melodyRows[step] ?? melodyRows[0]) || 0)))
         || getRandomSwarmPentatonicNote())
       : '';
-    const notesLen = Math.max(1, Array.isArray(group?.notes) ? group.notes.length : 0);
+    const effectiveNotes = introSlotIdentityActive && Array.isArray(group?.introSlotNotes) && group.introSlotNotes.length
+      ? group.introSlotNotes
+      : (Array.isArray(group?.notes) ? group.notes : []);
+    const notesLen = Math.max(1, effectiveNotes.length);
     const noteIdx = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
       ? 0
       : (Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen);
-    const noteNameBaseRaw = normalizeSwarmNoteName(melodyProfileNote || group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
+    const lockedIntroNote = introSlotIdentityActive && Array.isArray(group?.introSlotNotes) && group.introSlotNotes.length
+      ? normalizeSwarmNoteName(group.introSlotNotes[0])
+      : '';
+    const noteNameBaseRaw = lockedIntroNote
+      || normalizeSwarmNoteName(melodyProfileNote || effectiveNotes?.[noteIdx])
+      || getRandomSwarmPentatonicNote();
     const noteNameBase = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
       ? noteNameBaseRaw
       : clampNoteToDirectorPool(
@@ -579,6 +959,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       performers.push(enemy);
     }
     if (!performers.length) continue;
+    noteIntroCollectorState('collector_emit_generic', {
+      actorId: Math.max(0, Math.trunc(Number(performers[0]?.id) || 0)),
+      requestedNote: styledNoteName,
+    });
     noteResponseDiagnostic('emitted', {
       continuingResponsePhrase,
       responseOverrideHit,
@@ -627,7 +1011,12 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       if (lane === 'response') return 'trace';
       return 'trace';
     })();
-    const musicLayer = isBassRole ? 'foundation' : 'loops';
+    const musicLayer = (() => {
+      if (rhythmPulseCarrier || groupLaneId === 'foundation_lane') return 'foundation';
+      if (rhythmMotionCarrier || groupLaneId === 'sparkle_lane') return 'sparkle';
+      if (isBassRole) return 'foundation';
+      return 'loops';
+    })();
     const restrainedGroupGain = (() => {
       if (rhythmPercussionCarrier) return 1;
       if (isSoloCarrier) return 0.92;
@@ -761,9 +1150,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       });
       continue;
     }
-    group.__bsPhraseRestUntilStep = phraseResolutionHit
-      ? (stepAbs + localCadenceRestSteps)
-      : Math.max(-1, postCadenceRestUntilStep);
+    group.__bsPhraseRestUntilStep = slotRhythmCarrier
+      ? -1
+      : (phraseResolutionHit
+        ? (stepAbs + localCadenceRestSteps)
+        : Math.max(-1, postCadenceRestUntilStep));
     noteCallDiagnostic('emitted', {
       performerCount: performers.length,
       strongCallCandidate,
@@ -792,6 +1183,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         visualSyncType: 'group-pulse',
         payload: {
           groupId,
+          groupEventSource: slotRhythmCarrier
+            ? 'intro_slot_generic'
+            : (isFoundationBufferGroup ? 'foundation_buffer_generic' : 'composer_group_generic'),
           continuityId: String(group?.continuityId || '').trim(),
           musicLayer,
           musicProminence,
@@ -822,7 +1216,32 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         soloCarrierType,
       });
     }
-    if ((introPercussionCarrier || rhythmProfileCarrier || soloRhythmCarrier) && directTriggerComposerCarrier) {
+    if (slotRhythmCarrier) {
+      const introSlotGenericEmitPayload = {
+        groupId,
+        stepIndex: stepAbs,
+        beatIndex,
+        performerCount: performers.length,
+        instrumentId,
+        note: styledNoteName,
+        slotProfile: musicProfileSourceType,
+        musicLaneId: String(group?.musicLaneId || '').trim().toLowerCase(),
+      };
+      if (noteIntroDebug) noteIntroDebug('intro_slot_rhythm_emitted', introSlotGenericEmitPayload);
+      const introSlotGenericBranchPayload = {
+        groupId,
+        stepIndex: stepAbs,
+        beatIndex,
+        slotProfile: musicProfileSourceType,
+        note: styledNoteName,
+        instrumentId,
+        musicLaneId: String(group?.musicLaneId || '').trim().toLowerCase(),
+        callResponseLane: lane,
+      };
+      if (noteIntroDebug) noteIntroDebug('intro_slot_generic_emit', introSlotGenericBranchPayload);
+      noteMusicSystemEvent?.('music_intro_slot_generic_emit', introSlotGenericBranchPayload, { beatIndex, stepIndex: stepAbs, barIndex });
+    }
+    if ((introPercussionCarrier || (introSlotIdentityActive && (rhythmBackbeatCarrier || rhythmMotionCarrier)) || ((rhythmProfileCarrier || soloRhythmCarrier) && !slotRhythmCarrier)) && directTriggerComposerCarrier) {
       for (const enemy of performers) {
         try {
           directTriggerComposerCarrier({
@@ -830,7 +1249,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
             groupId,
             instrumentId,
             note: styledNoteName,
-            audioGain: introPercussionCarrier ? 1 : clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain * restrainedGroupGain),
+            audioGain: (introPercussionCarrier || rhythmProfileCarrier)
+              ? 1
+              : clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain * restrainedGroupGain),
             musicProminence,
             soloCarrierType,
             introPercussionCarrier,

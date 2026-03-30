@@ -28,6 +28,11 @@ Recent work has materially improved the system:
 - ghost-loop cleanup is in much better shape and no longer looks like a main clutter source
 - call-and-answer is now alive, measurable, and no longer a blind-debug area
 - Music Lab export now preserves the fields needed to inspect call/response behavior directly
+- intro slot ownership is now functioning as real lane-owned music instead of a bespoke silent placeholder path
+- the intro now successfully teaches:
+  - one stable pulse first
+  - then one additive second percussion layer
+  - with a smoother handoff into general play
 
 Current working baseline:
 
@@ -36,6 +41,32 @@ Current working baseline:
 - foreground readability is improved overall, but still fragile when reply/support motion gets too assertive
 
 So the remaining work is refinement, not rescue.
+
+## Intro Status
+
+Completed in this pass:
+
+- [x] first intro carrier owns the pulse lane and is audible immediately
+- [x] first intro pulse stays musically stable through the intro
+- [x] second intro carrier joins later instead of spawning immediately
+- [x] second intro carrier is now a distinct audible backbeat layer
+- [x] intro pulse and backbeat survive execution as separate voices
+- [x] intro-to-play handoff no longer immediately rewrites the opening pulse
+- [x] intro slot carriers now behave as interchangeable music carriers rather than one-off hardcoded exceptions
+
+Still to do for intro:
+
+- [ ] replace the first large intro enemy body with a composer group while keeping the same pulse slot music
+- [ ] randomize the second intro carrier body per run between composer group and large enemy while preserving its slot music
+- [ ] make the intro retain its teaching structure but feel musically different each run
+- [ ] ensure overall playthrough-to-playthrough musical identity is more varied and distinct
+
+Important current rule:
+
+> The director should choose the musical slot first, and enemy bodies should be swappable outputs for that slot.
+
+That intro direction now works structurally for pulse and backbeat.
+The next step is to swap bodies without losing musical continuity.
 
 ## Primary Problem: Delivery And Audibility
 

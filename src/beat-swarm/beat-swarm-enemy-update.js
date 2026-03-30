@@ -22,6 +22,20 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     const e = enemies[i];
     const enemyType = String(e?.enemyType || '');
     const lifecycleState = helpers.normalizeMusicLifecycleState?.(e?.lifecycleState || 'active', 'active');
+    const participationGain = Math.max(0, Math.min(1, Number(e?.musicParticipationGain == null ? 1 : e.musicParticipationGain)));
+    const introSlotProfile = String(e?.introSlotProfileSourceType || '').trim().toLowerCase();
+    const isIntroSlotCarrier = introSlotProfile === 'spawner_rhythm_pulse'
+      || introSlotProfile === 'spawner_rhythm_backbeat'
+      || introSlotProfile === 'spawner_rhythm_motion';
+    const isProtectedComposerCarrier = enemyType === 'composer-group-member'
+      && !e?.retreating
+      && lifecycleState === 'active'
+      && (
+        e?.introStageCarrier === true
+        || isIntroSlotCarrier
+        || participationGain >= 0.78
+      );
+    const effectiveOffscreenGraceSeconds = isProtectedComposerCarrier ? 6.5 : offscreenGraceSeconds;
     const aggressionScale = helpers.getLifecycleAggressionScale?.(lifecycleState);
     const resolveRolePulseScale = () => {
       const pulseDur = Math.max(0.01, Number(e?.musicRolePulseDur) || Number(constants.musicRolePulseSeconds) || 0.24);
@@ -240,7 +254,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       || s.y > globalThis.window.innerHeight + offscreenRemovePad;
     if (isOffscreenBeyondGracePad) {
       e.offscreenGraceT = Math.max(0, Number(e.offscreenGraceT) || 0) + (Number(state.dt) || 0);
-      if (!isPersistentSpecialEnemy && Number(e.offscreenGraceT) >= offscreenGraceSeconds) {
+      if (!isPersistentSpecialEnemy && Number(e.offscreenGraceT) >= effectiveOffscreenGraceSeconds) {
         helpers.removeEnemy?.(e, 'retreated');
         enemies.splice(i, 1);
         continue;
