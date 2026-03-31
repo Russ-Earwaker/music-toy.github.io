@@ -575,6 +575,15 @@ function chooseEligibleCarrierTypeForMusicLane(laneIdLike = '', preferredCarrier
   if (fallbackCarrier && eligible.includes(fallbackCarrier)) return fallbackCarrier;
   return String(eligible[0] || fallbackCarrier || 'group').trim().toLowerCase() || 'group';
 }
+function chooseComposerBodyTypeForMusicLane(laneIdLike = '', preferredCarrierLike = '', fallbackBodyTypeLike = 'group') {
+  const preferredCarrier = String(preferredCarrierLike || '').trim().toLowerCase();
+  const fallbackBodyType = String(fallbackBodyTypeLike || 'group').trim().toLowerCase() === 'solo' ? 'solo' : 'group';
+  if (!preferredCarrier || preferredCarrier === 'none') return fallbackBodyType;
+  const resolvedCarrierType = chooseEligibleCarrierTypeForMusicLane(laneIdLike, preferredCarrier, '');
+  if (resolvedCarrierType === 'group') return 'group';
+  if (resolvedCarrierType === 'spawner' || resolvedCarrierType === 'drawsnake') return 'solo';
+  return fallbackBodyType;
+}
 function getDirectorLaneContextForActor(sourceEnemy = null, sourceGroup = null) {
   const source = sourceEnemy && typeof sourceEnemy === 'object' ? sourceEnemy : null;
   const group = sourceGroup && typeof sourceGroup === 'object' ? sourceGroup : null;
@@ -17786,6 +17795,7 @@ function maintainComposerEnemyGroups() {
       getCurrentPacingCaps,
       getCurrentPacingStateName,
       getSpawnDirectorState: () => ensureSwarmDirector().getSpawnState?.() || null,
+      chooseComposerBodyTypeForMusicLane,
       noteDirectorSpawnArchetype,
       getCurrentSwarmEnergyStateName,
       noteIntroDebug,

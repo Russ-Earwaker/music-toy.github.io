@@ -835,7 +835,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       noteResponseDiagnostic('lane_driven_primary_loop');
       continue;
     }
-    const performerCount = (isBassRole || isFoundationBufferGroup || !isPrimaryLoopOwnerGroup)
+    const performerCount = (isBassRole || isFoundationBufferGroup || !isPrimaryLoopOwnerGroup || rhythmPercussionCarrier)
       ? 1
       : Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
     if ((isBassRole || rhythmPulseCarrier) && getFoundationLaneSnapshot && !(introSlotIdentityActive && rhythmPulseCarrier)) {
@@ -1008,13 +1008,15 @@ export function collectComposerGroupStepBeatEvents(options = null) {
 
     const performers = [];
     const usedEnemyIds = new Set();
-    const primary = chooseEnemyForNote({
-      group,
-      noteName: styledNoteName,
-      aliveMembers,
-      normalizeNoteName: normalizeSwarmNoteName,
-      getFallbackNote: getRandomSwarmPentatonicNote,
-    });
+    const primary = rhythmPercussionCarrier
+      ? (aliveMembers[0] || null)
+      : chooseEnemyForNote({
+        group,
+        noteName: styledNoteName,
+        aliveMembers,
+        normalizeNoteName: normalizeSwarmNoteName,
+        getFallbackNote: getRandomSwarmPentatonicNote,
+      });
     if (primary) {
       performers.push(primary);
       const primaryId = Math.trunc(Number(primary.id) || 0);
