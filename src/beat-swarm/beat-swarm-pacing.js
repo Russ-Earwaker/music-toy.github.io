@@ -11,9 +11,9 @@ const PACING_STATES = Object.freeze({
 });
 
 const INTRO_SEQUENCE = Object.freeze([
-  Object.freeze({ id: PACING_STATES.INTRO_SOLO, bars: 4 }),
-  Object.freeze({ id: PACING_STATES.INTRO_BASS, bars: 8 }),
-  Object.freeze({ id: PACING_STATES.INTRO_RESPONSE, bars: 8 }),
+  Object.freeze({ id: PACING_STATES.INTRO_SOLO, bars: 2 }),
+  Object.freeze({ id: PACING_STATES.INTRO_BASS, bars: 4 }),
+  Object.freeze({ id: PACING_STATES.INTRO_RESPONSE, bars: 4 }),
 ]);
 
 const LOOP_SEQUENCE = Object.freeze([
@@ -23,7 +23,7 @@ const LOOP_SEQUENCE = Object.freeze([
   Object.freeze({ id: PACING_STATES.BREAK, bars: 4 }),
 ]);
 
-function getPacingCapsForState(stateName, responseMode = 'drawsnake') {
+function getPacingCapsForState(stateName, responseMode = 'group') {
   const s = String(stateName || PACING_STATES.INTRO_SOLO).trim().toLowerCase();
   if (s === PACING_STATES.INTRO_SOLO) {
     return {
@@ -48,45 +48,45 @@ function getPacingCapsForState(stateName, responseMode = 'drawsnake') {
     };
   }
   if (s === PACING_STATES.INTRO_RESPONSE) {
-    const mode = String(responseMode || 'drawsnake') === 'group' ? 'group' : 'drawsnake';
+    const mode = 'group';
     return {
       maxFallbackEnemies: 0,
-      maxSpawners: mode === 'group' ? 1 : 0,
-      maxDrawSnakes: mode === 'drawsnake' ? 1 : 0,
-      // Phase 2 should add one response loop while preserving phase-1 bass foundation.
-      maxComposerGroups: 1,
+      maxSpawners: 0,
+      maxDrawSnakes: 0,
+      // Phase 2 should add one melodic/rhythmic response layer while preserving bass foundation.
+      maxComposerGroups: 2,
       maxComposerGroupSize: 4,
-      maxComposerPerformers: 1,
+      maxComposerPerformers: 2,
       responseMode: mode,
     };
   }
   if (s === PACING_STATES.MAIN_LOW) {
     return {
       maxFallbackEnemies: 0,
-      maxSpawners: 1,
-      maxDrawSnakes: 1,
-      maxComposerGroups: 1,
-      maxComposerGroupSize: 3,
-      maxComposerPerformers: 1,
-      responseMode: 'either',
+      maxSpawners: 0,
+      maxDrawSnakes: 0,
+      maxComposerGroups: 2,
+      maxComposerGroupSize: 4,
+      maxComposerPerformers: 2,
+      responseMode: 'group',
     };
   }
   if (s === PACING_STATES.MAIN_MID) {
     return {
       maxFallbackEnemies: 0,
-      maxSpawners: 2,
-      maxDrawSnakes: 2,
-      maxComposerGroups: 2,
+      maxSpawners: 1,
+      maxDrawSnakes: 0,
+      maxComposerGroups: 3,
       maxComposerGroupSize: 4,
       maxComposerPerformers: 2,
-      responseMode: 'either',
+      responseMode: 'group',
     };
   }
   if (s === PACING_STATES.PEAK) {
     return {
       maxFallbackEnemies: 0,
-      maxSpawners: 3,
-      maxDrawSnakes: 2,
+      maxSpawners: 1,
+      maxDrawSnakes: 1,
       maxComposerGroups: 3,
       maxComposerGroupSize: 5,
       maxComposerPerformers: 3,
@@ -96,12 +96,12 @@ function getPacingCapsForState(stateName, responseMode = 'drawsnake') {
   if (s === PACING_STATES.BREAK) {
     return {
       maxFallbackEnemies: 0,
-      maxSpawners: 1,
-      maxDrawSnakes: 1,
-      maxComposerGroups: 1,
+      maxSpawners: 0,
+      maxDrawSnakes: 0,
+      maxComposerGroups: 2,
       maxComposerGroupSize: 2,
       maxComposerPerformers: 1,
-      responseMode: 'either',
+      responseMode: 'group',
     };
   }
   return getPacingCapsForState(PACING_STATES.INTRO_SOLO, responseMode);
@@ -119,14 +119,14 @@ export function createBeatSwarmPacing(options = null) {
   let barsInState = INTRO_SEQUENCE[0].bars;
   let lastBar = -1;
   let introResponseCount = 0;
-  let responseMode = 'drawsnake';
+  let responseMode = 'group';
 
   function applyState(nextState, nextBars, startBar) {
     state = String(nextState || PACING_STATES.INTRO_SOLO);
     barsInState = Math.max(1, Math.trunc(Number(nextBars) || 1));
     stateStartBar = Math.max(0, Math.trunc(Number(startBar) || 0));
     if (state === PACING_STATES.INTRO_RESPONSE) {
-      responseMode = (introResponseCount % 2) === 0 ? 'drawsnake' : 'group';
+      responseMode = 'group';
       introResponseCount += 1;
     }
   }
@@ -138,7 +138,7 @@ export function createBeatSwarmPacing(options = null) {
     inLoop = false;
     cycle = 0;
     introResponseCount = 0;
-    responseMode = 'drawsnake';
+    responseMode = 'group';
     applyState(INTRO_SEQUENCE[0].id, INTRO_SEQUENCE[0].bars, bar);
     lastBar = bar;
   }

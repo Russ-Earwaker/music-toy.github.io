@@ -3323,12 +3323,21 @@ function compactMusicLabPayloadForSave(payload = null) {
     });
   const systemEventCountsByType = Object.create(null);
   const systemEventCountsByReason = Object.create(null);
+  const systemEventCountsByVisualFailureReason = Object.create(null);
   const sectionIds = new Set();
   for (const ev of systemEvents) {
     const eventType = String(ev?.eventType || '').trim();
     if (eventType) systemEventCountsByType[eventType] = (systemEventCountsByType[eventType] || 0) + 1;
     const reason = String(ev?.reason || '').trim();
     if (reason) systemEventCountsByReason[reason] = (systemEventCountsByReason[reason] || 0) + 1;
+    if (eventType === 'music_handoff_visual_continuity_failed') {
+      const visualFailureReasons = Array.isArray(ev?.visualFailureReasons) ? ev.visualFailureReasons : [];
+      for (const reasonLike of visualFailureReasons) {
+        const visualReason = String(reasonLike || '').trim().toLowerCase();
+        if (!visualReason) continue;
+        systemEventCountsByVisualFailureReason[visualReason] = (systemEventCountsByVisualFailureReason[visualReason] || 0) + 1;
+      }
+    }
     const sectionId = String(ev?.sectionId || '').trim();
     if (sectionId) sectionIds.add(sectionId);
   }
@@ -3495,6 +3504,7 @@ function compactMusicLabPayloadForSave(payload = null) {
       totalCount: systemEvents.length,
       countsByType: systemEventCountsByType,
       countsByReason: systemEventCountsByReason,
+      countsByVisualFailureReason: systemEventCountsByVisualFailureReason,
       uniqueSectionIds: Array.from(sectionIds),
     },
     threatBudgetSnapshots: [],
@@ -3850,17 +3860,10 @@ function applyMusicLaneCarrierPolicyOverride(policyLike = null) {
 
 function captureMusicHandoffSlotPreferenceOverrideState() {
   const state = {
-    hasDirect: false,
-    direct: null,
     hasNestedRoot: false,
     hasNestedPreference: false,
     nestedPreference: null,
   };
-  try {
-    state.hasDirect = typeof window !== 'undefined'
-      && Object.prototype.hasOwnProperty.call(window, '__beatSwarmHandoffSlotPreference');
-    state.direct = clonePerfJson(window.__beatSwarmHandoffSlotPreference);
-  } catch {}
   try {
     const root = window.__beatSwarmTestOverrides;
     state.hasNestedRoot = !!root && typeof root === 'object';
@@ -3874,10 +3877,6 @@ function captureMusicHandoffSlotPreferenceOverrideState() {
 function restoreMusicHandoffSlotPreferenceOverrideState(stateLike = null) {
   const state = stateLike && typeof stateLike === 'object' ? stateLike : null;
   if (!state) return;
-  try {
-    if (state.hasDirect) window.__beatSwarmHandoffSlotPreference = clonePerfJson(state.direct);
-    else delete window.__beatSwarmHandoffSlotPreference;
-  } catch {}
   try {
     const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
       ? window.__beatSwarmTestOverrides
@@ -3898,14 +3897,12 @@ function applyMusicHandoffSlotPreferenceOverride(preferenceLike = null) {
   const preference = preferenceLike && typeof preferenceLike === 'object' ? clonePerfJson(preferenceLike) : null;
   try {
     if (preference) {
-      window.__beatSwarmHandoffSlotPreference = clonePerfJson(preference);
       const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
         ? window.__beatSwarmTestOverrides
         : {};
       root.handoffSlotPreference = clonePerfJson(preference);
       window.__beatSwarmTestOverrides = root;
     } else {
-      delete window.__beatSwarmHandoffSlotPreference;
       if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
         delete window.__beatSwarmTestOverrides.handoffSlotPreference;
       }
@@ -3915,17 +3912,10 @@ function applyMusicHandoffSlotPreferenceOverride(preferenceLike = null) {
 
 function captureMusicForcedHandoffReceiverSlotOverrideState() {
   const state = {
-    hasDirect: false,
-    direct: null,
     hasNestedRoot: false,
     hasNestedForcedReceiverSlot: false,
     nestedForcedReceiverSlot: null,
   };
-  try {
-    state.hasDirect = typeof window !== 'undefined'
-      && Object.prototype.hasOwnProperty.call(window, '__beatSwarmForcedHandoffReceiverSlot');
-    state.direct = clonePerfJson(window.__beatSwarmForcedHandoffReceiverSlot);
-  } catch {}
   try {
     const root = window.__beatSwarmTestOverrides;
     state.hasNestedRoot = !!root && typeof root === 'object';
@@ -3939,10 +3929,6 @@ function captureMusicForcedHandoffReceiverSlotOverrideState() {
 function restoreMusicForcedHandoffReceiverSlotOverrideState(stateLike = null) {
   const state = stateLike && typeof stateLike === 'object' ? stateLike : null;
   if (!state) return;
-  try {
-    if (state.hasDirect) window.__beatSwarmForcedHandoffReceiverSlot = clonePerfJson(state.direct);
-    else delete window.__beatSwarmForcedHandoffReceiverSlot;
-  } catch {}
   try {
     const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
       ? window.__beatSwarmTestOverrides
@@ -3963,14 +3949,12 @@ function applyMusicForcedHandoffReceiverSlotOverride(overrideLike = null) {
   const override = overrideLike && typeof overrideLike === 'object' ? clonePerfJson(overrideLike) : null;
   try {
     if (override) {
-      window.__beatSwarmForcedHandoffReceiverSlot = clonePerfJson(override);
       const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
         ? window.__beatSwarmTestOverrides
         : {};
       root.forcedHandoffReceiverSlot = clonePerfJson(override);
       window.__beatSwarmTestOverrides = root;
     } else {
-      delete window.__beatSwarmForcedHandoffReceiverSlot;
       if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
         delete window.__beatSwarmTestOverrides.forcedHandoffReceiverSlot;
       }
@@ -3980,17 +3964,10 @@ function applyMusicForcedHandoffReceiverSlotOverride(overrideLike = null) {
 
 function captureMusicForcedProbeHandoffOverrideState() {
   const state = {
-    hasDirect: false,
-    direct: null,
     hasNestedRoot: false,
     hasNestedForcedProbeHandoff: false,
     nestedForcedProbeHandoff: null,
   };
-  try {
-    state.hasDirect = typeof window !== 'undefined'
-      && Object.prototype.hasOwnProperty.call(window, '__beatSwarmForcedProbeHandoff');
-    state.direct = clonePerfJson(window.__beatSwarmForcedProbeHandoff);
-  } catch {}
   try {
     const root = window.__beatSwarmTestOverrides;
     state.hasNestedRoot = !!root && typeof root === 'object';
@@ -4004,10 +3981,6 @@ function captureMusicForcedProbeHandoffOverrideState() {
 function restoreMusicForcedProbeHandoffOverrideState(stateLike = null) {
   const state = stateLike && typeof stateLike === 'object' ? stateLike : null;
   if (!state) return;
-  try {
-    if (state.hasDirect) window.__beatSwarmForcedProbeHandoff = clonePerfJson(state.direct);
-    else delete window.__beatSwarmForcedProbeHandoff;
-  } catch {}
   try {
     const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
       ? window.__beatSwarmTestOverrides
@@ -4028,14 +4001,12 @@ function applyMusicForcedProbeHandoffOverride(overrideLike = null) {
   const override = overrideLike && typeof overrideLike === 'object' ? clonePerfJson(overrideLike) : null;
   try {
     if (override) {
-      window.__beatSwarmForcedProbeHandoff = clonePerfJson(override);
       const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
         ? window.__beatSwarmTestOverrides
         : {};
       root.forcedProbeHandoff = clonePerfJson(override);
       window.__beatSwarmTestOverrides = root;
     } else {
-      delete window.__beatSwarmForcedProbeHandoff;
       if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
         delete window.__beatSwarmTestOverrides.forcedProbeHandoff;
       }

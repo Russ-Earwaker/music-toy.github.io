@@ -172,9 +172,12 @@ function deriveNeeds({ lanePlan = null, pressureState = null, battlefieldState =
   const field = battlefieldState && typeof battlefieldState === 'object' ? battlefieldState : {};
   const needs = new Set();
   const occupiedSlots = field.occupiedSlots && typeof field.occupiedSlots === 'object' ? field.occupiedSlots : {};
-  if (plan.foundation?.active === true && !(field.countsById?.composer_basic > 0)) needs.add('needfoundation');
-  if (plan.secondary_loop?.active === true && !occupiedSlots.rhythmSpecialOccupied && !(field.countsById?.solo_rhythm_basic > 0)) needs.add('needrhythm');
-  if (plan.primary_loop?.active === true && !occupiedSlots.melodySpecialOccupied && !(field.countsById?.solo_melody_basic > 0)) needs.add('needmelody');
+  const foundationCovered = (field.countsById?.composer_basic > 0);
+  const rhythmCovered = occupiedSlots.secondaryLoopLaneOccupied === true || (field.countsById?.solo_rhythm_basic > 0);
+  const melodyCovered = occupiedSlots.primaryLoopLaneOccupied === true || (field.countsById?.solo_melody_basic > 0);
+  if (plan.foundation?.active === true && !foundationCovered) needs.add('needfoundation');
+  if (plan.secondary_loop?.active === true && !rhythmCovered) needs.add('needrhythm');
+  if (plan.primary_loop?.active === true && !melodyCovered) needs.add('needmelody');
   if (clamp01(pressure.combatPressure) > 0.72 && clamp01(pressure.musicalPressure) < 0.52) needs.add('needescalation');
   if (clamp01(pressure.combatPressure) > 0.82 && clamp01(pressure.musicalPressure) > 0.72) needs.add('needrelief');
   return Array.from(needs);

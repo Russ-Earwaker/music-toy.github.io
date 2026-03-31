@@ -109,7 +109,16 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
 export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
   const group = options?.group || null;
   if (!group) return;
-  const count = Math.max(0, Math.trunc(Number(options?.count) || 0));
+  const requestedCount = Math.max(0, Math.trunc(Number(options?.count) || 0));
+  const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
+  const introCarrierBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
+  const count = (
+    soloCarrierType === 'rhythm'
+    || soloCarrierType === 'melody'
+    || introCarrierBodyType === 'solo'
+  )
+    ? Math.min(requestedCount, 1)
+    : requestedCount;
   const getRandomOffscreenSpawnPoint = typeof options?.getRandomOffscreenSpawnPoint === 'function' ? options.getRandomOffscreenSpawnPoint : (() => ({ x: 0, y: 0 }));
   const spawnComposerGroupEnemyAt = typeof options?.spawnComposerGroupEnemyAt === 'function' ? options.spawnComposerGroupEnemyAt : (() => null);
   for (let i = 0; i < count; i++) {

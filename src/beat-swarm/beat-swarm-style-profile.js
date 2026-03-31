@@ -14,8 +14,8 @@ const STYLE_PROFILES = Object.freeze({
     bassRootBias: 0.74,
     bassFifthBias: 0.58,
     notePoolMaxUnique: 4,
-    spawnerDensityMult: 0.78,
-    drawsnakeDensityMult: 0.82,
+    spawnerDensityMult: 0.32,
+    drawsnakeDensityMult: 0.22,
     styleLaneBias: Object.freeze({
       bass: 1,
       lead: 1,
@@ -65,8 +65,8 @@ function normalizeProfile(profileLike, fallbackId = 'retro_shooter') {
     bassRootBias: clamp01(src?.bassRootBias, 0.7),
     bassFifthBias: clamp01(src?.bassFifthBias, 0.55),
     notePoolMaxUnique: clampInt(src?.notePoolMaxUnique, 4, 1),
-    spawnerDensityMult: clamp01(src?.spawnerDensityMult, 0.78),
-    drawsnakeDensityMult: clamp01(src?.drawsnakeDensityMult, 0.82),
+    spawnerDensityMult: clamp01(src?.spawnerDensityMult, 0.32),
+    drawsnakeDensityMult: clamp01(src?.drawsnakeDensityMult, 0.22),
     styleLaneBias: Object.freeze({
       bass: clamp01(src?.styleLaneBias?.bass, 1),
       lead: clamp01(src?.styleLaneBias?.lead, 1),

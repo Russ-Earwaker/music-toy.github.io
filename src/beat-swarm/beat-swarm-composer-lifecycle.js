@@ -18,6 +18,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const createComposerEnemyGroupProfile = typeof options?.createComposerEnemyGroupProfile === 'function' ? options.createComposerEnemyGroupProfile : (() => ({}));
   const createGroupFromMotif = typeof options?.createGroupFromMotif === 'function' ? options.createGroupFromMotif : (() => null);
   const noteMusicSystemEvent = typeof options?.noteMusicSystemEvent === 'function' ? options.noteMusicSystemEvent : null;
+  const retireGroup = typeof options?.retireGroup === 'function' ? options.retireGroup : (() => {});
   const normalizeLifecycleState = (value, fallback = 'active') => {
     const raw = String(value || '').trim().toLowerCase();
     if (raw === 'active') return 'active';
@@ -55,10 +56,17 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const responseMode = String(pacingCaps.responseMode || 'none');
   const responseAllowsGroups = responseMode === 'either' || responseMode === 'group';
   const desiredGroupsRaw = Math.max(1, Math.min(2, Math.max(1, Math.trunc((Number(composer.intensity) || 1) * 2))));
+  const primaryLoopPlan = directorLanePlan && typeof directorLanePlan === 'object'
+    ? (directorLanePlan.primary_loop || null)
+    : null;
+  const primaryLoopReserveWindowActive = currentBarIndex >= 20;
+  const primaryLoopNeedsGroupCoverage = responseAllowsGroups
+    && primaryLoopPlan?.active === true
+    && Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0)) >= 2;
   const introForcedDesiredGroups = introStage === 'rhythm_only'
     ? 1
     : (introStage === 'soft_ramp' ? 2 : -1);
-  const desiredGroups = introForcedDesiredGroups > 0
+  const desiredGroupsBase = introForcedDesiredGroups > 0
     ? Math.max(
       0,
       Math.min(
@@ -77,6 +85,15 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
         )
         : 0
     );
+  const desiredGroups = primaryLoopNeedsGroupCoverage
+    ? Math.max(
+      2,
+      Math.min(
+        Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0)),
+        desiredGroupsBase
+      )
+    )
+    : desiredGroupsBase;
   const sectionKey = `${String(composer.sectionId || 'default')}:${Math.max(0, Math.trunc(Number(composer.cycle) || 0))}:${motifScopeKey}`;
   const isFoundationBufferGroup = (group) => (
     !!group
@@ -92,6 +109,28 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (group.memberIds instanceof Set) return group.memberIds.size > 0;
     if (Array.isArray(group.memberIds)) return group.memberIds.length > 0;
     return false;
+  };
+  const isBassLikeGroup = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!group) return false;
+    return String(group?.role || '').trim().toLowerCase() === 'bass'
+      || String(group?.musicLaneId || '').trim().toLowerCase() === 'foundation_lane';
+  };
+  const isPromotableLeadCandidate = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!group || group.active !== true || group.retiring) return false;
+    if (isFoundationBufferGroup(group)) return false;
+    if (isPersistentIntroSlotCarrier(group)) return false;
+    if (String(group?.soloCarrierType || '').trim()) return false;
+    if (!hasLiveMembers(group)) return false;
+    return !isBassLikeGroup(group);
+  };
+  const hasActivePrimaryLoopCoverage = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!group || group.active !== true || group.retiring) return false;
+    if (!hasLiveMembers(group)) return false;
+    if (String(group?.musicLaneId || '').trim().toLowerCase() !== 'primary_loop_lane') return false;
+    return true;
   };
   const getDirectorGroupFallbackGain = () => {
     const supportPlan = directorLanePlan && typeof directorLanePlan === 'object' ? (directorLanePlan.support || null) : null;
@@ -147,6 +186,12 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     )
   ));
   const activePersistentIntroSlotGroups = sameSection.filter((g) => isPersistentIntroSlotCarrier(g));
+  const activePrimaryLoopCoveragePresent = sameSection.some((group) => hasActivePrimaryLoopCoverage(group));
+  const promotableLeadCandidatePresent = sameSection.some((group) => isPromotableLeadCandidate(group));
+  let reservedLeadSpawnNeeded = primaryLoopReserveWindowActive
+    && primaryLoopNeedsGroupCoverage
+    && !activePrimaryLoopCoveragePresent
+    && !promotableLeadCandidatePresent;
   const rankedGroups = sameSection
     .slice()
     .sort((a, b) => (Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0)));
@@ -173,6 +218,32 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       )
     ))
     .length;
+  let effectiveCurrentSectionCount = currentSectionCount;
+  if (reservedLeadSpawnNeeded && effectiveCurrentSectionCount >= Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0))) {
+    const replaceableGroup = rankedGroups.find((group) => (
+      group
+      && !isPersistentIntroSlotCarrier(group)
+      && hasLiveMembers(group)
+      && isBassLikeGroup(group)
+    )) || null;
+    if (replaceableGroup) {
+      retireGroup(replaceableGroup, 'lead_candidate_reserve');
+      effectiveCurrentSectionCount = Math.max(0, effectiveCurrentSectionCount - 1);
+      try {
+        noteMusicSystemEvent?.('music_composer_group_state', {
+          phase: 'lead_candidate_reserve',
+          groupId: Math.trunc(Number(replaceableGroup?.id) || 0),
+          reason: 'retire_bass_for_primary_loop_candidate',
+          primaryLoopNeedsGroupCoverage,
+          currentSectionCount,
+          maxComposerGroups: Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0)),
+        }, {
+          beatIndex: Math.max(0, currentBarIndex * 4),
+          barIndex: currentBarIndex,
+        });
+      } catch {}
+    }
+  }
   const targetIntroProfiles = getTargetIntroProfiles();
   const existingIntroProfiles = new Set(
     composerEnemyGroups
@@ -200,10 +271,17 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const missingIntroProfiles = requiredIntroProfiles.length > 0
     ? requiredIntroProfiles.filter((profile) => !existingIntroProfiles.has(profile))
     : [];
-  const genericGroupSpawnBlockedByIntroBridge = requiredIntroProfiles.length === 0 && activePersistentIntroSlotGroups.length > 0;
+  const introBridgeBlocksGenericSpawn = requiredIntroProfiles.length === 0
+    && activePersistentIntroSlotGroups.length > 0
+    && introStage !== 'none'
+    && introStage !== 'ended';
+  const genericGroupSpawnBlockedByIntroBridge = introBridgeBlocksGenericSpawn && !reservedLeadSpawnNeeded;
   const spawnCount = requiredIntroProfiles.length > 0
     ? Math.max(0, introMissingCount)
-    : (genericGroupSpawnBlockedByIntroBridge ? 0 : Math.max(0, desiredGroups - currentSectionCount));
+    : (genericGroupSpawnBlockedByIntroBridge ? 0 : Math.max(
+        reservedLeadSpawnNeeded ? 1 : 0,
+        Math.max(0, desiredGroups - effectiveCurrentSectionCount)
+      ));
   for (let i = 0; i < spawnCount; i++) {
     const forcedIntroProfileSourceType = missingIntroProfiles[i] || '';
     const groupIndex = sameSection.length + i;

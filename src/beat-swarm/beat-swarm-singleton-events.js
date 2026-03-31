@@ -92,7 +92,7 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
   const primaryLoopOwnerEnemyId = Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime?.performerEnemyId) || 0));
   const primaryLoopOwnerGroupId = Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime?.performerGroupId) || 0));
   const lanePrimaryLoopActive = !!primaryLoopLaneRuntime
-    && primaryLoopOwnerEnemyId > 0
+    && (primaryLoopOwnerEnemyId > 0 || primaryLoopOwnerGroupId > 0)
     && !!String(primaryLoopLaneRuntime?.continuityId || '').trim();
   const loneStartupSnakeWindow = !forceIntroPrimaryLoopWindow
     && snakes.length === 1

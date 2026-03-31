@@ -1,6 +1,6 @@
 id,displayName,roleTags,spawnCost,threatValue,musicValue,baseWeight,rarityClass,minPhase,maxPhase,maxAlive,cooldownBars,spawnOnBeat,spawnOnBar,spawnOnPhrase,preferredSectionTags,forbiddenSectionTags,preferredNeeds,forbiddenNeeds,groupMin,groupMax,variantTier,notes
-composer_basic,Composer Basic,filler|adaptive|foundation,1,1,1,100,common,0,99,20,0,1,1,0,intro|build|drop|break,,needFoundation,,2,5,1,Main common filler enemy
-spawner_basic,Spawner Basic,rhythm|special|drums,6,4,5,1,rare,2,99,1,28,0,1,1,build|drop,break,needRhythm|needEscalation|needFoundation,needRelief,1,1,1,Special rhythm anchor
-snake_basic,Snake Basic,melody|special|lead,10,8,8,0.5,very_rare,4,99,1,40,0,1,1,drop|peak,intro|break,needMelody|needEscalation,needRelief,1,1,1,Special melodic feature enemy
-solo_rhythm_basic,Solo Rhythm Carrier,rhythm|solo|heavy|adaptive,2,3,5,42,common,0,99,1,4,0,1,1,build|drop|break,intro,needRhythm|needFoundation|needEscalation,needRelief,1,1,2,Single large simple rhythm carrier
-solo_melody_basic,Solo Melody Carrier,melody|solo|heavy|adaptive,3,4,6,26,common,0,99,1,6,0,1,1,build|drop|peak,intro,needMelody|needEscalation,needRelief,1,1,2,Single large simple melodic carrier
+composer_basic,Composer Basic,filler|adaptive|foundation,1,1,1,120,common,0,99,24,0,1,1,0,intro|build|drop|break,,needFoundation,,2,5,1,Primary common enemy body
+spawner_basic,Spawner Basic,rhythm|special|drums,6,4,5,0.25,very_rare,3,99,1,40,0,1,1,build|drop,break,needRhythm|needEscalation|needFoundation,needRelief,1,1,1,Rare rhythm special that drops in occasionally
+snake_basic,Snake Basic,melody|special|lead,10,8,8,0.12,very_rare,5,99,1,56,0,1,1,drop|peak,intro|break,needMelody|needEscalation,needRelief,1,1,1,Rare melodic special that drops in occasionally
+solo_rhythm_basic,Solo Rhythm Carrier,rhythm|solo|heavy|adaptive,2,3,5,60,common,0,99,1,4,0,1,1,build|drop|break,intro,needRhythm|needFoundation|needEscalation,needRelief,1,1,2,Primary large rhythm carrier
+solo_melody_basic,Solo Melody Carrier,melody|solo|heavy|adaptive,3,4,6,44,common,0,99,1,6,0,1,1,build|drop|peak,intro,needMelody|needEscalation,needRelief,1,1,2,Primary large melodic carrier

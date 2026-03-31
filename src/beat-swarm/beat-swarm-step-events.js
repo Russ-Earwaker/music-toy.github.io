@@ -266,7 +266,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   };
   const primaryLoopLaneActive = primaryLoopLaneRuntime
     && typeof primaryLoopLaneRuntime === 'object'
-    && Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime.performerEnemyId) || 0)) > 0
+    && (
+      Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime.performerEnemyId) || 0)) > 0
+      || Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime.performerGroupId) || 0)) > 0
+    )
     && String(primaryLoopLaneRuntime.continuityId || '').trim();
   const secondaryLoopLaneActive = secondaryLoopLaneRuntime
     && typeof secondaryLoopLaneRuntime === 'object'

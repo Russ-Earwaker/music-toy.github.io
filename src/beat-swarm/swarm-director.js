@@ -86,7 +86,7 @@ function createDefaultLanePlan() {
     foundation: {
       active: true,
       targetCount: 1,
-      preferredCarrier: 'spawner',
+      preferredCarrier: 'group',
       protected: true,
       continuityBias: 'hold',
       intensity: 0.4,
@@ -94,7 +94,7 @@ function createDefaultLanePlan() {
     secondary_loop: {
       active: false,
       targetCount: 0,
-      preferredCarrier: 'spawner',
+      preferredCarrier: 'group',
       protected: false,
       continuityBias: 'hold',
       intensity: 0.25,
@@ -102,7 +102,7 @@ function createDefaultLanePlan() {
     primary_loop: {
       active: false,
       targetCount: 0,
-      preferredCarrier: 'drawsnake',
+      preferredCarrier: 'group',
       protected: true,
       continuityBias: 'blend',
       intensity: 0.35,
@@ -110,7 +110,7 @@ function createDefaultLanePlan() {
     sparkle: {
       active: false,
       targetCount: 0,
-      preferredCarrier: 'spawner',
+      preferredCarrier: 'group',
       protected: false,
       continuityBias: 'follow',
       intensity: 0.2,

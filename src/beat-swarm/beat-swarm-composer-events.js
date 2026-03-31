@@ -275,6 +275,43 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         barIndex,
       });
     };
+    const noteEarlyCarrierTrace = (phase, extra = null) => {
+      if (!noteMusicSystemEvent || barIndex > 20) return;
+      if (!(slotRhythmCarrier || soloCarrierType === 'rhythm')) return;
+      const aliveMembersNow = getAliveEnemiesByIds(group?.memberIds).filter((enemy) => String(enemy?.enemyType || '') === 'composer-group-member');
+      const aliveMemberIds = aliveMembersNow
+        .map((enemy) => Math.max(0, Math.trunc(Number(enemy?.id) || 0)))
+        .filter((id) => id > 0);
+      const visibleSoloEnemyIds = aliveMembersNow
+        .filter((enemy) => {
+          const memberSoloCarrierType = String(enemy?.soloCarrierType || '').trim().toLowerCase();
+          const introCarrierBodyType = String(enemy?.introCarrierBodyType || '').trim().toLowerCase();
+          return memberSoloCarrierType === 'rhythm' || introCarrierBodyType === 'solo';
+        })
+        .map((enemy) => Math.max(0, Math.trunc(Number(enemy?.id) || 0)))
+        .filter((id) => id > 0);
+      noteMusicSystemEvent('music_intro_carrier_trace', {
+        phase: String(phase || '').trim().toLowerCase(),
+        groupId,
+        role: String(group?.role || '').trim().toLowerCase(),
+        musicLaneId: String(group?.musicLaneId || group?.introSlotMusicLaneId || '').trim().toLowerCase(),
+        slotProfile: String(musicProfileSourceType || '').trim().toLowerCase(),
+        introSlotProfileSourceType,
+        callResponseLane: String(lane || '').trim().toLowerCase(),
+        soloCarrierType,
+        introCarrierBodyType: String(group?.introCarrierBodyType || '').trim().toLowerCase(),
+        introStageCarrier: group?.introStageCarrier === true,
+        introSlotIdentityActive,
+        introSlotIdentityLocked,
+        aliveMemberIds,
+        visibleSoloEnemyIds,
+        ...(extra && typeof extra === 'object' ? extra : {}),
+      }, {
+        beatIndex,
+        stepIndex: stepAbs,
+        barIndex,
+      });
+    };
     const noteResponseDiagnostic = (reason, extra = null) => {
       if (lane !== 'response' || !noteMusicSystemEvent) return;
       noteMusicSystemEvent('music_call_response_response_group_state', {
@@ -327,6 +364,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     }
     if (!laneActive) {
       noteIntroCollectorState('collector_suppressed', { admissionReason: 'lane_inactive' });
+      noteEarlyCarrierTrace('suppressed', {
+        branch: 'collector',
+        admissionReason: 'lane_inactive',
+      });
       if (slotRhythmCarrier) {
         const introSlotSuppressedPayload = {
           reason: 'lane_inactive',
@@ -449,6 +490,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       : (Array.isArray(group.steps) && !!group.steps[step]);
     if (!stepActive && !responseOverrideHit) {
       noteIntroCollectorState('collector_suppressed', { admissionReason: 'step_inactive' });
+      noteEarlyCarrierTrace('suppressed', {
+        branch: 'collector',
+        admissionReason: 'step_inactive',
+      });
       if (slotRhythmCarrier) {
         const introSlotSuppressedPayload = {
           reason: 'step_inactive',
@@ -470,6 +515,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       : Math.max(-1, Math.trunc(Number(group?.__bsPhraseRestUntilStep) || -1));
     if (phraseRestUntilStepAbs >= stepAbs) {
       noteIntroCollectorState('collector_suppressed', { admissionReason: 'post_cadence_rest' });
+      noteEarlyCarrierTrace('suppressed', {
+        branch: 'collector',
+        admissionReason: 'post_cadence_rest',
+        restUntilStepAbs: phraseRestUntilStepAbs,
+      });
       if (slotRhythmCarrier) {
         const introSlotSuppressedPayload = {
           reason: 'post_cadence_rest',
@@ -544,6 +594,15 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           requestedNote: lockedNoteName,
           admissionReason: 'ghost_playback',
         });
+        noteEarlyCarrierTrace('emit', {
+          branch: 'ghost',
+          performerEnemyIds: [],
+          requestedNote: lockedNoteName,
+          instrumentId: lockedInstrumentId,
+          actionType: String(group?.introSlotActionType || group?.actionType || 'explosion') === 'explosion'
+            ? 'composer-group-explosion'
+            : 'composer-group-projectile',
+        });
         events.push(createPerformedBeatEvent({
           actorId: 0,
           beatIndex,
@@ -596,6 +655,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         continue;
       }
       noteIntroCollectorState('collector_suppressed', { admissionReason: 'no_alive_members' });
+      noteEarlyCarrierTrace('suppressed', {
+        branch: 'collector',
+        admissionReason: 'no_alive_members',
+      });
       if (slotRhythmCarrier) {
         const introSlotSuppressedPayload = {
           reason: 'no_alive_members',
@@ -657,6 +720,15 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       noteIntroCollectorState('collector_emit_strict', {
         actorId: Math.max(0, Math.trunc(Number(lockedPerformer?.id) || 0)),
         requestedNote: lockedNoteName,
+      });
+      noteEarlyCarrierTrace('emit', {
+        branch: 'strict',
+        performerEnemyIds: [Math.max(0, Math.trunc(Number(lockedPerformer?.id) || 0))].filter((id) => id > 0),
+        requestedNote: lockedNoteName,
+        instrumentId: lockedInstrumentId,
+        actionType: String(group?.introSlotActionType || group?.actionType || 'explosion') === 'explosion'
+          ? 'composer-group-explosion'
+          : 'composer-group-projectile',
       });
       const lockedThreatClass = (() => {
         const t = String(group?.threatLevel || threat.full || 'full').trim().toLowerCase();
@@ -1241,7 +1313,37 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       if (noteIntroDebug) noteIntroDebug('intro_slot_generic_emit', introSlotGenericBranchPayload);
       noteMusicSystemEvent?.('music_intro_slot_generic_emit', introSlotGenericBranchPayload, { beatIndex, stepIndex: stepAbs, barIndex });
     }
+    noteEarlyCarrierTrace('emit', {
+      branch: slotRhythmCarrier
+        ? 'generic'
+        : ((introPercussionCarrier || ((rhythmProfileCarrier || soloRhythmCarrier) && !slotRhythmCarrier)) ? 'direct_candidate' : 'generic'),
+      performerEnemyIds: performers
+        .map((enemy) => Math.max(0, Math.trunc(Number(enemy?.id) || 0)))
+        .filter((id) => id > 0),
+      performerCount: performers.length,
+      requestedNote: styledNoteName,
+      instrumentId,
+      actionType: String(group.actionType || 'projectile') === 'explosion'
+        ? 'composer-group-explosion'
+        : 'composer-group-projectile',
+      directTriggerEligible: !!(
+        (introPercussionCarrier || (introSlotIdentityActive && (rhythmBackbeatCarrier || rhythmMotionCarrier)) || ((rhythmProfileCarrier || soloRhythmCarrier) && !slotRhythmCarrier))
+        && directTriggerComposerCarrier
+      ),
+    });
     if ((introPercussionCarrier || (introSlotIdentityActive && (rhythmBackbeatCarrier || rhythmMotionCarrier)) || ((rhythmProfileCarrier || soloRhythmCarrier) && !slotRhythmCarrier)) && directTriggerComposerCarrier) {
+      noteEarlyCarrierTrace('direct_trigger', {
+        branch: 'direct_trigger',
+        performerEnemyIds: performers
+          .map((enemy) => Math.max(0, Math.trunc(Number(enemy?.id) || 0)))
+          .filter((id) => id > 0),
+        performerCount: performers.length,
+        requestedNote: styledNoteName,
+        instrumentId,
+        actionType: String(group.actionType || 'projectile') === 'explosion'
+          ? 'composer-group-explosion'
+          : 'composer-group-projectile',
+      });
       for (const enemy of performers) {
         try {
           directTriggerComposerCarrier({

@@ -442,6 +442,9 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     gameplayDeltaMixShift: Number(payload?.gameplayDeltaMixShift) || 0,
     gameplayDeltaSignificant: payload?.gameplayDeltaSignificant === true,
     meaningfulTransitionEligible: payload?.meaningfulTransitionEligible === true,
+    visualFailureReasons: Array.isArray(payload?.visualFailureReasons)
+      ? payload.visualFailureReasons.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
     meaningfulTransitionReasons: Array.isArray(payload?.meaningfulTransitionReasons)
       ? payload.meaningfulTransitionReasons.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
       : [],
@@ -566,6 +569,7 @@ function summarizeSystemEvent(sessionLike, record) {
         events: 0,
         offC3Events: 0,
       },
+      handoffVisualFailures: {},
     };
   }
   const type = String(rec?.eventType || '').trim().toLowerCase();
@@ -625,6 +629,17 @@ function summarizeSystemEvent(sessionLike, record) {
     summary.events += 1;
     const resolvedNote = String(rec?.resolvedNote || '').trim().toUpperCase();
     if (resolvedNote && resolvedNote !== 'C3') summary.offC3Events += 1;
+  } else if (type === 'music_handoff_visual_continuity_failed') {
+    const summary = session.systemEventSummary.handoffVisualFailures
+      && typeof session.systemEventSummary.handoffVisualFailures === 'object'
+      ? session.systemEventSummary.handoffVisualFailures
+      : (session.systemEventSummary.handoffVisualFailures = {});
+    const reasons = Array.isArray(rec?.visualFailureReasons) ? rec.visualFailureReasons : [];
+    for (const reasonLike of reasons) {
+      const reason = String(reasonLike || '').trim().toLowerCase();
+      if (!reason) continue;
+      summary[reason] = clampInt(summary[reason], 0, 0) + 1;
+    }
   }
 }
 
@@ -3587,6 +3602,7 @@ export function createBeatSwarmMusicLab(options = null) {
           executedPulse: 0,
           executedBackbeat: 0,
         },
+        handoffVisualFailures: {},
       },
       threatBudgetSnapshots: [],
       metricsHistory: [],

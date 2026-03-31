@@ -75,13 +75,20 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const supportLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.support : null;
   const answerLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.answer : null;
   const primaryLoopLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.primary_loop : null;
+  const supportLaneActive = supportLanePlan?.active === true;
+  const answerLaneActive = answerLanePlan?.active === true;
+  const primaryLoopLaneActive = primaryLoopLanePlan?.active === true;
   const pacingState = String(helpers.getCurrentPacingStateName?.() || '').trim().toLowerCase();
   const introWindowActive = introStage !== 'none';
   const introComposerLockActive = introStage === 'player_only';
   const introRhythmOnlyWindow = introStage === 'rhythm_only';
   const introSoftRampWindow = introStage === 'soft_ramp';
+  const melodySoloWindowOpen = !introWindowActive && currentBarIndex >= 20;
   const spawnWantsSoloRhythm = spawnConfigLoaded && spawnChosenId === 'solo_rhythm_basic' && !introRhythmOnlyWindow;
-  const spawnWantsSoloMelody = spawnConfigLoaded && spawnChosenId === 'solo_melody_basic' && !introRhythmOnlyWindow;
+  const spawnWantsSoloMelody = spawnConfigLoaded
+    && spawnChosenId === 'solo_melody_basic'
+    && !introRhythmOnlyWindow
+    && melodySoloWindowOpen;
   const stepAbs = Math.max(0, Math.trunc(currentBeatIndex));
   const legacyIntroHoldActive = !!helpers.shouldHoldIntroLayerExpansion?.(stepAbs);
   const introHoldActive = false;
@@ -149,27 +156,52 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     : 0;
   const activePrimaryLoopIntensity = Math.max(0, Number(primaryLoopLanePlan?.intensity) || 0);
   const strongLeadWindowActive = primaryLoopLanePlan?.active === true && activePrimaryLoopIntensity >= 0.66;
+  const melodyFallbackWindowOpen = melodySoloWindowOpen
+    && (
+      pacingState === 'peak'
+      || pacingState === 'break'
+      || currentBarIndex >= 20
+    );
   const effectiveDirectorSupportGroups = strongLeadWindowActive && directorAnswerGroups > 0
     ? 0
     : directorSupportGroups;
   const effectiveDirectorAnswerGroups = directorAnswerGroups;
   const directorRequestedGroupCount = effectiveDirectorSupportGroups + effectiveDirectorAnswerGroups;
+  const fallbackMelodyCoverageRequested = melodyFallbackWindowOpen
+    && primaryLoopLaneActive
+    && !spawnWantsSoloMelody
+    && spawnChosenId !== 'snake_basic';
+  const fallbackRhythmCoverageRequested = (supportLaneActive || answerLaneActive) && !spawnWantsSoloRhythm && spawnChosenId !== 'spawner_basic';
+  const fallbackCoverageGroupCount = (fallbackMelodyCoverageRequested ? 1 : 0) + (fallbackRhythmCoverageRequested ? 1 : 0);
   if (!introComposerLockActive && !introHoldActive) {
     effectivePacingCaps.maxComposerGroups = Math.max(
       0,
-      Math.max(Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0), directorRequestedGroupCount)
+      Math.max(
+        Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0),
+        directorRequestedGroupCount,
+        fallbackCoverageGroupCount
+      )
     );
-    if (!introWindowActive && !(effectiveDirectorSupportGroups > 0 || effectiveDirectorAnswerGroups > 0) && !spawnWantsComposer) {
+    if (!introWindowActive && !(effectiveDirectorSupportGroups > 0 || effectiveDirectorAnswerGroups > 0) && !spawnWantsComposer && fallbackCoverageGroupCount === 0) {
       effectivePacingCaps.maxComposerGroups = 0;
     }
-    if (spawnWantsComposer) {
+    const minimumCoverageGroupCount = fallbackMelodyCoverageRequested
+      ? 2
+      : Math.max(1, fallbackCoverageGroupCount);
+    if (spawnWantsComposer || fallbackCoverageGroupCount > 0) {
       effectivePacingCaps.responseMode = 'group';
-      effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
+      effectivePacingCaps.maxComposerGroups = Math.max(
+        minimumCoverageGroupCount,
+        Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0)
+      );
       effectivePacingCaps.maxComposerGroupSize = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 1));
       effectivePacingCaps.maxComposerPerformers = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1));
     }
     if (strongLeadWindowActive && !spawnWantsComposer) {
-      effectivePacingCaps.maxComposerGroups = Math.min(Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0), 1);
+      effectivePacingCaps.maxComposerGroups = Math.max(
+        minimumCoverageGroupCount,
+        Math.min(Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0), 1)
+      );
       effectivePacingCaps.maxComposerGroupSize = Math.min(Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 1), 1);
       effectivePacingCaps.maxComposerPerformers = Math.min(Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1), 1);
       if (effectiveDirectorAnswerGroups > 0) {
@@ -399,7 +431,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   };
   const INTRO_SLOT_BODY_POLICY = Object.freeze({
     spawner_rhythm_pulse: Object.freeze(['group']),
-    spawner_rhythm_backbeat: Object.freeze(['group', 'solo']),
+    spawner_rhythm_backbeat: Object.freeze(['group']),
     spawner_rhythm_motion: Object.freeze(['solo']),
   });
   const getEligibleIntroRhythmCarrierBodyTypes = (profileSourceType = '') => {
@@ -434,6 +466,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     if (introComposerLockActive || String(effectivePacingCaps?.responseMode || '').trim().toLowerCase() !== 'group') {
       return parityLane;
     }
+    if (fallbackMelodyCoverageRequested || fallbackRhythmCoverageRequested) return 'call';
     const coverage = getActiveComposerLaneCoverage();
     if (!coverage.hasNonBassCall) return 'call';
     if (!coverage.hasResponse) return 'response';
@@ -467,6 +500,22 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       )
     )
   )).length;
+  const getActiveVisibleNonFoundationSoloCount = () => composerEnemyGroups.filter((group) => {
+    if (!group || group.active !== true || group.retiring) return false;
+    if (String(group?.musicLaneId || '').trim().toLowerCase() === 'foundation_lane') return false;
+    const templateId = String(group?.templateId || '').trim().toLowerCase();
+    const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
+    const introCarrierBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
+    return templateId.startsWith('solo-') || (!!soloCarrierType && introCarrierBodyType !== 'group');
+  }).length;
+  const getActiveVisibleNonFoundationSoloGroups = () => composerEnemyGroups.filter((group) => {
+    if (!group || group.active !== true || group.retiring) return false;
+    if (String(group?.musicLaneId || '').trim().toLowerCase() === 'foundation_lane') return false;
+    const templateId = String(group?.templateId || '').trim().toLowerCase();
+    const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
+    const introCarrierBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
+    return templateId.startsWith('solo-') || (!!soloCarrierType && introCarrierBodyType !== 'group');
+  });
   const findReplaceableNonSoloGroup = () => {
     const activeGroups = composerEnemyGroups.filter((group) => (
       group
@@ -487,6 +536,99 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     });
     return activeGroups[0] || null;
   };
+  const promoteExistingGroupToFallbackSoloCarrier = (soloType) => {
+    const normalizedSoloType = String(soloType || '').trim().toLowerCase();
+    if (normalizedSoloType !== 'melody' && normalizedSoloType !== 'rhythm') return null;
+    const profileSourceType = normalizedSoloType === 'melody' ? 'snake_melody' : 'spawner_rhythm';
+    const sharedSoloProfile = getSharedCarrierMusicProfile(profileSourceType) || null;
+    const candidate = composerEnemyGroups.find((group) => {
+      if (!group || group.active !== true || group.retiring) return false;
+      if (isActiveIntroSlotProfile(group)) return false;
+      if (String(group?.templateId || '').trim() === 'foundation-buffer') return false;
+      if (String(group?.soloCarrierType || '').trim()) return false;
+      if (normalizedSoloType === 'melody') {
+        const role = helpers.normalizeSwarmRole?.(group?.role || '', constants.leadRole) || '';
+        if (role === constants.bassRole) return false;
+      }
+      return getAliveComposerEnemiesByIds(group?.memberIds).length > 0;
+    }) || null;
+    if (!candidate) {
+      try {
+        noteMusicSystemEvent?.('music_composer_fallback_promotion', {
+          phase: 'miss',
+          soloCarrierType: normalizedSoloType,
+          reason: 'no_candidate_group',
+        }, {
+          beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+          barIndex: Math.max(0, Math.trunc(Number(currentBarIndex) || 0)),
+        });
+      } catch {}
+      return null;
+    }
+    candidate.soloCarrierType = normalizedSoloType;
+    candidate.musicProfileSourceType = profileSourceType;
+    candidate.role = sharedSoloProfile?.role || (normalizedSoloType === 'melody' ? constants.leadRole : candidate.role);
+    candidate.actionType = sharedSoloProfile?.actionType || (normalizedSoloType === 'rhythm' ? 'explosion' : 'projectile');
+    candidate.musicLaneId = sharedSoloProfile?.musicLaneId
+      || (normalizedSoloType === 'melody' ? 'primary_loop_lane' : getSoloRhythmPreferredLaneId(profileSourceType));
+    candidate.musicLaneLayer = sharedSoloProfile?.musicLaneLayer || 'loops';
+    candidate.callResponseLane = sharedSoloProfile?.callResponseLane || 'solo';
+    if (Array.isArray(sharedSoloProfile?.steps) && sharedSoloProfile.steps.length) {
+      candidate.steps = sharedSoloProfile.steps.slice(0, constants.weaponTuneSteps);
+    }
+    if (Array.isArray(sharedSoloProfile?.rows)) {
+      candidate.rows = sharedSoloProfile.rows.slice(0, constants.weaponTuneSteps);
+    }
+    if (Array.isArray(sharedSoloProfile?.notes) && sharedSoloProfile.notes.length) {
+      candidate.notes = sharedSoloProfile.notes.slice();
+    }
+    if (Array.isArray(sharedSoloProfile?.noteIndices)) {
+      candidate.noteIndices = sharedSoloProfile.noteIndices.slice(0, constants.weaponTuneSteps);
+    }
+    if (Array.isArray(sharedSoloProfile?.notePalette)) {
+      candidate.notePalette = sharedSoloProfile.notePalette.slice();
+    }
+    if (sharedSoloProfile?.phraseRoot) candidate.phraseRoot = sharedSoloProfile.phraseRoot;
+    if (sharedSoloProfile?.phraseFifth) candidate.phraseFifth = sharedSoloProfile.phraseFifth;
+    if (Array.isArray(sharedSoloProfile?.resolutionTargets) && sharedSoloProfile.resolutionTargets.length) {
+      candidate.resolutionTargets = sharedSoloProfile.resolutionTargets.slice();
+    }
+    if (sharedSoloProfile?.instrumentId) {
+      candidate.instrumentId = String(sharedSoloProfile.instrumentId);
+      candidate.instrument = String(sharedSoloProfile.instrumentId);
+    }
+    candidate.__bsComposerMemberSyncSignature = '';
+    candidate.__bsComposerMemberSyncCount = -1;
+    const aliveMembers = getAliveComposerEnemiesByIds(candidate?.memberIds);
+    for (const enemy of aliveMembers) {
+      if (!enemy || typeof enemy !== 'object') continue;
+      enemy.__bsComposerSyncSignature = '';
+      enemy.callResponseLane = 'solo';
+      enemy.musicLaneId = String(candidate.musicLaneId || enemy.musicLaneId || '').trim().toLowerCase();
+    }
+    try {
+      noteMusicSystemEvent?.('music_composer_fallback_promotion', {
+        phase: 'promoted',
+        groupId: Math.trunc(Number(candidate?.id) || 0),
+        soloCarrierType: normalizedSoloType,
+        musicLaneId: String(candidate?.musicLaneId || '').trim().toLowerCase(),
+        callResponseLane: String(candidate?.callResponseLane || '').trim().toLowerCase(),
+        aliveMemberCount: aliveMembers.length,
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+        barIndex: Math.max(0, Math.trunc(Number(currentBarIndex) || 0)),
+      });
+    } catch {}
+    return candidate;
+  };
+  if (currentBarIndex < 20) {
+    const earlyVisibleSoloGroups = getActiveVisibleNonFoundationSoloGroups()
+      .slice()
+      .sort((a, b) => Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0));
+    for (let i = 1; i < earlyVisibleSoloGroups.length; i++) {
+      retireGroup(earlyVisibleSoloGroups[i], 'early_solo_overflow');
+    }
+  }
   if (!introComposerLockActive) {
     if (spawnWantsSoloRhythm && getActiveSoloCarrierCount('rhythm') === 0) {
       const replaceable = findReplaceableNonSoloGroup();
@@ -499,6 +641,23 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     if (spawnWantsSoloMelody && getActiveSoloCarrierCount('melody') === 0) {
       const replaceable = findReplaceableNonSoloGroup();
       if (replaceable) retireGroup(replaceable, 'solo_melody_turnover');
+      effectivePacingCaps.responseMode = 'group';
+      effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
+      effectivePacingCaps.maxComposerGroupSize = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 1));
+      effectivePacingCaps.maxComposerPerformers = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1));
+    }
+    if (!spawnWantsSoloRhythm && fallbackRhythmCoverageRequested && getActiveSoloCarrierCount('rhythm') === 0) {
+      const replaceable = findReplaceableNonSoloGroup();
+      if (replaceable) retireGroup(replaceable, 'fallback_rhythm_turnover');
+      effectivePacingCaps.responseMode = 'group';
+      effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
+      effectivePacingCaps.maxComposerGroupSize = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 1));
+      effectivePacingCaps.maxComposerPerformers = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1));
+    }
+    if (!spawnWantsSoloMelody && fallbackMelodyCoverageRequested && getActiveSoloCarrierCount('melody') === 0) {
+      promoteExistingGroupToFallbackSoloCarrier('melody');
+      const replaceable = findReplaceableNonSoloGroup();
+      if (replaceable) retireGroup(replaceable, 'fallback_melody_turnover');
       effectivePacingCaps.responseMode = 'group';
       effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
       effectivePacingCaps.maxComposerGroupSize = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 1));
@@ -639,9 +798,14 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             && String(motif?.callResponseLane || templateLane || '').trim().toLowerCase() !== 'response';
           if (requestedGenericFoundationSolo || requestedGenericBackbeatSolo) return null;
           const introStageSoloRhythmActive = (introRhythmOnlyWindow || introSoftRampWindow) && !spawnWantsSoloMelody;
+          const fallbackSoloCarrierType = fallbackMelodyCoverageRequested
+            ? 'melody'
+            : (fallbackRhythmCoverageRequested ? 'rhythm' : '');
           const soloCarrierType = introStageSoloRhythmActive
             ? 'rhythm'
-            : (spawnWantsSoloRhythm ? 'rhythm' : (spawnWantsSoloMelody ? 'melody' : ''));
+            : (spawnWantsSoloRhythm
+              ? 'rhythm'
+              : (spawnWantsSoloMelody ? 'melody' : fallbackSoloCarrierType));
           const soloCarrierActive = !!soloCarrierType;
           const introRhythmProfileSourceType = (() => {
             if (!introStageSoloRhythmActive) return '';
@@ -671,8 +835,16 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             ? chooseIntroRhythmCarrierBodyType(introRhythmProfileSourceType)
             : '';
           const introRhythmUsesGroupBody = introStageSoloRhythmActive && introRhythmCarrierBodyType === 'group';
-          const visualSoloCarrierType = introRhythmUsesGroupBody ? '' : soloCarrierType;
+          const suppressEarlyFallbackRhythmSoloVisual = currentBarIndex < 20
+            && soloCarrierType === 'rhythm'
+            && !introStageSoloRhythmActive
+            && !spawnWantsSoloRhythm;
+          const visualSoloCarrierType = (introRhythmUsesGroupBody || suppressEarlyFallbackRhythmSoloVisual) ? '' : soloCarrierType;
           const visualSoloCarrierActive = !!visualSoloCarrierType;
+          const earlySoloHandoffClampActive = currentBarIndex < 20;
+          if (earlySoloHandoffClampActive && visualSoloCarrierActive && getActiveVisibleNonFoundationSoloCount() >= 1) {
+            return null;
+          }
           const sharedProfileSourceType = soloCarrierType === 'rhythm'
             ? (introRhythmProfileSourceType || 'spawner_rhythm')
             : (soloCarrierType === 'melody' ? 'snake_melody' : '');
@@ -1169,7 +1341,28 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         });
       }
       const aliveMembers = getAliveComposerEnemiesByIds(group.memberIds);
-      for (const enemy of aliveMembers) {
+      if (soloCarrierType) {
+        group.size = 1;
+        group.performers = 1;
+        if (aliveMembers.length > 1) {
+          const keeper = aliveMembers[0] || null;
+          for (let i = 1; i < aliveMembers.length; i++) {
+            const extraEnemy = aliveMembers[i];
+            if (!extraEnemy) continue;
+            extraEnemy.lifecycleState = 'retiring';
+            extraEnemy.composerRetiring = true;
+            extraEnemy.retireReason = 'solo_carrier_trim';
+            extraEnemy.retirePhaseStartMs = Number(performance?.now?.() || 0);
+            extraEnemy.retreating = true;
+          }
+          group.memberIds = new Set(keeper ? [Math.trunc(Number(keeper?.id) || 0)].filter((id) => id > 0) : []);
+        }
+      }
+      const syncedAliveMembers = getAliveComposerEnemiesByIds(group.memberIds);
+      const primarySoloMemberId = soloCarrierType && syncedAliveMembers.length
+        ? Math.trunc(Number(syncedAliveMembers[0]?.id) || 0)
+        : 0;
+      for (const enemy of syncedAliveMembers) {
         enemy.lifecycleState = memberLifecycleState;
         const memberSyncSignature = [
           Math.trunc(Number(group?.id) || 0),
@@ -1217,7 +1410,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           }
         }
         enemy.introStageCarrier = group?.introStageCarrier === true;
-        enemy.introCarrierBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
+        const enemyIsPrimarySoloMember = soloCarrierType && Math.trunc(Number(enemy?.id) || 0) === primarySoloMemberId;
+        enemy.soloCarrierType = enemyIsPrimarySoloMember ? soloCarrierType : '';
+        enemy.introCarrierBodyType = enemyIsPrimarySoloMember
+          ? String(group?.introCarrierBodyType || '').trim().toLowerCase()
+          : 'group';
         enemy.introSlotProfileSourceType = String(group?.introSlotProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase();
         enemy.musicParticipationGain = Number(group?.musicParticipationGain == null ? enemy?.musicParticipationGain : group.musicParticipationGain);
         enemy.callResponseLane = String(group?.callResponseLane || enemy?.callResponseLane || '').trim().toLowerCase();
@@ -1225,7 +1422,10 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         enemy.__bsComposerSyncSignature = memberSyncSignature;
       }
       group.__bsComposerMemberSyncSignature = groupSyncSignature;
-      group.__bsComposerMemberSyncCount = Math.max(0, Math.trunc(Number(groupMemberCount) || 0));
+      group.__bsComposerMemberSyncCount = Math.max(
+        0,
+        Math.trunc(Number(soloCarrierType ? syncedAliveMembers.length : groupMemberCount) || 0)
+      );
     }
   });
 }
