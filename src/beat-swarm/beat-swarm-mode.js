@@ -809,6 +809,7 @@ function chooseRotatingLaneInstrument(options = null) {
 function assignMusicLaneIdentity(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const laneId = resolveMusicLaneId(opts);
+  scrubStaleMusicLaneOwnership(laneId);
   const lane = getMusicLaneRuntimeEntry(laneId);
   if (!lane) return null;
   const directorLaneKey = resolveDirectorLanePlanKeyForMusicLaneId(laneId);
@@ -920,6 +921,25 @@ function assignMusicLaneIdentity(options = null) {
       || identityChangeReason === 'continuity_reset'
     )
   );
+  const explicitPerformerEnemyId = Math.max(0, Math.trunc(Number(opts?.performerEnemyId) || 0));
+  const explicitPerformerGroupId = Math.max(0, Math.trunc(Number(opts?.performerGroupId) || 0));
+  const explicitPerformerType = String(opts?.performerType || '').trim().toLowerCase();
+  const shouldRefreshLanePerformerBinding = (
+    explicitPerformerEnemyId > 0
+    && (
+      Math.max(0, Math.trunc(Number(lane.performerEnemyId) || 0)) <= 0
+      || (
+        explicitPerformerGroupId > 0
+        && Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0)) === explicitPerformerGroupId
+      )
+    )
+  );
+  const refreshLanePerformerBinding = () => {
+    if (!shouldRefreshLanePerformerBinding) return;
+    lane.performerEnemyId = explicitPerformerEnemyId;
+    if (explicitPerformerGroupId > 0) lane.performerGroupId = explicitPerformerGroupId;
+    if (explicitPerformerType) lane.performerType = explicitPerformerType;
+  };
   if (
     sameContinuity
     && stableProtectedLane
@@ -929,6 +949,7 @@ function assignMusicLaneIdentity(options = null) {
     && !phraseBoundary
   ) {
     if (matchesPendingIdentityChange) {
+      refreshLanePerformerBinding();
       if (group) {
         group.musicLaneId = laneId;
         group.musicLaneLayer = layer;
@@ -959,6 +980,7 @@ function assignMusicLaneIdentity(options = null) {
       };
     }
     if (!meaningfulProtectedLaneRestatement) {
+      refreshLanePerformerBinding();
       if (group) {
         group.musicLaneId = laneId;
         group.musicLaneLayer = layer;
@@ -1055,8 +1077,8 @@ function assignMusicLaneIdentity(options = null) {
   const patternKey = preserveLaneIdentity && !allowPatternChange
     ? String(lane.patternKey || requestedPatternKey || '').trim()
     : requestedPatternKey;
-  const performerEnemyId = Math.max(0, Math.trunc(Number(opts?.performerEnemyId) || 0));
-  const performerGroupId = Math.max(0, Math.trunc(Number(opts?.performerGroupId) || 0));
+  const performerEnemyId = explicitPerformerEnemyId;
+  const performerGroupId = explicitPerformerGroupId;
   lane.laneId = laneId;
   lane.layer = layer;
   lane.role = role;
@@ -3811,6 +3833,154 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
   } catch {}
   return event;
 }
+function ensureBeatSwarmMusicTraceCaptureApi() {
+  if (typeof window === 'undefined') return null;
+  const existing = window.__beatSwarmMusicTraceCapture;
+  if (existing && typeof existing === 'object') return existing;
+  const state = {
+    enabled: false,
+    lines: [],
+    maxLines: 400,
+    outputDirectoryHandle: null,
+    include: null,
+    exclude: null,
+  };
+  const api = {
+    start(options = null) {
+      const opts = options && typeof options === 'object' ? options : {};
+      state.enabled = true;
+      state.lines = [];
+      state.maxLines = Math.max(50, Math.min(5000, Math.trunc(Number(opts.maxLines) || 400)));
+      state.include = Array.isArray(opts.include)
+        ? new Set(opts.include.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean))
+        : null;
+      state.exclude = Array.isArray(opts.exclude)
+        ? new Set(opts.exclude.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean))
+        : null;
+      return {
+        enabled: state.enabled,
+        maxLines: state.maxLines,
+        count: state.lines.length,
+      };
+    },
+    stop() {
+      state.enabled = false;
+      return {
+        enabled: state.enabled,
+        count: state.lines.length,
+      };
+    },
+    clear() {
+      state.lines = [];
+      return {
+        enabled: state.enabled,
+        count: state.lines.length,
+      };
+    },
+    getLines() {
+      return state.lines.slice();
+    },
+    getText() {
+      return state.lines.join('\n');
+    },
+    download(fileName = '') {
+      try {
+        const text = state.lines.join('\n');
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const resolvedName = String(fileName || '').trim() || `beat-swarm-trace-${ts}.txt`;
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = resolvedName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 250);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    async chooseOutputDirectory() {
+      try {
+        if (typeof window.showDirectoryPicker !== 'function') {
+          return { ok: false, reason: 'directory_picker_unavailable' };
+        }
+        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        state.outputDirectoryHandle = handle || null;
+        return {
+          ok: !!state.outputDirectoryHandle,
+          reason: state.outputDirectoryHandle ? '' : 'no_directory_selected',
+          name: String(state.outputDirectoryHandle?.name || '').trim(),
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          reason: String(err && err.name || err || 'directory_picker_failed').trim().toLowerCase() || 'directory_picker_failed',
+        };
+      }
+    },
+    async saveToOutputDirectory(fileName = '') {
+      try {
+        const dirHandle = state.outputDirectoryHandle;
+        if (!dirHandle || typeof dirHandle.getFileHandle !== 'function') {
+          return { ok: false, reason: 'output_directory_unset' };
+        }
+        const text = state.lines.join('\n');
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        const resolvedName = String(fileName || '').trim() || `beat-swarm-trace-${ts}.txt`;
+        const fileHandle = await dirHandle.getFileHandle(resolvedName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(text);
+        await writable.close();
+        return { ok: true, fileName: resolvedName, directoryName: String(dirHandle?.name || '').trim() };
+      } catch (err) {
+        return {
+          ok: false,
+          reason: String(err && err.name || err || 'write_failed').trim().toLowerCase() || 'write_failed',
+        };
+      }
+    },
+    getOutputDirectoryState() {
+      return {
+        configured: !!state.outputDirectoryHandle,
+        name: String(state.outputDirectoryHandle?.name || '').trim(),
+      };
+    },
+    push(line = '') {
+      if (!state.enabled) return;
+      const text = String(line || '').trim();
+      if (!text) return;
+      state.lines.push(text);
+      if (state.lines.length > state.maxLines) {
+        state.lines.splice(0, state.lines.length - state.maxLines);
+      }
+    },
+    getState() {
+      return {
+        enabled: state.enabled,
+        maxLines: state.maxLines,
+        count: state.lines.length,
+      };
+    },
+    record(eventRecord = null) {
+      if (!state.enabled || !eventRecord || typeof eventRecord !== 'object') return;
+      const type = String(eventRecord.type || '').trim().toLowerCase();
+      if (!type) return;
+      if (state.include && !state.include.has(type)) return;
+      if (state.exclude && state.exclude.has(type)) return;
+      try {
+        api.push(JSON.stringify(eventRecord));
+      } catch {}
+    },
+  };
+  try {
+    window.__beatSwarmMusicTraceCapture = api;
+  } catch {}
+  return api;
+}
+
 function noteMusicSystemEvent(eventType, fields = null, context = null) {
   const payload = fields && typeof fields === 'object' ? fields : {};
   const beatIndex = Math.max(0, Math.trunc(Number(context?.beatIndex) || Number(currentBeatIndex) || 0));
@@ -3836,6 +4006,15 @@ function noteMusicSystemEvent(eventType, fields = null, context = null) {
         barIndex,
       },
     }));
+  } catch {}
+  try {
+    ensureBeatSwarmMusicTraceCaptureApi()?.record({
+      type,
+      barIndex,
+      beatIndex,
+      stepIndex,
+      payload,
+    });
   } catch {}
   try {
     const traceConfig = window.__beatSwarmMusicTrace;
@@ -4385,6 +4564,7 @@ function applyDeferredMusicLaneIdentityChangesRuntime(options = null) {
   return applied;
 }
 function buildMusicLaneOwnershipSnapshot(laneId = '') {
+  scrubStaleMusicLaneOwnership(laneId);
   const lane = getMusicLaneRuntimeEntry(laneId);
   if (!lane) return null;
   return {
@@ -4409,6 +4589,38 @@ function buildMusicLaneOwnershipSnapshot(laneId = '') {
     lastAssignedBar: Math.trunc(Number(lane.lastAssignedBar) || -1),
     lifetimeBars: Math.max(0, Math.trunc(Number(lane.lifetimeBars) || 0)),
   };
+}
+function scrubStaleMusicLaneOwnership(laneId = '') {
+  const lane = getMusicLaneRuntimeEntry(laneId);
+  if (!lane || typeof lane !== 'object') return;
+  const performerEnemyId = Math.max(0, Math.trunc(Number(lane.performerEnemyId) || 0));
+  const performerGroupId = Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0));
+  const liveEnemy = performerEnemyId > 0
+    ? (enemies.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === performerEnemyId) || null)
+    : null;
+  const liveEnemyActive = !!liveEnemy
+    && liveEnemy.retreating !== true
+    && normalizeMusicLifecycleState(liveEnemy?.lifecycleState || 'active', 'active') === 'active';
+  const liveGroup = performerGroupId > 0
+    ? (composerEnemyGroups.find((group) => Math.max(0, Math.trunc(Number(group?.id) || 0)) === performerGroupId) || null)
+    : null;
+  const liveGroupMemberIds = liveGroup?.memberIds instanceof Set
+    ? Array.from(liveGroup.memberIds)
+    : (Array.isArray(liveGroup?.memberIds) ? liveGroup.memberIds.slice() : []);
+  const liveGroupHasActiveMembers = !!liveGroup
+    && liveGroup.active !== false
+    && liveGroup.retiring !== true
+    && liveGroupMemberIds.some((memberId) => {
+      const member = enemies.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === Math.max(0, Math.trunc(Number(memberId) || 0))) || null;
+      return !!member
+        && member.retreating !== true
+        && normalizeMusicLifecycleState(member?.lifecycleState || 'active', 'active') === 'active';
+    });
+  if (performerEnemyId > 0 && liveEnemyActive) return;
+  if (performerGroupId > 0 && liveGroupHasActiveMembers) return;
+  lane.performerEnemyId = 0;
+  lane.performerGroupId = 0;
+  lane.performerType = '';
 }
 function isMeaningfulMusicLaneOwnershipSnapshot(snapshot = null) {
   const snap = snapshot && typeof snapshot === 'object' ? snapshot : null;
@@ -18958,6 +19170,7 @@ installBeatSwarmDebugGlobalRuntime({
 installBeatSwarmMusicLabGlobalRuntime({
   windowObj: window,
   api: createBeatSwarmMusicLabApiRuntime({
+    windowObj: window,
     helpers: {
       getBeatSwarmPerfSnapshot,
       getBeatSwarmStepEventsPerfSnapshot,

@@ -780,6 +780,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         },
       }));
       if (slotRhythmCarrier) {
+        if (!(Math.trunc(Number(group?.introSlotFirstAudibleBeatIndex) || -1) >= 0)) {
+          group.introSlotFirstAudibleBeatIndex = beatIndex;
+        }
         const introSlotEmitPayload = {
           groupId,
           stepIndex: stepAbs,
@@ -1291,6 +1294,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       });
     }
     if (slotRhythmCarrier) {
+      if (!(Math.trunc(Number(group?.introSlotFirstAudibleBeatIndex) || -1) >= 0)) {
+        group.introSlotFirstAudibleBeatIndex = beatIndex;
+      }
       const introSlotGenericEmitPayload = {
         groupId,
         stepIndex: stepAbs,

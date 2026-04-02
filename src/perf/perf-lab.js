@@ -1353,7 +1353,6 @@ function ensureUI() {
       }
       return;
     }
-
     // --------------------------------------------------------------
     // Footer auto-tests (these are the big buttons in the footer)
     // --------------------------------------------------------------
@@ -1852,6 +1851,7 @@ const PERF_LAB_STORAGE_KEY = 'perfLab:lastResults';
 const PERF_LAB_AUTO_KEY = 'perfLab:auto';
 const DEFAULT_PERF_RESULTS_URL = 'http://localhost:5174/perf-lab-results';
 const DEFAULT_MUSIC_RESULTS_URL = 'http://localhost:5174/music-lab-results';
+const DEFAULT_DEBUG_OUTPUT_URL = 'http://localhost:5174/debug-output';
 
 function normalizeQueue(input) {
   if (!input) return [];
@@ -1998,6 +1998,14 @@ function resolveLabPostUrl(cfg, labType = 'perf') {
     || DEFAULT_PERF_RESULTS_URL;
 }
 
+function resolveDebugOutputPostUrl(cfg) {
+  const src = (cfg && typeof cfg === 'object') ? cfg : {};
+  return src.debugOutputUrl
+    || src.postUrlDebug
+    || window.__DEBUG_OUTPUT_URL
+    || DEFAULT_DEBUG_OUTPUT_URL;
+}
+
 function buildResultsBundle(results, meta = {}) {
   const href = (typeof location !== 'undefined' && location.href) ? location.href : '';
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
@@ -2064,6 +2072,25 @@ async function postResultsBundle(bundle, url, opts = {}) {
     return false;
   } catch (err) {
     console.warn('[PerfLab] postResults failed', err);
+    return false;
+  }
+}
+
+async function postDebugOutputFile({ fileName = '', text = '', meta = null } = {}, url = '') {
+  if (!url) return false;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: String(fileName || '').trim(),
+        text: String(text || ''),
+        meta: meta && typeof meta === 'object' ? meta : null,
+      }),
+    });
+    return !!(res && res.ok);
+  } catch (err) {
+    console.warn('[PerfLab] postDebugOutput failed', err);
     return false;
   }
 }
@@ -3093,6 +3120,93 @@ function getMusicLabApiGlobal() {
   return api;
 }
 
+function getMusicTraceCaptureApiGlobal() {
+  const api = getMusicLabApiGlobal();
+  if (!api || typeof api !== 'object') return null;
+  if (typeof api.startTraceCapture !== 'function' || typeof api.stopTraceCapture !== 'function') return null;
+  return api;
+}
+
+function startMusicTraceCaptureForPerfRun(config = null) {
+  const api = getMusicTraceCaptureApiGlobal();
+  if (!api) return { ok: false, reason: 'trace_capture_api_unavailable' };
+  const cfg = config && typeof config === 'object' ? config : {};
+  const include = Array.isArray(cfg.include)
+    ? cfg.include.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+  const exclude = Array.isArray(cfg.exclude)
+    ? cfg.exclude.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+  try {
+    window.__beatSwarmMusicTrace = {
+      enabled: true,
+      include,
+      exclude,
+    };
+  } catch {}
+  try {
+    const result = api.startTraceCapture({
+      include,
+      exclude,
+      maxLines: Math.max(50, Math.min(5000, Math.trunc(Number(cfg.maxLines) || 300))),
+    });
+    return {
+      ok: true,
+      started: result && typeof result === 'object' ? { ...result } : null,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: String(err && err.message || err || 'trace_capture_start_failed'),
+    };
+  }
+}
+
+async function finalizeMusicTraceCaptureForPerfRun(config = null) {
+  const api = getMusicTraceCaptureApiGlobal();
+  if (!api) return { ok: false, reason: 'trace_capture_api_unavailable' };
+  const cfg = config && typeof config === 'object' ? config : {};
+  let stopped = null;
+  try {
+    stopped = api.stopTraceCapture();
+  } catch {}
+  const fileName = String(cfg.fileName || '').trim();
+  const text = typeof api.getTraceCaptureText === 'function' ? String(api.getTraceCaptureText() || '') : '';
+  try {
+    const cfgResolved = await resolveResultsConfig();
+    const postUrl = resolveDebugOutputPostUrl(cfgResolved);
+    const saved = await postDebugOutputFile({
+      fileName,
+      text,
+      meta: cfg.meta && typeof cfg.meta === 'object' ? cfg.meta : null,
+    }, postUrl);
+    if (saved) {
+      return {
+        ok: true,
+        mode: 'server',
+        fileName,
+        postUrl,
+        stopped,
+      };
+    }
+  } catch {}
+  try {
+    const downloaded = api.downloadTraceCapture(fileName);
+    return {
+      ok: !!downloaded,
+      mode: 'download',
+      fileName,
+      stopped,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: String(err && err.message || err || 'trace_capture_finalize_failed'),
+      stopped,
+    };
+  }
+}
+
 function getBeatSwarmPerfSnapshotGlobal() {
   const api = window.__beatSwarmDebug;
   if (!api || typeof api !== 'object') return null;
@@ -4111,6 +4225,9 @@ async function runBS0Stage(stageCount = 1, opts = null) {
   const groupedRunId = String(cfg.groupedRunId || `${saveRunIdBase}_scenario`).trim() || `${saveRunIdBase}_scenario`;
   const groupedNotes = String(cfg.groupedNotes || `Grouped scenario bundle for BS0 S${stageCount} music multi-run.`).trim()
     || `Grouped scenario bundle for BS0 S${stageCount} music multi-run.`;
+  const traceCaptureConfig = cfg.traceCapture && typeof cfg.traceCapture === 'object'
+    ? cfg.traceCapture
+    : null;
   const tagPrefix = String(cfg.tagPrefix || `BS0S${stageCount}`).trim() || `BS0S${stageCount}`;
   const labelPrefix = String(cfg.labelPrefix || `BS0_stage${stageCount}_beatswarm_static_fire`).trim() || `BS0_stage${stageCount}_beatswarm_static_fire`;
   const statusPrefix = String(cfg.statusPrefix || `Running BS0 S${stageCount} (static player, ${stageCount} stage weapon, onscreen enemies)`).trim()
@@ -4146,6 +4263,15 @@ async function runBS0Stage(stageCount = 1, opts = null) {
         if (api && typeof api.reset === 'function') {
           try { api.reset('perf-lab-run'); } catch {}
         }
+      }
+      if (traceCaptureConfig?.enabled === true) {
+        try {
+          await startMusicTraceCaptureForPerfRun({
+            include: Array.isArray(traceCaptureConfig.include) ? traceCaptureConfig.include : [],
+            exclude: Array.isArray(traceCaptureConfig.exclude) ? traceCaptureConfig.exclude : [],
+            maxLines: traceCaptureConfig.maxLines,
+          });
+        } catch {}
       }
       try { window.__PERF_RUN_TAG = `${tagPrefix}${runSuffix}`; } catch {}
       try {
@@ -4217,6 +4343,16 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           });
         } catch {}
       }
+      let traceCaptureResult = null;
+      if (traceCaptureConfig?.enabled === true) {
+        const traceFileBase = String(
+          traceCaptureConfig.fileNamePrefix || `beat-swarm-trace-s${stageCount}${runSuffix}`
+        ).trim();
+        traceCaptureResult = await finalizeMusicTraceCaptureForPerfRun({
+          fileName: `${traceFileBase}.txt`,
+          preferOutputDirectory: traceCaptureConfig.preferOutputDirectory !== false,
+        });
+      }
       if (saveMusicLabEachRun) {
         if (publishPerfArtifacts) {
           try {
@@ -4254,6 +4390,7 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           sessionId: String(save?.sessionId || ''),
           events: Math.max(0, Number(save?.events) || 0),
           sessionSummary: (save?.sessionSummary && typeof save.sessionSummary === 'object') ? save.sessionSummary : null,
+          traceCapture: traceCaptureResult && typeof traceCaptureResult === 'object' ? { ...traceCaptureResult } : null,
         });
         try {
           console.info('[PerfLab] BS0 Music run save outcome', {
@@ -4365,6 +4502,22 @@ async function runBS0s2() { await runBS0Stage(2); }
 async function runBS0s3() { await runBS0Stage(3); }
 async function runBS0s4() { await runBS0Stage(4); }
 async function runBS0s5() { await runBS0Stage(5); }
+
+const DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG = Object.freeze({
+  enabled: true,
+  include: Object.freeze([
+    'music_composer_group_spawn_plan',
+    'music_composer_group_lifecycle',
+    'music_intro_carrier_trace',
+    'music_intro_slot_strict_emit',
+    'music_intro_slot_generic_emit',
+    'music_intro_slot_suppressed',
+  ]),
+  maxLines: 1500,
+  preferOutputDirectory: true,
+  fileNamePrefix: 'resources-debug-trace',
+});
+
 async function runBS0s3MusicLabTriplet() {
   await runBS0Stage(3, {
     durationMs: 180000,
@@ -4381,6 +4534,10 @@ async function runBS0s3MusicLabTriplet() {
     tagPrefix: 'BS0S3MusicLab3x3m',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_3m',
     statusPrefix: 'Running BS0 S3 Music Lab playtest (3 minutes)',
+    traceCapture: {
+      ...DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG,
+      fileNamePrefix: 'resources-debug-musicLab_bs0_s3_3x3m',
+    },
   });
 }
 
@@ -4400,6 +4557,10 @@ async function runBS0s3MusicLabSingle() {
     tagPrefix: 'BS0S3MusicLab1x3m',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_1x3m',
     statusPrefix: 'Running BS0 S3 Music Lab quick playtest (3 minutes)',
+    traceCapture: {
+      ...DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG,
+      fileNamePrefix: 'resources-debug-musicLab_bs0_s3_1x3m',
+    },
   });
 }
 
@@ -4419,6 +4580,10 @@ async function runBS0s3MusicLabSingle5m() {
     tagPrefix: 'BS0S3MusicLab1x5m',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_1x5m',
     statusPrefix: 'Running BS0 S3 Music Lab structure pass (5 minutes)',
+    traceCapture: {
+      ...DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG,
+      fileNamePrefix: 'resources-debug-musicLab_bs0_s3_1x5m',
+    },
   });
 }
 
@@ -4438,6 +4603,10 @@ async function runBS0s3MusicLabSingle1m() {
     tagPrefix: 'BS0S3MusicLab1x1m',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_1x1m',
     statusPrefix: 'Running BS0 S3 Music Lab quick playtest (1 minute)',
+    traceCapture: {
+      ...DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG,
+      fileNamePrefix: 'resources-debug-musicLab_bs0_s3_1x1m',
+    },
   });
 }
 

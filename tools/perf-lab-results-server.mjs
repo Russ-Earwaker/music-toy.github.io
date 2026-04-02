@@ -6,6 +6,7 @@ const port = Number(process.env.PERF_LAB_PORT || 5174);
 const outRootDir = process.env.PERF_LAB_OUT_DIR || 'resources';
 const perfDirName = process.env.PERF_LAB_RESULTS_DIR || 'perf-lab-results';
 const musicDirName = process.env.MUSIC_LAB_RESULTS_DIR || 'music-lab-results';
+const debugDirName = process.env.DEBUG_OUTPUT_DIR || 'debug-output';
 
 function nowStamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
@@ -60,6 +61,31 @@ const server = http.createServer(async (req, res) => {
     }
   };
 
+  const saveDebugOutput = async () => {
+    try {
+      const body = await readBody(req);
+      const payload = JSON.parse(body);
+      const targetDir = join(outRootDir, debugDirName);
+      mkdirSync(targetDir, { recursive: true });
+      const rawFileName = String(payload?.fileName || '').trim();
+      const safeFileName = rawFileName
+        ? rawFileName.replace(/[<>:"/\\|?*\x00-\x1F]/g, '-')
+        : `debug-output-${nowStamp()}.txt`;
+      const outPath = join(targetDir, safeFileName);
+      const text = typeof payload?.text === 'string'
+        ? payload.text
+        : JSON.stringify(payload, null, 2);
+      writeFileSync(outPath, text, 'utf8');
+      send(res, 200, 'saved');
+      console.log('[debug-output] saved', outPath);
+      return;
+    } catch (err) {
+      console.error('[debug-output] failed', err);
+      send(res, 400, 'invalid json');
+      return;
+    }
+  };
+
   if (req.method === 'POST' && req.url === '/perf-lab-results') {
     await saveBundle({
       routeTag: 'perf-lab-results',
@@ -75,6 +101,11 @@ const server = http.createServer(async (req, res) => {
       stampPrefix: 'music-lab-results',
       outputDirName: musicDirName,
     });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/debug-output') {
+    await saveDebugOutput();
     return;
   }
 

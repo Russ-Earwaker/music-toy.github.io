@@ -528,6 +528,30 @@ export function installBeatSwarmMusicLabGlobalRuntime(deps = {}) {
       setEnabled(next = true) {
         return api.setEnabled(next);
       },
+      startTraceCapture(options = null) {
+        return api.startTraceCapture(options);
+      },
+      stopTraceCapture() {
+        return api.stopTraceCapture();
+      },
+      clearTraceCapture() {
+        return api.clearTraceCapture();
+      },
+      getTraceCaptureText() {
+        return api.getTraceCaptureText();
+      },
+      downloadTraceCapture(fileName = '') {
+        return api.downloadTraceCapture(fileName);
+      },
+      chooseTraceOutputDirectory() {
+        return api.chooseTraceOutputDirectory();
+      },
+      saveTraceCaptureToOutputDirectory(fileName = '') {
+        return api.saveTraceCaptureToOutputDirectory(fileName);
+      },
+      getTraceOutputDirectoryState() {
+        return api.getTraceOutputDirectoryState();
+      },
       getCleanupAssertions() {
         return api.getCleanupAssertions();
       },
@@ -538,6 +562,11 @@ export function installBeatSwarmMusicLabGlobalRuntime(deps = {}) {
 export function createBeatSwarmMusicLabApiRuntime(deps = {}) {
   const helpers = deps.helpers && typeof deps.helpers === 'object' ? deps.helpers : {};
   const state = deps.state && typeof deps.state === 'object' ? deps.state : {};
+  const windowObj = deps.windowObj;
+  const getTraceCaptureApi = () => {
+    const api = windowObj?.__beatSwarmMusicTraceCapture;
+    return api && typeof api === 'object' ? api : null;
+  };
   return {
     reset(reason = 'manual') {
       helpers.startMusicLabSession?.(reason);
@@ -568,6 +597,30 @@ export function createBeatSwarmMusicLabApiRuntime(deps = {}) {
     },
     setEnabled(next = true) {
       return helpers.swarmMusicLab?.setEnabled?.(next);
+    },
+    startTraceCapture(options = null) {
+      return getTraceCaptureApi()?.start?.(options) || null;
+    },
+    stopTraceCapture() {
+      return getTraceCaptureApi()?.stop?.() || null;
+    },
+    clearTraceCapture() {
+      return getTraceCaptureApi()?.clear?.() || null;
+    },
+    getTraceCaptureText() {
+      return getTraceCaptureApi()?.getText?.() || '';
+    },
+    downloadTraceCapture(fileName = '') {
+      return !!getTraceCaptureApi()?.download?.(fileName);
+    },
+    chooseTraceOutputDirectory() {
+      return getTraceCaptureApi()?.chooseOutputDirectory?.() || Promise.resolve({ ok: false, reason: 'trace_capture_api_unavailable' });
+    },
+    saveTraceCaptureToOutputDirectory(fileName = '') {
+      return getTraceCaptureApi()?.saveToOutputDirectory?.(fileName) || Promise.resolve({ ok: false, reason: 'trace_capture_api_unavailable' });
+    },
+    getTraceOutputDirectoryState() {
+      return getTraceCaptureApi()?.getOutputDirectoryState?.() || { configured: false, name: '' };
     },
     getCleanupAssertions() {
       const cleanupAssertionState = state.cleanupAssertionState || {};
