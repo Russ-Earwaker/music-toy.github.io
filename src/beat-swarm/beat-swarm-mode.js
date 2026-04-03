@@ -3628,10 +3628,29 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       return null;
     }
     const notesLen = Math.max(1, Array.isArray(group?.notes) ? group.notes.length : 0);
+    const melodyStepDriven = isSoloCarrier
+      && soloCarrierType === 'melody'
+      && String(group?.musicLaneId || ownerEnemy?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane';
     const postCadenceRestUntilStep = Math.max(-1, Math.trunc(Number(group?.__bsPhraseRestUntilStep) || -1));
     if (stepIndex <= postCadenceRestUntilStep && !continuingResponsePhrase) return null;
-    const noteIdx = Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen;
-    const noteNameBaseRaw = normalizeSwarmNoteName(group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
+    const noteIdx = melodyStepDriven
+      ? (step % notesLen)
+      : (Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen);
+    const rowDrivenNoteName = melodyStepDriven
+      ? normalizeSwarmNoteName(getSwarmPentatonicNoteByIndex(
+          Math.max(
+            0,
+            Math.min(
+              SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1,
+              Math.trunc(Number(group?.rows?.[step]) || 0)
+            )
+          )
+        ))
+      : '';
+    const stepDrivenNoteName = melodyStepDriven
+      ? (normalizeSwarmNoteName(group?.notes?.[step]) || rowDrivenNoteName)
+      : '';
+    const noteNameBaseRaw = stepDrivenNoteName || normalizeSwarmNoteName(group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
     const noteNameBase = clampNoteToDirectorPool(noteNameBaseRaw, stepIndex + noteIdx);
     const responsePool = ensureSwarmDirector().getNotePool();
     const responseSeedNote = normalizeSwarmNoteName(chooseResponseNoteFromPool({
@@ -3693,9 +3712,10 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       const currentNote = normalizeSwarmNoteName(styledNoteName);
       const prevIdx = prevNote ? getNotePoolIndex(prevNote) : -1;
       const currIdx = currentNote ? getNotePoolIndex(currentNote) : -1;
-      if (!phraseStep.resolutionOpportunity && prevNote && Math.random() < (motifRepeatBias * 0.5)) {
+      const repeatBias = melodyStepDriven ? (motifRepeatBias * 0.08) : (motifRepeatBias * 0.5);
+      if (!phraseStep.resolutionOpportunity && prevNote && Math.random() < repeatBias) {
         styledNoteName = prevNote;
-      } else if (prevIdx >= 0 && currIdx >= 0 && Math.abs(currIdx - prevIdx) > 1 && Math.random() > leadLeapChance) {
+      } else if (!melodyStepDriven && prevIdx >= 0 && currIdx >= 0 && Math.abs(currIdx - prevIdx) > 1 && Math.random() > leadLeapChance) {
         styledNoteName = prevNote;
       }
     }
@@ -3707,7 +3727,9 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       : false;
     const phraseResolutionOpportunity = phraseGravityOpportunity && phraseStep.resolutionOpportunity;
     const phraseResolutionHit = phraseResolutionOpportunity && phraseGravityHit;
-    group.noteCursor = noteIdx + 1;
+    if (!melodyStepDriven) {
+      group.noteCursor = noteIdx + 1;
+    }
     group.__bsLastComposerNote = normalizeSwarmNoteName(styledNoteName) || styledNoteName;
     group.__bsPhraseRestUntilStep = phraseResolutionHit ? (stepIndex + 1) : Math.max(-1, postCadenceRestUntilStep);
     const instrumentId = resolveProtectedLaneInstrumentIdentity(
@@ -6186,12 +6208,15 @@ function getUnifiedIntroStage(barIndex = 0, beatIndex = null) {
   const sessionStartBeat = sessionAge.sessionStartBeat;
   const sessionAgeBeats = sessionAge.sessionAgeBeats;
   const sessionAgeBars = sessionAge.sessionAgeBars;
-  const introRelevant = stateName === 'intro' || sessionAgeBars < 7;
+  const PLAYER_ONLY_BARS = 4;
+  const RHYTHM_ONLY_BARS = 4;
+  const SOFT_RAMP_END_BAR = 12;
+  const introRelevant = stateName === 'intro' || sessionAgeBars < SOFT_RAMP_END_BAR;
   let stage = 'none';
   if (introRelevant) {
-    if (sessionAgeBeats < 16) stage = 'player_only';
-    else if (sessionAgeBars < 3) stage = 'rhythm_only';
-    else if (sessionAgeBars < 7) stage = 'soft_ramp';
+    if (sessionAgeBars < PLAYER_ONLY_BARS) stage = 'player_only';
+    else if (sessionAgeBars < (PLAYER_ONLY_BARS + RHYTHM_ONLY_BARS)) stage = 'rhythm_only';
+    else if (sessionAgeBars < SOFT_RAMP_END_BAR) stage = 'soft_ramp';
   }
   const sig = `${stage}|${beat}|${sessionStartBeat}|${stateName}`;
   if (introDebugRuntime.lastStageSignature !== sig && bar < 20) {

@@ -13,6 +13,15 @@ function normalizeLifecycleState(value, fallback = 'active') {
   return 'active';
 }
 
+function normalizeComposerProfileSourceType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'snake_melody') return 'lead_melody';
+  if (normalized === 'spawner_rhythm') return 'rhythm_lane';
+  if (normalized === 'spawner_rhythm_secondary') return 'rhythm_lane_backbeat';
+  return normalized;
+}
+
 function normalizePhraseNoteList(values, normalizeNoteName) {
   if (!Array.isArray(values) || !values.length) return [];
   const out = [];
@@ -100,7 +109,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   });
   const hasIntroSlotRhythmCarrier = composerEnemyGroups.some((g) => {
     if (!g || !g.active || g.retiring) return false;
-    const profile = String(g?.introSlotProfileSourceType || g?.musicProfileSourceType || '').trim().toLowerCase();
+    const profile = normalizeComposerProfileSourceType(g?.introSlotProfileSourceType || g?.musicProfileSourceType);
     return profile === 'spawner_rhythm_pulse'
       || profile === 'spawner_rhythm_backbeat'
       || profile === 'spawner_rhythm_motion';
@@ -222,18 +231,18 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const introPercussionCarrier = group?.introPercussionCarrier === true;
     const introStageCarrier = group?.introStageCarrier === true;
     const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
-    const introSlotProfileSourceType = String(group?.introSlotProfileSourceType || '').trim().toLowerCase();
+    const introSlotProfileSourceType = normalizeComposerProfileSourceType(group?.introSlotProfileSourceType);
     const introSlotIdentityLocked = group?.introSlotLock === true
       && Math.max(-1, Math.trunc(Number(group?.introSlotLockUntilBar) || -1)) >= barIndex;
     const introSlotIdentityActive = introSlotProfileSourceType === 'spawner_rhythm_pulse'
       || introSlotProfileSourceType === 'spawner_rhythm_backbeat'
       || introSlotProfileSourceType === 'spawner_rhythm_motion';
-    const musicProfileSourceType = (introSlotIdentityActive
+    const musicProfileSourceType = normalizeComposerProfileSourceType(introSlotIdentityActive
       ? (introSlotProfileSourceType || group?.musicProfileSourceType)
       : group?.musicProfileSourceType) || '';
     const soloRhythmCarrier = soloCarrierType === 'rhythm';
-    const rhythmProfileCarrier = musicProfileSourceType === 'spawner_rhythm'
-      || musicProfileSourceType === 'spawner_rhythm_secondary'
+    const rhythmProfileCarrier = musicProfileSourceType === 'rhythm_lane'
+      || musicProfileSourceType === 'rhythm_lane_backbeat'
       || musicProfileSourceType === 'spawner_rhythm_pulse'
       || musicProfileSourceType === 'spawner_rhythm_backbeat'
       || musicProfileSourceType === 'spawner_rhythm_motion';
@@ -241,7 +250,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const rhythmBackbeatCarrier = musicProfileSourceType === 'spawner_rhythm_backbeat';
     const rhythmMotionCarrier = musicProfileSourceType === 'spawner_rhythm_motion';
     const slotRhythmCarrier = rhythmPulseCarrier || rhythmBackbeatCarrier || rhythmMotionCarrier;
-    const melodyProfileCarrier = musicProfileSourceType === 'snake_melody';
+    const melodyProfileCarrier = musicProfileSourceType === 'lead_melody';
     const rhythmPercussionCarrier = introPercussionCarrier || rhythmProfileCarrier;
     const isSoloCarrier = soloCarrierType === 'rhythm' || soloCarrierType === 'melody';
     const lockedIntroLane = introSlotIdentityActive
@@ -865,6 +874,8 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const melodyRows = introSlotIdentityActive && Array.isArray(group?.introSlotRows)
       ? group.introSlotRows
       : (Array.isArray(group?.rows) ? group.rows : []);
+    const melodyStepDriven = (soloCarrierType === 'melody' || melodyProfileCarrier)
+      && groupLaneId === 'primary_loop_lane';
     const melodyProfileNote = (soloCarrierType === 'melody' || melodyProfileCarrier) && melodyRows.length
       ? (options?.getSwarmPentatonicNoteByIndex?.(Math.max(0, Math.trunc(Number(melodyRows[step] ?? melodyRows[0]) || 0)))
         || getRandomSwarmPentatonicNote())
@@ -875,12 +886,17 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const notesLen = Math.max(1, effectiveNotes.length);
     const noteIdx = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
       ? 0
-      : (Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen);
+      : (melodyStepDriven
+        ? (step % notesLen)
+        : (Math.max(0, Math.trunc(Number(group.noteCursor) || 0)) % notesLen));
     const lockedIntroNote = introSlotIdentityActive && Array.isArray(group?.introSlotNotes) && group.introSlotNotes.length
       ? normalizeSwarmNoteName(group.introSlotNotes[0])
       : '';
+    const stepDrivenNoteName = melodyStepDriven
+      ? normalizeSwarmNoteName(effectiveNotes?.[step] || melodyProfileNote || effectiveNotes?.[noteIdx])
+      : '';
     const noteNameBaseRaw = lockedIntroNote
-      || normalizeSwarmNoteName(melodyProfileNote || effectiveNotes?.[noteIdx])
+      || normalizeSwarmNoteName(stepDrivenNoteName || melodyProfileNote || effectiveNotes?.[noteIdx])
       || getRandomSwarmPentatonicNote();
     const noteNameBase = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
       ? noteNameBaseRaw
@@ -944,7 +960,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
         registerTarget
       );
-    const phraseStep = getPhraseStepState(stepAbs, getPhraseLengthSteps(lane, group, stepAbs));
+    const phraseStep = getPhraseStepState(
+      stepAbs,
+      melodyStepDriven ? Math.max(8, Math.trunc(Number(getPhraseLengthSteps(lane, group, stepAbs)) || 8)) : getPhraseLengthSteps(lane, group, stepAbs)
+    );
     const phraseTargets = normalizePhraseNoteList([
       ...(Array.isArray(group?.resolutionTargets) ? group.resolutionTargets : []),
       group?.phraseRoot,
@@ -960,7 +979,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const phraseGravityTarget = phraseStep.resolutionOpportunity
       ? (normalizeSwarmNoteName(group?.phraseRoot) || phraseGravityTargetBase)
       : phraseGravityTargetBase;
-    const gravityBiasChance = phraseStep.resolutionOpportunity ? 0.92 : 0.54;
+    const gravityBiasChance = melodyStepDriven
+      ? (phraseStep.resolutionOpportunity ? 0.3 : 0.12)
+      : (phraseStep.resolutionOpportunity ? 0.92 : 0.54);
     const phraseGravityOpportunity = !!phraseGravityTarget && phraseStep.nearPhraseEnd;
     const gravityNoteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
       ? phraseGravityTarget
@@ -981,15 +1002,15 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       const currIdx = currentNote ? getNotePoolIndex(currentNote) : -1;
       if (roleForStyle === String(roles?.bass || 'bass')) {
         styledNoteName = gravityNoteName;
-      } else if (!phraseStep.resolutionOpportunity && prevNote && Math.random() < (motifRepeatBias * 0.5)) {
+      } else if (!phraseStep.resolutionOpportunity && prevNote && Math.random() < (melodyStepDriven ? (motifRepeatBias * 0.08) : (motifRepeatBias * 0.5))) {
         styledNoteName = prevNote;
-      } else if (prevIdx >= 0 && currIdx >= 0 && Math.abs(currIdx - prevIdx) > 1 && Math.random() > leadLeapChance) {
+      } else if (!melodyStepDriven && prevIdx >= 0 && currIdx >= 0 && Math.abs(currIdx - prevIdx) > 1 && Math.random() > leadLeapChance) {
         styledNoteName = prevNote;
       } else if (roleForStyle === String(roles?.accent || 'accent') && prevNote && Math.random() > accentPitchVariance) {
         styledNoteName = prevNote;
       }
     }
-    if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && !isBassRole && !rhythmPercussionCarrier && Math.random() < 0.84) {
+    if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && !isBassRole && !rhythmPercussionCarrier && Math.random() < (melodyStepDriven ? 0.18 : 0.84)) {
       styledNoteName = clampNoteToDirectorRegisterTarget(
         phraseGravityTarget,
         stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
@@ -1004,10 +1025,14 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const localCadenceRestSteps = lane === 'response'
       ? responseCadenceRestSteps
       : callCadenceRestSteps;
-    const postCadenceRestUntilStep = phraseStep.resolutionOpportunity
+    const postCadenceRestUntilStep = melodyStepDriven
+      ? -1
+      : (phraseStep.resolutionOpportunity
       ? (stepAbs + localCadenceRestSteps)
-      : -1;
-    group.noteCursor = noteIdx + 1;
+      : -1);
+    if (!melodyStepDriven) {
+      group.noteCursor = noteIdx + 1;
+    }
 
     const performers = [];
     const usedEnemyIds = new Set();

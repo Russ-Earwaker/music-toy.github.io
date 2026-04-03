@@ -4506,14 +4506,13 @@ async function runBS0s5() { await runBS0Stage(5); }
 const DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG = Object.freeze({
   enabled: true,
   include: Object.freeze([
-    'music_composer_group_spawn_plan',
-    'music_composer_group_lifecycle',
     'music_intro_carrier_trace',
     'music_intro_slot_strict_emit',
     'music_intro_slot_generic_emit',
     'music_intro_slot_suppressed',
+    'music_composer_group_state',
   ]),
-  maxLines: 1500,
+  maxLines: 300,
   preferOutputDirectory: true,
   fileNamePrefix: 'resources-debug-trace',
 });

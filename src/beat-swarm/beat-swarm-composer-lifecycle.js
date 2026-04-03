@@ -32,10 +32,18 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (fb.includes('inactive')) return 'inactiveForScheduling';
     return 'active';
   };
+  const normalizeComposerProfileSourceType = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return '';
+    if (normalized === 'snake_melody') return 'lead_melody';
+    if (normalized === 'spawner_rhythm') return 'rhythm_lane';
+    if (normalized === 'spawner_rhythm_secondary') return 'rhythm_lane_backbeat';
+    return normalized;
+  };
   const getIntroSlotProfileSourceType = (groupLike) => {
     const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
     if (!group) return '';
-    return String(group?.introSlotProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase();
+    return normalizeComposerProfileSourceType(group?.introSlotProfileSourceType || group?.musicProfileSourceType);
   };
   const getOldestActiveIntroSlotCarrierBarIndex = (profileSourceType = '') => {
     const normalized = String(profileSourceType || '').trim().toLowerCase();
@@ -66,7 +74,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const pulseCarrierReadyForBackbeat = (() => {
     const oldestPulseCarrierBeatIndex = getOldestActiveIntroSlotCarrierBeatIndex('spawner_rhythm_pulse');
     if (!(oldestPulseCarrierBeatIndex >= 0)) return false;
-    return ((currentBarIndex * 4) - oldestPulseCarrierBeatIndex) >= 8;
+    return ((currentBarIndex * 4) - oldestPulseCarrierBeatIndex) >= 16;
   })();
   const isPersistentIntroSlotCarrier = (groupLike) => {
     const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
@@ -91,7 +99,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const primaryLoopPlan = directorLanePlan && typeof directorLanePlan === 'object'
     ? (directorLanePlan.primary_loop || null)
     : null;
-  const primaryLoopReserveWindowActive = currentBarIndex >= 20;
+  const primaryLoopReserveWindowActive = currentBarIndex >= 12;
   const primaryLoopNeedsGroupCoverage = responseAllowsGroups
     && primaryLoopPlan?.active === true
     && Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0)) >= 2;
@@ -160,12 +168,21 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (!hasLiveMembers(group)) return false;
     return !isBassLikeGroup(group);
   };
+  const hasPendingPrimaryLoopIdentity = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!group || group.active !== true || group.retiring) return false;
+    if (String(group?.musicLaneId || '').trim().toLowerCase() !== 'primary_loop_lane') return false;
+    const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
+    const musicProfileSourceType = normalizeComposerProfileSourceType(group?.musicProfileSourceType);
+    if (soloCarrierType === 'melody' || musicProfileSourceType === 'lead_melody') return true;
+    return !isBassLikeGroup(group);
+  };
   const hasActivePrimaryLoopCoverage = (groupLike) => {
     const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
     if (!group || group.active !== true || group.retiring) return false;
-    if (!hasLiveMembers(group)) return false;
     if (String(group?.musicLaneId || '').trim().toLowerCase() !== 'primary_loop_lane') return false;
-    return true;
+    if (hasLiveMembers(group)) return true;
+    return hasPendingPrimaryLoopIdentity(group);
   };
   const hasActiveSecondaryLoopCoverage = (groupLike) => {
     const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
@@ -378,27 +395,6 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     composerEnemyGroups.push(group);
     if (noteMusicSystemEvent && currentBarIndex < 24) {
       try {
-        noteMusicSystemEvent('music_composer_group_spawn_plan', {
-          groupId: Math.trunc(Number(group?.id) || 0),
-          sectionId: String(group?.sectionId || composer?.sectionId || '').trim().toLowerCase(),
-          introStage,
-          sessionAgeBars,
-          desiredGroups,
-          currentSectionCount,
-          groupIndex,
-          reason: forcedIntroProfileSourceType
-            ? 'intro_required_profile'
-            : (genericGroupSpawnBlockedByIntroBridge ? 'blocked_generic' : 'generic_group_fill'),
-          templateId: String(templateId || '').trim(),
-          role: String(group?.role || '').trim().toLowerCase(),
-          musicLaneId: String(group?.musicLaneId || '').trim().toLowerCase(),
-          callResponseLane: String(group?.callResponseLane || '').trim().toLowerCase(),
-          instrumentId: String(group?.instrumentId || group?.instrument || '').trim(),
-          note: Array.isArray(group?.notes) && group.notes.length ? String(group.notes[0] || '').trim() : '',
-          stage: String(forcedIntroProfileSourceType || group?.introSlotProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase(),
-        }, {
-          beatIndex: Math.max(0, currentBarIndex * 4),
-        });
         noteMusicSystemEvent('music_composer_group_state', {
           phase: 'creation_trace',
           groupId: Math.trunc(Number(group?.id) || 0),
