@@ -3158,6 +3158,11 @@ function computeSummary(metrics) {
   const droppedDeferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.droppedDeferredChanges, 0, 0));
   const rejectedDeferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.rejectedDeferredChanges, 0, 0));
   const avgDeferredWaitSteps = Number(metrics?.passDiagnostics?.ownershipContinuity?.avgDeferredWaitSteps) || 0;
+  const primaryLeadStatus = String(metrics?.musicalityTargets?.primaryLead?.status || '').trim().toLowerCase();
+  const primaryLeadPersistenceStatus = String(metrics?.musicalityTargets?.primaryLead?.persistenceStatus || '').trim().toLowerCase();
+  const foundationBufferStatus = String(metrics?.musicalityTargets?.foundationBuffer?.status || '').trim().toLowerCase();
+  const answerOrnamentStatus = String(metrics?.musicalityTargets?.answerOrnament?.status || '').trim().toLowerCase();
+  const populationStatus = String(metrics?.musicalityTargets?.population?.status || '').trim().toLowerCase();
   return {
     notePoolCompliance: `${Math.round((Number(metrics?.notePoolCompliance?.poolComplianceRate) || 0) * 100)}%`,
     motifReuse: `${Math.round(motifReuse * 100)}%`,
@@ -3239,6 +3244,145 @@ function computeSummary(metrics) {
     spawnerSkippedCreatedEvents,
     bassSkippedCreatedEvents,
     maxEnemyStepsWithoutBass,
+    primaryLead: primaryLeadStatus || 'unknown',
+    primaryLeadPersistence: primaryLeadPersistenceStatus || 'unknown',
+    foundationBufferBounds: foundationBufferStatus || 'unknown',
+    answerOrnamentContainment: answerOrnamentStatus || 'unknown',
+    composerPopulation: populationStatus || 'unknown',
+  };
+}
+
+function collectMusicalityTargets(session, maxBarIndex) {
+  const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => (
+      String(e?.eventType || '').trim().toLowerCase() === 'music_composer_group_state'
+      && clampInt(e?.barIndex, 0, 0) <= maxBarIndex
+    ));
+  const perStep = new Map();
+  for (const log of logs) {
+    const stepKey = `${clampInt(log?.barIndex, 0, 0)}:${clampInt(log?.beatIndex, 0, 0)}:${clampInt(log?.stepIndex, 0, 0)}`;
+    let bucket = perStep.get(stepKey);
+    if (!bucket) {
+      bucket = new Map();
+      perStep.set(stepKey, bucket);
+    }
+    const groupId = Math.max(0, clampInt(log?.groupId, 0, 0));
+    if (groupId <= 0) continue;
+    bucket.set(groupId, log);
+  }
+  let stepsAnalyzed = 0;
+  let stepsWithSinglePrimaryLead = 0;
+  let stepsWithNoPrimaryLead = 0;
+  let stepsWithMultiplePrimaryLeads = 0;
+  let totalPrimaryLeadCount = 0;
+  let maxPrimaryLeadCount = 0;
+  let longestSinglePrimaryLeadRunSteps = 0;
+  let currentSinglePrimaryLeadRunSteps = 0;
+  let lastSinglePrimaryLeadId = 0;
+  const primaryLeadIds = new Set();
+  let totalFoundationBufferCount = 0;
+  let maxFoundationBufferCount = 0;
+  let stepsWithMultipleFoundationBuffers = 0;
+  let totalAnswerOrnamentCount = 0;
+  let maxAnswerOrnamentCount = 0;
+  let stepsWithMultipleAnswerOrnaments = 0;
+  let answerOrnamentLeadRoleEvents = 0;
+  let totalActiveComposerGroupCount = 0;
+  let maxActiveComposerGroupCount = 0;
+  for (const bucket of perStep.values()) {
+    const activeGroups = [...bucket.values()].filter((record) => record?.active === true && record?.retiring !== true);
+    stepsAnalyzed += 1;
+    totalActiveComposerGroupCount += activeGroups.length;
+    if (activeGroups.length > maxActiveComposerGroupCount) maxActiveComposerGroupCount = activeGroups.length;
+    const primaryLeadGroups = activeGroups.filter((record) => (
+      String(record?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
+      && String(record?.reason || '').trim().toLowerCase() === 'lead_melody'
+      && String(record?.lifecycleState || '').trim().toLowerCase() !== 'retiring'
+    ));
+    const primaryLeadCount = primaryLeadGroups.length;
+    totalPrimaryLeadCount += primaryLeadCount;
+    if (primaryLeadCount > maxPrimaryLeadCount) maxPrimaryLeadCount = primaryLeadCount;
+    if (primaryLeadCount === 0) {
+      stepsWithNoPrimaryLead += 1;
+      currentSinglePrimaryLeadRunSteps = 0;
+      lastSinglePrimaryLeadId = 0;
+    } else if (primaryLeadCount === 1) {
+      stepsWithSinglePrimaryLead += 1;
+      const currentLeadId = Math.max(0, clampInt(primaryLeadGroups[0]?.groupId, 0, 0));
+      if (currentLeadId > 0) primaryLeadIds.add(currentLeadId);
+      if (currentLeadId > 0 && currentLeadId === lastSinglePrimaryLeadId) currentSinglePrimaryLeadRunSteps += 1;
+      else currentSinglePrimaryLeadRunSteps = 1;
+      lastSinglePrimaryLeadId = currentLeadId;
+      if (currentSinglePrimaryLeadRunSteps > longestSinglePrimaryLeadRunSteps) longestSinglePrimaryLeadRunSteps = currentSinglePrimaryLeadRunSteps;
+    } else {
+      stepsWithMultiplePrimaryLeads += 1;
+      for (const group of primaryLeadGroups) {
+        const groupId = Math.max(0, clampInt(group?.groupId, 0, 0));
+        if (groupId > 0) primaryLeadIds.add(groupId);
+      }
+      currentSinglePrimaryLeadRunSteps = 0;
+      lastSinglePrimaryLeadId = 0;
+    }
+    const foundationBuffers = activeGroups.filter((record) => String(record?.templateId || '').trim() === 'foundation-buffer');
+    const foundationBufferCount = foundationBuffers.length;
+    totalFoundationBufferCount += foundationBufferCount;
+    if (foundationBufferCount > maxFoundationBufferCount) maxFoundationBufferCount = foundationBufferCount;
+    if (foundationBufferCount > 1) stepsWithMultipleFoundationBuffers += 1;
+    const answerOrnaments = activeGroups.filter((record) => String(record?.reason || '').trim().toLowerCase() === 'answer_ornament');
+    const answerOrnamentCount = answerOrnaments.length;
+    totalAnswerOrnamentCount += answerOrnamentCount;
+    if (answerOrnamentCount > maxAnswerOrnamentCount) maxAnswerOrnamentCount = answerOrnamentCount;
+    if (answerOrnamentCount > 1) stepsWithMultipleAnswerOrnaments += 1;
+    answerOrnamentLeadRoleEvents += answerOrnaments.filter((record) => String(record?.role || '').trim().toLowerCase() === 'lead').length;
+  }
+  const singleLeadShare = stepsAnalyzed > 0 ? (stepsWithSinglePrimaryLead / stepsAnalyzed) : 0;
+  const noLeadShare = stepsAnalyzed > 0 ? (stepsWithNoPrimaryLead / stepsAnalyzed) : 0;
+  const multiLeadShare = stepsAnalyzed > 0 ? (stepsWithMultiplePrimaryLeads / stepsAnalyzed) : 0;
+  const avgPrimaryLeadCount = stepsAnalyzed > 0 ? (totalPrimaryLeadCount / stepsAnalyzed) : 0;
+  const avgFoundationBufferCount = stepsAnalyzed > 0 ? (totalFoundationBufferCount / stepsAnalyzed) : 0;
+  const avgAnswerOrnamentCount = stepsAnalyzed > 0 ? (totalAnswerOrnamentCount / stepsAnalyzed) : 0;
+  const avgActiveComposerGroupCount = stepsAnalyzed > 0 ? (totalActiveComposerGroupCount / stepsAnalyzed) : 0;
+  return {
+    stepsAnalyzed,
+    primaryLead: {
+      uniqueLeadGroupCount: primaryLeadIds.size,
+      stepsWithSingleLead: stepsWithSinglePrimaryLead,
+      stepsWithNoLead: stepsWithNoPrimaryLead,
+      stepsWithMultipleLeads: stepsWithMultiplePrimaryLeads,
+      singleLeadShare: Number(singleLeadShare.toFixed(3)),
+      noLeadShare: Number(noLeadShare.toFixed(3)),
+      multiLeadShare: Number(multiLeadShare.toFixed(3)),
+      avgLeadCount: Number(avgPrimaryLeadCount.toFixed(3)),
+      maxLeadCount: maxPrimaryLeadCount,
+      longestSingleLeadRunSteps: longestSinglePrimaryLeadRunSteps,
+      longestSingleLeadRunBeats: Number((longestSinglePrimaryLeadRunSteps / 8).toFixed(3)),
+      status: (stepsAnalyzed > 0 && stepsWithMultiplePrimaryLeads === 0 && stepsWithNoPrimaryLead === 0 && singleLeadShare >= 0.9)
+        ? 'exclusive'
+        : (stepsWithSinglePrimaryLead > 0 ? 'contested' : 'missing'),
+      persistenceStatus: longestSinglePrimaryLeadRunSteps >= 64
+        ? 'stable'
+        : (longestSinglePrimaryLeadRunSteps >= 32 ? 'short' : 'fragmented'),
+    },
+    foundationBuffer: {
+      avgCount: Number(avgFoundationBufferCount.toFixed(3)),
+      maxCount: maxFoundationBufferCount,
+      stepsWithMultipleBuffers: stepsWithMultipleFoundationBuffers,
+      status: maxFoundationBufferCount <= 1 ? 'bounded' : 'runaway',
+    },
+    answerOrnament: {
+      avgCount: Number(avgAnswerOrnamentCount.toFixed(3)),
+      maxCount: maxAnswerOrnamentCount,
+      stepsWithMultipleOrnaments: stepsWithMultipleAnswerOrnaments,
+      leadRoleEvents: answerOrnamentLeadRoleEvents,
+      status: (maxAnswerOrnamentCount <= 1 && stepsWithMultipleAnswerOrnaments === 0 && answerOrnamentLeadRoleEvents === 0)
+        ? 'contained'
+        : 'competing',
+    },
+    population: {
+      avgActiveGroupCount: Number(avgActiveComposerGroupCount.toFixed(3)),
+      maxActiveGroupCount: maxActiveComposerGroupCount,
+      status: (maxActiveComposerGroupCount <= 6 && avgActiveComposerGroupCount <= 5) ? 'sane' : 'crowded',
+    },
   };
 }
 
@@ -3327,6 +3471,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     visibleEnemyAudibility,
     passDiagnostics,
   });
+  const musicalityTargets = collectMusicalityTargets(session, maxBarIndex);
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -3359,12 +3504,10 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     directorSpawnChosenSpawnerBeats: Number(threatBudgetUsage?.spawnDirector?.chosenCounts?.spawner_basic) || 0,
     directorSpawnChosenSnakeBeats: Number(threatBudgetUsage?.spawnDirector?.chosenCounts?.snake_basic) || 0,
     directorSpawnChosenSoloRhythmBeats: Number(threatBudgetUsage?.spawnDirector?.chosenCounts?.solo_rhythm_basic) || 0,
-    directorSpawnChosenSoloMelodyBeats: Number(threatBudgetUsage?.spawnDirector?.chosenCounts?.solo_melody_basic) || 0,
     directorSpawnActualComposerCount: Number(threatBudgetUsage?.spawnDirector?.spawnedCounts?.composer_basic) || 0,
     directorSpawnActualSpawnerCount: Number(threatBudgetUsage?.spawnDirector?.spawnedCounts?.spawner_basic) || 0,
     directorSpawnActualSnakeCount: Number(threatBudgetUsage?.spawnDirector?.spawnedCounts?.snake_basic) || 0,
     directorSpawnActualSoloRhythmCount: Number(threatBudgetUsage?.spawnDirector?.spawnedCounts?.solo_rhythm_basic) || 0,
-    directorSpawnActualSoloMelodyCount: Number(threatBudgetUsage?.spawnDirector?.spawnedCounts?.solo_melody_basic) || 0,
     directorSpawnTotalSpawnsNoted: Number(threatBudgetUsage?.spawnDirector?.totalSpawnsNoted) || 0,
     directorSpawnMatchedChosenCount: Number(threatBudgetUsage?.spawnDirector?.matchedChosenSpawnCount) || 0,
     directorSpawnMismatchedChosenCount: Number(threatBudgetUsage?.spawnDirector?.mismatchedChosenSpawnCount) || 0,
@@ -3541,6 +3684,18 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     suppressedEventRate: Number(presentationMetrics?.suppressedEventRate) || 0,
     groupParticipationRate: Number(presentationMetrics?.groupParticipationRate) || 0,
     ghostLoopCount: Number(presentationMetrics?.ghostLoopCount) || 0,
+    musicalityTargets,
+    primaryLeadUniqueGroupCount: Number(musicalityTargets?.primaryLead?.uniqueLeadGroupCount) || 0,
+    primaryLeadSingleShare: Number(musicalityTargets?.primaryLead?.singleLeadShare) || 0,
+    primaryLeadNoLeadShare: Number(musicalityTargets?.primaryLead?.noLeadShare) || 0,
+    primaryLeadMultiLeadShare: Number(musicalityTargets?.primaryLead?.multiLeadShare) || 0,
+    primaryLeadMaxCount: Number(musicalityTargets?.primaryLead?.maxLeadCount) || 0,
+    primaryLeadLongestRunBeats: Number(musicalityTargets?.primaryLead?.longestSingleLeadRunBeats) || 0,
+    foundationBufferMaxCount: Number(musicalityTargets?.foundationBuffer?.maxCount) || 0,
+    answerOrnamentMaxCount: Number(musicalityTargets?.answerOrnament?.maxCount) || 0,
+    answerOrnamentLeadRoleEvents: Number(musicalityTargets?.answerOrnament?.leadRoleEvents) || 0,
+    avgActiveComposerGroupCount: Number(musicalityTargets?.population?.avgActiveGroupCount) || 0,
+    maxActiveComposerGroupCount: Number(musicalityTargets?.population?.maxActiveGroupCount) || 0,
   };
   return {
     metrics,

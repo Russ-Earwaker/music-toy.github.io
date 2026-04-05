@@ -3,4 +3,3 @@ composer_basic,Composer Basic,filler|adaptive|foundation,1,1,1,120,common,0,99,2
 spawner_basic,Spawner Basic,rhythm|special|drums,6,4,5,0.25,very_rare,3,99,1,40,0,1,1,build|drop,break,needRhythm|needEscalation|needFoundation,needRelief,1,1,1,Rare rhythm special that drops in occasionally
 snake_basic,Snake Basic,melody|special|lead,10,8,8,0.12,very_rare,5,99,1,56,0,1,1,drop|peak,intro|break,needMelody|needEscalation,needRelief,1,1,1,Rare melodic special that drops in occasionally
 solo_rhythm_basic,Solo Rhythm Carrier,rhythm|solo|heavy|adaptive,2,3,5,60,common,0,99,1,4,0,1,1,build|drop|break,intro,needRhythm|needFoundation|needEscalation,needRelief,1,1,2,Primary large rhythm carrier
-solo_melody_basic,Solo Melody Carrier,melody|solo|heavy|adaptive,3,4,6,44,common,0,99,1,6,0,1,1,build|drop|peak,intro,needMelody|needEscalation,needRelief,1,1,2,Primary large melodic carrier

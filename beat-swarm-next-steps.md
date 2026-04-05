@@ -79,6 +79,189 @@ The remaining failures are mostly perceptual:
 
 This means the next work should optimize for presentation, not more architectural complexity.
 
+## Musicality Reconstruction Plan
+
+We now have enough evidence that the current post-fix system is stable enough to hear clearly, but too structurally flat.
+
+Current failure mode:
+
+- the run tends to settle into `2` rhythm layers plus `1` melody layer
+- the old layered richness that existed when snakes and spawners directly owned musical roles is mostly gone
+- fallback and persistence logic are now good enough to keep things alive, but not rich enough to create varied arrangement on their own
+
+Important truth:
+
+> We did not lose all of the old musical content.
+> We mostly lost the old structural mechanism that let multiple enemy families act like independent arrangers at the same time.
+
+So the reconstruction plan is:
+
+- do **not** return to literal snake/spawner lane ownership as the default model
+- keep protected lane identity and modern handoff rules
+- reintroduce the old richness intentionally as authored arrangement layers
+
+### Reconstruction Goal
+
+Rebuild the old sense of layered musicality without restoring the ownership bugs that came with it.
+
+Target post-reconstruction texture:
+
+- one stable foundation / pulse role
+- one stable counter-rhythm role
+- one stable lead role
+- one explicit answer / ornament role
+- optional sparkle / motion layer during the right sections
+
+That means the intended baseline should become:
+
+> `foundation + counter-rhythm + lead + answer/ornament`
+
+instead of:
+
+> `rhythm + rhythm + melody`
+
+### Working Rule
+
+Use old toy identity as **style input**, not **lane ownership**.
+
+Examples:
+
+- snake-like:
+  - contour
+  - register leaps
+  - longer melodic phrases
+  - legato or arc-shaped lead motion
+- spawner-like:
+  - pulse
+  - syncopation
+  - drum-machine repetition
+  - additive groove layering
+
+The point is:
+
+- snakes and spawners should still influence the music
+- but they should not have to own the musical lane in order to contribute that character
+
+### Reconstruction Stages
+
+#### Stage 1. Restore Structural Layer Count
+
+Goal:
+
+- stop capping the arrangement at the effective `2 rhythm + 1 melody` shape
+
+Needed work:
+
+- allow one real extra non-lead group beyond the current stable core
+- make sure melody fallback does not hijack all later group creation
+- preserve lead persistence without making lead the only privileged lane
+
+Success condition:
+
+- long runs can sustain at least one additional non-foundation, non-lead musical layer
+
+#### Stage 2. Author Explicit Lane Roles
+
+Goal:
+
+- stop treating every extra group like generic rhythm support
+
+Define explicit composer roles:
+
+- `foundation_groove`
+- `counter_rhythm`
+- `lead_phrase`
+- `answer_ornament`
+
+Each role should have:
+
+- its own phrase logic
+- its own register expectations
+- its own instrument expectations
+- its own density limits
+
+Success condition:
+
+- the fourth layer sounds like an answer, ornament, or phrase comment, not just another rhythm loop
+
+#### Stage 3. Reintroduce Toy Character As Style Modules
+
+Goal:
+
+- recover the musical personality we used to get “for free” from enemy ownership
+
+Needed work:
+
+- extract reusable snake-like melodic behaviors
+- extract reusable spawner-like groove behaviors
+- feed those into composer profile generation as style families
+
+Success condition:
+
+- sections feel like they carry distinct personalities again without requiring literal toy ownership
+
+#### Stage 4. Make Sections Rearrange The Piece
+
+Goal:
+
+- make section changes sound like arrangement decisions, not just intensity changes
+
+Needed work:
+
+- section state should decide which role families are active
+- support / answer / sparkle should enter and leave intentionally
+- build / release / breakdown should change texture, not only energy numbers
+
+Success condition:
+
+- a `3m` run sounds like it moves through recognisable arrangement states
+
+#### Stage 5. Rebuild Long-Run Variation
+
+Goal:
+
+- stop the piece from becoming static once it finds one working texture
+
+Needed work:
+
+- rotate role families over phrase epochs
+- allow answer and ornament lanes to swap behavior more freely than protected owners
+- vary phrase density and contour without destabilising the main idea
+
+Success condition:
+
+- the run stays legible, but does not feel locked to one texture for minutes at a time
+
+### Immediate Implementation Order
+
+The next concrete work under this reconstruction plan should be:
+
+1. make the extra post-lead group explicitly `answer/ornament` instead of generic response fill
+2. give that role its own profile generator and register limits
+3. widen section logic so `support`, `answer`, and `sparkle` can be intentionally active together in the right windows
+4. bring back stronger snake-like and spawner-like style families as generator inputs
+5. tune long-run entry/exit rules so melody persistence does not flatten the rest of the arrangement
+
+### Anti-Regression Rule
+
+Do not reintroduce the old layering by undoing protected-lane ownership and handoff fixes.
+
+Specifically:
+
+- do not make snakes the default lead owner again
+- do not make spawners the default rhythm owner again
+- do not rely on enemy-type churn to create musical variation
+
+Reconstruction should add:
+
+- explicit arrangement roles
+- explicit section behavior
+- explicit style modules
+
+not:
+
+- accidental richness caused by unstable ownership
+
 ## Metrics Review
 
 Useful existing signals to preserve:
@@ -103,6 +286,20 @@ Useful live signals now in use:
 - `audibleResponseRate`
 - `avgResponseSize`
 
+New actionable metrics to add or prioritize next:
+
+- role embodiment coverage
+  - for each active lane/role, measure how often it had a valid live carrier
+- vacancy and rescue metrics
+  - vacancy count, average vacancy duration, max vacancy duration, rescue count, rescue latency
+- soft continuity metrics
+  - distinguish exact phrase preservation from musically coherent substitutions
+- director-to-embodiment divergence
+  - compare intended lane activity against actual active/audible gameplay carriers
+
+These are useful because they fit the current architecture.
+They should be tracked in lane/role terms first, not enemy-family terms.
+
 ## Remaining Priorities
 
 ### 1. Mix Hierarchy And Protected Audibility
@@ -121,6 +318,17 @@ Biases to strengthen:
 - fresh loop entries should remain audible long enough to be learned
 
 This is a tuning/system-shaping task, not a new mixer architecture.
+
+Immediate concrete failure from latest tests:
+
+- `primary_loop_lane` is allowing more than one simultaneous `lead_melody` owner
+- `answer_ornament` can duplicate and still read as a peer lead
+
+Immediate acceptance targets:
+
+- exactly one active `lead_melody` owner on `primary_loop_lane`
+- at most one active `answer_ornament` support group per active support lane
+- `answer_ornament` should not be treated as a co-equal foreground lead by default
 
 ### 2. Ghost Loop Scope Correction
 
@@ -614,6 +822,18 @@ It can also mean:
 10. Controlled instrument introduction
 11. Sample leveling and loudness control
 12. Sample pitch import and base-note accuracy
+
+## Immediate Runtime Targets
+
+Before adding more arrangement complexity, keep the current runtime aligned to these targets:
+
+- `primaryLead = exclusive`
+- `primaryLeadPersistence = stable`
+- `foundationBufferBounds = bounded`
+- `answerOrnamentContainment = contained`
+- `composerPopulation = sane`
+
+These are now the quickest acceptance checks for whether the current grouped-lane design is behaving musically.
 
 ## Direction
 

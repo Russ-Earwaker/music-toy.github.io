@@ -1,3 +1,14 @@
+function resolveSingletonLaneIdentity(groupLike, enemyLike, normalizeCallResponseLane, fallbackLane = 'call') {
+  const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+  const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
+  return {
+    groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+    musicLaneId: String(group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase(),
+    callResponseLane: normalizeCallResponseLane(group?.callResponseLane || enemy?.callResponseLane, fallbackLane),
+    continuityId: String(group?.continuityId || enemy?.musicContinuityId || enemy?.continuityId || '').trim(),
+  };
+}
+
 export function collectDrawSnakeStepBeatEvents(options = null) {
   const events = [];
   if (!options?.active || options?.gameplayPaused) return events;
@@ -36,6 +47,13 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
   const isCallResponseLaneActive = typeof options?.isCallResponseLaneActive === 'function'
     ? options.isCallResponseLaneActive
     : (() => true);
+  const normalizeCallResponseLane = (value, fallback = 'call') => {
+    const raw = String(value || '').trim().toLowerCase();
+    if (raw === 'response') return 'response';
+    if (raw === 'solo') return 'solo';
+    if (raw === 'call') return 'call';
+    return String(fallback || 'call').trim().toLowerCase() || 'call';
+  };
   const getPhraseStepState = typeof options?.getPhraseStepState === 'function'
     ? options.getPhraseStepState
     : (() => ({ nearPhraseEnd: false, resolutionOpportunity: false }));
@@ -103,8 +121,10 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
     const actorId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
     const group = getEnemyMusicGroup(enemy, 'drawsnake-projectile');
     if (!group) continue;
-    const musicLaneId = String(group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
-    const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+    const laneIdentity = resolveSingletonLaneIdentity(group, enemy, normalizeCallResponseLane, 'call');
+    const musicLaneId = laneIdentity.musicLaneId;
+    const laneMode = laneIdentity.callResponseLane;
+    const groupId = laneIdentity.groupId;
     const isPrimaryLoopOwner = (
       (primaryLoopOwnerEnemyId > 0 && primaryLoopOwnerEnemyId === actorId)
       || (primaryLoopOwnerGroupId > 0 && primaryLoopOwnerGroupId === groupId)
@@ -121,7 +141,7 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       const pacingGateStepModulo = maxDrawSnakes > 1 ? 4 : 2;
       if ((stepAbs % pacingGateStepModulo) !== (actorId % pacingGateStepModulo) && !idleRescueWindow) continue;
     }
-    if (!forceIntroPrimaryLoopWindow && !loneStartupSnakeWindow && !isCallResponseLaneActive(enemy?.callResponseLane, stepAbs, snakes.length) && !idleRescueWindow && !isPrimaryLoopOwner) continue;
+    if (!forceIntroPrimaryLoopWindow && !loneStartupSnakeWindow && !isCallResponseLaneActive(laneMode, stepAbs, snakes.length) && !idleRescueWindow && !isPrimaryLoopOwner) continue;
     const steps = Array.isArray(group?.steps) ? group.steps : [];
     if (!steps[step]) continue;
     const rows = Array.isArray(group?.rows) ? group.rows : [];
@@ -205,7 +225,7 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       visualSyncType: 'node-pulse',
       payload: {
         groupId,
-        continuityId: String(group?.continuityId || enemy?.musicContinuityId || '').trim(),
+        continuityId: laneIdentity.continuityId,
         nodeIndex: getDrawSnakeNodeIndexForStep(step, drawSnakeSegmentCount),
         audioGain: deconflictedAudioGain,
         requestedNoteRaw: noteNameRaw,
@@ -213,6 +233,7 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
         phraseGravityHit,
         phraseResolutionOpportunity,
         phraseResolutionHit,
+        callResponseLane: laneMode,
         drawsnakeIdleRescue: idleRescueWindow,
         drawsnakePrimaryLoopOwner: isPrimaryLoopOwner,
       },
@@ -222,6 +243,7 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
       sourceSystem: 'drawsnake',
       enemyType: 'drawsnake',
       groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+      callResponseLane: laneMode,
     }));
   }
   return events;
@@ -344,6 +366,13 @@ export function collectSpawnerStepBeatEvents(options = null) {
       }
       : (liveGroup || null);
     if (!group) continue;
+    const laneIdentity = resolveSingletonLaneIdentity(group, enemy, (value, fallback = 'call') => {
+      const raw = String(value || '').trim().toLowerCase();
+      if (raw === 'response') return 'response';
+      if (raw === 'solo') return 'solo';
+      if (raw === 'call') return 'call';
+      return String(fallback || 'call').trim().toLowerCase() || 'call';
+    }, 'call');
     const lifecycleState = normalizeMusicLifecycleState(group?.lifecycleState || enemy?.lifecycleState || 'active', 'active');
     const loopTailUntilStep = Math.max(0, Math.trunc(Number(enemy?.musicLoopTailUntilStep) || 0));
     const tailContinuationActive = (
@@ -402,8 +431,8 @@ export function collectSpawnerStepBeatEvents(options = null) {
     ) {
       continue;
     }
-    const continuityId = String(group?.continuityId || enemy?.musicContinuityId || '').trim();
-    const tailLaneId = String(enemy?.musicLoopTailLaneId || group?.musicLaneId || '').trim().toLowerCase();
+    const continuityId = laneIdentity.continuityId;
+    const tailLaneId = String(enemy?.musicLoopTailLaneId || laneIdentity.musicLaneId || '').trim().toLowerCase();
     const liveSameContinuitySuccessor = tailContinuationActive
       ? enemies.find((candidate) => {
         if (!candidate || candidate === enemy || candidate?.retreating) return false;
@@ -500,6 +529,7 @@ export function collectSpawnerStepBeatEvents(options = null) {
       visualSyncType: 'spawn-burst',
       payload: {
         groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+        callResponseLane: laneIdentity.callResponseLane,
         continuityId,
         nodeStepIndex: step,
         audioGain: deconflictedAudioGain,
@@ -518,8 +548,9 @@ export function collectSpawnerStepBeatEvents(options = null) {
       stepIndex: stepAbs,
       sourceSystem: 'spawner',
       enemyType: 'spawner',
-      groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-    }));
+        groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+        callResponseLane: laneIdentity.callResponseLane,
+      }));
     if (slotOwnedSpawner && typeof options?.noteMusicSystemEvent === 'function') {
       try {
         options.noteMusicSystemEvent('music_slot_spawner_emit_identity', {

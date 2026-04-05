@@ -27,8 +27,9 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
   const w = screenToWorld({ x: clientX, y: clientY });
   if (!w || !Number.isFinite(w.x) || !Number.isFinite(w.y)) return null;
 
-  const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
-  const isSoloCarrier = soloCarrierType === 'rhythm' || soloCarrierType === 'melody';
+  const soloCarrierTypeRaw = String(group?.soloCarrierType || '').trim().toLowerCase();
+  const soloCarrierType = soloCarrierTypeRaw === 'rhythm' ? 'rhythm' : '';
+  const isSoloCarrier = soloCarrierType === 'rhythm';
   const el = document.createElement('div');
   el.className = `beat-swarm-enemy is-composer-group is-shape-${String(group.shape || 'circle')}${isSoloCarrier ? ` is-solo-carrier is-solo-${soloCarrierType}-carrier` : ''}`;
   el.style.setProperty('--bs-group-color', String(group.color || '#ff8b6e'));
@@ -110,11 +111,10 @@ export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
   const group = options?.group || null;
   if (!group) return;
   const requestedCount = Math.max(0, Math.trunc(Number(options?.count) || 0));
-  const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
+  const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase() === 'rhythm' ? 'rhythm' : '';
   const introCarrierBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
   const count = (
     soloCarrierType === 'rhythm'
-    || soloCarrierType === 'melody'
     || introCarrierBodyType === 'solo'
   )
     ? Math.min(requestedCount, 1)

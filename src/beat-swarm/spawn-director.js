@@ -174,7 +174,7 @@ function deriveNeeds({ lanePlan = null, pressureState = null, battlefieldState =
   const occupiedSlots = field.occupiedSlots && typeof field.occupiedSlots === 'object' ? field.occupiedSlots : {};
   const foundationCovered = (field.countsById?.composer_basic > 0);
   const rhythmCovered = occupiedSlots.secondaryLoopLaneOccupied === true || (field.countsById?.solo_rhythm_basic > 0);
-  const melodyCovered = occupiedSlots.primaryLoopLaneOccupied === true || (field.countsById?.solo_melody_basic > 0);
+  const melodyCovered = occupiedSlots.primaryLoopLaneOccupied === true;
   if (plan.foundation?.active === true && !foundationCovered) needs.add('needfoundation');
   if (plan.secondary_loop?.active === true && !rhythmCovered) needs.add('needrhythm');
   if (plan.primary_loop?.active === true && !melodyCovered) needs.add('needmelody');
@@ -399,7 +399,7 @@ export function createSpawnDirectorSubsystem(options = null) {
       if (hasRoleTag(def, 'rhythm') && occupiedSlots.rhythmSpecialOccupied) reasons.push('rhythm_slot');
       if (hasRoleTag(def, 'melody') && occupiedSlots.melodySpecialOccupied) reasons.push('melody_slot');
       if (forceRhythmSpecial && !(hasRoleTag(def, 'rhythm') && (hasRoleTag(def, 'special') || def.id === 'solo_rhythm_basic'))) reasons.push('forced_special_focus');
-      if (forceMelodySpecial && !(hasRoleTag(def, 'melody') && (hasRoleTag(def, 'special') || def.id === 'solo_melody_basic'))) reasons.push('forced_special_focus');
+      if (forceMelodySpecial && !(hasRoleTag(def, 'melody') && hasRoleTag(def, 'special'))) reasons.push('forced_special_focus');
       if (reasons.length) {
         rejected.push({ id: def.id, reasons });
         continue;
@@ -422,16 +422,11 @@ export function createSpawnDirectorSubsystem(options = null) {
       if ((timingBoundary === 'bar' || timingBoundary === 'phrase') && def.id === 'snake_basic' && sectionTag === 'drop') score += 4;
       if ((timingBoundary === 'bar' || timingBoundary === 'phrase') && def.id === 'snake_basic' && sectionTag === 'peak') score += 4;
       if (def.id === 'solo_rhythm_basic' && needs.includes('needrhythm')) score += 72;
-      if (def.id === 'solo_melody_basic' && needs.includes('needmelody')) score += 84;
       if (def.id === 'solo_rhythm_basic' && needs.includes('needfoundation')) score += 22;
       if (def.id === 'solo_rhythm_basic' && needs.includes('needescalation')) score += 26;
-      if (def.id === 'solo_melody_basic' && needs.includes('needescalation')) score += 30;
       if (def.id === 'solo_rhythm_basic' && forceRhythmSpecial) score += 120;
-      if (def.id === 'solo_melody_basic' && forceMelodySpecial) score += 140;
       if (battlefieldAlive >= 6 && hasRoleTag(def, 'solo')) score += 46;
       if (battlefieldAlive <= 4 && hasRoleTag(def, 'solo')) score += 10;
-      if (sectionTag === 'drop' && def.id === 'solo_melody_basic') score += 18;
-      if (sectionTag === 'peak' && def.id === 'solo_melody_basic') score += 18;
       if ((sectionTag === 'build' || sectionTag === 'drop') && def.id === 'solo_rhythm_basic') score += 14;
       if (def.id === 'composer_basic' && needs.includes('needfoundation')) score += 6;
       if (def.id === 'composer_basic' && (needs.includes('needrhythm') || needs.includes('needmelody'))) score *= 0.72;

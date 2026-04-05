@@ -12,6 +12,24 @@ The system should produce:
 - intentional returns
 - drop moments with payoff
 
+Important scope:
+
+- this plan assumes the structural reconstruction described in [beat-swarm-next-steps.md](/d:/Desktop/music-toy/music-toy.github.io/beat-swarm-next-steps.md)
+- it should now target an explicit arrangement shape:
+  - `foundation`
+  - `counter-rhythm`
+  - `lead`
+  - `answer/ornament`
+  - optional `sparkle/motion`
+
+So this plan is no longer:
+
+> hope richer layering emerges from local behavior
+
+It is:
+
+> define how explicit arrangement roles evolve over time
+
 ## Why This Is Needed
 
 The current roadmap already improves:
@@ -55,9 +73,11 @@ It should decide:
 
 - what the current section is
 - which motifs are active
+- which arrangement roles are active
 - how energy should rise or fall
 - when to thin out for contrast
 - when to bring material back for recognition
+- when `answer/ornament` and `sparkle` should enter or leave
 
 ## 1. Recurring Themes And Motif Identity
 
@@ -77,17 +97,17 @@ themeMotif = {
   contour,
   rhythmShape,
   pitchPool,
-  ownerBias
+  roleBias
 };
 ```
 
 Suggested use:
 
 - `1-3` core motifs per run
-- assign them to likely carriers such as:
-  - drawsnake
-  - spawner groups
-  - special enemies
+- assign them to likely arrangement roles such as:
+  - `lead_phrase`
+  - `counter_rhythm`
+  - `answer_ornament`
 - reintroduce them later with light variation
 
 Working rule:
@@ -111,7 +131,7 @@ sectionState = {
   type: "intro" | "build" | "peak" | "drop" | "release" | "rebuild",
   durationBars,
   energyLevel,
-  activeLayers,
+  activeRoles,
   themeFocus
 };
 ```
@@ -127,6 +147,7 @@ What this gives:
 - recognisable phases
 - expectation
 - payoff
+- explicit control over which layers are allowed to speak
 
 ## 3. Drop Moments
 
@@ -181,10 +202,10 @@ Drive with it:
 Example mapping:
 
 - `0-20`: pulse only
-- `20-50`: pulse + motion
-- `50-70`: pulse + backbeat + light motion
-- `70-90`: full layers
-- `90+`: ornament + peak behavior
+- `20-50`: foundation + counter-rhythm
+- `50-70`: foundation + counter-rhythm + lead
+- `70-90`: full core roles
+- `90+`: answer/ornament + peak behavior
 
 ## 5. Return Moments
 
@@ -266,6 +287,7 @@ Allow a small motif memory:
 Tie pacing maintenance to section state:
 
 - layer activation
+- role activation
 - density gates
 - call/answer permissiveness
 - ornament availability
@@ -311,6 +333,7 @@ This structure plan handles:
 
 - motif memory
 - section identity
+- arrangement-role entry and exit
 - long-term arcs
 - drops, returns, and payoff
 
@@ -322,6 +345,7 @@ This structure plan handles:
 
 - players can recognise at least one recurring idea in a run
 - sections feel distinguishable by behavior, not just density accident
+- the arrangement can move between reduced and full-role states intentionally
 - drops feel prepared and earned
 - motifs can return later for payoff
 - special palette overrides feel intentional and scoped

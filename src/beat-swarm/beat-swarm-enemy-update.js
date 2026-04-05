@@ -20,6 +20,20 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
 
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
+    if (e?.__bsRemoved || e?.__bsHiddenRemoved) {
+      if (e?.el instanceof HTMLElement) {
+        e.el.style.transform = 'translate(-9999px, -9999px) scale(0.001)';
+        e.el.style.opacity = '0';
+        e.el.style.visibility = 'hidden';
+        e.el.style.display = 'none';
+      }
+      if (e?.linkedSpawnerLineEl instanceof HTMLElement) {
+        e.linkedSpawnerLineEl.style.transform = 'translate(-9999px, -9999px)';
+        e.linkedSpawnerLineEl.style.opacity = '0';
+      }
+      enemies.splice(i, 1);
+      continue;
+    }
     const enemyType = String(e?.enemyType || '');
     const lifecycleState = helpers.normalizeMusicLifecycleState?.(e?.lifecycleState || 'active', 'active');
     const participationGain = Math.max(0, Math.min(1, Number(e?.musicParticipationGain == null ? 1 : e.musicParticipationGain)));
@@ -278,8 +292,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         }
         const soloPulseDur = Math.max(0.01, Number(e?.soloCarrierActivationPulseDur) || 0);
         const soloPulseT = Math.max(0, Number(e?.soloCarrierActivationPulseT) || 0);
-        const soloCarrierType = String(e?.soloCarrierType || '').trim().toLowerCase();
-        const isSoloCarrier = soloCarrierType === 'rhythm' || soloCarrierType === 'melody';
+        const soloCarrierType = String(e?.soloCarrierType || '').trim().toLowerCase() === 'rhythm' ? 'rhythm' : '';
+        const isSoloCarrier = soloCarrierType === 'rhythm';
         if (isSoloCarrier && soloPulseT > 0) {
           const soloPhase = 1 - Math.max(0, Math.min(1, soloPulseT / soloPulseDur));
           const soloPulseStrength = Math.sin(soloPhase * Math.PI);

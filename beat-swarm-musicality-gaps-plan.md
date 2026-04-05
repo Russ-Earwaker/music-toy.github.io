@@ -12,6 +12,17 @@ into:
 
 > this feels like real music
 
+Important scope:
+
+- this plan is **not** the structural reconstruction plan
+- the structural reconstruction work now lives in [beat-swarm-next-steps.md](/d:/Desktop/music-toy/music-toy.github.io/beat-swarm-next-steps.md) under `Musicality Reconstruction Plan`
+- that plan covers how to rebuild layered arrangement after moving away from literal snake/spawner lane ownership
+
+So this document should be read as:
+
+> once the arrangement structure is rebuilt,
+> these are the next musical ingredients that make it feel like real music
+
 ## Current Strengths
 
 The system already has strong work in:
@@ -24,6 +35,12 @@ The system already has strong work in:
 - continuity and handoff
 
 Those are substantial gains.
+
+It also now has a clearer understanding of what is missing structurally:
+
+- the old layered richness mostly came from enemy-family ownership overlap
+- the current system is more stable, but tends to flatten into `2` rhythms plus `1` melody
+- so the arrangement-layer reconstruction must happen before the gaps below can fully pay off
 
 ## Remaining High-Impact Gaps
 
@@ -238,10 +255,10 @@ Why it matters:
 If this work is tackled incrementally, the highest ROI order is:
 
 1. harmony
-2. section and motif structure
-3. explicit silence / drop behavior
-4. cadence / phrase endings
-5. stronger register enforcement
+2. explicit silence / drop behavior
+3. cadence / phrase endings
+4. stronger register enforcement
+5. instrument identity consistency
 
 Later:
 
@@ -257,20 +274,35 @@ This plan complements:
 - [beat-swarm-percussion-build-up-plan.md](/d:/Desktop/music-toy/music-toy.github.io/beat-swarm-percussion-build-up-plan.md)
 - [beat-swarm-musical-structure-plan.md](/d:/Desktop/music-toy/music-toy.github.io/beat-swarm-musical-structure-plan.md)
 
-Those plans handle:
+Those plans should now be read in this order:
 
+1. `beat-swarm-next-steps.md`
+2. `beat-swarm-musical-structure-plan.md`
+3. `beat-swarm-percussion-build-up-plan.md`
+4. this document
+
+The other plans handle:
+
+- structural reconstruction of layered arrangement
 - groove construction
 - pacing
 - sections
 - motif return
 
-This plan is specifically about the remaining ingredients that make the output feel musically intentional:
+This plan is specifically about the remaining ingredients that make the reconstructed output feel musically intentional:
 
 - harmonic context
 - emotional contrast
 - silence
 - landing and resolution
 - stable instrument identity
+
+In other words:
+
+- `beat-swarm-next-steps.md` answers:
+  - how do we get back to a richer layered arrangement?
+- this plan answers:
+  - once we have that arrangement, what still makes it feel musically shallow?
 
 ## Working Rule
 

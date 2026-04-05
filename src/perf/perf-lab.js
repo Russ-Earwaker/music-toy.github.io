@@ -2078,13 +2078,17 @@ async function postResultsBundle(bundle, url, opts = {}) {
 
 async function postDebugOutputFile({ fileName = '', text = '', meta = null } = {}, url = '') {
   if (!url) return false;
+  const resolvedFileName = String(fileName || '').trim();
+  const resolvedText = String(text || '');
+  if (!resolvedFileName) return false;
+  if (!resolvedText.trim()) return false;
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        fileName: String(fileName || '').trim(),
-        text: String(text || ''),
+        fileName: resolvedFileName,
+        text: resolvedText,
         meta: meta && typeof meta === 'object' ? meta : null,
       }),
     });
@@ -3166,12 +3170,22 @@ async function finalizeMusicTraceCaptureForPerfRun(config = null) {
   const api = getMusicTraceCaptureApiGlobal();
   if (!api) return { ok: false, reason: 'trace_capture_api_unavailable' };
   const cfg = config && typeof config === 'object' ? config : {};
+  const textBeforeStop = typeof api.getTraceCaptureText === 'function' ? String(api.getTraceCaptureText() || '') : '';
   let stopped = null;
   try {
     stopped = api.stopTraceCapture();
   } catch {}
   const fileName = String(cfg.fileName || '').trim();
-  const text = typeof api.getTraceCaptureText === 'function' ? String(api.getTraceCaptureText() || '') : '';
+  const textAfterStop = typeof api.getTraceCaptureText === 'function' ? String(api.getTraceCaptureText() || '') : '';
+  const text = textAfterStop.trim() ? textAfterStop : textBeforeStop;
+  if (!text.trim()) {
+    return {
+      ok: false,
+      reason: 'trace_capture_empty',
+      fileName,
+      stopped,
+    };
+  }
   try {
     const cfgResolved = await resolveResultsConfig();
     const postUrl = resolveDebugOutputPostUrl(cfgResolved);
@@ -3253,7 +3267,8 @@ function compactMusicLabPayloadForSave(payload = null) {
     const lane = String(ev?.callResponseLane || '').trim().toLowerCase();
     return lane === 'call' || lane === 'response';
   });
-  const compactEventTimeline = compactTimelineSource.map((ev) => {
+  const compactTimelineTail = compactTimelineSource.slice(-256);
+  const compactEventTimeline = compactTimelineTail.map((ev) => {
     const event = ev && typeof ev === 'object' ? ev : {};
     return {
       tMs: Number(event.tMs) || 0,
@@ -3311,130 +3326,124 @@ function compactMusicLabPayloadForSave(payload = null) {
     };
   });
   const systemEvents = Array.isArray(src.systemEvents) ? src.systemEvents : [];
-  const compactSystemEventTypesToKeep = new Set([
-    'music_composer_group_state',
-    'music_call_response_call_group_state',
-    'music_call_response_response_group_state',
-    'music_enemy_instrument_pool_audit',
-    'music_enemy_instrument_pool_unreachable',
-    'music_structure_intent_state',
-    'music_motif_return_state',
-    'music_foreground_motif_usage',
-    'music_harmony_authority_state',
-    'music_slot_spawner_stage',
-    'music_slot_spawner_execution_reason',
-    'music_slot_spawner_admission',
-    'music_slot_spawner_loop_state_change',
-    'music_slot_spawner_emit_identity',
-    'music_slot_spawner_assignment',
-    'music_slot_spawner_visual_identity',
-    'music_intro_drum_first_note',
-    'music_player_weapon_timing',
-  ]);
-  const compactSystemEvents = systemEvents
-    .filter((ev) => compactSystemEventTypesToKeep.has(String(ev?.eventType || '').trim().toLowerCase()))
-    .map((ev) => {
-      const item = ev && typeof ev === 'object' ? ev : {};
-      return {
+  const focusedSystemEvents = [];
+  const lastFocusedComposerStateByGroup = new Map();
+  for (const ev of systemEvents) {
+    const item = ev && typeof ev === 'object' ? ev : {};
+    const eventType = String(item.eventType || '').trim().toLowerCase();
+    if (!eventType) continue;
+    if (eventType === 'music_structure_intent_state') {
+      focusedSystemEvents.push({
         tMs: Number(item.tMs) || 0,
-        timestamp: Number(item.timestamp) || 0,
-        eventType: String(item.eventType || '').trim().toLowerCase(),
-        phase: String(item.phase || '').trim().toLowerCase(),
+        eventType,
         barIndex: Number(item.barIndex) || 0,
         beatIndex: Number(item.beatIndex) || 0,
         stepIndex: Number(item.stepIndex) || 0,
-        actorId: Number(item.actorId) || 0,
-        groupId: Number(item.groupId) || 0,
-        continuityId: String(item.continuityId || '').trim(),
-        musicVoiceKey: String(item.musicVoiceKey || '').trim().toLowerCase(),
-        musicLayer: String(item.musicLayer || '').trim().toLowerCase(),
-        musicLaneId: String(item.musicLaneId || '').trim().toLowerCase(),
-        instrumentId: String(item.instrumentId || '').trim(),
-        previousInstrumentId: String(item.previousInstrumentId || '').trim(),
-        note: String(item.note || '').trim(),
-        requestedNote: String(item.requestedNote || '').trim(),
-        resolvedNote: String(item.resolvedNote || '').trim(),
-        stage: String(item.stage || '').trim().toLowerCase(),
-        reason: String(item.reason || '').trim().toLowerCase(),
-        previousContinuityId: String(item.previousContinuityId || '').trim(),
-        visualId: String(item.visualId || '').trim(),
-        roleColor: String(item.roleColor || '').trim(),
-        templateId: String(item.templateId || '').trim(),
-        callResponseLane: String(item.callResponseLane || '').trim().toLowerCase(),
-        callResponseQualified: item.callResponseQualified === true
-          ? true
-          : (item.callResponseQualified === false ? false : null),
         sectionId: String(item.sectionId || '').trim().toLowerCase(),
         intent: String(item.intent || '').trim().toLowerCase(),
-        motifEpoch: Number(item.motifEpoch) || 0,
-        requestedLockIndex: Number(item.requestedLockIndex) || 0,
-        effectiveLockIndex: Number(item.effectiveLockIndex) || 0,
-        lookbackLocks: Number(item.lookbackLocks) || 0,
-        returnActive: item.returnActive === true,
-        liveSnakeCount: Number(item.liveSnakeCount) || 0,
-        matchingScopeSnakeCount: Number(item.matchingScopeSnakeCount) || 0,
-        introDrumProtected: item.introDrumProtected === true,
-        introPrimaryLoopBlendWindow: item.introPrimaryLoopBlendWindow === true,
-        primaryLoopUsesScope: item.primaryLoopUsesScope === true,
-        role: String(item.role || '').trim().toLowerCase(),
-        reason: String(item.reason || '').trim().toLowerCase(),
-        active: item.active === true,
-        retiring: item.retiring === true,
-        lifecycleState: String(item.lifecycleState || '').trim().toLowerCase(),
-        callStepAbs: Number(item.callStepAbs) || -1,
-        lastResponseStepAbs: Number(item.lastResponseStepAbs) || -1,
-        pendingCallExpiresStepAbs: Number(item.pendingCallExpiresStepAbs) || -1,
-        activeResponseGroupId: Number(item.activeResponseGroupId) || 0,
-        performerCount: Number(item.performerCount) || 0,
-        stepInPhrase: Number(item.stepInPhrase) || 0,
-        strongCallCandidate: item.strongCallCandidate === true,
-        acceptedStrongCall: item.acceptedStrongCall === true,
-        hasLiveCallWindow: item.hasLiveCallWindow === true,
-        continuingResponsePhrase: item.continuingResponsePhrase === true,
-        responseOverrideHit: item.responseOverrideHit === true,
-        admissionReason: String(item.admissionReason || '').trim().toLowerCase(),
-        auditId: String(item.auditId || '').trim().toLowerCase(),
-        themeId: String(item.themeId || '').trim(),
-        toyKey: String(item.toyKey || '').trim().toLowerCase(),
-        eligibleCount: Number(item.eligibleCount) || 0,
-        unusedEligibleCount: Number(item.unusedEligibleCount) || 0,
-        priorityEligibleCount: Number(item.priorityEligibleCount) || 0,
-        unreachableCount: Number(item.unreachableCount) || 0,
-        eligibleIds: Array.isArray(item.eligibleIds) ? item.eligibleIds.slice(0, 16) : [],
-        unusedEligibleIds: Array.isArray(item.unusedEligibleIds) ? item.unusedEligibleIds.slice(0, 16) : [],
-        priorityEligibleIds: Array.isArray(item.priorityEligibleIds) ? item.priorityEligibleIds.slice(0, 16) : [],
-        unreachableIds: Array.isArray(item.unreachableIds) ? item.unreachableIds.slice(0, 16) : [],
-        intent: String(item.intent || '').trim().toLowerCase(),
         sourceEnergyState: String(item.sourceEnergyState || '').trim().toLowerCase(),
-        stateStartBar: Number(item.stateStartBar) || 0,
         stateAgeBars: Number(item.stateAgeBars) || 0,
-        preDropActive: item.preDropActive === true,
-        preDropBarsRemaining: Number(item.preDropBarsRemaining) || -1,
-        barsUntilBreak: Number(item.barsUntilBreak) || -1,
-        authoritySource: String(item.authoritySource || '').trim().toLowerCase(),
-        fallbackUsed: item.fallbackUsed === true,
-        tonicRootNote: String(item.tonicRootNote || '').trim(),
-        rootNote: String(item.rootNote || '').trim(),
-        transposeSemitones: Number(item.transposeSemitones) || 0,
-        relativeShiftActive: item.relativeShiftActive === true,
-        authorityWeaponSlotIndex: Number.isFinite(Number(item.authorityWeaponSlotIndex))
-          ? Math.trunc(Number(item.authorityWeaponSlotIndex))
-          : -1,
-        authorityDistinctNoteCount: Number(item.authorityDistinctNoteCount) || 0,
-        authorityActiveNoteCount: Number(item.authorityActiveNoteCount) || 0,
-        notePoolSize: Number(item.notePoolSize) || 0,
-        scheduledBeatIndex: Number(item.scheduledBeatIndex) || 0,
-        scheduledStepIndex: Number(item.scheduledStepIndex) || -1,
-        flushOffsetMs: Number(item.flushOffsetMs) || 0,
-        flushOffsetAbsMs: Number(item.flushOffsetAbsMs) || 0,
-        targetAudioTime: Number(item.targetAudioTime) || 0,
-        flushAudioTime: Number(item.flushAudioTime) || 0,
-        weaponMappingMismatchCount: Number(item.weaponMappingMismatchCount) || 0,
-        weaponMappingMismatchNotes: Array.isArray(item.weaponMappingMismatchNotes) ? item.weaponMappingMismatchNotes.slice(0, 12) : [],
-        weaponOutsidePoolCount: Number(item.weaponOutsidePoolCount) || 0,
-        weaponOutsidePoolNotes: Array.isArray(item.weaponOutsidePoolNotes) ? item.weaponOutsidePoolNotes.slice(0, 12) : [],
-      };
+      });
+      continue;
+    }
+    if (eventType.endsWith('_deduplicated')) {
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        groupId: Number(item.groupId) || 0,
+        targetGroupId: Number(item.targetGroupId) || 0,
+        reason: String(item.reason || '').trim().toLowerCase(),
+        continuityId: String(item.continuityId || '').trim(),
+      });
+      continue;
+    }
+    if (eventType === 'music_singleton_lead_group_created') {
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        enemyId: Number(item.enemyId) || 0,
+        groupId: Number(item.groupId) || 0,
+        actionType: String(item.actionType || '').trim().toLowerCase(),
+        sectionId: String(item.sectionId || '').trim().toLowerCase(),
+        currentSectionId: String(item.currentSectionId || '').trim().toLowerCase(),
+        currentSectionCycle: Number(item.currentSectionCycle) || 0,
+        lastSectionChangeBar: Number(item.lastSectionChangeBar) || 0,
+        motifScopeKey: String(item.motifScopeKey || '').trim(),
+        continuityId: String(item.continuityId || '').trim(),
+        phraseId: String(item.phraseId || '').trim().toLowerCase(),
+        directorSpawnId: String(item.directorSpawnId || '').trim().toLowerCase(),
+        preferredLaneId: String(item.preferredLaneId || '').trim().toLowerCase(),
+        lanePerformerEnemyId: Number(item.lanePerformerEnemyId) || 0,
+        lanePerformerGroupId: Number(item.lanePerformerGroupId) || 0,
+        laneContinuityId: String(item.laneContinuityId || '').trim(),
+      });
+      continue;
+    }
+    if (eventType !== 'music_composer_group_state') continue;
+    const reason = String(item.reason || '').trim().toLowerCase();
+    const templateId = String(item.templateId || '').trim();
+    const keepComposerState = (
+      reason === 'lead_melody'
+      || reason === 'answer_ornament'
+      || templateId === 'foundation-buffer'
+    );
+    if (!keepComposerState) continue;
+    const groupId = Number(item.groupId) || 0;
+    const phase = String(item.phase || '').trim().toLowerCase();
+    const stepIndex = Number(item.stepIndex) || 0;
+    const signature = [
+      phase,
+      templateId,
+      reason,
+      String(item.musicLaneId || '').trim().toLowerCase(),
+      String(item.callResponseLane || '').trim().toLowerCase(),
+      String(item.sectionId || '').trim().toLowerCase(),
+      item.active === true ? '1' : '0',
+      item.retiring === true ? '1' : '0',
+      String(item.lifecycleState || '').trim().toLowerCase(),
+      String(item.instrumentId || '').trim(),
+      String(item.note || '').trim(),
+      String(item.stage || '').trim().toLowerCase(),
+    ].join('|');
+    const previous = lastFocusedComposerStateByGroup.get(groupId);
+    const shouldKeep = (
+      phase !== 'steady'
+      || !previous
+      || previous.signature !== signature
+      || (stepIndex - previous.stepIndex) >= 16
+    );
+    if (!shouldKeep) continue;
+    lastFocusedComposerStateByGroup.set(groupId, { signature, stepIndex });
+    focusedSystemEvents.push({
+      tMs: Number(item.tMs) || 0,
+      eventType,
+      phase,
+      barIndex: Number(item.barIndex) || 0,
+      beatIndex: Number(item.beatIndex) || 0,
+      stepIndex,
+      groupId,
+      continuityId: String(item.continuityId || '').trim(),
+      templateId,
+      musicLaneId: String(item.musicLaneId || '').trim().toLowerCase(),
+      callResponseLane: String(item.callResponseLane || '').trim().toLowerCase(),
+      sectionId: String(item.sectionId || '').trim().toLowerCase(),
+      role: String(item.role || '').trim().toLowerCase(),
+      reason,
+      active: item.active === true,
+      retiring: item.retiring === true,
+      lifecycleState: String(item.lifecycleState || '').trim().toLowerCase(),
+      instrumentId: String(item.instrumentId || '').trim(),
+      note: String(item.note || '').trim(),
+      stage: String(item.stage || '').trim().toLowerCase(),
     });
+  }
+  const compactSystemEvents = focusedSystemEvents.slice(-240);
   const systemEventCountsByType = Object.create(null);
   const systemEventCountsByReason = Object.create(null);
   const systemEventCountsByVisualFailureReason = Object.create(null);
@@ -3635,10 +3644,10 @@ function compactMusicLabPayloadForSave(payload = null) {
       : src.session,
     saveCompact: {
       compacted: true,
-      detail: 'executed_timeline_and_summaries',
+      detail: 'focused_musicality_targets_and_recent_tail',
       originalEventTimelineCount: fullTimeline.length,
       keptEventTimelineCount: compactEventTimeline.length,
-      droppedEventTimelineCount: Math.max(0, fullTimeline.length - compactTimelineSource.length),
+      droppedEventTimelineCount: Math.max(0, fullTimeline.length - compactEventTimeline.length),
       originalCreatedEventCount: Array.isArray(src?.session?.createdEvents) ? src.session.createdEvents.length : 0,
       originalQueuedEventCount: Array.isArray(src?.session?.queuedEvents) ? src.session.queuedEvents.length : 0,
       originalSpawnerPipelineEventCount: Array.isArray(src?.session?.spawnerPipelineEvents) ? src.session.spawnerPipelineEvents.length : 0,
@@ -3652,7 +3661,7 @@ function compactMusicLabPayloadForSave(payload = null) {
   return {
     payload: compactedPayload,
     compacted: true,
-    detail: 'executed_timeline_and_summaries',
+    detail: 'focused_musicality_targets_and_recent_tail',
   };
 }
 
@@ -4506,10 +4515,10 @@ async function runBS0s5() { await runBS0Stage(5); }
 const DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG = Object.freeze({
   enabled: true,
   include: Object.freeze([
-    'music_intro_carrier_trace',
-    'music_intro_slot_strict_emit',
-    'music_intro_slot_generic_emit',
-    'music_intro_slot_suppressed',
+    'music_singleton_lead_group_created',
+    'music_primary_lead_request',
+    'music_primary_loop_coverage_status',
+    'music_primary_lead_snapshot',
     'music_composer_group_state',
   ]),
   maxLines: 300,
