@@ -2253,6 +2253,114 @@ async function publishMusicLabSaveDebugResult(entry = {}) {
   return { ok: !!ok, reason: ok ? '' : 'post_failed', postUrl };
 }
 
+function buildBeatSwarmTransitionDebugText(payload, meta = {}) {
+  const src = payload && typeof payload === 'object' ? payload : {};
+  const eventTimeline = Array.isArray(src.eventTimeline) ? src.eventTimeline : [];
+  const systemEvents = Array.isArray(src.systemEvents) ? src.systemEvents : [];
+  const transitionSnapshots = systemEvents
+    .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_transition_snapshot')
+    .sort((a, b) => (Number(a?.barIndex) || 0) - (Number(b?.barIndex) || 0));
+  const executedEnemy = eventTimeline
+    .filter((e) => String(e?.phase || '').trim().toLowerCase() === 'executed')
+    .filter((e) => String(e?.sourceSystem || '').trim().toLowerCase() !== 'player');
+  const firstLeadEvent = executedEnemy.find((e) => {
+    const laneId = String(e?.musicLaneId || '').trim().toLowerCase();
+    const role = String(e?.role || '').trim().toLowerCase();
+    return laneId === 'primary_loop_lane' || role === 'lead';
+  }) || null;
+  const leadEntryBar = Math.max(0, Math.trunc(Number(firstLeadEvent?.barIndex) || 0));
+  const rangeStart = Math.max(0, leadEntryBar > 0 ? (leadEntryBar - 4) : 8);
+  const rangeEnd = Math.max(rangeStart + 8, leadEntryBar + 8);
+  const lines = [];
+  lines.push('Beat Swarm Transition Debug');
+  lines.push(`sessionId=${String(src.sessionId || '')}`);
+  lines.push(`runId=${String(meta.runId || '')}`);
+  lines.push(`label=${String(meta.label || '')}`);
+  lines.push(`leadEntryBar=${leadEntryBar}`);
+  lines.push(`range=${rangeStart}-${rangeEnd}`);
+  lines.push('');
+  lines.push('Per-bar executed audible enemy events:');
+  for (let bar = rangeStart; bar <= rangeEnd; bar++) {
+    const barEvents = executedEnemy.filter((e) => Math.trunc(Number(e?.barIndex) || 0) === bar);
+    const audible = barEvents.filter((e) => e?.enemyAudible === true);
+    const playerAudible = eventTimeline.filter((e) => (
+      Math.trunc(Number(e?.barIndex) || 0) === bar
+      && String(e?.sourceSystem || '').trim().toLowerCase() === 'player'
+      && e?.playerAudible === true
+    )).length;
+    const bucket = Object.create(null);
+    for (const ev of audible) {
+      const key = `${String(ev?.musicLaneId || '').trim().toLowerCase() || '-'}|${String(ev?.musicLayer || '').trim().toLowerCase() || '-'}|${String(ev?.callResponseLane || '').trim().toLowerCase() || '-'}|${String(ev?.musicProminence || '').trim().toLowerCase() || '-'}`;
+      bucket[key] = Math.max(0, Math.trunc(Number(bucket[key]) || 0)) + 1;
+    }
+    const summary = Object.entries(bucket)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([k, v]) => `${k}:${v}`)
+      .join(', ');
+    lines.push(`bar ${bar}: audibleEnemy=${audible.length} playerAudible=${playerAudible}${summary ? ` :: ${summary}` : ''}`);
+  }
+  lines.push('');
+  lines.push('Transition snapshots:');
+  for (const snap of transitionSnapshots.filter((e) => {
+    const bar = Math.trunc(Number(e?.barIndex) || 0);
+    return bar >= rangeStart && bar <= rangeEnd;
+  })) {
+    const payloadLike = snap?.payload && typeof snap.payload === 'object' ? snap.payload : {};
+    const groups = Array.isArray(payloadLike.groups) ? payloadLike.groups : [];
+    const groupSummary = groups
+      .slice(0, 10)
+      .map((g) => `${Math.trunc(Number(g?.id) || 0)}:${String(g?.laneId || '')}/${String(g?.profile || '')}/${String(g?.callResponseLane || '')}/alive=${Math.trunc(Number(g?.aliveMemberCount) || 0)}`)
+      .join(', ');
+    lines.push(
+      `bar ${Math.trunc(Number(snap?.barIndex) || 0)} `
+      + `intro=${String(payloadLike.introStage || '')} energy=${String(payloadLike.currentEnergyStateName || '')} pacing=${String(payloadLike.pacingState || '')} `
+      + `support=${payloadLike?.supportLanePlan ? `${payloadLike.supportLanePlan.active ? 'on' : 'off'} tc=${payloadLike.supportLanePlan.targetCount} i=${Number(payloadLike.supportLanePlan.intensity || 0).toFixed(2)}` : 'n/a'} `
+      + `answer=${payloadLike?.answerLanePlan ? `${payloadLike.answerLanePlan.active ? 'on' : 'off'} tc=${payloadLike.answerLanePlan.targetCount} i=${Number(payloadLike.answerLanePlan.intensity || 0).toFixed(2)}` : 'n/a'} `
+      + `primary=${payloadLike?.primaryLoopLanePlan ? `${payloadLike.primaryLoopLanePlan.active ? 'on' : 'off'} tc=${payloadLike.primaryLoopLanePlan.targetCount} i=${Number(payloadLike.primaryLoopLanePlan.intensity || 0).toFixed(2)}` : 'n/a'} `
+      + `effectiveSupport=${Math.trunc(Number(payloadLike.effectiveDirectorSupportGroups) || 0)} `
+      + `effectiveAnswer=${Math.trunc(Number(payloadLike.effectiveDirectorAnswerGroups) || 0)} `
+      + `groups=${Math.trunc(Number(payloadLike.activeGroupCount) || 0)}`
+    );
+    if (groupSummary) lines.push(`  ${groupSummary}`);
+  }
+  lines.push('');
+  lines.push('Response events in range:');
+  const responseEvents = eventTimeline.filter((e) => {
+    const bar = Math.trunc(Number(e?.barIndex) || 0);
+    return bar >= rangeStart && bar <= rangeEnd && String(e?.callResponseLane || '').trim().toLowerCase() === 'response';
+  });
+  for (const ev of responseEvents.slice(0, 40)) {
+    lines.push(
+      `bar ${Math.trunc(Number(ev?.barIndex) || 0)} step ${Math.trunc(Number(ev?.stepIndex) || 0)} `
+      + `phase=${String(ev?.phase || '')} actor=${Math.trunc(Number(ev?.actorId) || 0)} audible=${ev?.enemyAudible === true ? 'y' : 'n'} `
+      + `lane=${String(ev?.musicLaneId || '')} layer=${String(ev?.musicLayer || '')} inst=${String(ev?.instrumentId || '')} note=${String(ev?.noteResolved || ev?.note || '')}`
+    );
+  }
+  return lines.join('\n').trim();
+}
+
+async function saveMusicLabTransitionDebugOutput(payload, meta = {}) {
+  const text = buildBeatSwarmTransitionDebugText(payload, meta);
+  if (!text.trim()) return { ok: false, reason: 'empty_transition_debug' };
+  const cfg = await resolveResultsConfig();
+  const postUrl = resolveDebugOutputPostUrl(cfg);
+  const sessionIdPart = String(payload?.sessionId || 'session').replace(/[<>:"/\\|?*\x00-\x1F]/g, '-');
+  const runIdPart = String(meta.runId || 'music-lab').replace(/[<>:"/\\|?*\x00-\x1F]/g, '-');
+  const fileName = `${runIdPart || 'music-lab'}__transition-debug__${sessionIdPart}.txt`;
+  const saved = await postDebugOutputFile({
+    fileName,
+    text,
+    meta: {
+      kind: 'beat-swarm-transition-debug',
+      sessionId: String(payload?.sessionId || ''),
+      runId: String(meta.runId || ''),
+      label: String(meta.label || ''),
+    },
+  }, postUrl);
+  return { ok: !!saved, fileName, postUrl };
+}
+
 async function publishBs0MusicRunStageDebugResult(entry = {}) {
   const cfg = await resolveResultsConfig();
   const postUrl = resolveLabPostUrl(cfg, 'perf');
@@ -3309,6 +3417,82 @@ function compactMusicLabPayloadForSave(payload = null) {
       approxPlaybackVolume: Number(event.approxPlaybackVolume) || 0,
     };
   });
+  const focusBarWindow = compactTimelineTail.length > 0
+    ? {
+        min: Math.max(
+          0,
+          Math.min(...compactTimelineTail.map((ev) => Number(ev?.barIndex) || 0)) - 2
+        ),
+        max: Math.max(...compactTimelineTail.map((ev) => Number(ev?.barIndex) || 0)) + 2,
+      }
+    : { min: 0, max: Number.POSITIVE_INFINITY };
+  const compactSessionBeatEvent = (ev) => {
+    const event = ev && typeof ev === 'object' ? ev : {};
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : {};
+    return {
+      tMs: Number(event.tMs) || 0,
+      eventId: Number(event.eventId) || 0,
+      barIndex: Number(event.barIndex) || 0,
+      beatIndex: Number(event.beatIndex) || 0,
+      stepIndex: Number(event.stepIndex) || 0,
+      actorId: Number(event.actorId) || 0,
+      groupId: Number(event.groupId) || 0,
+      role: String(event.role || ''),
+      noteResolved: String(event.noteResolved || event.note || ''),
+      instrumentId: String(event.instrumentId || ''),
+      actionType: String(event.actionType || ''),
+      threatClass: String(event.threatClass || ''),
+      sourceSystem: String(event.sourceSystem || ''),
+      enemyType: String(event.enemyType || ''),
+      enemyAudible: event.enemyAudible === true ? true : (event.enemyAudible === false ? false : null),
+      triggerVolume: Number(event.triggerVolume) || 0,
+      approxPlaybackVolume: Number(event.approxPlaybackVolume) || 0,
+      resolvedPlaybackInstrumentId: String(event.resolvedPlaybackInstrumentId || ''),
+      payload: {
+        continuityId: String(payload.continuityId || ''),
+        groupEventSource: String(payload.groupEventSource || ''),
+        ghostPlayback: payload.ghostPlayback === true,
+        musicLayer: String(payload.musicLayer || ''),
+        musicLaneId: String(payload.musicLaneId || ''),
+        musicProminence: String(payload.musicProminence || ''),
+        musicVoiceKey: String(payload.musicVoiceKey || ''),
+        audioGain: Number(payload.audioGain) || 0,
+        callResponseLane: String(payload.callResponseLane || ''),
+      },
+    };
+  };
+  const shouldKeepFocusedSessionEvent = (ev) => {
+    const event = ev && typeof ev === 'object' ? ev : {};
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : {};
+    const barIndex = Number(event.barIndex) || 0;
+    const groupEventSource = String(payload.groupEventSource || '').trim().toLowerCase();
+    const laneId = String(payload.musicLaneId || '').trim().toLowerCase();
+    const continuityId = String(payload.continuityId || '').trim().toLowerCase();
+    const keepByBarWindow = barIndex >= focusBarWindow.min && barIndex <= focusBarWindow.max;
+    if (keepByBarWindow) return true;
+    if (
+      groupEventSource === 'secondary_loop_bridge_fallback'
+      || groupEventSource === 'composer_group_response_fallback'
+      || groupEventSource === 'intro_slot_strict'
+    ) return true;
+    if (continuityId === 'secondary-loop-bridge-fallback') return true;
+    if (
+      laneId === 'primary_loop_lane'
+      || laneId === 'secondary_loop_lane'
+      || laneId === 'foundation_lane'
+    ) return true;
+    return false;
+  };
+  const srcCreatedEvents = Array.isArray(src?.session?.createdEvents) ? src.session.createdEvents : [];
+  const srcExecutedEvents = Array.isArray(src?.session?.executedEvents) ? src.session.executedEvents : [];
+  const compactCreatedEvents = srcCreatedEvents
+    .filter(shouldKeepFocusedSessionEvent)
+    .slice(-192)
+    .map(compactSessionBeatEvent);
+  const compactExecutedEvents = srcExecutedEvents
+    .filter(shouldKeepFocusedSessionEvent)
+    .slice(-192)
+    .map(compactSessionBeatEvent);
   const enemyRemovals = Array.isArray(src.enemyRemovals) ? src.enemyRemovals : [];
   const compactEnemyRemovals = enemyRemovals.map((ev) => {
     const item = ev && typeof ev === 'object' ? ev : {};
@@ -3636,10 +3820,10 @@ function compactMusicLabPayloadForSave(payload = null) {
     session: (src.session && typeof src.session === 'object')
       ? {
           ...src.session,
-          createdEvents: [],
+          createdEvents: compactCreatedEvents,
           queuedEvents: [],
           spawnerPipelineEvents: [],
-          executedEvents: [],
+          executedEvents: compactExecutedEvents,
         }
       : src.session,
     saveCompact: {
@@ -3656,6 +3840,8 @@ function compactMusicLabPayloadForSave(payload = null) {
       originalThreatBudgetSnapshotCount: threatBudgetSnapshots.length,
       originalMetricsHistoryCount: metricsHistory.length,
       originalExecutedEventCount: Array.isArray(src?.session?.executedEvents) ? src.session.executedEvents.length : 0,
+      keptCreatedEventCount: compactCreatedEvents.length,
+      keptExecutedEventCount: compactExecutedEvents.length,
     },
   };
   return {
@@ -3792,6 +3978,18 @@ async function saveMusicLabSessionToResourcesGlobal({
   } catch {}
   const ok = await postResultsBundle(bundle, postUrl, { allowLegacyPerfFallback: true });
   const sessionSummary = summarizeMusicLabSessionPayload(payload);
+  let transitionDebug = null;
+  try {
+    transitionDebug = await saveMusicLabTransitionDebugOutput(payload, {
+      runId,
+      label,
+    });
+  } catch (err) {
+    transitionDebug = {
+      ok: false,
+      reason: String(err && err.message || err || 'transition_debug_failed'),
+    };
+  }
   const result = {
     ok: !!ok,
     reason: ok ? '' : 'post_failed',
@@ -3799,6 +3997,7 @@ async function saveMusicLabSessionToResourcesGlobal({
     sessionId: String(payload?.sessionId || ''),
     events: Array.isArray(payload?.eventTimeline) ? payload.eventTimeline.length : 0,
     sessionSummary,
+    transitionDebug,
     payloadDebug: {
       ...payloadDebug,
       preflightBundleBytes,

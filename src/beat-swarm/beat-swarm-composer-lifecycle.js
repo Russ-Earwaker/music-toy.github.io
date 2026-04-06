@@ -110,6 +110,15 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const primaryLoopPlan = directorLanePlan && typeof directorLanePlan === 'object'
     ? (directorLanePlan.primary_loop || null)
     : null;
+  const secondaryLoopPlan = directorLanePlan && typeof directorLanePlan === 'object'
+    ? (directorLanePlan.secondary_loop || null)
+    : null;
+  const supportPlan = directorLanePlan && typeof directorLanePlan === 'object'
+    ? (directorLanePlan.support || null)
+    : null;
+  const answerPlan = directorLanePlan && typeof directorLanePlan === 'object'
+    ? (directorLanePlan.answer || null)
+    : null;
   const arrangementSectionId = normalizeArrangementSectionId(composer.sectionId || '');
   const primaryLoopReserveWindowActive = currentBarIndex >= 12;
   const explicitNoLeadSection = false;
@@ -142,9 +151,9 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     );
   const desiredGroups = primaryLoopNeedsGroupCoverage
     ? Math.max(
-      1,
+      currentBarIndex >= 12 ? 2 : 1,
       Math.min(
-        Math.max(1, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0)),
+        Math.max(currentBarIndex >= 12 ? 2 : 1, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0)),
         desiredGroupsBase
       )
     )
@@ -201,6 +210,13 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (!group || group.active !== true || group.retiring) return false;
     if (!hasLiveMembers(group)) return false;
     if (String(group?.musicLaneId || '').trim().toLowerCase() !== 'secondary_loop_lane') return false;
+    const normalizedProfileSourceType = normalizeComposerProfileSourceType(group?.musicProfileSourceType);
+    if (
+      normalizedProfileSourceType === 'answer_ornament'
+      || String(group?.callResponseLane || '').trim().toLowerCase() === 'response'
+    ) {
+      return false;
+    }
     return true;
   };
   const countsAsLiveSectionGroup = (groupLike) => {
@@ -244,8 +260,6 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     return score;
   };
   const getDirectorGroupFallbackGain = () => {
-    const supportPlan = directorLanePlan && typeof directorLanePlan === 'object' ? (directorLanePlan.support || null) : null;
-    const answerPlan = directorLanePlan && typeof directorLanePlan === 'object' ? (directorLanePlan.answer || null) : null;
     const protectedHold = (plan) => !!plan && plan.protected === true && String(plan.continuityBias || '').trim().toLowerCase() === 'hold';
     if (protectedHold(supportPlan) || protectedHold(answerPlan)) return 0.5;
     const blend = (plan) => !!plan && String(plan.continuityBias || '').trim().toLowerCase() === 'blend';
@@ -344,6 +358,23 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     && primaryLoopNeedsGroupCoverage
     && !activePrimaryLoopCoveragePresent
     && !promotableLeadCandidatePresent;
+  const secondaryLoopCoverageRequested = primaryLoopReserveWindowActive
+    && activeGlobalPrimaryLeadPresent
+    && (
+      currentBarIndex >= 12
+      || (
+        secondaryLoopPlan?.active === true
+        && String(secondaryLoopPlan?.preferredCarrier || '').trim().toLowerCase() === 'group'
+        && (
+          supportPlan?.active === true
+          || answerPlan?.active === true
+          || String(secondaryLoopPlan?.continuityBias || '').trim().toLowerCase() === 'hold'
+          || String(secondaryLoopPlan?.continuityBias || '').trim().toLowerCase() === 'blend'
+        )
+      )
+    );
+  let reservedSecondaryLoopSpawnNeeded = secondaryLoopCoverageRequested
+    && !activeSecondaryLoopCoveragePresent;
   if (activeGlobalPrimaryLeadPresent) reservedLeadSpawnNeeded = false;
   try {
     noteMusicSystemEvent?.('music_primary_loop_coverage_status', {
@@ -358,6 +389,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       activeGlobalPrimaryLeadPresent,
       promotableLeadCandidatePresent,
       reservedLeadSpawnNeeded,
+      reservedSecondaryLoopSpawnNeeded,
       earlyIntroBridgeActive,
       sameSectionCount: sameSection.length,
       persistentIntroSlotGroupCount: activePersistentIntroSlotGroups.length,
@@ -488,23 +520,31 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   if (activeGlobalPrimaryLeadPresent) {
     effectiveCurrentSectionCount = Math.max(effectiveCurrentSectionCount, desiredGroups);
   }
-  if (!earlyIntroBridgeActive && reservedLeadSpawnNeeded && effectiveCurrentSectionCount >= Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0))) {
+  const reservedCoverageSpawnNeeded = reservedLeadSpawnNeeded || reservedSecondaryLoopSpawnNeeded;
+  if (!earlyIntroBridgeActive && reservedCoverageSpawnNeeded && effectiveCurrentSectionCount >= Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0))) {
     const replaceableGroup = rankedGroups.find((group) => (
       group
       && !isPersistentIntroSlotCarrier(group)
       && hasLiveMembers(group)
-      && isBassLikeGroup(group)
-      && !hasActiveSecondaryLoopCoverage(group)
+      && !hasActivePrimaryLoopCoverage(group)
+      && (
+        reservedLeadSpawnNeeded
+          ? (isBassLikeGroup(group) && !hasActiveSecondaryLoopCoverage(group))
+          : (!hasActiveSecondaryLoopCoverage(group) && !isAnswerOrnamentGroup(group))
+      )
     )) || null;
     if (replaceableGroup) {
-      retireGroup(replaceableGroup, 'lead_candidate_reserve');
+      retireGroup(replaceableGroup, reservedLeadSpawnNeeded ? 'lead_candidate_reserve' : 'secondary_loop_reserve');
       effectiveCurrentSectionCount = Math.max(0, effectiveCurrentSectionCount - 1);
       try {
         noteMusicSystemEvent?.('music_composer_group_state', {
-          phase: 'lead_candidate_reserve',
+          phase: reservedLeadSpawnNeeded ? 'lead_candidate_reserve' : 'secondary_loop_reserve',
           groupId: Math.trunc(Number(replaceableGroup?.id) || 0),
-          reason: 'retire_bass_for_primary_loop_candidate',
+          reason: reservedLeadSpawnNeeded
+            ? 'retire_bass_for_primary_loop_candidate'
+            : 'retire_group_for_secondary_loop_bridge',
           primaryLoopNeedsGroupCoverage,
+          secondaryLoopCoverageRequested,
           currentSectionCount,
           maxComposerGroups: Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0)),
         }, {
@@ -555,17 +595,19 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const spawnCount = requiredIntroProfiles.length > 0
     ? Math.max(0, introMissingCount)
     : (
-      earlyIntroBridgeActive && reservedLeadSpawnNeeded
+      earlyIntroBridgeActive && reservedCoverageSpawnNeeded
         ? 1
         : (genericGroupSpawnBlockedByIntroBridge ? 0 : Math.max(
-            reservedLeadSpawnNeeded ? 1 : 0,
+            reservedCoverageSpawnNeeded ? 1 : 0,
             Math.max(0, desiredGroups - effectiveCurrentSectionCount)
           ))
     );
   for (let i = 0; i < spawnCount; i++) {
     const forcedIntroProfileSourceType = missingIntroProfiles[i] || '';
     const forcedProfileSourceType = forcedIntroProfileSourceType || (
-      reservedLeadSpawnNeeded && i === 0 ? 'lead_melody' : ''
+      reservedLeadSpawnNeeded && i === 0
+        ? 'lead_melody'
+        : (reservedSecondaryLoopSpawnNeeded && i === 0 ? 'secondary_bridge_backbeat' : '')
     );
     const groupIndex = sameSection.length + i;
     const template = pickTemplate(groupIndex);
@@ -599,7 +641,13 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
           currentSectionCount,
           groupIndex,
           reason: forcedProfileSourceType
-            ? (forcedProfileSourceType === 'lead_melody' ? 'reserved_lead_spawn' : 'intro_required_profile')
+            ? (
+              forcedProfileSourceType === 'lead_melody'
+                ? 'reserved_lead_spawn'
+                : (forcedProfileSourceType === 'secondary_bridge_backbeat'
+                  ? 'reserved_secondary_bridge_spawn'
+                  : 'intro_required_profile')
+            )
             : (genericGroupSpawnBlockedByIntroBridge ? 'blocked_generic' : 'generic_group_fill'),
           templateId: String(templateId || '').trim(),
           role: String(group?.role || '').trim().toLowerCase(),

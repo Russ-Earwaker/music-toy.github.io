@@ -39,6 +39,8 @@ Current working baseline:
 - delivery is acceptable again
 - delayed replies are real and can sustain short fragments instead of only single-note answers
 - foreground readability is improved overall, but still fragile when reply/support motion gets too assertive
+- lead phrase quality is now materially better than the surrounding texture
+- the current integration problem is that once the lead enters, support/counter-rhythm can over-duck and the arrangement thins out too far
 
 So the remaining work is refinement, not rescue.
 
@@ -241,6 +243,18 @@ The next concrete work under this reconstruction plan should be:
 3. widen section logic so `support`, `answer`, and `sparkle` can be intentionally active together in the right windows
 4. bring back stronger snake-like and spawner-like style families as generator inputs
 5. tune long-run entry/exit rules so melody persistence does not flatten the rest of the arrangement
+
+### Lead Backlog
+
+Lead work should continue, but it is no longer the only active concern.
+
+Current lead-specific backlog:
+
+- keep late-phrase cadence diversification small and listen for any return of width-style sameness
+- improve phrase-to-phrase contour variety without making the lead jumpier or less singable
+- tune lead/support coexistence so lead entry does not mute the counter-rhythm and answer bed
+- preserve one clear lead foreground while allowing secondary loop material to remain audible underneath
+- verify that lead improvement is measured against full-texture runs, not isolated lead quality
 
 ### Anti-Regression Rule
 

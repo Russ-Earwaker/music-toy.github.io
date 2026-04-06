@@ -127,6 +127,25 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const performersMax = Math.max(performersMin, Math.trunc(Number(constants.performersMax) || 2));
 
   const activeGroups = composerEnemyGroups.filter((g) => g && g.active && !g.retiring);
+  const activeAnswerOrnamentGroup = activeGroups.find((g) => {
+    if (!g) return false;
+    const profile = normalizeComposerProfileSourceType(g?.musicProfileSourceType);
+    const lane = normalizeCallResponseLane(g?.callResponseLane, '');
+    return profile === 'answer_ornament' || lane === 'response';
+  }) || null;
+  const fallbackResponseProxyGroup = activeAnswerOrnamentGroup || activeGroups.find((g) => {
+    if (!g) return false;
+    const laneId = String(g?.musicLaneId || '').trim().toLowerCase();
+    const lane = normalizeCallResponseLane(g?.callResponseLane, '');
+    const roleId = String(g?.role || '').trim().toLowerCase();
+    if (lane === 'call') return false;
+    if (laneId === 'secondary_loop_lane' || laneId === 'sparkle_lane') return true;
+    return roleId === String(options?.roles?.accent || 'accent').trim().toLowerCase();
+  }) || activeGroups.find((g) => {
+    if (!g) return false;
+    const lane = normalizeCallResponseLane(g?.callResponseLane, '');
+    return lane !== 'call';
+  }) || null;
   const activePrimaryLoopLeadGroups = activeGroups.filter((g) => {
     if (!g) return false;
     const laneId = String(g?.musicLaneId || '').trim().toLowerCase();
@@ -149,8 +168,36 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const directTriggerComposerCarrier = typeof options?.directTriggerComposerCarrier === 'function'
     ? options.directTriggerComposerCarrier
     : null;
+  const playerLikelyAudible = options?.playerLikelyAudible === true;
 
   const getAliveEnemiesByIds = typeof options?.getAliveEnemiesByIds === 'function' ? options.getAliveEnemiesByIds : (() => []);
+  const getLiveComposerMembersForGroup = (group) => getAliveEnemiesByIds(group?.memberIds).filter((e) => {
+    if (!e) return false;
+    return String(e?.enemyType || '').trim().toLowerCase() === 'composer-group-member';
+  });
+  const activeSecondaryLoopCoveragePresent = activeGroups.some((g) => {
+    if (!g) return false;
+    const laneId = String(g?.musicLaneId || '').trim().toLowerCase();
+    if (laneId !== 'secondary_loop_lane') return false;
+    return getLiveComposerMembersForGroup(g).length > 0;
+  });
+  const fallbackResponseCarrierGroup = activeGroups.find((g) => {
+    if (!g) return false;
+    const laneId = String(g?.musicLaneId || '').trim().toLowerCase();
+    const lane = normalizeCallResponseLane(g?.callResponseLane, '');
+    if (lane === 'call') return false;
+    if (laneId !== 'secondary_loop_lane' && laneId !== 'sparkle_lane') return false;
+    return getLiveComposerMembersForGroup(g).length > 0;
+  }) || activeGroups.find((g) => {
+    if (!g) return false;
+    const laneId = String(g?.musicLaneId || '').trim().toLowerCase();
+    const roleId = String(g?.role || '').trim().toLowerCase();
+    if (laneId === 'primary_loop_lane' && roleId === String(options?.roles?.lead || 'lead').trim().toLowerCase()) return false;
+    return getLiveComposerMembersForGroup(g).length > 0;
+  }) || activeGroups.find((g) => {
+    if (!g) return false;
+    return getLiveComposerMembersForGroup(g).length > 0;
+  }) || null;
   const getFoundationLaneSnapshot = typeof options?.getFoundationLaneSnapshot === 'function'
     ? options.getFoundationLaneSnapshot
     : null;
@@ -214,6 +261,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     ? (preDropActive ? 2 : (strongLeadWindowActive ? 3 : 2))
     : 1;
   const callCadenceRestSteps = 1;
+  const directBedFallbackWanted = strongLeadWindowActive
+    && activePrimaryLoopLeadGroups.length > 0
+    && !activeSecondaryLoopCoveragePresent;
   const getPendingCallExpiry = (callStepAbs, targetLength) => {
     const lastCallStep = Math.max(-1, Math.trunc(Number(callStepAbs) || -1));
     if (lastCallStep < 0) return -1;
@@ -227,6 +277,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (lane === 'call') return 'high';
     return 'mid';
   };
+  let emittedResponseThisStep = false;
 
   for (const group of composerEnemyGroups) {
     if (!group || !group.active || group.retiring) continue;
@@ -247,11 +298,13 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const soloRhythmCarrier = soloCarrierType === 'rhythm';
     const rhythmProfileCarrier = musicProfileSourceType === 'rhythm_lane'
       || musicProfileSourceType === 'rhythm_lane_backbeat'
+      || musicProfileSourceType === 'secondary_bridge_backbeat'
       || musicProfileSourceType === 'spawner_rhythm_pulse'
       || musicProfileSourceType === 'spawner_rhythm_backbeat'
       || musicProfileSourceType === 'spawner_rhythm_motion';
     const rhythmPulseCarrier = musicProfileSourceType === 'spawner_rhythm_pulse';
-    const rhythmBackbeatCarrier = musicProfileSourceType === 'spawner_rhythm_backbeat';
+    const rhythmBackbeatCarrier = musicProfileSourceType === 'spawner_rhythm_backbeat'
+      || musicProfileSourceType === 'secondary_bridge_backbeat';
     const rhythmMotionCarrier = musicProfileSourceType === 'spawner_rhythm_motion';
     const slotRhythmCarrier = rhythmPulseCarrier || rhythmBackbeatCarrier || rhythmMotionCarrier;
     const melodyProfileCarrier = musicProfileSourceType === 'lead_melody';
@@ -954,12 +1007,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const noteNameBaseRaw = lockedIntroNote
       || normalizeSwarmNoteName(stepDrivenNoteName || melodyProfileNote || effectiveNotes?.[noteIdx])
       || getRandomSwarmPentatonicNote();
-    const noteNameBase = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
-      ? noteNameBaseRaw
-      : clampNoteToDirectorPool(
-        noteNameBaseRaw,
-        stepAbs + noteIdx
-      );
+    const noteNameBase = clampNoteToDirectorPool(
+      noteNameBaseRaw,
+      stepAbs + noteIdx
+    );
     const responsePool = getDirectorNotePool();
     const responseSeedNote = normalizeSwarmNoteName(
       chooseResponseNoteFromPool({
@@ -1009,13 +1060,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       isPrimaryLoopOwnerGroup,
       isFoundationBufferGroup,
     });
-    const noteName = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
-      ? noteNameRaw
-      : clampNoteToDirectorRegisterTarget(
-        noteNameRaw,
-        stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
-        registerTarget
-      );
+    const noteName = clampNoteToDirectorRegisterTarget(
+      noteNameRaw,
+      stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
+      registerTarget
+    );
     const phraseStep = getPhraseStepState(
       stepAbs,
       melodyStepDriven ? Math.max(8, Math.trunc(Number(getPhraseLengthSteps(lane, group, stepAbs)) || 8)) : getPhraseLengthSteps(lane, group, stepAbs)
@@ -1042,13 +1091,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const gravityNoteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
       ? phraseGravityTarget
       : noteNameRaw;
-    const gravityNoteName = (isBassRole || rhythmPercussionCarrier || soloCarrierType === 'rhythm')
-      ? gravityNoteNameRaw
-      : clampNoteToDirectorRegisterTarget(
-        gravityNoteNameRaw,
-        stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
-        registerTarget
-      );
+    const gravityNoteName = clampNoteToDirectorRegisterTarget(
+      gravityNoteNameRaw,
+      stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
+      registerTarget
+    );
     let styledNoteName = gravityNoteName;
     if (styleId === 'retro_shooter') {
       const prevNote = normalizeSwarmNoteName(group?.__bsLastComposerNote);
@@ -1182,11 +1229,12 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       if (isFoundationBufferGroup) return 0.4;
       if (isBassRole) return 0.56;
       if (strongLeadWindowActive && directorWantsAnswerGroup) {
-        if (lane === 'response') return 0.14;
-        if (lane === 'call') return 0.18;
+        if (lane === 'response') return 0.1;
+        if (lane === 'call') return 0.14;
       }
-      if (lane === 'response') return isPrimaryLoopOwnerGroup ? 0.24 : 0.22;
-      return 0.46;
+      if (lane === 'response') return isPrimaryLoopOwnerGroup ? 0.22 : 0.16;
+      if (groupLaneId === 'secondary_loop_lane') return 0.42;
+      return 0.34;
     })();
     const melodicCallGroup = (
       lane === 'call'
@@ -1308,6 +1356,65 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       });
       continue;
     }
+    const directPlayerDuckGate = (
+      playerLikelyAudible
+      && !isSoloCarrier
+      && !rhythmPercussionCarrier
+      && !isPrimaryLoopOwnerGroup
+      && !isBassRole
+      && !isFoundationBufferGroup
+      && (
+        lane === 'response'
+        || lane === 'call'
+        || groupLaneId === 'sparkle_lane'
+        || musicLayer === 'sparkle'
+      )
+      && !phraseResolutionOpportunity
+      && !phraseGravityOpportunity
+      && !responseOverrideHit
+    );
+    if (directPlayerDuckGate) {
+      noteResponseDiagnostic(lane === 'response' ? 'player_duck_gate' : 'player_duck_support_gate', {
+        stepInPhrase: Math.max(0, Math.trunc(Number(phraseStep?.stepInPhrase) || 0)),
+        stepInBar: step,
+        playerLikelyAudible,
+      });
+      noteCallDiagnostic('player_duck_gate', {
+        stepInPhrase: Math.max(0, Math.trunc(Number(phraseStep?.stepInPhrase) || 0)),
+        stepInBar: step,
+        playerLikelyAudible,
+      });
+      continue;
+    }
+    const supportMaskingGate = (
+      strongLeadWindowActive
+      && !isSoloCarrier
+      && !rhythmPercussionCarrier
+      && !isPrimaryLoopOwnerGroup
+      && !isBassRole
+      && !isFoundationBufferGroup
+      && (
+        (lane === 'response'
+          && !responseOverrideHit
+          && !phraseResolutionOpportunity
+          && !phraseGravityOpportunity
+          && (step % 2) === 1)
+        || (lane !== 'call'
+          && lane !== 'response'
+          && phraseStep.stepInPhrase > 0
+          && (step % 2) === 1)
+      )
+    );
+    if (supportMaskingGate) {
+      noteResponseDiagnostic(lane === 'response' ? 'support_masking_gate' : 'support_lane_masking_gate', {
+        stepInPhrase: Math.max(0, Math.trunc(Number(phraseStep?.stepInPhrase) || 0)),
+        stepInBar: step,
+        responseOverrideHit,
+        phraseResolutionOpportunity,
+        phraseGravityOpportunity,
+      });
+      continue;
+    }
     group.__bsPhraseRestUntilStep = slotRhythmCarrier
       ? -1
       : (phraseResolutionHit
@@ -1363,6 +1470,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           phraseResolutionHit,
         },
       }));
+    }
+    if (!isSoloCarrier && lane === 'response' && performers.length > 0) {
+      emittedResponseThisStep = true;
     }
     if ((introPercussionCarrier || isSoloCarrier) && noteIntroDebug) {
       noteIntroDebug(introPercussionCarrier ? 'intro_percussion_emitted' : 'solo_carrier_emitted', {
@@ -1471,6 +1581,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         callResponseRuntime.pendingCallExpiresStepAbs = getPendingCallExpiry(stepAbs, cappedResponseTargetLength);
         callResponseRuntime.lastResponseNote = '';
         callResponseRuntime.activeResponseGroupId = 0;
+        callResponseRuntime.fallbackResponseGroupId = 0;
         callResponseRuntime.responseHoldUntilStepAbs = -1;
         callResponseRuntime.responsePhraseProgress = 0;
         callResponseRuntime.responsePhraseTargetLength = cappedResponseTargetLength;
@@ -1500,6 +1611,262 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       );
     }
     group.__bsLastComposerNote = normalizeSwarmNoteName(styledNoteName) || styledNoteName;
+  }
+  if (
+    !emittedResponseThisStep
+    && directorWantsAnswerGroup
+  ) {
+    const lastCallStep = Math.max(-1, Math.trunc(Number(callResponseRuntime.lastCallStepAbs) || -1));
+    const sinceCall = lastCallStep >= 0 ? (stepAbs - lastCallStep) : -1;
+    const pendingCallExpiresStepAbs = Math.max(
+      Math.trunc(Number(callResponseRuntime.pendingCallExpiresStepAbs) || -1),
+      getPendingCallExpiry(lastCallStep, callResponseRuntime.responsePhraseTargetLength)
+    );
+    const responseWindowOpen = lastCallStep >= 0
+      && sinceCall >= minResponseDelaySteps
+      && stepAbs <= pendingCallExpiresStepAbs;
+    const proxyFallbackGroupId = Math.max(
+      1,
+      Math.trunc(Number(callResponseRuntime.fallbackResponseGroupId) || 0)
+        || (900000 + Math.max(0, Math.trunc(Number(callResponseRuntime.lastCallGroupId) || 0)))
+    );
+    const fallbackResponseGroup = fallbackResponseProxyGroup
+      ? {
+        ...fallbackResponseProxyGroup,
+        id: Math.max(1, Math.trunc(Number(fallbackResponseProxyGroup?.id) || 0)) || proxyFallbackGroupId,
+      }
+      : {
+        id: proxyFallbackGroupId,
+        role: roles?.accent || 'accent',
+        musicLaneId: 'secondary_loop_lane',
+        musicLaneLayer: 'loops',
+        continuityId: `fallback-response-${proxyFallbackGroupId}`,
+        instrumentId: '',
+        instrument: '',
+        notes: [],
+        phraseTargets: [],
+        phraseRoot: '',
+        musicParticipationGain: 1,
+      };
+    const continuingResponsePhrase = Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0)) > 0
+      && Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0)) === Math.max(0, Math.trunc(Number(fallbackResponseGroup?.id) || 0))
+      && stepAbs <= Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1));
+    if (responseWindowOpen || continuingResponsePhrase) {
+      const responsePool = getDirectorNotePool();
+      const fallbackBaseNote = normalizeSwarmNoteName(
+        Array.isArray(fallbackResponseGroup?.notes) && fallbackResponseGroup.notes.length
+          ? fallbackResponseGroup.notes.find(Boolean)
+          : ''
+      ) || getRandomSwarmPentatonicNote();
+      const responseSeedNote = normalizeSwarmNoteName(chooseResponseNoteFromPool({
+        callNote: callResponseRuntime.lastCallNote,
+        fallbackNote: fallbackBaseNote,
+        stepAbs,
+        notePool: responsePool,
+        normalizeNoteName: normalizeSwarmNoteName,
+      })) || fallbackBaseNote;
+      const callNote = normalizeSwarmNoteName(callResponseRuntime.lastCallNote);
+      const callIdx = callNote ? getNotePoolIndex(callNote) : -1;
+      const seedIdx = getNotePoolIndex(responseSeedNote);
+      const defaultDir = seedIdx >= 0 && callIdx >= 0 && seedIdx < callIdx ? -1 : 1;
+      const responseDir = continuingResponsePhrase
+        ? (Math.trunc(Number(callResponseRuntime.responseDirection) || defaultDir) || defaultDir)
+        : defaultDir;
+      const responseProgress = continuingResponsePhrase
+        ? Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0))
+        : 0;
+      const minimumFallbackResponseLength = strongLeadWindowActive ? 2 : 3;
+      const responseTargetLength = Math.max(minimumFallbackResponseLength, Math.min(
+        responseLengthCap,
+        Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2)
+      ));
+      const responseOffsets = responseTargetLength <= 1
+        ? [responseDir]
+        : (responseTargetLength === 2
+          ? [responseDir, 0]
+          : (responseTargetLength === 3 ? [responseDir, responseDir * 2, responseDir] : [responseDir, responseDir * 2, responseDir, 0]));
+      const responseIdx = callIdx >= 0 && Array.isArray(responsePool) && responsePool.length
+        ? (((callIdx + responseOffsets[Math.min(responseProgress, responseOffsets.length - 1)]) % responsePool.length) + responsePool.length) % responsePool.length
+        : -1;
+      const noteName = clampNoteToDirectorRegisterTarget(
+        responseIdx >= 0
+          ? (normalizeSwarmNoteName(responsePool[responseIdx]) || responseSeedNote)
+          : responseSeedNote,
+        stepAbs + 1,
+        getGroupRegisterTarget({ lane: 'response' })
+      );
+      const responsePhraseProgressForEvent = continuingResponsePhrase
+        ? (Math.max(0, Math.trunc(Number(callResponseRuntime.responsePhraseProgress) || 0)) + 1)
+        : 1;
+      const groupId = Math.max(0, Math.trunc(Number(fallbackResponseGroup?.id) || 0));
+      const fallbackCarrierSourceGroup = fallbackResponseCarrierGroup || fallbackResponseGroup;
+      const fallbackAliveMembers = getLiveComposerMembersForGroup(fallbackCarrierSourceGroup);
+      const fallbackPerformer = fallbackAliveMembers.length
+        ? (chooseEnemyForNote({
+          group: fallbackCarrierSourceGroup,
+          noteName,
+          aliveMembers: fallbackAliveMembers,
+          normalizeNoteName: normalizeSwarmNoteName,
+          getFallbackNote: getRandomSwarmPentatonicNote,
+        }) || fallbackAliveMembers[0] || null)
+        : null;
+      const fallbackActorId = Math.max(0, Math.trunc(Number(fallbackPerformer?.id) || 0));
+      const instrumentId = String(
+        fallbackResponseGroup?.instrumentId
+          || fallbackResponseGroup?.instrument
+          || fallbackCarrierSourceGroup?.instrumentId
+          || fallbackCarrierSourceGroup?.instrument
+          || fallbackPerformer?.instrumentId
+          || fallbackPerformer?.musicInstrumentId
+          || fallbackPerformer?.composerInstrument
+          || getIdForDisplayName('Chime')
+          || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
+          || resolveSwarmSoundInstrumentId('projectile')
+          || 'tone'
+      ).trim();
+      const fallbackMusicLaneId = String(
+        fallbackResponseGroup?.musicLaneId
+          || (String(fallbackResponseGroup?.musicLaneLayer || '').trim().toLowerCase() === 'sparkle' ? 'sparkle_lane' : 'secondary_loop_lane')
+      ).trim().toLowerCase() || 'secondary_loop_lane';
+      const fallbackMusicLayer = fallbackMusicLaneId === 'sparkle_lane'
+        ? 'sparkle'
+        : 'loops';
+      events.push(createPerformedBeatEvent({
+        actorId: fallbackActorId,
+        beatIndex,
+        stepIndex: stepAbs,
+        role: normalizeSwarmRole(fallbackResponseGroup?.role || 'accent', roles?.accent || 'accent'),
+        note: noteName,
+        instrumentId,
+        actionType: 'composer-group-projectile',
+        threatClass: String(threat.light || 'light'),
+        visualSyncType: 'group-pulse',
+        payload: {
+          groupId,
+          groupEventSource: 'composer_group_response_fallback',
+          continuityId: String(fallbackResponseGroup?.continuityId || '').trim(),
+          musicLayer: fallbackMusicLayer,
+          musicProminence: 'quiet',
+          soloCarrierType: '',
+          musicLaneId: fallbackMusicLaneId,
+          callResponseLane: 'response',
+          callResponseQualified: true,
+          callResponsePhraseProgress: responsePhraseProgressForEvent,
+          musicRegister: 'high',
+          audioGain: clamp01(Number(fallbackResponseGroup?.musicParticipationGain == null ? 0.3 : fallbackResponseGroup.musicParticipationGain * 0.3)),
+          requestedNoteRaw: noteName,
+          phraseGravityTarget: normalizeSwarmNoteName(fallbackResponseGroup?.phraseRoot) || '',
+          phraseGravityHit: false,
+          phraseResolutionOpportunity: false,
+          phraseResolutionHit: false,
+        },
+      }));
+      callResponseRuntime.lastResponseStepAbs = stepAbs;
+      callResponseRuntime.lastResponseGroupId = groupId;
+      callResponseRuntime.lastResponseNote = normalizeSwarmNoteName(noteName) || noteName;
+      callResponseRuntime.pendingCallExpiresStepAbs = -1;
+      callResponseRuntime.activeResponseGroupId = groupId;
+      callResponseRuntime.fallbackResponseGroupId = groupId;
+      callResponseRuntime.responseDirection = responseDir;
+      callResponseRuntime.responsePhraseProgress = responsePhraseProgressForEvent;
+      callResponseRuntime.responseHoldUntilStepAbs = Math.max(
+        stepAbs,
+        Math.min(
+          stepAbs + Math.max(0, (responseTargetLength - 1) * responsePhraseSteps),
+          Math.max(stepAbs, lastCallStep + responseWindowSteps + responseWindowGraceSteps)
+        )
+      );
+      noteMusicSystemEvent?.('music_call_response_response_group_state', {
+        groupId,
+        stepIndex: stepAbs,
+        beatIndex,
+        reason: 'fallback_emitted',
+        callStepAbs: lastCallStep,
+        responseHoldUntilStepAbs: Math.max(-1, Math.trunc(Number(callResponseRuntime.responseHoldUntilStepAbs) || -1)),
+        activeResponseGroupId: Math.max(0, Math.trunc(Number(callResponseRuntime.activeResponseGroupId) || 0)),
+        lifecycleState: 'active',
+      });
+    }
+  }
+  if (directBedFallbackWanted) {
+    const anchorStep = step === 0 || step === 4;
+    const backbeatStep = step === 2 || step === 6;
+    const bridgePulseStep = anchorStep || backbeatStep;
+    const allowBedStep = playerLikelyAudible ? backbeatStep : bridgePulseStep;
+    if (allowBedStep) {
+      const leadCarrierGroup = activePrimaryLoopLeadGroups[0] || null;
+      const bedActorId = 0;
+      const bedNote = normalizeSwarmNoteName(
+        anchorStep ? 'C3' : 'G3'
+      ) || (anchorStep ? 'C3' : 'G3');
+      const bedInstrumentId = String(
+        backbeatStep
+          ? (
+            getIdForDisplayName('Bass Tone 3')
+            || getIdForDisplayName('Bass Tone 4')
+            || getIdForDisplayName('SNARE 808')
+            || getIdForDisplayName('HAND CLAP (ELECTRO)')
+          )
+          : (
+            getIdForDisplayName('Bass Tone 3')
+            || getIdForDisplayName('Bass Tone 4')
+            || getIdForDisplayName('SNARE 808')
+            || getIdForDisplayName('HAND CLAP (ELECTRO)')
+          )
+          || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
+          || resolveSwarmSoundInstrumentId('projectile')
+          || 'tone'
+      ).trim();
+      const bedProminence = backbeatStep ? 'full' : 'quiet';
+      const bedGain = clamp01(
+        playerLikelyAudible
+          ? 0.52
+          : (backbeatStep ? 0.82 : 0.66)
+      );
+      events.push(createPerformedBeatEvent({
+        actorId: bedActorId,
+        beatIndex,
+        stepIndex: stepAbs,
+        role: normalizeSwarmRole(roles?.accent || 'accent', roles?.accent || 'accent'),
+        note: bedNote,
+        instrumentId: bedInstrumentId,
+        actionType: 'composer-group-projectile',
+        threatClass: String(threat.light || 'light'),
+        visualSyncType: 'none',
+        payload: {
+          groupId: Math.max(0, Math.trunc(Number(leadCarrierGroup?.id) || 0)),
+          ghostPlayback: true,
+          groupEventSource: 'secondary_loop_bridge_fallback',
+          continuityId: 'secondary-loop-bridge-fallback',
+          musicLayer: 'loops',
+          musicVoiceKey: 'percussion_backbeat',
+          onboardingPriority: 1,
+          musicProminence: bedProminence,
+          soloCarrierType: '',
+          musicLaneId: 'secondary_loop_lane',
+          callResponseLane: 'call',
+          callResponseQualified: false,
+          callResponsePhraseProgress: 0,
+          musicRegister: 'low',
+          audioGain: bedGain,
+          requestedNoteRaw: bedNote,
+          phraseGravityTarget: '',
+          phraseGravityHit: false,
+          phraseResolutionOpportunity: false,
+          phraseResolutionHit: false,
+        },
+      }));
+      noteMusicSystemEvent?.('music_secondary_loop_bridge_fallback', {
+        stepIndex: stepAbs,
+        beatIndex,
+        barIndex,
+        actorId: bedActorId,
+        leadGroupId: Math.max(0, Math.trunc(Number(leadCarrierGroup?.id) || 0)),
+        note: bedNote,
+        instrumentId: bedInstrumentId,
+        playerLikelyAudible,
+      });
+    }
   }
   return events;
 }
