@@ -169,18 +169,37 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     ? options.directTriggerComposerCarrier
     : null;
   const playerLikelyAudible = options?.playerLikelyAudible === true;
+  const musicModeRuntime = options?.musicModeRuntime && typeof options.musicModeRuntime === 'object'
+    ? options.musicModeRuntime
+    : null;
 
   const getAliveEnemiesByIds = typeof options?.getAliveEnemiesByIds === 'function' ? options.getAliveEnemiesByIds : (() => []);
   const getLiveComposerMembersForGroup = (group) => getAliveEnemiesByIds(group?.memberIds).filter((e) => {
     if (!e) return false;
     return String(e?.enemyType || '').trim().toLowerCase() === 'composer-group-member';
   });
+  const isRhythmicSecondaryLoopCarrier = (group) => {
+    if (!group) return false;
+    const laneId = String(group?.musicLaneId || '').trim().toLowerCase();
+    if (laneId !== 'secondary_loop_lane') return false;
+    if (getLiveComposerMembersForGroup(group).length <= 0) return false;
+    const profile = normalizeComposerProfileSourceType(group?.musicProfileSourceType);
+    const templateId = String(group?.templateId || '').trim().toLowerCase();
+    const responseLane = normalizeCallResponseLane(group?.callResponseLane, '');
+    if (responseLane === 'response' || profile === 'answer_ornament') return false;
+    return profile === 'rhythm_lane'
+      || profile === 'rhythm_lane_backbeat'
+      || profile === 'secondary_bridge_backbeat'
+      || profile === 'spawner_rhythm_backbeat'
+      || templateId === 'secondary_loop_bridge_group';
+  };
   const activeSecondaryLoopCoveragePresent = activeGroups.some((g) => {
     if (!g) return false;
     const laneId = String(g?.musicLaneId || '').trim().toLowerCase();
     if (laneId !== 'secondary_loop_lane') return false;
     return getLiveComposerMembersForGroup(g).length > 0;
   });
+  const activeSecondaryLoopRhythmCoveragePresent = activeGroups.some((g) => isRhythmicSecondaryLoopCarrier(g));
   const fallbackResponseCarrierGroup = activeGroups.find((g) => {
     if (!g) return false;
     const laneId = String(g?.musicLaneId || '').trim().toLowerCase();
@@ -261,9 +280,16 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     ? (preDropActive ? 2 : (strongLeadWindowActive ? 3 : 2))
     : 1;
   const callCadenceRestSteps = 1;
+  const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
+  const protectedContinuityLanes = Array.isArray(musicModeRuntime?.protectedContinuityLanes)
+    ? musicModeRuntime.protectedContinuityLanes.map((laneId) => String(laneId || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+  const secondaryLoopProtected = activeMusicMode === 'lead_entry_merge'
+    || protectedContinuityLanes.includes('secondary_loop_lane');
   const directBedFallbackWanted = strongLeadWindowActive
     && activePrimaryLoopLeadGroups.length > 0
-    && !activeSecondaryLoopCoveragePresent;
+    && (secondaryLoopProtected || !activeSecondaryLoopCoveragePresent)
+    && !activeSecondaryLoopRhythmCoveragePresent;
   const getPendingCallExpiry = (callStepAbs, targetLength) => {
     const lastCallStep = Math.max(-1, Math.trunc(Number(callStepAbs) || -1));
     if (lastCallStep < 0) return -1;

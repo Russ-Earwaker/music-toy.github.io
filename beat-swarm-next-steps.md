@@ -808,6 +808,282 @@ Follow-up direction under that plan:
 - add future low-count `solo carrier` enemies that can hold a full rhythm or melody lane on their own
 - use them when the director needs lane continuity without flooding the battlefield with many specials
 
+### 16. Partial Explicit Musical State Layer
+
+The next architectural step should be a partial explicit control layer above the current engine, not a full replacement of the current music runtime.
+
+Why this is needed:
+
+- the current lower-level systems are capable enough
+- the main failures are increasingly about policy and continuity, not raw note generation
+- too many important decisions are still inferred indirectly from:
+  - lane occupancy
+  - template choice
+  - enemy embodiment
+  - section heuristics
+  - fallback state
+
+That makes the system flexible, but too easy to push into "looks structurally valid, sounds wrong."
+
+Target shape:
+
+- keep the current executor systems:
+  - motifs
+  - lanes
+  - call/response
+  - event arbitration
+  - carrier spawning / embodiment
+- add a thin explicit state layer that decides:
+  - current musical mode
+  - allowed and required lanes
+  - protected continuity lanes
+  - profile-family bias
+  - instrument palette bias
+  - response policy
+  - density ceiling
+  - gameplay-driven overrides
+
+Working rule:
+
+> The explicit state layer should decide what must be true.
+> The current engine should decide how to realize it.
+
+Initial mode set:
+
+- `intro_pulse`
+- `intro_backbeat_bridge`
+- `lead_entry_merge`
+- `full_texture`
+- `boss_rhythm_override`
+
+First pilot:
+
+- make `intro -> first lead entry` the first explicit-mode transition
+- when lead enters, switch to `lead_entry_merge`
+- keep `secondary_loop` continuity protected for a fixed bridge window
+- require real rhythmic support continuity, not just nominal lane occupancy
+- only then relax into `full_texture`
+
+Gameplay override targets:
+
+- scoped instrument bias for special enemies
+  - example: a `piano` enemy can bias foreground/support material toward piano-capable families
+- scoped boss override
+  - example: a boss can force a rhythm-heavy or drums-only mode for a phase
+- temporary encounter-specific lane policy
+  - example: suppress melody and privilege `foundation + counter-rhythm` during a pressure phase
+
+Important anti-rewrite rule:
+
+- do not remove motif generation
+- do not remove call/response
+- do not remove lane arbitration
+- do not remove carrier embodiment
+
+This layer should reduce ambiguity, not replace the engine.
+
+Debug requirement:
+
+Every bar should be able to report:
+
+- active mode
+- requested next mode
+- transition reason
+- protected lanes
+- required lanes not yet embodied
+- fallback used / not used
+- active gameplay override source
+
+Reason for doing this:
+
+- it preserves most of the current flexibility
+- it gives the project a clean way to support:
+  - intro merge
+  - gameplay-driven musical identity changes
+  - clearer section behavior
+  - fewer accidental cross-system failures
+
+Expected tradeoff:
+
+- some emergent weirdness will be reduced
+- but in exchange we should get stronger authorship, clearer debugging, and more reliable gameplay-to-music behavior
+
+#### First Implementation Checklist
+
+The first pass should stay narrow and prove the approach on one transition:
+
+> `intro_backbeat_bridge -> lead_entry_merge`
+
+Do not start by rewriting the whole director.
+
+Implementation checklist:
+
+1. Add a small runtime state object
+
+Create a dedicated state container for:
+
+- `activeMusicMode`
+- `requestedMusicMode`
+- `modeEnteredBar`
+- `modeTransitionReason`
+- `protectedContinuityLanes`
+- `requiredLaneRoles`
+- `instrumentPaletteBias`
+- `gameplayMusicOverrides`
+
+The first version should be tiny and readable.
+
+2. Define the first explicit modes
+
+Implement only:
+
+- `intro_pulse`
+- `intro_backbeat_bridge`
+- `lead_entry_merge`
+- `full_texture`
+
+Each mode should declare:
+
+- allowed lanes
+- required lanes
+- protected continuity lanes
+- lead family bias
+- rhythm family bias
+- response policy
+- density ceiling
+
+3. Put mode evaluation in one place
+
+Add one function that decides the active mode from:
+
+- current section
+- intro state
+- lead-active state
+- gameplay overrides
+
+That function should produce:
+
+- current mode
+- next requested mode if different
+- transition reason
+
+Do not let multiple files infer the same transition independently.
+
+4. Pilot the intro merge explicitly
+
+For the first pilot:
+
+- `intro_pulse` should require stable pulse only
+- `intro_backbeat_bridge` should require pulse plus backbeat
+- `lead_entry_merge` should require:
+  - `primary_loop`
+  - real rhythmic `secondary_loop`
+- `lead_entry_merge` should protect `secondary_loop` continuity for a fixed bridge window
+- `full_texture` should only start after that merge window is satisfied
+
+Acceptance rule:
+
+> Lead entry must not be allowed to count as successful unless a real rhythmic underlay survives with it.
+
+5. Distinguish nominal from real lane coverage
+
+Mode evaluation should not accept:
+
+- any occupied `secondary_loop_lane`
+
+as success.
+
+It should require:
+
+- audible rhythmic secondary coverage
+
+This logic should be shared between:
+
+- mode evaluation
+- fallback admission
+- Music Lab / debug reporting
+
+6. Route existing systems through mode policy instead of replacing them
+
+Keep using:
+
+- existing motif generators
+- existing lane assignment
+- existing event collector
+- existing embodiment logic
+
+But make them read mode policy for:
+
+- what lanes are required
+- what continuity must be protected
+- what profile families are preferred
+- whether fallback is permitted
+
+7. Add scoped gameplay overrides
+
+The first implementation should only support two simple override forms:
+
+- `instrument_bias`
+- `mode_override`
+
+Example targets:
+
+- special enemy alive -> `instrument_bias: piano`
+- boss phase active -> `mode_override: boss_rhythm_override`
+
+These overrides should be:
+
+- time-bounded
+- explicitly attributed
+- visible in debug
+
+8. Add state-layer debug output
+
+Per bar, log:
+
+- `activeMusicMode`
+- `requestedMusicMode`
+- `modeTransitionReason`
+- `protectedContinuityLanes`
+- `requiredLaneRoles`
+- `missingRequiredLaneRoles`
+- `activeGameplayMusicOverrides`
+- `fallbackUsed`
+
+This should become the first place to inspect when musical behavior sounds wrong.
+
+9. Use one success test before expanding scope
+
+Do not add boss modes, palette complexity, or more mode types until this passes:
+
+- intro pulse starts alone
+- backbeat joins
+- lead enters as solo carrier
+- rhythmic underlay remains audible under the lead
+- merge lasts for the intended bridge window
+- then the piece opens into `full_texture`
+
+10. Only then expand outward
+
+After the pilot works, the next additions should be:
+
+- `boss_rhythm_override`
+- scoped special-enemy instrument bias
+- explicit support / answer entry rules
+- longer-horizon section modes
+
+File targets for the first pass:
+
+- [beat-swarm-mode.js](/d:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-mode.js)
+- [beat-swarm-composer-lifecycle.js](/d:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-composer-lifecycle.js)
+- [beat-swarm-composer-maintenance.js](/d:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-composer-maintenance.js)
+- [beat-swarm-composer-events.js](/d:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-composer-events.js)
+- [beat-swarm-music-lab.js](/d:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-music-lab.js)
+
+Working boundary:
+
+> If the pilot cannot make intro merge correctly, do not broaden the state layer yet.
+
 ## Working Rule
 
 Use this as the tuning principle:

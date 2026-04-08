@@ -29,9 +29,14 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
 
   const soloCarrierTypeRaw = String(group?.soloCarrierType || '').trim().toLowerCase();
   const soloCarrierType = soloCarrierTypeRaw === 'rhythm' ? 'rhythm' : '';
-  const isSoloCarrier = soloCarrierType === 'rhythm';
+  const introCarrierBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
+  const templateId = String(group?.templateId || '').trim().toLowerCase();
+  const soloCarrierFlavor = soloCarrierType === 'rhythm'
+    ? 'rhythm'
+    : ((introCarrierBodyType === 'solo' || templateId.startsWith('solo-')) ? 'melody' : '');
+  const isSoloCarrier = !!soloCarrierFlavor;
   const el = document.createElement('div');
-  el.className = `beat-swarm-enemy is-composer-group is-shape-${String(group.shape || 'circle')}${isSoloCarrier ? ` is-solo-carrier is-solo-${soloCarrierType}-carrier` : ''}`;
+  el.className = `beat-swarm-enemy is-composer-group is-shape-${String(group.shape || 'circle')}${isSoloCarrier ? ` is-solo-carrier is-solo-${soloCarrierFlavor}-carrier` : ''}`;
   el.style.setProperty('--bs-group-color', String(group.color || '#ff8b6e'));
   const hpWrap = document.createElement('div');
   hpWrap.className = 'beat-swarm-enemy-hp';
@@ -43,7 +48,7 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     soloPulse.className = 'beat-swarm-solo-pulse';
     el.appendChild(soloPulse);
     const soloBadge = document.createElement('div');
-    soloBadge.className = `beat-swarm-solo-badge beat-swarm-solo-badge-${soloCarrierType}`;
+    soloBadge.className = `beat-swarm-solo-badge beat-swarm-solo-badge-${soloCarrierFlavor}`;
     el.appendChild(soloBadge);
   }
   el.appendChild(hpWrap);

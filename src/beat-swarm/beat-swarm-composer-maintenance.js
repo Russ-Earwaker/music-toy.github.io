@@ -36,6 +36,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const currentEnergyStateName = String(state.currentEnergyStateName || '').trim().toLowerCase();
   const introStage = String(state.introStage || 'none').trim().toLowerCase() || 'none';
   const enemies = Array.isArray(state.enemies) ? state.enemies : [];
+  const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
+    ? state.musicModeRuntime
+    : null;
   const sanitizeEnemyMusicInstrumentId = typeof helpers.sanitizeEnemyMusicInstrumentId === 'function'
     ? helpers.sanitizeEnemyMusicInstrumentId
     : ((instrumentId, fallback) => helpers.resolveInstrumentIdOrFallback?.(instrumentId, fallback) || fallback || 'tone');
@@ -85,6 +88,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const introRhythmOnlyWindow = introStage === 'rhythm_only';
   const introSoftRampWindow = introStage === 'soft_ramp';
   const melodySoloWindowOpen = !introWindowActive && currentBarIndex >= 12;
+  const leadEntryMergeActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'lead_entry_merge';
   const spawnWantsSoloRhythm = spawnConfigLoaded && spawnChosenId === 'solo_rhythm_basic' && !introRhythmOnlyWindow;
   const stepAbs = Math.max(0, Math.trunc(currentBeatIndex));
   const legacyIntroHoldActive = !!helpers.shouldHoldIntroLayerExpansion?.(stepAbs);
@@ -1706,6 +1710,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     );
     effectivePacingCaps.responseMode = 'group';
   }
+  if (leadEntryMergeActive) {
+    effectivePacingCaps.maxComposerGroups = Math.max(3, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
+    effectivePacingCaps.maxComposerGroupSize = Math.max(2, Math.trunc(Number(effectivePacingCaps?.maxComposerGroupSize) || 0));
+    effectivePacingCaps.maxComposerPerformers = Math.max(2, Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 0));
+  }
   const getActiveEmbodiedSecondaryLoopBridgeGroup = () => composerEnemyGroups.find((group) => {
     if (!group || group.active !== true || group.retiring) return false;
     if (String(group?.sectionKey || '').trim().toLowerCase() !== String(runtimeSectionKey || '').trim().toLowerCase()) return false;
@@ -1880,10 +1889,27 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           if (
             !forcedLeadProfile
             && !forcedIntroProfile
+            && !forcedSecondaryBridgeProfile
             && activePrimaryLoopMelodyCarrier
             && desiredLane !== 'response'
             && role === constants.leadRole
           ) {
+            try {
+              noteMusicSystemEvent?.('music_composer_spawn_blocked', {
+                reason: 'blocked_by_active_primary_lead',
+                forcedProfileSourceType: forcedProfile,
+                forcedSecondaryBridgeProfile,
+                desiredLane,
+                role,
+                requestedTemplateId,
+                effectiveTemplateId,
+                activePrimaryLoopMelodyCarrier,
+                sectionKey: String(sectionKey || '').trim().toLowerCase(),
+                motifScopeKey: String(motifScopeKey || '').trim().toLowerCase(),
+              }, {
+                beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+              });
+            } catch {}
             return null;
           }
           const introBridgeFoundationHoldActive = !forcedIntroProfile
@@ -2078,6 +2104,14 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           const leadIdentityRequested = (melodyCarrierRequested || groupedMelodyRequested)
             && soloCarrierType !== 'rhythm'
             && !introPercussionCarrierActive;
+          const leadSoloBodyType = leadIdentityRequested
+            ? chooseComposerBodyTypeForMusicLane(
+                resolvedCarrierLaneId || 'primary_loop_lane',
+                getPreferredCarrierForMusicLaneId(resolvedCarrierLaneId || 'primary_loop_lane'),
+                'solo'
+              )
+            : '';
+          const leadSoloCarrierActive = leadIdentityRequested && leadSoloBodyType !== 'group';
           const forcedVisualIdentity = introSecondaryRhythmCarrierActive
             ? {
                 roleLane: 'accent',
@@ -2132,7 +2166,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             sectionId: String(composerDirective?.sectionId || 'default'),
             templateId: (introRhythmUsesGroupBody || (soloCarrierActive && resolvedComposerBodyType === 'group'))
               ? effectiveTemplateId
-              : (effectiveVisualSoloCarrierActive ? `solo-${effectiveVisualSoloCarrierType}-carrier` : effectiveTemplateId),
+              : (leadSoloCarrierActive
+                ? 'solo-melody-carrier'
+                : (effectiveVisualSoloCarrierActive ? `solo-${effectiveVisualSoloCarrierType}-carrier` : effectiveTemplateId)),
             role: responseCarrierProfile?.role || createdRole,
             musicLaneId: responseCarrierProfile?.musicLaneId || resolvedCarrierLaneId,
             musicLaneLayer: introPercussionCarrierActive
@@ -2188,7 +2224,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             introPercussionCarrier: introPercussionCarrierActive,
             performers: (introRhythmUsesGroupBody || groupRhythmCarrierActive)
               ? 6
-              : (soloCarrierActive
+              : ((leadSoloCarrierActive || soloCarrierActive)
               ? 1
               : Math.max(
                 1,
@@ -2199,7 +2235,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
               )),
             size: (introRhythmUsesGroupBody || groupRhythmCarrierActive)
               ? 6
-              : (soloCarrierActive
+              : ((leadSoloCarrierActive || soloCarrierActive)
               ? 1
               : Math.max(
                 1,
@@ -2302,7 +2338,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             roleColorDeep: forcedVisualIdentity?.roleColorDeep || '',
             identityVisualLocked: forcedVisualIdentity?.identityVisualLocked === true,
             soloCarrierType: effectiveVisualSoloCarrierType,
-            introCarrierBodyType: introStageSoloRhythmActive ? introRhythmCarrierBodyType : (soloCarrierActive ? resolvedComposerBodyType : ''),
+            introCarrierBodyType: introStageSoloRhythmActive
+              ? introRhythmCarrierBodyType
+              : ((leadSoloCarrierActive && leadSoloBodyType)
+                ? leadSoloBodyType
+                : (soloCarrierActive ? resolvedComposerBodyType : '')),
             introStageCarrier: introStageSoloRhythmActive,
             musicProfileSourceType: responseGroupRequested ? 'answer_ornament' : (sharedProfileSourceType || ''),
             ...buildIntroSlotState({
@@ -2381,9 +2421,27 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           }
           if (forcedSecondaryBridgeProfile) {
             created.templateId = 'secondary_loop_bridge_group';
+            created.musicLaneId = 'secondary_loop_lane';
+            created.musicLaneLayer = 'loops';
+            created.musicProfileSourceType = 'secondary_bridge_backbeat';
+            created.callResponseLane = 'call';
             created.performers = Math.max(2, Math.trunc(Number(created?.performers) || 0));
             created.size = Math.max(2, Math.trunc(Number(created?.size) || 0));
             created.musicParticipationGain = 1;
+            try {
+              noteMusicSystemEvent?.('music_reserved_secondary_bridge_result', {
+                sectionKey: String(sectionKey || '').trim().toLowerCase(),
+                created: true,
+                groupId: Math.trunc(Number(created?.id) || 0),
+                templateId: String(created?.templateId || '').trim(),
+                musicLaneId: String(created?.musicLaneId || '').trim().toLowerCase(),
+                musicProfileSourceType: String(created?.musicProfileSourceType || '').trim().toLowerCase(),
+                role: String(created?.role || '').trim().toLowerCase(),
+                instrumentId: String(created?.instrumentId || created?.instrument || '').trim(),
+              }, {
+                beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+              });
+            } catch {}
           }
           syncGroupPrimaryNote(created);
           if (typeof helpers.noteIntroDebug === 'function' && currentBarIndex < 24 && soloCarrierType === 'rhythm') {
@@ -2585,8 +2643,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         group.groupRhythmCarrierLock = false;
         group.introStageCarrier = false;
         group.introPercussionCarrier = false;
-        group.introCarrierBodyType = '';
+        group.introCarrierBodyType = 'solo';
         group.musicProfileSourceType = 'lead_melody';
+        if (!String(group?.templateId || '').trim().toLowerCase().startsWith('solo-')) {
+          group.templateId = 'solo-melody-carrier';
+        }
         group.role = canonicalLeadProfile?.role || constants.leadRole;
         group.musicLaneId = 'primary_loop_lane';
         group.musicLaneLayer = 'loops';

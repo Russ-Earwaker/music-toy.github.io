@@ -282,8 +282,18 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     }
     g.lifecycleState = normalizeLifecycleState(g.lifecycleState, 'active');
     if (g.sectionKey !== sectionKey) {
-      // Keep groups alive across section boundaries and adapt scheduling/audio instead.
-      g.sectionKey = sectionKey;
+      const carryAcrossSection = isPrimaryLeadMelodyGroup(g)
+        || hasActiveSecondaryLoopCoverage(g)
+        || isPersistentIntroSlotCarrier(g);
+      if (carryAcrossSection) {
+        g.sectionKey = sectionKey;
+        g.sectionId = String(composer?.sectionId || g.sectionId || 'default');
+      } else {
+        // Off-section groups should age out naturally; don't retag or replenish them into the new section.
+        g.lifecycleState = normalizeLifecycleState(g.lifecycleState, 'retiring');
+        if (!aliveIds.size) composerEnemyGroups.splice(i, 1);
+        continue;
+      }
     }
     const introGroupBodyLocked = isPersistentIntroSlotCarrier(g)
       && String(g?.introCarrierBodyType || '').trim().toLowerCase() === 'group';
