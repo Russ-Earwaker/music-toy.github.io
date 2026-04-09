@@ -31,6 +31,11 @@ export function executePerformedBeatEventRuntime(options = null) {
   const stepIndex = Math.max(0, Math.trunc(Number(ev.stepIndex) || 0));
   const barIndex = Math.floor(beatIndex / Math.max(1, Math.trunc(Number(constants.composerBeatsPerBar) || 4)));
   const playerStepLikelyAudible = helpers.isPlayerWeaponStepLikelyAudible?.(stepIndex) === true;
+  const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
+    ? state.musicModeRuntime
+    : null;
+  const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
+  const primaryLoopForegroundProtected = activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture';
   const inferInstrumentLaneFromCatalogId = typeof helpers.inferInstrumentLaneFromCatalogId === 'function'
     ? helpers.inferInstrumentLaneFromCatalogId
     : ((_, fallbackLane = 'lead') => String(fallbackLane || 'lead').trim().toLowerCase() || 'lead');
@@ -294,10 +299,14 @@ export function executePerformedBeatEventRuntime(options = null) {
   const normalizeEnemyProminenceForPlayerStep = (raw) => {
     const key = String(raw || '').trim().toLowerCase() || 'full';
     const entryAudibilityGrace = ev?.payload?.entryAudibilityGrace === true;
+    const eventLaneId = String(ev?.payload?.musicLaneId || '').trim().toLowerCase();
     if (!playerStepLikelyAudible) return key;
     if (actionType === 'player-weapon-step') return key;
     const eventLayer = String(ev?.payload?.musicLayer || '').trim().toLowerCase();
     if (eventLayer === 'foundation') return key;
+    if (primaryLoopForegroundProtected && eventLaneId === 'primary_loop_lane') {
+      return key === 'suppressed' ? 'suppressed' : 'full';
+    }
     if (entryAudibilityGrace && (key === 'trace' || key === 'quiet')) return 'quiet';
     // During player-audible steps, keep enemy voices present but ducked (quiet) instead of muting to trace.
     if (key === 'full') return 'quiet';

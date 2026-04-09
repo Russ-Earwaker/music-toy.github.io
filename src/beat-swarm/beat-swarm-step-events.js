@@ -42,6 +42,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const centerWorld = state.centerWorld && typeof state.centerWorld === 'object'
     ? state.centerWorld
     : { x: 0, y: 0 };
+  const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
+    ? state.musicModeRuntime
+    : null;
+  const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
+  const primaryLoopForegroundProtected = activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture';
   const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
   if (!(entryAudibilityRuntime.byKey instanceof Map)) entryAudibilityRuntime.byKey = new Map();
   if (entryAudibilityRuntime.lastStepIndex !== stepIndex) {
@@ -740,6 +745,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       // Preserve the tune skeleton under player fire: foundation stays anchored,
       // one loop voice can remain quiet, sparkle stays background-only.
       if (safeLayer === 'foundation' && safeProminence === 'full') return 'full';
+      if (safeLayer === 'loops' && laneDrivenPrimaryLoop && primaryLoopForegroundProtected) return 'full';
       if (safeLayer === 'loops' && laneDrivenPrimaryLoop) return 'quiet';
       if (safeLayer === 'loops') return 'quiet';
       if (safeLayer === 'sparkle') return 'trace';
@@ -1071,6 +1077,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         if (item.layer === 'loops') {
           if (item.isProtectedIntroDrum) return 'quiet';
           if (item.isPrimaryLoopLaneEvent) {
+            if (primaryLoopForegroundProtected) {
+              return 'full';
+            }
             if (foundationSelected) {
               if (item.isEstablishingForegroundLoop && !playerLikelyAudible) return 'full';
               return freshEntryAudibility ? 'quiet' : 'quiet';

@@ -2271,6 +2271,65 @@ function buildBeatSwarmTransitionDebugText(payload, meta = {}) {
   const leadEntryBar = Math.max(0, Math.trunc(Number(firstLeadEvent?.barIndex) || 0));
   const rangeStart = Math.max(0, leadEntryBar > 0 ? (leadEntryBar - 4) : 8);
   const rangeEnd = Math.max(rangeStart + 8, leadEntryBar + 8);
+  const isBarInRange = (barIndex) => {
+    const bar = Math.trunc(Number(barIndex) || 0);
+    return bar >= rangeStart && bar <= rangeEnd;
+  };
+  const leadRenderEvents = eventTimeline.filter((e) => {
+    if (!isBarInRange(e?.barIndex)) return false;
+    const laneId = String(e?.musicLaneId || '').trim().toLowerCase();
+    return laneId === 'primary_loop_lane';
+  });
+  const secondaryRenderEvents = eventTimeline.filter((e) => {
+    if (!isBarInRange(e?.barIndex)) return false;
+    const laneId = String(e?.musicLaneId || '').trim().toLowerCase();
+    return laneId === 'secondary_loop_lane';
+  });
+  const leadSuppressionEvents = systemEvents.filter((e) => {
+    const eventType = String(e?.eventType || '').trim().toLowerCase();
+    return eventType === 'music_primary_loop_group_suppressed' && isBarInRange(e?.barIndex);
+  });
+  const leadEmissionEvents = systemEvents.filter((e) => {
+    const eventType = String(e?.eventType || '').trim().toLowerCase();
+    return eventType === 'music_primary_loop_lane_emitted' && isBarInRange(e?.barIndex);
+  });
+  const summarizeLaneEventsForBar = (events, barIndex) => {
+    const barEvents = events.filter((e) => Math.trunc(Number(e?.barIndex) || 0) === barIndex);
+    const created = barEvents.filter((e) => String(e?.phase || '').trim().toLowerCase() === 'created');
+    const executed = barEvents.filter((e) => String(e?.phase || '').trim().toLowerCase() === 'executed');
+    const audible = executed.filter((e) => e?.enemyAudible === true);
+    const full = executed.filter((e) => String(e?.musicProminence || '').trim().toLowerCase() === 'full');
+    const quiet = executed.filter((e) => String(e?.musicProminence || '').trim().toLowerCase() === 'quiet');
+    const trace = executed.filter((e) => String(e?.musicProminence || '').trim().toLowerCase() === 'trace');
+    const noteCounts = Object.create(null);
+    const instrumentCounts = Object.create(null);
+    for (const ev of audible) {
+      const note = String(ev?.noteResolved || ev?.note || '').trim();
+      const instrument = String(ev?.resolvedPlaybackInstrumentId || ev?.instrumentId || '').trim();
+      if (note) noteCounts[note] = (noteCounts[note] || 0) + 1;
+      if (instrument) instrumentCounts[instrument] = (instrumentCounts[instrument] || 0) + 1;
+    }
+    const topNotes = Object.entries(noteCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([note, count]) => `${note}:${count}`)
+      .join(', ');
+    const topInstruments = Object.entries(instrumentCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([instrument, count]) => `${instrument}:${count}`)
+      .join(', ');
+    return {
+      created: created.length,
+      executed: executed.length,
+      audible: audible.length,
+      full: full.length,
+      quiet: quiet.length,
+      trace: trace.length,
+      notes: topNotes,
+      instruments: topInstruments,
+    };
+  };
   const lines = [];
   lines.push('Beat Swarm Transition Debug');
   lines.push(`sessionId=${String(src.sessionId || '')}`);
@@ -2301,6 +2360,38 @@ function buildBeatSwarmTransitionDebugText(payload, meta = {}) {
     lines.push(`bar ${bar}: audibleEnemy=${audible.length} playerAudible=${playerAudible}${summary ? ` :: ${summary}` : ''}`);
   }
   lines.push('');
+  lines.push('Lead / Secondary Render Summary:');
+  for (let bar = rangeStart; bar <= rangeEnd; bar++) {
+    const lead = summarizeLaneEventsForBar(leadRenderEvents, bar);
+    const secondary = summarizeLaneEventsForBar(secondaryRenderEvents, bar);
+    const suppressions = leadSuppressionEvents
+      .filter((e) => Math.trunc(Number(e?.barIndex) || 0) === bar)
+      .reduce((bucket, ev) => {
+        const reason = String(ev?.reason || ev?.payload?.reason || '').trim().toLowerCase() || 'unknown';
+        bucket[reason] = (bucket[reason] || 0) + 1;
+        return bucket;
+      }, Object.create(null));
+    const emissionSteps = leadEmissionEvents
+      .filter((e) => Math.trunc(Number(e?.barIndex) || 0) === bar)
+      .map((e) => Math.trunc(Number(e?.stepIndex) || 0));
+    const suppressionSummary = Object.entries(suppressions)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([reason, count]) => `${reason}:${count}`)
+      .join(', ');
+    lines.push(
+      `bar ${bar}: `
+      + `lead c/e/a/f/q/t=${lead.created}/${lead.executed}/${lead.audible}/${lead.full}/${lead.quiet}/${lead.trace}`
+      + `${lead.notes ? ` notes[${lead.notes}]` : ''}`
+      + `${lead.instruments ? ` inst[${lead.instruments}]` : ''}`
+      + ` | secondary c/e/a/f/q/t=${secondary.created}/${secondary.executed}/${secondary.audible}/${secondary.full}/${secondary.quiet}/${secondary.trace}`
+      + `${secondary.notes ? ` notes[${secondary.notes}]` : ''}`
+      + `${secondary.instruments ? ` inst[${secondary.instruments}]` : ''}`
+      + `${emissionSteps.length ? ` | leadEmitSteps=${emissionSteps.join('/')}` : ''}`
+      + `${suppressionSummary ? ` | leadSuppress=${suppressionSummary}` : ''}`
+    );
+  }
+  lines.push('');
   lines.push('Transition snapshots:');
   for (const snap of transitionSnapshots.filter((e) => {
     const bar = Math.trunc(Number(e?.barIndex) || 0);
@@ -2323,6 +2414,18 @@ function buildBeatSwarmTransitionDebugText(payload, meta = {}) {
       + `groups=${Math.trunc(Number(payloadLike.activeGroupCount) || 0)}`
     );
     if (groupSummary) lines.push(`  ${groupSummary}`);
+  }
+  lines.push('');
+  lines.push('Lead suppression events in range:');
+  for (const ev of leadSuppressionEvents.slice(0, 80)) {
+    lines.push(
+      `bar ${Math.trunc(Number(ev?.barIndex) || 0)} step ${Math.trunc(Number(ev?.stepIndex) || 0)} `
+      + `reason=${String(ev?.reason || ev?.payload?.reason || '')} `
+      + `group=${Math.trunc(Number(ev?.groupId || ev?.payload?.groupId) || 0)} `
+      + `enemy=${Math.trunc(Number(ev?.enemyId || ev?.payload?.enemyId) || 0)} `
+      + `laneMode=${String(ev?.laneMode || ev?.payload?.laneMode || '')} `
+      + `soloCarrierType=${String(ev?.soloCarrierType || ev?.payload?.soloCarrierType || '')}`
+    );
   }
   lines.push('');
   lines.push('Response events in range:');
@@ -3378,6 +3481,7 @@ function compactMusicLabPayloadForSave(payload = null) {
   const compactTimelineTail = compactTimelineSource.slice(-256);
   const compactEventTimeline = compactTimelineTail.map((ev) => {
     const event = ev && typeof ev === 'object' ? ev : {};
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : {};
     return {
       tMs: Number(event.tMs) || 0,
       phase: String(event.phase || '').trim().toLowerCase(),
@@ -3406,9 +3510,11 @@ function compactMusicLabPayloadForSave(payload = null) {
         ? true
         : (event.callResponseQualified === false ? false : null),
       callResponsePhraseProgress: Number(event.callResponsePhraseProgress) || 0,
+      musicLaneId: String(event.musicLaneId || payload.musicLaneId || payload.foundationLaneId || ''),
       musicLayer: String(event.musicLayer || ''),
       musicProminence: String(event.musicProminence || ''),
       audioGain: Number(event.audioGain) || 0,
+      musicVoiceKey: String(event.musicVoiceKey || payload.musicVoiceKey || ''),
       resolvedPlaybackInstrumentId: String(event.resolvedPlaybackInstrumentId || ''),
       playbackKind: String(event.playbackKind || ''),
       sampleVolumeHint: String(event.sampleVolumeHint || ''),
@@ -3566,6 +3672,26 @@ function compactMusicLabPayloadForSave(payload = null) {
         lanePerformerEnemyId: Number(item.lanePerformerEnemyId) || 0,
         lanePerformerGroupId: Number(item.lanePerformerGroupId) || 0,
         laneContinuityId: String(item.laneContinuityId || '').trim(),
+      });
+      continue;
+    }
+    if (eventType === 'music_primary_loop_group_suppressed' || eventType === 'music_primary_loop_lane_emitted') {
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        groupId: Number(item.groupId) || 0,
+        enemyId: Number(item.enemyId) || 0,
+        continuityId: String(item.continuityId || '').trim(),
+        reason: String(item.reason || '').trim().toLowerCase(),
+        laneMode: String(item.laneMode || '').trim().toLowerCase(),
+        soloCarrierType: String(item.soloCarrierType || '').trim().toLowerCase(),
+        note: String(item.note || '').trim(),
+        instrumentId: String(item.instrumentId || '').trim(),
+        actionType: String(item.actionType || '').trim().toLowerCase(),
+        performerType: String(item.performerType || '').trim().toLowerCase(),
       });
       continue;
     }

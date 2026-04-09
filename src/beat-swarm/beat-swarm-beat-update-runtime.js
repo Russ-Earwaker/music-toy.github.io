@@ -242,6 +242,7 @@ export function handleBeatStepChangeRuntime(options = null) {
           centerWorld,
           musicLaneRuntime: state.musicLaneRuntime,
           loopAdmissionRuntime: state.loopAdmissionRuntime,
+          musicModeRuntime: state.musicModeRuntime,
         },
       }) || null;
     });

@@ -89,6 +89,8 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const introSoftRampWindow = introStage === 'soft_ramp';
   const melodySoloWindowOpen = !introWindowActive && currentBarIndex >= 12;
   const leadEntryMergeActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'lead_entry_merge';
+  const fullTextureActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'full_texture';
+  const protectedMergeTextureActive = leadEntryMergeActive || fullTextureActive;
   const spawnWantsSoloRhythm = spawnConfigLoaded && spawnChosenId === 'solo_rhythm_basic' && !introRhythmOnlyWindow;
   const stepAbs = Math.max(0, Math.trunc(currentBeatIndex));
   const legacyIntroHoldActive = !!helpers.shouldHoldIntroLayerExpansion?.(stepAbs);
@@ -1746,6 +1748,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       introStateAgeBars,
       currentBarIndex,
       directorLanePlan,
+      musicModeRuntime,
       motifScopeKey,
       retireGroup,
       getAliveIdsForGroup: (group) => new Set(
@@ -1778,7 +1781,23 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           : (
             desiredLane === 'response' && defaultResponseTemplate
               ? [defaultResponseTemplate]
-              : ((!getActiveComposerLaneCoverage().hasNonBassCall && defaultCallTemplate) ? [defaultCallTemplate] : templateLibrary)
+              : (() => {
+                  const nonBassCallTemplates = templateLibrary.filter((template) => {
+                    const lane = helpers.normalizeCallResponseLane?.(template?.callResponseLane || '', '') || String(template?.callResponseLane || '').trim().toLowerCase();
+                    const templateId = String(template?.id || '').trim().toLowerCase();
+                    const role = helpers.normalizeSwarmRole?.(template?.role || '', constants.leadRole) || '';
+                    return lane !== 'response'
+                      && templateId !== 'foundation-buffer'
+                      && role !== constants.bassRole;
+                  });
+                  if (protectedMergeTextureActive && desiredLane !== 'response' && nonBassCallTemplates.length) {
+                    return nonBassCallTemplates;
+                  }
+                  if (!getActiveComposerLaneCoverage().hasNonBassCall && defaultCallTemplate) {
+                    return [defaultCallTemplate];
+                  }
+                  return templateLibrary;
+                })()
           );
         return helpers.pickComposerGroupTemplate?.({
           templates: templatePool,
@@ -2552,6 +2571,52 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         ''
       );
       const responseTemplateIdentity = String(group?.templateId || '').trim().toLowerCase() === 'response_group';
+      const introBackbeatMergePromotionRequested = (
+        (leadEntryMergeActive || fullTextureActive)
+        && group?.introStageCarrier === true
+        && getIntroSlotProfileSourceType(group) === 'spawner_rhythm_backbeat'
+        && String(group?.musicLaneId || '').trim().toLowerCase() === 'secondary_loop_lane'
+        && !introSlotIdentityActive
+      );
+      if (introBackbeatMergePromotionRequested) {
+        group.introStageCarrier = false;
+        group.introSlotLock = false;
+        group.introSlotLockUntilBar = -1;
+        group.introSlotProfileSourceType = '';
+        group.introSlotRole = '';
+        group.introSlotMusicLaneId = '';
+        group.introSlotMusicLaneLayer = '';
+        group.introSlotCallResponseLane = '';
+        group.introSlotInstrumentId = '';
+        group.introSlotActionType = '';
+        group.introSlotSteps = null;
+        group.introSlotRows = null;
+        group.introSlotNotes = null;
+        group.introSlotNoteIndices = null;
+        group.introSlotNotePalette = null;
+        group.introSlotPhraseRoot = '';
+        group.introSlotPhraseFifth = '';
+        group.introSlotResolutionTargets = null;
+        group.musicProfileSourceType = 'secondary_bridge_backbeat';
+        group.callResponseLane = 'call';
+        group.musicLaneId = 'secondary_loop_lane';
+        group.musicLaneLayer = 'loops';
+        group.groupRhythmCarrierLock = false;
+        try {
+          noteMusicSystemEvent?.('music_composer_group_state', {
+            phase: 'intro_backbeat_promoted',
+            groupId: Math.trunc(Number(group?.id) || 0),
+            reason: 'lead_entry_merge_secondary_bridge_promotion',
+            musicLaneId: 'secondary_loop_lane',
+            callResponseLane: 'call',
+            stage: 'secondary_bridge_backbeat',
+            instrumentId: String(group?.instrumentId || group?.instrument || '').trim(),
+          }, {
+            beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+            barIndex: currentBarIndex,
+          });
+        } catch {}
+      }
       if (introSlotIdentityActive) {
         applyIntroSlotStateToGroup(group);
       } else if (
