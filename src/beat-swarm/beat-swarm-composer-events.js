@@ -305,6 +305,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   };
   let emittedResponseThisStep = false;
   let emittedSecondaryLoopRhythmThisStep = false;
+  let emittedSecondaryBedFallbackThisStep = false;
 
   for (const group of composerEnemyGroups) {
     if (!group || !group.active || group.retiring) continue;
@@ -1827,6 +1828,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       callResponseRuntime.fallbackResponseGroupId = groupId;
       callResponseRuntime.responseDirection = responseDir;
       callResponseRuntime.responsePhraseProgress = responsePhraseProgressForEvent;
+      emittedResponseThisStep = true;
       callResponseRuntime.responseHoldUntilStepAbs = Math.max(
         stepAbs,
         Math.min(
@@ -1924,6 +1926,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           phraseResolutionHit: false,
         },
       }));
+      emittedSecondaryBedFallbackThisStep = true;
       noteMusicSystemEvent?.('music_secondary_loop_bridge_fallback', {
         stepIndex: stepAbs,
         beatIndex,
@@ -1933,6 +1936,84 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         note: bedNote,
         instrumentId: bedInstrumentId,
         playerLikelyAudible,
+      });
+    }
+  }
+  const directAnswerOrnamentWanted = (
+    activeMusicMode === 'full_texture'
+    && activePrimaryLoopLeadGroups.length > 0
+    && !emittedResponseThisStep
+    && !emittedSecondaryBedFallbackThisStep
+    && !playerLikelyAudible
+  );
+  if (directAnswerOrnamentWanted) {
+    const ornamentStep = step === 1 || step === 5;
+    const ornamentBarPhase = (barIndex % 4) === 1 || (barIndex % 4) === 3;
+    const ornamentFoundationLaneSnapshot = getFoundationLaneSnapshot
+      ? getFoundationLaneSnapshot(stepAbs, barIndex)
+      : null;
+    if (ornamentStep && ornamentBarPhase && ornamentFoundationLaneSnapshot?.isActiveStep !== true) {
+      const notePool = getDirectorNotePool();
+      const poolLength = Array.isArray(notePool) ? notePool.length : 0;
+      const poolIndex = poolLength
+        ? (((Math.trunc(Number(stepAbs) || 0) + Math.trunc(Number(barIndex) || 0)) % poolLength) + poolLength) % poolLength
+        : -1;
+      const rawOrnamentNote = normalizeSwarmNoteName(
+        poolIndex >= 0 ? notePool[poolIndex] : ''
+      ) || (step === 1 ? 'D5' : 'A4');
+      const ornamentNote = clampNoteToDirectorRegisterTarget(
+        rawOrnamentNote,
+        stepAbs + 5,
+        'mid'
+      );
+      const ornamentInstrumentId = String(
+        getIdForDisplayName('Gaming Note')
+          || getIdForDisplayName('Retro Triangle')
+          || getIdForDisplayName('Bell')
+          || getIdForDisplayName('Xylophone')
+          || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
+          || resolveSwarmSoundInstrumentId('projectile')
+          || 'tone'
+      ).trim();
+      events.push(createPerformedBeatEvent({
+        actorId: 0,
+        beatIndex,
+        stepIndex: stepAbs,
+        role: normalizeSwarmRole(roles?.accent || 'accent', roles?.accent || 'accent'),
+        note: ornamentNote,
+        instrumentId: ornamentInstrumentId,
+        actionType: 'composer-group-projectile',
+        threatClass: String(threat.light || 'light'),
+        visualSyncType: 'none',
+        payload: {
+          groupId: 0,
+          ghostPlayback: true,
+          groupEventSource: 'answer_ornament_fallback',
+          continuityId: 'answer-ornament-fallback',
+          musicLayer: 'sparkle',
+          musicVoiceKey: 'answer_ornament',
+          onboardingPriority: 0,
+          musicProminence: 'trace',
+          soloCarrierType: '',
+          musicLaneId: 'sparkle_lane',
+          callResponseLane: 'response',
+          callResponseQualified: true,
+          callResponsePhraseProgress: step === 1 ? 1 : 2,
+          musicRegister: 'mid',
+          audioGain: 0.22,
+          requestedNoteRaw: ornamentNote,
+          phraseGravityTarget: '',
+          phraseGravityHit: false,
+          phraseResolutionOpportunity: false,
+          phraseResolutionHit: false,
+        },
+      }));
+      noteMusicSystemEvent?.('music_answer_ornament_fallback', {
+        stepIndex: stepAbs,
+        beatIndex,
+        barIndex,
+        note: ornamentNote,
+        instrumentId: ornamentInstrumentId,
       });
     }
   }
