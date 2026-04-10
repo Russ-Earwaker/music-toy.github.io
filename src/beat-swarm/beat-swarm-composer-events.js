@@ -285,11 +285,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     ? musicModeRuntime.protectedContinuityLanes.map((laneId) => String(laneId || '').trim().toLowerCase()).filter(Boolean)
     : [];
   const secondaryLoopProtected = activeMusicMode === 'lead_entry_merge'
+    || activeMusicMode === 'full_texture'
     || protectedContinuityLanes.includes('secondary_loop_lane');
-  const directBedFallbackWanted = strongLeadWindowActive
+  const directBedFallbackWanted = (strongLeadWindowActive || secondaryLoopProtected)
     && activePrimaryLoopLeadGroups.length > 0
-    && (secondaryLoopProtected || !activeSecondaryLoopCoveragePresent)
-    && !activeSecondaryLoopRhythmCoveragePresent;
+    && (secondaryLoopProtected || !activeSecondaryLoopCoveragePresent);
   const getPendingCallExpiry = (callStepAbs, targetLength) => {
     const lastCallStep = Math.max(-1, Math.trunc(Number(callStepAbs) || -1));
     if (lastCallStep < 0) return -1;
@@ -304,6 +304,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     return 'mid';
   };
   let emittedResponseThisStep = false;
+  let emittedSecondaryLoopRhythmThisStep = false;
 
   for (const group of composerEnemyGroups) {
     if (!group || !group.active || group.retiring) continue;
@@ -949,9 +950,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const performerCount = (isBassRole || isFoundationBufferGroup || !isPrimaryLoopOwnerGroup || rhythmPercussionCarrier)
       ? 1
       : Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
-    if ((isBassRole || rhythmPulseCarrier) && getFoundationLaneSnapshot && !(introSlotIdentityActive && rhythmPulseCarrier)) {
-      const lane = getFoundationLaneSnapshot(stepAbs, barIndex);
-      if (!lane?.isActiveStep) {
+    const foundationLaneSnapshot = getFoundationLaneSnapshot
+      ? getFoundationLaneSnapshot(stepAbs, barIndex)
+      : null;
+    if ((isBassRole || rhythmPulseCarrier) && foundationLaneSnapshot && !(introSlotIdentityActive && rhythmPulseCarrier)) {
+      if (!foundationLaneSnapshot?.isActiveStep) {
         noteIntroCollectorState('collector_suppressed', { admissionReason: 'foundation_step_inactive' });
         if (slotRhythmCarrier) {
           const introSlotSuppressedPayload = {
@@ -969,6 +972,26 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         noteResponseDiagnostic('foundation_step_inactive');
         continue;
       }
+    }
+    const mergeRhythmOverlapGate = (
+      foundationLaneSnapshot?.isActiveStep === true
+      && (activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture')
+      && groupLaneId === 'secondary_loop_lane'
+      && rhythmProfileCarrier
+      && !introSlotIdentityActive
+      && !responseOverrideHit
+    );
+    if (mergeRhythmOverlapGate) {
+      noteCallDiagnostic('secondary_foundation_overlap_gate', {
+        stepInBar: step,
+        slotProfile: musicProfileSourceType,
+        instrumentId: String(group?.instrumentId || '').trim(),
+      });
+      noteResponseDiagnostic('secondary_foundation_overlap_gate', {
+        stepInBar: step,
+        slotProfile: musicProfileSourceType,
+      });
+      continue;
     }
     const melodyRows = introSlotIdentityActive && Array.isArray(group?.introSlotRows)
       ? group.introSlotRows
@@ -1457,6 +1480,14 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       phraseGravityHit,
       phraseResolutionHit,
     });
+    const forcePlayableStructuralRhythmAction = (
+      groupLaneId === 'secondary_loop_lane'
+      && rhythmProfileCarrier
+      && !introSlotIdentityActive
+    );
+    if (forcePlayableStructuralRhythmAction) {
+      emittedSecondaryLoopRhythmThisStep = true;
+    }
     for (const enemy of performers) {
       events.push(createPerformedBeatEvent({
         actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
@@ -1467,7 +1498,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           : normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(enemy, roles.lead), roles.lead),
         note: styledNoteName,
         instrumentId,
-        actionType: String(group.actionType || 'projectile') === 'explosion'
+        actionType: !forcePlayableStructuralRhythmAction && String(group.actionType || 'projectile') === 'explosion'
           ? 'composer-group-explosion'
           : 'composer-group-projectile',
         threatClass,
@@ -1582,6 +1613,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
             musicProminence,
             soloCarrierType,
             introPercussionCarrier,
+            visualOnly: true,
           });
         } catch {}
       }
@@ -1818,26 +1850,36 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const anchorStep = step === 0 || step === 4;
     const backbeatStep = step === 2 || step === 6;
     const bridgePulseStep = anchorStep || backbeatStep;
-    const allowBedStep = playerLikelyAudible ? backbeatStep : bridgePulseStep;
-    if (allowBedStep) {
+    const fallbackFoundationLaneSnapshot = getFoundationLaneSnapshot
+      ? getFoundationLaneSnapshot(stepAbs, barIndex)
+      : null;
+    const mergeFallbackFoundationOverlap = (
+      fallbackFoundationLaneSnapshot?.isActiveStep === true
+      && (activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture')
+    );
+    const allowBedStep = (playerLikelyAudible ? backbeatStep : bridgePulseStep)
+      && !mergeFallbackFoundationOverlap;
+    if (allowBedStep && !emittedSecondaryLoopRhythmThisStep) {
       const leadCarrierGroup = activePrimaryLoopLeadGroups[0] || null;
       const bedActorId = 0;
       const bedNote = normalizeSwarmNoteName(
-        anchorStep ? 'C3' : 'G3'
-      ) || (anchorStep ? 'C3' : 'G3');
+        anchorStep ? 'D4' : 'A#4'
+      ) || (anchorStep ? 'D4' : 'A#4');
       const bedInstrumentId = String(
         backbeatStep
           ? (
-            getIdForDisplayName('Bass Tone 3')
-            || getIdForDisplayName('Bass Tone 4')
-            || getIdForDisplayName('SNARE 808')
-            || getIdForDisplayName('HAND CLAP (ELECTRO)')
+            getIdForDisplayName('Drum Snare 2')
+            || getIdForDisplayName('Drum Snare 1')
+            || getIdForDisplayName('Hand clap (electro)')
+            || getIdForDisplayName('Hand clap')
+            || getIdForDisplayName('Bass Tone 3')
           )
           : (
-            getIdForDisplayName('Bass Tone 3')
-            || getIdForDisplayName('Bass Tone 4')
-            || getIdForDisplayName('SNARE 808')
-            || getIdForDisplayName('HAND CLAP (ELECTRO)')
+            getIdForDisplayName('Drum Snare 2')
+            || getIdForDisplayName('Hand clap (electro)')
+            || getIdForDisplayName('Hand clap')
+            || getIdForDisplayName('Drum Snare 1')
+            || getIdForDisplayName('Bass Tone 3')
           )
           || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
           || resolveSwarmSoundInstrumentId('projectile')
@@ -1873,7 +1915,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           callResponseLane: 'call',
           callResponseQualified: false,
           callResponsePhraseProgress: 0,
-          musicRegister: 'low',
+          musicRegister: 'mid',
           audioGain: bedGain,
           requestedNoteRaw: bedNote,
           phraseGravityTarget: '',

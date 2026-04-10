@@ -87,6 +87,10 @@ export function collectDrawSnakeStepBeatEvents(options = null) {
   const musicLaneRuntime = options?.musicLaneRuntime && typeof options.musicLaneRuntime === 'object'
     ? options.musicLaneRuntime
     : null;
+  const musicModeRuntime = options?.musicModeRuntime && typeof options.musicModeRuntime === 'object'
+    ? options.musicModeRuntime
+    : null;
+  const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
   const getDrawSnakeNodeIndexForStep = typeof options?.getDrawSnakeNodeIndexForStep === 'function'
     ? options.getDrawSnakeNodeIndexForStep
     : (() => 0);
@@ -319,6 +323,10 @@ export function collectSpawnerStepBeatEvents(options = null) {
   const musicLaneRuntime = options?.musicLaneRuntime && typeof options.musicLaneRuntime === 'object'
     ? options.musicLaneRuntime
     : null;
+  const musicModeRuntime = options?.musicModeRuntime && typeof options.musicModeRuntime === 'object'
+    ? options.musicModeRuntime
+    : null;
+  const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
   const getPerfNow = typeof options?.getPerfNow === 'function'
     ? options.getPerfNow
     : (() => (globalThis.performance?.now?.() ?? Date.now()));
@@ -517,6 +525,13 @@ export function collectSpawnerStepBeatEvents(options = null) {
     const explicitMusicLaneId = musicVoiceKey === 'percussion_backbeat'
       ? 'secondary_loop_lane'
       : (musicVoiceKey === 'percussion_motion' ? 'sparkle_lane' : 'foundation_lane');
+    if (
+      explicitMusicLaneId === 'secondary_loop_lane'
+      && foundationLaneStep?.isActiveStep === true
+      && (activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture')
+    ) {
+      continue;
+    }
     events.push(createLoggedPerformedBeatEvent({
       actorId,
       beatIndex,

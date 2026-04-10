@@ -21,6 +21,9 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const getComposerMotif = typeof options?.getComposerMotif === 'function' ? options.getComposerMotif : ((_scope, _id, factory) => (typeof factory === 'function' ? factory() : null));
   const createComposerEnemyGroupProfile = typeof options?.createComposerEnemyGroupProfile === 'function' ? options.createComposerEnemyGroupProfile : (() => ({}));
   const createGroupFromMotif = typeof options?.createGroupFromMotif === 'function' ? options.createGroupFromMotif : (() => null);
+  const hasPendingSecondaryLoopReservation = typeof options?.hasPendingSecondaryLoopReservation === 'function'
+    ? options.hasPendingSecondaryLoopReservation
+    : (() => false);
   const noteMusicSystemEvent = typeof options?.noteMusicSystemEvent === 'function' ? options.noteMusicSystemEvent : null;
   const retireGroup = typeof options?.retireGroup === 'function' ? options.retireGroup : (() => {});
   const normalizeLifecycleState = (value, fallback = 'active') => {
@@ -229,6 +232,19 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       || String(group?.callResponseLane || '').trim().toLowerCase() === 'response'
     ) {
       return false;
+    }
+    if (
+      protectedMergeTextureWindow
+      && (
+        normalizedProfileSourceType === 'secondary_bridge_backbeat'
+        || normalizedProfileSourceType === 'spawner_rhythm_backbeat'
+        || normalizedProfileSourceType === 'rhythm_lane'
+        || normalizedProfileSourceType === 'rhythm_lane_backbeat'
+        || normalizedTemplateId === 'secondary_loop_bridge_group'
+        || normalizedTemplateId === 'intro_percussion_group'
+      )
+    ) {
+      return true;
     }
     return normalizedProfileSourceType === 'secondary_bridge_backbeat'
       || normalizedProfileSourceType === 'spawner_rhythm_backbeat'
@@ -454,6 +470,9 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     );
   let reservedSecondaryLoopSpawnNeeded = secondaryLoopCoverageRequested
     && !activeSecondaryLoopCoveragePresent;
+  if (reservedSecondaryLoopSpawnNeeded && hasPendingSecondaryLoopReservation()) {
+    reservedSecondaryLoopSpawnNeeded = false;
+  }
   if (activeGlobalPrimaryLeadPresent) reservedLeadSpawnNeeded = false;
   try {
     noteMusicSystemEvent?.('music_primary_loop_coverage_status', {

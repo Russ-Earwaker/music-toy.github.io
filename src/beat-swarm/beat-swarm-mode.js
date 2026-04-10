@@ -1550,10 +1550,11 @@ function directTriggerComposerCarrier(options = null) {
   const audioGain = clamp01(Number(input?.audioGain == null ? 1 : input.audioGain));
   const musicProminence = String(input?.musicProminence || 'full').trim().toLowerCase();
   const soloCarrierType = String(input?.soloCarrierType || '').trim().toLowerCase();
+  const visualOnly = input?.visualOnly === true;
   const triggerVolume = soloCarrierType === 'rhythm'
     ? Math.max(0.08, Math.min(0.4, (Number(SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME) || 0.24) * Math.max(0.6, audioGain)))
     : Math.max(0.18, Math.min(0.7, audioGain * (musicProminence === 'full' ? 0.62 : 0.5)));
-  if (instrumentId && note) {
+  if (!visualOnly && instrumentId && note) {
     try { triggerInstrument(instrumentId, note, undefined, 'master', {}, triggerVolume); } catch {}
   }
   pulseEnemyMusicalRoleVisual(enemy, musicProminence === 'full' ? 'strong' : 'soft');
@@ -1566,6 +1567,7 @@ function directTriggerComposerCarrier(options = null) {
       note,
       soloCarrierType,
       introPercussionCarrier: input?.introPercussionCarrier === true,
+      visualOnly,
       triggerVolume,
     });
   } catch {}
@@ -17226,13 +17228,16 @@ function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex)
   });
 }
 function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
+  const barIndex = Math.floor(Math.max(0, Math.trunc(Number(beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR));
+  const introStage = getUnifiedIntroStage(barIndex, beatIndex);
   return collectSpawnerStepEvents({
     active,
     gameplayPaused,
     stepIndex,
     beatIndex,
-    barIndex: Math.floor(Math.max(0, Math.trunc(Number(beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR)),
+    barIndex,
     enemies,
+    musicModeRuntime: evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage),
     getEnemyMusicGroup,
     getFoundationLaneSnapshot,
     normalizeMusicLifecycleState,
