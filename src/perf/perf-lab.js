@@ -3729,6 +3729,33 @@ function compactMusicLabPayloadForSave(payload = null) {
       });
       continue;
     }
+    if (eventType === 'music_enemy_director_state') {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        activeDirectorPhase: String(payload.activeDirectorPhase || '').trim().toLowerCase(),
+        targetPressure: Number(payload.targetPressure) || 0,
+        targetAliveMin: Number(payload.targetAliveMin) || 0,
+        targetAliveMax: Number(payload.targetAliveMax) || 0,
+        difficultyRamp: Number(payload.difficultyRamp) || 0,
+        arrangementRamp: Number(payload.arrangementRamp) || 0,
+        desiredLaneRoles: Array.isArray(payload.desiredLaneRoles) ? payload.desiredLaneRoles.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+        preferredEnemyFamilies: Array.isArray(payload.preferredEnemyFamilies) ? payload.preferredEnemyFamilies.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+        suppressedEnemyFamilies: Array.isArray(payload.suppressedEnemyFamilies) ? payload.suppressedEnemyFamilies.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+        varietyPressureByFamily: payload.varietyPressureByFamily && typeof payload.varietyPressureByFamily === 'object'
+          ? { ...payload.varietyPressureByFamily }
+          : {},
+        targetCarrierCounts: payload.targetCarrierCounts && typeof payload.targetCarrierCounts === 'object'
+          ? { ...payload.targetCarrierCounts }
+          : {},
+        totalAlive: Number(payload.totalAlive) || 0,
+      });
+      continue;
+    }
     if (eventType !== 'music_composer_group_state') continue;
     const reason = String(item.reason || '').trim().toLowerCase();
     const templateId = String(item.templateId || '').trim();
@@ -3787,7 +3814,7 @@ function compactMusicLabPayloadForSave(payload = null) {
       stage: String(item.stage || '').trim().toLowerCase(),
     });
   }
-  const compactSystemEvents = focusedSystemEvents.slice(-240);
+  const compactSystemEvents = focusedSystemEvents.slice(-320);
   const systemEventCountsByType = Object.create(null);
   const systemEventCountsByReason = Object.create(null);
   const systemEventCountsByVisualFailureReason = Object.create(null);
@@ -3809,6 +3836,68 @@ function compactMusicLabPayloadForSave(payload = null) {
     if (sectionId) sectionIds.add(sectionId);
   }
   const threatBudgetSnapshots = Array.isArray(src.threatBudgetSnapshots) ? src.threatBudgetSnapshots : [];
+  const compactThreatBudgetSnapshots = threatBudgetSnapshots
+    .filter((snap, index, arr) => {
+      const isTail = index >= Math.max(0, arr.length - 32);
+      const barIndex = Math.max(0, Math.trunc(Number(snap?.barIndex) || 0));
+      return isTail || (barIndex % 8) === 0;
+    })
+    .map((snap) => ({
+      barIndex: Math.max(0, Math.trunc(Number(snap?.barIndex) || 0)),
+      beatIndex: Math.max(0, Math.trunc(Number(snap?.beatIndex) || 0)),
+      fullThreats: Math.max(0, Math.trunc(Number(snap?.fullThreats) || 0)),
+      lightThreats: Math.max(0, Math.trunc(Number(snap?.lightThreats) || 0)),
+      audibleAccents: Math.max(0, Math.trunc(Number(snap?.audibleAccents) || 0)),
+      cosmeticParticipants: Math.max(0, Math.trunc(Number(snap?.cosmeticParticipants) || 0)),
+      combatPressure: Math.max(0, Math.min(1, Number(snap?.combatPressure) || 0)),
+      musicalPressure: Math.max(0, Math.min(1, Number(snap?.musicalPressure) || 0)),
+      energyState: String(snap?.energyState || '').trim().toLowerCase(),
+      pressureState: snap?.pressureState && typeof snap.pressureState === 'object'
+        ? {
+            sectionIntent: String(snap.pressureState?.sectionIntent || '').trim().toLowerCase(),
+            combatPressure: Math.max(0, Math.min(1, Number(snap.pressureState?.combatPressure) || 0)),
+            musicalPressure: Math.max(0, Math.min(1, Number(snap.pressureState?.musicalPressure) || 0)),
+          }
+        : null,
+      lanePlan: snap?.lanePlan && typeof snap.lanePlan === 'object'
+        ? {
+            foundation: snap.lanePlan.foundation || null,
+            secondary_loop: snap.lanePlan.secondary_loop || null,
+            primary_loop: snap.lanePlan.primary_loop || null,
+            sparkle: snap.lanePlan.sparkle || null,
+            support: snap.lanePlan.support || null,
+            answer: snap.lanePlan.answer || null,
+          }
+        : null,
+      spawnState: snap?.spawnState && typeof snap.spawnState === 'object'
+        ? {
+            configStatus: String(snap.spawnState?.configStatus || '').trim().toLowerCase(),
+            liveBudgetMax: Math.max(0, Number(snap.spawnState?.liveBudgetMax) || 0),
+            spawnBudget: Math.max(0, Number(snap.spawnState?.spawnBudget) || 0),
+            totalSpawnsNoted: Math.max(0, Math.trunc(Number(snap.spawnState?.totalSpawnsNoted) || 0)),
+            matchedChosenSpawnCount: Math.max(0, Math.trunc(Number(snap.spawnState?.matchedChosenSpawnCount) || 0)),
+            mismatchedChosenSpawnCount: Math.max(0, Math.trunc(Number(snap.spawnState?.mismatchedChosenSpawnCount) || 0)),
+            evaluationCount: Math.max(0, Math.trunc(Number(snap.spawnState?.evaluationCount) || 0)),
+            noChoiceCount: Math.max(0, Math.trunc(Number(snap.spawnState?.noChoiceCount) || 0)),
+            avgEligibleCount: Math.max(0, Number(snap.spawnState?.avgEligibleCount) || 0),
+            maxEligibleCount: Math.max(0, Math.trunc(Number(snap.spawnState?.maxEligibleCount) || 0)),
+            lastSpawnedId: String(snap.spawnState?.lastSpawnedId || '').trim().toLowerCase(),
+            chosenId: String(snap.spawnState?.chosenId || snap.spawnState?.lastEvaluation?.chosenId || '').trim().toLowerCase(),
+            rejectionReasonCounts: snap.spawnState?.rejectionReasonCounts && typeof snap.spawnState.rejectionReasonCounts === 'object'
+              ? { ...snap.spawnState.rejectionReasonCounts }
+              : {},
+          }
+        : null,
+      countsById: snap?.countsById && typeof snap.countsById === 'object'
+        ? { ...snap.countsById }
+        : {},
+      roleTagCounts: snap?.roleTagCounts && typeof snap.roleTagCounts === 'object'
+        ? { ...snap.roleTagCounts }
+        : {},
+      occupiedSlots: snap?.occupiedSlots && typeof snap.occupiedSlots === 'object'
+        ? { ...snap.occupiedSlots }
+        : {},
+    }));
   const threatBudgetSummary = {
     count: threatBudgetSnapshots.length,
     energyStateCounts: Object.create(null),
@@ -3974,7 +4063,7 @@ function compactMusicLabPayloadForSave(payload = null) {
       countsByVisualFailureReason: systemEventCountsByVisualFailureReason,
       uniqueSectionIds: Array.from(sectionIds),
     },
-    threatBudgetSnapshots: [],
+    threatBudgetSnapshots: compactThreatBudgetSnapshots,
     threatBudgetSummary,
     metricsHistory: compactMetricsHistory,
     session: (src.session && typeof src.session === 'object')
@@ -3998,6 +4087,7 @@ function compactMusicLabPayloadForSave(payload = null) {
       originalSystemEventCount: systemEvents.length,
       keptSystemEventCount: compactSystemEvents.length,
       originalThreatBudgetSnapshotCount: threatBudgetSnapshots.length,
+      keptThreatBudgetSnapshotCount: compactThreatBudgetSnapshots.length,
       originalMetricsHistoryCount: metricsHistory.length,
       originalExecutedEventCount: Array.isArray(src?.session?.executedEvents) ? src.session.executedEvents.length : 0,
       keptCreatedEventCount: compactCreatedEvents.length,

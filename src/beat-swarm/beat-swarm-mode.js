@@ -7640,9 +7640,14 @@ function publishDirectorLanePlanForBar(barIndex = 0) {
   const director = ensureSwarmDirector();
   const plan = buildDirectorLanePlanForBar(barIndex);
   const pressureState = plan.__pressure && typeof plan.__pressure === 'object' ? plan.__pressure : {};
+  const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
+  const introStage = getUnifiedIntroStage(barIndex, beatIndex);
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime);
   delete plan.__pressure;
   director.setLanePlan(plan);
   director.setPressureState(pressureState);
+  director.setEnemyDirectorState?.(activeEnemyDirectorRuntime);
   return director.getSnapshot?.() || null;
 }
 function getDirectorActiveLaneOwnerEnemy(laneKey = '') {
@@ -8335,6 +8340,29 @@ const musicModeRuntime = {
   gameplayMusicOverrides: [],
   lastEvaluatedBar: -1,
   leadEntryStartBar: -1,
+};
+const enemyDirectorRuntime = {
+  activeDirectorPhase: 'intro',
+  targetPressure: 0,
+  targetAliveMin: 0,
+  targetAliveMax: 0,
+  targetCarrierCounts: Object.freeze({
+    foundation: 1,
+    secondary_loop_rhythm: 0,
+    primary_loop_lead: 0,
+    ornament: 0,
+  }),
+  desiredLaneRoles: [],
+  preferredEnemyFamilies: [],
+  suppressedEnemyFamilies: [],
+  varietyPressureByFamily: Object.freeze({}),
+  countsById: Object.freeze({}),
+  roleTagCounts: Object.freeze({}),
+  occupiedSlots: Object.freeze({}),
+  totalAlive: 0,
+  difficultyRamp: 0,
+  arrangementRamp: 0,
+  lastEvaluatedBar: -1,
 };
 const beatSwarmPerfRuntime = {
   enabled: true,
@@ -9934,6 +9962,27 @@ function startMusicLabSession(reason = 'unknown') {
   musicModeRuntime.gameplayMusicOverrides = [];
   musicModeRuntime.lastEvaluatedBar = -1;
   musicModeRuntime.leadEntryStartBar = -1;
+  enemyDirectorRuntime.activeDirectorPhase = 'intro';
+  enemyDirectorRuntime.targetPressure = 0;
+  enemyDirectorRuntime.targetAliveMin = 0;
+  enemyDirectorRuntime.targetAliveMax = 0;
+  enemyDirectorRuntime.targetCarrierCounts = Object.freeze({
+    foundation: 1,
+    secondary_loop_rhythm: 0,
+    primary_loop_lead: 0,
+    ornament: 0,
+  });
+  enemyDirectorRuntime.desiredLaneRoles = [];
+  enemyDirectorRuntime.preferredEnemyFamilies = [];
+  enemyDirectorRuntime.suppressedEnemyFamilies = [];
+  enemyDirectorRuntime.varietyPressureByFamily = Object.freeze({});
+  enemyDirectorRuntime.countsById = Object.freeze({});
+  enemyDirectorRuntime.roleTagCounts = Object.freeze({});
+  enemyDirectorRuntime.occupiedSlots = Object.freeze({});
+  enemyDirectorRuntime.totalAlive = 0;
+  enemyDirectorRuntime.difficultyRamp = 0;
+  enemyDirectorRuntime.arrangementRamp = 0;
+  enemyDirectorRuntime.lastEvaluatedBar = -1;
   composerRuntime.lastForegroundMotifUsageBar = -1;
   resetSpawnerPercussionGrooveRuntime();
   resetIntroDrumLoopRuntime();
@@ -17268,6 +17317,8 @@ function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex)
 function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
   const barIndex = Math.floor(Math.max(0, Math.trunc(Number(beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR));
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime);
   return collectSpawnerStepEvents({
     active,
     gameplayPaused,
@@ -17275,7 +17326,8 @@ function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
     beatIndex,
     barIndex,
     enemies,
-    musicModeRuntime: evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage),
+    musicModeRuntime: activeMusicModeRuntime,
+    enemyDirectorRuntime: activeEnemyDirectorRuntime,
     getEnemyMusicGroup,
     getFoundationLaneSnapshot,
     normalizeMusicLifecycleState,
@@ -18081,10 +18133,13 @@ function updateBeatWeapons(centerWorld) {
   let readabilityStepStats = null;
   let queuedStepEvents = 0;
   let drainedStepEvents = 0;
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, getUnifiedIntroStage(barIndex, beatIndex));
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, getUnifiedIntroStage(barIndex, beatIndex), activeMusicModeRuntime);
   const stepState = {
     lastSpawnerEnemyStepIndex,
     lastWeaponTuneStepIndex,
-    musicModeRuntime: evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, getUnifiedIntroStage(barIndex, beatIndex)),
+    musicModeRuntime: activeMusicModeRuntime,
+    enemyDirectorRuntime: activeEnemyDirectorRuntime,
   };
   let stepUpdate = null;
   withBeatSwarmPerfSample('pickupsCombat.weaponRuntime.stepChange', () => {
@@ -18551,6 +18606,107 @@ function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'no
   } catch {}
   return musicModeRuntime;
 }
+function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null) {
+  const musicState = activeMusicModeState && typeof activeMusicModeState === 'object'
+    ? activeMusicModeState
+    : evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
+  const battlefieldState = buildDirectorSpawnBattlefieldState();
+  const activeMusicMode = String(musicState?.activeMusicMode || '').trim().toLowerCase();
+  const difficultyRamp = Math.max(0, Math.min(1, Math.max(0, Math.trunc(Number(barIndex) || 0)) / 96));
+  const arrangementRamp = Math.max(0, Math.min(1, Math.max(0, Math.trunc(Number(barIndex) || 0)) / 64));
+  const basePressure = introStage === 'player_only'
+    ? 0.08
+    : (introStage === 'rhythm_only'
+      ? 0.16
+      : (introStage === 'soft_ramp'
+        ? 0.26
+        : (activeMusicMode === 'lead_entry_merge'
+          ? 0.48
+          : 0.62)));
+  const targetPressure = Math.max(0, Math.min(1, basePressure + (difficultyRamp * 0.24)));
+  const targetAliveMin = Math.max(1, Math.round(1 + (targetPressure * 4)));
+  const targetAliveMax = Math.max(targetAliveMin, Math.round(targetAliveMin + 1 + (targetPressure * 3)));
+  const targetCarrierCounts = Object.freeze({
+    foundation: 1,
+    secondary_loop_rhythm: (
+      activeMusicMode === 'intro_backbeat_bridge'
+      || activeMusicMode === 'lead_entry_merge'
+      || activeMusicMode === 'full_texture'
+    ) ? 1 : 0,
+    primary_loop_lead: (
+      activeMusicMode === 'lead_entry_merge'
+      || activeMusicMode === 'full_texture'
+    ) ? 1 : 0,
+    ornament: activeMusicMode === 'full_texture' ? 1 : 0,
+  });
+  const desiredLaneRoles = [
+    'foundation',
+    ...(targetCarrierCounts.secondary_loop_rhythm > 0 ? ['secondary_loop_rhythm'] : []),
+    ...(targetCarrierCounts.primary_loop_lead > 0 ? ['primary_loop_lead'] : []),
+    ...(targetCarrierCounts.ornament > 0 ? ['ornament'] : []),
+  ];
+  const countsById = battlefieldState?.countsById && typeof battlefieldState.countsById === 'object'
+    ? battlefieldState.countsById
+    : {};
+  const familyCounts = {
+    composer: Math.max(0, Math.trunc(Number(countsById.composer_basic) || 0)),
+    spawner: Math.max(0, Math.trunc(Number(countsById.spawner_basic) || 0)),
+    snake: Math.max(0, Math.trunc(Number(countsById.snake_basic) || 0)),
+    solo_rhythm: Math.max(0, Math.trunc(Number(countsById.solo_rhythm_basic) || 0)),
+  };
+  const varietyPressureByFamily = Object.freeze(Object.fromEntries(
+    Object.entries(familyCounts).map(([familyId, count]) => {
+      const target = familyId === 'composer' ? 2 : 1;
+      return [familyId, Math.max(0, count - target)];
+    })
+  ));
+  const sortedFamilies = Object.entries(varietyPressureByFamily).sort((a, b) => a[1] - b[1]);
+  const preferredEnemyFamilies = sortedFamilies.filter(([, pressure]) => pressure <= 0).map(([familyId]) => familyId);
+  const suppressedEnemyFamilies = sortedFamilies.filter(([, pressure]) => pressure > 0).map(([familyId]) => familyId);
+  enemyDirectorRuntime.activeDirectorPhase = introStage === 'player_only' || introStage === 'rhythm_only'
+    ? 'intro'
+    : (activeMusicMode === 'lead_entry_merge' ? 'merge' : 'full_texture');
+  enemyDirectorRuntime.targetPressure = targetPressure;
+  enemyDirectorRuntime.targetAliveMin = targetAliveMin;
+  enemyDirectorRuntime.targetAliveMax = targetAliveMax;
+  enemyDirectorRuntime.targetCarrierCounts = targetCarrierCounts;
+  enemyDirectorRuntime.desiredLaneRoles = desiredLaneRoles.slice();
+  enemyDirectorRuntime.preferredEnemyFamilies = preferredEnemyFamilies.slice();
+  enemyDirectorRuntime.suppressedEnemyFamilies = suppressedEnemyFamilies.slice();
+  enemyDirectorRuntime.varietyPressureByFamily = varietyPressureByFamily;
+  enemyDirectorRuntime.countsById = Object.freeze({ ...countsById });
+  enemyDirectorRuntime.roleTagCounts = Object.freeze({ ...(battlefieldState?.roleTagCounts || {}) });
+  enemyDirectorRuntime.occupiedSlots = Object.freeze({ ...(battlefieldState?.occupiedSlots || {}) });
+  enemyDirectorRuntime.totalAlive = Math.max(0, Math.trunc(Number(battlefieldState?.totalAlive) || 0));
+  enemyDirectorRuntime.difficultyRamp = difficultyRamp;
+  enemyDirectorRuntime.arrangementRamp = arrangementRamp;
+  if (enemyDirectorRuntime.lastEvaluatedBar !== Math.max(0, Math.trunc(Number(barIndex) || 0))) {
+    try {
+      noteMusicSystemEvent?.('music_enemy_director_state', {
+        activeDirectorPhase: String(enemyDirectorRuntime.activeDirectorPhase || '').trim().toLowerCase(),
+        activeMusicMode,
+        introStage: String(introStage || '').trim().toLowerCase(),
+        targetPressure,
+        targetAliveMin,
+        targetAliveMax,
+        totalAlive: enemyDirectorRuntime.totalAlive,
+        desiredLaneRoles: desiredLaneRoles.slice(),
+        preferredEnemyFamilies: preferredEnemyFamilies.slice(),
+        suppressedEnemyFamilies: suppressedEnemyFamilies.slice(),
+        varietyPressureByFamily: { ...varietyPressureByFamily },
+        countsById: { ...countsById },
+        occupiedSlots: { ...(battlefieldState?.occupiedSlots || {}) },
+        difficultyRamp,
+        arrangementRamp,
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
+        barIndex: Math.max(0, Math.trunc(Number(barIndex) || 0)),
+      });
+    } catch {}
+  }
+  enemyDirectorRuntime.lastEvaluatedBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  return enemyDirectorRuntime;
+}
 function chooseComposerGroupEnemyForNote(group, noteName, aliveMembers) {
   return pickComposerEnemyForNote({
     group,
@@ -18565,6 +18721,7 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
   const directorLanePlan = ensureSwarmDirector().getLanePlan?.() || null;
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
   const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime);
   return collectComposerGroupStepEvents({
     active,
     gameplayPaused,
@@ -18574,6 +18731,7 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
     introLeadStabilizationActive: isForcedIntroPrimaryLoopWindow(barIndex),
     composerEnemyGroups,
     musicModeRuntime: activeMusicModeRuntime,
+    enemyDirectorRuntime: activeEnemyDirectorRuntime,
     constants: {
       stepsPerBar: WEAPON_TUNE_STEPS,
       performersMin: COMPOSER_GROUP_PERFORMERS_MIN,
@@ -18642,6 +18800,7 @@ function maintainComposerEnemyGroups() {
   const currentBarIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
   const introStage = getUnifiedIntroStage(currentBarIndex, beatIndex);
   const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(currentBarIndex, beatIndex, introStage);
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime);
   const sessionAge = getBeatSwarmSessionAge(beatIndex);
   const introStateAgeBars = Math.max(0, currentBarIndex - Math.max(0, Math.trunc(Number(energyStateRuntime.stateStartBar) || 0)));
   const introStateAgeBeats = Math.max(0, beatIndex - (Math.max(0, Math.trunc(Number(energyStateRuntime.stateStartBar) || 0)) * Math.max(1, COMPOSER_BEATS_PER_BAR)));
@@ -18666,6 +18825,7 @@ function maintainComposerEnemyGroups() {
       currentEnergyStateName: String(energyStateRuntime.state || 'intro').trim().toLowerCase() || 'intro',
       enemies,
       musicModeRuntime: activeMusicModeRuntime,
+      enemyDirectorRuntime: activeEnemyDirectorRuntime,
     },
     constants: {
       composerGroupsEnabled: COMPOSER_GROUPS_ENABLED,

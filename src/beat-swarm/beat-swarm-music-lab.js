@@ -516,6 +516,30 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     impactEnemyId: clampInt(payload?.impactEnemyId, 0, 0),
     damageScale: Number(payload?.damageScale) || 0,
     detonationSource: String(payload?.detonationSource || '').trim().toLowerCase(),
+    activeDirectorPhase: String(payload?.activeDirectorPhase || '').trim().toLowerCase(),
+    activeMusicMode: String(payload?.activeMusicMode || '').trim().toLowerCase(),
+    introStage: String(payload?.introStage || '').trim().toLowerCase(),
+    targetPressure: Number(payload?.targetPressure) || 0,
+    targetAliveMin: clampInt(payload?.targetAliveMin, 0, 0),
+    targetAliveMax: clampInt(payload?.targetAliveMax, 0, 0),
+    difficultyRamp: Number(payload?.difficultyRamp) || 0,
+    arrangementRamp: Number(payload?.arrangementRamp) || 0,
+    totalAlive: clampInt(payload?.totalAlive, 0, 0),
+    desiredLaneRoles: Array.isArray(payload?.desiredLaneRoles)
+      ? payload.desiredLaneRoles.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
+    preferredEnemyFamilies: Array.isArray(payload?.preferredEnemyFamilies)
+      ? payload.preferredEnemyFamilies.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
+    suppressedEnemyFamilies: Array.isArray(payload?.suppressedEnemyFamilies)
+      ? payload.suppressedEnemyFamilies.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
+    varietyPressureByFamily: payload?.varietyPressureByFamily && typeof payload.varietyPressureByFamily === 'object'
+      ? { ...payload.varietyPressureByFamily }
+      : {},
+    targetCarrierCounts: payload?.targetCarrierCounts && typeof payload.targetCarrierCounts === 'object'
+      ? { ...payload.targetCarrierCounts }
+      : {},
   };
 }
 

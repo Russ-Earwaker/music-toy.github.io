@@ -223,6 +223,7 @@ export function createSwarmDirector(options = null) {
       responseMode: '',
       pacingState: '',
     }),
+    enemyDirectorState: null,
     spawnDirector: createSpawnDirectorSubsystem({
       configUrl: String(opts.spawnConfigUrl || './data/beat-swarm/enemy_spawn_config.csv').trim() || './data/beat-swarm/enemy_spawn_config.csv',
     }),
@@ -485,6 +486,12 @@ export function createSwarmDirector(options = null) {
     return { ...state.pressureState };
   }
 
+  function setEnemyDirectorState(next) {
+    state.enemyDirectorState = next && typeof next === 'object' ? JSON.parse(JSON.stringify(next)) : null;
+    try { state.spawnDirector?.setEnemyDirectorState?.(state.enemyDirectorState); } catch {}
+    return state.enemyDirectorState ? { ...state.enemyDirectorState } : null;
+  }
+
   function ensureSpawnConfigLoaded(fetchImpl = null) {
     return state.spawnDirector?.ensureConfigLoaded?.(fetchImpl) || Promise.resolve([]);
   }
@@ -528,6 +535,7 @@ export function createSwarmDirector(options = null) {
       state.spawnDirector?.reset?.();
       state.spawnDirector?.setLanePlan?.(state.lanePlan);
       state.spawnDirector?.setPressureState?.(state.pressureState);
+      state.spawnDirector?.setEnemyDirectorState?.(state.enemyDirectorState);
     } catch {}
     resetBeatUsage(null);
     clearBeatEvents();
@@ -551,6 +559,7 @@ export function createSwarmDirector(options = null) {
     setLanePlan,
     getLanePlan,
     setPressureState,
+    setEnemyDirectorState,
     ensureSpawnConfigLoaded,
     setSpawnBattlefieldState,
     noteSpawn,

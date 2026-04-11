@@ -166,10 +166,11 @@ export function warmBeatSwarmEnemySpawnConfig(csvUrl = DEFAULT_SPAWN_CONFIG_URL,
   return enemySpawnConfigLoadPromise;
 }
 
-function deriveNeeds({ lanePlan = null, pressureState = null, battlefieldState = null }) {
+function deriveNeeds({ lanePlan = null, pressureState = null, battlefieldState = null, enemyDirectorState = null }) {
   const plan = lanePlan && typeof lanePlan === 'object' ? lanePlan : {};
   const pressure = pressureState && typeof pressureState === 'object' ? pressureState : {};
   const field = battlefieldState && typeof battlefieldState === 'object' ? battlefieldState : {};
+  const director = enemyDirectorState && typeof enemyDirectorState === 'object' ? enemyDirectorState : {};
   const needs = new Set();
   const occupiedSlots = field.occupiedSlots && typeof field.occupiedSlots === 'object' ? field.occupiedSlots : {};
   const foundationCovered = (field.countsById?.composer_basic > 0);
@@ -178,6 +179,9 @@ function deriveNeeds({ lanePlan = null, pressureState = null, battlefieldState =
   if (plan.foundation?.active === true && !foundationCovered) needs.add('needfoundation');
   if (plan.secondary_loop?.active === true && !rhythmCovered) needs.add('needrhythm');
   if (plan.primary_loop?.active === true && !melodyCovered) needs.add('needmelody');
+  const desiredLaneRoles = Array.isArray(director.desiredLaneRoles) ? director.desiredLaneRoles : [];
+  if (desiredLaneRoles.includes('secondary_loop_rhythm') && !rhythmCovered) needs.add('needrhythm');
+  if (desiredLaneRoles.includes('primary_loop_lead') && !melodyCovered) needs.add('needmelody');
   if (clamp01(pressure.combatPressure) > 0.72 && clamp01(pressure.musicalPressure) < 0.52) needs.add('needescalation');
   if (clamp01(pressure.combatPressure) > 0.82 && clamp01(pressure.musicalPressure) > 0.72) needs.add('needrelief');
   return Array.from(needs);
@@ -224,6 +228,7 @@ export function createSpawnDirectorSubsystem(options = null) {
     },
     lanePlan: null,
     pressureState: null,
+    enemyDirectorState: null,
     spawnBudget: 0,
     spawnBudgetMax: 0,
     spawnBudgetRefillPerBar: 0,
@@ -270,14 +275,20 @@ export function createSpawnDirectorSubsystem(options = null) {
 
   function setLanePlan(next) {
     state.lanePlan = next && typeof next === 'object' ? JSON.parse(JSON.stringify(next)) : null;
-    state.needs = deriveNeeds({ lanePlan: state.lanePlan, pressureState: state.pressureState, battlefieldState: state.battlefieldState });
+    state.needs = deriveNeeds({ lanePlan: state.lanePlan, pressureState: state.pressureState, battlefieldState: state.battlefieldState, enemyDirectorState: state.enemyDirectorState });
     return state.lanePlan;
   }
 
   function setPressureState(next) {
     state.pressureState = next && typeof next === 'object' ? { ...next } : null;
-    state.needs = deriveNeeds({ lanePlan: state.lanePlan, pressureState: state.pressureState, battlefieldState: state.battlefieldState });
+    state.needs = deriveNeeds({ lanePlan: state.lanePlan, pressureState: state.pressureState, battlefieldState: state.battlefieldState, enemyDirectorState: state.enemyDirectorState });
     return state.pressureState;
+  }
+
+  function setEnemyDirectorState(next) {
+    state.enemyDirectorState = next && typeof next === 'object' ? JSON.parse(JSON.stringify(next)) : null;
+    state.needs = deriveNeeds({ lanePlan: state.lanePlan, pressureState: state.pressureState, battlefieldState: state.battlefieldState, enemyDirectorState: state.enemyDirectorState });
+    return state.enemyDirectorState;
   }
 
   function recalculateLiveCost() {
@@ -305,7 +316,7 @@ export function createSpawnDirectorSubsystem(options = null) {
       liveCostUsed: 0,
     };
     recalculateLiveCost();
-    state.needs = deriveNeeds({ lanePlan: state.lanePlan, pressureState: state.pressureState, battlefieldState: state.battlefieldState });
+    state.needs = deriveNeeds({ lanePlan: state.lanePlan, pressureState: state.pressureState, battlefieldState: state.battlefieldState, enemyDirectorState: state.enemyDirectorState });
     return { ...state.battlefieldState, liveCostUsed: state.battlefieldState.liveCostUsed };
   }
 
@@ -321,9 +332,18 @@ export function createSpawnDirectorSubsystem(options = null) {
     state.stepIndex = Math.max(0, Math.trunc(Number(stepIndex) || 0));
     const phaseTier = computePhaseTier();
     const combatPressure = clamp01(state.pressureState?.combatPressure);
-    state.liveBudgetMax = 8 + (phaseTier * 3) + Math.round(combatPressure * 6);
-    state.spawnBudgetMax = 3 + phaseTier + Math.round(combatPressure * 3);
-    state.spawnBudgetRefillPerBar = 1 + (combatPressure * 1.5);
+    const directorPressure = clamp01(state.enemyDirectorState?.targetPressure);
+    const directorAliveMin = Math.max(0, Math.trunc(Number(state.enemyDirectorState?.targetAliveMin) || 0));
+    const directorAliveMax = Math.max(directorAliveMin, Math.trunc(Number(state.enemyDirectorState?.targetAliveMax) || 0));
+    state.liveBudgetMax = directorAliveMax > 0
+      ? Math.max(4, directorAliveMax * 3)
+      : (8 + (phaseTier * 3) + Math.round(combatPressure * 6));
+    state.spawnBudgetMax = directorAliveMax > 0
+      ? Math.max(2, Math.round(1 + directorPressure * 4 + (directorAliveMax * 0.5)))
+      : (3 + phaseTier + Math.round(combatPressure * 3));
+    state.spawnBudgetRefillPerBar = directorAliveMax > 0
+      ? Math.max(0.5, 0.6 + (directorPressure * 1.8))
+      : (1 + (combatPressure * 1.5));
     if (state.lastBudgetBarIndex < 0) {
       state.lastBudgetBarIndex = state.barIndex;
       state.spawnBudget = state.spawnBudgetMax;
@@ -358,9 +378,19 @@ export function createSpawnDirectorSubsystem(options = null) {
       ? state.battlefieldState.occupiedSlots
       : {};
     const needs = Array.isArray(state.needs) ? state.needs.slice() : [];
-    const forceRhythmSpecial = needs.includes('needrhythm') && occupiedSlots.rhythmSpecialOccupied !== true;
-    const forceMelodySpecial = needs.includes('needmelody') && occupiedSlots.melodySpecialOccupied !== true;
+    const enemyDirectorState = state.enemyDirectorState && typeof state.enemyDirectorState === 'object'
+      ? state.enemyDirectorState
+      : {};
+    const preferredEnemyFamilies = new Set(Array.isArray(enemyDirectorState.preferredEnemyFamilies) ? enemyDirectorState.preferredEnemyFamilies : []);
+    const suppressedEnemyFamilies = new Set(Array.isArray(enemyDirectorState.suppressedEnemyFamilies) ? enemyDirectorState.suppressedEnemyFamilies : []);
+    const varietyPressureByFamily = enemyDirectorState.varietyPressureByFamily && typeof enemyDirectorState.varietyPressureByFamily === 'object'
+      ? enemyDirectorState.varietyPressureByFamily
+      : {};
+    const directorPressure = clamp01(enemyDirectorState.targetPressure);
+    const targetAliveMin = Math.max(0, Math.trunc(Number(enemyDirectorState.targetAliveMin) || 0));
+    const targetAliveMax = Math.max(targetAliveMin, Math.trunc(Number(enemyDirectorState.targetAliveMax) || 0));
     const battlefieldAlive = Math.max(0, Math.trunc(Number(state.battlefieldState.totalAlive) || 0));
+    const belowDirectorFloor = targetAliveMin > 0 && battlefieldAlive < targetAliveMin;
     const eligible = [];
     const rejected = [];
 
@@ -371,18 +401,27 @@ export function createSpawnDirectorSubsystem(options = null) {
       const supportsPhrase = def.spawnTiming.phrase === true;
       const supportsBar = def.spawnTiming.bar === true;
       const supportsBeat = def.spawnTiming.beat === true;
+      const recoveryBasicSpawn = belowDirectorFloor && (
+        def.id === 'composer_basic'
+        || def.id === 'spawner_basic'
+        || def.id === 'snake_basic'
+      );
       const isValidBoundary = phraseBoundary
         ? (supportsPhrase || supportsBar || supportsBeat)
         : (barBoundary
           ? (supportsBar || supportsBeat)
           : supportsBeat);
-      if (!isValidBoundary) {
+      const relaxedTimingBoundary = recoveryBasicSpawn && (beatBoundary || barBoundary);
+      if (!isValidBoundary && !relaxedTimingBoundary) {
         rejected.push({ id: def.id, reasons: ['timing'] });
         continue;
       }
       if (def.spawnCost > liveRemaining) reasons.push('live_budget');
       if (def.spawnCost > spawnRemaining) reasons.push('spawn_budget');
-      if (phaseTier < def.minPhase || phaseTier > def.maxPhase) reasons.push('phase');
+      if ((phaseTier < def.minPhase || phaseTier > def.maxPhase) && !recoveryBasicSpawn) reasons.push('phase');
+      if (targetAliveMax > 0 && battlefieldAlive >= targetAliveMax && !needs.includes('needfoundation') && !needs.includes('needrhythm') && !needs.includes('needmelody')) {
+        reasons.push('director_alive_cap');
+      }
       const maxAliveLimit = Math.max(0, Math.trunc(Number(def.maxAlive) || 0));
       if (maxAliveLimit > 0) {
         const relaxedAliveCount = def.id === 'composer_basic'
@@ -398,8 +437,6 @@ export function createSpawnDirectorSubsystem(options = null) {
       if (def.forbiddenNeeds.some((need) => needs.includes(need))) reasons.push('forbidden_need');
       if (hasRoleTag(def, 'rhythm') && occupiedSlots.rhythmSpecialOccupied) reasons.push('rhythm_slot');
       if (hasRoleTag(def, 'melody') && occupiedSlots.melodySpecialOccupied) reasons.push('melody_slot');
-      if (forceRhythmSpecial && !(hasRoleTag(def, 'rhythm') && (hasRoleTag(def, 'special') || def.id === 'solo_rhythm_basic'))) reasons.push('forced_special_focus');
-      if (forceMelodySpecial && !(hasRoleTag(def, 'melody') && hasRoleTag(def, 'special'))) reasons.push('forced_special_focus');
       if (reasons.length) {
         rejected.push({ id: def.id, reasons });
         continue;
@@ -409,12 +446,12 @@ export function createSpawnDirectorSubsystem(options = null) {
       for (const need of needs) {
         if (def.preferredNeeds.includes(need)) score += 32;
       }
-      if (def.id === 'spawner_basic' && needs.includes('needrhythm')) score += 2;
-      if (def.id === 'snake_basic' && needs.includes('needmelody')) score += 4;
+      if (def.id === 'composer_basic' && needs.includes('needrhythm')) score += 10;
+      if (def.id === 'composer_basic' && needs.includes('needmelody')) score += 10;
+      if (def.id === 'solo_rhythm_basic' && needs.includes('needmelody')) score += 12;
+      if (def.id === 'composer_basic' && needs.includes('needescalation')) score += 6;
       if (def.id === 'spawner_basic' && needs.includes('needescalation')) score += 2;
       if (def.id === 'snake_basic' && needs.includes('needescalation')) score += 3;
-      if (def.id === 'spawner_basic' && forceRhythmSpecial) score += 4;
-      if (def.id === 'snake_basic' && forceMelodySpecial) score += 6;
       const liveFit = liveRemaining > 0 ? (1 - Math.abs((liveRemaining - def.spawnCost) / Math.max(1, liveRemaining))) : 0;
       score += Math.max(0, liveFit) * 18;
       if (timingBoundary === 'phrase' && hasRoleTag(def, 'special')) score += 8;
@@ -424,13 +461,42 @@ export function createSpawnDirectorSubsystem(options = null) {
       if (def.id === 'solo_rhythm_basic' && needs.includes('needrhythm')) score += 72;
       if (def.id === 'solo_rhythm_basic' && needs.includes('needfoundation')) score += 22;
       if (def.id === 'solo_rhythm_basic' && needs.includes('needescalation')) score += 26;
-      if (def.id === 'solo_rhythm_basic' && forceRhythmSpecial) score += 120;
       if (battlefieldAlive >= 6 && hasRoleTag(def, 'solo')) score += 46;
       if (battlefieldAlive <= 4 && hasRoleTag(def, 'solo')) score += 10;
       if ((sectionTag === 'build' || sectionTag === 'drop') && def.id === 'solo_rhythm_basic') score += 14;
       if (def.id === 'composer_basic' && needs.includes('needfoundation')) score += 6;
-      if (def.id === 'composer_basic' && (needs.includes('needrhythm') || needs.includes('needmelody'))) score *= 0.72;
-      if (def.id === 'composer_basic' && needs.includes('needescalation')) score *= 0.84;
+      if (targetAliveMin > 0 && battlefieldAlive < targetAliveMin) {
+        score += 18 + (directorPressure * 28);
+        if (hasRoleTag(def, 'special')) score += 10;
+      }
+      if (recoveryBasicSpawn) {
+        score += 20 + (directorPressure * 16);
+        if (def.id === 'composer_basic') score += 20;
+        if (def.id === 'solo_rhythm_basic') score += 18;
+        if (def.id === 'spawner_basic') score *= 0.92;
+        if (def.id === 'snake_basic') score *= 0.92;
+        if (needs.includes('needrhythm') && def.id === 'composer_basic') score += 16;
+        if (needs.includes('needmelody') && def.id === 'composer_basic') score += 16;
+        if (needs.includes('needrhythm') && def.id === 'solo_rhythm_basic') score += 22;
+      }
+      if (targetAliveMax > 0 && battlefieldAlive >= targetAliveMax) {
+        score *= hasRoleTag(def, 'special') ? 0.52 : 0.68;
+      }
+      const directorFamilyId = def.id === 'composer_basic'
+        ? 'composer'
+        : (def.id === 'spawner_basic'
+          ? 'spawner'
+          : (def.id === 'snake_basic'
+            ? 'snake'
+            : (def.id === 'solo_rhythm_basic' ? 'solo_rhythm' : '')));
+      if (directorFamilyId && preferredEnemyFamilies.has(directorFamilyId)) score += 12;
+      if (directorFamilyId && suppressedEnemyFamilies.has(directorFamilyId)) {
+        score *= (directorFamilyId === 'composer' ? 0.9 : 0.72);
+      }
+      const familyVarietyPressure = Math.max(0, Number(varietyPressureByFamily?.[directorFamilyId]) || 0);
+      if (directorFamilyId && familyVarietyPressure > 0) {
+        score *= Math.max(0.45, 1 - (familyVarietyPressure * 0.12));
+      }
       const mostRecentIndex = state.recentSpawnIds.length
         ? state.recentSpawnIds.lastIndexOf(def.id)
         : -1;
@@ -554,6 +620,7 @@ export function createSpawnDirectorSubsystem(options = null) {
       totalAlive: 0,
       liveCostUsed: 0,
     };
+    state.enemyDirectorState = null;
     state.spawnBudget = 0;
     state.spawnBudgetMax = 0;
     state.spawnBudgetRefillPerBar = 0;
@@ -579,6 +646,7 @@ export function createSpawnDirectorSubsystem(options = null) {
     setConfigRows,
     setLanePlan,
     setPressureState,
+    setEnemyDirectorState,
     setBattlefieldState,
     updateTimeline,
     evaluateSpawnCandidates,
