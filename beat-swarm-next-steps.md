@@ -1084,6 +1084,150 @@ Working boundary:
 
 > If the pilot cannot make intro merge correctly, do not broaden the state layer yet.
 
+### 17. Future Flexibility Guardrails
+
+The next architecture pass should preserve room for future musical expansion, even if that work is not immediate.
+
+This matters because Beat Swarm will likely need to support:
+
+- more than one stable musical style family
+- recognisable run-to-run variation
+- future user-authored sequence insertion
+- encounter-specific authored moments without breaking the generative base
+
+Important rule:
+
+> Future flexibility should plug into the director/state layer.
+> It should not bypass lane policy, arbitration, or carrier ownership.
+
+#### 17.1 Style-Family Flexibility
+
+The system should be able to support multiple high-level style families without rewriting the runtime.
+
+Examples:
+
+- shmup-electro base
+- rhythm-heavy boss override
+- more melodic / harmonic special encounters
+- future stylistic packs with different phrase and groove behavior
+
+Implementation direction:
+
+- keep one stable base style per run or encounter scope
+- let modes and overrides bias:
+  - motif families
+  - rhythm families
+  - register preference
+  - instrument palette
+  - lane density
+- do not make style changes by letting random enemy ownership churn reshape the music
+
+Working rule:
+
+> Style should be selected intentionally and executed through the same lane system,
+> not emerge accidentally from carrier instability.
+
+#### 17.2 Recognisable Run Identity
+
+Variation should not mean formless randomness.
+
+Target behavior:
+
+- two runs should feel recognisably different
+- one run should still feel internally coherent
+- the player should be able to notice that a run had a particular musical identity
+
+Implementation direction:
+
+- add a per-run music identity seed
+- derive from that seed:
+  - preferred style family
+  - motif-family weighting
+  - phrase contour bias
+  - ornament bias
+  - instrument palette weighting
+- keep section transitions and overrides constrained by that run identity instead of re-rolling everything constantly
+
+Success condition:
+
+- runs differ in recognisable musical character without sounding unrelated from bar to bar
+
+#### 17.3 User-Authored Sequence Insertion
+
+The system should eventually allow user-authored material to enter the mix without replacing the whole generator.
+
+Possible future use cases:
+
+- short lead phrases
+- answer/ornament fragments
+- rhythm patterns
+- encounter-specific authored motifs
+
+Important rule:
+
+> User-authored material should enter as lane-aware phrase content,
+> not as an unmanaged parallel soundtrack.
+
+Implementation direction:
+
+- support authored phrase fragments at the role/lane level:
+  - `foundation`
+  - `counter_rhythm`
+  - `lead_phrase`
+  - `answer_ornament`
+- let authored material declare:
+  - preferred mode(s)
+  - preferred register
+  - preferred style family
+  - allowed density
+  - whether it is:
+    - hard-authored
+    - seed-mutated
+    - or generator-completed
+- allow the director to schedule authored fragments the same way it schedules generated phrase roles
+
+Design constraint:
+
+- user-authored sequences should still obey:
+  - note-pool / harmony policy
+  - lane arbitration
+  - visibility / gameplay readability constraints
+  - section and mode timing
+
+That means authored content should be:
+
+- insertable
+- biasable
+- suppressible
+- replaceable by policy when the encounter requires it
+
+not:
+
+- absolute
+- always-on
+- immune to the rest of the runtime
+
+#### 17.4 Non-Immediate Scope Boundary
+
+These features are future-facing, not current blockers.
+
+So the near-term rule should be:
+
+- do not implement broad style-pack support yet
+- do not implement user-sequence tooling yet
+- do not broaden the mode system until the current merge / lane work is stable
+
+But do preserve these extension points now:
+
+- per-run identity seed
+- mode/style-family bias hooks
+- lane-role phrase insertion points
+- scoped override attribution in debug
+
+Reason:
+
+> We should avoid another refactor later just to make future musical authorship possible.
+
 ## Working Rule
 
 Use this as the tuning principle:

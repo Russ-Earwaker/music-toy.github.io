@@ -151,7 +151,14 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const laneId = String(g?.musicLaneId || '').trim().toLowerCase();
     if (laneId !== 'primary_loop_lane') return false;
     const roleId = String(g?.role || options?.roles?.lead || 'lead').trim().toLowerCase();
-    return roleId === String(options?.roles?.lead || 'lead').trim().toLowerCase();
+    const profileId = normalizeComposerProfileSourceType(g?.musicProfileSourceType);
+    const soloCarrierType = String(g?.soloCarrierType || '').trim().toLowerCase();
+    return (
+      roleId === String(options?.roles?.lead || 'lead').trim().toLowerCase()
+      || profileId === 'lead_melody'
+      || soloCarrierType === 'melody'
+      || soloCarrierType === 'solo'
+    );
   });
   const getCallResponseWindowSteps = typeof options?.getCallResponseWindowSteps === 'function' ? options.getCallResponseWindowSteps : (() => 1);
   const responseWindowSteps = Math.max(1, Math.trunc(Number(getCallResponseWindowSteps()) || 1));
@@ -306,6 +313,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   let emittedResponseThisStep = false;
   let emittedSecondaryLoopRhythmThisStep = false;
   let emittedSecondaryBedFallbackThisStep = false;
+  let emittedAnswerOrnamentThisStep = false;
 
   for (const group of composerEnemyGroups) {
     if (!group || !group.active || group.retiring) continue;
@@ -1939,28 +1947,125 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       });
     }
   }
-  const directAnswerOrnamentWanted = (
-    activeMusicMode === 'full_texture'
+  const explicitOrnamentCompanionWanted = (
+    !emittedAnswerOrnamentThisStep
+    && (activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture' || secondaryLoopProtected)
     && activePrimaryLoopLeadGroups.length > 0
-    && !emittedResponseThisStep
-    && !emittedSecondaryBedFallbackThisStep
-    && !playerLikelyAudible
+    && (step === 2 || step === 6)
+    && (barIndex % 2 === 0)
   );
-  if (directAnswerOrnamentWanted) {
-    const ornamentStep = step === 1 || step === 5;
-    const ornamentBarPhase = (barIndex % 4) === 1 || (barIndex % 4) === 3;
-    const ornamentFoundationLaneSnapshot = getFoundationLaneSnapshot
-      ? getFoundationLaneSnapshot(stepAbs, barIndex)
+  if (explicitOrnamentCompanionWanted) {
+    const leadCarrierGroup = activePrimaryLoopLeadGroups[0] || null;
+    const ornamentCarrierSourceGroup = fallbackResponseCarrierGroup || leadCarrierGroup || null;
+    const ornamentRawNote = normalizeSwarmNoteName(step === 2 ? 'D5' : 'A4') || 'D5';
+    const ornamentNote = clampNoteToDirectorRegisterTarget(
+      ornamentRawNote,
+      stepAbs + 3,
+      'mid'
+    );
+    const ornamentInstrumentId = String(
+      getIdForDisplayName('Gaming Note')
+        || getIdForDisplayName('Retro Triangle')
+        || getIdForDisplayName('Bell')
+        || getIdForDisplayName('Xylophone')
+        || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
+        || resolveSwarmSoundInstrumentId('projectile')
+        || 'tone'
+    ).trim();
+    const ornamentAliveMembers = ornamentCarrierSourceGroup
+      ? getLiveComposerMembersForGroup(ornamentCarrierSourceGroup)
+      : [];
+    const ornamentPerformer = ornamentAliveMembers.length
+      ? (chooseEnemyForNote({
+        group: ornamentCarrierSourceGroup,
+        noteName: ornamentNote,
+        aliveMembers: ornamentAliveMembers,
+        normalizeNoteName: normalizeSwarmNoteName,
+        getFallbackNote: getRandomSwarmPentatonicNote,
+      }) || ornamentAliveMembers[0] || null)
       : null;
-    if (ornamentStep && ornamentBarPhase && ornamentFoundationLaneSnapshot?.isActiveStep !== true) {
+    const ornamentActorId = Math.max(0, Math.trunc(Number(ornamentPerformer?.id) || 0));
+    const ornamentGroupId = Math.max(
+      0,
+      Math.trunc(Number(ornamentCarrierSourceGroup?.id) || 0)
+        || Math.trunc(Number(leadCarrierGroup?.id) || 0)
+    );
+    events.push(createPerformedBeatEvent({
+      actorId: ornamentActorId,
+      beatIndex,
+      stepIndex: stepAbs,
+      role: normalizeSwarmRole(roles?.accent || 'accent', roles?.accent || 'accent'),
+      note: ornamentNote,
+      instrumentId: ornamentInstrumentId,
+      actionType: 'composer-group-projectile',
+      threatClass: String(threat.light || 'light'),
+      visualSyncType: ornamentActorId > 0 ? 'group-pulse' : 'none',
+      payload: {
+        groupId: ornamentGroupId,
+        ghostPlayback: ornamentActorId <= 0,
+        groupEventSource: 'answer_ornament_fallback',
+        continuityId: 'answer-ornament-fallback',
+        musicLayer: 'sparkle',
+        musicVoiceKey: 'answer_ornament',
+        onboardingPriority: 0,
+        musicProminence: playerLikelyAudible ? 'trace' : 'quiet',
+        soloCarrierType: '',
+        musicLaneId: 'sparkle_lane',
+        callResponseLane: 'response',
+        callResponseQualified: true,
+        callResponsePhraseProgress: 1,
+        musicRegister: 'mid',
+        audioGain: playerLikelyAudible ? 0.24 : 0.48,
+        requestedNoteRaw: ornamentNote,
+        phraseGravityTarget: '',
+        phraseGravityHit: false,
+        phraseResolutionOpportunity: false,
+        phraseResolutionHit: false,
+      },
+    }));
+    emittedAnswerOrnamentThisStep = true;
+    noteMusicSystemEvent?.('music_answer_ornament_fallback', {
+      stepIndex: stepAbs,
+      beatIndex,
+      barIndex,
+      actorId: ornamentActorId,
+      note: ornamentNote,
+      instrumentId: ornamentInstrumentId,
+    });
+  }
+  const directAnswerOrnamentWanted = (
+    (strongLeadWindowActive || secondaryLoopProtected)
+    && activePrimaryLoopLeadGroups.length > 0
+  );
+  if (noteMusicSystemEvent && (step === 2 || step === 6) && (strongLeadWindowActive || secondaryLoopProtected)) {
+    noteMusicSystemEvent('music_answer_ornament_gate', {
+      stepIndex: stepAbs,
+      beatIndex,
+      barIndex,
+      step,
+      activeMusicMode,
+      wanted: directAnswerOrnamentWanted,
+      leadGroups: activePrimaryLoopLeadGroups.length,
+      emittedThisStep: emittedAnswerOrnamentThisStep,
+      emittedSecondaryLoopRhythmThisStep,
+      emittedSecondaryBedFallbackThisStep,
+      emittedResponseThisStep,
+    });
+  }
+  if (directAnswerOrnamentWanted && !emittedAnswerOrnamentThisStep) {
+    const ornamentStep = step === 2 || step === 6;
+    if (ornamentStep) {
+      const leadCarrierGroup = activePrimaryLoopLeadGroups[0] || null;
+      const ornamentCarrierSourceGroup = fallbackResponseCarrierGroup || leadCarrierGroup || null;
       const notePool = getDirectorNotePool();
       const poolLength = Array.isArray(notePool) ? notePool.length : 0;
       const poolIndex = poolLength
         ? (((Math.trunc(Number(stepAbs) || 0) + Math.trunc(Number(barIndex) || 0)) % poolLength) + poolLength) % poolLength
         : -1;
+      const ornamentPhraseProgress = step === 2 ? 1 : 2;
       const rawOrnamentNote = normalizeSwarmNoteName(
         poolIndex >= 0 ? notePool[poolIndex] : ''
-      ) || (step === 1 ? 'D5' : 'A4');
+      ) || (step === 2 ? 'D5' : 'A4');
       const ornamentNote = clampNoteToDirectorRegisterTarget(
         rawOrnamentNote,
         stepAbs + 5,
@@ -1975,8 +2080,26 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           || resolveSwarmSoundInstrumentId('projectile')
           || 'tone'
       ).trim();
+      const ornamentAliveMembers = ornamentCarrierSourceGroup
+        ? getLiveComposerMembersForGroup(ornamentCarrierSourceGroup)
+        : [];
+      const ornamentPerformer = ornamentAliveMembers.length
+        ? (chooseEnemyForNote({
+          group: ornamentCarrierSourceGroup,
+          noteName: ornamentNote,
+          aliveMembers: ornamentAliveMembers,
+          normalizeNoteName: normalizeSwarmNoteName,
+          getFallbackNote: getRandomSwarmPentatonicNote,
+        }) || ornamentAliveMembers[0] || null)
+        : null;
+      const ornamentActorId = Math.max(0, Math.trunc(Number(ornamentPerformer?.id) || 0));
+      const ornamentGroupId = Math.max(
+        0,
+        Math.trunc(Number(ornamentCarrierSourceGroup?.id) || 0)
+          || Math.trunc(Number(leadCarrierGroup?.id) || 0)
+      );
       events.push(createPerformedBeatEvent({
-        actorId: 0,
+        actorId: ornamentActorId,
         beatIndex,
         stepIndex: stepAbs,
         role: normalizeSwarmRole(roles?.accent || 'accent', roles?.accent || 'accent'),
@@ -1984,23 +2107,23 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         instrumentId: ornamentInstrumentId,
         actionType: 'composer-group-projectile',
         threatClass: String(threat.light || 'light'),
-        visualSyncType: 'none',
+        visualSyncType: ornamentActorId > 0 ? 'group-pulse' : 'none',
         payload: {
-          groupId: 0,
-          ghostPlayback: true,
+          groupId: ornamentGroupId,
+          ghostPlayback: ornamentActorId <= 0,
           groupEventSource: 'answer_ornament_fallback',
           continuityId: 'answer-ornament-fallback',
           musicLayer: 'sparkle',
           musicVoiceKey: 'answer_ornament',
           onboardingPriority: 0,
-          musicProminence: 'trace',
+          musicProminence: playerLikelyAudible ? 'trace' : (step === 2 ? 'quiet' : 'full'),
           soloCarrierType: '',
           musicLaneId: 'sparkle_lane',
           callResponseLane: 'response',
           callResponseQualified: true,
-          callResponsePhraseProgress: step === 1 ? 1 : 2,
+          callResponsePhraseProgress: ornamentPhraseProgress,
           musicRegister: 'mid',
-          audioGain: 0.22,
+          audioGain: playerLikelyAudible ? 0.28 : (step === 2 ? 0.46 : 0.58),
           requestedNoteRaw: ornamentNote,
           phraseGravityTarget: '',
           phraseGravityHit: false,

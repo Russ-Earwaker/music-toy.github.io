@@ -3579,6 +3579,7 @@ function compactMusicLabPayloadForSave(payload = null) {
     if (
       groupEventSource === 'secondary_loop_bridge_fallback'
       || groupEventSource === 'composer_group_response_fallback'
+      || groupEventSource === 'answer_ornament_fallback'
       || groupEventSource === 'intro_slot_strict'
     ) return true;
     if (continuityId === 'secondary-loop-bridge-fallback') return true;
@@ -3586,6 +3587,7 @@ function compactMusicLabPayloadForSave(payload = null) {
       laneId === 'primary_loop_lane'
       || laneId === 'secondary_loop_lane'
       || laneId === 'foundation_lane'
+      || laneId === 'sparkle_lane'
     ) return true;
     return false;
   };
@@ -3692,6 +3694,44 @@ function compactMusicLabPayloadForSave(payload = null) {
         instrumentId: String(item.instrumentId || '').trim(),
         actionType: String(item.actionType || '').trim().toLowerCase(),
         performerType: String(item.performerType || '').trim().toLowerCase(),
+      });
+      continue;
+    }
+    if (
+      eventType === 'music_answer_ornament_fallback'
+      || eventType === 'music_answer_ornament_gate'
+      || eventType === 'music_answer_ornament_arbitration'
+      || eventType === 'music_answer_ornament_direct_gate'
+      || eventType === 'music_answer_ornament_post_arbitration_emit'
+    ) {
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        actorId: Number(item.actorId) || 0,
+        groupId: Number(item.groupId) || 0,
+        activeMusicMode: String(item.activeMusicMode || '').trim().toLowerCase(),
+        step: Number(item.step) || 0,
+        wanted: item.wanted === true,
+        leadGroups: Number(item.leadGroups) || 0,
+        emittedThisStep: item.emittedThisStep === true,
+        stepMod8: Number(item.stepMod8) || 0,
+        evenBar: item.evenBar === true,
+        primaryLoopLaneActive: item.primaryLoopLaneActive === true,
+        secondaryLoopLaneActive: item.secondaryLoopLaneActive === true,
+        primaryLoopPerformerEnemyId: Number(item.primaryLoopPerformerEnemyId) || 0,
+        primaryLoopPerformerGroupId: Number(item.primaryLoopPerformerGroupId) || 0,
+        secondaryLoopPerformerEnemyId: Number(item.secondaryLoopPerformerEnemyId) || 0,
+        secondaryLoopPerformerGroupId: Number(item.secondaryLoopPerformerGroupId) || 0,
+        requestedProminence: String(item.requestedProminence || '').trim().toLowerCase(),
+        finalProminence: String(item.finalProminence || '').trim().toLowerCase(),
+        decisionReason: String(item.decisionReason || '').trim().toLowerCase(),
+        note: String(item.note || '').trim(),
+        instrumentId: String(item.instrumentId || '').trim(),
+        musicLaneId: String(item.musicLaneId || '').trim().toLowerCase(),
+        groupEventSource: String(item.groupEventSource || '').trim().toLowerCase(),
       });
       continue;
     }

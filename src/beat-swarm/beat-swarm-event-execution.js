@@ -934,9 +934,16 @@ export function executePerformedBeatEventRuntime(options = null) {
     }
     const duckForPlayer = false;
     const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
-    const musicProminence = normalizeEnemyProminenceForPlayerStep(
+    const ornamentCompanionDirect = (
+      String(ev?.payload?.musicLaneId || '').trim().toLowerCase() === 'sparkle_lane'
+      && String(ev?.payload?.musicVoiceKey || '').trim().toLowerCase() === 'answer_ornament'
+    );
+    const normalizedProminence = normalizeEnemyProminenceForPlayerStep(
       String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
     );
+    const musicProminence = ornamentCompanionDirect && normalizedProminence === 'trace'
+      ? 'quiet'
+      : normalizedProminence;
     const prominenceGain = resolveMusicProminenceGain(musicProminence);
     const enemyAudible = isMaskingAudibleProminence(musicProminence);
     const triggerVolume = (execSoloType === 'rhythm'

@@ -1233,6 +1233,29 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         }, { beatIndex, stepIndex, barIndex });
       } catch {}
     }
+    if (String(payload.groupEventSource || '').trim().toLowerCase() === 'answer_ornament_fallback') {
+      try {
+        helpers.noteMusicSystemEvent?.('music_answer_ornament_arbitration', {
+          actorId: Math.max(0, Math.trunc(Number(profiled?.actorId) || 0)),
+          groupId: Math.max(0, Math.trunc(Number(payload?.groupId) || 0)),
+          actionType: String(profiled?.actionType || '').trim().toLowerCase(),
+          musicLaneId: String(payload.musicLaneId || '').trim().toLowerCase(),
+          groupEventSource: String(payload.groupEventSource || '').trim().toLowerCase(),
+          requestedProminence: String(preArbitration?.prominence || safeProminence),
+          finalProminence: safeProminence,
+          decisionReason: (
+            preArbitration && safeProminence !== preArbitration.prominence
+              ? (
+                playerLikelyAudible ? 'player_mask_sparkle_trace'
+                  : (safeProminence === 'suppressed' ? 'suppressed_after_selection' : 'sparkle_background_trace')
+              )
+              : (safeProminence === 'suppressed' ? 'suppressed_unchanged' : 'admitted')
+          ),
+          note: String(preArbitration?.noteResolved || payload?.requestedNoteRaw || ''),
+          instrumentId: String(profiled?.instrumentId || ''),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    }
     if (safeProminence === 'suppressed') continue;
     if (layerStepStats[safeLayer]) layerStepStats[safeLayer][safeProminence] += 1;
     readabilityStepStats.enemyEvents += 1;
@@ -1483,9 +1506,100 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     };
   });
   const playerSoundVolumeMult = basePlayerSoundVolumeMult * globalStepGainScale;
+  const explicitSparkleCompanionWanted = (
+    (stepIndex % 8 === 2 || stepIndex % 8 === 6)
+    && (barIndex % 2 === 0)
+  );
+  try {
+    helpers.noteMusicSystemEvent?.('music_answer_ornament_direct_gate', {
+      barIndex,
+      beatIndex,
+      stepIndex,
+      stepMod8: stepIndex % 8,
+      evenBar: (barIndex % 2) === 0,
+      primaryLoopLaneActive: primaryLoopLaneActive === true,
+      secondaryLoopLaneActive: secondaryLoopLaneActive === true,
+      primaryLoopPerformerEnemyId: Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime?.performerEnemyId) || 0)),
+      primaryLoopPerformerGroupId: Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime?.performerGroupId) || 0)),
+      secondaryLoopPerformerEnemyId: Math.max(0, Math.trunc(Number(secondaryLoopLaneRuntime?.performerEnemyId) || 0)),
+      secondaryLoopPerformerGroupId: Math.max(0, Math.trunc(Number(secondaryLoopLaneRuntime?.performerGroupId) || 0)),
+      wanted: explicitSparkleCompanionWanted,
+    }, { beatIndex, stepIndex, barIndex });
+  } catch {}
+  const explicitSparkleCompanionEvent = (() => {
+    if (!explicitSparkleCompanionWanted) return null;
+    const sparkleActorId = Math.max(
+      0,
+      Math.trunc(Number(secondaryLoopLaneRuntime?.performerEnemyId) || 0)
+        || Math.trunc(Number(primaryLoopLaneRuntime?.performerEnemyId) || 0)
+    );
+    const sparkleGroupId = Math.max(
+      0,
+      Math.trunc(Number(secondaryLoopLaneRuntime?.performerGroupId) || 0)
+        || Math.trunc(Number(primaryLoopLaneRuntime?.performerGroupId) || 0)
+    );
+    if (!(sparkleActorId > 0 || sparkleGroupId > 0 || primaryLoopLaneActive || secondaryLoopLaneActive)) return null;
+    const sparkleNote = (stepIndex % 8 === 2) ? 'D5' : 'A4';
+    const sparkleInstrumentId = String(
+      helpers.getIdForDisplayName?.('Gaming Note')
+        || helpers.getIdForDisplayName?.('Retro Triangle')
+        || helpers.getIdForDisplayName?.('Bell')
+        || secondaryLoopLaneRuntime?.instrumentId
+        || primaryLoopLaneRuntime?.instrumentId
+        || ''
+    ).trim();
+    const ev = helpers.createLoggedPerformedBeatEvent?.({
+      actorId: sparkleActorId,
+      beatIndex,
+      stepIndex,
+      role: constants.roles?.accent || 'accent',
+      note: sparkleNote,
+      instrumentId: sparkleInstrumentId,
+      actionType: 'composer-group-projectile',
+      threatClass: constants.threat?.light || 'light',
+      visualSyncType: sparkleActorId > 0 ? 'group-pulse' : 'none',
+      payload: {
+        groupId: sparkleGroupId,
+        groupEventSource: 'answer_ornament_companion_direct',
+        continuityId: 'answer-ornament-companion-direct',
+        ghostPlayback: sparkleActorId <= 0,
+        musicLayer: 'sparkle',
+        musicLaneId: 'sparkle_lane',
+        musicVoiceKey: 'answer_ornament',
+        callResponseLane: 'response',
+        callResponseQualified: true,
+        callResponsePhraseProgress: (stepIndex % 8 === 2) ? 1 : 2,
+        musicRegister: 'mid',
+        musicProminence: playerLikelyAudible ? 'trace' : 'quiet',
+        audioGain: playerLikelyAudible ? 0.22 : 0.44,
+        requestedNoteRaw: sparkleNote,
+      },
+    }, {
+      beatIndex,
+      stepIndex,
+      sourceSystem: 'music',
+      enemyType: 'composer-group-member',
+    }) || null;
+    if (!ev) return null;
+    try {
+      helpers.noteMusicSystemEvent?.('music_answer_ornament_post_arbitration_emit', {
+        actorId: sparkleActorId,
+        groupId: sparkleGroupId,
+        barIndex,
+        beatIndex,
+        stepIndex,
+        note: sparkleNote,
+        instrumentId: sparkleInstrumentId,
+        musicLaneId: 'sparkle_lane',
+        groupEventSource: 'answer_ornament_companion_direct',
+      }, { beatIndex, stepIndex, barIndex });
+    } catch {}
+    return ev;
+  })();
 
   stepEvents = [
     ...stagedEnemyEvents,
+    explicitSparkleCompanionEvent,
     shouldEmitPlayerStepFinal
       ? helpers.createLoggedPerformedBeatEvent?.({
         actorId: 0,
