@@ -2037,21 +2037,6 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     (strongLeadWindowActive || secondaryLoopProtected)
     && activePrimaryLoopLeadGroups.length > 0
   );
-  if (noteMusicSystemEvent && (step === 2 || step === 6) && (strongLeadWindowActive || secondaryLoopProtected)) {
-    noteMusicSystemEvent('music_answer_ornament_gate', {
-      stepIndex: stepAbs,
-      beatIndex,
-      barIndex,
-      step,
-      activeMusicMode,
-      wanted: directAnswerOrnamentWanted,
-      leadGroups: activePrimaryLoopLeadGroups.length,
-      emittedThisStep: emittedAnswerOrnamentThisStep,
-      emittedSecondaryLoopRhythmThisStep,
-      emittedSecondaryBedFallbackThisStep,
-      emittedResponseThisStep,
-    });
-  }
   if (directAnswerOrnamentWanted && !emittedAnswerOrnamentThisStep) {
     const ornamentStep = step === 2 || step === 6;
     if (ornamentStep) {

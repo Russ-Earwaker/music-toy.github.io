@@ -801,7 +801,7 @@ Design constraint:
 
 Related detailed plan:
 
-- [beat-swarm-enemy-director-plan.md](/d:/Desktop/music-toy/music-toy.github.io/beat-swarm-enemy-director-plan.md)
+- [beat-swarm-enemy-director-plan.md](/c:/Desktop/music-toy/music-toy.github.io/beat-swarm-enemy-director-plan.md)
 
 Follow-up direction under that plan:
 

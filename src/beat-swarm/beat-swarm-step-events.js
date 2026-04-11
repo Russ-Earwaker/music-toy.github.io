@@ -1233,29 +1233,6 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         }, { beatIndex, stepIndex, barIndex });
       } catch {}
     }
-    if (String(payload.groupEventSource || '').trim().toLowerCase() === 'answer_ornament_fallback') {
-      try {
-        helpers.noteMusicSystemEvent?.('music_answer_ornament_arbitration', {
-          actorId: Math.max(0, Math.trunc(Number(profiled?.actorId) || 0)),
-          groupId: Math.max(0, Math.trunc(Number(payload?.groupId) || 0)),
-          actionType: String(profiled?.actionType || '').trim().toLowerCase(),
-          musicLaneId: String(payload.musicLaneId || '').trim().toLowerCase(),
-          groupEventSource: String(payload.groupEventSource || '').trim().toLowerCase(),
-          requestedProminence: String(preArbitration?.prominence || safeProminence),
-          finalProminence: safeProminence,
-          decisionReason: (
-            preArbitration && safeProminence !== preArbitration.prominence
-              ? (
-                playerLikelyAudible ? 'player_mask_sparkle_trace'
-                  : (safeProminence === 'suppressed' ? 'suppressed_after_selection' : 'sparkle_background_trace')
-              )
-              : (safeProminence === 'suppressed' ? 'suppressed_unchanged' : 'admitted')
-          ),
-          note: String(preArbitration?.noteResolved || payload?.requestedNoteRaw || ''),
-          instrumentId: String(profiled?.instrumentId || ''),
-        }, { beatIndex, stepIndex, barIndex });
-      } catch {}
-    }
     if (safeProminence === 'suppressed') continue;
     if (layerStepStats[safeLayer]) layerStepStats[safeLayer][safeProminence] += 1;
     readabilityStepStats.enemyEvents += 1;
@@ -1506,26 +1483,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     };
   });
   const playerSoundVolumeMult = basePlayerSoundVolumeMult * globalStepGainScale;
+  const sparkleStepMod8 = stepIndex % 8;
+  const sparkleBarPattern = ((barIndex % 4) + 4) % 4;
   const explicitSparkleCompanionWanted = (
-    (stepIndex % 8 === 2 || stepIndex % 8 === 6)
-    && (barIndex % 2 === 0)
+    (sparkleBarPattern === 0 && sparkleStepMod8 === 2)
+    || (sparkleBarPattern === 3 && (sparkleStepMod8 === 2 || sparkleStepMod8 === 6))
   );
-  try {
-    helpers.noteMusicSystemEvent?.('music_answer_ornament_direct_gate', {
-      barIndex,
-      beatIndex,
-      stepIndex,
-      stepMod8: stepIndex % 8,
-      evenBar: (barIndex % 2) === 0,
-      primaryLoopLaneActive: primaryLoopLaneActive === true,
-      secondaryLoopLaneActive: secondaryLoopLaneActive === true,
-      primaryLoopPerformerEnemyId: Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime?.performerEnemyId) || 0)),
-      primaryLoopPerformerGroupId: Math.max(0, Math.trunc(Number(primaryLoopLaneRuntime?.performerGroupId) || 0)),
-      secondaryLoopPerformerEnemyId: Math.max(0, Math.trunc(Number(secondaryLoopLaneRuntime?.performerEnemyId) || 0)),
-      secondaryLoopPerformerGroupId: Math.max(0, Math.trunc(Number(secondaryLoopLaneRuntime?.performerGroupId) || 0)),
-      wanted: explicitSparkleCompanionWanted,
-    }, { beatIndex, stepIndex, barIndex });
-  } catch {}
   const explicitSparkleCompanionEvent = (() => {
     if (!explicitSparkleCompanionWanted) return null;
     const sparkleActorId = Math.max(
@@ -1539,7 +1502,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         || Math.trunc(Number(primaryLoopLaneRuntime?.performerGroupId) || 0)
     );
     if (!(sparkleActorId > 0 || sparkleGroupId > 0 || primaryLoopLaneActive || secondaryLoopLaneActive)) return null;
-    const sparkleNote = (stepIndex % 8 === 2) ? 'D5' : 'A4';
+    const sparkleNote = sparkleStepMod8 === 6 ? 'A4' : 'D5';
     const sparkleInstrumentId = String(
       helpers.getIdForDisplayName?.('Gaming Note')
         || helpers.getIdForDisplayName?.('Retro Triangle')
@@ -1568,10 +1531,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         musicVoiceKey: 'answer_ornament',
         callResponseLane: 'response',
         callResponseQualified: true,
-        callResponsePhraseProgress: (stepIndex % 8 === 2) ? 1 : 2,
+        callResponsePhraseProgress: sparkleStepMod8 === 2 ? 1 : 2,
         musicRegister: 'mid',
         musicProminence: playerLikelyAudible ? 'trace' : 'quiet',
-        audioGain: playerLikelyAudible ? 0.22 : 0.44,
+        audioGain: playerLikelyAudible ? 0.14 : (sparkleBarPattern === 3 ? 0.34 : 0.24),
         requestedNoteRaw: sparkleNote,
       },
     }, {
@@ -1580,21 +1543,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       sourceSystem: 'music',
       enemyType: 'composer-group-member',
     }) || null;
-    if (!ev) return null;
-    try {
-      helpers.noteMusicSystemEvent?.('music_answer_ornament_post_arbitration_emit', {
-        actorId: sparkleActorId,
-        groupId: sparkleGroupId,
-        barIndex,
-        beatIndex,
-        stepIndex,
-        note: sparkleNote,
-        instrumentId: sparkleInstrumentId,
-        musicLaneId: 'sparkle_lane',
-        groupEventSource: 'answer_ornament_companion_direct',
-      }, { beatIndex, stepIndex, barIndex });
-    } catch {}
-    return ev;
+    return ev || null;
   })();
 
   stepEvents = [

@@ -3697,13 +3697,7 @@ function compactMusicLabPayloadForSave(payload = null) {
       });
       continue;
     }
-    if (
-      eventType === 'music_answer_ornament_fallback'
-      || eventType === 'music_answer_ornament_gate'
-      || eventType === 'music_answer_ornament_arbitration'
-      || eventType === 'music_answer_ornament_direct_gate'
-      || eventType === 'music_answer_ornament_post_arbitration_emit'
-    ) {
+    if (eventType === 'music_answer_ornament_fallback') {
       focusedSystemEvents.push({
         tMs: Number(item.tMs) || 0,
         eventType,

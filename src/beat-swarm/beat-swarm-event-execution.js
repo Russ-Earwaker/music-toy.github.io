@@ -1074,6 +1074,7 @@ export function executePerformedBeatEventRuntime(options = null) {
       noteWasClamped: requestedNote ? requestedNote !== noteName : false,
       enemyAudible,
       musicProminence,
+      ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
     });
     noteComposerExecutionStage('completed', {
       hasGroup: true,

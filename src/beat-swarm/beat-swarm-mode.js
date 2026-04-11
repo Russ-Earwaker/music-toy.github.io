@@ -4748,6 +4748,36 @@ function applyDeferredMusicLaneIdentityChangesRuntime(options = null) {
       : null;
     if (!lane || !pending) continue;
     const waitSteps = Math.max(0, stepIndex - Math.max(0, Math.trunc(Number(pending.requestedAtStep) || 0)));
+    const identityChangeReason = normalizeLaneIdentityChangeReason(pending.identityChangeReason);
+    const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
+    const staggerSecondaryRhythmChange = (
+      laneId === 'secondary_loop_lane'
+      && (activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture')
+      && (
+        identityChangeReason === 'phrase_boundary_mutation'
+        || identityChangeReason === 'section_restatement'
+        || identityChangeReason === 'reorchestrate_lane'
+      )
+      && waitSteps < Math.max(1, WEAPON_TUNE_STEPS)
+    );
+    if (staggerSecondaryRhythmChange) {
+      noteMusicSystemEvent('music_lane_identity_change_held', {
+        laneId: String(laneId || '').trim().toLowerCase(),
+        role: String(lane.role || '').trim().toLowerCase(),
+        continuityId: String(pending.continuityId || '').trim(),
+        instrumentId: String(pending.instrumentId || '').trim(),
+        phraseId: String(pending.phraseId || '').trim().toLowerCase(),
+        patternKey: String(pending.patternKey || '').trim(),
+        performerEnemyId: Math.max(0, Math.trunc(Number(pending.performerEnemyId) || 0)),
+        performerGroupId: Math.max(0, Math.trunc(Number(pending.performerGroupId) || 0)),
+        performerType: String(pending.performerType || '').trim().toLowerCase(),
+        identityChangeReason,
+        sectionId: String(pending.sectionId || '').trim().toLowerCase(),
+        waitSteps,
+        holdReason: 'secondary_loop_stagger_for_merge_continuity',
+      }, { beatIndex, stepIndex, barIndex });
+      continue;
+    }
     lane.pendingIdentityChange = null;
     const result = assignMusicLaneIdentity({
       ...pending,
@@ -12596,6 +12626,7 @@ function removeEnemy(enemy, reason = 'unknown', context = null) {
       || introProfile === 'spawner_rhythm_backbeat'
       || introProfile === 'spawner_rhythm_motion';
     if (!isIntroSlotCarrier) return false;
+    if (introProfile === 'spawner_rhythm_backbeat') return false;
     const introBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
     if (introBodyType === 'solo') return false;
     const minLiveMembers = introBodyType === 'group' ? 2 : 1;
@@ -12938,9 +12969,16 @@ function damageEnemy(enemy, amount = 1) {
     const soloCarrierType = String(enemy?.soloCarrierType || '').trim().toLowerCase();
     const introSlotProfileSourceType = String(enemy?.introSlotProfileSourceType || '').trim().toLowerCase();
     const introCarrierBodyType = String(enemy?.introCarrierBodyType || '').trim().toLowerCase();
+    const enemyProfileSourceType = String(enemy?.musicProfileSourceType || '').trim().toLowerCase();
+    const enemyLaneId = String(enemy?.musicLaneId || '').trim().toLowerCase();
     const allowSoloCarrierRetreatTail = !(
-      introCarrierBodyType === 'solo'
-      && introSlotProfileSourceType === 'spawner_rhythm_backbeat'
+      soloCarrierType === 'rhythm'
+      && (
+        (introCarrierBodyType === 'solo' && introSlotProfileSourceType === 'spawner_rhythm_backbeat')
+        || enemyProfileSourceType === 'secondary_bridge_backbeat'
+        || enemyProfileSourceType === 'spawner_rhythm_backbeat'
+        || enemyLaneId === 'secondary_loop_lane'
+      )
     );
     if (
       String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member'
