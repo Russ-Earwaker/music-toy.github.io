@@ -146,6 +146,7 @@ const perfLabRuntime = {
 const perfEnemyRepeatRuntime = {
   enabled: false,
   enemyType: '',
+  behavior: 'none',
   targetCount: 0,
   composerGroupId: 0,
   persistent: true,
@@ -1403,10 +1404,16 @@ function applyMusicalIdentityVisualToEnemy(enemyLike = null, groupLike = null) {
   const resolvedLane = String(lockedLane || colors?.lane || inferEnemyLaneFromRole(role, 'lead'));
   const existingVisualLane = String(group?.roleLane || enemy?.musicRoleLane || '').trim();
   const canonicalLeadIdentity = authoritativeLaneId === 'primary_loop_lane' && role === BEAT_EVENT_ROLES.LEAD;
+  const activeMusicModeForVisuals = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
+  const visualSupportContinuityActive = !explicitReorchestration
+    && !canonicalLeadIdentity
+    && (activeMusicModeForVisuals === 'lead_entry_merge' || activeMusicModeForVisuals === 'full_texture')
+    && existingVisualLane === 'accent'
+    && authoritativeLaneId !== 'primary_loop_lane';
   const preserveExistingVisual = !explicitReorchestration
     && !canonicalLeadIdentity
     && existingVisualLane
-    && existingVisualLane === resolvedLane;
+    && (existingVisualLane === resolvedLane || visualSupportContinuityActive);
   const resolvedBaseColor = preserveExistingVisual && String(enemy?.musicRoleColor || group?.roleColor || '').trim()
     ? String(enemy?.musicRoleColor || group?.roleColor || '').trim()
     : String(colors?.base || '');
@@ -15635,7 +15642,91 @@ function getRandomOffscreenSpawnClientPoint(marginPx = ENEMY_FALLBACK_SPAWN_MARG
 function getPerfEnemyRepeatTargetCount(enemyType = '') {
   return String(enemyType || '').trim().toLowerCase() === 'group' ? 8 : 1;
 }
-function createPerfComposerEnemyGroup() {
+function normalizePerfRepeatBehaviorId(value = '') {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'winding_chain' || raw === 'paired_dance' || raw === 'advancing_line') return raw;
+  return 'none';
+}
+function getPerfRepeatBehaviorSpec(behaviorId = 'none') {
+  const id = normalizePerfRepeatBehaviorId(behaviorId);
+  if (id === 'winding_chain') {
+    return {
+      behavioralFormationArchetype: 'winding_chain',
+      behavioralFormationClass: 'follow_the_leader',
+      behavioralFormationActivationMode: 'perf_lab',
+      behavioralFormationIntensity: 0.7,
+      behavioralFormationActive: true,
+      formationArchetype: 'lead_arc',
+      formationRole: 'lead_phrase',
+      formationSpawnRegion: 'upper_mid',
+      formationSpacingProfile: 'paired',
+      formationSymmetry: 'none',
+      formationPresentationWeight: 0.92,
+      formationMergeProtectionActive: false,
+      formationDesiredMemberCount: 8,
+    };
+  }
+  if (id === 'paired_dance') {
+    return {
+      behavioralFormationArchetype: 'paired_dance',
+      behavioralFormationClass: 'paired_motion',
+      behavioralFormationActivationMode: 'perf_lab',
+      behavioralFormationIntensity: 0.6,
+      behavioralFormationActive: false,
+      formationArchetype: 'backbeat_pair',
+      formationRole: 'counter_rhythm',
+      formationSpawnRegion: 'mid_side',
+      formationSpacingProfile: 'paired',
+      formationSymmetry: 'mirrored',
+      formationPresentationWeight: 0.88,
+      formationMergeProtectionActive: false,
+      formationDesiredMemberCount: 8,
+    };
+  }
+  if (id === 'advancing_line') {
+    return {
+      behavioralFormationArchetype: 'advancing_line',
+      behavioralFormationClass: 'lane_push',
+      behavioralFormationActivationMode: 'perf_lab',
+      behavioralFormationIntensity: 0.64,
+      behavioralFormationActive: false,
+      formationArchetype: 'foundation_anchor_line',
+      formationRole: 'foundation_groove',
+      formationSpawnRegion: 'lower_outer',
+      formationSpacingProfile: 'wide_line',
+      formationSymmetry: 'mirrored',
+      formationPresentationWeight: 0.84,
+      formationMergeProtectionActive: false,
+      formationDesiredMemberCount: 8,
+    };
+  }
+  return {
+    behavioralFormationArchetype: 'none',
+    behavioralFormationClass: 'none',
+    behavioralFormationActivationMode: 'inactive',
+    behavioralFormationIntensity: 0,
+    behavioralFormationActive: false,
+  };
+}
+function applyPerfRepeatBehaviorToEnemy(enemy, behaviorId = 'none') {
+  if (!enemy || typeof enemy !== 'object') return enemy;
+  const spec = getPerfRepeatBehaviorSpec(behaviorId);
+  enemy.behavioralFormationArchetype = spec.behavioralFormationArchetype;
+  enemy.behavioralFormationClass = spec.behavioralFormationClass;
+  enemy.behavioralFormationActivationMode = spec.behavioralFormationActivationMode;
+  enemy.behavioralFormationIntensity = spec.behavioralFormationIntensity;
+  enemy.behavioralFormationActive = spec.behavioralFormationActive === true;
+  if (spec.formationArchetype) enemy.formationArchetype = spec.formationArchetype;
+  if (spec.formationRole) enemy.formationRole = spec.formationRole;
+  if (spec.formationSpawnRegion) enemy.formationSpawnRegion = spec.formationSpawnRegion;
+  if (spec.formationSpacingProfile) enemy.formationSpacingProfile = spec.formationSpacingProfile;
+  if (spec.formationSymmetry) enemy.formationSymmetry = spec.formationSymmetry;
+  if (Number.isFinite(Number(spec.formationPresentationWeight))) enemy.formationPresentationWeight = Number(spec.formationPresentationWeight) || 0;
+  if (spec.formationMergeProtectionActive === true) enemy.formationMergeProtectionActive = true;
+  if (Number.isFinite(Number(spec.formationDesiredMemberCount))) enemy.formationDesiredMemberCount = Math.max(1, Math.trunc(Number(spec.formationDesiredMemberCount) || 1));
+  return enemy;
+}
+function createPerfComposerEnemyGroup(behaviorId = 'none') {
   const motif = createComposerEnemyGroupProfile(0, null) || {};
   const role = normalizeSwarmRole(motif?.role || BEAT_EVENT_ROLES.LEAD, BEAT_EVENT_ROLES.LEAD);
   const fallbackInstrument = resolveSwarmSoundInstrumentId('projectile') || 'tone';
@@ -15677,6 +15768,7 @@ function createPerfComposerEnemyGroup() {
     retiring: false,
     lifecycleState: 'active',
   };
+  applyPerfRepeatBehaviorToEnemy(group, behaviorId);
   assignMusicLaneIdentity({
     group,
     role,
@@ -15704,34 +15796,38 @@ function setPerfEnemyRepeatMode(enemyType = '', enabled = true, options = null) 
   const type = String(enemyType || '').trim().toLowerCase();
   const opts = options && typeof options === 'object' ? options : {};
   const persistent = opts.persistent !== false;
+  const behavior = normalizePerfRepeatBehaviorId(opts.behavior || 'none');
   if (!enabled || !type) {
     perfEnemyRepeatRuntime.enabled = false;
     perfEnemyRepeatRuntime.enemyType = '';
+    perfEnemyRepeatRuntime.behavior = 'none';
     perfEnemyRepeatRuntime.targetCount = 0;
     perfEnemyRepeatRuntime.composerGroupId = 0;
     perfEnemyRepeatRuntime.persistent = true;
     clearPendingEnemyDeaths();
     clearEnemies();
-    return { ok: true, enabled: false, enemyType: '', targetCount: 0, persistent: true };
+    return { ok: true, enabled: false, enemyType: '', behavior: 'none', targetCount: 0, persistent: true };
   }
   clearPendingEnemyDeaths();
   clearEnemies();
   perfEnemyRepeatRuntime.enabled = true;
   perfEnemyRepeatRuntime.enemyType = type;
+  perfEnemyRepeatRuntime.behavior = behavior;
   perfEnemyRepeatRuntime.targetCount = getPerfEnemyRepeatTargetCount(type);
   perfEnemyRepeatRuntime.composerGroupId = 0;
   perfEnemyRepeatRuntime.persistent = persistent;
   if (type === 'group') {
-    const group = createPerfComposerEnemyGroup();
+    const group = createPerfComposerEnemyGroup(behavior);
     perfEnemyRepeatRuntime.composerGroupId = Math.trunc(Number(group?.id) || 0);
     spawnComposerGroupOffscreenMembers(group, perfEnemyRepeatRuntime.targetCount);
   } else {
-    for (let i = 0; i < perfEnemyRepeatRuntime.targetCount; i++) spawnPerfEnemyType(type);
+    for (let i = 0; i < perfEnemyRepeatRuntime.targetCount; i++) spawnPerfEnemyType(type, behavior);
   }
   return {
     ok: true,
     enabled: true,
     enemyType: type,
+    behavior,
     targetCount: perfEnemyRepeatRuntime.targetCount,
     persistent,
   };
@@ -15758,9 +15854,10 @@ function maintainPerfEnemyRepeatMode() {
   if (targetType === 'group') {
     let group = composerEnemyGroups.find((g) => Math.trunc(Number(g?.id) || 0) === Math.trunc(Number(perfEnemyRepeatRuntime.composerGroupId) || 0)) || null;
     if (!group) {
-      group = createPerfComposerEnemyGroup();
+      group = createPerfComposerEnemyGroup(perfEnemyRepeatRuntime.behavior);
       perfEnemyRepeatRuntime.composerGroupId = Math.trunc(Number(group?.id) || 0);
     }
+    applyPerfRepeatBehaviorToEnemy(group, perfEnemyRepeatRuntime.behavior);
     group.active = true;
     group.retiring = false;
     group.lifecycleState = 'active';
@@ -15800,7 +15897,7 @@ function maintainPerfEnemyRepeatMode() {
     }
   }
   const aliveCount = Math.min(targetCount, aliveEnemies.length);
-  for (let i = aliveCount; i < targetCount; i++) spawnPerfEnemyType(targetType);
+  for (let i = aliveCount; i < targetCount; i++) spawnPerfEnemyType(targetType, perfEnemyRepeatRuntime.behavior);
   return true;
 }
 function spawnDrawSnakeEnemyAt(clientX, clientY, options = null) {
@@ -16009,14 +16106,24 @@ function spawnDrawSnakeEnemyOffscreen(options = null) {
   const point = getRandomOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
   return spawnDrawSnakeEnemyAt(point.x, point.y, options);
 }
-function spawnPerfEnemyType(enemyType = 'drawsnake') {
+function spawnPerfEnemyType(enemyType = 'drawsnake', behaviorId = 'none') {
   if (!active) return null;
   const type = String(enemyType || 'drawsnake').trim().toLowerCase();
-  if (type === 'drawsnake') return spawnDrawSnakeEnemyOffscreen({ role: 'lead' }) || null;
-  if (type === 'spawner') return spawnSpawnerEnemyOffscreen({ role: 'drum' }) || null;
+  if (type === 'drawsnake') {
+    const enemy = spawnDrawSnakeEnemyOffscreen({ role: 'lead' }) || null;
+    if (enemy) applyPerfRepeatBehaviorToEnemy(enemy, behaviorId);
+    return enemy;
+  }
+  if (type === 'spawner') {
+    const enemy = spawnSpawnerEnemyOffscreen({ role: 'drum' }) || null;
+    if (enemy) applyPerfRepeatBehaviorToEnemy(enemy, behaviorId);
+    return enemy;
+  }
   if (type === 'dumb') {
     const point = getRandomOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
-    return spawnEnemyAt(point.x, point.y) || null;
+    const enemy = spawnEnemyAt(point.x, point.y) || null;
+    if (enemy) applyPerfRepeatBehaviorToEnemy(enemy, behaviorId);
+    return enemy;
   }
   return null;
 }
@@ -18834,6 +18941,37 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
     const visualWeight = aliveMembers.length * presentationWeight * mergeBoost * soloBoost;
     roleWeights[roleId] += visualWeight;
   }
+  const aliveVisualEnemies = (Array.isArray(enemies) ? enemies : []).filter((enemy) => (
+    String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member'
+    && enemy?.retreating !== true
+  ));
+  if (roleWeights.foundation_groove < 0.85) {
+    let foundationFallbackWeight = 0;
+    for (const enemy of aliveVisualEnemies) {
+      if (String(enemy?.musicRoleLane || '').trim().toLowerCase() !== 'bass') continue;
+      foundationFallbackWeight += 0.45;
+    }
+    roleWeights.foundation_groove = Math.max(roleWeights.foundation_groove, foundationFallbackWeight);
+  }
+  if (roleWeights.counter_rhythm < 0.85) {
+    let supportFallbackWeight = 0;
+    for (const enemy of aliveVisualEnemies) {
+      const visualLane = String(enemy?.musicRoleLane || '').trim().toLowerCase();
+      const laneId = String(enemy?.musicLaneId || '').trim().toLowerCase();
+      if (visualLane !== 'accent') continue;
+      if (laneId === 'sparkle_lane') continue;
+      supportFallbackWeight += 0.55;
+    }
+    roleWeights.counter_rhythm = Math.max(roleWeights.counter_rhythm, supportFallbackWeight);
+  }
+  if (roleWeights.lead_phrase < 0.85) {
+    let leadFallbackWeight = 0;
+    for (const enemy of aliveVisualEnemies) {
+      if (String(enemy?.musicRoleLane || '').trim().toLowerCase() !== 'lead') continue;
+      leadFallbackWeight += 0.5;
+    }
+    roleWeights.lead_phrase = Math.max(roleWeights.lead_phrase, leadFallbackWeight);
+  }
   const readableRoles = Object.entries(roleWeights)
     .filter(([, weight]) => Number(weight) >= 0.85)
     .map(([roleId]) => roleId);
@@ -18962,6 +19100,7 @@ function maintainComposerEnemyGroups() {
   const currentBarIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
   const introStage = getUnifiedIntroStage(currentBarIndex, beatIndex);
   const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(currentBarIndex, beatIndex, introStage);
+  const activeEventSectionRuntime = evaluateBeatSwarmEventSectionRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime);
   const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime);
   evaluateBeatSwarmVisualRoleReadabilityRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime);
   const sessionAge = getBeatSwarmSessionAge(beatIndex);
@@ -18989,6 +19128,7 @@ function maintainComposerEnemyGroups() {
       enemies,
       musicModeRuntime: activeMusicModeRuntime,
       enemyDirectorRuntime: activeEnemyDirectorRuntime,
+      eventSectionRuntime: activeEventSectionRuntime,
     },
     constants: {
       composerGroupsEnabled: COMPOSER_GROUPS_ENABLED,
@@ -19714,6 +19854,7 @@ export function enterBeatSwarmMode(options = null) {
   perfLabRuntime.autoMovePhase = Math.random() * Math.PI * 2;
   perfEnemyRepeatRuntime.enabled = false;
   perfEnemyRepeatRuntime.enemyType = '';
+  perfEnemyRepeatRuntime.behavior = 'none';
   perfEnemyRepeatRuntime.targetCount = 0;
   perfEnemyRepeatRuntime.composerGroupId = 0;
   perfEnemyRepeatRuntime.persistent = true;
@@ -19896,6 +20037,7 @@ export function exitBeatSwarmMode() {
   if (!active) return true;
   perfEnemyRepeatRuntime.enabled = false;
   perfEnemyRepeatRuntime.enemyType = '';
+  perfEnemyRepeatRuntime.behavior = 'none';
   perfEnemyRepeatRuntime.targetCount = 0;
   perfEnemyRepeatRuntime.composerGroupId = 0;
   perfEnemyRepeatRuntime.persistent = true;

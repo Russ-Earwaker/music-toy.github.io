@@ -432,6 +432,14 @@ function ensureUI() {
           <option value="group">Composer Group</option>
         </select>
       </label>`,
+      `<label class="perf-lab-toggle">Behavior
+        <select class="perf-lab-select" data-music-spawn-behavior>
+          <option value="none">None</option>
+          <option value="winding_chain">Winding Chain</option>
+          <option value="paired_dance">Paired Dance</option>
+          <option value="advancing_line">Advancing Line</option>
+        </select>
+      </label>`,
       `<label class="perf-lab-toggle"><input type="checkbox" data-music-repeat-persistent checked /> Repeat enemy stays alive</label>`,
       btn('musicEnemyRepeatStart', 'Music: Start Repeat Spawn', 'primary'),
       btn('musicEnemyRepeatStop', 'Music: Stop Repeat Spawn'),
@@ -1099,11 +1107,13 @@ function ensureUI() {
 
     if (act === 'musicEnemyRepeatStart') {
       const typeEl = ov.querySelector('[data-music-spawn-type]');
+      const behaviorEl = ov.querySelector('[data-music-spawn-behavior]');
       const persistentEl = ov.querySelector('[data-music-repeat-persistent]');
       const enemyType = String(typeEl?.value || 'drawsnake').trim().toLowerCase() || 'drawsnake';
+      const behavior = String(behaviorEl?.value || 'none').trim().toLowerCase() || 'none';
       const persistent = persistentEl ? persistentEl.checked !== false : true;
-      const result = await startPerfMusicRepeatSpawn(enemyType, { persistent });
-      setStatus(result.ok ? `Music repeat spawn running: ${enemyType}` : 'Music repeat spawn failed');
+      const result = await startPerfMusicRepeatSpawn(enemyType, { persistent, behavior });
+      setStatus(result.ok ? `Music repeat spawn running: ${enemyType} (${behavior})` : 'Music repeat spawn failed');
       setOutput(result);
       return;
     }
@@ -3325,6 +3335,7 @@ async function startPerfMusicRepeatSpawn(enemyType = 'drawsnake', options = null
   const opts = options && typeof options === 'object' ? options : {};
   return dbg.setPerfEnemyRepeatMode(type, true, {
     persistent: opts.persistent !== false,
+    behavior: String(opts.behavior || 'none').trim().toLowerCase() || 'none',
   });
 }
 
@@ -3812,6 +3823,9 @@ function compactMusicLabPayloadForSave(payload = null) {
       || formationArchetype === 'syncopation_stair'
       || formationArchetype === 'lead_arc'
       || formationArchetype === 'answer_echo'
+      || String(item.behavioralFormationArchetype || '').trim().toLowerCase() === 'winding_chain'
+      || String(item.behavioralFormationArchetype || '').trim().toLowerCase() === 'paired_dance'
+      || String(item.behavioralFormationArchetype || '').trim().toLowerCase() === 'advancing_line'
     );
     if (!keepComposerState) continue;
     const groupId = Number(item.groupId) || 0;
@@ -3870,6 +3884,11 @@ function compactMusicLabPayloadForSave(payload = null) {
       formationPresentationWeight: Number(item.formationPresentationWeight) || 0,
       formationMergeProtectionActive: item.formationMergeProtectionActive === true,
       formationDesiredMemberCount: Number(item.formationDesiredMemberCount) || 0,
+      behavioralFormationArchetype: String(item.behavioralFormationArchetype || '').trim().toLowerCase(),
+      behavioralFormationClass: String(item.behavioralFormationClass || '').trim().toLowerCase(),
+      behavioralFormationActivationMode: String(item.behavioralFormationActivationMode || '').trim().toLowerCase(),
+      behavioralFormationIntensity: Number(item.behavioralFormationIntensity) || 0,
+      behavioralFormationActive: item.behavioralFormationActive === true,
     });
   }
   const compactSystemEvents = focusedSystemEvents.slice(-320);

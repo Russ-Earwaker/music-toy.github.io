@@ -44,6 +44,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
     ? state.musicModeRuntime
     : null;
+  const eventSectionRuntime = state.eventSectionRuntime && typeof state.eventSectionRuntime === 'object'
+    ? state.eventSectionRuntime
+    : null;
   const sanitizeEnemyMusicInstrumentId = typeof helpers.sanitizeEnemyMusicInstrumentId === 'function'
     ? helpers.sanitizeEnemyMusicInstrumentId
     : ((instrumentId, fallback) => helpers.resolveInstrumentIdOrFallback?.(instrumentId, fallback) || fallback || 'tone');
@@ -105,6 +108,8 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     const formationRuntime = buildBeatSwarmFormationRuntime({
       group,
       activeMusicMode: String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase(),
+      introStage,
+      activeEventSection: String(eventSectionRuntime?.activeEventSection || '').trim().toLowerCase(),
       runSeed: sessionSeed,
       barIndex: currentBarIndex,
       carrierType: getGroupFormationCarrierType(group),
@@ -2617,6 +2622,20 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
               note: Array.isArray(created?.notes) && created.notes.length ? String(created.notes[0] || '').trim() : '',
               reason: String(created?.introSlotProfileSourceType || created?.musicProfileSourceType || '').trim().toLowerCase(),
               stage: buildStepSignature(created?.introSlotSteps || created?.steps),
+              formationRole: String(created?.formationRole || '').trim().toLowerCase(),
+              formationArchetype: String(created?.formationArchetype || '').trim().toLowerCase(),
+              formationStyleFamily: String(created?.formationStyleFamily || '').trim().toLowerCase(),
+              formationSpawnRegion: String(created?.formationSpawnRegion || '').trim().toLowerCase(),
+              formationSpacingProfile: String(created?.formationSpacingProfile || '').trim().toLowerCase(),
+              formationSymmetry: String(created?.formationSymmetry || '').trim().toLowerCase(),
+              formationPresentationWeight: Number(created?.formationPresentationWeight) || 0,
+              formationMergeProtectionActive: created?.formationMergeProtectionActive === true,
+              formationDesiredMemberCount: Math.max(1, Math.trunc(Number(created?.formationDesiredMemberCount) || 1)),
+              behavioralFormationArchetype: String(created?.behavioralFormationArchetype || '').trim().toLowerCase(),
+              behavioralFormationClass: String(created?.behavioralFormationClass || '').trim().toLowerCase(),
+              behavioralFormationActivationMode: String(created?.behavioralFormationActivationMode || '').trim().toLowerCase(),
+              behavioralFormationIntensity: Number(created?.behavioralFormationIntensity) || 0,
+              behavioralFormationActive: created?.behavioralFormationActive === true,
               ...(leadCreationDebugPayload || {}),
             }, {
               beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
@@ -3105,6 +3124,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             formationPresentationWeight: Number(group?.formationPresentationWeight) || 0,
             formationMergeProtectionActive: group?.formationMergeProtectionActive === true,
             formationDesiredMemberCount: Math.max(1, Math.trunc(Number(group?.formationDesiredMemberCount) || 1)),
+            behavioralFormationArchetype: String(group?.behavioralFormationArchetype || '').trim().toLowerCase(),
+            behavioralFormationClass: String(group?.behavioralFormationClass || '').trim().toLowerCase(),
+            behavioralFormationActivationMode: String(group?.behavioralFormationActivationMode || '').trim().toLowerCase(),
+            behavioralFormationIntensity: Number(group?.behavioralFormationIntensity) || 0,
+            behavioralFormationActive: group?.behavioralFormationActive === true,
           }, {
             beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
           });
@@ -3136,6 +3160,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           formationPresentationWeight: Number(group?.formationPresentationWeight) || 0,
           formationMergeProtectionActive: group?.formationMergeProtectionActive === true,
           formationDesiredMemberCount: Math.max(1, Math.trunc(Number(group?.formationDesiredMemberCount) || 1)),
+          behavioralFormationArchetype: String(group?.behavioralFormationArchetype || '').trim().toLowerCase(),
+          behavioralFormationClass: String(group?.behavioralFormationClass || '').trim().toLowerCase(),
+          behavioralFormationActivationMode: String(group?.behavioralFormationActivationMode || '').trim().toLowerCase(),
+          behavioralFormationIntensity: Number(group?.behavioralFormationIntensity) || 0,
+          behavioralFormationActive: group?.behavioralFormationActive === true,
         }, {
           beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
         });

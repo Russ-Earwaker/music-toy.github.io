@@ -1,4 +1,8 @@
 import { getBeatSwarmFormationArchetype } from './beat-swarm-formations.js';
+import {
+  applyBeatSwarmBehavioralFormationRuntime,
+  selectBeatSwarmBehavioralFormationForRole,
+} from './beat-swarm-behavioral-formations.js';
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
@@ -132,6 +136,13 @@ export function buildBeatSwarmFormationRuntime(options = null) {
     barIndex: opts.barIndex,
     carrierType: opts.carrierType,
   });
+  const behavioralSelection = selectBeatSwarmBehavioralFormationForRole({
+    role,
+    group,
+    activeMusicMode: opts.activeMusicMode,
+    introStage: opts.introStage,
+    activeEventSection: opts.activeEventSection,
+  });
   return Object.freeze({
     role,
     formationArchetype: selection.formationArchetype,
@@ -142,6 +153,11 @@ export function buildBeatSwarmFormationRuntime(options = null) {
     presentationWeight: selection.presentationWeight,
     mergeProtectionActive: selection.mergeProtectionActive === true,
     desiredMemberCount: Math.max(1, Math.trunc(Number(selection.desiredMemberCount) || 1)),
+    behavioralFormationArchetype: String(behavioralSelection.behavioralFormationArchetype || 'none').trim().toLowerCase(),
+    behavioralFormationClass: String(behavioralSelection.behavioralFormationClass || 'none').trim().toLowerCase(),
+    behavioralFormationActivationMode: String(behavioralSelection.behavioralFormationActivationMode || 'inactive').trim().toLowerCase(),
+    behavioralFormationIntensity: Number(behavioralSelection.behavioralFormationIntensity) || 0,
+    behavioralFormationActive: behavioralSelection.behavioralFormationActive === true,
   });
 }
 
@@ -158,5 +174,6 @@ export function applyBeatSwarmFormationRuntime(groupLike = null, formationLike =
   group.formationPresentationWeight = clamp01(formation.presentationWeight);
   group.formationMergeProtectionActive = formation.mergeProtectionActive === true;
   group.formationDesiredMemberCount = Math.max(1, Math.trunc(Number(formation.desiredMemberCount) || 1));
+  applyBeatSwarmBehavioralFormationRuntime(group, formation);
   return group;
 }

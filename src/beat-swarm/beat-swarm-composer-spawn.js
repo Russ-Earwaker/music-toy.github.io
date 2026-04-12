@@ -43,12 +43,21 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
   const formationArchetype = String(group?.formationArchetype || '').trim().toLowerCase();
   const formationRole = String(group?.formationRole || '').trim().toLowerCase();
   const formationStyleFamily = String(group?.formationStyleFamily || '').trim().toLowerCase();
+  const behavioralFormationArchetype = String(group?.behavioralFormationArchetype || '').trim().toLowerCase();
+  const behavioralFormationClass = String(group?.behavioralFormationClass || '').trim().toLowerCase();
+  const behavioralFormationActivationMode = String(group?.behavioralFormationActivationMode || '').trim().toLowerCase();
   if (formationArchetype) {
     el.classList.add(`is-formation-${formationArchetype.replace(/[^a-z0-9_-]/g, '-')}`);
     el.dataset.formationArchetype = formationArchetype;
   }
   if (formationRole) el.dataset.formationRole = formationRole;
   if (formationStyleFamily) el.dataset.formationStyleFamily = formationStyleFamily;
+  if (behavioralFormationArchetype && behavioralFormationArchetype !== 'none') {
+    el.classList.add(`is-behavioral-formation-${behavioralFormationArchetype.replace(/[^a-z0-9_-]/g, '-')}`);
+    el.dataset.behavioralFormationArchetype = behavioralFormationArchetype;
+  }
+  if (behavioralFormationClass && behavioralFormationClass !== 'none') el.dataset.behavioralFormationClass = behavioralFormationClass;
+  if (behavioralFormationActivationMode && behavioralFormationActivationMode !== 'inactive') el.dataset.behavioralFormationActivationMode = behavioralFormationActivationMode;
   const hpWrap = document.createElement('div');
   hpWrap.className = 'beat-swarm-enemy-hp';
   const hpFill = document.createElement('div');
@@ -101,7 +110,12 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     composerActionPulseDur: actionPulseSeconds * (isSoloCarrier ? 1.45 : 1.15),
     composerActionPulseScale: isSoloCarrier ? 0.24 : 0.26,
     composerRole: groupRole,
-    enemySpeedMultiplier: isSoloCarrier ? 0.82 : 1,
+    enemySpeedMultiplier: (
+      String(group?.behavioralFormationArchetype || '').trim().toLowerCase() === 'winding_chain'
+      && group?.behavioralFormationActive === true
+    )
+      ? (isSoloCarrier ? 1.25 : 1.7)
+      : (isSoloCarrier ? 0.82 : 1),
     soloCarrierType,
     introStageCarrier: group?.introStageCarrier === true,
     introCarrierBodyType: String(group?.introCarrierBodyType || '').trim().toLowerCase(),
@@ -124,6 +138,11 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     formationPresentationWeight: Number(group?.formationPresentationWeight) || 0,
     formationMergeProtectionActive: group?.formationMergeProtectionActive === true,
     formationDesiredMemberCount: Math.max(1, Math.trunc(Number(group?.formationDesiredMemberCount) || 1)),
+    behavioralFormationArchetype,
+    behavioralFormationClass,
+    behavioralFormationActivationMode,
+    behavioralFormationIntensity: Number(group?.behavioralFormationIntensity) || 0,
+    behavioralFormationActive: group?.behavioralFormationActive === true,
     formationMemberIndex,
     formationMemberCount,
     callResponseLane: String(group?.callResponseLane || '').trim().toLowerCase(),

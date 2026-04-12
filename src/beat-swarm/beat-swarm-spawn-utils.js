@@ -40,6 +40,8 @@ export function getRandomOffscreenSpawnPointRuntime(options = null) {
   const m = Math.max(8, Number(constants.enemyFallbackSpawnMarginPx) || 42);
   const formationSpawnRegion = String(group?.formationSpawnRegion || '').trim().toLowerCase();
   const formationArchetype = String(group?.formationArchetype || '').trim().toLowerCase();
+  const behavioralFormationArchetype = String(group?.behavioralFormationArchetype || '').trim().toLowerCase();
+  const behavioralFormationActive = group?.behavioralFormationActive === true;
   const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
   const seed = Math.abs((groupId * 31) + (memberCount * 7) + memberIndex);
   const sideBias = seed % 2;
@@ -50,6 +52,16 @@ export function getRandomOffscreenSpawnPointRuntime(options = null) {
     ? helpers.randRange
     : ((min, max) => min + (Math.random() * (max - min)));
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+  if (behavioralFormationActive && behavioralFormationArchetype === 'winding_chain') {
+    const fromLeft = (groupId % 2) === 0;
+    const baseY = h * 0.24;
+    const chainOffset = memberIndex * Math.max(8, Math.round(offsetUnit * 0.24));
+    return {
+      x: fromLeft ? -m : (w + m),
+      y: clamp(baseY + chainOffset, h * 0.16, h * 0.42),
+    };
+  }
 
   if (formationSpawnRegion === 'lower_outer' || formationArchetype === 'foundation_anchor_line') {
     const fromLeft = sideBias === 0;

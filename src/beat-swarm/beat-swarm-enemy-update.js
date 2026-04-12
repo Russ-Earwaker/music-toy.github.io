@@ -1,3 +1,5 @@
+import { buildBeatSwarmBehavioralFormationEnemyRuntime } from './beat-swarm-behavioral-runtime.js';
+
 function getFormationAnchorWorldRuntime(enemy, helpers) {
   if (String(enemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') return null;
   if (enemy?.retreating) return null;
@@ -76,6 +78,100 @@ function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
   };
 }
 
+function resolveWindingChainLeaderRuntime(enemy, enemies) {
+  const groupId = Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0));
+  if (!(groupId > 0)) return null;
+  let leader = null;
+  for (let i = 0; i < enemies.length; i++) {
+    const candidate = enemies[i];
+    if (!candidate || candidate === enemy) continue;
+    if (String(candidate?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') continue;
+    const candidateGroupId = Math.max(0, Math.trunc(Number(candidate?.composerGroupId || candidate?.musicGroupId) || 0));
+    if (candidateGroupId !== groupId) continue;
+    if (candidate?.behavioralFormationActive !== true) continue;
+    if (String(candidate?.behavioralFormationArchetype || '').trim().toLowerCase() !== 'winding_chain') continue;
+    if (candidate?.retreating) continue;
+    if (!leader || Math.trunc(Number(candidate?.formationMemberIndex) || 0) < Math.trunc(Number(leader?.formationMemberIndex) || 0)) {
+      leader = candidate;
+    }
+  }
+  return leader;
+}
+
+function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, state, constants) {
+  const runtime = enemy?.behavioralFormationRuntime && typeof enemy.behavioralFormationRuntime === 'object'
+    ? enemy.behavioralFormationRuntime
+    : null;
+  if (!runtime || runtime.active !== true) return null;
+  if (runtime.behaviorClass !== 'follow_the_leader' || runtime.archetype !== 'winding_chain') return null;
+  const enemyMaxSpeed = Math.max(40, Number(constants?.enemyMaxSpeed) || 0);
+  const speedMultiplier = Math.max(1, Number(runtime?.speedMultiplier) || 1);
+  const desiredSpeed = enemyMaxSpeed * speedMultiplier;
+  if ((Number(runtime?.leaderBias) || 0) >= 0.999) {
+    const phase = (Number(enemy?.behavioralFormationPhase) || 0) + ((Number(state?.dt) || 0) * Math.PI * 2 * Math.max(0.05, Number(runtime?.pathOscillationHz) || 0.55));
+    enemy.behavioralFormationPhase = phase;
+    const toCenterX = Number(centerWorld?.x) - Number(enemy?.wx);
+    const toCenterY = Number(centerWorld?.y) - Number(enemy?.wy);
+    const toCenterLen = Math.hypot(toCenterX, toCenterY) || 1;
+    const dirX = toCenterX / toCenterLen;
+    const dirY = toCenterY / toCenterLen;
+    const normalX = -dirY;
+    const normalY = dirX;
+    const wave = Math.sin(phase) * Math.max(0.1, Math.min(1, Number(runtime?.pathOscillationAmplitude) || 0.5));
+    const desiredDirX = dirX + (normalX * wave);
+    const desiredDirY = dirY + (normalY * wave);
+    const desiredDirLen = Math.hypot(desiredDirX, desiredDirY) || 1;
+    return {
+      overrideVelocity: true,
+      desiredVx: (desiredDirX / desiredDirLen) * desiredSpeed,
+      desiredVy: (desiredDirY / desiredDirLen) * desiredSpeed,
+      blend: Math.max(0.12, Math.min(0.45, Number(runtime?.velocityBlend) || 0.34)),
+    };
+  }
+  const groupId = Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0));
+  if (!(groupId > 0)) return null;
+  const members = [];
+  for (let i = 0; i < enemies.length; i++) {
+    const candidate = enemies[i];
+    if (!candidate) continue;
+    const candidateGroupId = Math.max(0, Math.trunc(Number(candidate?.composerGroupId || candidate?.musicGroupId) || 0));
+    if (candidateGroupId !== groupId) continue;
+    if (candidate?.behavioralFormationActive !== true) continue;
+    if (String(candidate?.behavioralFormationArchetype || '').trim().toLowerCase() !== 'winding_chain') continue;
+    if (candidate?.retreating) continue;
+    members.push(candidate);
+  }
+  members.sort((a, b) => Math.trunc(Number(a?.formationMemberIndex) || 0) - Math.trunc(Number(b?.formationMemberIndex) || 0));
+  const slotIndex = Math.max(0, Math.trunc(Number(runtime?.slotIndex) || 0));
+  const predecessor = slotIndex > 0 ? (members[slotIndex - 1] || resolveWindingChainLeaderRuntime(enemy, enemies)) : null;
+  if (!predecessor) return null;
+  const prevVx = Number(predecessor?.vx) || 0;
+  const prevVy = Number(predecessor?.vy) || 0;
+  const prevSpeed = Math.hypot(prevVx, prevVy) || 1;
+  const dirX = prevSpeed > 0.0001 ? (prevVx / prevSpeed) : 0;
+  const dirY = prevSpeed > 0.0001 ? (prevVy / prevSpeed) : -1;
+  const normalX = -dirY;
+  const normalY = dirX;
+  const targetX = Number(predecessor?.wx)
+    - (dirX * Math.max(12, Number(runtime?.followDistanceWorld) || 0))
+    + (normalX * (Number(runtime?.lateralOffsetWorld) || 0));
+  const targetY = Number(predecessor?.wy)
+    - (dirY * Math.max(12, Number(runtime?.followDistanceWorld) || 0))
+    + (normalY * (Number(runtime?.lateralOffsetWorld) || 0));
+  const followDx = targetX - Number(enemy?.wx);
+  const followDy = targetY - Number(enemy?.wy);
+  const followLen = Math.hypot(followDx, followDy) || 1;
+  const desiredDirX = ((followDx / followLen) * 0.75) + (dirX * 0.25);
+  const desiredDirY = ((followDy / followLen) * 0.75) + (dirY * 0.25);
+  const desiredDirLen = Math.hypot(desiredDirX, desiredDirY) || 1;
+  return {
+    overrideVelocity: true,
+    desiredVx: (desiredDirX / desiredDirLen) * desiredSpeed * Math.max(0.9, 1 - (slotIndex * 0.04)),
+    desiredVy: (desiredDirY / desiredDirLen) * desiredSpeed * Math.max(0.9, 1 - (slotIndex * 0.04)),
+    blend: Math.max(0.18, Math.min(0.5, (Number(runtime?.velocityBlend) || 0.34) + 0.08)),
+  };
+}
+
 export function updateBeatSwarmEnemiesRuntime(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
@@ -118,6 +214,18 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     const enemyType = String(e?.enemyType || '');
     const lifecycleState = helpers.normalizeMusicLifecycleState?.(e?.lifecycleState || 'active', 'active');
     const eventSectionVisual = getEventSectionVisualRuntime(e, eventSectionRuntime);
+    const behavioralFormationRuntime = buildBeatSwarmBehavioralFormationEnemyRuntime({ enemy: e, helpers, state });
+    e.behavioralFormationRuntime = behavioralFormationRuntime;
+    e.behavioralFormationLeaderBias = Number(behavioralFormationRuntime?.leaderBias) || 0;
+    e.behavioralFormationFollowDistanceWorld = Number(behavioralFormationRuntime?.followDistanceWorld) || 0;
+    e.behavioralFormationLateralOffsetWorld = Number(behavioralFormationRuntime?.lateralOffsetWorld) || 0;
+    if (behavioralFormationRuntime?.targetWorld && typeof behavioralFormationRuntime.targetWorld === 'object') {
+      e.behavioralFormationTargetX = Number(behavioralFormationRuntime.targetWorld.x) || 0;
+      e.behavioralFormationTargetY = Number(behavioralFormationRuntime.targetWorld.y) || 0;
+    } else {
+      e.behavioralFormationTargetX = 0;
+      e.behavioralFormationTargetY = 0;
+    }
     const participationGain = Math.max(0, Math.min(1, Number(e?.musicParticipationGain == null ? 1 : e.musicParticipationGain)));
     const introSlotProfile = String(e?.introSlotProfileSourceType || '').trim().toLowerCase();
     const isIntroSlotCarrier = introSlotProfile === 'spawner_rhythm_pulse'
@@ -301,6 +409,14 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
           ay += (anchorDy / anchorDist) * anchorForce;
         }
       }
+    }
+    const behavioralMotion = resolveBehavioralFormationMotionRuntime(e, enemies, centerWorld, state, constants);
+    if (behavioralMotion?.overrideVelocity === true) {
+      const blend = Math.max(0.08, Math.min(0.5, Number(behavioralMotion.blend) || 0.3));
+      e.vx += ((Number(behavioralMotion.desiredVx) || 0) - (Number(e.vx) || 0)) * blend;
+      e.vy += ((Number(behavioralMotion.desiredVy) || 0) - (Number(e.vy) || 0)) * blend;
+      ax *= 0.2;
+      ay *= 0.2;
     }
     e.vx += ax * (Number(state.dt) || 0);
     e.vy += ay * (Number(state.dt) || 0);
