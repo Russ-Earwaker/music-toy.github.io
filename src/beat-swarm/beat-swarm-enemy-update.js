@@ -1,3 +1,81 @@
+function getFormationAnchorWorldRuntime(enemy, helpers) {
+  if (String(enemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') return null;
+  if (enemy?.retreating) return null;
+  const formationArchetype = String(enemy?.formationArchetype || '').trim().toLowerCase();
+  const formationSpawnRegion = String(enemy?.formationSpawnRegion || '').trim().toLowerCase();
+  if (!formationArchetype && !formationSpawnRegion) return null;
+  const introOrMergeProtected = enemy?.introStageCarrier === true || enemy?.formationMergeProtectionActive === true;
+  if (!introOrMergeProtected) return null;
+  const screenToWorld = typeof helpers?.screenToWorld === 'function' ? helpers.screenToWorld : null;
+  if (!screenToWorld) return null;
+
+  const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
+  const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
+  const memberIndex = Math.max(0, Math.trunc(Number(enemy?.formationMemberIndex) || 0));
+  const memberCount = Math.max(1, Math.trunc(Number(enemy?.formationMemberCount) || 1));
+  const centeredIndex = memberIndex - ((memberCount - 1) * 0.5);
+  const xStep = Math.max(18, Math.round(screenW * 0.055));
+  const yStep = Math.max(14, Math.round(screenH * 0.05));
+  let targetX = screenW * 0.5;
+  let targetY = screenH * 0.5;
+
+  if (formationSpawnRegion === 'lower_outer' || formationArchetype === 'foundation_anchor_line') {
+    const laneSide = memberCount <= 1 ? 0 : (centeredIndex < 0 ? -1 : 1);
+    targetX = screenW * (laneSide < 0 ? 0.28 : (laneSide > 0 ? 0.72 : 0.5)) + (centeredIndex * (xStep * 0.45));
+    targetY = (screenH * 0.78) - (Math.abs(centeredIndex) * (yStep * 0.2));
+  } else if (formationSpawnRegion === 'mid_side' || formationArchetype === 'backbeat_pair') {
+    const laneSide = memberCount <= 1 ? 0 : (centeredIndex < 0 ? -1 : 1);
+    targetX = screenW * (laneSide < 0 ? 0.24 : (laneSide > 0 ? 0.76 : 0.5));
+    targetY = (screenH * 0.5) + (centeredIndex * (yStep * 0.65));
+  } else if (formationSpawnRegion === 'side_diagonal' || formationArchetype === 'syncopation_stair') {
+    const laneSide = memberCount <= 1 ? 0 : (centeredIndex < 0 ? -1 : 1);
+    targetX = screenW * (laneSide < 0 ? 0.2 : (laneSide > 0 ? 0.8 : 0.5));
+    targetY = (screenH * 0.34) + (memberIndex * (yStep * 0.9));
+  } else if (formationSpawnRegion === 'upper_mid' || formationArchetype === 'lead_arc') {
+    targetX = (screenW * 0.5) + (centeredIndex * xStep);
+    targetY = (screenH * 0.22) + (Math.abs(centeredIndex) * (yStep * 0.18));
+  } else if (formationSpawnRegion === 'lead_reply_edge' || formationArchetype === 'answer_echo') {
+    const laneSide = memberCount <= 1 ? 1 : (centeredIndex <= 0 ? -1 : 1);
+    targetX = screenW * (laneSide < 0 ? 0.22 : 0.78);
+    targetY = (screenH * 0.28) + (centeredIndex * (yStep * 0.5));
+  } else {
+    return null;
+  }
+
+  return screenToWorld({
+    x: Math.max(24, Math.min(screenW - 24, targetX)),
+    y: Math.max(24, Math.min(screenH - 24, targetY)),
+  });
+}
+
+function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
+  const activeEventSection = String(eventSectionRuntime?.activeEventSection || '').trim().toLowerCase();
+  if (activeEventSection !== 'beat_bounce') {
+    return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
+  }
+  if (String(enemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') {
+    return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
+  }
+  const role = String(enemy?.formationRole || '').trim().toLowerCase();
+  const musicLaneId = String(enemy?.musicLaneId || '').trim().toLowerCase();
+  const eligibleRoles = Array.isArray(eventSectionRuntime?.eligibleRoles) ? eventSectionRuntime.eligibleRoles : [];
+  const roleEligible = eligibleRoles.length <= 0
+    || eligibleRoles.includes(role)
+    || (musicLaneId === 'foundation_lane' && eligibleRoles.includes('foundation_groove'))
+    || (musicLaneId === 'secondary_loop_lane' && eligibleRoles.includes('counter_rhythm'))
+    || (musicLaneId === 'primary_loop_lane' && eligibleRoles.includes('lead_phrase'));
+  if (!roleEligible) return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
+  const strongBeatActive = eventSectionRuntime?.strongBeatActive === true;
+  if (!strongBeatActive) return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
+  const presentationWeight = Math.max(0.5, Number(enemy?.formationPresentationWeight) || 0.7);
+  const pulseScale = Math.max(0, Number(eventSectionRuntime?.presentationPulseScale) || 0);
+  return {
+    velocityDamping: Math.max(0.82, Math.min(1, Number(eventSectionRuntime?.motionDamping) || 1)),
+    scaleBias: 1 + (pulseScale * presentationWeight),
+    offsetYPx: -(6 * presentationWeight),
+  };
+}
+
 export function updateBeatSwarmEnemiesRuntime(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
@@ -13,6 +91,9 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
   const offscreenRemovePad = 80;
   const offscreenGraceSeconds = 2.4;
   const frameIndex = Math.max(0, Math.trunc(Number(state.frameIndex) || 0));
+  const eventSectionRuntime = state?.eventSectionRuntime && typeof state.eventSectionRuntime === 'object'
+    ? state.eventSectionRuntime
+    : null;
   const projectileCount = Math.max(0, Math.trunc(Number(state.projectileCount) || 0));
   const effectCount = Math.max(0, Math.trunc(Number(state.effectCount) || 0));
   const liveObjectPressure = enemies.length + projectileCount + effectCount;
@@ -36,6 +117,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     }
     const enemyType = String(e?.enemyType || '');
     const lifecycleState = helpers.normalizeMusicLifecycleState?.(e?.lifecycleState || 'active', 'active');
+    const eventSectionVisual = getEventSectionVisualRuntime(e, eventSectionRuntime);
     const participationGain = Math.max(0, Math.min(1, Number(e?.musicParticipationGain == null ? 1 : e.musicParticipationGain)));
     const introSlotProfile = String(e?.introSlotProfileSourceType || '').trim().toLowerCase();
     const isIntroSlotCarrier = introSlotProfile === 'spawner_rhythm_pulse'
@@ -90,6 +172,10 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       const blend = Math.max(0, Math.min(1, (Number(state.dt) || 0) * 2.2));
       e.vx += (((Number(away.x) || 0) * retreatSpeed) - (Number(e.vx) || 0)) * blend;
       e.vy += (((Number(away.y) || 0) * retreatSpeed) - (Number(e.vy) || 0)) * blend;
+      if ((Number(eventSectionVisual.velocityDamping) || 1) < 0.999) {
+        e.vx *= eventSectionVisual.velocityDamping;
+        e.vy *= eventSectionVisual.velocityDamping;
+      }
       e.wx += (Number(e.vx) || 0) * (Number(state.dt) || 0);
       e.wy += (Number(e.vy) || 0) * (Number(state.dt) || 0);
       const s = helpers.worldToScreen?.({ x: e.wx, y: e.wy });
@@ -112,7 +198,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         e.spawnT = Math.min(Number(e.spawnDur) || 0.14, (Number(e.spawnT) || 0) + (Number(state.dt) || 0));
         const spawnScale = enemyType === 'drawsnake' ? 1 : (helpers.getEnemySpawnScale?.(e) || 1);
         const rolePulseScale = resolveRolePulseScale();
-        e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${(spawnScale * rolePulseScale).toFixed(3)})`;
+        e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * rolePulseScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})`;
       }
       if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
       if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {
@@ -202,9 +288,26 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         ax += (repelX / repelLen) * force;
         ay += (repelY / repelLen) * force;
       }
+      const anchorWorld = getFormationAnchorWorldRuntime(e, helpers);
+      if (anchorWorld && Number.isFinite(anchorWorld.x) && Number.isFinite(anchorWorld.y)) {
+        const anchorDx = Number(anchorWorld.x) - Number(e.wx);
+        const anchorDy = Number(anchorWorld.y) - Number(e.wy);
+        const anchorDist = Math.hypot(anchorDx, anchorDy);
+        if (anchorDist > 0.0001) {
+          const presentationWeight = Math.max(0.2, Number(e?.formationPresentationWeight) || 0.6);
+          const introBiasScale = e?.introStageCarrier === true ? 1 : 0.72;
+          const anchorForce = Math.max(0, Number(constants.enemyAccel) || 0) * 0.18 * presentationWeight * introBiasScale;
+          ax += (anchorDx / anchorDist) * anchorForce;
+          ay += (anchorDy / anchorDist) * anchorForce;
+        }
+      }
     }
     e.vx += ax * (Number(state.dt) || 0);
     e.vy += ay * (Number(state.dt) || 0);
+    if ((Number(eventSectionVisual.velocityDamping) || 1) < 0.999) {
+      e.vx *= eventSectionVisual.velocityDamping;
+      e.vy *= eventSectionVisual.velocityDamping;
+    }
     const speed = Math.hypot(e.vx, e.vy);
     const maxSpeed = (Number(constants.enemyMaxSpeed) || 0) * speedMult;
     if (speed > maxSpeed) {
@@ -353,7 +456,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
           e.soloPulseDebugLastLoggedT = 0;
         }
       }
-      e.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${(spawnScale * actionScale * rolePulseScale).toFixed(3)})`;
+      e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})`;
     }
     if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
     if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {

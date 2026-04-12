@@ -3756,13 +3756,62 @@ function compactMusicLabPayloadForSave(payload = null) {
       });
       continue;
     }
+    if (eventType === 'music_event_section_state') {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        activeEventSection: String(payload.activeEventSection || '').trim().toLowerCase(),
+        eventBehaviorClass: String(payload.eventBehaviorClass || '').trim().toLowerCase(),
+        enteredBar: Number(payload.enteredBar) || -1,
+        endBar: Number(payload.endBar) || -1,
+        strongBeatActive: payload.strongBeatActive === true,
+        motionDamping: Number(payload.motionDamping) || 0,
+        agitationBoost: Number(payload.agitationBoost) || 0,
+        presentationPulseScale: Number(payload.presentationPulseScale) || 0,
+        eligibleRoles: Array.isArray(payload.eligibleRoles) ? payload.eligibleRoles.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+      });
+      continue;
+    }
+    if (eventType === 'music_visual_role_readability_state') {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        readableRoles: Array.isArray(payload.readableRoles) ? payload.readableRoles.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+        distinctReadableRoleCount: Number(payload.distinctReadableRoleCount) || 0,
+        foundationVisualWeight: Number(payload.foundationVisualWeight) || 0,
+        supportVisualWeight: Number(payload.supportVisualWeight) || 0,
+        leadVisualWeight: Number(payload.leadVisualWeight) || 0,
+        ornamentVisualWeight: Number(payload.ornamentVisualWeight) || 0,
+        supportCollapsedDuringLead: payload.supportCollapsedDuringLead === true,
+        leadWithSupportVisible: payload.leadWithSupportVisible === true,
+        threeRoleReadable: payload.threeRoleReadable === true,
+      });
+      continue;
+    }
     if (eventType !== 'music_composer_group_state') continue;
     const reason = String(item.reason || '').trim().toLowerCase();
     const templateId = String(item.templateId || '').trim();
+    const formationArchetype = String(item.formationArchetype || '').trim().toLowerCase();
     const keepComposerState = (
       reason === 'lead_melody'
       || reason === 'answer_ornament'
+      || reason === 'secondary_bridge_backbeat'
+      || reason === 'spawner_rhythm_pulse'
+      || reason === 'spawner_rhythm_backbeat'
       || templateId === 'foundation-buffer'
+      || formationArchetype === 'foundation_anchor_line'
+      || formationArchetype === 'backbeat_pair'
+      || formationArchetype === 'syncopation_stair'
+      || formationArchetype === 'lead_arc'
+      || formationArchetype === 'answer_echo'
     );
     if (!keepComposerState) continue;
     const groupId = Number(item.groupId) || 0;
@@ -3812,6 +3861,15 @@ function compactMusicLabPayloadForSave(payload = null) {
       instrumentId: String(item.instrumentId || '').trim(),
       note: String(item.note || '').trim(),
       stage: String(item.stage || '').trim().toLowerCase(),
+      formationRole: String(item.formationRole || '').trim().toLowerCase(),
+      formationArchetype,
+      formationStyleFamily: String(item.formationStyleFamily || '').trim().toLowerCase(),
+      formationSpawnRegion: String(item.formationSpawnRegion || '').trim().toLowerCase(),
+      formationSpacingProfile: String(item.formationSpacingProfile || '').trim().toLowerCase(),
+      formationSymmetry: String(item.formationSymmetry || '').trim().toLowerCase(),
+      formationPresentationWeight: Number(item.formationPresentationWeight) || 0,
+      formationMergeProtectionActive: item.formationMergeProtectionActive === true,
+      formationDesiredMemberCount: Number(item.formationDesiredMemberCount) || 0,
     });
   }
   const compactSystemEvents = focusedSystemEvents.slice(-320);

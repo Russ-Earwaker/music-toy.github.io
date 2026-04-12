@@ -8364,6 +8364,32 @@ const enemyDirectorRuntime = {
   arrangementRamp: 0,
   lastEvaluatedBar: -1,
 };
+const eventSectionRuntime = {
+  activeEventSection: 'none',
+  eventBehaviorClass: 'none',
+  enteredBar: -1,
+  endBar: -1,
+  strongBeatActive: false,
+  motionDamping: 1,
+  agitationBoost: 1,
+  presentationPulseScale: 0,
+  eligibleRoles: [],
+  activeMusicMode: '',
+  introStage: 'none',
+  lastEvaluatedBar: -1,
+};
+const visualRoleReadabilityRuntime = {
+  lastEvaluatedBar: -1,
+  readableRoles: [],
+  distinctReadableRoleCount: 0,
+  supportVisualWeight: 0,
+  ornamentVisualWeight: 0,
+  leadVisualWeight: 0,
+  foundationVisualWeight: 0,
+  supportCollapsedDuringLead: false,
+  leadWithSupportVisible: false,
+  threeRoleReadable: false,
+};
 const beatSwarmPerfRuntime = {
   enabled: true,
   frameCount: 0,
@@ -18275,6 +18301,11 @@ function keepDrawSnakeEnemyOnscreen(enemy, dt) {
   });
 }
 function updateEnemies(dt) {
+  const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
+  const barIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
+  const introStage = getUnifiedIntroStage(barIndex, beatIndex);
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
+  const activeEventSectionRuntime = evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime);
   updateBeatSwarmEnemiesRuntime({
     constants: {
       enemyHitRadius: ENEMY_HIT_RADIUS,
@@ -18308,6 +18339,7 @@ function updateEnemies(dt) {
       startEnemyRetreat,
       normalizeDir,
       worldToScreen,
+      screenToWorld,
       removeEnemy,
       getEnemySpawnScale,
       updateSpawnerLinkedEnemyLine,
@@ -18321,6 +18353,9 @@ function updateEnemies(dt) {
       projectiles,
       effects,
       frameIndex: perfFrameIndex,
+      currentBeatIndex: beatIndex,
+      currentBarIndex: barIndex,
+      eventSectionRuntime: activeEventSectionRuntime,
       difficultyConfig,
       arenaCenterWorld,
     },
@@ -18345,7 +18380,7 @@ function getRandomOffscreenSpawnPoint() {
     helpers: { randRange },
   });
 }
-function spawnComposerGroupEnemyAt(clientX, clientY, group) {
+function spawnComposerGroupEnemyAt(clientX, clientY, group, memberIndex = 0, memberCount = 1) {
   const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
   const barIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
@@ -18353,6 +18388,8 @@ function spawnComposerGroupEnemyAt(clientX, clientY, group) {
     clientX,
     clientY,
     group,
+    memberIndex,
+    memberCount,
     enemyLayerEl,
     enemies,
     enemyCap: ENEMY_CAP,
@@ -18707,6 +18744,131 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
   enemyDirectorRuntime.lastEvaluatedBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   return enemyDirectorRuntime;
 }
+function evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null) {
+  const musicState = activeMusicModeState && typeof activeMusicModeState === 'object'
+    ? activeMusicModeState
+    : evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
+  const activeMusicMode = String(musicState?.activeMusicMode || '').trim().toLowerCase();
+  const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const safeBeat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
+  const beatsPerBar = Math.max(1, COMPOSER_BEATS_PER_BAR);
+  const beatInBar = safeBeat % beatsPerBar;
+  const halfBarBeat = Math.max(1, Math.floor(beatsPerBar / 2));
+  const barCycle = safeBar % 32;
+  const beatBounceWindow = activeMusicMode === 'full_texture'
+    && introStage === 'none'
+    && safeBar >= 24
+    && barCycle >= 24
+    && barCycle <= 27;
+  const nextSection = beatBounceWindow ? 'beat_bounce' : 'none';
+  if (String(eventSectionRuntime.activeEventSection || '') !== nextSection) {
+    eventSectionRuntime.enteredBar = nextSection === 'none' ? -1 : safeBar;
+  }
+  eventSectionRuntime.activeEventSection = nextSection;
+  eventSectionRuntime.eventBehaviorClass = nextSection === 'beat_bounce' ? 'presentation' : 'none';
+  eventSectionRuntime.endBar = nextSection === 'beat_bounce' ? (safeBar + Math.max(0, 27 - barCycle)) : -1;
+  eventSectionRuntime.strongBeatActive = nextSection === 'beat_bounce' && (beatInBar === 0 || beatInBar === halfBarBeat);
+  eventSectionRuntime.motionDamping = eventSectionRuntime.strongBeatActive ? 0.88 : 1;
+  eventSectionRuntime.agitationBoost = nextSection === 'beat_bounce' ? 1.04 : 1;
+  eventSectionRuntime.presentationPulseScale = eventSectionRuntime.strongBeatActive ? 0.12 : 0;
+  eventSectionRuntime.eligibleRoles = nextSection === 'beat_bounce'
+    ? ['foundation_groove', 'counter_rhythm', 'lead_phrase']
+    : [];
+  eventSectionRuntime.activeMusicMode = activeMusicMode;
+  eventSectionRuntime.introStage = String(introStage || 'none').trim().toLowerCase();
+  if (eventSectionRuntime.lastEvaluatedBar !== safeBar) {
+    try {
+      noteMusicSystemEvent?.('music_event_section_state', {
+        activeEventSection: String(eventSectionRuntime.activeEventSection || '').trim().toLowerCase(),
+        eventBehaviorClass: String(eventSectionRuntime.eventBehaviorClass || '').trim().toLowerCase(),
+        enteredBar: Math.max(-1, Math.trunc(Number(eventSectionRuntime.enteredBar) || -1)),
+        endBar: Math.max(-1, Math.trunc(Number(eventSectionRuntime.endBar) || -1)),
+        strongBeatActive: eventSectionRuntime.strongBeatActive === true,
+        motionDamping: Number(eventSectionRuntime.motionDamping) || 1,
+        agitationBoost: Number(eventSectionRuntime.agitationBoost) || 1,
+        presentationPulseScale: Number(eventSectionRuntime.presentationPulseScale) || 0,
+        eligibleRoles: Array.isArray(eventSectionRuntime.eligibleRoles) ? eventSectionRuntime.eligibleRoles.slice() : [],
+        activeMusicMode,
+        introStage: String(introStage || 'none').trim().toLowerCase(),
+      }, {
+        beatIndex: safeBeat,
+        barIndex: safeBar,
+      });
+    } catch {}
+  }
+  eventSectionRuntime.lastEvaluatedBar = safeBar;
+  return eventSectionRuntime;
+}
+function getVisualReadabilityRoleIdForGroup(group = null) {
+  const formationRole = String(group?.formationRole || '').trim().toLowerCase();
+  if (formationRole) return formationRole;
+  const laneId = String(group?.musicLaneId || '').trim().toLowerCase();
+  if (laneId === 'foundation_lane') return 'foundation_groove';
+  if (laneId === 'primary_loop_lane') return 'lead_phrase';
+  if (laneId === 'secondary_loop_lane') return 'counter_rhythm';
+  if (laneId === 'sparkle_lane') return 'answer_ornament';
+  return '';
+}
+function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null) {
+  const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const safeBeat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
+  const activeMusicMode = String(activeMusicModeState?.activeMusicMode || '').trim().toLowerCase();
+  const roleWeights = {
+    foundation_groove: 0,
+    counter_rhythm: 0,
+    lead_phrase: 0,
+    answer_ornament: 0,
+  };
+  const activeGroups = Array.isArray(composerEnemyGroups) ? composerEnemyGroups : [];
+  for (const group of activeGroups) {
+    if (!group || group.active !== true || group.retiring) continue;
+    const roleId = getVisualReadabilityRoleIdForGroup(group);
+    if (!roleId || !Object.prototype.hasOwnProperty.call(roleWeights, roleId)) continue;
+    const aliveMembers = getAliveEnemiesByIds(group?.memberIds).filter((enemy) => (
+      String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member' && enemy?.retreating !== true
+    ));
+    if (aliveMembers.length <= 0) continue;
+    const presentationWeight = Math.max(0.2, Number(group?.formationPresentationWeight) || 0.6);
+    const mergeBoost = group?.formationMergeProtectionActive === true ? 1.15 : 1;
+    const soloBoost = String(group?.introCarrierBodyType || '').trim().toLowerCase() === 'solo' ? 1.2 : 1;
+    const visualWeight = aliveMembers.length * presentationWeight * mergeBoost * soloBoost;
+    roleWeights[roleId] += visualWeight;
+  }
+  const readableRoles = Object.entries(roleWeights)
+    .filter(([, weight]) => Number(weight) >= 0.85)
+    .map(([roleId]) => roleId);
+  visualRoleReadabilityRuntime.readableRoles = readableRoles.slice();
+  visualRoleReadabilityRuntime.distinctReadableRoleCount = readableRoles.length;
+  visualRoleReadabilityRuntime.supportVisualWeight = Number(roleWeights.counter_rhythm) || 0;
+  visualRoleReadabilityRuntime.ornamentVisualWeight = Number(roleWeights.answer_ornament) || 0;
+  visualRoleReadabilityRuntime.leadVisualWeight = Number(roleWeights.lead_phrase) || 0;
+  visualRoleReadabilityRuntime.foundationVisualWeight = Number(roleWeights.foundation_groove) || 0;
+  visualRoleReadabilityRuntime.supportCollapsedDuringLead = roleWeights.lead_phrase >= 0.85 && roleWeights.counter_rhythm < 0.85;
+  visualRoleReadabilityRuntime.leadWithSupportVisible = roleWeights.lead_phrase >= 0.85 && roleWeights.counter_rhythm >= 0.85;
+  visualRoleReadabilityRuntime.threeRoleReadable = readableRoles.length >= 3;
+  if (visualRoleReadabilityRuntime.lastEvaluatedBar !== safeBar) {
+    try {
+      noteMusicSystemEvent?.('music_visual_role_readability_state', {
+        activeMusicMode,
+        introStage: String(introStage || 'none').trim().toLowerCase(),
+        readableRoles: readableRoles.slice(),
+        distinctReadableRoleCount: readableRoles.length,
+        foundationVisualWeight: Number(roleWeights.foundation_groove) || 0,
+        supportVisualWeight: Number(roleWeights.counter_rhythm) || 0,
+        leadVisualWeight: Number(roleWeights.lead_phrase) || 0,
+        ornamentVisualWeight: Number(roleWeights.answer_ornament) || 0,
+        supportCollapsedDuringLead: visualRoleReadabilityRuntime.supportCollapsedDuringLead === true,
+        leadWithSupportVisible: visualRoleReadabilityRuntime.leadWithSupportVisible === true,
+        threeRoleReadable: visualRoleReadabilityRuntime.threeRoleReadable === true,
+      }, {
+        beatIndex: safeBeat,
+        barIndex: safeBar,
+      });
+    } catch {}
+  }
+  visualRoleReadabilityRuntime.lastEvaluatedBar = safeBar;
+  return visualRoleReadabilityRuntime;
+}
 function chooseComposerGroupEnemyForNote(group, noteName, aliveMembers) {
   return pickComposerEnemyForNote({
     group,
@@ -18801,6 +18963,7 @@ function maintainComposerEnemyGroups() {
   const introStage = getUnifiedIntroStage(currentBarIndex, beatIndex);
   const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(currentBarIndex, beatIndex, introStage);
   const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime);
+  evaluateBeatSwarmVisualRoleReadabilityRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime);
   const sessionAge = getBeatSwarmSessionAge(beatIndex);
   const introStateAgeBars = Math.max(0, currentBarIndex - Math.max(0, Math.trunc(Number(energyStateRuntime.stateStartBar) || 0)));
   const introStateAgeBeats = Math.max(0, beatIndex - (Math.max(0, Math.trunc(Number(energyStateRuntime.stateStartBar) || 0)) * Math.max(1, COMPOSER_BEATS_PER_BAR)));

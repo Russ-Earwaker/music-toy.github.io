@@ -1228,6 +1228,564 @@ Reason:
 
 > We should avoid another refactor later just to make future musical authorship possible.
 
+### 18. Role-Driven Formation Spawning
+
+The next presentation layer should make musical roles visibly legible on screen without turning enemy family back into hidden lane ownership.
+
+Why this matters:
+
+- the current system is structurally healthier
+- the remaining weakness is often perceptual
+- support can exist logically while still feeling visually weak
+- the screen can still read like generic action instead of visible arrangement
+
+Target outcome:
+
+- the player can visually distinguish:
+  - `foundation / groove`
+  - `counter-rhythm`
+  - `lead phrase`
+  - `answer / ornament`
+- intro-to-lead merge stays readable on screen as well as in audio
+- support roles do not vanish perceptually just because lead arrives
+
+Working rule:
+
+> Music role chooses the formation first.
+> Enemy family only styles that formation second.
+
+#### 18.1 Gameplay-First Guardrail
+
+Enemy behavior must work with gameplay and reinforce readability.
+It must not replace or fight the core combat behavior.
+
+That means:
+
+- formation logic may control:
+  - spawn region
+  - member spacing
+  - screen grouping
+  - lightweight presentation offsets
+  - role-specific pulse emphasis
+- formation logic must not become a second movement brain that overrides:
+  - core pathing
+  - hit reactions
+  - combat readability
+  - existing enemy behavior identity
+
+Important rule:
+
+> Formations should boost gameplay readability, not override gameplay movement.
+
+#### 18.1a Presentation vs Behavioral Formations
+
+We should explicitly separate two kinds of formation logic:
+
+- `presentation formations`
+  - spawn region
+  - spacing
+  - grouping
+  - lightweight anchor bias
+  - pulse emphasis
+- `behavioral formations`
+  - follow-the-leader
+  - winding chains
+  - paired dance motion
+  - advancing lines
+  - other gameplay-carrying movement patterns
+
+Working rule:
+
+> Presentation formations are the universal baseline.
+> Behavioral formations are optional style or encounter modules.
+
+Implications:
+
+- music must remain legible with presentation formations alone
+- behavioral formations are opt-in
+- behavioral formations may change gameplay shape, but only intentionally
+- no level should require bespoke movement just to make the music readable
+
+#### 18.2 Baseline Carrier Rule
+
+Composer groups and solo carriers must be able to realize every role on their own.
+
+This is non-negotiable because:
+
+- levels may omit specials entirely
+- music still needs to work without snakes or spawners
+- specials should be optional takeover voices, not hidden requirements
+
+So:
+
+- every formation archetype must have a `composer group` baseline
+- every important lane should also be satisfiable by a `solo carrier`
+- snakes, spawners, and future specials may:
+  - flavor
+  - reinforce
+  - temporarily take over
+- but they must not be structurally required for musical legibility
+
+#### 18.3 Formation System Shape
+
+Add a lightweight formation layer above current spawn/embodiment logic.
+
+Likely files:
+
+- `src/beat-swarm/beat-swarm-formation-spawn.js`
+- `src/beat-swarm/beat-swarm-formations.js`
+- later if needed: `src/beat-swarm/beat-swarm-formation-motion.js`
+
+Keep this out of `beat-swarm-mode.js` unless a very small bridge is unavoidable.
+
+The formation layer should decide:
+
+- archetype
+- spawn region
+- spacing profile
+- symmetry
+- presentation weight
+- simple motion flavor
+
+That applies to `presentation formations`.
+
+`behavioral formations` should live in separate opt-in modules with their own debug and safety rules, not inside the baseline formation layer.
+
+The existing runtime should still decide:
+
+- actual lane ownership
+- carrier continuity
+- combat behavior
+- arbitration and visibility limits
+
+#### 18.4 First Archetypes
+
+Do not build a huge library first.
+Start with a small stable set:
+
+- `foundation_anchor_line`
+- `backbeat_pair`
+- `syncopation_stair`
+- `lead_arc`
+- `answer_echo`
+
+These should be treated as archetype families, not rigid templates.
+
+Per-run and per-section variation should come from:
+
+- seed
+- spacing variation
+- orientation
+- region choice
+- timing bias
+- member count
+
+That preserves future recognisable run identity instead of making every run stage the same picture.
+
+#### 18.5 Intro And Merge First
+
+The first required use case is still:
+
+> `intro_pulse -> intro_backbeat_bridge -> lead_entry_merge -> full_texture`
+
+Visual requirements:
+
+- pulse remains visibly stable
+- backbeat remains visibly distinct
+- lead enters with a clearly melodic formation
+- support roles cannot be visually de-emphasized too quickly during merge
+
+Temporary guardrail:
+
+- during `lead_entry_merge`, protected support roles should keep a minimum visual weight for a fixed bridge window
+
+This is the visual equivalent of the merge continuity work already done in the audio/runtime layer.
+
+#### 18.6 Precedence Rule
+
+This feature must not add another competing policy brain.
+
+Decision order should be:
+
+1. music mode / director intent
+2. required lane continuity
+3. carrier availability
+4. formation archetype selection
+5. enemy family styling
+
+So if a preferred formation conflicts with:
+
+- gameplay readability
+- lane continuity
+- alive-count floor
+- intro teaching structure
+
+the formation must yield.
+
+#### 18.7 Metrics And Debug
+
+Do not judge this only by feel.
+Add measurable readability signals.
+
+Useful metrics:
+
+- bars where `counter_rhythm` exists but visual weight is too low
+- bars where `lead_phrase` exists but no distinct support formation is also visible
+- time from lead entry to first visible `answer_ornament`
+- beats where at least `3` distinct role formations are concurrently readable
+- merge windows where support visual weight collapses too quickly
+- formation diversity per run
+
+Per-role debug should expose:
+
+- role
+- formation archetype
+- style family
+- spawn region
+- member count
+- visual weight
+- merge protection active
+
+This should eventually feed Music Lab.
+
+#### 18.8 Anti-Regression Rules
+
+Do not let this work reintroduce older architectural mistakes.
+
+Specifically:
+
+- do not restore snake/spawner lane ownership through visual logic
+- do not make specials musically required for readability
+- do not hide core policy inside bespoke transition hacks
+- do not let every role use the same motion with different labels
+- do not let formation motion override combat behavior
+
+Success condition:
+
+> The player can watch the screen and identify groove, lead, and reply
+> without sacrificing gameplay readability or requiring special enemy families.
+
+#### 18.9 First Implementation Checklist
+
+The first pass should stay narrow and prove the idea on the existing healthy baseline.
+
+Do not start by rewriting spawn logic, enemy movement, or lane ownership.
+
+Implementation checklist:
+
+1. Add a lightweight formation runtime record
+
+Create a small role-presentation state object that can be attached to active carriers or groups.
+
+First fields should be limited to:
+
+- `role`
+- `formationArchetype`
+- `styleFamily`
+- `spawnRegion`
+- `spacingProfile`
+- `symmetry`
+- `presentationWeight`
+- `mergeProtectionActive`
+
+This should be enough to drive visual staging and debug output without creating a second policy brain.
+
+2. Define the first archetype families
+
+Implement only:
+
+- `foundation_anchor_line`
+- `backbeat_pair`
+- `syncopation_stair`
+- `lead_arc`
+- `answer_echo`
+
+Each archetype should define:
+
+- preferred spawn region family
+- default spacing
+- default member-count range
+- simple presentation offsets
+- visual weight bias
+
+Do not add deep motion logic yet.
+
+3. Keep composer groups and solo carriers as the baseline
+
+For the first pass, every archetype must be satisfiable by:
+
+- a `composer group`
+- a `solo carrier`
+
+before any special-family styling is allowed.
+
+Acceptance rule:
+
+> A level with no snakes and no spawners must still be able to stage all required musical roles clearly.
+
+4. Add one formation-selection function
+
+Create one resolver such as:
+
+- `selectFormationForRole(...)`
+
+It should take:
+
+- role
+- active music mode
+- section state
+- carrier type
+- style family bias
+- run seed
+
+And return:
+
+- archetype
+- region
+- spacing
+- member count
+- presentation weight
+
+Do not let multiple files invent formation choice independently.
+
+5. Add one lightweight layout helper
+
+Create one helper such as:
+
+- `buildFormationLayout(...)`
+
+It should provide:
+
+- spawn offsets
+- simple orientation
+- pair/stair/arc arrangement data
+
+It should not own:
+
+- enemy AI
+- combat pathing
+- bespoke transition rules
+
+6. Integrate at spawn/embodiment, not ownership
+
+Use the formation layer at:
+
+- `beat-swarm-composer-spawn.js`
+- `beat-swarm-composer-maintenance.js`
+
+for:
+
+- assigning initial formation presentation
+- preserving formation identity across continuity
+- evolving a surviving role smoothly during merge
+
+Do not use it to decide:
+
+- who owns the lane
+- whether a lane exists
+- whether continuity is protected
+
+7. Pilot the intro and merge path first
+
+The first required sequence is:
+
+- `intro_pulse`
+- `intro_backbeat_bridge`
+- `lead_entry_merge`
+- `full_texture`
+
+For that pilot:
+
+- pulse should read as one stable formation
+- backbeat should read as a second distinct support formation
+- lead should enter with a clearly different melodic formation
+- support should keep a minimum visual weight through the first merge bars
+
+Acceptance rule:
+
+> If intro-to-lead still looks like one visual layer taking over and everything else fading into generic clutter, do not expand the formation system yet.
+
+8. Keep runtime motion shallow in the first pass
+
+Allowed first-pass motion:
+
+- anchor offset
+- mirrored offset
+- staggered phase offset
+- simple arc bias
+- simple pulse emphasis
+
+Not allowed in the first pass:
+
+- replacing core pathing
+- creating a second AI-like motion controller
+- special-case behavior trees per archetype
+
+9. Add visibility/readability debug
+
+Per active role, expose:
+
+- role
+- formation archetype
+- style family
+- member count
+- region
+- presentation weight
+- merge protection state
+
+And add first-pass metrics:
+
+- bars with at least `3` readable role formations
+- bars where support exists musically but drops below visual threshold
+- time from lead entry to first visible answer formation
+
+10. Add seeded variation immediately
+
+Do not hard-freeze these archetypes into one look each.
+
+From the start, vary by run seed:
+
+- region choice
+- orientation
+- spacing
+- member count
+- mild offset pattern
+
+The archetype family should stay recognisable.
+The exact picture should not be identical every run.
+
+11. Hold a hard boundary against special-family drift
+
+Before any later expansion, verify:
+
+- specials are not required for a readable groove
+- specials are not required for a readable lead
+- specials are not silently becoming the default visual owner for rhythm or melody again
+
+Only after that passes should later work add:
+
+- stronger style-family variation
+- special-enemy-specific visual takeovers
+- more archetypes
+- richer motion behavior
+
+File targets for the first pass:
+
+- [beat-swarm-composer-spawn.js](/c:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-composer-spawn.js)
+- [beat-swarm-composer-maintenance.js](/c:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-composer-maintenance.js)
+- [beat-swarm-enemy-update.js](/c:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-enemy-update.js)
+- [beat-swarm-mode.js](/c:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-mode.js)
+- [beat-swarm-formation-spawn.js](/c:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-formation-spawn.js)
+- [beat-swarm-formations.js](/c:/Desktop/music-toy/music-toy.github.io/src/beat-swarm/beat-swarm-formations.js)
+
+Working boundary:
+
+> If the first pass cannot make groove, lead, and reply visually legible without leaning on special enemies, do not broaden the system yet.
+
+### 19. Event Sections
+
+We also need a higher-level concept for rare, authored-feeling moments that sit above normal lane flow.
+
+These are not ordinary formations.
+They are short-lived sequence behaviors that make a section feel intentionally staged.
+
+Examples:
+
+- bass-drop freeze, then agitated release
+- strong-beat unison bounce
+- paired waltz motion
+- line-dance or mirrored stepping
+- brief enemy-wide stop-and-hit accent
+
+Working rule:
+
+> Event sections are rare, explicit, and time-bounded.
+> They should decorate or intensify the music, not replace the lane system.
+
+#### 19.1 Design Rules
+
+- event sections must be optional overlays on top of the normal lane/runtime logic
+- they must not break:
+  - carrier continuity
+  - role readability
+  - combat readability
+  - input fairness
+- they should be driven by:
+  - mode
+  - bar-cycle timing
+  - encounter state
+  - future style or user-authored section cues
+
+Important rule:
+
+> Event sections may temporarily bias movement, pacing, or pulse,
+> but the music system must still function normally when they are absent.
+
+#### 19.2 Runtime Shape
+
+Add a lightweight event-section runtime with fields like:
+
+- `activeEventSection`
+- `eventBehaviorClass`
+- `enteredBar`
+- `endBar`
+- `strongBeatActive`
+- `motionDamping`
+- `agitationBoost`
+- `presentationPulseScale`
+- `eligibleRoles`
+
+This should sit alongside:
+
+- `musicModeRuntime`
+- `enemyDirectorRuntime`
+- `formation runtime`
+
+#### 19.3 Section Classes
+
+Start with a very small set:
+
+- `beat_bounce`
+  - synchronized accent bounce on strong beats
+  - presentation-first
+- `hold_then_surge`
+  - brief freeze or damp
+  - followed by stronger agitation
+  - behavioral overlay
+- `dance_phrase`
+  - style-specific paired or line motion
+  - behavioral overlay
+
+Do not implement the full library first.
+Get one safe section working, then extend.
+
+#### 19.4 Integration Order
+
+Precedence should be:
+
+1. music mode / section continuity
+2. enemy director / gameplay safety
+3. formation baseline
+4. event section overlay
+5. enemy family styling
+
+That means event sections may bias the battlefield presentation or motion, but they do not get to silently rewrite the core ownership model.
+
+#### 19.5 First Implementation Checklist
+
+- add `eventSectionRuntime`
+- expose it in Music Lab/debug
+- implement one safe section:
+  - `beat_bounce`
+- keep it rare and time-bounded
+- limit it to presentation pulse and very small synchronized movement damping
+- verify it does not regress intro/merge readability
+- do not implement `hold_then_surge` or dance sections until the safe presentation section is stable
+
+Acceptance rule:
+
+- if the first event section is not readable without destabilizing combat or lane continuity, do not broaden the system yet
+
 ## Working Rule
 
 Use this as the tuning principle:

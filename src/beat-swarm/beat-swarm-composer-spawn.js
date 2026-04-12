@@ -2,6 +2,8 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
   const group = options?.group || null;
   const clientX = Number(options?.clientX);
   const clientY = Number(options?.clientY);
+  const formationMemberIndex = Math.max(0, Math.trunc(Number(options?.memberIndex) || 0));
+  const formationMemberCount = Math.max(1, Math.trunc(Number(options?.memberCount) || 1));
   if (!group) return null;
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
   if (!options?.enemyLayerEl) return null;
@@ -38,6 +40,15 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
   const el = document.createElement('div');
   el.className = `beat-swarm-enemy is-composer-group is-shape-${String(group.shape || 'circle')}${isSoloCarrier ? ` is-solo-carrier is-solo-${soloCarrierFlavor}-carrier` : ''}`;
   el.style.setProperty('--bs-group-color', String(group.color || '#ff8b6e'));
+  const formationArchetype = String(group?.formationArchetype || '').trim().toLowerCase();
+  const formationRole = String(group?.formationRole || '').trim().toLowerCase();
+  const formationStyleFamily = String(group?.formationStyleFamily || '').trim().toLowerCase();
+  if (formationArchetype) {
+    el.classList.add(`is-formation-${formationArchetype.replace(/[^a-z0-9_-]/g, '-')}`);
+    el.dataset.formationArchetype = formationArchetype;
+  }
+  if (formationRole) el.dataset.formationRole = formationRole;
+  if (formationStyleFamily) el.dataset.formationStyleFamily = formationStyleFamily;
   const hpWrap = document.createElement('div');
   hpWrap.className = 'beat-swarm-enemy-hp';
   const hpFill = document.createElement('div');
@@ -104,6 +115,17 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     musicLaneInstrumentId: String(group.musicLaneInstrumentId || group.instrumentId || group.instrument || ''),
     musicLanePhraseId: String(group.musicLanePhraseId || group?.motif?.id || ''),
     musicLaneHandoffPolicy: String(group.musicLaneHandoffPolicy || ''),
+    formationRole,
+    formationArchetype,
+    formationStyleFamily,
+    formationSpawnRegion: String(group?.formationSpawnRegion || '').trim().toLowerCase(),
+    formationSpacingProfile: String(group?.formationSpacingProfile || '').trim().toLowerCase(),
+    formationSymmetry: String(group?.formationSymmetry || '').trim().toLowerCase(),
+    formationPresentationWeight: Number(group?.formationPresentationWeight) || 0,
+    formationMergeProtectionActive: group?.formationMergeProtectionActive === true,
+    formationDesiredMemberCount: Math.max(1, Math.trunc(Number(group?.formationDesiredMemberCount) || 1)),
+    formationMemberIndex,
+    formationMemberCount,
     callResponseLane: String(group?.callResponseLane || '').trim().toLowerCase(),
     lifecycleState: String(group?.lifecycleState || 'active'),
   };
@@ -127,7 +149,11 @@ export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
   const getRandomOffscreenSpawnPoint = typeof options?.getRandomOffscreenSpawnPoint === 'function' ? options.getRandomOffscreenSpawnPoint : (() => ({ x: 0, y: 0 }));
   const spawnComposerGroupEnemyAt = typeof options?.spawnComposerGroupEnemyAt === 'function' ? options.spawnComposerGroupEnemyAt : (() => null);
   for (let i = 0; i < count; i++) {
-    const p = getRandomOffscreenSpawnPoint();
-    spawnComposerGroupEnemyAt(p?.x, p?.y, group);
+    const p = getRandomOffscreenSpawnPoint({
+      group,
+      memberIndex: i,
+      memberCount: count,
+    });
+    spawnComposerGroupEnemyAt(p?.x, p?.y, group, i, count);
   }
 }

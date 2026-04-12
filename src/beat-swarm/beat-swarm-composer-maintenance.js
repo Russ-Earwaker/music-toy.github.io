@@ -1,3 +1,8 @@
+import {
+  applyBeatSwarmFormationRuntime,
+  buildBeatSwarmFormationRuntime,
+} from './beat-swarm-formation-spawn.js';
+
 export function maintainComposerEnemyGroupsRuntime(options = null) {
   const state = options?.state && typeof options.state === 'object' ? options.state : {};
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
@@ -88,6 +93,24 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const introRhythmOnlyWindow = introStage === 'rhythm_only';
   const introSoftRampWindow = introStage === 'soft_ramp';
   const melodySoloWindowOpen = !introWindowActive && currentBarIndex >= 12;
+  const getGroupFormationCarrierType = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : {};
+    const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
+    const introCarrierBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
+    return (soloCarrierType || introCarrierBodyType === 'solo') ? 'solo_carrier' : 'composer_group';
+  };
+  const applyFormationRuntimeToGroup = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!group) return group;
+    const formationRuntime = buildBeatSwarmFormationRuntime({
+      group,
+      activeMusicMode: String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase(),
+      runSeed: sessionSeed,
+      barIndex: currentBarIndex,
+      carrierType: getGroupFormationCarrierType(group),
+    });
+    return applyBeatSwarmFormationRuntime(group, formationRuntime);
+  };
   const leadEntryMergeActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'lead_entry_merge';
   const fullTextureActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'full_texture';
   const protectedMergeTextureActive = leadEntryMergeActive || fullTextureActive;
@@ -2521,6 +2544,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
               });
             } catch {}
           }
+          applyFormationRuntimeToGroup(created);
           syncGroupPrimaryNote(created);
           if (typeof helpers.noteIntroDebug === 'function' && currentBarIndex < 24 && soloCarrierType === 'rhythm') {
             helpers.noteIntroDebug('intro_rhythm_carrier_created', {
@@ -3024,6 +3048,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           }
         }
       }
+      applyFormationRuntimeToGroup(group);
       syncGroupPrimaryNote(group);
       if (soloPreferredLaneId && !String(group?.musicLaneId || '').trim()) group.musicLaneId = soloPreferredLaneId;
       if (effectiveGroupSoloCarrierType && !String(group?.musicLaneLayer || '').trim()) group.musicLaneLayer = 'loops';
@@ -3071,6 +3096,15 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             note: Array.isArray(group?.notes) && group.notes.length ? String(group.notes[0] || '').trim() : '',
             reason: String(group?.introSlotProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase(),
             stage: buildStepSignature(group?.introSlotSteps || group?.steps),
+            formationRole: String(group?.formationRole || '').trim().toLowerCase(),
+            formationArchetype: String(group?.formationArchetype || '').trim().toLowerCase(),
+            formationStyleFamily: String(group?.formationStyleFamily || '').trim().toLowerCase(),
+            formationSpawnRegion: String(group?.formationSpawnRegion || '').trim().toLowerCase(),
+            formationSpacingProfile: String(group?.formationSpacingProfile || '').trim().toLowerCase(),
+            formationSymmetry: String(group?.formationSymmetry || '').trim().toLowerCase(),
+            formationPresentationWeight: Number(group?.formationPresentationWeight) || 0,
+            formationMergeProtectionActive: group?.formationMergeProtectionActive === true,
+            formationDesiredMemberCount: Math.max(1, Math.trunc(Number(group?.formationDesiredMemberCount) || 1)),
           }, {
             beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
           });
@@ -3093,6 +3127,15 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           note: Array.isArray(group?.notes) && group.notes.length ? String(group.notes[0] || '').trim() : '',
           reason: String(group?.introSlotProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase(),
           stage: buildStepSignature(group?.introSlotSteps || group?.steps),
+          formationRole: String(group?.formationRole || '').trim().toLowerCase(),
+          formationArchetype: String(group?.formationArchetype || '').trim().toLowerCase(),
+          formationStyleFamily: String(group?.formationStyleFamily || '').trim().toLowerCase(),
+          formationSpawnRegion: String(group?.formationSpawnRegion || '').trim().toLowerCase(),
+          formationSpacingProfile: String(group?.formationSpacingProfile || '').trim().toLowerCase(),
+          formationSymmetry: String(group?.formationSymmetry || '').trim().toLowerCase(),
+          formationPresentationWeight: Number(group?.formationPresentationWeight) || 0,
+          formationMergeProtectionActive: group?.formationMergeProtectionActive === true,
+          formationDesiredMemberCount: Math.max(1, Math.trunc(Number(group?.formationDesiredMemberCount) || 1)),
         }, {
           beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
         });

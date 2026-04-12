@@ -32,14 +32,65 @@ export function getEnemySpawnScaleRuntime(options = null) {
 export function getRandomOffscreenSpawnPointRuntime(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
+  const group = options?.group && typeof options.group === 'object' ? options.group : null;
+  const memberIndex = Math.max(0, Math.trunc(Number(options?.memberIndex) || 0));
+  const memberCount = Math.max(1, Math.trunc(Number(options?.memberCount) || 1));
   const w = Math.max(1, Number(window.innerWidth) || 0);
   const h = Math.max(1, Number(window.innerHeight) || 0);
   const m = Math.max(8, Number(constants.enemyFallbackSpawnMarginPx) || 42);
+  const formationSpawnRegion = String(group?.formationSpawnRegion || '').trim().toLowerCase();
+  const formationArchetype = String(group?.formationArchetype || '').trim().toLowerCase();
+  const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+  const seed = Math.abs((groupId * 31) + (memberCount * 7) + memberIndex);
+  const sideBias = seed % 2;
+  const offsetUnit = Math.max(18, Math.min(72, Math.round(Math.min(w, h) * 0.035)));
+  const pairOffset = (memberIndex - ((memberCount - 1) * 0.5)) * offsetUnit;
+  const stairOffset = memberIndex * Math.max(16, Math.round(offsetUnit * 0.85));
+  const randRange = typeof helpers.randRange === 'function'
+    ? helpers.randRange
+    : ((min, max) => min + (Math.random() * (max - min)));
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+  if (formationSpawnRegion === 'lower_outer' || formationArchetype === 'foundation_anchor_line') {
+    const fromLeft = sideBias === 0;
+    return {
+      x: fromLeft ? -m : (w + m),
+      y: clamp((h * 0.72) + pairOffset, h * 0.52, h * 0.92),
+    };
+  }
+  if (formationSpawnRegion === 'mid_side' || formationArchetype === 'backbeat_pair') {
+    const fromLeft = sideBias === 0;
+    return {
+      x: fromLeft ? -m : (w + m),
+      y: clamp((h * 0.48) + pairOffset, h * 0.28, h * 0.72),
+    };
+  }
+  if (formationSpawnRegion === 'side_diagonal' || formationArchetype === 'syncopation_stair') {
+    const fromLeft = sideBias === 0;
+    return {
+      x: fromLeft ? -m : (w + m),
+      y: clamp((h * 0.34) + stairOffset, h * 0.14, h * 0.82),
+    };
+  }
+  if (formationSpawnRegion === 'upper_mid' || formationArchetype === 'lead_arc') {
+    return {
+      x: clamp((w * 0.5) + pairOffset, w * 0.22, w * 0.78),
+      y: -m,
+    };
+  }
+  if (formationSpawnRegion === 'lead_reply_edge' || formationArchetype === 'answer_echo') {
+    const fromLeft = sideBias === 0;
+    return {
+      x: fromLeft ? -m : (w + m),
+      y: clamp((h * 0.26) + pairOffset, h * 0.12, h * 0.46),
+    };
+  }
+
   const side = Math.floor(Math.random() * 4);
-  if (side === 0) return { x: -m, y: helpers.randRange?.(0, h) ?? 0 };
-  if (side === 1) return { x: w + m, y: helpers.randRange?.(0, h) ?? 0 };
-  if (side === 2) return { x: helpers.randRange?.(0, w) ?? 0, y: -m };
-  return { x: helpers.randRange?.(0, w) ?? 0, y: h + m };
+  if (side === 0) return { x: -m, y: randRange(0, h) ?? 0 };
+  if (side === 1) return { x: w + m, y: randRange(0, h) ?? 0 };
+  if (side === 2) return { x: randRange(0, w) ?? 0, y: -m };
+  return { x: randRange(0, w) ?? 0, y: h + m };
 }
 
 export function spawnFallbackEnemyOffscreenRuntime(options = null) {
