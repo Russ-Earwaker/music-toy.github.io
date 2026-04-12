@@ -108,18 +108,76 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
   const speedMultiplier = Math.max(1, Number(runtime?.speedMultiplier) || 1);
   const desiredSpeed = enemyMaxSpeed * speedMultiplier;
   if ((Number(runtime?.leaderBias) || 0) >= 0.999) {
-    const phase = (Number(enemy?.behavioralFormationPhase) || 0) + ((Number(state?.dt) || 0) * Math.PI * 2 * Math.max(0.05, Number(runtime?.pathOscillationHz) || 0.55));
+    const arenaCenter = state?.arenaCenterWorld && typeof state.arenaCenterWorld === 'object'
+      ? state.arenaCenterWorld
+      : centerWorld;
+    const arenaRadius = Math.max(140, Number(constants?.swarmArenaRadiusWorld) || 0);
+    const phase = (Number(enemy?.behavioralFormationPhase) || 0) + ((Number(state?.dt) || 0) * Math.PI * 2 * Math.max(0.04, Number(runtime?.pathOscillationHz) || 0.55));
     enemy.behavioralFormationPhase = phase;
-    const toCenterX = Number(centerWorld?.x) - Number(enemy?.wx);
-    const toCenterY = Number(centerWorld?.y) - Number(enemy?.wy);
-    const toCenterLen = Math.hypot(toCenterX, toCenterY) || 1;
-    const dirX = toCenterX / toCenterLen;
-    const dirY = toCenterY / toCenterLen;
+    const relX = Number(enemy?.wx) - Number(arenaCenter?.x || 0);
+    const relY = Number(enemy?.wy) - Number(arenaCenter?.y || 0);
+    const relLen = Math.hypot(relX, relY) || 1;
+    const currentAngle = Math.atan2(relY, relX);
+    if (!enemy.behavioralFormationTraverseTarget || !Number.isFinite(enemy.behavioralFormationTraverseTarget.x) || !Number.isFinite(enemy.behavioralFormationTraverseTarget.y)) {
+      enemy.behavioralFormationTraverseMode = Math.random() < 0.32 ? 'cross' : 'edge';
+      enemy.behavioralFormationTraverseSign = enemy.behavioralFormationTraverseSign === -1 ? -1 : 1;
+      if (enemy.behavioralFormationTraverseMode === 'edge') {
+        const nextAngle = currentAngle + (enemy.behavioralFormationTraverseSign * (Math.PI * (0.55 + (Math.random() * 0.22))));
+        enemy.behavioralFormationTraverseTarget = {
+          x: Number(arenaCenter?.x || 0) + (Math.cos(nextAngle) * arenaRadius * 0.76),
+          y: Number(arenaCenter?.y || 0) + (Math.sin(nextAngle) * arenaRadius * 0.76),
+        };
+      } else {
+        enemy.behavioralFormationTraverseTarget = {
+          x: Number(arenaCenter?.x || 0) - (relX / relLen) * arenaRadius * 0.68,
+          y: Number(arenaCenter?.y || 0) - (relY / relLen) * arenaRadius * 0.42,
+        };
+      }
+    }
+    const targetDx0 = Number(enemy.behavioralFormationTraverseTarget.x) - Number(enemy?.wx);
+    const targetDy0 = Number(enemy.behavioralFormationTraverseTarget.y) - Number(enemy?.wy);
+    const targetDist0 = Math.hypot(targetDx0, targetDy0);
+    if (targetDist0 < Math.max(80, arenaRadius * 0.18)) {
+      const nextSign = (Number(enemy.behavioralFormationTraverseSign) || 1) * -1;
+      enemy.behavioralFormationTraverseSign = nextSign;
+      enemy.behavioralFormationTraverseMode = Math.random() < 0.34 ? 'cross' : 'edge';
+      if (enemy.behavioralFormationTraverseMode === 'edge') {
+        const nextAngle = currentAngle + (nextSign * (Math.PI * (0.6 + (Math.sin(phase * 0.53) * 0.18))));
+        enemy.behavioralFormationTraverseTarget = {
+          x: Number(arenaCenter?.x || 0) + (Math.cos(nextAngle) * arenaRadius * 0.78),
+          y: Number(arenaCenter?.y || 0) + (Math.sin(nextAngle) * arenaRadius * 0.78),
+        };
+      } else {
+        const wiggle = Math.sin(phase * 0.73) * arenaRadius * 0.28;
+        enemy.behavioralFormationTraverseTarget = {
+          x: Number(arenaCenter?.x || 0) + (nextSign * arenaRadius * 0.72),
+          y: Number(arenaCenter?.y || 0) + wiggle,
+        };
+      }
+    }
+    const targetDx = Number(enemy.behavioralFormationTraverseTarget.x) - Number(enemy?.wx);
+    const targetDy = Number(enemy.behavioralFormationTraverseTarget.y) - Number(enemy?.wy);
+    const targetDist = Math.hypot(targetDx, targetDy) || 1;
+    const dirX = targetDx / targetDist;
+    const dirY = targetDy / targetDist;
     const normalX = -dirY;
     const normalY = dirX;
-    const wave = Math.sin(phase) * Math.max(0.1, Math.min(1, Number(runtime?.pathOscillationAmplitude) || 0.5));
-    const desiredDirX = dirX + (normalX * wave);
-    const desiredDirY = dirY + (normalY * wave);
+    const preferredRadius = Math.max(150, arenaRadius * 0.72);
+    const radialX = relX / relLen;
+    const radialY = relY / relLen;
+    const radialError = preferredRadius - relLen;
+    const radialPull = Math.max(-0.75, Math.min(0.75, radialError / Math.max(40, arenaRadius * 0.22)));
+    const sweepWave = Math.sin(phase * 1.37) * Math.max(0.18, Math.min(1, Number(runtime?.pathOscillationAmplitude) || 0.5));
+    const edgeMode = String(enemy.behavioralFormationTraverseMode || 'edge') === 'edge';
+    const tangentDir = Number(enemy?.behavioralFormationTraverseSign) || 1;
+    const tangentX = -radialY * tangentDir;
+    const tangentY = radialX * tangentDir;
+    const desiredDirX = edgeMode
+      ? (dirX * 0.46) + (tangentX * 0.54) + (normalX * sweepWave * 0.28) + (radialX * radialPull * 0.52)
+      : dirX + (normalX * sweepWave * 0.42) + (radialX * radialPull * 0.45);
+    const desiredDirY = edgeMode
+      ? (dirY * 0.46) + (tangentY * 0.54) + (normalY * sweepWave * 0.28) + (radialY * radialPull * 0.52)
+      : dirY + (normalY * sweepWave * 0.42) + (radialY * radialPull * 0.45);
     const desiredDirLen = Math.hypot(desiredDirX, desiredDirY) || 1;
     return {
       overrideVelocity: true,
@@ -161,13 +219,18 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
   const followDx = targetX - Number(enemy?.wx);
   const followDy = targetY - Number(enemy?.wy);
   const followLen = Math.hypot(followDx, followDy) || 1;
-  const desiredDirX = ((followDx / followLen) * 0.75) + (dirX * 0.25);
-  const desiredDirY = ((followDy / followLen) * 0.75) + (dirY * 0.25);
+  const desiredGap = Math.max(18, Number(runtime?.followDistanceWorld) || 0);
+  const gapError = Math.max(-1, Math.min(1, (followLen - desiredGap) / desiredGap));
+  const approachWeight = followLen < desiredGap ? 0.92 : 0.78;
+  const streamWeight = 1 - approachWeight;
+  const desiredDirX = ((followDx / followLen) * approachWeight) + (dirX * streamWeight);
+  const desiredDirY = ((followDy / followLen) * approachWeight) + (dirY * streamWeight);
   const desiredDirLen = Math.hypot(desiredDirX, desiredDirY) || 1;
+  const slotSpeedScale = Math.max(0.9, 1 - (slotIndex * 0.03)) + (gapError * 0.18);
   return {
     overrideVelocity: true,
-    desiredVx: (desiredDirX / desiredDirLen) * desiredSpeed * Math.max(0.9, 1 - (slotIndex * 0.04)),
-    desiredVy: (desiredDirY / desiredDirLen) * desiredSpeed * Math.max(0.9, 1 - (slotIndex * 0.04)),
+    desiredVx: (desiredDirX / desiredDirLen) * desiredSpeed * Math.max(0.82, Math.min(1.12, slotSpeedScale)),
+    desiredVy: (desiredDirY / desiredDirLen) * desiredSpeed * Math.max(0.82, Math.min(1.12, slotSpeedScale)),
     blend: Math.max(0.18, Math.min(0.5, (Number(runtime?.velocityBlend) || 0.34) + 0.08)),
   };
 }
@@ -503,11 +566,33 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       if (enemyType === 'composer-group-member') {
         const pulseDur = Math.max(0.01, Number(e.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);
         const pulseT = Math.max(0, Number(e.composerActionPulseT) || 0);
+        let actionPulseStrength = 0;
         if (pulseT > 0) {
           const phase = 1 - Math.max(0, Math.min(1, pulseT / pulseDur));
           const localPulseScale = Math.max(0, Number(e?.composerActionPulseScale) || Number(constants.composerGroupActionPulseScale) || 0);
-          actionScale = 1 + (Math.sin(phase * Math.PI) * localPulseScale);
+          actionPulseStrength = Math.sin(phase * Math.PI);
+          actionScale = 1 + (actionPulseStrength * localPulseScale);
           e.composerActionPulseT = Math.max(0, pulseT - (Number(state.dt) || 0));
+        }
+        if (e.el instanceof HTMLElement) {
+          if (actionPulseStrength > 0.0001) {
+            const borderWidthPx = 1 + (actionPulseStrength * 2.4);
+            const innerTintPct = Math.max(6, 18 - (actionPulseStrength * 10));
+            const glowPx = 8 + (actionPulseStrength * 14);
+            try {
+              e.el.style.borderWidth = `${borderWidthPx.toFixed(2)}px`;
+              e.el.style.borderColor = 'var(--bs-role-color-bright)';
+              e.el.style.background = `radial-gradient(circle at center, color-mix(in srgb, var(--bs-role-color-bright) ${Math.max(4, 10 - (actionPulseStrength * 5)).toFixed(2)}%, black ${(100 - Math.max(4, 10 - (actionPulseStrength * 5))).toFixed(2)}%), color-mix(in srgb, var(--bs-role-color-deep) ${innerTintPct.toFixed(2)}%, black ${(100 - innerTintPct).toFixed(2)}%))`;
+              e.el.style.boxShadow = `0 0 ${glowPx.toFixed(2)}px var(--bs-role-glow-color)`;
+            } catch {}
+          } else {
+            try {
+              e.el.style.borderWidth = '';
+              e.el.style.borderColor = '';
+              e.el.style.background = '';
+              e.el.style.boxShadow = '';
+            } catch {}
+          }
         }
         const soloPulseDur = Math.max(0.01, Number(e?.soloCarrierActivationPulseDur) || 0);
         const soloPulseT = Math.max(0, Number(e?.soloCarrierActivationPulseT) || 0);
