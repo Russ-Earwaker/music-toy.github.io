@@ -71,6 +71,44 @@ function buildWindingChainRuntime(enemyLike = null, helpers = null) {
   });
 }
 
+function buildAdvancingLineRuntime(enemyLike = null, helpers = null) {
+  const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : {};
+  const slotIndex = Math.max(0, Math.trunc(Number(enemy?.formationMemberIndex) || 0));
+  const slotCount = Math.max(1, Math.trunc(Number(enemy?.formationMemberCount) || 1));
+  const screenToWorld = typeof helpers?.screenToWorld === 'function' ? helpers.screenToWorld : null;
+  const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
+  const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
+  const centeredIndex = slotIndex - ((slotCount - 1) * 0.5);
+  const laneSide = centeredIndex === 0 ? 0 : (centeredIndex < 0 ? -1 : 1);
+  const targetWorld = screenToWorld
+    ? screenToWorld({
+        x: Math.max(24, Math.min(screenW - 24, (screenW * 0.5) + (centeredIndex * (screenW * 0.055)))),
+        y: Math.max(24, Math.min(screenH - 24, screenH * 0.5)),
+      })
+    : null;
+  return Object.freeze({
+    archetype: 'advancing_line',
+    behaviorClass: 'follow_the_leader',
+    activationMode: normalizeActivationMode(enemy?.behavioralFormationActivationMode || 'opt_in'),
+    active: enemy?.behavioralFormationActive === true,
+    intensity: clamp01(enemy?.behavioralFormationIntensity || 0.6),
+    slotIndex,
+    slotCount,
+    leaderEnemyId: slotIndex === 0 ? Math.max(0, Math.trunc(Number(enemy?.id) || 0)) : 0,
+    leaderBias: slotIndex === 0 ? 1 : 0,
+    followDistanceWorld: Math.max(44, Math.round((screenW || 1280) * 0.03)),
+    lateralOffsetWorld: laneSide * Math.max(4, Math.round((screenH || 720) * 0.01)),
+    curvatureBias: centeredIndex * 0.04,
+    speedMultiplier: enemy?.behavioralFormationActive === true ? 1.58 : 1,
+    pathOscillationAmplitude: Math.max(0.24, Math.min(0.95, 0.34 + (clamp01(enemy?.behavioralFormationIntensity || 0.6) * 0.42))),
+    pathOscillationHz: 0.48,
+    velocityBlend: enemy?.behavioralFormationActive === true ? 0.3 : 0.12,
+    targetWorld: targetWorld && Number.isFinite(targetWorld.x) && Number.isFinite(targetWorld.y)
+      ? { x: Number(targetWorld.x) || 0, y: Number(targetWorld.y) || 0 }
+      : null,
+  });
+}
+
 export function buildBeatSwarmBehavioralFormationEnemyRuntime(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const enemy = opts.enemy && typeof opts.enemy === 'object' ? opts.enemy : null;
@@ -79,6 +117,9 @@ export function buildBeatSwarmBehavioralFormationEnemyRuntime(options = null) {
   const archetype = normalizeArchetype(enemy?.behavioralFormationArchetype || 'none');
   if (archetype === 'winding_chain') {
     return buildWindingChainRuntime(enemy, helpers);
+  }
+  if (archetype === 'advancing_line') {
+    return buildAdvancingLineRuntime(enemy, helpers);
   }
   return buildInactiveRuntime(enemy);
 }

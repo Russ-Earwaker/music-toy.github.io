@@ -111,7 +111,10 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     composerActionPulseScale: isSoloCarrier ? 0.24 : 0.26,
     composerRole: groupRole,
     enemySpeedMultiplier: (
-      String(group?.behavioralFormationArchetype || '').trim().toLowerCase() === 'winding_chain'
+      (
+        String(group?.behavioralFormationArchetype || '').trim().toLowerCase() === 'winding_chain'
+        || String(group?.behavioralFormationArchetype || '').trim().toLowerCase() === 'advancing_line'
+      )
       && group?.behavioralFormationActive === true
     )
       ? (isSoloCarrier ? 1.25 : 1.7)
@@ -167,8 +170,17 @@ export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
     : requestedCount;
   const getRandomOffscreenSpawnPoint = typeof options?.getRandomOffscreenSpawnPoint === 'function' ? options.getRandomOffscreenSpawnPoint : (() => ({ x: 0, y: 0 }));
   const spawnComposerGroupEnemyAt = typeof options?.spawnComposerGroupEnemyAt === 'function' ? options.spawnComposerGroupEnemyAt : (() => null);
+  const behavioralFormationArchetype = String(group?.behavioralFormationArchetype || '').trim().toLowerCase();
+  const useSharedBatchEntryPoint = group?.behavioralFormationActive === true && behavioralFormationArchetype === 'advancing_line';
+  const sharedEntryPoint = useSharedBatchEntryPoint
+    ? (getRandomOffscreenSpawnPoint({
+        group,
+        memberIndex: 0,
+        memberCount: count,
+      }) || { x: 0, y: 0 })
+    : null;
   for (let i = 0; i < count; i++) {
-    const p = getRandomOffscreenSpawnPoint({
+    const p = sharedEntryPoint || getRandomOffscreenSpawnPoint({
       group,
       memberIndex: i,
       memberCount: count,

@@ -63,6 +63,15 @@ export function getRandomOffscreenSpawnPointRuntime(options = null) {
     };
   }
 
+  if (behavioralFormationActive && behavioralFormationArchetype === 'advancing_line') {
+    const fromLeft = (groupId % 2) === 0;
+    const baseY = h * 0.5;
+    return {
+      x: fromLeft ? -m : (w + m),
+      y: clamp(baseY, h * 0.42, h * 0.58),
+    };
+  }
+
   if (formationSpawnRegion === 'lower_outer' || formationArchetype === 'foundation_anchor_line') {
     const fromLeft = sideBias === 0;
     return {

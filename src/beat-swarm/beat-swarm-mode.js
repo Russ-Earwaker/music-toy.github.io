@@ -15687,10 +15687,10 @@ function getPerfRepeatBehaviorSpec(behaviorId = 'none') {
   if (id === 'advancing_line') {
     return {
       behavioralFormationArchetype: 'advancing_line',
-      behavioralFormationClass: 'lane_push',
+      behavioralFormationClass: 'follow_the_leader',
       behavioralFormationActivationMode: 'perf_lab',
       behavioralFormationIntensity: 0.64,
-      behavioralFormationActive: false,
+      behavioralFormationActive: true,
       formationArchetype: 'foundation_anchor_line',
       formationRole: 'foundation_groove',
       formationSpawnRegion: 'lower_outer',

@@ -81,6 +81,7 @@ function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
 function resolveWindingChainLeaderRuntime(enemy, enemies) {
   const groupId = Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0));
   if (!(groupId > 0)) return null;
+  const archetype = String(enemy?.behavioralFormationArchetype || '').trim().toLowerCase();
   let leader = null;
   for (let i = 0; i < enemies.length; i++) {
     const candidate = enemies[i];
@@ -89,7 +90,7 @@ function resolveWindingChainLeaderRuntime(enemy, enemies) {
     const candidateGroupId = Math.max(0, Math.trunc(Number(candidate?.composerGroupId || candidate?.musicGroupId) || 0));
     if (candidateGroupId !== groupId) continue;
     if (candidate?.behavioralFormationActive !== true) continue;
-    if (String(candidate?.behavioralFormationArchetype || '').trim().toLowerCase() !== 'winding_chain') continue;
+    if (String(candidate?.behavioralFormationArchetype || '').trim().toLowerCase() !== archetype) continue;
     if (candidate?.retreating) continue;
     if (!leader || Math.trunc(Number(candidate?.formationMemberIndex) || 0) < Math.trunc(Number(leader?.formationMemberIndex) || 0)) {
       leader = candidate;
@@ -103,11 +104,69 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     ? enemy.behavioralFormationRuntime
     : null;
   if (!runtime || runtime.active !== true) return null;
-  if (runtime.behaviorClass !== 'follow_the_leader' || runtime.archetype !== 'winding_chain') return null;
   const enemyMaxSpeed = Math.max(40, Number(constants?.enemyMaxSpeed) || 0);
   const speedMultiplier = Math.max(1, Number(runtime?.speedMultiplier) || 1);
   const desiredSpeed = enemyMaxSpeed * speedMultiplier;
-  if ((Number(runtime?.leaderBias) || 0) >= 0.999) {
+  if (runtime.behaviorClass === 'follow_the_leader' && runtime.archetype === 'advancing_line' && (Number(runtime?.leaderBias) || 0) >= 0.999) {
+    const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
+    const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
+    const worldToScreen = typeof state?.worldToScreen === 'function' ? state.worldToScreen : null;
+    const screenToWorld = typeof state?.screenToWorld === 'function' ? state.screenToWorld : null;
+    const arenaCenterScreen = (worldToScreen && state?.arenaCenterWorld && typeof state.arenaCenterWorld === 'object')
+      ? worldToScreen({
+          x: Number(state.arenaCenterWorld.x) || 0,
+          y: Number(state.arenaCenterWorld.y) || 0,
+        })
+      : null;
+    const s = worldToScreen ? worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 }) : null;
+    const phase = (Number(enemy?.behavioralFormationPhase) || 0) + ((Number(state?.dt) || 0) * Math.PI * 2 * Math.max(0.018, Number(runtime?.pathOscillationHz) || 0.32));
+    enemy.behavioralFormationPhase = phase;
+    if (!enemy.behavioralFormationSweepDir || Math.abs(Number(enemy.behavioralFormationSweepDir)) !== 1) {
+      enemy.behavioralFormationSweepDir = ((Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId || 0)) % 2) === 0) ? 1 : -1;
+    }
+    const sweepDir = Number(enemy.behavioralFormationSweepDir) || 1;
+    const arenaRadiusScreen = Math.max(90, Math.min(screenH * 0.38, (Number(constants?.swarmArenaRadiusWorld) || 180) * 0.6));
+    const pickCrossingY = () => {
+      const centerY = Number(arenaCenterScreen?.y) || (screenH * 0.5);
+      const band = arenaRadiusScreen * 0.52;
+      const offset = Math.sin(phase * 0.61 + (Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId || 0)) * 0.37)) * band;
+      return Math.max(24, Math.min(screenH - 24, centerY + offset));
+    };
+    if (!enemy.behavioralFormationSweepTargetX || !Number.isFinite(Number(enemy.behavioralFormationSweepTargetX))) {
+      enemy.behavioralFormationSweepTargetX = sweepDir > 0 ? (screenW + 96) : -96;
+      enemy.behavioralFormationSweepCrossY = pickCrossingY();
+    }
+    if (s && Number.isFinite(s.x)) {
+      const crossedFarSide = sweepDir > 0 ? (s.x > screenW + 48) : (s.x < -48);
+      if (crossedFarSide) {
+        enemy.behavioralFormationSweepDir = sweepDir * -1;
+        enemy.behavioralFormationSweepTargetX = enemy.behavioralFormationSweepDir > 0 ? (screenW + 96) : -96;
+        enemy.behavioralFormationSweepCrossY = pickCrossingY();
+      }
+    }
+    const wiggleAmp = Math.max(64, Math.min(screenH * 0.3, screenH * Number(runtime?.pathOscillationAmplitude || 0.5) * 0.4));
+    const leadWave = Math.sin(phase * 1.05);
+    const targetScreenX = Number(enemy.behavioralFormationSweepTargetX) || (sweepDir > 0 ? (screenW + 96) : -96);
+    const targetScreenY = (Number(enemy.behavioralFormationSweepCrossY) || (screenH * 0.5)) + (leadWave * wiggleAmp);
+    const targetWorld = screenToWorld ? screenToWorld({
+      x: targetScreenX,
+      y: Math.max(24, Math.min(screenH - 24, targetScreenY)),
+    }) : null;
+    if (!targetWorld || !Number.isFinite(targetWorld.x) || !Number.isFinite(targetWorld.y)) return null;
+    const dx = Number(targetWorld.x) - Number(enemy?.wx);
+    const dy = Number(targetWorld.y) - Number(enemy?.wy);
+    const dLen = Math.hypot(dx, dy) || 1;
+    const dirX = dx / dLen;
+    const dirY = dy / dLen;
+    return {
+      overrideVelocity: true,
+      desiredVx: dirX * desiredSpeed,
+      desiredVy: dirY * desiredSpeed,
+      blend: Math.max(0.22, Math.min(0.46, (Number(runtime?.velocityBlend) || 0.3) + 0.1)),
+    };
+  }
+  if (runtime.behaviorClass !== 'follow_the_leader') return null;
+  if (runtime.archetype === 'winding_chain' && (Number(runtime?.leaderBias) || 0) >= 0.999) {
     const arenaCenter = state?.arenaCenterWorld && typeof state.arenaCenterWorld === 'object'
       ? state.arenaCenterWorld
       : centerWorld;
@@ -119,7 +178,7 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     const relLen = Math.hypot(relX, relY) || 1;
     const currentAngle = Math.atan2(relY, relX);
     if (!enemy.behavioralFormationTraverseTarget || !Number.isFinite(enemy.behavioralFormationTraverseTarget.x) || !Number.isFinite(enemy.behavioralFormationTraverseTarget.y)) {
-      enemy.behavioralFormationTraverseMode = Math.random() < 0.32 ? 'cross' : 'edge';
+      enemy.behavioralFormationTraverseMode = Math.random() < 0.22 ? 'cross' : 'edge';
       enemy.behavioralFormationTraverseSign = enemy.behavioralFormationTraverseSign === -1 ? -1 : 1;
       if (enemy.behavioralFormationTraverseMode === 'edge') {
         const nextAngle = currentAngle + (enemy.behavioralFormationTraverseSign * (Math.PI * (0.55 + (Math.random() * 0.22))));
@@ -140,7 +199,7 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     if (targetDist0 < Math.max(80, arenaRadius * 0.18)) {
       const nextSign = (Number(enemy.behavioralFormationTraverseSign) || 1) * -1;
       enemy.behavioralFormationTraverseSign = nextSign;
-      enemy.behavioralFormationTraverseMode = Math.random() < 0.34 ? 'cross' : 'edge';
+      enemy.behavioralFormationTraverseMode = Math.random() < 0.24 ? 'cross' : 'edge';
       if (enemy.behavioralFormationTraverseMode === 'edge') {
         const nextAngle = currentAngle + (nextSign * (Math.PI * (0.6 + (Math.sin(phase * 0.53) * 0.18))));
         enemy.behavioralFormationTraverseTarget = {
@@ -167,17 +226,18 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     const radialY = relY / relLen;
     const radialError = preferredRadius - relLen;
     const radialPull = Math.max(-0.75, Math.min(0.75, radialError / Math.max(40, arenaRadius * 0.22)));
-    const sweepWave = Math.sin(phase * 1.37) * Math.max(0.18, Math.min(1, Number(runtime?.pathOscillationAmplitude) || 0.5));
+    const sweepWave = Math.sin(phase * 1.37) * Math.max(0.24, Math.min(1.15, Number(runtime?.pathOscillationAmplitude) || 0.5));
+    const sineLateral = Math.sin(phase * 2.2) * 0.34;
     const edgeMode = String(enemy.behavioralFormationTraverseMode || 'edge') === 'edge';
     const tangentDir = Number(enemy?.behavioralFormationTraverseSign) || 1;
     const tangentX = -radialY * tangentDir;
     const tangentY = radialX * tangentDir;
     const desiredDirX = edgeMode
-      ? (dirX * 0.46) + (tangentX * 0.54) + (normalX * sweepWave * 0.28) + (radialX * radialPull * 0.52)
-      : dirX + (normalX * sweepWave * 0.42) + (radialX * radialPull * 0.45);
+      ? (dirX * 0.42) + (tangentX * 0.58) + (normalX * ((sweepWave * 0.2) + sineLateral)) + (radialX * radialPull * 0.52)
+      : dirX + (normalX * ((sweepWave * 0.34) + (sineLateral * 0.7))) + (radialX * radialPull * 0.45);
     const desiredDirY = edgeMode
-      ? (dirY * 0.46) + (tangentY * 0.54) + (normalY * sweepWave * 0.28) + (radialY * radialPull * 0.52)
-      : dirY + (normalY * sweepWave * 0.42) + (radialY * radialPull * 0.45);
+      ? (dirY * 0.42) + (tangentY * 0.58) + (normalY * ((sweepWave * 0.2) + sineLateral)) + (radialY * radialPull * 0.52)
+      : dirY + (normalY * ((sweepWave * 0.34) + (sineLateral * 0.7))) + (radialY * radialPull * 0.45);
     const desiredDirLen = Math.hypot(desiredDirX, desiredDirY) || 1;
     return {
       overrideVelocity: true,
@@ -195,7 +255,7 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     const candidateGroupId = Math.max(0, Math.trunc(Number(candidate?.composerGroupId || candidate?.musicGroupId) || 0));
     if (candidateGroupId !== groupId) continue;
     if (candidate?.behavioralFormationActive !== true) continue;
-    if (String(candidate?.behavioralFormationArchetype || '').trim().toLowerCase() !== 'winding_chain') continue;
+    if (String(candidate?.behavioralFormationArchetype || '').trim().toLowerCase() !== String(runtime?.archetype || '').trim().toLowerCase()) continue;
     if (candidate?.retreating) continue;
     members.push(candidate);
   }
@@ -253,6 +313,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
   const eventSectionRuntime = state?.eventSectionRuntime && typeof state.eventSectionRuntime === 'object'
     ? state.eventSectionRuntime
     : null;
+  state.worldToScreen = typeof helpers.worldToScreen === 'function' ? helpers.worldToScreen : null;
+  state.screenToWorld = typeof helpers.screenToWorld === 'function' ? helpers.screenToWorld : null;
   const projectileCount = Math.max(0, Math.trunc(Number(state.projectileCount) || 0));
   const effectCount = Math.max(0, Math.trunc(Number(state.effectCount) || 0));
   const liveObjectPressure = enemies.length + projectileCount + effectCount;
@@ -478,8 +540,13 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       const blend = Math.max(0.08, Math.min(0.5, Number(behavioralMotion.blend) || 0.3));
       e.vx += ((Number(behavioralMotion.desiredVx) || 0) - (Number(e.vx) || 0)) * blend;
       e.vy += ((Number(behavioralMotion.desiredVy) || 0) - (Number(e.vy) || 0)) * blend;
-      ax *= 0.2;
-      ay *= 0.2;
+      if (String(e?.behavioralFormationArchetype || '').trim().toLowerCase() === 'advancing_line') {
+        ax = 0;
+        ay = 0;
+      } else {
+        ax *= 0.2;
+        ay *= 0.2;
+      }
     }
     e.vx += ax * (Number(state.dt) || 0);
     e.vy += ay * (Number(state.dt) || 0);
@@ -576,7 +643,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         }
         if (e.el instanceof HTMLElement) {
           if (actionPulseStrength > 0.0001) {
-            const borderWidthPx = 1 + (actionPulseStrength * 2.4);
+            const borderWidthPx = 1 + (actionPulseStrength * 3.2);
             const innerTintPct = Math.max(6, 18 - (actionPulseStrength * 10));
             const glowPx = 8 + (actionPulseStrength * 14);
             try {

@@ -283,6 +283,8 @@ const AUTO_BEAT_SWARM_GENERIC_QUEUE = [
   'runBS0s5',
 ];
 
+const PERF_MUSIC_REPEAT_UI_KEY = 'perfLab:musicRepeatUi';
+
 function ensureUI() {
   let ov = document.getElementById('perf-lab-overlay');
   if (ov) return ov;
@@ -307,6 +309,31 @@ function ensureUI() {
 
   function sortByLabel(arr) {
     return arr.slice().sort((a, b) => String(a.label).localeCompare(String(b.label)));
+  }
+
+  function loadMusicRepeatUiState() {
+    try {
+      const raw = localStorage.getItem(PERF_MUSIC_REPEAT_UI_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveMusicRepeatUiState(state = null) {
+    try {
+      const next = state && typeof state === 'object' ? state : null;
+      if (!next) {
+        localStorage.removeItem(PERF_MUSIC_REPEAT_UI_KEY);
+        return;
+      }
+      localStorage.setItem(PERF_MUSIC_REPEAT_UI_KEY, JSON.stringify({
+        enemyType: String(next.enemyType || 'drawsnake').trim().toLowerCase() || 'drawsnake',
+        behavior: String(next.behavior || 'none').trim().toLowerCase() || 'none',
+      }));
+    } catch {}
   }
 
   const P2 = {
@@ -951,6 +978,15 @@ function ensureUI() {
   try { syncUiFromPending(); } catch {}
   try { setCycleBtnVisual(); } catch {}
   try { setShowStateBtnVisual(); } catch {}
+  try {
+    const storedMusicRepeatUi = loadMusicRepeatUiState();
+    if (storedMusicRepeatUi) {
+      const typeEl = ov.querySelector('[data-music-spawn-type]');
+      const behaviorEl = ov.querySelector('[data-music-spawn-behavior]');
+      if (typeEl instanceof HTMLSelectElement) typeEl.value = String(storedMusicRepeatUi.enemyType || 'drawsnake');
+      if (behaviorEl instanceof HTMLSelectElement) behaviorEl.value = String(storedMusicRepeatUi.behavior || 'none');
+    }
+  } catch {}
   // Keep UI checkboxes/selects in sync with global perf state.
   // (Used by Trace Demon buttons and safe to call anytime.)
   function syncUiFromState() {
@@ -1112,6 +1148,7 @@ function ensureUI() {
       const enemyType = String(typeEl?.value || 'drawsnake').trim().toLowerCase() || 'drawsnake';
       const behavior = String(behaviorEl?.value || 'none').trim().toLowerCase() || 'none';
       const persistent = persistentEl ? persistentEl.checked !== false : true;
+      saveMusicRepeatUiState({ enemyType, behavior });
       const result = await startPerfMusicRepeatSpawn(enemyType, { persistent, behavior });
       setStatus(result.ok ? `Music repeat spawn running: ${enemyType} (${behavior})` : 'Music repeat spawn failed');
       setOutput(result);
@@ -2289,6 +2326,18 @@ function buildBeatSwarmTransitionDebugText(payload, meta = {}) {
     if (!isBarInRange(e?.barIndex)) return false;
     const laneId = String(e?.musicLaneId || '').trim().toLowerCase();
     return laneId === 'primary_loop_lane';
+  });
+
+  ov.addEventListener('change', (e) => {
+    const target = e.target instanceof HTMLElement ? e.target : null;
+    if (!target) return;
+    if (!target.matches('[data-music-spawn-type], [data-music-spawn-behavior]')) return;
+    const typeEl = ov.querySelector('[data-music-spawn-type]');
+    const behaviorEl = ov.querySelector('[data-music-spawn-behavior]');
+    saveMusicRepeatUiState({
+      enemyType: String(typeEl?.value || 'drawsnake').trim().toLowerCase() || 'drawsnake',
+      behavior: String(behaviorEl?.value || 'none').trim().toLowerCase() || 'none',
+    });
   });
   const secondaryRenderEvents = eventTimeline.filter((e) => {
     if (!isBarInRange(e?.barIndex)) return false;
