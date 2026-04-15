@@ -492,6 +492,7 @@ function ensureUI() {
       </label>`,
       `<label class="perf-lab-toggle"><input type="checkbox" data-music-repeat-persistent checked /> Repeat enemy stays alive</label>`,
       btn('musicEnemyRepeatStart', 'Music: Start Repeat Spawn', 'primary'),
+      btn('musicEnemyRepeatTimedDebug', 'Music: Timed Debug Run (20s)', 'primary'),
       btn('musicEnemyRepeatStop', 'Music: Stop Repeat Spawn'),
       btn('musicLabEnable', 'Music Lab: Enable'),
       btn('musicLabDisable', 'Music Lab: Disable'),
@@ -1099,6 +1100,95 @@ function ensureUI() {
     };
   }
 
+  function delayMs(ms = 0) {
+    return new Promise((resolve) => {
+      try {
+        setTimeout(resolve, Math.max(0, Number(ms) || 0));
+      } catch {
+        resolve();
+      }
+    });
+  }
+
+  async function runTimedMusicRepeatDebug({
+    enemyType = 'drawsnake',
+    behavior = 'none',
+    groupCount = 8,
+    speedScale = 1,
+    persistent = true,
+    durationMs = 20000,
+  } = {}) {
+    const api = getMusicLabApi();
+    if (!api || typeof api.setEnabled !== 'function' || typeof api.reset !== 'function' || typeof api.exportSession !== 'function') {
+      return { ok: false, reason: 'music_lab_api_unavailable' };
+    }
+    const safeDurationMs = Math.max(3000, Math.trunc(Number(durationMs) || 20000));
+    const safeEnemyType = String(enemyType || 'drawsnake').trim().toLowerCase() || 'drawsnake';
+    const safeBehavior = String(behavior || 'none').trim().toLowerCase() || 'none';
+    const safeGroupCount = Math.max(1, Math.trunc(Number(groupCount) || 8));
+    const safeSpeedScale = Math.max(0.25, Math.min(4, Number(speedScale) || 1));
+    try {
+      api.setEnabled(true);
+      api.reset('perf-lab-timed-repeat');
+    } catch (err) {
+      return { ok: false, reason: 'music_lab_reset_failed', error: String(err && err.message || err) };
+    }
+    const startResult = await startPerfMusicRepeatSpawn(safeEnemyType, {
+      persistent,
+      behavior: safeBehavior,
+      groupCount: safeGroupCount,
+      speedScale: safeSpeedScale,
+    });
+    if (!startResult?.ok) return startResult || { ok: false, reason: 'repeat_start_failed' };
+    await delayMs(safeDurationMs);
+    stopPerfMusicRepeatSpawn();
+    await delayMs(120);
+    const fileName = [
+      'resources-debug-music-repeat',
+      safeEnemyType,
+      safeBehavior || 'none',
+      `${safeDurationMs}ms`,
+      new Date().toISOString().replace(/[:.]/g, '-'),
+    ].join('-') + '.json';
+    let payload = null;
+    try {
+      payload = api.exportSession();
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'music_lab_export_failed',
+        error: String(err && err.message || err),
+        fileName,
+      };
+    }
+    const cfg = await resolveResultsConfig();
+    const debugOutputUrl = resolveDebugOutputPostUrl(cfg);
+    const saved = await postDebugOutputFile({
+      fileName,
+      text: JSON.stringify(payload, null, 2),
+      meta: {
+        source: 'perf-lab-timed-repeat-debug',
+        enemyType: safeEnemyType,
+        behavior: safeBehavior,
+        durationMs: safeDurationMs,
+        groupCount: safeGroupCount,
+        speedScale: safeSpeedScale,
+      },
+    }, debugOutputUrl);
+    return {
+      ok: saved,
+      saved,
+      debugOutputUrl,
+      fileName,
+      durationMs: safeDurationMs,
+      enemyType: safeEnemyType,
+      behavior: safeBehavior,
+      groupCount: safeGroupCount,
+      speedScale: safeSpeedScale,
+      ...getMusicLabDebugState(),
+    };
+  }
+
   async function saveMusicLabSessionToResources({
     runId = 'musicLabAutoSave',
     label = 'music-lab-session',
@@ -1182,6 +1272,40 @@ function ensureUI() {
       saveMusicRepeatUiState({ enemyType, behavior, groupCount, speedScale });
       const result = await startPerfMusicRepeatSpawn(enemyType, { persistent, behavior, groupCount, speedScale });
       setStatus(result.ok ? `Music repeat spawn running: ${enemyType} (${behavior})` : 'Music repeat spawn failed');
+      setOutput(result);
+      return;
+    }
+    if (act === 'musicEnemyRepeatTimedDebug') {
+      const typeEl = ov.querySelector('[data-music-spawn-type]');
+      const behaviorEl = ov.querySelector('[data-music-spawn-behavior]');
+      const countEl = ov.querySelector('[data-music-group-count]');
+      const speedEl = ov.querySelector('[data-music-speed-scale]');
+      const persistentEl = ov.querySelector('[data-music-repeat-persistent]');
+      const enemyType = String(typeEl?.value || 'drawsnake').trim().toLowerCase() || 'drawsnake';
+      const behavior = String(behaviorEl?.value || 'none').trim().toLowerCase() || 'none';
+      const groupCount = Math.max(1, Math.trunc(Number(countEl?.value) || 8));
+      const speedScale = Math.max(0.25, Math.min(4, Number(speedEl?.value) || 1));
+      const persistent = persistentEl ? persistentEl.checked !== false : true;
+      saveMusicRepeatUiState({ enemyType, behavior, groupCount, speedScale });
+      setStatus(`Timed debug run active: ${enemyType} (${behavior})`);
+      setOutput({
+        ok: true,
+        running: true,
+        durationMs: 20000,
+        enemyType,
+        behavior,
+        groupCount,
+        speedScale,
+      });
+      const result = await runTimedMusicRepeatDebug({
+        enemyType,
+        behavior,
+        groupCount,
+        speedScale,
+        persistent,
+        durationMs: 20000,
+      });
+      setStatus(result.ok ? `Timed debug run exported: ${result.fileName}` : 'Timed debug run failed');
       setOutput(result);
       return;
     }
@@ -3893,6 +4017,35 @@ function compactMusicLabPayloadForSave(payload = null) {
       });
       continue;
     }
+    if (eventType === 'music_paired_dance_trace') {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        actorId: Number(payload.actorId) || 0,
+        groupId: Number(payload.groupId) || 0,
+        partnerId: Number(payload.targetEnemyId) || 0,
+        phase: String(payload.phase || '').trim().toLowerCase(),
+        reason: String(payload.reason || '').trim().toLowerCase(),
+        cycleBeat: Number(payload.cycleBeat) || 0,
+        cycleIndex: Number(payload.cycleIndex) || 0,
+        allPairsReady: payload.allPairsReady === true,
+        pairCenterX: Number(payload.pairCenterX) || 0,
+        pairCenterY: Number(payload.pairCenterY) || 0,
+        targetX: Number(payload.targetX) || 0,
+        targetY: Number(payload.targetY) || 0,
+        desiredVx: Number(payload.desiredVx) || 0,
+        desiredVy: Number(payload.desiredVy) || 0,
+        postBlendVx: Number(payload.postBlendVx) || 0,
+        postBlendVy: Number(payload.postBlendVy) || 0,
+        orbitAngle: Number(payload.orbitAngle) || 0,
+        debugFrame: Number(payload.debugFrame) || 0,
+      });
+      continue;
+    }
     if (eventType !== 'music_composer_group_state') continue;
     const reason = String(item.reason || '').trim().toLowerCase();
     const templateId = String(item.templateId || '').trim();
@@ -5132,6 +5285,7 @@ const DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG = Object.freeze({
     'music_primary_loop_coverage_status',
     'music_primary_lead_snapshot',
     'music_composer_group_state',
+    'music_paired_dance_trace',
   ]),
   maxLines: 300,
   preferOutputDirectory: true,

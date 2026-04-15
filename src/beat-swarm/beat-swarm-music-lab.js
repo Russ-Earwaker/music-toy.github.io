@@ -576,6 +576,19 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     targetCarrierCounts: payload?.targetCarrierCounts && typeof payload.targetCarrierCounts === 'object'
       ? { ...payload.targetCarrierCounts }
       : {},
+    cycleBeat: clampInt(payload?.cycleBeat, 0, 0),
+    cycleIndex: clampInt(payload?.cycleIndex, 0, 0),
+    allPairsReady: payload?.allPairsReady === true,
+    pairCenterX: Number(payload?.pairCenterX) || 0,
+    pairCenterY: Number(payload?.pairCenterY) || 0,
+    targetX: Number(payload?.targetX) || 0,
+    targetY: Number(payload?.targetY) || 0,
+    desiredVx: Number(payload?.desiredVx) || 0,
+    desiredVy: Number(payload?.desiredVy) || 0,
+    postBlendVx: Number(payload?.postBlendVx) || 0,
+    postBlendVy: Number(payload?.postBlendVy) || 0,
+    orbitAngle: Number(payload?.orbitAngle) || 0,
+    debugFrame: clampInt(payload?.debugFrame, 0, 0),
   };
 }
 

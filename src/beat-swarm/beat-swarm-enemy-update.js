@@ -210,11 +210,24 @@ function getPairedDanceAssignmentRuntime(enemy, enemies, state, cycleIndex = 0) 
         };
       }
       centers.push(pairCenter);
+      let axisX = 1;
+      let axisY = 0;
+      if (b) {
+        const rawAxisX = (Number(a?.wx) || 0) - (Number(b?.wx) || 0);
+        const rawAxisY = (Number(a?.wy) || 0) - (Number(b?.wy) || 0);
+        const rawAxisLen = Math.hypot(rawAxisX, rawAxisY) || 0;
+        if (rawAxisLen > 0.001) {
+          axisX = rawAxisX / rawAxisLen;
+          axisY = rawAxisY / rawAxisLen;
+        }
+      }
       assignments[aId] = {
         partnerId: bId,
         pairCenterX: Number(pairCenter.x) || midpoint.x,
         pairCenterY: Number(pairCenter.y) || midpoint.y,
         pairSide: -1,
+        approachAxisX: axisX,
+        approachAxisY: axisY,
       };
       if (bId > 0) {
         assignments[bId] = {
@@ -222,6 +235,8 @@ function getPairedDanceAssignmentRuntime(enemy, enemies, state, cycleIndex = 0) 
           pairCenterX: Number(pairCenter.x) || midpoint.x,
           pairCenterY: Number(pairCenter.y) || midpoint.y,
           pairSide: 1,
+          approachAxisX: axisX,
+          approachAxisY: axisY,
         };
       }
     }
@@ -234,11 +249,15 @@ function arePairedDanceTargetsReadyRuntime(enemies, state, cycleIndex = 0) {
   const cache = state?.__pairedDanceLayoutCache;
   if (!cache || typeof cache !== 'object') return false;
   const readyCache = state.__pairedDanceReadyCache || (state.__pairedDanceReadyCache = Object.create(null));
+  const memberReadyCache = state.__pairedDanceMemberReadyCache || (state.__pairedDanceMemberReadyCache = Object.create(null));
   const readyKey = String(Math.trunc(Number(cycleIndex) || 0));
   if (Object.prototype.hasOwnProperty.call(readyCache, readyKey)) {
     return readyCache[readyKey] === true;
   }
-  const tolerance = 26;
+  const tolerance = 40;
+  const cycleMemberReady = memberReadyCache[readyKey] && typeof memberReadyCache[readyKey] === 'object'
+    ? memberReadyCache[readyKey]
+    : (memberReadyCache[readyKey] = Object.create(null));
   const byId = new Map();
   for (const enemy of enemies) {
     if (!enemy) continue;
@@ -252,9 +271,15 @@ function arePairedDanceTargetsReadyRuntime(enemies, state, cycleIndex = 0) {
       const enemy = byId.get(Math.max(0, Math.trunc(Number(idKey) || 0))) || null;
       if (!enemy || enemy.retreating) continue;
       const pairSide = Number(assignment?.pairSide) >= 0 ? 1 : -1;
-      const targetX = (Number(assignment?.pairCenterX) || Number(enemy?.wx) || 0) + (pairSide * 34);
-      const targetY = Number(assignment?.pairCenterY) || Number(enemy?.wy) || 0;
+      const axisX = Number.isFinite(Number(assignment?.approachAxisX)) ? Number(assignment.approachAxisX) : 1;
+      const axisY = Number.isFinite(Number(assignment?.approachAxisY)) ? Number(assignment.approachAxisY) : 0;
+      const readyGap = 124;
+      const targetX = (Number(assignment?.pairCenterX) || Number(enemy?.wx) || 0) + (axisX * pairSide * readyGap);
+      const targetY = (Number(assignment?.pairCenterY) || Number(enemy?.wy) || 0) + (axisY * pairSide * readyGap);
       const dist = Math.hypot(targetX - (Number(enemy?.wx) || 0), targetY - (Number(enemy?.wy) || 0));
+      const enemyId = Math.max(0, Math.trunc(Number(idKey) || 0));
+      if (dist <= tolerance) cycleMemberReady[enemyId] = true;
+      if (cycleMemberReady[enemyId] === true) continue;
       if (dist > tolerance) {
         readyCache[readyKey] = false;
         return false;
@@ -263,6 +288,100 @@ function arePairedDanceTargetsReadyRuntime(enemies, state, cycleIndex = 0) {
   }
   readyCache[readyKey] = true;
   return true;
+}
+
+function notePairedDanceTraceRuntime(helpers, state, enemy, traceLike = null) {
+  const noteMusicSystemEvent = typeof helpers?.noteMusicSystemEvent === 'function' ? helpers.noteMusicSystemEvent : null;
+  if (!noteMusicSystemEvent || !enemy || !traceLike || typeof traceLike !== 'object') return;
+  if (String(enemy?.behavioralFormationArchetype || '').trim().toLowerCase() !== 'paired_dance') return;
+  const frameIndex = Math.max(0, Math.trunc(Number(state?.frameIndex) || 0));
+  const actorId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
+  if ((frameIndex % 6) !== (actorId % 6)) return;
+  noteMusicSystemEvent('music_paired_dance_trace', {
+    actorId,
+    groupId: Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0)),
+    targetEnemyId: Math.max(0, Math.trunc(Number(traceLike?.partnerId) || 0)),
+    behavioralFormationArchetype: 'paired_dance',
+    phase: String(traceLike?.phase || '').trim().toLowerCase(),
+    reason: String(traceLike?.reason || '').trim().toLowerCase(),
+    cycleBeat: Math.max(0, Math.trunc(Number(traceLike?.cycleBeat) || 0)),
+    cycleIndex: Math.max(0, Math.trunc(Number(traceLike?.cycleIndex) || 0)),
+    allPairsReady: traceLike?.allPairsReady === true,
+    pairCenterX: Number(traceLike?.pairCenterX) || 0,
+    pairCenterY: Number(traceLike?.pairCenterY) || 0,
+    targetX: Number(traceLike?.targetX) || 0,
+    targetY: Number(traceLike?.targetY) || 0,
+    desiredVx: Number(traceLike?.desiredVx) || 0,
+    desiredVy: Number(traceLike?.desiredVy) || 0,
+    postBlendVx: Number(traceLike?.postBlendVx) || 0,
+    postBlendVy: Number(traceLike?.postBlendVy) || 0,
+    orbitAngle: Number(traceLike?.orbitAngle) || 0,
+    debugFrame: frameIndex,
+  }, {
+    beatIndex: Math.max(0, Math.trunc(Number(state?.currentBeatIndex) || 0)),
+    barIndex: Math.max(0, Math.trunc(Number(state?.currentBarIndex) || 0)),
+  });
+}
+
+function ensurePairedDanceOrbitSeedRuntime(enemy, partner, assignment, cycleIndex = 0, pairCenterX = 0, pairCenterY = 0, orbitRadius = 1, ellipseY = 1) {
+  if (!enemy || !partner || !assignment) return 0;
+  const seedKey = `${Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0))}:${Math.min(Math.max(0, Math.trunc(Number(enemy?.id) || 0)), Math.max(0, Math.trunc(Number(partner?.id) || 0)))}:${Math.max(Math.max(0, Math.trunc(Number(enemy?.id) || 0)), Math.max(0, Math.trunc(Number(partner?.id) || 0)))}:${Math.max(0, Math.trunc(Number(cycleIndex) || 0))}`;
+  if (!globalThis.__bsPairedDanceOrbitSeed || typeof globalThis.__bsPairedDanceOrbitSeed !== 'object') {
+    globalThis.__bsPairedDanceOrbitSeed = Object.create(null);
+  }
+  const cache = globalThis.__bsPairedDanceOrbitSeed;
+  if (Number.isFinite(Number(cache[seedKey]))) return Number(cache[seedKey]) || 0;
+  const axisX = Number.isFinite(Number(assignment?.approachAxisX)) ? Number(assignment.approachAxisX) : 1;
+  const axisY = Number.isFinite(Number(assignment?.approachAxisY)) ? Number(assignment.approachAxisY) : 0;
+  const normalX = -axisY;
+  const normalY = axisX;
+  const relX = (Number(enemy?.wx) || 0) - Number(pairCenterX || 0);
+  const relY = (Number(enemy?.wy) || 0) - Number(pairCenterY || 0);
+  const localX = (relX * axisX) + (relY * axisY);
+  const localY = (relX * normalX) + (relY * normalY);
+  const base = Math.atan2(localY / Math.max(1, Number(ellipseY) || 1), localX / Math.max(1, Number(orbitRadius) || 1));
+  cache[seedKey] = Number.isFinite(base) ? base : 0;
+  return Number(cache[seedKey]) || 0;
+}
+
+function applyPairedDanceSeparationRuntime(enemy, enemies, state) {
+  if (!enemy || String(enemy?.behavioralFormationArchetype || '').trim().toLowerCase() !== 'paired_dance') return;
+  if (enemy?.behavioralFormationActive !== true || enemy?.retreating) return;
+  const danceWindow = getPerfBehaviorWindowRuntime(5600, 3600);
+  if (!danceWindow.active) return;
+  const beatIndex = Math.max(0, Math.trunc(Number(state?.currentBeatIndex) || 0));
+  const cycleBeat = beatIndex % 8;
+  if (cycleBeat > 5) return;
+  const assignment = getPairedDanceAssignmentRuntime(enemy, enemies, state, danceWindow.cycleIndex);
+  if (!assignment) return;
+  const partnerId = Math.max(0, Math.trunc(Number(assignment?.partnerId) || 0));
+  if (!(partnerId > 0)) return;
+  const actorId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
+  if (!(actorId > 0) || actorId >= partnerId) return;
+  const partner = enemies.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === partnerId) || null;
+  if (!partner || partner.retreating || String(partner?.behavioralFormationArchetype || '').trim().toLowerCase() !== 'paired_dance') return;
+  const dx = (Number(enemy?.wx) || 0) - (Number(partner?.wx) || 0);
+  const dy = (Number(enemy?.wy) || 0) - (Number(partner?.wy) || 0);
+  let dist = Math.hypot(dx, dy) || 0;
+  const minDist = 156;
+  if (dist >= minDist) return;
+  let nx = 1;
+  let ny = 0;
+  if (dist > 0.001) {
+    nx = dx / dist;
+    ny = dy / dist;
+  } else {
+    const axisX = Number.isFinite(Number(assignment?.approachAxisX)) ? Number(assignment.approachAxisX) : 1;
+    const axisY = Number.isFinite(Number(assignment?.approachAxisY)) ? Number(assignment.approachAxisY) : 0;
+    nx = axisX;
+    ny = axisY;
+    dist = 0;
+  }
+  const push = (minDist - dist) * 0.5;
+  enemy.wx = (Number(enemy?.wx) || 0) + (nx * push);
+  enemy.wy = (Number(enemy?.wy) || 0) + (ny * push);
+  partner.wx = (Number(partner?.wx) || 0) - (nx * push);
+  partner.wy = (Number(partner?.wy) || 0) - (ny * push);
 }
 
 function resolvePerfRepeatEventMotionRuntime(enemy, state, constants) {
@@ -407,6 +526,9 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     const beatState = getBehaviorBeatProgressRuntime(enemy, state, 'behavioralPairedDance', 0.22);
     const cycleBeat = beatState.beatIndex % 8;
     const allPairsReady = arePairedDanceTargetsReadyRuntime(enemies, state, danceWindow.cycleIndex);
+    const readyTimeoutMs = 1250;
+    const settleMs = 420;
+    const effectiveAllPairsReady = allPairsReady || (Number(danceWindow.phaseMs) >= readyTimeoutMs);
     const pairCenterX = Number(assignment?.pairCenterX) || ((Number(enemy?.wx) || 0) + (Number(partner?.wx) || 0)) * 0.5;
     const pairCenterY = Number(assignment?.pairCenterY) || ((Number(enemy?.wy) || 0) + (Number(partner?.wy) || 0)) * 0.5;
     const partnerX = Number(partner?.wx) || pairCenterX;
@@ -416,43 +538,61 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     const pairDist = Math.hypot(pairDx, pairDy) || 1;
     const pairSepX = pairDist > 0.001 ? (pairDx / pairDist) : pairSide;
     const pairSepY = pairDist > 0.001 ? (pairDy / pairDist) : 0;
+    const approachAxisX = Number.isFinite(Number(assignment?.approachAxisX)) ? Number(assignment.approachAxisX) : pairSepX;
+    const approachAxisY = Number.isFinite(Number(assignment?.approachAxisY)) ? Number(assignment.approachAxisY) : pairSepY;
+    const orbitNormalX = -approachAxisY;
+    const orbitNormalY = approachAxisX;
     let targetWorld = null;
-    if (cycleBeat <= 1 || !allPairsReady) {
-      const approachGap = 104;
+    let phase = 'release';
+    let orbitAngle = 0;
+    if (cycleBeat <= 1 || !effectiveAllPairsReady) {
+      phase = 'approach';
+      const approachGap = 124;
       targetWorld = {
-        x: pairCenterX + (pairSepX * approachGap * Math.max(0.6, 1 - beatState.smoothT)),
-        y: pairCenterY + (pairSepY * approachGap * Math.max(0.6, 1 - beatState.smoothT)),
+        x: pairCenterX + (approachAxisX * pairSide * approachGap),
+        y: pairCenterY + (approachAxisY * pairSide * approachGap),
+      };
+    } else if (Number(danceWindow.phaseMs) < (readyTimeoutMs + settleMs)) {
+      phase = 'settle';
+      const settleGap = 144;
+      const settleT = Math.max(0, Math.min(1, (Number(danceWindow.phaseMs) - readyTimeoutMs) / Math.max(1, settleMs)));
+      const sweepT = 0.5 - (0.5 * Math.cos(settleT * Math.PI));
+      const settleNormalX = -approachAxisY;
+      const settleNormalY = approachAxisX;
+      const settleOffset = (pairSide * 26) * sweepT;
+      targetWorld = {
+        x: pairCenterX + (approachAxisX * pairSide * settleGap) + (settleNormalX * settleOffset),
+        y: pairCenterY + (approachAxisY * pairSide * settleGap) + (settleNormalY * settleOffset),
       };
     } else if (cycleBeat <= 5) {
+      phase = 'orbit';
       const orbitDir = (((Math.trunc(Number(enemy?.behavioralDanceCycleIndex) || 0) + Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0))) % 2) === 0) ? 1 : -1;
-      const approachMs = 1100;
-      const orbitMs = Math.max(900, Number(danceWindow.activeMs) - approachMs);
-      const orbitPhase = Math.max(0, Math.min(1, (Number(danceWindow.phaseMs) - approachMs) / orbitMs));
-      const orbitRadius = 164;
-      const ellipseY = orbitRadius * 0.84;
-      if (
-        Math.trunc(Number(enemy?.behavioralDanceOrbitCycleIndex) || -1) !== danceWindow.cycleIndex
-        || Math.trunc(Number(enemy?.behavioralDanceOrbitBeatAnchor) || -1) !== beatState.beatIndex
-      ) {
-        const relX0 = (Number(enemy?.wx) || 0) - pairCenterX;
-        const relY0 = (Number(enemy?.wy) || 0) - pairCenterY;
-        const baseAngle = (Math.abs(relX0) > 0.001 || Math.abs(relY0) > 0.001)
-          ? Math.atan2(relY0 / Math.max(1, ellipseY), relX0 / Math.max(1, orbitRadius))
-          : (pairSide < 0 ? Math.PI : 0);
-        enemy.behavioralDanceOrbitBaseAngle = baseAngle;
-        enemy.behavioralDanceOrbitCycleIndex = danceWindow.cycleIndex;
-        enemy.behavioralDanceOrbitBeatAnchor = beatState.beatIndex;
-      }
-      const baseAngle = Number(enemy?.behavioralDanceOrbitBaseAngle);
-      const orbitAngle = (Number.isFinite(baseAngle) ? baseAngle : (pairSide < 0 ? Math.PI : 0))
-        + ((orbitPhase * Math.PI * 2 * 1.1) * orbitDir);
+      const orbitStartMs = readyTimeoutMs + settleMs;
+      const orbitMs = Math.max(900, Number(danceWindow.activeMs) - orbitStartMs);
+      const orbitPhase = Math.max(0, Math.min(1, (Number(danceWindow.phaseMs) - orbitStartMs) / orbitMs));
+      const orbitRadius = 186;
+      const ellipseY = orbitRadius * 0.88;
+      const sharedSeed = ensurePairedDanceOrbitSeedRuntime(
+        enemy,
+        partner,
+        assignment,
+        danceWindow.cycleIndex,
+        pairCenterX,
+        pairCenterY,
+        orbitRadius,
+        ellipseY,
+      );
+      const baseAngle = sharedSeed + (pairSide < 0 ? 0 : Math.PI);
+      orbitAngle = baseAngle + ((orbitPhase * Math.PI * 2 * 1.1) * orbitDir);
       const sweepX = Math.cos(orbitAngle) * orbitRadius;
       const sweepY = Math.sin(orbitAngle) * ellipseY;
-      const driftX = Math.sin(orbitPhase * Math.PI * 2) * 6;
-      const driftY = Math.cos(orbitPhase * Math.PI * 4) * 5;
+      const driftX = Math.sin(orbitPhase * Math.PI * 2) * 5;
+      const driftY = Math.cos(orbitPhase * Math.PI * 4) * 4;
+      const partnerGap = Math.max(0, 132 - pairDist);
+      const repelScale = Math.max(0, Math.min(56, partnerGap * 0.7));
       targetWorld = {
-        x: pairCenterX + sweepX + driftX + (pairSepX * 22),
-        y: pairCenterY + sweepY + driftY + (pairSepY * 22),
+        x: pairCenterX + (approachAxisX * sweepX) + (orbitNormalX * sweepY) + driftX + (approachAxisX * pairSide * (44 + repelScale)),
+        y: pairCenterY + (approachAxisY * sweepX) + (orbitNormalY * sweepY) + driftY + (approachAxisY * pairSide * (44 + repelScale)),
       };
     } else {
       return null;
@@ -460,13 +600,38 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     const dx = Number(targetWorld.x) - Number(enemy?.wx);
     const dy = Number(targetWorld.y) - Number(enemy?.wy);
     const dLen = Math.hypot(dx, dy) || 1;
+    const phaseIsApproach = (phase === 'approach');
+    const phaseIsSettle = (phase === 'settle');
+    const desiredVx = (dx / dLen) * (phaseIsApproach ? desiredSpeed * 2 : (phaseIsSettle ? desiredSpeed * 1.28 : desiredSpeed));
+    const desiredVy = (dy / dLen) * (phaseIsApproach ? desiredSpeed * 2 : (phaseIsSettle ? desiredSpeed * 1.28 : desiredSpeed));
     return {
       overrideVelocity: true,
-      desiredVx: (dx / dLen) * ((cycleBeat <= 1 || !allPairsReady) ? desiredSpeed * 2 : desiredSpeed),
-      desiredVy: (dy / dLen) * ((cycleBeat <= 1 || !allPairsReady) ? desiredSpeed * 2 : desiredSpeed),
-      blend: (cycleBeat <= 1 || !allPairsReady)
+      desiredVx,
+      desiredVy,
+      blend: phaseIsApproach
         ? 0.62
-        : Math.max(0.44, Math.min(0.64, (Number(runtime?.velocityBlend) || 0.34) + 0.16)),
+        : (phaseIsSettle
+          ? Math.max(0.68, Math.min(0.84, (Number(runtime?.velocityBlend) || 0.34) + 0.34))
+          : Math.max(0.58, Math.min(0.78, (Number(runtime?.velocityBlend) || 0.34) + 0.28))),
+      debugTrace: {
+        phase,
+        reason: phaseIsApproach
+          ? (effectiveAllPairsReady ? 'approach_window' : 'waiting_for_all_pairs')
+          : (phaseIsSettle
+            ? (allPairsReady ? 'settle_window' : 'settle_window_forced')
+            : (allPairsReady ? 'orbit_window' : 'orbit_window_forced')),
+        partnerId,
+        cycleBeat,
+        cycleIndex: danceWindow.cycleIndex,
+        allPairsReady: effectiveAllPairsReady,
+        pairCenterX,
+        pairCenterY,
+        targetX: Number(targetWorld?.x) || 0,
+        targetY: Number(targetWorld?.y) || 0,
+        desiredVx,
+        desiredVy,
+        orbitAngle,
+      },
     };
   }
   if (runtime.behaviorClass !== 'follow_the_leader') return null;
@@ -845,7 +1010,17 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       const blend = Math.max(0.08, Math.min(0.5, Number(behavioralMotion.blend) || 0.3));
       e.vx += ((Number(behavioralMotion.desiredVx) || 0) - (Number(e.vx) || 0)) * blend;
       e.vy += ((Number(behavioralMotion.desiredVy) || 0) - (Number(e.vy) || 0)) * blend;
+      if (behavioralMotion?.debugTrace && typeof behavioralMotion.debugTrace === 'object') {
+        notePairedDanceTraceRuntime(helpers, state, e, {
+          ...behavioralMotion.debugTrace,
+          postBlendVx: Number(e.vx) || 0,
+          postBlendVy: Number(e.vy) || 0,
+        });
+      }
       if (String(e?.behavioralFormationArchetype || '').trim().toLowerCase() === 'advancing_line') {
+        ax = 0;
+        ay = 0;
+      } else if (String(e?.behavioralFormationArchetype || '').trim().toLowerCase() === 'paired_dance') {
         ax = 0;
         ay = 0;
       } else {
@@ -868,6 +1043,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     }
     e.wx += e.vx * (Number(state.dt) || 0);
     e.wy += e.vy * (Number(state.dt) || 0);
+    applyPairedDanceSeparationRuntime(e, enemies, state);
     if (d <= hitRadiusWorld) {
       const perfProtected = helpers.isPerfRepeatProtectedEnemy?.(e) === true;
       if (lifecycleState === 'retiring') {

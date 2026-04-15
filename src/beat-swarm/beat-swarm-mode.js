@@ -18612,6 +18612,7 @@ function updateEnemies(dt) {
       normalizeMusicLifecycleState,
       getLifecycleAggressionScale,
       isPerfRepeatProtectedEnemy,
+      noteMusicSystemEvent,
       noteIntroDebug,
       updateSpawnerEnemyFlash,
       startEnemyRetreat,
