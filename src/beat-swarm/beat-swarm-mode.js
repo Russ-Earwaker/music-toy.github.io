@@ -148,6 +148,8 @@ const perfEnemyRepeatRuntime = {
   enemyType: '',
   behavior: 'none',
   targetCount: 0,
+  requestedGroupCount: 8,
+  requestedSpeedScale: 1,
   composerGroupId: 0,
   persistent: true,
   lastRhythmStep: -1,
@@ -15640,12 +15642,15 @@ function getRandomOffscreenSpawnClientPoint(marginPx = ENEMY_FALLBACK_SPAWN_MARG
   if (side === 2) return { x: randRange(0, screenW), y: -margin };
   return { x: randRange(0, screenW), y: screenH + margin };
 }
-function getPerfEnemyRepeatTargetCount(enemyType = '') {
-  return String(enemyType || '').trim().toLowerCase() === 'group' ? 8 : 1;
+function getPerfEnemyRepeatTargetCount(enemyType = '', requestedCount = null) {
+  const type = String(enemyType || '').trim().toLowerCase();
+  if (type !== 'group' && type !== 'composer-group-member') return 1;
+  const n = Math.trunc(Number(requestedCount));
+  return Math.max(1, Number.isFinite(n) ? n : 8);
 }
 function normalizePerfRepeatBehaviorId(value = '') {
   const raw = String(value || '').trim().toLowerCase();
-  if (raw === 'winding_chain' || raw === 'paired_dance' || raw === 'advancing_line') return raw;
+  if (raw === 'winding_chain' || raw === 'paired_dance' || raw === 'advancing_line' || raw === 'beat_bounce_event') return raw;
   return 'none';
 }
 function getPerfRepeatBehaviorSpec(behaviorId = 'none') {
@@ -15673,7 +15678,7 @@ function getPerfRepeatBehaviorSpec(behaviorId = 'none') {
       behavioralFormationClass: 'paired_motion',
       behavioralFormationActivationMode: 'perf_lab',
       behavioralFormationIntensity: 0.6,
-      behavioralFormationActive: false,
+      behavioralFormationActive: true,
       formationArchetype: 'backbeat_pair',
       formationRole: 'counter_rhythm',
       formationSpawnRegion: 'mid_side',
@@ -15701,12 +15706,31 @@ function getPerfRepeatBehaviorSpec(behaviorId = 'none') {
       formationDesiredMemberCount: 8,
     };
   }
+  if (id === 'beat_bounce_event') {
+    return {
+      behavioralFormationArchetype: 'none',
+      behavioralFormationClass: 'none',
+      behavioralFormationActivationMode: 'perf_lab',
+      behavioralFormationIntensity: 0,
+      behavioralFormationActive: false,
+      perfRepeatEventBehavior: 'beat_bounce',
+      formationArchetype: 'foundation_anchor_line',
+      formationRole: 'foundation_groove',
+      formationSpawnRegion: 'lower_outer',
+      formationSpacingProfile: 'wide_line',
+      formationSymmetry: 'mirrored',
+      formationPresentationWeight: 0.84,
+      formationMergeProtectionActive: false,
+      formationDesiredMemberCount: 1,
+    };
+  }
   return {
     behavioralFormationArchetype: 'none',
     behavioralFormationClass: 'none',
     behavioralFormationActivationMode: 'inactive',
     behavioralFormationIntensity: 0,
     behavioralFormationActive: false,
+    perfRepeatEventBehavior: '',
   };
 }
 function applyPerfRepeatBehaviorToEnemy(enemy, behaviorId = 'none') {
@@ -15717,6 +15741,7 @@ function applyPerfRepeatBehaviorToEnemy(enemy, behaviorId = 'none') {
   enemy.behavioralFormationActivationMode = spec.behavioralFormationActivationMode;
   enemy.behavioralFormationIntensity = spec.behavioralFormationIntensity;
   enemy.behavioralFormationActive = spec.behavioralFormationActive === true;
+  enemy.perfRepeatEventBehavior = String(spec?.perfRepeatEventBehavior || '').trim().toLowerCase();
   if (spec.formationArchetype) enemy.formationArchetype = spec.formationArchetype;
   if (spec.formationRole) enemy.formationRole = spec.formationRole;
   if (spec.formationSpawnRegion) enemy.formationSpawnRegion = spec.formationSpawnRegion;
@@ -15727,7 +15752,10 @@ function applyPerfRepeatBehaviorToEnemy(enemy, behaviorId = 'none') {
   if (Number.isFinite(Number(spec.formationDesiredMemberCount))) enemy.formationDesiredMemberCount = Math.max(1, Math.trunc(Number(spec.formationDesiredMemberCount) || 1));
   return enemy;
 }
-function createPerfComposerEnemyGroup(behaviorId = 'none') {
+function createPerfComposerEnemyGroup(behaviorId = 'none', options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const requestedCount = Math.max(1, Math.trunc(Number(opts.requestedGroupCount) || 8));
+  const requestedSpeedScale = Math.max(0.25, Math.min(4, Number(opts.requestedSpeedScale) || 1));
   const motif = createComposerEnemyGroupProfile(0, null) || {};
   const role = normalizeSwarmRole(motif?.role || BEAT_EVENT_ROLES.LEAD, BEAT_EVENT_ROLES.LEAD);
   const fallbackInstrument = resolveSwarmSoundInstrumentId('projectile') || 'tone';
@@ -15746,8 +15774,8 @@ function createPerfComposerEnemyGroup(behaviorId = 'none') {
     color: String(motif?.color || pickComposerGroupColor?.({ colors: COMPOSER_GROUP_COLORS, index: 0 }) || '#ff8b6e'),
     actionType: String(motif?.actionType || 'projectile'),
     threatLevel: String(motif?.threatLevel || BEAT_EVENT_THREAT.FULL),
-    performers: 8,
-    size: 8,
+    performers: requestedCount,
+    size: requestedCount,
     steps: Array.isArray(motif?.steps) ? motif.steps.slice(0, WEAPON_TUNE_STEPS) : Array.from({ length: WEAPON_TUNE_STEPS }, () => Math.random() >= 0.5),
     motif: motif?.motif && typeof motif.motif === 'object'
       ? { id: String(motif.motif.id || 'perf-repeat-group'), steps: Array.isArray(motif.motif.steps) ? motif.motif.steps.slice(0, WEAPON_TUNE_STEPS) : [] }
@@ -15768,6 +15796,8 @@ function createPerfComposerEnemyGroup(behaviorId = 'none') {
     active: true,
     retiring: false,
     lifecycleState: 'active',
+    perfRepeatSpeedScale: requestedSpeedScale,
+    perfRepeatRequestedCount: requestedCount,
   };
   applyPerfRepeatBehaviorToEnemy(group, behaviorId);
   assignMusicLaneIdentity({
@@ -15784,6 +15814,21 @@ function createPerfComposerEnemyGroup(behaviorId = 'none') {
   });
   composerEnemyGroups.push(group);
   return group;
+}
+function spawnPerfComposerMemberOffscreen(behaviorId = 'none') {
+  const group = createPerfComposerEnemyGroup('none', {
+    requestedGroupCount: 1,
+    requestedSpeedScale: 1,
+  });
+  applyPerfRepeatBehaviorToEnemy(group, behaviorId);
+  group.performers = 1;
+  group.size = 1;
+  group.perfRepeatRequestedCount = 1;
+  spawnComposerGroupOffscreenMembers(group, 1);
+  const spawned = getAliveEnemiesByIds(group.memberIds)
+    .filter((enemy) => String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member' && !enemy?.retreating)[0] || null;
+  if (spawned) applyPerfRepeatBehaviorToEnemy(spawned, behaviorId);
+  return spawned;
 }
 function triggerPerfRepeatRhythmPulse(enemiesLike, beatIndex = currentBeatIndex, behaviorId = 'none') {
   const list = Array.isArray(enemiesLike) ? enemiesLike.filter(Boolean) : [];
@@ -15818,6 +15863,30 @@ function triggerPerfRepeatRhythmPulse(enemiesLike, beatIndex = currentBeatIndex,
     const bi = Math.trunc(Number(b?.formationMemberIndex) || 0);
     return ai - bi;
   });
+  if (behavior === 'beat_bounce_event') {
+    const strongHit = stepMod8 === 0 || stepMod8 === 4;
+    const focusCount = strongHit ? Math.min(2, preferred.length) : 1;
+    for (let i = 0; i < focusCount; i++) {
+      const enemy = preferred[i];
+      if (!enemy) continue;
+      enemy.composerActionPulseT = Math.max(0.12, Number(enemy?.composerActionPulseDur) || Number(COMPOSER_GROUP_ACTION_PULSE_SECONDS) || 0.24);
+      enemy.lastPerfRepeatTriggerStep = stepAbs;
+      pulseEnemyMusicalRoleVisual(enemy, strongHit ? 'strong' : 'soft');
+      try {
+        directTriggerComposerCarrier({
+          enemyId: Math.trunc(Number(enemy?.id) || 0),
+          groupId: Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0)),
+          instrumentId: String(enemy?.composerInstrument || enemy?.musicLaneInstrumentId || enemy?.instrumentId || '').trim(),
+          note: String(enemy?.soundNote || '').trim(),
+          musicProminence: strongHit ? 'full' : 'quiet',
+          audioGain: strongHit ? 0.78 : 0.54,
+          soloCarrierType: String(enemy?.soloCarrierType || '').trim().toLowerCase(),
+          visualOnly: false,
+        });
+      } catch {}
+    }
+    return true;
+  }
   let focus = preferred[0] || sorted[0] || null;
   if (behavior === 'winding_chain' && !strongHit && preferred.length > 1) {
     const altIndex = (Math.floor(stepAbs / 2) % preferred.length);
@@ -15860,29 +15929,35 @@ function setPerfEnemyRepeatMode(enemyType = '', enabled = true, options = null) 
   const opts = options && typeof options === 'object' ? options : {};
   const persistent = opts.persistent !== false;
   const behavior = normalizePerfRepeatBehaviorId(opts.behavior || 'none');
+  const requestedGroupCount = Math.max(1, Math.trunc(Number(opts.groupCount) || 8));
+  const requestedSpeedScale = Math.max(0.25, Math.min(4, Number(opts.speedScale) || 1));
   if (!enabled || !type) {
     perfEnemyRepeatRuntime.enabled = false;
     perfEnemyRepeatRuntime.enemyType = '';
     perfEnemyRepeatRuntime.behavior = 'none';
     perfEnemyRepeatRuntime.targetCount = 0;
+    perfEnemyRepeatRuntime.requestedGroupCount = 8;
+    perfEnemyRepeatRuntime.requestedSpeedScale = 1;
     perfEnemyRepeatRuntime.composerGroupId = 0;
     perfEnemyRepeatRuntime.persistent = true;
     perfEnemyRepeatRuntime.lastRhythmStep = -1;
     clearPendingEnemyDeaths();
     clearEnemies();
-    return { ok: true, enabled: false, enemyType: '', behavior: 'none', targetCount: 0, persistent: true };
+    return { ok: true, enabled: false, enemyType: '', behavior: 'none', targetCount: 0, groupCount: 8, speedScale: 1, persistent: true };
   }
   clearPendingEnemyDeaths();
   clearEnemies();
   perfEnemyRepeatRuntime.enabled = true;
   perfEnemyRepeatRuntime.enemyType = type;
   perfEnemyRepeatRuntime.behavior = behavior;
-  perfEnemyRepeatRuntime.targetCount = getPerfEnemyRepeatTargetCount(type);
+  perfEnemyRepeatRuntime.targetCount = getPerfEnemyRepeatTargetCount(type, requestedGroupCount);
+  perfEnemyRepeatRuntime.requestedGroupCount = requestedGroupCount;
+  perfEnemyRepeatRuntime.requestedSpeedScale = requestedSpeedScale;
   perfEnemyRepeatRuntime.composerGroupId = 0;
   perfEnemyRepeatRuntime.persistent = persistent;
   perfEnemyRepeatRuntime.lastRhythmStep = -1;
   if (type === 'group') {
-    const group = createPerfComposerEnemyGroup(behavior);
+    const group = createPerfComposerEnemyGroup(behavior, { requestedGroupCount, requestedSpeedScale });
     perfEnemyRepeatRuntime.composerGroupId = Math.trunc(Number(group?.id) || 0);
     spawnComposerGroupOffscreenMembers(group, perfEnemyRepeatRuntime.targetCount);
   } else {
@@ -15894,6 +15969,8 @@ function setPerfEnemyRepeatMode(enemyType = '', enabled = true, options = null) 
     enemyType: type,
     behavior,
     targetCount: perfEnemyRepeatRuntime.targetCount,
+    groupCount: requestedGroupCount,
+    speedScale: requestedSpeedScale,
     persistent,
   };
 }
@@ -15919,14 +15996,38 @@ function maintainPerfEnemyRepeatMode() {
   if (targetType === 'group') {
     let group = composerEnemyGroups.find((g) => Math.trunc(Number(g?.id) || 0) === Math.trunc(Number(perfEnemyRepeatRuntime.composerGroupId) || 0)) || null;
     if (!group) {
-      group = createPerfComposerEnemyGroup(perfEnemyRepeatRuntime.behavior);
+      group = createPerfComposerEnemyGroup(perfEnemyRepeatRuntime.behavior, {
+        requestedGroupCount: perfEnemyRepeatRuntime.requestedGroupCount,
+        requestedSpeedScale: perfEnemyRepeatRuntime.requestedSpeedScale,
+      });
       perfEnemyRepeatRuntime.composerGroupId = Math.trunc(Number(group?.id) || 0);
     }
     applyPerfRepeatBehaviorToEnemy(group, perfEnemyRepeatRuntime.behavior);
+    group.performers = perfEnemyRepeatRuntime.targetCount;
+    group.size = perfEnemyRepeatRuntime.targetCount;
+    group.perfRepeatSpeedScale = perfEnemyRepeatRuntime.requestedSpeedScale;
+    group.perfRepeatRequestedCount = perfEnemyRepeatRuntime.requestedGroupCount;
     group.active = true;
     group.retiring = false;
     group.lifecycleState = 'active';
     const aliveMembers = getAliveEnemiesByIds(group.memberIds).filter((e) => String(e?.enemyType || '').trim().toLowerCase() === 'composer-group-member' && !e?.retreating);
+    if (perfEnemyRepeatRuntime.behavior === 'advancing_line' && aliveMembers.length) {
+      const leader = aliveMembers.slice().sort((a, b) => Math.trunc(Number(a?.formationMemberIndex) || 0) - Math.trunc(Number(b?.formationMemberIndex) || 0))[0] || null;
+      const leaderScreen = leader ? worldToScreen({ x: Number(leader.wx) || 0, y: Number(leader.wy) || 0 }) : null;
+      const movingRight = Number(leader?.behavioralFormationPathDirX || group?.behavioralFormationPathDirX || 1) >= 0;
+      const exitedFarSide = !!(leaderScreen && Number.isFinite(leaderScreen.x) && (movingRight ? leaderScreen.x > (window.innerWidth + 56) : leaderScreen.x < -56));
+      if (exitedFarSide) {
+        for (const enemy of aliveMembers) {
+          if (!enemy) continue;
+          removeEnemy(enemy, 'perf_repeat_cycle_reset');
+          const idx = enemies.indexOf(enemy);
+          if (idx >= 0) enemies.splice(idx, 1);
+        }
+        try { group.memberIds = new Set(); } catch {}
+        spawnComposerGroupOffscreenMembers(group, targetCount);
+        return true;
+      }
+    }
     if (aliveMembers.length > targetCount) {
       for (let i = targetCount; i < aliveMembers.length; i++) {
         const enemy = aliveMembers[i];
@@ -16191,6 +16292,9 @@ function spawnPerfEnemyType(enemyType = 'drawsnake', behaviorId = 'none') {
     const enemy = spawnEnemyAt(point.x, point.y) || null;
     if (enemy) applyPerfRepeatBehaviorToEnemy(enemy, behaviorId);
     return enemy;
+  }
+  if (type === 'composer-group-member') {
+    return spawnPerfComposerMemberOffscreen(behaviorId);
   }
   return null;
 }
@@ -18642,6 +18746,8 @@ function spawnComposerGroupOffscreenMembers(group, count = 1) {
     count,
     getRandomOffscreenSpawnPoint,
     spawnComposerGroupEnemyAt,
+    screenToWorld,
+    worldToScreen,
   });
 }
 function getAliveEnemiesByIds(idSet) {

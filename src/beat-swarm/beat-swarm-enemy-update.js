@@ -51,6 +51,27 @@ function getFormationAnchorWorldRuntime(enemy, helpers) {
 }
 
 function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
+  const perfRepeatEventBehavior = String(enemy?.perfRepeatEventBehavior || '').trim().toLowerCase();
+  if (perfRepeatEventBehavior === 'beat_bounce') {
+    if (String(enemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') {
+      return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
+    }
+    const nowMs = Number(globalThis.performance?.now?.() || 0);
+    const cycleMs = 3200;
+    const activeMs = 720;
+    const phaseMs = nowMs % cycleMs;
+    if (!(phaseMs >= 0 && phaseMs <= activeMs)) {
+      return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
+    }
+    const phaseT = Math.max(0, Math.min(1, phaseMs / activeMs));
+    const pulse = Math.sin(phaseT * Math.PI);
+    const presentationWeight = Math.max(0.5, Number(enemy?.formationPresentationWeight) || 0.75);
+    return {
+      velocityDamping: 1 - (0.22 * pulse),
+      scaleBias: 1,
+      offsetYPx: -(4 * pulse * presentationWeight),
+    };
+  }
   const activeEventSection = String(eventSectionRuntime?.activeEventSection || '').trim().toLowerCase();
   if (activeEventSection !== 'beat_bounce') {
     return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
@@ -75,6 +96,226 @@ function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
     velocityDamping: Math.max(0.82, Math.min(1, Number(eventSectionRuntime?.motionDamping) || 1)),
     scaleBias: 1 + (pulseScale * presentationWeight),
     offsetYPx: -(6 * presentationWeight),
+  };
+}
+
+function getBehaviorBeatProgressRuntime(enemy, state, key = 'behavioralBeat', beatWindowSeconds = 0.28) {
+  const beatIndex = Math.max(0, Math.trunc(Number(state?.currentBeatIndex) || 0));
+  const stampKey = `${key}BeatIndex`;
+  const tKey = `${key}BeatT`;
+  if (Math.trunc(Number(enemy?.[stampKey]) || -1) !== beatIndex) {
+    enemy[stampKey] = beatIndex;
+    enemy[tKey] = 0;
+  } else {
+    enemy[tKey] = Math.max(0, Number(enemy?.[tKey]) || 0) + Math.max(0, Number(state?.dt) || 0);
+  }
+  const localT = Math.max(0, Math.min(1, (Number(enemy?.[tKey]) || 0) / Math.max(0.08, Number(beatWindowSeconds) || 0.28)));
+  return {
+    beatIndex,
+    localT,
+    smoothT: 0.5 - (0.5 * Math.cos(localT * Math.PI)),
+  };
+}
+
+function getPerfBehaviorWindowRuntime(cycleMs = 5200, activeMs = 1800) {
+  const nowMs = Number(globalThis.performance?.now?.() || 0);
+  const safeCycleMs = Math.max(600, Number(cycleMs) || 5200);
+  const safeActiveMs = Math.max(200, Math.min(safeCycleMs, Number(activeMs) || 1800));
+  const phaseMs = nowMs % safeCycleMs;
+  return {
+    active: phaseMs >= 0 && phaseMs <= safeActiveMs,
+    cycleIndex: Math.floor(nowMs / safeCycleMs),
+    phaseMs,
+    cycleMs: safeCycleMs,
+    activeMs: safeActiveMs,
+  };
+}
+
+function getPairedDanceAssignmentRuntime(enemy, enemies, state, cycleIndex = 0) {
+  const groupId = Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0));
+  if (!(groupId > 0)) return null;
+  if (!state.__pairedDanceLayoutCache || typeof state.__pairedDanceLayoutCache !== 'object') {
+    state.__pairedDanceLayoutCache = Object.create(null);
+  }
+  const cacheKey = `${groupId}:${Math.trunc(Number(cycleIndex) || 0)}`;
+  if (!state.__pairedDanceLayoutCache[cacheKey]) {
+    const members = enemies
+      .filter((candidate) => (
+        candidate
+        && !candidate.retreating
+        && String(candidate?.enemyType || '').trim().toLowerCase() === 'composer-group-member'
+        && Math.trunc(Number(candidate?.composerGroupId || candidate?.musicGroupId || 0)) === groupId
+      ))
+      .slice();
+    const used = new Set();
+    const assignments = Object.create(null);
+    const centers = [];
+    const worldToScreen = typeof state?.worldToScreen === 'function' ? state.worldToScreen : null;
+    const screenToWorld = typeof state?.screenToWorld === 'function' ? state.screenToWorld : null;
+    const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
+    const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
+    const minCenterDistance = 150;
+    members.sort((a, b) => (Number(a?.wx) || 0) - (Number(b?.wx) || 0));
+    for (let i = 0; i < members.length; i++) {
+      const a = members[i];
+      const aId = Math.max(0, Math.trunc(Number(a?.id) || 0));
+      if (!(aId > 0) || used.has(aId)) continue;
+      let partner = null;
+      let nearestD2 = Infinity;
+      for (let j = 0; j < members.length; j++) {
+        const b = members[j];
+        const bId = Math.max(0, Math.trunc(Number(b?.id) || 0));
+        if (!(bId > 0) || bId === aId || used.has(bId)) continue;
+        const ddx = (Number(b?.wx) || 0) - (Number(a?.wx) || 0);
+        const ddy = (Number(b?.wy) || 0) - (Number(a?.wy) || 0);
+        const d2 = (ddx * ddx) + (ddy * ddy);
+        if (!(d2 < nearestD2)) continue;
+        nearestD2 = d2;
+        partner = b;
+      }
+      used.add(aId);
+      const b = partner || null;
+      const bId = Math.max(0, Math.trunc(Number(b?.id) || 0));
+      if (bId > 0) used.add(bId);
+      const midpoint = b
+        ? {
+            x: ((Number(a?.wx) || 0) + (Number(b?.wx) || 0)) * 0.5,
+            y: ((Number(a?.wy) || 0) + (Number(b?.wy) || 0)) * 0.5,
+          }
+        : { x: Number(a?.wx) || 0, y: Number(a?.wy) || 0 };
+      let pairCenter = midpoint;
+      const midpointScreen = worldToScreen ? worldToScreen(midpoint) : null;
+      const midpointOnScreen = !!(midpointScreen && Number.isFinite(midpointScreen.x) && Number.isFinite(midpointScreen.y) && midpointScreen.x >= 0 && midpointScreen.x <= screenW && midpointScreen.y >= 0 && midpointScreen.y <= screenH);
+      if (!midpointOnScreen && screenToWorld) {
+        const safeWorld = screenToWorld({
+          x: Math.max(screenW * 0.2, Math.min(screenW * 0.8, Number(midpointScreen?.x) || (screenW * 0.5))),
+          y: Math.max(screenH * 0.2, Math.min(screenH * 0.8, Number(midpointScreen?.y) || (screenH * 0.5))),
+        });
+        if (safeWorld && Number.isFinite(safeWorld.x) && Number.isFinite(safeWorld.y)) {
+          pairCenter = { x: Number(safeWorld.x) || midpoint.x, y: Number(safeWorld.y) || midpoint.y };
+        }
+      }
+      for (let k = 0; k < centers.length; k++) {
+        const other = centers[k];
+        const dx = Number(pairCenter.x) - Number(other.x);
+        const dy = Number(pairCenter.y) - Number(other.y);
+        const dist = Math.hypot(dx, dy) || 0.001;
+        if (dist >= minCenterDistance) continue;
+        const push = (minCenterDistance - dist);
+        const nx = dx / dist;
+        const ny = dy / dist;
+        pairCenter = {
+          x: Number(pairCenter.x) + (nx * push),
+          y: Number(pairCenter.y) + (ny * push),
+        };
+      }
+      centers.push(pairCenter);
+      assignments[aId] = {
+        partnerId: bId,
+        pairCenterX: Number(pairCenter.x) || midpoint.x,
+        pairCenterY: Number(pairCenter.y) || midpoint.y,
+        pairSide: -1,
+      };
+      if (bId > 0) {
+        assignments[bId] = {
+          partnerId: aId,
+          pairCenterX: Number(pairCenter.x) || midpoint.x,
+          pairCenterY: Number(pairCenter.y) || midpoint.y,
+          pairSide: 1,
+        };
+      }
+    }
+    state.__pairedDanceLayoutCache[cacheKey] = assignments;
+  }
+  return state.__pairedDanceLayoutCache[cacheKey]?.[Math.max(0, Math.trunc(Number(enemy?.id) || 0))] || null;
+}
+
+function arePairedDanceTargetsReadyRuntime(enemies, state, cycleIndex = 0) {
+  const cache = state?.__pairedDanceLayoutCache;
+  if (!cache || typeof cache !== 'object') return false;
+  const readyCache = state.__pairedDanceReadyCache || (state.__pairedDanceReadyCache = Object.create(null));
+  const readyKey = String(Math.trunc(Number(cycleIndex) || 0));
+  if (Object.prototype.hasOwnProperty.call(readyCache, readyKey)) {
+    return readyCache[readyKey] === true;
+  }
+  const tolerance = 26;
+  const byId = new Map();
+  for (const enemy of enemies) {
+    if (!enemy) continue;
+    byId.set(Math.max(0, Math.trunc(Number(enemy?.id) || 0)), enemy);
+  }
+  for (const key of Object.keys(cache)) {
+    if (!key.endsWith(`:${Math.trunc(Number(cycleIndex) || 0)}`)) continue;
+    const assignments = cache[key];
+    if (!assignments || typeof assignments !== 'object') continue;
+    for (const [idKey, assignment] of Object.entries(assignments)) {
+      const enemy = byId.get(Math.max(0, Math.trunc(Number(idKey) || 0))) || null;
+      if (!enemy || enemy.retreating) continue;
+      const pairSide = Number(assignment?.pairSide) >= 0 ? 1 : -1;
+      const targetX = (Number(assignment?.pairCenterX) || Number(enemy?.wx) || 0) + (pairSide * 34);
+      const targetY = Number(assignment?.pairCenterY) || Number(enemy?.wy) || 0;
+      const dist = Math.hypot(targetX - (Number(enemy?.wx) || 0), targetY - (Number(enemy?.wy) || 0));
+      if (dist > tolerance) {
+        readyCache[readyKey] = false;
+        return false;
+      }
+    }
+  }
+  readyCache[readyKey] = true;
+  return true;
+}
+
+function resolvePerfRepeatEventMotionRuntime(enemy, state, constants) {
+  const perfRepeatEventBehavior = String(enemy?.perfRepeatEventBehavior || '').trim().toLowerCase();
+  if (perfRepeatEventBehavior !== 'beat_bounce') return null;
+  if (String(enemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') return null;
+  const eventWindow = getPerfBehaviorWindowRuntime(5200, 1800);
+  if (!eventWindow.active) {
+    enemy.behavioralBeatBounceAnchorX = Number(enemy?.wx) || 0;
+    enemy.behavioralBeatBounceAnchorY = Number(enemy?.wy) || 0;
+    return null;
+  }
+  if (!Number.isFinite(Number(enemy?.behavioralBeatBounceAnchorX)) || !Number.isFinite(Number(enemy?.behavioralBeatBounceAnchorY))) {
+    enemy.behavioralBeatBounceAnchorX = Number(enemy?.wx) || 0;
+    enemy.behavioralBeatBounceAnchorY = Number(enemy?.wy) || 0;
+  }
+  const beatState = getBehaviorBeatProgressRuntime(enemy, state, 'behavioralBeatBounce', 0.24);
+  const anchorX = Number(enemy?.behavioralBeatBounceAnchorX) || Number(enemy?.wx) || 0;
+  const anchorY = Number(enemy?.behavioralBeatBounceAnchorY) || Number(enemy?.wy) || 0;
+  const cycleBeat = beatState.beatIndex % 4;
+  const segSmooth = beatState.smoothT;
+  const lateralAmp = 118;
+  const forwardAmp = 72;
+  const sweepAmp = 96;
+  const bob = Math.sin(((beatState.beatIndex + beatState.localT) % 1 + beatState.localT) * Math.PI * 4) * 10;
+  let offsetX = 0;
+  let offsetY = 0;
+  if (cycleBeat === 0) {
+    offsetX = lateralAmp * segSmooth;
+    offsetY = bob;
+  } else if (cycleBeat === 1) {
+    offsetX = lateralAmp - (sweepAmp * segSmooth);
+    offsetY = (-forwardAmp * segSmooth) + bob;
+  } else if (cycleBeat === 2) {
+    offsetX = (lateralAmp - sweepAmp) - (lateralAmp * 2 * segSmooth);
+    offsetY = bob;
+  } else {
+    offsetX = -lateralAmp + (sweepAmp * segSmooth);
+    offsetY = (forwardAmp * segSmooth) + bob;
+  }
+  const targetWorld = {
+    x: anchorX + offsetX,
+    y: anchorY + offsetY,
+  };
+  const dx = Number(targetWorld.x) - Number(enemy?.wx);
+  const dy = Number(targetWorld.y) - Number(enemy?.wy);
+  const dLen = Math.hypot(dx, dy) || 1;
+  const desiredSpeed = Math.max(80, (Number(constants?.enemyMaxSpeed) || 140) * 1.25);
+  return {
+    overrideVelocity: true,
+    desiredVx: (dx / dLen) * desiredSpeed,
+    desiredVy: (dy / dLen) * desiredSpeed,
+    blend: 0.36 + (0.06 * segSmooth),
   };
 }
 
@@ -108,61 +349,124 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
   const speedMultiplier = Math.max(1, Number(runtime?.speedMultiplier) || 1);
   const desiredSpeed = enemyMaxSpeed * speedMultiplier;
   if (runtime.behaviorClass === 'follow_the_leader' && runtime.archetype === 'advancing_line' && (Number(runtime?.leaderBias) || 0) >= 0.999) {
-    const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-    const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
-    const worldToScreen = typeof state?.worldToScreen === 'function' ? state.worldToScreen : null;
-    const screenToWorld = typeof state?.screenToWorld === 'function' ? state.screenToWorld : null;
-    const arenaCenterScreen = (worldToScreen && state?.arenaCenterWorld && typeof state.arenaCenterWorld === 'object')
-      ? worldToScreen({
-          x: Number(state.arenaCenterWorld.x) || 0,
-          y: Number(state.arenaCenterWorld.y) || 0,
-        })
-      : null;
-    const s = worldToScreen ? worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 }) : null;
+    const arenaCenter = state?.arenaCenterWorld && typeof state.arenaCenterWorld === 'object'
+      ? state.arenaCenterWorld
+      : centerWorld;
+    const arenaRadius = Math.max(140, Number(constants?.swarmArenaRadiusWorld) || 180);
     const phase = (Number(enemy?.behavioralFormationPhase) || 0) + ((Number(state?.dt) || 0) * Math.PI * 2 * Math.max(0.018, Number(runtime?.pathOscillationHz) || 0.32));
     enemy.behavioralFormationPhase = phase;
-    if (!enemy.behavioralFormationSweepDir || Math.abs(Number(enemy.behavioralFormationSweepDir)) !== 1) {
-      enemy.behavioralFormationSweepDir = ((Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId || 0)) % 2) === 0) ? 1 : -1;
+    if (!Number.isFinite(Number(enemy?.behavioralFormationPathDirX)) || Math.abs(Number(enemy?.behavioralFormationPathDirX)) < 0.001) {
+      enemy.behavioralFormationPathDirX = ((Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId || 0)) % 2) === 0) ? 1 : -1;
     }
-    const sweepDir = Number(enemy.behavioralFormationSweepDir) || 1;
-    const arenaRadiusScreen = Math.max(90, Math.min(screenH * 0.38, (Number(constants?.swarmArenaRadiusWorld) || 180) * 0.6));
-    const pickCrossingY = () => {
-      const centerY = Number(arenaCenterScreen?.y) || (screenH * 0.5);
-      const band = arenaRadiusScreen * 0.52;
-      const offset = Math.sin(phase * 0.61 + (Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId || 0)) * 0.37)) * band;
-      return Math.max(24, Math.min(screenH - 24, centerY + offset));
+    if (!Number.isFinite(Number(enemy?.behavioralFormationPathOriginWorldX)) || !Number.isFinite(Number(enemy?.behavioralFormationPathOriginWorldY))) {
+      enemy.behavioralFormationPathOriginWorldX = Number(enemy?.wx) || 0;
+      enemy.behavioralFormationPathOriginWorldY = Number(enemy?.wy) || 0;
+    }
+    const travelDirX = Number(enemy.behavioralFormationPathDirX) >= 0 ? 1 : -1;
+    const travelDirY = Number(enemy?.behavioralFormationPathDirY) || 0;
+    const travelLen = Math.hypot(travelDirX, travelDirY) || 1;
+    const dirX = travelDirX / travelLen;
+    const dirY = travelDirY / travelLen;
+    const normalX = -dirY;
+    const normalY = dirX;
+    const waveBaseY = Number(enemy.behavioralFormationPathOriginWorldY) || Number(enemy?.wy) || 0;
+    const offsetBand = Math.max(arenaRadius * 0.52, 120);
+    if (!Number.isFinite(Number(enemy?.behavioralFormationPathCrossOffsetWorld)) || Math.abs(Number(enemy?.behavioralFormationPathCrossOffsetWorld)) < 1) {
+      const seedPhase = Math.sin((Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId || 0)) * 0.37) + 0.8);
+      enemy.behavioralFormationPathCrossOffsetWorld = seedPhase * offsetBand * 0.55;
+    }
+    const wiggleAmp = Math.max(110, Math.min(arenaRadius * 1.05, arenaRadius * Math.max(0.7, Number(runtime?.pathOscillationAmplitude) || 0.95)));
+    const forwardLookahead = Math.max(arenaRadius * 0.85, 320);
+    const leadWave = Math.sin(phase * 0.42);
+    const targetWorld = {
+      x: Number(enemy?.wx) + (dirX * forwardLookahead) + (normalX * leadWave * wiggleAmp),
+      y: waveBaseY + (dirY * forwardLookahead) + (normalY * ((Number(enemy.behavioralFormationPathCrossOffsetWorld) || 0) + (leadWave * wiggleAmp))),
     };
-    if (!enemy.behavioralFormationSweepTargetX || !Number.isFinite(Number(enemy.behavioralFormationSweepTargetX))) {
-      enemy.behavioralFormationSweepTargetX = sweepDir > 0 ? (screenW + 96) : -96;
-      enemy.behavioralFormationSweepCrossY = pickCrossingY();
-    }
-    if (s && Number.isFinite(s.x)) {
-      const crossedFarSide = sweepDir > 0 ? (s.x > screenW + 48) : (s.x < -48);
-      if (crossedFarSide) {
-        enemy.behavioralFormationSweepDir = sweepDir * -1;
-        enemy.behavioralFormationSweepTargetX = enemy.behavioralFormationSweepDir > 0 ? (screenW + 96) : -96;
-        enemy.behavioralFormationSweepCrossY = pickCrossingY();
-      }
-    }
-    const wiggleAmp = Math.max(64, Math.min(screenH * 0.3, screenH * Number(runtime?.pathOscillationAmplitude || 0.5) * 0.4));
-    const leadWave = Math.sin(phase * 1.05);
-    const targetScreenX = Number(enemy.behavioralFormationSweepTargetX) || (sweepDir > 0 ? (screenW + 96) : -96);
-    const targetScreenY = (Number(enemy.behavioralFormationSweepCrossY) || (screenH * 0.5)) + (leadWave * wiggleAmp);
-    const targetWorld = screenToWorld ? screenToWorld({
-      x: targetScreenX,
-      y: Math.max(24, Math.min(screenH - 24, targetScreenY)),
-    }) : null;
-    if (!targetWorld || !Number.isFinite(targetWorld.x) || !Number.isFinite(targetWorld.y)) return null;
     const dx = Number(targetWorld.x) - Number(enemy?.wx);
     const dy = Number(targetWorld.y) - Number(enemy?.wy);
     const dLen = Math.hypot(dx, dy) || 1;
-    const dirX = dx / dLen;
-    const dirY = dy / dLen;
+    const steerX = dx / dLen;
+    const steerY = dy / dLen;
     return {
       overrideVelocity: true,
-      desiredVx: dirX * desiredSpeed,
-      desiredVy: dirY * desiredSpeed,
+      desiredVx: steerX * desiredSpeed,
+      desiredVy: steerY * desiredSpeed,
       blend: Math.max(0.22, Math.min(0.46, (Number(runtime?.velocityBlend) || 0.3) + 0.1)),
+    };
+  }
+  if (runtime.behaviorClass === 'paired_motion' && runtime.archetype === 'paired_dance') {
+    const danceWindow = getPerfBehaviorWindowRuntime(5600, 3600);
+    if (!danceWindow.active) return null;
+    const assignment = getPairedDanceAssignmentRuntime(enemy, enemies, state, danceWindow.cycleIndex);
+    if (!assignment) return null;
+    const pairSide = Number(assignment?.pairSide) >= 0 ? 1 : -1;
+    const partnerId = Math.max(0, Math.trunc(Number(assignment?.partnerId) || 0));
+    const partner = partnerId > 0
+      ? (enemies.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === partnerId) || null)
+      : null;
+    const beatState = getBehaviorBeatProgressRuntime(enemy, state, 'behavioralPairedDance', 0.22);
+    const cycleBeat = beatState.beatIndex % 8;
+    const allPairsReady = arePairedDanceTargetsReadyRuntime(enemies, state, danceWindow.cycleIndex);
+    const pairCenterX = Number(assignment?.pairCenterX) || ((Number(enemy?.wx) || 0) + (Number(partner?.wx) || 0)) * 0.5;
+    const pairCenterY = Number(assignment?.pairCenterY) || ((Number(enemy?.wy) || 0) + (Number(partner?.wy) || 0)) * 0.5;
+    const partnerX = Number(partner?.wx) || pairCenterX;
+    const partnerY = Number(partner?.wy) || pairCenterY;
+    const pairDx = (Number(enemy?.wx) || 0) - partnerX;
+    const pairDy = (Number(enemy?.wy) || 0) - partnerY;
+    const pairDist = Math.hypot(pairDx, pairDy) || 1;
+    const pairSepX = pairDist > 0.001 ? (pairDx / pairDist) : pairSide;
+    const pairSepY = pairDist > 0.001 ? (pairDy / pairDist) : 0;
+    let targetWorld = null;
+    if (cycleBeat <= 1 || !allPairsReady) {
+      const approachGap = 104;
+      targetWorld = {
+        x: pairCenterX + (pairSepX * approachGap * Math.max(0.6, 1 - beatState.smoothT)),
+        y: pairCenterY + (pairSepY * approachGap * Math.max(0.6, 1 - beatState.smoothT)),
+      };
+    } else if (cycleBeat <= 5) {
+      const orbitDir = (((Math.trunc(Number(enemy?.behavioralDanceCycleIndex) || 0) + Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0))) % 2) === 0) ? 1 : -1;
+      const approachMs = 1100;
+      const orbitMs = Math.max(900, Number(danceWindow.activeMs) - approachMs);
+      const orbitPhase = Math.max(0, Math.min(1, (Number(danceWindow.phaseMs) - approachMs) / orbitMs));
+      const orbitRadius = 164;
+      const ellipseY = orbitRadius * 0.84;
+      if (
+        Math.trunc(Number(enemy?.behavioralDanceOrbitCycleIndex) || -1) !== danceWindow.cycleIndex
+        || Math.trunc(Number(enemy?.behavioralDanceOrbitBeatAnchor) || -1) !== beatState.beatIndex
+      ) {
+        const relX0 = (Number(enemy?.wx) || 0) - pairCenterX;
+        const relY0 = (Number(enemy?.wy) || 0) - pairCenterY;
+        const baseAngle = (Math.abs(relX0) > 0.001 || Math.abs(relY0) > 0.001)
+          ? Math.atan2(relY0 / Math.max(1, ellipseY), relX0 / Math.max(1, orbitRadius))
+          : (pairSide < 0 ? Math.PI : 0);
+        enemy.behavioralDanceOrbitBaseAngle = baseAngle;
+        enemy.behavioralDanceOrbitCycleIndex = danceWindow.cycleIndex;
+        enemy.behavioralDanceOrbitBeatAnchor = beatState.beatIndex;
+      }
+      const baseAngle = Number(enemy?.behavioralDanceOrbitBaseAngle);
+      const orbitAngle = (Number.isFinite(baseAngle) ? baseAngle : (pairSide < 0 ? Math.PI : 0))
+        + ((orbitPhase * Math.PI * 2 * 1.1) * orbitDir);
+      const sweepX = Math.cos(orbitAngle) * orbitRadius;
+      const sweepY = Math.sin(orbitAngle) * ellipseY;
+      const driftX = Math.sin(orbitPhase * Math.PI * 2) * 6;
+      const driftY = Math.cos(orbitPhase * Math.PI * 4) * 5;
+      targetWorld = {
+        x: pairCenterX + sweepX + driftX + (pairSepX * 22),
+        y: pairCenterY + sweepY + driftY + (pairSepY * 22),
+      };
+    } else {
+      return null;
+    }
+    const dx = Number(targetWorld.x) - Number(enemy?.wx);
+    const dy = Number(targetWorld.y) - Number(enemy?.wy);
+    const dLen = Math.hypot(dx, dy) || 1;
+    return {
+      overrideVelocity: true,
+      desiredVx: (dx / dLen) * ((cycleBeat <= 1 || !allPairsReady) ? desiredSpeed * 2 : desiredSpeed),
+      desiredVy: (dy / dLen) * ((cycleBeat <= 1 || !allPairsReady) ? desiredSpeed * 2 : desiredSpeed),
+      blend: (cycleBeat <= 1 || !allPairsReady)
+        ? 0.62
+        : Math.max(0.44, Math.min(0.64, (Number(runtime?.velocityBlend) || 0.34) + 0.16)),
     };
   }
   if (runtime.behaviorClass !== 'follow_the_leader') return null;
@@ -535,7 +839,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         }
       }
     }
-    const behavioralMotion = resolveBehavioralFormationMotionRuntime(e, enemies, centerWorld, state, constants);
+    const perfRepeatEventMotion = resolvePerfRepeatEventMotionRuntime(e, state, constants);
+    const behavioralMotion = perfRepeatEventMotion || resolveBehavioralFormationMotionRuntime(e, enemies, centerWorld, state, constants);
     if (behavioralMotion?.overrideVelocity === true) {
       const blend = Math.max(0.08, Math.min(0.5, Number(behavioralMotion.blend) || 0.3));
       e.vx += ((Number(behavioralMotion.desiredVx) || 0) - (Number(e.vx) || 0)) * blend;

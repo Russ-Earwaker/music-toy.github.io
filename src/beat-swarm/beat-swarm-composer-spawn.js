@@ -117,7 +117,7 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
       )
       && group?.behavioralFormationActive === true
     )
-      ? (isSoloCarrier ? 1.25 : 1.7)
+      ? ((isSoloCarrier ? 1.25 : 1.7) * Math.max(0.25, Math.min(4, Number(group?.perfRepeatSpeedScale) || 1)))
       : (isSoloCarrier ? 0.82 : 1),
     soloCarrierType,
     introStageCarrier: group?.introStageCarrier === true,
@@ -146,6 +146,13 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     behavioralFormationActivationMode,
     behavioralFormationIntensity: Number(group?.behavioralFormationIntensity) || 0,
     behavioralFormationActive: group?.behavioralFormationActive === true,
+    perfRepeatEventBehavior: String(group?.perfRepeatEventBehavior || '').trim().toLowerCase(),
+    behavioralFormationPathOriginWorldX: Number(group?.behavioralFormationPathOriginWorldX) || 0,
+    behavioralFormationPathOriginWorldY: Number(group?.behavioralFormationPathOriginWorldY) || 0,
+    behavioralFormationPathDirX: Number(group?.behavioralFormationPathDirX) || 0,
+    behavioralFormationPathDirY: Number(group?.behavioralFormationPathDirY) || 0,
+    behavioralFormationPathCrossOffsetWorld: Number(group?.behavioralFormationPathCrossOffsetWorld) || 0,
+    perfRepeatSpeedScale: Math.max(0.25, Math.min(4, Number(group?.perfRepeatSpeedScale) || 1)),
     formationMemberIndex,
     formationMemberCount,
     callResponseLane: String(group?.callResponseLane || '').trim().toLowerCase(),
@@ -170,15 +177,70 @@ export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
     : requestedCount;
   const getRandomOffscreenSpawnPoint = typeof options?.getRandomOffscreenSpawnPoint === 'function' ? options.getRandomOffscreenSpawnPoint : (() => ({ x: 0, y: 0 }));
   const spawnComposerGroupEnemyAt = typeof options?.spawnComposerGroupEnemyAt === 'function' ? options.spawnComposerGroupEnemyAt : (() => null);
+  const screenToWorld = typeof options?.screenToWorld === 'function' ? options.screenToWorld : (() => null);
+  const worldToScreen = typeof options?.worldToScreen === 'function' ? options.worldToScreen : (() => null);
   const behavioralFormationArchetype = String(group?.behavioralFormationArchetype || '').trim().toLowerCase();
   const useSharedBatchEntryPoint = group?.behavioralFormationActive === true && behavioralFormationArchetype === 'advancing_line';
-  const sharedEntryPoint = useSharedBatchEntryPoint
-    ? (getRandomOffscreenSpawnPoint({
-        group,
-        memberIndex: 0,
-        memberCount: count,
-      }) || { x: 0, y: 0 })
-    : null;
+  let sharedEntryPoint = null;
+  if (useSharedBatchEntryPoint) {
+    const freshEntryPoint = getRandomOffscreenSpawnPoint({
+      group,
+      memberIndex: 0,
+      memberCount: count,
+    }) || { x: 0, y: 0 };
+    const freshWorld = screenToWorld(freshEntryPoint);
+    const storedOriginWorld = (
+      Number.isFinite(Number(group?.behavioralFormationPathOriginWorldX))
+      && Number.isFinite(Number(group?.behavioralFormationPathOriginWorldY))
+    )
+      ? {
+          x: Number(group.behavioralFormationPathOriginWorldX) || 0,
+          y: Number(group.behavioralFormationPathOriginWorldY) || 0,
+        }
+      : (freshWorld && Number.isFinite(freshWorld.x) && Number.isFinite(freshWorld.y) ? freshWorld : null);
+    const fromLeft = Number(freshEntryPoint?.x) <= 0;
+    const pathDirX = fromLeft ? 1 : -1;
+    const pathDirY = 0;
+    if (storedOriginWorld) {
+      group.behavioralFormationPathOriginWorldX = Number(storedOriginWorld.x) || 0;
+      group.behavioralFormationPathOriginWorldY = Number(storedOriginWorld.y) || 0;
+      group.behavioralFormationPathDirX = pathDirX;
+      group.behavioralFormationPathDirY = pathDirY;
+      if (!Number.isFinite(Number(group?.behavioralFormationPathCrossOffsetWorld))) {
+        group.behavioralFormationPathCrossOffsetWorld = 0;
+      }
+      let spawnWorld = { x: Number(storedOriginWorld.x) || 0, y: Number(storedOriginWorld.y) || 0 };
+      let projected = worldToScreen(spawnWorld);
+      const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
+      const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
+      const offscreenPad = 56;
+      let guard = 0;
+      while (
+        projected
+        && Number.isFinite(projected.x)
+        && Number.isFinite(projected.y)
+        && projected.x >= -offscreenPad
+        && projected.x <= (screenW + offscreenPad)
+        && projected.y >= -offscreenPad
+        && projected.y <= (screenH + offscreenPad)
+        && guard < 32
+      ) {
+        spawnWorld = {
+          x: Number(spawnWorld.x) - (pathDirX * 96),
+          y: Number(spawnWorld.y) - (pathDirY * 96),
+        };
+        projected = worldToScreen(spawnWorld);
+        guard += 1;
+      }
+      group.behavioralFormationPathOriginWorldX = Number(spawnWorld.x) || 0;
+      group.behavioralFormationPathOriginWorldY = Number(spawnWorld.y) || 0;
+      sharedEntryPoint = projected && Number.isFinite(projected.x) && Number.isFinite(projected.y)
+        ? { x: Number(projected.x) || 0, y: Number(projected.y) || 0 }
+        : freshEntryPoint;
+    } else {
+      sharedEntryPoint = freshEntryPoint;
+    }
+  }
   for (let i = 0; i < count; i++) {
     const p = sharedEntryPoint || getRandomOffscreenSpawnPoint({
       group,

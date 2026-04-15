@@ -109,6 +109,43 @@ function buildAdvancingLineRuntime(enemyLike = null, helpers = null) {
   });
 }
 
+function buildPairedDanceRuntime(enemyLike = null, helpers = null) {
+  const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : {};
+  const slotIndex = Math.max(0, Math.trunc(Number(enemy?.formationMemberIndex) || 0));
+  const slotCount = Math.max(1, Math.trunc(Number(enemy?.formationMemberCount) || 1));
+  const screenToWorld = typeof helpers?.screenToWorld === 'function' ? helpers.screenToWorld : null;
+  const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
+  const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
+  const centeredIndex = slotIndex - ((slotCount - 1) * 0.5);
+  const targetWorld = screenToWorld
+    ? screenToWorld({
+        x: Math.max(24, Math.min(screenW - 24, (screenW * 0.5) + (centeredIndex * (screenW * 0.05)))),
+        y: Math.max(24, Math.min(screenH - 24, (screenH * 0.54) + ((slotIndex % 2 === 0 ? -1 : 1) * (screenH * 0.03)))),
+      })
+    : null;
+  return Object.freeze({
+    archetype: 'paired_dance',
+    behaviorClass: 'paired_motion',
+    activationMode: normalizeActivationMode(enemy?.behavioralFormationActivationMode || 'opt_in'),
+    active: enemy?.behavioralFormationActive === true,
+    intensity: clamp01(enemy?.behavioralFormationIntensity || 0.7),
+    slotIndex,
+    slotCount,
+    leaderEnemyId: 0,
+    leaderBias: 0,
+    followDistanceWorld: 0,
+    lateralOffsetWorld: 0,
+    curvatureBias: centeredIndex * 0.06,
+    speedMultiplier: enemy?.behavioralFormationActive === true ? 1.45 : 1,
+    pathOscillationAmplitude: Math.max(0.35, Math.min(0.95, 0.42 + (clamp01(enemy?.behavioralFormationIntensity || 0.7) * 0.32))),
+    pathOscillationHz: 0.18,
+    velocityBlend: enemy?.behavioralFormationActive === true ? 0.34 : 0.12,
+    targetWorld: targetWorld && Number.isFinite(targetWorld.x) && Number.isFinite(targetWorld.y)
+      ? { x: Number(targetWorld.x) || 0, y: Number(targetWorld.y) || 0 }
+      : null,
+  });
+}
+
 export function buildBeatSwarmBehavioralFormationEnemyRuntime(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const enemy = opts.enemy && typeof opts.enemy === 'object' ? opts.enemy : null;
@@ -120,6 +157,9 @@ export function buildBeatSwarmBehavioralFormationEnemyRuntime(options = null) {
   }
   if (archetype === 'advancing_line') {
     return buildAdvancingLineRuntime(enemy, helpers);
+  }
+  if (archetype === 'paired_dance') {
+    return buildPairedDanceRuntime(enemy, helpers);
   }
   return buildInactiveRuntime(enemy);
 }

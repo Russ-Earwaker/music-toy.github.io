@@ -332,6 +332,8 @@ function ensureUI() {
       localStorage.setItem(PERF_MUSIC_REPEAT_UI_KEY, JSON.stringify({
         enemyType: String(next.enemyType || 'drawsnake').trim().toLowerCase() || 'drawsnake',
         behavior: String(next.behavior || 'none').trim().toLowerCase() || 'none',
+        groupCount: Math.max(1, Math.trunc(Number(next.groupCount) || 8)),
+        speedScale: Math.max(0.25, Math.min(4, Number(next.speedScale) || 1)),
       }));
     } catch {}
   }
@@ -456,15 +458,36 @@ function ensureUI() {
           <option value="drawsnake">DrawSnake</option>
           <option value="spawner">Spawner</option>
           <option value="dumb">Dumb</option>
+          <option value="composer-group-member">Composer Enemy</option>
           <option value="group">Composer Group</option>
         </select>
       </label>`,
       `<label class="perf-lab-toggle">Behavior
         <select class="perf-lab-select" data-music-spawn-behavior>
           <option value="none">None</option>
+          <option value="beat_bounce_event">Beat Bounce Event</option>
           <option value="winding_chain">Winding Chain</option>
           <option value="paired_dance">Paired Dance</option>
           <option value="advancing_line">Advancing Line</option>
+        </select>
+      </label>`,
+      `<label class="perf-lab-toggle">Group size
+        <select class="perf-lab-select" data-music-group-count>
+          <option value="4">4</option>
+          <option value="6">6</option>
+          <option value="8" selected>8</option>
+          <option value="10">10</option>
+          <option value="12">12</option>
+        </select>
+      </label>`,
+      `<label class="perf-lab-toggle">Speed
+        <select class="perf-lab-select" data-music-speed-scale>
+          <option value="0.8">0.8x</option>
+          <option value="1" selected>1.0x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="1.8">1.8x</option>
+          <option value="2.2">2.2x</option>
         </select>
       </label>`,
       `<label class="perf-lab-toggle"><input type="checkbox" data-music-repeat-persistent checked /> Repeat enemy stays alive</label>`,
@@ -983,8 +1006,12 @@ function ensureUI() {
     if (storedMusicRepeatUi) {
       const typeEl = ov.querySelector('[data-music-spawn-type]');
       const behaviorEl = ov.querySelector('[data-music-spawn-behavior]');
+      const countEl = ov.querySelector('[data-music-group-count]');
+      const speedEl = ov.querySelector('[data-music-speed-scale]');
       if (typeEl instanceof HTMLSelectElement) typeEl.value = String(storedMusicRepeatUi.enemyType || 'drawsnake');
       if (behaviorEl instanceof HTMLSelectElement) behaviorEl.value = String(storedMusicRepeatUi.behavior || 'none');
+      if (countEl instanceof HTMLSelectElement) countEl.value = String(Math.max(1, Math.trunc(Number(storedMusicRepeatUi.groupCount) || 8)));
+      if (speedEl instanceof HTMLSelectElement) speedEl.value = String(Math.max(0.25, Math.min(4, Number(storedMusicRepeatUi.speedScale) || 1)));
     }
   } catch {}
   // Keep UI checkboxes/selects in sync with global perf state.
@@ -1144,12 +1171,16 @@ function ensureUI() {
     if (act === 'musicEnemyRepeatStart') {
       const typeEl = ov.querySelector('[data-music-spawn-type]');
       const behaviorEl = ov.querySelector('[data-music-spawn-behavior]');
+      const countEl = ov.querySelector('[data-music-group-count]');
+      const speedEl = ov.querySelector('[data-music-speed-scale]');
       const persistentEl = ov.querySelector('[data-music-repeat-persistent]');
       const enemyType = String(typeEl?.value || 'drawsnake').trim().toLowerCase() || 'drawsnake';
       const behavior = String(behaviorEl?.value || 'none').trim().toLowerCase() || 'none';
+      const groupCount = Math.max(1, Math.trunc(Number(countEl?.value) || 8));
+      const speedScale = Math.max(0.25, Math.min(4, Number(speedEl?.value) || 1));
       const persistent = persistentEl ? persistentEl.checked !== false : true;
-      saveMusicRepeatUiState({ enemyType, behavior });
-      const result = await startPerfMusicRepeatSpawn(enemyType, { persistent, behavior });
+      saveMusicRepeatUiState({ enemyType, behavior, groupCount, speedScale });
+      const result = await startPerfMusicRepeatSpawn(enemyType, { persistent, behavior, groupCount, speedScale });
       setStatus(result.ok ? `Music repeat spawn running: ${enemyType} (${behavior})` : 'Music repeat spawn failed');
       setOutput(result);
       return;
@@ -2331,12 +2362,16 @@ function buildBeatSwarmTransitionDebugText(payload, meta = {}) {
   ov.addEventListener('change', (e) => {
     const target = e.target instanceof HTMLElement ? e.target : null;
     if (!target) return;
-    if (!target.matches('[data-music-spawn-type], [data-music-spawn-behavior]')) return;
+    if (!target.matches('[data-music-spawn-type], [data-music-spawn-behavior], [data-music-group-count], [data-music-speed-scale]')) return;
     const typeEl = ov.querySelector('[data-music-spawn-type]');
     const behaviorEl = ov.querySelector('[data-music-spawn-behavior]');
+    const countEl = ov.querySelector('[data-music-group-count]');
+    const speedEl = ov.querySelector('[data-music-speed-scale]');
     saveMusicRepeatUiState({
       enemyType: String(typeEl?.value || 'drawsnake').trim().toLowerCase() || 'drawsnake',
       behavior: String(behaviorEl?.value || 'none').trim().toLowerCase() || 'none',
+      groupCount: Math.max(1, Math.trunc(Number(countEl?.value) || 8)),
+      speedScale: Math.max(0.25, Math.min(4, Number(speedEl?.value) || 1)),
     });
   });
   const secondaryRenderEvents = eventTimeline.filter((e) => {
@@ -3385,6 +3420,8 @@ async function startPerfMusicRepeatSpawn(enemyType = 'drawsnake', options = null
   return dbg.setPerfEnemyRepeatMode(type, true, {
     persistent: opts.persistent !== false,
     behavior: String(opts.behavior || 'none').trim().toLowerCase() || 'none',
+    groupCount: Math.max(1, Math.trunc(Number(opts.groupCount) || 8)),
+    speedScale: Math.max(0.25, Math.min(4, Number(opts.speedScale) || 1)),
   });
 }
 
