@@ -113,7 +113,9 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const responseMode = String(pacingCaps.responseMode || 'none');
   const responseAllowsGroups = responseMode === 'either' || responseMode === 'group';
   const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
+  const phaseVariant = String(musicModeRuntime?.phaseVariant || 'default').trim().toLowerCase();
   const protectedMergeTextureWindow = activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture';
+  const leadMergeReducedSupportActive = activeMusicMode === 'lead_entry_merge' && phaseVariant === 'reduced_support';
   const desiredGroupsRaw = Math.max(1, Math.min(4, Math.max(1, Math.trunc((Number(composer.intensity) || 1) * 4))));
   const primaryLoopPlan = directorLanePlan && typeof directorLanePlan === 'object'
     ? (directorLanePlan.primary_loop || null)
@@ -340,6 +342,15 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (blend(supportPlan) || blend(answerPlan)) return 0.46;
     return 0.42;
   };
+  const hasLeadMergeSecondaryBridgePersistence = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!group || group.active !== true || group.retiring) return false;
+    if (!leadMergeReducedSupportActive) return false;
+    if (String(group?.musicLaneId || '').trim().toLowerCase() !== 'secondary_loop_lane') return false;
+    if (normalizeComposerProfileSourceType(group?.musicProfileSourceType) !== 'secondary_bridge_backbeat') return false;
+    const persistUntilBar = Math.max(-1, Math.trunc(Number(group?.__bsLeadMergeSecondaryPersistUntilBar) || -1));
+    return persistUntilBar >= currentBarIndex;
+  };
 
   for (let i = composerEnemyGroups.length - 1; i >= 0; i--) {
     const g = composerEnemyGroups[i];
@@ -477,7 +488,8 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const secondaryLoopCoverageRequested = primaryLoopReserveWindowActive
     && activeGlobalPrimaryLeadPresent
     && (
-      currentBarIndex >= 12
+      leadMergeReducedSupportActive
+      || currentBarIndex >= 12
       || (
         secondaryLoopPlan?.active === true
         && String(secondaryLoopPlan?.preferredCarrier || '').trim().toLowerCase() === 'group'
@@ -495,6 +507,44 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     reservedSecondaryLoopSpawnNeeded = false;
   }
   if (activeGlobalPrimaryLeadPresent) reservedLeadSpawnNeeded = false;
+  if (leadMergeReducedSupportActive) {
+    try {
+      const secondaryBridgeGroups = sameSection.filter((group) => (
+        group
+        && group.active === true
+        && !group.retiring
+        && String(group?.musicLaneId || '').trim().toLowerCase() === 'secondary_loop_lane'
+        && normalizeComposerProfileSourceType(group?.musicProfileSourceType) === 'secondary_bridge_backbeat'
+      ));
+      noteMusicSystemEvent?.('music_secondary_bridge_coverage_trace', {
+        activeMusicMode,
+        phaseVariant,
+        activeSecondaryLoopCoveragePresent,
+        reservedSecondaryLoopSpawnNeeded,
+        pendingSecondaryLoopReservation: hasPendingSecondaryLoopReservation() === true,
+        bridgeGroupCount: secondaryBridgeGroups.length,
+        bridgeGroups: secondaryBridgeGroups.slice(0, 6).map((group) => ({
+          groupId: Math.trunc(Number(group?.id) || 0),
+          active: group?.active === true,
+          retiring: group?.retiring === true,
+          lifecycleState: String(group?.lifecycleState || '').trim().toLowerCase(),
+          memberCount: hasLiveMembers(group)
+            ? (group?.memberIds instanceof Set
+              ? group.memberIds.size
+              : (Array.isArray(group?.memberIds) ? group.memberIds.length : 0))
+            : 0,
+          hasActiveCoverage: hasActiveSecondaryLoopCoverage(group),
+          hasPendingIdentity: hasPendingSecondaryLoopIdentity(group),
+          hasRecentCoverageMemory: hasRecentSecondaryLoopCoverageMemory(group),
+          persistUntilBar: Math.max(-1, Math.trunc(Number(group?.__bsLeadMergeSecondaryPersistUntilBar) || -1)),
+          musicParticipationGain: Number(group?.musicParticipationGain) || 0,
+        })),
+      }, {
+        beatIndex: Math.max(0, currentBarIndex * 4),
+        barIndex: currentBarIndex,
+      });
+    } catch {}
+  }
   try {
     noteMusicSystemEvent?.('music_primary_loop_coverage_status', {
       sectionId: String(composer?.sectionId || 'default').trim().toLowerCase(),
@@ -605,7 +655,8 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     const introSlotPersistent = isPersistentIntroSlotCarrier(group);
     const primaryLoopCoverage = hasActivePrimaryLoopCoverage(group);
     const secondaryLoopCoverage = hasActiveSecondaryLoopCoverage(group) || hasRecentSecondaryLoopCoverageMemory(group);
-    const shouldSchedule = i < desiredGroups || introSlotLocked || introSlotPersistent || primaryLoopCoverage || secondaryLoopCoverage;
+    const forcedSecondaryBridgePersistence = hasLeadMergeSecondaryBridgePersistence(group);
+    const shouldSchedule = i < desiredGroups || introSlotLocked || introSlotPersistent || primaryLoopCoverage || secondaryLoopCoverage || forcedSecondaryBridgePersistence;
     const normalizedProfileSourceType = normalizeComposerProfileSourceType(group?.musicProfileSourceType);
     const pinnedPrimaryLead = String(group?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
       && normalizedProfileSourceType === 'lead_melody';
@@ -644,6 +695,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     const replaceableGroup = rankedGroups.find((group) => (
       group
       && !isPersistentIntroSlotCarrier(group)
+      && !hasLeadMergeSecondaryBridgePersistence(group)
       && hasLiveMembers(group)
       && !hasActivePrimaryLoopCoverage(group)
       && (
@@ -748,6 +800,12 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (!group) continue;
     group.lifecycleState = normalizeLifecycleState(group.lifecycleState, 'active');
     group.sectionContinuityKey = sectionContinuityKey;
+    if (
+      leadMergeReducedSupportActive
+      && String(forcedProfileSourceType || '').trim().toLowerCase() === 'secondary_bridge_backbeat'
+    ) {
+      group.__bsLeadMergeSecondaryPersistUntilBar = currentBarIndex + 4;
+    }
     composerEnemyGroups.push(group);
     if (noteMusicSystemEvent && currentBarIndex < 24) {
       try {

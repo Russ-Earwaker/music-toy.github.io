@@ -1820,7 +1820,48 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     );
   }
   const ensureStrongLeadSecondaryBridgeGroup = () => {
-    return;
+    const mergeVariant = String(musicModeRuntime?.phaseVariant || 'default').trim().toLowerCase();
+    if (!leadEntryMergeActive || mergeVariant !== 'reduced_support') return;
+    const targetGroup = getActiveEmbodiedSecondaryLoopBridgeGroup()
+      || composerEnemyGroups.find((group) => (
+        group
+        && group.active === true
+        && !group.retiring
+        && String(group?.sectionKey || '').trim().toLowerCase() === String(runtimeSectionKey || '').trim().toLowerCase()
+        && String(group?.musicLaneId || '').trim().toLowerCase() === 'secondary_loop_lane'
+        && String(group?.callResponseLane || '').trim().toLowerCase() !== 'response'
+      ))
+      || null;
+    if (!targetGroup) return;
+    targetGroup.retiring = false;
+    targetGroup.lifecycleState = 'active';
+    targetGroup.musicParticipationGain = 1;
+    targetGroup.size = Math.max(2, Math.trunc(Number(targetGroup?.size) || 0));
+    targetGroup.performers = Math.max(2, Math.trunc(Number(targetGroup?.performers) || 0));
+    targetGroup.__bsSecondaryCoverageSeenBarIndex = currentBarIndex;
+    refreshSecondaryLoopReservation(targetGroup);
+    const aliveCount = getAliveComposerEnemiesByIds(targetGroup?.memberIds).length;
+    const refillNeeded = Math.max(0, Math.trunc(Number(targetGroup?.size) || 0) - aliveCount);
+    if (refillNeeded > 0) {
+      try {
+        helpers.spawnComposerGroupOffscreenMembers?.(targetGroup, refillNeeded);
+      } catch {}
+    }
+    try {
+      noteMusicSystemEvent?.('music_composer_group_state', {
+        phase: 'lead_merge_secondary_support_bias',
+        groupId: Math.trunc(Number(targetGroup?.id) || 0),
+        reason: 'protect_and_refill_secondary_loop_during_reduced_support',
+        musicLaneId: String(targetGroup?.musicLaneId || '').trim().toLowerCase(),
+        stage: String(targetGroup?.musicProfileSourceType || '').trim().toLowerCase(),
+        size: Math.max(0, Math.trunc(Number(targetGroup?.size) || 0)),
+        performers: Math.max(0, Math.trunc(Number(targetGroup?.performers) || 0)),
+        refillNeeded,
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+        barIndex: currentBarIndex,
+      });
+    } catch {}
   };
   ensureStrongLeadSecondaryBridgeGroup();
   withPerfSample('maintainComposerGroups.lifecycle', () => {

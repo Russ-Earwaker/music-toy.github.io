@@ -19401,7 +19401,7 @@ function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'no
     : (activeLevelPhase === 'groove_establish'
       ? (phaseVariant === 'foundation_only' ? ['foundation'] : ['foundation', 'secondary_loop_rhythm'])
       : (activeLevelPhase === 'lead_merge'
-        ? (phaseVariant === 'reduced_support' ? ['primary_loop_lead'] : ['primary_loop_lead', 'secondary_loop_rhythm'])
+        ? ['primary_loop_lead', 'secondary_loop_rhythm']
         : ['primary_loop_lead', 'secondary_loop_rhythm']));
   const missingRequiredLaneRoles = requiredLaneRoles.filter((roleId) => {
     if (roleId === 'foundation') return false;
@@ -19414,7 +19414,7 @@ function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'no
     : (activeLevelPhase === 'groove_establish'
       ? ['foundation_lane', ...(phaseVariant === 'foundation_only' ? [] : ['secondary_loop_lane'])]
       : (activeLevelPhase === 'lead_merge'
-        ? ['primary_loop_lane', ...(phaseVariant === 'reduced_support' ? [] : ['secondary_loop_lane'])]
+        ? ['primary_loop_lane', 'secondary_loop_lane']
         : ['primary_loop_lane', 'secondary_loop_lane']));
   if (String(musicModeRuntime.activeMusicMode || '') !== nextMode) {
     musicModeRuntime.modeEnteredBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
@@ -19598,7 +19598,7 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
   const targetCarrierCounts = Object.freeze({
     foundation: 1,
     secondary_loop_rhythm: (activeLevelPhase === 'groove_establish' && phaseVariant !== 'foundation_only')
-      || (activeLevelPhase === 'lead_merge' && phaseVariant !== 'reduced_support')
+      || activeLevelPhase === 'lead_merge'
       || activeLevelPhase === 'full_texture'
       ? 1 : 0,
     primary_loop_lead: activeLevelPhase === 'lead_merge' || activeLevelPhase === 'full_texture' ? 1 : 0,

@@ -4034,6 +4034,24 @@ function compactMusicLabPayloadForSave(payload = null) {
       });
       continue;
     }
+    if (eventType === 'music_secondary_bridge_coverage_trace') {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        activeMusicMode: String(payload.activeMusicMode || '').trim().toLowerCase(),
+        phaseVariant: String(payload.phaseVariant || '').trim().toLowerCase(),
+        activeSecondaryLoopCoveragePresent: payload.activeSecondaryLoopCoveragePresent === true,
+        reservedSecondaryLoopSpawnNeeded: payload.reservedSecondaryLoopSpawnNeeded === true,
+        pendingSecondaryLoopReservation: payload.pendingSecondaryLoopReservation === true,
+        bridgeGroupCount: Number(payload.bridgeGroupCount) || 0,
+        bridgeGroups: Array.isArray(payload.bridgeGroups) ? payload.bridgeGroups.slice(0, 6) : [],
+      });
+      continue;
+    }
     if (eventType === 'music_event_section_state') {
       const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
       focusedSystemEvents.push({
@@ -5493,6 +5511,7 @@ async function runBS0BehaviorTaxonomyDebug() {
         'music_enemy_director_state',
         'music_composer_group_state',
         'music_group_performer_trace',
+        'music_secondary_bridge_coverage_trace',
         'music_event_section_state',
         'music_visual_role_readability_state',
       ],
