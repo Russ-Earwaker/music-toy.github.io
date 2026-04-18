@@ -956,6 +956,28 @@ export function executePerformedBeatEventRuntime(options = null) {
     if (enemy) helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
     noteExecutedInstrumentChange(instrumentId, enemy || null, group);
     if (enemy) helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
+    const isGroupedPrimaryLead = String(group?.musicLaneId || ev?.payload?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
+      && String(group?.musicProfileSourceType || '').trim().toLowerCase() === 'lead_melody'
+      && String(group?.callResponseLane || '').trim().toLowerCase() !== 'solo'
+      && execSoloType !== 'rhythm';
+    if (isGroupedPrimaryLead && group?.memberIds && typeof helpers.getSwarmEnemyById === 'function') {
+      const memberIds = group.memberIds instanceof Set
+        ? Array.from(group.memberIds)
+        : (Array.isArray(group.memberIds) ? group.memberIds : []);
+      for (let i = 0; i < memberIds.length; i++) {
+        const memberId = Math.max(0, Math.trunc(Number(memberIds[i]) || 0));
+        if (!(memberId > 0) || memberId === Math.max(0, Math.trunc(Number(enemy?.id) || 0))) continue;
+        const memberEnemy = helpers.getSwarmEnemyById(memberId);
+        if (!memberEnemy || memberEnemy?.retreating || String(memberEnemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') continue;
+        const companionPulseDur = Math.max(
+          0.01,
+          (Number(memberEnemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0.24) * 0.72,
+        );
+        memberEnemy.composerActionPulseDur = companionPulseDur;
+        memberEnemy.composerActionPulseT = Math.max(Number(memberEnemy?.composerActionPulseT) || 0, companionPulseDur);
+        helpers.pulseEnemyMusicalRoleVisual?.(memberEnemy, 'soft');
+      }
+    }
     if (enemyAudible) {
       try {
         if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {

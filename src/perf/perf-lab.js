@@ -498,6 +498,7 @@ function ensureUI() {
       btn('musicLabDisable', 'Music Lab: Disable'),
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
       btn('musicLabRunBS0S3x1m1m', 'Music Lab: Run BS0 S3 (1x1m, auto-save)', 'primary'),
+      btn('musicLabRunBehaviorTaxonomyDebug', 'Music Lab: Run Behavior Taxonomy Debug (1x1m, auto-save)', 'primary'),
       btn('musicLabRunSlotBodyProbe', 'Music Lab: Run Slot/Body Probe (3x45s, auto-save)', 'primary'),
       btn('musicLabRunHandoffMatrixProbe', 'Music Lab: Run Handoff Matrix Probe (4x45s, auto-save)', 'primary'),
       btn('musicLabRunBS0S3x1m', 'Music Lab: Run BS0 S3 (1x3m, auto-save)', 'primary'),
@@ -1446,6 +1447,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3x1m1m') {
       await runBS0s3MusicLabSingle1m();
+      return;
+    }
+    if (act === 'musicLabRunBehaviorTaxonomyDebug') {
+      await runBS0BehaviorTaxonomyDebug();
       return;
     }
     if (act === 'musicLabRunSlotBodyProbe') {
@@ -3898,7 +3903,7 @@ function compactMusicLabPayloadForSave(payload = null) {
       });
       continue;
     }
-    if (eventType === 'music_primary_loop_group_suppressed' || eventType === 'music_primary_loop_lane_emitted') {
+    if (eventType === 'music_primary_loop_group_suppressed' || eventType === 'music_primary_loop_lane_emitted' || eventType === 'music_primary_loop_owner_trace') {
       focusedSystemEvents.push({
         tMs: Number(item.tMs) || 0,
         eventType,
@@ -3915,6 +3920,15 @@ function compactMusicLabPayloadForSave(payload = null) {
         instrumentId: String(item.instrumentId || '').trim(),
         actionType: String(item.actionType || '').trim().toLowerCase(),
         performerType: String(item.performerType || '').trim().toLowerCase(),
+        eligibleCount: Number(item.eligibleCount) || 0,
+        eligibleIds: Array.isArray(item.eligibleIds) ? item.eligibleIds.map((x) => Number(x) || 0).filter((x) => x > 0) : [],
+        selectedOwnerId: Number(item.selectedOwnerId) || 0,
+        previousPerformerEnemyId: Number(item.previousPerformerEnemyId) || 0,
+        performerEnemyId: Number(item.performerEnemyId) || 0,
+        performerGroupId: Number(item.performerGroupId) || 0,
+        cursor: Number(item.cursor) || 0,
+        templateId: String(item.templateId || '').trim().toLowerCase(),
+        performerCount: Number(item.performerCount) || 0,
       });
       continue;
     }
@@ -3967,6 +3981,10 @@ function compactMusicLabPayloadForSave(payload = null) {
         desiredLaneRoles: Array.isArray(payload.desiredLaneRoles) ? payload.desiredLaneRoles.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
         preferredEnemyFamilies: Array.isArray(payload.preferredEnemyFamilies) ? payload.preferredEnemyFamilies.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
         suppressedEnemyFamilies: Array.isArray(payload.suppressedEnemyFamilies) ? payload.suppressedEnemyFamilies.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+        behaviorAssignmentByRole: payload.behaviorAssignmentByRole && typeof payload.behaviorAssignmentByRole === 'object'
+          ? { ...payload.behaviorAssignmentByRole }
+          : {},
+        activeEventBehaviorId: String(payload.activeEventBehaviorId || '').trim().toLowerCase(),
         varietyPressureByFamily: payload.varietyPressureByFamily && typeof payload.varietyPressureByFamily === 'object'
           ? { ...payload.varietyPressureByFamily }
           : {},
@@ -4043,6 +4061,27 @@ function compactMusicLabPayloadForSave(payload = null) {
         postBlendVy: Number(payload.postBlendVy) || 0,
         orbitAngle: Number(payload.orbitAngle) || 0,
         debugFrame: Number(payload.debugFrame) || 0,
+      });
+      continue;
+    }
+    if (eventType === 'music_group_performer_trace') {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        actorId: Number(payload.actorId) || 0,
+        groupId: Number(payload.groupId) || 0,
+        role: String(payload.role || '').trim().toLowerCase(),
+        musicLaneId: String(payload.musicLaneId || '').trim().toLowerCase(),
+        reason: String(payload.reason || '').trim().toLowerCase(),
+        performerCount: Number(payload.performerCount) || 0,
+        selectedPrimaryEnemyId: Number(payload.selectedPrimaryEnemyId) || 0,
+        aliveEnemyIdsCsv: String(payload.aliveEnemyIdsCsv || '').trim(),
+        visibleEnemyIdsCsv: String(payload.visibleEnemyIdsCsv || '').trim(),
+        performerEnemyIdsCsv: String(payload.performerEnemyIdsCsv || '').trim(),
       });
       continue;
     }
@@ -4128,6 +4167,12 @@ function compactMusicLabPayloadForSave(payload = null) {
       behavioralFormationActivationMode: String(item.behavioralFormationActivationMode || '').trim().toLowerCase(),
       behavioralFormationIntensity: Number(item.behavioralFormationIntensity) || 0,
       behavioralFormationActive: item.behavioralFormationActive === true,
+      singleBehaviorId: String(item.singleBehaviorId || '').trim().toLowerCase(),
+      groupBehaviorId: String(item.groupBehaviorId || '').trim().toLowerCase(),
+      eventBehaviorId: String(item.eventBehaviorId || '').trim().toLowerCase(),
+      behaviorPriority: String(item.behaviorPriority || '').trim().toLowerCase(),
+      behaviorWindow: String(item.behaviorWindow || '').trim().toLowerCase(),
+      behaviorSource: String(item.behaviorSource || '').trim().toLowerCase(),
     });
   }
   const compactSystemEvents = focusedSystemEvents.slice(-320);
@@ -5284,7 +5329,9 @@ const DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG = Object.freeze({
     'music_primary_lead_request',
     'music_primary_loop_coverage_status',
     'music_primary_lead_snapshot',
+    'music_primary_loop_owner_trace',
     'music_composer_group_state',
+    'music_group_performer_trace',
     'music_paired_dance_trace',
   ]),
   maxLines: 300,
@@ -5380,6 +5427,38 @@ async function runBS0s3MusicLabSingle1m() {
     traceCapture: {
       ...DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG,
       fileNamePrefix: 'resources-debug-musicLab_bs0_s3_1x1m',
+    },
+  });
+}
+
+async function runBS0BehaviorTaxonomyDebug() {
+  await runBS0Stage(3, {
+    durationMs: 60000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_behavior_taxonomy_debug_1x1m',
+    saveNotes: 'Beat Swarm behavior taxonomy debug: verify director-assigned single/group/event behavior IDs and propagation into composer groups during real gameplay.',
+    groupedScenarioName: 'beat_swarm_behavior_taxonomy_debug_1x1m',
+    groupedRunId: 'musicLab_behavior_taxonomy_debug_1x1m_scenario',
+    groupedNotes: 'Behavior taxonomy debug scenario: one 1-minute Beat Swarm run with focused director/group/event behavior tracing.',
+    tagPrefix: 'BS0BehaviorTaxonomyDebug1x1m',
+    labelPrefix: 'BS0_stage3_behavior_taxonomy_debug_1x1m',
+    statusPrefix: 'Running Beat Swarm behavior taxonomy debug (1 minute)',
+    traceCapture: {
+      enabled: true,
+      include: [
+        'music_enemy_director_state',
+        'music_composer_group_state',
+        'music_group_performer_trace',
+        'music_event_section_state',
+        'music_visual_role_readability_state',
+      ],
+      maxLines: 360,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-behavior-taxonomy',
     },
   });
 }
@@ -9894,6 +9973,7 @@ try {
     runBS0s4,
     runBS0s5,
     runBS0s3MusicLabTriplet,
+    runBS0BehaviorTaxonomyDebug,
     runBS0a,
     runBS0b,
     runQueue,

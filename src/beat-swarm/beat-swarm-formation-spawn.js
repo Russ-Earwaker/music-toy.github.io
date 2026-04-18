@@ -1,6 +1,7 @@
 import { getBeatSwarmFormationArchetype } from './beat-swarm-formations.js';
 import {
   applyBeatSwarmBehavioralFormationRuntime,
+  buildBeatSwarmBehaviorScopeRuntime,
   selectBeatSwarmBehavioralFormationForRole,
 } from './beat-swarm-behavioral-formations.js';
 
@@ -21,6 +22,36 @@ function computeSeedOffset(runSeed = 0, barIndex = 0, salt = 0) {
   const seed = Math.max(0, Math.trunc(Number(runSeed) || 0));
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   return Math.abs((seed * 31) + (bar * 17) + Math.trunc(Number(salt) || 0));
+}
+
+function resolveBeatSwarmEventBehaviorId(groupLike = null, activeEventSection = '') {
+  const group = groupLike && typeof groupLike === 'object' ? groupLike : {};
+  const perfRepeatEventBehavior = String(group?.perfRepeatEventBehavior || '').trim().toLowerCase();
+  if (perfRepeatEventBehavior) return perfRepeatEventBehavior;
+  const eventSection = String(activeEventSection || '').trim().toLowerCase();
+  if (eventSection === 'beat_bounce') return 'beat_bounce_event';
+  if (eventSection === 'dance_phrase') return 'paired_dance';
+  if (eventSection === 'hold_then_surge') return 'bass_drop_freeze';
+  return 'none';
+}
+
+function resolveBeatSwarmDirectorBehaviorAssignment(role = '', enemyDirectorRuntimeLike = null) {
+  const runtime = enemyDirectorRuntimeLike && typeof enemyDirectorRuntimeLike === 'object' ? enemyDirectorRuntimeLike : {};
+  const assignments = runtime?.behaviorAssignmentByRole && typeof runtime.behaviorAssignmentByRole === 'object'
+    ? runtime.behaviorAssignmentByRole
+    : {};
+  const roleKey = String(role || '').trim().toLowerCase();
+  const assignment = assignments[roleKey] && typeof assignments[roleKey] === 'object'
+    ? assignments[roleKey]
+    : null;
+  if (!assignment) return null;
+  return {
+    singleBehaviorId: String(assignment.singleBehaviorId || '').trim().toLowerCase(),
+    groupBehaviorId: String(assignment.groupBehaviorId || '').trim().toLowerCase(),
+    behaviorSource: String(assignment.behaviorSource || '').trim().toLowerCase(),
+    singleBehaviorWindow: String(assignment.singleBehaviorWindow || '').trim().toLowerCase(),
+    groupBehaviorWindow: String(assignment.groupBehaviorWindow || '').trim().toLowerCase(),
+  };
 }
 
 export function inferBeatSwarmFormationRole(groupLike = null) {
@@ -128,6 +159,8 @@ export function buildBeatSwarmFormationRuntime(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const group = opts.group && typeof opts.group === 'object' ? opts.group : {};
   const role = String(opts.role || inferBeatSwarmFormationRole(group)).trim().toLowerCase();
+  const behaviorAssignment = resolveBeatSwarmDirectorBehaviorAssignment(role, opts.enemyDirectorRuntime);
+  const eventBehaviorId = resolveBeatSwarmEventBehaviorId(group, opts.activeEventSection);
   const selection = selectBeatSwarmFormationForRole({
     role,
     group,
@@ -142,6 +175,22 @@ export function buildBeatSwarmFormationRuntime(options = null) {
     activeMusicMode: opts.activeMusicMode,
     introStage: opts.introStage,
     activeEventSection: opts.activeEventSection,
+    groupBehaviorId: behaviorAssignment?.groupBehaviorId || '',
+  });
+  const behaviorScope = buildBeatSwarmBehaviorScopeRuntime({
+    group,
+    formation: {
+      behavioralFormationArchetype: behavioralSelection.behavioralFormationArchetype,
+      singleBehaviorId: behaviorAssignment?.singleBehaviorId || '',
+      groupBehaviorId: behaviorAssignment?.groupBehaviorId || behavioralSelection.behavioralFormationArchetype || 'none',
+      eventBehaviorId,
+      behaviorSource: eventBehaviorId !== 'none'
+        ? (String(group?.perfRepeatEventBehavior || '').trim() ? 'perf_lab' : 'event')
+        : (behaviorAssignment?.behaviorSource || 'director'),
+      singleBehaviorWindow: behaviorAssignment?.singleBehaviorWindow || 'continuous',
+      groupBehaviorWindow: behaviorAssignment?.groupBehaviorWindow || (String(behaviorAssignment?.groupBehaviorId || '').trim() ? 'persistent' : 'continuous'),
+      eventBehaviorWindow: eventBehaviorId !== 'none' ? 'timed' : 'continuous',
+    },
   });
   return Object.freeze({
     role,
@@ -158,6 +207,15 @@ export function buildBeatSwarmFormationRuntime(options = null) {
     behavioralFormationActivationMode: String(behavioralSelection.behavioralFormationActivationMode || 'inactive').trim().toLowerCase(),
     behavioralFormationIntensity: Number(behavioralSelection.behavioralFormationIntensity) || 0,
     behavioralFormationActive: behavioralSelection.behavioralFormationActive === true,
+    singleBehaviorId: behaviorScope.singleBehaviorId,
+    groupBehaviorId: behaviorScope.groupBehaviorId,
+    eventBehaviorId: behaviorScope.eventBehaviorId,
+    behaviorPriority: behaviorScope.behaviorPriority,
+    behaviorWindow: behaviorScope.behaviorWindow,
+    behaviorSource: behaviorScope.behaviorSource,
+    singleBehaviorWindow: behaviorScope.singleBehaviorWindow,
+    groupBehaviorWindow: behaviorScope.groupBehaviorWindow,
+    eventBehaviorWindow: behaviorScope.eventBehaviorWindow,
   });
 }
 

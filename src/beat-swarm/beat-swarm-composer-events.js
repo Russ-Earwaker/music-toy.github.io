@@ -82,14 +82,110 @@ export function chooseComposerGroupEnemyForNote(options = null) {
   const noteName = options?.noteName;
   const note = normalizeNoteName(noteName) || getFallbackNote();
   const aliveIds = new Set(aliveMembers.map((e) => Math.trunc(Number(e?.id) || 0)));
+  const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
+  const explicitSoloGroup = soloCarrierType === 'rhythm'
+    || String(group?.callResponseLane || '').trim().toLowerCase() === 'solo'
+    || String(group?.introCarrierBodyType || '').trim().toLowerCase() === 'solo'
+    || String(group?.templateId || '').trim().toLowerCase().startsWith('solo-');
   const pinned = Math.trunc(Number(group?.noteToEnemyId?.get?.(note)) || 0);
-  if (pinned > 0 && aliveIds.has(pinned)) {
+  if (explicitSoloGroup && pinned > 0 && aliveIds.has(pinned)) {
     return aliveMembers.find((e) => Math.trunc(Number(e?.id) || 0) === pinned) || null;
   }
   if (!aliveMembers.length) return null;
-  const picked = aliveMembers[Math.max(0, Math.min(aliveMembers.length - 1, Math.trunc(Math.random() * aliveMembers.length)))] || null;
-  if (picked) group?.noteToEnemyId?.set?.(note, Math.trunc(Number(picked.id) || 0));
+  const stableSortedMembers = aliveMembers.slice().sort((a, b) => {
+    const aIndex = Math.trunc(Number(a?.formationMemberIndex) || 0);
+    const bIndex = Math.trunc(Number(b?.formationMemberIndex) || 0);
+    if (aIndex !== bIndex) return aIndex - bIndex;
+    return Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0);
+  });
+  const lastChosenId = Math.trunc(Number(group?.__bsLastChosenEnemyId) || 0);
+  const cursor = Math.max(0, Math.trunc(Number(group?.__bsGroupEmitCursor) || 0));
+  const sortedMembers = stableSortedMembers.slice().sort((a, b) => {
+    const aPulse = Math.max(
+      0,
+      Number(a?.composerActionPulseT) || 0,
+      Number(a?.musicRolePulseT) || 0,
+    );
+    const bPulse = Math.max(
+      0,
+      Number(b?.composerActionPulseT) || 0,
+      Number(b?.musicRolePulseT) || 0,
+    );
+    if (aPulse !== bPulse) return aPulse - bPulse;
+    const aLastEmit = Math.max(-1000000, Math.trunc(Number(a?.__bsGroupLastEmitSequence) || -1000000));
+    const bLastEmit = Math.max(-1000000, Math.trunc(Number(b?.__bsGroupLastEmitSequence) || -1000000));
+    if (aLastEmit !== bLastEmit) return aLastEmit - bLastEmit;
+    const aPinned = Math.trunc(Number(a?.id) || 0) === pinned ? 1 : 0;
+    const bPinned = Math.trunc(Number(b?.id) || 0) === pinned ? 1 : 0;
+    if (aPinned !== bPinned) return bPinned - aPinned;
+    const aIndex = Math.trunc(Number(a?.formationMemberIndex) || 0);
+    const bIndex = Math.trunc(Number(b?.formationMemberIndex) || 0);
+    if (aIndex !== bIndex) return aIndex - bIndex;
+    return Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0);
+  });
+  let picked = null;
+  if (stableSortedMembers.length === 1) {
+    picked = stableSortedMembers[0] || null;
+  } else {
+    for (let offset = 0; offset < stableSortedMembers.length; offset++) {
+      const member = stableSortedMembers[(cursor + offset) % stableSortedMembers.length];
+      const memberId = Math.trunc(Number(member?.id) || 0);
+      if (!(memberId > 0)) continue;
+      if (memberId === lastChosenId && offset < stableSortedMembers.length - 1) continue;
+      picked = member;
+      break;
+    }
+    if (!picked) {
+      picked = sortedMembers.find((enemy) => Math.trunc(Number(enemy?.id) || 0) !== lastChosenId)
+        || sortedMembers[0]
+        || null;
+    }
+  }
+  if (picked) {
+    const nextSequence = Math.max(1, Math.trunc(Number(group?.__bsGroupEmitSequence) || 0) + 1);
+    if (group && typeof group === 'object') group.__bsGroupEmitSequence = nextSequence;
+    picked.__bsGroupLastEmitSequence = nextSequence;
+    const pickedId = Math.trunc(Number(picked?.id) || 0);
+    if (pickedId > 0 && group && typeof group === 'object') {
+      group.__bsLastChosenEnemyId = pickedId;
+      const pickedIndex = stableSortedMembers.findIndex((enemy) => Math.trunc(Number(enemy?.id) || 0) === pickedId);
+      group.__bsGroupEmitCursor = pickedIndex >= 0
+        ? ((pickedIndex + 1) % Math.max(1, stableSortedMembers.length))
+        : ((cursor + 1) % Math.max(1, stableSortedMembers.length));
+    }
+    if (explicitSoloGroup) group?.noteToEnemyId?.set?.(note, Math.trunc(Number(picked.id) || 0));
+    else group?.noteToEnemyId?.delete?.(note);
+  }
   return picked;
+}
+
+function sortComposerGroupCandidatesByVisibilityAndRecency(members = [], isEnemyLikelyOnScreen = null) {
+  const visibleFn = typeof isEnemyLikelyOnScreen === 'function'
+    ? isEnemyLikelyOnScreen
+    : (() => false);
+  return members.slice().sort((a, b) => {
+    const aOn = visibleFn(a) ? 1 : 0;
+    const bOn = visibleFn(b) ? 1 : 0;
+    if (aOn !== bOn) return bOn - aOn;
+    const aPulse = Math.max(
+      0,
+      Number(a?.composerActionPulseT) || 0,
+      Number(a?.musicRolePulseT) || 0,
+    );
+    const bPulse = Math.max(
+      0,
+      Number(b?.composerActionPulseT) || 0,
+      Number(b?.musicRolePulseT) || 0,
+    );
+    if (aPulse !== bPulse) return aPulse - bPulse;
+    const aLastEmit = Math.max(-1000000, Math.trunc(Number(a?.__bsGroupLastEmitSequence) || -1000000));
+    const bLastEmit = Math.max(-1000000, Math.trunc(Number(b?.__bsGroupLastEmitSequence) || -1000000));
+    if (aLastEmit !== bLastEmit) return aLastEmit - bLastEmit;
+    const aIndex = Math.trunc(Number(a?.formationMemberIndex) || 0);
+    const bIndex = Math.trunc(Number(b?.formationMemberIndex) || 0);
+    if (aIndex !== bIndex) return aIndex - bIndex;
+    return Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0);
+  });
 }
 
 export function collectComposerGroupStepBeatEvents(options = null) {
@@ -175,6 +271,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const directTriggerComposerCarrier = typeof options?.directTriggerComposerCarrier === 'function'
     ? options.directTriggerComposerCarrier
     : null;
+  const isEnemyLikelyOnScreen = typeof options?.isEnemyLikelyOnScreen === 'function'
+    ? options.isEnemyLikelyOnScreen
+    : (() => false);
   const playerLikelyAudible = options?.playerLikelyAudible === true;
   const musicModeRuntime = options?.musicModeRuntime && typeof options.musicModeRuntime === 'object'
     ? options.musicModeRuntime
@@ -956,9 +1055,21 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       noteResponseDiagnostic('lane_driven_primary_loop');
       continue;
     }
-    const performerCount = (isBassRole || isFoundationBufferGroup || !isPrimaryLoopOwnerGroup || rhythmPercussionCarrier)
+    const explicitSoloGroup = isSoloCarrier
+      || String(group?.callResponseLane || '').trim().toLowerCase() === 'solo'
+      || String(group?.introCarrierBodyType || '').trim().toLowerCase() === 'solo'
+      || String(group?.templateId || '').trim().toLowerCase().startsWith('solo-');
+    const configuredPerformerCount = Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
+    const groupedPerformerFloor = explicitSoloGroup || introSlotIdentityActive
       ? 1
-      : Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
+      : Math.min(2, Math.max(1, aliveMembers.length));
+    const performerCount = Math.max(
+      1,
+      Math.min(
+        aliveMembers.length || 1,
+        Math.max(groupedPerformerFloor, configuredPerformerCount)
+      )
+    );
     const foundationLaneSnapshot = getFoundationLaneSnapshot
       ? getFoundationLaneSnapshot(stepAbs, barIndex)
       : null;
@@ -1197,24 +1308,25 @@ export function collectComposerGroupStepBeatEvents(options = null) {
 
     const performers = [];
     const usedEnemyIds = new Set();
-    const primary = rhythmPercussionCarrier
-      ? (aliveMembers[0] || null)
-      : chooseEnemyForNote({
-        group,
-        noteName: styledNoteName,
-        aliveMembers,
-        normalizeNoteName: normalizeSwarmNoteName,
-        getFallbackNote: getRandomSwarmPentatonicNote,
-      });
+    const primary = chooseEnemyForNote({
+      group,
+      noteName: styledNoteName,
+      aliveMembers,
+      normalizeNoteName: normalizeSwarmNoteName,
+      getFallbackNote: getRandomSwarmPentatonicNote,
+    });
     if (primary) {
       performers.push(primary);
       const primaryId = Math.trunc(Number(primary.id) || 0);
       if (primaryId > 0) usedEnemyIds.add(primaryId);
     }
     while (performers.length < performerCount) {
-      const remaining = aliveMembers.filter((e) => !usedEnemyIds.has(Math.trunc(Number(e.id) || 0)));
+      const remaining = sortComposerGroupCandidatesByVisibilityAndRecency(
+        aliveMembers.filter((e) => !usedEnemyIds.has(Math.trunc(Number(e.id) || 0))),
+        isEnemyLikelyOnScreen,
+      );
       if (!remaining.length) break;
-      const enemy = remaining[Math.max(0, Math.min(remaining.length - 1, Math.trunc(Math.random() * remaining.length)))] || null;
+      const enemy = remaining[0] || null;
       if (!enemy) continue;
       const enemyId = Math.trunc(Number(enemy.id) || 0);
       if (!(enemyId > 0) || usedEnemyIds.has(enemyId)) continue;
@@ -1596,6 +1708,34 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         && directTriggerComposerCarrier
       ),
     });
+    if (noteMusicSystemEvent) {
+      const aliveMemberIds = aliveMembers
+        .map((enemy) => Math.max(0, Math.trunc(Number(enemy?.id) || 0)))
+        .filter((id) => id > 0);
+      const visibleMemberIds = aliveMembers
+        .filter((enemy) => isEnemyLikelyOnScreen(enemy))
+        .map((enemy) => Math.max(0, Math.trunc(Number(enemy?.id) || 0)))
+        .filter((id) => id > 0);
+      const performerEnemyIds = performers
+        .map((enemy) => Math.max(0, Math.trunc(Number(enemy?.id) || 0)))
+        .filter((id) => id > 0);
+      noteMusicSystemEvent('music_group_performer_trace', {
+        groupId,
+        actorId: performerEnemyIds[0] || 0,
+        role: String(group?.role || '').trim().toLowerCase(),
+        musicLaneId: String(group?.musicLaneId || '').trim().toLowerCase(),
+        reason: String(musicProfileSourceType || '').trim().toLowerCase(),
+        performerCount: performers.length,
+        selectedPrimaryEnemyId: performerEnemyIds[0] || 0,
+        aliveEnemyIdsCsv: aliveMemberIds.join(','),
+        visibleEnemyIdsCsv: visibleMemberIds.join(','),
+        performerEnemyIdsCsv: performerEnemyIds.join(','),
+      }, {
+        beatIndex,
+        stepIndex: stepAbs,
+        barIndex,
+      });
+    }
     if ((introPercussionCarrier || (introSlotIdentityActive && (rhythmBackbeatCarrier || rhythmMotionCarrier)) || ((rhythmProfileCarrier || soloRhythmCarrier) && !slotRhythmCarrier)) && directTriggerComposerCarrier) {
       noteEarlyCarrierTrace('direct_trigger', {
         branch: 'direct_trigger',

@@ -69,7 +69,7 @@ function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
     return {
       velocityDamping: 1 - (0.22 * pulse),
       scaleBias: 1,
-      offsetYPx: -(4 * pulse * presentationWeight),
+      offsetYPx: 0,
     };
   }
   const activeEventSection = String(eventSectionRuntime?.activeEventSection || '').trim().toLowerCase();
@@ -91,11 +91,10 @@ function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
   const strongBeatActive = eventSectionRuntime?.strongBeatActive === true;
   if (!strongBeatActive) return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
   const presentationWeight = Math.max(0.5, Number(enemy?.formationPresentationWeight) || 0.7);
-  const pulseScale = Math.max(0, Number(eventSectionRuntime?.presentationPulseScale) || 0);
   return {
     velocityDamping: Math.max(0.82, Math.min(1, Number(eventSectionRuntime?.motionDamping) || 1)),
-    scaleBias: 1 + (pulseScale * presentationWeight),
-    offsetYPx: -(6 * presentationWeight),
+    scaleBias: 1,
+    offsetYPx: 0,
   };
 }
 
@@ -290,6 +289,59 @@ function arePairedDanceTargetsReadyRuntime(enemies, state, cycleIndex = 0) {
   return true;
 }
 
+function getPairedDanceReadyStatsRuntime(enemies, state, cycleIndex = 0) {
+  const cache = state?.__pairedDanceLayoutCache;
+  if (!cache || typeof cache !== 'object') return { readyCount: 0, totalCount: 0, readyRatio: 0 };
+  const memberReadyCache = state.__pairedDanceMemberReadyCache || (state.__pairedDanceMemberReadyCache = Object.create(null));
+  const readyKey = String(Math.trunc(Number(cycleIndex) || 0));
+  const cycleMemberReady = memberReadyCache[readyKey] && typeof memberReadyCache[readyKey] === 'object'
+    ? memberReadyCache[readyKey]
+    : null;
+  let totalCount = 0;
+  let readyCount = 0;
+  for (const key of Object.keys(cache)) {
+    if (!key.endsWith(`:${Math.trunc(Number(cycleIndex) || 0)}`)) continue;
+    const assignments = cache[key];
+    if (!assignments || typeof assignments !== 'object') continue;
+    for (const idKey of Object.keys(assignments)) {
+      const enemyId = Math.max(0, Math.trunc(Number(idKey) || 0));
+      if (!(enemyId > 0)) continue;
+      totalCount += 1;
+      if (cycleMemberReady?.[enemyId] === true) readyCount += 1;
+    }
+  }
+  return {
+    readyCount,
+    totalCount,
+    readyRatio: totalCount > 0 ? (readyCount / totalCount) : 0,
+  };
+}
+
+function getPairedDanceCycleStateRuntime(enemies, state, cycleIndex = 0, phaseMs = 0) {
+  const key = String(Math.trunc(Number(cycleIndex) || 0));
+  const cache = state.__pairedDanceCycleStateCache || (state.__pairedDanceCycleStateCache = Object.create(null));
+  const entry = cache[key] && typeof cache[key] === 'object'
+    ? cache[key]
+    : (cache[key] = { started: false, startMs: -1, readyRatio: 0, readyCount: 0, totalCount: 0, allPairsReady: false });
+  const readyStats = getPairedDanceReadyStatsRuntime(enemies, state, cycleIndex);
+  const allPairsReady = arePairedDanceTargetsReadyRuntime(enemies, state, cycleIndex);
+  entry.readyRatio = Number(readyStats.readyRatio) || 0;
+  entry.readyCount = Math.max(0, Math.trunc(Number(readyStats.readyCount) || 0));
+  entry.totalCount = Math.max(0, Math.trunc(Number(readyStats.totalCount) || 0));
+  entry.allPairsReady = allPairsReady === true;
+  if (!entry.started) {
+    const shouldStart = entry.allPairsReady || (
+      Number(phaseMs) >= 2200
+      && entry.readyRatio >= 0.875
+    );
+    if (shouldStart) {
+      entry.started = true;
+      entry.startMs = Math.max(0, Number(phaseMs) || 0);
+    }
+  }
+  return entry;
+}
+
 function notePairedDanceTraceRuntime(helpers, state, enemy, traceLike = null) {
   const noteMusicSystemEvent = typeof helpers?.noteMusicSystemEvent === 'function' ? helpers.noteMusicSystemEvent : null;
   if (!noteMusicSystemEvent || !enemy || !traceLike || typeof traceLike !== 'object') return;
@@ -438,6 +490,100 @@ function resolvePerfRepeatEventMotionRuntime(enemy, state, constants) {
   };
 }
 
+function resolveSingleBehaviorMotionRuntime(enemy, centerWorld, state, constants, runtime = null) {
+  const singleBehaviorId = String(runtime?.singleBehaviorId || enemy?.singleBehaviorId || '').trim().toLowerCase();
+  if (!singleBehaviorId || singleBehaviorId === 'none' || singleBehaviorId === 'default_motion') return null;
+  if (enemy?.retreating) return null;
+  const dt = Math.max(0, Number(state?.dt) || 0);
+  const dx = Number(centerWorld?.x) - (Number(enemy?.wx) || 0);
+  const dy = Number(centerWorld?.y) - (Number(enemy?.wy) || 0);
+  const dist = Math.hypot(dx, dy) || 1;
+  const dirX = dx / dist;
+  const dirY = dy / dist;
+  const normalX = -dirY;
+  const normalY = dirX;
+  const enemyMaxSpeed = Math.max(40, Number(constants?.enemyMaxSpeed) || 0);
+  const beatState = getBehaviorBeatProgressRuntime(enemy, state, `single_${singleBehaviorId}`, 0.26);
+  const sharedInstrumentPulseStrength = (() => {
+    const instrumentId = String(
+      enemy?.musicLaneInstrumentId
+        || enemy?.composerInstrument
+        || enemy?.musicInstrumentId
+        || enemy?.instrumentId
+        || '',
+    ).trim().toUpperCase();
+    if (!instrumentId) return 0;
+    const enemies = Array.isArray(state?.enemies) ? state.enemies : [];
+    let strongestPulse = 0;
+    for (let i = 0; i < enemies.length; i++) {
+      const candidate = enemies[i];
+      if (!candidate) continue;
+      const candidateInstrumentId = String(
+        candidate?.musicLaneInstrumentId
+          || candidate?.composerInstrument
+          || candidate?.musicInstrumentId
+          || candidate?.instrumentId
+          || '',
+      ).trim().toUpperCase();
+      if (candidateInstrumentId !== instrumentId) continue;
+      const pulseDur = Math.max(
+        0.01,
+        Number(candidate?.composerActionPulseDur)
+          || Number(constants?.composerGroupActionPulseSeconds)
+          || 0.18,
+      );
+      const pulseT = Math.max(0, Number(candidate?.composerActionPulseT) || 0);
+      if (!(pulseT > 0)) continue;
+      const pulsePhase = 1 - Math.max(0, Math.min(1, pulseT / pulseDur));
+      const pulseStrength = Math.sin(pulsePhase * Math.PI);
+      if (pulseStrength > strongestPulse) strongestPulse = pulseStrength;
+    }
+    return strongestPulse;
+  })();
+  if (singleBehaviorId === 'move_stop_on_beat') {
+    const cycleBeat = beatState.beatIndex % 4;
+    const strongBeat = cycleBeat === 0 || cycleBeat === 2;
+    const holdWindow = sharedInstrumentPulseStrength > 0.12
+      ? sharedInstrumentPulseStrength > 0.2
+      : (strongBeat && beatState.localT < 0.46);
+    if (holdWindow) {
+      return {
+        overrideVelocity: true,
+        desiredVx: 0,
+        desiredVy: 0,
+        blend: Math.max(0.34, Math.min(0.78, 0.42 + (sharedInstrumentPulseStrength * 0.38))),
+      };
+    }
+    const resumeScale = sharedInstrumentPulseStrength > 0.001
+      ? (0.5 + ((1 - sharedInstrumentPulseStrength) * 0.5))
+      : (strongBeat ? (0.52 + (0.48 * beatState.smoothT)) : 1);
+    const desiredSpeed = enemyMaxSpeed * (0.52 * resumeScale);
+    return {
+      overrideVelocity: true,
+      desiredVx: dirX * desiredSpeed,
+      desiredVy: dirY * desiredSpeed,
+      blend: 0.18 + (0.1 * Math.max(0.35, resumeScale)),
+    };
+  }
+  if (singleBehaviorId === 'zig_zag_on_beat') {
+    const phraseIndex = Math.floor(Math.max(0, beatState.beatIndex) / 2);
+    const phrasePolarity = (phraseIndex % 2) === 0 ? 1 : -1;
+    const smoothWave = Math.sin((beatState.localT * Math.PI) - (Math.PI * 0.5));
+    const phraseSwell = 0.35 + (0.65 * beatState.smoothT);
+    const wave = smoothWave * phrasePolarity * phraseSwell;
+    const lateralAmplitude = Math.max(72, enemyMaxSpeed * 0.68);
+    const forwardSpeed = enemyMaxSpeed * 0.56;
+    const lateralSpeed = lateralAmplitude * wave;
+    return {
+      overrideVelocity: true,
+      desiredVx: (dirX * forwardSpeed) + (normalX * lateralSpeed),
+      desiredVy: (dirY * forwardSpeed) + (normalY * lateralSpeed),
+      blend: 0.24 + (0.06 * Math.max(0, dt * 60)),
+    };
+  }
+  return null;
+}
+
 function resolveWindingChainLeaderRuntime(enemy, enemies) {
   const groupId = Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0));
   if (!(groupId > 0)) return null;
@@ -524,11 +670,11 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
       ? (enemies.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === partnerId) || null)
       : null;
     const beatState = getBehaviorBeatProgressRuntime(enemy, state, 'behavioralPairedDance', 0.22);
-    const cycleBeat = beatState.beatIndex % 8;
-    const allPairsReady = arePairedDanceTargetsReadyRuntime(enemies, state, danceWindow.cycleIndex);
-    const readyTimeoutMs = 1250;
-    const settleMs = 420;
-    const effectiveAllPairsReady = allPairsReady || (Number(danceWindow.phaseMs) >= readyTimeoutMs);
+    const cycleState = getPairedDanceCycleStateRuntime(enemies, state, danceWindow.cycleIndex, danceWindow.phaseMs);
+    const assembleMs = 1600;
+    const holdMs = 360;
+    const danceStartMs = assembleMs + holdMs;
+    const effectiveAllPairsReady = Number(danceWindow.phaseMs) >= danceStartMs;
     const pairCenterX = Number(assignment?.pairCenterX) || ((Number(enemy?.wx) || 0) + (Number(partner?.wx) || 0)) * 0.5;
     const pairCenterY = Number(assignment?.pairCenterY) || ((Number(enemy?.wy) || 0) + (Number(partner?.wy) || 0)) * 0.5;
     const partnerX = Number(partner?.wx) || pairCenterX;
@@ -542,32 +688,28 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     const approachAxisY = Number.isFinite(Number(assignment?.approachAxisY)) ? Number(assignment.approachAxisY) : pairSepY;
     const orbitNormalX = -approachAxisY;
     const orbitNormalY = approachAxisX;
+    const readyGap = 124;
+    const readyTargetX = pairCenterX + (approachAxisX * pairSide * readyGap);
+    const readyTargetY = pairCenterY + (approachAxisY * pairSide * readyGap);
     let targetWorld = null;
     let phase = 'release';
     let orbitAngle = 0;
-    if (cycleBeat <= 1 || !effectiveAllPairsReady) {
+    if (Number(danceWindow.phaseMs) < assembleMs) {
       phase = 'approach';
-      const approachGap = 124;
       targetWorld = {
-        x: pairCenterX + (approachAxisX * pairSide * approachGap),
-        y: pairCenterY + (approachAxisY * pairSide * approachGap),
+        x: readyTargetX,
+        y: readyTargetY,
       };
-    } else if (Number(danceWindow.phaseMs) < (readyTimeoutMs + settleMs)) {
-      phase = 'settle';
-      const settleGap = 144;
-      const settleT = Math.max(0, Math.min(1, (Number(danceWindow.phaseMs) - readyTimeoutMs) / Math.max(1, settleMs)));
-      const sweepT = 0.5 - (0.5 * Math.cos(settleT * Math.PI));
-      const settleNormalX = -approachAxisY;
-      const settleNormalY = approachAxisX;
-      const settleOffset = (pairSide * 26) * sweepT;
+    } else if (Number(danceWindow.phaseMs) < danceStartMs) {
+      phase = 'hold';
       targetWorld = {
-        x: pairCenterX + (approachAxisX * pairSide * settleGap) + (settleNormalX * settleOffset),
-        y: pairCenterY + (approachAxisY * pairSide * settleGap) + (settleNormalY * settleOffset),
+        x: readyTargetX,
+        y: readyTargetY,
       };
-    } else if (cycleBeat <= 5) {
+    } else {
       phase = 'orbit';
       const orbitDir = (((Math.trunc(Number(enemy?.behavioralDanceCycleIndex) || 0) + Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0))) % 2) === 0) ? 1 : -1;
-      const orbitStartMs = readyTimeoutMs + settleMs;
+      const orbitStartMs = danceStartMs;
       const orbitMs = Math.max(900, Number(danceWindow.activeMs) - orbitStartMs);
       const orbitPhase = Math.max(0, Math.min(1, (Number(danceWindow.phaseMs) - orbitStartMs) / orbitMs));
       const orbitRadius = 186;
@@ -594,36 +736,36 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
         x: pairCenterX + (approachAxisX * sweepX) + (orbitNormalX * sweepY) + driftX + (approachAxisX * pairSide * (44 + repelScale)),
         y: pairCenterY + (approachAxisY * sweepX) + (orbitNormalY * sweepY) + driftY + (approachAxisY * pairSide * (44 + repelScale)),
       };
-    } else {
-      return null;
     }
     const dx = Number(targetWorld.x) - Number(enemy?.wx);
     const dy = Number(targetWorld.y) - Number(enemy?.wy);
     const dLen = Math.hypot(dx, dy) || 1;
     const phaseIsApproach = (phase === 'approach');
-    const phaseIsSettle = (phase === 'settle');
-    const desiredVx = (dx / dLen) * (phaseIsApproach ? desiredSpeed * 2 : (phaseIsSettle ? desiredSpeed * 1.28 : desiredSpeed));
-    const desiredVy = (dy / dLen) * (phaseIsApproach ? desiredSpeed * 2 : (phaseIsSettle ? desiredSpeed * 1.28 : desiredSpeed));
+    const phaseIsHold = (phase === 'hold');
+    const desiredVx = (dx / dLen) * (phaseIsApproach ? desiredSpeed * 2 : (phaseIsHold ? desiredSpeed * 0.42 : desiredSpeed));
+    const desiredVy = (dy / dLen) * (phaseIsApproach ? desiredSpeed * 2 : (phaseIsHold ? desiredSpeed * 0.42 : desiredSpeed));
     return {
       overrideVelocity: true,
       desiredVx,
       desiredVy,
       blend: phaseIsApproach
         ? 0.62
-        : (phaseIsSettle
-          ? Math.max(0.68, Math.min(0.84, (Number(runtime?.velocityBlend) || 0.34) + 0.34))
+        : (phaseIsHold
+          ? 0.88
           : Math.max(0.58, Math.min(0.78, (Number(runtime?.velocityBlend) || 0.34) + 0.28))),
       debugTrace: {
         phase,
         reason: phaseIsApproach
-          ? (effectiveAllPairsReady ? 'approach_window' : 'waiting_for_all_pairs')
-          : (phaseIsSettle
-            ? (allPairsReady ? 'settle_window' : 'settle_window_forced')
-            : (allPairsReady ? 'orbit_window' : 'orbit_window_forced')),
+          ? 'assembly_window'
+          : (phaseIsHold
+            ? 'hold_window'
+            : 'orbit_window'),
         partnerId,
-        cycleBeat,
+        cycleBeat: Math.max(0, Math.trunc(Number(beatState.beatIndex) || 0)) % 8,
         cycleIndex: danceWindow.cycleIndex,
         allPairsReady: effectiveAllPairsReady,
+        readyCount: Math.max(0, Math.trunc(Number(cycleState.readyCount) || 0)),
+        totalCount: Math.max(0, Math.trunc(Number(cycleState.totalCount) || 0)),
         pairCenterX,
         pairCenterY,
         targetX: Number(targetWorld?.x) || 0,
@@ -833,7 +975,9 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         || isIntroSlotCarrier
         || participationGain >= 0.78
       );
-    const effectiveOffscreenGraceSeconds = isProtectedComposerCarrier ? 6.5 : offscreenGraceSeconds;
+    const effectiveOffscreenGraceSeconds = enemyType === 'composer-group-member' && lifecycleState === 'retiring'
+      ? 1.1
+      : (isProtectedComposerCarrier ? 6.5 : offscreenGraceSeconds);
     const aggressionScale = helpers.getLifecycleAggressionScale?.(lifecycleState);
     const resolveRolePulseScale = () => {
       const pulseDur = Math.max(0.01, Number(e?.musicRolePulseDur) || Number(constants.musicRolePulseSeconds) || 0.24);
@@ -856,13 +1000,6 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     };
     if (enemyType === 'spawner') helpers.updateSpawnerEnemyFlash?.(e, state.dt);
     const isPersistentSpecialEnemy = enemyType === 'spawner' || enemyType === 'drawsnake';
-    if (!e?.retreating && lifecycleState === 'retiring' && enemyType === 'composer-group-member') {
-      const retireStartedMs = Number(e?.retirePhaseStartMs) || 0;
-      const nowMs = Number(globalThis?.performance?.now?.() || 0);
-      if (retireStartedMs > 0 && (nowMs - retireStartedMs) >= ((Number(constants.retiringRetreatDelaySec) || 0) * 1000)) {
-        helpers.startEnemyRetreat?.(e, e?.retireReason || 'retreated', 'retiring-timeout');
-      }
-    }
     if (e?.retreating) {
       const away = helpers.normalizeDir?.(
         (Number(e.wx) || 0) - (Number(centerWorld.x) || 0),
@@ -968,6 +1105,12 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       ay = 0;
     }
     if (enemyType === 'composer-group-member') {
+      const groupBehaviorArchetype = String(e?.behavioralFormationArchetype || '').trim().toLowerCase();
+      const soloCarrierType = String(e?.soloCarrierType || '').trim().toLowerCase();
+      const introCarrierBodyType = String(e?.introCarrierBodyType || '').trim().toLowerCase();
+      const groupId = Number.isFinite(Number(e?.composerGroupId))
+        ? Number(e.composerGroupId)
+        : (Number.isFinite(Number(e?.musicGroupId)) ? Number(e.musicGroupId) : null);
       const sepR = Math.max(20, Number(constants.composerGroupSeparationRadiusWorld) || 200);
       const sepR2 = sepR * sepR;
       let repelX = 0;
@@ -1003,16 +1146,70 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
           ay += (anchorDy / anchorDist) * anchorForce;
         }
       }
+      const allowGroupCohesion = groupId !== null
+        && soloCarrierType === ''
+        && introCarrierBodyType !== 'solo'
+        && groupBehaviorArchetype !== 'paired_dance'
+        && groupBehaviorArchetype !== 'advancing_line'
+        && groupBehaviorArchetype !== 'winding_chain';
+      if (allowGroupCohesion) {
+        let memberCount = 0;
+        let centroidX = 0;
+        let centroidY = 0;
+        let avgVx = 0;
+        let avgVy = 0;
+        for (let j = 0; j < enemies.length; j++) {
+          const o = enemies[j];
+          if (!o || String(o?.enemyType || '') !== 'composer-group-member') continue;
+          const otherGroupId = Number.isFinite(Number(o?.composerGroupId))
+            ? Number(o.composerGroupId)
+            : (Number.isFinite(Number(o?.musicGroupId)) ? Number(o.musicGroupId) : null);
+          if (otherGroupId !== groupId) continue;
+          if (String(o?.lifecycleState || '').trim().toLowerCase() === 'retiring') continue;
+          centroidX += Number(o.wx) || 0;
+          centroidY += Number(o.wy) || 0;
+          avgVx += Number(o.vx) || 0;
+          avgVy += Number(o.vy) || 0;
+          memberCount += 1;
+        }
+        if (memberCount >= 2) {
+          centroidX /= memberCount;
+          centroidY /= memberCount;
+          avgVx /= memberCount;
+          avgVy /= memberCount;
+          const centroidDx = centroidX - Number(e.wx);
+          const centroidDy = centroidY - Number(e.wy);
+          const centroidDist = Math.hypot(centroidDx, centroidDy);
+          const cohesionSoftRadius = Math.max(
+            Math.max(80, Number(constants.composerGroupSeparationRadiusWorld) || 200) * 0.82,
+            120
+          );
+          if (centroidDist > cohesionSoftRadius) {
+            const pullDist = centroidDist - cohesionSoftRadius;
+            const pullNorm = Math.min(1, pullDist / Math.max(1, cohesionSoftRadius * 0.8));
+            const cohesionForce = Math.max(0, Number(constants.enemyAccel) || 0) * 0.11 * pullNorm;
+            ax += (centroidDx / centroidDist) * cohesionForce;
+            ay += (centroidDy / centroidDist) * cohesionForce;
+          }
+          const velocityBlend = Math.max(0, Math.min(1, (Number(state.dt) || 0) * 0.95));
+          e.vx += (avgVx - (Number(e.vx) || 0)) * velocityBlend * 0.22;
+          e.vy += (avgVy - (Number(e.vy) || 0)) * velocityBlend * 0.22;
+        }
+      }
     }
     const perfRepeatEventMotion = resolvePerfRepeatEventMotionRuntime(e, state, constants);
-    const behavioralMotion = perfRepeatEventMotion || resolveBehavioralFormationMotionRuntime(e, enemies, centerWorld, state, constants);
-    if (behavioralMotion?.overrideVelocity === true) {
-      const blend = Math.max(0.08, Math.min(0.5, Number(behavioralMotion.blend) || 0.3));
-      e.vx += ((Number(behavioralMotion.desiredVx) || 0) - (Number(e.vx) || 0)) * blend;
-      e.vy += ((Number(behavioralMotion.desiredVy) || 0) - (Number(e.vy) || 0)) * blend;
-      if (behavioralMotion?.debugTrace && typeof behavioralMotion.debugTrace === 'object') {
+    const groupBehaviorMotion = perfRepeatEventMotion || resolveBehavioralFormationMotionRuntime(e, enemies, centerWorld, state, constants);
+    const singleBehaviorMotion = groupBehaviorMotion
+      ? null
+      : resolveSingleBehaviorMotionRuntime(e, centerWorld, state, constants, behavioralFormationRuntime);
+    const scopedBehaviorMotion = groupBehaviorMotion || singleBehaviorMotion;
+    if (scopedBehaviorMotion?.overrideVelocity === true) {
+      const blend = Math.max(0.08, Math.min(0.5, Number(scopedBehaviorMotion.blend) || 0.3));
+      e.vx += ((Number(scopedBehaviorMotion.desiredVx) || 0) - (Number(e.vx) || 0)) * blend;
+      e.vy += ((Number(scopedBehaviorMotion.desiredVy) || 0) - (Number(e.vy) || 0)) * blend;
+      if (scopedBehaviorMotion?.debugTrace && typeof scopedBehaviorMotion.debugTrace === 'object') {
         notePairedDanceTraceRuntime(helpers, state, e, {
-          ...behavioralMotion.debugTrace,
+          ...scopedBehaviorMotion.debugTrace,
           postBlendVx: Number(e.vx) || 0,
           postBlendVy: Number(e.vy) || 0,
         });
@@ -1023,6 +1220,9 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       } else if (String(e?.behavioralFormationArchetype || '').trim().toLowerCase() === 'paired_dance') {
         ax = 0;
         ay = 0;
+      } else if (singleBehaviorMotion?.overrideVelocity === true) {
+        ax *= 0.12;
+        ay *= 0.12;
       } else {
         ax *= 0.2;
         ay *= 0.2;

@@ -355,6 +355,10 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     previousPerformerEnemyId: clampInt(payload?.previousPerformerEnemyId, 0, 0),
     previousPerformerGroupId: clampInt(payload?.previousPerformerGroupId, 0, 0),
     previousPerformerType: String(payload?.previousPerformerType || '').trim().toLowerCase(),
+    selectedPrimaryEnemyId: clampInt(payload?.selectedPrimaryEnemyId, 0, 0),
+    aliveEnemyIdsCsv: String(payload?.aliveEnemyIdsCsv || '').trim(),
+    visibleEnemyIdsCsv: String(payload?.visibleEnemyIdsCsv || '').trim(),
+    performerEnemyIdsCsv: String(payload?.performerEnemyIdsCsv || '').trim(),
     ownerChanged: payload?.ownerChanged === true,
     continuityChanged: payload?.continuityChanged === true,
     continuityPreserved: payload?.continuityPreserved === true,
@@ -484,6 +488,15 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     behavioralFormationActivationMode: String(payload?.behavioralFormationActivationMode || '').trim().toLowerCase(),
     behavioralFormationIntensity: Number(payload?.behavioralFormationIntensity) || 0,
     behavioralFormationActive: payload?.behavioralFormationActive === true,
+    singleBehaviorId: String(payload?.singleBehaviorId || '').trim().toLowerCase(),
+    groupBehaviorId: String(payload?.groupBehaviorId || '').trim().toLowerCase(),
+    eventBehaviorId: String(payload?.eventBehaviorId || '').trim().toLowerCase(),
+    behaviorPriority: String(payload?.behaviorPriority || '').trim().toLowerCase(),
+    behaviorWindow: String(payload?.behaviorWindow || '').trim().toLowerCase(),
+    behaviorSource: String(payload?.behaviorSource || '').trim().toLowerCase(),
+    singleBehaviorWindow: String(payload?.singleBehaviorWindow || '').trim().toLowerCase(),
+    groupBehaviorWindow: String(payload?.groupBehaviorWindow || '').trim().toLowerCase(),
+    eventBehaviorWindow: String(payload?.eventBehaviorWindow || '').trim().toLowerCase(),
     activeEventSection: String(payload?.activeEventSection || '').trim().toLowerCase(),
     eventBehaviorClass: String(payload?.eventBehaviorClass || '').trim().toLowerCase(),
     enteredBar: clampInt(payload?.enteredBar, -1, -1),
@@ -570,6 +583,10 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     suppressedEnemyFamilies: Array.isArray(payload?.suppressedEnemyFamilies)
       ? payload.suppressedEnemyFamilies.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
       : [],
+    behaviorAssignmentByRole: payload?.behaviorAssignmentByRole && typeof payload.behaviorAssignmentByRole === 'object'
+      ? { ...payload.behaviorAssignmentByRole }
+      : {},
+    activeEventBehaviorId: String(payload?.activeEventBehaviorId || '').trim().toLowerCase(),
     varietyPressureByFamily: payload?.varietyPressureByFamily && typeof payload.varietyPressureByFamily === 'object'
       ? { ...payload.varietyPressureByFamily }
       : {},

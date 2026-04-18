@@ -378,11 +378,32 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     }
     const introGroupBodyLocked = isPersistentIntroSlotCarrier(g)
       && String(g?.introCarrierBodyType || '').trim().toLowerCase() === 'group';
+    const normalizedTemplateId = String(g?.templateId || '').trim().toLowerCase();
+    const ordinaryGroupedMusicalRole = (
+      !introGroupBodyLocked
+      && !isFoundationBufferGroup(g)
+      && !String(g?.soloCarrierType || '').trim()
+      && String(g?.introCarrierBodyType || '').trim().toLowerCase() !== 'solo'
+      && !normalizedTemplateId.startsWith('solo-')
+    );
+    const groupedFloor = ordinaryGroupedMusicalRole ? 2 : 1;
     if (!introGroupBodyLocked && Number(pacingCaps.maxComposerPerformers) > 0) {
-      g.performers = Math.max(1, Math.min(Math.trunc(Number(g.performers) || 1), Math.trunc(Number(pacingCaps.maxComposerPerformers) || 1)));
+      g.performers = Math.max(
+        groupedFloor,
+        Math.min(
+          Math.trunc(Number(g.performers) || groupedFloor),
+          Math.max(groupedFloor, Math.trunc(Number(pacingCaps.maxComposerPerformers) || groupedFloor))
+        )
+      );
     }
     if (!introGroupBodyLocked && Number(pacingCaps.maxComposerGroupSize) > 0) {
-      g.size = Math.max(1, Math.min(Math.trunc(Number(g.size) || 1), Math.trunc(Number(pacingCaps.maxComposerGroupSize) || 1)));
+      g.size = Math.max(
+        groupedFloor,
+        Math.min(
+          Math.trunc(Number(g.size) || groupedFloor),
+          Math.max(groupedFloor, Math.trunc(Number(pacingCaps.maxComposerGroupSize) || groupedFloor))
+        )
+      );
     }
     const need = Math.max(0, Math.trunc(Number(g.size) || 0) - aliveIds.size);
     if (need > 0) {

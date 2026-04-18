@@ -555,6 +555,20 @@ export const COMPOSER_GROUP_TEMPLATE_LIBRARY = Object.freeze([
     }),
   }),
   Object.freeze({
+    id: 'lead_group',
+    role: BEAT_EVENT_ROLES.LEAD,
+    size: 2,
+    performers: 1,
+    actionType: 'projectile',
+    threatLevel: BEAT_EVENT_THREAT.FULL,
+    callResponseLane: 'call',
+    notes: Object.freeze(['C4', 'D#4', 'G4', 'A#4']),
+    motif: Object.freeze({
+      id: 'lead_lift',
+      steps: Object.freeze([1, 0, 1, 0, 0, 1, 0, 1]),
+    }),
+  }),
+  Object.freeze({
     id: 'lead_drawsnake_group',
     role: BEAT_EVENT_ROLES.LEAD,
     size: 2,

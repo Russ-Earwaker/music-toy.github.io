@@ -1306,6 +1306,94 @@ Implications:
 - behavioral formations may change gameplay shape, but only intentionally
 - no level should require bespoke movement just to make the music readable
 
+#### 18.1b Enemy Behavior Scopes
+
+We should also explicitly separate three scopes of enemy behavior:
+
+- `single enemy behaviors`
+  - the local default behavior for one enemy at a time
+  - examples:
+    - default pursuit
+    - zig-zag on beat
+    - move then stop on beat
+    - other individual rhythmic motion
+- `group behaviors`
+  - coordinated motion for one subset or formation group
+  - examples:
+    - winding chain
+    - advancing line
+    - escort / follow-the-leader variants
+- `event behaviors`
+  - rare, time-bounded overlays that affect most or all visible enemies
+  - examples:
+    - paired dance
+    - beat bounce
+    - bass-drop freeze / surge
+
+Working rule:
+
+> Single behavior is the baseline.
+> Group behavior is coordinated variety.
+> Event behavior is a sparse, section-level override.
+
+This matters because the director will eventually need to decide:
+
+- when to field many enemies with one single-enemy behavior
+- when to add one or two coordinated group behaviors for contrast
+- when a section is musically strong enough to justify a global event behavior
+
+These three scopes should not be treated as interchangeable.
+They have different cadence, cost, and musical meaning.
+
+#### 18.1c Behavior Precedence
+
+Behavior scope should have an explicit precedence model:
+
+1. `event behavior`
+2. `group behavior`
+3. `single enemy behavior`
+
+That means:
+
+- event behavior may temporarily override local/group motion
+- group behavior may coordinate members when no event behavior is active
+- single-enemy behavior remains the fallback baseline
+
+Important rule:
+
+> Event behavior may override motion briefly.
+> It must not silently replace ownership, lane policy, or encounter fairness.
+
+#### 18.1d Director Ownership
+
+The enemy director should eventually own behavior assignment the same way it owns pressure and carrier demand.
+
+Director responsibilities should include:
+
+- how many enemies use a given `single enemy behavior`
+- whether a `group behavior` is introduced in this section
+- whether an `event behavior` is eligible at all
+- whether the current music intensity supports that event
+
+Examples:
+
+- a calmer section may spawn several enemies with `move_and_stop_on_beat`
+- a busier section may add one `winding_chain` group for contrast
+- a highly regular or high-intensity section may permit `paired_dance`
+- a bass-drop moment may permit a brief freeze/surge event
+
+Important guardrail:
+
+> No section should require a special group or event behavior for the music to function.
+
+The baseline piece must remain valid with:
+
+- only single-enemy behaviors
+- presentation formations
+- normal lane ownership
+
+Everything else is additive.
+
 #### 18.2 Baseline Carrier Rule
 
 Composer groups and solo carriers must be able to realize every role on their own.
@@ -1781,6 +1869,50 @@ That means event sections may bias the battlefield presentation or motion, but t
 - limit it to presentation pulse and very small synchronized movement damping
 - verify it does not regress intro/merge readability
 - do not implement `hold_then_surge` or dance sections until the safe presentation section is stable
+
+#### 19.6 Behavior Taxonomy Runtime
+
+Before broadening event or group motion further, formalize one shared behavior contract.
+
+Add a small runtime/state vocabulary such as:
+
+- `singleBehaviorId`
+- `groupBehaviorId`
+- `eventBehaviorId`
+- `behaviorPriority`
+- `behaviorWindow`
+- `behaviorSource`
+  - `default`
+  - `director`
+  - `style`
+  - `event`
+
+This should let the runtime answer, for any active enemy:
+
+- what its baseline motion is
+- whether it currently belongs to a coordinated group movement
+- whether a section/event overlay is currently overriding that motion
+
+Acceptance rule:
+
+> Do not let different files invent behavior precedence independently.
+> The director/runtime contract should be the single source of truth.
+
+#### 19.7 First Behavior-Scope Checklist
+
+Implementation order should stay narrow:
+
+1. formalize the three behavior scopes in runtime/debug
+2. keep `single enemy behavior` as the always-valid fallback
+3. allow `group behavior` as explicit opt-in variety
+4. keep `event behavior` sparse and strongly gated by section/music state
+5. only then allow the director to schedule them intentionally
+
+Practical rule:
+
+- any level should still work with only single-enemy behavior
+- group behavior should improve variety, not patch a missing baseline
+- event behavior should feel authored and rare, not constant
 
 Acceptance rule:
 

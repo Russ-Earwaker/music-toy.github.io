@@ -44,6 +44,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
     ? state.musicModeRuntime
     : null;
+  const enemyDirectorRuntime = state.enemyDirectorRuntime && typeof state.enemyDirectorRuntime === 'object'
+    ? state.enemyDirectorRuntime
+    : null;
   const eventSectionRuntime = state.eventSectionRuntime && typeof state.eventSectionRuntime === 'object'
     ? state.eventSectionRuntime
     : null;
@@ -110,6 +113,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       activeMusicMode: String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase(),
       introStage,
       activeEventSection: String(eventSectionRuntime?.activeEventSection || '').trim().toLowerCase(),
+      enemyDirectorRuntime,
       runSeed: sessionSeed,
       barIndex: currentBarIndex,
       carrierType: getGroupFormationCarrierType(group),
@@ -2636,6 +2640,12 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
               behavioralFormationActivationMode: String(created?.behavioralFormationActivationMode || '').trim().toLowerCase(),
               behavioralFormationIntensity: Number(created?.behavioralFormationIntensity) || 0,
               behavioralFormationActive: created?.behavioralFormationActive === true,
+              singleBehaviorId: String(created?.singleBehaviorId || '').trim().toLowerCase(),
+              groupBehaviorId: String(created?.groupBehaviorId || '').trim().toLowerCase(),
+              eventBehaviorId: String(created?.eventBehaviorId || '').trim().toLowerCase(),
+              behaviorPriority: String(created?.behaviorPriority || '').trim().toLowerCase(),
+              behaviorWindow: String(created?.behaviorWindow || '').trim().toLowerCase(),
+              behaviorSource: String(created?.behaviorSource || '').trim().toLowerCase(),
               ...(leadCreationDebugPayload || {}),
             }, {
               beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
@@ -2842,19 +2852,24 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           sectionId: group?.sectionId,
           energyState: currentEnergyStateName,
         });
+        const existingBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
+        const existingTemplateId = String(group?.templateId || '').trim().toLowerCase();
+        const explicitSoloLeadCarrier = existingBodyType === 'solo' || existingTemplateId.startsWith('solo-');
         group.soloCarrierType = '';
         group.groupRhythmCarrierLock = false;
         group.introStageCarrier = false;
         group.introPercussionCarrier = false;
-        group.introCarrierBodyType = 'solo';
+        group.introCarrierBodyType = explicitSoloLeadCarrier ? 'solo' : 'group';
         group.musicProfileSourceType = 'lead_melody';
-        if (!String(group?.templateId || '').trim().toLowerCase().startsWith('solo-')) {
+        if (explicitSoloLeadCarrier && !existingTemplateId.startsWith('solo-')) {
           group.templateId = 'solo-melody-carrier';
+        } else if (!explicitSoloLeadCarrier) {
+          group.templateId = 'lead_group';
         }
         group.role = canonicalLeadProfile?.role || constants.leadRole;
         group.musicLaneId = 'primary_loop_lane';
         group.musicLaneLayer = 'loops';
-        group.callResponseLane = 'solo';
+        group.callResponseLane = explicitSoloLeadCarrier ? 'solo' : 'call';
         const canonicalLeadInstrumentId = sanitizeEnemyMusicInstrumentId(
           canonicalLeadProfile?.instrumentId,
           group?.instrumentId || group?.instrument || helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone',
@@ -3129,6 +3144,12 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             behavioralFormationActivationMode: String(group?.behavioralFormationActivationMode || '').trim().toLowerCase(),
             behavioralFormationIntensity: Number(group?.behavioralFormationIntensity) || 0,
             behavioralFormationActive: group?.behavioralFormationActive === true,
+            singleBehaviorId: String(group?.singleBehaviorId || '').trim().toLowerCase(),
+            groupBehaviorId: String(group?.groupBehaviorId || '').trim().toLowerCase(),
+            eventBehaviorId: String(group?.eventBehaviorId || '').trim().toLowerCase(),
+            behaviorPriority: String(group?.behaviorPriority || '').trim().toLowerCase(),
+            behaviorWindow: String(group?.behaviorWindow || '').trim().toLowerCase(),
+            behaviorSource: String(group?.behaviorSource || '').trim().toLowerCase(),
           }, {
             beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
           });
@@ -3165,15 +3186,29 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           behavioralFormationActivationMode: String(group?.behavioralFormationActivationMode || '').trim().toLowerCase(),
           behavioralFormationIntensity: Number(group?.behavioralFormationIntensity) || 0,
           behavioralFormationActive: group?.behavioralFormationActive === true,
+          singleBehaviorId: String(group?.singleBehaviorId || '').trim().toLowerCase(),
+          groupBehaviorId: String(group?.groupBehaviorId || '').trim().toLowerCase(),
+          eventBehaviorId: String(group?.eventBehaviorId || '').trim().toLowerCase(),
+          behaviorPriority: String(group?.behaviorPriority || '').trim().toLowerCase(),
+          behaviorWindow: String(group?.behaviorWindow || '').trim().toLowerCase(),
+          behaviorSource: String(group?.behaviorSource || '').trim().toLowerCase(),
         }, {
           beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
         });
       }
       const aliveMembers = getAliveComposerEnemiesByIds(group.memberIds);
       if (primaryLoopMelodyIdentity) {
-        group.size = 1;
-        group.performers = 1;
-        if (aliveMembers.length > 1) {
+        const explicitSoloLeadCarrier = String(group?.introCarrierBodyType || '').trim().toLowerCase() === 'solo'
+          || String(group?.templateId || '').trim().toLowerCase().startsWith('solo-');
+        if (explicitSoloLeadCarrier) {
+          group.size = 1;
+          group.performers = 1;
+        } else {
+          const sharedLeadCount = Math.max(1, Math.min(aliveMembers.length || groupMemberCount || 1, 3));
+          group.size = sharedLeadCount;
+          group.performers = sharedLeadCount;
+        }
+        if (explicitSoloLeadCarrier && aliveMembers.length > 1) {
           const keeper = aliveMembers[0] || null;
           for (let i = 1; i < aliveMembers.length; i++) {
             const extraEnemy = aliveMembers[i];
@@ -3182,10 +3217,22 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             extraEnemy.composerRetiring = true;
             extraEnemy.retireReason = 'lead_diagnostic_trim';
             extraEnemy.retirePhaseStartMs = Number(performance?.now?.() || 0);
-            extraEnemy.retreating = true;
+            extraEnemy.retreating = false;
           }
           group.memberIds = new Set(keeper ? [Math.trunc(Number(keeper?.id) || 0)].filter((id) => id > 0) : []);
         }
+      }
+      const nonSoloGroupedTemplate = String(group?.templateId || '').trim().toLowerCase();
+      const ordinaryGroupedMusicalRole = (
+        !effectiveGroupSoloCarrierType
+        && String(group?.introCarrierBodyType || '').trim().toLowerCase() !== 'solo'
+        && !nonSoloGroupedTemplate.startsWith('solo-')
+        && nonSoloGroupedTemplate !== 'foundation-buffer'
+      );
+      if (ordinaryGroupedMusicalRole) {
+        const groupedFloorCount = Math.max(2, Math.min(aliveMembers.length || groupMemberCount || 2, 2));
+        group.size = Math.max(groupedFloorCount, Math.trunc(Number(group?.size) || 0));
+        group.performers = Math.max(groupedFloorCount, Math.trunc(Number(group?.performers) || 0));
       }
       if (effectiveGroupSoloCarrierType) {
         group.size = 1;
@@ -3199,7 +3246,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             extraEnemy.composerRetiring = true;
             extraEnemy.retireReason = 'solo_carrier_trim';
             extraEnemy.retirePhaseStartMs = Number(performance?.now?.() || 0);
-            extraEnemy.retreating = true;
+            extraEnemy.retreating = false;
           }
           group.memberIds = new Set(keeper ? [Math.trunc(Number(keeper?.id) || 0)].filter((id) => id > 0) : []);
         }
