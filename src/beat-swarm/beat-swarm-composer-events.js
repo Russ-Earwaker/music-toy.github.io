@@ -32,6 +32,28 @@ function normalizePhraseNoteList(values, normalizeNoteName) {
   return out;
 }
 
+function isIntroSlotIdentityProfile(profileId) {
+  const profile = normalizeComposerProfileSourceType(profileId);
+  return profile === 'spawner_rhythm_pulse'
+    || profile === 'spawner_rhythm_backbeat'
+    || profile === 'spawner_rhythm_motion';
+}
+
+function isForcedSingleEmitterGroup(group, aliveMemberCount = 0) {
+  const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
+  const callResponseLane = String(group?.callResponseLane || '').trim().toLowerCase();
+  const introCarrierBodyType = String(group?.introCarrierBodyType || '').trim().toLowerCase();
+  const templateId = String(group?.templateId || '').trim().toLowerCase();
+  const introSlotProfileSourceType = normalizeComposerProfileSourceType(group?.introSlotProfileSourceType || group?.musicProfileSourceType);
+  const multiMemberIntroGroup = Math.max(0, Math.trunc(Number(aliveMemberCount) || 0)) > 1
+    && ((group?.introStageCarrier === true) || isIntroSlotIdentityProfile(introSlotProfileSourceType));
+  if (multiMemberIntroGroup) return false;
+  return soloCarrierType === 'rhythm'
+    || callResponseLane === 'solo'
+    || introCarrierBodyType === 'solo'
+    || templateId.startsWith('solo-');
+}
+
 function getPhraseStepState(stepAbs = 0, phraseSteps = 4) {
   const steps = Math.max(2, Math.trunc(Number(phraseSteps) || 4));
   const abs = Math.max(0, Math.trunc(Number(stepAbs) || 0));
@@ -82,11 +104,7 @@ export function chooseComposerGroupEnemyForNote(options = null) {
   const noteName = options?.noteName;
   const note = normalizeNoteName(noteName) || getFallbackNote();
   const aliveIds = new Set(aliveMembers.map((e) => Math.trunc(Number(e?.id) || 0)));
-  const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
-  const explicitSoloGroup = soloCarrierType === 'rhythm'
-    || String(group?.callResponseLane || '').trim().toLowerCase() === 'solo'
-    || String(group?.introCarrierBodyType || '').trim().toLowerCase() === 'solo'
-    || String(group?.templateId || '').trim().toLowerCase().startsWith('solo-');
+  const explicitSoloGroup = isForcedSingleEmitterGroup(group, aliveMembers.length);
   const pinned = Math.trunc(Number(group?.noteToEnemyId?.get?.(note)) || 0);
   if (explicitSoloGroup && pinned > 0 && aliveIds.has(pinned)) {
     return aliveMembers.find((e) => Math.trunc(Number(e?.id) || 0) === pinned) || null;
@@ -424,9 +442,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const introSlotProfileSourceType = normalizeComposerProfileSourceType(group?.introSlotProfileSourceType);
     const introSlotIdentityLocked = group?.introSlotLock === true
       && Math.max(-1, Math.trunc(Number(group?.introSlotLockUntilBar) || -1)) >= barIndex;
-    const introSlotIdentityActive = introSlotProfileSourceType === 'spawner_rhythm_pulse'
-      || introSlotProfileSourceType === 'spawner_rhythm_backbeat'
-      || introSlotProfileSourceType === 'spawner_rhythm_motion';
+    const introSlotIdentityActive = isIntroSlotIdentityProfile(introSlotProfileSourceType);
     const musicProfileSourceType = normalizeComposerProfileSourceType(introSlotIdentityActive
       ? (introSlotProfileSourceType || group?.musicProfileSourceType)
       : group?.musicProfileSourceType) || '';
@@ -1055,12 +1071,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       noteResponseDiagnostic('lane_driven_primary_loop');
       continue;
     }
-    const explicitSoloGroup = isSoloCarrier
-      || String(group?.callResponseLane || '').trim().toLowerCase() === 'solo'
-      || String(group?.introCarrierBodyType || '').trim().toLowerCase() === 'solo'
-      || String(group?.templateId || '').trim().toLowerCase().startsWith('solo-');
+    const explicitSoloGroup = isForcedSingleEmitterGroup(group, aliveMembers.length);
     const configuredPerformerCount = Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
-    const groupedPerformerFloor = explicitSoloGroup || introSlotIdentityActive
+    const groupedPerformerFloor = explicitSoloGroup
       ? 1
       : Math.min(2, Math.max(1, aliveMembers.length));
     const performerCount = Math.max(
