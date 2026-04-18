@@ -8461,6 +8461,11 @@ const enemyDirectorRuntime = {
   desiredLaneRoles: [],
   preferredEnemyFamilies: [],
   suppressedEnemyFamilies: [],
+  behaviorIntensityTier: 'low',
+  singleBehaviorDensity: 0,
+  groupBehaviorDensity: 0,
+  eventBehaviorEligibility: 'low',
+  behaviorNoveltyBias: 0,
   behaviorAssignmentByRole: Object.freeze({}),
   activeEventBehaviorId: 'none',
   varietyPressureByFamily: Object.freeze({}),
@@ -10109,6 +10114,11 @@ function startMusicLabSession(reason = 'unknown') {
   enemyDirectorRuntime.desiredLaneRoles = [];
   enemyDirectorRuntime.preferredEnemyFamilies = [];
   enemyDirectorRuntime.suppressedEnemyFamilies = [];
+  enemyDirectorRuntime.behaviorIntensityTier = 'low';
+  enemyDirectorRuntime.singleBehaviorDensity = 0;
+  enemyDirectorRuntime.groupBehaviorDensity = 0;
+  enemyDirectorRuntime.eventBehaviorEligibility = 'low';
+  enemyDirectorRuntime.behaviorNoveltyBias = 0;
   enemyDirectorRuntime.behaviorAssignmentByRole = Object.freeze({});
   enemyDirectorRuntime.activeEventBehaviorId = 'none';
   enemyDirectorRuntime.varietyPressureByFamily = Object.freeze({});
@@ -19052,6 +19062,96 @@ function getBeatSwarmEventBehaviorIdForSection(sectionId = 'none') {
   if (normalizedSectionId === 'hold_then_surge') return 'bass_drop_freeze';
   return 'none';
 }
+
+function getBeatSwarmBehaviorIntensityRuntime(options = null) {
+  const targetPressure = Math.max(0, Math.min(1, Number(options?.targetPressure) || 0));
+  const arrangementRamp = Math.max(0, Math.min(1, Number(options?.arrangementRamp) || 0));
+  const difficultyRamp = Math.max(0, Math.min(1, Number(options?.difficultyRamp) || 0));
+  const activeMusicMode = String(options?.activeMusicMode || '').trim().toLowerCase();
+  const introStage = String(options?.introStage || '').trim().toLowerCase();
+  const activeEventBehaviorId = String(options?.activeEventBehaviorId || 'none').trim().toLowerCase();
+  const intensitySignal = Math.max(
+    targetPressure,
+    (targetPressure * 0.72) + (arrangementRamp * 0.28),
+    (targetPressure * 0.68) + (difficultyRamp * 0.32),
+  );
+  let behaviorIntensityTier = 'low';
+  if (
+    activeMusicMode === 'full_texture'
+    || activeEventBehaviorId !== 'none'
+    || intensitySignal >= 0.78
+  ) {
+    behaviorIntensityTier = 'high';
+  } else if (
+    activeMusicMode === 'lead_entry_merge'
+    || introStage === 'soft_ramp'
+    || intensitySignal >= 0.5
+  ) {
+    behaviorIntensityTier = 'medium';
+  }
+  const singleBehaviorDensity = behaviorIntensityTier === 'high'
+    ? 0.88
+    : (behaviorIntensityTier === 'medium' ? 0.62 : 0.28);
+  const groupBehaviorDensity = behaviorIntensityTier === 'high'
+    ? 0.42
+    : (behaviorIntensityTier === 'medium' ? 0.16 : 0.04);
+  const eventBehaviorEligibility = activeEventBehaviorId !== 'none'
+    ? 'active'
+    : (behaviorIntensityTier === 'high' ? 'high' : (behaviorIntensityTier === 'medium' ? 'medium' : 'low'));
+  const behaviorNoveltyBias = behaviorIntensityTier === 'high'
+    ? 0.72
+    : (behaviorIntensityTier === 'medium' ? 0.4 : 0.14);
+  return {
+    behaviorIntensityTier,
+    singleBehaviorDensity,
+    groupBehaviorDensity,
+    eventBehaviorEligibility,
+    behaviorNoveltyBias,
+  };
+}
+
+function buildBeatSwarmBehaviorAssignmentByRole(options = null) {
+  const introStage = String(options?.introStage || '').trim().toLowerCase();
+  const activeMusicMode = String(options?.activeMusicMode || '').trim().toLowerCase();
+  const intensityTier = String(options?.behaviorIntensityTier || 'low').trim().toLowerCase();
+  const singleBehaviorDensity = Math.max(0, Math.min(1, Number(options?.singleBehaviorDensity) || 0));
+  const groupBehaviorDensity = Math.max(0, Math.min(1, Number(options?.groupBehaviorDensity) || 0));
+  const noveltyBias = Math.max(0, Math.min(1, Number(options?.behaviorNoveltyBias) || 0));
+  const introWindingChainActive = (introStage === 'rhythm_only' || introStage === 'soft_ramp') && groupBehaviorDensity >= 0.08;
+  const leadGroupBehaviorActive = activeMusicMode === 'full_texture' && intensityTier === 'high' && groupBehaviorDensity >= 0.4;
+  const expressiveSinglesActive = singleBehaviorDensity >= 0.56;
+  const highNovelty = noveltyBias >= 0.64;
+  return Object.freeze({
+    foundation_groove: Object.freeze({
+      singleBehaviorId: expressiveSinglesActive ? 'move_stop_on_beat' : 'default_motion',
+      groupBehaviorId: 'none',
+      behaviorSource: 'director',
+      singleBehaviorWindow: intensityTier === 'low' ? 'restrained' : 'continuous',
+      groupBehaviorWindow: 'continuous',
+    }),
+    counter_rhythm: Object.freeze({
+      singleBehaviorId: expressiveSinglesActive ? 'zig_zag_on_beat' : 'default_motion',
+      groupBehaviorId: introWindingChainActive ? 'winding_chain' : 'none',
+      behaviorSource: 'director',
+      singleBehaviorWindow: expressiveSinglesActive ? 'continuous' : 'restrained',
+      groupBehaviorWindow: introWindingChainActive ? 'persistent' : 'continuous',
+    }),
+    lead_phrase: Object.freeze({
+      singleBehaviorId: highNovelty ? 'zig_zag_on_beat' : 'default_motion',
+      groupBehaviorId: leadGroupBehaviorActive ? 'advancing_line' : 'none',
+      behaviorSource: 'director',
+      singleBehaviorWindow: intensityTier === 'high' ? 'accented' : 'continuous',
+      groupBehaviorWindow: leadGroupBehaviorActive ? 'section_peak_only' : 'continuous',
+    }),
+    answer_ornament: Object.freeze({
+      singleBehaviorId: intensityTier === 'high' ? 'zig_zag_on_beat' : 'default_motion',
+      groupBehaviorId: 'none',
+      behaviorSource: 'director',
+      singleBehaviorWindow: intensityTier === 'low' ? 'restrained' : 'continuous',
+      groupBehaviorWindow: 'continuous',
+    }),
+  });
+}
 function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null) {
   const musicState = activeMusicModeState && typeof activeMusicModeState === 'object'
     ? activeMusicModeState
@@ -19110,37 +19210,20 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
   const sortedFamilies = Object.entries(varietyPressureByFamily).sort((a, b) => a[1] - b[1]);
   const preferredEnemyFamilies = sortedFamilies.filter(([, pressure]) => pressure <= 0).map(([familyId]) => familyId);
   const suppressedEnemyFamilies = sortedFamilies.filter(([, pressure]) => pressure > 0).map(([familyId]) => familyId);
-  const behaviorAssignmentByRole = Object.freeze({
-    foundation_groove: Object.freeze({
-      singleBehaviorId: 'move_stop_on_beat',
-      groupBehaviorId: 'none',
-      behaviorSource: 'director',
-      singleBehaviorWindow: 'continuous',
-      groupBehaviorWindow: 'continuous',
-    }),
-    counter_rhythm: Object.freeze({
-      singleBehaviorId: 'zig_zag_on_beat',
-      groupBehaviorId: (introStage === 'rhythm_only' || introStage === 'soft_ramp') ? 'winding_chain' : 'none',
-      behaviorSource: 'director',
-      singleBehaviorWindow: 'continuous',
-      groupBehaviorWindow: (introStage === 'rhythm_only' || introStage === 'soft_ramp') ? 'persistent' : 'continuous',
-    }),
-    lead_phrase: Object.freeze({
-      singleBehaviorId: 'default_motion',
-      groupBehaviorId: 'none',
-      behaviorSource: 'director',
-      singleBehaviorWindow: 'continuous',
-      groupBehaviorWindow: 'continuous',
-    }),
-    answer_ornament: Object.freeze({
-      singleBehaviorId: 'default_motion',
-      groupBehaviorId: 'none',
-      behaviorSource: 'director',
-      singleBehaviorWindow: 'continuous',
-      groupBehaviorWindow: 'continuous',
-    }),
-  });
   const activeEventBehaviorId = getBeatSwarmEventBehaviorIdForSection(inferredEventSection.sectionId);
+  const behaviorIntensityRuntime = getBeatSwarmBehaviorIntensityRuntime({
+    targetPressure,
+    arrangementRamp,
+    difficultyRamp,
+    activeMusicMode,
+    introStage,
+    activeEventBehaviorId,
+  });
+  const behaviorAssignmentByRole = buildBeatSwarmBehaviorAssignmentByRole({
+    introStage,
+    activeMusicMode,
+    ...behaviorIntensityRuntime,
+  });
   enemyDirectorRuntime.activeDirectorPhase = introStage === 'player_only' || introStage === 'rhythm_only'
     ? 'intro'
     : (activeMusicMode === 'lead_entry_merge' ? 'merge' : 'full_texture');
@@ -19151,6 +19234,11 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
   enemyDirectorRuntime.desiredLaneRoles = desiredLaneRoles.slice();
   enemyDirectorRuntime.preferredEnemyFamilies = preferredEnemyFamilies.slice();
   enemyDirectorRuntime.suppressedEnemyFamilies = suppressedEnemyFamilies.slice();
+  enemyDirectorRuntime.behaviorIntensityTier = behaviorIntensityRuntime.behaviorIntensityTier;
+  enemyDirectorRuntime.singleBehaviorDensity = behaviorIntensityRuntime.singleBehaviorDensity;
+  enemyDirectorRuntime.groupBehaviorDensity = behaviorIntensityRuntime.groupBehaviorDensity;
+  enemyDirectorRuntime.eventBehaviorEligibility = behaviorIntensityRuntime.eventBehaviorEligibility;
+  enemyDirectorRuntime.behaviorNoveltyBias = behaviorIntensityRuntime.behaviorNoveltyBias;
   enemyDirectorRuntime.behaviorAssignmentByRole = behaviorAssignmentByRole;
   enemyDirectorRuntime.activeEventBehaviorId = activeEventBehaviorId;
   enemyDirectorRuntime.varietyPressureByFamily = varietyPressureByFamily;
@@ -19173,6 +19261,11 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
         desiredLaneRoles: desiredLaneRoles.slice(),
         preferredEnemyFamilies: preferredEnemyFamilies.slice(),
         suppressedEnemyFamilies: suppressedEnemyFamilies.slice(),
+        behaviorIntensityTier: behaviorIntensityRuntime.behaviorIntensityTier,
+        singleBehaviorDensity: behaviorIntensityRuntime.singleBehaviorDensity,
+        groupBehaviorDensity: behaviorIntensityRuntime.groupBehaviorDensity,
+        eventBehaviorEligibility: behaviorIntensityRuntime.eventBehaviorEligibility,
+        behaviorNoveltyBias: behaviorIntensityRuntime.behaviorNoveltyBias,
         behaviorAssignmentByRole: behaviorAssignmentByRole,
         activeEventBehaviorId,
         varietyPressureByFamily: { ...varietyPressureByFamily },

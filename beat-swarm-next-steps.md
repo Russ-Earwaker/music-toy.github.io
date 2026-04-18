@@ -808,6 +808,344 @@ Follow-up direction under that plan:
 - add future low-count `solo carrier` enemies that can hold a full rhythm or melody lane on their own
 - use them when the director needs lane continuity without flooding the battlefield with many specials
 
+#### 15.1 First-Level Conductor Runtime
+
+The next step after the current director/runtime work should be a thin first-level conductor, not another parallel giant system.
+
+Working rule:
+
+> The conductor is a runtime authority, not just a phase labeler.
+> It should decide when the level may advance, when it must hold, and how it degrades gracefully when live gameplay fails to satisfy the authored target.
+
+Target shape:
+
+- keep existing executors:
+  - music mode runtime
+  - enemy director runtime
+  - event section runtime
+  - lifecycle / maintenance / spawn / behavior execution
+- add one small top-level level-phase runtime that feeds those executors
+
+Suggested first-level phase set:
+
+- `intro_teach`
+- `groove_establish`
+- `lead_merge`
+- `full_texture`
+- `event_showcase`
+- `escalation`
+- `pre_boss`
+- `boss_entry`
+
+Suggested runtime fields:
+
+- `activeLevelPhase`
+- `phaseVariant`
+- `phaseEnteredBar`
+- `earliestTransitionBar`
+- `preferredTransitionWindowStartBar`
+- `preferredTransitionWindowEndBar`
+- `readyToAdvance`
+- `phaseValidity`
+- `holdReason`
+- `readinessFailures`
+- `timeoutBar`
+- `degradedPhaseVariant`
+- `fallbackPhase`
+
+Important rule:
+
+> Bar count should propose transition windows.
+> Readiness should decide whether the transition is legal.
+
+That means:
+
+- the level reaches an authored transition window
+- the conductor checks whether live battlefield/music state is ready
+- if ready, it advances
+- if not ready, it holds briefly
+- if still not ready, it degrades or falls back instead of forcing the authored state into mush
+
+#### 15.2 Phase Failure Policy
+
+Every first-level phase should define:
+
+- `hardRequirements`
+- `softRequirements`
+- `maxHoldBars`
+- `degradeVariant`
+- `fallbackPhase`
+- `abortConditions`
+
+The conductor should support three recovery modes:
+
+1. `delay`
+
+- use when the missing requirement is likely to resolve soon
+- example: hold `lead_merge` briefly while rhythmic support is rebuilding
+
+2. `degrade`
+
+- use when the ideal phase target is unavailable, but a simpler valid version is possible
+- examples:
+  - `full_texture.no_ornament`
+  - `lead_merge.reduced_support`
+  - `groove_establish.foundation_only`
+
+3. `fall_back`
+
+- use when the intended next phase would currently read badly
+- example: if pre-boss simplification fails, fall back to stronger cleanup instead of forcing boss entry into clutter
+
+Hard vs soft requirement rule:
+
+- `hardRequirements`
+  - must be true or the phase cannot legally enter
+- `softRequirements`
+  - preferred, but may be delayed, degraded, or waived
+
+Examples:
+
+- hard:
+  - intro must have stable foundation
+  - lead merge must have one real lead
+  - boss entry must suppress ordinary stage authority enough for boss law to read
+- soft:
+  - secondary rhythm during intro bridge
+  - ornament during full texture
+  - event showcase during a given run
+
+#### 15.2a Normalized Conductor Contract
+
+Before implementing the first-level conductor, compress the plan into one small normalized runtime contract.
+
+Use exactly two core data shapes:
+
+1. `PhasePolicy`
+
+Static authored data for a phase.
+
+Suggested shape:
+
+- `id`
+- `earliestTransitionBar`
+- `latestPreferredTransitionBar`
+- `maxHoldBars`
+- `hardRequirements`
+- `softRequirements`
+- `degradeVariant`
+- `fallbackPhase`
+- `abortConditions`
+
+Example:
+
+```js
+{
+  id: 'lead_merge',
+  earliestTransitionBar: 16,
+  latestPreferredTransitionBar: 24,
+  maxHoldBars: 4,
+  hardRequirements: ['lead_present', 'secondary_rhythm_present'],
+  softRequirements: ['support_stable', 'ornament_absent'],
+  degradeVariant: 'reduced_support',
+  fallbackPhase: 'groove_establish',
+  abortConditions: ['co_lead_confusion', 'pressure_catastrophic'],
+}
+```
+
+2. `PhaseRuntime`
+
+Live evaluated conductor state.
+
+Suggested shape:
+
+- `activeLevelPhase`
+- `phaseVariant`
+- `timeInPhaseBars`
+- `transitionWindowOpen`
+- `readyToAdvance`
+- `holdReason`
+- `phaseValidity`
+- `unmetHardRequirements`
+- `unmetSoftRequirements`
+- `activeAbortConditions`
+- `degradeApplied`
+- `fallbackPending`
+
+Example:
+
+```js
+{
+  activeLevelPhase: 'lead_merge',
+  phaseVariant: 'default',
+  timeInPhaseBars: 3,
+  transitionWindowOpen: true,
+  readyToAdvance: false,
+  holdReason: 'secondary_rhythm_missing',
+  phaseValidity: 'valid', // valid | degraded | invalid
+  unmetHardRequirements: ['secondary_rhythm_present'],
+  unmetSoftRequirements: [],
+  activeAbortConditions: [],
+  degradeApplied: false,
+  fallbackPending: false,
+}
+```
+
+Important rule:
+
+> Do not let each phase become a bespoke conditional story.
+> Every phase should use the same policy shape and the same conductor machinery.
+
+#### 15.2b Requirement Evaluators
+
+Requirements should become reusable evaluators, not just prose labels in the plan.
+
+Examples:
+
+- `foundation_present`
+- `lead_present`
+- `secondary_rhythm_present`
+- `support_stable`
+- `ornament_available`
+- `pressure_within_target`
+- `field_readable`
+- `boss_cleanup_complete`
+- `co_lead_absent`
+
+Evaluator output should be machine-readable.
+
+Suggested shape:
+
+- `ok`
+- `reason`
+- `severity`
+- optional `evidence`
+
+This allows:
+
+- phase policy to reference requirement ids
+- conductor runtime to resolve them consistently
+- lifecycle / maintenance / director systems to report failures upward without redefining phase intent
+
+#### 15.2c Three-Question Conductor Loop
+
+The conductor should evaluate every update through one normalized loop.
+
+For the current phase, answer:
+
+1. `Are we still valid where we are?`
+
+- this is sustain validity
+- if not:
+  - degrade
+  - fall back
+  - or force cleanup
+
+2. `Are we in the transition window?`
+
+- this is authored timing
+- if not, stay in the current phase
+- if yes, check readiness
+
+3. `If the window is open, are we ready to advance?`
+
+- if yes, transition
+- if no, hold briefly
+- then degrade or fall back on timeout
+
+This keeps three different questions separate:
+
+- `transition readiness`
+- `sustain validity`
+- `forced exit`
+
+They must not collapse into one generic boolean.
+
+#### 15.3 First-Level Policy Rules
+
+The conductor should own first-level authored policy, but should not replace the current musical substates.
+
+Separation of concerns:
+
+- `level phase`
+  - broad authored macro state
+  - where the run is in the level arc
+- `music mode`
+  - musical continuity and lane policy substate
+  - how the current texture behaves operationally
+
+So:
+
+- phase should constrain music mode, not replace it
+- phase should constrain enemy director ceilings and behavior density, not replace local adaptation
+- event sections should remain skippable if readability or stability conditions fail
+
+Ownership rule:
+
+> Phase runtime declares intent.
+> Music mode / enemy director / lifecycle obey that intent.
+> They may report failure upward.
+> They must not redefine the intended phase on their own.
+
+Formation and behavior rules under conductor policy:
+
+- formations should provide `readability bias`, not fixed role signatures
+- phase should set formation/behavior ceilings and floors
+- live runtime should choose actual density inside that allowed range based on:
+  - pressure
+  - arrangement stability
+  - visibility
+  - recent novelty
+
+This should be implemented as:
+
+- weighted formation preferences
+- weighted behavior preferences
+- readability vetoes
+- anti-repetition checks
+
+not:
+
+- permanent role-to-shape laws
+- categorical “intro always X / escalation always Y” assignments
+
+#### 15.4 First-Level Acceptance And Metrics
+
+Before broadening content, the first-level conductor should prove:
+
+- intro teaches pulse first, then backbeat
+- lead merge happens without deleting support
+- full texture has one foreground lead and subordinate ornament only when stable
+- the event showcase lands clearly or is skipped safely
+- escalation increases intensity without flattening the whole field
+- pre-boss creates real contrast before boss entry
+- boss entry hands off to different musical law cleanly
+
+Metrics to add or prioritize for that conductor pass:
+
+- time from phase window open to phase readiness
+- time held due to missing hard requirements
+- degraded-phase entry count
+- fallback-phase entry count
+- time from lead entry to first valid subordinate answer/ornament
+- ornament duplication count
+- co-lead violation count
+- pre-boss simplification success
+- boss-entry transition success
+
+Implementation order for this pass:
+
+1. add the level-phase runtime with readiness/timeout fields from day one
+2. make music mode and enemy director consume:
+   - `activeLevelPhase`
+   - `phaseVariant`
+   - `readyToAdvance`
+   - `degradedPhaseVariant`
+3. encode hard vs soft requirements per phase
+4. bias formations/behaviors by weighted phase ceilings, not categorical locks
+5. keep `beat_bounce` as the only first-level authored event section
+6. add pre-boss cleanup and boss-entry fallback states
+
 ### 16. Partial Explicit Musical State Layer
 
 The next architectural step should be a partial explicit control layer above the current engine, not a full replacement of the current music runtime.
@@ -1374,6 +1712,7 @@ Director responsibilities should include:
 - whether a `group behavior` is introduced in this section
 - whether an `event behavior` is eligible at all
 - whether the current music intensity supports that event
+- how behavior density changes with section intensity and arrangement pressure
 
 Examples:
 
@@ -1393,6 +1732,48 @@ The baseline piece must remain valid with:
 - normal lane ownership
 
 Everything else is additive.
+
+#### 18.1e Intensity-Driven Behavior Density
+
+Behavior assignment should not stay flat across the whole run.
+
+The director should intentionally vary behavior complexity with musical intensity:
+
+- `low intensity`
+  - prefer `default_motion`
+  - keep single-behavior density restrained
+  - avoid introducing coordinated group motion unless a section explicitly needs it
+- `medium intensity`
+  - allow more expressive `single enemy behavior`
+  - introduce one coordinated group behavior occasionally for contrast
+  - keep event behavior eligibility limited
+- `high intensity`
+  - keep more enemies on expressive single behaviors
+  - allow sparse group-behavior variety when the section is dense enough to support it
+  - permit event behavior only when section/music state justifies it
+
+Working rule:
+
+> Intensity should increase motion character selectively, not globally.
+> A high-energy section should feel richer than a calm section, but still readable.
+
+Director/runtime vocabulary should include:
+
+- `behaviorIntensityTier`
+- `singleBehaviorDensity`
+- `groupBehaviorDensity`
+- `eventBehaviorEligibility`
+- `behaviorNoveltyBias`
+
+First implementation pass:
+
+- compute these values from:
+  - `targetPressure`
+  - `difficultyRamp`
+  - `arrangementRamp`
+  - current section / music mode
+- let them steer role-level behavior assignment before adding broader scheduling logic
+- keep group/event behavior sparse until the baseline single-behavior pass is stable
 
 #### 18.2 Baseline Carrier Rule
 

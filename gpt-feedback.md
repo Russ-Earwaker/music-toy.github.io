@@ -1,700 +1,923 @@
-# Beat Swarm: Role-Driven Formation Spawning Brief
-
-## Goal
-
-Add a **visual formation layer** to Beat Swarm so enemy spawning and movement visibly reinforce the music.
-
-This should make the player able to read, on screen:
-
-* what is the **foundation / pulse**
-* what is the **counter-rhythm**
-* what is the **lead melody**
-* what is the **answer / ornament**
-
-The core rule is:
-
-> Music roles drive formation choice first.
-> Enemy body/family styles flavor the result second.
-
-This should build on the current architecture, not replace it.
-
-Relevant existing files:
-
-* `beat-swarm-next-steps.md`
-* `src/beat-swarm/beat-swarm-mode.js`
-* `src/beat-swarm/beat-swarm-composer-maintenance.js`
-* `src/beat-swarm/beat-swarm-composer-lifecycle.js`
-* `src/beat-swarm/beat-swarm-composer-spawn.js`
-* `src/beat-swarm/beat-swarm-enemy-update.js`
-* `src/beat-swarm/beat-swarm-pacing.js`
 
 ---
 
-## Why this exists
+# Beat Swarm First Level Integration Plan
 
-The current system is much healthier structurally than before:
+## Core goal
 
-* protected lane ownership is better
-* intro handoff is better
-* `lead_entry_merge` exists
-* duplicate role clutter is lower
-* support roles can survive more reliably
+Build the **first complete Beat Swarm level** as a single controlled musical/gameplay arc using the systems that already exist, rather than adding more parallel logic.
 
-But the next problem is now **presentation and perceptual richness**, not core ownership.
+The level should feel like:
 
-Current likely failure mode:
+1. **intro teaching**
+2. **groove establishment**
+3. **lead arrival**
+4. **texture expansion**
+5. **one clear authored event moment**
+6. **escalation**
+7. **pre-boss transition**
+8. **boss entry**
 
-* roles may exist logically
-* but they are not always **clearly staged visually**
-* the arrangement can still feel too thin once lead enters
-* support may be technically present but perceptually weak
-* enemy motion still risks looking like “stuff happening” instead of “music made visible”
+The main architectural rule is:
 
-We want to fix that by giving each music role a distinct visual language.
+> Existing systems should remain the executors.
+> One thin level conductor layer should become the authority.
 
----
+That means we are **not** replacing:
 
-# Design principles
+* motif generation
+* lane arbitration
+* carrier embodiment
+* call/response
+* fallback continuity
+* formation spawning
+* behavior runtime
 
-## 1. Roles own screen language
+We are making one layer decide:
 
-Each role should have defaults for:
-
-* spawn region
-* spacing
-* path shape
-* movement smoothness
-* symmetry
-* pulse behavior
-* lifespan
-* density
-
-The player should be able to infer role from motion alone.
-
-## 2. Formations are orchestration, not decoration
-
-Formations are not just prettier spawns.
-They are the **visual equivalent of arrangement**.
-
-* foundation should look stable
-* rhythm should look stepped / punctuated
-* lead should look like a phrase line
-* answer should look like a reply
-
-## 3. Enemy family is style input, not role ownership
-
-Snake-like, spawner-like, composer-group, etc. should influence:
-
-* motion style
-* silhouette
-* phrase curvature
-* attack feel
-
-But they should not determine lane ownership.
-
-## 4. `lead_entry_merge` must be visually authored
-
-This phase is the most important test case.
-
-During intro → lead handoff:
-
-* keep pulse/backbeat visibly present
-* introduce lead with a clear melodic formation
-* prevent support from immediately fading into irrelevance
-* create screen separation between lead and support roles
+* what phase the level is in
+* which musical roles must exist
+* how much pressure is allowed
+* which event section is allowed
+* which visual/combat behaviors are appropriate
+* when the level is preparing for boss
 
 ---
 
-# Required outcome
+## Why this is the right next step
 
-After this work, a player watching the screen during Beat Swarm should be able to say:
+Right now the code already has the beginnings of the unification layer:
 
-* “that pair is the groove”
-* “that sweep is the melody”
-* “those little pops are the response”
+* `evaluateBeatSwarmMusicModeRuntime(...)`
+* `evaluateBeatSwarmEnemyDirectorRuntime(...)`
+* `evaluateBeatSwarmEventSectionRuntime(...)`
 
-If that is not true, the feature is not done.
+It also already has:
 
----
+* explicit music modes like `intro_pulse`, `intro_backbeat_bridge`, `lead_entry_merge`, `full_texture`
+* role-based behavior assignment
+* formation archetypes
+* event behavior support
+* active runtime/debug output
 
-# Musical role to formation mapping
+So the missing work is **not more infrastructure**.
 
-## A. `foundation_groove`
+The missing work is:
 
-### Visual feel
+* choosing a single level flow
+* deciding which runtime owns what
+* preventing local good decisions from producing a globally muddy result
 
-Stable, predictable, anchoring, metronomic.
-
-### Good formations
-
-* horizontal anchor line
-* mirrored side braces
-* slow orbit ring
-* evenly spaced lane march
-
-### Motion rules
-
-* low variance
-* little lateral chaos
-* predictable timing
-* consistent spacing
-* should remain readable even in denser sections
-
-### Spawn defaults
-
-* lower or outer playfield
-* broad spacing
-* low curvature
-* long lifespan
-
-### Notes
-
-This is the “the groove exists” layer.
+In other words, this plan is about **authority, sequencing, and restraint**.
 
 ---
 
-## B. `counter_rhythm`
+# 1. Define the first level as one explicit phase timeline
 
-### Visual feel
+## What Codex should do
 
-Stepped, syncopated, percussive, structured interruption.
+Add one explicit **first-level phase model** on top of the existing music mode / enemy director / event section runtime.
 
-### Good formations
+This should be a simple phase enum or state object, something like:
 
-* staggered diagonal staircase
-* alternating side bursts
-* offset pair pulses
-* broken zig-zag entry
+* `intro_teach`
+* `groove_establish`
+* `lead_merge`
+* `full_texture`
+* `event_showcase`
+* `escalation`
+* `pre_boss`
+* `boss_entry`
 
-### Motion rules
+Do **not** make this a second giant director.
+It should be a **small top-level layer** that feeds the existing runtime.
 
-* clearer subdivision than foundation
-* more offset timing
-* should not look like lead phrasing
-* should read as accents and structure
+## Why
 
-### Spawn defaults
+At the moment, several systems infer sensible state from:
 
-* side lanes or diagonal entries
-* medium spacing
-* moderate lifespan
-* pulse in and out on accent beats
+* intro stage
+* bar count
+* active lead
+* pressure
+* event windows
 
-### Notes
+That is good for local adaptation, but it does not yet guarantee a strong first-level arc.
 
-This is the visible backbeat / syncopation layer.
+A top-level phase layer gives the project:
+
+* a shared answer to “where are we in the level?”
+* a clean place to author the first run
+* a way to coordinate music, enemies, and event moments without hardcoding everything into unrelated files
+
+## Recommended phase timing
+
+For a first pass, use a **rough 3-minute arcade-like stage**, around **48–64 bars** depending on BPM.
+
+Suggested structure:
+
+### Phase 1 — Intro teach
+
+Purpose:
+
+* teach the player the pulse
+* make the opening legible
+* avoid clutter
+
+Require:
+
+* `foundation` only at first
+* then `secondary_loop_rhythm`
+
+Avoid:
+
+* no ornament
+* no dense multi-family pressure
+* no event sections
+
+### Phase 2 — Groove establish
+
+Purpose:
+
+* confirm the run now has a stable groove
+* let the player understand the battlefield language
+
+Require:
+
+* foundation remains trackable
+* one clear backbeat / counter-rhythm embodiment
+* stable readable formations
+
+Avoid:
+
+* still no ornament by default
+* lead not yet dominant unless conditions are clean
+
+### Phase 3 — Lead merge
+
+Purpose:
+
+* introduce the main lead while keeping support alive underneath
+
+Require:
+
+* real `primary_loop_lead`
+* real rhythmic `secondary_loop`
+* fixed merge bridge window
+* support cannot collapse just because lead appeared
+
+Avoid:
+
+* no decorative chaos
+* do not allow ornament duplication
+* do not let lead become the only audible truth
+
+### Phase 4 — Full texture
+
+Purpose:
+
+* allow the baseline intended texture:
+
+  * foundation
+  * counter-rhythm
+  * lead
+  * answer / ornament
+
+Require:
+
+* exactly one lead foreground
+* at most one answer/ornament support presence
+* stable readable role embodiment
+
+Avoid:
+
+* do not let ornament read as co-lead
+* do not let support swamp the lead
+* do not let the stage become flat constant pressure
+
+### Phase 5 — Event showcase
+
+Purpose:
+
+* present one clearly authored-feeling section
+
+Use:
+
+* only the safe event section first: `beat_bounce`
+
+Require:
+
+* event should be felt visually and musically
+* event is temporary
+* event enhances the current texture rather than replacing the whole level logic
+
+Avoid:
+
+* do not add `hold_then_surge`
+* do not add `dance_phrase`
+* do not add bass-drop style structure changes yet
+
+### Phase 6 — Escalation
+
+Purpose:
+
+* raise difficulty and density
+* make the player feel the stage is advancing
+
+Require:
+
+* stronger behavior density
+* more aggressive formations
+* maintained legibility of roles
+* controlled wave energy, not flat constant saturation
+
+Avoid:
+
+* do not break role clarity for spectacle
+* do not introduce multiple foreground musical ideas at once
+
+### Phase 7 — Pre-boss
+
+Purpose:
+
+* prepare the boss musically and visually
+
+Require:
+
+* thinning or narrowing of the field
+* obvious reset of expectation
+* stronger preparation of rhythm/foundation
+* reduced ornament
+
+Avoid:
+
+* don’t drift straight from escalation into boss without contrast
+
+### Phase 8 — Boss entry
+
+Purpose:
+
+* hand off authority to boss mode cleanly
+
+Require:
+
+* boss-specific music mode
+* boss-specific pressure policy
+* boss-specific lane policy
+
+Avoid:
+
+* boss should not feel like “just more stage enemies”
 
 ---
 
-## C. `lead_phrase`
+# 2. Make one file the authority for the phase plan
 
-### Visual feel
+## What Codex should do
 
-Singing, sweeping, contour-based, phrase-shaped.
+Put the top-level phase evaluation in **`beat-swarm-mode.js`**.
 
-### Good formations
+That file already contains the clearest seeds of the unified runtime:
 
-* arc sweep
-* melody ribbon
-* serpent contour line
-* rise/fall crescent
+* music mode evaluation
+* enemy director runtime evaluation
+* event section evaluation
 
-### Motion rules
+Add something like:
 
-* long directional continuity
-* visible contour
-* smoother motion than rhythm roles
-* should feel like a line drawn across the screen
+* `evaluateBeatSwarmLevelPhaseRuntime(...)`
 
-### Spawn defaults
+And make that function return a small state object, for example:
 
-* upper-middle or strongly readable lane
-* strong screen separation from foundation
-* medium-to-long lifespan
-* should preserve phrase identity across several beats
+* `activeLevelPhase`
+* `phaseEnteredBar`
+* `phaseTransitionReason`
+* `phaseTargetPressure`
+* `phaseAllowsEventSection`
+* `phaseTargetRoles`
+* `phaseCombatStyle`
+* `phaseBossPrepActive`
 
-### Notes
+## Why
 
-This should be the most obviously musical formation.
+You already have a partial state layer in `beat-swarm-mode.js`.
+That file is the natural place for top-level orchestration because it is already mediating between music logic and enemy logic.
 
----
+This avoids the current risk of having:
 
-## D. `answer_ornament`
+* one runtime infer phase from music
+* another infer from bar count
+* another infer from encounter pressure
+* another infer from event window
 
-### Visual feel
-
-Brief, responsive, echo-like, punctuation.
-
-### Good formations
-
-* mirrored reply arc
-* short pop cluster
-* endcap echo
-* sparkle burst
-
-### Motion rules
-
-* short lifespan
-* small spatial footprint
-* appears after lead phrase or around phrase endings
-* never dominates the screen
-
-### Spawn defaults
-
-* near lead endpoint or opposing screen side
-* tighter grouping
-* quick fade/exit
-
-### Notes
-
-This should feel like a reply, not another main part.
+That fragmentation is exactly how the level ends up technically valid but perceptually mushy.
 
 ---
 
-## Optional E. `sparkle_motion`
+# 3. Make phase drive music mode, not replace it
 
-### Visual feel
+## What Codex should do
 
-Transient texture, energy lift, not core structure.
+Do **not** remove `evaluateBeatSwarmMusicModeRuntime(...)`.
 
-### Good formations
+Instead:
 
-* tiny crossing flares
-* quick orbit fragments
-* very short accent streaks
+* keep music mode as the **musical substate**
+* keep level phase as the **authored macro state**
 
-### Notes
+For example:
 
-Only use in fuller sections. Never let this bury foundation or answer.
+* `intro_teach` may allow:
 
----
+  * `intro_pulse`
+  * then `intro_backbeat_bridge`
 
-# Formation archetypes to implement first
+* `lead_merge` should strongly imply:
 
-Implement a small set first. Do not build a giant general system yet.
+  * `lead_entry_merge`
 
-## Required first archetypes
+* `full_texture` should permit:
 
-* `foundation_anchor_line`
-* `backbeat_pair`
-* `syncopation_stair`
-* `lead_arc`
-* `answer_echo`
+  * `full_texture`
 
-These five are enough to prove the concept.
+* `boss_entry` should eventually enforce:
 
----
+  * `boss_rhythm_override`
 
-# Suggested data shape
+## Why
 
-Add a lightweight formation definition layer.
+This keeps the current architecture sane.
 
-## Formation spec
+The level phase should answer:
 
-Each spawnable role presentation should be able to resolve to something like:
+* what part of the run are we in?
 
-```js
-{
-  role: "lead_phrase",
-  archetype: "lead_arc",
-  styleFamily: "snake_like",
-  spawnRegion: "upper_mid",
-  motionProfile: "arc_sweep",
-  timingProfile: "phrase_sustain",
-  spacingProfile: "loose_chain",
-  pulseProfile: "phrase_accented",
-  lifespanBeats: 4,
-  memberCount: 3,
-  symmetry: "none"
-}
-```
+The music mode should answer:
 
-This does not need to be perfect or deeply abstract at first.
+* what musical continuity rules currently apply?
+
+That separation is useful:
+
+* phase is authored and broad
+* music mode is musical and operational
+
+If phase replaces music mode entirely, you lose the nuance that already exists.
+If music mode remains the only high-level state, you still don’t have a true first-level script.
 
 ---
 
-# Suggested system split
+# 4. Make phase drive enemy director ceilings and targets
 
-## 1. Role resolution
+## What Codex should do
 
-Use existing composer/director logic to decide:
+Adjust `evaluateBeatSwarmEnemyDirectorRuntime(...)` so it still computes smart local behavior, but it now reads **phase policy** for:
 
-* what role is being spawned
-* what section state is active
-* whether this is intro / merge / full texture / breakdown / etc.
+* target pressure ceiling
+* min/max alive ranges
+* allowed role counts
+* preferred enemy family emphasis
+* allowed ornament count
+* behavior density ceiling
+* whether an event section is eligible
 
-This already mostly exists.
+Examples:
 
-## 2. Formation selection
+### Intro teach
 
-New layer:
+* low target pressure
+* narrow alive range
+* foundation/body emphasis
+* almost no ornament
+* restrained single behaviors
+* little or no group behavior
 
-* pick a formation archetype based on role + section + style family
+### Lead merge
 
-Example:
+* moderate pressure
+* protect support embodiment
+* allow one lead
+* suppress excess ornament
+* avoid multi-foreground clutter
 
-```js
-selectFormationForRole({
-  role,
-  sectionState,
-  styleFamily,
-  phraseShape,
-  intensity
-})
-```
+### Full texture
 
-## 3. Member layout generation
+* allow answer/ornament
+* allow more behavior density
+* allow one event section when window is right
 
-New helper:
+### Pre-boss
 
-* take archetype and generate spawn positions / offsets / path params
+* reduce battlefield clutter
+* shift emphasis toward more stable structural roles
+* lower ornament
+* prepare a clearer rhythmic identity
 
-Example:
+## Why
 
-```js
-buildFormationLayout({
-  archetype,
-  anchorPoint,
-  memberCount,
-  spacing,
-  orientation,
-  arenaBounds
-})
-```
+Right now the enemy director runtime is already doing useful work:
 
-## 4. Enemy body assignment
+* pressure
+* family variety pressure
+* target role counts
+* behavior intensity
+* role-based behavior assignment
 
-Existing enemy/spawn logic should then instantiate actual units using that layout.
+The problem is not that it is bad.
+The problem is that it is trying to infer “what this moment should feel like” from local state.
 
-Important:
+Phase policy gives it a **clear mood ceiling**.
 
-* formation decides the arrangement
-* enemy family skins the arrangement
+That makes the system much easier to reason about:
 
-## 5. Runtime motion binding
-
-Each formation should expose motion params that enemy update/runtime can follow.
-
-This can be simple at first:
-
-* anchor + offset + oscillation
-* arc target
-* stagger phase offset
-* mirrored drift
-* follow-the-leader chain
+* local runtime still adapts
+* but it adapts inside authored bounds
 
 ---
 
-# Where this should live
+# 5. Define the first level’s target role grammar
 
-## New file suggested
+## What Codex should do
 
-Create a new module, something like:
+Lock the first-level musical role grammar explicitly:
 
-* `src/beat-swarm/beat-swarm-formation-spawn.js`
+### Baseline target grammar
 
-Optional follow-up helpers:
+* `foundation_groove`
+* `counter_rhythm`
+* `lead_phrase`
+* `answer_ornament`
 
-* `src/beat-swarm/beat-swarm-formations.js`
-* `src/beat-swarm/beat-swarm-formation-motion.js`
+### Rules
 
-Do not dump this into `beat-swarm-mode.js` unless absolutely necessary.
+* exactly one foreground `lead_phrase`
+* at most one `answer_ornament`
+* `answer_ornament` is subordinate by default
+* `foundation` must never become perceptually secondary to ornament
+* `counter_rhythm` must survive lead entry during merge and after
 
-Your file size rule matters here.
+### Phase-specific grammar
 
----
+* intro: foundation only, then foundation + counter-rhythm
+* lead merge: foundation + counter-rhythm + lead
+* full texture: add answer/ornament only after merge stability
+* pre-boss: narrow back down before boss
+* boss: likely foundation + boss rhythm emphasis first
 
-# Integration points
+## Why
 
-## `beat-swarm-composer-spawn.js`
+This directly addresses the current failure mode described in your docs:
 
-Use this as a likely entry point for:
+* the system settles into flatter shapes
+* support can over-duck after lead entry
+* answer/ornament can duplicate or read like peer lead
+* the run can become locally correct but structurally thin
 
-* role-aware formation requests
-* passing role/style/section into the formation layer
+You need the first level to teach the player a stable musical grammar.
+That means the game should not be “discovering” the grammar live every run.
 
-## `beat-swarm-composer-maintenance.js`
-
-Use this for:
-
-* preserving formation identity during role continuity
-* especially intro pulse/backbeat → bridge → full texture
-
-Important:
-If a lane survives a handoff, try to preserve the formation family or evolve it smoothly instead of hard-swapping instantly.
-
-## `beat-swarm-composer-lifecycle.js`
-
-Use this for:
-
-* deciding which role families should remain present
-* preventing de-emphasis from making support visually disappear during merge
-
-May need a new rule:
-
-* role survives not just musically, but visually, for minimum merge bars
-
-## `beat-swarm-enemy-update.js`
-
-Use this for:
-
-* formation motion playback
-* per-member movement offsets
-* stagger/mirror behavior
-
-Keep this light. Avoid turning it into a giant formation brain.
+The generative system should vary content **inside** that grammar.
 
 ---
 
-# Special handling: intro to main handoff
+# 6. Treat `beat_bounce` as the only approved authored event section for level one
 
-This is the first required use case.
+## What Codex should do
 
-## Desired visual behavior
+For the first complete level, only permit:
 
-### `intro_pulse`
+* `beat_bounce`
 
-* one very readable stable pulse formation
-* probably `foundation_anchor_line`
+Defer:
 
-### `intro_backbeat_bridge`
+* `hold_then_surge`
+* `dance_phrase`
+* anything bass-drop-like
+* any event section that requires stronger battlefield restructuring
 
-* add one distinct support formation
-* probably `backbeat_pair`
+Use the phase layer to enable `beat_bounce` only during:
 
-### `lead_entry_merge`
+* later full texture
+* or early escalation
 
-* keep pulse visible
-* keep backbeat visible
-* introduce lead using a clearly melodic formation
-* likely `lead_arc`
-* do not let support visually collapse during the first few bars of merge
+Keep it:
 
-### `full_texture`
+* short
+* legible
+* clearly prepared
+* clearly exited
 
-* allow answer/ornament to join
-* likely `answer_echo`
-* keep screen language distinct by role
+## Why
 
-## Temporary guardrail
+The code already supports this as the safest real event section:
 
-For the first implementation, add a merge safety rule:
+* the event section runtime already knows `beat_bounce`
+* the enemy update/runtime already understands it
+* the formation mapping already routes it
 
-* during `lead_entry_merge`, protected non-lead support roles cannot be visually de-emphasized below a minimum threshold for N bars
+This is important because you do **not** need a library of event sections yet.
+You need **one event section that reliably reads**.
 
-This avoids “lead arrives, support technically exists, but vanishes perceptually.”
-
----
-
-# Concrete behavior examples
-
-## Example 1: Lead phrase
-
-Input:
-
-* role = `lead_phrase`
-* style family = `snake_like`
-
-Output:
-
-* formation = `lead_arc`
-* 2–4 members
-* curved sweep path
-* rising then falling arc
-* upper-middle screen region
-* phrase lasts 3–5 beats
-
-Result:
-The lead looks like a musical contour.
+Adding more section types now increases surface area and ambiguity without proving the level is coherent.
 
 ---
 
-## Example 2: Counter-rhythm
+# 7. Use formations as role legibility tools, not just spawn variation
 
-Input:
+## What Codex should do
 
-* role = `counter_rhythm`
-* style family = `spawner_like`
+Treat formation selection as part of the first-level readability plan.
 
-Output:
+Preserve the role-to-formation associations that already exist and reinforce them:
 
-* formation = `syncopation_stair`
-* 3 members
-* diagonal staggered layout
-* stepwise movement
-* side-entry with beat-offset pulses
+* `foundation` → anchor / line stability
+* `counter_rhythm` → repeated patterned group shape
+* `lead_phrase` → arc / advancing readable phrase carrier
+* `answer_ornament` → lighter echo / companion presentation
 
-Result:
-The player sees syncopation instead of generic clutter.
+Then add phase constraints:
 
----
+### Intro / groove
 
-## Example 3: Answer
+* pick the simplest most readable formation variants
 
-Input:
+### Lead merge
 
-* role = `answer_ornament`
-* prior lead endpoint known
+* avoid formations that visually compete with the lead
+* preserve support without visual clutter
 
-Output:
+### Full texture / escalation
 
-* formation = `answer_echo`
-* 1–2 members
-* appears near phrase endpoint or mirrored opposite side
-* short duration
-* slight reply arc or pop
+* allow more expressive forms
+* but keep one dominant visual phrase at a time
 
-Result:
-The visual reads as response, not a new main voice.
+## Why
 
----
+This is how you make the screen teach the music.
 
-# Metrics to add
+The first level does not need maximum variety.
+It needs **visual-musical correspondence**:
 
-Do not just track whether a role exists.
-Track whether it is readable.
+* the player should be able to see which thing is the pulse
+* which thing is the answer
+* which thing is the foreground phrase
 
-## Add metrics for:
-
-* bars where `counter_rhythm` exists but average visual presence is too low
-* bars where `lead_phrase` exists but no visually distinct support formation is also present
-* time from lead entry to first visible `answer_ornament`
-* number of beats where at least 3 distinct role silhouettes are concurrently readable
-* merge windows where support roles are de-emphasized too quickly
-* formation diversity per run
-* section states vs visible role composition
-
-## Nice debug output
-
-Per active role, expose:
-
-* role
-* formation archetype
-* style family
-* spawn region
-* member count
-* visual weight
-* merge protection active yes/no
-
-This should probably feed Music Lab eventually.
+The existing formation system is already close to being the right mechanism for that.
 
 ---
 
-# Constraints
+# 8. Scope single / group / event behaviors by phase
 
-## Do not do these
+## What Codex should do
 
-* do not restore literal snake/spawner lane ownership
-* do not rebuild music generation around enemy family
-* do not hardcode bespoke intro-only bodies again
-* do not add giant one-off transition hacks
-* do not make every role use the same motion with different labels
-* do not bury this inside `beat-swarm-mode.js` if a module split is possible
+Keep the current three-scope behavior idea:
 
-## Must preserve
+* single enemy behavior
+* group behavior
+* event behavior
 
-* protected lane ownership
-* phrase-boundary handoff behavior
-* continuity buffering
-* intro teaching structure
-* current role-based direction from `beat-swarm-next-steps.md`
+But gate them by phase.
 
----
+### Intro teach
 
-# Implementation order
+* singles: restrained
+* groups: very limited
+* events: none
 
-## Phase 1: Skeleton
+### Groove establish
 
-* create formation selection module
-* define the 5 first archetypes
-* wire role → archetype selection
-* support basic layout generation
+* singles: light expressive motion
+* groups: maybe one stable rhythm behavior
+* events: none
 
-## Phase 2: Intro / merge pass
+### Lead merge
 
-* apply formations to intro pulse, intro backbeat, lead entry merge
-* enforce minimum visual persistence for support during merge
-* confirm lead visibly differs from support
+* singles: moderate
+* groups: restricted to support legibility
+* events: none
 
-## Phase 3: Runtime motion
+### Full texture
 
-* implement simple role-distinct movement patterns
-* anchor line
-* pair pulse
-* stair stagger
-* arc sweep
-* reply pop
+* singles: expressive
+* groups: allowed for lead or support if readable
+* events: one safe event allowed when scheduled
 
-## Phase 4: Metrics / debug
+### Escalation
 
-* expose active formation info
-* log merge failures
-* log role visibility/readability
+* singles: expressive
+* groups: stronger, but under pressure ceiling
+* events: only if not already recently used
 
-## Phase 5: Extension
+### Pre-boss
 
-* add optional sparkle layer
-* add more style-family variation
-* evolve archetypes per section without losing role identity
+* simplify again
 
----
+## Why
 
-# Definition of done
+Without phase gating, the behavior system can easily produce:
 
-This work is successful when:
+* too much motion
+* too much novelty
+* too many competing signals
 
-## Musical readability
+The purpose of behaviors is not “more life.”
+The purpose is to make the battlefield feel musically intentional.
 
-Watching the screen, a human can identify:
-
-* groove
-* lead
-* reply
-
-without needing debug tools.
-
-## Transition quality
-
-During intro → main:
-
-* pulse remains visible
-* backbeat remains visible
-* lead enters clearly
-* support does not perceptually vanish
-
-## Arrangement richness
-
-Longer runs regularly show:
-
-* foundation
-* counter-rhythm
-* lead
-* answer/ornament
-
-as distinct staged presences, not just labels in state.
-
-## Maintainability
-
-The formation system is modular enough that new archetypes can be added without touching core ownership logic.
+Phase gating gives those behaviors a dramatic function.
 
 ---
 
-# Short instruction to Codex
+# 9. Add boss transition support before adding the boss itself
 
-Implement a lightweight, role-driven formation spawning layer for Beat Swarm.
+## What Codex should do
 
-Start with five formation archetypes:
+Implement **boss transition logic first**, even if the boss enemy itself is still placeholder.
 
-* foundation anchor line
-* backbeat pair
-* syncopation stair
-* lead arc
-* answer echo
+That means adding:
 
-Use music role first, enemy family style second.
+* `pre_boss` phase
+* `boss_entry` phase
+* `boss_rhythm_override` support in the phase/mode flow
+* clear handoff rules from stage texture to boss structure
 
-Prioritize the intro → lead-entry merge path first, because that is where current perceptual weakness is most obvious.
+At minimum, the system should be able to:
 
-The outcome should be that Beat Swarm’s music is visibly legible on screen, not just logically correct in the director.
+* stop spawning normal escalation texture
+* simplify the active arrangement
+* retain one strong rhythmic identity
+* hand off authority to boss mode cleanly
+
+## Why
+
+A boss is not just an enemy.
+In a music-driven shooter, boss entry is a **musical mode change**.
+
+If you wait until the boss enemy exists before defining boss transition behavior, the end of the level will remain shapeless.
+
+The first level will feel far more complete as soon as it can:
+
+* prepare the boss
+* arrive at the boss
+* change musical law cleanly
+
+Even a temporary boss placeholder will feel better with a real transition than a real boss dropped into a muddy phase structure.
+
+---
+
+# 10. Decide exact ownership boundaries now
+
+This is the part Codex most needs to keep clean.
+
+## Ownership model
+
+### `beat-swarm-mode.js`
+
+Owns:
+
+* level phase runtime
+* music mode runtime
+* event section runtime
+* phase-to-policy decisions
+* boss/pre-boss transition decisions
+
+Should **not** directly own:
+
+* low-level enemy motion
+* detailed spawn implementation
+* per-enemy behavior execution
+
+### `beat-swarm-composer-lifecycle.js`
+
+Owns:
+
+* group survival / retirement
+* deduplication
+* continuity restraint
+* role coexistence safeguards
+
+Should read policy from mode/phase, not invent the first level on its own.
+
+### `beat-swarm-composer-maintenance.js`
+
+Owns:
+
+* maintaining valid musical embodiment
+* rescue/fallback/continuity operations
+* keeping required roles alive when allowed
+
+Should obey required roles and protected lanes from the mode/phase layer.
+
+### `beat-swarm-formation-spawn.js`
+
+Owns:
+
+* role-to-formation embodiment
+* role-to-behavior packaging during spawn
+
+Should read:
+
+* current phase
+* active music mode
+* active event section
+
+Should not decide what the level wants overall.
+
+### `beat-swarm-enemy-update.js`
+
+Owns:
+
+* movement realization
+* behavior execution
+* event behavior presentation
+
+Should not infer stage structure.
+
+### `beat-swarm-music-lab.js`
+
+Owns:
+
+* proving whether the plan is working
+
+## Why
+
+The biggest risk now is authority blur.
+
+If multiple files all decide:
+
+* when full texture has begun
+* whether ornament is allowed
+* whether support should survive
+* when boss prep starts
+
+then the level will keep drifting.
+
+This ownership map is how you stop that.
+
+---
+
+# 11. Add first-level acceptance criteria before expanding content
+
+## What Codex should do
+
+Treat this level as complete only if the following are measurably true:
+
+### Intro
+
+* pulse is clearly audible first
+* backbeat joins later and is distinct
+* intro remains musically legible
+
+### Lead merge
+
+* lead enters without erasing rhythmic underlay
+* merge lasts for intended bridge window
+* support remains visible and audible enough to register
+
+### Full texture
+
+* exactly one foreground lead
+* answer/ornament is present but subordinate
+* role count reaches intended texture without co-lead confusion
+
+### Event section
+
+* `beat_bounce` lands clearly
+* event affects presentation without destroying role clarity
+
+### Escalation
+
+* pressure rises
+* the music still feels structured rather than flat dense
+* the battlefield does not become unreadable mush
+
+### Pre-boss / boss entry
+
+* the level clearly prepares for the boss
+* the handoff feels like a section change, not just more enemies
+
+## Why
+
+This stops the project from slipping into “we added more good systems” instead of “the first level works.”
+
+The acceptance criteria should be blunt and level-specific.
+
+---
+
+# 12. Add the missing metrics that directly support this level plan
+
+## What Codex should do
+
+Prioritize metrics that prove the conductor layer is doing its job:
+
+* role embodiment coverage
+* vacancy count / vacancy duration / rescue latency
+* director/phase intention vs live embodiment divergence
+* time from lead entry to first valid answer/ornament
+* time from phase transition to required-role fulfillment
+* ornament duplication count
+* co-lead violation count
+* pre-boss simplification success
+* boss-entry transition success
+
+## Why
+
+You already have lots of useful signals.
+Now the question is not just “is the system alive?”
+It is:
+
+* did the level enter the phase it meant to?
+* did the required roles become real?
+* did the battlefield embodiment match the musical intention?
+
+These metrics let Codex debug the **integration**, not just the sub-systems.
+
+---
+
+# 13. Recommended implementation order
+
+This is the safest order.
+
+## Pass 1 — Add the top-level phase runtime
+
+In `beat-swarm-mode.js`:
+
+* add `evaluateBeatSwarmLevelPhaseRuntime(...)`
+* keep it tiny
+* make it driven mainly by bar count plus current intro/music state
+* expose debug output
+
+## Pass 2 — Route music mode and enemy director through phase policy
+
+Still in `beat-swarm-mode.js`:
+
+* keep existing evaluators
+* make them read the phase state
+* add phase-based ceilings and gating
+
+## Pass 3 — Lock the first-level role grammar
+
+In lifecycle/maintenance:
+
+* enforce one lead
+* limit ornament duplication
+* preserve merge support survival
+* make phase-specific role admission clearer
+
+## Pass 4 — Constrain behaviors and formations by phase
+
+In formation spawn / behavior assignment:
+
+* reduce expressiveness early
+* preserve readability in merge
+* allow richer texture only when phase allows it
+
+## Pass 5 — Integrate only `beat_bounce`
+
+Make one authored section land reliably.
+
+## Pass 6 — Add pre-boss and boss-entry runtime
+
+Even before the boss fight is fancy, make the stage end deliberately.
+
+## Pass 7 — Tune with Music Lab against acceptance criteria
+
+Do not expand event libraries or boss complexity until this passes.
+
+---
+
+# 14. What Codex should explicitly avoid
+
+Do **not**:
+
+* rewrite the whole director
+* add more event section types yet
+* reintroduce enemy family ownership as musical truth
+* let ornament behave like second lead
+* solve variety by making the base palette incoherent
+* let each subsystem infer its own version of phase progression
+* add boss complexity before boss transition logic exists
+
+## Why
+
+All of those moves would increase surface area without solving the current problem:
+the systems already work; they just do not yet feel like one intentional level.
+
+---
+
+# 15. The intended outcome
+
+When this plan is done, the first level should feel like:
+
+* the opening teaches the player a pulse
+* the groove becomes recognizable
+* the lead arrives and matters
+* the texture grows without collapsing clarity
+* one event section feels authored and satisfying
+* the stage escalates
+* the level narrows and prepares
+* the boss arrives under different musical law
+
+That is enough for a real first Beat Swarm level.
+
+Not because every possible system exists, but because the existing ones are finally being conducted.
 
 ---

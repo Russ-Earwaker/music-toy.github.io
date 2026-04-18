@@ -583,6 +583,11 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     suppressedEnemyFamilies: Array.isArray(payload?.suppressedEnemyFamilies)
       ? payload.suppressedEnemyFamilies.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
       : [],
+    behaviorIntensityTier: String(payload?.behaviorIntensityTier || '').trim().toLowerCase(),
+    singleBehaviorDensity: Number(payload?.singleBehaviorDensity) || 0,
+    groupBehaviorDensity: Number(payload?.groupBehaviorDensity) || 0,
+    eventBehaviorEligibility: String(payload?.eventBehaviorEligibility || '').trim().toLowerCase(),
+    behaviorNoveltyBias: Number(payload?.behaviorNoveltyBias) || 0,
     behaviorAssignmentByRole: payload?.behaviorAssignmentByRole && typeof payload.behaviorAssignmentByRole === 'object'
       ? { ...payload.behaviorAssignmentByRole }
       : {},
