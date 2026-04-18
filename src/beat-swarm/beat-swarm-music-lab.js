@@ -565,6 +565,35 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     impactEnemyId: clampInt(payload?.impactEnemyId, 0, 0),
     damageScale: Number(payload?.damageScale) || 0,
     detonationSource: String(payload?.detonationSource || '').trim().toLowerCase(),
+    activeLevelPhase: String(payload?.activeLevelPhase || '').trim().toLowerCase(),
+    phaseVariant: String(payload?.phaseVariant || '').trim().toLowerCase(),
+    phaseValidity: String(payload?.phaseValidity || '').trim().toLowerCase(),
+    phaseEnteredBar: clampInt(payload?.phaseEnteredBar, -1, -1),
+    earliestTransitionBar: clampInt(payload?.earliestTransitionBar, 0, 0),
+    preferredTransitionWindowStartBar: clampInt(payload?.preferredTransitionWindowStartBar, 0, 0),
+    preferredTransitionWindowEndBar: clampInt(payload?.preferredTransitionWindowEndBar, 0, 0),
+    timeInPhaseBars: clampInt(payload?.timeInPhaseBars, 0, 0),
+    transitionWindowOpen: payload?.transitionWindowOpen === true,
+    readyToAdvance: payload?.readyToAdvance === true,
+    holdReason: String(payload?.holdReason || '').trim().toLowerCase(),
+    readinessFailures: Array.isArray(payload?.readinessFailures)
+      ? payload.readinessFailures.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
+    timeoutBar: clampInt(payload?.timeoutBar, 0, 0),
+    degradedPhaseVariant: String(payload?.degradedPhaseVariant || '').trim().toLowerCase(),
+    fallbackPhase: String(payload?.fallbackPhase || '').trim().toLowerCase(),
+    unmetHardRequirements: Array.isArray(payload?.unmetHardRequirements)
+      ? payload.unmetHardRequirements.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
+    unmetSoftRequirements: Array.isArray(payload?.unmetSoftRequirements)
+      ? payload.unmetSoftRequirements.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
+    activeAbortConditions: Array.isArray(payload?.activeAbortConditions)
+      ? payload.activeAbortConditions.map((s) => String(s || '').trim().toLowerCase()).filter((s) => s)
+      : [],
+    degradeApplied: payload?.degradeApplied === true,
+    fallbackPending: payload?.fallbackPending === true,
+    leadMergeStableBars: clampInt(payload?.leadMergeStableBars, 0, 0),
     activeDirectorPhase: String(payload?.activeDirectorPhase || '').trim().toLowerCase(),
     activeMusicMode: String(payload?.activeMusicMode || '').trim().toLowerCase(),
     introStage: String(payload?.introStage || '').trim().toLowerCase(),

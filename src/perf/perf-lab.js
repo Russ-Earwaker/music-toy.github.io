@@ -3972,12 +3972,19 @@ function compactMusicLabPayloadForSave(payload = null) {
         barIndex: Number(item.barIndex) || 0,
         beatIndex: Number(item.beatIndex) || 0,
         stepIndex: Number(item.stepIndex) || 0,
+        activeLevelPhase: String(payload.activeLevelPhase || '').trim().toLowerCase(),
+        phaseVariant: String(payload.phaseVariant || '').trim().toLowerCase(),
         activeDirectorPhase: String(payload.activeDirectorPhase || '').trim().toLowerCase(),
         targetPressure: Number(payload.targetPressure) || 0,
         targetAliveMin: Number(payload.targetAliveMin) || 0,
         targetAliveMax: Number(payload.targetAliveMax) || 0,
         difficultyRamp: Number(payload.difficultyRamp) || 0,
         arrangementRamp: Number(payload.arrangementRamp) || 0,
+        behaviorIntensityTier: String(payload.behaviorIntensityTier || '').trim().toLowerCase(),
+        singleBehaviorDensity: Number(payload.singleBehaviorDensity) || 0,
+        groupBehaviorDensity: Number(payload.groupBehaviorDensity) || 0,
+        eventBehaviorEligibility: String(payload.eventBehaviorEligibility || '').trim().toLowerCase(),
+        behaviorNoveltyBias: Number(payload.behaviorNoveltyBias) || 0,
         desiredLaneRoles: Array.isArray(payload.desiredLaneRoles) ? payload.desiredLaneRoles.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
         preferredEnemyFamilies: Array.isArray(payload.preferredEnemyFamilies) ? payload.preferredEnemyFamilies.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
         suppressedEnemyFamilies: Array.isArray(payload.suppressedEnemyFamilies) ? payload.suppressedEnemyFamilies.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
@@ -3992,6 +3999,38 @@ function compactMusicLabPayloadForSave(payload = null) {
           ? { ...payload.targetCarrierCounts }
           : {},
         totalAlive: Number(payload.totalAlive) || 0,
+      });
+      continue;
+    }
+    if (eventType === 'music_level_phase_state') {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        activeLevelPhase: String(payload.activeLevelPhase || '').trim().toLowerCase(),
+        phaseVariant: String(payload.phaseVariant || '').trim().toLowerCase(),
+        phaseValidity: String(payload.phaseValidity || '').trim().toLowerCase(),
+        phaseEnteredBar: Number(payload.phaseEnteredBar) || -1,
+        earliestTransitionBar: Number(payload.earliestTransitionBar) || 0,
+        preferredTransitionWindowStartBar: Number(payload.preferredTransitionWindowStartBar) || 0,
+        preferredTransitionWindowEndBar: Number(payload.preferredTransitionWindowEndBar) || 0,
+        timeInPhaseBars: Number(payload.timeInPhaseBars) || 0,
+        transitionWindowOpen: payload.transitionWindowOpen === true,
+        readyToAdvance: payload.readyToAdvance === true,
+        holdReason: String(payload.holdReason || '').trim().toLowerCase(),
+        readinessFailures: Array.isArray(payload.readinessFailures) ? payload.readinessFailures.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+        timeoutBar: Number(payload.timeoutBar) || 0,
+        degradedPhaseVariant: String(payload.degradedPhaseVariant || '').trim().toLowerCase(),
+        fallbackPhase: String(payload.fallbackPhase || '').trim().toLowerCase(),
+        unmetHardRequirements: Array.isArray(payload.unmetHardRequirements) ? payload.unmetHardRequirements.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+        unmetSoftRequirements: Array.isArray(payload.unmetSoftRequirements) ? payload.unmetSoftRequirements.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+        activeAbortConditions: Array.isArray(payload.activeAbortConditions) ? payload.activeAbortConditions.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+        degradeApplied: payload.degradeApplied === true,
+        fallbackPending: payload.fallbackPending === true,
+        leadMergeStableBars: Number(payload.leadMergeStableBars) || 0,
       });
       continue;
     }
@@ -5450,6 +5489,7 @@ async function runBS0BehaviorTaxonomyDebug() {
     traceCapture: {
       enabled: true,
       include: [
+        'music_level_phase_state',
         'music_enemy_director_state',
         'music_composer_group_state',
         'music_group_performer_trace',

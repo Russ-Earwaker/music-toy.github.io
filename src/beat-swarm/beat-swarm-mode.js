@@ -7748,8 +7748,9 @@ function publishDirectorLanePlanForBar(barIndex = 0) {
   const pressureState = plan.__pressure && typeof plan.__pressure === 'object' ? plan.__pressure : {};
   const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
-  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
-  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime);
+  const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage, activeLevelPhaseRuntime);
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
   delete plan.__pressure;
   director.setLanePlan(plan);
   director.setPressureState(pressureState);
@@ -8446,6 +8447,33 @@ const musicModeRuntime = {
   gameplayMusicOverrides: [],
   lastEvaluatedBar: -1,
   leadEntryStartBar: -1,
+  activeLevelPhase: 'intro_teach',
+  phaseVariant: 'default',
+  phaseValidity: 'valid',
+};
+const levelPhaseRuntime = {
+  activeLevelPhase: 'intro_teach',
+  phaseVariant: 'default',
+  phaseEnteredBar: -1,
+  earliestTransitionBar: 0,
+  preferredTransitionWindowStartBar: 0,
+  preferredTransitionWindowEndBar: 0,
+  readyToAdvance: false,
+  transitionWindowOpen: false,
+  phaseValidity: 'valid',
+  holdReason: '',
+  readinessFailures: [],
+  timeoutBar: 0,
+  degradedPhaseVariant: '',
+  fallbackPhase: '',
+  timeInPhaseBars: 0,
+  unmetHardRequirements: [],
+  unmetSoftRequirements: [],
+  activeAbortConditions: [],
+  degradeApplied: false,
+  fallbackPending: false,
+  leadMergeStableBars: 0,
+  lastEvaluatedBar: -1,
 };
 const enemyDirectorRuntime = {
   activeDirectorPhase: 'intro',
@@ -10090,6 +10118,28 @@ function startMusicLabSession(reason = 'unknown') {
   structureIntentRuntime.preDropActive = false;
   structureIntentRuntime.preDropBarsRemaining = -1;
   structureIntentRuntime.lastAppliedBar = -1;
+  levelPhaseRuntime.activeLevelPhase = 'intro_teach';
+  levelPhaseRuntime.phaseVariant = 'default';
+  levelPhaseRuntime.phaseEnteredBar = -1;
+  levelPhaseRuntime.earliestTransitionBar = 0;
+  levelPhaseRuntime.preferredTransitionWindowStartBar = 0;
+  levelPhaseRuntime.preferredTransitionWindowEndBar = 0;
+  levelPhaseRuntime.readyToAdvance = false;
+  levelPhaseRuntime.transitionWindowOpen = false;
+  levelPhaseRuntime.phaseValidity = 'valid';
+  levelPhaseRuntime.holdReason = '';
+  levelPhaseRuntime.readinessFailures = [];
+  levelPhaseRuntime.timeoutBar = 0;
+  levelPhaseRuntime.degradedPhaseVariant = '';
+  levelPhaseRuntime.fallbackPhase = '';
+  levelPhaseRuntime.timeInPhaseBars = 0;
+  levelPhaseRuntime.unmetHardRequirements = [];
+  levelPhaseRuntime.unmetSoftRequirements = [];
+  levelPhaseRuntime.activeAbortConditions = [];
+  levelPhaseRuntime.degradeApplied = false;
+  levelPhaseRuntime.fallbackPending = false;
+  levelPhaseRuntime.leadMergeStableBars = 0;
+  levelPhaseRuntime.lastEvaluatedBar = -1;
   musicModeRuntime.activeMusicMode = 'intro_pulse';
   musicModeRuntime.requestedMusicMode = '';
   musicModeRuntime.modeEnteredBar = -1;
@@ -10101,6 +10151,9 @@ function startMusicLabSession(reason = 'unknown') {
   musicModeRuntime.gameplayMusicOverrides = [];
   musicModeRuntime.lastEvaluatedBar = -1;
   musicModeRuntime.leadEntryStartBar = -1;
+  musicModeRuntime.activeLevelPhase = 'intro_teach';
+  musicModeRuntime.phaseVariant = 'default';
+  musicModeRuntime.phaseValidity = 'valid';
   enemyDirectorRuntime.activeDirectorPhase = 'intro';
   enemyDirectorRuntime.targetPressure = 0;
   enemyDirectorRuntime.targetAliveMin = 0;
@@ -17731,8 +17784,9 @@ function collectDrawSnakeStepBeatEvents(stepIndex, beatIndex = currentBeatIndex)
 function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
   const barIndex = Math.floor(Math.max(0, Math.trunc(Number(beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR));
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
-  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
-  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime);
+  const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage, activeLevelPhaseRuntime);
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
   return collectSpawnerStepEvents({
     active,
     gameplayPaused,
@@ -18547,8 +18601,10 @@ function updateBeatWeapons(centerWorld) {
   let readabilityStepStats = null;
   let queuedStepEvents = 0;
   let drainedStepEvents = 0;
-  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, getUnifiedIntroStage(barIndex, beatIndex));
-  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, getUnifiedIntroStage(barIndex, beatIndex), activeMusicModeRuntime);
+  const currentIntroStage = getUnifiedIntroStage(barIndex, beatIndex);
+  const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, currentIntroStage);
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, currentIntroStage, activeLevelPhaseRuntime);
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, currentIntroStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
   const stepState = {
     lastSpawnerEnemyStepIndex,
     lastWeaponTuneStepIndex,
@@ -18692,8 +18748,9 @@ function updateEnemies(dt) {
   const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
   const barIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
-  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
-  const activeEventSectionRuntime = evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime);
+  const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage, activeLevelPhaseRuntime);
+  const activeEventSectionRuntime = evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
   updateBeatSwarmEnemiesRuntime({
     constants: {
       enemyHitRadius: ENEMY_HIT_RADIUS,
@@ -18956,8 +19013,362 @@ function hasBeatSwarmRhythmicSecondaryCoverageGroup(groupLike = null) {
     || profileSourceType === 'spawner_rhythm_backbeat'
     || templateId === 'secondary_loop_bridge_group';
 }
-function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'none') {
+function hasBeatSwarmFoundationCoverageGroup(groupLike = null) {
+  const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+  if (!group) return false;
+  const laneId = String(group?.musicLaneId || '').trim().toLowerCase();
+  const roleId = String(group?.role || '').trim().toLowerCase();
+  const sectionId = String(group?.sectionId || '').trim().toLowerCase();
+  const profileSourceType = String(group?.musicProfileSourceType || '').trim().toLowerCase();
+  const aliveMembers = getAliveEnemiesByIds(group?.memberIds).filter((enemy) => (
+    String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member' && enemy?.retreating !== true
+  ));
+  if (aliveMembers.length <= 0) return false;
+  return laneId === 'foundation_lane'
+    || roleId === 'bass'
+    || sectionId === 'foundation-buffer'
+    || profileSourceType === 'foundation_buffer'
+    || profileSourceType === 'foundation_groove';
+}
+function hasBeatSwarmOrnamentCoverageGroup(groupLike = null) {
+  const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+  if (!group) return false;
+  const laneId = String(group?.musicLaneId || '').trim().toLowerCase();
+  const responseLane = String(group?.callResponseLane || '').trim().toLowerCase();
+  const profileSourceType = String(group?.musicProfileSourceType || '').trim().toLowerCase();
+  const aliveMembers = getAliveEnemiesByIds(group?.memberIds).filter((enemy) => (
+    String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member' && enemy?.retreating !== true
+  ));
+  if (aliveMembers.length <= 0) return false;
+  return laneId === 'sparkle_lane'
+    || responseLane === 'response'
+    || profileSourceType === 'answer_ornament';
+}
+const BEAT_SWARM_LEVEL_PHASE_ORDER = Object.freeze([
+  'intro_teach',
+  'groove_establish',
+  'lead_merge',
+  'full_texture',
+]);
+const BEAT_SWARM_LEVEL_PHASE_POLICIES = Object.freeze({
+  intro_teach: Object.freeze({
+    id: 'intro_teach',
+    earliestTransitionBar: 0,
+    latestPreferredTransitionBar: 6,
+    minBarsBeforeAdvance: 2,
+    maxHoldBars: 2,
+    hardRequirements: Object.freeze(['foundation_present']),
+    softRequirements: Object.freeze(['secondary_rhythm_present']),
+    degradeVariant: 'foundation_only',
+    fallbackPhase: 'intro_teach',
+    abortConditions: Object.freeze(['foundation_lost']),
+  }),
+  groove_establish: Object.freeze({
+    id: 'groove_establish',
+    earliestTransitionBar: 4,
+    latestPreferredTransitionBar: 12,
+    minBarsBeforeAdvance: 2,
+    maxHoldBars: 3,
+    hardRequirements: Object.freeze(['foundation_present']),
+    softRequirements: Object.freeze(['secondary_rhythm_present']),
+    degradeVariant: 'foundation_only',
+    fallbackPhase: 'groove_establish',
+    abortConditions: Object.freeze(['foundation_lost']),
+  }),
+  lead_merge: Object.freeze({
+    id: 'lead_merge',
+    earliestTransitionBar: 12,
+    latestPreferredTransitionBar: 20,
+    minBarsBeforeAdvance: 3,
+    maxHoldBars: 4,
+    hardRequirements: Object.freeze(['lead_present', 'secondary_rhythm_present']),
+    softRequirements: Object.freeze(['support_stable', 'co_lead_absent']),
+    degradeVariant: 'reduced_support',
+    fallbackPhase: 'lead_merge',
+    abortConditions: Object.freeze(['lead_lost', 'co_lead_confusion', 'pressure_catastrophic']),
+  }),
+  full_texture: Object.freeze({
+    id: 'full_texture',
+    earliestTransitionBar: 20,
+    latestPreferredTransitionBar: 32,
+    minBarsBeforeAdvance: 0,
+    maxHoldBars: 6,
+    hardRequirements: Object.freeze(['lead_present', 'secondary_rhythm_present', 'lead_merge_stable']),
+    softRequirements: Object.freeze(['ornament_available', 'field_readable', 'co_lead_absent']),
+    degradeVariant: 'no_ornament',
+    fallbackPhase: 'lead_merge',
+    abortConditions: Object.freeze(['lead_lost', 'secondary_rhythm_lost', 'pressure_catastrophic', 'field_unreadable']),
+  }),
+});
+function getBeatSwarmLevelPhasePolicy(phaseId = 'intro_teach') {
+  const normalizedPhaseId = String(phaseId || 'intro_teach').trim().toLowerCase();
+  return BEAT_SWARM_LEVEL_PHASE_POLICIES[normalizedPhaseId] || BEAT_SWARM_LEVEL_PHASE_POLICIES.intro_teach;
+}
+function buildBeatSwarmPhaseRequirementSnapshot(barIndex = 0, introStage = 'none', runtimeState = null) {
   const activeGroups = getBeatSwarmActiveMusicModeGroups();
+  const battlefieldState = buildDirectorSpawnBattlefieldState();
+  const phaseState = runtimeState && typeof runtimeState === 'object' ? runtimeState : {};
+  const foundationGroups = activeGroups.filter((group) => hasBeatSwarmFoundationCoverageGroup(group));
+  const secondaryRhythmGroups = activeGroups.filter((group) => hasBeatSwarmRhythmicSecondaryCoverageGroup(group));
+  const leadGroups = activeGroups.filter((group) => (
+    String(group?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
+    && String(group?.musicProfileSourceType || '').trim().toLowerCase() === 'lead_melody'
+  ));
+  const ornamentGroups = activeGroups.filter((group) => hasBeatSwarmOrnamentCoverageGroup(group));
+  return {
+    activeGroups,
+    battlefieldState,
+    introStage: String(introStage || 'none').trim().toLowerCase(),
+    currentBar: Math.max(0, Math.trunc(Number(barIndex) || 0)),
+    foundationPresent: foundationGroups.length > 0,
+    secondaryRhythmPresent: secondaryRhythmGroups.length > 0,
+    leadPresent: leadGroups.length > 0,
+    ornamentAvailable: ornamentGroups.length > 0,
+    leadGroupCount: leadGroups.length,
+    totalAlive: Math.max(0, Math.trunc(Number(battlefieldState?.totalAlive) || 0)),
+    currentLevelPhase: String(phaseState?.activeLevelPhase || '').trim().toLowerCase(),
+    currentLevelPhaseTimeInBars: Math.max(0, Math.trunc(Number(phaseState?.timeInPhaseBars) || 0)),
+    leadMergeStableBars: Math.max(0, Math.trunc(Number(phaseState?.leadMergeStableBars) || 0)),
+  };
+}
+function evaluateBeatSwarmPhaseRequirement(requirementId = '', snapshot = null) {
+  const reqId = String(requirementId || '').trim().toLowerCase();
+  const snap = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  const totalAlive = Math.max(0, Math.trunc(Number(snap?.totalAlive) || 0));
+  switch (reqId) {
+    case 'foundation_present':
+      return { ok: snap.foundationPresent === true, reason: snap.foundationPresent === true ? 'ok' : 'foundation_missing', severity: 'hard' };
+    case 'lead_present':
+      return { ok: snap.leadPresent === true, reason: snap.leadPresent === true ? 'ok' : 'lead_missing', severity: 'hard' };
+    case 'secondary_rhythm_present':
+      return { ok: snap.secondaryRhythmPresent === true, reason: snap.secondaryRhythmPresent === true ? 'ok' : 'secondary_rhythm_missing', severity: 'soft' };
+    case 'lead_merge_stable': {
+      const stableBars = Math.max(0, Math.trunc(Number(snap?.leadMergeStableBars) || 0));
+      const stableEnough = stableBars >= 2;
+      return {
+        ok: stableEnough,
+        reason: stableEnough ? 'ok' : 'lead_merge_not_stable_yet',
+        severity: 'hard',
+        evidence: { leadMergeStableBars: stableBars },
+      };
+    }
+    case 'support_stable':
+      return { ok: snap.secondaryRhythmPresent === true && totalAlive <= 8, reason: snap.secondaryRhythmPresent === true ? (totalAlive <= 8 ? 'ok' : 'support_overcrowded') : 'support_missing', severity: 'soft' };
+    case 'ornament_available':
+      return { ok: snap.ornamentAvailable === true, reason: snap.ornamentAvailable === true ? 'ok' : 'ornament_missing', severity: 'soft' };
+    case 'field_readable':
+      return { ok: totalAlive <= 8, reason: totalAlive <= 8 ? 'ok' : 'field_unreadable', severity: 'soft', evidence: { totalAlive } };
+    case 'co_lead_absent':
+      return { ok: Math.max(0, Math.trunc(Number(snap?.leadGroupCount) || 0)) <= 1, reason: Math.max(0, Math.trunc(Number(snap?.leadGroupCount) || 0)) <= 1 ? 'ok' : 'co_lead_confusion', severity: 'soft', evidence: { leadGroupCount: Math.max(0, Math.trunc(Number(snap?.leadGroupCount) || 0)) } };
+    case 'foundation_lost':
+      return { ok: snap.foundationPresent !== false, reason: snap.foundationPresent !== false ? 'ok' : 'foundation_lost', severity: 'abort' };
+    case 'lead_lost':
+      return { ok: snap.leadPresent !== false, reason: snap.leadPresent !== false ? 'ok' : 'lead_lost', severity: 'abort' };
+    case 'secondary_rhythm_lost':
+      return { ok: snap.secondaryRhythmPresent !== false, reason: snap.secondaryRhythmPresent !== false ? 'ok' : 'secondary_rhythm_lost', severity: 'abort' };
+    case 'pressure_catastrophic':
+      return { ok: totalAlive < 11, reason: totalAlive < 11 ? 'ok' : 'pressure_catastrophic', severity: 'abort', evidence: { totalAlive } };
+    case 'field_unreadable':
+      return { ok: totalAlive <= 10, reason: totalAlive <= 10 ? 'ok' : 'field_unreadable', severity: 'abort', evidence: { totalAlive } };
+    default:
+      return { ok: true, reason: 'unknown_requirement', severity: 'soft' };
+  }
+}
+function evaluateBeatSwarmRequirementSet(requirementIds = [], snapshot = null) {
+  const unmet = [];
+  const results = {};
+  for (const requirementId of Array.isArray(requirementIds) ? requirementIds : []) {
+    const result = evaluateBeatSwarmPhaseRequirement(requirementId, snapshot);
+    results[String(requirementId || '').trim().toLowerCase()] = result;
+    if (result?.ok !== true) unmet.push(String(requirementId || '').trim().toLowerCase());
+  }
+  return { unmet, results };
+}
+function inferBeatSwarmLevelPhaseFromState(barIndex = 0, introStage = 'none') {
+  const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const normalizedIntroStage = String(introStage || 'none').trim().toLowerCase();
+  if (normalizedIntroStage === 'player_only' || normalizedIntroStage === 'rhythm_only') return 'intro_teach';
+  if (normalizedIntroStage === 'soft_ramp' || safeBar < 12) return 'groove_establish';
+  if (safeBar < 20) return 'lead_merge';
+  return 'full_texture';
+}
+function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'none') {
+  const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const safeBeat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
+  const inferredPhaseId = inferBeatSwarmLevelPhaseFromState(safeBar, introStage);
+  const previousPhaseEnteredBar = Math.max(-1, Math.trunc(Number(levelPhaseRuntime.phaseEnteredBar) || -1));
+  const previousTimeInPhaseBars = Math.max(0, safeBar - Math.max(0, previousPhaseEnteredBar));
+  let activePhaseId = String(levelPhaseRuntime.activeLevelPhase || '').trim().toLowerCase();
+  const runtimeBootstrapped = previousPhaseEnteredBar >= 0 && BEAT_SWARM_LEVEL_PHASE_POLICIES[activePhaseId];
+  if (!runtimeBootstrapped) {
+    activePhaseId = inferredPhaseId;
+  } else if (!(BEAT_SWARM_LEVEL_PHASE_POLICIES[activePhaseId])) {
+    activePhaseId = inferredPhaseId;
+  }
+  const currentPolicy = getBeatSwarmLevelPhasePolicy(activePhaseId);
+  const snapshot = buildBeatSwarmPhaseRequirementSnapshot(safeBar, introStage, {
+    activeLevelPhase: activePhaseId,
+    timeInPhaseBars: previousTimeInPhaseBars,
+    leadMergeStableBars: Math.max(0, Math.trunc(Number(levelPhaseRuntime.leadMergeStableBars) || 0)),
+  });
+  const hardEval = evaluateBeatSwarmRequirementSet(currentPolicy.hardRequirements, snapshot);
+  const softEval = evaluateBeatSwarmRequirementSet(currentPolicy.softRequirements, snapshot);
+  const abortEval = evaluateBeatSwarmRequirementSet(currentPolicy.abortConditions, snapshot);
+  let phaseVariant = 'default';
+  let phaseValidity = 'valid';
+  let degradeApplied = false;
+  let fallbackPending = false;
+  let transitionBlockedThisTick = false;
+  const activeAbortConditions = abortEval.unmet
+    .map((reqId) => String((abortEval.results[reqId]?.reason) || reqId).trim().toLowerCase())
+    .filter(Boolean);
+  if (hardEval.unmet.length > 0) {
+    phaseValidity = 'invalid';
+    fallbackPending = currentPolicy.fallbackPhase !== currentPolicy.id;
+  } else if (softEval.unmet.length > 0 && currentPolicy.degradeVariant) {
+    phaseValidity = 'degraded';
+    phaseVariant = String(currentPolicy.degradeVariant || 'default').trim().toLowerCase() || 'default';
+    degradeApplied = phaseVariant !== 'default';
+  }
+  if (activeAbortConditions.length > 0) {
+    phaseValidity = 'invalid';
+    fallbackPending = currentPolicy.fallbackPhase !== currentPolicy.id;
+  }
+  if (
+    phaseValidity === 'invalid'
+    && hardEval.unmet.length > 0
+    && activeAbortConditions.length <= 0
+    && currentPolicy.fallbackPhase === currentPolicy.id
+    && currentPolicy.degradeVariant
+  ) {
+    phaseVariant = String(currentPolicy.degradeVariant || 'default').trim().toLowerCase() || 'default';
+    degradeApplied = phaseVariant !== 'default';
+    phaseValidity = degradeApplied ? 'degraded' : 'invalid';
+    fallbackPending = false;
+    transitionBlockedThisTick = true;
+  }
+  if (phaseValidity === 'invalid' && currentPolicy.fallbackPhase && currentPolicy.fallbackPhase !== currentPolicy.id) {
+    activePhaseId = String(currentPolicy.fallbackPhase || currentPolicy.id).trim().toLowerCase();
+    transitionBlockedThisTick = true;
+    const fallbackPolicy = getBeatSwarmLevelPhasePolicy(activePhaseId);
+    const fallbackHardEval = evaluateBeatSwarmRequirementSet(fallbackPolicy.hardRequirements, snapshot);
+    const fallbackSoftEval = evaluateBeatSwarmRequirementSet(fallbackPolicy.softRequirements, snapshot);
+    phaseVariant = fallbackSoftEval.unmet.length > 0 && fallbackPolicy.degradeVariant
+      ? String(fallbackPolicy.degradeVariant || 'default').trim().toLowerCase()
+      : 'default';
+    degradeApplied = phaseVariant !== 'default';
+    phaseValidity = fallbackHardEval.unmet.length > 0 ? 'invalid' : (degradeApplied ? 'degraded' : 'valid');
+  }
+  const activePolicy = getBeatSwarmLevelPhasePolicy(activePhaseId);
+  const activeHardEval = evaluateBeatSwarmRequirementSet(activePolicy.hardRequirements, snapshot);
+  const activeSoftEval = evaluateBeatSwarmRequirementSet(activePolicy.softRequirements, snapshot);
+  const activeAbortEval = evaluateBeatSwarmRequirementSet(activePolicy.abortConditions, snapshot);
+  const activeTimeInPhaseBars = Math.max(0, safeBar - Math.max(0, previousPhaseEnteredBar));
+  const minBarsBeforeAdvance = Math.max(0, Math.trunc(Number(activePolicy.minBarsBeforeAdvance) || 0));
+  const currentIdx = Math.max(0, BEAT_SWARM_LEVEL_PHASE_ORDER.indexOf(activePhaseId));
+  const nextPhaseId = BEAT_SWARM_LEVEL_PHASE_ORDER[Math.min(BEAT_SWARM_LEVEL_PHASE_ORDER.length - 1, currentIdx + 1)] || activePhaseId;
+  const nextPolicy = getBeatSwarmLevelPhasePolicy(nextPhaseId);
+  const nextHardEval = evaluateBeatSwarmRequirementSet(nextPolicy.hardRequirements, snapshot);
+  const nextSoftEval = evaluateBeatSwarmRequirementSet(nextPolicy.softRequirements, snapshot);
+  const transitionWindowOpen = nextPhaseId !== activePhaseId && safeBar >= nextPolicy.earliestTransitionBar;
+  const readyToAdvance = transitionWindowOpen
+    && nextHardEval.unmet.length <= 0
+    && transitionBlockedThisTick !== true
+    && activeTimeInPhaseBars >= minBarsBeforeAdvance
+    && safeBar > previousPhaseEnteredBar;
+  const timeoutBar = Math.max(nextPolicy.earliestTransitionBar, nextPolicy.latestPreferredTransitionBar + nextPolicy.maxHoldBars);
+  let holdReason = '';
+  let degradedPhaseVariant = degradeApplied ? phaseVariant : '';
+  let fallbackPhase = String(activePolicy.fallbackPhase || '').trim().toLowerCase();
+  if (transitionWindowOpen && !readyToAdvance) {
+    holdReason = String((nextHardEval.results[nextHardEval.unmet[0]]?.reason) || nextHardEval.unmet[0] || '').trim().toLowerCase();
+  } else if (phaseValidity === 'invalid') {
+    holdReason = String((activeHardEval.results[activeHardEval.unmet[0]]?.reason) || activeAbortConditions[0] || '').trim().toLowerCase();
+  }
+  if (readyToAdvance) {
+    const nextVariant = nextSoftEval.unmet.length > 0 && nextPolicy.degradeVariant
+      ? String(nextPolicy.degradeVariant || 'default').trim().toLowerCase()
+      : 'default';
+    activePhaseId = nextPhaseId;
+    phaseVariant = nextVariant || 'default';
+    degradeApplied = phaseVariant !== 'default';
+    degradedPhaseVariant = degradeApplied ? phaseVariant : '';
+    fallbackPhase = String(nextPolicy.fallbackPhase || '').trim().toLowerCase();
+    phaseValidity = degradeApplied ? 'degraded' : 'valid';
+  } else if (transitionWindowOpen && safeBar > timeoutBar) {
+    fallbackPending = true;
+  }
+  if (String(levelPhaseRuntime.activeLevelPhase || '') !== activePhaseId || String(levelPhaseRuntime.phaseVariant || '') !== phaseVariant) {
+    levelPhaseRuntime.phaseEnteredBar = safeBar;
+  }
+  levelPhaseRuntime.activeLevelPhase = activePhaseId;
+  levelPhaseRuntime.phaseVariant = phaseVariant || 'default';
+  levelPhaseRuntime.phaseEnteredBar = Math.max(-1, Math.trunc(Number(levelPhaseRuntime.phaseEnteredBar) || safeBar));
+  levelPhaseRuntime.earliestTransitionBar = Math.max(0, Math.trunc(Number(activePolicy.earliestTransitionBar) || 0));
+  levelPhaseRuntime.preferredTransitionWindowStartBar = Math.max(0, Math.trunc(Number(activePolicy.earliestTransitionBar) || 0));
+  levelPhaseRuntime.preferredTransitionWindowEndBar = Math.max(levelPhaseRuntime.preferredTransitionWindowStartBar, Math.trunc(Number(activePolicy.latestPreferredTransitionBar) || levelPhaseRuntime.preferredTransitionWindowStartBar));
+  levelPhaseRuntime.readyToAdvance = readyToAdvance;
+  levelPhaseRuntime.transitionWindowOpen = transitionWindowOpen;
+  levelPhaseRuntime.phaseValidity = phaseValidity;
+  levelPhaseRuntime.holdReason = holdReason;
+  levelPhaseRuntime.readinessFailures = nextHardEval.unmet.slice();
+  levelPhaseRuntime.timeoutBar = Math.max(0, Math.trunc(Number(timeoutBar) || 0));
+  levelPhaseRuntime.degradedPhaseVariant = degradedPhaseVariant;
+  levelPhaseRuntime.fallbackPhase = fallbackPhase;
+  levelPhaseRuntime.timeInPhaseBars = Math.max(0, safeBar - Math.max(0, Math.trunc(Number(levelPhaseRuntime.phaseEnteredBar) || 0)));
+  levelPhaseRuntime.unmetHardRequirements = activeHardEval.unmet.slice();
+  levelPhaseRuntime.unmetSoftRequirements = activeSoftEval.unmet.slice();
+  levelPhaseRuntime.activeAbortConditions = activeAbortEval.unmet
+    .map((reqId) => String((activeAbortEval.results[reqId]?.reason) || reqId).trim().toLowerCase())
+    .filter(Boolean);
+  levelPhaseRuntime.degradeApplied = degradeApplied;
+  levelPhaseRuntime.fallbackPending = fallbackPending;
+  if (levelPhaseRuntime.lastEvaluatedBar !== safeBar) {
+    const leadMergeStableNow = activePhaseId === 'lead_merge'
+      && activeHardEval.unmet.length <= 0
+      && activeAbortEval.unmet.length <= 0;
+    levelPhaseRuntime.leadMergeStableBars = leadMergeStableNow
+      ? (Math.max(0, Math.trunc(Number(levelPhaseRuntime.leadMergeStableBars) || 0)) + 1)
+      : 0;
+  }
+  if (levelPhaseRuntime.lastEvaluatedBar !== safeBar) {
+    try {
+      noteMusicSystemEvent?.('music_level_phase_state', {
+        activeLevelPhase: String(levelPhaseRuntime.activeLevelPhase || '').trim().toLowerCase(),
+        phaseVariant: String(levelPhaseRuntime.phaseVariant || '').trim().toLowerCase(),
+        phaseEnteredBar: Math.max(-1, Math.trunc(Number(levelPhaseRuntime.phaseEnteredBar) || -1)),
+        earliestTransitionBar: Math.max(0, Math.trunc(Number(levelPhaseRuntime.earliestTransitionBar) || 0)),
+        preferredTransitionWindowStartBar: Math.max(0, Math.trunc(Number(levelPhaseRuntime.preferredTransitionWindowStartBar) || 0)),
+        preferredTransitionWindowEndBar: Math.max(0, Math.trunc(Number(levelPhaseRuntime.preferredTransitionWindowEndBar) || 0)),
+        timeInPhaseBars: Math.max(0, Math.trunc(Number(levelPhaseRuntime.timeInPhaseBars) || 0)),
+        transitionWindowOpen: levelPhaseRuntime.transitionWindowOpen === true,
+        readyToAdvance: levelPhaseRuntime.readyToAdvance === true,
+        holdReason: String(levelPhaseRuntime.holdReason || '').trim().toLowerCase(),
+        phaseValidity: String(levelPhaseRuntime.phaseValidity || '').trim().toLowerCase(),
+        readinessFailures: Array.isArray(levelPhaseRuntime.readinessFailures) ? levelPhaseRuntime.readinessFailures.slice() : [],
+        timeoutBar: Math.max(0, Math.trunc(Number(levelPhaseRuntime.timeoutBar) || 0)),
+        degradedPhaseVariant: String(levelPhaseRuntime.degradedPhaseVariant || '').trim().toLowerCase(),
+        fallbackPhase: String(levelPhaseRuntime.fallbackPhase || '').trim().toLowerCase(),
+        unmetHardRequirements: Array.isArray(levelPhaseRuntime.unmetHardRequirements) ? levelPhaseRuntime.unmetHardRequirements.slice() : [],
+        unmetSoftRequirements: Array.isArray(levelPhaseRuntime.unmetSoftRequirements) ? levelPhaseRuntime.unmetSoftRequirements.slice() : [],
+        activeAbortConditions: Array.isArray(levelPhaseRuntime.activeAbortConditions) ? levelPhaseRuntime.activeAbortConditions.slice() : [],
+        degradeApplied: levelPhaseRuntime.degradeApplied === true,
+        fallbackPending: levelPhaseRuntime.fallbackPending === true,
+        leadMergeStableBars: Math.max(0, Math.trunc(Number(levelPhaseRuntime.leadMergeStableBars) || 0)),
+      }, {
+        beatIndex: safeBeat,
+        barIndex: safeBar,
+      });
+    } catch {}
+  }
+  levelPhaseRuntime.lastEvaluatedBar = safeBar;
+  return levelPhaseRuntime;
+}
+function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'none', activeLevelPhaseState = null) {
+  const activeGroups = getBeatSwarmActiveMusicModeGroups();
+  const levelPhaseState = activeLevelPhaseState && typeof activeLevelPhaseState === 'object'
+    ? activeLevelPhaseState
+    : evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
   const hasPrimaryLead = activeGroups.some((group) => (
     String(group?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
     && String(group?.musicProfileSourceType || '').trim().toLowerCase() === 'lead_melody'
@@ -18971,38 +19382,40 @@ function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'no
   const bridgeWindowActive = hasPrimaryLead
     && musicModeRuntime.leadEntryStartBar >= 0
     && (Math.max(0, Math.trunc(Number(barIndex) || 0)) - Math.max(0, Math.trunc(Number(musicModeRuntime.leadEntryStartBar) || 0))) < 8;
+  const activeLevelPhase = String(levelPhaseState?.activeLevelPhase || '').trim().toLowerCase();
+  const phaseVariant = String(levelPhaseState?.phaseVariant || 'default').trim().toLowerCase();
   let nextMode = 'full_texture';
-  let transitionReason = 'default_full_texture';
-  if (introStage === 'player_only' || introStage === 'rhythm_only') {
+  let transitionReason = `level_phase_${activeLevelPhase || 'full_texture'}`;
+  if (activeLevelPhase === 'intro_teach') {
     nextMode = 'intro_pulse';
-    transitionReason = `intro_stage_${introStage || 'rhythm_only'}`;
-  } else if (introStage === 'soft_ramp') {
+    transitionReason = phaseVariant === 'foundation_only' ? 'level_phase_intro_teach_foundation_only' : `intro_stage_${introStage || 'rhythm_only'}`;
+  } else if (activeLevelPhase === 'groove_establish') {
     nextMode = 'intro_backbeat_bridge';
-    transitionReason = 'intro_soft_ramp';
-  } else if (bridgeWindowActive) {
+    transitionReason = phaseVariant === 'foundation_only' ? 'level_phase_groove_establish_foundation_only' : 'level_phase_groove_establish';
+  } else if (activeLevelPhase === 'lead_merge' || bridgeWindowActive) {
     nextMode = 'lead_entry_merge';
-    transitionReason = 'lead_entry_bridge_window';
+    transitionReason = phaseVariant === 'reduced_support' ? 'level_phase_lead_merge_reduced_support' : 'lead_entry_bridge_window';
   }
-  const requiredLaneRoles = nextMode === 'intro_pulse'
+  const requiredLaneRoles = activeLevelPhase === 'intro_teach'
     ? ['foundation']
-    : (nextMode === 'intro_backbeat_bridge'
-      ? ['foundation', 'secondary_loop_rhythm']
-      : (nextMode === 'lead_entry_merge'
-        ? ['primary_loop_lead', 'secondary_loop_rhythm']
-        : ['primary_loop_lead']));
+    : (activeLevelPhase === 'groove_establish'
+      ? (phaseVariant === 'foundation_only' ? ['foundation'] : ['foundation', 'secondary_loop_rhythm'])
+      : (activeLevelPhase === 'lead_merge'
+        ? (phaseVariant === 'reduced_support' ? ['primary_loop_lead'] : ['primary_loop_lead', 'secondary_loop_rhythm'])
+        : ['primary_loop_lead', 'secondary_loop_rhythm']));
   const missingRequiredLaneRoles = requiredLaneRoles.filter((roleId) => {
     if (roleId === 'foundation') return false;
     if (roleId === 'primary_loop_lead') return !hasPrimaryLead;
     if (roleId === 'secondary_loop_rhythm') return !hasRhythmicSecondary;
     return false;
   });
-  const protectedContinuityLanes = nextMode === 'intro_pulse'
+  const protectedContinuityLanes = activeLevelPhase === 'intro_teach'
     ? ['foundation_lane']
-    : (nextMode === 'intro_backbeat_bridge'
-      ? ['foundation_lane', 'secondary_loop_lane']
-      : (nextMode === 'lead_entry_merge'
-        ? ['primary_loop_lane', 'secondary_loop_lane']
-        : ['primary_loop_lane']));
+    : (activeLevelPhase === 'groove_establish'
+      ? ['foundation_lane', ...(phaseVariant === 'foundation_only' ? [] : ['secondary_loop_lane'])]
+      : (activeLevelPhase === 'lead_merge'
+        ? ['primary_loop_lane', ...(phaseVariant === 'reduced_support' ? [] : ['secondary_loop_lane'])]
+        : ['primary_loop_lane', 'secondary_loop_lane']));
   if (String(musicModeRuntime.activeMusicMode || '') !== nextMode) {
     musicModeRuntime.modeEnteredBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   }
@@ -19015,6 +19428,9 @@ function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'no
   musicModeRuntime.instrumentPaletteBias = '';
   musicModeRuntime.gameplayMusicOverrides = [];
   musicModeRuntime.lastEvaluatedBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  musicModeRuntime.activeLevelPhase = activeLevelPhase || 'intro_teach';
+  musicModeRuntime.phaseVariant = phaseVariant || 'default';
+  musicModeRuntime.phaseValidity = String(levelPhaseState?.phaseValidity || 'valid').trim().toLowerCase() || 'valid';
   try {
     noteMusicSystemEvent?.('music_mode_state', {
       activeMusicMode: String(musicModeRuntime.activeMusicMode || '').trim().toLowerCase(),
@@ -19025,6 +19441,9 @@ function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'no
       requiredLaneRoles: Array.isArray(musicModeRuntime.requiredLaneRoles) ? musicModeRuntime.requiredLaneRoles.slice() : [],
       missingRequiredLaneRoles: Array.isArray(musicModeRuntime.missingRequiredLaneRoles) ? musicModeRuntime.missingRequiredLaneRoles.slice() : [],
       introStage: String(introStage || 'none').trim().toLowerCase(),
+      activeLevelPhase: String(musicModeRuntime.activeLevelPhase || '').trim().toLowerCase(),
+      phaseVariant: String(musicModeRuntime.phaseVariant || '').trim().toLowerCase(),
+      phaseValidity: String(musicModeRuntime.phaseValidity || '').trim().toLowerCase(),
       hasPrimaryLead,
       hasRhythmicSecondary,
     }, {
@@ -19152,39 +19571,38 @@ function buildBeatSwarmBehaviorAssignmentByRole(options = null) {
     }),
   });
 }
-function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null) {
+function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null, activeLevelPhaseState = null) {
+  const levelPhaseState = activeLevelPhaseState && typeof activeLevelPhaseState === 'object'
+    ? activeLevelPhaseState
+    : evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
   const musicState = activeMusicModeState && typeof activeMusicModeState === 'object'
     ? activeMusicModeState
-    : evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
+    : evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage, levelPhaseState);
   const battlefieldState = buildDirectorSpawnBattlefieldState();
   const activeMusicMode = String(musicState?.activeMusicMode || '').trim().toLowerCase();
+  const activeLevelPhase = String(levelPhaseState?.activeLevelPhase || '').trim().toLowerCase();
+  const phaseVariant = String(levelPhaseState?.phaseVariant || 'default').trim().toLowerCase();
   const inferredEventSection = getBeatSwarmEventSectionIdForState(barIndex, beatIndex, introStage, activeMusicMode);
   const difficultyRamp = Math.max(0, Math.min(1, Math.max(0, Math.trunc(Number(barIndex) || 0)) / 96));
   const arrangementRamp = Math.max(0, Math.min(1, Math.max(0, Math.trunc(Number(barIndex) || 0)) / 64));
-  const basePressure = introStage === 'player_only'
-    ? 0.08
-    : (introStage === 'rhythm_only'
-      ? 0.16
-      : (introStage === 'soft_ramp'
-        ? 0.26
-        : (activeMusicMode === 'lead_entry_merge'
-          ? 0.48
-          : 0.62)));
+  const basePressure = activeLevelPhase === 'intro_teach'
+    ? (phaseVariant === 'foundation_only' ? 0.08 : 0.16)
+    : (activeLevelPhase === 'groove_establish'
+      ? (phaseVariant === 'foundation_only' ? 0.2 : 0.28)
+      : (activeLevelPhase === 'lead_merge'
+        ? (phaseVariant === 'reduced_support' ? 0.38 : 0.48)
+        : 0.62));
   const targetPressure = Math.max(0, Math.min(1, basePressure + (difficultyRamp * 0.24)));
   const targetAliveMin = Math.max(1, Math.round(1 + (targetPressure * 4)));
   const targetAliveMax = Math.max(targetAliveMin, Math.round(targetAliveMin + 1 + (targetPressure * 3)));
   const targetCarrierCounts = Object.freeze({
     foundation: 1,
-    secondary_loop_rhythm: (
-      activeMusicMode === 'intro_backbeat_bridge'
-      || activeMusicMode === 'lead_entry_merge'
-      || activeMusicMode === 'full_texture'
-    ) ? 1 : 0,
-    primary_loop_lead: (
-      activeMusicMode === 'lead_entry_merge'
-      || activeMusicMode === 'full_texture'
-    ) ? 1 : 0,
-    ornament: activeMusicMode === 'full_texture' ? 1 : 0,
+    secondary_loop_rhythm: (activeLevelPhase === 'groove_establish' && phaseVariant !== 'foundation_only')
+      || (activeLevelPhase === 'lead_merge' && phaseVariant !== 'reduced_support')
+      || activeLevelPhase === 'full_texture'
+      ? 1 : 0,
+    primary_loop_lead: activeLevelPhase === 'lead_merge' || activeLevelPhase === 'full_texture' ? 1 : 0,
+    ornament: activeLevelPhase === 'full_texture' && phaseVariant !== 'no_ornament' ? 1 : 0,
   });
   const desiredLaneRoles = [
     'foundation',
@@ -19224,9 +19642,9 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
     activeMusicMode,
     ...behaviorIntensityRuntime,
   });
-  enemyDirectorRuntime.activeDirectorPhase = introStage === 'player_only' || introStage === 'rhythm_only'
+  enemyDirectorRuntime.activeDirectorPhase = activeLevelPhase === 'intro_teach' || activeLevelPhase === 'groove_establish'
     ? 'intro'
-    : (activeMusicMode === 'lead_entry_merge' ? 'merge' : 'full_texture');
+    : (activeLevelPhase === 'lead_merge' ? 'merge' : 'full_texture');
   enemyDirectorRuntime.targetPressure = targetPressure;
   enemyDirectorRuntime.targetAliveMin = targetAliveMin;
   enemyDirectorRuntime.targetAliveMax = targetAliveMax;
@@ -19253,6 +19671,8 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
       noteMusicSystemEvent?.('music_enemy_director_state', {
         activeDirectorPhase: String(enemyDirectorRuntime.activeDirectorPhase || '').trim().toLowerCase(),
         activeMusicMode,
+        activeLevelPhase,
+        phaseVariant,
         introStage: String(introStage || '').trim().toLowerCase(),
         targetPressure,
         targetAliveMin,
@@ -19282,18 +19702,22 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
   enemyDirectorRuntime.lastEvaluatedBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   return enemyDirectorRuntime;
 }
-function evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null) {
+function evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null, activeLevelPhaseState = null) {
+  const levelPhaseState = activeLevelPhaseState && typeof activeLevelPhaseState === 'object'
+    ? activeLevelPhaseState
+    : evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
   const musicState = activeMusicModeState && typeof activeMusicModeState === 'object'
     ? activeMusicModeState
-    : evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
+    : evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage, levelPhaseState);
   const activeMusicMode = String(musicState?.activeMusicMode || '').trim().toLowerCase();
+  const activeLevelPhase = String(levelPhaseState?.activeLevelPhase || '').trim().toLowerCase();
   const inferredEventSection = getBeatSwarmEventSectionIdForState(barIndex, beatIndex, introStage, activeMusicMode);
   const safeBar = inferredEventSection.safeBar;
   const safeBeat = inferredEventSection.safeBeat;
   const beatInBar = inferredEventSection.beatInBar;
   const halfBarBeat = inferredEventSection.halfBarBeat;
   const barCycle = inferredEventSection.barCycle;
-  const nextSection = inferredEventSection.sectionId;
+  const nextSection = activeLevelPhase === 'full_texture' ? inferredEventSection.sectionId : 'none';
   if (String(eventSectionRuntime.activeEventSection || '') !== nextSection) {
     eventSectionRuntime.enteredBar = nextSection === 'none' ? -1 : safeBar;
   }
@@ -19322,6 +19746,7 @@ function evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage = 
         presentationPulseScale: Number(eventSectionRuntime.presentationPulseScale) || 0,
         eligibleRoles: Array.isArray(eventSectionRuntime.eligibleRoles) ? eventSectionRuntime.eligibleRoles.slice() : [],
         activeMusicMode,
+        activeLevelPhase,
         introStage: String(introStage || 'none').trim().toLowerCase(),
       }, {
         beatIndex: safeBeat,
@@ -19446,8 +19871,9 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
   const barIndex = Math.floor(Math.max(0, Math.trunc(Number(beatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR));
   const directorLanePlan = ensureSwarmDirector().getLanePlan?.() || null;
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
-  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage);
-  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime);
+  const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage, activeLevelPhaseRuntime);
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
   const screenW = Math.max(1, Number(window.innerWidth) || 0);
   const screenH = Math.max(1, Number(window.innerHeight) || 0);
   const isEnemyLikelyOnScreen = (enemy) => {
@@ -19533,9 +19959,10 @@ function maintainComposerEnemyGroups() {
   const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
   const currentBarIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
   const introStage = getUnifiedIntroStage(currentBarIndex, beatIndex);
-  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(currentBarIndex, beatIndex, introStage);
-  const activeEventSectionRuntime = evaluateBeatSwarmEventSectionRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime);
-  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime);
+  const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(currentBarIndex, beatIndex, introStage);
+  const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(currentBarIndex, beatIndex, introStage, activeLevelPhaseRuntime);
+  const activeEventSectionRuntime = evaluateBeatSwarmEventSectionRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
+  const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
   evaluateBeatSwarmVisualRoleReadabilityRuntime(currentBarIndex, beatIndex, introStage, activeMusicModeRuntime);
   const sessionAge = getBeatSwarmSessionAge(beatIndex);
   const introStateAgeBars = Math.max(0, currentBarIndex - Math.max(0, Math.trunc(Number(energyStateRuntime.stateStartBar) || 0)));
