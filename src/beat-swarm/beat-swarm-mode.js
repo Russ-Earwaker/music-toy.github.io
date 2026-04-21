@@ -19737,10 +19737,13 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
       ? (phaseVariant === 'foundation_only' ? 0.2 : 0.28)
       : (activeLevelPhase === 'lead_merge'
         ? (phaseVariant === 'reduced_support' ? 0.38 : 0.48)
-        : 0.62));
+        : (phaseVariant === 'no_ornament' ? 0.5 : 0.56)));
   const targetPressure = Math.max(0, Math.min(1, basePressure + (difficultyRamp * 0.24)));
   const targetAliveMin = Math.max(1, Math.round(1 + (targetPressure * 4)));
-  const targetAliveMax = Math.max(targetAliveMin, Math.round(targetAliveMin + 1 + (targetPressure * 3)));
+  let targetAliveMax = Math.max(targetAliveMin, Math.round(targetAliveMin + 1 + (targetPressure * 3)));
+  if (activeLevelPhase === 'full_texture') {
+    targetAliveMax = Math.min(targetAliveMax, phaseVariant === 'no_ornament' ? 5 : 6);
+  }
   const targetCarrierCounts = Object.freeze({
     foundation: 1,
     secondary_loop_rhythm: (activeLevelPhase === 'groove_establish' && phaseVariant !== 'foundation_only')

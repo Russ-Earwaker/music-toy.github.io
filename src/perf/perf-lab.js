@@ -4618,6 +4618,12 @@ async function saveMusicLabSessionToResourcesGlobal({
   let compactedSave = false;
   let compactedSaveDetail = '';
   let preflightBundleBytes = 0;
+  const saveTimestampIso = new Date().toISOString();
+  const saveInstanceId = [
+    String(runId || 'musicLabAutoSave').trim() || 'musicLabAutoSave',
+    String(payload?.sessionId || '').trim() || 'session',
+    saveTimestampIso.replace(/[<>:"/\\|?*\x00-\x1F]/g, '-'),
+  ].join('__');
   try {
     const preflightBundle = buildResultsBundle([
       {
@@ -4662,6 +4668,8 @@ async function saveMusicLabSessionToResourcesGlobal({
     iterationCount: Math.max(1, Math.trunc(Number(iterationCount) || 1)),
     labType: 'music',
     kind: 'music-lab',
+    saveTimestampIso,
+    saveInstanceId,
   });
   let bundleBytes = 0;
   try {
@@ -4670,6 +4678,10 @@ async function saveMusicLabSessionToResourcesGlobal({
   let ok = await postResultsBundle(bundle, postUrl, { allowLegacyPerfFallback: true });
   let fallbackJsonSaved = false;
   let fallbackJsonFileName = '';
+  let mirrorJsonSaved = false;
+  let mirrorJsonFileName = '';
+  let summaryJsonSaved = false;
+  let summaryJsonFileName = '';
   if (!ok) {
     try {
       const debugOutputUrl = resolveDebugOutputPostUrl(cfg);
@@ -4689,6 +4701,25 @@ async function saveMusicLabSessionToResourcesGlobal({
       if (fallbackJsonSaved) ok = true;
     } catch {}
   }
+  try {
+    const debugOutputUrl = resolveDebugOutputPostUrl(cfg);
+    mirrorJsonFileName = `resources-debug-${saveInstanceId}-results.json`;
+    mirrorJsonSaved = await postDebugOutputFile({
+      fileName: mirrorJsonFileName,
+      text: JSON.stringify(bundle, null, 2),
+      meta: {
+        source: 'music-lab-results-mirror',
+        runId: String(runId || 'musicLabAutoSave'),
+        label: String(label || 'music-lab-session'),
+        scenarioName: String(scenarioName || label || 'music-lab-session'),
+        sessionId: String(payload?.sessionId || ''),
+        saveTimestampIso,
+        saveInstanceId,
+        compactedSave,
+        compactedSaveDetail,
+      },
+    }, debugOutputUrl);
+  } catch {}
   const sessionSummary = summarizeMusicLabSessionPayload(payload);
   let transitionDebug = null;
   try {
@@ -4702,6 +4733,40 @@ async function saveMusicLabSessionToResourcesGlobal({
       reason: String(err && err.message || err || 'transition_debug_failed'),
     };
   }
+  try {
+    const debugOutputUrl = resolveDebugOutputPostUrl(cfg);
+    const summaryBundle = {
+      kind: 'music-lab-summary',
+      runId: String(runId || 'musicLabAutoSave'),
+      label: String(label || 'music-lab-session'),
+      scenarioName: String(scenarioName || label || 'music-lab-session'),
+      sessionId: String(payload?.sessionId || ''),
+      saveTimestampIso,
+      saveInstanceId,
+      compactedSave,
+      compactedSaveDetail,
+      payloadDebug: {
+        ...payloadDebug,
+        preflightBundleBytes,
+        bundleBytes,
+      },
+      sessionSummary,
+      transitionDebug,
+    };
+    summaryJsonFileName = `resources-debug-${saveInstanceId}-summary.json`;
+    summaryJsonSaved = await postDebugOutputFile({
+      fileName: summaryJsonFileName,
+      text: JSON.stringify(summaryBundle, null, 2),
+      meta: {
+        source: 'music-lab-summary',
+        runId: String(runId || 'musicLabAutoSave'),
+        sessionId: String(payload?.sessionId || ''),
+        scenarioName: String(scenarioName || label || 'music-lab-session'),
+        saveTimestampIso,
+        saveInstanceId,
+      },
+    }, debugOutputUrl);
+  } catch {}
   const result = {
     ok: !!ok,
     reason: ok ? (fallbackJsonSaved ? 'debug_output_fallback_saved' : '') : 'post_failed',
@@ -4712,12 +4777,18 @@ async function saveMusicLabSessionToResourcesGlobal({
     transitionDebug,
     fallbackJsonSaved,
     fallbackJsonFileName,
+    mirrorJsonSaved,
+    mirrorJsonFileName,
+    summaryJsonSaved,
+    summaryJsonFileName,
     payloadDebug: {
       ...payloadDebug,
       preflightBundleBytes,
       bundleBytes,
       compactedSave,
       compactedSaveDetail,
+      saveTimestampIso,
+      saveInstanceId,
     },
   };
   try { window.__LAST_MUSIC_LAB_SAVE_RESULT = { ...result, runId, label, notes }; } catch {}
@@ -5325,6 +5396,44 @@ async function runBS0Stage(stageCount = 1, opts = null) {
             label: `music-lab-session${runSuffix}`,
             save,
           });
+        } catch {}
+        try {
+          const cfgResolved = await resolveResultsConfig();
+          const debugOutputUrl = resolveDebugOutputPostUrl(cfgResolved);
+          const saveResultText = [
+            `runId=${String(`${saveRunIdBase}${runSuffix}`)}`,
+            `label=${String(`music-lab-session${runSuffix}`)}`,
+            `stageCount=${Math.max(0, Math.trunc(Number(stageCount) || 0))}`,
+            `runIndex=${Math.max(0, Math.trunc(Number(runIndex) || 0))}`,
+            `repeatCount=${Math.max(0, Math.trunc(Number(repeatCount) || 0))}`,
+            `durationMs=${Math.max(0, Math.trunc(Number(durationMs) || 0))}`,
+            `ok=${save?.ok === true}`,
+            `reason=${String(save?.reason || '')}`,
+            `postUrl=${String(save?.postUrl || '')}`,
+            `sessionId=${String(save?.sessionId || '')}`,
+            `events=${Math.max(0, Number(save?.events) || 0)}`,
+            `fallbackJsonSaved=${save?.fallbackJsonSaved === true}`,
+            `fallbackJsonFileName=${String(save?.fallbackJsonFileName || '')}`,
+            `mirrorJsonSaved=${save?.mirrorJsonSaved === true}`,
+            `mirrorJsonFileName=${String(save?.mirrorJsonFileName || '')}`,
+            `summaryJsonSaved=${save?.summaryJsonSaved === true}`,
+            `summaryJsonFileName=${String(save?.summaryJsonFileName || '')}`,
+            `transitionDebugOk=${save?.transitionDebug?.ok === true}`,
+            `transitionDebugReason=${String(save?.transitionDebug?.reason || '')}`,
+            `payloadDebug=${JSON.stringify(save?.payloadDebug || {})}`,
+            `sessionSummary=${JSON.stringify(save?.sessionSummary || {})}`,
+          ].join('\n');
+          await postDebugOutputFile({
+            fileName: `resources-debug-${String(saveRunIdBase || 'musicLabSave').trim() || 'musicLabSave'}${runSuffix}-save-result.txt`,
+            text: saveResultText,
+            meta: {
+              source: 'music-lab-save-result-text',
+              runId: String(`${saveRunIdBase}${runSuffix}`),
+              stageCount: Math.max(0, Math.trunc(Number(stageCount) || 0)),
+              runIndex: Math.max(0, Math.trunc(Number(runIndex) || 0)),
+              repeatCount: Math.max(0, Math.trunc(Number(repeatCount) || 0)),
+            },
+          }, debugOutputUrl);
         } catch {}
         if (publishPerfArtifacts) {
           try {
