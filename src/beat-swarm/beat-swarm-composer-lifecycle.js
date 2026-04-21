@@ -345,11 +345,12 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const hasLeadMergeSecondaryBridgePersistence = (groupLike) => {
     const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
     if (!group || group.active !== true || group.retiring) return false;
-    if (!leadMergeReducedSupportActive) return false;
+    if (activeMusicMode !== 'lead_entry_merge') return false;
     if (String(group?.musicLaneId || '').trim().toLowerCase() !== 'secondary_loop_lane') return false;
     if (normalizeComposerProfileSourceType(group?.musicProfileSourceType) !== 'secondary_bridge_backbeat') return false;
+    if (String(group?.callResponseLane || '').trim().toLowerCase() === 'response') return false;
     const persistUntilBar = Math.max(-1, Math.trunc(Number(group?.__bsLeadMergeSecondaryPersistUntilBar) || -1));
-    return persistUntilBar >= currentBarIndex;
+    return persistUntilBar >= currentBarIndex || activeMusicMode === 'lead_entry_merge';
   };
 
   for (let i = composerEnemyGroups.length - 1; i >= 0; i--) {
@@ -442,9 +443,10 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     sameSection.push(activeGlobalPrimaryLead);
   }
   const activePersistentIntroSlotGroups = sameSection.filter((g) => isPersistentIntroSlotCarrier(g));
-  const activeSecondaryLoopCoveragePresent = sameSection.some((group) => (
+  const globalSecondaryLoopCoverageGroups = composerEnemyGroups.filter((group) => (
     hasActiveSecondaryLoopCoverage(group) || hasRecentSecondaryLoopCoverageMemory(group)
   ));
+  const activeSecondaryLoopCoveragePresent = globalSecondaryLoopCoverageGroups.length > 0;
   let activePrimaryLoopCoveragePresent = sameSection.some((group) => hasActivePrimaryLoopCoverage(group));
     if (activeGlobalPrimaryLeadPresent) activePrimaryLoopCoveragePresent = true;
   const earlyIntroBridgeActive = activePersistentIntroSlotGroups.length > 0
@@ -509,12 +511,17 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   if (activeGlobalPrimaryLeadPresent) reservedLeadSpawnNeeded = false;
   if (leadMergeReducedSupportActive) {
     try {
-      const secondaryBridgeGroups = sameSection.filter((group) => (
+      const secondaryBridgeGroups = composerEnemyGroups.filter((group) => (
         group
         && group.active === true
         && !group.retiring
         && String(group?.musicLaneId || '').trim().toLowerCase() === 'secondary_loop_lane'
-        && normalizeComposerProfileSourceType(group?.musicProfileSourceType) === 'secondary_bridge_backbeat'
+        && String(group?.callResponseLane || '').trim().toLowerCase() !== 'response'
+        && (
+          hasActiveSecondaryLoopCoverage(group)
+          || hasPendingSecondaryLoopIdentity(group)
+          || hasRecentSecondaryLoopCoverageMemory(group)
+        )
       ));
       noteMusicSystemEvent?.('music_secondary_bridge_coverage_trace', {
         activeMusicMode,

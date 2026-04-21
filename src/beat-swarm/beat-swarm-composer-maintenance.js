@@ -44,6 +44,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
     ? state.musicModeRuntime
     : null;
+  const levelPhaseRuntime = state.levelPhaseRuntime && typeof state.levelPhaseRuntime === 'object'
+    ? state.levelPhaseRuntime
+    : null;
   const enemyDirectorRuntime = state.enemyDirectorRuntime && typeof state.enemyDirectorRuntime === 'object'
     ? state.enemyDirectorRuntime
     : null;
@@ -123,6 +126,10 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const leadEntryMergeActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'lead_entry_merge';
   const fullTextureActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'full_texture';
   const protectedMergeTextureActive = leadEntryMergeActive || fullTextureActive;
+  const leadMergeStableBars = Math.max(0, Math.trunc(Number(levelPhaseRuntime?.leadMergeStableBars) || 0));
+  const stableMergeSupportLockActive = leadEntryMergeActive && leadMergeStableBars >= 2;
+  const fullTextureSupportLockActive = fullTextureActive
+    && Math.max(0, Math.trunc(Number(levelPhaseRuntime?.timeInPhaseBars) || 0)) <= 2;
   const spawnWantsSoloRhythm = spawnConfigLoaded && spawnChosenId === 'solo_rhythm_basic' && !introRhythmOnlyWindow;
   const stepAbs = Math.max(0, Math.trunc(currentBeatIndex));
   const legacyIntroHoldActive = !!helpers.shouldHoldIntroLayerExpansion?.(stepAbs);
@@ -1510,6 +1517,27 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   };
   const retireGroup = (group, reason) => {
     if (!group || group.retiring) return;
+    const normalizedLaneId = String(group?.musicLaneId || '').trim().toLowerCase();
+    const normalizedCallResponseLane = String(group?.callResponseLane || '').trim().toLowerCase();
+    const normalizedProfileSourceType = normalizeComposerProfileSourceType(group?.musicProfileSourceType);
+    const protectedLeadMergeSecondaryBridge = (
+      (leadEntryMergeActive || fullTextureSupportLockActive)
+      && normalizedLaneId === 'secondary_loop_lane'
+      && normalizedCallResponseLane !== 'response'
+      && normalizedProfileSourceType === 'secondary_bridge_backbeat'
+    );
+    if (protectedLeadMergeSecondaryBridge) {
+      group.active = true;
+      group.retiring = false;
+      group.lifecycleState = 'active';
+      group.musicParticipationGain = 1;
+      group.__bsSecondaryCoverageSeenBarIndex = currentBarIndex;
+      group.__bsLeadMergeSecondaryPersistUntilBar = Math.max(
+        Math.max(-1, Math.trunc(Number(group?.__bsLeadMergeSecondaryPersistUntilBar) || -1)),
+        currentBarIndex + ((stableMergeSupportLockActive || fullTextureSupportLockActive) ? 4 : 2)
+      );
+      return;
+    }
     group.active = false;
     group.retiring = true;
     group.lifecycleState = 'retiring';
@@ -1684,6 +1712,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       && !isIntroSlotIdentityActive(group)
       && String(group?.templateId || '').trim() !== 'foundation-buffer'
       && !isActivePrimaryLeadIntentGroup(group)
+      && !(
+        stableMergeSupportLockActive
+        && String(group?.musicLaneId || '').trim().toLowerCase() === 'secondary_loop_lane'
+        && String(group?.callResponseLane || '').trim().toLowerCase() !== 'response'
+      )
     ));
     activeGroups.sort((a, b) => {
       const aLead = String(a?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane' ? 1 : 0;
@@ -1728,7 +1761,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   }
   if (!introComposerLockActive) {
     if (spawnWantsSoloRhythm && getActiveSoloCarrierCount('rhythm') === 0) {
-      const replaceable = findReplaceableNonSoloGroup();
+      const replaceable = stableMergeSupportLockActive ? null : findReplaceableNonSoloGroup();
       if (replaceable) retireGroup(replaceable, 'solo_rhythm_turnover');
       effectivePacingCaps.responseMode = 'group';
       effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
@@ -1736,7 +1769,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       effectivePacingCaps.maxComposerPerformers = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1));
     }
     if (!spawnWantsSoloRhythm && fallbackRhythmCoverageRequested && getActiveSoloCarrierCount('rhythm') === 0) {
-      const replaceable = findReplaceableNonSoloGroup();
+      const replaceable = stableMergeSupportLockActive ? null : findReplaceableNonSoloGroup();
       if (replaceable) retireGroup(replaceable, 'fallback_rhythm_turnover');
       effectivePacingCaps.responseMode = 'group';
       effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
@@ -1744,7 +1777,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       effectivePacingCaps.maxComposerPerformers = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerPerformers) || 1));
     }
     if (fallbackMelodyCoverageRequested && getActiveMelodyCoverageCount() === 0) {
-      const replaceable = findReplaceableNonSoloGroup();
+      const replaceable = stableMergeSupportLockActive ? null : findReplaceableNonSoloGroup();
       if (replaceable) retireGroup(replaceable, 'fallback_melody_turnover');
       effectivePacingCaps.responseMode = 'group';
       effectivePacingCaps.maxComposerGroups = Math.max(1, Math.trunc(Number(effectivePacingCaps?.maxComposerGroups) || 0));
@@ -1821,7 +1854,10 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   }
   const ensureStrongLeadSecondaryBridgeGroup = () => {
     const mergeVariant = String(musicModeRuntime?.phaseVariant || 'default').trim().toLowerCase();
-    if (!leadEntryMergeActive || mergeVariant !== 'reduced_support') return;
+    if (
+      (!leadEntryMergeActive && !fullTextureSupportLockActive)
+      || (leadEntryMergeActive && mergeVariant !== 'reduced_support' && !stableMergeSupportLockActive)
+    ) return;
     const targetGroup = getActiveEmbodiedSecondaryLoopBridgeGroup()
       || composerEnemyGroups.find((group) => (
         group
@@ -1839,6 +1875,12 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     targetGroup.size = Math.max(2, Math.trunc(Number(targetGroup?.size) || 0));
     targetGroup.performers = Math.max(2, Math.trunc(Number(targetGroup?.performers) || 0));
     targetGroup.__bsSecondaryCoverageSeenBarIndex = currentBarIndex;
+    if (stableMergeSupportLockActive || fullTextureSupportLockActive) {
+      targetGroup.__bsLeadMergeSecondaryPersistUntilBar = Math.max(
+        Math.max(-1, Math.trunc(Number(targetGroup?.__bsLeadMergeSecondaryPersistUntilBar) || -1)),
+        currentBarIndex + 4
+      );
+    }
     refreshSecondaryLoopReservation(targetGroup);
     const aliveCount = getAliveComposerEnemiesByIds(targetGroup?.memberIds).length;
     const refillNeeded = Math.max(0, Math.trunc(Number(targetGroup?.size) || 0) - aliveCount);
@@ -1857,6 +1899,8 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         size: Math.max(0, Math.trunc(Number(targetGroup?.size) || 0)),
         performers: Math.max(0, Math.trunc(Number(targetGroup?.performers) || 0)),
         refillNeeded,
+        leadMergeStableBars,
+        stableMergeSupportLockActive,
       }, {
         beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
         barIndex: currentBarIndex,
@@ -1980,6 +2024,13 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
                 ? forcedCallTemplateId
                 : requestedTemplateId
             );
+          if (
+            stableMergeSupportLockActive
+            && forcedRhythmProfile !== 'secondary_bridge_backbeat'
+            && String(effectiveTemplateId || '').trim().toLowerCase() === 'foundation-buffer'
+          ) {
+            effectiveTemplateId = String(defaultCallTemplate?.id || effectiveTemplateId || '').trim();
+          }
           if (forcedRhythmProfile) {
             const requestedLane = helpers.normalizeCallResponseLane?.(
               templateById.get(effectiveTemplateId)?.callResponseLane || '',

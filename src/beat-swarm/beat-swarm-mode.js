@@ -19057,6 +19057,7 @@ const BEAT_SWARM_LEVEL_PHASE_POLICIES = Object.freeze({
     latestPreferredTransitionBar: 6,
     minBarsBeforeAdvance: 2,
     maxHoldBars: 2,
+    entryRequirements: Object.freeze(['foundation_present']),
     hardRequirements: Object.freeze(['foundation_present']),
     softRequirements: Object.freeze(['secondary_rhythm_present']),
     degradeVariant: 'foundation_only',
@@ -19069,6 +19070,7 @@ const BEAT_SWARM_LEVEL_PHASE_POLICIES = Object.freeze({
     latestPreferredTransitionBar: 12,
     minBarsBeforeAdvance: 2,
     maxHoldBars: 3,
+    entryRequirements: Object.freeze(['foundation_present']),
     hardRequirements: Object.freeze(['foundation_present']),
     softRequirements: Object.freeze(['secondary_rhythm_present']),
     degradeVariant: 'foundation_only',
@@ -19081,11 +19083,12 @@ const BEAT_SWARM_LEVEL_PHASE_POLICIES = Object.freeze({
     latestPreferredTransitionBar: 20,
     minBarsBeforeAdvance: 3,
     maxHoldBars: 4,
+    entryRequirements: Object.freeze(['lead_present', 'secondary_rhythm_present']),
     hardRequirements: Object.freeze(['lead_present', 'secondary_rhythm_present']),
     softRequirements: Object.freeze(['support_stable', 'co_lead_absent']),
     degradeVariant: 'reduced_support',
     fallbackPhase: 'lead_merge',
-    abortConditions: Object.freeze(['lead_lost', 'co_lead_confusion', 'pressure_catastrophic']),
+    abortConditions: Object.freeze(['lead_lost', 'co_lead_confusion']),
   }),
   full_texture: Object.freeze({
     id: 'full_texture',
@@ -19093,11 +19096,12 @@ const BEAT_SWARM_LEVEL_PHASE_POLICIES = Object.freeze({
     latestPreferredTransitionBar: 32,
     minBarsBeforeAdvance: 0,
     maxHoldBars: 6,
-    hardRequirements: Object.freeze(['lead_present', 'secondary_rhythm_present', 'lead_merge_stable']),
+    entryRequirements: Object.freeze(['lead_present', 'secondary_rhythm_present', 'lead_merge_stable']),
+    hardRequirements: Object.freeze(['lead_present', 'secondary_rhythm_present']),
     softRequirements: Object.freeze(['ornament_available', 'field_readable', 'co_lead_absent']),
     degradeVariant: 'no_ornament',
-    fallbackPhase: 'lead_merge',
-    abortConditions: Object.freeze(['lead_lost', 'secondary_rhythm_lost', 'pressure_catastrophic', 'field_unreadable']),
+    fallbackPhase: 'full_texture',
+    abortConditions: Object.freeze(['lead_lost', 'pressure_catastrophic', 'field_unreadable']),
   }),
 });
 function getBeatSwarmLevelPhasePolicy(phaseId = 'intro_teach') {
@@ -19268,7 +19272,10 @@ function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'n
   const currentIdx = Math.max(0, BEAT_SWARM_LEVEL_PHASE_ORDER.indexOf(activePhaseId));
   const nextPhaseId = BEAT_SWARM_LEVEL_PHASE_ORDER[Math.min(BEAT_SWARM_LEVEL_PHASE_ORDER.length - 1, currentIdx + 1)] || activePhaseId;
   const nextPolicy = getBeatSwarmLevelPhasePolicy(nextPhaseId);
-  const nextHardEval = evaluateBeatSwarmRequirementSet(nextPolicy.hardRequirements, snapshot);
+  const nextEntryRequirements = Array.isArray(nextPolicy.entryRequirements) && nextPolicy.entryRequirements.length > 0
+    ? nextPolicy.entryRequirements
+    : nextPolicy.hardRequirements;
+  const nextHardEval = evaluateBeatSwarmRequirementSet(nextEntryRequirements, snapshot);
   const nextSoftEval = evaluateBeatSwarmRequirementSet(nextPolicy.softRequirements, snapshot);
   const transitionWindowOpen = nextPhaseId !== activePhaseId && safeBar >= nextPolicy.earliestTransitionBar;
   const readyToAdvance = transitionWindowOpen
@@ -19280,8 +19287,10 @@ function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'n
   let holdReason = '';
   let degradedPhaseVariant = degradeApplied ? phaseVariant : '';
   let fallbackPhase = String(activePolicy.fallbackPhase || '').trim().toLowerCase();
+  let readinessFailures = [];
   if (transitionWindowOpen && !readyToAdvance) {
     holdReason = String((nextHardEval.results[nextHardEval.unmet[0]]?.reason) || nextHardEval.unmet[0] || '').trim().toLowerCase();
+    readinessFailures = nextHardEval.unmet.slice();
   } else if (phaseValidity === 'invalid') {
     holdReason = String((activeHardEval.results[activeHardEval.unmet[0]]?.reason) || activeAbortConditions[0] || '').trim().toLowerCase();
   }
@@ -19311,7 +19320,7 @@ function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'n
   levelPhaseRuntime.transitionWindowOpen = transitionWindowOpen;
   levelPhaseRuntime.phaseValidity = phaseValidity;
   levelPhaseRuntime.holdReason = holdReason;
-  levelPhaseRuntime.readinessFailures = nextHardEval.unmet.slice();
+  levelPhaseRuntime.readinessFailures = readinessFailures.slice();
   levelPhaseRuntime.timeoutBar = Math.max(0, Math.trunc(Number(timeoutBar) || 0));
   levelPhaseRuntime.degradedPhaseVariant = degradedPhaseVariant;
   levelPhaseRuntime.fallbackPhase = fallbackPhase;
@@ -19369,21 +19378,24 @@ function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'no
   const levelPhaseState = activeLevelPhaseState && typeof activeLevelPhaseState === 'object'
     ? activeLevelPhaseState
     : evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
+  const activeLevelPhase = String(levelPhaseState?.activeLevelPhase || '').trim().toLowerCase();
+  const phaseVariant = String(levelPhaseState?.phaseVariant || 'default').trim().toLowerCase();
   const hasPrimaryLead = activeGroups.some((group) => (
     String(group?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
     && String(group?.musicProfileSourceType || '').trim().toLowerCase() === 'lead_melody'
   ));
   const hasRhythmicSecondary = activeGroups.some((group) => hasBeatSwarmRhythmicSecondaryCoverageGroup(group));
-  if (hasPrimaryLead) {
+  if (activeLevelPhase === 'full_texture') {
+    musicModeRuntime.leadEntryStartBar = -1;
+  } else if (hasPrimaryLead) {
     if (!(musicModeRuntime.leadEntryStartBar >= 0)) musicModeRuntime.leadEntryStartBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   } else {
     musicModeRuntime.leadEntryStartBar = -1;
   }
-  const bridgeWindowActive = hasPrimaryLead
+  const bridgeWindowActive = activeLevelPhase !== 'full_texture'
+    && hasPrimaryLead
     && musicModeRuntime.leadEntryStartBar >= 0
     && (Math.max(0, Math.trunc(Number(barIndex) || 0)) - Math.max(0, Math.trunc(Number(musicModeRuntime.leadEntryStartBar) || 0))) < 8;
-  const activeLevelPhase = String(levelPhaseState?.activeLevelPhase || '').trim().toLowerCase();
-  const phaseVariant = String(levelPhaseState?.phaseVariant || 'default').trim().toLowerCase();
   let nextMode = 'full_texture';
   let transitionReason = `level_phase_${activeLevelPhase || 'full_texture'}`;
   if (activeLevelPhase === 'intro_teach') {
@@ -19626,8 +19638,16 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
     })
   ));
   const sortedFamilies = Object.entries(varietyPressureByFamily).sort((a, b) => a[1] - b[1]);
-  const preferredEnemyFamilies = sortedFamilies.filter(([, pressure]) => pressure <= 0).map(([familyId]) => familyId);
-  const suppressedEnemyFamilies = sortedFamilies.filter(([, pressure]) => pressure > 0).map(([familyId]) => familyId);
+  let preferredEnemyFamilies = sortedFamilies.filter(([, pressure]) => pressure <= 0).map(([familyId]) => familyId);
+  let suppressedEnemyFamilies = sortedFamilies.filter(([, pressure]) => pressure > 0).map(([familyId]) => familyId);
+  if (activeLevelPhase === 'lead_merge') {
+    suppressedEnemyFamilies = suppressedEnemyFamilies.filter((familyId) => familyId !== 'composer');
+    preferredEnemyFamilies = [
+      'composer',
+      ...preferredEnemyFamilies.filter((familyId) => familyId !== 'composer'),
+      ...suppressedEnemyFamilies.filter((familyId) => familyId !== 'composer'),
+    ];
+  }
   const activeEventBehaviorId = getBeatSwarmEventBehaviorIdForSection(inferredEventSection.sectionId);
   const behaviorIntensityRuntime = getBeatSwarmBehaviorIntensityRuntime({
     targetPressure,
