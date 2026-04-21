@@ -291,7 +291,9 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     return hasLiveMembers(group)
       || hasPendingPrimaryLoopIdentity(group)
       || hasPendingSecondaryLoopIdentity(group)
-      || hasRecentSecondaryLoopCoverageMemory(group);
+      || hasRecentSecondaryLoopCoverageMemory(group)
+      || hasRecentAnswerOrnamentCoverageMemory(group)
+      || hasFullTextureAnswerOrnamentPersistence(group);
   };
   const hasProtectedSecondaryLoopContinuity = (groupLike) => {
     const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
@@ -313,6 +315,29 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (!group || group.active !== true || group.retiring) return false;
     return normalizeComposerProfileSourceType(group?.musicProfileSourceType) === 'answer_ornament'
       || String(group?.callResponseLane || '').trim().toLowerCase() === 'response';
+  };
+  const hasRecentAnswerOrnamentCoverageMemory = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!isAnswerOrnamentGroup(group)) return false;
+    const lastSeenBarIndex = Math.max(-1, Math.trunc(Number(group?.__bsAnswerOrnamentSeenBarIndex) || -1));
+    if (lastSeenBarIndex < 0) return false;
+    return (currentBarIndex - lastSeenBarIndex) <= 1;
+  };
+  const hasFullTextureAnswerOrnamentPersistence = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!group || group.active !== true || group.retiring) return false;
+    if (activeMusicMode !== 'full_texture') return false;
+    if (!isAnswerOrnamentGroup(group)) return false;
+    const persistUntilBar = Math.max(-1, Math.trunc(Number(group?.__bsFullTextureAnswerOrnamentPersistUntilBar) || -1));
+    return persistUntilBar >= currentBarIndex;
+  };
+  const hasProtectedAnswerOrnamentContinuity = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!group || group.active !== true || group.retiring) return false;
+    const groupContinuityKey = String(group?.sectionContinuityKey || '').trim().toLowerCase();
+    if (groupContinuityKey && groupContinuityKey !== String(sectionContinuityKey || '').trim().toLowerCase()) return false;
+    return isAnswerOrnamentGroup(group)
+      && (hasLiveMembers(group) || hasRecentAnswerOrnamentCoverageMemory(group) || hasFullTextureAnswerOrnamentPersistence(group));
   };
   const rankPrimaryLeadGroup = (groupLike) => {
     const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
@@ -373,9 +398,13 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (hasActiveSecondaryLoopCoverage(g) || hasPendingSecondaryLoopIdentity(g)) {
       g.__bsSecondaryCoverageSeenBarIndex = currentBarIndex;
     }
+    if (isAnswerOrnamentGroup(g) && (hasLiveMembers(g) || hasFullTextureAnswerOrnamentPersistence(g))) {
+      g.__bsAnswerOrnamentSeenBarIndex = currentBarIndex;
+    }
     if (g.sectionKey !== sectionKey) {
       const carryAcrossSection = isPrimaryLeadMelodyGroup(g)
         || hasProtectedSecondaryLoopContinuity(g)
+        || hasProtectedAnswerOrnamentContinuity(g)
         || isPersistentIntroSlotCarrier(g);
       if (carryAcrossSection) {
         g.sectionKey = sectionKey;
