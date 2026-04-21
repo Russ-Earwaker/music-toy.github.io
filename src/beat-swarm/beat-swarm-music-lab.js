@@ -4061,6 +4061,36 @@ export function createBeatSwarmMusicLab(options = null) {
       sessionSummary: s.sessionSummary,
     });
   }
+  function exportSessionForSave() {
+    const s = ensureSession();
+    let maxBar = 0;
+    for (const ev of s.events) maxBar = Math.max(maxBar, clampInt(ev?.barIndex, 0, 0));
+    const executed = s.events.filter((e) => e?.phase === 'executed');
+    const bundle = computeMetricsForEvents(s, executed, maxBar);
+    s.metrics = bundle.metrics;
+    s.sessionSummary = bundle.sessionSummary;
+    s.endedAtIso = new Date().toISOString();
+    return {
+      sessionId: String(s.sessionId || ''),
+      startedAtIso: String(s.startedAtIso || ''),
+      endedAtIso: String(s.endedAtIso || ''),
+      beatsPerBar: s.beatsPerBar,
+      metricsEveryBars: s.metricsEveryBars,
+      eventTimeline: Array.isArray(s.events) ? s.events.slice() : [],
+      paletteChanges: Array.isArray(s.paletteChanges) ? s.paletteChanges.slice() : [],
+      pacingChanges: Array.isArray(s.pacingChanges) ? s.pacingChanges.slice() : [],
+      enemyRemovals: Array.isArray(s.enemyRemovals) ? s.enemyRemovals.slice() : [],
+      systemEvents: Array.isArray(s.systemEvents) ? s.systemEvents.slice() : [],
+      systemEventSummary: s.systemEventSummary && typeof s.systemEventSummary === 'object'
+        ? { ...s.systemEventSummary }
+        : {},
+      threatBudgetSnapshots: Array.isArray(s.threatBudgetSnapshots) ? s.threatBudgetSnapshots.slice() : [],
+      metricsHistory: Array.isArray(s.metricsHistory) ? s.metricsHistory.slice() : [],
+      metrics: s.metrics && typeof s.metrics === 'object' ? { ...s.metrics } : s.metrics,
+      sessionSummary: s.sessionSummary && typeof s.sessionSummary === 'object' ? { ...s.sessionSummary } : s.sessionSummary,
+      exportMode: 'save_shallow',
+    };
+  }
 
   function downloadSession(fileName = '') {
     const payload = exportSession();
@@ -4103,6 +4133,7 @@ export function createBeatSwarmMusicLab(options = null) {
     noteThreatBudgetSnapshot,
     noteSystemEvent,
     exportSession,
+    exportSessionForSave,
     downloadSession,
     setEnabled,
     getSessionSnapshot,
