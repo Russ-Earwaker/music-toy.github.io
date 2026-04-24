@@ -1,0 +1,1585 @@
+{
+  "createdAt": "2026-04-24T13:24:53.211Z",
+  "href": "http://192.168.0.62:5500/music-toy.github.io/index.html",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+  "meta": {
+    "runId": "musicLab_bs0_s3_assessment_1x5m",
+    "notes": "Beat Swarm Music Lab assessment run: S3, 1 run x 5 minutes, compact save for structured review.",
+    "runMode": "auto",
+    "scenarioName": "retro_shooter_intro_pacing_s3_assessment_1x5m",
+    "testCategory": "retro_shooter_intro_pacing_s3_assessment_1x5m",
+    "iterationIndex": 1,
+    "iterationCount": 1,
+    "labType": "music",
+    "kind": "music-lab",
+    "saveTimestampIso": "2026-04-24T13:24:53.210Z",
+    "saveInstanceId": "musicLab_bs0_s3_assessment_1x5m__music-lab-2026-04-24T13:19:53.106Z-2__2026-04-24T13-24-53.210Z"
+  },
+  "results": [
+    {
+      "label": "music-lab-session",
+      "runId": "musicLab_bs0_s3_assessment_1x5m",
+      "createdAt": "2026-04-24T13:24:53.211Z",
+      "musicLab": {
+        "sessionId": "music-lab-2026-04-24T13:19:53.106Z-2",
+        "startedAtIso": "2026-04-24T13:19:53.106Z",
+        "endedAtIso": "2026-04-24T13:24:53.197Z",
+        "beatsPerBar": 4,
+        "metricsEveryBars": 4,
+        "eventTimeline": [],
+        "paletteChanges": [],
+        "pacingChanges": [],
+        "enemyRemovals": [],
+        "systemEvents": [],
+        "systemEventSummary": {
+          "totalCount": 0,
+          "countsByType": {},
+          "countsByReason": {},
+          "countsByVisualFailureReason": {},
+          "uniqueSectionIds": []
+        },
+        "threatBudgetSnapshots": [],
+        "metricsHistory": [],
+        "metrics": {
+          "notePoolCompliance": {
+            "offPoolNoteRequests": 0,
+            "clampedNoteCount": 0,
+            "clampedNoteBySource": {},
+            "clampedByEnemyType": {},
+            "clampedNoteByEnemyId": {},
+            "considered": 0,
+            "clamped": 0,
+            "insidePool": 0,
+            "poolComplianceRate": 1
+          },
+          "pitchEntropy": {
+            "considered": 0,
+            "entropyOverall": 0,
+            "entropyByRole": {}
+          },
+          "intervalProfile": {
+            "buckets": {
+              "repeat": 0,
+              "step": 0,
+              "smallLeap": 0,
+              "largeLeap": 0
+            },
+            "compared": 0,
+            "smoothShare": 0
+          },
+          "melodicContour": {
+            "buckets": {
+              "repeat": 0,
+              "step": 0,
+              "smallLeap": 0,
+              "largeLeap": 0
+            },
+            "compared": 0,
+            "smoothShare": 0,
+            "largeLeapRate": 0,
+            "contourStability": "rough"
+          },
+          "motifReuse": {
+            "windowsByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "repeatedByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "uniqueMotifsByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "motifReuseRate": 0
+          },
+          "motifPersistence": {
+            "windowsByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "persistenceByN": {
+              "n2": 0,
+              "n3": 0,
+              "n4": 0
+            },
+            "weightedPersistence": 0,
+            "motifReuseRate": 0
+          },
+          "phraseGravity": {
+            "gravityOpportunities": 0,
+            "gravityHits": 0,
+            "gravityHitRate": 0,
+            "phraseResolutionOpportunities": 0,
+            "phraseResolutionHits": 0,
+            "phraseResolutionRate": 0
+          },
+          "playerWeaponTiming": {
+            "count": 0,
+            "lateCount": 0,
+            "earlyCount": 0,
+            "severeCount": 0,
+            "avgAbsOffsetMs": 0,
+            "maxAbsOffsetMs": 0
+          },
+          "playerWeaponTimingCount": 0,
+          "playerWeaponTimingAvgAbsOffsetMs": 0,
+          "playerWeaponTimingMaxAbsOffsetMs": 0,
+          "playerWeaponTimingSevereCount": 0,
+          "laneCompliance": {
+            "evaluated": 0,
+            "matched": 0,
+            "missingActual": 0,
+            "matchRate": 1,
+            "mismatchRate": 0,
+            "bySource": {},
+            "byLane": {},
+            "mismatchExamples": []
+          },
+          "roleBalance": {
+            "perBar": {},
+            "totals": {},
+            "distribution": {},
+            "totalEvents": 0
+          },
+          "threatBalance": {
+            "perBeat": {},
+            "perBar": {}
+          },
+          "threatBudgetUsage": {
+            "snapshots": 0,
+            "perBeat": {},
+            "perBar": {},
+            "directorPlan": {
+              "laneActiveBeatCounts": {},
+              "laneCarrierPreferenceCounts": {},
+              "sectionIntentCounts": {},
+              "avgCombatPressure": 0,
+              "avgMusicalPressure": 0
+            },
+            "spawnDirector": {
+              "loadedBeatCount": 0,
+              "chosenCounts": {},
+              "spawnedCounts": {},
+              "avgLiveBudgetMax": 0,
+              "avgSpawnBudget": 0,
+              "totalSpawnsNoted": 0,
+              "matchedChosenSpawnCount": 0,
+              "mismatchedChosenSpawnCount": 0,
+              "evaluationCount": 0,
+              "noChoiceCount": 0,
+              "avgEligibleCount": 0,
+              "maxEligibleCount": 0,
+              "rejectionReasonCounts": {}
+            }
+          },
+          "directorFoundationActiveBeats": 0,
+          "directorSecondaryLoopActiveBeats": 0,
+          "directorPrimaryLoopActiveBeats": 0,
+          "directorSupportActiveBeats": 0,
+          "directorAnswerActiveBeats": 0,
+          "directorSparkleActiveBeats": 0,
+          "directorAvgCombatPressure": 0,
+          "directorAvgMusicalPressure": 0,
+          "directorSpawnConfigLoadedBeats": 0,
+          "directorSpawnAvgLiveBudgetMax": 0,
+          "directorSpawnAvgBudget": 0,
+          "directorSpawnChosenComposerBeats": 0,
+          "directorSpawnChosenSpawnerBeats": 0,
+          "directorSpawnChosenSnakeBeats": 0,
+          "directorSpawnChosenSoloRhythmBeats": 0,
+          "directorSpawnActualComposerCount": 0,
+          "directorSpawnActualSpawnerCount": 0,
+          "directorSpawnActualSnakeCount": 0,
+          "directorSpawnActualSoloRhythmCount": 0,
+          "directorSpawnTotalSpawnsNoted": 0,
+          "directorSpawnMatchedChosenCount": 0,
+          "directorSpawnMismatchedChosenCount": 0,
+          "directorSpawnEvaluationCount": 0,
+          "directorSpawnNoChoiceCount": 0,
+          "directorSpawnAvgEligibleCount": 0,
+          "directorSpawnMaxEligibleCount": 0,
+          "directorSpawnRejectTimingCount": 0,
+          "directorSpawnRejectMaxAliveCount": 0,
+          "directorSpawnRejectLiveBudgetCount": 0,
+          "directorSpawnRejectSpawnBudgetCount": 0,
+          "directorSpawnRejectRhythmSlotCount": 0,
+          "directorSpawnRejectMelodySlotCount": 0,
+          "callResponse": {
+            "callCount": 0,
+            "responsePairs": 0,
+            "responseRate": 0,
+            "audibleResponsePairs": 0,
+            "audibleResponseRate": 0,
+            "avgResponseSize": 0,
+            "avgResponseAudibility": 0,
+            "delayedResponsePairs": 0,
+            "delayedResponseRate": 0,
+            "immediateResponsePairs": 0,
+            "immediateResponseRate": 0,
+            "responseWindowSteps": 16,
+            "pairExamples": []
+          },
+          "callCount": 0,
+          "responsePairs": 0,
+          "responseRate": 0,
+          "audibleResponsePairs": 0,
+          "audibleResponseRate": 0,
+          "avgResponseSize": 0,
+          "avgResponseAudibility": 0,
+          "delayedResponsePairs": 0,
+          "delayedResponseRate": 0,
+          "immediateResponsePairs": 0,
+          "immediateResponseRate": 0,
+          "deathDensity": {
+            "perBeat": {},
+            "perBar": {},
+            "clusterBeats": 0
+          },
+          "playerMasking": {
+            "playerAudibleSteps": 0,
+            "enemyEvents": 0,
+            "maskedEnemyEvents": 0,
+            "playerMaskingRate": 0
+          },
+          "visibleEnemyAudibility": {
+            "visibleEnemyEvents": 0,
+            "barelyAudibleVisibleEnemyEvents": 0,
+            "barelyAudibleVisibleEnemyRate": 0
+          },
+          "playerInstrument": {
+            "playerStepEvents": 0,
+            "audiblePlayerSteps": 0,
+            "cadenceModeCounts": {},
+            "cadenceReasonCounts": {},
+            "manualOverrideSteps": 0,
+            "manualOverrideRate": 0
+          },
+          "paletteContinuity": {
+            "paletteChanges": 0,
+            "barsSinceLastPaletteChange": 1,
+            "avgBarsBetweenChanges": 1,
+            "themeChanges": 0,
+            "roleInstrumentChanges": 0,
+            "paletteContinuityScore": 1
+          },
+          "enemyRemovals": {
+            "totalEnemyRemovals": 0,
+            "byReason": {},
+            "byEnemyType": {},
+            "directorCleanupRemovals": 0,
+            "sectionChangeCleanupRemovals": 0,
+            "sameFrameGroupRemovals": 0,
+            "groupRetirements": 0,
+            "groupNaturalDeaths": 0
+          },
+          "spawnerSync": {
+            "spawnerCount": 0,
+            "perfectSyncSpawnerPairs": 0,
+            "nearDuplicateSpawnerPairs": 0,
+            "duplicateSpawnerPatternClusters": [],
+            "pairExamples": []
+          },
+          "spawnerPipeline": {
+            "spawnerGameplayEvents": 0,
+            "spawnerAudioEvents": 0,
+            "spawnerAudioMutedEvents": 0,
+            "spawnerVisualEvents": 0,
+            "spawnerLoopgridEvents": 0,
+            "spawnerPipelineMismatches": 0,
+            "expectedAudioEvents": 0,
+            "audioShortfall": 0,
+            "visualShortfall": 0,
+            "loopgridShortfall": 0
+          },
+          "foundationProminence": {
+            "total": 0,
+            "full": 0,
+            "quiet": 0,
+            "trace": 0,
+            "suppressed": 0,
+            "changedByDeconflict": 0,
+            "quietShare": 0,
+            "traceShare": 0,
+            "suppressedShare": 0,
+            "deconflictChangeRate": 0
+          },
+          "handoff": {
+            "totalHandoffLogs": 0,
+            "byType": {},
+            "attempts": 0,
+            "completed": 0,
+            "successes": 0,
+            "failures": 0,
+            "successRate": 0,
+            "inheritedPhrase": 0,
+            "resetPhrase": 0,
+            "bassAttempts": 0,
+            "bassInheritedPhrase": 0,
+            "bassResetPhrase": 0,
+            "bassSuccessRate": 0
+          },
+          "explosionReliability": {
+            "byType": {},
+            "explosionPrimesCreated": 0,
+            "explosionQueuesCreated": 0,
+            "explosionQueuesRetargeted": 0,
+            "explosionQueuesProcessed": 0,
+            "explosionQueuesCleared": 0,
+            "explosionFailsafeDetonations": 0,
+            "explosionApplications": 0,
+            "explosionPrimeWithoutApplicationCount": 0,
+            "explosionReliabilityRate": 1
+          },
+          "passDiagnostics": {
+            "bassStability": {
+              "bassEventCount": 0,
+              "bassLoopCycles": 0,
+              "bassPhraseResets": 0,
+              "bassHandoffContinuityRate": 0
+            },
+            "identityStability": {
+              "enemyCountObserved": 0,
+              "instrumentChangesPerEnemy": 0,
+              "colourChangesPerEnemy": 0,
+              "totalInstrumentChanges": 0,
+              "totalColourChanges": 0,
+              "enemiesWithInstrumentChanges": 0,
+              "enemiesWithColourChanges": 0
+            },
+            "ownershipContinuity": {
+              "totalLogs": 0,
+              "laneStarts": 0,
+              "laneClears": 0,
+              "laneChanges": 0,
+              "ownerChanges": 0,
+              "preservedHandoffs": 0,
+              "resetHandoffs": 0,
+              "continuityBreaks": 0,
+              "sameContinuityInstrumentDrift": 0,
+              "sameContinuityPhraseDrift": 0,
+              "sameContinuityPatternDrift": 0,
+              "intentionalIdentityChanges": 0,
+              "deferredChanges": 0,
+              "appliedDeferredChanges": 0,
+              "replacedDeferredChanges": 0,
+              "droppedDeferredChanges": 0,
+              "rejectedDeferredChanges": 0,
+              "droppedDeferredByReason": {
+                "continuityAdvanced": 0,
+                "sectionAdvanced": 0,
+                "timeout": 0,
+                "other": 0
+              },
+              "avgDeferredWaitSteps": 0,
+              "avgRejectedBoundaryDistance": 0,
+              "byLane": {}
+            },
+            "decisionMaking": {
+              "gameplaySuppressionEvents": 0,
+              "gameplaySuppressionDrops": 0,
+              "gameplaySuppressionSoftens": 0,
+              "stepArbitrationChanges": 0,
+              "bassOwnerChoices": 0,
+              "rhythmTierSelections": 0,
+              "protectedLaneClaimsInferred": 0,
+              "protectedLaneClaimsMissing": 0,
+              "executionInstrumentChanges": 0,
+              "executionInstrumentChangesSameContinuity": 0,
+              "executionInstrumentChangesNewContinuity": 0,
+              "executionInstrumentChangesProtectedLane": 0,
+              "executionInstrumentChangesSupportLane": 0,
+              "executionInstrumentChangesBufferTakeover": 0,
+              "executionInstrumentChangesUnscoped": 0,
+              "executionInstrumentChangesPerformerChange": 0,
+              "executionInstrumentChangesGroupChange": 0,
+              "executionInstrumentChangesSectionChange": 0,
+              "executionInstrumentChangesMotifScopeChange": 0,
+              "executionInstrumentChangesRetiringOwner": 0,
+              "executionInstrumentChangesExplicitReorchestration": 0,
+              "executionInstrumentChangesContinuityReset": 0,
+              "executionInstrumentChangesUnknownCause": 0,
+              "instrumentPoolAuditEvents": 0,
+              "instrumentPoolEligibleTotal": 0,
+              "instrumentPoolUnusedEligibleTotal": 0,
+              "instrumentPoolPriorityEligibleTotal": 0,
+              "instrumentPoolUnreachableCount": 0,
+              "structureIntentEvents": 0,
+              "structureBuildBars": 0,
+              "structureDriveBars": 0,
+              "structureDropBars": 0,
+              "structurePeakBars": 0,
+              "structurePreDropBars": 0,
+              "structurePreDropNearBars": 0,
+              "motifReturnEvents": 0,
+              "motifReturnActiveBars": 0,
+              "motifReturnBuildBars": 0,
+              "motifReturnDriveBars": 0,
+              "motifReturnPeakBars": 0,
+              "foregroundMotifUsageEvents": 0,
+              "foregroundMotifReturnBars": 0,
+              "foregroundMotifReturnMatchingBars": 0,
+              "foregroundMotifPrimaryLoopReturnBars": 0,
+              "harmonyAuthorityEvents": 0,
+              "harmonyWeaponAnchorBars": 0,
+              "harmonyFallbackBars": 0,
+              "harmonyRelativeShiftBars": 0,
+              "harmonyWeaponMappingMismatchBars": 0,
+              "harmonyWeaponMappingMismatchCount": 0,
+              "harmonyWeaponOutsidePoolBars": 0,
+              "harmonyWeaponOutsidePoolCount": 0,
+              "slotSpawnerRawPulseEvents": 0,
+              "slotSpawnerRawBackbeatEvents": 0,
+              "slotSpawnerQueuedPulseEvents": 0,
+              "slotSpawnerQueuedBackbeatEvents": 0,
+              "slotSpawnerDrainedPulseEvents": 0,
+              "slotSpawnerDrainedBackbeatEvents": 0,
+              "slotSpawnerFilteredPulseEvents": 0,
+              "slotSpawnerFilteredBackbeatEvents": 0,
+              "slotSpawnerShapedPulseEvents": 0,
+              "slotSpawnerShapedBackbeatEvents": 0,
+              "slotSpawnerExecutedPulseEvents": 0,
+              "slotSpawnerExecutedBackbeatEvents": 0,
+              "slotSpawnerLoopStateChanges": 0,
+              "slotSpawnerLoopStateIntroProtectedChanges": 0,
+              "slotSpawnerLoopStateBlendWindowChanges": 0,
+              "introDrumFirstNoteEvents": 0,
+              "introDrumFirstNoteOffC3Events": 0,
+              "slotSpawnerEmitIdentityEvents": 0,
+              "slotSpawnerEmitPulseIdentityEvents": 0,
+              "slotSpawnerEmitBackbeatIdentityEvents": 0,
+              "slotSpawnerAssignmentEvents": 0,
+              "slotSpawnerAssignmentCreatedEvents": 0,
+              "slotSpawnerAssignmentSyncEvents": 0,
+              "slotSpawnerVisualIdentityEvents": 0,
+              "byDecisionReason": {}
+            },
+            "spawnerFeedback": {
+              "spawnerGameplayEvents": 0,
+              "spawnerVisualEvents": 0,
+              "spawnerAudioEvents": 0,
+              "spawnerMismatchCount": 0
+            },
+            "delivery": {
+              "createdEnemyEvents": 0,
+              "executedEnemyEvents": 0,
+              "skippedCreatedEvents": 0,
+              "unmatchedExecutedEvents": 0,
+              "executedToCreatedRate": 1,
+              "createdSpawnerEvents": 0,
+              "executedSpawnerEvents": 0,
+              "spawnerSkippedCreatedEvents": 0,
+              "spawnerExecutedToCreatedRate": 1,
+              "createdBassEvents": 0,
+              "executedBassEvents": 0,
+              "bassSkippedCreatedEvents": 0,
+              "bassExecutedToCreatedRate": 1,
+              "maxBassStepGap": 0,
+              "maxEnemyStepsWithoutBass": 0,
+              "byActionType": {},
+              "bySourceSystem": {},
+              "byMusicLane": {},
+              "byProfileSourceType": {},
+              "byReason": {},
+              "byBeatStrength": {},
+              "strongBeatByMusicLane": {},
+              "strongBeatByReason": {},
+              "strongBeatFoundationByProfileSourceType": {},
+              "strongBeatFoundationByReason": {},
+              "mediumBeatByMusicLane": {},
+              "mediumBeatByReason": {}
+            }
+          },
+          "bassLoopCycles": 0,
+          "bassPhraseResets": 0,
+          "bassHandoffContinuityRate": 0,
+          "laneOwnerChanges": 0,
+          "lanePreservedHandoffs": 0,
+          "laneResetHandoffs": 0,
+          "laneIntentionalIdentityChanges": 0,
+          "laneDeferredChanges": 0,
+          "laneAppliedDeferredChanges": 0,
+          "laneReplacedDeferredChanges": 0,
+          "laneDroppedDeferredChanges": 0,
+          "laneRejectedDeferredChanges": 0,
+          "laneDroppedDeferredByContinuityAdvance": 0,
+          "laneDroppedDeferredBySectionAdvance": 0,
+          "laneDroppedDeferredByTimeout": 0,
+          "laneAvgDeferredWaitSteps": 0,
+          "laneAvgRejectedBoundaryDistance": 0,
+          "sameContinuityInstrumentDriftCount": 0,
+          "sameContinuityPhraseDriftCount": 0,
+          "sameContinuityPatternDriftCount": 0,
+          "gameplaySuppressionDecisions": 0,
+          "gameplaySuppressionDrops": 0,
+          "gameplaySuppressionSoftens": 0,
+          "stepArbitrationChanges": 0,
+          "bassOwnerChoiceCount": 0,
+          "rhythmTierSelectionCount": 0,
+          "protectedLaneClaimsInferred": 0,
+          "protectedLaneClaimsMissing": 0,
+          "executionInstrumentChangeCount": 0,
+          "executionInstrumentChangeSameContinuityCount": 0,
+          "executionInstrumentChangeNewContinuityCount": 0,
+          "executionInstrumentChangeProtectedLaneCount": 0,
+          "executionInstrumentChangeSupportLaneCount": 0,
+          "executionInstrumentChangeBufferTakeoverCount": 0,
+          "executionInstrumentChangeUnscopedCount": 0,
+          "instrumentPoolAuditEvents": 0,
+          "instrumentPoolEligibleTotal": 0,
+          "instrumentPoolUnusedEligibleTotal": 0,
+          "instrumentPoolPriorityEligibleTotal": 0,
+          "instrumentPoolUnreachableCount": 0,
+          "structureIntentEvents": 0,
+          "structureBuildBars": 0,
+          "structureDriveBars": 0,
+          "structureDropBars": 0,
+          "structurePeakBars": 0,
+          "structurePreDropBars": 0,
+          "structurePreDropNearBars": 0,
+          "motifReturnEvents": 0,
+          "motifReturnActiveBars": 0,
+          "motifReturnBuildBars": 0,
+          "motifReturnDriveBars": 0,
+          "motifReturnPeakBars": 0,
+          "foregroundMotifUsageEvents": 0,
+          "foregroundMotifReturnBars": 0,
+          "foregroundMotifReturnMatchingBars": 0,
+          "foregroundMotifPrimaryLoopReturnBars": 0,
+          "harmonyAuthorityEvents": 0,
+          "harmonyWeaponAnchorBars": 0,
+          "harmonyFallbackBars": 0,
+          "harmonyRelativeShiftBars": 0,
+          "harmonyWeaponMappingMismatchBars": 0,
+          "harmonyWeaponMappingMismatchCount": 0,
+          "harmonyWeaponOutsidePoolBars": 0,
+          "harmonyWeaponOutsidePoolCount": 0,
+          "slotSpawnerRawPulseEvents": 0,
+          "slotSpawnerRawBackbeatEvents": 0,
+          "slotSpawnerQueuedPulseEvents": 0,
+          "slotSpawnerQueuedBackbeatEvents": 0,
+          "slotSpawnerDrainedPulseEvents": 0,
+          "slotSpawnerDrainedBackbeatEvents": 0,
+          "slotSpawnerFilteredPulseEvents": 0,
+          "slotSpawnerFilteredBackbeatEvents": 0,
+          "slotSpawnerShapedPulseEvents": 0,
+          "slotSpawnerShapedBackbeatEvents": 0,
+          "slotSpawnerExecutedPulseEvents": 0,
+          "slotSpawnerExecutedBackbeatEvents": 0,
+          "visibleEnemyEvents": 0,
+          "barelyAudibleVisibleEnemyEvents": 0,
+          "barelyAudibleVisibleEnemyRate": 0,
+          "foundationCycleCount": 0,
+          "foundationPhraseResets": 0,
+          "foundationContinuityRate": 0,
+          "themeCycleCount": 0,
+          "themePersistenceRate": 0,
+          "themeReturnRate": 0,
+          "sparkleDensity": 0,
+          "sparkleForegroundShare": 0,
+          "audibleForegroundLaneCount": 0,
+          "foregroundLoopOwnerChanges": 0,
+          "foregroundLoopChurnRate": 0,
+          "barsSinceNewForegroundIdea": 1,
+          "laneReassignmentRate": 0,
+          "enemyColourMutationCount": 0,
+          "enemyInstrumentMutationCount": 0,
+          "instrumentChangesPerEnemy": 0,
+          "colourChangesPerEnemy": 0,
+          "colorChangesPerEnemy": 0,
+          "spawnerGameplayEvents": 0,
+          "spawnerVisualEvents": 0,
+          "spawnerAudioEvents": 0,
+          "createdEnemyEvents": 0,
+          "executedEnemyEvents": 0,
+          "skippedCreatedEvents": 0,
+          "createdSpawnerEvents": 0,
+          "executedSpawnerEvents": 0,
+          "spawnerSkippedCreatedEvents": 0,
+          "createdBassEvents": 0,
+          "executedBassEvents": 0,
+          "bassSkippedCreatedEvents": 0,
+          "executedToCreatedRate": 1,
+          "spawnerExecutedToCreatedRate": 1,
+          "bassExecutedToCreatedRate": 1,
+          "maxBassStepGap": 0,
+          "maxEnemyStepsWithoutBass": 0,
+          "deliveryByActionType": {},
+          "deliveryBySourceSystem": {},
+          "deliveryByMusicLane": {},
+          "deliveryByProfileSourceType": {},
+          "deliveryByReason": {},
+          "deliveryByBeatStrength": {},
+          "strongBeatDeliveryByMusicLane": {},
+          "strongBeatDeliveryByReason": {},
+          "mediumBeatDeliveryByMusicLane": {},
+          "mediumBeatDeliveryByReason": {},
+          "strongBeatFoundationDeliveryByProfileSourceType": {},
+          "strongBeatFoundationDeliveryByReason": {},
+          "sectionStability": {
+            "sectionChanges": 0,
+            "avgDurationBars": 1,
+            "minDurationBars": 1,
+            "maxDurationBars": 1,
+            "shortSections": 0
+          },
+          "sectionPresentation": {
+            "totalSectionChanges": 0,
+            "namedSectionChanges": 0,
+            "headingCoverageRate": 0,
+            "uniqueSectionIds": 0,
+            "uniqueHeadingTitles": 0,
+            "uniqueMovementCycles": 0,
+            "avgBarsBetweenHeadingChanges": 0,
+            "headingRepeatRate": 0,
+            "meaningfulTitleRate": 0,
+            "meaningfulTitleCount": 0,
+            "meaningfulReasonCounts": {},
+            "meaningfulFailureReasonCounts": {},
+            "headingFlavorTagCounts": {}
+          },
+          "readability": {
+            "snapshotCount": 0,
+            "avgPlayerMaskingRisk": 0,
+            "avgSameRegisterOverlapRisk": 0,
+            "avgPlayerAudibleShare": 0,
+            "avgEnemyForegroundShare": 0,
+            "avgEnemyCompetitionShare": 0,
+            "phaseCounts": {}
+          },
+          "structure": {
+            "snapshotCount": 0,
+            "avgFoundationContinuityBars": 0,
+            "avgFoundationAudibleEvents": 0,
+            "avgLoopAudibleEvents": 0,
+            "avgSparkleAudibleEvents": 0,
+            "avgSparkleSuppressedEvents": 0,
+            "sectionIdCounts": {}
+          },
+          "onboarding": {
+            "snapshotCount": 0,
+            "avgKnownIdentityCount": 0,
+            "avgRecentNovelIdentityCount": 0,
+            "maxKnownIdentityCount": 0,
+            "maxRecentNovelIdentityCount": 0,
+            "noveltyPressureRate": 0
+          },
+          "grooveStability": {
+            "barsConsidered": 0,
+            "avgUniquePitchPerBar": 0,
+            "avgUniqueRhythmicEventsPerBar": 0,
+            "bassPatternPersistence": 0,
+            "sectionAvgDurationBars": 1
+          },
+          "foregroundCompetition": {
+            "fullTextureEnemyAudibleEvents": 0,
+            "fullTextureEnemyForegroundEvents": 0,
+            "fullTextureEnemyCompetingEvents": 0,
+            "fullTextureEnemyForegroundShare": 0,
+            "fullTextureEnemyCompetitionShare": 0,
+            "byRoleForeground": {},
+            "byRoleCompetition": {},
+            "bySourceForeground": {},
+            "bySourceCompetition": {},
+            "byEnemyTypeForeground": {},
+            "byEnemyTypeCompetition": {},
+            "byProfileSourceTypeForeground": {},
+            "byProfileSourceTypeCompetition": {},
+            "byReasonForeground": {},
+            "byReasonCompetition": {},
+            "conflictDiagnostics": {
+              "primarySecondaryConsidered": 0,
+              "primarySecondaryConflictHitCount": 0,
+              "primarySecondaryConflictAvoidedCount": 0,
+              "byLane": {},
+              "byProfileSourceType": {},
+              "byReason": {},
+              "ornamentConsidered": 0,
+              "ornamentConflictHitCount": 0,
+              "ornamentConflictAvoidedCount": 0,
+              "ornamentByProfileSourceType": {},
+              "ornamentByReason": {}
+            }
+          },
+          "presentationMetrics": {
+            "protectedLoopAudibility": 0,
+            "protectedLoopEventCount": 0,
+            "foregroundClarityScore": 1,
+            "simultaneousVoiceCount": 0,
+            "maxSimultaneousVoiceCount": 0,
+            "buildSimultaneousVoiceCount": 0,
+            "driveSimultaneousVoiceCount": 0,
+            "dropSimultaneousVoiceCount": 0,
+            "peakSimultaneousVoiceCount": 0,
+            "preDropSimultaneousVoiceCount": 0,
+            "suppressedEventCount": 0,
+            "suppressedEventRate": 0,
+            "groupParticipationRate": 0,
+            "ghostLoopCount": 0
+          },
+          "explosionPrimesCreated": 0,
+          "explosionApplications": 0,
+          "explosionPrimeWithoutApplicationCount": 0,
+          "explosionReliabilityRate": 1,
+          "protectedLoopAudibility": 0,
+          "protectedLoopEventCount": 0,
+          "foregroundClarityScore": 1,
+          "simultaneousVoiceCount": 0,
+          "maxSimultaneousVoiceCount": 0,
+          "buildSimultaneousVoiceCount": 0,
+          "driveSimultaneousVoiceCount": 0,
+          "dropSimultaneousVoiceCount": 0,
+          "peakSimultaneousVoiceCount": 0,
+          "preDropSimultaneousVoiceCount": 0,
+          "suppressedEventCount": 0,
+          "suppressedEventRate": 0,
+          "groupParticipationRate": 0,
+          "ghostLoopCount": 0,
+          "musicalityTargets": {
+            "stepsAnalyzed": 0,
+            "primaryLead": {
+              "uniqueLeadGroupCount": 0,
+              "stepsWithSingleLead": 0,
+              "stepsWithNoLead": 0,
+              "stepsWithMultipleLeads": 0,
+              "singleLeadShare": 0,
+              "noLeadShare": 0,
+              "multiLeadShare": 0,
+              "avgLeadCount": 0,
+              "maxLeadCount": 0,
+              "longestSingleLeadRunSteps": 0,
+              "longestSingleLeadRunBeats": 0,
+              "status": "missing",
+              "persistenceStatus": "fragmented",
+              "authority": {
+                "stepsAnalyzed": 0,
+                "activeShare": 0,
+                "groupSwitches": 0,
+                "continuitySwitches": 0,
+                "instrumentSwitches": 0,
+                "longestGroupRunSteps": 0,
+                "longestGroupRunBeats": 0,
+                "longestContinuityRunSteps": 0,
+                "longestContinuityRunBeats": 0,
+                "longestInstrumentRunSteps": 0,
+                "longestInstrumentRunBeats": 0,
+                "status": "missing"
+              }
+            },
+            "foundationBuffer": {
+              "avgCount": 0,
+              "maxCount": 0,
+              "stepsWithMultipleBuffers": 0,
+              "status": "bounded"
+            },
+            "answerOrnament": {
+              "avgCount": 0,
+              "maxCount": 0,
+              "stepsWithMultipleOrnaments": 0,
+              "leadRoleEvents": 0,
+              "status": "contained"
+            },
+            "population": {
+              "avgActiveGroupCount": 0,
+              "maxActiveGroupCount": 0,
+              "status": "sane"
+            }
+          },
+          "primaryLeadInstrumentChangeTrace": {
+            "count": 0,
+            "bySource": {},
+            "byPhase": {},
+            "byMode": {},
+            "trace": []
+          },
+          "level1ContractTrace": {
+            "count": 0,
+            "fullTextureCount": 0,
+            "answerActiveShare": 0,
+            "sparkleActiveShare": 0,
+            "supportActiveShare": 0,
+            "bySupportBudget": {},
+            "byCounterRhythmFamily": {},
+            "byAnswerPolicy": {},
+            "byAllowedRoleSet": {},
+            "byEpoch": {},
+            "sample": []
+          },
+          "level1ContractTraceCount": 0,
+          "level1ContractFullTextureCount": 0,
+          "level1ContractAnswerActiveShare": 0,
+          "level1ContractSparkleActiveShare": 0,
+          "level1ContractSupportActiveShare": 0,
+          "level1ContractBySupportBudget": {},
+          "level1ContractByCounterRhythmFamily": {},
+          "level1ContractByAnswerPolicy": {},
+          "level1ContractByAllowedRoleSet": {},
+          "level1ContractSample": [],
+          "primaryLeadUniqueGroupCount": 0,
+          "primaryLeadSingleShare": 0,
+          "primaryLeadNoLeadShare": 0,
+          "primaryLeadMultiLeadShare": 0,
+          "primaryLeadMaxCount": 0,
+          "primaryLeadLongestRunBeats": 0,
+          "primaryLeadAuthorityActiveShare": 0,
+          "primaryLeadAuthorityGroupSwitches": 0,
+          "primaryLeadAuthorityContinuitySwitches": 0,
+          "primaryLeadAuthorityInstrumentSwitches": 0,
+          "primaryLeadAuthorityLongestGroupRunBeats": 0,
+          "primaryLeadAuthorityLongestContinuityRunBeats": 0,
+          "primaryLeadAuthorityLongestInstrumentRunBeats": 0,
+          "primaryLeadAuthorityStatus": "missing",
+          "primaryLeadInstrumentChangeTraceCount": 0,
+          "primaryLeadInstrumentChangeBySource": {},
+          "primaryLeadInstrumentChangeByPhase": {},
+          "primaryLeadInstrumentChangeByMode": {},
+          "primaryLeadInstrumentChangeTraceSample": [],
+          "foundationBufferMaxCount": 0,
+          "answerOrnamentMaxCount": 0,
+          "answerOrnamentLeadRoleEvents": 0,
+          "avgActiveComposerGroupCount": 0,
+          "maxActiveComposerGroupCount": 0,
+          "fullTextureEnemyForegroundShare": 0,
+          "fullTextureEnemyCompetitionShare": 0,
+          "fullTextureForegroundByRole": {},
+          "fullTextureCompetitionByRole": {},
+          "fullTextureForegroundBySource": {},
+          "fullTextureCompetitionBySource": {},
+          "fullTextureForegroundByEnemyType": {},
+          "fullTextureCompetitionByEnemyType": {},
+          "fullTextureForegroundByProfileSourceType": {},
+          "fullTextureCompetitionByProfileSourceType": {},
+          "fullTextureForegroundByReason": {},
+          "fullTextureCompetitionByReason": {},
+          "fullTexturePrimarySecondaryConflictHitCount": 0,
+          "fullTexturePrimarySecondaryConflictAvoidedCount": 0,
+          "fullTexturePrimarySecondaryConflictByLane": {},
+          "fullTexturePrimarySecondaryConflictByProfileSourceType": {},
+          "fullTexturePrimarySecondaryConflictByReason": {},
+          "fullTextureOrnamentConflictHitCount": 0,
+          "fullTextureOrnamentConflictAvoidedCount": 0,
+          "fullTextureOrnamentConflictByProfileSourceType": {},
+          "fullTextureOrnamentConflictByReason": {},
+          "retroShmupStyle": {
+            "targetProfile": "retro_shmup_stage1",
+            "pulseRegularityScore": 0,
+            "leadAuthorityScore": 0,
+            "cadenceRegularityScore": 0,
+            "supportDisciplineScore": 0.3,
+            "arrangementSimplicityScore": 1,
+            "overallScore": 0.174,
+            "styleStatus": "off_target"
+          }
+        },
+        "sessionSummary": {
+          "notePoolCompliance": "100%",
+          "motifReuse": "0%",
+          "gravityHitRate": 0,
+          "phraseResolutionRate": 0,
+          "leadIntervalSmoothness": "rough",
+          "roleBalance": "acceptable",
+          "responseRate": 0,
+          "audibleResponseRate": 0,
+          "avgResponseSize": 0,
+          "avgResponseAudibility": 0,
+          "delayedResponseRate": 0,
+          "immediateResponseRate": 0,
+          "pitchEntropy": 0,
+          "melodicContour": "stable",
+          "motifPersistence": 0,
+          "laneCompliance": "good",
+          "paletteContinuity": "stable",
+          "playerMasking": "low",
+          "removalCleanup": "clean",
+          "spawnerSync": "ok",
+          "handoff": "fragile",
+          "playerOverride": "inactive",
+          "grooveStability": "volatile",
+          "onboardingNovelty": "controlled",
+          "identityOnboarding": "early",
+          "readabilityDensity": "clear",
+          "sectionPresentation": "insufficient_data",
+          "spawnerFeedback": "consistent",
+          "explosionReliability": "reliable",
+          "foundationProminence": "balanced",
+          "beatDelivery": "drops_detected",
+          "bassFoundation": "at_risk",
+          "identityStability": "stable",
+          "ownershipContinuity": "stable",
+          "deferredOwnershipChanges": "healthy",
+          "spawnerFeedbackMismatchCount": 0,
+          "skippedCreatedEvents": 0,
+          "spawnerSkippedCreatedEvents": 0,
+          "bassSkippedCreatedEvents": 0,
+          "maxEnemyStepsWithoutBass": 0,
+          "primaryLead": "missing",
+          "primaryLeadPersistence": "fragmented",
+          "foundationBufferBounds": "bounded",
+          "answerOrnamentContainment": "contained",
+          "composerPopulation": "sane",
+          "retroShmupStyle": "off_target",
+          "retroShmupStyleScore": "0.174",
+          "retroShmupPulseRegularity": "0.000",
+          "retroShmupLeadAuthority": "0.000",
+          "retroShmupSupportDiscipline": "0.300",
+          "retroShmupArrangementSimplicity": "1.000"
+        },
+        "exportMode": "save_shallow",
+        "beatSwarmPerfSnapshot": {
+          "enabled": true,
+          "frameCount": 9720,
+          "totalFrameMs": 62286.899997115135,
+          "avgFrameMs": 6.40811728365382,
+          "worstFrameMs": 64,
+          "lastFrameMs": 3.100000023841858,
+          "buckets": {
+            "sectionPresentation": {
+              "count": 9720,
+              "totalMs": 20.399999499320984,
+              "avgMs": 0.0020987653805885787,
+              "worstMs": 0.19999992847442627,
+              "lastMs": 0
+            },
+            "arenaPath": {
+              "count": 9720,
+              "totalMs": 28,
+              "avgMs": 0.002880658436213992,
+              "worstMs": 0.20000004768371582,
+              "lastMs": 0
+            },
+            "weaponSubBoard": {
+              "count": 9720,
+              "totalMs": 51.600000858306885,
+              "avgMs": 0.0053086420636118195,
+              "worstMs": 0.20000004768371582,
+              "lastMs": 0
+            },
+            "starfield": {
+              "count": 9720,
+              "totalMs": 10661.199995279312,
+              "avgMs": 1.096831275234497,
+              "worstMs": 21.200000047683716,
+              "lastMs": 1.2000000476837158
+            },
+            "updateEnemies": {
+              "count": 9720,
+              "totalMs": 4628.600000739098,
+              "avgMs": 0.47619341571389895,
+              "worstMs": 17.899999976158142,
+              "lastMs": 0.2999999523162842
+            },
+            "pickupsCombat.updateHelpers": {
+              "count": 9720,
+              "totalMs": 18.200000047683716,
+              "avgMs": 0.0018724279884448267,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.pickups": {
+              "count": 9720,
+              "totalMs": 8.800000667572021,
+              "avgMs": 0.0009053498629189322,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.projectiles": {
+              "count": 9720,
+              "totalMs": 2814.499997615814,
+              "avgMs": 0.2895576129234377,
+              "worstMs": 7,
+              "lastMs": 0.20000004768371582
+            },
+            "pickupsCombat.effects": {
+              "count": 9720,
+              "totalMs": 149.9000004529953,
+              "avgMs": 0.015421810746192931,
+              "worstMs": 0.3999999761581421,
+              "lastMs": 0
+            },
+            "pickupsCombat.energyGravity": {
+              "count": 9720,
+              "totalMs": 68.1999980211258,
+              "avgMs": 0.007016460701761913,
+              "worstMs": 7.599999904632568,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.transportStop": {
+              "count": 9720,
+              "totalMs": 23.599998950958252,
+              "avgMs": 0.0024279834311685443,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.prelude": {
+              "count": 9720,
+              "totalMs": 858.8000057935715,
+              "avgMs": 0.08835391006106702,
+              "worstMs": 7.600000023841858,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange": {
+              "count": 9720,
+              "totalMs": 11357.500000357628,
+              "avgMs": 1.1684670782260933,
+              "worstMs": 37.299999952316284,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.beatTail": {
+              "count": 9720,
+              "totalMs": 274.7000015974045,
+              "avgMs": 0.028261317036770008,
+              "worstMs": 4.799999952316284,
+              "lastMs": 0.09999990463256836
+            },
+            "pickupsCombat.weaponRuntime": {
+              "count": 9720,
+              "totalMs": 13652.800004124641,
+              "avgMs": 1.4046090539222882,
+              "worstMs": 37.5,
+              "lastMs": 0.19999992847442627
+            },
+            "pickupsCombat.soundFlush": {
+              "count": 9720,
+              "totalMs": 125.99999976158142,
+              "avgMs": 0.012962962938434302,
+              "worstMs": 2.899999976158142,
+              "lastMs": 0
+            },
+            "pickupsCombat": {
+              "count": 9720,
+              "totalMs": 17198.00000143051,
+              "avgMs": 1.7693415639331802,
+              "worstMs": 37.799999952316284,
+              "lastMs": 0.5
+            },
+            "spawnerRuntime": {
+              "count": 9720,
+              "totalMs": 11.000000357627869,
+              "avgMs": 0.0011316872795913446,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "maintainSpawners.schedule": {
+              "count": 9720,
+              "totalMs": 8.699999809265137,
+              "avgMs": 0.0008950617087721334,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "maintainSpawners.enemyIndex": {
+              "count": 9720,
+              "totalMs": 18.19999933242798,
+              "avgMs": 0.0018724279148588454,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "maintainSpawners.sync": {
+              "count": 9720,
+              "totalMs": 4.8999998569488525,
+              "avgMs": 0.0005041152116202523,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "maintainSpawners.cleanup": {
+              "count": 9720,
+              "totalMs": 10.40000069141388,
+              "avgMs": 0.0010699589188697407,
+              "worstMs": 4.600000023841858,
+              "lastMs": 0
+            },
+            "maintainSpawners": {
+              "count": 9720,
+              "totalMs": 6258.699996352196,
+              "avgMs": 0.643899176579444,
+              "worstMs": 26.200000047683716,
+              "lastMs": 0.7000000476837158
+            },
+            "maintainDrawSnakes": {
+              "count": 9720,
+              "totalMs": 281.50000035762787,
+              "avgMs": 0.02896090538658723,
+              "worstMs": 11.600000023841858,
+              "lastMs": 0
+            },
+            "maintainComposerGroups.enemyIndex": {
+              "count": 1325,
+              "totalMs": 3.3000001907348633,
+              "avgMs": 0.002490566181686689,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "maintainComposerGroups.lifecycle": {
+              "count": 1325,
+              "totalMs": 589.4999984502792,
+              "avgMs": 0.44490565920775793,
+              "worstMs": 36.699999928474426,
+              "lastMs": 0.20000004768371582
+            },
+            "maintainComposerGroups.syncMembers": {
+              "count": 1325,
+              "totalMs": 16777.600001215935,
+              "avgMs": 12.662339623559197,
+              "worstMs": 39.699999928474426,
+              "lastMs": 13.199999928474426
+            },
+            "maintainComposerGroups": {
+              "count": 9720,
+              "totalMs": 18767.20000386238,
+              "avgMs": 1.9307818934014795,
+              "worstMs": 52.200000047683716,
+              "lastMs": 0.10000002384185791
+            },
+            "shipFacing": {
+              "count": 9720,
+              "totalMs": 158.0999983549118,
+              "avgMs": 0.016265431929517675,
+              "worstMs": 0.2999999523162842,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents": {
+              "count": 1320,
+              "totalMs": 11295.500000596046,
+              "avgMs": 8.55719697014852,
+              "worstMs": 37.299999952316284,
+              "lastMs": 5
+            },
+            "pickupsCombat.weaponRuntime.stepChange.readabilityFold": {
+              "count": 1320,
+              "totalMs": 6.100000023841858,
+              "avgMs": 0.004621212139274135,
+              "worstMs": 0.20000004768371582,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.bookkeeping": {
+              "count": 1320,
+              "totalMs": 0.8999999761581421,
+              "avgMs": 0.0006818181637561683,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.debugEvent": {
+              "count": 1320,
+              "totalMs": 6.000000357627869,
+              "avgMs": 0.004545454816384749,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.projectiles.motion": {
+              "count": 140722,
+              "totalMs": 104.79999828338623,
+              "avgMs": 0.0007447307335269981,
+              "worstMs": 2.100000023841858,
+              "lastMs": 0
+            },
+            "pickupsCombat.projectiles.collision": {
+              "count": 140722,
+              "totalMs": 544.1000028848648,
+              "avgMs": 0.003866488558184682,
+              "worstMs": 6.299999952316284,
+              "lastMs": 0
+            },
+            "pickupsCombat.projectiles.dom": {
+              "count": 138131,
+              "totalMs": 429.60000121593475,
+              "avgMs": 0.0031100911541647766,
+              "worstMs": 1.8000000715255737,
+              "lastMs": 0
+            },
+            "maintainComposerGroups.createGroup": {
+              "count": 41,
+              "totalMs": 111.99999988079071,
+              "avgMs": 2.731707314165627,
+              "worstMs": 9.899999976158142,
+              "lastMs": 6.200000047683716
+            },
+            "pickupsCombat.effects.explosions": {
+              "count": 4532,
+              "totalMs": 80.60000038146973,
+              "avgMs": 0.017784642626096584,
+              "worstMs": 0.20000004768371582,
+              "lastMs": 0
+            },
+            "pickupsCombat.effects.beams": {
+              "count": 744,
+              "totalMs": 22.600000500679016,
+              "avgMs": 0.030376344758977172,
+              "worstMs": 0.30000007152557373,
+              "lastMs": 0
+            }
+          }
+        },
+        "beatSwarmStepEventsPerfSnapshot": {
+          "enabled": true,
+          "buckets": {
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.collect.spawner": {
+              "count": 1320,
+              "totalMs": 103.90000057220459,
+              "avgMs": 0.07871212164560953,
+              "worstMs": 1.2999999523162842,
+              "lastMs": 0.10000002384185791
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.collect.drawsnake": {
+              "count": 1320,
+              "totalMs": 13.399999737739563,
+              "avgMs": 0.010151514952833002,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.collect.composer": {
+              "count": 1320,
+              "totalMs": 630.2999967336655,
+              "avgMs": 0.47749999752550415,
+              "worstMs": 12.399999976158142,
+              "lastMs": 0.10000002384185791
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.collect": {
+              "count": 1320,
+              "totalMs": 819.5999974012375,
+              "avgMs": 0.6209090889403315,
+              "worstMs": 12.5,
+              "lastMs": 0.2999999523162842
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.collapse": {
+              "count": 1320,
+              "totalMs": 4.000000238418579,
+              "avgMs": 0.003030303210923166,
+              "worstMs": 0.20000004768371582,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bass": {
+              "count": 1300,
+              "totalMs": 352.3000031709671,
+              "avgMs": 0.27100000243920547,
+              "worstMs": 3.799999952316284,
+              "lastMs": 0.40000009536743164
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.loop": {
+              "count": 1320,
+              "totalMs": 306.9999997615814,
+              "avgMs": 0.23257575739513744,
+              "worstMs": 1.600000023841858,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.structuralCollapse": {
+              "count": 1320,
+              "totalMs": 4.300000190734863,
+              "avgMs": 0.003257575902071866,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters": {
+              "count": 1320,
+              "totalMs": 691.7000032663345,
+              "avgMs": 0.5240151539896474,
+              "worstMs": 4.100000023841858,
+              "lastMs": 0.5
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape": {
+              "count": 1320,
+              "totalMs": 718.6000044345856,
+              "avgMs": 0.544393942753474,
+              "worstMs": 4.100000023841858,
+              "lastMs": 0.6000000238418579
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.arbitrate": {
+              "count": 1320,
+              "totalMs": 203.89999914169312,
+              "avgMs": 0.15446969631946447,
+              "worstMs": 5.399999976158142,
+              "lastMs": 0.20000004768371582
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.queue": {
+              "count": 1320,
+              "totalMs": 11.699999570846558,
+              "avgMs": 0.008863636038520119,
+              "worstMs": 0.7000000476837158,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute": {
+              "count": 1320,
+              "totalMs": 9363.099999904633,
+              "avgMs": 7.093257575685327,
+              "worstMs": 35.200000047683716,
+              "lastMs": 3.899999976158142
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.collect.playerFilter": {
+              "count": 741,
+              "totalMs": 2.0999999046325684,
+              "avgMs": 0.0028340079684650047,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.prep": {
+              "count": 847,
+              "totalMs": 0.9000002145767212,
+              "avgMs": 0.0010625740431838503,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tune": {
+              "count": 847,
+              "totalMs": 32.600000619888306,
+              "avgMs": 0.0384887846751928,
+              "worstMs": 0.20000004768371582,
+              "lastMs": 0.19999992847442627
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.continuation": {
+              "count": 1261,
+              "totalMs": 1.8999998569488525,
+              "avgMs": 0.001506740568555791,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.debug": {
+              "count": 1261,
+              "totalMs": 1.5,
+              "avgMs": 0.0011895321173671688,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.nearestEnemy": {
+              "count": 1261,
+              "totalMs": 2.899999976158142,
+              "avgMs": 0.002299762074669423,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.projectile": {
+              "count": 709,
+              "totalMs": 195.09999918937683,
+              "avgMs": 0.2751763035111098,
+              "worstMs": 10.399999976158142,
+              "lastMs": 0.20000004768371582
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage": {
+              "count": 709,
+              "totalMs": 230.3999980688095,
+              "avgMs": 0.32496473634528844,
+              "worstMs": 10.5,
+              "lastMs": 0.20000004768371582
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire": {
+              "count": 847,
+              "totalMs": 282.4999989271164,
+              "avgMs": 0.3335301049906923,
+              "worstMs": 10.600000023841858,
+              "lastMs": 0.3999999761581421
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player": {
+              "count": 847,
+              "totalMs": 301.19999837875366,
+              "avgMs": 0.35560802642119677,
+              "worstMs": 10.600000023841858,
+              "lastMs": 0.3999999761581421
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.clearIdle": {
+              "count": 138,
+              "totalMs": 1.0999997854232788,
+              "avgMs": 0.007971012937849846,
+              "worstMs": 0.19999992847442627,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.hitFlash": {
+              "count": 848,
+              "totalMs": 21.90000009536743,
+              "avgMs": 0.0258254718105748,
+              "worstMs": 0.20000004768371582,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.aoeApply": {
+              "count": 340,
+              "totalMs": 49.09999966621399,
+              "avgMs": 0.1444117637241588,
+              "worstMs": 3.899999976158142,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.laserEffect": {
+              "count": 212,
+              "totalMs": 2.000000238418579,
+              "avgMs": 0.009433963388766883,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage": {
+              "count": 212,
+              "totalMs": 18.800000548362732,
+              "avgMs": 0.08867924786963553,
+              "worstMs": 4.299999952316284,
+              "lastMs": 0.30000007152557373
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.laserHitscan": {
+              "count": 212,
+              "totalMs": 30.000000715255737,
+              "avgMs": 0.14150943733611196,
+              "worstMs": 4.5,
+              "lastMs": 0.30000007152557373
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.chainTrigger": {
+              "count": 212,
+              "totalMs": 36.40000033378601,
+              "avgMs": 0.1716981147820095,
+              "worstMs": 4.5,
+              "lastMs": 0.30000007152557373
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.aoe": {
+              "count": 340,
+              "totalMs": 104.09999990463257,
+              "avgMs": 0.30617647030774287,
+              "worstMs": 4.699999928474426,
+              "lastMs": 0.10000002384185791
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.composer": {
+              "count": 2001,
+              "totalMs": 8868.100002765656,
+              "avgMs": 4.431834084340657,
+              "worstMs": 25.600000023841858,
+              "lastMs": 3.399999976158142
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove.musicLab": {
+              "count": 317,
+              "totalMs": 2.4999998807907104,
+              "avgMs": 0.007886434955175744,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove.assertion": {
+              "count": 317,
+              "totalMs": 0.29999983310699463,
+              "avgMs": 0.0009463717132712765,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove.musicCleanup.groupCleanup": {
+              "count": 317,
+              "totalMs": 29.100000023841858,
+              "avgMs": 0.09179810733073142,
+              "worstMs": 3.899999976158142,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove.musicCleanup": {
+              "count": 317,
+              "totalMs": 35.30000030994415,
+              "avgMs": 0.11135646785471341,
+              "worstMs": 3.899999976158142,
+              "lastMs": 0.10000002384185791
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove.dom": {
+              "count": 317,
+              "totalMs": 12.899999856948853,
+              "avgMs": 0.04069400585788282,
+              "worstMs": 0.20000004768371582,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove": {
+              "count": 272,
+              "totalMs": 60.90000069141388,
+              "avgMs": 0.2238970613654922,
+              "worstMs": 4.200000047683716,
+              "lastMs": 0.10000002384185791
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bass.ownerScan": {
+              "count": 956,
+              "totalMs": 17.00000023841858,
+              "avgMs": 0.017782427027634495,
+              "worstMs": 1.0999999046325684,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bass.ownerLookup": {
+              "count": 1211,
+              "totalMs": 15.299999713897705,
+              "avgMs": 0.012634186386373002,
+              "worstMs": 0.3999999761581421,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove.musicCleanup.bassTransfer": {
+              "count": 38,
+              "totalMs": 2.200000047683716,
+              "avgMs": 0.05789473809693989,
+              "worstMs": 0.6000000238418579,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.loopReplace": {
+              "count": 344,
+              "totalMs": 0.7000000476837158,
+              "avgMs": 0.0020348838595456854,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove.musicCleanup.bassClear": {
+              "count": 32,
+              "totalMs": 1.2000001668930054,
+              "avgMs": 0.03750000521540642,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0.10000002384185791
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bass.ownerSpawn": {
+              "count": 955,
+              "totalMs": 201.1000006198883,
+              "avgMs": 0.2105759168794642,
+              "worstMs": 1.5999999046325684,
+              "lastMs": 0.20000004768371582
+            },
+            "pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bassReplace": {
+              "count": 407,
+              "totalMs": 1.2000001668930054,
+              "avgMs": 0.0029484033584594727,
+              "worstMs": 0.10000002384185791,
+              "lastMs": 0
+            }
+          }
+        },
+        "threatBudgetSummary": {
+          "count": 0,
+          "energyStateCounts": {},
+          "laneActiveBeatCounts": {},
+          "laneCarrierPreferenceCounts": {},
+          "sectionIntentCounts": {},
+          "spawnChosenCounts": {},
+          "spawnConfigLoadedCount": 0,
+          "avgSpawnLiveBudgetMax": 0,
+          "avgSpawnBudget": 0,
+          "totalSpawnsNoted": 0,
+          "matchedChosenSpawnCount": 0,
+          "mismatchedChosenSpawnCount": 0,
+          "spawnEvaluationCount": 0,
+          "spawnNoChoiceCount": 0,
+          "spawnAvgEligibleCount": 0,
+          "spawnMaxEligibleCount": 0,
+          "spawnRejectionReasonCounts": {},
+          "avgCombatPressure": 0,
+          "avgMusicalPressure": 0,
+          "maxUsage": {
+            "fullThreats": 0,
+            "lightThreats": 0,
+            "audibleAccents": 0,
+            "cosmeticParticipants": 0
+          }
+        },
+        "saveCompact": {
+          "compacted": true,
+          "detail": "focused_musicality_targets_and_recent_tail",
+          "originalEventTimelineCount": 0,
+          "keptEventTimelineCount": 0,
+          "droppedEventTimelineCount": 0,
+          "originalCreatedEventCount": 0,
+          "originalQueuedEventCount": 0,
+          "originalSpawnerPipelineEventCount": 0,
+          "originalSystemEventCount": 0,
+          "keptSystemEventCount": 0,
+          "originalThreatBudgetSnapshotCount": 0,
+          "keptThreatBudgetSnapshotCount": 0,
+          "originalMetricsHistoryCount": 0,
+          "originalExecutedEventCount": 0,
+          "keptCreatedEventCount": 0,
+          "keptExecutedEventCount": 0
+        }
+      },
+      "labType": "music"
+    }
+  ]
+}

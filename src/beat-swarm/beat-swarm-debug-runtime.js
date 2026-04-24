@@ -531,6 +531,21 @@ export function installBeatSwarmMusicLabGlobalRuntime(deps = {}) {
       setEnabled(next = true) {
         return api.setEnabled(next);
       },
+      isEnabled() {
+        return api.isEnabled();
+      },
+      setRealtimeMetricsEnabled(next = true) {
+        return api.setRealtimeMetricsEnabled(next);
+      },
+      isRealtimeMetricsEnabled() {
+        return api.isRealtimeMetricsEnabled();
+      },
+      setLightweightSystemEventsEnabled(next = true) {
+        return api.setLightweightSystemEventsEnabled(next);
+      },
+      isLightweightSystemEventsEnabled() {
+        return api.isLightweightSystemEventsEnabled();
+      },
       startTraceCapture(options = null) {
         return api.startTraceCapture(options);
       },
@@ -617,6 +632,21 @@ export function createBeatSwarmMusicLabApiRuntime(deps = {}) {
     },
     setEnabled(next = true) {
       return helpers.swarmMusicLab?.setEnabled?.(next);
+    },
+    isEnabled() {
+      return helpers.swarmMusicLab?.isEnabled?.() === true;
+    },
+    setRealtimeMetricsEnabled(next = true) {
+      return helpers.swarmMusicLab?.setRealtimeMetricsEnabled?.(next);
+    },
+    isRealtimeMetricsEnabled() {
+      return helpers.swarmMusicLab?.isRealtimeMetricsEnabled?.() === true;
+    },
+    setLightweightSystemEventsEnabled(next = true) {
+      return helpers.swarmMusicLab?.setLightweightSystemEventsEnabled?.(next);
+    },
+    isLightweightSystemEventsEnabled() {
+      return helpers.swarmMusicLab?.isLightweightSystemEventsEnabled?.() === true;
     },
     startTraceCapture(options = null) {
       return getTraceCaptureApi()?.start?.(options) || null;

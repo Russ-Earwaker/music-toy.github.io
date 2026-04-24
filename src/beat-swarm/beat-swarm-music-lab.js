@@ -12,6 +12,16 @@ const SYSTEM_EVENT_SUMMARY_ONLY_TYPES = new Set([
   'music_spawner_pipeline_mismatch',
   'music_foundation_prominence_decision',
 ]);
+const PERF_LIGHTWEIGHT_SYSTEM_EVENT_DROP_TYPES = new Set([
+  'music_composer_group_state',
+  'music_group_performer_trace',
+  'music_primary_loop_owner_trace',
+  'music_primary_loop_coverage_status',
+  'music_primary_lead_snapshot',
+  'music_level1_contract_state',
+  'music_step_arbitration',
+  'music_primary_loop_lane_emitted',
+]);
 
 function clampInt(value, fallback = 0, min = 0) {
   const n = Math.trunc(Number(value));
@@ -4691,7 +4701,9 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
 export function createBeatSwarmMusicLab(options = null) {
   const beatsPerBar = Math.max(1, clampInt(options?.beatsPerBar, DEFAULT_BEATS_PER_BAR, 1));
   const metricsEveryBars = Math.max(1, clampInt(options?.metricsEveryBars, DEFAULT_METRICS_EVERY_BARS, 1));
-  let enabled = true;
+  let enabled = options?.enabled === true;
+  let realtimeMetricsEnabled = options?.realtimeMetricsEnabled !== false;
+  let lightweightSystemEventsEnabled = options?.lightweightSystemEventsEnabled === true;
   let sessionSeq = 1;
   let session = null;
   let lastMetricsBar = -1;
@@ -4756,6 +4768,7 @@ export function createBeatSwarmMusicLab(options = null) {
   }
 
   function recordMetricsCheckpoint(barIndex) {
+    if (!realtimeMetricsEnabled) return;
     const s = ensureSession();
     const bar = clampInt(barIndex, 0, 0);
     if (bar < 0) return;
@@ -4881,8 +4894,10 @@ export function createBeatSwarmMusicLab(options = null) {
 
   function noteSystemEvent(eventType, payload = null, context = null) {
     if (!enabled) return null;
+    const type = String(eventType || '').trim().toLowerCase();
+    if (lightweightSystemEventsEnabled && PERF_LIGHTWEIGHT_SYSTEM_EVENT_DROP_TYPES.has(type)) return null;
     const s = ensureSession(context);
-    const rec = makeSystemEventRecord(eventType, payload, context || {}, beatsPerBar);
+    const rec = makeSystemEventRecord(type, payload, context || {}, beatsPerBar);
     if (!rec.eventType) return null;
     summarizeSystemEvent(s, rec);
     const shouldStoreRaw = shouldStoreRawSystemEvent(rec.eventType);
@@ -4978,6 +4993,29 @@ export function createBeatSwarmMusicLab(options = null) {
     return enabled;
   }
 
+  function isEnabled() {
+    return enabled === true;
+  }
+
+  function setRealtimeMetricsEnabled(next = true) {
+    realtimeMetricsEnabled = next !== false;
+    if (!realtimeMetricsEnabled) lastMetricsBar = -1;
+    return realtimeMetricsEnabled;
+  }
+
+  function isRealtimeMetricsEnabled() {
+    return realtimeMetricsEnabled === true;
+  }
+
+  function setLightweightSystemEventsEnabled(next = true) {
+    lightweightSystemEventsEnabled = next === true;
+    return lightweightSystemEventsEnabled;
+  }
+
+  function isLightweightSystemEventsEnabled() {
+    return lightweightSystemEventsEnabled === true;
+  }
+
   function getSessionSnapshot() {
     const s = ensureSession();
     return cloneJson(s);
@@ -4997,6 +5035,11 @@ export function createBeatSwarmMusicLab(options = null) {
     exportSessionForSave,
     downloadSession,
     setEnabled,
+    isEnabled,
+    setRealtimeMetricsEnabled,
+    isRealtimeMetricsEnabled,
+    setLightweightSystemEventsEnabled,
+    isLightweightSystemEventsEnabled,
     getSessionSnapshot,
   };
 }

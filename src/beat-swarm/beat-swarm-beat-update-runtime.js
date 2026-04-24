@@ -303,27 +303,32 @@ export function handleBeatTailRuntime(options = null) {
   const drainedStepEvents = Math.max(0, Math.trunc(Number(metrics.drainedStepEvents) || 0));
 
   const beatChanged = !!tick?.beatChanged || beatIndex !== Math.trunc(Number(state.lastBeatIndex) || 0);
-  try {
-    helpers.swarmMusicLab?.noteThreatBudgetSnapshot?.(director?.getSnapshot?.(), helpers.getMusicLabContext?.({
+  const shouldSampleDirector = stepChanged || beatChanged || helpers.shouldUpdateSwarmDirectorDebugHud?.() === true;
+  const directorSnapshot = shouldSampleDirector ? (director?.getSnapshot?.() || null) : null;
+  if (stepChanged || beatChanged) {
+    try {
+      helpers.swarmMusicLab?.noteThreatBudgetSnapshot?.(directorSnapshot, helpers.getMusicLabContext?.({
+        beatIndex,
+        stepIndex,
+        barIndex,
+      }));
+    } catch {}
+  }
+  if (shouldSampleDirector) {
+    helpers.updateSwarmDirectorDebugHud?.({
+      reason: stepChanged ? 'step' : (beatChanged ? 'beat-only' : 'frame'),
+      stepChanged,
+      beatChanged,
       beatIndex,
       stepIndex,
-      barIndex,
-    }));
-  } catch {}
-  const directorSnapshot = director?.getSnapshot?.() || null;
-  helpers.updateSwarmDirectorDebugHud?.({
-    reason: stepChanged ? 'step' : (beatChanged ? 'beat-only' : 'frame'),
-    stepChanged,
-    beatChanged,
-    beatIndex,
-    stepIndex,
-    spawnerActiveCount: Number(spawnerStepStats?.activeSpawners) || 0,
-    spawnerTriggeredCount: Number(spawnerStepStats?.triggeredSpawners) || 0,
-    spawnerSpawnCount: Number(spawnerStepStats?.spawnedEnemies) || 0,
-    queuedStepEvents,
-    drainedStepEvents,
-    directorState: directorSnapshot,
-  });
+      spawnerActiveCount: Number(spawnerStepStats?.activeSpawners) || 0,
+      spawnerTriggeredCount: Number(spawnerStepStats?.triggeredSpawners) || 0,
+      spawnerSpawnCount: Number(spawnerStepStats?.spawnedEnemies) || 0,
+      queuedStepEvents,
+      drainedStepEvents,
+      directorState: directorSnapshot,
+    });
+  }
   if (!beatChanged) return { beatChanged: false };
 
   if (!!helpers.shouldLogBeatSnapshots?.()) {

@@ -3923,7 +3923,13 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         String(group?.__bsComposerMemberSyncSignature || '') === groupSyncSignature
         && Math.trunc(Number(group?.__bsComposerMemberSyncCount) || 0) === Math.max(0, Math.trunc(Number(groupMemberCount) || 0))
       ) {
-        if (noteMusicSystemEvent) {
+        const lastSteadyTraceBeat = Math.max(-1, Math.trunc(Number(group?.__bsLastSteadyTraceBeat) || -1));
+        const shouldTraceSteady = noteMusicSystemEvent && (
+          lastSteadyTraceBeat < 0
+          || (Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) - lastSteadyTraceBeat) >= 16
+        );
+        if (shouldTraceSteady) {
+          group.__bsLastSteadyTraceBeat = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
           noteMusicSystemEvent('music_composer_group_state', {
             phase: 'steady',
             groupId: Math.trunc(Number(group?.id) || 0),

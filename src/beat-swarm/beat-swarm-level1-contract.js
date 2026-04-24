@@ -7,13 +7,20 @@ export const BEAT_SWARM_LEVEL1_ALLOWED_ROLES = Object.freeze([
 
 export const BEAT_SWARM_LEVEL1_PHASE_SEQUENCE = Object.freeze([
   'player_impact',
-  'foundation_intro',
-  'layer_intro',
+  'intro_teach',
+  'groove_establish',
   'full_texture',
 ]);
 
 function normalizeId(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizeLevel1Phase(value) {
+  const phase = normalizeId(value);
+  if (phase === 'foundation_intro' || phase === 'intro_pulse') return 'intro_teach';
+  if (phase === 'layer_intro' || phase === 'intro_backbeat_bridge') return 'groove_establish';
+  return phase;
 }
 
 function clampInt(value, fallback = 0) {
@@ -23,7 +30,7 @@ function clampInt(value, fallback = 0) {
 
 export function getBeatSwarmLevel1EpochId(input = null) {
   const data = input && typeof input === 'object' ? input : {};
-  const activeLevelPhase = normalizeId(data.activeLevelPhase);
+  const activeLevelPhase = normalizeLevel1Phase(data.activeLevelPhase);
   const phaseVariant = normalizeId(data.phaseVariant || 'default') || 'default';
   const sectionIntent = normalizeId(data.sectionIntent || 'default') || 'default';
   const sectionId = normalizeId(data.sectionId || 'default') || 'default';
@@ -34,30 +41,35 @@ export function getBeatSwarmLevel1EpochId(input = null) {
 
 export function getBeatSwarmLevel1RoleContract(input = null) {
   const data = input && typeof input === 'object' ? input : {};
-  const activeLevelPhase = normalizeId(data.activeLevelPhase);
+  const activeLevelPhase = normalizeLevel1Phase(data.activeLevelPhase);
   const phaseVariant = normalizeId(data.phaseVariant || 'default') || 'default';
   const answerWindowActive = data.answerWindowActive === true;
   const stableWindow = data.stableWindow === true;
 
   const isFullTexture = activeLevelPhase === 'full_texture';
+  const isIntroTeach = activeLevelPhase === 'intro_teach';
+  const isGrooveEstablish = activeLevelPhase === 'groove_establish';
   const isDegradedFullTexture = isFullTexture && phaseVariant === 'no_ornament';
+  const foundationAllowed = activeLevelPhase !== 'player_impact';
+  const counterRhythmAllowed = isGrooveEstablish || isFullTexture;
+  const leadPhraseAllowed = isFullTexture;
 
   const roles = {
     foundation_groove: {
-      allowed: activeLevelPhase !== 'player_impact',
-      required: activeLevelPhase !== 'player_impact',
+      allowed: foundationAllowed,
+      required: foundationAllowed,
       maxIdentities: 1,
-      behavior: 'persistent',
+      behavior: isIntroTeach ? 'intro_foundation' : 'persistent',
     },
     counter_rhythm: {
-      allowed: activeLevelPhase === 'layer_intro' || isFullTexture,
-      required: activeLevelPhase === 'layer_intro' || isFullTexture,
+      allowed: counterRhythmAllowed,
+      required: counterRhythmAllowed,
       maxIdentities: 1,
       behavior: isFullTexture ? 'epoch_locked' : 'intro_layer',
     },
     lead_phrase: {
-      allowed: isFullTexture,
-      required: isFullTexture,
+      allowed: leadPhraseAllowed,
+      required: leadPhraseAllowed,
       maxIdentities: 1,
       behavior: isFullTexture ? 'dominant_foreground' : 'inactive',
     },

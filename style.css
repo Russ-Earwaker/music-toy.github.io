@@ -3214,6 +3214,63 @@ body.internal-board-active #board-main {
   cursor: grabbing;
 }
 
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-star {
+  display: none !important;
+}
+
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-enemy,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-enemy::before,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-enemy::after,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-projectile,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-projectile::before,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-projectile::after,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-helper-orbital,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-helper-turret,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-fx-laser,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-fx-explosion,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-drawsnake-segment,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-drawsnake-node,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-enemy-spawner-cell,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-spawner-link,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-solo-badge,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-solo-pulse {
+  animation: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transition: none !important;
+}
+
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-enemy-spawner-cell.is-playhead,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-enemy-spawner-cell.is-play-hit,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-enemy.is-hit-flash,
+.beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-enemy.is-death-pop {
+  animation: none !important;
+}
+
+.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-fx-explosion,
+.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-fx-laser,
+.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-spawner-link,
+.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-solo-pulse,
+.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-enemy-hp,
+.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-enemy-spawner-grid {
+  display: none !important;
+}
+
+.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-enemy.is-spawner-enemy {
+  width: 96px !important;
+  height: 96px !important;
+  margin-left: -48px !important;
+  margin-top: -48px !important;
+  border-radius: 20px !important;
+}
+
+.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-enemy.is-spawner-enemy.is-solo-carrier {
+  width: 128px !important;
+  height: 128px !important;
+  margin-left: -64px !important;
+  margin-top: -64px !important;
+}
+
 .beat-swarm-ship-wrap {
   position: absolute;
   left: 50%;

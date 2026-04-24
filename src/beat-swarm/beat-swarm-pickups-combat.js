@@ -1,3 +1,5 @@
+let projectileCollisionFrameCursor = 0;
+
 export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
@@ -103,6 +105,9 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   const collectRadiusWorld = (Number(constants.pickupCollectRadiusPx) || 0) / Math.max(0.001, scale || 1);
   const projectileHitRadiusWorld = (Number(constants.projectileHitRadiusPx) || 0) / Math.max(0.001, scale || 1);
   const projectileOffscreenPad = Math.max(16, Number(constants.projectileDespawnOffscreenPadPx) || 72);
+  const maxProjectileCount = Math.max(32, Math.trunc(Number(constants.maxProjectileCount) || 128));
+  const maxProjectileCollisionsPerFrame = Math.max(16, Math.trunc(Number(constants.maxProjectileCollisionsPerFrame) || 96));
+  const maxEffectCount = Math.max(32, Math.trunc(Number(constants.maxEffectCount) || 160));
   const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
   const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
   const cr2 = collectRadiusWorld * collectRadiusWorld;
@@ -130,6 +135,17 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   });
 
   withPerfSample('pickupsCombat.projectiles', () => {
+    if (projectiles.length > maxProjectileCount) {
+      const dropCount = projectiles.length - maxProjectileCount;
+      const droppedProjectiles = projectiles.splice(0, dropCount);
+      for (let i = 0; i < droppedProjectiles.length; i++) {
+        try { droppedProjectiles[i]?.el?.remove?.(); } catch {}
+      }
+    }
+    const projectileCountAtFrameStart = Math.max(0, projectiles.length);
+    const collisionStride = Math.max(1, Math.ceil(projectileCountAtFrameStart / maxProjectileCollisionsPerFrame));
+    const collisionPhase = projectileCollisionFrameCursor % collisionStride;
+    projectileCollisionFrameCursor = (projectileCollisionFrameCursor + 1) % 1000000;
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i];
       p.ttl -= dt;
@@ -250,6 +266,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       });
       let hit = false;
       withPerfSample('pickupsCombat.projectiles.collision', () => {
+        if (collisionStride > 1 && (i % collisionStride) !== collisionPhase) return;
         const allowCollision = !(Number(p.collisionGraceT) > 0);
         const collisionRadiusWorld = Math.max(projectileHitRadiusWorld * 3, enemySpatialCellSize);
         forEachNearbyEnemy(p.wx, p.wy, collisionRadiusWorld, (e) => {
@@ -353,6 +370,13 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   });
 
   withPerfSample('pickupsCombat.effects', () => {
+    if (effects.length > maxEffectCount) {
+      const dropCount = effects.length - maxEffectCount;
+      const droppedEffects = effects.splice(0, dropCount);
+      for (let i = 0; i < droppedEffects.length; i++) {
+        try { droppedEffects[i]?.el?.remove?.(); } catch {}
+      }
+    }
     for (let i = effects.length - 1; i >= 0; i--) {
       const fx = effects[i];
       fx.ttl -= dt;
