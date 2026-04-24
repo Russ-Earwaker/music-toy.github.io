@@ -519,6 +519,9 @@ export function installBeatSwarmMusicLabGlobalRuntime(deps = {}) {
       exportSession() {
         return api.exportSession();
       },
+      exportSessionForSave() {
+        return api.exportSessionForSave();
+      },
       downloadSession(fileName = '') {
         return api.downloadSession(fileName);
       },
@@ -574,6 +577,23 @@ export function createBeatSwarmMusicLabApiRuntime(deps = {}) {
     },
     exportSession() {
       const payload = helpers.swarmMusicLab?.exportSession?.();
+      if (!payload || typeof payload !== 'object') return payload;
+      try {
+        const beatSwarmPerfSnapshot = helpers.getBeatSwarmPerfSnapshot?.();
+        if (beatSwarmPerfSnapshot && typeof beatSwarmPerfSnapshot === 'object') {
+          payload.beatSwarmPerfSnapshot = beatSwarmPerfSnapshot;
+        }
+      } catch {}
+      try {
+        const beatSwarmStepEventsPerfSnapshot = helpers.getBeatSwarmStepEventsPerfSnapshot?.();
+        if (beatSwarmStepEventsPerfSnapshot && typeof beatSwarmStepEventsPerfSnapshot === 'object') {
+          payload.beatSwarmStepEventsPerfSnapshot = beatSwarmStepEventsPerfSnapshot;
+        }
+      } catch {}
+      return payload;
+    },
+    exportSessionForSave() {
+      const payload = helpers.swarmMusicLab?.exportSessionForSave?.();
       if (!payload || typeof payload !== 'object') return payload;
       try {
         const beatSwarmPerfSnapshot = helpers.getBeatSwarmPerfSnapshot?.();

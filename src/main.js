@@ -3,7 +3,6 @@ import './fullscreen.js';
 // --- Module Imports ---
 import './debug.js';
 import './scene-manager.js';
-import './perf/perf-lab.js';
 import './perf/toy-update-arbiter.js';
 import { installRafBoundaryFlag, traceDomWrite } from './perf/PerfTrace.js';
 import './advanced-controls-toggle.js';
@@ -28,6 +27,11 @@ import { getViewportTransform, getViewportElement, screenToWorld } from './board
 import { getRect } from './layout-cache.js';
 
 import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
+
+const perfLabVersion = '2026-04-23-single-assessment-v4';
+import(`./perf/perf-lab.js?v=${perfLabVersion}`).catch((err) => {
+  try { console.warn('[main] perf lab import failed', err); } catch {}
+});
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';

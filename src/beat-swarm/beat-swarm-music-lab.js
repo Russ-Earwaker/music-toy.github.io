@@ -181,6 +181,9 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     : (payload?.playerManualOverrideActive === true);
   const musicLayer = String(context?.musicLayer ?? payload?.musicLayer ?? '').trim().toLowerCase();
   const musicProminence = String(context?.musicProminence ?? payload?.musicProminence ?? '').trim().toLowerCase();
+  const musicProfileSourceType = String(context?.musicProfileSourceType ?? payload?.musicProfileSourceType ?? '').trim().toLowerCase();
+  const formationRole = String(context?.formationRole ?? payload?.formationRole ?? '').trim().toLowerCase();
+  const reason = String(context?.reason ?? payload?.reason ?? '').trim().toLowerCase();
   const authoringClass = String(context?.authoringClass ?? payload?.authoringClass ?? '').trim().toLowerCase();
   return {
     tMs: nowMs(),
@@ -226,6 +229,9 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     playerManualOverrideActive,
     musicLayer,
     musicProminence,
+    musicProfileSourceType,
+    formationRole,
+    reason,
     authoringClass,
     audioGain: Number(context?.audioGain ?? payload?.audioGain) || 0,
     resolvedPlaybackInstrumentId: String(context?.resolvedPlaybackInstrumentId || '').trim(),
@@ -567,6 +573,21 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     detonationSource: String(payload?.detonationSource || '').trim().toLowerCase(),
     activeLevelPhase: String(payload?.activeLevelPhase || '').trim().toLowerCase(),
     phaseVariant: String(payload?.phaseVariant || '').trim().toLowerCase(),
+    epochId: String(payload?.epochId || '').trim(),
+    allowedRolesCsv: String(payload?.allowedRolesCsv || '').trim().toLowerCase(),
+    supportPatternBudget: String(payload?.supportPatternBudget || '').trim().toLowerCase(),
+    preferredCounterRhythmFamily: String(payload?.preferredCounterRhythmFamily || '').trim().toLowerCase(),
+    answerPolicy: String(payload?.answerPolicy || '').trim().toLowerCase(),
+    allowSparkle: payload?.allowSparkle === true,
+    answerWindowActive: payload?.answerWindowActive === true,
+    cadenceWindowActive: payload?.cadenceWindowActive === true,
+    stableWindow: payload?.stableWindow === true,
+    contractFoundationActive: payload?.contractFoundationActive === true,
+    contractSecondaryLoopActive: payload?.contractSecondaryLoopActive === true,
+    contractPrimaryLoopActive: payload?.contractPrimaryLoopActive === true,
+    contractSparkleActive: payload?.contractSparkleActive === true,
+    contractSupportActive: payload?.contractSupportActive === true,
+    contractAnswerActive: payload?.contractAnswerActive === true,
     phaseValidity: String(payload?.phaseValidity || '').trim().toLowerCase(),
     phaseEnteredBar: clampInt(payload?.phaseEnteredBar, -1, -1),
     earliestTransitionBar: clampInt(payload?.earliestTransitionBar, 0, 0),
@@ -596,6 +617,9 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     leadMergeStableBars: clampInt(payload?.leadMergeStableBars, 0, 0),
     activeDirectorPhase: String(payload?.activeDirectorPhase || '').trim().toLowerCase(),
     activeMusicMode: String(payload?.activeMusicMode || '').trim().toLowerCase(),
+    canonicalLeadGroupId: clampInt(payload?.canonicalLeadGroupId, 0, 0),
+    canonicalLeadContinuityId: String(payload?.canonicalLeadContinuityId || '').trim(),
+    canonicalLeadInstrumentId: String(payload?.canonicalLeadInstrumentId || '').trim(),
     introStage: String(payload?.introStage || '').trim().toLowerCase(),
     targetPressure: Number(payload?.targetPressure) || 0,
     targetAliveMin: clampInt(payload?.targetAliveMin, 0, 0),
@@ -1317,6 +1341,185 @@ function collectVisibleEnemyAudibility(events) {
     visibleEnemyEvents,
     barelyAudibleVisibleEnemyEvents,
     barelyAudibleVisibleEnemyRate: visibleEnemyEvents > 0 ? (barelyAudibleVisibleEnemyEvents / visibleEnemyEvents) : 0,
+  };
+}
+
+function inferForegroundRoleId(eventLike) {
+  const ev = eventLike && typeof eventLike === 'object' ? eventLike : {};
+  const explicitRole = String(ev?.role || '').trim().toLowerCase();
+  if (explicitRole === 'bass') return 'foundation_groove';
+  if (explicitRole === 'lead') return 'lead_phrase';
+  if (explicitRole === 'accent') {
+    const laneId = String(ev?.musicLaneId || '').trim().toLowerCase();
+    if (laneId === 'sparkle_lane') return 'answer_ornament';
+    return 'counter_rhythm';
+  }
+  const laneId = String(ev?.musicLaneId || '').trim().toLowerCase();
+  if (laneId === 'foundation_lane') return 'foundation_groove';
+  if (laneId === 'primary_loop_lane') return 'lead_phrase';
+  if (laneId === 'sparkle_lane') return 'answer_ornament';
+  if (laneId === 'secondary_loop_lane') {
+    const responseLane = String(ev?.callResponseLane || '').trim().toLowerCase();
+    return responseLane === 'response' ? 'answer_ornament' : 'counter_rhythm';
+  }
+  return 'unknown';
+}
+
+function collectForegroundCompetitionDiagnostics(session, events, maxBarIndex) {
+  const systemEvents = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
+    .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_mode_state')
+    .sort((a, b) => {
+      const barDelta = clampInt(a?.barIndex, 0, 0) - clampInt(b?.barIndex, 0, 0);
+      if (barDelta !== 0) return barDelta;
+      const beatDelta = clampInt(a?.beatIndex, 0, 0) - clampInt(b?.beatIndex, 0, 0);
+      if (beatDelta !== 0) return beatDelta;
+      return clampInt(a?.stepIndex, 0, 0) - clampInt(b?.stepIndex, 0, 0);
+    });
+  const modeByBar = new Map();
+  let latestMode = null;
+  for (let bar = 0; bar <= maxBarIndex; bar += 1) {
+    while (systemEvents.length && clampInt(systemEvents[0]?.barIndex, 0, 0) <= bar) {
+      latestMode = systemEvents.shift();
+    }
+    if (latestMode) {
+      modeByBar.set(bar, {
+        activeLevelPhase: String(latestMode?.activeLevelPhase || '').trim().toLowerCase(),
+        activeMusicMode: String(latestMode?.activeMusicMode || '').trim().toLowerCase(),
+      });
+    }
+  }
+  const playerAudibleKeys = new Set();
+  for (const ev of events) {
+    if (clampInt(ev?.barIndex, 0, 0) > maxBarIndex) continue;
+    if (String(ev?.sourceSystem || '').trim().toLowerCase() !== 'player') continue;
+    if (!isAudibleEvent(ev)) continue;
+    playerAudibleKeys.add(`${clampInt(ev?.beatIndex, 0, 0)}:${clampInt(ev?.stepIndex, 0, 0)}`);
+  }
+  const byRoleForeground = Object.create(null);
+  const byRoleCompetition = Object.create(null);
+  const bySourceForeground = Object.create(null);
+  const bySourceCompetition = Object.create(null);
+  const byEnemyTypeForeground = Object.create(null);
+  const byEnemyTypeCompetition = Object.create(null);
+  const byProfileSourceTypeForeground = Object.create(null);
+  const byProfileSourceTypeCompetition = Object.create(null);
+  const byReasonForeground = Object.create(null);
+  const byReasonCompetition = Object.create(null);
+  const conflictDiagnostics = {
+    primarySecondaryConsidered: 0,
+    primarySecondaryConflictHitCount: 0,
+    primarySecondaryConflictAvoidedCount: 0,
+    byLane: Object.create(null),
+    byProfileSourceType: Object.create(null),
+    byReason: Object.create(null),
+    ornamentConsidered: 0,
+    ornamentConflictHitCount: 0,
+    ornamentConflictAvoidedCount: 0,
+    ornamentByProfileSourceType: Object.create(null),
+    ornamentByReason: Object.create(null),
+  };
+  let fullTextureEnemyAudibleEvents = 0;
+  let fullTextureEnemyForegroundEvents = 0;
+  let fullTextureEnemyCompetingEvents = 0;
+  for (const ev of events) {
+    if (clampInt(ev?.barIndex, 0, 0) > maxBarIndex) continue;
+    const sourceSystem = String(ev?.sourceSystem || '').trim().toLowerCase();
+    if (sourceSystem === 'player') continue;
+    if (!isAudibleEvent(ev)) continue;
+    const modeState = modeByBar.get(clampInt(ev?.barIndex, 0, 0));
+    if (String(modeState?.activeLevelPhase || '').trim().toLowerCase() !== 'full_texture') continue;
+    fullTextureEnemyAudibleEvents += 1;
+    const roleId = inferForegroundRoleId(ev);
+    const sourceKey = sourceSystem || 'unknown';
+    const enemyTypeKey = String(ev?.enemyType || '').trim().toLowerCase() || 'unknown';
+    const profileKey = String(ev?.musicProfileSourceType || '').trim().toLowerCase() || 'unknown';
+    const reasonKey = String(ev?.reason || ev?.formationRole || ev?.musicLaneId || '').trim().toLowerCase() || 'unknown';
+    const musicLaneId = String(ev?.musicLaneId || '').trim().toLowerCase();
+    const prominence = String(ev?.musicProminence || '').trim().toLowerCase();
+    const foreground = prominence === 'full' || prominence === 'quiet';
+    const key = `${clampInt(ev?.beatIndex, 0, 0)}:${clampInt(ev?.stepIndex, 0, 0)}`;
+    const competing = playerAudibleKeys.has(key);
+    if (musicLaneId === 'primary_loop_lane' || musicLaneId === 'secondary_loop_lane') {
+      conflictDiagnostics.primarySecondaryConsidered += 1;
+      if (!conflictDiagnostics.byLane[musicLaneId]) {
+        conflictDiagnostics.byLane[musicLaneId] = { considered: 0, hit: 0, avoided: 0 };
+      }
+      if (!conflictDiagnostics.byProfileSourceType[profileKey]) {
+        conflictDiagnostics.byProfileSourceType[profileKey] = { considered: 0, hit: 0, avoided: 0 };
+      }
+      if (!conflictDiagnostics.byReason[reasonKey]) {
+        conflictDiagnostics.byReason[reasonKey] = { considered: 0, hit: 0, avoided: 0 };
+      }
+      conflictDiagnostics.byLane[musicLaneId].considered += 1;
+      conflictDiagnostics.byProfileSourceType[profileKey].considered += 1;
+      conflictDiagnostics.byReason[reasonKey].considered += 1;
+      if (competing) {
+        conflictDiagnostics.primarySecondaryConflictHitCount += 1;
+        conflictDiagnostics.byLane[musicLaneId].hit += 1;
+        conflictDiagnostics.byProfileSourceType[profileKey].hit += 1;
+        conflictDiagnostics.byReason[reasonKey].hit += 1;
+      } else {
+        conflictDiagnostics.primarySecondaryConflictAvoidedCount += 1;
+        conflictDiagnostics.byLane[musicLaneId].avoided += 1;
+        conflictDiagnostics.byProfileSourceType[profileKey].avoided += 1;
+        conflictDiagnostics.byReason[reasonKey].avoided += 1;
+      }
+    }
+    if (roleId === 'answer_ornament' || musicLaneId === 'sparkle_lane') {
+      conflictDiagnostics.ornamentConsidered += 1;
+      if (!conflictDiagnostics.ornamentByProfileSourceType[profileKey]) {
+        conflictDiagnostics.ornamentByProfileSourceType[profileKey] = { considered: 0, hit: 0, avoided: 0 };
+      }
+      if (!conflictDiagnostics.ornamentByReason[reasonKey]) {
+        conflictDiagnostics.ornamentByReason[reasonKey] = { considered: 0, hit: 0, avoided: 0 };
+      }
+      conflictDiagnostics.ornamentByProfileSourceType[profileKey].considered += 1;
+      conflictDiagnostics.ornamentByReason[reasonKey].considered += 1;
+      if (competing) {
+        conflictDiagnostics.ornamentConflictHitCount += 1;
+        conflictDiagnostics.ornamentByProfileSourceType[profileKey].hit += 1;
+        conflictDiagnostics.ornamentByReason[reasonKey].hit += 1;
+      } else {
+        conflictDiagnostics.ornamentConflictAvoidedCount += 1;
+        conflictDiagnostics.ornamentByProfileSourceType[profileKey].avoided += 1;
+        conflictDiagnostics.ornamentByReason[reasonKey].avoided += 1;
+      }
+    }
+    if (foreground) {
+      fullTextureEnemyForegroundEvents += 1;
+      byRoleForeground[roleId] = clampInt(byRoleForeground[roleId], 0, 0) + 1;
+      bySourceForeground[sourceKey] = clampInt(bySourceForeground[sourceKey], 0, 0) + 1;
+      byEnemyTypeForeground[enemyTypeKey] = clampInt(byEnemyTypeForeground[enemyTypeKey], 0, 0) + 1;
+      byProfileSourceTypeForeground[profileKey] = clampInt(byProfileSourceTypeForeground[profileKey], 0, 0) + 1;
+      byReasonForeground[reasonKey] = clampInt(byReasonForeground[reasonKey], 0, 0) + 1;
+    }
+    if (competing) {
+      fullTextureEnemyCompetingEvents += 1;
+      byRoleCompetition[roleId] = clampInt(byRoleCompetition[roleId], 0, 0) + 1;
+      bySourceCompetition[sourceKey] = clampInt(bySourceCompetition[sourceKey], 0, 0) + 1;
+      byEnemyTypeCompetition[enemyTypeKey] = clampInt(byEnemyTypeCompetition[enemyTypeKey], 0, 0) + 1;
+      byProfileSourceTypeCompetition[profileKey] = clampInt(byProfileSourceTypeCompetition[profileKey], 0, 0) + 1;
+      byReasonCompetition[reasonKey] = clampInt(byReasonCompetition[reasonKey], 0, 0) + 1;
+    }
+  }
+  return {
+    fullTextureEnemyAudibleEvents,
+    fullTextureEnemyForegroundEvents,
+    fullTextureEnemyCompetingEvents,
+    fullTextureEnemyForegroundShare: fullTextureEnemyAudibleEvents > 0 ? (fullTextureEnemyForegroundEvents / fullTextureEnemyAudibleEvents) : 0,
+    fullTextureEnemyCompetitionShare: fullTextureEnemyAudibleEvents > 0 ? (fullTextureEnemyCompetingEvents / fullTextureEnemyAudibleEvents) : 0,
+    byRoleForeground,
+    byRoleCompetition,
+    bySourceForeground,
+    bySourceCompetition,
+    byEnemyTypeForeground,
+    byEnemyTypeCompetition,
+    byProfileSourceTypeForeground,
+    byProfileSourceTypeCompetition,
+    byReasonForeground,
+    byReasonCompetition,
+    conflictDiagnostics,
   };
 }
 
@@ -2691,6 +2894,110 @@ function collectDeliveryDiagnostics(session, maxBarIndex) {
     if (currentRun > maxEnemyStepsWithoutBass) maxEnemyStepsWithoutBass = currentRun;
   }
 
+  const buildCountMap = (list, keyFn) => {
+    const out = Object.create(null);
+    for (const ev of list) {
+      const key = String(keyFn(ev) || '').trim().toLowerCase() || 'unknown';
+      out[key] = clampInt(out[key], 0, 0) + 1;
+    }
+    return out;
+  };
+  const getBeatStrengthClass = (ev) => {
+    const step = ((clampInt(ev?.stepIndex, 0, 0) % 8) + 8) % 8;
+    if (step === 0 || step === 4) return 'strong';
+    if (step === 2 || step === 6) return 'medium';
+    return 'weak';
+  };
+  const computeDeficitMap = (createdMap, executedMap) => {
+    const out = Object.create(null);
+    const keys = new Set([...Object.keys(createdMap || {}), ...Object.keys(executedMap || {})]);
+    for (const key of keys) {
+      const createdCount = Math.max(0, clampInt(createdMap?.[key], 0, 0));
+      const executedCount = Math.max(0, clampInt(executedMap?.[key], 0, 0));
+      const skippedCount = Math.max(0, createdCount - executedCount);
+      if (createdCount <= 0 && executedCount <= 0) continue;
+      out[key] = {
+        created: createdCount,
+        executed: executedCount,
+        skipped: skippedCount,
+        executedToCreatedRate: createdCount > 0 ? (executedCount / createdCount) : 1,
+      };
+    }
+    return out;
+  };
+  const createdByActionType = buildCountMap(created, (ev) => ev?.actionType);
+  const executedByActionType = buildCountMap(executed, (ev) => ev?.actionType);
+  const createdBySourceSystem = buildCountMap(created, (ev) => ev?.sourceSystem);
+  const executedBySourceSystem = buildCountMap(executed, (ev) => ev?.sourceSystem);
+  const createdByMusicLane = buildCountMap(created, (ev) => ev?.musicLaneId || ev?.foundationLaneId);
+  const executedByMusicLane = buildCountMap(executed, (ev) => ev?.musicLaneId || ev?.foundationLaneId);
+  const createdByProfileSourceType = buildCountMap(created, (ev) => ev?.musicProfileSourceType);
+  const executedByProfileSourceType = buildCountMap(executed, (ev) => ev?.musicProfileSourceType);
+  const createdByReason = buildCountMap(created, (ev) => ev?.reason);
+  const executedByReason = buildCountMap(executed, (ev) => ev?.reason);
+  const createdByBeatStrength = buildCountMap(created, getBeatStrengthClass);
+  const executedByBeatStrength = buildCountMap(executed, getBeatStrengthClass);
+  const createdStrongBeatsByLane = buildCountMap(
+    created.filter((ev) => getBeatStrengthClass(ev) === 'strong'),
+    (ev) => ev?.musicLaneId || ev?.foundationLaneId
+  );
+  const executedStrongBeatsByLane = buildCountMap(
+    executed.filter((ev) => getBeatStrengthClass(ev) === 'strong'),
+    (ev) => ev?.musicLaneId || ev?.foundationLaneId
+  );
+  const createdStrongBeatsByReason = buildCountMap(
+    created.filter((ev) => getBeatStrengthClass(ev) === 'strong'),
+    (ev) => ev?.reason
+  );
+  const executedStrongBeatsByReason = buildCountMap(
+    executed.filter((ev) => getBeatStrengthClass(ev) === 'strong'),
+    (ev) => ev?.reason
+  );
+  const createdStrongFoundationByProfileSourceType = buildCountMap(
+    created.filter((ev) => (
+      getBeatStrengthClass(ev) === 'strong'
+      && String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase() === 'foundation_lane'
+    )),
+    (ev) => ev?.musicProfileSourceType
+  );
+  const executedStrongFoundationByProfileSourceType = buildCountMap(
+    executed.filter((ev) => (
+      getBeatStrengthClass(ev) === 'strong'
+      && String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase() === 'foundation_lane'
+    )),
+    (ev) => ev?.musicProfileSourceType
+  );
+  const createdStrongFoundationByReason = buildCountMap(
+    created.filter((ev) => (
+      getBeatStrengthClass(ev) === 'strong'
+      && String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase() === 'foundation_lane'
+    )),
+    (ev) => ev?.reason
+  );
+  const executedStrongFoundationByReason = buildCountMap(
+    executed.filter((ev) => (
+      getBeatStrengthClass(ev) === 'strong'
+      && String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase() === 'foundation_lane'
+    )),
+    (ev) => ev?.reason
+  );
+  const createdMediumBeatsByLane = buildCountMap(
+    created.filter((ev) => getBeatStrengthClass(ev) === 'medium'),
+    (ev) => ev?.musicLaneId || ev?.foundationLaneId
+  );
+  const executedMediumBeatsByLane = buildCountMap(
+    executed.filter((ev) => getBeatStrengthClass(ev) === 'medium'),
+    (ev) => ev?.musicLaneId || ev?.foundationLaneId
+  );
+  const createdMediumBeatsByReason = buildCountMap(
+    created.filter((ev) => getBeatStrengthClass(ev) === 'medium'),
+    (ev) => ev?.reason
+  );
+  const executedMediumBeatsByReason = buildCountMap(
+    executed.filter((ev) => getBeatStrengthClass(ev) === 'medium'),
+    (ev) => ev?.reason
+  );
+
   return {
     createdEnemyEvents: created.length,
     executedEnemyEvents: executed.length,
@@ -2707,6 +3014,18 @@ function collectDeliveryDiagnostics(session, maxBarIndex) {
     bassExecutedToCreatedRate: createdBass.length > 0 ? (executedBass.length / createdBass.length) : 1,
     maxBassStepGap,
     maxEnemyStepsWithoutBass,
+    byActionType: computeDeficitMap(createdByActionType, executedByActionType),
+    bySourceSystem: computeDeficitMap(createdBySourceSystem, executedBySourceSystem),
+    byMusicLane: computeDeficitMap(createdByMusicLane, executedByMusicLane),
+    byProfileSourceType: computeDeficitMap(createdByProfileSourceType, executedByProfileSourceType),
+    byReason: computeDeficitMap(createdByReason, executedByReason),
+    byBeatStrength: computeDeficitMap(createdByBeatStrength, executedByBeatStrength),
+    strongBeatByMusicLane: computeDeficitMap(createdStrongBeatsByLane, executedStrongBeatsByLane),
+    strongBeatByReason: computeDeficitMap(createdStrongBeatsByReason, executedStrongBeatsByReason),
+    strongBeatFoundationByProfileSourceType: computeDeficitMap(createdStrongFoundationByProfileSourceType, executedStrongFoundationByProfileSourceType),
+    strongBeatFoundationByReason: computeDeficitMap(createdStrongFoundationByReason, executedStrongFoundationByReason),
+    mediumBeatByMusicLane: computeDeficitMap(createdMediumBeatsByLane, executedMediumBeatsByLane),
+    mediumBeatByReason: computeDeficitMap(createdMediumBeatsByReason, executedMediumBeatsByReason),
   };
 }
 function collectExplosionReliabilityDiagnostics(session, maxBarIndex) {
@@ -3287,6 +3606,9 @@ function computeSummary(metrics) {
   const foundationBufferStatus = String(metrics?.musicalityTargets?.foundationBuffer?.status || '').trim().toLowerCase();
   const answerOrnamentStatus = String(metrics?.musicalityTargets?.answerOrnament?.status || '').trim().toLowerCase();
   const populationStatus = String(metrics?.musicalityTargets?.population?.status || '').trim().toLowerCase();
+  const retroShmupStyle = metrics?.retroShmupStyle && typeof metrics.retroShmupStyle === 'object'
+    ? metrics.retroShmupStyle
+    : {};
   return {
     notePoolCompliance: `${Math.round((Number(metrics?.notePoolCompliance?.poolComplianceRate) || 0) * 100)}%`,
     motifReuse: `${Math.round(motifReuse * 100)}%`,
@@ -3373,6 +3695,12 @@ function computeSummary(metrics) {
     foundationBufferBounds: foundationBufferStatus || 'unknown',
     answerOrnamentContainment: answerOrnamentStatus || 'unknown',
     composerPopulation: populationStatus || 'unknown',
+    retroShmupStyle: String(retroShmupStyle?.styleStatus || '').trim().toLowerCase() || 'unknown',
+    retroShmupStyleScore: Number(Number(retroShmupStyle?.overallScore) || 0).toFixed(3),
+    retroShmupPulseRegularity: Number(Number(retroShmupStyle?.pulseRegularityScore) || 0).toFixed(3),
+    retroShmupLeadAuthority: Number(Number(retroShmupStyle?.leadAuthorityScore) || 0).toFixed(3),
+    retroShmupSupportDiscipline: Number(Number(retroShmupStyle?.supportDisciplineScore) || 0).toFixed(3),
+    retroShmupArrangementSimplicity: Number(Number(retroShmupStyle?.arrangementSimplicityScore) || 0).toFixed(3),
   };
 }
 
@@ -3383,16 +3711,51 @@ function collectMusicalityTargets(session, maxBarIndex) {
       && clampInt(e?.barIndex, 0, 0) <= maxBarIndex
     ));
   const perStep = new Map();
-  for (const log of logs) {
-    const stepKey = `${clampInt(log?.barIndex, 0, 0)}:${clampInt(log?.beatIndex, 0, 0)}:${clampInt(log?.stepIndex, 0, 0)}`;
+  const getStepBucket = (barIndex, beatIndex, stepIndex) => {
+    const stepKey = `${clampInt(barIndex, 0, 0)}:${clampInt(beatIndex, 0, 0)}:${clampInt(stepIndex, 0, 0)}`;
     let bucket = perStep.get(stepKey);
     if (!bucket) {
       bucket = new Map();
       perStep.set(stepKey, bucket);
     }
+    return bucket;
+  };
+  for (const log of logs) {
+    const bucket = getStepBucket(log?.barIndex, log?.beatIndex, log?.stepIndex);
     const groupId = Math.max(0, clampInt(log?.groupId, 0, 0));
     if (groupId <= 0) continue;
     bucket.set(groupId, log);
+  }
+  const timeline = Array.isArray(session?.events)
+    ? session.events
+    : (Array.isArray(session?.eventTimeline) ? session.eventTimeline : []);
+  for (let i = 0; i < timeline.length; i += 1) {
+    const event = timeline[i] && typeof timeline[i] === 'object' ? timeline[i] : null;
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : event;
+    if (!payload) continue;
+    const musicLaneId = String(payload?.musicLaneId || '').trim().toLowerCase();
+    const role = String(payload?.role || payload?.musicRole || '').trim().toLowerCase();
+    const profileSourceType = String(payload?.musicProfileSourceType || payload?.reason || '').trim().toLowerCase();
+    const primaryLeadEvent = musicLaneId === 'primary_loop_lane'
+      && (profileSourceType === 'lead_melody' || role === 'lead');
+    if (!primaryLeadEvent) continue;
+    const bucket = getStepBucket(payload?.barIndex ?? event?.barIndex, payload?.beatIndex ?? event?.beatIndex, payload?.stepIndex ?? event?.stepIndex);
+    const groupId = Math.max(
+      0,
+      clampInt(payload?.groupId ?? event?.groupId ?? payload?.actorGroupId ?? event?.actorGroupId ?? payload?.musicGroupId ?? event?.musicGroupId, 0, 0)
+    );
+    if (groupId <= 0) continue;
+    if (bucket.has(groupId)) continue;
+    bucket.set(groupId, {
+      active: true,
+      retiring: false,
+      lifecycleState: 'active',
+      groupId,
+      musicLaneId: 'primary_loop_lane',
+      reason: profileSourceType || 'lead_melody',
+      role: role || 'lead',
+      source: 'event_timeline',
+    });
   }
   let stepsAnalyzed = 0;
   let stepsWithSinglePrimaryLead = 0;
@@ -3420,7 +3783,11 @@ function collectMusicalityTargets(session, maxBarIndex) {
     if (activeGroups.length > maxActiveComposerGroupCount) maxActiveComposerGroupCount = activeGroups.length;
     const primaryLeadGroups = activeGroups.filter((record) => (
       String(record?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
-      && String(record?.reason || '').trim().toLowerCase() === 'lead_melody'
+      && (
+        String(record?.reason || '').trim().toLowerCase() === 'lead_melody'
+        || String(record?.musicProfileSourceType || '').trim().toLowerCase() === 'lead_melody'
+        || String(record?.role || '').trim().toLowerCase() === 'lead'
+      )
       && String(record?.lifecycleState || '').trim().toLowerCase() !== 'retiring'
     ));
     const primaryLeadCount = primaryLeadGroups.length;
@@ -3466,6 +3833,87 @@ function collectMusicalityTargets(session, maxBarIndex) {
   const avgFoundationBufferCount = stepsAnalyzed > 0 ? (totalFoundationBufferCount / stepsAnalyzed) : 0;
   const avgAnswerOrnamentCount = stepsAnalyzed > 0 ? (totalAnswerOrnamentCount / stepsAnalyzed) : 0;
   const avgActiveComposerGroupCount = stepsAnalyzed > 0 ? (totalActiveComposerGroupCount / stepsAnalyzed) : 0;
+  const leadAuthorityLogs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => (
+      String(e?.eventType || '').trim().toLowerCase() === 'music_mode_state'
+      && clampInt(e?.barIndex, 0, 0) <= maxBarIndex
+    ));
+  let authorityStepsAnalyzed = 0;
+  let authorityActiveSteps = 0;
+  let authorityGroupSwitches = 0;
+  let authorityContinuitySwitches = 0;
+  let authorityInstrumentSwitches = 0;
+  let authorityLongestGroupRunSteps = 0;
+  let authorityCurrentGroupRunSteps = 0;
+  let authorityLongestContinuityRunSteps = 0;
+  let authorityCurrentContinuityRunSteps = 0;
+  let authorityLongestInstrumentRunSteps = 0;
+  let authorityCurrentInstrumentRunSteps = 0;
+  let lastAuthorityGroupId = 0;
+  let lastAuthorityContinuityId = '';
+  let lastAuthorityInstrumentId = '';
+  for (const log of leadAuthorityLogs) {
+    authorityStepsAnalyzed += 1;
+    const groupId = Math.max(0, clampInt(log?.canonicalLeadGroupId, 0, 0));
+    const continuityId = String(log?.canonicalLeadContinuityId || '').trim();
+    const instrumentId = String(log?.canonicalLeadInstrumentId || '').trim();
+    const authorityActive = groupId > 0 || !!continuityId || !!instrumentId;
+    if (authorityActive) authorityActiveSteps += 1;
+    if (groupId > 0) {
+      if (groupId === lastAuthorityGroupId) authorityCurrentGroupRunSteps += 1;
+      else {
+        if (lastAuthorityGroupId > 0) authorityGroupSwitches += 1;
+        authorityCurrentGroupRunSteps = 1;
+      }
+      lastAuthorityGroupId = groupId;
+      if (authorityCurrentGroupRunSteps > authorityLongestGroupRunSteps) authorityLongestGroupRunSteps = authorityCurrentGroupRunSteps;
+    } else {
+      authorityCurrentGroupRunSteps = 0;
+      lastAuthorityGroupId = 0;
+    }
+    if (continuityId) {
+      if (continuityId === lastAuthorityContinuityId) authorityCurrentContinuityRunSteps += 1;
+      else {
+        if (lastAuthorityContinuityId) authorityContinuitySwitches += 1;
+        authorityCurrentContinuityRunSteps = 1;
+      }
+      lastAuthorityContinuityId = continuityId;
+      if (authorityCurrentContinuityRunSteps > authorityLongestContinuityRunSteps) authorityLongestContinuityRunSteps = authorityCurrentContinuityRunSteps;
+    } else {
+      authorityCurrentContinuityRunSteps = 0;
+      lastAuthorityContinuityId = '';
+    }
+    if (instrumentId) {
+      if (instrumentId === lastAuthorityInstrumentId) authorityCurrentInstrumentRunSteps += 1;
+      else {
+        if (lastAuthorityInstrumentId) authorityInstrumentSwitches += 1;
+        authorityCurrentInstrumentRunSteps = 1;
+      }
+      lastAuthorityInstrumentId = instrumentId;
+      if (authorityCurrentInstrumentRunSteps > authorityLongestInstrumentRunSteps) authorityLongestInstrumentRunSteps = authorityCurrentInstrumentRunSteps;
+    } else {
+      authorityCurrentInstrumentRunSteps = 0;
+      lastAuthorityInstrumentId = '';
+    }
+  }
+  const authorityActiveShare = authorityStepsAnalyzed > 0 ? (authorityActiveSteps / authorityStepsAnalyzed) : 0;
+  const authoritySwitches = authorityGroupSwitches + authorityContinuitySwitches + authorityInstrumentSwitches;
+  const authorityStable = authorityStepsAnalyzed > 0
+    && authorityActiveShare >= 0.8
+    && authoritySwitches === 0
+    && authorityLongestGroupRunSteps >= 64
+    && authorityLongestContinuityRunSteps >= 64
+    && authorityLongestInstrumentRunSteps >= 64;
+  const compactLeadExclusive = stepsAnalyzed > 0
+    && stepsWithMultiplePrimaryLeads === 0
+    && stepsWithNoPrimaryLead === 0
+    && singleLeadShare >= 0.9;
+  const primaryLeadStatus = compactLeadExclusive || authorityStable
+    ? 'exclusive'
+    : (stepsWithSinglePrimaryLead > 0 || authorityActiveSteps > 0 ? 'contested' : 'missing');
+  const primaryLeadPersistenceStatus = authorityStable || longestSinglePrimaryLeadRunSteps >= 64
+    ? 'stable'
+    : (longestSinglePrimaryLeadRunSteps >= 32 || authorityLongestGroupRunSteps >= 32 ? 'short' : 'fragmented');
   return {
     stepsAnalyzed,
     primaryLead: {
@@ -3480,12 +3928,24 @@ function collectMusicalityTargets(session, maxBarIndex) {
       maxLeadCount: maxPrimaryLeadCount,
       longestSingleLeadRunSteps: longestSinglePrimaryLeadRunSteps,
       longestSingleLeadRunBeats: Number((longestSinglePrimaryLeadRunSteps / 8).toFixed(3)),
-      status: (stepsAnalyzed > 0 && stepsWithMultiplePrimaryLeads === 0 && stepsWithNoPrimaryLead === 0 && singleLeadShare >= 0.9)
-        ? 'exclusive'
-        : (stepsWithSinglePrimaryLead > 0 ? 'contested' : 'missing'),
-      persistenceStatus: longestSinglePrimaryLeadRunSteps >= 64
-        ? 'stable'
-        : (longestSinglePrimaryLeadRunSteps >= 32 ? 'short' : 'fragmented'),
+      status: primaryLeadStatus,
+      persistenceStatus: primaryLeadPersistenceStatus,
+      authority: {
+        stepsAnalyzed: authorityStepsAnalyzed,
+        activeShare: Number(authorityActiveShare.toFixed(3)),
+        groupSwitches: authorityGroupSwitches,
+        continuitySwitches: authorityContinuitySwitches,
+        instrumentSwitches: authorityInstrumentSwitches,
+        longestGroupRunSteps: authorityLongestGroupRunSteps,
+        longestGroupRunBeats: Number((authorityLongestGroupRunSteps / 8).toFixed(3)),
+        longestContinuityRunSteps: authorityLongestContinuityRunSteps,
+        longestContinuityRunBeats: Number((authorityLongestContinuityRunSteps / 8).toFixed(3)),
+        longestInstrumentRunSteps: authorityLongestInstrumentRunSteps,
+        longestInstrumentRunBeats: Number((authorityLongestInstrumentRunSteps / 8).toFixed(3)),
+        status: authorityStable
+          ? 'stable'
+          : (authorityActiveSteps > 0 ? 'drift' : 'missing'),
+      },
     },
     foundationBuffer: {
       avgCount: Number(avgFoundationBufferCount.toFixed(3)),
@@ -3507,6 +3967,272 @@ function collectMusicalityTargets(session, maxBarIndex) {
       maxActiveGroupCount: maxActiveComposerGroupCount,
       status: (maxActiveComposerGroupCount <= 6 && avgActiveComposerGroupCount <= 5) ? 'sane' : 'crowded',
     },
+  };
+}
+
+function collectPrimaryLeadInstrumentChangeTrace(session, maxBarIndex) {
+  const systemEvents = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
+  const modeLogs = systemEvents
+    .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_mode_state')
+    .sort((a, b) => {
+      const barDelta = clampInt(a?.barIndex, 0, 0) - clampInt(b?.barIndex, 0, 0);
+      if (barDelta !== 0) return barDelta;
+      const beatDelta = clampInt(a?.beatIndex, 0, 0) - clampInt(b?.beatIndex, 0, 0);
+      if (beatDelta !== 0) return beatDelta;
+      return clampInt(a?.stepIndex, 0, 0) - clampInt(b?.stepIndex, 0, 0);
+    });
+  const findNearestContextEvent = (eventType, beatIndex, canonicalGroupId) => {
+    let best = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const ev of systemEvents) {
+      if (String(ev?.eventType || '').trim().toLowerCase() !== eventType) continue;
+      const evBeatIndex = clampInt(ev?.beatIndex, 0, 0);
+      if (evBeatIndex > beatIndex) continue;
+      if (canonicalGroupId > 0) {
+        const evGroupId = Math.max(0, clampInt(ev?.groupId ?? ev?.canonicalLeadGroupId, 0, 0));
+        if (evGroupId > 0 && evGroupId !== canonicalGroupId) continue;
+      }
+      const distance = beatIndex - evBeatIndex;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = ev;
+      }
+    }
+    return best;
+  };
+  const trace = [];
+  const bySource = {};
+  const byPhase = {};
+  const byMode = {};
+  let lastInstrumentId = '';
+  for (const log of modeLogs) {
+    const instrumentId = String(log?.canonicalLeadInstrumentId || '').trim();
+    if (!instrumentId) continue;
+    if (!lastInstrumentId) {
+      lastInstrumentId = instrumentId;
+      continue;
+    }
+    if (instrumentId === lastInstrumentId) continue;
+    const beatIndex = clampInt(log?.beatIndex, 0, 0);
+    const canonicalGroupId = Math.max(0, clampInt(log?.canonicalLeadGroupId, 0, 0));
+    const activeLevelPhase = String(log?.activeLevelPhase || '').trim().toLowerCase();
+    const activeMusicMode = String(log?.activeMusicMode || '').trim().toLowerCase();
+    const nearestLeadSnapshot = findNearestContextEvent('music_primary_lead_snapshot', beatIndex, canonicalGroupId);
+    const nearestGroupState = findNearestContextEvent('music_composer_group_state', beatIndex, canonicalGroupId);
+    const source = nearestGroupState
+      ? String(nearestGroupState?.phase || nearestGroupState?.reason || '').trim().toLowerCase()
+      : (nearestLeadSnapshot ? 'primary_lead_snapshot_context' : 'mode_state_only');
+    bySource[source] = clampInt(bySource[source], 0, 0) + 1;
+    byPhase[activeLevelPhase || 'unknown'] = clampInt(byPhase[activeLevelPhase || 'unknown'], 0, 0) + 1;
+    byMode[activeMusicMode || 'unknown'] = clampInt(byMode[activeMusicMode || 'unknown'], 0, 0) + 1;
+    trace.push({
+      barIndex: clampInt(log?.barIndex, 0, 0),
+      beatIndex,
+      stepIndex: clampInt(log?.stepIndex, 0, 0),
+      previousInstrumentId: lastInstrumentId,
+      instrumentId,
+      canonicalLeadGroupId: canonicalGroupId,
+      canonicalLeadContinuityId: String(log?.canonicalLeadContinuityId || '').trim(),
+      activeLevelPhase,
+      activeMusicMode,
+      source,
+      nearestLeadSnapshot: nearestLeadSnapshot
+        ? {
+          beatIndex: clampInt(nearestLeadSnapshot?.beatIndex, 0, 0),
+          groupId: Math.max(0, clampInt(nearestLeadSnapshot?.groupId, 0, 0)),
+          instrumentId: String(nearestLeadSnapshot?.instrumentId || '').trim(),
+          musicProfileSourceType: String(nearestLeadSnapshot?.musicProfileSourceType || nearestLeadSnapshot?.stage || '').trim().toLowerCase(),
+        }
+        : null,
+      nearestGroupState: nearestGroupState
+        ? {
+          beatIndex: clampInt(nearestGroupState?.beatIndex, 0, 0),
+          groupId: Math.max(0, clampInt(nearestGroupState?.groupId, 0, 0)),
+          phase: String(nearestGroupState?.phase || '').trim().toLowerCase(),
+          reason: String(nearestGroupState?.reason || '').trim().toLowerCase(),
+          stage: String(nearestGroupState?.stage || '').trim().toLowerCase(),
+        }
+        : null,
+    });
+    lastInstrumentId = instrumentId;
+  }
+  return {
+    count: trace.length,
+    bySource,
+    byPhase,
+    byMode,
+    trace: trace.slice(0, 24),
+  };
+}
+
+function collectLevel1ContractTrace(session, maxBarIndex) {
+  const events = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => (
+      String(e?.eventType || '').trim().toLowerCase() === 'music_level1_contract_state'
+      && clampInt(e?.barIndex, 0, 0) <= maxBarIndex
+    ))
+    .sort((a, b) => {
+      const barDelta = clampInt(a?.barIndex, 0, 0) - clampInt(b?.barIndex, 0, 0);
+      if (barDelta !== 0) return barDelta;
+      return clampInt(a?.beatIndex, 0, 0) - clampInt(b?.beatIndex, 0, 0);
+    });
+  const inc = (bucket, keyLike) => {
+    const key = String(keyLike || 'unknown').trim().toLowerCase() || 'unknown';
+    bucket[key] = Math.max(0, clampInt(bucket[key], 0, 0)) + 1;
+  };
+  const bySupportBudget = {};
+  const byCounterRhythmFamily = {};
+  const byAnswerPolicy = {};
+  const byAllowedRoleSet = {};
+  const byEpoch = {};
+  let fullTextureCount = 0;
+  let answerActiveCount = 0;
+  let sparkleActiveCount = 0;
+  let supportActiveCount = 0;
+  for (const ev of events) {
+    const phase = String(ev?.activeLevelPhase || '').trim().toLowerCase();
+    const allowedRoles = String(ev?.allowedRolesCsv || '').trim().toLowerCase()
+      .split(',')
+      .map((role) => String(role || '').trim().toLowerCase())
+      .filter(Boolean)
+      .sort();
+    if (phase === 'full_texture') fullTextureCount += 1;
+    if (ev?.contractAnswerActive === true) answerActiveCount += 1;
+    if (ev?.contractSparkleActive === true) sparkleActiveCount += 1;
+    if (ev?.contractSupportActive === true) supportActiveCount += 1;
+    inc(bySupportBudget, ev?.supportPatternBudget);
+    inc(byCounterRhythmFamily, ev?.preferredCounterRhythmFamily);
+    inc(byAnswerPolicy, ev?.answerPolicy);
+    inc(byAllowedRoleSet, allowedRoles.join('|') || 'none');
+    inc(byEpoch, ev?.epochId);
+  }
+  const count = events.length;
+  return {
+    count,
+    fullTextureCount,
+    answerActiveShare: count > 0 ? answerActiveCount / count : 0,
+    sparkleActiveShare: count > 0 ? sparkleActiveCount / count : 0,
+    supportActiveShare: count > 0 ? supportActiveCount / count : 0,
+    bySupportBudget,
+    byCounterRhythmFamily,
+    byAnswerPolicy,
+    byAllowedRoleSet,
+    byEpoch,
+    sample: events.slice(0, 24).map((ev) => ({
+      barIndex: clampInt(ev?.barIndex, 0, 0),
+      beatIndex: clampInt(ev?.beatIndex, 0, 0),
+      activeLevelPhase: String(ev?.activeLevelPhase || '').trim().toLowerCase(),
+      activeMusicMode: String(ev?.activeMusicMode || '').trim().toLowerCase(),
+      phaseVariant: String(ev?.phaseVariant || '').trim().toLowerCase(),
+      epochId: String(ev?.epochId || '').trim(),
+      allowedRoles,
+      supportPolicy: {
+        supportPatternBudget: String(ev?.supportPatternBudget || '').trim().toLowerCase(),
+        preferredCounterRhythmFamily: String(ev?.preferredCounterRhythmFamily || '').trim().toLowerCase(),
+        answerPolicy: String(ev?.answerPolicy || '').trim().toLowerCase(),
+        allowSparkle: ev?.allowSparkle === true,
+      },
+      lanes: {
+        foundation: ev?.contractFoundationActive === true,
+        secondary_loop: ev?.contractSecondaryLoopActive === true,
+        primary_loop: ev?.contractPrimaryLoopActive === true,
+        sparkle: ev?.contractSparkleActive === true,
+        support: ev?.contractSupportActive === true,
+        answer: ev?.contractAnswerActive === true,
+      },
+    })),
+  };
+}
+
+function clampUnit(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+function collectRetroShmupStyleMetrics(metrics) {
+  const leadShare = clampUnit(
+    metrics?.roleBalance?.distribution?.lead
+    ?? metrics?.roleBalance?.distribution?.lead_phrase
+    ?? 0
+  );
+  const strongFoundationRate = clampUnit(
+    metrics?.strongBeatDeliveryByMusicLane?.foundation_lane?.executedToCreatedRate
+  );
+  const mediumRhythmRate = clampUnit(
+    metrics?.mediumBeatDeliveryByReason?.rhythm_lane?.executedToCreatedRate
+  );
+  const leadDeliveryRate = clampUnit(
+    metrics?.deliveryByReason?.lead_melody?.executedToCreatedRate
+  );
+  const answerRate = clampUnit(
+    metrics?.deliveryByProfileSourceType?.answer_ornament?.executedToCreatedRate
+  );
+  const sparkleRate = clampUnit(
+    metrics?.deliveryByMusicLane?.sparkle_lane?.executedToCreatedRate
+  );
+  const secondaryBridgeRate = clampUnit(
+    metrics?.deliveryByReason?.secondary_bridge_backbeat?.executedToCreatedRate
+  );
+  const maskingRate = clampUnit(metrics?.playerMasking?.playerMaskingRate);
+  const enemyCompetitionShare = clampUnit(metrics?.readability?.avgEnemyCompetitionShare);
+  const avgVoices = clampUnit((Number(metrics?.simultaneousVoiceCount) || 0) / 4);
+  const maxVoices = clampUnit((Number(metrics?.maxSimultaneousVoiceCount) || 0) / 6);
+  const phraseResolutionRate = clampUnit(metrics?.phraseGravity?.phraseResolutionRate);
+  const gravityHitRate = clampUnit(metrics?.phraseGravity?.gravityHitRate);
+  const immediateResponseRate = clampUnit(metrics?.callResponse?.immediateResponseRate);
+  const bassPersistence = clampUnit(metrics?.grooveStability?.bassPatternPersistence);
+  const primaryLeadStable = String(metrics?.musicalityTargets?.primaryLead?.status || '').trim().toLowerCase() === 'stable';
+  const primaryLeadPersistenceStable = String(metrics?.musicalityTargets?.primaryLead?.persistenceStatus || '').trim().toLowerCase() === 'stable';
+
+  const pulseRegularityScore = clampUnit(
+    (strongFoundationRate * 0.5)
+    + (bassPersistence * 0.3)
+    + (mediumRhythmRate * 0.2)
+  );
+  const leadAuthorityScore = clampUnit(
+    (leadDeliveryRate * 0.4)
+    + (leadShare * 0.25)
+    + ((primaryLeadStable ? 1 : 0) * 0.2)
+    + ((primaryLeadPersistenceStable ? 1 : 0) * 0.15)
+  );
+  const cadenceRegularityScore = clampUnit(
+    (phraseResolutionRate * 0.45)
+    + (gravityHitRate * 0.35)
+    + (immediateResponseRate * 0.2)
+  );
+  const supportDisciplineScore = clampUnit(
+    1 - (
+      ((1 - answerRate) * 0.22)
+      + ((1 - sparkleRate) * 0.28)
+      + ((1 - secondaryBridgeRate) * 0.2)
+      + (maskingRate * 0.18)
+      + (enemyCompetitionShare * 0.12)
+    )
+  );
+  const arrangementSimplicityScore = clampUnit(
+    1 - ((avgVoices * 0.55) + (maxVoices * 0.45))
+  );
+  const overallScore = clampUnit(
+    (pulseRegularityScore * 0.28)
+    + (leadAuthorityScore * 0.26)
+    + (cadenceRegularityScore * 0.16)
+    + (supportDisciplineScore * 0.18)
+    + (arrangementSimplicityScore * 0.12)
+  );
+
+  return {
+    targetProfile: 'retro_shmup_stage1',
+    pulseRegularityScore: Number(pulseRegularityScore.toFixed(3)),
+    leadAuthorityScore: Number(leadAuthorityScore.toFixed(3)),
+    cadenceRegularityScore: Number(cadenceRegularityScore.toFixed(3)),
+    supportDisciplineScore: Number(supportDisciplineScore.toFixed(3)),
+    arrangementSimplicityScore: Number(arrangementSimplicityScore.toFixed(3)),
+    overallScore: Number(overallScore.toFixed(3)),
+    styleStatus: overallScore >= 0.72
+      ? 'on_target'
+      : (overallScore >= 0.56 ? 'approaching' : 'off_target'),
   };
 }
 
@@ -3582,6 +4308,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const sectionPresentation = collectSectionPresentation(session, maxBarIndex);
   const readabilityStructureOnboarding = collectReadabilityStructureOnboarding(session, maxBarIndex);
   const grooveStability = collectGrooveStability(executedEvents, sectionStability);
+  const foregroundCompetition = collectForegroundCompetitionDiagnostics(session, executedEvents, maxBarIndex);
   const hierarchyModel = collectHierarchyModelDiagnostics(
     executedEvents,
     maxBarIndex,
@@ -3596,6 +4323,8 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     passDiagnostics,
   });
   const musicalityTargets = collectMusicalityTargets(session, maxBarIndex);
+  const primaryLeadInstrumentChangeTrace = collectPrimaryLeadInstrumentChangeTrace(session, maxBarIndex);
+  const level1ContractTrace = collectLevel1ContractTrace(session, maxBarIndex);
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -3783,12 +4512,49 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     bassExecutedToCreatedRate: Number(passDiagnostics?.delivery?.bassExecutedToCreatedRate) || 0,
     maxBassStepGap: Number(passDiagnostics?.delivery?.maxBassStepGap) || 0,
     maxEnemyStepsWithoutBass: Number(passDiagnostics?.delivery?.maxEnemyStepsWithoutBass) || 0,
+    deliveryByActionType: passDiagnostics?.delivery?.byActionType && typeof passDiagnostics.delivery.byActionType === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.byActionType))
+      : {},
+    deliveryBySourceSystem: passDiagnostics?.delivery?.bySourceSystem && typeof passDiagnostics.delivery.bySourceSystem === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.bySourceSystem))
+      : {},
+    deliveryByMusicLane: passDiagnostics?.delivery?.byMusicLane && typeof passDiagnostics.delivery.byMusicLane === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.byMusicLane))
+      : {},
+    deliveryByProfileSourceType: passDiagnostics?.delivery?.byProfileSourceType && typeof passDiagnostics.delivery.byProfileSourceType === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.byProfileSourceType))
+      : {},
+    deliveryByReason: passDiagnostics?.delivery?.byReason && typeof passDiagnostics.delivery.byReason === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.byReason))
+      : {},
+    deliveryByBeatStrength: passDiagnostics?.delivery?.byBeatStrength && typeof passDiagnostics.delivery.byBeatStrength === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.byBeatStrength))
+      : {},
+    strongBeatDeliveryByMusicLane: passDiagnostics?.delivery?.strongBeatByMusicLane && typeof passDiagnostics.delivery.strongBeatByMusicLane === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.strongBeatByMusicLane))
+      : {},
+    strongBeatDeliveryByReason: passDiagnostics?.delivery?.strongBeatByReason && typeof passDiagnostics.delivery.strongBeatByReason === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.strongBeatByReason))
+      : {},
+    mediumBeatDeliveryByMusicLane: passDiagnostics?.delivery?.mediumBeatByMusicLane && typeof passDiagnostics.delivery.mediumBeatByMusicLane === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.mediumBeatByMusicLane))
+      : {},
+    mediumBeatDeliveryByReason: passDiagnostics?.delivery?.mediumBeatByReason && typeof passDiagnostics.delivery.mediumBeatByReason === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.mediumBeatByReason))
+      : {},
+    strongBeatFoundationDeliveryByProfileSourceType: passDiagnostics?.delivery?.strongBeatFoundationByProfileSourceType && typeof passDiagnostics.delivery.strongBeatFoundationByProfileSourceType === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.strongBeatFoundationByProfileSourceType))
+      : {},
+    strongBeatFoundationDeliveryByReason: passDiagnostics?.delivery?.strongBeatFoundationByReason && typeof passDiagnostics.delivery.strongBeatFoundationByReason === 'object'
+      ? JSON.parse(JSON.stringify(passDiagnostics.delivery.strongBeatFoundationByReason))
+      : {},
     sectionStability,
     sectionPresentation,
     readability: readabilityStructureOnboarding.readability,
     structure: readabilityStructureOnboarding.structure,
     onboarding: readabilityStructureOnboarding.onboarding,
     grooveStability,
+    foregroundCompetition,
     presentationMetrics,
     explosionPrimesCreated: Number(explosionReliability?.explosionPrimesCreated) || 0,
     explosionApplications: Number(explosionReliability?.explosionApplications) || 0,
@@ -3809,18 +4575,113 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     groupParticipationRate: Number(presentationMetrics?.groupParticipationRate) || 0,
     ghostLoopCount: Number(presentationMetrics?.ghostLoopCount) || 0,
     musicalityTargets,
+    primaryLeadInstrumentChangeTrace,
+    level1ContractTrace,
+    level1ContractTraceCount: Number(level1ContractTrace?.count) || 0,
+    level1ContractFullTextureCount: Number(level1ContractTrace?.fullTextureCount) || 0,
+    level1ContractAnswerActiveShare: Number(level1ContractTrace?.answerActiveShare) || 0,
+    level1ContractSparkleActiveShare: Number(level1ContractTrace?.sparkleActiveShare) || 0,
+    level1ContractSupportActiveShare: Number(level1ContractTrace?.supportActiveShare) || 0,
+    level1ContractBySupportBudget: level1ContractTrace?.bySupportBudget && typeof level1ContractTrace.bySupportBudget === 'object'
+      ? { ...level1ContractTrace.bySupportBudget }
+      : {},
+    level1ContractByCounterRhythmFamily: level1ContractTrace?.byCounterRhythmFamily && typeof level1ContractTrace.byCounterRhythmFamily === 'object'
+      ? { ...level1ContractTrace.byCounterRhythmFamily }
+      : {},
+    level1ContractByAnswerPolicy: level1ContractTrace?.byAnswerPolicy && typeof level1ContractTrace.byAnswerPolicy === 'object'
+      ? { ...level1ContractTrace.byAnswerPolicy }
+      : {},
+    level1ContractByAllowedRoleSet: level1ContractTrace?.byAllowedRoleSet && typeof level1ContractTrace.byAllowedRoleSet === 'object'
+      ? { ...level1ContractTrace.byAllowedRoleSet }
+      : {},
+    level1ContractSample: Array.isArray(level1ContractTrace?.sample)
+      ? level1ContractTrace.sample.slice(0, 24)
+      : [],
     primaryLeadUniqueGroupCount: Number(musicalityTargets?.primaryLead?.uniqueLeadGroupCount) || 0,
     primaryLeadSingleShare: Number(musicalityTargets?.primaryLead?.singleLeadShare) || 0,
     primaryLeadNoLeadShare: Number(musicalityTargets?.primaryLead?.noLeadShare) || 0,
     primaryLeadMultiLeadShare: Number(musicalityTargets?.primaryLead?.multiLeadShare) || 0,
     primaryLeadMaxCount: Number(musicalityTargets?.primaryLead?.maxLeadCount) || 0,
     primaryLeadLongestRunBeats: Number(musicalityTargets?.primaryLead?.longestSingleLeadRunBeats) || 0,
+    primaryLeadAuthorityActiveShare: Number(musicalityTargets?.primaryLead?.authority?.activeShare) || 0,
+    primaryLeadAuthorityGroupSwitches: Number(musicalityTargets?.primaryLead?.authority?.groupSwitches) || 0,
+    primaryLeadAuthorityContinuitySwitches: Number(musicalityTargets?.primaryLead?.authority?.continuitySwitches) || 0,
+    primaryLeadAuthorityInstrumentSwitches: Number(musicalityTargets?.primaryLead?.authority?.instrumentSwitches) || 0,
+    primaryLeadAuthorityLongestGroupRunBeats: Number(musicalityTargets?.primaryLead?.authority?.longestGroupRunBeats) || 0,
+    primaryLeadAuthorityLongestContinuityRunBeats: Number(musicalityTargets?.primaryLead?.authority?.longestContinuityRunBeats) || 0,
+    primaryLeadAuthorityLongestInstrumentRunBeats: Number(musicalityTargets?.primaryLead?.authority?.longestInstrumentRunBeats) || 0,
+    primaryLeadAuthorityStatus: String(musicalityTargets?.primaryLead?.authority?.status || '').trim().toLowerCase(),
+    primaryLeadInstrumentChangeTraceCount: Number(primaryLeadInstrumentChangeTrace?.count) || 0,
+    primaryLeadInstrumentChangeBySource: primaryLeadInstrumentChangeTrace?.bySource && typeof primaryLeadInstrumentChangeTrace.bySource === 'object'
+      ? { ...primaryLeadInstrumentChangeTrace.bySource }
+      : {},
+    primaryLeadInstrumentChangeByPhase: primaryLeadInstrumentChangeTrace?.byPhase && typeof primaryLeadInstrumentChangeTrace.byPhase === 'object'
+      ? { ...primaryLeadInstrumentChangeTrace.byPhase }
+      : {},
+    primaryLeadInstrumentChangeByMode: primaryLeadInstrumentChangeTrace?.byMode && typeof primaryLeadInstrumentChangeTrace.byMode === 'object'
+      ? { ...primaryLeadInstrumentChangeTrace.byMode }
+      : {},
+    primaryLeadInstrumentChangeTraceSample: Array.isArray(primaryLeadInstrumentChangeTrace?.trace)
+      ? primaryLeadInstrumentChangeTrace.trace.slice(0, 24)
+      : [],
     foundationBufferMaxCount: Number(musicalityTargets?.foundationBuffer?.maxCount) || 0,
     answerOrnamentMaxCount: Number(musicalityTargets?.answerOrnament?.maxCount) || 0,
     answerOrnamentLeadRoleEvents: Number(musicalityTargets?.answerOrnament?.leadRoleEvents) || 0,
     avgActiveComposerGroupCount: Number(musicalityTargets?.population?.avgActiveGroupCount) || 0,
     maxActiveComposerGroupCount: Number(musicalityTargets?.population?.maxActiveGroupCount) || 0,
+    fullTextureEnemyForegroundShare: Number(foregroundCompetition?.fullTextureEnemyForegroundShare) || 0,
+    fullTextureEnemyCompetitionShare: Number(foregroundCompetition?.fullTextureEnemyCompetitionShare) || 0,
+    fullTextureForegroundByRole: foregroundCompetition?.byRoleForeground && typeof foregroundCompetition.byRoleForeground === 'object'
+      ? { ...foregroundCompetition.byRoleForeground }
+      : {},
+    fullTextureCompetitionByRole: foregroundCompetition?.byRoleCompetition && typeof foregroundCompetition.byRoleCompetition === 'object'
+      ? { ...foregroundCompetition.byRoleCompetition }
+      : {},
+    fullTextureForegroundBySource: foregroundCompetition?.bySourceForeground && typeof foregroundCompetition.bySourceForeground === 'object'
+      ? { ...foregroundCompetition.bySourceForeground }
+      : {},
+    fullTextureCompetitionBySource: foregroundCompetition?.bySourceCompetition && typeof foregroundCompetition.bySourceCompetition === 'object'
+      ? { ...foregroundCompetition.bySourceCompetition }
+      : {},
+    fullTextureForegroundByEnemyType: foregroundCompetition?.byEnemyTypeForeground && typeof foregroundCompetition.byEnemyTypeForeground === 'object'
+      ? { ...foregroundCompetition.byEnemyTypeForeground }
+      : {},
+    fullTextureCompetitionByEnemyType: foregroundCompetition?.byEnemyTypeCompetition && typeof foregroundCompetition.byEnemyTypeCompetition === 'object'
+      ? { ...foregroundCompetition.byEnemyTypeCompetition }
+      : {},
+    fullTextureForegroundByProfileSourceType: foregroundCompetition?.byProfileSourceTypeForeground && typeof foregroundCompetition.byProfileSourceTypeForeground === 'object'
+      ? { ...foregroundCompetition.byProfileSourceTypeForeground }
+      : {},
+    fullTextureCompetitionByProfileSourceType: foregroundCompetition?.byProfileSourceTypeCompetition && typeof foregroundCompetition.byProfileSourceTypeCompetition === 'object'
+      ? { ...foregroundCompetition.byProfileSourceTypeCompetition }
+      : {},
+    fullTextureForegroundByReason: foregroundCompetition?.byReasonForeground && typeof foregroundCompetition.byReasonForeground === 'object'
+      ? { ...foregroundCompetition.byReasonForeground }
+      : {},
+    fullTextureCompetitionByReason: foregroundCompetition?.byReasonCompetition && typeof foregroundCompetition.byReasonCompetition === 'object'
+      ? { ...foregroundCompetition.byReasonCompetition }
+      : {},
+    fullTexturePrimarySecondaryConflictHitCount: Number(foregroundCompetition?.conflictDiagnostics?.primarySecondaryConflictHitCount) || 0,
+    fullTexturePrimarySecondaryConflictAvoidedCount: Number(foregroundCompetition?.conflictDiagnostics?.primarySecondaryConflictAvoidedCount) || 0,
+    fullTexturePrimarySecondaryConflictByLane: foregroundCompetition?.conflictDiagnostics?.byLane && typeof foregroundCompetition.conflictDiagnostics.byLane === 'object'
+      ? JSON.parse(JSON.stringify(foregroundCompetition.conflictDiagnostics.byLane))
+      : {},
+    fullTexturePrimarySecondaryConflictByProfileSourceType: foregroundCompetition?.conflictDiagnostics?.byProfileSourceType && typeof foregroundCompetition.conflictDiagnostics.byProfileSourceType === 'object'
+      ? JSON.parse(JSON.stringify(foregroundCompetition.conflictDiagnostics.byProfileSourceType))
+      : {},
+    fullTexturePrimarySecondaryConflictByReason: foregroundCompetition?.conflictDiagnostics?.byReason && typeof foregroundCompetition.conflictDiagnostics.byReason === 'object'
+      ? JSON.parse(JSON.stringify(foregroundCompetition.conflictDiagnostics.byReason))
+      : {},
+    fullTextureOrnamentConflictHitCount: Number(foregroundCompetition?.conflictDiagnostics?.ornamentConflictHitCount) || 0,
+    fullTextureOrnamentConflictAvoidedCount: Number(foregroundCompetition?.conflictDiagnostics?.ornamentConflictAvoidedCount) || 0,
+    fullTextureOrnamentConflictByProfileSourceType: foregroundCompetition?.conflictDiagnostics?.ornamentByProfileSourceType && typeof foregroundCompetition.conflictDiagnostics.ornamentByProfileSourceType === 'object'
+      ? JSON.parse(JSON.stringify(foregroundCompetition.conflictDiagnostics.ornamentByProfileSourceType))
+      : {},
+    fullTextureOrnamentConflictByReason: foregroundCompetition?.conflictDiagnostics?.ornamentByReason && typeof foregroundCompetition.conflictDiagnostics.ornamentByReason === 'object'
+      ? JSON.parse(JSON.stringify(foregroundCompetition.conflictDiagnostics.ornamentByReason))
+      : {},
   };
+  metrics.retroShmupStyle = collectRetroShmupStyleMetrics(metrics);
   return {
     metrics,
     sessionSummary: computeSummary(metrics),

@@ -364,6 +364,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const resolveSwarmRoleInstrumentId = typeof options?.resolveSwarmRoleInstrumentId === 'function' ? options.resolveSwarmRoleInstrumentId : ((_, fallback) => fallback);
   const resolveSwarmSoundInstrumentId = typeof options?.resolveSwarmSoundInstrumentId === 'function' ? options.resolveSwarmSoundInstrumentId : (() => 'tone');
   const createPerformedBeatEvent = typeof options?.createPerformedBeatEvent === 'function' ? options.createPerformedBeatEvent : ((evt) => evt);
+  const getGroupEventContinuityId = (groupLike = null) => String(
+    groupLike?.musicLaneContinuityId
+    || groupLike?.continuityId
+    || ''
+  ).trim();
   const chooseEnemyForNote = typeof options?.chooseEnemyForNote === 'function' ? options.chooseEnemyForNote : ((o) => chooseComposerGroupEnemyForNote(o));
   const roles = options?.roles && typeof options.roles === 'object' ? options.roles : {};
   const threat = options?.threat && typeof options.threat === 'object' ? options.threat : {};
@@ -373,6 +378,52 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const motifRepeatBias = Math.max(0, Math.min(1, Number(styleProfile?.motifRepeatBias) || 0));
   const leadLeapChance = Math.max(0, Math.min(1, Number(styleProfile?.leadLeapChance) || 1));
   const accentPitchVariance = Math.max(0, Math.min(1, Number(styleProfile?.accentPitchVariance) || 1));
+  const isSupportLaneEvent = ({ musicLaneId = '', callResponseLane = '', role = '' } = {}) => {
+    const normalizedLaneId = String(musicLaneId || '').trim().toLowerCase();
+    const normalizedCallResponseLane = String(callResponseLane || '').trim().toLowerCase();
+    const normalizedRole = normalizeSwarmRole(role || '', '');
+    return normalizedLaneId === 'secondary_loop_lane'
+      || normalizedLaneId === 'answer_lane'
+      || normalizedLaneId === 'sparkle_lane'
+      || normalizedCallResponseLane === 'response'
+      || normalizedRole === String(roles?.accent || 'accent').trim().toLowerCase();
+  };
+  const resolveSupportSafeInstrumentId = (preferredInstrumentId = '', optionsLike = null) => {
+    const musicLaneId = String(optionsLike?.musicLaneId || '').trim().toLowerCase();
+    const callResponseLane = String(optionsLike?.callResponseLane || '').trim().toLowerCase();
+    const role = normalizeSwarmRole(optionsLike?.role || '', roles?.accent || 'accent');
+    const preferred = String(preferredInstrumentId || '').trim();
+    const preferredLane = inferInstrumentLaneFromCatalogId(preferred, '');
+    if (!isSupportLaneEvent({ musicLaneId, callResponseLane, role }) || preferredLane !== 'lead') return preferred;
+    const responseLike = callResponseLane === 'response' || musicLaneId === 'answer_lane' || musicLaneId === 'sparkle_lane';
+    const candidateIds = responseLike
+      ? [
+          getIdForDisplayName('Bell'),
+          getIdForDisplayName('Xylophone'),
+          getIdForDisplayName('Chime'),
+          getIdForDisplayName('Retro Triangle'),
+          resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone'),
+          resolveSwarmSoundInstrumentId('projectile'),
+          'tone',
+        ]
+      : [
+          getIdForDisplayName('Drum Snare 2'),
+          getIdForDisplayName('Hand clap (electro)'),
+          getIdForDisplayName('Hand clap'),
+          getIdForDisplayName('Retro Projectile Subtle'),
+          getIdForDisplayName('Laser'),
+          resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone'),
+          resolveSwarmSoundInstrumentId('projectile'),
+          'tone',
+        ];
+    for (const candidate of candidateIds) {
+      const instrumentId = String(candidate || '').trim();
+      if (!instrumentId) continue;
+      if (inferInstrumentLaneFromCatalogId(instrumentId, '') === 'lead') continue;
+      return instrumentId;
+    }
+    return preferred;
+  };
   const laneDrivenFoundation = options?.laneDrivenFoundation === true;
   const laneDrivenPrimaryLoop = options?.laneDrivenPrimaryLoop === true;
   const answerLanePlan = directorLanePlan && typeof directorLanePlan === 'object'
@@ -413,7 +464,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     || protectedContinuityLanes.includes('secondary_loop_lane');
   const directBedFallbackWanted = (strongLeadWindowActive || secondaryLoopProtected)
     && activePrimaryLoopLeadGroups.length > 0
-    && (secondaryLoopProtected || !activeSecondaryLoopCoveragePresent);
+    && !activeSecondaryLoopCoveragePresent;
   const getPendingCallExpiry = (callStepAbs, targetLength) => {
     const lastCallStep = Math.max(-1, Math.trunc(Number(callStepAbs) || -1));
     if (lastCallStep < 0) return -1;
@@ -801,9 +852,16 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         const lockedResolvedRole = lockedInstrumentLane === 'bass'
           ? 'bass'
           : normalizeSwarmRole(lockedRole || roles.lead, roles.lead);
-        const lockedInstrumentId = lockedInstrumentIdRaw || resolveSwarmRoleInstrumentId(
-          lockedResolvedRole,
-          resolveSwarmSoundInstrumentId('projectile') || 'tone'
+        const lockedInstrumentId = resolveSupportSafeInstrumentId(
+          lockedInstrumentIdRaw || resolveSwarmRoleInstrumentId(
+            lockedResolvedRole,
+            resolveSwarmSoundInstrumentId('projectile') || 'tone'
+          ),
+          {
+            musicLaneId: lockedLaneId,
+            callResponseLane: lockedIntroLane || lane || 'solo',
+            role: lockedInstrumentLane === 'bass' ? 'bass' : lockedResolvedRole,
+          }
         );
         const lockedNoteName = normalizeSwarmNoteName(
           Array.isArray(group?.introSlotNotes) && group.introSlotNotes.length
@@ -852,7 +910,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
             groupId,
             ghostPlayback: true,
             groupEventSource: 'intro_slot_strict',
-            continuityId: String(group?.continuityId || '').trim(),
+            continuityId: getGroupEventContinuityId(group),
             musicVoiceKey: lockedMusicVoiceKey,
             musicRole: lockedInstrumentLane === 'bass' ? 'bass' : lockedResolvedRole,
             musicLayer: lockedMusicLayer,
@@ -923,19 +981,27 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       const lockedLaneId = String(group?.introSlotMusicLaneId || group?.musicLaneId || '').trim().toLowerCase();
       const lockedInstrumentIdRaw = String(
         group?.introSlotInstrumentId
+          || group?.musicLaneInstrumentId
           || group?.instrumentId
           || group?.instrument
-          || aliveMembers[0]?.composerInstrument
           || aliveMembers[0]?.musicLaneInstrumentId
+          || aliveMembers[0]?.composerInstrument
           || ''
       ).trim();
       const lockedInstrumentLane = inferInstrumentLaneFromCatalogId(lockedInstrumentIdRaw, '');
       const lockedResolvedRole = lockedInstrumentLane === 'bass'
         ? 'bass'
         : normalizeSwarmRole(lockedRole || getSwarmRoleForEnemy(aliveMembers[0], roles.lead), roles.lead);
-      const lockedInstrumentId = lockedInstrumentIdRaw || resolveSwarmRoleInstrumentId(
-        lockedResolvedRole,
-        resolveSwarmSoundInstrumentId('projectile') || 'tone'
+      const lockedInstrumentId = resolveSupportSafeInstrumentId(
+        lockedInstrumentIdRaw || resolveSwarmRoleInstrumentId(
+          lockedResolvedRole,
+          resolveSwarmSoundInstrumentId('projectile') || 'tone'
+        ),
+        {
+          musicLaneId: lockedLaneId,
+          callResponseLane: lockedIntroLane || lane || 'solo',
+          role: lockedInstrumentLane === 'bass' ? 'bass' : lockedResolvedRole,
+        }
       );
       const lockedNoteName = normalizeSwarmNoteName(
         Array.isArray(group?.introSlotNotes) && group.introSlotNotes.length
@@ -992,7 +1058,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         payload: {
           groupId,
           groupEventSource: 'intro_slot_strict',
-          continuityId: String(group?.continuityId || '').trim(),
+          continuityId: getGroupEventContinuityId(group),
           musicVoiceKey: lockedMusicVoiceKey,
           musicRole: lockedInstrumentLane === 'bass' ? 'bass' : lockedResolvedRole,
           musicLayer: lockedMusicLayer,
@@ -1368,10 +1434,12 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         ? (
           getIdForDisplayName('Bass Tone 3')
           || getIdForDisplayName('Bass Tone 4')
+          || group?.musicLaneInstrumentId
           || group?.instrumentId
           || ''
         )
-        : group?.instrumentId)
+        : (group?.musicLaneInstrumentId || group?.instrumentId))
+        || performers[0]?.musicLaneInstrumentId
         || performers[0]?.instrumentId
         || performers[0]?.musicInstrumentId
         || performers[0]?.composerInstrument
@@ -1381,9 +1449,16 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const resolvedRole = lockedLane === 'bass'
       ? 'bass'
       : normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(performers[0], roles.lead), roles.lead);
-    const instrumentId = lockedInstrumentId || resolveSwarmRoleInstrumentId(
-      resolvedRole,
-      resolveSwarmSoundInstrumentId('projectile') || 'tone'
+    const instrumentId = resolveSupportSafeInstrumentId(
+      lockedInstrumentId || resolveSwarmRoleInstrumentId(
+        resolvedRole,
+        resolveSwarmSoundInstrumentId('projectile') || 'tone'
+      ),
+      {
+        musicLaneId: groupLaneId,
+        callResponseLane: lane,
+        role: resolvedRole,
+      }
     );
     const lifecycleAudioGain = lifecycleState === 'inactiveForScheduling'
       ? 0.35
@@ -1642,7 +1717,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           groupEventSource: slotRhythmCarrier
             ? 'intro_slot_generic'
             : (isFoundationBufferGroup ? 'foundation_buffer_generic' : 'composer_group_generic'),
-          continuityId: String(group?.continuityId || '').trim(),
+          continuityId: getGroupEventContinuityId(group),
           musicLayer,
           musicProminence,
           soloCarrierType,
@@ -1931,23 +2006,30 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         }) || fallbackAliveMembers[0] || null)
         : null;
       const fallbackActorId = Math.max(0, Math.trunc(Number(fallbackPerformer?.id) || 0));
-      const instrumentId = String(
-        fallbackResponseGroup?.instrumentId
-          || fallbackResponseGroup?.instrument
-          || fallbackCarrierSourceGroup?.instrumentId
-          || fallbackCarrierSourceGroup?.instrument
-          || fallbackPerformer?.instrumentId
-          || fallbackPerformer?.musicInstrumentId
-          || fallbackPerformer?.composerInstrument
-          || getIdForDisplayName('Chime')
-          || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
-          || resolveSwarmSoundInstrumentId('projectile')
-          || 'tone'
-      ).trim();
       const fallbackMusicLaneId = String(
         fallbackResponseGroup?.musicLaneId
           || (String(fallbackResponseGroup?.musicLaneLayer || '').trim().toLowerCase() === 'sparkle' ? 'sparkle_lane' : 'secondary_loop_lane')
       ).trim().toLowerCase() || 'secondary_loop_lane';
+      const instrumentId = resolveSupportSafeInstrumentId(
+        String(
+          fallbackResponseGroup?.instrumentId
+            || fallbackResponseGroup?.instrument
+            || fallbackCarrierSourceGroup?.instrumentId
+            || fallbackCarrierSourceGroup?.instrument
+            || fallbackPerformer?.instrumentId
+            || fallbackPerformer?.musicInstrumentId
+            || fallbackPerformer?.composerInstrument
+            || getIdForDisplayName('Chime')
+            || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
+            || resolveSwarmSoundInstrumentId('projectile')
+            || 'tone'
+        ).trim(),
+        {
+          musicLaneId: fallbackMusicLaneId,
+          callResponseLane: 'response',
+          role: roles?.accent || 'accent',
+        }
+      );
       const fallbackMusicLayer = fallbackMusicLaneId === 'sparkle_lane'
         ? 'sparkle'
         : 'loops';
@@ -2116,15 +2198,22 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       stepAbs + 3,
       'mid'
     );
-    const ornamentInstrumentId = String(
-      getIdForDisplayName('Gaming Note')
-        || getIdForDisplayName('Retro Triangle')
-        || getIdForDisplayName('Bell')
-        || getIdForDisplayName('Xylophone')
-        || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
-        || resolveSwarmSoundInstrumentId('projectile')
-        || 'tone'
-    ).trim();
+    const ornamentInstrumentId = resolveSupportSafeInstrumentId(
+      String(
+        getIdForDisplayName('Bell')
+          || getIdForDisplayName('Xylophone')
+          || getIdForDisplayName('Chime')
+          || getIdForDisplayName('Retro Triangle')
+          || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
+          || resolveSwarmSoundInstrumentId('projectile')
+          || 'tone'
+      ).trim(),
+      {
+        musicLaneId: 'sparkle_lane',
+        callResponseLane: 'response',
+        role: roles?.accent || 'accent',
+      }
+    );
     const ornamentAliveMembers = ornamentCarrierSourceGroup
       ? getLiveComposerMembersForGroup(ornamentCarrierSourceGroup)
       : [];
@@ -2209,15 +2298,22 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         stepAbs + 5,
         'mid'
       );
-      const ornamentInstrumentId = String(
-        getIdForDisplayName('Gaming Note')
-          || getIdForDisplayName('Retro Triangle')
-          || getIdForDisplayName('Bell')
-          || getIdForDisplayName('Xylophone')
-          || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
-          || resolveSwarmSoundInstrumentId('projectile')
-          || 'tone'
-      ).trim();
+      const ornamentInstrumentId = resolveSupportSafeInstrumentId(
+        String(
+          getIdForDisplayName('Bell')
+            || getIdForDisplayName('Xylophone')
+            || getIdForDisplayName('Chime')
+            || getIdForDisplayName('Retro Triangle')
+            || resolveSwarmRoleInstrumentId(roles?.accent || 'accent', resolveSwarmSoundInstrumentId('projectile') || 'tone')
+            || resolveSwarmSoundInstrumentId('projectile')
+            || 'tone'
+        ).trim(),
+        {
+          musicLaneId: 'sparkle_lane',
+          callResponseLane: 'response',
+          role: roles?.accent || 'accent',
+        }
+      );
       const ornamentAliveMembers = ornamentCarrierSourceGroup
         ? getLiveComposerMembersForGroup(ornamentCarrierSourceGroup)
         : [];

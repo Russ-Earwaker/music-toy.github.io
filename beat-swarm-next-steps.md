@@ -1,5 +1,65 @@
 # Beat Swarm - Next Steps
 
+## Current Handoff Status
+
+Latest validated Music Lab run:
+
+- file: `resources/music-lab-results/music-lab-results-2026-04-24T12-52-54-537Z.json`
+- scenario: `BS0 S3 assessment 1x5m`
+- result: support-lane instrument leakage is fixed
+
+What the latest run confirmed:
+
+- `laneCompliance.matchRate = 1.0`
+- `laneCompliance.byLane.accent.matched = 236 / 236`
+- `laneCompliance.mismatchExamples = []`
+- executed accent support now uses support-safe instruments:
+  - `secondary_loop_lane / call / HAND CLAP (ELECTRO)`
+  - `sparkle_lane / response / BELL`
+- executed accent `composer-group-projectile` events now contain:
+  - `GAMING NOTE = 0`
+  - `GAMING BLING = 0`
+- `directorSparkleActiveBeats = 0`
+- `primaryLead = exclusive`
+- `primaryLeadPersistence = stable`
+
+Current musical read:
+
+- `retroShmupStyle.overallScore = 0.604`
+- `leadAuthorityScore = 0.651`
+- `arrangementSimplicityScore = 0.329`
+- `supportDisciplineScore = 0.607`
+- `pulseRegularityScore = 0.752`
+- `instrumentChangesPerEnemy = 3.36`
+- `visibleEnemyEvents = 1938`
+
+Current assessment:
+
+- the accent/lead lane-classification bug is no longer the blocker
+- the main remaining problem is structural drift and excess density
+- session summary still reports:
+  - `ownershipContinuity = drift`
+  - `identityStability = drift`
+  - `readabilityDensity = busy`
+
+## What We Are Currently Doing
+
+Active runtime focus:
+
+1. preserve the now-correct lane/instrument contract
+2. reduce support/counter-rhythm ownership drift
+3. simplify full-texture density so the result reads more like a retro shmup stage track
+
+Immediate next technical target:
+
+- continue tracing support and counter-rhythm ownership drift
+- reduce unnecessary ownership resets and continuity breaks without regressing lead authority
+- trim arrangement density after continuity is stable, rather than adding more role variety first
+
+Explicit non-goal right now:
+
+- do **not** spend more time on accent-lane instrument cleanup unless a regression appears
+
 ## Current State
 
 The core architecture is no longer the main problem.
@@ -19,10 +79,100 @@ The current phase is:
 
 > Musical clarity, delivery reliability, and perceptual stability
 
+## Current Direction Reset
+
+The current branch has exposed a larger architectural problem:
+
+- local tuning keeps moving one metric while regressing another
+- support identity and density are still too emergent
+- Level 1 is trying to behave like both:
+  - a flexible adaptive music system
+  - and a tightly readable retro shmup score
+
+That is too much freedom for the current runtime.
+
+So the active direction has changed:
+
+> Level 1 should now be implemented as a constrained contract-first music mode.
+
+For Level 1:
+
+- structure is fixed
+- content varies within strict bounds
+- gameplay may only thin, defer, or fail to embody authored material
+- gameplay may not add roles, reclassify roles, or alter authored timing windows
+
+### Level 1 Contract Rules
+
+These are now the active working rules for implementation:
+
+- phases are one-way onboarding milestones, not looping runtime states
+- `full_texture` is the steady-state phase
+- a `full_texture` epoch is one continuous arrangement instance bounded by:
+  - an authored cadence reset
+  - a section transition
+  - or a major arrangement refresh
+- during a single `full_texture` epoch:
+  - `counter_rhythm` keeps one pattern family
+  - family changes are only allowed at explicit authored section boundaries or cadence reset points
+  - never as continuous runtime adaptation
+
+### Level 1 Role Contract
+
+Allowed roles:
+
+- `foundation_groove`
+- `counter_rhythm`
+- `lead_phrase`
+- `answer_ornament`
+
+Forbidden roles / behaviors in normal Level 1 `full_texture`:
+
+- sparkle layers
+- ambient filler layers
+- dense support stacks
+- support-family switching inside an epoch
+- continuous ornament occupancy
+
+Hard rules:
+
+- exactly one `lead_phrase` at a time
+- foundation must remain present after Phase 2
+- counter-rhythm must remain audible under lead
+- ornament is cadence-only punctuation
+- ornament must not occupy structural beats by default
+
+### Implementation Priority
+
+The next architectural move is not more local tuning.
+
+It is:
+
+1. extract a dedicated Level 1 contract module
+2. make lane-plan, maintenance, lifecycle, and spawn logic consume that contract
+3. remove or disable competing fallback/recovery authorship paths for Level 1
+4. validate runs against:
+   - readability
+   - role correctness
+   - variation bounds
+   - retro shmup style fit
+
+### Status Of Older Plan Sections
+
+The older "Musicality Reconstruction Plan" below is still useful as historical context,
+but it is no longer the active top-level strategy for Level 1.
+
+The active strategy is:
+
+> constrained Level 1 contract first, broader flexibility later
+
 ## Progress Snapshot
 
 Recent work has materially improved the system:
 
+- support-lane event emission now hard-rejects catalog instruments classified as `lead`
+- explicit ornament fallback no longer injects `Gaming Note` into support lanes
+- accent lane compliance is now fully clean in the latest validated run
 - protected `foundation` and `primary_loop` ownership now survive handoff much more reliably
 - phase-3 instrument churn is far lower than it was during the earlier sync/handoff bugs
 - ghost-loop cleanup is in much better shape and no longer looks like a main clutter source
@@ -40,7 +190,9 @@ Current working baseline:
 - delayed replies are real and can sustain short fragments instead of only single-note answers
 - foreground readability is improved overall, but still fragile when reply/support motion gets too assertive
 - lead phrase quality is now materially better than the surrounding texture
-- the current integration problem is that once the lead enters, support/counter-rhythm can over-duck and the arrangement thins out too far
+- the current integration problem is now less about incorrect role embodiment and more about:
+  - ownership drift in support/counter-rhythm
+  - full-texture density still reading as busy rather than cleanly staged
 
 So the remaining work is refinement, not rescue.
 
