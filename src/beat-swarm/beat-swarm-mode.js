@@ -10052,6 +10052,7 @@ function noteGameplayFamilyEvent(familyLike = '', beatIndex = currentBeatIndex) 
   readabilityMetricsRuntime.gameplayFamilyEvents = totals;
 }
 function resolveGameplaySoundSuppressionPolicy(eventKey = '', meta = null, beatIndex = currentBeatIndex) {
+  return null;
   const key = String(eventKey || '').trim();
   if (!key) return null;
   const info = meta && typeof meta === 'object' ? meta : {};
@@ -10234,6 +10235,19 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
   if (!logContext.musicProfileSourceType && derivedMusicProfileSourceType) logContext.musicProfileSourceType = derivedMusicProfileSourceType;
   if (!logContext.formationRole && derivedFormationRole) logContext.formationRole = derivedFormationRole;
   if (!logContext.reason && derivedReason) logContext.reason = derivedReason;
+  const shouldLogCreatedToMusicLab = (() => {
+    if (sourceSystem !== 'group') return true;
+    const musicProminence = String(input?.musicProminence || created?.payload?.musicProminence || '').trim().toLowerCase();
+    const laneId = String(input?.musicLaneId || created?.payload?.musicLaneId || '').trim().toLowerCase();
+    const role = normalizeSwarmRole(created?.role || input?.role || '', '');
+    if (actionType === 'composer-group-explosion') return false;
+    if (role === BEAT_EVENT_ROLES.BASS || laneId === 'foundation_lane') return true;
+    if (laneId === 'sparkle_lane') return false;
+    if (input?.enemyAudible === false) return false;
+    if (musicProminence === 'trace') return false;
+    if (musicProminence === 'suppressed') return false;
+    return true;
+  })();
   try {
     if (created?.payload && typeof created.payload === 'object') {
       created.payload.authoringClass = authoringClass;
@@ -10306,7 +10320,9 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
         role: String(roleKey || '').trim().toLowerCase(),
       }, input || null);
     }
-    swarmMusicLab.logCreatedEvent(created, getMusicLabContext(logContext));
+    if (shouldLogCreatedToMusicLab) {
+      swarmMusicLab.logCreatedEvent(created, getMusicLabContext(logContext));
+    }
   } catch {}
   try {
     if (actorId > 0) {
@@ -18021,12 +18037,25 @@ function shouldKeepEnemyEventDuringPlayerStep(ev, keepCount = 0) {
   const playerProminence = clamp01(Number(style?.playerProminence) || 0);
   if (!ev || typeof ev !== 'object') return false;
   const action = String(ev.actionType || '').trim().toLowerCase();
+  const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+  const authoringClass = String(ev?.authoringClass || payload?.authoringClass || '').trim().toLowerCase();
+  const sourceSystem = String(ev?.sourceSystem || payload?.sourceSystem || '').trim().toLowerCase();
   if (!action) return false;
   if (action === 'player-weapon-step') return true;
   if (action === 'spawner-spawn') return true;
   if (action === 'drawsnake-projectile') return true;
   if (action === 'composer-group-projectile') return true;
   if (action === 'composer-group-explosion') return true;
+  if ((sourceSystem === 'player' || sourceSystem === 'death' || authoringClass === 'gameplayauthored') && (
+    action.includes('projectile')
+    || action.includes('explosion')
+    || action.includes('chain')
+    || action.includes('impact')
+    || action.includes('collision')
+    || action.includes('hitscan')
+    || action.includes('beam')
+    || action.includes('boomerang')
+  )) return true;
   const actor = Math.max(0, Math.trunc(Number(ev?.actorId) || 0));
   if (keepCount >= PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP) return false;
   const beat = Math.max(0, Math.trunc(Number(ev?.beatIndex) || 0));

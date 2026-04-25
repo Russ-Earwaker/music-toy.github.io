@@ -36,6 +36,27 @@ export function executePerformedBeatEventRuntime(options = null) {
     : null;
   const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
   const primaryLoopForegroundProtected = activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture';
+  const isCombatFeedbackAction = (eventLike = null) => {
+    const event = eventLike && typeof eventLike === 'object' ? eventLike : {};
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : {};
+    const action = String(event?.actionType || eventLike || '').trim().toLowerCase();
+    const source = String(payload?.sourceSystem || event?.sourceSystem || '').trim().toLowerCase();
+    const authoringClass = String(payload?.authoringClass || event?.authoringClass || '').trim().toLowerCase();
+    if (!action) return false;
+    if (source === 'player' || source === 'death') return true;
+    if (authoringClass === 'gameplayauthored') return true;
+    if (authoringClass === 'musicauthored') return false;
+    return (
+      action.includes('projectile')
+      || action.includes('explosion')
+      || action.includes('chain')
+      || action.includes('impact')
+      || action.includes('collision')
+      || action.includes('hitscan')
+      || action.includes('beam')
+      || action.includes('boomerang')
+    );
+  };
   const inferInstrumentLaneFromCatalogId = typeof helpers.inferInstrumentLaneFromCatalogId === 'function'
     ? helpers.inferInstrumentLaneFromCatalogId
     : ((_, fallbackLane = 'lead') => String(fallbackLane || 'lead').trim().toLowerCase() || 'lead');
@@ -461,12 +482,17 @@ export function executePerformedBeatEventRuntime(options = null) {
       group.instrumentId = instrumentId;
       group.role = normalizedGroupRole;
       const duckForPlayer = false;
-      const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
-      musicProminence = normalizeEnemyProminenceForPlayerStep(
-        String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
-      );
-      prominenceGain = resolveMusicProminenceGain(musicProminence);
-      enemyAudible = isMaskingAudibleProminence(musicProminence);
+      const combatFeedback = isCombatFeedbackAction(ev);
+      const audioGain = combatFeedback
+        ? 1
+        : helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
+      musicProminence = combatFeedback
+        ? 'full'
+        : normalizeEnemyProminenceForPlayerStep(
+          String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
+        );
+      prominenceGain = combatFeedback ? 1 : resolveMusicProminenceGain(musicProminence);
+      enemyAudible = combatFeedback ? true : isMaskingAudibleProminence(musicProminence);
       audioMutedExplicitly = ev?.payload?.muteAudio === true || ev?.payload?.audioMuted === true;
       shouldTriggerAudio = !audioMutedExplicitly;
       triggerVolume = (Number(constants.spawnerTriggerSoundVolume) || 0)
@@ -727,12 +753,17 @@ export function executePerformedBeatEventRuntime(options = null) {
     }
     group.role = helpers.normalizeSwarmRole?.(ev.role || group.role, constants.roles?.lead);
     const duckForPlayer = false;
-    const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
-    const musicProminence = normalizeEnemyProminenceForPlayerStep(
-      String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
-    );
-    const prominenceGain = resolveMusicProminenceGain(musicProminence);
-    const enemyAudible = isMaskingAudibleProminence(musicProminence);
+    const combatFeedback = isCombatFeedbackAction(ev);
+    const audioGain = combatFeedback
+      ? 1
+      : helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
+    const musicProminence = combatFeedback
+      ? 'full'
+      : normalizeEnemyProminenceForPlayerStep(
+        String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
+      );
+    const prominenceGain = combatFeedback ? 1 : resolveMusicProminenceGain(musicProminence);
+    const enemyAudible = combatFeedback ? true : isMaskingAudibleProminence(musicProminence);
     const triggerVolume = (Number(constants.drawSnakeTriggerSoundVolume) || 0)
       * (duckForPlayer ? (Number(constants.playerMaskDuckEnemyVolumeMult) || 1) : 1)
       * (Number(audioGain) || 0)
@@ -933,7 +964,10 @@ export function executePerformedBeatEventRuntime(options = null) {
         : normalizeBassRegister(noteName, normalizeBassRegister(requestedNote || 'C3', 'C3'));
     }
     const duckForPlayer = false;
-    const audioGain = helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
+    const combatFeedback = isCombatFeedbackAction(ev);
+    const audioGain = combatFeedback
+      ? 1
+      : helpers.clamp01?.(Number(ev?.payload?.audioGain == null ? 1 : ev.payload.audioGain));
     const ornamentCompanionDirect = (
       String(ev?.payload?.musicLaneId || '').trim().toLowerCase() === 'sparkle_lane'
       && String(ev?.payload?.musicVoiceKey || '').trim().toLowerCase() === 'answer_ornament'
@@ -941,11 +975,13 @@ export function executePerformedBeatEventRuntime(options = null) {
     const normalizedProminence = normalizeEnemyProminenceForPlayerStep(
       String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
     );
-    const musicProminence = ornamentCompanionDirect && normalizedProminence === 'trace'
+    const musicProminence = combatFeedback
+      ? 'full'
+      : ornamentCompanionDirect && normalizedProminence === 'trace'
       ? 'quiet'
       : normalizedProminence;
-    const prominenceGain = resolveMusicProminenceGain(musicProminence);
-    const enemyAudible = isMaskingAudibleProminence(musicProminence);
+    const prominenceGain = combatFeedback ? 1 : resolveMusicProminenceGain(musicProminence);
+    const enemyAudible = combatFeedback ? true : isMaskingAudibleProminence(musicProminence);
     const triggerVolume = (execSoloType === 'rhythm'
       ? (Number(constants.spawnerTriggerSoundVolume) || 0.24)
       : 0.62)

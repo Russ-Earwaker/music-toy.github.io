@@ -173,6 +173,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const withPlayerDuck = (ev) => {
     if (!playerLikelyAudible || !ev || typeof ev !== 'object') return ev;
     const action = String(ev.actionType || '').trim().toLowerCase();
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const authoringClass = String(ev?.authoringClass || payload?.authoringClass || '').trim().toLowerCase();
+    const sourceSystem = String(ev?.sourceSystem || payload?.sourceSystem || '').trim().toLowerCase();
     if (
       !action
       || action === 'player-weapon-step'
@@ -180,8 +183,17 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       || action === 'drawsnake-projectile'
       || action === 'composer-group-projectile'
       || action === 'composer-group-explosion'
+      || ((sourceSystem === 'player' || sourceSystem === 'death' || authoringClass === 'gameplayauthored') && (
+        action.includes('projectile')
+        || action.includes('explosion')
+        || action.includes('chain')
+        || action.includes('impact')
+        || action.includes('collision')
+        || action.includes('hitscan')
+        || action.includes('beam')
+        || action.includes('boomerang')
+      ))
     ) return ev;
-    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     return {
       ...ev,
       payload: {

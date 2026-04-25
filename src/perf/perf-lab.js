@@ -2441,6 +2441,8 @@ async function publishMusicLabSaveDebugResult(entry = {}) {
     musicLabSaveDebug: {
       ok: entry?.ok === true,
       reason: String(entry?.reason || ''),
+      error: String(entry?.error || ''),
+      errorStack: String(entry?.errorStack || ''),
       postUrl: String(entry?.postUrl || ''),
       sessionId: String(entry?.sessionId || ''),
       events: Math.max(0, Number(entry?.events) || 0),
@@ -4555,10 +4557,13 @@ async function saveMusicLabSessionToResourcesGlobal({
         : api.exportSession());
     if (!payload && api && typeof api.exportSession === 'function') payload = api.exportSession();
   } catch (err) {
+    const error = String(err && err.message || err || 'export_failed');
+    const errorStack = String(err && err.stack || '');
     const result = {
       ok: false,
       reason: 'export_failed',
-      error: String(err && err.message || err || 'export_failed'),
+      error,
+      errorStack,
       postUrl: '',
       sessionId: '',
       events: 0,
@@ -5640,6 +5645,7 @@ async function runBS0Stage(stageCount = 1, opts = null) {
             `transitionDebugOk=${save?.transitionDebug?.ok === true}`,
             `transitionDebugReason=${String(save?.transitionDebug?.reason || '')}`,
             `error=${String(save?.error || '')}`,
+            `errorStack=${String(save?.errorStack || '')}`,
             `payloadDebug=${JSON.stringify(save?.payloadDebug || {})}`,
             `sessionSummary=${JSON.stringify(save?.sessionSummary || {})}`,
           ].join('\n');
@@ -5670,6 +5676,8 @@ async function runBS0Stage(stageCount = 1, opts = null) {
               runId: `${saveRunIdBase}${runSuffix}`,
               ok: !!save?.ok,
               reason: String(save?.reason || ''),
+              error: String(save?.error || ''),
+              errorStack: String(save?.errorStack || ''),
               postUrl: String(save?.postUrl || ''),
               sessionId: String(save?.sessionId || ''),
               events: Math.max(0, Number(save?.events) || 0),

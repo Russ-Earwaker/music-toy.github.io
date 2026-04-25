@@ -822,6 +822,31 @@ function isAudibleEvent(eventLike) {
   return false;
 }
 
+function isCombatFeedbackEvent(eventLike) {
+  const ev = eventLike && typeof eventLike === 'object' ? eventLike : {};
+  const source = String(ev?.sourceSystem || '').trim().toLowerCase();
+  const action = String(ev?.actionType || '').trim().toLowerCase();
+  const authoringClass = String(ev?.authoringClass || ev?.payload?.authoringClass || '').trim().toLowerCase();
+  if (source === 'player' || source === 'death') return true;
+  if (authoringClass === 'gameplayauthored') return true;
+  if (authoringClass === 'musicauthored') return false;
+  if (action === 'enemy-death-accent') return true;
+  return (
+    action.includes('projectile')
+    || action.includes('explosion')
+    || action.includes('chain')
+    || action.includes('impact')
+    || action.includes('collision')
+    || action.includes('hitscan')
+    || action.includes('beam')
+    || action.includes('boomerang')
+  );
+}
+
+function isMusicFlowEvent(eventLike) {
+  return !isCombatFeedbackEvent(eventLike);
+}
+
 function isEnemyMusicEvent(eventLike) {
   const ev = eventLike && typeof eventLike === 'object' ? eventLike : {};
   const source = String(ev?.sourceSystem || '').trim().toLowerCase();
@@ -1073,29 +1098,56 @@ function collectThreatBudgetUsage(session, maxBarIndex) {
 }
 
 function collectIntervalProfile(events) {
-  const melodic = events
+  const melodicAll = events
     .filter((ev) => String(ev?.noteResolved || ev?.note || '').trim().length > 0)
     .sort((a, b) => clampInt(a?.timestamp, 0, 0) - clampInt(b?.timestamp, 0, 0));
+  const melodic = melodicAll.filter(isMusicFlowEvent);
   const buckets = { repeat: 0, step: 0, smallLeap: 0, largeLeap: 0 };
-  let previousMidi = null;
-  let compared = 0;
+  const byLane = Object.create(null);
   for (const ev of melodic) {
-    const midi = toMidi(ev.noteResolved || ev.note);
-    if (midi == null) continue;
-    if (previousMidi != null) {
+    const lane = String(ev?.musicLaneId || ev?.expectedInstrumentLane || ev?.role || 'unknown').trim().toLowerCase() || 'unknown';
+    if (!byLane[lane]) byLane[lane] = [];
+    byLane[lane].push(ev);
+  }
+  const laneKeys = Object.keys(byLane);
+  if (laneKeys.reduce((sum, key) => sum + Math.max(0, byLane[key].length - 1), 0) < 1) {
+    return {
+      buckets,
+      compared: 0,
+      smoothShare: 1,
+      scopedEventCount: melodic.length,
+      excludedCombatFeedbackEvents: Math.max(0, melodicAll.length - melodic.length),
+      laneScoped: true,
+    };
+  }
+  let compared = 0;
+  for (const lane of laneKeys) {
+    let previousMidi = null;
+    for (const ev of byLane[lane]) {
+      const midi = toMidi(ev.noteResolved || ev.note);
+      if (midi == null) continue;
+      if (previousMidi != null) {
       const delta = Math.abs(midi - previousMidi);
       if (delta === 0) buckets.repeat += 1;
       else if (delta <= 2) buckets.step += 1;
       else if (delta <= 5) buckets.smallLeap += 1;
       else buckets.largeLeap += 1;
       compared += 1;
+      }
+      previousMidi = midi;
     }
-    previousMidi = midi;
   }
   const smoothShare = compared > 0
     ? (buckets.repeat + buckets.step + buckets.smallLeap) / compared
     : 0;
-  return { buckets, compared, smoothShare };
+  return {
+    buckets,
+    compared,
+    smoothShare,
+    scopedEventCount: melodic.length,
+    excludedCombatFeedbackEvents: Math.max(0, melodicAll.length - melodic.length),
+    laneScoped: true,
+  };
 }
 
 function computeShannonEntropyFromCounts(countsLike) {
@@ -1179,6 +1231,7 @@ function collectPlayerMasking(events) {
   const playerAudibleKeys = new Set();
   for (const ev of events) {
     if (String(ev?.sourceSystem || '') !== 'player') continue;
+    if (isCombatFeedbackEvent(ev)) continue;
     if (!isAudibleEvent(ev)) continue;
     playerAudibleKeys.add(`${clampInt(ev?.beatIndex, 0, 0)}:${clampInt(ev?.stepIndex, 0, 0)}`);
   }
@@ -1187,6 +1240,7 @@ function collectPlayerMasking(events) {
   for (const ev of events) {
     const src = String(ev?.sourceSystem || '').trim().toLowerCase();
     if (src === 'player') continue;
+    if (isCombatFeedbackEvent(ev)) continue;
     if (!isAudibleEvent(ev)) continue;
     enemyAudibleEvents += 1;
     const key = `${clampInt(ev?.beatIndex, 0, 0)}:${clampInt(ev?.stepIndex, 0, 0)}`;
@@ -3100,7 +3154,12 @@ function collectNotePoolCompliance(events) {
   const clampedNoteBySource = Object.create(null);
   const clampedByEnemyType = Object.create(null);
   const clampedNoteByEnemyId = Object.create(null);
+  let excludedCombatFeedbackEvents = 0;
   for (const ev of events) {
+    if (!isMusicFlowEvent(ev)) {
+      if (String(ev?.noteResolved || ev?.note || '').trim()) excludedCombatFeedbackEvents += 1;
+      continue;
+    }
     const requested = String(ev?.note || '').trim();
     const resolved = String(ev?.noteResolved || '').trim();
     if (!requested || !resolved) continue;
@@ -3127,14 +3186,17 @@ function collectNotePoolCompliance(events) {
     considered,
     clamped,
     insidePool,
+    excludedCombatFeedbackEvents,
     poolComplianceRate: considered > 0 ? (insidePool / considered) : 1,
   };
 }
 
 function collectMotifReuse(events) {
-  const melodic = events
+  const melodicCandidates = events
     .filter((ev) => String(ev?.noteResolved || ev?.note || '').trim().length > 0)
-    .sort((a, b) => clampInt(a?.timestamp, 0, 0) - clampInt(b?.timestamp, 0, 0))
+    .sort((a, b) => clampInt(a?.timestamp, 0, 0) - clampInt(b?.timestamp, 0, 0));
+  const melodic = melodicCandidates
+    .filter(isMusicFlowEvent)
     .map((ev) => String(ev?.noteResolved || ev?.note || '').trim())
     .filter((n) => n.length > 0);
   const motifCounts = {
@@ -3165,7 +3227,7 @@ function collectMotifReuse(events) {
 
   const totalWindows = windowsByN.n2 + windowsByN.n3 + windowsByN.n4;
   const repeatedWindows = repeatedByN.n2 + repeatedByN.n3 + repeatedByN.n4;
-  const motifReuseRate = totalWindows > 0 ? (repeatedWindows / totalWindows) : 0;
+  const motifReuseRate = totalWindows > 0 ? (repeatedWindows / totalWindows) : 1;
 
   return {
     windowsByN,
@@ -3175,6 +3237,8 @@ function collectMotifReuse(events) {
       n3: Object.keys(motifCounts.n3).length,
       n4: Object.keys(motifCounts.n4).length,
     },
+    scopedEventCount: melodic.length,
+    excludedCombatFeedbackEvents: Math.max(0, melodicCandidates.length - melodic.length),
     motifReuseRate,
   };
 }
