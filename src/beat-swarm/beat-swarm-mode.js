@@ -831,7 +831,15 @@ function assignMusicLaneIdentity(options = null) {
   const role = normalizeSwarmRole(opts?.role || lane.role || '', lane.role || BEAT_EVENT_ROLES.ACCENT);
   const layer = normalizeEnemyMusicLayer(opts?.layer || lane.layer || '', lane.layer || 'sparkle');
   const previousContinuityId = String(lane.continuityId || '').trim();
-  const continuityId = String(opts?.continuityId || lane.continuityId || '').trim() || getNextMusicContinuityId();
+  const requestedContinuityId = String(opts?.continuityId || lane.continuityId || '').trim();
+  let continuityId = requestedContinuityId || getNextMusicContinuityId();
+  if (
+    laneId === 'secondary_loop_lane'
+    && previousContinuityId
+    && normalizeLaneIdentityChangeReason(opts?.identityChangeReason) !== 'continuity_reset'
+  ) {
+    continuityId = previousContinuityId;
+  }
   const group = opts?.group && typeof opts.group === 'object' ? opts.group : null;
   const enemy = opts?.enemy && typeof opts.enemy === 'object' ? opts.enemy : null;
   const enemyType = String(opts?.enemyType || enemy?.enemyType || group?.enemyType || '').trim().toLowerCase();
@@ -1084,18 +1092,52 @@ function assignMusicLaneIdentity(options = null) {
     : requestedPatternKey;
   const currentPerformerEnemyId = Math.max(0, Math.trunc(Number(lane.performerEnemyId) || 0));
   const currentPerformerGroupId = Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0));
-  const preservePerformerBinding = (
-    stableProtectedLane
+  const currentPerformerEnemy = currentPerformerEnemyId > 0 ? getSwarmEnemyById(currentPerformerEnemyId) : null;
+  const currentPerformerLive = !!currentPerformerEnemy
+    && currentPerformerEnemy.retreating !== true
+    && normalizeMusicLifecycleState(currentPerformerEnemy?.lifecycleState || 'active', 'active') === 'active';
+  const currentPerformerGroup = currentPerformerGroupId > 0
+    ? (composerEnemyGroups.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === currentPerformerGroupId) || null)
+    : null;
+  const currentPerformerGroupMemberIds = currentPerformerGroup?.memberIds instanceof Set
+    ? Array.from(currentPerformerGroup.memberIds)
+    : (Array.isArray(currentPerformerGroup?.memberIds) ? currentPerformerGroup.memberIds.slice() : []);
+  const currentPerformerGroupLive = !!currentPerformerGroup
+    && currentPerformerGroup.active !== false
+    && currentPerformerGroup.retiring !== true
+    && currentPerformerGroupMemberIds.some((memberId) => {
+      const member = getSwarmEnemyById(memberId);
+      return !!member
+        && member.retreating !== true
+        && normalizeMusicLifecycleState(member?.lifecycleState || 'active', 'active') === 'active';
+    });
+  const preserveSecondaryContinuityOwner = (
+    laneId === 'secondary_loop_lane'
+    && stableProtectedLane
     && sameContinuity
     && !allowContinuityDrift
-    && currentPerformerEnemyId > 0
     && (
-      explicitPerformerGroupId <= 0
-      || currentPerformerGroupId <= 0
-      || explicitPerformerGroupId === currentPerformerGroupId
+      (currentPerformerEnemyId > 0 && currentPerformerLive)
+      || (currentPerformerGroupId > 0 && currentPerformerGroupLive)
     )
   );
-  const performerEnemyId = preservePerformerBinding ? currentPerformerEnemyId : explicitPerformerEnemyId;
+  const preservePerformerBinding = (
+    preserveSecondaryContinuityOwner
+    || (
+      stableProtectedLane
+      && sameContinuity
+      && !allowContinuityDrift
+      && currentPerformerEnemyId > 0
+      && (
+        explicitPerformerGroupId <= 0
+        || currentPerformerGroupId <= 0
+        || explicitPerformerGroupId === currentPerformerGroupId
+      )
+    )
+  );
+  const performerEnemyId = preserveSecondaryContinuityOwner && !currentPerformerLive
+    ? 0
+    : (preservePerformerBinding ? currentPerformerEnemyId : explicitPerformerEnemyId);
   const performerGroupId = preservePerformerBinding ? currentPerformerGroupId : explicitPerformerGroupId;
   lane.laneId = laneId;
   lane.layer = layer;
@@ -1109,7 +1151,9 @@ function assignMusicLaneIdentity(options = null) {
   lane.lifetimeBars = lane.activeSinceBar >= 0 ? Math.max(1, (barIndex - lane.activeSinceBar) + 1) : 0;
   lane.performerEnemyId = performerEnemyId;
   lane.performerGroupId = performerGroupId;
-  lane.performerType = String(opts?.performerType || lane.performerType || '').trim().toLowerCase();
+  lane.performerType = preservePerformerBinding
+    ? String(lane.performerType || opts?.performerType || '').trim().toLowerCase()
+    : String(opts?.performerType || lane.performerType || '').trim().toLowerCase();
   lane.identityChangeReason = identityChangeReason;
   lane.sectionId = sectionId;
   lane.directorLaneKey = directorLaneKey;
@@ -2005,6 +2049,10 @@ function ensureBassFoundationComposerBufferGroup(options = null) {
     && group.active !== false
     && group.retiring !== true
     && isFoundationBufferGroup(group)
+    && (
+      !String(group?.musicLaneId || '').trim()
+      || String(group?.musicLaneId || '').trim().toLowerCase() === 'foundation_lane'
+    )
   ));
   const existing = activeFoundationBufferGroups.find((group) => (
     !isIntroSlotRhythmCarrier(group)
@@ -2074,6 +2122,8 @@ function ensureBassFoundationComposerBufferGroup(options = null) {
     continuityId,
     phraseId,
     patternKey: String(group.foundationPatternKey || patternKey || '').trim(),
+    identityChangeReason: normalizeLaneIdentityChangeReason(getMusicLaneRuntimeEntry('foundation_lane')?.identityChangeReason),
+    sectionId: String(composerRuntime.currentSectionId || 'default').trim().toLowerCase() || 'default',
     performerGroupId: Math.trunc(Number(group.id) || 0),
     performerType: 'composer-group',
     lockInstrument: true,
@@ -3082,6 +3132,23 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
     && isCarrierTypeEligibleForMusicLane('foundation_lane', 'spawner', foundationPreferredCarrier);
   const pacingState = String(getCurrentPacingStateName() || '').trim().toLowerCase();
   const introDrumProfile = getLockedIntroDrumSpawnerProfile(barIndex, pacingState);
+  const forceImmediate = opts.forceImmediate === true;
+  const keepaliveGapTarget = (
+    pacingState === 'intro_solo'
+    || pacingState === 'intro_bass'
+    || pacingState === 'intro_response'
+  ) ? 2 : 3;
+  const sinceNaturalBass = stepIndex - Math.max(-1000000, Math.trunc(Number(bassKeepaliveRuntime.lastNaturalBassStep) || -1000000));
+  if (!forceImmediate && sinceNaturalBass < keepaliveGapTarget) return null;
+  const bassKeepaliveCadenceSteps = Math.max(2, keepaliveGapTarget);
+  const sinceInjectedBass = stepIndex - Math.max(-1000000, Math.trunc(Number(bassKeepaliveRuntime.lastInjectedBassStep) || -1000000));
+  if (!forceImmediate && sinceInjectedBass < bassKeepaliveCadenceSteps) return null;
+  const foundationLane = getFoundationLaneSnapshot(stepIndex, barIndex);
+  const emergencyFoundationRecovery = !foundationLane.isActiveStep
+    && !forceImmediate
+    && sinceNaturalBass >= 6
+    && sinceInjectedBass >= 6;
+  if (!foundationLane.isActiveStep && !emergencyFoundationRecovery) return null;
   const center = opts.centerWorld && typeof opts.centerWorld === 'object'
     ? opts.centerWorld
     : (centerWorld && typeof centerWorld === 'object' ? centerWorld : { x: 0, y: 0 });
@@ -3356,19 +3423,6 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   if (isIntroSlotRhythmCarrier(group)) return null;
   const role = normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(ownerEnemy, BEAT_EVENT_ROLES.BASS), BEAT_EVENT_ROLES.BASS);
   if (role !== BEAT_EVENT_ROLES.BASS) return null;
-  const forceImmediate = opts.forceImmediate === true;
-  const keepaliveGapTarget = (
-    pacingState === 'intro_solo'
-    || pacingState === 'intro_bass'
-    || pacingState === 'intro_response'
-  ) ? 2 : 3;
-  const sinceNaturalBass = stepIndex - Math.max(-1000000, Math.trunc(Number(bassKeepaliveRuntime.lastNaturalBassStep) || -1000000));
-  if (!forceImmediate && sinceNaturalBass < keepaliveGapTarget) return null;
-  const bassKeepaliveCadenceSteps = Math.max(2, keepaliveGapTarget);
-  const sinceInjectedBass = stepIndex - Math.max(-1000000, Math.trunc(Number(bassKeepaliveRuntime.lastInjectedBassStep) || -1000000));
-  if (!forceImmediate && sinceInjectedBass < bassKeepaliveCadenceSteps) return null;
-  const foundationLane = getFoundationLaneSnapshot(stepIndex, barIndex);
-  if (!foundationLane.isActiveStep) return null;
   const ownerId = Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0));
   if (!(ownerId > 0)) return null;
   const forcedIntroFoundationWindow = isForcedIntroFoundationWindow(barIndex);
@@ -6919,7 +6973,7 @@ function cloneFoundationPhraseEntry(phraseLike = null, fallbackId = 'foundation_
 }
 function getFoundationPhraseLockDurationBars(seedKey = '') {
   const seed = hashStringSeed(`foundation-lock|${String(seedKey || '').trim()}`);
-  return 4 + (Math.max(0, Math.floor(seededNoise01(seed) * 5)) % 5);
+  return 8 + (Math.max(0, Math.floor(seededNoise01(seed) * 9)) % 9);
 }
 function mutateFoundationPhraseEntry(basePhraseLike = null, barIndex = 0, seedKey = '') {
   const base = cloneFoundationPhraseEntry(basePhraseLike);
@@ -6973,6 +7027,7 @@ function chooseFoundationLanePhrase(barIndex = 0, options = null) {
   const sectionId = String(opts.sectionId || 'default').trim().toLowerCase() || 'default';
   const cycle = Math.max(0, Math.trunc(Number(opts.cycle) || 0));
   const mutationChance = Math.max(0, Math.min(1, Number(opts.mutationChance) || 0.3));
+  const holdChance = Math.max(0, Math.min(1, Number(opts.holdChance) || 0));
   const randomSeedKey = `${sectionId}|${cycle}|${bar}`;
   if (opts.allowMutation && opts.currentPhrase && library.length) {
     const mutationSeed = hashStringSeed(`foundation-mutation-chance|${randomSeedKey}|${currentPhraseId}|${currentPatternKey}`);
@@ -6980,6 +7035,10 @@ function chooseFoundationLanePhrase(barIndex = 0, options = null) {
       const mutated = mutateFoundationPhraseEntry(opts.currentPhrase, bar, randomSeedKey);
       if (mutated?.patternKey && mutated.patternKey !== currentPatternKey) return mutated;
     }
+  }
+  if (opts.allowHold && opts.currentPhrase && currentPatternKey && holdChance > 0) {
+    const holdSeed = hashStringSeed(`foundation-hold|${randomSeedKey}|${currentPhraseId}|${currentPatternKey}`);
+    if (seededNoise01(holdSeed) < holdChance) return cloneFoundationPhraseEntry(opts.currentPhrase, currentPhraseId || 'foundation_fallback');
   }
   const candidates = library.filter((entry) => {
     if (!entry?.patternKey) return false;
@@ -7109,7 +7168,9 @@ function ensureFoundationLanePlan(barIndex = 0, options = null) {
       steps: currentSteps,
     },
     allowMutation: !!currentPhraseId && currentSteps.some(Boolean),
-    mutationChance: currentPhraseId ? 0.34 : 0,
+    mutationChance: currentPhraseId ? 0.12 : 0,
+    allowHold: !!currentPhraseId && currentSteps.some(Boolean) && previousSectionId === currentSectionId,
+    holdChance: 0.78,
   });
   if (foundationLane) foundationLane.phraseFamily = String(phrase?.family || '').trim().toLowerCase();
   const identityChangeReason = phrase?.sourcePhraseId
@@ -7776,6 +7837,10 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
     && energyState !== 'break'
     && !motifReturnActive
     && !postBreakRecoveryWindow
+    && (
+      activeLevelPhase !== 'full_texture'
+      || driveAnswerCadenceWindow
+    )
     && (tensionWindow || maxSpawners >= 3)
   );
   const secondaryLoopActive = !pulseOnlyBreakWindow
@@ -7856,7 +7921,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       preferredCarrier: 'group',
       protected: false,
       continuityBias: 'follow',
-      intensity: applyIntroRampIntensity(motifReturnActive ? 0.18 : (structureIntent === 'peak' ? 0.62 : (tensionWindow ? 0.46 : 0.22)), 0.05, 0.62),
+      intensity: applyIntroRampIntensity(motifReturnActive ? 0.14 : (structureIntent === 'peak' ? 0.38 : (tensionWindow ? 0.3 : 0.18)), 0.04, 0.38),
     },
     support: {
       active: simplifiedFullTextureArrangement ? false : supportActive,

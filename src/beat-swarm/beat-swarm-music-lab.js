@@ -21,6 +21,17 @@ const PERF_LIGHTWEIGHT_SYSTEM_EVENT_DROP_TYPES = new Set([
   'music_level1_contract_state',
   'music_step_arbitration',
   'music_primary_loop_lane_emitted',
+  'music_mode_state',
+  'music_intro_debug',
+  'music_rhythm_tier_selected',
+  'music_composer_execution_stage',
+  'music_slot_spawner_stage',
+  'music_slot_spawner_admission',
+  'music_call_response_call_group_state',
+  'music_call_response_response_group_state',
+  'music_secondary_bridge_coverage_trace',
+  'music_intro_slot_suppressed',
+  'music_primary_loop_group_suppressed',
 ]);
 
 function clampInt(value, fallback = 0, min = 0) {
@@ -4226,11 +4237,30 @@ function clampUnit(value) {
 }
 
 function collectRetroShmupStyleMetrics(metrics) {
-  const leadShare = clampUnit(
+  const getExecutedCount = (record) => Math.max(0, Number(record?.executed) || 0);
+  const getOptionalDeliveryRate = (record) => {
+    const created = Math.max(0, Number(record?.created) || 0);
+    const executed = Math.max(0, Number(record?.executed) || 0);
+    if (created <= 0 && executed <= 0) return 1;
+    return clampUnit(record?.executedToCreatedRate);
+  };
+  const musicalLaneDelivery = metrics?.deliveryByMusicLane && typeof metrics.deliveryByMusicLane === 'object'
+    ? metrics.deliveryByMusicLane
+    : {};
+  const primaryLaneExecuted = getExecutedCount(musicalLaneDelivery.primary_loop_lane);
+  const musicalLaneExecuted = primaryLaneExecuted
+    + getExecutedCount(musicalLaneDelivery.foundation_lane)
+    + getExecutedCount(musicalLaneDelivery.secondary_loop_lane)
+    + getExecutedCount(musicalLaneDelivery.sparkle_lane)
+    + getExecutedCount(musicalLaneDelivery.answer_lane);
+  const roleBalanceLeadShare = clampUnit(
     metrics?.roleBalance?.distribution?.lead
     ?? metrics?.roleBalance?.distribution?.lead_phrase
     ?? 0
   );
+  const leadShare = musicalLaneExecuted > 0
+    ? clampUnit(primaryLaneExecuted / musicalLaneExecuted)
+    : roleBalanceLeadShare;
   const strongFoundationRate = clampUnit(
     metrics?.strongBeatDeliveryByMusicLane?.foundation_lane?.executedToCreatedRate
   );
@@ -4240,15 +4270,9 @@ function collectRetroShmupStyleMetrics(metrics) {
   const leadDeliveryRate = clampUnit(
     metrics?.deliveryByReason?.lead_melody?.executedToCreatedRate
   );
-  const answerRate = clampUnit(
-    metrics?.deliveryByProfileSourceType?.answer_ornament?.executedToCreatedRate
-  );
-  const sparkleRate = clampUnit(
-    metrics?.deliveryByMusicLane?.sparkle_lane?.executedToCreatedRate
-  );
-  const secondaryBridgeRate = clampUnit(
-    metrics?.deliveryByReason?.secondary_bridge_backbeat?.executedToCreatedRate
-  );
+  const answerRate = getOptionalDeliveryRate(metrics?.deliveryByProfileSourceType?.answer_ornament);
+  const sparkleRate = getOptionalDeliveryRate(metrics?.deliveryByMusicLane?.sparkle_lane);
+  const secondaryBridgeRate = getOptionalDeliveryRate(metrics?.deliveryByReason?.secondary_bridge_backbeat);
   const maskingRate = clampUnit(metrics?.playerMasking?.playerMaskingRate);
   const enemyCompetitionShare = clampUnit(metrics?.readability?.avgEnemyCompetitionShare);
   const avgVoices = clampUnit((Number(metrics?.simultaneousVoiceCount) || 0) / 4);
@@ -4257,7 +4281,8 @@ function collectRetroShmupStyleMetrics(metrics) {
   const gravityHitRate = clampUnit(metrics?.phraseGravity?.gravityHitRate);
   const immediateResponseRate = clampUnit(metrics?.callResponse?.immediateResponseRate);
   const bassPersistence = clampUnit(metrics?.grooveStability?.bassPatternPersistence);
-  const primaryLeadStable = String(metrics?.musicalityTargets?.primaryLead?.status || '').trim().toLowerCase() === 'stable';
+  const primaryLeadStatus = String(metrics?.musicalityTargets?.primaryLead?.status || '').trim().toLowerCase();
+  const primaryLeadStable = primaryLeadStatus === 'stable' || primaryLeadStatus === 'exclusive';
   const primaryLeadPersistenceStable = String(metrics?.musicalityTargets?.primaryLead?.persistenceStatus || '').trim().toLowerCase() === 'stable';
 
   const pulseRegularityScore = clampUnit(
@@ -5001,12 +5026,35 @@ export function createBeatSwarmMusicLab(options = null) {
       sessionSummary: s.sessionSummary,
     });
   }
-  function exportSessionForSave() {
+  function exportSessionForSave(options = null) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const compact = opts.compact === true || opts.forceCompact === true;
     const s = ensureSession();
+    const sourceEvents = compact && Array.isArray(s.events) ? s.events.slice(-1800) : s.events;
+    const sourceSystemEvents = compact && Array.isArray(s.systemEvents) ? s.systemEvents.slice(-500) : s.systemEvents;
+    const sourceThreatBudgetSnapshots = compact && Array.isArray(s.threatBudgetSnapshots) ? s.threatBudgetSnapshots.slice(-128) : s.threatBudgetSnapshots;
+    const sourceMetricsHistory = compact && Array.isArray(s.metricsHistory) ? s.metricsHistory.slice(-96) : s.metricsHistory;
     let maxBar = 0;
-    for (const ev of s.events) maxBar = Math.max(maxBar, clampInt(ev?.barIndex, 0, 0));
-    const executed = s.events.filter((e) => e?.phase === 'executed');
-    const bundle = computeMetricsForEvents(s, executed, maxBar);
+    for (const ev of sourceEvents) maxBar = Math.max(maxBar, clampInt(ev?.barIndex, 0, 0));
+    const executed = sourceEvents.filter((e) => e?.phase === 'executed');
+    const metricsSession = compact
+      ? {
+          ...s,
+          events: sourceEvents,
+          systemEvents: sourceSystemEvents,
+          threatBudgetSnapshots: sourceThreatBudgetSnapshots,
+          metricsHistory: sourceMetricsHistory,
+        }
+      : s;
+    const cachedCheckpoint = compact && Array.isArray(s.metricsHistory) && s.metricsHistory.length
+      ? s.metricsHistory[s.metricsHistory.length - 1]
+      : null;
+    const bundle = cachedCheckpoint?.metrics && cachedCheckpoint?.sessionSummary
+      ? {
+          metrics: cachedCheckpoint.metrics,
+          sessionSummary: cachedCheckpoint.sessionSummary,
+        }
+      : computeMetricsForEvents(metricsSession, executed, maxBar);
     s.metrics = bundle.metrics;
     s.sessionSummary = bundle.sessionSummary;
     s.endedAtIso = new Date().toISOString();
@@ -5016,19 +5064,29 @@ export function createBeatSwarmMusicLab(options = null) {
       endedAtIso: String(s.endedAtIso || ''),
       beatsPerBar: s.beatsPerBar,
       metricsEveryBars: s.metricsEveryBars,
-      eventTimeline: Array.isArray(s.events) ? s.events.slice() : [],
-      paletteChanges: Array.isArray(s.paletteChanges) ? s.paletteChanges.slice() : [],
-      pacingChanges: Array.isArray(s.pacingChanges) ? s.pacingChanges.slice() : [],
-      enemyRemovals: Array.isArray(s.enemyRemovals) ? s.enemyRemovals.slice() : [],
-      systemEvents: Array.isArray(s.systemEvents) ? s.systemEvents.slice() : [],
+      eventTimeline: Array.isArray(sourceEvents) ? (compact ? sourceEvents.slice(-900) : sourceEvents.slice()) : [],
+      paletteChanges: Array.isArray(s.paletteChanges) ? (compact ? s.paletteChanges.slice(-64) : s.paletteChanges.slice()) : [],
+      pacingChanges: Array.isArray(s.pacingChanges) ? (compact ? s.pacingChanges.slice(-64) : s.pacingChanges.slice()) : [],
+      enemyRemovals: Array.isArray(s.enemyRemovals) ? (compact ? s.enemyRemovals.slice(-512) : s.enemyRemovals.slice()) : [],
+      systemEvents: Array.isArray(sourceSystemEvents) ? (compact ? sourceSystemEvents.slice(-300) : sourceSystemEvents.slice()) : [],
       systemEventSummary: s.systemEventSummary && typeof s.systemEventSummary === 'object'
         ? { ...s.systemEventSummary }
         : {},
-      threatBudgetSnapshots: Array.isArray(s.threatBudgetSnapshots) ? s.threatBudgetSnapshots.slice() : [],
-      metricsHistory: Array.isArray(s.metricsHistory) ? s.metricsHistory.slice() : [],
+      threatBudgetSnapshots: Array.isArray(sourceThreatBudgetSnapshots) ? (compact ? sourceThreatBudgetSnapshots.slice(-96) : sourceThreatBudgetSnapshots.slice()) : [],
+      metricsHistory: Array.isArray(sourceMetricsHistory) ? (compact ? sourceMetricsHistory.slice(-64) : sourceMetricsHistory.slice()) : [],
       metrics: s.metrics && typeof s.metrics === 'object' ? { ...s.metrics } : s.metrics,
       sessionSummary: s.sessionSummary && typeof s.sessionSummary === 'object' ? { ...s.sessionSummary } : s.sessionSummary,
-      exportMode: 'save_shallow',
+      exportMode: compact ? 'save_compact_shallow' : 'save_shallow',
+      saveCompact: compact
+        ? {
+            compacted: true,
+            detail: 'api_compact_tail_export',
+            originalEventTimelineCount: Array.isArray(s.events) ? s.events.length : 0,
+            originalSystemEventCount: Array.isArray(s.systemEvents) ? s.systemEvents.length : 0,
+            originalThreatBudgetSnapshotCount: Array.isArray(s.threatBudgetSnapshots) ? s.threatBudgetSnapshots.length : 0,
+            originalMetricsHistoryCount: Array.isArray(s.metricsHistory) ? s.metricsHistory.length : 0,
+          }
+        : undefined,
     };
   }
 

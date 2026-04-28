@@ -2258,11 +2258,29 @@ function deriveLegacyPerfResultsUrl(url) {
   return '';
 }
 
+async function fetchWithPerfLabTimeout(url, options = null, timeoutMs = 12000) {
+  const ms = Math.max(1000, Math.trunc(Number(timeoutMs) || 12000));
+  const opts = options && typeof options === 'object' ? { ...options } : {};
+  if (typeof AbortController === 'undefined') return fetch(url, opts);
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try { controller.abort(); } catch {}
+  }, ms);
+  try {
+    return await fetch(url, {
+      ...opts,
+      signal: opts.signal || controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function postResultsBundle(bundle, url, opts = {}) {
   if (!bundle || !url) return false;
   const allowLegacyPerfFallback = !!opts.allowLegacyPerfFallback;
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithPerfLabTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bundle),
@@ -2272,7 +2290,7 @@ async function postResultsBundle(bundle, url, opts = {}) {
       const fallbackUrl = deriveLegacyPerfResultsUrl(url);
       if (fallbackUrl) {
         try {
-          const retry = await fetch(fallbackUrl, {
+          const retry = await fetchWithPerfLabTimeout(fallbackUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(bundle),
@@ -2295,7 +2313,7 @@ async function postDebugOutputFile({ fileName = '', text = '', meta = null } = {
   if (!resolvedFileName) return false;
   if (!resolvedText.trim()) return false;
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithPerfLabTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4553,7 +4571,7 @@ async function saveMusicLabSessionToResourcesGlobal({
     payload = payloadOverride && typeof payloadOverride === 'object'
       ? payloadOverride
       : ((typeof api.exportSessionForSave === 'function')
-        ? api.exportSessionForSave()
+        ? api.exportSessionForSave({ compact: forceCompactSave === true })
         : api.exportSession());
     if (!payload && api && typeof api.exportSession === 'function') payload = api.exportSession();
   } catch (err) {
@@ -4636,27 +4654,29 @@ async function saveMusicLabSessionToResourcesGlobal({
     String(payload?.sessionId || '').trim() || 'session',
     saveTimestampIso.replace(/[<>:"/\\|?*\x00-\x1F]/g, '-'),
   ].join('__');
-  try {
-    const preflightBundle = buildResultsBundle([
-      {
-        label: String(label || 'music-lab-session'),
+  if (forceCompactSave !== true) {
+    try {
+      const preflightBundle = buildResultsBundle([
+        {
+          label: String(label || 'music-lab-session'),
+          runId: String(runId || 'musicLabAutoSave'),
+          createdAt: new Date().toISOString(),
+          musicLab: payload,
+        },
+      ], {
         runId: String(runId || 'musicLabAutoSave'),
-        createdAt: new Date().toISOString(),
-        musicLab: payload,
-      },
-    ], {
-      runId: String(runId || 'musicLabAutoSave'),
-      notes: String(notes || ''),
-      runMode: 'auto',
-      scenarioName: String(scenarioName || label || 'music-lab-session'),
-      testCategory: String(testCategory || 'music-lab-session'),
-      iterationIndex: Math.max(1, Math.trunc(Number(iterationIndex) || 1)),
-      iterationCount: Math.max(1, Math.trunc(Number(iterationCount) || 1)),
-      labType: 'music',
-      kind: 'music-lab',
-    });
-    preflightBundleBytes = String(JSON.stringify(preflightBundle) || '').length;
-  } catch {}
+        notes: String(notes || ''),
+        runMode: 'auto',
+        scenarioName: String(scenarioName || label || 'music-lab-session'),
+        testCategory: String(testCategory || 'music-lab-session'),
+        iterationIndex: Math.max(1, Math.trunc(Number(iterationIndex) || 1)),
+        iterationCount: Math.max(1, Math.trunc(Number(iterationCount) || 1)),
+        labType: 'music',
+        kind: 'music-lab',
+      });
+      preflightBundleBytes = String(JSON.stringify(preflightBundle) || '').length;
+    } catch {}
+  }
   if (forceCompactSave === true || preflightBundleBytes > 5000000) {
     const compacted = compactMusicLabPayloadForSave(payload);
     payloadForSave = compacted.payload;
@@ -4824,7 +4844,7 @@ function exportMusicLabPayloadForDeferredSave() {
   let payload = null;
   try {
     payload = (typeof api.exportSessionForSave === 'function')
-      ? api.exportSessionForSave()
+      ? api.exportSessionForSave({ compact: true })
       : api.exportSession();
     if (!payload && typeof api.exportSession === 'function') payload = api.exportSession();
   } catch (err) {
@@ -5444,7 +5464,7 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           try { prevMusicLabLightweightSystemEventsEnabled = musicLabApi.isLightweightSystemEventsEnabled() === true; } catch { prevMusicLabLightweightSystemEventsEnabled = false; }
         }
         try { musicLabApi.setEnabled(true); } catch {}
-        try { musicLabApi.setRealtimeMetricsEnabled?.(false); } catch {}
+        try { musicLabApi.setRealtimeMetricsEnabled?.(cfg.keepMusicLabRealtimeMetrics === true); } catch {}
         try { musicLabApi.setLightweightSystemEventsEnabled?.(true); } catch {}
       }
       if (resetMusicLabEachRun) {
@@ -5539,6 +5559,24 @@ async function runBS0Stage(stageCount = 1, opts = null) {
         } catch {}
       }
       let traceCaptureResult = null;
+      if (publishPerfArtifacts) {
+        try {
+          await publishBs0MusicRunStageDebugResult({
+            label: `music-lab-run-stage-debug${runSuffix}`,
+            runId: `${saveRunIdBase}${runSuffix}`,
+            stage: traceCaptureConfig?.enabled === true ? 'before_trace_finalize' : 'trace_finalize_skipped',
+            sourceLabel: `${labelPrefix}${runSuffix}`,
+            notes: saveNotes || `Auto save for BS0 S${stageCount} run ${runIndex}/${repeatCount}`,
+            durationMs,
+            stageCount,
+            iterationIndex: runIndex,
+            iterationCount: repeatCount,
+            transportRunning: isRunning(),
+            beatSwarmActive: !!window.__beatSwarmActive,
+            perfRunTag: String(window.__PERF_RUN_TAG || ''),
+          });
+        } catch {}
+      }
       if (traceCaptureConfig?.enabled === true) {
         const traceFilePrefix = String(
           traceCaptureConfig.fileNamePrefix || `beat-swarm-trace-s${stageCount}${runSuffix}`
@@ -5548,6 +5586,24 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           fileName: `${traceFileBase}.txt`,
           preferOutputDirectory: traceCaptureConfig.preferOutputDirectory !== false,
         });
+      }
+      if (publishPerfArtifacts) {
+        try {
+          await publishBs0MusicRunStageDebugResult({
+            label: `music-lab-run-stage-debug${runSuffix}`,
+            runId: `${saveRunIdBase}${runSuffix}`,
+            stage: 'after_trace_finalize',
+            sourceLabel: `${labelPrefix}${runSuffix}`,
+            notes: saveNotes || `Auto save for BS0 S${stageCount} run ${runIndex}/${repeatCount}`,
+            durationMs,
+            stageCount,
+            iterationIndex: runIndex,
+            iterationCount: repeatCount,
+            transportRunning: isRunning(),
+            beatSwarmActive: !!window.__beatSwarmActive,
+            perfRunTag: String(window.__PERF_RUN_TAG || ''),
+          });
+        } catch {}
       }
       if (saveMusicLabEachRun) {
         if (publishPerfArtifacts) {
@@ -5581,18 +5637,35 @@ async function runBS0Stage(stageCount = 1, opts = null) {
         const deferredExport = deferMusicLabSaveUntilBatchEnd
           ? exportMusicLabPayloadForDeferredSave()
           : null;
-        const save = deferMusicLabSaveUntilBatchEnd
-          ? {
-              ok: deferredExport?.ok === true,
-              reason: String(deferredExport?.reason || ''),
-              postUrl: 'deferred_until_batch_end',
-              sessionId: String(deferredExport?.payload?.sessionId || ''),
-              events: Array.isArray(deferredExport?.payload?.eventTimeline) ? deferredExport.payload.eventTimeline.length : 0,
-              sessionSummary: deferredExport?.payload ? summarizeMusicLabSessionPayload(deferredExport.payload) : null,
-              payloadDebug: deferredExport?.payloadDebug || null,
-              deferred: true,
-            }
-          : await saveMusicLabSessionToResourcesGlobal(saveArgs);
+        let save = null;
+        try {
+          save = deferMusicLabSaveUntilBatchEnd
+            ? {
+                ok: deferredExport?.ok === true,
+                reason: String(deferredExport?.reason || ''),
+                postUrl: 'deferred_until_batch_end',
+                sessionId: String(deferredExport?.payload?.sessionId || ''),
+                events: Array.isArray(deferredExport?.payload?.eventTimeline) ? deferredExport.payload.eventTimeline.length : 0,
+                sessionSummary: deferredExport?.payload ? summarizeMusicLabSessionPayload(deferredExport.payload) : null,
+                payloadDebug: deferredExport?.payloadDebug || null,
+                deferred: true,
+              }
+            : await saveMusicLabSessionToResourcesGlobal(saveArgs);
+        } catch (err) {
+          save = {
+            ok: false,
+            reason: 'save_call_threw',
+            error: String(err && err.message || err || 'save_call_threw'),
+            errorStack: String(err && err.stack || ''),
+            postUrl: '',
+            sessionId: '',
+            events: 0,
+            sessionSummary: null,
+            payloadDebug: null,
+          };
+          try { window.__LAST_MUSIC_LAB_SAVE_RESULT = { ...save, ...saveArgs }; } catch {}
+          try { console.warn('[PerfLab] Music Lab save call threw', { save, saveArgs }); } catch {}
+        }
         if (deferMusicLabSaveUntilBatchEnd && save.ok) {
           deferredMusicLabSaves.push({
             args: saveArgs,
@@ -5920,6 +5993,7 @@ async function runBS0s3MusicLabAssessment5m() {
     resetMusicLabEachRun: true,
     saveMusicLabEachRun: true,
     forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
     publishPerfArtifacts: true,
     saveRunIdBase: 'musicLab_bs0_s3_assessment_1x5m',
     saveNotes: 'Beat Swarm Music Lab assessment run: S3, 1 run x 5 minutes, compact save for structured review.',
@@ -5930,8 +6004,7 @@ async function runBS0s3MusicLabAssessment5m() {
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_assessment_1x5m',
     statusPrefix: 'Running BS0 S3 Music Lab assessment pass (5 minutes, compact save)',
     traceCapture: {
-      ...DEFAULT_MUSIC_TRACE_CAPTURE_CONFIG,
-      fileNamePrefix: 'resources-debug-musicLab_bs0_s3_assessment_1x5m',
+      enabled: false,
     },
   });
 }

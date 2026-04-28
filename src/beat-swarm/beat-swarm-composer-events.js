@@ -300,7 +300,13 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const getAliveEnemiesByIds = typeof options?.getAliveEnemiesByIds === 'function' ? options.getAliveEnemiesByIds : (() => []);
   const getLiveComposerMembersForGroup = (group) => getAliveEnemiesByIds(group?.memberIds).filter((e) => {
     if (!e) return false;
-    return String(e?.enemyType || '').trim().toLowerCase() === 'composer-group-member';
+    if (String(e?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') return false;
+    const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+    const enemyGroupId = Math.max(0, Math.trunc(Number(e?.composerGroupId || e?.musicGroupId) || 0));
+    if (groupId > 0 && enemyGroupId > 0 && enemyGroupId !== groupId) return false;
+    const groupLaneId = String(group?.musicLaneId || '').trim().toLowerCase();
+    const enemyLaneId = String(e?.musicLaneId || '').trim().toLowerCase();
+    return !groupLaneId || !enemyLaneId || groupLaneId === enemyLaneId;
   });
   const isRhythmicSecondaryLoopCarrier = (group) => {
     if (!group) return false;
@@ -1119,6 +1125,16 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         ? (group?.introSlotMusicLaneId || group?.musicLaneId || '')
         : (group?.musicLaneId || '')
     ).trim().toLowerCase();
+    if (
+      groupLaneId === 'secondary_loop_lane'
+      && rhythmProfileCarrier
+      && !introSlotIdentityActive
+      && emittedSecondaryLoopRhythmThisStep
+    ) {
+      noteCallDiagnostic('secondary_loop_rhythm_step_cap');
+      noteResponseDiagnostic('secondary_loop_rhythm_step_cap');
+      continue;
+    }
     const isPrimaryLoopOwnerGroup = groupLaneId === 'primary_loop_lane';
     const isFoundationBufferGroup = String(group?.sectionId || '').trim().toLowerCase() === 'foundation-buffer';
     if (laneDrivenFoundation && isBassRole && !rhythmProfileCarrier) {
