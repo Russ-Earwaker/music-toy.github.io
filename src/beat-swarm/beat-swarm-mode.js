@@ -2019,7 +2019,7 @@ function ensureBassFoundationComposerBufferGroup(options = null) {
     && group.retiring !== true
     && isIntroSlotRhythmCarrier(group)
   ));
-  if (hasActiveIntroSlotRhythmCarrier) return null;
+  if (hasActiveIntroSlotRhythmCarrier && opts.forceImmediate !== true) return null;
   const isFoundationBufferGroup = (groupLike) => {
     const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
     if (!group) return false;
@@ -3124,6 +3124,7 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   const stepIndex = Math.max(0, Math.trunc(Number(opts.stepIndex) || Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0));
   const barIndex = Math.max(0, Math.trunc(Number(opts.barIndex) || Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR))));
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
+  const forceImmediate = opts.forceImmediate === true;
   if (introStage !== 'none') return null;
   if (barIndex < 4) return null;
   const foundationLanePlan = getDirectorLanePlanEntryForMusicLaneId('foundation_lane');
@@ -3132,7 +3133,6 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
     && isCarrierTypeEligibleForMusicLane('foundation_lane', 'spawner', foundationPreferredCarrier);
   const pacingState = String(getCurrentPacingStateName() || '').trim().toLowerCase();
   const introDrumProfile = getLockedIntroDrumSpawnerProfile(barIndex, pacingState);
-  const forceImmediate = opts.forceImmediate === true;
   const keepaliveGapTarget = (
     pacingState === 'intro_solo'
     || pacingState === 'intro_bass'
@@ -3159,6 +3159,22 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
     return profile === 'spawner_rhythm_pulse'
       || profile === 'spawner_rhythm_backbeat'
       || profile === 'spawner_rhythm_motion';
+  };
+  const returnForcedKeepaliveBlock = (reason, extra = null) => {
+    if (forceImmediate) {
+      try {
+        const safeReason = String(reason || 'unknown').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_') || 'unknown';
+        noteMusicSystemEvent(`music_bass_keepalive_blocked_${safeReason}`, {
+          reason: safeReason,
+          ownerId: Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0)),
+          ownerType: String(ownerEnemy?.enemyType || '').trim().toLowerCase(),
+          groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+          forceImmediate: true,
+          ...(extra && typeof extra === 'object' ? extra : {}),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    }
+    return null;
   };
   let ownerEnemy = null;
   let group = null;
@@ -3378,11 +3394,20 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
       }) || null;
       if (spawned) spawnedType = 'spawner';
     }
-    if (!introDrumProfile && shouldUseBassFoundationComposerBuffer({ beatIndex, barIndex, pacingState, introStage })) {
+    const postIntroRecoveryWindow = forceImmediate && foundationLane.isActiveStep && introStage === 'none' && barIndex >= 24;
+    if (
+      !spawned
+      && !introDrumProfile
+      && (
+        shouldUseBassFoundationComposerBuffer({ beatIndex, barIndex, pacingState, introStage })
+        || postIntroRecoveryWindow
+      )
+    ) {
       const bufferGroup = ensureBassFoundationComposerBufferGroup({
         beatIndex,
         stepIndex,
         barIndex,
+        forceImmediate: postIntroRecoveryWindow,
         sourceEnemy: bassFoundationOwnerRuntime.enemyRef,
         sourceGroup: bassFoundationOwnerRuntime.groupRef,
         continuityId: String(bassFoundationOwnerRuntime.continuityId || '').trim(),
@@ -3414,17 +3439,17 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
     }
     finishKeepaliveSpawnPerf();
   }
-  if (!ownerEnemy || !group) return null;
+  if (!ownerEnemy || !group) return returnForcedKeepaliveBlock('no_owner');
   const finishKeepaliveBuildPerf = createStepEventsPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bass.build');
   const ownerType = String(ownerEnemy?.enemyType || '').trim().toLowerCase();
   const fallbackActionType = getDefaultActionTypeForEnemyGroup(ownerType);
   const lifecycleState = normalizeMusicLifecycleState(group?.lifecycleState || ownerEnemy?.lifecycleState || 'active', 'active');
-  if (lifecycleState === 'retiring') return null;
+  if (lifecycleState === 'retiring') return returnForcedKeepaliveBlock('retiring', { lifecycleState });
   if (isIntroSlotRhythmCarrier(group)) return null;
   const role = normalizeSwarmRole(group?.role || getSwarmRoleForEnemy(ownerEnemy, BEAT_EVENT_ROLES.BASS), BEAT_EVENT_ROLES.BASS);
-  if (role !== BEAT_EVENT_ROLES.BASS) return null;
+  if (role !== BEAT_EVENT_ROLES.BASS) return returnForcedKeepaliveBlock('role_mismatch', { role });
   const ownerId = Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0));
-  if (!(ownerId > 0)) return null;
+  if (!(ownerId > 0)) return returnForcedKeepaliveBlock('missing_owner_id');
   const forcedIntroFoundationWindow = isForcedIntroFoundationWindow(barIndex);
   const introLockedLoop = !!introDrumProfile && ownerType === 'spawner';
   const slotOwnedSpawnerOwner = ownerType === 'spawner' && !!String(ownerEnemy?.musicVoiceKey || '').trim();

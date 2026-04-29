@@ -2950,23 +2950,38 @@ function collectDeliveryDiagnostics(session, maxBarIndex) {
   const bassSteps = Array.from(new Set(executedBass.map((ev) => clampInt(ev?.stepIndex, 0, 0))))
     .sort((a, b) => a - b);
   let maxBassStepGap = 0;
+  let maxBassStepGapFrom = -1;
+  let maxBassStepGapTo = -1;
   for (let i = 1; i < bassSteps.length; i++) {
     const gap = Math.max(0, bassSteps[i] - bassSteps[i - 1]);
-    if (gap > maxBassStepGap) maxBassStepGap = gap;
+    if (gap > maxBassStepGap) {
+      maxBassStepGap = gap;
+      maxBassStepGapFrom = bassSteps[i - 1];
+      maxBassStepGapTo = bassSteps[i];
+    }
   }
 
   const executedSteps = Array.from(new Set(executed.map((ev) => clampInt(ev?.stepIndex, 0, 0))))
     .sort((a, b) => a - b);
   const bassStepSet = new Set(bassSteps);
   let maxEnemyStepsWithoutBass = 0;
+  let maxEnemyStepsWithoutBassStart = -1;
+  let maxEnemyStepsWithoutBassEnd = -1;
   let currentRun = 0;
+  let currentRunStart = -1;
   for (const step of executedSteps) {
     if (bassStepSet.has(step)) {
       currentRun = 0;
+      currentRunStart = -1;
       continue;
     }
+    if (currentRun <= 0) currentRunStart = step;
     currentRun += 1;
-    if (currentRun > maxEnemyStepsWithoutBass) maxEnemyStepsWithoutBass = currentRun;
+    if (currentRun > maxEnemyStepsWithoutBass) {
+      maxEnemyStepsWithoutBass = currentRun;
+      maxEnemyStepsWithoutBassStart = currentRunStart;
+      maxEnemyStepsWithoutBassEnd = step;
+    }
   }
 
   const buildCountMap = (list, keyFn) => {
@@ -3088,7 +3103,11 @@ function collectDeliveryDiagnostics(session, maxBarIndex) {
     bassSkippedCreatedEvents,
     bassExecutedToCreatedRate: createdBass.length > 0 ? (executedBass.length / createdBass.length) : 1,
     maxBassStepGap,
+    maxBassStepGapFrom,
+    maxBassStepGapTo,
     maxEnemyStepsWithoutBass,
+    maxEnemyStepsWithoutBassStart,
+    maxEnemyStepsWithoutBassEnd,
     byActionType: computeDeficitMap(createdByActionType, executedByActionType),
     bySourceSystem: computeDeficitMap(createdBySourceSystem, executedBySourceSystem),
     byMusicLane: computeDeficitMap(createdByMusicLane, executedByMusicLane),

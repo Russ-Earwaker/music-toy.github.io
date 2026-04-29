@@ -5994,7 +5994,7 @@ async function runBS0s3MusicLabAssessment5m() {
     saveMusicLabEachRun: true,
     forceCompactSave: true,
     keepMusicLabRealtimeMetrics: true,
-    publishPerfArtifacts: true,
+    publishPerfArtifacts: false,
     saveRunIdBase: 'musicLab_bs0_s3_assessment_1x5m',
     saveNotes: 'Beat Swarm Music Lab assessment run: S3, 1 run x 5 minutes, compact save for structured review.',
     groupedScenarioName: 'retro_shooter_intro_pacing_s3_assessment_1x5m',

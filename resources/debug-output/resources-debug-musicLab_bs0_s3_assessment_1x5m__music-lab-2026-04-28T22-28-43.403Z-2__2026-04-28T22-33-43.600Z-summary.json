@@ -1,0 +1,50 @@
+{
+  "kind": "music-lab-summary",
+  "runId": "musicLab_bs0_s3_assessment_1x5m",
+  "label": "music-lab-session",
+  "scenarioName": "retro_shooter_intro_pacing_s3_assessment_1x5m",
+  "sessionId": "music-lab-2026-04-28T22:28:43.403Z-2",
+  "saveTimestampIso": "2026-04-28T22:33:43.600Z",
+  "saveInstanceId": "musicLab_bs0_s3_assessment_1x5m__music-lab-2026-04-28T22:28:43.403Z-2__2026-04-28T22-33-43.600Z",
+  "compactedSave": true,
+  "compactedSaveDetail": "focused_musicality_targets_and_recent_tail",
+  "payloadDebug": {
+    "sessionId": "music-lab-2026-04-28T22:28:43.403Z-2",
+    "eventTimelineCount": 8271,
+    "executedEventCount": 0,
+    "createdEventCount": 0,
+    "spawnerPipelineEventCount": 0,
+    "metricsHistoryCount": 42,
+    "beatSwarmPerfBucketCount": 39,
+    "beatSwarmStepEventsPerfBucketCount": 45,
+    "preflightBundleBytes": 0,
+    "bundleBytes": 1599903
+  },
+  "sessionSummary": {
+    "sessionId": "music-lab-2026-04-28T22:28:43.403Z-2",
+    "startedAtIso": "2026-04-28T22:28:43.403Z",
+    "endedAtIso": "2026-04-28T22:33:43.577Z",
+    "eventCount": 8271,
+    "paletteChangeCount": 3,
+    "pacingChangeCount": 29,
+    "metrics": {
+      "notePoolCompliance": 0.9022595901208618,
+      "intervalSmoothShare": 0.934668071654373,
+      "motifReuseRate": 0.9214448535858321,
+      "responseRate": 0.336322869955157,
+      "paletteContinuityScore": 1,
+      "playerMaskingRate": 0,
+      "enemyExecutedToCreatedRate": 1.0855675984027382,
+      "spawnerExecutedToCreatedRate": 1,
+      "bassExecutedToCreatedRate": 1.1729857819905214,
+      "skippedCreatedEvents": 0,
+      "spawnerSkippedCreatedEvents": 0,
+      "bassSkippedCreatedEvents": 0,
+      "maxEnemyStepsWithoutBass": 19
+    }
+  },
+  "transitionDebug": {
+    "ok": false,
+    "reason": "ov is not defined"
+  }
+}
