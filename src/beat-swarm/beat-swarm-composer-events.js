@@ -456,7 +456,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const responsePhraseSteps = 2;
   const responseLengthCap = preDropActive
     ? 1
-    : (structureIntent === 'build' ? 3 : 4);
+    : (strongLeadWindowActive ? 2 : (structureIntent === 'build' ? 3 : 4));
   const responseCadenceRestSteps = directorWantsAnswerGroup
     ? (preDropActive ? 2 : (strongLeadWindowActive ? 3 : 2))
     : 1;
