@@ -1426,7 +1426,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             || 'C4';
         }
       }
-      const phraseRoot = helpers.normalizeSwarmNoteName?.(notes[0]) || 'C4';
+      const firstActiveIdx = activeStepIndices.length ? activeStepIndices[0] : 0;
+      const finalActiveIdx = activeStepIndices.length ? activeStepIndices[activeStepIndices.length - 1] : 0;
+      const phraseRoot = helpers.normalizeSwarmNoteName?.(notes[finalActiveIdx])
+        || helpers.normalizeSwarmNoteName?.(notes[firstActiveIdx])
+        || 'C4';
       const resolvedPhraseFifth = notes.find((note) => String(note || '').trim() && String(note || '').trim() !== String(phraseRoot || '').trim()) || notes[Math.min(2, Math.max(0, notes.length - 1))];
       const phraseFifth = helpers.normalizeSwarmNoteName?.(resolvedPhraseFifth) || phraseRoot;
       return {
