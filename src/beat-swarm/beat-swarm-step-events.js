@@ -1112,7 +1112,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const entryPhraseAudibility = isEntryPhraseAudibility(item?.ev);
     const finalProminence = (() => {
       if (selectedIds.has(item.idx)) {
-        if (item.layer === 'foundation') return 'full';
+        if (item.layer === 'foundation') {
+          if (item.isFoundationStructuralStep) return 'full';
+          if (!playerLikelyAudible && !primaryLoopForegroundProtected) return 'full';
+          return 'quiet';
+        }
         if (item.layer === 'loops') {
           if (item.isProtectedIntroDrum) return 'quiet';
           if (item.isPrimaryLoopLaneEvent) {
@@ -1121,7 +1125,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
             }
             if (foundationSelected) {
               if (item.isEstablishingForegroundLoop && !playerLikelyAudible) return 'full';
-              return freshEntryAudibility ? 'quiet' : 'quiet';
+              return 'quiet';
             }
             if (playerLikelyAudible) return item.isEstablishingForegroundLoop ? 'full' : 'quiet';
             return 'full';

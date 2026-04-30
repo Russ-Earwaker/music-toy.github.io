@@ -833,13 +833,7 @@ function assignMusicLaneIdentity(options = null) {
   const previousContinuityId = String(lane.continuityId || '').trim();
   const requestedContinuityId = String(opts?.continuityId || lane.continuityId || '').trim();
   let continuityId = requestedContinuityId || getNextMusicContinuityId();
-  if (
-    laneId === 'secondary_loop_lane'
-    && previousContinuityId
-    && normalizeLaneIdentityChangeReason(opts?.identityChangeReason) !== 'continuity_reset'
-  ) {
-    continuityId = previousContinuityId;
-  }
+  const requestedLaneIdentityChangeReason = normalizeLaneIdentityChangeReason(opts?.identityChangeReason);
   const group = opts?.group && typeof opts.group === 'object' ? opts.group : null;
   const enemy = opts?.enemy && typeof opts.enemy === 'object' ? opts.enemy : null;
   const enemyType = String(opts?.enemyType || enemy?.enemyType || group?.enemyType || '').trim().toLowerCase();
@@ -847,7 +841,7 @@ function assignMusicLaneIdentity(options = null) {
   const currentSectionId = String(composerRuntime.currentSectionId || 'default').trim().toLowerCase() || 'default';
   const sectionId = String(opts?.sectionId || lane.sectionId || currentSectionId).trim().toLowerCase() || currentSectionId;
   const previousSectionId = String(lane.sectionId || '').trim().toLowerCase();
-  const sameContinuity = !!continuityId && !!previousContinuityId && continuityId === previousContinuityId;
+  let sameContinuity = !!continuityId && !!previousContinuityId && continuityId === previousContinuityId;
   const stepIndex = Math.max(0, Math.trunc(
     Number(opts?.stepIndex)
       || Number(ensureSwarmDirector().getSnapshot()?.stepIndex)
@@ -868,9 +862,12 @@ function assignMusicLaneIdentity(options = null) {
       || lane.patternKey
       || ''
   ).trim();
+  const protectedContinuityWillBePreserved = stableProtectedLane
+    && !!previousContinuityId
+    && requestedLaneIdentityChangeReason !== 'continuity_reset';
   const inferredIdentityChangeReason = (
-    !normalizeLaneIdentityChangeReason(opts?.identityChangeReason)
-    && sameContinuity
+    !requestedLaneIdentityChangeReason
+    && (sameContinuity || protectedContinuityWillBePreserved)
     && stableProtectedLane
     && !!previousSectionId
     && previousSectionId !== sectionId
@@ -879,7 +876,15 @@ function assignMusicLaneIdentity(options = null) {
       || requestedPatternKey !== String(lane.patternKey || '').trim()
     )
   ) ? 'section_restatement' : '';
-  const identityChangeReason = normalizeLaneIdentityChangeReason(opts?.identityChangeReason || inferredIdentityChangeReason);
+  const identityChangeReason = normalizeLaneIdentityChangeReason(requestedLaneIdentityChangeReason || inferredIdentityChangeReason);
+  if (
+    stableProtectedLane
+    && previousContinuityId
+    && identityChangeReason !== 'continuity_reset'
+  ) {
+    continuityId = previousContinuityId;
+    sameContinuity = true;
+  }
   const allowContinuityDrift = opts?.allowContinuityDrift === true
     || identityChangeReason === 'continuity_reset'
     || (!stableProtectedLane && directorContinuityBias === 'follow');
@@ -5192,11 +5197,19 @@ function noteMusicLaneOwnershipDiagnostics(beatIndex = currentBeatIndex, stepInd
       && String(current.continuityId || '').trim() === String(previous.continuityId || '').trim();
     const identityPreserved = continuityPreserved && !instrumentChanged && !phraseChanged && !patternChanged;
     const identityChangeReason = normalizeLaneIdentityChangeReason(current.identityChangeReason);
+    const previousIdentityChangeReason = normalizeLaneIdentityChangeReason(previous.identityChangeReason);
+    const foundationPhraseVariation = laneId === 'foundation_lane'
+      && continuityPreserved
+      && !instrumentChanged
+      && (phraseChanged || patternChanged);
     const intentionalIdentityChange = (
       identityChangeReason === 'phrase_boundary_mutation'
       || identityChangeReason === 'section_restatement'
       || identityChangeReason === 'reorchestrate_lane'
       || identityChangeReason === 'continuity_reset'
+      || previousIdentityChangeReason === 'phrase_boundary_mutation'
+      || previousIdentityChangeReason === 'section_restatement'
+      || foundationPhraseVariation
     );
     noteMusicSystemEvent('music_lane_identity_changed', {
       ...current,
@@ -5204,7 +5217,7 @@ function noteMusicLaneOwnershipDiagnostics(beatIndex = currentBeatIndex, stepInd
       previousInstrumentId: String(previous.instrumentId || '').trim(),
       previousPhraseId: String(previous.phraseId || '').trim(),
       previousPatternKey: String(previous.patternKey || '').trim(),
-      previousIdentityChangeReason: normalizeLaneIdentityChangeReason(previous.identityChangeReason),
+      previousIdentityChangeReason,
       previousPerformerEnemyId: Math.max(0, Math.trunc(Number(previous.performerEnemyId) || 0)),
       previousPerformerGroupId: Math.max(0, Math.trunc(Number(previous.performerGroupId) || 0)),
       previousPerformerType: String(previous.performerType || '').trim().toLowerCase(),
@@ -7088,7 +7101,9 @@ function setFoundationLanePhrase(phraseLike = null, barIndex = 0, options = null
     foundationLane.phraseId = nextPhraseId;
     foundationLane.phraseFamily = String(phrase?.family || '').trim().toLowerCase();
     foundationLane.patternKey = nextPatternKey;
-    foundationLane.identityChangeReason = normalizeLaneIdentityChangeReason(opts?.identityChangeReason);
+    foundationLane.identityChangeReason = normalizeLaneIdentityChangeReason(
+      opts?.identityChangeReason || (changed ? 'phrase_boundary_mutation' : '')
+    );
     foundationLane.sectionId = String(opts?.sectionId || foundationLane.sectionId || '').trim().toLowerCase();
     if (!(foundationLane.activeSinceBar >= 0)) foundationLane.activeSinceBar = safeBar;
     foundationLane.lastAssignedBar = safeBar;
@@ -7182,7 +7197,9 @@ function ensureFoundationLanePlan(barIndex = 0, options = null) {
     holdChance: 0.78,
   });
   if (foundationLane) foundationLane.phraseFamily = String(phrase?.family || '').trim().toLowerCase();
-  const identityChangeReason = phrase?.sourcePhraseId
+  const phraseIdChanged = !!currentPhraseId && currentPhraseId !== String(phrase?.id || '').trim().toLowerCase();
+  const patternChanged = !!currentPatternKey && currentPatternKey !== buildFoundationPhrasePatternKey(phrase?.steps);
+  const identityChangeReason = phrase?.sourcePhraseId || phraseIdChanged || patternChanged
     ? 'phrase_boundary_mutation'
     : ((previousSectionId && previousSectionId !== currentSectionId) ? 'section_restatement' : '');
   return setFoundationLanePhrase(phrase, bar, {
