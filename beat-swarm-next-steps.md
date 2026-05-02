@@ -4,61 +4,198 @@
 
 Latest validated Music Lab run:
 
-- file: `resources/music-lab-results/music-lab-results-2026-04-24T12-52-54-537Z.json`
-- scenario: `BS0 S3 assessment 1x5m`
-- result: support-lane instrument leakage is fixed
+- file: `resources/music-lab-results/music-lab-results-2026-05-02T08-24-18-685Z.json`
+- scenario: `BS0 S3 HP Sections 1x5m`
+- result: lane-owned carrier transfer slice passed the HP/readability goal with no support collapse
 
 What the latest run confirmed:
 
-- `laneCompliance.matchRate = 1.0`
-- `laneCompliance.byLane.accent.matched = 236 / 236`
-- `laneCompliance.mismatchExamples = []`
-- executed accent support now uses support-safe instruments:
-  - `secondary_loop_lane / call / HAND CLAP (ELECTRO)`
-  - `sparkle_lane / response / BELL`
-- executed accent `composer-group-projectile` events now contain:
-  - `GAMING NOTE = 0`
-  - `GAMING BLING = 0`
-- `directorSparkleActiveBeats = 0`
-- `primaryLead = exclusive`
-- `primaryLeadPersistence = stable`
+- `visualRoleFullTextureThreeRoleReadableShare = 1.000`
+- `visualRoleSupportCollapsedDuringLeadShare = 0.000`
+- `visualRoleFullTextureLeadWithSupportVisibleShare = 1.000`
+- `visualRoleAvgSupportVisualWeight = 9.197`
+- HP-section stability:
+  - `1x`: `full3 = 1.000`, `collapse = 0.000`
+  - `1.5x`: `full3 = 1.000`, `collapse = 0.000`
+  - `2x`: `full3 = 1.000`, `collapse = 0.000`
+- lane carrier transfer path is active:
+  - `music_lane_carrier_transferred = 42`
+  - `music_lane_carrier_unbound = 15`
+- duplicate primary-lead block telemetry is reduced but still visible:
+  - `blocked_by_active_primary_lead = 175`
 
 Current musical read:
 
-- `retroShmupStyle.overallScore = 0.604`
-- `leadAuthorityScore = 0.651`
-- `arrangementSimplicityScore = 0.329`
-- `supportDisciplineScore = 0.607`
-- `pulseRegularityScore = 0.752`
-- `instrumentChangesPerEnemy = 3.36`
-- `visibleEnemyEvents = 1938`
+- the intro teaching structure is restored and should be preserved:
+  1. player shooting only
+  2. one pulse layer
+  3. second beat/backbeat layer
+  4. melody enters and continues
+- foundation, counter-rhythm, and primary lead are now readable together
+- lead cadence improved materially after resolving `phraseRoot` from the final active lead note
+- sparkle/ornament timing experiments regressed clarity and have been rolled back
+- player/enemy weapon sounds, explosions, and chain/combat sounds are separate from the musical-flow gating and should remain reliable at standard volume
 
 Current assessment:
 
-- the accent/lead lane-classification bug is no longer the blocker
-- the main remaining problem is structural drift and excess density
-- session summary still reports:
-  - `ownershipContinuity = drift`
-  - `identityStability = drift`
-  - `readabilityDensity = busy`
+- the first lane-owned carrier transfer slice fixed the HP/readability failure mode
+- HP is now behaving more like combat difficulty rather than music-role ownership
+- remaining work is to formalize this path and reduce old duplicate lead spawn attempts
+- do not rework sparkle timing unless a clear regression appears
+
+## Active Architecture Direction
+
+The current goal is now more specific than "role lifecycle":
+
+> Music lanes are owned by the director/music runtime. Enemies are visible and interactive carriers for those lanes.
+
+This replaces the fragile model where an enemy or composer group effectively owns the music and enemy death, HP, or stale visual identity can accidentally remove a lane.
+
+### Core Rules
+
+1. The director generates music intent.
+   - foundation
+   - counter-rhythm
+   - lead
+   - ornament/reply
+   - density, phrase, register, instrument, and section shape
+
+2. The director also chooses how that music is embodied on screen.
+   - choose or spawn carrier enemies
+   - assign current performers to lanes
+   - transfer a lane when a carrier dies, expires, is released, or becomes visually unreadable
+
+3. Normal music lanes are unaffected by enemy lifespan or HP.
+   - enemy death should not stop a normal lane
+   - HP should affect combat difficulty only
+   - long-lived enemies must not block a lane transfer or refresh
+   - if no carrier is available, the lane can temporarily play as a system/offscreen voice until embodied again
+
+4. Special instrument-bound enemies are explicit exceptions.
+   - example: a piano enemy that owns a piano riff
+   - when that enemy dies, the special riff can stop
+   - these enemies are authored exceptions, not the default lane model
+
+Default rule:
+
+> Normal enemies are carriers for music. Special enemies can be true musical sources.
+
+### Runtime Shape
+
+Move toward explicit lane-owned state:
+
+```js
+musicLaneRuntime = {
+  foundation: {
+    laneId: "foundation_lane",
+    role: "foundation_groove",
+    active: true,
+    instrumentId: "BASS TONE 4",
+    phraseId: "foundation-a",
+    performerEnemyId: 394,
+    performerGroupId: 178,
+    embodimentState: "embodied" // embodied / transferring / system_voice / vacant
+  },
+  counterRhythm: {
+    laneId: "secondary_loop_lane",
+    role: "counter_rhythm",
+    active: true,
+    instrumentId: "HAND CLAP (ELECTRO)",
+    phraseId: "counter-a",
+    performerEnemyId: 359,
+    performerGroupId: 152,
+    embodimentState: "embodied"
+  }
+}
+```
+
+Enemy/carrier state should become secondary:
+
+```js
+enemyMusicCarrier = {
+  carrierEnemyId: 359,
+  carrierGroupId: 152,
+  assignedLaneId: "secondary_loop_lane",
+  assignedRole: "counter_rhythm",
+  carrierState: "active",   // active / released / dead / unavailable
+  combatState: "armed"      // armed / suppressed / disabled
+}
+```
+
+Important distinction:
+
+- `musicLaneRuntime` decides whether the lane exists and what it plays
+- enemy/carrier state decides who currently represents it on screen
+
+### Immediate Implementation Target
+
+Stop trying to preserve music by preserving enemies.
+
+Next work should build lane transfer behavior:
+
+- detect when a lane's current carrier dies, is released, or becomes visually invalid
+- keep the lane's phrase/instrument/pattern alive in `musicLaneRuntime`
+- bind that lane to a new active enemy/group when possible
+- fall back to a temporary system/offscreen performer if no carrier is available
+- prevent stale carrier/group identities from blocking replacement
+
+### Acceptance Signals
+
+- HP-section tests should show similar music-role readability across `1x`, `1.5x`, and `2x` HP sections
+- `visualRoleFullTextureThreeRoleReadableShare` should climb above `0.60`
+- `visualRoleSupportCollapsedDuringLeadShare` should fall below `0.25`
+- enemy death/removal should not create lane dropouts for normal lanes
+- `explosionReliability` must remain reliable
+- `retroShmupStyle` should remain `on_target`
+
+### Non-Goals
+
+- do not use HP increases, global or role-specific, to patch readability
+- do not make combat durability decide whether music can refresh
+- do not add more lane density to hide missing transfer logic
+- do not make special enemy families required for musical legibility
 
 ## What We Are Currently Doing
 
 Active runtime focus:
 
-1. preserve the now-correct lane/instrument contract
-2. reduce support/counter-rhythm ownership drift
-3. simplify full-texture density so the result reads more like a retro shmup stage track
+1. preserve the current intro, lead, foundation, and counter-rhythm baseline
+2. move normal music ownership from enemies/groups into explicit lane runtime
+3. make enemies swappable carriers for active lanes
+4. improve late-run support readability without increasing active voice count
+5. keep cadence/phrase resolution gains from the final-active-note lead `phraseRoot` fix
+6. keep weapon and explosion sounds outside musical-flow suppression
+
+Current implementation slice:
+
+- composer groups now carry explicit `musicState`, `combatState`, and `musicRole` defaults
+- musical coverage checks have started moving away from raw alive-enemy checks
+- HP-section testing shows this is not enough: stale carrier identity can still block or mislabel support
+- next implementation should introduce lane-owned continuity and carrier transfer as the default model
 
 Immediate next technical target:
 
-- continue tracing support and counter-rhythm ownership drift
-- reduce unnecessary ownership resets and continuity breaks without regressing lead authority
-- trim arrangement density after continuity is stable, rather than adding more role variety first
+- define the Level 1 lane runtime contract for `foundation`, `counter_rhythm`, `lead`, and `ornament`
+- make normal lane playback survive enemy death, release, and HP changes
+- add carrier assignment/transfer behavior for active lanes
+- preserve the successful lead cadence checkpoint while improving support transfer
+- success target:
+  - phrase resolution remains high
+  - lead delivery remains near `1.0`
+  - competition stays below roughly `0.35`
+  - foreground clarity stays above roughly `0.90`
+  - full-texture three-role readability reaches at least `0.60`
+  - support collapse during lead falls below roughly `0.25`
+  - HP-section readability remains stable across `1x`, `1.5x`, and `2x`
+- note: the first late-contour variation pass after the `16:35` checkpoint regressed cadence and was reverted
 
 Explicit non-goal right now:
 
-- do **not** spend more time on accent-lane instrument cleanup unless a regression appears
+- do **not** increase lane density, support stacks, or ornament cadence
+- do **not** use HP as a readability or role-stability control
+- do **not** preserve music by forcing enemies to stay alive
+- do **not** revisit framerate unless the user reports a new issue
+- do **not** change intro staging unless a regression appears
 
 ## Current State
 

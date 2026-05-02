@@ -361,6 +361,16 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     identityChangeReason: String(payload?.identityChangeReason || '').trim().toLowerCase(),
     previousIdentityChangeReason: String(payload?.previousIdentityChangeReason || '').trim().toLowerCase(),
     sectionId: String(payload?.sectionId || '').trim().toLowerCase(),
+    sectionLabel: String(payload?.sectionLabel || '').trim(),
+    hpSectionId: String(payload?.hpSectionId || '').trim().toLowerCase(),
+    hpSectionLabel: String(payload?.hpSectionLabel || '').trim(),
+    hpMultiplier: Number(payload?.hpMultiplier) || 0,
+    spawnMaxHp: Number(payload?.spawnMaxHp) || 0,
+    baseSpawnMaxHp: Number(payload?.baseSpawnMaxHp) || 0,
+    startBar: clampInt(payload?.startBar, 0, 0),
+    endBar: payload?.endBar == null ? null : clampInt(payload?.endBar, 0, 0),
+    hpSectionStartBar: payload?.hpSectionStartBar == null ? null : clampInt(payload?.hpSectionStartBar, 0, 0),
+    hpSectionEndBar: payload?.hpSectionEndBar == null ? null : clampInt(payload?.hpSectionEndBar, 0, 0),
     waitSteps: clampInt(payload?.waitSteps, 0, 0),
     callStepAbs: clampInt(payload?.callStepAbs, 0, -1),
     lastResponseStepAbs: clampInt(payload?.lastResponseStepAbs, 0, -1),
@@ -3713,6 +3723,30 @@ function computeSummary(metrics) {
   const retroShmupStyle = metrics?.retroShmupStyle && typeof metrics.retroShmupStyle === 'object'
     ? metrics.retroShmupStyle
     : {};
+  const visualRoleTraceCount = Math.max(0, clampInt(metrics?.visualRoleReadabilityTraceCount, 0, 0));
+  const visualRoleFullTextureTraceCount = Math.max(0, clampInt(metrics?.visualRoleFullTextureTraceCount, 0, 0));
+  const visualRoleThreeRoleReadableShare = Number(metrics?.visualRoleThreeRoleReadableShare) || 0;
+  const visualRoleFullTextureThreeRoleReadableShare = Number(metrics?.visualRoleFullTextureThreeRoleReadableShare) || 0;
+  const visualRoleLeadWithSupportVisibleShare = Number(metrics?.visualRoleLeadWithSupportVisibleShare) || 0;
+  const visualRoleFullTextureLeadWithSupportVisibleShare = Number(metrics?.visualRoleFullTextureLeadWithSupportVisibleShare) || 0;
+  const visualRoleSupportCollapsedDuringLeadShare = Number(metrics?.visualRoleSupportCollapsedDuringLeadShare) || 0;
+  const visualRoleAvgDistinctReadableRoleCount = Number(metrics?.visualRoleAvgDistinctReadableRoleCount) || 0;
+  const visualRoleReadabilityStatus = visualRoleTraceCount <= 0
+    ? 'missing'
+    : (
+      visualRoleFullTextureTraceCount > 0
+      && visualRoleFullTextureThreeRoleReadableShare >= 0.6
+      && visualRoleFullTextureLeadWithSupportVisibleShare >= 0.85
+      && visualRoleSupportCollapsedDuringLeadShare <= 0.15
+        ? 'readable'
+        : (
+          visualRoleThreeRoleReadableShare >= 0.45
+          && visualRoleLeadWithSupportVisibleShare >= 0.7
+          && visualRoleSupportCollapsedDuringLeadShare <= 0.25
+            ? 'partial'
+            : 'blurred'
+        )
+    );
   return {
     notePoolCompliance: `${Math.round((Number(metrics?.notePoolCompliance?.poolComplianceRate) || 0) * 100)}%`,
     motifReuse: `${Math.round(motifReuse * 100)}%`,
@@ -3805,6 +3839,15 @@ function computeSummary(metrics) {
     retroShmupLeadAuthority: Number(Number(retroShmupStyle?.leadAuthorityScore) || 0).toFixed(3),
     retroShmupSupportDiscipline: Number(Number(retroShmupStyle?.supportDisciplineScore) || 0).toFixed(3),
     retroShmupArrangementSimplicity: Number(Number(retroShmupStyle?.arrangementSimplicityScore) || 0).toFixed(3),
+    visualRoleReadability: visualRoleReadabilityStatus,
+    visualRoleTraceCount,
+    visualRoleFullTextureTraceCount,
+    visualRoleThreeRoleReadableShare: Number(visualRoleThreeRoleReadableShare.toFixed(3)),
+    visualRoleFullTextureThreeRoleReadableShare: Number(visualRoleFullTextureThreeRoleReadableShare.toFixed(3)),
+    visualRoleLeadWithSupportVisibleShare: Number(visualRoleLeadWithSupportVisibleShare.toFixed(3)),
+    visualRoleFullTextureLeadWithSupportVisibleShare: Number(visualRoleFullTextureLeadWithSupportVisibleShare.toFixed(3)),
+    visualRoleSupportCollapsedDuringLeadShare: Number(visualRoleSupportCollapsedDuringLeadShare.toFixed(3)),
+    visualRoleAvgDistinctReadableRoleCount: Number(visualRoleAvgDistinctReadableRoleCount.toFixed(3)),
   };
 }
 
@@ -4249,6 +4292,200 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
   };
 }
 
+function collectVisualRoleReadabilityTrace(session, maxBarIndex) {
+  const allSystemEvents = Array.isArray(session?.systemEvents) ? session.systemEvents : [];
+  const events = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => (
+      String(e?.eventType || '').trim().toLowerCase() === 'music_visual_role_readability_state'
+      && clampInt(e?.barIndex, 0, 0) <= maxBarIndex
+    ))
+    .sort((a, b) => {
+      const barDelta = clampInt(a?.barIndex, 0, 0) - clampInt(b?.barIndex, 0, 0);
+      if (barDelta !== 0) return barDelta;
+      return clampInt(a?.beatIndex, 0, 0) - clampInt(b?.beatIndex, 0, 0);
+    });
+  const hpSectionEvents = allSystemEvents
+    .filter((e) => (
+      String(e?.eventType || '').trim().toLowerCase() === 'music_enemy_health_test_section'
+      && clampInt(e?.barIndex, 0, 0) <= maxBarIndex
+    ))
+    .sort((a, b) => clampInt(a?.barIndex, 0, 0) - clampInt(b?.barIndex, 0, 0));
+  const inc = (bucket, keyLike) => {
+    const key = String(keyLike || 'unknown').trim().toLowerCase() || 'unknown';
+    bucket[key] = Math.max(0, clampInt(bucket[key], 0, 0)) + 1;
+  };
+  const makeSectionBucket = (sectionEvent = null) => ({
+    sectionId: String(sectionEvent?.sectionId || sectionEvent?.hpSectionId || 'default').trim().toLowerCase() || 'default',
+    sectionLabel: String(sectionEvent?.sectionLabel || sectionEvent?.hpSectionLabel || 'default').trim() || 'default',
+    hpMultiplier: Number(sectionEvent?.hpMultiplier) || 1,
+    startBar: Math.max(0, clampInt(sectionEvent?.startBar ?? sectionEvent?.hpSectionStartBar, clampInt(sectionEvent?.barIndex, 0, 0), 0)),
+    endBar: Number.isFinite(Number(sectionEvent?.endBar ?? sectionEvent?.hpSectionEndBar)) ? Math.max(0, clampInt(sectionEvent?.endBar ?? sectionEvent?.hpSectionEndBar, 0, 0)) : null,
+    count: 0,
+    fullTextureCount: 0,
+    threeRoleCount: 0,
+    fullTextureThreeRoleCount: 0,
+    supportCollapsedDuringLeadCount: 0,
+    leadWithSupportVisibleCount: 0,
+    fullTextureLeadWithSupportVisibleCount: 0,
+    distinctRoleTotal: 0,
+    foundationWeightTotal: 0,
+    supportWeightTotal: 0,
+    leadWeightTotal: 0,
+    ornamentWeightTotal: 0,
+  });
+  const sectionBuckets = {};
+  const findHpSectionEventForBar = (barIndex) => {
+    let current = null;
+    for (const ev of hpSectionEvents) {
+      const startBar = Math.max(0, clampInt(ev?.startBar, clampInt(ev?.barIndex, 0, 0), 0));
+      if (startBar > barIndex) break;
+      const endBar = Number.isFinite(Number(ev?.endBar)) ? Math.max(startBar, clampInt(ev?.endBar, startBar, 0)) : Number.POSITIVE_INFINITY;
+      if (barIndex >= startBar && barIndex < endBar) current = ev;
+    }
+    return current;
+  };
+  const addSectionSample = (sectionEvent, ev, fullTexture, distinctCount) => {
+    if (!sectionEvent) return;
+    const sectionId = String(sectionEvent?.sectionId || sectionEvent?.hpSectionId || sectionEvent?.sectionLabel || sectionEvent?.hpSectionLabel || 'default').trim().toLowerCase() || 'default';
+    const bucket = sectionBuckets[sectionId] || (sectionBuckets[sectionId] = makeSectionBucket(sectionEvent));
+    bucket.count += 1;
+    if (fullTexture) bucket.fullTextureCount += 1;
+    bucket.distinctRoleTotal += distinctCount;
+    bucket.foundationWeightTotal += Math.max(0, Number(ev?.foundationVisualWeight) || 0);
+    bucket.supportWeightTotal += Math.max(0, Number(ev?.supportVisualWeight) || 0);
+    bucket.leadWeightTotal += Math.max(0, Number(ev?.leadVisualWeight) || 0);
+    bucket.ornamentWeightTotal += Math.max(0, Number(ev?.ornamentVisualWeight) || 0);
+    if (ev?.threeRoleReadable === true || distinctCount >= 3) {
+      bucket.threeRoleCount += 1;
+      if (fullTexture) bucket.fullTextureThreeRoleCount += 1;
+    }
+    if (ev?.supportCollapsedDuringLead === true) bucket.supportCollapsedDuringLeadCount += 1;
+    if (ev?.leadWithSupportVisible === true) {
+      bucket.leadWithSupportVisibleCount += 1;
+      if (fullTexture) bucket.fullTextureLeadWithSupportVisibleCount += 1;
+    }
+  };
+  const count = events.length;
+  const byReadableRoleSet = {};
+  const readableRoleCounts = {
+    foundation_groove: 0,
+    counter_rhythm: 0,
+    lead_phrase: 0,
+    answer_ornament: 0,
+  };
+  let fullTextureCount = 0;
+  let threeRoleCount = 0;
+  let fullTextureThreeRoleCount = 0;
+  let supportCollapsedDuringLeadCount = 0;
+  let leadWithSupportVisibleCount = 0;
+  let fullTextureLeadWithSupportVisibleCount = 0;
+  let distinctRoleTotal = 0;
+  let foundationWeightTotal = 0;
+  let supportWeightTotal = 0;
+  let leadWeightTotal = 0;
+  let ornamentWeightTotal = 0;
+  for (const ev of events) {
+    const activeMusicMode = String(ev?.activeMusicMode || '').trim().toLowerCase();
+    const fullTexture = activeMusicMode === 'full_texture';
+    const readableRoles = Array.isArray(ev?.readableRoles)
+      ? ev.readableRoles.map((role) => String(role || '').trim().toLowerCase()).filter(Boolean).sort()
+      : [];
+    if (fullTexture) fullTextureCount += 1;
+    for (const role of readableRoles) {
+      if (Object.prototype.hasOwnProperty.call(readableRoleCounts, role)) {
+        readableRoleCounts[role] += 1;
+      }
+    }
+    inc(byReadableRoleSet, readableRoles.join('|') || 'none');
+    const distinctCount = Math.max(0, clampInt(ev?.distinctReadableRoleCount, readableRoles.length, 0));
+    const directHpSection = String(ev?.hpSectionId || '').trim()
+      ? {
+          sectionId: String(ev.hpSectionId || '').trim().toLowerCase(),
+          sectionLabel: String(ev?.hpSectionLabel || ev.hpSectionId || '').trim(),
+          hpMultiplier: Number(ev?.hpMultiplier) || 1,
+          startBar: ev?.hpSectionStartBar,
+          endBar: ev?.hpSectionEndBar,
+          barIndex: ev?.barIndex,
+        }
+      : null;
+    addSectionSample(directHpSection || findHpSectionEventForBar(clampInt(ev?.barIndex, 0, 0)), ev, fullTexture, distinctCount);
+    distinctRoleTotal += distinctCount;
+    foundationWeightTotal += Math.max(0, Number(ev?.foundationVisualWeight) || 0);
+    supportWeightTotal += Math.max(0, Number(ev?.supportVisualWeight) || 0);
+    leadWeightTotal += Math.max(0, Number(ev?.leadVisualWeight) || 0);
+    ornamentWeightTotal += Math.max(0, Number(ev?.ornamentVisualWeight) || 0);
+    if (ev?.threeRoleReadable === true || distinctCount >= 3) {
+      threeRoleCount += 1;
+      if (fullTexture) fullTextureThreeRoleCount += 1;
+    }
+    if (ev?.supportCollapsedDuringLead === true) supportCollapsedDuringLeadCount += 1;
+    if (ev?.leadWithSupportVisible === true) {
+      leadWithSupportVisibleCount += 1;
+      if (fullTexture) fullTextureLeadWithSupportVisibleCount += 1;
+    }
+  }
+  const roleShares = {};
+  for (const [role, roleCount] of Object.entries(readableRoleCounts)) {
+    roleShares[role] = count > 0 ? roleCount / count : 0;
+  }
+  const byEnemyHealthSection = {};
+  for (const [sectionId, bucket] of Object.entries(sectionBuckets)) {
+    const sectionCount = Math.max(0, Number(bucket.count) || 0);
+    const sectionFullTextureCount = Math.max(0, Number(bucket.fullTextureCount) || 0);
+    byEnemyHealthSection[sectionId] = {
+      sectionId,
+      sectionLabel: bucket.sectionLabel,
+      hpMultiplier: bucket.hpMultiplier,
+      startBar: bucket.startBar,
+      endBar: bucket.endBar,
+      count: sectionCount,
+      fullTextureCount: sectionFullTextureCount,
+      threeRoleReadableShare: sectionCount > 0 ? bucket.threeRoleCount / sectionCount : 0,
+      fullTextureThreeRoleReadableShare: sectionFullTextureCount > 0 ? bucket.fullTextureThreeRoleCount / sectionFullTextureCount : 0,
+      supportCollapsedDuringLeadShare: sectionCount > 0 ? bucket.supportCollapsedDuringLeadCount / sectionCount : 0,
+      leadWithSupportVisibleShare: sectionCount > 0 ? bucket.leadWithSupportVisibleCount / sectionCount : 0,
+      fullTextureLeadWithSupportVisibleShare: sectionFullTextureCount > 0 ? bucket.fullTextureLeadWithSupportVisibleCount / sectionFullTextureCount : 0,
+      avgDistinctReadableRoleCount: sectionCount > 0 ? bucket.distinctRoleTotal / sectionCount : 0,
+      avgFoundationVisualWeight: sectionCount > 0 ? bucket.foundationWeightTotal / sectionCount : 0,
+      avgSupportVisualWeight: sectionCount > 0 ? bucket.supportWeightTotal / sectionCount : 0,
+      avgLeadVisualWeight: sectionCount > 0 ? bucket.leadWeightTotal / sectionCount : 0,
+      avgOrnamentVisualWeight: sectionCount > 0 ? bucket.ornamentWeightTotal / sectionCount : 0,
+    };
+  }
+  return {
+    count,
+    fullTextureCount,
+    threeRoleReadableShare: count > 0 ? threeRoleCount / count : 0,
+    fullTextureThreeRoleReadableShare: fullTextureCount > 0 ? fullTextureThreeRoleCount / fullTextureCount : 0,
+    supportCollapsedDuringLeadShare: count > 0 ? supportCollapsedDuringLeadCount / count : 0,
+    leadWithSupportVisibleShare: count > 0 ? leadWithSupportVisibleCount / count : 0,
+    fullTextureLeadWithSupportVisibleShare: fullTextureCount > 0 ? fullTextureLeadWithSupportVisibleCount / fullTextureCount : 0,
+    avgDistinctReadableRoleCount: count > 0 ? distinctRoleTotal / count : 0,
+    avgFoundationVisualWeight: count > 0 ? foundationWeightTotal / count : 0,
+    avgSupportVisualWeight: count > 0 ? supportWeightTotal / count : 0,
+    avgLeadVisualWeight: count > 0 ? leadWeightTotal / count : 0,
+    avgOrnamentVisualWeight: count > 0 ? ornamentWeightTotal / count : 0,
+    readableRoleShares: roleShares,
+    byReadableRoleSet,
+    byEnemyHealthSection,
+    sample: events.slice(0, 24).map((ev) => ({
+      barIndex: clampInt(ev?.barIndex, 0, 0),
+      beatIndex: clampInt(ev?.beatIndex, 0, 0),
+      activeMusicMode: String(ev?.activeMusicMode || '').trim().toLowerCase(),
+      introStage: String(ev?.introStage || '').trim().toLowerCase(),
+      readableRoles: Array.isArray(ev?.readableRoles) ? ev.readableRoles.slice(0, 8) : [],
+      distinctReadableRoleCount: clampInt(ev?.distinctReadableRoleCount, 0, 0),
+      foundationVisualWeight: Number(ev?.foundationVisualWeight) || 0,
+      supportVisualWeight: Number(ev?.supportVisualWeight) || 0,
+      leadVisualWeight: Number(ev?.leadVisualWeight) || 0,
+      ornamentVisualWeight: Number(ev?.ornamentVisualWeight) || 0,
+      supportCollapsedDuringLead: ev?.supportCollapsedDuringLead === true,
+      leadWithSupportVisible: ev?.leadWithSupportVisible === true,
+      threeRoleReadable: ev?.threeRoleReadable === true,
+    })),
+  };
+}
+
 function clampUnit(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
@@ -4443,6 +4680,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const musicalityTargets = collectMusicalityTargets(session, maxBarIndex);
   const primaryLeadInstrumentChangeTrace = collectPrimaryLeadInstrumentChangeTrace(session, maxBarIndex);
   const level1ContractTrace = collectLevel1ContractTrace(session, maxBarIndex);
+  const visualRoleReadabilityTrace = collectVisualRoleReadabilityTrace(session, maxBarIndex);
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -4695,6 +4933,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     musicalityTargets,
     primaryLeadInstrumentChangeTrace,
     level1ContractTrace,
+    visualRoleReadability: visualRoleReadabilityTrace,
     level1ContractTraceCount: Number(level1ContractTrace?.count) || 0,
     level1ContractFullTextureCount: Number(level1ContractTrace?.fullTextureCount) || 0,
     level1ContractAnswerActiveShare: Number(level1ContractTrace?.answerActiveShare) || 0,
@@ -4714,6 +4953,30 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       : {},
     level1ContractSample: Array.isArray(level1ContractTrace?.sample)
       ? level1ContractTrace.sample.slice(0, 24)
+      : [],
+    visualRoleReadabilityTraceCount: Number(visualRoleReadabilityTrace?.count) || 0,
+    visualRoleFullTextureTraceCount: Number(visualRoleReadabilityTrace?.fullTextureCount) || 0,
+    visualRoleThreeRoleReadableShare: Number(visualRoleReadabilityTrace?.threeRoleReadableShare) || 0,
+    visualRoleFullTextureThreeRoleReadableShare: Number(visualRoleReadabilityTrace?.fullTextureThreeRoleReadableShare) || 0,
+    visualRoleSupportCollapsedDuringLeadShare: Number(visualRoleReadabilityTrace?.supportCollapsedDuringLeadShare) || 0,
+    visualRoleLeadWithSupportVisibleShare: Number(visualRoleReadabilityTrace?.leadWithSupportVisibleShare) || 0,
+    visualRoleFullTextureLeadWithSupportVisibleShare: Number(visualRoleReadabilityTrace?.fullTextureLeadWithSupportVisibleShare) || 0,
+    visualRoleAvgDistinctReadableRoleCount: Number(visualRoleReadabilityTrace?.avgDistinctReadableRoleCount) || 0,
+    visualRoleAvgFoundationVisualWeight: Number(visualRoleReadabilityTrace?.avgFoundationVisualWeight) || 0,
+    visualRoleAvgSupportVisualWeight: Number(visualRoleReadabilityTrace?.avgSupportVisualWeight) || 0,
+    visualRoleAvgLeadVisualWeight: Number(visualRoleReadabilityTrace?.avgLeadVisualWeight) || 0,
+    visualRoleAvgOrnamentVisualWeight: Number(visualRoleReadabilityTrace?.avgOrnamentVisualWeight) || 0,
+    visualRoleReadableRoleShares: visualRoleReadabilityTrace?.readableRoleShares && typeof visualRoleReadabilityTrace.readableRoleShares === 'object'
+      ? { ...visualRoleReadabilityTrace.readableRoleShares }
+      : {},
+    visualRoleReadableRoleSetCounts: visualRoleReadabilityTrace?.byReadableRoleSet && typeof visualRoleReadabilityTrace.byReadableRoleSet === 'object'
+      ? { ...visualRoleReadabilityTrace.byReadableRoleSet }
+      : {},
+    visualRoleByEnemyHealthSection: visualRoleReadabilityTrace?.byEnemyHealthSection && typeof visualRoleReadabilityTrace.byEnemyHealthSection === 'object'
+      ? JSON.parse(JSON.stringify(visualRoleReadabilityTrace.byEnemyHealthSection))
+      : {},
+    visualRoleReadabilitySample: Array.isArray(visualRoleReadabilityTrace?.sample)
+      ? visualRoleReadabilityTrace.sample.slice(0, 24)
       : [],
     primaryLeadUniqueGroupCount: Number(musicalityTargets?.primaryLead?.uniqueLeadGroupCount) || 0,
     primaryLeadSingleShare: Number(musicalityTargets?.primaryLead?.singleLeadShare) || 0,
@@ -5053,10 +5316,15 @@ export function createBeatSwarmMusicLab(options = null) {
     const sourceSystemEvents = compact && Array.isArray(s.systemEvents) ? s.systemEvents.slice(-500) : s.systemEvents;
     const sourceThreatBudgetSnapshots = compact && Array.isArray(s.threatBudgetSnapshots) ? s.threatBudgetSnapshots.slice(-128) : s.threatBudgetSnapshots;
     const sourceMetricsHistory = compact && Array.isArray(s.metricsHistory) ? s.metricsHistory.slice(-96) : s.metricsHistory;
+    const forceFullMetricsForHealthSections = compact
+      && Math.max(0, clampInt(s?.systemEventSummary?.countsByType?.music_enemy_health_test_section, 0, 0)) > 0;
     let maxBar = 0;
-    for (const ev of sourceEvents) maxBar = Math.max(maxBar, clampInt(ev?.barIndex, 0, 0));
-    const executed = sourceEvents.filter((e) => e?.phase === 'executed');
-    const metricsSession = compact
+    const metricsEvents = forceFullMetricsForHealthSections ? s.events : sourceEvents;
+    for (const ev of metricsEvents) maxBar = Math.max(maxBar, clampInt(ev?.barIndex, 0, 0));
+    const executed = metricsEvents.filter((e) => e?.phase === 'executed');
+    const metricsSession = forceFullMetricsForHealthSections
+      ? s
+      : (compact
       ? {
           ...s,
           events: sourceEvents,
@@ -5064,8 +5332,8 @@ export function createBeatSwarmMusicLab(options = null) {
           threatBudgetSnapshots: sourceThreatBudgetSnapshots,
           metricsHistory: sourceMetricsHistory,
         }
-      : s;
-    const cachedCheckpoint = compact && Array.isArray(s.metricsHistory) && s.metricsHistory.length
+      : s);
+    const cachedCheckpoint = compact && !forceFullMetricsForHealthSections && Array.isArray(s.metricsHistory) && s.metricsHistory.length
       ? s.metricsHistory[s.metricsHistory.length - 1]
       : null;
     const bundle = cachedCheckpoint?.metrics && cachedCheckpoint?.sessionSummary

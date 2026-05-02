@@ -1,353 +1,203 @@
+Here’s a **tight, Codex-ready summary** you can drop straight in. I’ve kept it implementation-focused and aligned with what you’ve been building.
 
 ---
 
-# 🎵 Beat Swarm – Level 1 Music & Gameplay Intent Brief
+# Enemy Roles, HP, and Beat-Firing — Implementation Summary
 
-## 1. Core Goal
+## 1. Core Problem
 
-Level 1 of Beat Swarm is **not a fixed song** and **not a fully open music system**.
+Increasing HP reduced readability because enemies are not just targets — they are **role carriers in a compositional system**.
 
-It is:
+Readability comes from:
 
-> A structured, readable onboarding into a **generated retro shmup music experience**, where:
+> **simultaneous role contrast (foundation / support / lead / ornament)**
 
-* the player discovers musical interaction step-by-step
-* the system builds into a recognisable shmup-style track
-* each run feels different
-* player-created motifs can become part of the music
-* the music directly drives enemy intensity and behaviour
+—not from enemies staying alive longer.
 
 ---
 
-## 2. Design Principles
+## 2. Key Principle
 
-### 2.1 Fixed Structure, Variable Content
+> **Separate combat systems from musical/role systems.**
 
-We are authoring:
-
-* **player understanding progression**
-* **musical role structure**
-* **intensity curve**
-
-We are NOT authoring:
-
-* exact notes
-* exact phrases
-* exact orchestration
-* exact enemy mappings
+An enemy should not need to stay alive or active in music to remain valid in combat.
 
 ---
 
-### 2.2 Readability First
-
-At all times, the player should be able to understand:
-
-* what layer they are hearing
-* what changed
-* why it changed
-
-If readability and musical richness conflict:
-
-> **readability wins**
-
----
-
-### 2.3 Music Drives Gameplay
-
-Music is the **source of truth** for:
-
-* enemy spawn intensity
-* attack density
-* formation behaviour
-* pacing
-
-Gameplay systems must **react to music**, not redefine it.
-
----
-
-### 2.4 Generated, Not Scripted
-
-Every run must:
-
-* feel fresh
-* vary in phrasing, motif, and arrangement
-* still land within a recognisable shmup style
-
----
-
-## 3. Phase Structure (Authoritative)
-
-Level 1 follows a fixed progression of **player understanding**:
-
----
-
-### Phase 1: “My Gun Makes Music”
-
-**Goal:** Player notices their own musical impact
-
-* Only player-driven sound is clearly audible
-* Minimal or no backing
-* No competing layers
-
-**Constraints:**
-
-* No full rhythm bed
-* No melodic layering
-* No clutter
-
----
-
-### Phase 2: “There’s a Beat”
-
-**Goal:** Introduce a stable rhythmic foundation
-
-* A simple, clear beat emerges
-* Player audio sits on top
-
-**Constraints:**
-
-* One rhythm layer only
-* Highly regular
-* Must be easy to lock onto
-
----
-
-### Phase 3: “There’s a Second Beat”
-
-**Goal:** Show layering
-
-* A second rhythmic layer appears
-* Player hears interplay between layers
-
-**Constraints:**
-
-* Max 2 rhythm layers
-* Distinct roles (not duplicates)
-* Must remain readable
-
----
-
-### Phase 4: “Shmup Track Emerges” (Full Texture)
-
-**Goal:** Transition into full experience
-
-* Retro shmup-style structure appears:
-
-  * foundation groove
-  * counter rhythm
-  * lead phrase
-  * occasional ornament
-
-**Constraints:**
-
-* Only one lead at a time
-* No sparkle/noise layers
-* Ornaments only at cadence moments
-* Groove must remain audible under everything
-
----
-
-## 4. Musical Role Contract (Level 1)
-
-This is the **authoritative role system**.
-
-### Allowed Roles
-
-* `foundation_groove` (always present after Phase 2)
-* `counter_rhythm` (enters Phase 3+)
-* `lead_phrase` (enters Phase 4)
-* `answer_ornament` (cadence-only)
-
-### Forbidden Roles
-
-* sparkle layers
-* dense support stacks
-* ambient filler layers
-
-### Hard Rules
-
-* Only **one lead_phrase** at a time
-* foundation must **never drop out**
-* counter rhythm must **remain audible under lead**
-* ornaments must be **timed, not continuous**
-
----
-
-## 5. Player Motif Integration
-
-Player-generated motifs (from toys):
-
-Must:
-
-* be able to **replace or drive the lead**
-* be rhythmically aligned to the current groove
-* be constrained to maintain readability
-
-Must NOT:
-
-* introduce chaos
-* override core groove
-* create multiple competing leads
-
----
-
-## 6. Variability Model
-
-Each run should vary in:
-
-* rhythm patterns
-* lead phrasing
-* instrument selection
-* motif usage
-* timing of transitions
-* ornament placement
-
-Each run should NOT vary in:
-
-* phase order
-* role structure
-* readability
-* intensity curve direction
-
----
-
-## 7. Music → Gameplay Mapping
-
-Music intensity should directly control:
-
-| Music Change          | Gameplay Response       |
-| --------------------- | ----------------------- |
-| More layers           | More enemies            |
-| Faster rhythm density | Faster attacks          |
-| Stronger accents      | Stronger hits / events  |
-| Lead active           | Focused enemy patterns  |
-| Cadence moment        | Event spikes / emphasis |
-
-Important:
-
-> Gameplay adapts to music, never the other way around (except in failure cases).
-
----
-
-## 8. Architectural Direction (Critical)
-
-### 8.1 Single Source of Truth
-
-Create a **Level 1 Music Contract Module**
-
-Example:
-
-```
-beat-swarm-level1-contract.js
+## 3. Split Enemy State
+
+```js
+musicRole: "support"        // role identity
+musicState: "active"        // active / muted / released
+combatState: "armed"        // armed / suppressed / disabled
 ```
 
-It defines:
+### Rule
 
-* allowed roles per phase
-* role limits
-* forbidden roles
-* transition conditions
-* protection rules (what must never disappear)
+* Losing a music role **must NOT disable combat**
+* Enemy falls back to **default combat behaviour**
 
 ---
 
-### 8.2 Systems Become Consumers, Not Authors
+## 4. Replace HP as a Readability Tool
 
-The following systems must **stop making independent musical decisions**:
+HP = difficulty only
 
-* lane planner
-* composer maintenance
-* lifecycle
-* spawn logic
-* readability fallback
+Do NOT use HP to control:
 
-Instead, they:
+* role visibility
+* musical timing
+* composition stability
 
-> read the contract and obey it
+Instead, introduce:
 
 ---
 
-### 8.3 Separate Music from Realisation
+## 5. Role Lifecycle Contract
 
-Two layers:
+```js
+roleLifecycle: {
+  role: "support",
+  minReadableBars: 2,
+  maxRoleBars: 4,
+  replacementPolicy: "refresh_before_exit",
+  canBlockOtherRoles: false,
+  deathPolicy: "transfer_or_replace"
+}
+```
 
-**Music Layer (authoritative)**
+### Rules
 
-* decides roles
-* decides timing
-* decides transitions
-
-**Battlefield Layer (adaptive)**
-
-* decides which enemies carry roles
-* decides positioning/formation
-* reacts to intensity
-
-Battlefield must NOT:
-
-* redefine roles
-* introduce new musical layers
+* Roles track **time in bars**, not enemy lifetime
+* If a role dies early → **replace or transfer**
+* If an enemy lives too long → **stop blocking role refresh**
 
 ---
 
-### 8.4 Remove Competing Safety Systems
+## 6. Critical Separation
 
-Temporarily disable or reduce:
-
-* recovery floors
-* automatic support filling
-* over-aggressive fallback systems
-* emergent role creation
-
-These are currently causing oscillation.
+> **An enemy can be alive without carrying a role**
+> **A role can persist without the original enemy**
 
 ---
 
-## 9. Success Criteria
+## 7. Role Exit Behaviour
 
-A correct Level 1 run should:
+When a role ends:
 
-* clearly teach:
+```js
+musicState = "released"
+combatState = "armed"
+```
 
-  * “my gun makes music”
-  * “there’s a beat”
-  * “there’s layering”
-* transition smoothly into a shmup-style track
-* feel musically coherent
-* feel different each run
-* maintain readability throughout
-* drive enemy behaviour in a noticeable way
+Enemy switches to fallback:
 
----
-
-## 10. Anti-Goals (What We Are NOT Doing)
-
-* Not building a fully general adaptive music system (yet)
-* Not authoring a fixed level-1 song
-* Not maximising musical complexity
-* Not allowing all systems to “help” shape music
+```js
+fallbackFirePattern: {
+  grid: "quarter",
+  allowedSteps: [0, 4],
+  maxShotsPerBar: 1
+}
+```
 
 ---
 
-## 11. Immediate Next Steps for Codex
+## 8. Beat-Aligned Firing System
 
-1. Extract Level 1 rules into a **single contract module**
-2. Route all musical decisions through that contract
-3. Remove or disable conflicting adaptive behaviours
-4. Ensure phase progression is stable and readable
-5. Validate runs against:
+### Principle
 
-   * readability
-   * role correctness
-   * variation between runs
-6. Only after stable baseline:
+> **Enemies request shots — conductor schedules them**
 
-   * reintroduce controlled flexibility
+No per-enemy independent timers.
 
 ---
 
-## One-Line Summary for Codex
+## 9. Fire Flow
 
-> Build a constrained, readable, phase-driven shmup music generator where structure is fixed, content is variable, and all systems obey a single Level 1 contract.
+```js
+enemy.intent = "fire"
+
+conductor.requestFireSlot({
+  enemyId,
+  role,
+  urgency,
+  pattern
+})
+
+→ returns fireAtStep
+→ weapon fires on that step
+```
 
 ---
+
+## 10. Role-Based Rhythm Patterns
+
+```js
+foundation: [0]        // strong beats
+support:    [2, 6]     // offbeats
+lead:       [0, 3, 5]  // phrases
+ornament:   [7]        // fills
+```
+
+### Rule
+
+* Not all enemies fire on the same beat
+* Roles occupy **different rhythmic lanes**
+
+---
+
+## 11. Firing vs Music State
+
+```js
+if (musicState === "active") {
+  use role pattern
+} else {
+  use fallback pattern
+}
+```
+
+---
+
+## 12. Conductor Responsibilities
+
+The conductor must:
+
+* ensure **role coverage over time**
+* ensure **no role is blocked by long-lived enemies**
+* distribute firing to avoid **clumping**
+* maintain **rhythmic clarity**
+
+---
+
+## 13. Difficulty Scaling
+
+Do NOT scale readability via HP.
+
+Instead scale:
+
+* shots per bar
+* syncopation
+* telegraph length
+* role overlap
+
+---
+
+## 14. High-Level Rule
+
+> Gameplay embodies music, but does not control or break it.
+> Combat systems must not interfere with role readability or musical structure.
+
+---
+
+## 15. Design Intent (important)
+
+Enemies exist to create **clear, readable challenges**, not just durability targets — each enemy should reinforce a specific role or player interaction ([book.leveldesignbook.com][1]).
+
+---
+
+If you want, next step is I can turn this into:
+
+* a **PhaseRuntime / Conductor contract** (fits your doc style)
+* or **exact Codex tasks / diffs** to implement this cleanly without breaking current systems
+
+[1]: https://book.leveldesignbook.com/process/combat/enemy?utm_source=chatgpt.com "Enemy design"

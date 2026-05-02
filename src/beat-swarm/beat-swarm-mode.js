@@ -385,6 +385,48 @@ function getMusicLaneRuntimeEntry(laneId = '') {
   if (key === 'sparkle_lane') return musicLaneRuntime.sparkleLane;
   return null;
 }
+function isMusicLaneCarrierEnemyActive(enemyLike = null) {
+  const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
+  if (!enemy || enemy.retreating === true || enemy.__bsRemoved === true) return false;
+  if (String(enemy?.musicState || 'active').trim().toLowerCase() !== 'active') return false;
+  return normalizeMusicLifecycleState(enemy?.lifecycleState || 'active', 'active') === 'active';
+}
+function getActiveMusicLaneCarrierMembersForGroup(groupLike = null) {
+  const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+  if (!group || group.active === false || group.retiring === true) return [];
+  if (String(group?.musicState || 'active').trim().toLowerCase() !== 'active') return [];
+  const memberIds = group.memberIds instanceof Set
+    ? Array.from(group.memberIds)
+    : (Array.isArray(group.memberIds) ? group.memberIds.slice() : []);
+  return memberIds
+    .map((memberId) => getSwarmEnemyById(Math.max(0, Math.trunc(Number(memberId) || 0))))
+    .filter((member) => isMusicLaneCarrierEnemyActive(member));
+}
+function isMusicLaneCarrierGroupActive(groupLike = null) {
+  return getActiveMusicLaneCarrierMembersForGroup(groupLike).length > 0;
+}
+function findReplacementCarrierForMusicLane(laneId = '', excludeEnemyId = 0, excludeGroupId = 0) {
+  const normalizedLaneId = String(laneId || '').trim().toLowerCase();
+  if (!normalizedLaneId) return null;
+  const blockedEnemyId = Math.max(0, Math.trunc(Number(excludeEnemyId) || 0));
+  const blockedGroupId = Math.max(0, Math.trunc(Number(excludeGroupId) || 0));
+  const candidates = [];
+  for (const group of composerEnemyGroups) {
+    if (!group || Math.max(0, Math.trunc(Number(group?.id) || 0)) === blockedGroupId) continue;
+    if (String(group?.musicLaneId || '').trim().toLowerCase() !== normalizedLaneId) continue;
+    const members = getActiveMusicLaneCarrierMembersForGroup(group)
+      .filter((member) => Math.max(0, Math.trunc(Number(member?.id) || 0)) !== blockedEnemyId);
+    if (!members.length) continue;
+    const laneRoleMatch = String(group?.formationRole || group?.musicRole || '').trim().toLowerCase();
+    candidates.push({
+      group,
+      enemy: members[0],
+      score: (laneRoleMatch ? -20 : 0) + Math.max(0, Math.trunc(Number(group?.id) || 0)) / 10000,
+    });
+  }
+  candidates.sort((a, b) => a.score - b.score);
+  return candidates[0] || null;
+}
 function resolveMusicLaneId(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const preferred = String(opts?.preferredLaneId || '').trim().toLowerCase();
@@ -1098,24 +1140,11 @@ function assignMusicLaneIdentity(options = null) {
   const currentPerformerEnemyId = Math.max(0, Math.trunc(Number(lane.performerEnemyId) || 0));
   const currentPerformerGroupId = Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0));
   const currentPerformerEnemy = currentPerformerEnemyId > 0 ? getSwarmEnemyById(currentPerformerEnemyId) : null;
-  const currentPerformerLive = !!currentPerformerEnemy
-    && currentPerformerEnemy.retreating !== true
-    && normalizeMusicLifecycleState(currentPerformerEnemy?.lifecycleState || 'active', 'active') === 'active';
+  const currentPerformerLive = isMusicLaneCarrierEnemyActive(currentPerformerEnemy);
   const currentPerformerGroup = currentPerformerGroupId > 0
     ? (composerEnemyGroups.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === currentPerformerGroupId) || null)
     : null;
-  const currentPerformerGroupMemberIds = currentPerformerGroup?.memberIds instanceof Set
-    ? Array.from(currentPerformerGroup.memberIds)
-    : (Array.isArray(currentPerformerGroup?.memberIds) ? currentPerformerGroup.memberIds.slice() : []);
-  const currentPerformerGroupLive = !!currentPerformerGroup
-    && currentPerformerGroup.active !== false
-    && currentPerformerGroup.retiring !== true
-    && currentPerformerGroupMemberIds.some((memberId) => {
-      const member = getSwarmEnemyById(memberId);
-      return !!member
-        && member.retreating !== true
-        && normalizeMusicLifecycleState(member?.lifecycleState || 'active', 'active') === 'active';
-    });
+  const currentPerformerGroupLive = isMusicLaneCarrierGroupActive(currentPerformerGroup);
   const preserveSecondaryContinuityOwner = (
     laneId === 'secondary_loop_lane'
     && stableProtectedLane
@@ -1159,6 +1188,8 @@ function assignMusicLaneIdentity(options = null) {
   lane.performerType = preservePerformerBinding
     ? String(lane.performerType || opts?.performerType || '').trim().toLowerCase()
     : String(opts?.performerType || lane.performerType || '').trim().toLowerCase();
+  lane.embodimentState = (lane.performerEnemyId > 0 || lane.performerGroupId > 0) ? 'embodied' : 'system_voice';
+  lane.carrierState = lane.embodimentState === 'embodied' ? 'active' : 'unbound';
   lane.identityChangeReason = identityChangeReason;
   lane.sectionId = sectionId;
   lane.directorLaneKey = directorLaneKey;
@@ -5098,6 +5129,8 @@ function buildMusicLaneOwnershipSnapshot(laneId = '') {
     performerEnemyId: Math.max(0, Math.trunc(Number(lane.performerEnemyId) || 0)),
     performerGroupId: Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0)),
     performerType: String(lane.performerType || '').trim().toLowerCase(),
+    embodimentState: String(lane.embodimentState || '').trim().toLowerCase(),
+    carrierState: String(lane.carrierState || '').trim().toLowerCase(),
     directorLaneKey: String(lane.directorLaneKey || '').trim().toLowerCase(),
     directorPreferredCarrier: String(lane.directorPreferredCarrier || '').trim().toLowerCase(),
     directorContinuityBias: String(lane.directorContinuityBias || '').trim().toLowerCase(),
@@ -5113,34 +5146,71 @@ function buildMusicLaneOwnershipSnapshot(laneId = '') {
 function scrubStaleMusicLaneOwnership(laneId = '') {
   const lane = getMusicLaneRuntimeEntry(laneId);
   if (!lane || typeof lane !== 'object') return;
+  const normalizedLaneId = String(lane.laneId || laneId || '').trim().toLowerCase();
+  const previousEmbodimentState = String(lane.embodimentState || '').trim().toLowerCase();
   const performerEnemyId = Math.max(0, Math.trunc(Number(lane.performerEnemyId) || 0));
   const performerGroupId = Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0));
   const liveEnemy = performerEnemyId > 0
     ? (enemies.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === performerEnemyId) || null)
     : null;
-  const liveEnemyActive = !!liveEnemy
-    && liveEnemy.retreating !== true
-    && normalizeMusicLifecycleState(liveEnemy?.lifecycleState || 'active', 'active') === 'active';
+  const liveEnemyActive = isMusicLaneCarrierEnemyActive(liveEnemy);
   const liveGroup = performerGroupId > 0
     ? (composerEnemyGroups.find((group) => Math.max(0, Math.trunc(Number(group?.id) || 0)) === performerGroupId) || null)
     : null;
-  const liveGroupMemberIds = liveGroup?.memberIds instanceof Set
-    ? Array.from(liveGroup.memberIds)
-    : (Array.isArray(liveGroup?.memberIds) ? liveGroup.memberIds.slice() : []);
-  const liveGroupHasActiveMembers = !!liveGroup
-    && liveGroup.active !== false
-    && liveGroup.retiring !== true
-    && liveGroupMemberIds.some((memberId) => {
-      const member = enemies.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === Math.max(0, Math.trunc(Number(memberId) || 0))) || null;
-      return !!member
-        && member.retreating !== true
-        && normalizeMusicLifecycleState(member?.lifecycleState || 'active', 'active') === 'active';
-    });
-  if (performerEnemyId > 0 && liveEnemyActive) return;
-  if (performerGroupId > 0 && liveGroupHasActiveMembers) return;
+  const liveGroupMembers = getActiveMusicLaneCarrierMembersForGroup(liveGroup);
+  const liveGroupHasActiveMembers = liveGroupMembers.length > 0;
+  if (performerEnemyId > 0 && liveEnemyActive) {
+    lane.embodimentState = 'embodied';
+    lane.carrierState = 'active';
+    return;
+  }
+  if (performerGroupId > 0 && liveGroupHasActiveMembers) {
+    const nextEnemy = liveGroupMembers[0] || null;
+    lane.performerEnemyId = Math.max(0, Math.trunc(Number(nextEnemy?.id) || 0));
+    lane.embodimentState = 'embodied';
+    lane.carrierState = 'active';
+    return;
+  }
+  const replacement = findReplacementCarrierForMusicLane(normalizedLaneId, performerEnemyId, performerGroupId);
+  if (replacement?.group && replacement?.enemy) {
+    lane.performerEnemyId = Math.max(0, Math.trunc(Number(replacement.enemy.id) || 0));
+    lane.performerGroupId = Math.max(0, Math.trunc(Number(replacement.group.id) || 0));
+    lane.performerType = 'composer-group';
+    lane.embodimentState = 'embodied';
+    lane.carrierState = 'active';
+    lane.lastCarrierTransferBar = Math.floor(Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR));
+    try {
+      noteMusicSystemEvent('music_lane_carrier_transferred', {
+        laneId: normalizedLaneId,
+        continuityId: String(lane.continuityId || '').trim(),
+        previousPerformerEnemyId: performerEnemyId,
+        previousPerformerGroupId: performerGroupId,
+        performerEnemyId: lane.performerEnemyId,
+        performerGroupId: lane.performerGroupId,
+        embodimentState: lane.embodimentState,
+      }, { beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) });
+    } catch {}
+    return;
+  }
   lane.performerEnemyId = 0;
   lane.performerGroupId = 0;
   lane.performerType = '';
+  lane.embodimentState = String(lane.continuityId || lane.instrumentId || lane.phraseId || '').trim()
+    ? 'system_voice'
+    : 'vacant';
+  lane.carrierState = 'unbound';
+  if (previousEmbodimentState === lane.embodimentState) return;
+  try {
+    noteMusicSystemEvent('music_lane_carrier_unbound', {
+      laneId: normalizedLaneId,
+      continuityId: String(lane.continuityId || '').trim(),
+      instrumentId: String(lane.instrumentId || '').trim(),
+      phraseId: String(lane.phraseId || '').trim(),
+      previousPerformerEnemyId: performerEnemyId,
+      previousPerformerGroupId: performerGroupId,
+      embodimentState: lane.embodimentState,
+    }, { beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) });
+  } catch {}
 }
 function isMeaningfulMusicLaneOwnershipSnapshot(snapshot = null) {
   const snap = snapshot && typeof snapshot === 'object' ? snapshot : null;
@@ -8033,6 +8103,7 @@ function publishDirectorLanePlanForBar(barIndex = 0) {
   const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
   const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage, activeLevelPhaseRuntime);
   const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
+  applyBeatSwarmDirectorPressureCleanup(activeEnemyDirectorRuntime, activeLevelPhaseRuntime, barIndex);
   delete plan.__pressure;
   delete plan.__level1Contract;
   director.setLanePlan(plan);
@@ -8051,6 +8122,88 @@ function publishDirectorLanePlanForBar(barIndex = 0) {
   }
   director.setEnemyDirectorState?.(activeEnemyDirectorRuntime);
   return director.getSnapshot?.() || null;
+}
+function getBeatSwarmPressureCleanupPriority(enemy) {
+  if (!enemy || enemy.retreating) return Number.POSITIVE_INFINITY;
+  const enemyType = String(enemy?.enemyType || '').trim().toLowerCase();
+  if (enemyType !== 'composer-group-member') return 10;
+  const groupId = Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0));
+  const group = composerEnemyGroups.find((candidate) => Math.max(0, Math.trunc(Number(candidate?.id) || 0)) === groupId) || null;
+  const role = String(group?.musicRole || group?.formationRole || '').trim().toLowerCase();
+  const laneId = String(group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
+  const profileSourceType = String(group?.musicProfileSourceType || enemy?.introSlotProfileSourceType || '').trim().toLowerCase();
+  const musicState = String(group?.musicState || enemy?.musicState || 'active').trim().toLowerCase();
+  if (musicState === 'released') return 25;
+  const aliveMembers = group
+    ? getAliveEnemiesByIds(group?.memberIds).filter((member) => (
+      member
+      && member.retreating !== true
+      && String(member?.enemyType || '').trim().toLowerCase() === 'composer-group-member'
+    )).sort((a, b) => Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0))
+    : [];
+  const memberIndex = aliveMembers.findIndex((member) => Math.max(0, Math.trunc(Number(member?.id) || 0)) === Math.max(0, Math.trunc(Number(enemy?.id) || 0)));
+  const protectedStructuralRole = role === 'lead_phrase'
+    || role === 'counter_rhythm'
+    || role === 'foundation_groove'
+    || laneId === 'primary_loop_lane'
+    || laneId === 'secondary_loop_lane'
+    || laneId === 'foundation_lane';
+  if (
+    protectedStructuralRole
+    && aliveMembers.length > 2
+    && memberIndex >= 2
+  ) {
+    return 35;
+  }
+  if (profileSourceType === 'answer_ornament' || String(group?.callResponseLane || enemy?.callResponseLane || '').trim().toLowerCase() === 'response') {
+    return memberIndex >= 1 ? 20 : 75;
+  }
+  if (role === 'lead_phrase' || laneId === 'primary_loop_lane') return 90;
+  if (role === 'counter_rhythm' || laneId === 'secondary_loop_lane') return 80;
+  if (role === 'foundation_groove' || laneId === 'foundation_lane') return 70;
+  return 30;
+}
+function applyBeatSwarmDirectorPressureCleanup(enemyDirectorState = null, levelPhaseState = null, barIndex = 0) {
+  const activeLevelPhase = String(levelPhaseState?.activeLevelPhase || enemyDirectorState?.activeLevelPhase || '').trim().toLowerCase();
+  if (activeLevelPhase !== 'full_texture') return;
+  const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  if (Math.max(-1, Math.trunc(Number(enemyDirectorRuntime?.lastPressureCleanupBar) || -1)) === safeBar) return;
+  const totalAlive = Math.max(0, Math.trunc(Number(enemyDirectorState?.totalAlive) || 0));
+  const targetAliveMax = Math.max(0, Math.trunc(Number(enemyDirectorState?.targetAliveMax) || 0));
+  const readabilityCeiling = Math.max(8, targetAliveMax + 5);
+  if (totalAlive <= readabilityCeiling) return;
+  const candidates = enemies
+    .filter((enemy) => enemy && !enemy.retreating)
+    .map((enemy) => ({ enemy, priority: getBeatSwarmPressureCleanupPriority(enemy) }))
+    .filter((entry) => Number.isFinite(entry.priority) && entry.priority < 70)
+    .sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return Math.trunc(Number(a.enemy?.id) || 0) - Math.trunc(Number(b.enemy?.id) || 0);
+    });
+  if (!candidates.length) return;
+  const retreatBudget = Math.min(
+    String(levelPhaseState?.phaseVariant || '').trim().toLowerCase() === 'no_ornament' ? 6 : 4,
+    Math.max(1, totalAlive - readabilityCeiling),
+    candidates.length
+  );
+  enemyDirectorRuntime.lastPressureCleanupBar = safeBar;
+  for (let i = 0; i < retreatBudget; i++) {
+    startEnemyRetreat(candidates[i].enemy, 'director_pressure_cleanup', 'enemy_director');
+  }
+  try {
+    noteMusicSystemEvent?.('music_enemy_director_cleanup', {
+      reason: 'director_pressure_cleanup',
+      activeLevelPhase,
+      phaseVariant: String(levelPhaseState?.phaseVariant || '').trim().toLowerCase(),
+      totalAlive,
+      targetAliveMax,
+      readabilityCeiling,
+      retreatBudget,
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+      barIndex: safeBar,
+    });
+  } catch {}
 }
 function getDirectorActiveLaneOwnerEnemy(laneKey = '') {
   const key = String(laneKey || '').trim();
@@ -8812,6 +8965,7 @@ const enemyDirectorRuntime = {
   difficultyRamp: 0,
   arrangementRamp: 0,
   lastEvaluatedBar: -1,
+  lastPressureCleanupBar: -1,
 };
 const eventSectionRuntime = {
   activeEventSection: 'none',
@@ -8976,6 +9130,7 @@ function resetBeatSwarmStepEventsPerfSnapshot() {
   return getBeatSwarmStepEventsPerfSnapshot();
 }
 let currentEnemySpawnMaxHp = Math.max(1, Number(difficultyConfig.enemyHealth) || 1) * 2;
+let lastEnemyHealthTestSectionKey = '';
 let rafId = 0;
 let lastFrameTs = 0;
 function safeSessionStorage() {
@@ -10560,6 +10715,7 @@ function startMusicLabSession(reason = 'unknown') {
   enemyDirectorRuntime.difficultyRamp = 0;
   enemyDirectorRuntime.arrangementRamp = 0;
   enemyDirectorRuntime.lastEvaluatedBar = -1;
+  enemyDirectorRuntime.lastPressureCleanupBar = -1;
   composerRuntime.lastForegroundMotifUsageBar = -1;
   resetSpawnerPercussionGrooveRuntime();
   resetIntroDrumLoopRuntime();
@@ -11767,9 +11923,67 @@ function triggerPausePreviewWeaponStage(stage, origin, beatIndex, remainingStage
     },
   });
 }
+function getBeatSwarmEnemyHealthTestSection() {
+  const overrides = globalThis.__beatSwarmTestOverrides && typeof globalThis.__beatSwarmTestOverrides === 'object'
+    ? globalThis.__beatSwarmTestOverrides
+    : null;
+  const sections = Array.isArray(overrides?.enemyHealthSections) ? overrides.enemyHealthSections : [];
+  if (!sections.length) return null;
+  const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
+  const barIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
+  let activeSection = null;
+  for (const section of sections) {
+    if (!section || typeof section !== 'object') continue;
+    const startBar = Math.max(0, Math.trunc(Number(section?.startBar) || 0));
+    const endBarRaw = Number(section?.endBar);
+    const endBar = Number.isFinite(endBarRaw) ? Math.max(startBar, Math.trunc(endBarRaw)) : Number.POSITIVE_INFINITY;
+    if (barIndex < startBar || barIndex >= endBar) continue;
+    if (!activeSection || startBar >= Math.max(0, Math.trunc(Number(activeSection?.startBar) || 0))) {
+      activeSection = section;
+    }
+  }
+  if (!activeSection) return null;
+  const multiplier = Math.max(0.25, Math.min(8, Number(activeSection?.multiplier) || 1));
+  return {
+    id: String(activeSection?.id || activeSection?.label || `hp_${multiplier}`).trim().toLowerCase() || `hp_${multiplier}`,
+    label: String(activeSection?.label || activeSection?.id || `${multiplier}x HP`).trim() || `${multiplier}x HP`,
+    multiplier,
+    barIndex,
+    startBar: Math.max(0, Math.trunc(Number(activeSection?.startBar) || 0)),
+    endBar: Number.isFinite(Number(activeSection?.endBar)) ? Math.max(0, Math.trunc(Number(activeSection.endBar) || 0)) : null,
+  };
+}
 function updateEnemySpawnHealthScaling() {
   const base = Math.max(1, Number(difficultyConfig.enemyHealth) || 1) * 2;
-  currentEnemySpawnMaxHp = Math.max(1, base);
+  const testSection = getBeatSwarmEnemyHealthTestSection();
+  const multiplier = Math.max(0.25, Math.min(8, Number(testSection?.multiplier) || 1));
+  currentEnemySpawnMaxHp = Math.max(1, base * multiplier);
+  const overrides = globalThis.__beatSwarmTestOverrides && typeof globalThis.__beatSwarmTestOverrides === 'object'
+    ? globalThis.__beatSwarmTestOverrides
+    : null;
+  const emitNonce = String(overrides?.enemyHealthSectionEmitNonce || '').trim();
+  const sectionKey = testSection
+    ? `${testSection.id}|${testSection.startBar}|${testSection.endBar ?? 'end'}|${multiplier}|${emitNonce}`
+    : '';
+  if (sectionKey !== lastEnemyHealthTestSectionKey) {
+    lastEnemyHealthTestSectionKey = sectionKey;
+    if (testSection) {
+      try {
+        noteMusicSystemEvent('music_enemy_health_test_section', {
+          sectionId: testSection.id,
+          sectionLabel: testSection.label,
+          hpMultiplier: multiplier,
+          spawnMaxHp: currentEnemySpawnMaxHp,
+          baseSpawnMaxHp: base,
+          startBar: testSection.startBar,
+          endBar: testSection.endBar,
+        }, {
+          beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+          barIndex: testSection.barIndex,
+        });
+      } catch {}
+    }
+  }
   return currentEnemySpawnMaxHp;
 }
 function updateSpawnHealthDebugUi() {
@@ -13240,6 +13454,12 @@ function removeEnemy(enemy, reason = 'unknown', context = null) {
   const barIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
   const shouldPreserveIntroCarrierMember = (() => {
     if (removalReason === 'mode_exit_clear') return false;
+    const preservableIntroRemoval = removalReason === 'expired'
+      || removalReason === 'retreated'
+      || removalReason === 'director_cleanup'
+      || removalReason === 'section_change_cleanup'
+      || removalReason === 'restore_overflow';
+    if (!preservableIntroRemoval) return false;
     const enemyType = String(enemy?.enemyType || '').trim().toLowerCase();
     if (enemyType !== 'composer-group-member') return false;
     if (barIndex >= 24) return false;
@@ -13451,6 +13671,9 @@ function removeEnemy(enemy, reason = 'unknown', context = null) {
               try { spawnComposerGroupOffscreenMembers(group, refillCount); } catch {}
             }
           }
+        }
+        for (const laneId of ['foundation_lane', 'primary_loop_lane', 'secondary_loop_lane', 'sparkle_lane']) {
+          scrubStaleMusicLaneOwnership(laneId);
         }
       });
     });
@@ -19514,6 +19737,7 @@ function getBeatSwarmOrnamentReadabilityWeight() {
   const activeGroups = Array.isArray(composerEnemyGroups) ? composerEnemyGroups : [];
   for (const group of activeGroups) {
     if (!group || group.active !== true || group.retiring) continue;
+    if (String(group?.musicState || 'active').trim().toLowerCase() !== 'active') continue;
     if (!hasBeatSwarmOrnamentCoverageGroup(group)) continue;
     const aliveMembers = getAliveEnemiesByIds(group?.memberIds).filter((enemy) => (
       String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member' && enemy?.retreating !== true
@@ -20454,10 +20678,13 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
   const activeGroups = Array.isArray(composerEnemyGroups) ? composerEnemyGroups : [];
   for (const group of activeGroups) {
     if (!group || group.active !== true || group.retiring) continue;
+    if (String(group?.musicState || 'active').trim().toLowerCase() !== 'active') continue;
     const roleId = getVisualReadabilityRoleIdForGroup(group);
     if (!roleId || !Object.prototype.hasOwnProperty.call(roleWeights, roleId)) continue;
     const aliveMembers = getAliveEnemiesByIds(group?.memberIds).filter((enemy) => (
-      String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member' && enemy?.retreating !== true
+      String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member'
+      && enemy?.retreating !== true
+      && String(enemy?.musicState || 'active').trim().toLowerCase() === 'active'
     ));
     if (aliveMembers.length <= 0) continue;
     let presentationWeight = Math.max(0.2, Number(group?.formationPresentationWeight) || 0.6);
@@ -20475,6 +20702,7 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
   const aliveVisualEnemies = (Array.isArray(enemies) ? enemies : []).filter((enemy) => (
     String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member'
     && enemy?.retreating !== true
+    && String(enemy?.musicState || 'active').trim().toLowerCase() === 'active'
   ));
   if (roleWeights.foundation_groove < 0.85) {
     let foundationFallbackWeight = 0;
@@ -20494,6 +20722,18 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
       supportFallbackWeight += 0.55;
     }
     roleWeights.counter_rhythm = Math.max(roleWeights.counter_rhythm, supportFallbackWeight);
+  }
+  if (roleWeights.counter_rhythm < 0.85) {
+    let secondaryLoopFallbackWeight = 0;
+    for (const enemy of aliveVisualEnemies) {
+      const laneId = String(enemy?.musicLaneId || '').trim().toLowerCase();
+      const callResponseLane = String(enemy?.callResponseLane || '').trim().toLowerCase();
+      const profileSourceType = String(enemy?.musicProfileSourceType || enemy?.introSlotProfileSourceType || '').trim().toLowerCase();
+      if (laneId !== 'secondary_loop_lane') continue;
+      if (callResponseLane === 'response' || profileSourceType === 'answer_ornament') continue;
+      secondaryLoopFallbackWeight += 0.9;
+    }
+    roleWeights.counter_rhythm = Math.max(roleWeights.counter_rhythm, secondaryLoopFallbackWeight);
   }
   if (roleWeights.lead_phrase < 0.85) {
     let leadFallbackWeight = 0;
@@ -20527,9 +20767,15 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
   visualRoleReadabilityRuntime.threeRoleReadable = readableRoles.length >= 3;
   if (visualRoleReadabilityRuntime.lastEvaluatedBar !== safeBar) {
     try {
+      const healthTestSection = getBeatSwarmEnemyHealthTestSection();
       noteMusicSystemEvent?.('music_visual_role_readability_state', {
         activeMusicMode,
         introStage: String(introStage || 'none').trim().toLowerCase(),
+        hpSectionId: String(healthTestSection?.id || '').trim().toLowerCase(),
+        hpSectionLabel: String(healthTestSection?.label || '').trim(),
+        hpMultiplier: Number(healthTestSection?.multiplier) || 1,
+        hpSectionStartBar: healthTestSection ? Math.max(0, Math.trunc(Number(healthTestSection.startBar) || 0)) : null,
+        hpSectionEndBar: healthTestSection?.endBar == null ? null : Math.max(0, Math.trunc(Number(healthTestSection.endBar) || 0)),
         readableRoles: readableRoles.slice(),
         distinctReadableRoleCount: readableRoles.length,
         foundationVisualWeight: Number(roleWeights.foundation_groove) || 0,
@@ -20743,6 +20989,8 @@ function maintainComposerEnemyGroups() {
       sanitizeEnemyMusicInstrumentId,
       shouldHoldIntroLayerExpansion,
       spawnComposerGroupOffscreenMembers,
+      startEnemyRetreat,
+      removeEnemy,
     },
   });
 }
@@ -21482,6 +21730,9 @@ export function enterBeatSwarmMode(options = null) {
     lane.performerEnemyId = 0;
     lane.performerGroupId = 0;
     lane.performerType = '';
+    lane.embodimentState = 'vacant';
+    lane.carrierState = 'unbound';
+    lane.lastCarrierTransferBar = -1;
     lane.activeSinceBar = -1;
     lane.lastAssignedBar = -1;
     lane.directorLaneKey = '';

@@ -504,6 +504,7 @@ function ensureUI() {
       btn('musicLabRunBS0S3x1m', 'Music Lab: Run BS0 S3 (1x3m, auto-save)', 'primary'),
       btn('musicLabRunBS0S3x1m5m', 'Music Lab: Run BS0 S3 (1x5m, auto-save)', 'primary'),
       btn('musicLabRunBS0S3Assessment5m', 'Music Lab: Run BS0 S3 Assessment (1x5m, compact save)', 'primary'),
+      btn('musicLabRunBS0S3HpSections5m', 'Music Lab: Run BS0 S3 HP Sections (1x5m, compact save)', 'primary'),
       btn('musicLabRunBS0S3x3m', 'Music Lab: Run BS0 S3 (3x3m each, auto-save)', 'primary'),
       btn('musicLabSnapshot', 'Music Lab: Show Snapshot'),
       btn('musicLabExport', 'Music Lab: Export JSON'),
@@ -1450,6 +1451,10 @@ function ensureUI() {
       await runBS0s3MusicLabAssessment5m();
       return;
     }
+    if (act === 'musicLabRunBS0S3HpSections5m') {
+      await runBS0s3MusicLabHpSections5m();
+      return;
+    }
     if (act === 'musicLabRunBS0S3x1m1m') {
       await runBS0s3MusicLabSingle1m();
       return;
@@ -2098,6 +2103,21 @@ function readMusicLabMetric(payload, path, fallback = NaN) {
 
 function summarizeMusicLabSessionPayload(payload) {
   const timeline = Array.isArray(payload?.eventTimeline) ? payload.eventTimeline : [];
+  const visualRoleReadability = payload?.metrics?.visualRoleReadability
+    && typeof payload.metrics.visualRoleReadability === 'object'
+    ? payload.metrics.visualRoleReadability
+    : null;
+  const systemEventSummary = payload?.systemEventSummary && typeof payload.systemEventSummary === 'object'
+    ? payload.systemEventSummary
+    : null;
+  const cloneSmallObject = (value) => {
+    if (!value || typeof value !== 'object') return value;
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      return value;
+    }
+  };
   return {
     sessionId: String(payload?.sessionId || ''),
     startedAtIso: String(payload?.startedAtIso || ''),
@@ -2119,7 +2139,38 @@ function summarizeMusicLabSessionPayload(payload) {
       spawnerSkippedCreatedEvents: readMusicLabMetric(payload, 'spawnerSkippedCreatedEvents'),
       bassSkippedCreatedEvents: readMusicLabMetric(payload, 'bassSkippedCreatedEvents'),
       maxEnemyStepsWithoutBass: readMusicLabMetric(payload, 'maxEnemyStepsWithoutBass'),
+      visualRoleThreeRoleReadableShare: readMusicLabMetric(payload, 'visualRoleThreeRoleReadableShare'),
+      visualRoleFullTextureThreeRoleReadableShare: readMusicLabMetric(payload, 'visualRoleFullTextureThreeRoleReadableShare'),
+      visualRoleSupportCollapsedDuringLeadShare: readMusicLabMetric(payload, 'visualRoleSupportCollapsedDuringLeadShare'),
+      visualRoleFullTextureLeadWithSupportVisibleShare: readMusicLabMetric(payload, 'visualRoleFullTextureLeadWithSupportVisibleShare'),
+      visualRoleAvgDistinctReadableRoleCount: readMusicLabMetric(payload, 'visualRoleAvgDistinctReadableRoleCount'),
+      visualRoleAvgSupportVisualWeight: readMusicLabMetric(payload, 'visualRoleAvgSupportVisualWeight'),
     },
+    visualRoleReadability: visualRoleReadability
+      ? {
+          count: Number(visualRoleReadability.count) || 0,
+          fullTextureCount: Number(visualRoleReadability.fullTextureCount) || 0,
+          threeRoleReadableShare: Number(visualRoleReadability.threeRoleReadableShare) || 0,
+          fullTextureThreeRoleReadableShare: Number(visualRoleReadability.fullTextureThreeRoleReadableShare) || 0,
+          supportCollapsedDuringLeadShare: Number(visualRoleReadability.supportCollapsedDuringLeadShare) || 0,
+          leadWithSupportVisibleShare: Number(visualRoleReadability.leadWithSupportVisibleShare) || 0,
+          fullTextureLeadWithSupportVisibleShare: Number(visualRoleReadability.fullTextureLeadWithSupportVisibleShare) || 0,
+          avgDistinctReadableRoleCount: Number(visualRoleReadability.avgDistinctReadableRoleCount) || 0,
+          avgSupportVisualWeight: Number(visualRoleReadability.avgSupportVisualWeight) || 0,
+          readableRoleShares: cloneSmallObject(visualRoleReadability.readableRoleShares || {}),
+          byReadableRoleSet: cloneSmallObject(visualRoleReadability.byReadableRoleSet || {}),
+          byEnemyHealthSection: cloneSmallObject(visualRoleReadability.byEnemyHealthSection || {}),
+        }
+      : null,
+    systemEventSummary: systemEventSummary
+      ? {
+          totalCount: Number(systemEventSummary.totalCount) || 0,
+          countsByType: cloneSmallObject(systemEventSummary.countsByType || {}),
+          countsByReason: cloneSmallObject(systemEventSummary.countsByReason || {}),
+          countsByVisualFailureReason: cloneSmallObject(systemEventSummary.countsByVisualFailureReason || {}),
+          uniqueSectionIds: cloneSmallObject(systemEventSummary.uniqueSectionIds || []),
+        }
+      : null,
   };
 }
 
@@ -5420,11 +5471,26 @@ async function runBS0Stage(stageCount = 1, opts = null) {
   let prevMusicLabEnabled = null;
   let prevMusicLabRealtimeMetricsEnabled = null;
   let prevMusicLabLightweightSystemEventsEnabled = null;
+  const prevBeatSwarmTestOverrides = clonePerfJson(window.__beatSwarmTestOverrides);
+  const hadBeatSwarmTestOverrides = (() => {
+    try { return Object.prototype.hasOwnProperty.call(window, '__beatSwarmTestOverrides'); } catch { return false; }
+  })();
   const runOutcomes = [];
   const deferredMusicLabSaves = [];
   const totalMinutes = Number(((durationMs * repeatCount) / 60000).toFixed(1));
   try {
     try { window.__PERF_LAB_DURATION_MS = durationMs; } catch {}
+    if (cfg.beatSwarmTestOverrides && typeof cfg.beatSwarmTestOverrides === 'object') {
+      try {
+        const root = (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object')
+          ? clonePerfJson(window.__beatSwarmTestOverrides)
+          : {};
+        window.__beatSwarmTestOverrides = {
+          ...(root || {}),
+          ...clonePerfJson(cfg.beatSwarmTestOverrides),
+        };
+      } catch {}
+    }
     if (traceCaptureConfig?.enabled !== true) {
       try { window.__beatSwarmMusicTrace = { enabled: false, include: [], exclude: [], console: false }; } catch {}
       try { getMusicTraceCaptureApiGlobal()?.stopTraceCapture?.(); } catch {}
@@ -5871,6 +5937,10 @@ async function runBS0Stage(stageCount = 1, opts = null) {
   } finally {
     try { window.__PERF_LAB_DURATION_MS = prevDur; } catch {}
     try { window.__PERF_RUN_TAG = prevTag; } catch {}
+    try {
+      if (hadBeatSwarmTestOverrides) window.__beatSwarmTestOverrides = clonePerfJson(prevBeatSwarmTestOverrides);
+      else delete window.__beatSwarmTestOverrides;
+    } catch {}
     if (prevMusicLabEnabled !== null) {
       const api = getMusicLabApiGlobal();
       if (api && typeof api.setEnabled === 'function') {
@@ -6003,6 +6073,40 @@ async function runBS0s3MusicLabAssessment5m() {
     tagPrefix: 'BS0S3MusicLabAssessment1x5m',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_assessment_1x5m',
     statusPrefix: 'Running BS0 S3 Music Lab assessment pass (5 minutes, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabHpSections5m() {
+  const hpSections = [
+    { id: 'baseline_1x', label: '1x HP baseline', startBar: 0, endBar: 56, multiplier: 1 },
+    { id: 'durability_1_5x', label: '1.5x HP durability', startBar: 56, endBar: 100, multiplier: 1.5 },
+    { id: 'durability_2x', label: '2x HP durability', startBar: 100, multiplier: 2 },
+  ];
+  await runBS0Stage(3, {
+    durationMs: 300000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      enemyHealthSections: hpSections,
+      enemyHealthSectionEmitNonce: `hp-sections-${Date.now()}`,
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_hp_sections_1x5m',
+    saveNotes: `Beat Swarm Music Lab HP-section assessment: validate music-role readability under combat durability changes. hpSections=${JSON.stringify(hpSections)}`,
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_hp_sections_1x5m',
+    groupedRunId: 'musicLab_bs0_s3_hp_sections_1x5m_scenario',
+    groupedNotes: 'Beat Swarm Music Lab HP-section scenario: 1x, 1.5x, and 2x enemy HP sections in one 5-minute compact save.',
+    tagPrefix: 'BS0S3MusicLabHpSections1x5m',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_hp_sections_1x5m',
+    statusPrefix: 'Running BS0 S3 Music Lab HP-section assessment (5 minutes, compact save)',
     traceCapture: {
       enabled: false,
     },

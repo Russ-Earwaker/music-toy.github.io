@@ -42,6 +42,9 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
   el.style.setProperty('--bs-group-color', String(group.color || '#ff8b6e'));
   const formationArchetype = String(group?.formationArchetype || '').trim().toLowerCase();
   const formationRole = String(group?.formationRole || '').trim().toLowerCase();
+  const musicState = String(group?.musicState || 'active').trim().toLowerCase() || 'active';
+  const combatState = String(group?.combatState || 'armed').trim().toLowerCase() || 'armed';
+  const musicRole = String(group?.musicRole || formationRole || '').trim().toLowerCase();
   const formationStyleFamily = String(group?.formationStyleFamily || '').trim().toLowerCase();
   const behavioralFormationArchetype = String(group?.behavioralFormationArchetype || '').trim().toLowerCase();
   const behavioralFormationClass = String(group?.behavioralFormationClass || '').trim().toLowerCase();
@@ -51,6 +54,9 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     el.dataset.formationArchetype = formationArchetype;
   }
   if (formationRole) el.dataset.formationRole = formationRole;
+  if (musicRole) el.dataset.musicGroupRole = musicRole;
+  el.dataset.musicState = musicState;
+  el.dataset.combatState = combatState;
   if (formationStyleFamily) el.dataset.formationStyleFamily = formationStyleFamily;
   if (behavioralFormationArchetype && behavioralFormationArchetype !== 'none') {
     el.classList.add(`is-behavioral-formation-${behavioralFormationArchetype.replace(/[^a-z0-9_-]/g, '-')}`);
@@ -125,6 +131,9 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     introSlotProfileSourceType: String(group?.introSlotProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase(),
     musicGroupId: Math.trunc(Number(group.id) || 0),
     musicGroupType: 'composer',
+    musicState,
+    combatState,
+    musicGroupRole: musicRole,
     musicParticipationGain: Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain),
     musicLaneId: String(group.musicLaneId || ''),
     musicLaneLayer: String(group.musicLaneLayer || ''),
