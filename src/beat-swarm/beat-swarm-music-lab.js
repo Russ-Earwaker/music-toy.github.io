@@ -748,6 +748,12 @@ function summarizeSystemEvent(sessionLike, record) {
         events: 0,
         offC3Events: 0,
       },
+      laneCarrierContinuity: {
+        transferred: 0,
+        unbound: 0,
+        systemVoice: 0,
+        vacant: 0,
+      },
       handoffVisualFailures: {},
     };
   }
@@ -808,6 +814,16 @@ function summarizeSystemEvent(sessionLike, record) {
     summary.events += 1;
     const resolvedNote = String(rec?.resolvedNote || '').trim().toUpperCase();
     if (resolvedNote && resolvedNote !== 'C3') summary.offC3Events += 1;
+  } else if (type === 'music_lane_carrier_transferred' || type === 'music_lane_carrier_unbound') {
+    const summary = session.systemEventSummary.laneCarrierContinuity
+      && typeof session.systemEventSummary.laneCarrierContinuity === 'object'
+      ? session.systemEventSummary.laneCarrierContinuity
+      : (session.systemEventSummary.laneCarrierContinuity = { transferred: 0, unbound: 0, systemVoice: 0, vacant: 0 });
+    if (type === 'music_lane_carrier_transferred') summary.transferred += 1;
+    else summary.unbound += 1;
+    const embodimentState = String(rec?.embodimentState || '').trim().toLowerCase();
+    if (embodimentState === 'system_voice') summary.systemVoice += 1;
+    else if (embodimentState === 'vacant') summary.vacant += 1;
   } else if (type === 'music_handoff_visual_continuity_failed') {
     const summary = session.systemEventSummary.handoffVisualFailures
       && typeof session.systemEventSummary.handoffVisualFailures === 'object'
@@ -1822,6 +1838,13 @@ function collectLaneOwnershipDiagnostics(session, maxBarIndex) {
         || type === 'music_lane_identity_change_rejected';
     })
     .sort((a, b) => clampInt(a?.timestamp, 0, 0) - clampInt(b?.timestamp, 0, 0));
+  const carrierEvents = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
+    .filter((e) => {
+      const type = String(e?.eventType || '').trim().toLowerCase();
+      return type === 'music_lane_carrier_transferred'
+        || type === 'music_lane_carrier_unbound';
+    });
   const byLane = Object.create(null);
   let laneStarts = 0;
   let laneClears = 0;
@@ -1841,6 +1864,13 @@ function collectLaneOwnershipDiagnostics(session, maxBarIndex) {
   let rejectedDeferredChanges = 0;
   let totalDeferredWaitSteps = 0;
   let totalRejectedBoundaryDistance = 0;
+  let carrierTransferred = 0;
+  let carrierUnbound = 0;
+  let systemVoiceFallbacks = 0;
+  let vacantFallbacks = 0;
+  let protectedLaneCarrierUnbound = 0;
+  let protectedLaneVacantFallbacks = 0;
+  const protectedLaneIds = new Set(['foundation_lane', 'primary_loop_lane', 'secondary_loop_lane']);
   const droppedDeferredByReason = {
     continuityAdvanced: 0,
     sectionAdvanced: 0,
@@ -1868,6 +1898,10 @@ function collectLaneOwnershipDiagnostics(session, maxBarIndex) {
         replacedDeferredChanges: 0,
         droppedDeferredChanges: 0,
         rejectedDeferredChanges: 0,
+        carrierTransferred: 0,
+        carrierUnbound: 0,
+        systemVoiceFallbacks: 0,
+        vacantFallbacks: 0,
         totalDeferredWaitSteps: 0,
         totalRejectedBoundaryDistance: 0,
         droppedDeferredByReason: {
@@ -1972,6 +2006,67 @@ function collectLaneOwnershipDiagnostics(session, maxBarIndex) {
       row.sameContinuityPatternDrift += 1;
     }
   }
+  for (const e of carrierEvents) {
+    const type = String(e?.eventType || '').trim().toLowerCase();
+    const laneId = String(e?.laneId || '').trim().toLowerCase() || 'unknown';
+    if (!byLane[laneId]) {
+      byLane[laneId] = {
+        starts: 0,
+        clears: 0,
+        changes: 0,
+        ownerChanges: 0,
+        preservedHandoffs: 0,
+        resetHandoffs: 0,
+        continuityBreaks: 0,
+        sameContinuityInstrumentDrift: 0,
+        sameContinuityPhraseDrift: 0,
+        sameContinuityPatternDrift: 0,
+        intentionalIdentityChanges: 0,
+        deferredChanges: 0,
+        appliedDeferredChanges: 0,
+        replacedDeferredChanges: 0,
+        droppedDeferredChanges: 0,
+        rejectedDeferredChanges: 0,
+        carrierTransferred: 0,
+        carrierUnbound: 0,
+        systemVoiceFallbacks: 0,
+        vacantFallbacks: 0,
+        totalDeferredWaitSteps: 0,
+        totalRejectedBoundaryDistance: 0,
+        droppedDeferredByReason: {
+          continuityAdvanced: 0,
+          sectionAdvanced: 0,
+          timeout: 0,
+          other: 0,
+        },
+      };
+    }
+    const row = byLane[laneId];
+    const embodimentState = String(e?.embodimentState || '').trim().toLowerCase();
+    if (type === 'music_lane_carrier_transferred') {
+      carrierTransferred += 1;
+      row.carrierTransferred = clampInt(row.carrierTransferred, 0, 0) + 1;
+    } else {
+      carrierUnbound += 1;
+      row.carrierUnbound = clampInt(row.carrierUnbound, 0, 0) + 1;
+      if (protectedLaneIds.has(laneId)) protectedLaneCarrierUnbound += 1;
+    }
+    if (embodimentState === 'system_voice') {
+      systemVoiceFallbacks += 1;
+      row.systemVoiceFallbacks = clampInt(row.systemVoiceFallbacks, 0, 0) + 1;
+    } else if (embodimentState === 'vacant') {
+      vacantFallbacks += 1;
+      row.vacantFallbacks = clampInt(row.vacantFallbacks, 0, 0) + 1;
+      if (protectedLaneIds.has(laneId)) protectedLaneVacantFallbacks += 1;
+    }
+  }
+  const laneContinuityAssertionPassed = (
+    resetHandoffs === 0
+    && continuityBreaks === 0
+    && sameContinuityInstrumentDrift === 0
+    && sameContinuityPhraseDrift === 0
+    && protectedLaneVacantFallbacks === 0
+  );
   return {
     totalLogs: logs.length,
     laneStarts,
@@ -1993,6 +2088,13 @@ function collectLaneOwnershipDiagnostics(session, maxBarIndex) {
     droppedDeferredByReason,
     avgDeferredWaitSteps: appliedDeferredChanges > 0 ? (totalDeferredWaitSteps / appliedDeferredChanges) : 0,
     avgRejectedBoundaryDistance: rejectedDeferredChanges > 0 ? (totalRejectedBoundaryDistance / rejectedDeferredChanges) : 0,
+    carrierTransferred,
+    carrierUnbound,
+    systemVoiceFallbacks,
+    vacantFallbacks,
+    protectedLaneCarrierUnbound,
+    protectedLaneVacantFallbacks,
+    laneContinuityAssertionPassed,
     byLane,
   };
 }
@@ -3709,6 +3811,8 @@ function computeSummary(metrics) {
   const resetLaneHandoffs = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.resetHandoffs, 0, 0));
   const sameContinuityInstrumentDrift = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.sameContinuityInstrumentDrift, 0, 0));
   const sameContinuityPatternDrift = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.sameContinuityPatternDrift, 0, 0));
+  const laneContinuityAssertionPassed = metrics?.passDiagnostics?.ownershipContinuity?.laneContinuityAssertionPassed === true
+    || metrics?.laneContinuityAssertionPassed === true;
   const deferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.deferredChanges, 0, 0));
   const appliedDeferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.appliedDeferredChanges, 0, 0));
   const replacedDeferredLaneChanges = Math.max(0, clampInt(metrics?.passDiagnostics?.ownershipContinuity?.replacedDeferredChanges, 0, 0));
@@ -3809,10 +3913,9 @@ function computeSummary(metrics) {
       instrumentChangesPerEnemy === 0
       && colourChangesPerEnemy === 0
       && sameContinuityInstrumentDrift === 0
-      && sameContinuityPatternDrift === 0
       && resetLaneHandoffs === 0
-    ) ? 'stable' : 'drift',
-    ownershipContinuity: (resetLaneHandoffs === 0 && sameContinuityInstrumentDrift === 0 && sameContinuityPatternDrift === 0)
+    ) ? (sameContinuityPatternDrift > 0 ? 'pattern_variation' : 'stable') : 'drift',
+    ownershipContinuity: laneContinuityAssertionPassed
       ? (preservedLaneHandoffs > 0 ? 'preserved' : 'stable')
       : 'drift',
     deferredOwnershipChanges: (
@@ -4760,6 +4863,14 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     laneOwnerChanges: Number(passDiagnostics?.ownershipContinuity?.ownerChanges) || 0,
     lanePreservedHandoffs: Number(passDiagnostics?.ownershipContinuity?.preservedHandoffs) || 0,
     laneResetHandoffs: Number(passDiagnostics?.ownershipContinuity?.resetHandoffs) || 0,
+    laneContinuityAssertionPassed: passDiagnostics?.ownershipContinuity?.laneContinuityAssertionPassed === true,
+    laneContinuityBreaks: Number(passDiagnostics?.ownershipContinuity?.continuityBreaks) || 0,
+    laneCarrierTransferred: Number(passDiagnostics?.ownershipContinuity?.carrierTransferred) || 0,
+    laneCarrierUnbound: Number(passDiagnostics?.ownershipContinuity?.carrierUnbound) || 0,
+    laneSystemVoiceFallbacks: Number(passDiagnostics?.ownershipContinuity?.systemVoiceFallbacks) || 0,
+    laneVacantFallbacks: Number(passDiagnostics?.ownershipContinuity?.vacantFallbacks) || 0,
+    protectedLaneCarrierUnbound: Number(passDiagnostics?.ownershipContinuity?.protectedLaneCarrierUnbound) || 0,
+    protectedLaneVacantFallbacks: Number(passDiagnostics?.ownershipContinuity?.protectedLaneVacantFallbacks) || 0,
     laneIntentionalIdentityChanges: Number(passDiagnostics?.ownershipContinuity?.intentionalIdentityChanges) || 0,
     laneDeferredChanges: Number(passDiagnostics?.ownershipContinuity?.deferredChanges) || 0,
     laneAppliedDeferredChanges: Number(passDiagnostics?.ownershipContinuity?.appliedDeferredChanges) || 0,
@@ -4934,6 +5045,25 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     primaryLeadInstrumentChangeTrace,
     level1ContractTrace,
     visualRoleReadability: visualRoleReadabilityTrace,
+    laneContinuityAssertionPassed: passDiagnostics?.ownershipContinuity?.laneContinuityAssertionPassed === true,
+    laneContinuityAssertion: passDiagnostics?.ownershipContinuity && typeof passDiagnostics.ownershipContinuity === 'object'
+      ? {
+          passed: passDiagnostics.ownershipContinuity.laneContinuityAssertionPassed === true,
+          ownerChanges: Number(passDiagnostics.ownershipContinuity.ownerChanges) || 0,
+          preservedHandoffs: Number(passDiagnostics.ownershipContinuity.preservedHandoffs) || 0,
+          resetHandoffs: Number(passDiagnostics.ownershipContinuity.resetHandoffs) || 0,
+          continuityBreaks: Number(passDiagnostics.ownershipContinuity.continuityBreaks) || 0,
+          carrierTransferred: Number(passDiagnostics.ownershipContinuity.carrierTransferred) || 0,
+          carrierUnbound: Number(passDiagnostics.ownershipContinuity.carrierUnbound) || 0,
+          systemVoiceFallbacks: Number(passDiagnostics.ownershipContinuity.systemVoiceFallbacks) || 0,
+          vacantFallbacks: Number(passDiagnostics.ownershipContinuity.vacantFallbacks) || 0,
+          protectedLaneCarrierUnbound: Number(passDiagnostics.ownershipContinuity.protectedLaneCarrierUnbound) || 0,
+          protectedLaneVacantFallbacks: Number(passDiagnostics.ownershipContinuity.protectedLaneVacantFallbacks) || 0,
+          sameContinuityInstrumentDrift: Number(passDiagnostics.ownershipContinuity.sameContinuityInstrumentDrift) || 0,
+          sameContinuityPhraseDrift: Number(passDiagnostics.ownershipContinuity.sameContinuityPhraseDrift) || 0,
+          sameContinuityPatternDrift: Number(passDiagnostics.ownershipContinuity.sameContinuityPatternDrift) || 0,
+        }
+      : null,
     level1ContractTraceCount: Number(level1ContractTrace?.count) || 0,
     level1ContractFullTextureCount: Number(level1ContractTrace?.fullTextureCount) || 0,
     level1ContractAnswerActiveShare: Number(level1ContractTrace?.answerActiveShare) || 0,

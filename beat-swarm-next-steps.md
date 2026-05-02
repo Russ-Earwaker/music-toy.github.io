@@ -4,28 +4,28 @@
 
 Latest validated Music Lab run:
 
-- file: `resources/music-lab-results/music-lab-results-2026-05-02T08-43-41-394Z.json`
+- file: `resources/music-lab-results/music-lab-results-2026-05-02T09-15-00-190Z.json`
 - scenario: `BS0 S3 HP Sections 1x5m`
-- result: lane-owned carrier transfer slice passed the HP/readability goal with no support collapse and duplicate lead requests removed
+- result: lane runtime contract slice validated with no support collapse and duplicate lead requests still removed
 
 What the latest run confirmed:
 
 - `visualRoleFullTextureThreeRoleReadableShare = 1.000`
 - `visualRoleSupportCollapsedDuringLeadShare = 0.000`
 - `visualRoleFullTextureLeadWithSupportVisibleShare = 1.000`
-- `visualRoleAvgSupportVisualWeight = 2.416`
-- `visualRoleAvgDistinctReadableRoleCount = 3.521`
+- `visualRoleAvgSupportVisualWeight = 2.415`
+- `visualRoleAvgDistinctReadableRoleCount = 3.582`
 - HP-section stability:
   - `1x`: `full3 = 1.000`, `collapse = 0.000`
   - `1.5x`: `full3 = 1.000`, `collapse = 0.000`
   - `2x`: `full3 = 1.000`, `collapse = 0.000`
 - lane carrier transfer path is active:
-  - `music_lane_carrier_transferred = 26`
-  - `music_lane_carrier_unbound = 25`
+  - `music_lane_carrier_transferred = 34`
+  - `music_lane_carrier_unbound = 31`
 - duplicate primary-lead block telemetry is resolved:
   - `blocked_by_active_primary_lead = 0`
   - `music_composer_spawn_blocked = 0`
-  - `music_primary_lead_request = 1`
+  - `music_primary_lead_request = 17`
 
 Current musical read:
 
@@ -44,12 +44,9 @@ Current assessment:
 - the first lane-owned carrier transfer slice fixed the HP/readability failure mode
 - HP is now behaving more like combat difficulty rather than music-role ownership
 - remaining work is to formalize this path as the lane runtime contract
-- first post-contract test stayed strong but exposed a one-bar support handoff sample:
-  - file: `resources/music-lab-results/music-lab-results-2026-05-02T09-00-07-056Z.json`
-  - `visualRoleFullTextureThreeRoleReadableShare = 0.986`
-  - `visualRoleSupportCollapsedDuringLeadShare = 0.006`
-  - `blocked_by_active_primary_lead = 0`
-  - patched with one-bar `supportGraceApplied` readability smoothing for carrier-transfer handoffs
+- one-bar `supportGraceApplied` readability smoothing is available for carrier-transfer handoffs
+- latest validation did not need the grace path:
+  - `supportGraceApplied = 0`
 - do not rework sparkle timing unless a clear regression appears
 
 ## Active Architecture Direction
@@ -194,11 +191,27 @@ Current implementation slice:
 - HP-section testing validates lane-owned carrier transfer across `1x`, `1.5x`, and `2x` durability
 - duplicate primary-lead requests have been removed at the template-picking layer
 - the first explicit lane carrier binding/mirroring/result helpers are now in `beat-swarm-mode.js`
+- Music Lab now has a direct lane continuity assertion:
+  - `laneContinuityAssertionPassed`
+  - `laneContinuityAssertion`
+  - `laneContinuityBreaks`
+  - `laneResetHandoffs`
+  - `laneCarrierTransferred`
+  - `laneCarrierUnbound`
+  - `laneSystemVoiceFallbacks`
+  - `laneVacantFallbacks`
+  - `protectedLaneVacantFallbacks`
+- assertion pass criteria are interruption-focused:
+  - no reset handoffs
+  - no continuity breaks
+  - no same-continuity instrument/phrase drift
+  - no protected-lane vacant fallback
+  - same-continuity pattern drift is reported but does not fail the interruption assertion
 
 Immediate next technical target:
 
 - route remaining singleton/spawner/drawsnake lane ownership paths through the same carrier contract
-- add a direct Music Lab assertion for normal lane continuity across carrier death/release/HP changes
+- validate the direct Music Lab lane continuity assertion against the HP-section test
 - preserve the successful HP/readability and lead-request checkpoints
 - success target:
   - phrase resolution remains high

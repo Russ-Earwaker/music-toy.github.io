@@ -2107,6 +2107,10 @@ function summarizeMusicLabSessionPayload(payload) {
     && typeof payload.metrics.visualRoleReadability === 'object'
     ? payload.metrics.visualRoleReadability
     : null;
+  const laneContinuityAssertion = payload?.metrics?.laneContinuityAssertion
+    && typeof payload.metrics.laneContinuityAssertion === 'object'
+    ? payload.metrics.laneContinuityAssertion
+    : null;
   const systemEventSummary = payload?.systemEventSummary && typeof payload.systemEventSummary === 'object'
     ? payload.systemEventSummary
     : null;
@@ -2145,7 +2149,16 @@ function summarizeMusicLabSessionPayload(payload) {
       visualRoleFullTextureLeadWithSupportVisibleShare: readMusicLabMetric(payload, 'visualRoleFullTextureLeadWithSupportVisibleShare'),
       visualRoleAvgDistinctReadableRoleCount: readMusicLabMetric(payload, 'visualRoleAvgDistinctReadableRoleCount'),
       visualRoleAvgSupportVisualWeight: readMusicLabMetric(payload, 'visualRoleAvgSupportVisualWeight'),
+      laneContinuityAssertionPassed: payload?.metrics?.laneContinuityAssertionPassed === true,
+      laneContinuityBreaks: readMusicLabMetric(payload, 'laneContinuityBreaks'),
+      laneResetHandoffs: readMusicLabMetric(payload, 'laneResetHandoffs'),
+      laneCarrierTransferred: readMusicLabMetric(payload, 'laneCarrierTransferred'),
+      laneCarrierUnbound: readMusicLabMetric(payload, 'laneCarrierUnbound'),
+      laneSystemVoiceFallbacks: readMusicLabMetric(payload, 'laneSystemVoiceFallbacks'),
+      laneVacantFallbacks: readMusicLabMetric(payload, 'laneVacantFallbacks'),
+      protectedLaneVacantFallbacks: readMusicLabMetric(payload, 'protectedLaneVacantFallbacks'),
     },
+    laneContinuityAssertion: laneContinuityAssertion ? cloneSmallObject(laneContinuityAssertion) : null,
     visualRoleReadability: visualRoleReadability
       ? {
           count: Number(visualRoleReadability.count) || 0,
