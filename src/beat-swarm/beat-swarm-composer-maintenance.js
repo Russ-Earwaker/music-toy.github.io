@@ -2305,6 +2305,30 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const getActiveMelodyCoverageCount = () => composerEnemyGroups.filter((group) => (
     isActivePrimaryLeadIntentGroup(group)
   )).length + (hasPendingPrimaryLeadReservation() ? 1 : 0);
+  const isPrimaryLeadTemplate = (templateLike) => {
+    const template = templateLike && typeof templateLike === 'object'
+      ? templateLike
+      : templateById.get(String(templateLike || '').trim());
+    if (!template) return false;
+    const templateId = String(template?.id || '').trim().toLowerCase();
+    if (templateId === 'foundation-buffer' || templateId === 'response_group') return false;
+    const templateLane = helpers.normalizeCallResponseLane?.(template?.callResponseLane || '', 'call')
+      || String(template?.callResponseLane || '').trim().toLowerCase()
+      || 'call';
+    if (templateLane === 'response') return false;
+    const templateRole = helpers.normalizeSwarmRole?.(template?.role || '', constants.leadRole) || '';
+    return templateRole === constants.leadRole;
+  };
+  const suppressPrimaryLeadTemplatePoolWhenCovered = (templatesLike, desiredLane = '') => {
+    const templates = Array.isArray(templatesLike) ? templatesLike : [];
+    if (!templates.length) return templates;
+    if (getActiveMelodyCoverageCount() <= 0) return templates;
+    const lane = helpers.normalizeCallResponseLane?.(desiredLane || '', '')
+      || String(desiredLane || '').trim().toLowerCase();
+    if (lane === 'response') return templates;
+    const filtered = templates.filter((template) => !isPrimaryLeadTemplate(template));
+    return filtered.length ? filtered : [];
+  };
   const getActiveRhythmCoverageCount = () => composerEnemyGroups.filter((group) => {
     if (!isGroupMusicActive(group)) return false;
     const laneId = String(group?.musicLaneId || '').trim().toLowerCase();
@@ -2771,8 +2795,10 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
                   return templateLibrary;
                 })()
           );
+        const effectiveTemplatePool = suppressPrimaryLeadTemplatePoolWhenCovered(templatePool, desiredLane);
+        if (templatePool.length && effectiveTemplatePool.length <= 0) return null;
         return helpers.pickComposerGroupTemplate?.({
-          templates: templatePool,
+          templates: effectiveTemplatePool,
           groupIndex,
           energyState: helpers.getCurrentSwarmEnergyStateName?.(),
           normalizeRole: (roleName) => helpers.normalizeSwarmRole?.(roleName, constants.leadRole),

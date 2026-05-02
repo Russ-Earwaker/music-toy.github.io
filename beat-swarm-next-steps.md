@@ -4,25 +4,28 @@
 
 Latest validated Music Lab run:
 
-- file: `resources/music-lab-results/music-lab-results-2026-05-02T08-24-18-685Z.json`
+- file: `resources/music-lab-results/music-lab-results-2026-05-02T08-43-41-394Z.json`
 - scenario: `BS0 S3 HP Sections 1x5m`
-- result: lane-owned carrier transfer slice passed the HP/readability goal with no support collapse
+- result: lane-owned carrier transfer slice passed the HP/readability goal with no support collapse and duplicate lead requests removed
 
 What the latest run confirmed:
 
 - `visualRoleFullTextureThreeRoleReadableShare = 1.000`
 - `visualRoleSupportCollapsedDuringLeadShare = 0.000`
 - `visualRoleFullTextureLeadWithSupportVisibleShare = 1.000`
-- `visualRoleAvgSupportVisualWeight = 9.197`
+- `visualRoleAvgSupportVisualWeight = 2.416`
+- `visualRoleAvgDistinctReadableRoleCount = 3.521`
 - HP-section stability:
   - `1x`: `full3 = 1.000`, `collapse = 0.000`
   - `1.5x`: `full3 = 1.000`, `collapse = 0.000`
   - `2x`: `full3 = 1.000`, `collapse = 0.000`
 - lane carrier transfer path is active:
-  - `music_lane_carrier_transferred = 42`
-  - `music_lane_carrier_unbound = 15`
-- duplicate primary-lead block telemetry is reduced but still visible:
-  - `blocked_by_active_primary_lead = 175`
+  - `music_lane_carrier_transferred = 26`
+  - `music_lane_carrier_unbound = 25`
+- duplicate primary-lead block telemetry is resolved:
+  - `blocked_by_active_primary_lead = 0`
+  - `music_composer_spawn_blocked = 0`
+  - `music_primary_lead_request = 1`
 
 Current musical read:
 
@@ -40,7 +43,13 @@ Current assessment:
 
 - the first lane-owned carrier transfer slice fixed the HP/readability failure mode
 - HP is now behaving more like combat difficulty rather than music-role ownership
-- remaining work is to formalize this path and reduce old duplicate lead spawn attempts
+- remaining work is to formalize this path as the lane runtime contract
+- first post-contract test stayed strong but exposed a one-bar support handoff sample:
+  - file: `resources/music-lab-results/music-lab-results-2026-05-02T09-00-07-056Z.json`
+  - `visualRoleFullTextureThreeRoleReadableShare = 0.986`
+  - `visualRoleSupportCollapsedDuringLeadShare = 0.006`
+  - `blocked_by_active_primary_lead = 0`
+  - patched with one-bar `supportGraceApplied` readability smoothing for carrier-transfer handoffs
 - do not rework sparkle timing unless a clear regression appears
 
 ## Active Architecture Direction
@@ -129,9 +138,21 @@ Important distinction:
 
 ### Immediate Implementation Target
 
-Stop trying to preserve music by preserving enemies.
+Stop trying to preserve music by preserving enemies. The first version of the lane runtime contract is now in code:
 
-Next work should build lane transfer behavior:
+- `bindMusicLaneCarrier(lane, { performerEnemyId, performerGroupId, performerType })`
+  - the only normal path for changing lane carrier ids/state
+  - derives `embodimentState` and `carrierState`
+- `mirrorMusicLaneIdentityToCarrier(lane, carrier, options)`
+  - copies lane identity onto the visible enemy/group carrier
+  - keeps carrier state secondary to lane state
+- `buildMusicLaneAssignmentResult(lane, options)`
+  - returns a consistent assignment payload, including carrier and embodiment state
+- `scrubStaleMusicLaneOwnership(laneId)`
+  - transfers live lane carriers when possible
+  - falls back to `system_voice` / `vacant` without clearing lane phrase/instrument identity
+
+Next work should continue moving older direct ownership paths through this contract:
 
 - detect when a lane's current carrier dies, is released, or becomes visually invalid
 - keep the lane's phrase/instrument/pattern alive in `musicLaneRuntime`
@@ -170,15 +191,15 @@ Current implementation slice:
 
 - composer groups now carry explicit `musicState`, `combatState`, and `musicRole` defaults
 - musical coverage checks have started moving away from raw alive-enemy checks
-- HP-section testing shows this is not enough: stale carrier identity can still block or mislabel support
-- next implementation should introduce lane-owned continuity and carrier transfer as the default model
+- HP-section testing validates lane-owned carrier transfer across `1x`, `1.5x`, and `2x` durability
+- duplicate primary-lead requests have been removed at the template-picking layer
+- the first explicit lane carrier binding/mirroring/result helpers are now in `beat-swarm-mode.js`
 
 Immediate next technical target:
 
-- define the Level 1 lane runtime contract for `foundation`, `counter_rhythm`, `lead`, and `ornament`
-- make normal lane playback survive enemy death, release, and HP changes
-- add carrier assignment/transfer behavior for active lanes
-- preserve the successful lead cadence checkpoint while improving support transfer
+- route remaining singleton/spawner/drawsnake lane ownership paths through the same carrier contract
+- add a direct Music Lab assertion for normal lane continuity across carrier death/release/HP changes
+- preserve the successful HP/readability and lead-request checkpoints
 - success target:
   - phrase resolution remains high
   - lead delivery remains near `1.0`

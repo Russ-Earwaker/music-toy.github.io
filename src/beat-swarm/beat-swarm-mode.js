@@ -853,6 +853,68 @@ function chooseRotatingLaneInstrument(options = null) {
   roleInstrumentRotationRuntime.lastByRoleEnemyType.set(roleEnemyKey, { instrumentId: best, barIndex, continuityId });
   return best;
 }
+function getMusicLaneEmbodimentStateForCarrier(lane = null, performerEnemyId = 0, performerGroupId = 0) {
+  const hasCarrier = Math.max(0, Math.trunc(Number(performerEnemyId) || 0)) > 0
+    || Math.max(0, Math.trunc(Number(performerGroupId) || 0)) > 0;
+  if (hasCarrier) return 'embodied';
+  const hasLaneVoice = !!String(lane?.continuityId || lane?.instrumentId || lane?.phraseId || '').trim();
+  return hasLaneVoice ? 'system_voice' : 'vacant';
+}
+function bindMusicLaneCarrier(lane = null, options = null) {
+  if (!lane || typeof lane !== 'object') return null;
+  const opts = options && typeof options === 'object' ? options : {};
+  const performerEnemyId = Math.max(0, Math.trunc(Number(opts.performerEnemyId) || 0));
+  const performerGroupId = Math.max(0, Math.trunc(Number(opts.performerGroupId) || 0));
+  lane.performerEnemyId = performerEnemyId;
+  lane.performerGroupId = performerGroupId;
+  lane.performerType = String(opts.performerType || '').trim().toLowerCase();
+  lane.embodimentState = getMusicLaneEmbodimentStateForCarrier(lane, performerEnemyId, performerGroupId);
+  lane.carrierState = lane.embodimentState === 'embodied' ? 'active' : 'unbound';
+  return lane;
+}
+function mirrorMusicLaneIdentityToCarrier(lane = null, carrier = null, options = null) {
+  if (!lane || typeof lane !== 'object') return;
+  if (!carrier || typeof carrier !== 'object') return;
+  const opts = options && typeof options === 'object' ? options : {};
+  const laneId = String(opts.laneId || lane.laneId || '').trim().toLowerCase();
+  const layer = String(opts.layer || lane.layer || '').trim().toLowerCase();
+  const continuityId = String(opts.continuityId || lane.continuityId || '').trim();
+  const instrumentId = String(lane.instrumentId || opts.instrumentId || carrier.musicLaneInstrumentId || '').trim();
+  const phraseId = String(lane.phraseId || opts.phraseId || carrier.musicLanePhraseId || '').trim();
+  const patternKey = String(lane.patternKey || opts.patternKey || carrier.musicLanePatternKey || '').trim();
+  carrier.musicLaneId = laneId;
+  carrier.musicLaneLayer = layer;
+  carrier.musicLaneContinuityId = continuityId;
+  carrier.musicLaneInstrumentId = instrumentId;
+  carrier.musicLanePhraseId = phraseId;
+  carrier.musicLanePatternKey = patternKey;
+  carrier.musicLaneLifetimeBars = Math.max(0, Math.trunc(Number(lane.lifetimeBars) || 0));
+  carrier.musicLaneHandoffPolicy = String(lane.handoffPolicy || '').trim().toLowerCase();
+  carrier.musicLaneIdentityChangeReason = normalizeLaneIdentityChangeReason(lane.identityChangeReason);
+  carrier.musicLaneSectionId = String(lane.sectionId || '').trim().toLowerCase();
+}
+function buildMusicLaneAssignmentResult(lane = null, options = null) {
+  if (!lane || typeof lane !== 'object') return null;
+  const opts = options && typeof options === 'object' ? options : {};
+  return {
+    laneId: String(opts.laneId || lane.laneId || '').trim().toLowerCase(),
+    layer: String(opts.layer || lane.layer || '').trim().toLowerCase(),
+    role: String(opts.role || lane.role || '').trim().toLowerCase(),
+    continuityId: String(opts.continuityId || lane.continuityId || '').trim(),
+    instrumentId: String(lane.instrumentId || opts.instrumentId || '').trim(),
+    phraseId: String(lane.phraseId || opts.phraseId || '').trim(),
+    patternKey: String(lane.patternKey || opts.patternKey || '').trim(),
+    lifetimeBars: Math.max(0, Math.trunc(Number(lane.lifetimeBars) || 0)),
+    performerEnemyId: Math.max(0, Math.trunc(Number(lane.performerEnemyId) || 0)),
+    performerGroupId: Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0)),
+    performerType: String(lane.performerType || '').trim().toLowerCase(),
+    embodimentState: String(lane.embodimentState || '').trim().toLowerCase(),
+    carrierState: String(lane.carrierState || '').trim().toLowerCase(),
+    identityChangeReason: normalizeLaneIdentityChangeReason(lane.identityChangeReason),
+    sectionId: String(lane.sectionId || '').trim().toLowerCase(),
+    handoffPolicy: String(lane.handoffPolicy || '').trim().toLowerCase(),
+  };
+}
 function assignMusicLaneIdentity(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const laneId = resolveMusicLaneId(opts);
@@ -996,9 +1058,11 @@ function assignMusicLaneIdentity(options = null) {
   );
   const refreshLanePerformerBinding = () => {
     if (!shouldRefreshLanePerformerBinding) return;
-    lane.performerEnemyId = explicitPerformerEnemyId;
-    if (explicitPerformerGroupId > 0) lane.performerGroupId = explicitPerformerGroupId;
-    if (explicitPerformerType) lane.performerType = explicitPerformerType;
+    bindMusicLaneCarrier(lane, {
+      performerEnemyId: explicitPerformerEnemyId,
+      performerGroupId: explicitPerformerGroupId > 0 ? explicitPerformerGroupId : Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0)),
+      performerType: explicitPerformerType || lane.performerType,
+    });
   };
   if (
     sameContinuity
@@ -1011,64 +1075,22 @@ function assignMusicLaneIdentity(options = null) {
     if (matchesPendingIdentityChange) {
       refreshLanePerformerBinding();
       if (group) {
-        group.musicLaneId = laneId;
-        group.musicLaneLayer = layer;
-        group.musicLaneContinuityId = continuityId;
-        group.musicLaneInstrumentId = String(lane.instrumentId || requestedInstrumentId || group.musicLaneInstrumentId || '').trim();
+        mirrorMusicLaneIdentityToCarrier(lane, group, { laneId, layer, continuityId, instrumentId: requestedInstrumentId });
       }
       if (enemy) {
-        enemy.musicLaneId = laneId;
-        enemy.musicLaneLayer = layer;
-        enemy.musicLaneContinuityId = continuityId;
-        enemy.musicLaneInstrumentId = String(lane.instrumentId || requestedInstrumentId || enemy.musicLaneInstrumentId || '').trim();
+        mirrorMusicLaneIdentityToCarrier(lane, enemy, { laneId, layer, continuityId, instrumentId: requestedInstrumentId });
       }
-      return {
-        laneId,
-        layer,
-        role,
-        continuityId,
-        instrumentId: String(lane.instrumentId || requestedInstrumentId || '').trim(),
-        phraseId: String(lane.phraseId || requestedPhraseId || '').trim(),
-        patternKey: String(lane.patternKey || requestedPatternKey || '').trim(),
-        lifetimeBars: lane.lifetimeBars,
-        performerEnemyId: Math.max(0, Math.trunc(Number(lane.performerEnemyId) || 0)),
-        performerGroupId: Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0)),
-        performerType: String(lane.performerType || '').trim().toLowerCase(),
-        identityChangeReason: lane.identityChangeReason,
-        sectionId: lane.sectionId,
-        handoffPolicy: lane.handoffPolicy,
-      };
+      return buildMusicLaneAssignmentResult(lane, { laneId, layer, role, continuityId, instrumentId: requestedInstrumentId, phraseId: requestedPhraseId, patternKey: requestedPatternKey });
     }
     if (!meaningfulProtectedLaneRestatement) {
       refreshLanePerformerBinding();
       if (group) {
-        group.musicLaneId = laneId;
-        group.musicLaneLayer = layer;
-        group.musicLaneContinuityId = continuityId;
-        group.musicLaneInstrumentId = String(lane.instrumentId || requestedInstrumentId || group.musicLaneInstrumentId || '').trim();
+        mirrorMusicLaneIdentityToCarrier(lane, group, { laneId, layer, continuityId, instrumentId: requestedInstrumentId });
       }
       if (enemy) {
-        enemy.musicLaneId = laneId;
-        enemy.musicLaneLayer = layer;
-        enemy.musicLaneContinuityId = continuityId;
-        enemy.musicLaneInstrumentId = String(lane.instrumentId || requestedInstrumentId || enemy.musicLaneInstrumentId || '').trim();
+        mirrorMusicLaneIdentityToCarrier(lane, enemy, { laneId, layer, continuityId, instrumentId: requestedInstrumentId });
       }
-      return {
-        laneId,
-        layer,
-        role,
-        continuityId,
-        instrumentId: String(lane.instrumentId || requestedInstrumentId || '').trim(),
-        phraseId: String(lane.phraseId || requestedPhraseId || '').trim(),
-        patternKey: String(lane.patternKey || requestedPatternKey || '').trim(),
-        lifetimeBars: lane.lifetimeBars,
-        performerEnemyId: Math.max(0, Math.trunc(Number(lane.performerEnemyId) || 0)),
-        performerGroupId: Math.max(0, Math.trunc(Number(lane.performerGroupId) || 0)),
-        performerType: String(lane.performerType || '').trim().toLowerCase(),
-        identityChangeReason: lane.identityChangeReason,
-        sectionId: lane.sectionId,
-        handoffPolicy: lane.handoffPolicy,
-      };
+      return buildMusicLaneAssignmentResult(lane, { laneId, layer, role, continuityId, instrumentId: requestedInstrumentId, phraseId: requestedPhraseId, patternKey: requestedPatternKey });
     }
     const canDefer = directorContinuityBias === 'hold'
       ? stepsUntilBoundary <= 4
@@ -1183,13 +1205,13 @@ function assignMusicLaneIdentity(options = null) {
   if (!(lane.activeSinceBar >= 0)) lane.activeSinceBar = barIndex;
   lane.lastAssignedBar = barIndex;
   lane.lifetimeBars = lane.activeSinceBar >= 0 ? Math.max(1, (barIndex - lane.activeSinceBar) + 1) : 0;
-  lane.performerEnemyId = performerEnemyId;
-  lane.performerGroupId = performerGroupId;
-  lane.performerType = preservePerformerBinding
-    ? String(lane.performerType || opts?.performerType || '').trim().toLowerCase()
-    : String(opts?.performerType || lane.performerType || '').trim().toLowerCase();
-  lane.embodimentState = (lane.performerEnemyId > 0 || lane.performerGroupId > 0) ? 'embodied' : 'system_voice';
-  lane.carrierState = lane.embodimentState === 'embodied' ? 'active' : 'unbound';
+  bindMusicLaneCarrier(lane, {
+    performerEnemyId,
+    performerGroupId,
+    performerType: preservePerformerBinding
+      ? String(lane.performerType || opts?.performerType || '').trim().toLowerCase()
+      : String(opts?.performerType || lane.performerType || '').trim().toLowerCase(),
+  });
   lane.identityChangeReason = identityChangeReason;
   lane.sectionId = sectionId;
   lane.directorLaneKey = directorLaneKey;
@@ -1202,16 +1224,7 @@ function assignMusicLaneIdentity(options = null) {
     String(opts?.handoffPolicy || lane.handoffPolicy || '').trim().toLowerCase()
   );
   if (group) {
-    group.musicLaneId = laneId;
-    group.musicLaneLayer = layer;
-    group.musicLaneContinuityId = continuityId;
-    group.musicLaneInstrumentId = String(lane.instrumentId || instrumentId || group.musicLaneInstrumentId || '').trim();
-    group.musicLanePhraseId = String(lane.phraseId || group.musicLanePhraseId || '').trim();
-    group.musicLanePatternKey = String(lane.patternKey || patternKey || group.musicLanePatternKey || '').trim();
-    group.musicLaneLifetimeBars = lane.lifetimeBars;
-    group.musicLaneHandoffPolicy = lane.handoffPolicy;
-    group.musicLaneIdentityChangeReason = lane.identityChangeReason;
-    group.musicLaneSectionId = lane.sectionId;
+    mirrorMusicLaneIdentityToCarrier(lane, group, { laneId, layer, continuityId, instrumentId, phraseId, patternKey });
     if (laneId !== 'sparkle_lane') {
       group.continuityId = continuityId;
       if (laneId === 'foundation_lane' && group.musicLanePatternKey) group.foundationPatternKey = group.musicLanePatternKey;
@@ -1222,16 +1235,7 @@ function assignMusicLaneIdentity(options = null) {
     }
   }
   if (enemy) {
-    enemy.musicLaneId = laneId;
-    enemy.musicLaneLayer = layer;
-    enemy.musicLaneContinuityId = continuityId;
-    enemy.musicLaneInstrumentId = String(lane.instrumentId || instrumentId || enemy.musicLaneInstrumentId || '').trim();
-    enemy.musicLanePhraseId = String(lane.phraseId || enemy.musicLanePhraseId || '').trim();
-    enemy.musicLanePatternKey = String(lane.patternKey || patternKey || enemy.musicLanePatternKey || '').trim();
-    enemy.musicLaneLifetimeBars = lane.lifetimeBars;
-    enemy.musicLaneHandoffPolicy = lane.handoffPolicy;
-    enemy.musicLaneIdentityChangeReason = lane.identityChangeReason;
-    enemy.musicLaneSectionId = lane.sectionId;
+    mirrorMusicLaneIdentityToCarrier(lane, enemy, { laneId, layer, continuityId, instrumentId, phraseId, patternKey });
     if (laneId !== 'sparkle_lane') {
       enemy.musicContinuityId = continuityId;
       enemy.continuityId = continuityId;
@@ -1242,22 +1246,7 @@ function assignMusicLaneIdentity(options = null) {
       }
     }
   }
-  return {
-    laneId,
-    layer,
-    role,
-    continuityId,
-    instrumentId: String(lane.instrumentId || instrumentId || '').trim(),
-    phraseId: String(lane.phraseId || '').trim(),
-    patternKey: String(lane.patternKey || patternKey || '').trim(),
-    lifetimeBars: lane.lifetimeBars,
-    performerEnemyId,
-    performerGroupId,
-    performerType: lane.performerType,
-    identityChangeReason: lane.identityChangeReason,
-    sectionId: lane.sectionId,
-    handoffPolicy: lane.handoffPolicy,
-  };
+  return buildMusicLaneAssignmentResult(lane, { laneId, layer, role, continuityId, instrumentId, phraseId, patternKey });
 }
 function resolveProtectedLaneInstrumentIdentity(lane = null, group = null, enemy = null, fallbackInstrumentId = '', role = BEAT_EVENT_ROLES.LEAD) {
   const laneEntry = lane && typeof lane === 'object' ? lane : null;
@@ -3673,16 +3662,20 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     if (fallbackLeadGroup && fallbackLeadOwner) {
       group = fallbackLeadGroup;
       ownerEnemy = fallbackLeadOwner;
-      lane.performerGroupId = Math.max(0, Math.trunc(Number(fallbackLeadGroup?.id) || 0));
-      lane.performerEnemyId = Math.max(0, Math.trunc(Number(fallbackLeadOwner?.id) || 0));
-      lane.performerType = String(lane.performerType || 'composer-group').trim().toLowerCase() || 'composer-group';
+      bindMusicLaneCarrier(lane, {
+        performerEnemyId: Math.max(0, Math.trunc(Number(fallbackLeadOwner?.id) || 0)),
+        performerGroupId: Math.max(0, Math.trunc(Number(fallbackLeadGroup?.id) || 0)),
+        performerType: lane.performerType || 'composer-group',
+      });
     }
   }
   if (!ownerEnemy || !group) return null;
   if (String(ownerEnemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member') {
-    lane.performerGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
-    lane.performerEnemyId = Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0));
-    lane.performerType = String(lane.performerType || 'composer-group').trim().toLowerCase() || 'composer-group';
+    bindMusicLaneCarrier(lane, {
+      performerEnemyId: Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0)),
+      performerGroupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+      performerType: lane.performerType || 'composer-group',
+    });
   }
   const ownerType = String(ownerEnemy?.enemyType || '').trim().toLowerCase();
   if (ownerType === 'composer-group-member') {
@@ -5160,24 +5153,29 @@ function scrubStaleMusicLaneOwnership(laneId = '') {
   const liveGroupMembers = getActiveMusicLaneCarrierMembersForGroup(liveGroup);
   const liveGroupHasActiveMembers = liveGroupMembers.length > 0;
   if (performerEnemyId > 0 && liveEnemyActive) {
-    lane.embodimentState = 'embodied';
-    lane.carrierState = 'active';
+    bindMusicLaneCarrier(lane, {
+      performerEnemyId,
+      performerGroupId,
+      performerType: lane.performerType,
+    });
     return;
   }
   if (performerGroupId > 0 && liveGroupHasActiveMembers) {
     const nextEnemy = liveGroupMembers[0] || null;
-    lane.performerEnemyId = Math.max(0, Math.trunc(Number(nextEnemy?.id) || 0));
-    lane.embodimentState = 'embodied';
-    lane.carrierState = 'active';
+    bindMusicLaneCarrier(lane, {
+      performerEnemyId: Math.max(0, Math.trunc(Number(nextEnemy?.id) || 0)),
+      performerGroupId,
+      performerType: lane.performerType || 'composer-group',
+    });
     return;
   }
   const replacement = findReplacementCarrierForMusicLane(normalizedLaneId, performerEnemyId, performerGroupId);
   if (replacement?.group && replacement?.enemy) {
-    lane.performerEnemyId = Math.max(0, Math.trunc(Number(replacement.enemy.id) || 0));
-    lane.performerGroupId = Math.max(0, Math.trunc(Number(replacement.group.id) || 0));
-    lane.performerType = 'composer-group';
-    lane.embodimentState = 'embodied';
-    lane.carrierState = 'active';
+    bindMusicLaneCarrier(lane, {
+      performerEnemyId: Math.max(0, Math.trunc(Number(replacement.enemy.id) || 0)),
+      performerGroupId: Math.max(0, Math.trunc(Number(replacement.group.id) || 0)),
+      performerType: 'composer-group',
+    });
     lane.lastCarrierTransferBar = Math.floor(Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) / Math.max(1, COMPOSER_BEATS_PER_BAR));
     try {
       noteMusicSystemEvent('music_lane_carrier_transferred', {
@@ -5192,13 +5190,11 @@ function scrubStaleMusicLaneOwnership(laneId = '') {
     } catch {}
     return;
   }
-  lane.performerEnemyId = 0;
-  lane.performerGroupId = 0;
-  lane.performerType = '';
-  lane.embodimentState = String(lane.continuityId || lane.instrumentId || lane.phraseId || '').trim()
-    ? 'system_voice'
-    : 'vacant';
-  lane.carrierState = 'unbound';
+  bindMusicLaneCarrier(lane, {
+    performerEnemyId: 0,
+    performerGroupId: 0,
+    performerType: '',
+  });
   if (previousEmbodimentState === lane.embodimentState) return;
   try {
     noteMusicSystemEvent('music_lane_carrier_unbound', {
@@ -8994,6 +8990,8 @@ const visualRoleReadabilityRuntime = {
   supportCollapsedDuringLead: false,
   leadWithSupportVisible: false,
   threeRoleReadable: false,
+  supportGraceBar: -1,
+  supportGraceApplied: false,
 };
 const beatSwarmPerfRuntime = {
   enabled: true,
@@ -20743,6 +20741,16 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
     }
     roleWeights.lead_phrase = Math.max(roleWeights.lead_phrase, leadFallbackWeight);
   }
+  let supportGraceApplied = false;
+  if (
+    roleWeights.lead_phrase >= 0.85
+    && roleWeights.counter_rhythm < 0.85
+    && visualRoleReadabilityRuntime.lastEvaluatedBar === safeBar - 1
+    && Number(visualRoleReadabilityRuntime.supportVisualWeight) >= 0.85
+  ) {
+    roleWeights.counter_rhythm = Math.max(roleWeights.counter_rhythm, 0.9);
+    supportGraceApplied = true;
+  }
   if (roleWeights.answer_ornament < 0.85) {
     let ornamentFallbackWeight = 0;
     for (const enemy of aliveVisualEnemies) {
@@ -20765,6 +20773,8 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
   visualRoleReadabilityRuntime.supportCollapsedDuringLead = roleWeights.lead_phrase >= 0.85 && roleWeights.counter_rhythm < 0.85;
   visualRoleReadabilityRuntime.leadWithSupportVisible = roleWeights.lead_phrase >= 0.85 && roleWeights.counter_rhythm >= 0.85;
   visualRoleReadabilityRuntime.threeRoleReadable = readableRoles.length >= 3;
+  visualRoleReadabilityRuntime.supportGraceBar = supportGraceApplied ? safeBar : -1;
+  visualRoleReadabilityRuntime.supportGraceApplied = supportGraceApplied;
   if (visualRoleReadabilityRuntime.lastEvaluatedBar !== safeBar) {
     try {
       const healthTestSection = getBeatSwarmEnemyHealthTestSection();
@@ -20785,6 +20795,7 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
         supportCollapsedDuringLead: visualRoleReadabilityRuntime.supportCollapsedDuringLead === true,
         leadWithSupportVisible: visualRoleReadabilityRuntime.leadWithSupportVisible === true,
         threeRoleReadable: visualRoleReadabilityRuntime.threeRoleReadable === true,
+        supportGraceApplied,
       }, {
         beatIndex: safeBeat,
         barIndex: safeBar,
@@ -21727,11 +21738,7 @@ export function enterBeatSwarmMode(options = null) {
     lane.colourId = '';
     lane.continuityId = '';
     lane.lifetimeBars = 0;
-    lane.performerEnemyId = 0;
-    lane.performerGroupId = 0;
-    lane.performerType = '';
-    lane.embodimentState = 'vacant';
-    lane.carrierState = 'unbound';
+    bindMusicLaneCarrier(lane, { performerEnemyId: 0, performerGroupId: 0, performerType: '' });
     lane.lastCarrierTransferBar = -1;
     lane.activeSinceBar = -1;
     lane.lastAssignedBar = -1;

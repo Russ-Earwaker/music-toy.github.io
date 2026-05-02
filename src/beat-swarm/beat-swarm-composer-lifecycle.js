@@ -1263,6 +1263,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     );
     const groupIndex = sameSection.length + i;
     const template = pickTemplate(groupIndex);
+    if (!template && !forcedProfileSourceType) continue;
     const templateId = String(template?.id || `template-${groupIndex}`);
     const motif = getComposerMotif(
       motifScopeKey,
