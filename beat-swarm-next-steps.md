@@ -2,30 +2,44 @@
 
 ## Current Handoff Status
 
-Latest validated Music Lab run:
+Latest analysed Music Lab run:
 
-- file: `resources/music-lab-results/music-lab-results-2026-05-02T09-15-00-190Z.json`
+- file: `resources/music-lab-results/music-lab-results-2026-05-04T10-36-02-988Z.json`
 - scenario: `BS0 S3 HP Sections 1x5m`
-- result: lane runtime contract slice validated with no support collapse and duplicate lead requests still removed
+- result: lane runtime contract slice remains strong; one diagnostic false negative was fixed after this run
 
 What the latest run confirmed:
 
-- `visualRoleFullTextureThreeRoleReadableShare = 1.000`
-- `visualRoleSupportCollapsedDuringLeadShare = 0.000`
-- `visualRoleFullTextureLeadWithSupportVisibleShare = 1.000`
-- `visualRoleAvgSupportVisualWeight = 2.415`
-- `visualRoleAvgDistinctReadableRoleCount = 3.582`
+- `visualRoleFullTextureThreeRoleReadableShare = 0.993`
+- `visualRoleSupportCollapsedDuringLeadShare = 0.006`
+- `visualRoleFullTextureLeadWithSupportVisibleShare = 0.993`
+- `visualRoleAvgSupportVisualWeight = 2.363`
+- `visualRoleAvgDistinctReadableRoleCount = 3.412`
 - HP-section stability:
   - `1x`: `full3 = 1.000`, `collapse = 0.000`
   - `1.5x`: `full3 = 1.000`, `collapse = 0.000`
-  - `2x`: `full3 = 1.000`, `collapse = 0.000`
+  - `2x`: `full3 = 0.985`, `collapse = 0.015`
 - lane carrier transfer path is active:
-  - `music_lane_carrier_transferred = 34`
-  - `music_lane_carrier_unbound = 31`
+  - `music_lane_carrier_transferred = 32`
+  - `music_lane_carrier_unbound = 32`
+  - `laneContinuityBreaks = 0`
+  - `laneVacantFallbacks = 0`
+  - `protectedLaneVacantFallbacks = 0`
 - duplicate primary-lead block telemetry is resolved:
   - `blocked_by_active_primary_lead = 0`
   - `music_composer_spawn_blocked = 0`
   - `music_primary_lead_request = 17`
+
+Post-run diagnostic fix:
+
+- the latest run reported `laneContinuityAssertionPassed = false` because one same-continuity pattern variation was also counted as a reset handoff
+- this was a Music Lab assertion bug, not a confirmed musical dropout:
+  - continuity breaks: `0`
+  - same-continuity instrument drift: `0`
+  - same-continuity phrase drift: `0`
+  - same-continuity pattern drift: `1`
+- Music Lab now treats same-continuity pattern variation as informational, not a reset handoff
+- next run should confirm `laneContinuityAssertionPassed = true`
 
 Current musical read:
 

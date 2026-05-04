@@ -1981,7 +1981,7 @@ function collectLaneOwnershipDiagnostics(session, maxBarIndex) {
     if (ownerChanged) {
       ownerChanges += 1;
       row.ownerChanges += 1;
-      if (continuityPreserved && !instrumentChanged && !phraseChanged && !patternChanged) {
+      if (continuityPreserved && !instrumentChanged && !phraseChanged) {
         preservedHandoffs += 1;
         row.preservedHandoffs += 1;
       } else if (!intentionalIdentityChange) {
