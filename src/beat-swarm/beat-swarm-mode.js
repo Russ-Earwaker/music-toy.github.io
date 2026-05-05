@@ -7890,6 +7890,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
   const level1RoleContract = getBeatSwarmLevel1RoleContract({
     activeLevelPhase,
     phaseVariant: conductorPhaseVariant,
+    barIndex: bar,
     answerWindowActive: answerPhaseWindow,
     cadenceWindowActive: driveAnswerCadenceWindow,
     stableWindow,
@@ -8075,6 +8076,10 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       epochId: level1EpochId,
       allowedRolesCsv: Array.from(level1AllowedRoles).sort().join(','),
       supportPatternBudget: String(level1SupportPolicy.supportPatternBudget || '').trim().toLowerCase(),
+      preferredSupportStepIndicesCsv: Array.isArray(level1SupportPolicy.preferredSupportStepIndices)
+        ? level1SupportPolicy.preferredSupportStepIndices.join(',')
+        : '',
+      supportPunctuationEpoch: Math.max(0, Math.trunc(Number(level1SupportPolicy.supportPunctuationEpoch) || 0)),
       preferredCounterRhythmFamily: String(level1SupportPolicy.preferredCounterRhythmFamily || '').trim().toLowerCase(),
       answerPolicy: String(level1SupportPolicy.answerPolicy || '').trim().toLowerCase(),
       allowSparkle: level1SupportPolicy.allowSparkle === true,

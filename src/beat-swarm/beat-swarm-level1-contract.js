@@ -111,6 +111,7 @@ export function getBeatSwarmLevel1RoleContract(input = null) {
   const data = input && typeof input === 'object' ? input : {};
   const activeLevelPhase = normalizeLevel1Phase(data.activeLevelPhase);
   const phaseVariant = normalizeId(data.phaseVariant || 'default') || 'default';
+  const barIndex = Math.max(0, clampInt(data.barIndex, 0));
   const answerWindowActive = data.answerWindowActive === true;
   const stableWindow = data.stableWindow === true;
 
@@ -121,6 +122,16 @@ export function getBeatSwarmLevel1RoleContract(input = null) {
   const foundationAllowed = activeLevelPhase !== 'player_impact';
   const counterRhythmAllowed = isGrooveEstablish || activeLevelPhase === 'lead_merge' || isFullTexture;
   const leadPhraseAllowed = isFullTexture || activeLevelPhase === 'lead_merge';
+  const supportPunctuationEpoch = Math.max(0, Math.trunc(barIndex / 8));
+  const supportPunctuationRotation = Object.freeze([
+    Object.freeze([6]),
+    Object.freeze([3]),
+    Object.freeze([1]),
+    Object.freeze([3]),
+  ]);
+  const preferredSupportStepIndices = isFullTexture
+    ? supportPunctuationRotation[supportPunctuationEpoch % supportPunctuationRotation.length]
+    : Object.freeze([6]);
 
   const roles = {
     foundation_groove: {
@@ -169,7 +180,8 @@ export function getBeatSwarmLevel1RoleContract(input = null) {
       counterRhythmFamilyScope: 'epoch_locked',
       preferredCounterRhythmFamily: isFullTexture ? 'secondary_bridge_backbeat' : 'secondary_bridge_backbeat',
       supportPatternBudget: isFullTexture ? 'single_offbeat_punctuation' : 'default',
-      preferredSupportStepIndices: Object.freeze([6]),
+      preferredSupportStepIndices,
+      supportPunctuationEpoch,
       answerPolicy: roles.answer_ornament.allowed ? 'stable_window_punctuation' : 'disabled',
     }),
   };

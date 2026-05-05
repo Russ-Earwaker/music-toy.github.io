@@ -610,6 +610,8 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     epochId: String(payload?.epochId || '').trim(),
     allowedRolesCsv: String(payload?.allowedRolesCsv || '').trim().toLowerCase(),
     supportPatternBudget: String(payload?.supportPatternBudget || '').trim().toLowerCase(),
+    preferredSupportStepIndicesCsv: String(payload?.preferredSupportStepIndicesCsv || '').trim().toLowerCase(),
+    supportPunctuationEpoch: clampInt(payload?.supportPunctuationEpoch, 0, 0),
     preferredCounterRhythmFamily: String(payload?.preferredCounterRhythmFamily || '').trim().toLowerCase(),
     answerPolicy: String(payload?.answerPolicy || '').trim().toLowerCase(),
     allowSparkle: payload?.allowSparkle === true,
@@ -4330,6 +4332,7 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
     bucket[key] = Math.max(0, clampInt(bucket[key], 0, 0)) + 1;
   };
   const bySupportBudget = {};
+  const byPreferredSupportSteps = {};
   const byCounterRhythmFamily = {};
   const byAnswerPolicy = {};
   const byAllowedRoleSet = {};
@@ -4351,6 +4354,7 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
     if (ev?.contractSparkleActive === true) sparkleActiveCount += 1;
     if (ev?.contractSupportActive === true) supportActiveCount += 1;
     inc(bySupportBudget, ev?.supportPatternBudget);
+    inc(byPreferredSupportSteps, ev?.preferredSupportStepIndicesCsv);
     inc(byCounterRhythmFamily, ev?.preferredCounterRhythmFamily);
     inc(byAnswerPolicy, ev?.answerPolicy);
     inc(byAllowedRoleSet, allowedRoles.join('|') || 'none');
@@ -4364,6 +4368,7 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
     sparkleActiveShare: count > 0 ? sparkleActiveCount / count : 0,
     supportActiveShare: count > 0 ? supportActiveCount / count : 0,
     bySupportBudget,
+    byPreferredSupportSteps,
     byCounterRhythmFamily,
     byAnswerPolicy,
     byAllowedRoleSet,
@@ -4378,6 +4383,8 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
       allowedRoles: parseAllowedRoles(ev),
       supportPolicy: {
         supportPatternBudget: String(ev?.supportPatternBudget || '').trim().toLowerCase(),
+        preferredSupportStepIndicesCsv: String(ev?.preferredSupportStepIndicesCsv || '').trim().toLowerCase(),
+        supportPunctuationEpoch: clampInt(ev?.supportPunctuationEpoch, 0, 0),
         preferredCounterRhythmFamily: String(ev?.preferredCounterRhythmFamily || '').trim().toLowerCase(),
         answerPolicy: String(ev?.answerPolicy || '').trim().toLowerCase(),
         allowSparkle: ev?.allowSparkle === true,
@@ -5206,6 +5213,9 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     level1ContractSupportActiveShare: Number(level1ContractTrace?.supportActiveShare) || 0,
     level1ContractBySupportBudget: level1ContractTrace?.bySupportBudget && typeof level1ContractTrace.bySupportBudget === 'object'
       ? { ...level1ContractTrace.bySupportBudget }
+      : {},
+    level1ContractByPreferredSupportSteps: level1ContractTrace?.byPreferredSupportSteps && typeof level1ContractTrace.byPreferredSupportSteps === 'object'
+      ? { ...level1ContractTrace.byPreferredSupportSteps }
       : {},
     level1ContractByCounterRhythmFamily: level1ContractTrace?.byCounterRhythmFamily && typeof level1ContractTrace.byCounterRhythmFamily === 'object'
       ? { ...level1ContractTrace.byCounterRhythmFamily }

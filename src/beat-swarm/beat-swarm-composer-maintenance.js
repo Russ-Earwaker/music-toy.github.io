@@ -238,6 +238,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const level1RoleContract = getBeatSwarmLevel1RoleContract({
     activeLevelPhase: String(levelPhaseRuntime?.activeLevelPhase || musicModeRuntime?.activeMusicMode || '').trim().toLowerCase(),
     phaseVariant: fullTexturePhaseVariant,
+    barIndex: currentBarIndex,
     answerWindowActive: answerLaneActive,
     cadenceWindowActive: answerLaneActive && answerLaneResponseFamily === 'echo',
     stableWindow: answerLaneActive || supportLaneActive || primaryLoopLaneActive,
