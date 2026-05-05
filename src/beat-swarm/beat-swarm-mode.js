@@ -14426,6 +14426,12 @@ function pickSpawnerGrooveLayerPattern(layerKey, barIndex = 0, sectionId = 'defa
     { id: 'pulse_drive', steps: [true, false, true, false, true, false, false, false] },
     { id: 'pulse_push', steps: [true, false, false, true, true, false, false, false] },
   ];
+  const level1PulseFamilies = [
+    { id: 'level1_pulse_anchor', steps: [true, false, false, false, true, false, false, false] },
+    { id: 'level1_pulse_push', steps: [true, false, false, true, false, false, false, false] },
+    { id: 'level1_pulse_release', steps: [true, false, false, false, false, true, false, false] },
+    { id: 'level1_pulse_return', steps: [true, false, false, false, true, false, false, false] },
+  ];
   const backbeatFamilies = [
     { id: 'backbeat_two_four', steps: [false, false, true, false, false, false, true, false] },
     { id: 'backbeat_push', steps: [false, false, true, false, false, true, true, false] },
@@ -14461,6 +14467,15 @@ function pickSpawnerGrooveLayerPattern(layerKey, barIndex = 0, sectionId = 'defa
     return families[0];
   };
   const intensityBucket = Math.max(0, Math.min(3, Math.trunc(clamp01(intensity) * 3.99)));
+  const level1FullTextureActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'full_texture';
+  if (layerKey === 'pulse' && level1FullTextureActive) {
+    const level1PulseEpoch = Math.max(0, Math.trunc(Math.max(0, Math.trunc(Number(barIndex) || 0) - 24) / 16));
+    const chosen = level1PulseFamilies[level1PulseEpoch % level1PulseFamilies.length] || level1PulseFamilies[0];
+    return {
+      id: String(chosen?.id || 'level1_pulse_anchor'),
+      steps: cloneSpawnerGrooveLayerSteps(chosen?.steps),
+    };
+  }
   const lockBars = Math.max(1, Math.trunc(Number(SPAWNER_PERCUSSION_LAYER_LOCK_BARS?.[layerKey]) || 4));
   const lockCycle = Math.floor(Math.max(0, Math.trunc(Number(barIndex) || 0)) / lockBars);
   const seed = hashStringSeed(`${layerKey}|${sectionId}|${energyState}|${intensityBucket}|${lockCycle}`);

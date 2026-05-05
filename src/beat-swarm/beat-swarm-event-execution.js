@@ -67,6 +67,9 @@ export function executePerformedBeatEventRuntime(options = null) {
   const logMusicLabExecution = (context = null) => {
     const base = context && typeof context === 'object' ? context : {};
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const sourceEnemyId = Math.max(0, Math.trunc(Number(ev?.actorId) || 0));
+    const sourceEnemy = sourceEnemyId > 0 ? helpers.getSwarmEnemyById?.(sourceEnemyId) : null;
+    const sourceGroup = sourceEnemy ? helpers.getEnemyMusicGroup?.(sourceEnemy, undefined, { sync: false }) : null;
     try {
       state.swarmMusicLab?.logExecutedEvent?.(ev, helpers.getMusicLabContext?.({
         beatIndex,
@@ -89,6 +92,59 @@ export function executePerformedBeatEventRuntime(options = null) {
               : payload?.callResponsePhraseProgress
           ) || 0)
         ),
+        foundationPhraseId: String(
+          base?.foundationPhraseId
+            || payload?.foundationPhraseId
+            || sourceGroup?.foundationPhraseId
+            || sourceEnemy?.foundationPhraseId
+            || ''
+        ).trim().toLowerCase(),
+        foundationPatternKey: String(
+          base?.foundationPatternKey
+            || payload?.foundationPatternKey
+            || sourceGroup?.foundationPatternKey
+            || sourceEnemy?.foundationPatternKey
+            || ''
+        ).trim().toLowerCase(),
+        leadFamily: String(
+          base?.leadFamily
+            || payload?.leadFamily
+            || sourceGroup?.leadFamily
+            || sourceEnemy?.leadFamily
+            || ''
+        ).trim().toLowerCase(),
+        leadContourId: String(
+          base?.leadContourId
+            || payload?.leadContourId
+            || sourceGroup?.leadContourId
+            || sourceEnemy?.leadContourId
+            || ''
+        ).trim().toLowerCase(),
+        leadContourEpoch: Math.max(0, Math.trunc(Number(
+          base?.leadContourEpoch
+            ?? payload?.leadContourEpoch
+            ?? sourceGroup?.leadContourEpoch
+            ?? sourceEnemy?.leadContourEpoch
+        ) || 0)),
+        leadCadenceVariant: Math.max(0, Math.trunc(Number(
+          base?.leadCadenceVariant
+            ?? payload?.leadCadenceVariant
+            ?? sourceGroup?.leadCadenceVariant
+            ?? sourceEnemy?.leadCadenceVariant
+        ) || 0)),
+        sectionTransitionRole: String(
+          base?.sectionTransitionRole
+            || payload?.sectionTransitionRole
+            || sourceGroup?.sectionTransitionRole
+            || sourceEnemy?.sectionTransitionRole
+            || ''
+        ).trim().toLowerCase(),
+        sectionArcEpoch: Math.max(0, Math.trunc(Number(
+          base?.sectionArcEpoch
+            ?? payload?.sectionArcEpoch
+            ?? sourceGroup?.sectionArcEpoch
+            ?? sourceEnemy?.sectionArcEpoch
+        ) || 0)),
         ...base,
       }));
     } catch {}

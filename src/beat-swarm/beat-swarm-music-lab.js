@@ -209,6 +209,14 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const formationRole = String(context?.formationRole ?? payload?.formationRole ?? '').trim().toLowerCase();
   const reason = String(context?.reason ?? payload?.reason ?? '').trim().toLowerCase();
   const authoringClass = String(context?.authoringClass ?? payload?.authoringClass ?? '').trim().toLowerCase();
+  const leadFamily = String(context?.leadFamily ?? payload?.leadFamily ?? '').trim().toLowerCase();
+  const leadContourId = String(context?.leadContourId ?? payload?.leadContourId ?? '').trim().toLowerCase();
+  const leadContourEpoch = clampInt(context?.leadContourEpoch ?? payload?.leadContourEpoch, 0, 0);
+  const leadCadenceVariant = clampInt(context?.leadCadenceVariant ?? payload?.leadCadenceVariant, 0, 0);
+  const sectionTransitionRole = String(context?.sectionTransitionRole ?? payload?.sectionTransitionRole ?? '').trim().toLowerCase();
+  const sectionArcEpoch = clampInt(context?.sectionArcEpoch ?? payload?.sectionArcEpoch, 0, 0);
+  const foundationPatternKey = String(context?.foundationPatternKey ?? payload?.foundationPatternKey ?? '').trim().toLowerCase();
+  const foundationPhraseId = String(context?.foundationPhraseId ?? payload?.foundationPhraseId ?? '').trim().toLowerCase();
   return {
     tMs: nowMs(),
     phase: String(phase || '').trim() || 'queued',
@@ -257,6 +265,14 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     formationRole,
     reason,
     authoringClass,
+    leadFamily,
+    leadContourId,
+    leadContourEpoch,
+    leadCadenceVariant,
+    sectionTransitionRole,
+    sectionArcEpoch,
+    foundationPatternKey,
+    foundationPhraseId,
     audioGain: Number(context?.audioGain ?? payload?.audioGain) || 0,
     resolvedPlaybackInstrumentId: String(context?.resolvedPlaybackInstrumentId || '').trim(),
     playbackKind: String(context?.playbackKind || '').trim().toLowerCase(),
@@ -3446,6 +3462,88 @@ function collectPhraseGravity(events) {
   };
 }
 
+function collectLeadVariationTrace(events) {
+  const leadEvents = (Array.isArray(events) ? events : []).filter((ev) => {
+    const laneId = String(ev?.musicLaneId || '').trim().toLowerCase();
+    const leadFamily = String(ev?.leadFamily || '').trim().toLowerCase();
+    const leadContourId = String(ev?.leadContourId || '').trim().toLowerCase();
+    return laneId === 'primary_loop_lane' || !!leadFamily || !!leadContourId;
+  });
+  const byFamily = {};
+  const byContour = {};
+  const byCadenceVariant = {};
+  const byContourEpoch = {};
+  const bySectionTransitionRole = {};
+  const bySectionArcEpoch = {};
+  const inc = (target, keyLike) => {
+    const key = String(keyLike || '').trim().toLowerCase() || 'unknown';
+    target[key] = (target[key] || 0) + 1;
+  };
+  for (const ev of leadEvents) {
+    inc(byFamily, ev?.leadFamily);
+    inc(byContour, ev?.leadContourId);
+    inc(byCadenceVariant, ev?.leadCadenceVariant);
+    inc(byContourEpoch, ev?.leadContourEpoch);
+    inc(bySectionTransitionRole, ev?.sectionTransitionRole);
+    inc(bySectionArcEpoch, ev?.sectionArcEpoch);
+  }
+  return {
+    count: leadEvents.length,
+    byFamily,
+    byContour,
+    byCadenceVariant,
+    byContourEpoch,
+    bySectionTransitionRole,
+    bySectionArcEpoch,
+    distinctFamilyCount: Object.keys(byFamily).filter((key) => key !== 'unknown').length,
+    distinctContourCount: Object.keys(byContour).filter((key) => key !== 'unknown').length,
+    sample: leadEvents.slice(0, 24).map((ev) => ({
+      barIndex: clampInt(ev?.barIndex, 0, 0),
+      stepIndex: clampInt(ev?.stepIndex, 0, 0),
+      note: String(ev?.noteResolved || ev?.note || '').trim(),
+      leadFamily: String(ev?.leadFamily || '').trim().toLowerCase(),
+      leadContourId: String(ev?.leadContourId || '').trim().toLowerCase(),
+      leadContourEpoch: clampInt(ev?.leadContourEpoch, 0, 0),
+      leadCadenceVariant: clampInt(ev?.leadCadenceVariant, 0, 0),
+      sectionTransitionRole: String(ev?.sectionTransitionRole || '').trim().toLowerCase(),
+      sectionArcEpoch: clampInt(ev?.sectionArcEpoch, 0, 0),
+    })),
+  };
+}
+
+function collectFoundationVariationTrace(events) {
+  const foundationEvents = (Array.isArray(events) ? events : []).filter((ev) => {
+    const laneId = String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase();
+    const layer = String(ev?.musicLayer || '').trim().toLowerCase();
+    const role = String(ev?.role || '').trim().toLowerCase();
+    return laneId === 'foundation_lane' || layer === 'foundation' || role === 'bass';
+  });
+  const byPatternKey = {};
+  const byPhraseId = {};
+  const inc = (target, keyLike) => {
+    const key = String(keyLike || '').trim().toLowerCase() || 'unknown';
+    target[key] = (target[key] || 0) + 1;
+  };
+  for (const ev of foundationEvents) {
+    inc(byPatternKey, ev?.foundationPatternKey);
+    inc(byPhraseId, ev?.foundationPhraseId);
+  }
+  return {
+    count: foundationEvents.length,
+    byPatternKey,
+    byPhraseId,
+    distinctPatternKeyCount: Object.keys(byPatternKey).filter((key) => key !== 'unknown').length,
+    distinctPhraseIdCount: Object.keys(byPhraseId).filter((key) => key !== 'unknown').length,
+    sample: foundationEvents.slice(0, 24).map((ev) => ({
+      barIndex: clampInt(ev?.barIndex, 0, 0),
+      stepIndex: clampInt(ev?.stepIndex, 0, 0),
+      note: String(ev?.noteResolved || ev?.note || '').trim(),
+      foundationPatternKey: String(ev?.foundationPatternKey || '').trim().toLowerCase(),
+      foundationPhraseId: String(ev?.foundationPhraseId || '').trim().toLowerCase(),
+    })),
+  };
+}
+
 function collectLaneCompliance(events) {
   const createdEnemyEvents = events.filter((ev) => {
     if (String(ev?.phase || '').trim().toLowerCase() !== 'created') return false;
@@ -4849,6 +4947,8 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const motifReuse = collectMotifReuse(executedEvents);
   const motifPersistence = collectMotifPersistence(motifReuse);
   const phraseGravity = collectPhraseGravity(executedEvents);
+  const leadVariation = collectLeadVariationTrace(executedEvents);
+  const foundationVariation = collectFoundationVariationTrace(executedEvents);
   const playerWeaponTiming = collectPlayerWeaponTiming(session, maxBarIndex);
   const createdEvents = (Array.isArray(session?.events) ? session.events : [])
     .filter((e) => String(e?.phase || '').trim().toLowerCase() === 'created' && clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
@@ -4933,6 +5033,8 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     motifReuse,
     motifPersistence,
     phraseGravity,
+    leadVariation,
+    foundationVariation,
     playerWeaponTiming,
     playerWeaponTimingCount: Number(playerWeaponTiming?.count) || 0,
     playerWeaponTimingAvgAbsOffsetMs: Number(playerWeaponTiming?.avgAbsOffsetMs) || 0,

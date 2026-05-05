@@ -1084,7 +1084,23 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       const leadPhraseVariantEpoch = (melodyPhraseEpoch * 2) + motifLockIndex;
       const leadArcPhase = Math.max(0, Math.trunc((Math.max(0, currentBarIndex - 12)) / 2)) % 4;
       const leadPhraseBarPhase = Math.max(0, Math.trunc(Math.max(0, currentBarIndex - 12))) % 4;
-      const leadCadenceVariant = leadPhraseVariantEpoch % 3;
+      const level1SectionBar = Math.max(0, Math.trunc(Math.max(0, currentBarIndex - 24))) % 16;
+      const level1SectionArcEpoch = Math.max(0, Math.trunc(Math.max(0, currentBarIndex - 24) / 16));
+      const level1SectionPickupWindow = fullTextureActive && currentBarIndex >= 24 && level1SectionBar <= 1;
+      const level1SectionCadenceWindow = fullTextureActive && currentBarIndex >= 24 && level1SectionBar >= 14;
+      const level1SectionTransitionRole = level1SectionCadenceWindow
+        ? 'cadence'
+        : (level1SectionPickupWindow ? 'pickup' : 'body');
+      const leadCadenceVariant = level1SectionCadenceWindow
+        ? level1SectionArcEpoch % 3
+        : leadPhraseVariantEpoch % 3;
+      const leadContourEpoch = Math.max(0, Math.trunc((Math.max(0, currentBarIndex - 24)) / 8));
+      const leadContourRotation = ['hook_return', 'ascending_arc', 'descending_answer', 'cadence_turn'];
+      const leadContourId = level1SectionCadenceWindow
+        ? 'cadence_turn'
+        : (level1SectionPickupWindow
+          ? (level1SectionArcEpoch % 2 === 0 ? 'ascending_arc' : 'hook_return')
+          : (leadContourRotation[leadContourEpoch % leadContourRotation.length] || 'hook_return'));
       const leadArcLift = leadArcPhase === 1
         ? 1
         : (leadArcPhase === 2 ? 2 : (leadArcPhase === 3 ? -1 : 0));
@@ -1205,6 +1221,14 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           steps[i] = true;
           consecutiveSilentSteps = 0;
         }
+      }
+      if (level1SectionPickupWindow && steps.length >= constants.weaponTuneSteps) {
+        steps[0] = true;
+        steps[2] = true;
+      }
+      if (level1SectionCadenceWindow && steps.length >= constants.weaponTuneSteps) {
+        steps[5] = true;
+        steps[7] = true;
       }
       const activeStepIndices = steps
         .map((isOn, idx) => (isOn ? idx : -1))
@@ -1494,6 +1518,45 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           }
         }
       }
+      if (level1SectionCadenceWindow && activeStepIndices.length >= 3) {
+        const rowCeiling = Math.max(4, Math.min(6, (Array.isArray(constants?.swarmPentatonicNotesOneOctave)
+          ? constants.swarmPentatonicNotesOneOctave.length - 1
+          : 6)));
+        const cadenceLandingRows = [0, 2, 4, 1];
+        const finalActiveIdx = activeStepIndices[activeStepIndices.length - 1];
+        const penultimateActiveIdx = activeStepIndices[activeStepIndices.length - 2];
+        const landingRow = Math.max(0, Math.min(
+          rowCeiling,
+          cadenceLandingRows[level1SectionArcEpoch % cadenceLandingRows.length]
+        ));
+        const approachRow = Math.max(
+          0,
+          Math.min(rowCeiling, landingRow + (leadCadenceVariant === 2 ? 2 : 1))
+        );
+        rows[penultimateActiveIdx] = approachRow;
+        rows[finalActiveIdx] = landingRow;
+        notes[penultimateActiveIdx] = helpers.getSwarmPentatonicNoteByIndex?.(approachRow)
+          || notes[penultimateActiveIdx]
+          || 'C4';
+        notes[finalActiveIdx] = helpers.getSwarmPentatonicNoteByIndex?.(landingRow)
+          || notes[finalActiveIdx]
+          || 'C4';
+      } else if (level1SectionPickupWindow && activeStepIndices.length >= 3) {
+        const rowCeiling = Math.max(4, Math.min(6, (Array.isArray(constants?.swarmPentatonicNotesOneOctave)
+          ? constants.swarmPentatonicNotesOneOctave.length - 1
+          : 6)));
+        const firstActiveIdx = activeStepIndices[0];
+        const secondActiveIdx = activeStepIndices[1];
+        const liftBase = Math.max(1, Math.min(3, 1 + (level1SectionArcEpoch % 3)));
+        rows[firstActiveIdx] = liftBase;
+        rows[secondActiveIdx] = Math.max(0, Math.min(rowCeiling, liftBase + 2));
+        notes[firstActiveIdx] = helpers.getSwarmPentatonicNoteByIndex?.(rows[firstActiveIdx])
+          || notes[firstActiveIdx]
+          || 'C4';
+        notes[secondActiveIdx] = helpers.getSwarmPentatonicNoteByIndex?.(rows[secondActiveIdx])
+          || notes[secondActiveIdx]
+          || 'C4';
+      }
       if (activeStepIndices.length >= 4) {
         const preserveLateCadence = currentBarIndex >= 24;
         const phrasePeaks = [activeStepIndices[Math.floor(activeStepIndices.length / 2)]]
@@ -1512,6 +1575,36 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           );
           rows[idx] = boostedRow;
           notes[idx] = helpers.getSwarmPentatonicNoteByIndex?.(boostedRow)
+            || notes[idx]
+            || 'C4';
+        }
+      }
+      if (activeStepIndices.length >= 4) {
+        const rowCeiling = Math.max(4, Math.min(6, (Array.isArray(constants?.swarmPentatonicNotesOneOctave)
+          ? constants.swarmPentatonicNotesOneOctave.length - 1
+          : 6)));
+        const firstActiveIdx = activeStepIndices[0];
+        const finalActiveIdx = activeStepIndices[activeStepIndices.length - 1];
+        const midpoint = Math.floor(activeStepIndices.length / 2);
+        for (let i = 0; i < activeStepIndices.length; i += 1) {
+          const idx = activeStepIndices[i];
+          if (idx === finalActiveIdx) continue;
+          let delta = 0;
+          if (leadContourId === 'ascending_arc') {
+            delta = i >= midpoint ? 1 : 0;
+          } else if (leadContourId === 'descending_answer') {
+            delta = i >= midpoint ? -1 : 0;
+          } else if (leadContourId === 'hook_return') {
+            const firstRow = Math.max(0, Math.trunc(Number(rows[firstActiveIdx]) || 0));
+            const currentRow = Math.max(0, Math.trunc(Number(rows[idx]) || 0));
+            delta = i >= midpoint ? Math.max(-1, Math.min(1, firstRow - currentRow)) : 0;
+          } else if (leadContourId === 'cadence_turn') {
+            delta = i === Math.max(1, activeStepIndices.length - 2) ? (leadCadenceVariant === 0 ? -1 : 1) : 0;
+          }
+          if (!delta) continue;
+          const nextRow = Math.max(0, Math.min(rowCeiling, Math.trunc(Number(rows[idx]) || 0) + delta));
+          rows[idx] = nextRow;
+          notes[idx] = helpers.getSwarmPentatonicNoteByIndex?.(nextRow)
             || notes[idx]
             || 'C4';
         }
@@ -1535,6 +1628,12 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         phraseRoot,
         phraseFifth,
         resolutionTargets: [phraseRoot, phraseFifth].filter(Boolean),
+        leadFamily,
+        leadContourId,
+        leadContourEpoch,
+        leadCadenceVariant,
+        sectionTransitionRole: level1SectionTransitionRole,
+        sectionArcEpoch: level1SectionArcEpoch,
         instrumentId: sanitizeEnemyMusicInstrumentId(
           selectedLeadInstrumentId,
           helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone',
@@ -3440,6 +3539,12 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
                 : (soloCarrierActive ? resolvedComposerBodyType : '')),
             introStageCarrier: introStageSoloRhythmActive,
             musicProfileSourceType: responseGroupRequested ? 'answer_ornament' : (sharedProfileSourceType || ''),
+            leadFamily: sharedSoloProfile?.leadFamily || '',
+            leadContourId: sharedSoloProfile?.leadContourId || '',
+            leadContourEpoch: Math.max(0, Math.trunc(Number(sharedSoloProfile?.leadContourEpoch) || 0)),
+            leadCadenceVariant: Math.max(0, Math.trunc(Number(sharedSoloProfile?.leadCadenceVariant) || 0)),
+            sectionTransitionRole: sharedSoloProfile?.sectionTransitionRole || '',
+            sectionArcEpoch: Math.max(0, Math.trunc(Number(sharedSoloProfile?.sectionArcEpoch) || 0)),
             ...buildIntroSlotState({
               active: introStageSoloRhythmActive,
               profileSourceType: sharedProfileSourceType || '',
@@ -3939,6 +4044,34 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         group.musicLaneId = 'primary_loop_lane';
         group.musicLaneLayer = 'loops';
         group.callResponseLane = explicitSoloLeadCarrier ? 'solo' : 'call';
+        if (Array.isArray(canonicalLeadProfile?.steps) && canonicalLeadProfile.steps.length) {
+          group.steps = canonicalLeadProfile.steps.slice(0, constants.weaponTuneSteps);
+        }
+        if (Array.isArray(canonicalLeadProfile?.rows)) {
+          group.rows = canonicalLeadProfile.rows.slice(0, constants.weaponTuneSteps);
+        }
+        if (Array.isArray(canonicalLeadProfile?.notes) && canonicalLeadProfile.notes.length) {
+          group.notes = canonicalLeadProfile.notes.slice();
+        }
+        if (canonicalLeadProfile?.phraseRoot) group.phraseRoot = canonicalLeadProfile.phraseRoot;
+        if (canonicalLeadProfile?.phraseFifth) group.phraseFifth = canonicalLeadProfile.phraseFifth;
+        if (Array.isArray(canonicalLeadProfile?.resolutionTargets) && canonicalLeadProfile.resolutionTargets.length) {
+          group.resolutionTargets = canonicalLeadProfile.resolutionTargets.slice();
+        }
+        if (canonicalLeadProfile?.leadFamily) group.leadFamily = String(canonicalLeadProfile.leadFamily || '').trim().toLowerCase();
+        if (canonicalLeadProfile?.leadContourId) group.leadContourId = String(canonicalLeadProfile.leadContourId || '').trim().toLowerCase();
+        if (canonicalLeadProfile?.leadContourEpoch != null) {
+          group.leadContourEpoch = Math.max(0, Math.trunc(Number(canonicalLeadProfile.leadContourEpoch) || 0));
+        }
+        if (canonicalLeadProfile?.leadCadenceVariant != null) {
+          group.leadCadenceVariant = Math.max(0, Math.trunc(Number(canonicalLeadProfile.leadCadenceVariant) || 0));
+        }
+        if (canonicalLeadProfile?.sectionTransitionRole) {
+          group.sectionTransitionRole = String(canonicalLeadProfile.sectionTransitionRole || '').trim().toLowerCase();
+        }
+        if (canonicalLeadProfile?.sectionArcEpoch != null) {
+          group.sectionArcEpoch = Math.max(0, Math.trunc(Number(canonicalLeadProfile.sectionArcEpoch) || 0));
+        }
         const persistedLeadInstrumentId = String(
           leadAuthorityRuntime?.instrumentId
           || composer?.__bsCanonicalPrimaryLeadInstrumentId
@@ -4037,6 +4170,20 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           if (Array.isArray(sharedSoloProfile.resolutionTargets) && sharedSoloProfile.resolutionTargets.length) {
             group.resolutionTargets = sharedSoloProfile.resolutionTargets.slice();
           }
+          if (sharedSoloProfile.leadFamily) group.leadFamily = String(sharedSoloProfile.leadFamily || '').trim().toLowerCase();
+          if (sharedSoloProfile.leadContourId) group.leadContourId = String(sharedSoloProfile.leadContourId || '').trim().toLowerCase();
+          if (sharedSoloProfile.leadContourEpoch != null) {
+            group.leadContourEpoch = Math.max(0, Math.trunc(Number(sharedSoloProfile.leadContourEpoch) || 0));
+          }
+          if (sharedSoloProfile.leadCadenceVariant != null) {
+            group.leadCadenceVariant = Math.max(0, Math.trunc(Number(sharedSoloProfile.leadCadenceVariant) || 0));
+          }
+          if (sharedSoloProfile.sectionTransitionRole) {
+            group.sectionTransitionRole = String(sharedSoloProfile.sectionTransitionRole || '').trim().toLowerCase();
+          }
+          if (sharedSoloProfile.sectionArcEpoch != null) {
+            group.sectionArcEpoch = Math.max(0, Math.trunc(Number(sharedSoloProfile.sectionArcEpoch) || 0));
+          }
           const syncedSoloInstrumentId = (primaryLoopMelodyIdentity || !String(group?.instrumentId || group?.instrument || '').trim())
             ? sanitizeEnemyMusicInstrumentId(
                 sharedSoloProfile.instrumentId,
@@ -4132,6 +4279,20 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           if (sharedCarrierProfile.phraseFifth) group.phraseFifth = sharedCarrierProfile.phraseFifth;
           if (Array.isArray(sharedCarrierProfile.resolutionTargets) && sharedCarrierProfile.resolutionTargets.length) {
             group.resolutionTargets = sharedCarrierProfile.resolutionTargets.slice();
+          }
+          if (sharedCarrierProfile.leadFamily) group.leadFamily = String(sharedCarrierProfile.leadFamily || '').trim().toLowerCase();
+          if (sharedCarrierProfile.leadContourId) group.leadContourId = String(sharedCarrierProfile.leadContourId || '').trim().toLowerCase();
+          if (sharedCarrierProfile.leadContourEpoch != null) {
+            group.leadContourEpoch = Math.max(0, Math.trunc(Number(sharedCarrierProfile.leadContourEpoch) || 0));
+          }
+          if (sharedCarrierProfile.leadCadenceVariant != null) {
+            group.leadCadenceVariant = Math.max(0, Math.trunc(Number(sharedCarrierProfile.leadCadenceVariant) || 0));
+          }
+          if (sharedCarrierProfile.sectionTransitionRole) {
+            group.sectionTransitionRole = String(sharedCarrierProfile.sectionTransitionRole || '').trim().toLowerCase();
+          }
+          if (sharedCarrierProfile.sectionArcEpoch != null) {
+            group.sectionArcEpoch = Math.max(0, Math.trunc(Number(sharedCarrierProfile.sectionArcEpoch) || 0));
           }
           const normalizedCarrierProfileSourceType = normalizeComposerProfileSourceType(musicProfileSourceType);
           const structuralRhythmCarrier = (

@@ -1382,7 +1382,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         styledNoteName = prevNote;
       }
     }
-    if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && !isBassRole && !rhythmPercussionCarrier && Math.random() < (melodyStepDriven ? 0.18 : 0.84)) {
+    const resolutionGravityChance = melodyStepDriven
+      ? (activeMusicMode === 'full_texture' ? 0.9 : 0.42)
+      : 0.84;
+    if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && !isBassRole && !rhythmPercussionCarrier && Math.random() < resolutionGravityChance) {
       styledNoteName = clampNoteToDirectorRegisterTarget(
         phraseGravityTarget,
         stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
@@ -1755,6 +1758,12 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           phraseGravityHit,
           phraseResolutionOpportunity,
           phraseResolutionHit,
+          leadFamily: String(group?.leadFamily || '').trim().toLowerCase(),
+          leadContourId: String(group?.leadContourId || '').trim().toLowerCase(),
+          leadContourEpoch: Math.max(0, Math.trunc(Number(group?.leadContourEpoch) || 0)),
+          leadCadenceVariant: Math.max(0, Math.trunc(Number(group?.leadCadenceVariant) || 0)),
+          sectionTransitionRole: String(group?.sectionTransitionRole || '').trim().toLowerCase(),
+          sectionArcEpoch: Math.max(0, Math.trunc(Number(group?.sectionArcEpoch) || 0)),
         },
       }));
     }
