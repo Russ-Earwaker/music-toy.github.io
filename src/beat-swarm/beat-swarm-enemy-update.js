@@ -1,4 +1,7 @@
 import { buildBeatSwarmBehavioralFormationEnemyRuntime } from './beat-swarm-behavioral-runtime.js';
+import {
+  isBeatSwarmLevel1RoleEligibleForLane,
+} from './beat-swarm-level1-contract.js';
 
 function getFormationAnchorWorldRuntime(enemy, helpers) {
   if (String(enemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') return null;
@@ -82,11 +85,7 @@ function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
   const role = String(enemy?.formationRole || '').trim().toLowerCase();
   const musicLaneId = String(enemy?.musicLaneId || '').trim().toLowerCase();
   const eligibleRoles = Array.isArray(eventSectionRuntime?.eligibleRoles) ? eventSectionRuntime.eligibleRoles : [];
-  const roleEligible = eligibleRoles.length <= 0
-    || eligibleRoles.includes(role)
-    || (musicLaneId === 'foundation_lane' && eligibleRoles.includes('foundation_groove'))
-    || (musicLaneId === 'secondary_loop_lane' && eligibleRoles.includes('counter_rhythm'))
-    || (musicLaneId === 'primary_loop_lane' && eligibleRoles.includes('lead_phrase'));
+  const roleEligible = isBeatSwarmLevel1RoleEligibleForLane(role, musicLaneId, eligibleRoles);
   if (!roleEligible) return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
   const strongBeatActive = eventSectionRuntime?.strongBeatActive === true;
   if (!strongBeatActive) return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };

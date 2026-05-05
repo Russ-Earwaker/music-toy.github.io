@@ -5,6 +5,7 @@ import {
 import {
   getBeatSwarmLevel1EpochId,
   getBeatSwarmLevel1RoleContract,
+  inferBeatSwarmLevel1RoleForCarrier,
 } from './beat-swarm-level1-contract.js';
 
 export function maintainComposerEnemyGroupsRuntime(options = null) {
@@ -3098,6 +3099,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
                 )
             );
           const responseGroupRequested = !forcedIntroProfile
+            && answerLaneActive
             && !forcedLeadProfile
             && !fallbackRhythmGroupRequested
             && !soloCarrierType
@@ -3544,26 +3546,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           enforceLevel1NoSparkleOnGroup(created);
           applyFormationRuntimeToGroup(created);
           created.musicRole = String(
-            created?.formationRole
-              || (
-                String(created?.musicLaneId || '').trim().toLowerCase() === 'foundation_lane'
-                  ? 'foundation_groove'
-                  : (
-                    normalizeComposerProfileSourceType(created?.musicProfileSourceType) === 'lead_melody'
-                    || String(created?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
-                      ? 'lead_phrase'
-                      : (
-                        normalizeComposerProfileSourceType(created?.musicProfileSourceType) === 'answer_ornament'
-                        || String(created?.callResponseLane || '').trim().toLowerCase() === 'response'
-                          ? 'answer_ornament'
-                          : (
-                            String(created?.musicLaneId || '').trim().toLowerCase() === 'secondary_loop_lane'
-                              ? 'counter_rhythm'
-                              : 'support'
-                          )
-                      )
-                  )
-              )
+            created?.formationRole || inferBeatSwarmLevel1RoleForCarrier(created, 'support')
           ).trim().toLowerCase() || 'support';
           syncGroupPrimaryNote(created);
           if (typeof helpers.noteIntroDebug === 'function' && currentBarIndex < 24 && soloCarrierType === 'rhythm') {
@@ -3863,11 +3846,19 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         group.musicLaneLayer = 'loops';
         group.callResponseLane = 'call';
       }
-      if (!musicProfileSourceType && String(group?.callResponseLane || '').trim().toLowerCase() === 'response') {
+      if (!answerLaneActive && String(group?.callResponseLane || '').trim().toLowerCase() === 'response') {
+        musicProfileSourceType = level1CounterRhythmFamily || 'secondary_bridge_backbeat';
+        group.musicProfileSourceType = musicProfileSourceType;
+        group.role = constants.accentRole || 'accent';
+        group.musicLaneId = 'secondary_loop_lane';
+        group.musicLaneLayer = 'loops';
+        group.callResponseLane = 'call';
+      }
+      if (answerLaneActive && !musicProfileSourceType && String(group?.callResponseLane || '').trim().toLowerCase() === 'response') {
         musicProfileSourceType = 'answer_ornament';
         group.musicProfileSourceType = 'answer_ornament';
       }
-      if (responseTemplateIdentity) {
+      if (answerLaneActive && responseTemplateIdentity) {
         musicProfileSourceType = 'answer_ornament';
         group.musicProfileSourceType = 'answer_ornament';
         group.role = 'accent';
@@ -3881,7 +3872,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         group.musicLaneLayer = group.musicLaneId === 'sparkle_lane' ? 'sparkle' : 'loops';
         clearGroupRhythmState(group);
       }
-      if (musicProfileSourceType === 'answer_ornament' || String(group?.callResponseLane || '').trim().toLowerCase() === 'response') {
+      if (answerLaneActive && (musicProfileSourceType === 'answer_ornament' || String(group?.callResponseLane || '').trim().toLowerCase() === 'response')) {
         const normalizedResponseProfile = getSharedCarrierMusicProfile('answer_ornament', {
           instrumentInfluence: group?.instrumentInfluence,
           sectionId: group?.sectionId,

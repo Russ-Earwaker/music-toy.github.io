@@ -205,6 +205,10 @@ Current implementation slice:
 - HP-section testing validates lane-owned carrier transfer across `1x`, `1.5x`, and `2x` durability
 - duplicate primary-lead requests have been removed at the template-picking layer
 - the first explicit lane carrier binding/mirroring/result helpers are now in `beat-swarm-mode.js`
+- the first Level 1 contract extraction is active:
+  - lane/profile-to-role mapping lives in `beat-swarm-level1-contract.js`
+  - mode, formation spawn, enemy update, composer lifecycle, composer maintenance, and Music Lab diagnostics consume the contract helpers
+  - Music Lab now exports Level 1 contract trace and compliance metrics
 - Music Lab now has a direct lane continuity assertion:
   - `laneContinuityAssertionPassed`
   - `laneContinuityAssertion`
@@ -224,8 +228,14 @@ Current implementation slice:
 
 Immediate next technical target:
 
-- route remaining singleton/spawner/drawsnake lane ownership paths through the same carrier contract
-- validate the direct Music Lab lane continuity assertion against the HP-section test
+- validate Level 1 contract compliance against the HP-section test:
+  - `level1ContractCompliancePassed`
+  - `level1ContractViolationCount`
+  - `level1ContractRoleViolationCount`
+  - `level1ContractSparkleViolationCount`
+  - `level1ContractAnswerViolationCount`
+- keep routing remaining singleton/spawner/drawsnake lane ownership paths through the same carrier contract as needed
+- keep validating the direct Music Lab lane continuity assertion against the HP-section test
 - preserve the successful HP/readability and lead-request checkpoints
 - success target:
   - phrase resolution remains high

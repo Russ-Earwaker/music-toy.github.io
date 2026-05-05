@@ -1,3 +1,7 @@
+import {
+  getBeatSwarmLevel1RoleForLane,
+} from './beat-swarm-level1-contract.js';
+
 const DEFAULT_BEATS_PER_BAR = 4;
 const DEFAULT_METRICS_EVERY_BARS = 4;
 const SYSTEM_EVENT_SUMMARY_ONLY_TYPES = new Set([
@@ -18,7 +22,6 @@ const PERF_LIGHTWEIGHT_SYSTEM_EVENT_DROP_TYPES = new Set([
   'music_primary_loop_owner_trace',
   'music_primary_loop_coverage_status',
   'music_primary_lead_snapshot',
-  'music_level1_contract_state',
   'music_step_arbitration',
   'music_primary_loop_lane_emitted',
   'music_mode_state',
@@ -1452,18 +1455,13 @@ function inferForegroundRoleId(eventLike) {
   if (explicitRole === 'lead') return 'lead_phrase';
   if (explicitRole === 'accent') {
     const laneId = String(ev?.musicLaneId || '').trim().toLowerCase();
-    if (laneId === 'sparkle_lane') return 'answer_ornament';
+    if (getBeatSwarmLevel1RoleForLane(laneId) === 'answer_ornament') return 'answer_ornament';
     return 'counter_rhythm';
   }
   const laneId = String(ev?.musicLaneId || '').trim().toLowerCase();
-  if (laneId === 'foundation_lane') return 'foundation_groove';
-  if (laneId === 'primary_loop_lane') return 'lead_phrase';
-  if (laneId === 'sparkle_lane') return 'answer_ornament';
-  if (laneId === 'secondary_loop_lane') {
-    const responseLane = String(ev?.callResponseLane || '').trim().toLowerCase();
-    return responseLane === 'response' ? 'answer_ornament' : 'counter_rhythm';
-  }
-  return 'unknown';
+  const responseLane = String(ev?.callResponseLane || '').trim().toLowerCase();
+  if (responseLane === 'response') return 'answer_ornament';
+  return getBeatSwarmLevel1RoleForLane(laneId) || 'unknown';
 }
 
 function collectForegroundCompetitionDiagnostics(session, events, maxBarIndex) {
@@ -4336,17 +4334,18 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
   const byAnswerPolicy = {};
   const byAllowedRoleSet = {};
   const byEpoch = {};
+  const parseAllowedRoles = (ev) => String(ev?.allowedRolesCsv || '').trim().toLowerCase()
+    .split(',')
+    .map((role) => String(role || '').trim().toLowerCase())
+    .filter(Boolean)
+    .sort();
   let fullTextureCount = 0;
   let answerActiveCount = 0;
   let sparkleActiveCount = 0;
   let supportActiveCount = 0;
   for (const ev of events) {
     const phase = String(ev?.activeLevelPhase || '').trim().toLowerCase();
-    const allowedRoles = String(ev?.allowedRolesCsv || '').trim().toLowerCase()
-      .split(',')
-      .map((role) => String(role || '').trim().toLowerCase())
-      .filter(Boolean)
-      .sort();
+    const allowedRoles = parseAllowedRoles(ev);
     if (phase === 'full_texture') fullTextureCount += 1;
     if (ev?.contractAnswerActive === true) answerActiveCount += 1;
     if (ev?.contractSparkleActive === true) sparkleActiveCount += 1;
@@ -4376,7 +4375,7 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
       activeMusicMode: String(ev?.activeMusicMode || '').trim().toLowerCase(),
       phaseVariant: String(ev?.phaseVariant || '').trim().toLowerCase(),
       epochId: String(ev?.epochId || '').trim(),
-      allowedRoles,
+      allowedRoles: parseAllowedRoles(ev),
       supportPolicy: {
         supportPatternBudget: String(ev?.supportPatternBudget || '').trim().toLowerCase(),
         preferredCounterRhythmFamily: String(ev?.preferredCounterRhythmFamily || '').trim().toLowerCase(),
@@ -4392,6 +4391,140 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
         answer: ev?.contractAnswerActive === true,
       },
     })),
+  };
+}
+
+function collectLevel1ContractComplianceTrace(session, events, maxBarIndex) {
+  const contractEvents = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => (
+      String(e?.eventType || '').trim().toLowerCase() === 'music_level1_contract_state'
+      && clampInt(e?.barIndex, 0, 0) <= maxBarIndex
+    ))
+    .sort((a, b) => {
+      const barDelta = clampInt(a?.barIndex, 0, 0) - clampInt(b?.barIndex, 0, 0);
+      if (barDelta !== 0) return barDelta;
+      return clampInt(a?.beatIndex, 0, 0) - clampInt(b?.beatIndex, 0, 0);
+    });
+  const parseAllowedRoles = (ev) => new Set(
+    String(ev?.allowedRolesCsv || '').trim().toLowerCase()
+      .split(',')
+      .map((role) => String(role || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const contractByBar = new Map();
+  for (const ev of contractEvents) {
+    contractByBar.set(clampInt(ev?.barIndex, 0, 0), ev);
+  }
+  const getContractForBar = (() => {
+    let index = 0;
+    let current = null;
+    return (barIndex) => {
+      const safeBar = clampInt(barIndex, 0, 0);
+      while (
+        index < contractEvents.length
+        && clampInt(contractEvents[index]?.barIndex, 0, 0) <= safeBar
+      ) {
+        current = contractEvents[index];
+        index += 1;
+      }
+      return current;
+    };
+  })();
+  const consideredEvents = [];
+  let musicalEventCount = 0;
+  let roleViolationCount = 0;
+  let sparkleViolationCount = 0;
+  let answerViolationCount = 0;
+  const byRole = {};
+  const byLane = {};
+  const byReason = {};
+  const inc = (bucket, keyLike) => {
+    const key = String(keyLike || 'unknown').trim().toLowerCase() || 'unknown';
+    bucket[key] = Math.max(0, clampInt(bucket[key], 0, 0)) + 1;
+  };
+  const addViolation = (ev, roleId, contract, reason) => {
+    const sample = {
+      barIndex: clampInt(ev?.barIndex, 0, 0),
+      beatIndex: clampInt(ev?.beatIndex, 0, 0),
+      stepIndex: clampInt(ev?.stepIndex, 0, 0),
+      roleId,
+      musicLaneId: String(ev?.musicLaneId || '').trim().toLowerCase(),
+      musicLayer: String(ev?.musicLayer || '').trim().toLowerCase(),
+      musicVoiceKey: String(ev?.musicVoiceKey || '').trim().toLowerCase(),
+      callResponseLane: String(ev?.callResponseLane || '').trim().toLowerCase(),
+      actionType: String(ev?.actionType || '').trim().toLowerCase(),
+      sourceSystem: String(ev?.sourceSystem || '').trim().toLowerCase(),
+      allowedRoles: Array.from(parseAllowedRoles(contract)).sort(),
+      activeLevelPhase: String(contract?.activeLevelPhase || '').trim().toLowerCase(),
+      phaseVariant: String(contract?.phaseVariant || '').trim().toLowerCase(),
+      answerPolicy: String(contract?.answerPolicy || '').trim().toLowerCase(),
+      allowSparkle: contract?.allowSparkle === true,
+      reason,
+    };
+    if (consideredEvents.length < 24) consideredEvents.push(sample);
+    inc(byRole, roleId || 'unknown');
+    inc(byLane, sample.musicLaneId || 'unknown');
+    inc(byReason, reason || 'unknown');
+  };
+  const eventList = Array.isArray(events) ? events : [];
+  for (const ev of eventList) {
+    const barIndex = clampInt(ev?.barIndex, 0, 0);
+    if (barIndex > maxBarIndex) continue;
+    const phase = String(ev?.phase || '').trim().toLowerCase();
+    if (phase && phase !== 'executed') continue;
+    const sourceSystem = String(ev?.sourceSystem || '').trim().toLowerCase();
+    if (sourceSystem === 'player') continue;
+    const musicLaneId = String(ev?.musicLaneId || '').trim().toLowerCase();
+    const musicLayer = String(ev?.musicLayer || '').trim().toLowerCase();
+    const musicVoiceKey = String(ev?.musicVoiceKey || '').trim().toLowerCase();
+    const callResponseLane = String(ev?.callResponseLane || '').trim().toLowerCase();
+    const enemyAudible = ev?.enemyAudible === true;
+    const audioGain = Math.max(0, Number(ev?.audioGain) || Number(ev?.approxPlaybackVolume) || 0);
+    const musical = !!musicLaneId || !!musicLayer || !!musicVoiceKey || enemyAudible || audioGain > 0;
+    if (!musical) continue;
+    const contract = getContractForBar(barIndex);
+    if (!contract) continue;
+    const roleId = inferForegroundRoleId(ev);
+    if (!roleId || roleId === 'unknown') continue;
+    musicalEventCount += 1;
+    const allowedRoles = parseAllowedRoles(contract);
+    const nextBarContract = contractByBar.get(barIndex + 1) || null;
+    const allowedNextBar = nextBarContract ? parseAllowedRoles(nextBarContract).has(roleId) : false;
+    const isTransitionLeadGrace = roleId === 'lead_phrase'
+      && allowedNextBar
+      && String(contract?.activeLevelPhase || '').trim().toLowerCase() === 'groove_establish'
+      && String(nextBarContract?.activeLevelPhase || '').trim().toLowerCase() === 'lead_merge';
+    const isRoleAllowed = allowedRoles.has(roleId) || isTransitionLeadGrace;
+    if (!isRoleAllowed) {
+      roleViolationCount += 1;
+      addViolation(ev, roleId, contract, 'role_not_allowed');
+    }
+    const sparkleUsed = musicLaneId === 'sparkle_lane' || musicLayer === 'sparkle';
+    if (sparkleUsed && contract?.allowSparkle !== true) {
+      sparkleViolationCount += 1;
+      addViolation(ev, roleId, contract, 'sparkle_disabled');
+    }
+    const answerUsed = roleId === 'answer_ornament'
+      || musicVoiceKey === 'answer_ornament'
+      || musicLaneId === 'answer_lane';
+    if (answerUsed && contract?.contractAnswerActive !== true) {
+      answerViolationCount += 1;
+      addViolation(ev, roleId, contract, 'answer_disabled');
+    }
+  }
+  const violationCount = roleViolationCount + sparkleViolationCount + answerViolationCount;
+  return {
+    musicalEventCount,
+    violationCount,
+    roleViolationCount,
+    sparkleViolationCount,
+    answerViolationCount,
+    violationRate: musicalEventCount > 0 ? violationCount / musicalEventCount : 0,
+    passed: violationCount === 0,
+    byRole,
+    byLane,
+    byReason,
+    sample: consideredEvents,
   };
 }
 
@@ -4783,6 +4916,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const musicalityTargets = collectMusicalityTargets(session, maxBarIndex);
   const primaryLeadInstrumentChangeTrace = collectPrimaryLeadInstrumentChangeTrace(session, maxBarIndex);
   const level1ContractTrace = collectLevel1ContractTrace(session, maxBarIndex);
+  const level1ContractCompliance = collectLevel1ContractComplianceTrace(session, executedEvents, maxBarIndex);
   const visualRoleReadabilityTrace = collectVisualRoleReadabilityTrace(session, maxBarIndex);
   const metrics = {
     notePoolCompliance,
@@ -5044,6 +5178,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     musicalityTargets,
     primaryLeadInstrumentChangeTrace,
     level1ContractTrace,
+    level1ContractCompliance,
     visualRoleReadability: visualRoleReadabilityTrace,
     laneContinuityAssertionPassed: passDiagnostics?.ownershipContinuity?.laneContinuityAssertionPassed === true,
     laneContinuityAssertion: passDiagnostics?.ownershipContinuity && typeof passDiagnostics.ownershipContinuity === 'object'
@@ -5083,6 +5218,25 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       : {},
     level1ContractSample: Array.isArray(level1ContractTrace?.sample)
       ? level1ContractTrace.sample.slice(0, 24)
+      : [],
+    level1ContractCompliancePassed: level1ContractCompliance?.passed === true,
+    level1ContractMusicalEventCount: Number(level1ContractCompliance?.musicalEventCount) || 0,
+    level1ContractViolationCount: Number(level1ContractCompliance?.violationCount) || 0,
+    level1ContractViolationRate: Number(level1ContractCompliance?.violationRate) || 0,
+    level1ContractRoleViolationCount: Number(level1ContractCompliance?.roleViolationCount) || 0,
+    level1ContractSparkleViolationCount: Number(level1ContractCompliance?.sparkleViolationCount) || 0,
+    level1ContractAnswerViolationCount: Number(level1ContractCompliance?.answerViolationCount) || 0,
+    level1ContractViolationByRole: level1ContractCompliance?.byRole && typeof level1ContractCompliance.byRole === 'object'
+      ? { ...level1ContractCompliance.byRole }
+      : {},
+    level1ContractViolationByLane: level1ContractCompliance?.byLane && typeof level1ContractCompliance.byLane === 'object'
+      ? { ...level1ContractCompliance.byLane }
+      : {},
+    level1ContractViolationByReason: level1ContractCompliance?.byReason && typeof level1ContractCompliance.byReason === 'object'
+      ? { ...level1ContractCompliance.byReason }
+      : {},
+    level1ContractViolationSample: Array.isArray(level1ContractCompliance?.sample)
+      ? level1ContractCompliance.sample.slice(0, 24)
       : [],
     visualRoleReadabilityTraceCount: Number(visualRoleReadabilityTrace?.count) || 0,
     visualRoleFullTextureTraceCount: Number(visualRoleReadabilityTrace?.fullTextureCount) || 0,

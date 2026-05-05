@@ -1,6 +1,7 @@
 import {
   getBeatSwarmLevel1EpochId,
   getBeatSwarmLevel1RoleContract,
+  inferBeatSwarmLevel1RoleForCarrier,
 } from './beat-swarm-level1-contract.js';
 
 export function maintainComposerEnemyGroupsLifecycle(options = null) {
@@ -274,14 +275,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (!group) return 'support';
     const formationRole = String(group?.formationRole || '').trim().toLowerCase();
     if (formationRole) return formationRole;
-    const profileSourceType = normalizeComposerProfileSourceType(group?.musicProfileSourceType || group?.introSlotProfileSourceType);
-    const laneId = String(group?.musicLaneId || '').trim().toLowerCase();
-    const callResponseLane = String(group?.callResponseLane || '').trim().toLowerCase();
-    if (laneId === 'foundation_lane' || isFoundationBufferGroup(group) || isBassLikeGroup(group)) return 'foundation_groove';
-    if (profileSourceType === 'lead_melody' || laneId === 'primary_loop_lane') return 'lead_phrase';
-    if (profileSourceType === 'answer_ornament' || callResponseLane === 'response') return 'answer_ornament';
-    if (laneId === 'secondary_loop_lane') return 'counter_rhythm';
-    return 'support';
+    return inferBeatSwarmLevel1RoleForCarrier(group, 'support');
   };
   const getComposerRoleLifecyclePolicy = (role) => {
     const normalizedRole = String(role || '').trim().toLowerCase();

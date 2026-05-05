@@ -281,6 +281,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (key === 'sparkle_lane') return directorLanePlan.sparkle || null;
     return null;
   };
+  const sparkleLanePlan = getDirectorLanePlanForMusicLane('sparkle_lane');
+  const answerLanePlan = directorLanePlan && typeof directorLanePlan === 'object'
+    ? (directorLanePlan.answer || null)
+    : null;
+  const answerOrnamentAllowed = sparkleLanePlan?.active === true && answerLanePlan?.active === true;
   const primaryLoopLaneActive = primaryLoopLaneRuntime
     && typeof primaryLoopLaneRuntime === 'object'
     && (
@@ -1529,8 +1534,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const sparkleStepMod8 = stepIndex % 8;
   const sparkleBarPattern = ((barIndex % 4) + 4) % 4;
   const explicitSparkleCompanionWanted = (
+    answerOrnamentAllowed
+    && (
     (sparkleBarPattern === 0 && sparkleStepMod8 === 2)
     || (sparkleBarPattern === 3 && (sparkleStepMod8 === 2 || sparkleStepMod8 === 6))
+    )
   );
   const explicitSparkleCompanionEvent = (() => {
     if (!explicitSparkleCompanionWanted) return null;

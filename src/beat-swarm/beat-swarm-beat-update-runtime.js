@@ -32,9 +32,7 @@ export function handleTransportStoppedBeatUpdateRuntime(options = null) {
       lane.colourId = '';
       lane.continuityId = '';
       lane.lifetimeBars = 0;
-      lane.performerEnemyId = 0;
-      lane.performerGroupId = 0;
-      lane.performerType = '';
+      helpers.bindMusicLaneCarrier?.(lane, { performerEnemyId: 0, performerGroupId: 0, performerType: '' });
       lane.activeSinceBar = -1;
       lane.lastAssignedBar = -1;
     }

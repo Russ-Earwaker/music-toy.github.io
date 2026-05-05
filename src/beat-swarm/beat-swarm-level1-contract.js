@@ -12,6 +12,23 @@ export const BEAT_SWARM_LEVEL1_PHASE_SEQUENCE = Object.freeze([
   'full_texture',
 ]);
 
+export const BEAT_SWARM_LEVEL1_ROLE_BY_LANE_ID = Object.freeze({
+  foundation_lane: 'foundation_groove',
+  secondary_loop_lane: 'counter_rhythm',
+  primary_loop_lane: 'lead_phrase',
+  sparkle_lane: 'answer_ornament',
+});
+
+const BEAT_SWARM_LEVEL1_ROLE_BY_PROFILE_SOURCE_TYPE = Object.freeze({
+  lead_melody: 'lead_phrase',
+  answer_ornament: 'answer_ornament',
+  spawner_rhythm_pulse: 'foundation_groove',
+  secondary_bridge_backbeat: 'counter_rhythm',
+  spawner_rhythm_backbeat: 'counter_rhythm',
+  rhythm_lane: 'counter_rhythm',
+  rhythm_lane_backbeat: 'counter_rhythm',
+});
+
 function normalizeId(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -26,6 +43,57 @@ function normalizeLevel1Phase(value) {
 function clampInt(value, fallback = 0) {
   const n = Math.trunc(Number(value));
   return Number.isFinite(n) ? n : Math.trunc(Number(fallback) || 0);
+}
+
+export function getBeatSwarmLevel1RoleForLane(laneId = '') {
+  return BEAT_SWARM_LEVEL1_ROLE_BY_LANE_ID[normalizeId(laneId)] || '';
+}
+
+export function inferBeatSwarmLevel1RoleForCarrier(carrierLike = null, fallbackRole = 'counter_rhythm') {
+  const carrier = carrierLike && typeof carrierLike === 'object' ? carrierLike : {};
+  const laneRole = getBeatSwarmLevel1RoleForLane(carrier?.musicLaneId);
+  if (laneRole) return laneRole;
+  const callResponseLane = normalizeId(carrier?.callResponseLane);
+  if (callResponseLane === 'response') return 'answer_ornament';
+  const profile = normalizeId(carrier?.introSlotProfileSourceType || carrier?.musicProfileSourceType || '');
+  if (BEAT_SWARM_LEVEL1_ROLE_BY_PROFILE_SOURCE_TYPE[profile]) {
+    return BEAT_SWARM_LEVEL1_ROLE_BY_PROFILE_SOURCE_TYPE[profile];
+  }
+  const role = normalizeId(carrier?.role);
+  if (role === 'bass') return 'foundation_groove';
+  if (role === 'accent') return 'answer_ornament';
+  if (
+    normalizeId(carrier?.templateId) === 'foundation-buffer'
+    || normalizeId(carrier?.sectionId) === 'foundation-buffer'
+    || normalizeId(carrier?.sectionKey) === 'foundation-buffer'
+  ) return 'foundation_groove';
+  return normalizeId(fallbackRole) || 'counter_rhythm';
+}
+
+export function isBeatSwarmLevel1RoleEligibleForLane(roleId = '', laneId = '', eligibleRoles = null) {
+  const roles = Array.isArray(eligibleRoles) ? eligibleRoles.map(normalizeId).filter(Boolean) : [];
+  if (roles.length <= 0) return true;
+  const role = normalizeId(roleId);
+  if (role && roles.includes(role)) return true;
+  const laneRole = getBeatSwarmLevel1RoleForLane(laneId);
+  return !!laneRole && roles.includes(laneRole);
+}
+
+export function getBeatSwarmLevel1TargetCarrierCounts(input = null) {
+  const data = input && typeof input === 'object' ? input : {};
+  const activeLevelPhase = normalizeLevel1Phase(data.activeLevelPhase);
+  const phaseVariant = normalizeId(data.phaseVariant || 'default') || 'default';
+  const secondaryActive = (activeLevelPhase === 'groove_establish' && phaseVariant !== 'foundation_only')
+    || activeLevelPhase === 'lead_merge'
+    || activeLevelPhase === 'full_texture';
+  const primaryActive = activeLevelPhase === 'lead_merge' || activeLevelPhase === 'full_texture';
+  const ornamentActive = activeLevelPhase === 'full_texture' && phaseVariant !== 'no_ornament';
+  return Object.freeze({
+    foundation: 1,
+    secondary_loop_rhythm: secondaryActive ? 1 : 0,
+    primary_loop_lead: primaryActive ? 1 : 0,
+    ornament: ornamentActive ? 1 : 0,
+  });
 }
 
 export function getBeatSwarmLevel1EpochId(input = null) {
@@ -51,8 +119,8 @@ export function getBeatSwarmLevel1RoleContract(input = null) {
   const isGrooveEstablish = activeLevelPhase === 'groove_establish';
   const isDegradedFullTexture = isFullTexture && phaseVariant === 'no_ornament';
   const foundationAllowed = activeLevelPhase !== 'player_impact';
-  const counterRhythmAllowed = isGrooveEstablish || isFullTexture;
-  const leadPhraseAllowed = isFullTexture;
+  const counterRhythmAllowed = isGrooveEstablish || activeLevelPhase === 'lead_merge' || isFullTexture;
+  const leadPhraseAllowed = isFullTexture || activeLevelPhase === 'lead_merge';
 
   const roles = {
     foundation_groove: {

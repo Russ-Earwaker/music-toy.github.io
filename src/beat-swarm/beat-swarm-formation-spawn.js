@@ -4,6 +4,9 @@ import {
   buildBeatSwarmBehaviorScopeRuntime,
   selectBeatSwarmBehavioralFormationForRole,
 } from './beat-swarm-behavioral-formations.js';
+import {
+  inferBeatSwarmLevel1RoleForCarrier,
+} from './beat-swarm-level1-contract.js';
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
@@ -11,11 +14,6 @@ function clamp01(value) {
 
 function normalizeProfile(value = '') {
   return String(value || '').trim().toLowerCase();
-}
-
-function normalizeRole(value = '', fallback = 'lead') {
-  const raw = String(value || fallback || '').trim().toLowerCase();
-  return raw || String(fallback || 'lead').trim().toLowerCase();
 }
 
 function computeSeedOffset(runSeed = 0, barIndex = 0, salt = 0) {
@@ -55,28 +53,7 @@ function resolveBeatSwarmDirectorBehaviorAssignment(role = '', enemyDirectorRunt
 }
 
 export function inferBeatSwarmFormationRole(groupLike = null) {
-  const group = groupLike && typeof groupLike === 'object' ? groupLike : {};
-  const musicLaneId = String(group?.musicLaneId || '').trim().toLowerCase();
-  const callResponseLane = String(group?.callResponseLane || '').trim().toLowerCase();
-  const profile = normalizeProfile(group?.introSlotProfileSourceType || group?.musicProfileSourceType || '');
-  const role = normalizeRole(group?.role || '', 'lead');
-
-  if (musicLaneId === 'primary_loop_lane' || profile === 'lead_melody') return 'lead_phrase';
-  if (musicLaneId === 'sparkle_lane' || callResponseLane === 'response' || profile === 'answer_ornament') return 'answer_ornament';
-  if (
-    musicLaneId === 'foundation_lane'
-    || role === 'bass'
-    || String(group?.templateId || '').trim().toLowerCase() === 'foundation-buffer'
-    || profile === 'spawner_rhythm_pulse'
-  ) return 'foundation_groove';
-  if (
-    musicLaneId === 'secondary_loop_lane'
-    || profile === 'secondary_bridge_backbeat'
-    || profile === 'spawner_rhythm_backbeat'
-    || profile === 'rhythm_lane'
-    || profile === 'rhythm_lane_backbeat'
-  ) return 'counter_rhythm';
-  return role === 'accent' ? 'answer_ornament' : 'counter_rhythm';
+  return inferBeatSwarmLevel1RoleForCarrier(groupLike, 'counter_rhythm');
 }
 
 export function selectBeatSwarmFormationForRole(options = null) {

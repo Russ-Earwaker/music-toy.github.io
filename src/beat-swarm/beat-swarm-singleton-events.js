@@ -327,6 +327,20 @@ export function collectSpawnerStepBeatEvents(options = null) {
     ? options.musicModeRuntime
     : null;
   const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
+  const directorLanePlan = options?.directorLanePlan && typeof options.directorLanePlan === 'object'
+    ? options.directorLanePlan
+    : null;
+  const sparkleLaneActive = directorLanePlan?.sparkle?.active === true;
+  const coerceDirectorLaneId = (laneId) => (
+    !sparkleLaneActive && String(laneId || '').trim().toLowerCase() === 'sparkle_lane'
+      ? 'secondary_loop_lane'
+      : String(laneId || '').trim().toLowerCase()
+  );
+  const coerceDirectorLaneLayer = (layer) => (
+    !sparkleLaneActive && String(layer || '').trim().toLowerCase() === 'sparkle'
+      ? 'loops'
+      : String(layer || '').trim().toLowerCase()
+  );
   const getPerfNow = typeof options?.getPerfNow === 'function'
     ? options.getPerfNow
     : (() => (globalThis.performance?.now?.() ?? Date.now()));
@@ -519,12 +533,14 @@ export function collectSpawnerStepBeatEvents(options = null) {
         ? Math.max(introDrumLayerIndex === 0 ? 1 : 0.94, clamp01(baseAudioGain * percussionPresenceGain))
         : clamp01(baseAudioGain * percussionPresenceGain));
     const musicVoiceKey = String(enemy?.musicVoiceKey || '').trim().toLowerCase();
-    const explicitMusicLayer = musicVoiceKey === 'percussion_backbeat'
+    const explicitMusicLayerRaw = musicVoiceKey === 'percussion_backbeat'
       ? 'loops'
       : (musicVoiceKey === 'percussion_motion' ? 'sparkle' : 'foundation');
-    const explicitMusicLaneId = musicVoiceKey === 'percussion_backbeat'
+    const explicitMusicLaneIdRaw = musicVoiceKey === 'percussion_backbeat'
       ? 'secondary_loop_lane'
       : (musicVoiceKey === 'percussion_motion' ? 'sparkle_lane' : 'foundation_lane');
+    const explicitMusicLaneId = coerceDirectorLaneId(explicitMusicLaneIdRaw);
+    const explicitMusicLayer = coerceDirectorLaneLayer(explicitMusicLayerRaw);
     if (
       explicitMusicLaneId === 'secondary_loop_lane'
       && foundationLaneStep?.isActiveStep === true

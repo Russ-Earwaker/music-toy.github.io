@@ -3,7 +3,9 @@ import { screenToWorld, worldToScreen } from '../board-viewport.js';
 import { createBeatSwarmSpawnerRuntime, registerLoopgridSpawnerType } from './spawner-runtime.js';
 import {
   getBeatSwarmLevel1EpochId,
+  getBeatSwarmLevel1RoleForLane,
   getBeatSwarmLevel1RoleContract,
+  getBeatSwarmLevel1TargetCarrierCounts,
 } from './beat-swarm-level1-contract.js';
 import { DEFAULT_BPM, bpm as currentBpm, getLoopInfo, isRunning, setBpm, start as startTransport, stop as stopTransport } from '../audio-core.js';
 import { getInstrumentPlaybackMetadata, triggerInstrument } from '../audio-samples.js';
@@ -7943,7 +7945,8 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
         && secondaryLoopCarriersAvailable
         && structureIntent !== 'intro'
         && (!simplifiedFullTextureArrangement || level1AllowedRoles.has('counter_rhythm'))));
-  const primaryLoopActive = !explicitNegativeSpaceWindow
+  const primaryLoopActive = level1AllowedRoles.has('lead_phrase')
+    && !explicitNegativeSpaceWindow
     && energyState !== 'break'
     && !postBreakReentryWindow
     && !playerOnlyIntroWindow
@@ -18500,6 +18503,8 @@ function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
       full: BEAT_EVENT_THREAT.FULL,
     },
     styleProfile: getSwarmStyleProfile(),
+    musicLaneRuntime,
+    directorLanePlan: ensureSwarmDirector().getLanePlan?.() || null,
     laneDrivenFoundation: true,
     laneDrivenPrimaryLoop: true,
   });
@@ -19216,6 +19221,7 @@ function updateBeatWeapons(centerWorld) {
         composerBeatsPerBar: COMPOSER_BEATS_PER_BAR,
       },
       helpers: {
+        bindMusicLaneCarrier,
         hideSectionHeading,
         isRunning,
         resetEnergyGravityRuntime,
@@ -20305,14 +20311,7 @@ function evaluateBeatSwarmEventShowcaseReadiness(barIndex, beatIndex, introStage
     totalAlive += aliveMembers.length;
     const formationRole = String(group?.formationRole || '').trim().toLowerCase();
     const laneId = String(group?.musicLaneId || '').trim().toLowerCase();
-    const roleId = formationRole
-      || (laneId === 'foundation_lane'
-        ? 'foundation_groove'
-        : (laneId === 'primary_loop_lane'
-          ? 'lead_phrase'
-          : (laneId === 'secondary_loop_lane'
-            ? 'counter_rhythm'
-            : (laneId === 'sparkle_lane' ? 'answer_ornament' : ''))));
+    const roleId = formationRole || getBeatSwarmLevel1RoleForLane(laneId);
     if (roleId) readableRoles.add(roleId);
     if (laneId === 'secondary_loop_lane' && group?.isResponse !== true) secondaryPresent = true;
     if (laneId === 'primary_loop_lane') leadPresent = true;
@@ -20450,14 +20449,9 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
   if (activeLevelPhase === 'full_texture') {
     targetAliveMax = Math.min(targetAliveMax, phaseVariant === 'no_ornament' ? 3 : 4);
   }
-  const targetCarrierCounts = Object.freeze({
-    foundation: 1,
-    secondary_loop_rhythm: (activeLevelPhase === 'groove_establish' && phaseVariant !== 'foundation_only')
-      || activeLevelPhase === 'lead_merge'
-      || activeLevelPhase === 'full_texture'
-      ? 1 : 0,
-    primary_loop_lead: activeLevelPhase === 'lead_merge' || activeLevelPhase === 'full_texture' ? 1 : 0,
-    ornament: activeLevelPhase === 'full_texture' && phaseVariant !== 'no_ornament' ? 1 : 0,
+  const targetCarrierCounts = getBeatSwarmLevel1TargetCarrierCounts({
+    activeLevelPhase,
+    phaseVariant,
   });
   const desiredLaneRoles = [
     'foundation',
@@ -20657,11 +20651,7 @@ function getVisualReadabilityRoleIdForGroup(group = null) {
   const formationRole = String(group?.formationRole || '').trim().toLowerCase();
   if (formationRole) return formationRole;
   const laneId = String(group?.musicLaneId || '').trim().toLowerCase();
-  if (laneId === 'foundation_lane') return 'foundation_groove';
-  if (laneId === 'primary_loop_lane') return 'lead_phrase';
-  if (laneId === 'secondary_loop_lane') return 'counter_rhythm';
-  if (laneId === 'sparkle_lane') return 'answer_ornament';
-  return '';
+  return getBeatSwarmLevel1RoleForLane(laneId);
 }
 function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null) {
   const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));

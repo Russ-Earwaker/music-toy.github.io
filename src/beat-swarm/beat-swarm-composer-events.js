@@ -437,6 +437,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     : null;
   const directorWantsAnswerGroup = answerLanePlan?.active === true
     && String(answerLanePlan?.preferredCarrier || '').trim().toLowerCase() === 'group';
+  const answerOrnamentAllowed = answerLanePlan?.active === true;
+  const sparkleLanePlan = directorLanePlan && typeof directorLanePlan === 'object'
+    ? (directorLanePlan.sparkle || null)
+    : null;
+  const sparkleLaneAllowed = sparkleLanePlan?.active === true;
   const answerLaneIntensity = Math.max(0, Number(answerLanePlan?.intensity) || 0);
   const primaryLoopLanePlan = directorLanePlan && typeof directorLanePlan === 'object'
     ? (directorLanePlan.primary_loop || null)
@@ -2022,10 +2027,13 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         }) || fallbackAliveMembers[0] || null)
         : null;
       const fallbackActorId = Math.max(0, Math.trunc(Number(fallbackPerformer?.id) || 0));
-      const fallbackMusicLaneId = String(
+      let fallbackMusicLaneId = String(
         fallbackResponseGroup?.musicLaneId
           || (String(fallbackResponseGroup?.musicLaneLayer || '').trim().toLowerCase() === 'sparkle' ? 'sparkle_lane' : 'secondary_loop_lane')
       ).trim().toLowerCase() || 'secondary_loop_lane';
+      if (!sparkleLaneAllowed && fallbackMusicLaneId === 'sparkle_lane') {
+        fallbackMusicLaneId = 'secondary_loop_lane';
+      }
       const instrumentId = resolveSupportSafeInstrumentId(
         String(
           fallbackResponseGroup?.instrumentId
@@ -2199,7 +2207,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     }
   }
   const explicitOrnamentCompanionWanted = (
-    !emittedAnswerOrnamentThisStep
+    answerOrnamentAllowed
+    && sparkleLaneAllowed
+    && !emittedAnswerOrnamentThisStep
     && (activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture' || secondaryLoopProtected)
     && activePrimaryLoopLeadGroups.length > 0
     && (step === 2 || step === 6)
@@ -2292,7 +2302,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     });
   }
   const directAnswerOrnamentWanted = (
-    (strongLeadWindowActive || secondaryLoopProtected)
+    answerOrnamentAllowed
+    && sparkleLaneAllowed
+    && (strongLeadWindowActive || secondaryLoopProtected)
     && activePrimaryLoopLeadGroups.length > 0
   );
   if (directAnswerOrnamentWanted && !emittedAnswerOrnamentThisStep) {

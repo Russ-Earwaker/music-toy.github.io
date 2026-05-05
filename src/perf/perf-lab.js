@@ -2157,6 +2157,13 @@ function summarizeMusicLabSessionPayload(payload) {
       laneSystemVoiceFallbacks: readMusicLabMetric(payload, 'laneSystemVoiceFallbacks'),
       laneVacantFallbacks: readMusicLabMetric(payload, 'laneVacantFallbacks'),
       protectedLaneVacantFallbacks: readMusicLabMetric(payload, 'protectedLaneVacantFallbacks'),
+      level1ContractCompliancePassed: payload?.metrics?.level1ContractCompliancePassed === true,
+      level1ContractMusicalEventCount: readMusicLabMetric(payload, 'level1ContractMusicalEventCount'),
+      level1ContractViolationCount: readMusicLabMetric(payload, 'level1ContractViolationCount'),
+      level1ContractViolationRate: readMusicLabMetric(payload, 'level1ContractViolationRate'),
+      level1ContractRoleViolationCount: readMusicLabMetric(payload, 'level1ContractRoleViolationCount'),
+      level1ContractSparkleViolationCount: readMusicLabMetric(payload, 'level1ContractSparkleViolationCount'),
+      level1ContractAnswerViolationCount: readMusicLabMetric(payload, 'level1ContractAnswerViolationCount'),
     },
     laneContinuityAssertion: laneContinuityAssertion ? cloneSmallObject(laneContinuityAssertion) : null,
     visualRoleReadability: visualRoleReadability
