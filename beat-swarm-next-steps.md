@@ -187,6 +187,122 @@ Next work should continue moving older direct ownership paths through this contr
 - do not add more lane density to hide missing transfer logic
 - do not make special enemy families required for musical legibility
 
+## New Active Concept - Level 1 Arrangement State Runtime
+
+The next musical abstraction should be explicit arrangement energy control.
+
+The important shift is:
+
+> roles should not own one fixed behavior; roles should respond to a shared arrangement state.
+
+Current direction:
+
+```txt
+music style
++ level phase
++ authored phrase/section timing
++ combat pressure
++ player performance
+= current arrangement state
+```
+
+That arrangement state should then influence:
+
+- foundation pattern weight
+- counter-rhythm density and syncopation
+- lead contour, cadence strength, and melodic activity
+- answer/ornament admission
+- visual presentation weight
+- spawn/carrier embodiment bias
+- section transition shape
+
+First-pass runtime shape:
+
+```js
+level1ArrangementState = {
+  energy: 0.0,
+  layering: 0.0,
+  rhythmicComplexity: 0.0,
+  melodicActivity: 0.0,
+  ornamentation: 0.0,
+  stability: 1.0,
+  phraseIntent: "body" // intro / build / body / cadence / recovery
+};
+```
+
+Initial implementation rule:
+
+> add one shared Level 1 arrangement state, then make existing composer choices consume it.
+
+Do not start by building broad style packs, a general-purpose adaptive music brain, or many new knobs.
+The first pass should remain Level 1-specific and measurable.
+
+### Why This Matters
+
+This lets the director control musical shape without handing music ownership back to enemies.
+
+Examples:
+
+- high `stability` means motif persistence, fewer role changes, clearer readability
+- higher `layering` means foundation + counter-rhythm + lead + limited ornament
+- higher `rhythmicComplexity` means more offbeat support or syncopated punctuation
+- higher `melodicActivity` means denser or more assertive lead contours
+- `phraseIntent = "cadence"` means stronger resolution and section punctuation
+- `phraseIntent = "recovery"` means thinning and breathing space after a high-density phrase
+
+Important rule:
+
+> gameplay pressure and arrangement energy may influence each other, but they are not the same signal.
+
+This preserves authored contrast, such as calm music during dangerous play or a musical release after a combat spike.
+
+### First Implementation Target
+
+Add a small resolver, likely near the music mode/director layer, that computes one arrangement state per bar or phrase.
+
+Inputs should be conservative:
+
+- active Level 1 phase / music mode
+- current bar and phrase position
+- section/cadence window
+- player/combat pressure summary
+- current readability constraints
+
+Outputs should be consumed by existing systems:
+
+- `beat-swarm-mode.js` for mode and lane-plan state
+- `beat-swarm-composer-maintenance.js` for shared carrier profiles and section shaping
+- `beat-swarm-composer-events.js` for event admission, cadence strength, and support restraint
+- `beat-swarm-music-lab.js` for metrics/debug
+
+### First Acceptance Signals
+
+Music Lab should expose:
+
+- arrangement-state samples by bar/phase
+- phrase intent counts
+- energy/layering/rhythmic-complexity ranges
+- lead contour distribution by phrase intent
+- ornament admission by phrase intent
+- readability by arrangement state
+
+The first pass succeeds if:
+
+- contract compliance remains clean
+- phrase resolution stays high
+- intro structure remains intact
+- `pickup`, `body`, and `cadence` sections remain visible in lead variation
+- support/ornament density follows arrangement state instead of local ad hoc gates
+- HP-section readability remains stable across `1x`, `1.5x`, and `2x`
+
+Non-goals for the first pass:
+
+- do not implement style packs yet
+- do not add broad harmonic/tension systems yet
+- do not let combat intensity directly equal music intensity
+- do not make arrangement state another lane ownership path
+- do not expand voice count just to make energy feel higher
+
 ## What We Are Currently Doing
 
 Active runtime focus:

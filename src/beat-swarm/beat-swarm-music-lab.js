@@ -215,6 +215,8 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const leadCadenceVariant = clampInt(context?.leadCadenceVariant ?? payload?.leadCadenceVariant, 0, 0);
   const sectionTransitionRole = String(context?.sectionTransitionRole ?? payload?.sectionTransitionRole ?? '').trim().toLowerCase();
   const sectionArcEpoch = clampInt(context?.sectionArcEpoch ?? payload?.sectionArcEpoch, 0, 0);
+  const arrangementSupportIntent = String(context?.arrangementSupportIntent ?? payload?.arrangementSupportIntent ?? '').trim().toLowerCase();
+  const arrangementSupportStepBudget = clampInt(context?.arrangementSupportStepBudget ?? payload?.arrangementSupportStepBudget, 0, 0);
   const foundationPatternKey = String(context?.foundationPatternKey ?? payload?.foundationPatternKey ?? '').trim().toLowerCase();
   const foundationPhraseId = String(context?.foundationPhraseId ?? payload?.foundationPhraseId ?? '').trim().toLowerCase();
   return {
@@ -271,6 +273,8 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     leadCadenceVariant,
     sectionTransitionRole,
     sectionArcEpoch,
+    arrangementSupportIntent,
+    arrangementSupportStepBudget,
     foundationPatternKey,
     foundationPhraseId,
     audioGain: Number(context?.audioGain ?? payload?.audioGain) || 0,
@@ -640,6 +644,18 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     contractSparkleActive: payload?.contractSparkleActive === true,
     contractSupportActive: payload?.contractSupportActive === true,
     contractAnswerActive: payload?.contractAnswerActive === true,
+    phraseIntent: String(payload?.phraseIntent || '').trim().toLowerCase(),
+    arrangementEnergy: Number(payload?.energy ?? payload?.arrangementEnergy) || 0,
+    arrangementLayering: Number(payload?.layering ?? payload?.arrangementLayering) || 0,
+    arrangementRhythmicComplexity: Number(payload?.rhythmicComplexity ?? payload?.arrangementRhythmicComplexity) || 0,
+    arrangementMelodicActivity: Number(payload?.melodicActivity ?? payload?.arrangementMelodicActivity) || 0,
+    arrangementOrnamentation: Number(payload?.ornamentation ?? payload?.arrangementOrnamentation) || 0,
+    arrangementStability: Number(payload?.stability ?? payload?.arrangementStability) || 0,
+    arrangementSectionIntent: String(payload?.sectionIntent || '').trim().toLowerCase(),
+    arrangementTensionProfile: String(payload?.tensionProfile || '').trim().toLowerCase(),
+    arrangementSupportPatternBudget: String(payload?.supportPatternBudget || '').trim().toLowerCase(),
+    arrangementCombatPressure: Number(payload?.combatPressure) || 0,
+    arrangementMusicalPressure: Number(payload?.musicalPressure) || 0,
     phaseValidity: String(payload?.phaseValidity || '').trim().toLowerCase(),
     phaseEnteredBar: clampInt(payload?.phaseEnteredBar, -1, -1),
     earliestTransitionBar: clampInt(payload?.earliestTransitionBar, 0, 0),
@@ -3476,7 +3492,9 @@ function collectLeadVariationTrace(events) {
   const bySectionTransitionRole = {};
   const bySectionArcEpoch = {};
   const inc = (target, keyLike) => {
-    const key = String(keyLike || '').trim().toLowerCase() || 'unknown';
+    const key = keyLike == null
+      ? 'unknown'
+      : (String(keyLike).trim().toLowerCase() || 'unknown');
     target[key] = (target[key] || 0) + 1;
   };
   for (const ev of leadEvents) {
@@ -3540,6 +3558,43 @@ function collectFoundationVariationTrace(events) {
       note: String(ev?.noteResolved || ev?.note || '').trim(),
       foundationPatternKey: String(ev?.foundationPatternKey || '').trim().toLowerCase(),
       foundationPhraseId: String(ev?.foundationPhraseId || '').trim().toLowerCase(),
+    })),
+  };
+}
+
+function collectArrangementSupportTrace(events) {
+  const supportEvents = (Array.isArray(events) ? events : []).filter((ev) => {
+    const laneId = String(ev?.musicLaneId || '').trim().toLowerCase();
+    const profile = String(ev?.musicProfileSourceType || '').trim().toLowerCase();
+    const intent = String(ev?.arrangementSupportIntent || '').trim().toLowerCase();
+    return !!intent || laneId === 'secondary_loop_lane' || profile === 'secondary_bridge_backbeat' || profile === 'rhythm_lane';
+  });
+  const byIntent = {};
+  const byStepBudget = {};
+  const byProfileSourceType = {};
+  const inc = (target, keyLike) => {
+    const key = keyLike == null
+      ? 'unknown'
+      : (String(keyLike).trim().toLowerCase() || 'unknown');
+    target[key] = (target[key] || 0) + 1;
+  };
+  for (const ev of supportEvents) {
+    inc(byIntent, ev?.arrangementSupportIntent);
+    inc(byStepBudget, ev?.arrangementSupportStepBudget);
+    inc(byProfileSourceType, ev?.musicProfileSourceType);
+  }
+  return {
+    count: supportEvents.length,
+    byIntent,
+    byStepBudget,
+    byProfileSourceType,
+    sample: supportEvents.slice(0, 24).map((ev) => ({
+      barIndex: clampInt(ev?.barIndex, 0, 0),
+      stepIndex: clampInt(ev?.stepIndex, 0, 0),
+      musicLaneId: String(ev?.musicLaneId || '').trim().toLowerCase(),
+      musicProfileSourceType: String(ev?.musicProfileSourceType || '').trim().toLowerCase(),
+      arrangementSupportIntent: String(ev?.arrangementSupportIntent || '').trim().toLowerCase(),
+      arrangementSupportStepBudget: clampInt(ev?.arrangementSupportStepBudget, 0, 0),
     })),
   };
 }
@@ -4499,6 +4554,101 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
   };
 }
 
+function collectLevel1ArrangementTrace(session, maxBarIndex) {
+  const events = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => (
+      String(e?.eventType || '').trim().toLowerCase() === 'music_level1_arrangement_state'
+      && clampInt(e?.barIndex, 0, 0) <= maxBarIndex
+    ))
+    .sort((a, b) => {
+      const barDelta = clampInt(a?.barIndex, 0, 0) - clampInt(b?.barIndex, 0, 0);
+      if (barDelta !== 0) return barDelta;
+      return clampInt(a?.beatIndex, 0, 0) - clampInt(b?.beatIndex, 0, 0);
+    });
+  const inc = (bucket, keyLike) => {
+    const key = String(keyLike || 'unknown').trim().toLowerCase() || 'unknown';
+    bucket[key] = Math.max(0, clampInt(bucket[key], 0, 0)) + 1;
+  };
+  const numericFields = [
+    'arrangementEnergy',
+    'arrangementLayering',
+    'arrangementRhythmicComplexity',
+    'arrangementMelodicActivity',
+    'arrangementOrnamentation',
+    'arrangementStability',
+  ];
+  const stats = {};
+  for (const field of numericFields) {
+    stats[field] = {
+      min: Number.POSITIVE_INFINITY,
+      max: Number.NEGATIVE_INFINITY,
+      total: 0,
+      count: 0,
+    };
+  }
+  const byPhraseIntent = {};
+  const byPhase = {};
+  const byMode = {};
+  const bySectionIntent = {};
+  const byTensionProfile = {};
+  const bySupportBudget = {};
+  for (const ev of events) {
+    inc(byPhraseIntent, ev?.phraseIntent);
+    inc(byPhase, ev?.activeLevelPhase);
+    inc(byMode, ev?.activeMusicMode);
+    inc(bySectionIntent, ev?.arrangementSectionIntent);
+    inc(byTensionProfile, ev?.arrangementTensionProfile);
+    inc(bySupportBudget, ev?.arrangementSupportPatternBudget);
+    for (const field of numericFields) {
+      const value = Number(ev?.[field]) || 0;
+      stats[field].min = Math.min(stats[field].min, value);
+      stats[field].max = Math.max(stats[field].max, value);
+      stats[field].total += value;
+      stats[field].count += 1;
+    }
+  }
+  const summarize = (field) => {
+    const s = stats[field];
+    if (!s || s.count <= 0) return { min: 0, max: 0, avg: 0 };
+    return {
+      min: Number(s.min.toFixed(4)),
+      max: Number(s.max.toFixed(4)),
+      avg: Number((s.total / s.count).toFixed(4)),
+    };
+  };
+  return {
+    count: events.length,
+    byPhraseIntent,
+    byPhase,
+    byMode,
+    bySectionIntent,
+    byTensionProfile,
+    bySupportBudget,
+    energy: summarize('arrangementEnergy'),
+    layering: summarize('arrangementLayering'),
+    rhythmicComplexity: summarize('arrangementRhythmicComplexity'),
+    melodicActivity: summarize('arrangementMelodicActivity'),
+    ornamentation: summarize('arrangementOrnamentation'),
+    stability: summarize('arrangementStability'),
+    sample: events.slice(0, 24).map((ev) => ({
+      barIndex: clampInt(ev?.barIndex, 0, 0),
+      beatIndex: clampInt(ev?.beatIndex, 0, 0),
+      activeLevelPhase: String(ev?.activeLevelPhase || '').trim().toLowerCase(),
+      activeMusicMode: String(ev?.activeMusicMode || '').trim().toLowerCase(),
+      phraseIntent: String(ev?.phraseIntent || '').trim().toLowerCase(),
+      sectionIntent: String(ev?.arrangementSectionIntent || '').trim().toLowerCase(),
+      tensionProfile: String(ev?.arrangementTensionProfile || '').trim().toLowerCase(),
+      supportPatternBudget: String(ev?.arrangementSupportPatternBudget || '').trim().toLowerCase(),
+      energy: Number(ev?.arrangementEnergy) || 0,
+      layering: Number(ev?.arrangementLayering) || 0,
+      rhythmicComplexity: Number(ev?.arrangementRhythmicComplexity) || 0,
+      melodicActivity: Number(ev?.arrangementMelodicActivity) || 0,
+      ornamentation: Number(ev?.arrangementOrnamentation) || 0,
+      stability: Number(ev?.arrangementStability) || 0,
+    })),
+  };
+}
+
 function collectLevel1ContractComplianceTrace(session, events, maxBarIndex) {
   const contractEvents = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
     .filter((e) => (
@@ -4949,6 +5099,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const phraseGravity = collectPhraseGravity(executedEvents);
   const leadVariation = collectLeadVariationTrace(executedEvents);
   const foundationVariation = collectFoundationVariationTrace(executedEvents);
+  const arrangementSupport = collectArrangementSupportTrace(executedEvents);
   const playerWeaponTiming = collectPlayerWeaponTiming(session, maxBarIndex);
   const createdEvents = (Array.isArray(session?.events) ? session.events : [])
     .filter((e) => String(e?.phase || '').trim().toLowerCase() === 'created' && clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
@@ -5023,6 +5174,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const musicalityTargets = collectMusicalityTargets(session, maxBarIndex);
   const primaryLeadInstrumentChangeTrace = collectPrimaryLeadInstrumentChangeTrace(session, maxBarIndex);
   const level1ContractTrace = collectLevel1ContractTrace(session, maxBarIndex);
+  const level1ArrangementTrace = collectLevel1ArrangementTrace(session, maxBarIndex);
   const level1ContractCompliance = collectLevel1ContractComplianceTrace(session, executedEvents, maxBarIndex);
   const visualRoleReadabilityTrace = collectVisualRoleReadabilityTrace(session, maxBarIndex);
   const metrics = {
@@ -5035,6 +5187,20 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     phraseGravity,
     leadVariation,
     foundationVariation,
+    arrangementSupport,
+    arrangementSupportCount: Number(arrangementSupport?.count) || 0,
+    arrangementSupportByIntent: arrangementSupport?.byIntent && typeof arrangementSupport.byIntent === 'object'
+      ? { ...arrangementSupport.byIntent }
+      : {},
+    arrangementSupportByStepBudget: arrangementSupport?.byStepBudget && typeof arrangementSupport.byStepBudget === 'object'
+      ? { ...arrangementSupport.byStepBudget }
+      : {},
+    arrangementSupportByProfileSourceType: arrangementSupport?.byProfileSourceType && typeof arrangementSupport.byProfileSourceType === 'object'
+      ? { ...arrangementSupport.byProfileSourceType }
+      : {},
+    arrangementSupportSample: Array.isArray(arrangementSupport?.sample)
+      ? arrangementSupport.sample.slice(0, 24)
+      : [],
     playerWeaponTiming,
     playerWeaponTimingCount: Number(playerWeaponTiming?.count) || 0,
     playerWeaponTimingAvgAbsOffsetMs: Number(playerWeaponTiming?.avgAbsOffsetMs) || 0,
@@ -5287,6 +5453,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     musicalityTargets,
     primaryLeadInstrumentChangeTrace,
     level1ContractTrace,
+    level1ArrangementTrace,
     level1ContractCompliance,
     visualRoleReadability: visualRoleReadabilityTrace,
     laneContinuityAssertionPassed: passDiagnostics?.ownershipContinuity?.laneContinuityAssertionPassed === true,
@@ -5330,6 +5497,25 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       : {},
     level1ContractSample: Array.isArray(level1ContractTrace?.sample)
       ? level1ContractTrace.sample.slice(0, 24)
+      : [],
+    level1ArrangementTraceCount: Number(level1ArrangementTrace?.count) || 0,
+    level1ArrangementByPhraseIntent: level1ArrangementTrace?.byPhraseIntent && typeof level1ArrangementTrace.byPhraseIntent === 'object'
+      ? { ...level1ArrangementTrace.byPhraseIntent }
+      : {},
+    level1ArrangementByPhase: level1ArrangementTrace?.byPhase && typeof level1ArrangementTrace.byPhase === 'object'
+      ? { ...level1ArrangementTrace.byPhase }
+      : {},
+    level1ArrangementByMode: level1ArrangementTrace?.byMode && typeof level1ArrangementTrace.byMode === 'object'
+      ? { ...level1ArrangementTrace.byMode }
+      : {},
+    level1ArrangementEnergy: level1ArrangementTrace?.energy || { min: 0, max: 0, avg: 0 },
+    level1ArrangementLayering: level1ArrangementTrace?.layering || { min: 0, max: 0, avg: 0 },
+    level1ArrangementRhythmicComplexity: level1ArrangementTrace?.rhythmicComplexity || { min: 0, max: 0, avg: 0 },
+    level1ArrangementMelodicActivity: level1ArrangementTrace?.melodicActivity || { min: 0, max: 0, avg: 0 },
+    level1ArrangementOrnamentation: level1ArrangementTrace?.ornamentation || { min: 0, max: 0, avg: 0 },
+    level1ArrangementStability: level1ArrangementTrace?.stability || { min: 0, max: 0, avg: 0 },
+    level1ArrangementSample: Array.isArray(level1ArrangementTrace?.sample)
+      ? level1ArrangementTrace.sample.slice(0, 24)
       : [],
     level1ContractCompliancePassed: level1ContractCompliance?.passed === true,
     level1ContractMusicalEventCount: Number(level1ContractCompliance?.musicalEventCount) || 0,

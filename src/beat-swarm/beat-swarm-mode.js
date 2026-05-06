@@ -7789,6 +7789,95 @@ function getCallResponseWindowSteps() {
   const arrangement = getPaletteArrangementControls();
   return Math.max(1, Math.trunc(Math.round(base * (0.8 + (arrangement.accentStrength * 0.4)))));
 }
+function resolveLevel1ArrangementPhraseIntent(options = {}) {
+  const phase = String(options?.activeLevelPhase || '').trim().toLowerCase();
+  const structureIntent = String(options?.structureIntent || '').trim().toLowerCase();
+  const explicitRecoveryWindow = options?.explicitRecoveryWindow === true
+    || options?.breakDropWindow === true
+    || options?.breakRebuildWindow === true
+    || options?.postBreakRecoveryWindow === true
+    || options?.preDropNegativeSpaceWindow === true;
+  if (phase === 'intro_teach' || phase === 'groove_establish' || structureIntent === 'intro') return 'intro';
+  if (options?.driveAnswerCadenceWindow === true) return 'cadence';
+  if (explicitRecoveryWindow) return 'recovery';
+  if (options?.tensionWindow === true || phase === 'lead_merge') return 'build';
+  return 'body';
+}
+function buildLevel1ArrangementState(options = {}) {
+  const activeLevelPhase = String(options?.activeLevelPhase || '').trim().toLowerCase() || 'intro_teach';
+  const activeMusicMode = String(options?.activeMusicMode || '').trim().toLowerCase() || 'intro_pulse';
+  const phraseIntent = resolveLevel1ArrangementPhraseIntent(options);
+  const supportPolicy = options?.level1SupportPolicy && typeof options.level1SupportPolicy === 'object'
+    ? options.level1SupportPolicy
+    : {};
+  const supportBudget = String(supportPolicy.supportPatternBudget || '').trim().toLowerCase();
+  const musicalPressure = clamp01(Number(options?.musicalPressure) || 0);
+  const combatPressure = clamp01(Number(options?.combatPressure) || 0);
+  const fullTexture = activeLevelPhase === 'full_texture' || activeMusicMode === 'full_texture';
+  const leadMerge = activeLevelPhase === 'lead_merge';
+  const intro = phraseIntent === 'intro';
+  const build = phraseIntent === 'build';
+  const cadence = phraseIntent === 'cadence';
+  const recovery = phraseIntent === 'recovery';
+  const supportComplexity = supportBudget === 'high' ? 0.18 : (supportBudget === 'medium' ? 0.1 : 0.02);
+  const energy = clamp01(
+    (musicalPressure * 0.68)
+    + (combatPressure * 0.18)
+    + (build ? 0.08 : 0)
+    + (cadence ? 0.05 : 0)
+    - (recovery ? 0.14 : 0)
+    - (intro ? 0.1 : 0)
+  );
+  const layering = clamp01(
+    (intro ? 0.22 : (leadMerge ? 0.56 : (fullTexture ? 0.74 : 0.48)))
+    + (supportBudget === 'high' ? 0.08 : 0)
+    - (recovery ? 0.2 : 0)
+    - (cadence ? 0.06 : 0)
+  );
+  const rhythmicComplexity = clamp01(
+    (intro ? 0.18 : (fullTexture ? 0.42 : 0.34))
+    + supportComplexity
+    + (options?.tensionWindow === true ? 0.08 : 0)
+    - (recovery ? 0.16 : 0)
+  );
+  const melodicActivity = clamp01(
+    (intro ? 0.1 : (leadMerge ? 0.58 : (fullTexture ? 0.68 : 0.42)))
+    + (cadence ? 0.12 : 0)
+    + (build ? 0.06 : 0)
+    - (recovery ? 0.16 : 0)
+  );
+  const ornamentation = clamp01(
+    (cadence ? 0.38 : 0.08)
+    + (supportPolicy.allowSparkle === true ? 0.08 : 0)
+    + (fullTexture ? 0.04 : 0)
+    - (intro ? 0.08 : 0)
+    - (recovery ? 0.1 : 0)
+  );
+  const stability = clamp01(
+    (options?.stableWindow === true ? 0.82 : 0.62)
+    - (build ? 0.12 : 0)
+    - (cadence ? 0.1 : 0)
+    - (recovery ? 0.08 : 0)
+    + (intro ? 0.1 : 0)
+  );
+  return {
+    activeLevelPhase,
+    activeMusicMode,
+    phraseIntent,
+    energy,
+    layering,
+    rhythmicComplexity,
+    melodicActivity,
+    ornamentation,
+    stability,
+    sectionIntent: String(options?.structureIntent || '').trim().toLowerCase(),
+    tensionProfile: String(options?.tensionProfile || '').trim().toLowerCase(),
+    supportPatternBudget: supportBudget,
+    barIndex: Math.max(0, Math.trunc(Number(options?.barIndex) || 0)),
+    combatPressure,
+    musicalPressure,
+  };
+}
 function buildDirectorLanePlanForBar(barIndex = 0) {
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const beatIndex = bar * Math.max(1, COMPOSER_BEATS_PER_BAR);
@@ -7908,6 +7997,25 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
   const level1SupportPolicy = level1RoleContract?.supportPolicy && typeof level1RoleContract.supportPolicy === 'object'
     ? level1RoleContract.supportPolicy
     : {};
+  const level1ArrangementState = buildLevel1ArrangementState({
+    activeLevelPhase,
+    activeMusicMode: String(activeMusicModeRuntime?.activeMusicMode || '').trim().toLowerCase(),
+    structureIntent,
+    tensionProfile,
+    stableWindow,
+    tensionWindow,
+    releaseWindow,
+    explicitRecoveryWindow: preDropNegativeSpaceWindow || breakDropWindow || breakRebuildWindow || postBreakRecoveryWindow,
+    breakDropWindow,
+    breakRebuildWindow,
+    postBreakRecoveryWindow,
+    preDropNegativeSpaceWindow,
+    driveAnswerCadenceWindow,
+    combatPressure,
+    musicalPressure,
+    level1SupportPolicy,
+    barIndex: bar,
+  });
   const answerLaneId = 'secondary_loop_lane';
   const answerFamily = activeLevelPhase === 'full_texture'
     ? 'echo'
@@ -7988,6 +8096,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       intensity: applyIntroRampIntensity(Math.min(
         0.78,
         (introFoundationWindow ? 0.52 : (structureIntent === 'peak' ? 0.58 : (simplifiedFullTextureArrangement ? 0.22 : 0.46)))
+        + ((level1ArrangementState.rhythmicComplexity - 0.35) * 0.1)
         + (motifReturnActive ? 0.1 : 0)
         - (preDropNegativeSpaceWindow ? 0.14 : 0)
         - (breakRebuildWindow ? 0.04 : 0)
@@ -8004,6 +8113,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       intensity: applyIntroRampIntensity(Math.min(
         0.88,
         primaryLoopIntensity
+        + ((level1ArrangementState.melodicActivity - 0.5) * 0.08)
         + (motifReturnActive ? 0.12 : 0)
         - (preDropNegativeSpaceWindow ? 0.18 : 0)
         - (postBreakRecoveryWindow ? 0.12 : 0)
@@ -8052,8 +8162,8 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
         degradedFullTextureOrnamentRecovery
           ? 0.12
           : (strongPrimaryLoopWindow
-            ? 0.14
-            : (stableWindow ? 0.18 : 0.24)),
+            ? (0.13 + (level1ArrangementState.ornamentation * 0.05))
+            : ((stableWindow ? 0.16 : 0.21) + (level1ArrangementState.ornamentation * 0.08))),
         0.05,
         degradedFullTextureOrnamentRecovery ? 0.16 : 0.24
       ),
@@ -8068,7 +8178,11 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       tensionProfile,
       introIntensityScale,
       introStage,
+      arrangementEnergy: level1ArrangementState.energy,
+      arrangementLayering: level1ArrangementState.layering,
+      arrangementPhraseIntent: level1ArrangementState.phraseIntent,
     },
+    __arrangementState: level1ArrangementState,
     __level1Contract: {
       activeLevelPhase,
       activeMusicMode: String(activeMusicModeRuntime?.activeMusicMode || '').trim().toLowerCase(),
@@ -8099,6 +8213,9 @@ function publishDirectorLanePlanForBar(barIndex = 0) {
   const director = ensureSwarmDirector();
   const plan = buildDirectorLanePlanForBar(barIndex);
   const pressureState = plan.__pressure && typeof plan.__pressure === 'object' ? plan.__pressure : {};
+  const level1ArrangementState = plan.__arrangementState && typeof plan.__arrangementState === 'object'
+    ? plan.__arrangementState
+    : null;
   const level1ContractState = plan.__level1Contract && typeof plan.__level1Contract === 'object'
     ? plan.__level1Contract
     : null;
@@ -8109,9 +8226,25 @@ function publishDirectorLanePlanForBar(barIndex = 0) {
   const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
   applyBeatSwarmDirectorPressureCleanup(activeEnemyDirectorRuntime, activeLevelPhaseRuntime, barIndex);
   delete plan.__pressure;
+  delete plan.__arrangementState;
   delete plan.__level1Contract;
   director.setLanePlan(plan);
   director.setPressureState(pressureState);
+  if (level1ArrangementState) {
+    musicModeRuntime.level1ArrangementState = { ...level1ArrangementState };
+  }
+  if (
+    level1ArrangementState
+    && Math.max(0, Math.trunc(Number(barIndex) || 0)) !== Math.max(-1, Math.trunc(Number(musicModeRuntime?.lastLevel1ArrangementTraceBar) || -1))
+  ) {
+    musicModeRuntime.lastLevel1ArrangementTraceBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+    try {
+      noteMusicSystemEvent?.('music_level1_arrangement_state', level1ArrangementState, {
+        beatIndex,
+        barIndex: Math.max(0, Math.trunc(Number(barIndex) || 0)),
+      });
+    } catch {}
+  }
   if (
     level1ContractState
     && Math.max(0, Math.trunc(Number(barIndex) || 0)) !== Math.max(-1, Math.trunc(Number(musicModeRuntime?.lastLevel1ContractTraceBar) || -1))
@@ -8903,6 +9036,9 @@ const musicModeRuntime = {
   activeLevelPhase: 'intro_teach',
   phaseVariant: 'default',
   phaseValidity: 'valid',
+  level1ArrangementState: null,
+  lastLevel1ArrangementTraceBar: -1,
+  lastLevel1ContractTraceBar: -1,
 };
 const levelPhaseRuntime = {
   activeLevelPhase: 'intro_teach',
@@ -10693,6 +10829,9 @@ function startMusicLabSession(reason = 'unknown') {
   musicModeRuntime.activeLevelPhase = 'intro_teach';
   musicModeRuntime.phaseVariant = 'default';
   musicModeRuntime.phaseValidity = 'valid';
+  musicModeRuntime.level1ArrangementState = null;
+  musicModeRuntime.lastLevel1ArrangementTraceBar = -1;
+  musicModeRuntime.lastLevel1ContractTraceBar = -1;
   enemyDirectorRuntime.activeDirectorPhase = 'intro';
   enemyDirectorRuntime.targetPressure = 0;
   enemyDirectorRuntime.targetAliveMin = 0;

@@ -467,6 +467,50 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     : 1;
   const callCadenceRestSteps = 1;
   const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
+  const getPrimaryLeadTraceFallback = () => {
+    const arrangementPhraseIntent = String(musicModeRuntime?.level1ArrangementState?.phraseIntent || '').trim().toLowerCase();
+    const sectionBar = Math.max(0, Math.trunc(Math.max(0, barIndex - 24))) % 16;
+    const sectionArcEpoch = Math.max(0, Math.trunc(Math.max(0, barIndex - 24) / 16));
+    const pickupWindow = activeMusicMode === 'full_texture' && barIndex >= 24 && sectionBar <= 1;
+    const cadenceWindow = (activeMusicMode === 'full_texture' && barIndex >= 24 && sectionBar >= 14)
+      || arrangementPhraseIntent === 'cadence';
+    const buildWindow = arrangementPhraseIntent === 'build';
+    const recoveryWindow = arrangementPhraseIntent === 'recovery';
+    const bodyWindow = arrangementPhraseIntent === 'body';
+    const melodyEpoch = Math.max(0, Math.trunc(Math.max(0, barIndex - 12) / 2));
+    const earlyMelodyWindow = barIndex < 48;
+    const fallbackFamilies = cadenceWindow
+      ? ['hook', 'arc', 'hook']
+      : (buildWindow
+        ? ['arc', 'glide', 'hook']
+        : (earlyMelodyWindow || recoveryWindow || bodyWindow
+          ? ['hook', 'glide', 'hook']
+          : ['hook', 'glide', 'arc']));
+    const contourEpoch = Math.max(0, Math.trunc(Math.max(0, barIndex - 24) / 8));
+    const contourRotation = ['hook_return', 'ascending_arc', 'descending_answer', 'cadence_turn'];
+    return {
+      leadFamily: fallbackFamilies[melodyEpoch % fallbackFamilies.length] || 'hook',
+      leadContourId: cadenceWindow
+        ? 'cadence_turn'
+        : (recoveryWindow
+          ? 'hook_return'
+          : (buildWindow
+            ? 'ascending_arc'
+            : (bodyWindow
+              ? (sectionArcEpoch % 3 === 2 ? 'descending_answer' : 'hook_return')
+              : (pickupWindow
+                ? (sectionArcEpoch % 2 === 0 ? 'ascending_arc' : 'hook_return')
+                : (contourRotation[contourEpoch % contourRotation.length] || 'hook_return'))))),
+      leadContourEpoch: contourEpoch,
+      leadCadenceVariant: cadenceWindow
+        ? (sectionArcEpoch % 3)
+        : (recoveryWindow
+          ? 0
+          : (bodyWindow ? ((sectionArcEpoch + 1) % 3) : ((melodyEpoch * 2) % 3))),
+      sectionTransitionRole: cadenceWindow ? 'cadence' : (pickupWindow ? 'pickup' : 'body'),
+      sectionArcEpoch,
+    };
+  };
   const protectedContinuityLanes = Array.isArray(musicModeRuntime?.protectedContinuityLanes)
     ? musicModeRuntime.protectedContinuityLanes.map((laneId) => String(laneId || '').trim().toLowerCase()).filter(Boolean)
     : [];
@@ -1353,12 +1397,19 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const phraseGravityTarget = phraseStep.resolutionOpportunity
       ? (normalizeSwarmNoteName(group?.phraseRoot) || phraseGravityTargetBase)
       : phraseGravityTargetBase;
+    const playablePhraseGravityTarget = phraseGravityTarget
+      ? clampNoteToDirectorRegisterTarget(
+        phraseGravityTarget,
+        stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
+        registerTarget
+      )
+      : '';
     const gravityBiasChance = melodyStepDriven
       ? (phraseStep.resolutionOpportunity ? 0.3 : 0.12)
       : (phraseStep.resolutionOpportunity ? 0.92 : 0.54);
-    const phraseGravityOpportunity = !!phraseGravityTarget && phraseStep.nearPhraseEnd;
+    const phraseGravityOpportunity = !!playablePhraseGravityTarget && phraseStep.nearPhraseEnd;
     const gravityNoteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
-      ? phraseGravityTarget
+      ? playablePhraseGravityTarget
       : noteNameRaw;
     const gravityNoteName = clampNoteToDirectorRegisterTarget(
       gravityNoteNameRaw,
@@ -1386,14 +1437,10 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       ? (activeMusicMode === 'full_texture' ? 0.9 : 0.42)
       : 0.84;
     if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && !isBassRole && !rhythmPercussionCarrier && Math.random() < resolutionGravityChance) {
-      styledNoteName = clampNoteToDirectorRegisterTarget(
-        phraseGravityTarget,
-        stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
-        registerTarget
-      );
+      styledNoteName = playablePhraseGravityTarget;
     }
     const phraseGravityHit = phraseGravityOpportunity
-      ? normalizeSwarmNoteName(styledNoteName) === normalizeSwarmNoteName(phraseGravityTarget)
+      ? normalizeSwarmNoteName(styledNoteName) === normalizeSwarmNoteName(playablePhraseGravityTarget)
       : false;
     const phraseResolutionOpportunity = phraseGravityOpportunity && phraseStep.resolutionOpportunity;
     const phraseResolutionHit = phraseResolutionOpportunity && phraseGravityHit;
@@ -1721,6 +1768,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (forcePlayableStructuralRhythmAction) {
       emittedSecondaryLoopRhythmThisStep = true;
     }
+    const primaryLeadTraceFallback = isPrimaryLoopOwnerGroup
+      ? getPrimaryLeadTraceFallback()
+      : null;
     for (const enemy of performers) {
       events.push(createPerformedBeatEvent({
         actorId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
@@ -1758,12 +1808,20 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           phraseGravityHit,
           phraseResolutionOpportunity,
           phraseResolutionHit,
-          leadFamily: String(group?.leadFamily || '').trim().toLowerCase(),
-          leadContourId: String(group?.leadContourId || '').trim().toLowerCase(),
-          leadContourEpoch: Math.max(0, Math.trunc(Number(group?.leadContourEpoch) || 0)),
-          leadCadenceVariant: Math.max(0, Math.trunc(Number(group?.leadCadenceVariant) || 0)),
-          sectionTransitionRole: String(group?.sectionTransitionRole || '').trim().toLowerCase(),
-          sectionArcEpoch: Math.max(0, Math.trunc(Number(group?.sectionArcEpoch) || 0)),
+          leadFamily: String(group?.leadFamily || primaryLeadTraceFallback?.leadFamily || '').trim().toLowerCase(),
+          leadContourId: String(group?.leadContourId || primaryLeadTraceFallback?.leadContourId || '').trim().toLowerCase(),
+          leadContourEpoch: Math.max(0, Math.trunc(Number(
+            group?.leadContourEpoch ?? primaryLeadTraceFallback?.leadContourEpoch
+          ) || 0)),
+          leadCadenceVariant: Math.max(0, Math.trunc(Number(
+            group?.leadCadenceVariant ?? primaryLeadTraceFallback?.leadCadenceVariant
+          ) || 0)),
+          sectionTransitionRole: String(group?.sectionTransitionRole || primaryLeadTraceFallback?.sectionTransitionRole || '').trim().toLowerCase(),
+          sectionArcEpoch: Math.max(0, Math.trunc(Number(
+            group?.sectionArcEpoch ?? primaryLeadTraceFallback?.sectionArcEpoch
+          ) || 0)),
+          arrangementSupportIntent: String(group?.arrangementSupportIntent || '').trim().toLowerCase(),
+          arrangementSupportStepBudget: Math.max(0, Math.trunc(Number(group?.arrangementSupportStepBudget) || 0)),
         },
       }));
     }

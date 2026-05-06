@@ -1,203 +1,430 @@
-Here’s a **tight, Codex-ready summary** you can drop straight in. I’ve kept it implementation-focused and aligned with what you’ve been building.
+We’re evolving from:
 
----
+> “enemies make music”
 
-# Enemy Roles, HP, and Beat-Firing — Implementation Summary
+to:
 
-## 1. Core Problem
+> “the director/composer owns the music, and enemies embody it.”
 
-Increasing HP reduced readability because enemies are not just targets — they are **role carriers in a compositional system**.
+That’s a huge architectural improvement because it gives you:
 
-Readability comes from:
+* stable musical flow
+* controllable intensity
+* authored pacing
+* better readability
+* easier difficulty scaling
+* cleaner recovery from gameplay chaos
 
-> **simultaneous role contrast (foundation / support / lead / ornament)**
+Right now, your system sounds like it has:
 
-—not from enemies staying alive longer.
+* role assignment
+* coverage management
+* basic phrase continuity
+* conductor timing
 
----
+The next layer is what film/game music systems usually call:
 
-## 2. Key Principle
+> **Arrangement Energy Control**
 
-> **Separate combat systems from musical/role systems.**
+Not just:
 
-An enemy should not need to stay alive or active in music to remain valid in combat.
+* what notes play
 
----
+But:
 
-## 3. Split Enemy State
-
-```js
-musicRole: "support"        // role identity
-musicState: "active"        // active / muted / released
-combatState: "armed"        // armed / suppressed / disabled
-```
-
-### Rule
-
-* Losing a music role **must NOT disable combat**
-* Enemy falls back to **default combat behaviour**
-
----
-
-## 4. Replace HP as a Readability Tool
-
-HP = difficulty only
-
-Do NOT use HP to control:
-
-* role visibility
-* musical timing
-* composition stability
-
-Instead, introduce:
-
----
-
-## 5. Role Lifecycle Contract
-
-```js
-roleLifecycle: {
-  role: "support",
-  minReadableBars: 2,
-  maxRoleBars: 4,
-  replacementPolicy: "refresh_before_exit",
-  canBlockOtherRoles: false,
-  deathPolicy: "transfer_or_replace"
-}
-```
-
-### Rules
-
-* Roles track **time in bars**, not enemy lifetime
-* If a role dies early → **replace or transfer**
-* If an enemy lives too long → **stop blocking role refresh**
-
----
-
-## 6. Critical Separation
-
-> **An enemy can be alive without carrying a role**
-> **A role can persist without the original enemy**
-
----
-
-## 7. Role Exit Behaviour
-
-When a role ends:
-
-```js
-musicState = "released"
-combatState = "armed"
-```
-
-Enemy switches to fallback:
-
-```js
-fallbackFirePattern: {
-  grid: "quarter",
-  allowedSteps: [0, 4],
-  maxShotsPerBar: 1
-}
-```
-
----
-
-## 8. Beat-Aligned Firing System
-
-### Principle
-
-> **Enemies request shots — conductor schedules them**
-
-No per-enemy independent timers.
-
----
-
-## 9. Fire Flow
-
-```js
-enemy.intent = "fire"
-
-conductor.requestFireSlot({
-  enemyId,
-  role,
-  urgency,
-  pattern
-})
-
-→ returns fireAtStep
-→ weapon fires on that step
-```
-
----
-
-## 10. Role-Based Rhythm Patterns
-
-```js
-foundation: [0]        // strong beats
-support:    [2, 6]     // offbeats
-lead:       [0, 3, 5]  // phrases
-ornament:   [7]        // fills
-```
-
-### Rule
-
-* Not all enemies fire on the same beat
-* Roles occupy **different rhythmic lanes**
-
----
-
-## 11. Firing vs Music State
-
-```js
-if (musicState === "active") {
-  use role pattern
-} else {
-  use fallback pattern
-}
-```
-
----
-
-## 12. Conductor Responsibilities
-
-The conductor must:
-
-* ensure **role coverage over time**
-* ensure **no role is blocked by long-lived enemies**
-* distribute firing to avoid **clumping**
-* maintain **rhythmic clarity**
-
----
-
-## 13. Difficulty Scaling
-
-Do NOT scale readability via HP.
-
-Instead scale:
-
-* shots per bar
+* density
+* rhythmic intensity
+* layering
+* register spread
 * syncopation
-* telegraph length
-* role overlap
+* phrase aggression
+* ornamentation
+* harmonic pressure
+* cadence frequency
+* silence/rest usage
+
+That’s where “music direction” actually starts to emerge.
 
 ---
 
-## 14. High-Level Rule
+# Big Idea
 
-> Gameplay embodies music, but does not control or break it.
-> Combat systems must not interfere with role readability or musical structure.
+You want a system where:
+
+```txt
+music style
++ level phase
++ combat intensity
++ player performance
++ authored pacing
+=
+current arrangement state
+```
+
+And that arrangement state drives:
+
+* firing rhythms
+* enemy role density
+* instrument usage
+* phrase complexity
+* visual intensity
+* spawn behaviour
+* FX density
+* even movement style potentially
 
 ---
 
-## 15. Design Intent (important)
+# Important Shift
 
-Enemies exist to create **clear, readable challenges**, not just durability targets — each enemy should reinforce a specific role or player interaction ([book.leveldesignbook.com][1]).
+Right now you probably have:
+
+```txt
+role -> pattern
+```
+
+You now want:
+
+```txt
+style + intensity + phase -> role behaviour
+```
+
+Example:
+
+```txt
+Lead role
+    Calm phase:
+        sparse
+        slow
+        melodic
+        long notes
+
+    High intensity:
+        denser rhythm
+        shorter motifs
+        syncopation
+        octave jumps
+```
+
+Same role.
+Different arrangement behaviour.
+
+That’s the correct abstraction.
 
 ---
 
-If you want, next step is I can turn this into:
+# Introduce "Arrangement Parameters"
 
-* a **PhaseRuntime / Conductor contract** (fits your doc style)
-* or **exact Codex tasks / diffs** to implement this cleanly without breaking current systems
+Instead of hardcoding pattern behaviour, expose musical knobs.
 
-[1]: https://book.leveldesignbook.com/process/combat/enemy?utm_source=chatgpt.com "Enemy design"
+Example:
+
+```js
+arrangementState = {
+  energy: 0.7,
+  density: 0.5,
+  syncopation: 0.3,
+  aggression: 0.8,
+  layering: 0.6,
+  ornamentation: 0.2,
+  rhythmicComplexity: 0.4,
+  melodicActivity: 0.9,
+  harmonicTension: 0.1,
+  stability: 0.8
+}
+```
+
+These are GOLD.
+
+Because now:
+
+* levels
+* phases
+* bosses
+* difficulty
+* pacing systems
+* dynamic events
+
+can all manipulate these values.
+
+---
+
+# Examples
+
+## Energy
+
+Controls:
+
+* note frequency
+* velocity
+* animation intensity
+* firing rate
+* movement aggression
+
+Low:
+
+```txt
+kick on 1
+slow bass
+minimal support
+```
+
+High:
+
+```txt
+active percussion
+constant counter-rhythm
+fills
+rapid lead motifs
+```
+
+---
+
+## Layering
+
+Controls simultaneous active systems.
+
+Low:
+
+```txt
+foundation only
+```
+
+Medium:
+
+```txt
+foundation + support
+```
+
+High:
+
+```txt
+foundation + support + lead + ornament
+```
+
+This is probably one of your strongest knobs.
+
+Because layering directly affects:
+
+* excitement
+* fullness
+* readability
+* cognitive load
+
+---
+
+## Rhythmic Complexity
+
+Controls:
+
+* offbeats
+* syncopation
+* phrase fragmentation
+* burst density
+
+Low:
+
+```txt
+quarter notes
+```
+
+High:
+
+```txt
+16th note fills
+staggered attacks
+polyrhythmic support
+```
+
+---
+
+## Stability
+
+VERY important.
+
+Controls:
+
+* motif persistence
+* phrase repetition
+* role churn
+* predictability
+
+High stability:
+
+```txt
+recognisable groove
+```
+
+Low stability:
+
+```txt
+chaotic transition state
+```
+
+This lets you intentionally create:
+
+* tension
+* breakdowns
+* recoveries
+
+---
+
+# The REALLY Powerful Part
+
+Now you can author curves.
+
+Example level flow:
+
+```txt
+intro
+    energy 0.2
+    layering 0.2
+
+build
+    energy ramps
+    support introduced
+
+combat peak
+    layering 0.9
+    syncopation 0.7
+
+drop
+    remove percussion
+    keep bass + ambience
+
+rebuild
+    slow ornament reintroduction
+
+boss
+    aggression max
+    stability reduced
+```
+
+This gives you:
+
+* drops
+* ramps
+* fakeouts
+* recoveries
+* musical breathing
+
+without changing the underlying composition system.
+
+---
+
+# Another Important Insight
+
+You do NOT necessarily want:
+
+```txt
+combat intensity == musical intensity
+```
+
+Sometimes the best moments are:
+
+### Calm music + terrifying gameplay
+
+or
+
+### Huge musical drop after victory
+
+That contrast creates emotional pacing.
+
+So:
+
+* gameplay pressure
+* arrangement energy
+
+should influence each other,
+but not be identical.
+
+---
+
+# Suggested Architecture
+
+I’d add:
+
+```js
+MusicDirector
+    owns:
+        style
+        arrangementState
+        pacing curves
+        transitions
+
+Conductor
+    owns:
+        timing
+        slot allocation
+        phrase timing
+
+EnemyDirector
+    owns:
+        embodiment
+        spawning
+        combat pressure
+```
+
+That separation is getting VERY strong now.
+
+---
+
+# REALLY Interesting Possibility
+
+You can make:
+
+## Style Packs
+
+Example:
+
+### Chill Synthwave
+
+* low syncopation
+* long phrases
+* stable motifs
+* soft layering ramps
+
+### Combat Jazz
+
+* high syncopation
+* role swapping
+* reactive fills
+
+### Retro Shmup
+
+* strong bass pulse
+* octave leads
+* rapid arps at high energy
+
+Same game systems.
+Different arrangement curves.
+
+That becomes massively reusable.
+
+---
+
+# One More Important Thing
+
+You should strongly consider:
+
+## Phrase-Level Intensity
+
+instead of only continuous intensity.
+
+Meaning:
+
+```txt
+4-bar calm
+2-bar build
+1-bar explosion
+1-bar recovery
+```
+
+Humans emotionally respond to:
+
+* anticipation
+* release
+* contrast
+
+not constant escalation.
+
+This is probably where the system becomes genuinely special.

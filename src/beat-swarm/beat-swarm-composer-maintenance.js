@@ -227,6 +227,10 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   };
   const leadEntryMergeActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'lead_entry_merge';
   const fullTextureActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'full_texture';
+  const level1ArrangementState = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+    ? musicModeRuntime.level1ArrangementState
+    : {};
+  const level1ArrangementPhraseIntent = String(level1ArrangementState?.phraseIntent || '').trim().toLowerCase();
   const fullTexturePhaseVariant = String(levelPhaseRuntime?.phaseVariant || musicModeRuntime?.phaseVariant || 'default').trim().toLowerCase();
   const eventShowcaseActive = !!activeEventSection && activeEventSection !== 'none';
   const sustainedFullTextureNoShowcase = fullTextureActive && !eventShowcaseActive;
@@ -266,6 +270,29 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         .map((value) => Math.trunc(Number(value) || -1))
         .filter((value) => value >= 0 && value < constants.weaponTuneSteps)
     : [];
+  const level1ArrangementControlsIntroLocked = level1ArrangementPhraseIntent === 'intro'
+    || introStage === 'player_only'
+    || introStage === 'rhythm_only'
+    || introStage === 'soft_ramp';
+  const getArrangementSupportShape = (layerKey = '') => {
+    const layer = String(layerKey || '').trim().toLowerCase();
+    if (level1ArrangementControlsIntroLocked) return null;
+    if (level1ArrangementPhraseIntent === 'build') {
+      return layer === 'backbeat'
+        ? { preferredSteps: [1, 3, 6], maxActiveCount: 3, family: 'driving' }
+        : { preferredSteps: [0, 2, 4, 6], maxActiveCount: 4, family: 'driving' };
+    }
+    if (level1ArrangementPhraseIntent === 'cadence') {
+      return { preferredSteps: [3, 7], maxActiveCount: 2, family: 'offbeat' };
+    }
+    if (level1ArrangementPhraseIntent === 'recovery') {
+      return { preferredSteps: layer === 'backbeat' ? [2] : [0], maxActiveCount: 1, family: 'pulse' };
+    }
+    if (level1ArrangementPhraseIntent === 'body') {
+      return { preferredSteps: layer === 'backbeat' ? [2, 6] : [1, 3, 6], maxActiveCount: layer === 'backbeat' ? 2 : 3, family: 'offbeat' };
+    }
+    return null;
+  };
   const level1SparkleDisabled = level1SupportPolicy.allowSparkle !== true;
   const coerceLevel1LaneId = (laneId) => (
     level1SparkleDisabled && String(laneId || '').trim().toLowerCase() === 'sparkle_lane'
@@ -878,7 +905,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       }) || null;
       const introBuildRhythmActive = introRhythmOnlyWindow || introSoftRampWindow;
       const rhythmEpoch = Math.max(0, Math.trunc((Math.max(0, currentBarIndex - 4)) / 4));
-      const rhythmFamily = chooseRhythmFamily(normalizedProfileSourceType, { ...options, epoch: rhythmEpoch });
+      const arrangementSupportShape = getArrangementSupportShape(resolvedLayerKey);
+      const rhythmFamily = arrangementSupportShape?.family
+        || chooseRhythmFamily(normalizedProfileSourceType, { ...options, epoch: rhythmEpoch });
       const fallbackBaseNoteName = resolvedLayerKey === 'motion'
         ? 'C4'
         : (resolvedLayerKey === 'backbeat'
@@ -1014,8 +1043,18 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       const resolvedNoteIndices = introBuildRhythmActive ? introStrengthenedNoteIndices : genericRhythmProfile.noteIndices.slice(0, constants.weaponTuneSteps);
       const shapedRhythmSteps = sustainedFullTextureNoShowcase
         ? (
-          level1SupportPatternBudget === 'single_offbeat_punctuation'
-          || level1SupportPatternBudget === 'two_hit_backbeat_punctuation'
+          arrangementSupportShape
+            ? (
+              resolvedLayerKey === 'motion'
+                ? new Array(constants.weaponTuneSteps).fill(false)
+                : sparsifyStepPattern(
+                    resolvedSteps,
+                    Array.isArray(arrangementSupportShape.preferredSteps) ? arrangementSupportShape.preferredSteps : [],
+                    arrangementSupportShape.maxActiveCount
+                  )
+            )
+            : (level1SupportPatternBudget === 'single_offbeat_punctuation'
+          || level1SupportPatternBudget === 'two_hit_backbeat_punctuation')
             ? (
               resolvedLayerKey === 'motion'
                 ? new Array(constants.weaponTuneSteps).fill(false)
@@ -1072,6 +1111,10 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         phraseRoot: baseNoteName,
         phraseFifth: introBuildRhythmActive ? baseNoteName : (genericRhythmProfile.notes[1] || baseNoteName),
         resolutionTargets: introBuildRhythmActive ? [baseNoteName] : genericRhythmProfile.notes.slice(0, 3),
+        arrangementSupportIntent: level1ArrangementControlsIntroLocked ? '' : level1ArrangementPhraseIntent,
+        arrangementSupportStepBudget: arrangementSupportShape
+          ? Math.max(0, Math.trunc(Number(arrangementSupportShape.maxActiveCount) || 0))
+          : 0,
         instrumentId: sanitizeEnemyMusicInstrumentId(
           effectiveSpawnerProfile?.instrument,
           helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone',
@@ -1080,7 +1123,6 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       };
     }
     if (normalizedProfileSourceType === 'lead_melody') {
-      const leadFamily = chooseLeadFamily({ ...options, epoch: melodyPhraseEpoch });
       const leadPhraseVariantEpoch = (melodyPhraseEpoch * 2) + motifLockIndex;
       const leadArcPhase = Math.max(0, Math.trunc((Math.max(0, currentBarIndex - 12)) / 2)) % 4;
       const leadPhraseBarPhase = Math.max(0, Math.trunc(Math.max(0, currentBarIndex - 12))) % 4;
@@ -1088,19 +1130,43 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       const level1SectionArcEpoch = Math.max(0, Math.trunc(Math.max(0, currentBarIndex - 24) / 16));
       const level1SectionPickupWindow = fullTextureActive && currentBarIndex >= 24 && level1SectionBar <= 1;
       const level1SectionCadenceWindow = fullTextureActive && currentBarIndex >= 24 && level1SectionBar >= 14;
-      const level1SectionTransitionRole = level1SectionCadenceWindow
+      const arrangementCadenceWindow = level1ArrangementPhraseIntent === 'cadence';
+      const arrangementBuildWindow = level1ArrangementPhraseIntent === 'build';
+      const arrangementRecoveryWindow = level1ArrangementPhraseIntent === 'recovery';
+      const arrangementBodyWindow = level1ArrangementPhraseIntent === 'body';
+      const leadFamilyRotation = arrangementCadenceWindow
+        ? ['hook', 'arc', 'hook']
+        : (arrangementBuildWindow
+          ? ['arc', 'glide', 'hook']
+          : (arrangementRecoveryWindow
+            ? ['hook', 'glide', 'hook']
+            : null));
+      const leadFamily = Array.isArray(leadFamilyRotation)
+        ? (leadFamilyRotation[melodyPhraseEpoch % leadFamilyRotation.length] || 'hook')
+        : chooseLeadFamily({ ...options, epoch: arrangementBodyWindow ? Math.max(0, Math.trunc(melodyPhraseEpoch / 2)) : melodyPhraseEpoch });
+      const level1SectionTransitionRole = (level1SectionCadenceWindow || arrangementCadenceWindow)
         ? 'cadence'
         : (level1SectionPickupWindow ? 'pickup' : 'body');
-      const leadCadenceVariant = level1SectionCadenceWindow
+      const leadCadenceVariant = (level1SectionCadenceWindow || arrangementCadenceWindow)
         ? level1SectionArcEpoch % 3
-        : leadPhraseVariantEpoch % 3;
+        : (arrangementRecoveryWindow
+          ? 0
+          : (arrangementBodyWindow
+            ? Math.max(0, Math.trunc(level1SectionArcEpoch + 1)) % 3
+            : leadPhraseVariantEpoch % 3));
       const leadContourEpoch = Math.max(0, Math.trunc((Math.max(0, currentBarIndex - 24)) / 8));
       const leadContourRotation = ['hook_return', 'ascending_arc', 'descending_answer', 'cadence_turn'];
-      const leadContourId = level1SectionCadenceWindow
+      const leadContourId = (level1SectionCadenceWindow || arrangementCadenceWindow)
         ? 'cadence_turn'
-        : (level1SectionPickupWindow
+        : (arrangementRecoveryWindow
+          ? 'hook_return'
+          : (arrangementBuildWindow
+            ? 'ascending_arc'
+            : (arrangementBodyWindow
+              ? (level1SectionArcEpoch % 3 === 2 ? 'descending_answer' : 'hook_return')
+              : (level1SectionPickupWindow
           ? (level1SectionArcEpoch % 2 === 0 ? 'ascending_arc' : 'hook_return')
-          : (leadContourRotation[leadContourEpoch % leadContourRotation.length] || 'hook_return'));
+          : (leadContourRotation[leadContourEpoch % leadContourRotation.length] || 'hook_return')))));
       const leadArcLift = leadArcPhase === 1
         ? 1
         : (leadArcPhase === 2 ? 2 : (leadArcPhase === 3 ? -1 : 0));
@@ -1228,6 +1294,15 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       }
       if (level1SectionCadenceWindow && steps.length >= constants.weaponTuneSteps) {
         steps[5] = true;
+        steps[7] = true;
+      }
+      if (arrangementRecoveryWindow && steps.length >= constants.weaponTuneSteps) {
+        const recoveryKeep = new Set([0, 2, 4, 7]);
+        for (let i = 0; i < steps.length; i += 1) {
+          if (!recoveryKeep.has(i)) steps[i] = false;
+        }
+        steps[0] = true;
+        steps[4] = true;
         steps[7] = true;
       }
       const activeStepIndices = steps
@@ -3545,6 +3620,8 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             leadCadenceVariant: Math.max(0, Math.trunc(Number(sharedSoloProfile?.leadCadenceVariant) || 0)),
             sectionTransitionRole: sharedSoloProfile?.sectionTransitionRole || '',
             sectionArcEpoch: Math.max(0, Math.trunc(Number(sharedSoloProfile?.sectionArcEpoch) || 0)),
+            arrangementSupportIntent: String(sharedSoloProfile?.arrangementSupportIntent || '').trim().toLowerCase(),
+            arrangementSupportStepBudget: Math.max(0, Math.trunc(Number(sharedSoloProfile?.arrangementSupportStepBudget) || 0)),
             ...buildIntroSlotState({
               active: introStageSoloRhythmActive,
               profileSourceType: sharedProfileSourceType || '',
@@ -4184,6 +4261,8 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           if (sharedSoloProfile.sectionArcEpoch != null) {
             group.sectionArcEpoch = Math.max(0, Math.trunc(Number(sharedSoloProfile.sectionArcEpoch) || 0));
           }
+          group.arrangementSupportIntent = String(sharedSoloProfile.arrangementSupportIntent || '').trim().toLowerCase();
+          group.arrangementSupportStepBudget = Math.max(0, Math.trunc(Number(sharedSoloProfile.arrangementSupportStepBudget) || 0));
           const syncedSoloInstrumentId = (primaryLoopMelodyIdentity || !String(group?.instrumentId || group?.instrument || '').trim())
             ? sanitizeEnemyMusicInstrumentId(
                 sharedSoloProfile.instrumentId,
@@ -4294,6 +4373,8 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           if (sharedCarrierProfile.sectionArcEpoch != null) {
             group.sectionArcEpoch = Math.max(0, Math.trunc(Number(sharedCarrierProfile.sectionArcEpoch) || 0));
           }
+          group.arrangementSupportIntent = String(sharedCarrierProfile.arrangementSupportIntent || '').trim().toLowerCase();
+          group.arrangementSupportStepBudget = Math.max(0, Math.trunc(Number(sharedCarrierProfile.arrangementSupportStepBudget) || 0));
           const normalizedCarrierProfileSourceType = normalizeComposerProfileSourceType(musicProfileSourceType);
           const structuralRhythmCarrier = (
             normalizedCarrierProfileSourceType === 'secondary_bridge_backbeat'
