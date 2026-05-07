@@ -1,67 +1,177 @@
 # Beat Swarm - Next Steps
 
-## Current Handoff Status
+## Current Handoff Status - 2026-05-07
 
 Latest analysed Music Lab run:
 
-- file: `resources/music-lab-results/music-lab-results-2026-05-04T10-36-02-988Z.json`
-- scenario: `BS0 S3 HP Sections 1x5m`
-- result: lane runtime contract slice remains strong; one diagnostic false negative was fixed after this run
+- file: `resources/music-lab-results/music-lab-results-2026-05-06T16-23-33-033Z.json`
+- scenario: `musicLab_bs0_s3_intensity_ramp_release_1x150s`
+- result: the intensity audition is now valid as a dedicated listening/telemetry test
 
 What the latest run confirmed:
 
-- `visualRoleFullTextureThreeRoleReadableShare = 0.993`
-- `visualRoleSupportCollapsedDuringLeadShare = 0.006`
-- `visualRoleFullTextureLeadWithSupportVisibleShare = 0.993`
-- `visualRoleAvgSupportVisualWeight = 2.363`
-- `visualRoleAvgDistinctReadableRoleCount = 3.412`
-- HP-section stability:
-  - `1x`: `full3 = 1.000`, `collapse = 0.000`
-  - `1.5x`: `full3 = 1.000`, `collapse = 0.000`
-  - `2x`: `full3 = 0.985`, `collapse = 0.015`
-- lane carrier transfer path is active:
-  - `music_lane_carrier_transferred = 32`
-  - `music_lane_carrier_unbound = 32`
+- `musicIntensityAuditionDetected = true`
+- `musicIntensityAuditionPassed = true`
+- `musicIntensityAuditionFailureCount = 0`
+- normal arrangement musicality is intentionally skipped for this scenario:
+  - `level1ArrangementMusicality.status = skipped_intensity_audition`
+- lane continuity stayed intact:
+  - `laneContinuityAssertionPassed = true`
   - `laneContinuityBreaks = 0`
-  - `laneVacantFallbacks = 0`
-  - `protectedLaneVacantFallbacks = 0`
-- duplicate primary-lead block telemetry is resolved:
-  - `blocked_by_active_primary_lead = 0`
-  - `music_composer_spawn_blocked = 0`
-  - `music_primary_lead_request = 17`
+- musical response reliability stayed strong:
+  - `responsePairs = 35`
+  - `audibleResponsePairs = 35`
+- full-texture readability held:
+  - `visualRoleFullTextureThreeRoleReadableShare = 1.000`
+  - `formationRoleFullTextureThreeRoleReadableShare = 0.968`
 
-Post-run diagnostic fix:
+Current intensity-stage telemetry:
 
-- the latest run reported `laneContinuityAssertionPassed = false` because one same-continuity pattern variation was also counted as a reset handoff
-- this was a Music Lab assertion bug, not a confirmed musical dropout:
-  - continuity breaks: `0`
-  - same-continuity instrument drift: `0`
-  - same-continuity phrase drift: `0`
-  - same-continuity pattern drift: `1`
-- Music Lab now treats same-continuity pattern variation as informational, not a reset handoff
-- next run should confirm `laneContinuityAssertionPassed = true`
+- `low`: foundation + secondary loop, no lead/support/sparkle/answer
+- `medium`: foundation + secondary loop + lead
+- `build`: foundation + secondary loop + lead + support
+- `peak`: foundation + secondary loop + lead + support + sparkle + answer
+- `release`: foundation only
+- `settle`: foundation + secondary loop + lead
+- measured ranges:
+  - `energyRange = 0.816`
+  - `layeringRange = 0.760`
 
 Current musical read:
 
-- the intro teaching structure is restored and should be preserved:
+- the old intro structure must remain a protected set piece:
   1. player shooting only
   2. one pulse layer
   3. second beat/backbeat layer
   4. melody enters and continues
-- foundation, counter-rhythm, and primary lead are now readable together
-- lead cadence improved materially after resolving `phraseRoot` from the final active lead note
-- sparkle/ornament timing experiments regressed clarity and have been rolled back
-- player/enemy weapon sounds, explosions, and chain/combat sounds are separate from the musical-flow gating and should remain reliable at standard volume
+- after the intro, the intensity audition should transition into the current musical pace instead of replacing the intro
+- intensity should not mean only "louder"
+- useful intensity changes currently come from:
+  - more active instrumental lanes
+  - denser lane target counts
+  - stronger rhythmic and melodic activity
+  - clearer peak-layer stack
+  - release stripping layers back hard enough to be felt
+- next improvement target: add more intra-stage musical cadence/density changes within the same BPM, especially during `build` and `peak`
+
+Paused task to resume later:
+
+- presentation formation / answer-echo visibility
+- last checkpoint before pausing:
+  - arrangement musicality guardrail was passing in the normal 5-minute arrangement test
+  - foundation, counter-rhythm, and primary lead were readable together
+  - response audio was reliable
+  - visual `answer_echo` existed but remained sparse
 
 Current assessment:
 
-- the first lane-owned carrier transfer slice fixed the HP/readability failure mode
-- HP is now behaving more like combat difficulty rather than music-role ownership
-- remaining work is to formalize this path as the lane runtime contract
-- one-bar `supportGraceApplied` readability smoothing is available for carrier-transfer handoffs
-- latest validation did not need the grace path:
-  - `supportGraceApplied = 0`
-- do not rework sparkle timing unless a clear regression appears
+- the intensity-ramp test now has the right testing shape
+- the old arrangement-musicality guardrail should remain for normal arrangement runs
+- the intensity audition should be judged by `musicIntensityAudition`, not by the normal arrangement contract
+- forced lane/layer stacks in audition runs are allowed to violate the normal Level 1 contract; that is expected and should not be treated as a gameplay regression
+- player/enemy weapon sounds, explosions, chain attacks, and combat sounds remain separate from musical-flow gating and should keep reliable standard volume
+
+## Next Active Plan - Musical Gameplay Cadence
+
+Current diagnosis from feedback:
+
+> The system understands "more" better than it understands "different."
+
+The intensity audition now proves that layer changes are technically working, but the game still needs a stronger escalation language. Intensity should be felt through rhythm family, formation cadence, phrase shape, silence, and synchronized screen behavior, not just through extra notes or louder/more numerous layers.
+
+### Central Enemy Action Gate
+
+Next implementation target:
+
+- create a central enemy musical action gate
+- all non-player enemy actions should ask this gate when they are allowed to happen
+- this includes enemy fire, volleys, charges, sweeps, formation arrivals, pauses, and releases
+- the gate should be driven by musical stage and beat-grid subdivision, not local enemy randomness
+
+Guardrail:
+
+- the gate must coordinate action timing without muting reliable combat SFX
+- player weapons, enemy weapons, explosions, and chain attacks still play at standard volume once triggered
+- the gate controls *when gameplay actions are scheduled*, not whether their combat audio is audible
+
+### Intensity Rhythm Families
+
+Intensity tiers should map to distinct rhythmic identities:
+
+- `low`
+  - half-time feel
+  - strong downbeats
+  - sparse bass/foundation
+  - isolated enemy formations
+  - long melodic phrases
+- `medium`
+  - eighth-note pulse
+  - alternating call/response
+  - repeated ostinato feel
+  - enemies entering in readable lanes
+- `build`
+  - syncopation
+  - faster answer phrases
+  - short stabs
+  - arpeggio fragments
+  - more interrupted phrases
+- `peak`
+  - sixteenth-note subdivisions within the same BPM
+  - rapid gated leads
+  - stacked octave or doubled lead energy
+  - aggressive percussion feel
+  - relentless but patterned wave pacing
+- `release`
+  - sudden strip-down
+  - remove drums/action first
+  - keep bass/foundation or drone
+  - lingering echo phrase
+  - give the player breathing room
+
+### Phrase Archetypes
+
+Add reusable authored phrase identities so the player can learn what danger sounds like.
+
+Candidate archetypes:
+
+- `laser_sweep`: repeated ascending triplet
+- `warning_alarm`: short 2-note syncopation
+- `interceptor_rush`: rapid alternating octave pulse
+- `boss_drill`: repeated hammer phrase
+- `formation_arrival`: descending stab cadence
+
+These should be musical attack signatures, not random note streams. The goal is for players to recognize a rhythm and understand the incoming behavior.
+
+### Conductor Scenes
+
+Longer-term direction:
+
+- move from raw `intensity = 0.8` toward named conductor scenes
+- examples:
+  - `interceptor_swarm`
+  - `siege_pressure`
+  - `boss_overheat`
+  - `warning_drop`
+- each scene owns:
+  - rhythm family
+  - formation behavior
+  - orchestration profile
+  - pacing rules
+  - visual language
+  - silence/drop rules
+
+This should make the game feel less like an adaptive procedural music system and more like a living arcade soundtrack generator.
+
+### Acceptance Shape
+
+The next Music Lab test should confirm:
+
+- every intensity tier has a distinct rhythm-family signature
+- enemy action timing follows the stage grid
+- `build` and `peak` increase subdivision/cadence without changing BPM
+- `release` visibly and audibly strips back
+- screen behavior and music accents line up enough that the player can see the groove
+- peak remains patterned and readable, not bullet spam
 
 ## Active Architecture Direction
 

@@ -497,15 +497,8 @@ function ensureUI() {
       btn('musicLabEnable', 'Music Lab: Enable'),
       btn('musicLabDisable', 'Music Lab: Disable'),
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
-      btn('musicLabRunBS0S3x1m1m', 'Music Lab: Run BS0 S3 (1x1m, auto-save)', 'primary'),
-      btn('musicLabRunBehaviorTaxonomyDebug', 'Music Lab: Run Behavior Taxonomy Debug (1x1m, auto-save)', 'primary'),
-      btn('musicLabRunSlotBodyProbe', 'Music Lab: Run Slot/Body Probe (3x45s, auto-save)', 'primary'),
-      btn('musicLabRunHandoffMatrixProbe', 'Music Lab: Run Handoff Matrix Probe (4x45s, auto-save)', 'primary'),
-      btn('musicLabRunBS0S3x1m', 'Music Lab: Run BS0 S3 (1x3m, auto-save)', 'primary'),
-      btn('musicLabRunBS0S3x1m5m', 'Music Lab: Run BS0 S3 (1x5m, auto-save)', 'primary'),
-      btn('musicLabRunBS0S3Assessment5m', 'Music Lab: Run BS0 S3 Assessment (1x5m, compact save)', 'primary'),
-      btn('musicLabRunBS0S3HpSections5m', 'Music Lab: Run BS0 S3 HP Sections (1x5m, compact save)', 'primary'),
-      btn('musicLabRunBS0S3x3m', 'Music Lab: Run BS0 S3 (3x3m each, auto-save)', 'primary'),
+      btn('musicLabRunBS0S3Arrangement5m', 'Music Lab: Run BS0 S3 Arrangement Musicality (1x5m, compact save)', 'primary'),
+      btn('musicLabRunBS0S3IntensityRamp150s', 'Music Lab: Run BS0 S3 Intensity Ramp (1x150s, compact save)', 'primary'),
       btn('musicLabSnapshot', 'Music Lab: Show Snapshot'),
       btn('musicLabExport', 'Music Lab: Export JSON'),
       btn('musicLabSaveResources', 'Music Lab: Save to resources'),
@@ -1435,40 +1428,12 @@ function ensureUI() {
       }
       return;
     }
-    if (act === 'musicLabRunBS0S3x3m') {
-      await runBS0s3MusicLabTriplet();
+    if (act === 'musicLabRunBS0S3Arrangement5m') {
+      await runBS0s3MusicLabArrangement5m();
       return;
     }
-    if (act === 'musicLabRunBS0S3x1m') {
-      await runBS0s3MusicLabSingle();
-      return;
-    }
-    if (act === 'musicLabRunBS0S3x1m5m') {
-      await runBS0s3MusicLabSingle5m();
-      return;
-    }
-    if (act === 'musicLabRunBS0S3Assessment5m') {
-      await runBS0s3MusicLabAssessment5m();
-      return;
-    }
-    if (act === 'musicLabRunBS0S3HpSections5m') {
-      await runBS0s3MusicLabHpSections5m();
-      return;
-    }
-    if (act === 'musicLabRunBS0S3x1m1m') {
-      await runBS0s3MusicLabSingle1m();
-      return;
-    }
-    if (act === 'musicLabRunBehaviorTaxonomyDebug') {
-      await runBS0BehaviorTaxonomyDebug();
-      return;
-    }
-    if (act === 'musicLabRunSlotBodyProbe') {
-      await runBS0SlotBodyProbeSuite();
-      return;
-    }
-    if (act === 'musicLabRunHandoffMatrixProbe') {
-      await runBS0HandoffMatrixProbeSuite();
+    if (act === 'musicLabRunBS0S3IntensityRamp150s') {
+      await runBS0s3MusicLabIntensityRamp150s();
       return;
     }
     if (act === 'musicLabSnapshot') {
@@ -2111,6 +2076,14 @@ function summarizeMusicLabSessionPayload(payload) {
     && typeof payload.metrics.laneContinuityAssertion === 'object'
     ? payload.metrics.laneContinuityAssertion
     : null;
+  const level1ArrangementMusicality = payload?.metrics?.level1ArrangementMusicality
+    && typeof payload.metrics.level1ArrangementMusicality === 'object'
+    ? payload.metrics.level1ArrangementMusicality
+    : null;
+  const musicIntensityAudition = payload?.metrics?.musicIntensityAudition
+    && typeof payload.metrics.musicIntensityAudition === 'object'
+    ? payload.metrics.musicIntensityAudition
+    : null;
   const systemEventSummary = payload?.systemEventSummary && typeof payload.systemEventSummary === 'object'
     ? payload.systemEventSummary
     : null;
@@ -2149,6 +2122,10 @@ function summarizeMusicLabSessionPayload(payload) {
       visualRoleFullTextureLeadWithSupportVisibleShare: readMusicLabMetric(payload, 'visualRoleFullTextureLeadWithSupportVisibleShare'),
       visualRoleAvgDistinctReadableRoleCount: readMusicLabMetric(payload, 'visualRoleAvgDistinctReadableRoleCount'),
       visualRoleAvgSupportVisualWeight: readMusicLabMetric(payload, 'visualRoleAvgSupportVisualWeight'),
+      formationRoleFullTextureThreeRoleReadableShare: readMusicLabMetric(payload, 'formationRoleFullTextureThreeRoleReadableShare'),
+      formationRoleFullTextureLeadWithSupportVisibleShare: readMusicLabMetric(payload, 'formationRoleFullTextureLeadWithSupportVisibleShare'),
+      formationRoleSupportCollapsedDuringLeadShare: readMusicLabMetric(payload, 'formationRoleSupportCollapsedDuringLeadShare'),
+      formationRoleAvgDistinctReadableRoleCount: readMusicLabMetric(payload, 'formationRoleAvgDistinctReadableRoleCount'),
       laneContinuityAssertionPassed: payload?.metrics?.laneContinuityAssertionPassed === true,
       laneContinuityBreaks: readMusicLabMetric(payload, 'laneContinuityBreaks'),
       laneResetHandoffs: readMusicLabMetric(payload, 'laneResetHandoffs'),
@@ -2164,8 +2141,19 @@ function summarizeMusicLabSessionPayload(payload) {
       level1ContractRoleViolationCount: readMusicLabMetric(payload, 'level1ContractRoleViolationCount'),
       level1ContractSparkleViolationCount: readMusicLabMetric(payload, 'level1ContractSparkleViolationCount'),
       level1ContractAnswerViolationCount: readMusicLabMetric(payload, 'level1ContractAnswerViolationCount'),
+      level1ArrangementMusicalityPassed: payload?.metrics?.level1ArrangementMusicalityPassed === true,
+      level1ArrangementMusicalityFailureCount: readMusicLabMetric(payload, 'level1ArrangementMusicalityFailureCount'),
+      level1ArrangementTraceCount: readMusicLabMetric(payload, 'level1ArrangementTraceCount'),
+      level1ArrangementIntroSetPieceViolationCount: readMusicLabMetric(payload, 'level1ArrangementIntroSetPieceViolationCount'),
+      level1ArrangementPostIntroCount: readMusicLabMetric(payload, 'level1ArrangementPostIntroCount'),
+      arrangementSupportCount: readMusicLabMetric(payload, 'arrangementSupportCount'),
+      musicIntensityAuditionDetected: payload?.metrics?.musicIntensityAuditionDetected === true,
+      musicIntensityAuditionPassed: payload?.metrics?.musicIntensityAuditionPassed === true,
+      musicIntensityAuditionFailureCount: readMusicLabMetric(payload, 'musicIntensityAuditionFailureCount'),
     },
     laneContinuityAssertion: laneContinuityAssertion ? cloneSmallObject(laneContinuityAssertion) : null,
+    level1ArrangementMusicality: level1ArrangementMusicality ? cloneSmallObject(level1ArrangementMusicality) : null,
+    musicIntensityAudition: musicIntensityAudition ? cloneSmallObject(musicIntensityAudition) : null,
     visualRoleReadability: visualRoleReadability
       ? {
           count: Number(visualRoleReadability.count) || 0,
@@ -2177,6 +2165,12 @@ function summarizeMusicLabSessionPayload(payload) {
           fullTextureLeadWithSupportVisibleShare: Number(visualRoleReadability.fullTextureLeadWithSupportVisibleShare) || 0,
           avgDistinctReadableRoleCount: Number(visualRoleReadability.avgDistinctReadableRoleCount) || 0,
           avgSupportVisualWeight: Number(visualRoleReadability.avgSupportVisualWeight) || 0,
+          formationFullTextureThreeRoleReadableShare: Number(visualRoleReadability.formationFullTextureThreeRoleReadableShare) || 0,
+          formationFullTextureLeadWithSupportVisibleShare: Number(visualRoleReadability.formationFullTextureLeadWithSupportVisibleShare) || 0,
+          formationSupportCollapsedDuringLeadShare: Number(visualRoleReadability.formationSupportCollapsedDuringLeadShare) || 0,
+          formationAvgDistinctReadableRoleCount: Number(visualRoleReadability.formationAvgDistinctReadableRoleCount) || 0,
+          byFormationReadableRoleSet: cloneSmallObject(visualRoleReadability.byFormationReadableRoleSet || {}),
+          byFormationArchetypeRole: cloneSmallObject(visualRoleReadability.byFormationArchetypeRole || {}),
           readableRoleShares: cloneSmallObject(visualRoleReadability.readableRoleShares || {}),
           byReadableRoleSet: cloneSmallObject(visualRoleReadability.byReadableRoleSet || {}),
           byEnemyHealthSection: cloneSmallObject(visualRoleReadability.byEnemyHealthSection || {}),
@@ -2226,6 +2220,10 @@ function aggregateMusicRunSummaries(summaries) {
     averageSpawnerSkippedCreatedEvents: avg(list.map((s) => s?.metrics?.spawnerSkippedCreatedEvents)),
     averageBassSkippedCreatedEvents: avg(list.map((s) => s?.metrics?.bassSkippedCreatedEvents)),
     averageMaxEnemyStepsWithoutBass: avg(list.map((s) => s?.metrics?.maxEnemyStepsWithoutBass)),
+    arrangementMusicalityPassCount: list.filter((s) => s?.metrics?.level1ArrangementMusicalityPassed === true).length,
+    averageArrangementMusicalityFailureCount: avg(list.map((s) => s?.metrics?.level1ArrangementMusicalityFailureCount)),
+    musicIntensityAuditionPassCount: list.filter((s) => s?.metrics?.musicIntensityAuditionPassed === true).length,
+    averageMusicIntensityAuditionFailureCount: avg(list.map((s) => s?.metrics?.musicIntensityAuditionFailureCount)),
     varianceEventCount: variance(list.map((s) => s.eventCount)),
     variancePlayerMaskingRate: variance(list.map((s) => s?.metrics?.playerMaskingRate)),
   };
@@ -6093,6 +6091,68 @@ async function runBS0s3MusicLabAssessment5m() {
     tagPrefix: 'BS0S3MusicLabAssessment1x5m',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_assessment_1x5m',
     statusPrefix: 'Running BS0 S3 Music Lab assessment pass (5 minutes, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabArrangement5m() {
+  await runBS0Stage(3, {
+    durationMs: 300000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    saveRunIdBase: 'musicLab_bs0_s3_arrangement_musicality_1x5m',
+    saveNotes: [
+      'Beat Swarm Music Lab arrangement musicality run: validate the Level 1 intro set piece, arrangement-state coverage, lead phrasing, support shaping, lane continuity, contract compliance, and visual readability.',
+      'Expected: intro remains staged; body/build/cadence/recovery all appear; build favors ascending lead motion and higher support budgets; cadence uses punctuation; recovery strips support back.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_arrangement_musicality_1x5m',
+    groupedRunId: 'musicLab_bs0_s3_arrangement_musicality_1x5m_scenario',
+    groupedNotes: 'Beat Swarm Music Lab arrangement musicality scenario: 1 run x 5 minutes, compact save, focused on director-led musical arrangement rather than HP-section durability.',
+    tagPrefix: 'BS0S3MusicLabArrangementMusicality1x5m',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_arrangement_musicality_1x5m',
+    statusPrefix: 'Running BS0 S3 Music Lab arrangement musicality pass (5 minutes, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabIntensityRamp150s() {
+  await runBS0Stage(3, {
+    durationMs: 150000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'ramp_release',
+      },
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_intensity_ramp_release_1x150s',
+    saveNotes: [
+      'Beat Swarm Music Lab intensity audition: intro set piece, then low, medium, build, peak, release, and settle arrangement levels.',
+      'Expected: the intro continues normally into the audition; later stages add denser rhythm/lead/support/ornament layers and release strips back.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_intensity_ramp_release_1x150s',
+    groupedRunId: 'musicLab_bs0_s3_intensity_ramp_release_1x150s_scenario',
+    groupedNotes: 'Beat Swarm Music Lab intensity audition scenario: 1 run x 150 seconds, compact save, focused on hearing musical intensity transitions after the fixed intro set piece.',
+    tagPrefix: 'BS0S3MusicLabIntensityRampRelease1x150s',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_intensity_ramp_release_1x150s',
+    statusPrefix: 'Running BS0 S3 Music Lab intensity ramp/release audition (150 seconds, compact save)',
     traceCapture: {
       enabled: false,
     },

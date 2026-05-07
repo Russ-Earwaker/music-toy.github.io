@@ -107,6 +107,172 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   let spawnerStep = null;
   let rawEnemyEvents = [];
   let filteredEnemyEvents = [];
+  const normalizeGateStage = (stageLike = '') => {
+    const raw = String(stageLike || '').trim().toLowerCase();
+    if (raw === 'intro' || raw === 'low' || raw === 'medium' || raw === 'build' || raw === 'peak' || raw === 'release' || raw === 'settle') return raw;
+    return '';
+  };
+  const getEnemyMusicActionGateState = () => {
+    const arrangementState = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+      ? musicModeRuntime.level1ArrangementState
+      : null;
+    const auditionStage = normalizeGateStage(arrangementState?.intensityAuditionSection);
+    const phraseIntent = String(arrangementState?.phraseIntent || state?.structureIntentRuntime?.intent || '').trim().toLowerCase();
+    const sectionIntent = String(arrangementState?.sectionIntent || activeMusicMode || '').trim().toLowerCase();
+    const tensionProfile = String(arrangementState?.tensionProfile || '').trim().toLowerCase();
+    const energy = Math.max(0, Math.min(1, Number(arrangementState?.energy) || 0));
+    const stage = auditionStage || (() => {
+      if (phraseIntent === 'intro' || sectionIntent === 'intro_teach' || sectionIntent === 'groove_establish') return 'intro';
+      if (phraseIntent === 'recovery' || tensionProfile === 'release' || sectionIntent === 'break') return 'release';
+      if (phraseIntent === 'cadence' || sectionIntent === 'peak' || energy >= 0.86) return 'peak';
+      if (phraseIntent === 'build' || tensionProfile === 'tense' || energy >= 0.64) return 'build';
+      if (energy >= 0.38) return 'medium';
+      return 'low';
+    })();
+    const rhythmFamily = (() => {
+      if (stage === 'intro') return 'set_piece';
+      if (stage === 'low' || stage === 'release') return 'anchor';
+      if (stage === 'medium' || stage === 'settle') return 'pulse';
+      if (stage === 'build') return 'syncopated';
+      if (stage === 'peak') return 'dense';
+      return 'pulse';
+    })();
+    return {
+      stage,
+      rhythmFamily,
+      phraseIntent,
+      sectionIntent,
+      energy,
+      stepInBar: ((stepIndex % 8) + 8) % 8,
+    };
+  };
+  const getEnemyMusicActionGateLane = (ev) => {
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const layer = String(payload?.musicLayer || '').trim().toLowerCase();
+    const laneId = String(payload?.musicLaneId || payload?.foundationLaneId || '').trim().toLowerCase();
+    const voiceKey = String(payload?.musicVoiceKey || '').trim().toLowerCase();
+    const callResponseLane = String(payload?.callResponseLane || '').trim().toLowerCase();
+    if (laneId === 'foundation_lane' || layer === 'foundation') return 'foundation';
+    if (voiceKey === 'percussion_backbeat' || voiceKey === 'counter_rhythm' || laneId === 'secondary_loop_lane') return 'secondary';
+    if (voiceKey === 'answer_ornament' || callResponseLane === 'response' || laneId === 'sparkle_lane' || layer === 'sparkle') return 'ornament';
+    if (laneId === 'primary_loop_lane' || callResponseLane === 'call') return 'lead';
+    if (layer === 'loops') return 'support';
+    return 'other';
+  };
+  const getEnemyMusicActionGateAllowedSteps = (stage, lane, gateState = null) => {
+    const barInPhrase = ((Math.max(0, Math.trunc(Number(barIndex) || 0)) % 4) + 4) % 4;
+    if (stage === 'intro') return null;
+    if (lane === 'foundation') return null;
+    if (stage === 'low') {
+      if (lane === 'secondary') return [0, 4];
+      return [];
+    }
+    if (stage === 'settle') {
+      if (lane === 'lead') return [0, 2, 4, 6];
+      if (lane === 'ornament') return barInPhrase === 3 ? [2, 6] : [];
+      return [0, 2, 4, 6];
+    }
+    if (stage === 'medium') {
+      if (lane === 'lead') {
+        if (barInPhrase === 3) return [0, 4, 6];
+        if (barInPhrase === 1) return [0, 4];
+        return [0, 2, 4, 6];
+      }
+      if (lane === 'ornament') return [2, 6];
+      return [0, 2, 4, 6];
+    }
+    if (stage === 'build') {
+      if (lane === 'ornament') return [3, 7];
+      if (lane === 'lead') return barInPhrase < 3 ? [0, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6, 7];
+      return [0, 2, 4, 5, 6];
+    }
+    if (stage === 'peak') {
+      if (lane === 'ornament') return [1, 3, 6, 7];
+      if (lane === 'secondary') return [0, 1, 2, 4, 5, 6];
+      if (lane === 'lead') return [0, 1, 2, 4, 6, 7];
+      return [0, 1, 2, 3, 4, 5, 6, 7];
+    }
+    if (stage === 'release') {
+      return [];
+    }
+    return [0, 2, 4, 6];
+  };
+  const applyEnemyMusicActionGate = (eventsLike = []) => {
+    const events = Array.isArray(eventsLike) ? eventsLike : [];
+    if (!events.length) return events;
+    const gateState = getEnemyMusicActionGateState();
+    const kept = [];
+    let allowedCount = 0;
+    let blockedCount = 0;
+    for (const ev of events) {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const action = String(ev?.actionType || '').trim().toLowerCase();
+      const sourceSystem = String(ev?.sourceSystem || payload?.sourceSystem || '').trim().toLowerCase();
+      const authoringClass = String(ev?.authoringClass || payload?.authoringClass || '').trim().toLowerCase();
+      const combatAuthored = sourceSystem === 'player'
+        || sourceSystem === 'death'
+        || authoringClass === 'gameplayauthored'
+        || action === 'player-weapon-step'
+        || action === 'spawner-spawn'
+        || action === 'enemy-death-accent'
+        || action.includes('chain')
+        || action.includes('impact')
+        || action.includes('collision');
+      const gateProtected = combatAuthored
+        || payload?.introDrumProtected === true
+        || payload?.introPrimaryLoopBlendWindow === true
+        || gateState.stage === 'intro';
+      const lane = getEnemyMusicActionGateLane(ev);
+      const allowedSteps = gateProtected ? null : getEnemyMusicActionGateAllowedSteps(gateState.stage, lane, gateState);
+      const allowed = !Array.isArray(allowedSteps) || allowedSteps.includes(gateState.stepInBar);
+      if (allowed) {
+        allowedCount += 1;
+        kept.push({
+          ...ev,
+          payload: {
+            ...payload,
+            enemyMusicActionGateStage: gateState.stage,
+            enemyMusicActionGateRhythmFamily: gateState.rhythmFamily,
+            enemyMusicActionGateLane: lane,
+          },
+        });
+      } else {
+        blockedCount += 1;
+      }
+      try {
+        helpers.noteMusicSystemEvent?.('music_enemy_action_gate_decision', {
+          allowed,
+          stage: gateState.stage,
+          rhythmFamily: gateState.rhythmFamily,
+          lane,
+          actionType: action,
+          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
+          groupId: Math.max(0, Math.trunc(Number(payload?.groupId) || 0)),
+          musicLayer: String(payload?.musicLayer || '').trim().toLowerCase(),
+          musicLaneId: String(payload?.musicLaneId || payload?.foundationLaneId || '').trim().toLowerCase(),
+          stepInBar: gateState.stepInBar,
+          barInPhrase: ((Math.max(0, Math.trunc(Number(barIndex) || 0)) % 4) + 4) % 4,
+          allowedSteps: Array.isArray(allowedSteps) ? allowedSteps.join(',') : 'protected',
+          reason: gateProtected ? 'protected_or_intro' : (allowed ? 'grid_match' : 'grid_miss'),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    }
+    if (allowedCount > 0 || blockedCount > 0) {
+      try {
+        helpers.noteMusicSystemEvent?.('music_enemy_action_gate_step', {
+          stage: gateState.stage,
+          rhythmFamily: gateState.rhythmFamily,
+          stepInBar: gateState.stepInBar,
+          barInPhrase: ((Math.max(0, Math.trunc(Number(barIndex) || 0)) % 4) + 4) % 4,
+          allowedCount,
+          blockedCount,
+          inputCount: events.length,
+          outputCount: kept.length,
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+    }
+    return kept;
+  };
   const noteSlotSpawnerStage = (stage, eventsLike = null) => {
     const events = Array.isArray(eventsLike) ? eventsLike : [];
     for (const ev of events) {
@@ -747,6 +913,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     finishShapeEmittersPerf();
     }
     noteSlotSpawnerStage('shaped', effectiveEnemyEvents);
+    effectiveEnemyEvents = applyEnemyMusicActionGate(effectiveEnemyEvents);
+    noteSlotSpawnerStage('gated', effectiveEnemyEvents);
     finishShapePerf();
   }
 

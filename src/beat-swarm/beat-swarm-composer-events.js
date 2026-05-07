@@ -330,7 +330,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     return getLiveComposerMembersForGroup(g).length > 0;
   });
   const activeSecondaryLoopRhythmCoveragePresent = activeGroups.some((g) => isRhythmicSecondaryLoopCarrier(g));
-  const fallbackResponseCarrierGroup = activeGroups.find((g) => {
+  const fallbackResponseCarrierGroup = activeAnswerOrnamentGroup || activeGroups.find((g) => {
     if (!g) return false;
     const laneId = String(g?.musicLaneId || '').trim().toLowerCase();
     const lane = normalizeCallResponseLane(g?.callResponseLane, '');

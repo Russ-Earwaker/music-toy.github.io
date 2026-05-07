@@ -113,6 +113,7 @@ export function getBeatSwarmLevel1RoleContract(input = null) {
   const phaseVariant = normalizeId(data.phaseVariant || 'default') || 'default';
   const barIndex = Math.max(0, clampInt(data.barIndex, 0));
   const answerWindowActive = data.answerWindowActive === true;
+  const cadenceWindowActive = data.cadenceWindowActive === true;
   const stableWindow = data.stableWindow === true;
 
   const isFullTexture = activeLevelPhase === 'full_texture';
@@ -153,10 +154,10 @@ export function getBeatSwarmLevel1RoleContract(input = null) {
       behavior: isFullTexture ? 'dominant_foreground' : 'inactive',
     },
     answer_ornament: {
-      allowed: isFullTexture && !isDegradedFullTexture && stableWindow && answerWindowActive,
+      allowed: isFullTexture && !isDegradedFullTexture && (answerWindowActive || cadenceWindowActive),
       required: false,
       maxIdentities: 1,
-      behavior: 'stable_window_punctuation',
+      behavior: cadenceWindowActive ? 'cadence_punctuation' : 'stable_window_punctuation',
     },
   };
 

@@ -479,7 +479,8 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     });
   const fullTextureAnswerOrnamentLockActive = fullTextureActive
     && (
-      Math.max(0, Math.trunc(Number(levelPhaseRuntime?.timeInPhaseBars) || 0)) <= 4
+      answerLaneActive
+      || Math.max(0, Math.trunc(Number(levelPhaseRuntime?.timeInPhaseBars) || 0)) <= 4
       || fullTextureAnswerOrnamentRecovering
     );
   const spawnWantsSoloRhythm = spawnConfigLoaded && spawnChosenId === 'solo_rhythm_basic' && !introRhythmOnlyWindow;

@@ -4657,7 +4657,7 @@ function getBeatSwarmEventHeadingProfile(sectionId = 'none') {
       subtitle: 'Event Showcase',
     };
   }
-  return {
+  const lanePlan = {
     title: '',
     subtitle: '',
   };
@@ -7803,15 +7803,144 @@ function resolveLevel1ArrangementPhraseIntent(options = {}) {
   if (options?.tensionWindow === true || phase === 'lead_merge') return 'build';
   return 'body';
 }
+function isBeatSwarmMusicIntensityAuditionEnabled() {
+  if (typeof globalThis === 'undefined') return false;
+  const overrides = globalThis.__beatSwarmTestOverrides && typeof globalThis.__beatSwarmTestOverrides === 'object'
+    ? globalThis.__beatSwarmTestOverrides
+    : null;
+  const audition = overrides?.musicIntensityAudition;
+  if (!audition || typeof audition !== 'object' || audition.enabled !== true) return false;
+  return String(audition.mode || 'ramp_release').trim().toLowerCase() === 'ramp_release';
+}
+function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
+  if (typeof globalThis === 'undefined') return null;
+  if (!isBeatSwarmMusicIntensityAuditionEnabled()) return null;
+  const mode = 'ramp_release';
+  const barIndex = Math.max(0, Math.trunc(Number(barIndexLike) || 0));
+  const sessionAge = getBeatSwarmSessionAge();
+  const INTRO_BARS = 12;
+  const auditionBar = Math.max(-1, Math.trunc(Number(sessionAge.sessionAgeBars) || 0) - INTRO_BARS);
+  if (auditionBar < 0) return null;
+  const sections = [
+    { id: 'low', startBar: 0, endBar: 8, phraseIntent: 'body', sectionIntent: 'drop', tensionProfile: 'stable', energy: 0.22, layering: 0.28, rhythmicComplexity: 0.18, melodicActivity: 0.2, ornamentation: 0, stability: 0.9, musicalPressure: 0.22, laneIntensityScale: 0.5 },
+    { id: 'medium', startBar: 8, endBar: 16, phraseIntent: 'body', sectionIntent: 'drop', tensionProfile: 'stable', energy: 0.46, layering: 0.56, rhythmicComplexity: 0.36, melodicActivity: 0.48, ornamentation: 0.04, stability: 0.76, musicalPressure: 0.5, laneIntensityScale: 0.84 },
+    { id: 'build', startBar: 16, endBar: 28, phraseIntent: 'build', sectionIntent: 'build', tensionProfile: 'tense', energy: 0.72, layering: 0.8, rhythmicComplexity: 0.58, melodicActivity: 0.72, ornamentation: 0.16, stability: 0.5, musicalPressure: 0.76, laneIntensityScale: 1.12 },
+    { id: 'peak', startBar: 28, endBar: 40, phraseIntent: 'cadence', sectionIntent: 'peak', tensionProfile: 'tense', energy: 0.98, layering: 0.98, rhythmicComplexity: 0.82, melodicActivity: 0.94, ornamentation: 0.46, stability: 0.3, musicalPressure: 1, laneIntensityScale: 1.38 },
+    { id: 'release', startBar: 40, endBar: 48, phraseIntent: 'recovery', sectionIntent: 'break', tensionProfile: 'release', energy: 0.18, layering: 0.22, rhythmicComplexity: 0.14, melodicActivity: 0.16, ornamentation: 0, stability: 0.94, musicalPressure: 0.18, laneIntensityScale: 0.38 },
+    { id: 'settle', startBar: 48, endBar: Number.POSITIVE_INFINITY, phraseIntent: 'body', sectionIntent: 'drop', tensionProfile: 'stable', energy: 0.38, layering: 0.44, rhythmicComplexity: 0.3, melodicActivity: 0.36, ornamentation: 0.02, stability: 0.82, musicalPressure: 0.4, laneIntensityScale: 0.68 },
+  ];
+  const active = sections.find((section) => auditionBar >= section.startBar && auditionBar < section.endBar) || sections[sections.length - 1];
+  return {
+    ...active,
+    barIndex,
+    auditionBar,
+    introBars: INTRO_BARS,
+    auditionMode: mode,
+  };
+}
+function getBeatSwarmMusicIntensityAuditionLaneScale(arrangementState = null) {
+  const direct = Number(arrangementState?.laneIntensityScale);
+  if (Number.isFinite(direct) && direct > 0) return Math.max(0.1, Math.min(1.6, direct));
+  const section = getBeatSwarmMusicIntensityAuditionState(arrangementState?.barIndex);
+  const scale = Number(section?.laneIntensityScale);
+  return Number.isFinite(scale) && scale > 0 ? Math.max(0.1, Math.min(1.6, scale)) : 1;
+}
+function formatBeatSwarmIntensityAuditionStage(sectionLike = '') {
+  const section = String(sectionLike || '').trim().toLowerCase();
+  if (section === 'low') return 'Low';
+  if (section === 'medium') return 'Medium';
+  if (section === 'build') return 'Build';
+  if (section === 'peak') return 'Peak';
+  if (section === 'release') return 'Release';
+  if (section === 'settle') return 'Settle';
+  return '';
+}
+function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementState = null) {
+  if (!plan || typeof plan !== 'object') return plan;
+  const section = String(arrangementState?.intensityAuditionSection || '').trim().toLowerCase();
+  if (!section) return plan;
+  const activate = (laneKey, intensity, targetCount = 1) => {
+    const lane = plan[laneKey];
+    if (!lane || typeof lane !== 'object') return;
+    lane.active = true;
+    lane.targetCount = Math.max(1, Math.trunc(Number(targetCount) || 1));
+    lane.intensity = Math.max(0.02, Math.min(0.98, Number(intensity) || 0.02));
+    if (laneKey === 'secondary_loop') plan.__level1Contract.contractSecondaryLoopActive = true;
+    else if (laneKey === 'primary_loop') plan.__level1Contract.contractPrimaryLoopActive = true;
+    else if (laneKey === 'support') plan.__level1Contract.contractSupportActive = true;
+    else if (laneKey === 'sparkle') plan.__level1Contract.contractSparkleActive = true;
+    else if (laneKey === 'answer') plan.__level1Contract.contractAnswerActive = true;
+  };
+  const quiet = (laneKey) => {
+    const lane = plan[laneKey];
+    if (!lane || typeof lane !== 'object') return;
+    lane.active = false;
+    lane.targetCount = 0;
+    lane.intensity = 0.02;
+    if (laneKey === 'secondary_loop') plan.__level1Contract.contractSecondaryLoopActive = false;
+    else if (laneKey === 'primary_loop') plan.__level1Contract.contractPrimaryLoopActive = false;
+    else if (laneKey === 'support') plan.__level1Contract.contractSupportActive = false;
+    else if (laneKey === 'sparkle') plan.__level1Contract.contractSparkleActive = false;
+    else if (laneKey === 'answer') plan.__level1Contract.contractAnswerActive = false;
+  };
+  if (section === 'low') {
+    activate('foundation', 0.32, 1);
+    activate('secondary_loop', 0.18, 1);
+    quiet('primary_loop');
+    quiet('support');
+    quiet('sparkle');
+    quiet('answer');
+  } else if (section === 'medium') {
+    activate('foundation', 0.52, 1);
+    activate('secondary_loop', 0.44, 1);
+    activate('primary_loop', 0.4, 1);
+    quiet('support');
+    quiet('sparkle');
+    quiet('answer');
+  } else if (section === 'build') {
+    activate('foundation', 0.66, 1);
+    activate('secondary_loop', 0.64, 2);
+    activate('primary_loop', 0.72, 2);
+    activate('support', 0.36, 1);
+    quiet('sparkle');
+    quiet('answer');
+  } else if (section === 'peak') {
+    activate('foundation', 0.88, 1);
+    activate('secondary_loop', 0.86, 2);
+    activate('primary_loop', 0.96, 3);
+    activate('support', 0.5, 2);
+    activate('sparkle', 0.46, 1);
+    activate('answer', 0.34, 1);
+  } else if (section === 'release') {
+    activate('foundation', 0.24, 1);
+    quiet('secondary_loop');
+    quiet('primary_loop');
+    quiet('support');
+    quiet('sparkle');
+    quiet('answer');
+  } else if (section === 'settle') {
+    activate('foundation', 0.44, 1);
+    activate('secondary_loop', 0.34, 1);
+    activate('primary_loop', 0.34, 1);
+    quiet('support');
+    quiet('sparkle');
+    quiet('answer');
+  }
+  return plan;
+}
 function buildLevel1ArrangementState(options = {}) {
   const activeLevelPhase = String(options?.activeLevelPhase || '').trim().toLowerCase() || 'intro_teach';
   const activeMusicMode = String(options?.activeMusicMode || '').trim().toLowerCase() || 'intro_pulse';
-  const phraseIntent = resolveLevel1ArrangementPhraseIntent(options);
+  const intensityAuditionState = getBeatSwarmMusicIntensityAuditionState(options?.barIndex);
+  let phraseIntent = resolveLevel1ArrangementPhraseIntent(options);
+  if (intensityAuditionState) {
+    phraseIntent = String(intensityAuditionState.phraseIntent || phraseIntent).trim().toLowerCase() || phraseIntent;
+  }
   const supportPolicy = options?.level1SupportPolicy && typeof options.level1SupportPolicy === 'object'
     ? options.level1SupportPolicy
     : {};
   const supportBudget = String(supportPolicy.supportPatternBudget || '').trim().toLowerCase();
-  const musicalPressure = clamp01(Number(options?.musicalPressure) || 0);
+  let musicalPressure = clamp01(Number(options?.musicalPressure) || 0);
   const combatPressure = clamp01(Number(options?.combatPressure) || 0);
   const fullTexture = activeLevelPhase === 'full_texture' || activeMusicMode === 'full_texture';
   const leadMerge = activeLevelPhase === 'lead_merge';
@@ -7820,7 +7949,7 @@ function buildLevel1ArrangementState(options = {}) {
   const cadence = phraseIntent === 'cadence';
   const recovery = phraseIntent === 'recovery';
   const supportComplexity = supportBudget === 'high' ? 0.18 : (supportBudget === 'medium' ? 0.1 : 0.02);
-  const energy = clamp01(
+  let energy = clamp01(
     (musicalPressure * 0.68)
     + (combatPressure * 0.18)
     + (build ? 0.08 : 0)
@@ -7828,38 +7957,47 @@ function buildLevel1ArrangementState(options = {}) {
     - (recovery ? 0.14 : 0)
     - (intro ? 0.1 : 0)
   );
-  const layering = clamp01(
+  let layering = clamp01(
     (intro ? 0.22 : (leadMerge ? 0.56 : (fullTexture ? 0.74 : 0.48)))
     + (supportBudget === 'high' ? 0.08 : 0)
     - (recovery ? 0.2 : 0)
     - (cadence ? 0.06 : 0)
   );
-  const rhythmicComplexity = clamp01(
+  let rhythmicComplexity = clamp01(
     (intro ? 0.18 : (fullTexture ? 0.42 : 0.34))
     + supportComplexity
     + (options?.tensionWindow === true ? 0.08 : 0)
     - (recovery ? 0.16 : 0)
   );
-  const melodicActivity = clamp01(
+  let melodicActivity = clamp01(
     (intro ? 0.1 : (leadMerge ? 0.58 : (fullTexture ? 0.68 : 0.42)))
     + (cadence ? 0.12 : 0)
     + (build ? 0.06 : 0)
     - (recovery ? 0.16 : 0)
   );
-  const ornamentation = clamp01(
+  let ornamentation = clamp01(
     (cadence ? 0.38 : 0.08)
     + (supportPolicy.allowSparkle === true ? 0.08 : 0)
     + (fullTexture ? 0.04 : 0)
     - (intro ? 0.08 : 0)
     - (recovery ? 0.1 : 0)
   );
-  const stability = clamp01(
+  let stability = clamp01(
     (options?.stableWindow === true ? 0.82 : 0.62)
     - (build ? 0.12 : 0)
     - (cadence ? 0.1 : 0)
     - (recovery ? 0.08 : 0)
     + (intro ? 0.1 : 0)
   );
+  if (intensityAuditionState) {
+    musicalPressure = clamp01(Number(intensityAuditionState.musicalPressure) || musicalPressure);
+    energy = clamp01(Number(intensityAuditionState.energy) || energy);
+    layering = clamp01(Number(intensityAuditionState.layering) || layering);
+    rhythmicComplexity = clamp01(Number(intensityAuditionState.rhythmicComplexity) || rhythmicComplexity);
+    melodicActivity = clamp01(Number(intensityAuditionState.melodicActivity) || melodicActivity);
+    ornamentation = clamp01(Number(intensityAuditionState.ornamentation) || 0);
+    stability = clamp01(Number(intensityAuditionState.stability) || stability);
+  }
   return {
     activeLevelPhase,
     activeMusicMode,
@@ -7870,8 +8008,10 @@ function buildLevel1ArrangementState(options = {}) {
     melodicActivity,
     ornamentation,
     stability,
-    sectionIntent: String(options?.structureIntent || '').trim().toLowerCase(),
-    tensionProfile: String(options?.tensionProfile || '').trim().toLowerCase(),
+    sectionIntent: String(intensityAuditionState?.sectionIntent || options?.structureIntent || '').trim().toLowerCase(),
+    tensionProfile: String(intensityAuditionState?.tensionProfile || options?.tensionProfile || '').trim().toLowerCase(),
+    intensityAuditionSection: String(intensityAuditionState?.id || '').trim().toLowerCase(),
+    laneIntensityScale: Math.max(0.1, Math.min(1.6, Number(intensityAuditionState?.laneIntensityScale) || 1)),
     supportPatternBudget: supportBudget,
     barIndex: Math.max(0, Math.trunc(Number(options?.barIndex) || 0)),
     combatPressure,
@@ -7952,7 +8092,9 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
     ? 0.28
     : (structureIntent === 'peak' ? 0.76 : (structureIntent === 'drive' ? 0.66 : 0.54));
   const strongPrimaryLoopWindow = !introFoundationWindow && !playerOnlyIntroWindow && !rhythmBuildIntroWindow && primaryLoopCarriersAvailable && primaryLoopIntensity >= 0.66;
-  const driveAnswerCadenceWindow = structureIntent === 'drive' && ((bar % 8) === 7);
+  const cadenceBarPosition = bar % 16;
+  const driveAnswerCadenceWindow = structureIntent === 'drive'
+    && (cadenceBarPosition === 6 || cadenceBarPosition === 7 || cadenceBarPosition === 14 || cadenceBarPosition === 15);
   const leadSupportBridgeWindow = strongPrimaryLoopWindow
     && structureIntent !== 'peak'
     && structureIntent !== 'predrop'
@@ -7974,7 +8116,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
   const degradedFullTextureOrnamentRecovery = false;
   const simplifiedFullTextureArrangement = activeLevelPhase === 'full_texture';
   const answerPhaseWindow = activeLevelPhase === 'full_texture'
-    ? (conductorPhaseVariant !== 'no_ornament' && stableWindow && driveAnswerCadenceWindow)
+    ? (conductorPhaseVariant !== 'no_ornament' && driveAnswerCadenceWindow)
     : (activeLevelPhase === 'lead_merge' && conductorPhaseVariant !== 'reduced_support');
   const level1RoleContract = getBeatSwarmLevel1RoleContract({
     activeLevelPhase,
@@ -8069,15 +8211,20 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
     floor,
     Math.min(ceiling, (Number(value) || 0) * introIntensityScale)
   );
+  const auditionLaneScale = getBeatSwarmMusicIntensityAuditionLaneScale(level1ArrangementState);
+  const applyMusicIntensityAuditionScale = (value, floor = 0.04, ceiling = 0.98) => Math.max(
+    floor,
+    Math.min(ceiling, (Number(value) || 0) * auditionLaneScale)
+  );
 
-  return {
+  const lanePlan = {
     foundation: {
       active: true,
       targetCount: 1,
       preferredCarrier: 'group',
       protected: true,
       continuityBias: releaseWindow || stableWindow ? 'hold' : 'blend',
-      intensity: applyIntroRampIntensity(Math.min(
+      intensity: applyMusicIntensityAuditionScale(applyIntroRampIntensity(Math.min(
         0.84,
         ((playerOnlyIntroWindow ? 0.34 : (rhythmBuildIntroWindow ? 0.66 : (introFoundationWindow ? 0.62 : (structureIntent === 'drop' ? 0.56 : 0.48)))))
         + (motifReturnActive ? 0.08 : 0)
@@ -8085,7 +8232,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
         + (breakRebuildWindow ? 0.08 : 0)
         + (stableWindow ? 0.05 : 0)
         - (tensionWindow ? 0.03 : 0)
-      ), 0.16, 0.84),
+      ), 0.16, 0.84), 0.12, 0.94),
     },
     secondary_loop: {
       active: secondaryLoopActive,
@@ -8093,7 +8240,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       preferredCarrier: 'group',
       protected: introFoundationWindow || introSoftRampWindow || motifReturnActive,
       continuityBias: (introFoundationWindow || introSoftRampWindow || motifReturnActive || stableWindow) ? 'hold' : 'blend',
-      intensity: applyIntroRampIntensity(Math.min(
+      intensity: applyMusicIntensityAuditionScale(applyIntroRampIntensity(Math.min(
         0.78,
         (introFoundationWindow ? 0.52 : (structureIntent === 'peak' ? 0.58 : (simplifiedFullTextureArrangement ? 0.22 : 0.46)))
         + ((level1ArrangementState.rhythmicComplexity - 0.35) * 0.1)
@@ -8102,7 +8249,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
         - (breakRebuildWindow ? 0.04 : 0)
         + (tensionWindow ? 0.08 : 0)
         - (releaseWindow ? 0.08 : 0)
-      ), 0.08, 0.78),
+      ), 0.08, 0.78), 0.04, 0.9),
     },
     primary_loop: {
       active: primaryLoopActive,
@@ -8110,7 +8257,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       preferredCarrier: 'group',
       protected: true,
       continuityBias: (introPrimaryLoopWindow || motifReturnActive || stableWindow) ? 'hold' : 'blend',
-      intensity: applyIntroRampIntensity(Math.min(
+      intensity: applyMusicIntensityAuditionScale(applyIntroRampIntensity(Math.min(
         0.88,
         primaryLoopIntensity
         + ((level1ArrangementState.melodicActivity - 0.5) * 0.08)
@@ -8119,7 +8266,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
         - (postBreakRecoveryWindow ? 0.12 : 0)
         + (tensionWindow ? 0.04 : 0)
         - (releaseWindow ? 0.06 : 0)
-      ), 0.08, 0.88),
+      ), 0.08, 0.88), 0.04, 0.98),
     },
     sparkle: {
       active: sparkleActive,
@@ -8127,7 +8274,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       preferredCarrier: 'group',
       protected: false,
       continuityBias: 'follow',
-      intensity: applyIntroRampIntensity(motifReturnActive ? 0.14 : (structureIntent === 'peak' ? 0.38 : (tensionWindow ? 0.3 : 0.18)), 0.04, 0.38),
+      intensity: applyMusicIntensityAuditionScale(applyIntroRampIntensity(motifReturnActive ? 0.14 : (structureIntent === 'peak' ? 0.38 : (tensionWindow ? 0.3 : 0.18)), 0.04, 0.38), 0.02, 0.5),
     },
     support: {
       active: simplifiedFullTextureArrangement ? false : supportActive,
@@ -8135,7 +8282,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       preferredCarrier: 'group',
       protected: false,
       continuityBias: stableWindow ? 'blend' : 'follow',
-      intensity: applyIntroRampIntensity(
+      intensity: applyMusicIntensityAuditionScale(applyIntroRampIntensity(
         simplifiedFullTextureArrangement
           ? 0
           : stableWindow
@@ -8145,7 +8292,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
             : (strongPrimaryLoopWindow ? 0.18 : (structureIntent === 'build' ? 0.38 : 0.3))),
         0.05,
         0.38
-      ),
+      ), 0.02, 0.5),
     },
     answer: {
       active: answerActive,
@@ -8158,7 +8305,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       continuityBias: degradedFullTextureOrnamentRecovery
         ? 'blend'
         : (stableWindow ? 'blend' : 'follow'),
-      intensity: applyIntroRampIntensity(
+      intensity: applyMusicIntensityAuditionScale(applyIntroRampIntensity(
         degradedFullTextureOrnamentRecovery
           ? 0.12
           : (strongPrimaryLoopWindow
@@ -8166,7 +8313,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
             : ((stableWindow ? 0.16 : 0.21) + (level1ArrangementState.ornamentation * 0.08))),
         0.05,
         degradedFullTextureOrnamentRecovery ? 0.16 : 0.24
-      ),
+      ), 0.02, 0.34),
     },
     __pressure: {
       combatPressure,
@@ -8181,6 +8328,8 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       arrangementEnergy: level1ArrangementState.energy,
       arrangementLayering: level1ArrangementState.layering,
       arrangementPhraseIntent: level1ArrangementState.phraseIntent,
+      intensityAuditionSection: level1ArrangementState.intensityAuditionSection,
+      intensityAuditionLaneScale: auditionLaneScale,
     },
     __arrangementState: level1ArrangementState,
     __level1Contract: {
@@ -8197,6 +8346,8 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       preferredCounterRhythmFamily: String(level1SupportPolicy.preferredCounterRhythmFamily || '').trim().toLowerCase(),
       answerPolicy: String(level1SupportPolicy.answerPolicy || '').trim().toLowerCase(),
       allowSparkle: level1SupportPolicy.allowSparkle === true,
+      intensityAuditionSection: level1ArrangementState.intensityAuditionSection,
+      laneIntensityScale: level1ArrangementState.laneIntensityScale,
       answerWindowActive: answerPhaseWindow === true,
       cadenceWindowActive: driveAnswerCadenceWindow === true,
       stableWindow: stableWindow === true,
@@ -8208,6 +8359,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       contractAnswerActive: answerActive === true,
     },
   };
+  return applyBeatSwarmMusicIntensityAuditionLanePlan(lanePlan, level1ArrangementState);
 }
 function publishDirectorLanePlanForBar(barIndex = 0) {
   const director = ensureSwarmDirector();
@@ -12133,10 +12285,18 @@ function updateEnemySpawnHealthScaling() {
 }
 function updateSpawnHealthDebugUi() {
   if (!spawnHealthDebugEl) return;
+  const arrangement = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+    ? musicModeRuntime.level1ArrangementState
+    : null;
+  const auditionStage = formatBeatSwarmIntensityAuditionStage(arrangement?.intensityAuditionSection);
+  if (auditionStage) {
+    const energy = Math.max(0, Math.min(1, Number(arrangement?.energy) || 0));
+    const scale = Math.max(0.1, Math.min(1.6, Number(arrangement?.laneIntensityScale) || 1));
+    spawnHealthDebugEl.textContent = `Intensity Stage: ${auditionStage} | Energy ${energy.toFixed(2)} | Lane Scale ${scale.toFixed(2)}`;
+    return;
+  }
   const hp = Math.max(1, Number(currentEnemySpawnMaxHp) || 1);
-  const composer = getComposerDirective();
-  const section = String(composer.sectionId || 'default');
-  spawnHealthDebugEl.textContent = `Enemy Spawn Max HP: ${hp.toFixed(2)} | Composer: ${section} | Intensity: ${Number(composer.intensity || 1).toFixed(2)} | DrumLoops: ${composer.drumLoops} | DrawSnakes: ${composer.drawSnakes}`;
+  spawnHealthDebugEl.textContent = `Enemy Spawn Max HP: ${hp.toFixed(2)}`;
 }
 function processPausePreviewPendingChains(beatIndex) {
   processPausePreviewPendingChainsRuntime({
@@ -20822,6 +20982,18 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
     lead_phrase: 0,
     answer_ornament: 0,
   };
+  const formationRoleWeights = {
+    foundation_groove: 0,
+    counter_rhythm: 0,
+    lead_phrase: 0,
+    answer_ornament: 0,
+  };
+  const formationArchetypeByRole = {
+    foundation_groove: new Set(),
+    counter_rhythm: new Set(),
+    lead_phrase: new Set(),
+    answer_ornament: new Set(),
+  };
   const activeGroups = Array.isArray(composerEnemyGroups) ? composerEnemyGroups : [];
   for (const group of activeGroups) {
     if (!group || group.active !== true || group.retiring) continue;
@@ -20845,6 +21017,10 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
     const soloBoost = String(group?.introCarrierBodyType || '').trim().toLowerCase() === 'solo' ? 1.2 : 1;
     const visualWeight = aliveMembers.length * presentationWeight * mergeBoost * soloBoost;
     roleWeights[roleId] += visualWeight;
+    if (String(group?.formationArchetype || '').trim()) {
+      formationRoleWeights[roleId] += visualWeight;
+      formationArchetypeByRole[roleId]?.add?.(String(group.formationArchetype || '').trim().toLowerCase());
+    }
   }
   const aliveVisualEnemies = (Array.isArray(enemies) ? enemies : []).filter((enemy) => (
     String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member'
@@ -20913,6 +21089,17 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
   const readableRoles = Object.entries(roleWeights)
     .filter(([, weight]) => Number(weight) >= 0.85)
     .map(([roleId]) => roleId);
+  const formationReadableRoles = Object.entries(formationRoleWeights)
+    .filter(([, weight]) => Number(weight) >= 0.85)
+    .map(([roleId]) => roleId);
+  const formationArchetypesCsv = Object.entries(formationArchetypeByRole)
+    .map(([roleId, archetypes]) => {
+      const list = Array.from(archetypes || []).map((value) => String(value || '').trim().toLowerCase()).filter(Boolean);
+      if (!list.length) return '';
+      return `${roleId}:${list.sort().join('+')}`;
+    })
+    .filter(Boolean)
+    .join(',');
   visualRoleReadabilityRuntime.readableRoles = readableRoles.slice();
   visualRoleReadabilityRuntime.distinctReadableRoleCount = readableRoles.length;
   visualRoleReadabilityRuntime.supportVisualWeight = Number(roleWeights.counter_rhythm) || 0;
@@ -20937,6 +21124,16 @@ function evaluateBeatSwarmVisualRoleReadabilityRuntime(barIndex, beatIndex, intr
         hpSectionEndBar: healthTestSection?.endBar == null ? null : Math.max(0, Math.trunc(Number(healthTestSection.endBar) || 0)),
         readableRoles: readableRoles.slice(),
         distinctReadableRoleCount: readableRoles.length,
+        formationReadableRoles: formationReadableRoles.slice(),
+        formationReadableRoleCount: formationReadableRoles.length,
+        formationFoundationVisualWeight: Number(formationRoleWeights.foundation_groove) || 0,
+        formationSupportVisualWeight: Number(formationRoleWeights.counter_rhythm) || 0,
+        formationLeadVisualWeight: Number(formationRoleWeights.lead_phrase) || 0,
+        formationOrnamentVisualWeight: Number(formationRoleWeights.answer_ornament) || 0,
+        formationSupportCollapsedDuringLead: formationRoleWeights.lead_phrase >= 0.85 && formationRoleWeights.counter_rhythm < 0.85,
+        formationLeadWithSupportVisible: formationRoleWeights.lead_phrase >= 0.85 && formationRoleWeights.counter_rhythm >= 0.85,
+        formationThreeRoleReadable: formationReadableRoles.length >= 3,
+        formationArchetypesCsv,
         foundationVisualWeight: Number(roleWeights.foundation_groove) || 0,
         supportVisualWeight: Number(roleWeights.counter_rhythm) || 0,
         leadVisualWeight: Number(roleWeights.lead_phrase) || 0,

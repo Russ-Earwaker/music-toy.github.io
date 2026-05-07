@@ -351,6 +351,16 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     actionType: String(payload?.actionType || '').trim().toLowerCase(),
     instrumentId: String(payload?.instrumentId || '').trim(),
     stage: String(payload?.stage || '').trim().toLowerCase(),
+    allowed: payload?.allowed === true,
+    rhythmFamily: String(payload?.rhythmFamily || '').trim().toLowerCase(),
+    lane: String(payload?.lane || '').trim().toLowerCase(),
+    stepInBar: clampInt(payload?.stepInBar, 0, 0),
+    barInPhrase: clampInt(payload?.barInPhrase, 0, 0),
+    allowedSteps: String(payload?.allowedSteps || '').trim().toLowerCase(),
+    allowedCount: clampInt(payload?.allowedCount, 0, 0),
+    blockedCount: clampInt(payload?.blockedCount, 0, 0),
+    inputCount: clampInt(payload?.inputCount, 0, 0),
+    outputCount: clampInt(payload?.outputCount, 0, 0),
     musicVoiceKey: String(payload?.musicVoiceKey || '').trim().toLowerCase(),
     musicLayer: String(payload?.musicLayer || '').trim().toLowerCase(),
     phraseId: String(payload?.phraseId || '').trim().toLowerCase(),
@@ -572,6 +582,18 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
       ? payload.readableRoles.map((s) => String(s || '').trim().toLowerCase()).filter(Boolean)
       : [],
     distinctReadableRoleCount: clampInt(payload?.distinctReadableRoleCount, 0, 0),
+    formationReadableRoles: Array.isArray(payload?.formationReadableRoles)
+      ? payload.formationReadableRoles.map((s) => String(s || '').trim().toLowerCase()).filter(Boolean)
+      : [],
+    formationReadableRoleCount: clampInt(payload?.formationReadableRoleCount, 0, 0),
+    formationFoundationVisualWeight: Number(payload?.formationFoundationVisualWeight) || 0,
+    formationSupportVisualWeight: Number(payload?.formationSupportVisualWeight) || 0,
+    formationLeadVisualWeight: Number(payload?.formationLeadVisualWeight) || 0,
+    formationOrnamentVisualWeight: Number(payload?.formationOrnamentVisualWeight) || 0,
+    formationSupportCollapsedDuringLead: payload?.formationSupportCollapsedDuringLead === true,
+    formationLeadWithSupportVisible: payload?.formationLeadWithSupportVisible === true,
+    formationThreeRoleReadable: payload?.formationThreeRoleReadable === true,
+    formationArchetypesCsv: String(payload?.formationArchetypesCsv || '').trim().toLowerCase(),
     foundationVisualWeight: Number(payload?.foundationVisualWeight) || 0,
     supportVisualWeight: Number(payload?.supportVisualWeight) || 0,
     leadVisualWeight: Number(payload?.leadVisualWeight) || 0,
@@ -644,6 +666,8 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     contractSparkleActive: payload?.contractSparkleActive === true,
     contractSupportActive: payload?.contractSupportActive === true,
     contractAnswerActive: payload?.contractAnswerActive === true,
+    intensityAuditionSection: String(payload?.intensityAuditionSection || '').trim().toLowerCase(),
+    laneIntensityScale: Number(payload?.laneIntensityScale) || 0,
     phraseIntent: String(payload?.phraseIntent || '').trim().toLowerCase(),
     arrangementEnergy: Number(payload?.energy ?? payload?.arrangementEnergy) || 0,
     arrangementLayering: Number(payload?.layering ?? payload?.arrangementLayering) || 0,
@@ -656,6 +680,10 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     arrangementSupportPatternBudget: String(payload?.supportPatternBudget || '').trim().toLowerCase(),
     arrangementCombatPressure: Number(payload?.combatPressure) || 0,
     arrangementMusicalPressure: Number(payload?.musicalPressure) || 0,
+    intensityAuditionSection: String(payload?.intensityAuditionSection || '').trim().toLowerCase(),
+    intensityAuditionBar: clampInt(payload?.auditionBar, -1, -1),
+    intensityAuditionIntroBars: clampInt(payload?.introBars, 0, 0),
+    arrangementLaneIntensityScale: Number(payload?.laneIntensityScale) || 0,
     phaseValidity: String(payload?.phaseValidity || '').trim().toLowerCase(),
     phaseEnteredBar: clampInt(payload?.phaseEnteredBar, -1, -1),
     earliestTransitionBar: clampInt(payload?.earliestTransitionBar, 0, 0),
@@ -879,6 +907,70 @@ function shouldStoreRawSystemEvent(eventType) {
   const type = String(eventType || '').trim().toLowerCase();
   if (!type) return false;
   return !SYSTEM_EVENT_SUMMARY_ONLY_TYPES.has(type);
+}
+
+function collectEnemyActionGateDiagnostics(session, maxBarIndex) {
+  const events = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
+  const inc = (bucket, keyLike) => {
+    const key = String(keyLike || 'unknown').trim().toLowerCase() || 'unknown';
+    bucket[key] = clampInt(bucket[key], 0, 0) + 1;
+  };
+  const diagnostics = {
+    decisionCount: 0,
+    allowedCount: 0,
+    blockedCount: 0,
+    blockRate: 0,
+    stepCount: 0,
+    byStage: {},
+    allowedByStage: {},
+    blockedByStage: {},
+    byRhythmFamily: {},
+    byLane: {},
+    blockedByLane: {},
+    reasonCounts: {},
+    stepAllowedTotal: 0,
+    stepBlockedTotal: 0,
+    avgAllowedPerStep: 0,
+    avgBlockedPerStep: 0,
+  };
+  for (const ev of events) {
+    const type = String(ev?.eventType || '').trim().toLowerCase();
+    if (type === 'music_enemy_action_gate_decision') {
+      const stage = String(ev?.stage || '').trim().toLowerCase() || 'unknown';
+      const rhythmFamily = String(ev?.rhythmFamily || '').trim().toLowerCase() || 'unknown';
+      const lane = String(ev?.lane || '').trim().toLowerCase() || 'unknown';
+      const reason = String(ev?.reason || '').trim().toLowerCase() || 'unknown';
+      const allowed = ev?.allowed === true;
+      diagnostics.decisionCount += 1;
+      if (allowed) {
+        diagnostics.allowedCount += 1;
+        inc(diagnostics.allowedByStage, stage);
+      } else {
+        diagnostics.blockedCount += 1;
+        inc(diagnostics.blockedByStage, stage);
+        inc(diagnostics.blockedByLane, lane);
+      }
+      inc(diagnostics.byStage, stage);
+      inc(diagnostics.byRhythmFamily, rhythmFamily);
+      inc(diagnostics.byLane, lane);
+      inc(diagnostics.reasonCounts, reason);
+    } else if (type === 'music_enemy_action_gate_step') {
+      diagnostics.stepCount += 1;
+      diagnostics.stepAllowedTotal += clampInt(ev?.allowedCount, 0, 0);
+      diagnostics.stepBlockedTotal += clampInt(ev?.blockedCount, 0, 0);
+    }
+  }
+  diagnostics.blockRate = diagnostics.decisionCount > 0
+    ? diagnostics.blockedCount / diagnostics.decisionCount
+    : 0;
+  diagnostics.avgAllowedPerStep = diagnostics.stepCount > 0
+    ? diagnostics.stepAllowedTotal / diagnostics.stepCount
+    : 0;
+  diagnostics.avgBlockedPerStep = diagnostics.stepCount > 0
+    ? diagnostics.stepBlockedTotal / diagnostics.stepCount
+    : 0;
+  return diagnostics;
 }
 
 function isAudibleEvent(eventLike) {
@@ -3599,6 +3691,194 @@ function collectArrangementSupportTrace(events) {
   };
 }
 
+function collectLevel1ArrangementMusicalityAssertion(metrics) {
+  const failures = [];
+  const getCount = (bucket, key) => Math.max(0, clampInt(bucket?.[key], 0, 0));
+  const getRange = (stats) => {
+    const min = Number(stats?.min) || 0;
+    const max = Number(stats?.max) || 0;
+    return Math.max(0, max - min);
+  };
+  const assertPass = (condition, id, details = null) => {
+    if (condition) return;
+    failures.push({
+      id,
+      ...(details && typeof details === 'object' ? details : {}),
+    });
+  };
+
+  const arrangementCount = Math.max(0, clampInt(metrics?.level1ArrangementTraceCount, 0, 0));
+  const introSetPieceCount = Math.max(0, clampInt(metrics?.level1ArrangementIntroSetPieceCount, 0, 0));
+  const introSetPieceViolationCount = Math.max(0, clampInt(metrics?.level1ArrangementIntroSetPieceViolationCount, 0, 0));
+  const postIntroArrangementCount = Math.max(0, clampInt(metrics?.level1ArrangementPostIntroCount, 0, 0));
+  const postIntroByIntent = metrics?.level1ArrangementPostIntroByPhraseIntent && typeof metrics.level1ArrangementPostIntroByPhraseIntent === 'object'
+    ? metrics.level1ArrangementPostIntroByPhraseIntent
+    : {};
+  const supportByIntent = metrics?.arrangementSupportByIntent && typeof metrics.arrangementSupportByIntent === 'object'
+    ? metrics.arrangementSupportByIntent
+    : {};
+  const formationArchetypeCounts = metrics?.formationRoleArchetypeCounts && typeof metrics.formationRoleArchetypeCounts === 'object'
+    ? metrics.formationRoleArchetypeCounts
+    : {};
+  const cadencePunctuationCount = getCount(supportByIntent, 'cadence') + getCount(formationArchetypeCounts, 'answer_ornament:answer_echo');
+  const nonIntroSupportCount = Object.entries(supportByIntent).reduce((total, [intent, count]) => {
+    const key = String(intent || '').trim().toLowerCase();
+    if (!key || key === 'unknown' || key === 'intro') return total;
+    return total + Math.max(0, clampInt(count, 0, 0));
+  }, 0);
+  const leadVariation = metrics?.leadVariation && typeof metrics.leadVariation === 'object'
+    ? metrics.leadVariation
+    : {};
+  const continuityPassed = metrics?.laneContinuityAssertionPassed === true
+    && Math.max(0, clampInt(metrics?.laneContinuityBreaks, 0, 0)) === 0
+    && Math.max(0, clampInt(metrics?.laneResetHandoffs, 0, 0)) === 0
+    && Math.max(0, clampInt(metrics?.laneSystemVoiceFallbacks, 0, 0)) === 0
+    && Math.max(0, clampInt(metrics?.protectedLaneVacantFallbacks, 0, 0)) === 0;
+  const contractPassed = metrics?.level1ContractCompliancePassed === true
+    && Math.max(0, clampInt(metrics?.level1ContractViolationCount, 0, 0)) === 0;
+  const fullTextureReadableShare = Number(metrics?.visualRoleFullTextureThreeRoleReadableShare) || 0;
+  const fullTextureLeadSupportShare = Number(metrics?.visualRoleFullTextureLeadWithSupportVisibleShare) || 0;
+  const supportCollapsedShare = Number(metrics?.visualRoleSupportCollapsedDuringLeadShare) || 0;
+  const avgDistinctReadableRoleCount = Number(metrics?.visualRoleAvgDistinctReadableRoleCount) || 0;
+
+  assertPass(arrangementCount >= 96, 'arrangement_trace_missing_or_short', { arrangementCount, minimum: 96 });
+  assertPass(introSetPieceCount >= 8, 'intro_set_piece_trace_missing', { introSetPieceCount, minimum: 8 });
+  assertPass(introSetPieceViolationCount === 0, 'intro_set_piece_not_protected', { introSetPieceViolationCount });
+  assertPass(postIntroArrangementCount >= 64, 'post_intro_arrangement_trace_short', { postIntroArrangementCount, minimum: 64 });
+  assertPass(getCount(postIntroByIntent, 'body') >= 16, 'body_phrase_underrepresented', { count: getCount(postIntroByIntent, 'body'), minimum: 16 });
+  assertPass(getCount(postIntroByIntent, 'build') >= 16, 'build_phrase_underrepresented', { count: getCount(postIntroByIntent, 'build'), minimum: 16 });
+  assertPass(getCount(postIntroByIntent, 'recovery') >= 4, 'recovery_phrase_missing', { count: getCount(postIntroByIntent, 'recovery'), minimum: 4 });
+  assertPass(getCount(postIntroByIntent, 'cadence') >= 2, 'cadence_phrase_missing', { count: getCount(postIntroByIntent, 'cadence'), minimum: 2 });
+  assertPass(getRange(metrics?.level1ArrangementEnergy) >= 0.3, 'energy_range_too_flat', { range: Number(getRange(metrics?.level1ArrangementEnergy).toFixed(3)), minimum: 0.3 });
+  assertPass(getRange(metrics?.level1ArrangementMelodicActivity) >= 0.3, 'melodic_activity_range_too_flat', { range: Number(getRange(metrics?.level1ArrangementMelodicActivity).toFixed(3)), minimum: 0.3 });
+  assertPass(nonIntroSupportCount >= 48, 'arrangement_support_trace_short', { nonIntroSupportCount, minimum: 48 });
+  assertPass(getCount(supportByIntent, 'body') > 0, 'body_support_missing', { count: getCount(supportByIntent, 'body') });
+  assertPass(getCount(supportByIntent, 'build') > 0, 'build_support_missing', { count: getCount(supportByIntent, 'build') });
+  assertPass(getCount(supportByIntent, 'recovery') > 0, 'recovery_support_missing', { count: getCount(supportByIntent, 'recovery') });
+  assertPass(cadencePunctuationCount > 0, 'cadence_punctuation_missing', {
+    cadenceSupportCount: getCount(supportByIntent, 'cadence'),
+    answerEchoCount: getCount(formationArchetypeCounts, 'answer_ornament:answer_echo'),
+  });
+  assertPass(Math.max(0, clampInt(leadVariation?.count, 0, 0)) >= 96, 'lead_variation_trace_short', { count: Math.max(0, clampInt(leadVariation?.count, 0, 0)), minimum: 96 });
+  assertPass(Math.max(0, clampInt(leadVariation?.distinctFamilyCount, 0, 0)) >= 2, 'lead_family_variation_missing', { count: Math.max(0, clampInt(leadVariation?.distinctFamilyCount, 0, 0)), minimum: 2 });
+  assertPass(Math.max(0, clampInt(leadVariation?.distinctContourCount, 0, 0)) >= 3, 'lead_contour_variation_missing', { count: Math.max(0, clampInt(leadVariation?.distinctContourCount, 0, 0)), minimum: 3 });
+  assertPass(continuityPassed, 'lane_continuity_failed', {
+    laneContinuityBreaks: Math.max(0, clampInt(metrics?.laneContinuityBreaks, 0, 0)),
+    laneResetHandoffs: Math.max(0, clampInt(metrics?.laneResetHandoffs, 0, 0)),
+    laneSystemVoiceFallbacks: Math.max(0, clampInt(metrics?.laneSystemVoiceFallbacks, 0, 0)),
+    protectedLaneVacantFallbacks: Math.max(0, clampInt(metrics?.protectedLaneVacantFallbacks, 0, 0)),
+  });
+  assertPass(contractPassed, 'level1_contract_failed', {
+    level1ContractViolationCount: Math.max(0, clampInt(metrics?.level1ContractViolationCount, 0, 0)),
+  });
+  assertPass(fullTextureReadableShare >= 0.85, 'full_texture_readability_low', { share: Number(fullTextureReadableShare.toFixed(3)), minimum: 0.85 });
+  assertPass(fullTextureLeadSupportShare >= 0.85, 'full_texture_lead_support_visibility_low', { share: Number(fullTextureLeadSupportShare.toFixed(3)), minimum: 0.85 });
+  assertPass(supportCollapsedShare <= 0.15, 'support_collapsed_during_lead_high', { share: Number(supportCollapsedShare.toFixed(3)), maximum: 0.15 });
+  assertPass(avgDistinctReadableRoleCount >= 2.8, 'readable_role_count_low', { count: Number(avgDistinctReadableRoleCount.toFixed(3)), minimum: 2.8 });
+
+  return {
+    passed: failures.length === 0,
+    status: failures.length === 0 ? 'passed' : 'failed',
+    failureCount: failures.length,
+    failures,
+    thresholds: {
+      arrangementTraceMin: 96,
+      introSetPieceTraceMin: 8,
+      postIntroTraceMin: 64,
+      bodyPhraseMin: 16,
+      buildPhraseMin: 16,
+      recoveryPhraseMin: 4,
+      cadencePhraseMin: 2,
+      arrangementSupportNonIntroMin: 48,
+      fullTextureReadableShareMin: 0.85,
+      fullTextureLeadSupportShareMin: 0.85,
+      supportCollapsedDuringLeadShareMax: 0.15,
+      avgDistinctReadableRoleCountMin: 2.8,
+    },
+  };
+}
+
+function collectMusicIntensityAuditionAssertion(metrics) {
+  const failures = [];
+  const getCount = (bucket, key) => Math.max(0, clampInt(bucket?.[key], 0, 0));
+  const assertPass = (condition, id, details = null) => {
+    if (condition) return;
+    failures.push({
+      id,
+      ...(details && typeof details === 'object' ? details : {}),
+    });
+  };
+  const stages = ['low', 'medium', 'build', 'peak', 'release', 'settle'];
+  const stageCounts = metrics?.level1ArrangementByIntensityAuditionSection && typeof metrics.level1ArrangementByIntensityAuditionSection === 'object'
+    ? metrics.level1ArrangementByIntensityAuditionSection
+    : {};
+  const lanePresence = metrics?.level1IntensityAuditionLanePresence && typeof metrics.level1IntensityAuditionLanePresence === 'object'
+    ? metrics.level1IntensityAuditionLanePresence
+    : {};
+  const hasAudition = stages.some((stage) => getCount(stageCounts, stage) > 0);
+  if (!hasAudition) {
+    return {
+      passed: false,
+      status: 'not_detected',
+      failureCount: 1,
+      failures: [{ id: 'intensity_audition_not_detected' }],
+      stageCounts,
+      lanePresence,
+      thresholds: {
+        stageTraceMin: 2,
+        energyRangeMin: 0.6,
+        layeringRangeMin: 0.55,
+      },
+    };
+  }
+
+  for (const stage of stages) {
+    assertPass(getCount(stageCounts, stage) >= 2, 'stage_trace_missing_or_short', {
+      stage,
+      count: getCount(stageCounts, stage),
+      minimum: 2,
+    });
+  }
+  const energyRange = Math.max(0, (Number(metrics?.level1ArrangementEnergy?.max) || 0) - (Number(metrics?.level1ArrangementEnergy?.min) || 0));
+  const layeringRange = Math.max(0, (Number(metrics?.level1ArrangementLayering?.max) || 0) - (Number(metrics?.level1ArrangementLayering?.min) || 0));
+  assertPass(energyRange >= 0.6, 'intensity_energy_range_too_flat', { range: Number(energyRange.toFixed(3)), minimum: 0.6 });
+  assertPass(layeringRange >= 0.55, 'intensity_layering_range_too_flat', { range: Number(layeringRange.toFixed(3)), minimum: 0.55 });
+
+  const low = lanePresence.low || {};
+  const medium = lanePresence.medium || {};
+  const build = lanePresence.build || {};
+  const peak = lanePresence.peak || {};
+  const release = lanePresence.release || {};
+  assertPass(Math.max(0, clampInt(low?.primary_loop, 0, 0)) === 0, 'low_stage_lead_should_be_absent', { primaryLoopCount: Math.max(0, clampInt(low?.primary_loop, 0, 0)) });
+  assertPass(Math.max(0, clampInt(medium?.primary_loop, 0, 0)) > 0, 'medium_stage_lead_missing', { primaryLoopCount: Math.max(0, clampInt(medium?.primary_loop, 0, 0)) });
+  assertPass(Math.max(0, clampInt(build?.support, 0, 0)) > 0, 'build_stage_support_missing', { supportCount: Math.max(0, clampInt(build?.support, 0, 0)) });
+  assertPass(Math.max(0, clampInt(peak?.maxActiveLaneCount, 0, 0)) >= 5, 'peak_stage_layer_stack_too_thin', { maxActiveLaneCount: Math.max(0, clampInt(peak?.maxActiveLaneCount, 0, 0)), minimum: 5 });
+  assertPass(Math.max(0, clampInt(peak?.sparkle, 0, 0)) > 0, 'peak_stage_sparkle_missing', { sparkleCount: Math.max(0, clampInt(peak?.sparkle, 0, 0)) });
+  assertPass(Math.max(0, clampInt(peak?.answer, 0, 0)) > 0, 'peak_stage_answer_missing', { answerCount: Math.max(0, clampInt(peak?.answer, 0, 0)) });
+  assertPass(Math.max(0, clampInt(release?.maxActiveLaneCount, 0, 0)) <= 1, 'release_stage_not_stripped_back', { maxActiveLaneCount: Math.max(0, clampInt(release?.maxActiveLaneCount, 0, 0)), maximum: 1 });
+  assertPass(metrics?.laneContinuityAssertionPassed === true && Math.max(0, clampInt(metrics?.laneContinuityBreaks, 0, 0)) === 0, 'lane_continuity_failed', {
+    laneContinuityBreaks: Math.max(0, clampInt(metrics?.laneContinuityBreaks, 0, 0)),
+  });
+
+  return {
+    passed: failures.length === 0,
+    status: failures.length === 0 ? 'passed' : 'failed',
+    failureCount: failures.length,
+    failures,
+    stageCounts,
+    lanePresence,
+    energyRange: Number(energyRange.toFixed(3)),
+    layeringRange: Number(layeringRange.toFixed(3)),
+    thresholds: {
+      stageTraceMin: 2,
+      energyRangeMin: 0.6,
+      layeringRangeMin: 0.55,
+      peakActiveLaneCountMin: 5,
+      releaseActiveLaneCountMax: 1,
+    },
+  };
+}
+
 function collectLaneCompliance(events) {
   const createdEnemyEvents = events.filter((ev) => {
     if (String(ev?.phase || '').trim().toLowerCase() !== 'created') return false;
@@ -3988,6 +4268,13 @@ function computeSummary(metrics) {
   const visualRoleFullTextureLeadWithSupportVisibleShare = Number(metrics?.visualRoleFullTextureLeadWithSupportVisibleShare) || 0;
   const visualRoleSupportCollapsedDuringLeadShare = Number(metrics?.visualRoleSupportCollapsedDuringLeadShare) || 0;
   const visualRoleAvgDistinctReadableRoleCount = Number(metrics?.visualRoleAvgDistinctReadableRoleCount) || 0;
+  const formationRoleFullTextureThreeRoleReadableShare = Number(metrics?.formationRoleFullTextureThreeRoleReadableShare) || 0;
+  const formationRoleFullTextureLeadWithSupportVisibleShare = Number(metrics?.formationRoleFullTextureLeadWithSupportVisibleShare) || 0;
+  const formationRoleSupportCollapsedDuringLeadShare = Number(metrics?.formationRoleSupportCollapsedDuringLeadShare) || 0;
+  const formationRoleAvgDistinctReadableRoleCount = Number(metrics?.formationRoleAvgDistinctReadableRoleCount) || 0;
+  const level1ArrangementMusicality = metrics?.level1ArrangementMusicality && typeof metrics.level1ArrangementMusicality === 'object'
+    ? metrics.level1ArrangementMusicality
+    : null;
   const visualRoleReadabilityStatus = visualRoleTraceCount <= 0
     ? 'missing'
     : (
@@ -4104,6 +4391,12 @@ function computeSummary(metrics) {
     visualRoleFullTextureLeadWithSupportVisibleShare: Number(visualRoleFullTextureLeadWithSupportVisibleShare.toFixed(3)),
     visualRoleSupportCollapsedDuringLeadShare: Number(visualRoleSupportCollapsedDuringLeadShare.toFixed(3)),
     visualRoleAvgDistinctReadableRoleCount: Number(visualRoleAvgDistinctReadableRoleCount.toFixed(3)),
+    formationRoleFullTextureThreeRoleReadableShare: Number(formationRoleFullTextureThreeRoleReadableShare.toFixed(3)),
+    formationRoleFullTextureLeadWithSupportVisibleShare: Number(formationRoleFullTextureLeadWithSupportVisibleShare.toFixed(3)),
+    formationRoleSupportCollapsedDuringLeadShare: Number(formationRoleSupportCollapsedDuringLeadShare.toFixed(3)),
+    formationRoleAvgDistinctReadableRoleCount: Number(formationRoleAvgDistinctReadableRoleCount.toFixed(3)),
+    level1ArrangementMusicality: String(level1ArrangementMusicality?.status || '').trim().toLowerCase() || 'unknown',
+    level1ArrangementMusicalityFailureCount: Math.max(0, clampInt(level1ArrangementMusicality?.failureCount, 0, 0)),
   };
 }
 
@@ -4490,6 +4783,9 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
   const byAnswerPolicy = {};
   const byAllowedRoleSet = {};
   const byEpoch = {};
+  const byIntensityAuditionSection = {};
+  const byIntensityAuditionLaneSet = {};
+  const intensityAuditionLanePresence = {};
   const parseAllowedRoles = (ev) => String(ev?.allowedRolesCsv || '').trim().toLowerCase()
     .split(',')
     .map((role) => String(role || '').trim().toLowerCase())
@@ -4506,6 +4802,36 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
     if (ev?.contractAnswerActive === true) answerActiveCount += 1;
     if (ev?.contractSparkleActive === true) sparkleActiveCount += 1;
     if (ev?.contractSupportActive === true) supportActiveCount += 1;
+    const auditionSection = String(ev?.intensityAuditionSection || '').trim().toLowerCase();
+    if (auditionSection) {
+      inc(byIntensityAuditionSection, auditionSection);
+      const activeLanes = [];
+      if (ev?.contractFoundationActive === true) activeLanes.push('foundation');
+      if (ev?.contractSecondaryLoopActive === true) activeLanes.push('secondary_loop');
+      if (ev?.contractPrimaryLoopActive === true) activeLanes.push('primary_loop');
+      if (ev?.contractSupportActive === true) activeLanes.push('support');
+      if (ev?.contractSparkleActive === true) activeLanes.push('sparkle');
+      if (ev?.contractAnswerActive === true) activeLanes.push('answer');
+      inc(byIntensityAuditionLaneSet, `${auditionSection}:${activeLanes.join('|') || 'none'}`);
+      if (!intensityAuditionLanePresence[auditionSection]) {
+        intensityAuditionLanePresence[auditionSection] = {
+          count: 0,
+          foundation: 0,
+          secondary_loop: 0,
+          primary_loop: 0,
+          support: 0,
+          sparkle: 0,
+          answer: 0,
+          maxActiveLaneCount: 0,
+        };
+      }
+      const presence = intensityAuditionLanePresence[auditionSection];
+      presence.count += 1;
+      presence.maxActiveLaneCount = Math.max(presence.maxActiveLaneCount, activeLanes.length);
+      for (const laneId of activeLanes) {
+        presence[laneId] = Math.max(0, clampInt(presence[laneId], 0, 0)) + 1;
+      }
+    }
     inc(bySupportBudget, ev?.supportPatternBudget);
     inc(byPreferredSupportSteps, ev?.preferredSupportStepIndicesCsv);
     inc(byCounterRhythmFamily, ev?.preferredCounterRhythmFamily);
@@ -4526,6 +4852,9 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
     byAnswerPolicy,
     byAllowedRoleSet,
     byEpoch,
+    byIntensityAuditionSection,
+    byIntensityAuditionLaneSet,
+    intensityAuditionLanePresence,
     sample: events.slice(0, 24).map((ev) => ({
       barIndex: clampInt(ev?.barIndex, 0, 0),
       beatIndex: clampInt(ev?.beatIndex, 0, 0),
@@ -4550,6 +4879,8 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
         support: ev?.contractSupportActive === true,
         answer: ev?.contractAnswerActive === true,
       },
+      intensityAuditionSection: String(ev?.intensityAuditionSection || '').trim().toLowerCase(),
+      laneIntensityScale: Number(ev?.laneIntensityScale) || 0,
     })),
   };
 }
@@ -4592,13 +4923,29 @@ function collectLevel1ArrangementTrace(session, maxBarIndex) {
   const bySectionIntent = {};
   const byTensionProfile = {};
   const bySupportBudget = {};
+  const byIntensityAuditionSection = {};
+  const introSetPiecePhases = new Set(['intro_teach', 'groove_establish']);
+  let introSetPieceCount = 0;
+  let introSetPieceViolationCount = 0;
+  let postIntroArrangementCount = 0;
+  const postIntroByPhraseIntent = {};
   for (const ev of events) {
+    const phraseIntent = String(ev?.phraseIntent || '').trim().toLowerCase() || 'unknown';
+    const activeLevelPhase = String(ev?.activeLevelPhase || '').trim().toLowerCase();
+    if (introSetPiecePhases.has(activeLevelPhase)) {
+      introSetPieceCount += 1;
+      if (phraseIntent !== 'intro') introSetPieceViolationCount += 1;
+    } else {
+      postIntroArrangementCount += 1;
+      inc(postIntroByPhraseIntent, phraseIntent);
+    }
     inc(byPhraseIntent, ev?.phraseIntent);
     inc(byPhase, ev?.activeLevelPhase);
     inc(byMode, ev?.activeMusicMode);
     inc(bySectionIntent, ev?.arrangementSectionIntent);
     inc(byTensionProfile, ev?.arrangementTensionProfile);
     inc(bySupportBudget, ev?.arrangementSupportPatternBudget);
+    inc(byIntensityAuditionSection, ev?.intensityAuditionSection);
     for (const field of numericFields) {
       const value = Number(ev?.[field]) || 0;
       stats[field].min = Math.min(stats[field].min, value);
@@ -4624,6 +4971,11 @@ function collectLevel1ArrangementTrace(session, maxBarIndex) {
     bySectionIntent,
     byTensionProfile,
     bySupportBudget,
+    byIntensityAuditionSection,
+    introSetPieceCount,
+    introSetPieceViolationCount,
+    postIntroArrangementCount,
+    postIntroByPhraseIntent,
     energy: summarize('arrangementEnergy'),
     layering: summarize('arrangementLayering'),
     rhythmicComplexity: summarize('arrangementRhythmicComplexity'),
@@ -4645,6 +4997,9 @@ function collectLevel1ArrangementTrace(session, maxBarIndex) {
       melodicActivity: Number(ev?.arrangementMelodicActivity) || 0,
       ornamentation: Number(ev?.arrangementOrnamentation) || 0,
       stability: Number(ev?.arrangementStability) || 0,
+      intensityAuditionSection: String(ev?.intensityAuditionSection || '').trim().toLowerCase(),
+      intensityAuditionBar: clampInt(ev?.intensityAuditionBar, -1, -1),
+      laneIntensityScale: Number(ev?.arrangementLaneIntensityScale) || 0,
     })),
   };
 }
@@ -4870,6 +5225,18 @@ function collectVisualRoleReadabilityTrace(session, maxBarIndex) {
   let supportCollapsedDuringLeadCount = 0;
   let leadWithSupportVisibleCount = 0;
   let fullTextureLeadWithSupportVisibleCount = 0;
+  let formationThreeRoleCount = 0;
+  let formationFullTextureThreeRoleCount = 0;
+  let formationSupportCollapsedDuringLeadCount = 0;
+  let formationLeadWithSupportVisibleCount = 0;
+  let formationFullTextureLeadWithSupportVisibleCount = 0;
+  let formationDistinctRoleTotal = 0;
+  let formationFoundationWeightTotal = 0;
+  let formationSupportWeightTotal = 0;
+  let formationLeadWeightTotal = 0;
+  let formationOrnamentWeightTotal = 0;
+  const byFormationReadableRoleSet = {};
+  const byFormationArchetypeRole = {};
   let distinctRoleTotal = 0;
   let foundationWeightTotal = 0;
   let supportWeightTotal = 0;
@@ -4881,6 +5248,9 @@ function collectVisualRoleReadabilityTrace(session, maxBarIndex) {
     const readableRoles = Array.isArray(ev?.readableRoles)
       ? ev.readableRoles.map((role) => String(role || '').trim().toLowerCase()).filter(Boolean).sort()
       : [];
+    const formationReadableRoles = Array.isArray(ev?.formationReadableRoles)
+      ? ev.formationReadableRoles.map((role) => String(role || '').trim().toLowerCase()).filter(Boolean).sort()
+      : [];
     if (fullTexture) fullTextureCount += 1;
     for (const role of readableRoles) {
       if (Object.prototype.hasOwnProperty.call(readableRoleCounts, role)) {
@@ -4888,7 +5258,11 @@ function collectVisualRoleReadabilityTrace(session, maxBarIndex) {
       }
     }
     inc(byReadableRoleSet, readableRoles.join('|') || 'none');
+    inc(byFormationReadableRoleSet, formationReadableRoles.join('|') || 'none');
+    const archetypeTokens = String(ev?.formationArchetypesCsv || '').split(',').map((part) => part.trim()).filter(Boolean);
+    for (const token of archetypeTokens) inc(byFormationArchetypeRole, token);
     const distinctCount = Math.max(0, clampInt(ev?.distinctReadableRoleCount, readableRoles.length, 0));
+    const formationDistinctCount = Math.max(0, clampInt(ev?.formationReadableRoleCount, formationReadableRoles.length, 0));
     const directHpSection = String(ev?.hpSectionId || '').trim()
       ? {
           sectionId: String(ev.hpSectionId || '').trim().toLowerCase(),
@@ -4905,14 +5279,28 @@ function collectVisualRoleReadabilityTrace(session, maxBarIndex) {
     supportWeightTotal += Math.max(0, Number(ev?.supportVisualWeight) || 0);
     leadWeightTotal += Math.max(0, Number(ev?.leadVisualWeight) || 0);
     ornamentWeightTotal += Math.max(0, Number(ev?.ornamentVisualWeight) || 0);
+    formationDistinctRoleTotal += formationDistinctCount;
+    formationFoundationWeightTotal += Math.max(0, Number(ev?.formationFoundationVisualWeight) || 0);
+    formationSupportWeightTotal += Math.max(0, Number(ev?.formationSupportVisualWeight) || 0);
+    formationLeadWeightTotal += Math.max(0, Number(ev?.formationLeadVisualWeight) || 0);
+    formationOrnamentWeightTotal += Math.max(0, Number(ev?.formationOrnamentVisualWeight) || 0);
     if (ev?.threeRoleReadable === true || distinctCount >= 3) {
       threeRoleCount += 1;
       if (fullTexture) fullTextureThreeRoleCount += 1;
     }
+    if (ev?.formationThreeRoleReadable === true || formationDistinctCount >= 3) {
+      formationThreeRoleCount += 1;
+      if (fullTexture) formationFullTextureThreeRoleCount += 1;
+    }
     if (ev?.supportCollapsedDuringLead === true) supportCollapsedDuringLeadCount += 1;
+    if (ev?.formationSupportCollapsedDuringLead === true) formationSupportCollapsedDuringLeadCount += 1;
     if (ev?.leadWithSupportVisible === true) {
       leadWithSupportVisibleCount += 1;
       if (fullTexture) fullTextureLeadWithSupportVisibleCount += 1;
+    }
+    if (ev?.formationLeadWithSupportVisible === true) {
+      formationLeadWithSupportVisibleCount += 1;
+      if (fullTexture) formationFullTextureLeadWithSupportVisibleCount += 1;
     }
   }
   const roleShares = {};
@@ -4952,12 +5340,24 @@ function collectVisualRoleReadabilityTrace(session, maxBarIndex) {
     leadWithSupportVisibleShare: count > 0 ? leadWithSupportVisibleCount / count : 0,
     fullTextureLeadWithSupportVisibleShare: fullTextureCount > 0 ? fullTextureLeadWithSupportVisibleCount / fullTextureCount : 0,
     avgDistinctReadableRoleCount: count > 0 ? distinctRoleTotal / count : 0,
+    formationThreeRoleReadableShare: count > 0 ? formationThreeRoleCount / count : 0,
+    formationFullTextureThreeRoleReadableShare: fullTextureCount > 0 ? formationFullTextureThreeRoleCount / fullTextureCount : 0,
+    formationSupportCollapsedDuringLeadShare: count > 0 ? formationSupportCollapsedDuringLeadCount / count : 0,
+    formationLeadWithSupportVisibleShare: count > 0 ? formationLeadWithSupportVisibleCount / count : 0,
+    formationFullTextureLeadWithSupportVisibleShare: fullTextureCount > 0 ? formationFullTextureLeadWithSupportVisibleCount / fullTextureCount : 0,
+    formationAvgDistinctReadableRoleCount: count > 0 ? formationDistinctRoleTotal / count : 0,
+    formationAvgFoundationVisualWeight: count > 0 ? formationFoundationWeightTotal / count : 0,
+    formationAvgSupportVisualWeight: count > 0 ? formationSupportWeightTotal / count : 0,
+    formationAvgLeadVisualWeight: count > 0 ? formationLeadWeightTotal / count : 0,
+    formationAvgOrnamentVisualWeight: count > 0 ? formationOrnamentWeightTotal / count : 0,
     avgFoundationVisualWeight: count > 0 ? foundationWeightTotal / count : 0,
     avgSupportVisualWeight: count > 0 ? supportWeightTotal / count : 0,
     avgLeadVisualWeight: count > 0 ? leadWeightTotal / count : 0,
     avgOrnamentVisualWeight: count > 0 ? ornamentWeightTotal / count : 0,
     readableRoleShares: roleShares,
     byReadableRoleSet,
+    byFormationReadableRoleSet,
+    byFormationArchetypeRole,
     byEnemyHealthSection,
     sample: events.slice(0, 24).map((ev) => ({
       barIndex: clampInt(ev?.barIndex, 0, 0),
@@ -4966,6 +5366,16 @@ function collectVisualRoleReadabilityTrace(session, maxBarIndex) {
       introStage: String(ev?.introStage || '').trim().toLowerCase(),
       readableRoles: Array.isArray(ev?.readableRoles) ? ev.readableRoles.slice(0, 8) : [],
       distinctReadableRoleCount: clampInt(ev?.distinctReadableRoleCount, 0, 0),
+      formationReadableRoles: Array.isArray(ev?.formationReadableRoles) ? ev.formationReadableRoles.slice(0, 8) : [],
+      formationReadableRoleCount: clampInt(ev?.formationReadableRoleCount, 0, 0),
+      formationArchetypesCsv: String(ev?.formationArchetypesCsv || '').trim().toLowerCase(),
+      formationFoundationVisualWeight: Number(ev?.formationFoundationVisualWeight) || 0,
+      formationSupportVisualWeight: Number(ev?.formationSupportVisualWeight) || 0,
+      formationLeadVisualWeight: Number(ev?.formationLeadVisualWeight) || 0,
+      formationOrnamentVisualWeight: Number(ev?.formationOrnamentVisualWeight) || 0,
+      formationSupportCollapsedDuringLead: ev?.formationSupportCollapsedDuringLead === true,
+      formationLeadWithSupportVisible: ev?.formationLeadWithSupportVisible === true,
+      formationThreeRoleReadable: ev?.formationThreeRoleReadable === true,
       foundationVisualWeight: Number(ev?.foundationVisualWeight) || 0,
       supportVisualWeight: Number(ev?.supportVisualWeight) || 0,
       leadVisualWeight: Number(ev?.leadVisualWeight) || 0,
@@ -5177,6 +5587,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const level1ArrangementTrace = collectLevel1ArrangementTrace(session, maxBarIndex);
   const level1ContractCompliance = collectLevel1ContractComplianceTrace(session, executedEvents, maxBarIndex);
   const visualRoleReadabilityTrace = collectVisualRoleReadabilityTrace(session, maxBarIndex);
+  const enemyActionGate = collectEnemyActionGateDiagnostics(session, maxBarIndex);
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -5242,6 +5653,16 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     directorSpawnRejectSpawnBudgetCount: Number(threatBudgetUsage?.spawnDirector?.rejectionReasonCounts?.spawn_budget) || 0,
     directorSpawnRejectRhythmSlotCount: Number(threatBudgetUsage?.spawnDirector?.rejectionReasonCounts?.rhythm_slot) || 0,
     directorSpawnRejectMelodySlotCount: Number(threatBudgetUsage?.spawnDirector?.rejectionReasonCounts?.melody_slot) || 0,
+    enemyActionGate,
+    enemyActionGateDecisionCount: Number(enemyActionGate?.decisionCount) || 0,
+    enemyActionGateAllowedCount: Number(enemyActionGate?.allowedCount) || 0,
+    enemyActionGateBlockedCount: Number(enemyActionGate?.blockedCount) || 0,
+    enemyActionGateBlockRate: Number(enemyActionGate?.blockRate) || 0,
+    enemyActionGateByStage: enemyActionGate?.byStage && typeof enemyActionGate.byStage === 'object' ? { ...enemyActionGate.byStage } : {},
+    enemyActionGateAllowedByStage: enemyActionGate?.allowedByStage && typeof enemyActionGate.allowedByStage === 'object' ? { ...enemyActionGate.allowedByStage } : {},
+    enemyActionGateBlockedByStage: enemyActionGate?.blockedByStage && typeof enemyActionGate.blockedByStage === 'object' ? { ...enemyActionGate.blockedByStage } : {},
+    enemyActionGateByRhythmFamily: enemyActionGate?.byRhythmFamily && typeof enemyActionGate.byRhythmFamily === 'object' ? { ...enemyActionGate.byRhythmFamily } : {},
+    enemyActionGateByLane: enemyActionGate?.byLane && typeof enemyActionGate.byLane === 'object' ? { ...enemyActionGate.byLane } : {},
     callResponse,
     callCount: Number(callResponse?.callCount) || 0,
     responsePairs: Number(callResponse?.responsePairs) || 0,
@@ -5495,6 +5916,15 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     level1ContractByAllowedRoleSet: level1ContractTrace?.byAllowedRoleSet && typeof level1ContractTrace.byAllowedRoleSet === 'object'
       ? { ...level1ContractTrace.byAllowedRoleSet }
       : {},
+    level1ContractByIntensityAuditionSection: level1ContractTrace?.byIntensityAuditionSection && typeof level1ContractTrace.byIntensityAuditionSection === 'object'
+      ? { ...level1ContractTrace.byIntensityAuditionSection }
+      : {},
+    level1ContractByIntensityAuditionLaneSet: level1ContractTrace?.byIntensityAuditionLaneSet && typeof level1ContractTrace.byIntensityAuditionLaneSet === 'object'
+      ? { ...level1ContractTrace.byIntensityAuditionLaneSet }
+      : {},
+    level1IntensityAuditionLanePresence: level1ContractTrace?.intensityAuditionLanePresence && typeof level1ContractTrace.intensityAuditionLanePresence === 'object'
+      ? JSON.parse(JSON.stringify(level1ContractTrace.intensityAuditionLanePresence))
+      : {},
     level1ContractSample: Array.isArray(level1ContractTrace?.sample)
       ? level1ContractTrace.sample.slice(0, 24)
       : [],
@@ -5507,6 +5937,15 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       : {},
     level1ArrangementByMode: level1ArrangementTrace?.byMode && typeof level1ArrangementTrace.byMode === 'object'
       ? { ...level1ArrangementTrace.byMode }
+      : {},
+    level1ArrangementByIntensityAuditionSection: level1ArrangementTrace?.byIntensityAuditionSection && typeof level1ArrangementTrace.byIntensityAuditionSection === 'object'
+      ? { ...level1ArrangementTrace.byIntensityAuditionSection }
+      : {},
+    level1ArrangementIntroSetPieceCount: Number(level1ArrangementTrace?.introSetPieceCount) || 0,
+    level1ArrangementIntroSetPieceViolationCount: Number(level1ArrangementTrace?.introSetPieceViolationCount) || 0,
+    level1ArrangementPostIntroCount: Number(level1ArrangementTrace?.postIntroArrangementCount) || 0,
+    level1ArrangementPostIntroByPhraseIntent: level1ArrangementTrace?.postIntroByPhraseIntent && typeof level1ArrangementTrace.postIntroByPhraseIntent === 'object'
+      ? { ...level1ArrangementTrace.postIntroByPhraseIntent }
       : {},
     level1ArrangementEnergy: level1ArrangementTrace?.energy || { min: 0, max: 0, avg: 0 },
     level1ArrangementLayering: level1ArrangementTrace?.layering || { min: 0, max: 0, avg: 0 },
@@ -5544,6 +5983,22 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     visualRoleLeadWithSupportVisibleShare: Number(visualRoleReadabilityTrace?.leadWithSupportVisibleShare) || 0,
     visualRoleFullTextureLeadWithSupportVisibleShare: Number(visualRoleReadabilityTrace?.fullTextureLeadWithSupportVisibleShare) || 0,
     visualRoleAvgDistinctReadableRoleCount: Number(visualRoleReadabilityTrace?.avgDistinctReadableRoleCount) || 0,
+    formationRoleThreeRoleReadableShare: Number(visualRoleReadabilityTrace?.formationThreeRoleReadableShare) || 0,
+    formationRoleFullTextureThreeRoleReadableShare: Number(visualRoleReadabilityTrace?.formationFullTextureThreeRoleReadableShare) || 0,
+    formationRoleSupportCollapsedDuringLeadShare: Number(visualRoleReadabilityTrace?.formationSupportCollapsedDuringLeadShare) || 0,
+    formationRoleLeadWithSupportVisibleShare: Number(visualRoleReadabilityTrace?.formationLeadWithSupportVisibleShare) || 0,
+    formationRoleFullTextureLeadWithSupportVisibleShare: Number(visualRoleReadabilityTrace?.formationFullTextureLeadWithSupportVisibleShare) || 0,
+    formationRoleAvgDistinctReadableRoleCount: Number(visualRoleReadabilityTrace?.formationAvgDistinctReadableRoleCount) || 0,
+    formationRoleAvgFoundationVisualWeight: Number(visualRoleReadabilityTrace?.formationAvgFoundationVisualWeight) || 0,
+    formationRoleAvgSupportVisualWeight: Number(visualRoleReadabilityTrace?.formationAvgSupportVisualWeight) || 0,
+    formationRoleAvgLeadVisualWeight: Number(visualRoleReadabilityTrace?.formationAvgLeadVisualWeight) || 0,
+    formationRoleAvgOrnamentVisualWeight: Number(visualRoleReadabilityTrace?.formationAvgOrnamentVisualWeight) || 0,
+    formationRoleReadableRoleSetCounts: visualRoleReadabilityTrace?.byFormationReadableRoleSet && typeof visualRoleReadabilityTrace.byFormationReadableRoleSet === 'object'
+      ? { ...visualRoleReadabilityTrace.byFormationReadableRoleSet }
+      : {},
+    formationRoleArchetypeCounts: visualRoleReadabilityTrace?.byFormationArchetypeRole && typeof visualRoleReadabilityTrace.byFormationArchetypeRole === 'object'
+      ? { ...visualRoleReadabilityTrace.byFormationArchetypeRole }
+      : {},
     visualRoleAvgFoundationVisualWeight: Number(visualRoleReadabilityTrace?.avgFoundationVisualWeight) || 0,
     visualRoleAvgSupportVisualWeight: Number(visualRoleReadabilityTrace?.avgSupportVisualWeight) || 0,
     visualRoleAvgLeadVisualWeight: Number(visualRoleReadabilityTrace?.avgLeadVisualWeight) || 0,
@@ -5644,6 +6099,26 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       ? JSON.parse(JSON.stringify(foregroundCompetition.conflictDiagnostics.ornamentByReason))
       : {},
   };
+  metrics.musicIntensityAudition = collectMusicIntensityAuditionAssertion(metrics);
+  metrics.musicIntensityAuditionDetected = String(metrics.musicIntensityAudition?.status || '').trim().toLowerCase() !== 'not_detected';
+  metrics.musicIntensityAuditionPassed = metrics.musicIntensityAudition?.passed === true;
+  metrics.musicIntensityAuditionFailureCount = Number(metrics.musicIntensityAudition?.failureCount) || 0;
+  metrics.musicIntensityAuditionFailures = Array.isArray(metrics.musicIntensityAudition?.failures)
+    ? metrics.musicIntensityAudition.failures.slice(0, 24)
+    : [];
+  metrics.level1ArrangementMusicality = metrics.musicIntensityAuditionDetected
+    ? {
+        passed: true,
+        status: 'skipped_intensity_audition',
+        skipped: true,
+        reason: 'Intensity audition uses a forced lane/layer stack and is validated by musicIntensityAudition instead of the normal arrangement musicality contract.',
+      }
+    : collectLevel1ArrangementMusicalityAssertion(metrics);
+  metrics.level1ArrangementMusicalityPassed = metrics.level1ArrangementMusicality?.passed === true;
+  metrics.level1ArrangementMusicalityFailureCount = Number(metrics.level1ArrangementMusicality?.failureCount) || 0;
+  metrics.level1ArrangementMusicalityFailures = Array.isArray(metrics.level1ArrangementMusicality?.failures)
+    ? metrics.level1ArrangementMusicality.failures.slice(0, 24)
+    : [];
   metrics.retroShmupStyle = collectRetroShmupStyleMetrics(metrics);
   return {
     metrics,
