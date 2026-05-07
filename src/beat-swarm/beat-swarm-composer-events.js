@@ -442,6 +442,47 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     ? (directorLanePlan.sparkle || null)
     : null;
   const sparkleLaneAllowed = sparkleLanePlan?.active === true;
+  const level1ArrangementState = directorLanePlan?.__arrangementState && typeof directorLanePlan.__arrangementState === 'object'
+    ? directorLanePlan.__arrangementState
+    : (musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+      ? musicModeRuntime.level1ArrangementState
+      : null);
+  const level1Contract = directorLanePlan?.__level1Contract && typeof directorLanePlan.__level1Contract === 'object'
+    ? directorLanePlan.__level1Contract
+    : null;
+  const intensityAuditionSection = String(level1ArrangementState?.intensityAuditionSection || '').trim().toLowerCase();
+  const ornamentStageAllowed = !intensityAuditionSection || intensityAuditionSection === 'peak';
+  const contractAllowsSparkle = !level1Contract || level1Contract.allowSparkle === true;
+  const contractAllowsAnswer = !level1Contract || level1Contract.contractAnswerActive === true;
+  const ornamentLaneOpen = answerOrnamentAllowed
+    && sparkleLaneAllowed
+    && ornamentStageAllowed
+    && contractAllowsSparkle
+    && contractAllowsAnswer;
+  const isOrnamentLikeGroup = (groupLike = null) => {
+    if (!groupLike || typeof groupLike !== 'object') return false;
+    const profile = normalizeComposerProfileSourceType(groupLike?.musicProfileSourceType || groupLike?.introSlotProfileSourceType);
+    const laneId = String(groupLike?.musicLaneId || groupLike?.introSlotMusicLaneId || '').trim().toLowerCase();
+    const laneLayer = String(groupLike?.musicLaneLayer || '').trim().toLowerCase();
+    return profile === 'answer_ornament'
+      || laneId === 'sparkle_lane'
+      || laneLayer === 'sparkle';
+  };
+  const noteOrnamentSuppressed = (reason, extra = null) => {
+    noteMusicSystemEvent?.('music_answer_ornament_suppressed', {
+      stepIndex: stepAbs,
+      beatIndex,
+      barIndex,
+      reason: String(reason || 'ornament_lane_closed').trim().toLowerCase(),
+      intensityAuditionSection,
+      answerLaneAllowed: answerOrnamentAllowed,
+      sparkleLaneAllowed,
+      ornamentStageAllowed,
+      contractAllowsSparkle,
+      contractAllowsAnswer,
+      ...(extra && typeof extra === 'object' ? extra : {}),
+    }, { beatIndex, stepIndex: stepAbs, barIndex });
+  };
   const answerLaneIntensity = Math.max(0, Number(answerLanePlan?.intensity) || 0);
   const primaryLoopLanePlan = directorLanePlan && typeof directorLanePlan === 'object'
     ? (directorLanePlan.primary_loop || null)
@@ -575,6 +616,18 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       ? lockedIntroLane
       : (isSoloCarrier ? 'solo' : normalizeCallResponseLane(group?.callResponseLane, answerOrnamentCarrier ? 'response' : 'call'));
     const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+    if (!ornamentLaneOpen && isOrnamentLikeGroup(group)) {
+      noteOrnamentSuppressed(
+        ornamentStageAllowed ? 'ornament_lane_inactive' : 'ornament_stage_disabled',
+        {
+          groupId,
+          musicLaneId: String(group?.musicLaneId || group?.introSlotMusicLaneId || '').trim().toLowerCase(),
+          musicProfileSourceType,
+          callResponseLane: lane,
+        }
+      );
+      continue;
+    }
     const noteIntroCollectorState = (phase, extra = null) => {
       if (!noteMusicSystemEvent || !slotRhythmCarrier || barIndex > 20) return;
       noteMusicSystemEvent('music_composer_group_state', {
@@ -2098,7 +2151,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         fallbackResponseGroup?.musicLaneId
           || (String(fallbackResponseGroup?.musicLaneLayer || '').trim().toLowerCase() === 'sparkle' ? 'sparkle_lane' : 'secondary_loop_lane')
       ).trim().toLowerCase() || 'secondary_loop_lane';
-      if (!sparkleLaneAllowed && fallbackMusicLaneId === 'sparkle_lane') {
+      if (!ornamentLaneOpen && fallbackMusicLaneId === 'sparkle_lane') {
         fallbackMusicLaneId = 'secondary_loop_lane';
       }
       const instrumentId = resolveSupportSafeInstrumentId(
@@ -2274,8 +2327,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     }
   }
   const explicitOrnamentCompanionWanted = (
-    answerOrnamentAllowed
-    && sparkleLaneAllowed
+    ornamentLaneOpen
     && !emittedAnswerOrnamentThisStep
     && (activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture' || secondaryLoopProtected)
     && activePrimaryLoopLeadGroups.length > 0
@@ -2369,8 +2421,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     });
   }
   const directAnswerOrnamentWanted = (
-    answerOrnamentAllowed
-    && sparkleLaneAllowed
+    ornamentLaneOpen
     && (strongLeadWindowActive || secondaryLoopProtected)
     && activePrimaryLoopLeadGroups.length > 0
   );

@@ -113,8 +113,13 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     return '';
   };
   const getEnemyMusicActionGateState = () => {
-    const arrangementState = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
-      ? musicModeRuntime.level1ArrangementState
+    const arrangementState = directorLanePlan?.__arrangementState && typeof directorLanePlan.__arrangementState === 'object'
+      ? directorLanePlan.__arrangementState
+      : (musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+        ? musicModeRuntime.level1ArrangementState
+        : null);
+    const level1Contract = directorLanePlan?.__level1Contract && typeof directorLanePlan.__level1Contract === 'object'
+      ? directorLanePlan.__level1Contract
       : null;
     const auditionStage = normalizeGateStage(arrangementState?.intensityAuditionSection);
     const phraseIntent = String(arrangementState?.phraseIntent || state?.structureIntentRuntime?.intent || '').trim().toLowerCase();
@@ -143,6 +148,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       phraseIntent,
       sectionIntent,
       energy,
+      contractAllowsSparkle: !level1Contract || level1Contract.allowSparkle === true,
+      contractAllowsAnswer: !level1Contract || level1Contract.contractAnswerActive === true,
       stepInBar: ((stepIndex % 8) + 8) % 8,
     };
   };
@@ -158,6 +165,40 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (laneId === 'primary_loop_lane' || callResponseLane === 'call') return 'lead';
     if (layer === 'loops') return 'support';
     return 'other';
+  };
+  const isContractBlockedOrnamentEvent = (ev) => {
+    if (!ev || typeof ev !== 'object') return false;
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const lane = getEnemyMusicActionGateLane(ev);
+    if (lane !== 'ornament') return false;
+    const sourceSystem = String(ev?.sourceSystem || payload?.sourceSystem || '').trim().toLowerCase();
+    const action = String(ev?.actionType || '').trim().toLowerCase();
+    if (sourceSystem === 'player' || sourceSystem === 'death' || action === 'enemy-death-accent') return false;
+    const gateState = getEnemyMusicActionGateState();
+    return gateState.stage !== 'peak'
+      || gateState.contractAllowsSparkle !== true
+      || gateState.contractAllowsAnswer !== true;
+  };
+  const noteContractBlockedOrnamentEvent = (phase, ev) => {
+    try {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const gateState = getEnemyMusicActionGateState();
+      helpers.noteMusicSystemEvent?.('music_contract_ornament_blocked', {
+        phase: String(phase || '').trim().toLowerCase(),
+        stepIndex,
+        beatIndex,
+        barIndex,
+        stage: gateState.stage,
+        contractAllowsSparkle: gateState.contractAllowsSparkle === true,
+        contractAllowsAnswer: gateState.contractAllowsAnswer === true,
+        musicLaneId: String(payload?.musicLaneId || '').trim().toLowerCase(),
+        musicLayer: String(payload?.musicLayer || '').trim().toLowerCase(),
+        musicVoiceKey: String(payload?.musicVoiceKey || '').trim().toLowerCase(),
+        callResponseLane: String(payload?.callResponseLane || '').trim().toLowerCase(),
+        actionType: String(ev?.actionType || '').trim().toLowerCase(),
+        sourceSystem: String(ev?.sourceSystem || payload?.sourceSystem || '').trim().toLowerCase(),
+      }, { beatIndex, stepIndex, barIndex });
+    } catch {}
   };
   const getEnemyMusicActionGateAllowedSteps = (stage, lane, gateState = null) => {
     const barInPhrase = ((Math.max(0, Math.trunc(Number(barIndex) || 0)) % 4) + 4) % 4;
@@ -223,8 +264,19 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         || payload?.introPrimaryLoopBlendWindow === true
         || gateState.stage === 'intro';
       const lane = getEnemyMusicActionGateLane(ev);
+      const directorLaneBlocked = (() => {
+        if (gateProtected) return false;
+        if (lane !== 'ornament') return false;
+        const sparkleActive = sparkleLanePlan?.active === true;
+        const answerActive = answerLanePlan?.active === true;
+        const stageAllowsOrnament = gateState.stage === 'peak';
+        return !stageAllowsOrnament
+          || !(sparkleActive && answerActive)
+          || gateState.contractAllowsSparkle !== true
+          || gateState.contractAllowsAnswer !== true;
+      })();
       const allowedSteps = gateProtected ? null : getEnemyMusicActionGateAllowedSteps(gateState.stage, lane, gateState);
-      const allowed = !Array.isArray(allowedSteps) || allowedSteps.includes(gateState.stepInBar);
+      const allowed = !directorLaneBlocked && (!Array.isArray(allowedSteps) || allowedSteps.includes(gateState.stepInBar));
       if (allowed) {
         allowedCount += 1;
         kept.push({
@@ -253,7 +305,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
           stepInBar: gateState.stepInBar,
           barInPhrase: ((Math.max(0, Math.trunc(Number(barIndex) || 0)) % 4) + 4) % 4,
           allowedSteps: Array.isArray(allowedSteps) ? allowedSteps.join(',') : 'protected',
-          reason: gateProtected ? 'protected_or_intro' : (allowed ? 'grid_match' : 'grid_miss'),
+          reason: gateProtected ? 'protected_or_intro' : (directorLaneBlocked ? 'director_lane_inactive' : (allowed ? 'grid_match' : 'grid_miss')),
         }, { beatIndex, stepIndex, barIndex });
       } catch {}
     }
@@ -451,7 +503,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const answerLanePlan = directorLanePlan && typeof directorLanePlan === 'object'
     ? (directorLanePlan.answer || null)
     : null;
-  const answerOrnamentAllowed = sparkleLanePlan?.active === true && answerLanePlan?.active === true;
+  const currentEnemyMusicActionGateState = getEnemyMusicActionGateState();
+  const answerOrnamentAllowed = sparkleLanePlan?.active === true
+    && answerLanePlan?.active === true
+    && currentEnemyMusicActionGateState.stage === 'peak'
+    && currentEnemyMusicActionGateState.contractAllowsSparkle === true
+    && currentEnemyMusicActionGateState.contractAllowsAnswer === true;
   const primaryLoopLaneActive = primaryLoopLaneRuntime
     && typeof primaryLoopLaneRuntime === 'object'
     && (
@@ -1840,6 +1897,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const finishQueuePerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.queue');
   noteSlotSpawnerStage('queued', stepEvents);
   for (const ev of stepEvents) {
+    if (isContractBlockedOrnamentEvent(ev)) {
+      noteContractBlockedOrnamentEvent('queue', ev);
+      continue;
+    }
     try {
       const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
       const actionType = String(ev?.actionType || '').trim().toLowerCase();
@@ -1905,6 +1966,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     noteSlotSpawnerStage('drained', drained);
     for (const ev of drained) {
+      if (isContractBlockedOrnamentEvent(ev)) {
+        noteContractBlockedOrnamentEvent('drain', ev);
+        continue;
+      }
       if (helpers.executePerformedBeatEvent?.(ev)) drainedStepEvents += 1;
     }
     finishExecutePerf();

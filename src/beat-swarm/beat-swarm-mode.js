@@ -4121,6 +4121,41 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     const musicProfileSourceType = String(group?.musicProfileSourceType || '').trim().toLowerCase();
     const musicLaneId = String(group?.musicLaneId || 'primary_loop_lane').trim().toLowerCase() || 'primary_loop_lane';
     const formationRole = String(group?.formationRole || '').trim().toLowerCase();
+    const arrangementStateNow = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+      ? musicModeRuntime.level1ArrangementState
+      : null;
+    const intensityAuditionSectionNow = String(arrangementStateNow?.intensityAuditionSection || '').trim().toLowerCase();
+    const ornamentCandidate = laneMode === 'response'
+      || musicProfileSourceType === 'answer_ornament'
+      || musicLaneId === 'sparkle_lane';
+    if (ornamentCandidate) {
+      const lanePlanNow = ensureSwarmDirector().getLanePlan?.() || null;
+      const sparkleActiveNow = lanePlanNow?.sparkle?.active === true;
+      const answerActiveNow = lanePlanNow?.answer?.active === true;
+      const auditionAllowsOrnament = !intensityAuditionSectionNow || intensityAuditionSectionNow === 'peak';
+      if (!auditionAllowsOrnament || (lanePlanNow && !(sparkleActiveNow && answerActiveNow))) {
+        try {
+          noteMusicSystemEvent('music_primary_loop_group_suppressed', {
+            reason: !auditionAllowsOrnament ? 'ornament_stage_disabled' : 'ornament_lane_inactive',
+            groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+            enemyId: Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0)),
+            laneMode: isSoloCarrier ? 'solo' : laneMode,
+            soloCarrierType,
+            stepIndex,
+            musicLaneId,
+            musicProfileSourceType,
+            intensityAuditionSection: intensityAuditionSectionNow,
+          }, { beatIndex, stepIndex, barIndex });
+        } catch {}
+        return null;
+      }
+    }
+    const phraseArchetypeState = getBeatSwarmPhraseArchetypeState(
+      stepIndex,
+      arrangementStateNow,
+      isSoloCarrier ? 'solo' : laneMode,
+      musicLaneId
+    );
     const fullTextureConflictYieldActive = activeLevelPhaseNow === 'full_texture' && activeEventSectionId === 'none';
     const playerLikelyAudibleNow = isPlayerWeaponStepLikelyAudible(stepIndex);
     const leadEssentialConflictStep = acceptedStrongCall || phraseResolutionHit || phraseGravityHit;
@@ -4168,12 +4203,20 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         conflictYieldReason = 'counter_yield_to_player';
       }
     }
+    const archetypePhraseTargets = phraseTargets.length
+      ? phraseTargets
+      : [phraseGravityTarget, group?.phraseRoot, group?.phraseFifth].map((n) => normalizeSwarmNoteName(n)).filter(Boolean);
+    const eventNoteName = resolvePhraseArchetypeNote(styledNoteName, phraseArchetypeState, archetypePhraseTargets) || styledNoteName;
+    const finalPhraseGravityHit = phraseGravityOpportunity
+      ? normalizeSwarmNoteName(eventNoteName) === normalizeSwarmNoteName(phraseGravityTarget)
+      : phraseGravityHit;
+    const finalPhraseResolutionHit = phraseResolutionOpportunity && finalPhraseGravityHit;
     event = createLoggedPerformedBeatEvent({
       actorId: Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0)),
       beatIndex,
       stepIndex,
       role,
-      note: styledNoteName,
+      note: eventNoteName,
       instrumentId,
       actionType: String(group.actionType || 'projectile') === 'explosion'
         ? 'composer-group-explosion'
@@ -4189,9 +4232,13 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         audioGain: eventAudioGain,
         requestedNoteRaw: gravityNoteNameRaw,
         phraseGravityTarget,
-        phraseGravityHit,
+        phraseGravityHit: finalPhraseGravityHit,
         phraseResolutionOpportunity,
-        phraseResolutionHit,
+        phraseResolutionHit: finalPhraseResolutionHit,
+        phraseArchetype: String(phraseArchetypeState?.archetype || '').trim().toLowerCase(),
+        phraseArchetypeProgress: Number(phraseArchetypeState?.progress) || 0,
+        phraseArchetypeStep: Math.max(0, Math.trunc(Number(phraseArchetypeState?.stepInPhrase) || 0)),
+        phraseArchetypeSteps: Math.max(1, Math.trunc(Number(phraseArchetypeState?.phraseSteps) || 1)),
         musicLayer: String(group?.musicLaneLayer || 'loops').trim().toLowerCase() || 'loops',
         musicProminence: eventMusicProminence,
         musicLaneId,
@@ -4213,19 +4260,20 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       musicLaneId,
       musicProfileSourceType,
       formationRole,
+      phraseArchetype: String(phraseArchetypeState?.archetype || '').trim().toLowerCase(),
       reason: conflictYieldReason || musicProfileSourceType || formationRole || musicLaneId,
       enemyAudible: eventEnemyAudible,
     });
     if (!isSoloCarrier && laneMode === 'call') {
       if (acceptedStrongCall) {
         const responseTargetLength = (() => {
-          if (phraseResolutionHit && phraseGravityHit) return 4;
-          if (phraseResolutionHit || phraseGravityHit) return Math.random() < 0.35 ? 4 : 3;
+          if (finalPhraseResolutionHit && finalPhraseGravityHit) return 4;
+          if (finalPhraseResolutionHit || finalPhraseGravityHit) return Math.random() < 0.35 ? 4 : 3;
           return Math.random() < 0.2 ? 1 : 2;
         })();
         callResponseRuntime.lastCallStepAbs = stepIndex;
         callResponseRuntime.lastCallGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
-        callResponseRuntime.lastCallNote = styledNoteName;
+        callResponseRuntime.lastCallNote = eventNoteName;
         callResponseRuntime.pendingCallExpiresStepAbs = getPendingCallExpiry(stepIndex, responseTargetLength);
         callResponseRuntime.lastResponseNote = '';
         callResponseRuntime.activeResponseGroupId = 0;
@@ -4237,7 +4285,7 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       const responseTargetLength = Math.max(1, Math.trunc(Number(callResponseRuntime.responsePhraseTargetLength) || 2));
       callResponseRuntime.lastResponseStepAbs = stepIndex;
       callResponseRuntime.lastResponseGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
-      callResponseRuntime.lastResponseNote = normalizeSwarmNoteName(styledNoteName) || styledNoteName;
+      callResponseRuntime.lastResponseNote = normalizeSwarmNoteName(eventNoteName) || eventNoteName;
       callResponseRuntime.pendingCallExpiresStepAbs = -1;
       callResponseRuntime.activeResponseGroupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
       callResponseRuntime.responseDirection = continuingResponsePhrase
@@ -7463,6 +7511,67 @@ function pickClosestPhraseGravityTarget(noteName, targets) {
     }
   }
   return picked;
+}
+function getBeatSwarmPhraseArchetypeState(stepAbs = 0, arrangementState = null, laneModeLike = '', musicLaneIdLike = '') {
+  const arrangement = arrangementState && typeof arrangementState === 'object' ? arrangementState : {};
+  const section = String(arrangement.intensityAuditionSection || '').trim().toLowerCase();
+  const phraseIntent = String(arrangement.phraseIntent || '').trim().toLowerCase();
+  const laneMode = String(laneModeLike || '').trim().toLowerCase();
+  const musicLaneId = String(musicLaneIdLike || '').trim().toLowerCase();
+  const phraseBars = section === 'peak' || phraseIntent === 'cadence' ? 2 : 4;
+  const stepsPerBar = 8;
+  const phraseSteps = Math.max(8, phraseBars * stepsPerBar);
+  const stepInPhrase = ((Math.max(0, Math.trunc(Number(stepAbs) || 0)) % phraseSteps) + phraseSteps) % phraseSteps;
+  const progress = phraseSteps > 1 ? stepInPhrase / Math.max(1, phraseSteps - 1) : 0;
+  let archetype = 'steady_pulse';
+  if (section === 'low' || section === 'release' || phraseIntent === 'recovery') archetype = 'anchor_space';
+  else if (laneMode === 'response') archetype = 'answer_echo';
+  else if (phraseIntent === 'cadence' || section === 'peak') archetype = 'cadence_burst';
+  else if (phraseIntent === 'build' || section === 'build') archetype = 'rising_tension';
+  else if (section === 'settle') archetype = 'return_groove';
+  else if (musicLaneId === 'secondary_loop_lane') archetype = 'counter_pulse';
+  return {
+    archetype,
+    phraseBars,
+    phraseSteps,
+    stepInPhrase,
+    progress,
+  };
+}
+function resolvePhraseArchetypeNote(noteName, archetypeState = null, phraseTargets = []) {
+  const baseNote = normalizeSwarmNoteName(noteName) || '';
+  const state = archetypeState && typeof archetypeState === 'object' ? archetypeState : {};
+  const archetype = String(state.archetype || '').trim().toLowerCase();
+  if (!baseNote || !archetype) return baseNote;
+  const pool = ensureSwarmDirector().getNotePool();
+  if (!Array.isArray(pool) || pool.length < 2) return baseNote;
+  const baseIdx = getNotePoolIndex(baseNote);
+  if (baseIdx < 0) return baseNote;
+  const clampIdx = (idx) => Math.max(0, Math.min(pool.length - 1, Math.trunc(Number(idx) || 0)));
+  const noteAt = (idx) => normalizeSwarmNoteName(pool[clampIdx(idx)]) || baseNote;
+  const progress = Math.max(0, Math.min(1, Number(state.progress) || 0));
+  const phraseTarget = pickClosestPhraseGravityTarget(baseNote, phraseTargets);
+  if (archetype === 'rising_tension') {
+    const lift = progress > 0.74 ? 2 : (progress > 0.42 ? 1 : 0);
+    return noteAt(baseIdx + lift);
+  }
+  if (archetype === 'cadence_burst') {
+    if (progress > 0.82 && phraseTarget) return phraseTarget;
+    const lift = progress > 0.5 ? 1 : 0;
+    return noteAt(baseIdx + lift);
+  }
+  if (archetype === 'answer_echo') {
+    if (progress > 0.68 && phraseTarget) return phraseTarget;
+    return noteAt(baseIdx - (progress > 0.45 ? 1 : 0));
+  }
+  if (archetype === 'return_groove') {
+    if (progress > 0.72 && phraseTarget) return phraseTarget;
+    return noteAt(baseIdx + ((Math.trunc(Number(state.stepInPhrase) || 0) % 4) === 0 ? 0 : 1));
+  }
+  if (archetype === 'counter_pulse') {
+    return noteAt(baseIdx + ((Math.trunc(Number(state.stepInPhrase) || 0) % 8) >= 4 ? -1 : 0));
+  }
+  return baseNote;
 }
 function getLockedMotifHook(scopeKey = '', fallbackLength = 4) {
   const scope = String(scopeKey || getComposerMotifScopeKey()).trim();

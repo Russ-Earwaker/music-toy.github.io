@@ -207,6 +207,7 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const musicProminence = String(context?.musicProminence ?? payload?.musicProminence ?? '').trim().toLowerCase();
   const musicProfileSourceType = String(context?.musicProfileSourceType ?? payload?.musicProfileSourceType ?? '').trim().toLowerCase();
   const formationRole = String(context?.formationRole ?? payload?.formationRole ?? '').trim().toLowerCase();
+  const phraseArchetype = String(context?.phraseArchetype ?? payload?.phraseArchetype ?? '').trim().toLowerCase();
   const reason = String(context?.reason ?? payload?.reason ?? '').trim().toLowerCase();
   const authoringClass = String(context?.authoringClass ?? payload?.authoringClass ?? '').trim().toLowerCase();
   const leadFamily = String(context?.leadFamily ?? payload?.leadFamily ?? '').trim().toLowerCase();
@@ -265,6 +266,7 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     musicProminence,
     musicProfileSourceType,
     formationRole,
+    phraseArchetype,
     reason,
     authoringClass,
     leadFamily,
@@ -545,6 +547,10 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     requestedProminence: String(payload?.requestedProminence || '').trim().toLowerCase(),
     finalProminence: String(payload?.finalProminence || '').trim().toLowerCase(),
     formationRole: String(payload?.formationRole || '').trim().toLowerCase(),
+    phraseArchetype: String(payload?.phraseArchetype || '').trim().toLowerCase(),
+    phraseArchetypeProgress: Number(payload?.phraseArchetypeProgress) || 0,
+    phraseArchetypeStep: clampInt(payload?.phraseArchetypeStep, 0, 0),
+    phraseArchetypeSteps: clampInt(payload?.phraseArchetypeSteps, 0, 0),
     formationArchetype: String(payload?.formationArchetype || '').trim().toLowerCase(),
     formationStyleFamily: String(payload?.formationStyleFamily || '').trim().toLowerCase(),
     formationSpawnRegion: String(payload?.formationSpawnRegion || '').trim().toLowerCase(),
@@ -3621,6 +3627,44 @@ function collectLeadVariationTrace(events) {
   };
 }
 
+function collectPhraseArchetypeTrace(events) {
+  const sourceEvents = Array.isArray(events) ? events : [];
+  const byArchetype = {};
+  const byArchetypeAndLane = {};
+  const byArchetypeAndStage = {};
+  const inc = (target, keyLike) => {
+    const key = keyLike == null
+      ? 'unknown'
+      : (String(keyLike).trim().toLowerCase() || 'unknown');
+    target[key] = (target[key] || 0) + 1;
+  };
+  const archetypeEvents = sourceEvents.filter((ev) => String(ev?.phraseArchetype || '').trim());
+  for (const ev of archetypeEvents) {
+    const archetype = String(ev?.phraseArchetype || '').trim().toLowerCase() || 'unknown';
+    const lane = String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase() || 'unknown';
+    const stage = String(ev?.enemyMusicActionGateStage || ev?.intensityAuditionSection || '').trim().toLowerCase() || 'unknown';
+    inc(byArchetype, archetype);
+    inc(byArchetypeAndLane, `${archetype}|${lane}`);
+    inc(byArchetypeAndStage, `${archetype}|${stage}`);
+  }
+  return {
+    count: archetypeEvents.length,
+    byArchetype,
+    byArchetypeAndLane,
+    byArchetypeAndStage,
+    distinctArchetypeCount: Object.keys(byArchetype).filter((key) => key !== 'unknown').length,
+    sample: archetypeEvents.slice(0, 24).map((ev) => ({
+      barIndex: clampInt(ev?.barIndex, 0, 0),
+      stepIndex: clampInt(ev?.stepIndex, 0, 0),
+      note: String(ev?.noteResolved || ev?.note || '').trim(),
+      musicLaneId: String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase(),
+      phraseArchetype: String(ev?.phraseArchetype || '').trim().toLowerCase(),
+      phraseArchetypeStep: clampInt(ev?.phraseArchetypeStep, 0, 0),
+      phraseArchetypeSteps: clampInt(ev?.phraseArchetypeSteps, 0, 0),
+    })),
+  };
+}
+
 function collectFoundationVariationTrace(events) {
   const foundationEvents = (Array.isArray(events) ? events : []).filter((ev) => {
     const laneId = String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase();
@@ -5513,6 +5557,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const playerWeaponTiming = collectPlayerWeaponTiming(session, maxBarIndex);
   const createdEvents = (Array.isArray(session?.events) ? session.events : [])
     .filter((e) => String(e?.phase || '').trim().toLowerCase() === 'created' && clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
+  const phraseArchetypes = collectPhraseArchetypeTrace(createdEvents.length ? createdEvents : executedEvents);
   const callResponseSourceEvents = (() => {
     const taggedByLane = (list, wantedLane) => list.filter((e) => {
       const lane = String(e?.callResponseLane || '').trim().toLowerCase();
@@ -5597,6 +5642,18 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     motifPersistence,
     phraseGravity,
     leadVariation,
+    phraseArchetypes,
+    phraseArchetypeCount: Number(phraseArchetypes?.count) || 0,
+    phraseArchetypeDistinctCount: Number(phraseArchetypes?.distinctArchetypeCount) || 0,
+    phraseArchetypeByType: phraseArchetypes?.byArchetype && typeof phraseArchetypes.byArchetype === 'object'
+      ? { ...phraseArchetypes.byArchetype }
+      : {},
+    phraseArchetypeByLane: phraseArchetypes?.byArchetypeAndLane && typeof phraseArchetypes.byArchetypeAndLane === 'object'
+      ? { ...phraseArchetypes.byArchetypeAndLane }
+      : {},
+    phraseArchetypeByStage: phraseArchetypes?.byArchetypeAndStage && typeof phraseArchetypes.byArchetypeAndStage === 'object'
+      ? { ...phraseArchetypes.byArchetypeAndStage }
+      : {},
     foundationVariation,
     arrangementSupport,
     arrangementSupportCount: Number(arrangementSupport?.count) || 0,
