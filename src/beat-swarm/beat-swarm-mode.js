@@ -10881,14 +10881,65 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
     || actorGroup?.musicLaneId
     || ''
   ).trim().toLowerCase();
+  const derivedMusicLaneId = String(
+    input?.musicLaneId
+    || created?.payload?.musicLaneId
+    || actor?.musicLaneId
+    || actorGroup?.musicLaneId
+    || ''
+  ).trim().toLowerCase();
+  const derivedMusicLayer = String(
+    input?.musicLayer
+    || created?.payload?.musicLayer
+    || actorGroup?.musicLaneLayer
+    || ''
+  ).trim().toLowerCase();
+  const derivedMusicVoiceKey = String(
+    input?.musicVoiceKey
+    || created?.payload?.musicVoiceKey
+    || ''
+  ).trim().toLowerCase();
+  const derivedCallResponseLane = String(
+    input?.callResponseLane
+    || created?.payload?.callResponseLane
+    || actor?.callResponseLane
+    || actorGroup?.callResponseLane
+    || ''
+  ).trim().toLowerCase();
   if (!logContext.musicProfileSourceType && derivedMusicProfileSourceType) logContext.musicProfileSourceType = derivedMusicProfileSourceType;
   if (!logContext.formationRole && derivedFormationRole) logContext.formationRole = derivedFormationRole;
   if (!logContext.reason && derivedReason) logContext.reason = derivedReason;
+  if (!logContext.musicLaneId && derivedMusicLaneId) logContext.musicLaneId = derivedMusicLaneId;
+  if (!logContext.musicLayer && derivedMusicLayer) logContext.musicLayer = derivedMusicLayer;
+  if (!logContext.musicVoiceKey && derivedMusicVoiceKey) logContext.musicVoiceKey = derivedMusicVoiceKey;
+  if (!logContext.callResponseLane && derivedCallResponseLane) logContext.callResponseLane = derivedCallResponseLane;
+  const currentLevel1Contract = (() => {
+    try {
+      const plan = ensureSwarmDirector().getLanePlan?.() || null;
+      return plan?.__level1Contract && typeof plan.__level1Contract === 'object'
+        ? plan.__level1Contract
+        : null;
+    } catch {
+      return null;
+    }
+  })();
+  const contractBlocksCreatedOrnament = (() => {
+    if (sourceSystem !== 'group' || !currentLevel1Contract) return false;
+    const ornamentLike = derivedMusicLaneId === 'sparkle_lane'
+      || derivedMusicLayer === 'sparkle'
+      || derivedMusicVoiceKey === 'answer_ornament'
+      || derivedCallResponseLane === 'response'
+      || derivedMusicProfileSourceType === 'answer_ornament';
+    if (!ornamentLike) return false;
+    return currentLevel1Contract.allowSparkle !== true
+      || currentLevel1Contract.contractAnswerActive !== true;
+  })();
   const shouldLogCreatedToMusicLab = (() => {
     if (sourceSystem !== 'group') return true;
     const musicProminence = String(input?.musicProminence || created?.payload?.musicProminence || '').trim().toLowerCase();
-    const laneId = String(input?.musicLaneId || created?.payload?.musicLaneId || '').trim().toLowerCase();
+    const laneId = derivedMusicLaneId;
     const role = normalizeSwarmRole(created?.role || input?.role || '', '');
+    if (contractBlocksCreatedOrnament) return false;
     if (actionType === 'composer-group-explosion') return false;
     if (role === BEAT_EVENT_ROLES.BASS || laneId === 'foundation_lane') return true;
     if (laneId === 'sparkle_lane') return false;
@@ -10906,6 +10957,18 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
     if (created?.payload && typeof created.payload === 'object') {
       if (!String(created.payload.callResponseLane || '').trim() && String(input?.callResponseLane || '').trim()) {
         created.payload.callResponseLane = String(input.callResponseLane).trim().toLowerCase();
+      }
+      if (!String(created.payload.musicLaneId || '').trim() && derivedMusicLaneId) {
+        created.payload.musicLaneId = derivedMusicLaneId;
+      }
+      if (!String(created.payload.musicLayer || '').trim() && derivedMusicLayer) {
+        created.payload.musicLayer = derivedMusicLayer;
+      }
+      if (!String(created.payload.musicVoiceKey || '').trim() && derivedMusicVoiceKey) {
+        created.payload.musicVoiceKey = derivedMusicVoiceKey;
+      }
+      if (!String(created.payload.callResponseLane || '').trim() && derivedCallResponseLane) {
+        created.payload.callResponseLane = derivedCallResponseLane;
       }
       if (created.payload.callResponseQualified !== true && input?.callResponseQualified === true) {
         created.payload.callResponseQualified = true;
@@ -18957,6 +19020,8 @@ function executePerformedBeatEvent(event) {
     helpers: {
       getMusicLabContext,
       noteMusicSystemEvent,
+      getDirectorLanePlan: () => ensureSwarmDirector().getLanePlan?.() || null,
+      getDirectorLanePlanForBar: (barIndexLike = 0) => buildDirectorLanePlanForBar(barIndexLike),
       getIdForDisplayName,
       getSwarmEnemyById,
       getEnemyMusicGroup,

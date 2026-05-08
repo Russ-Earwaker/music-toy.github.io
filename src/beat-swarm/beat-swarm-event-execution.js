@@ -64,12 +64,71 @@ export function executePerformedBeatEventRuntime(options = null) {
     ? helpers.getInstrumentPlaybackMetadata
     : (() => null);
   const payloadGroupId = Math.max(0, Math.trunc(Number(ev?.payload?.groupId) || 0));
+  const getCurrentLevel1Contract = () => {
+    try {
+      const plan = helpers.getDirectorLanePlanForBar?.(barIndex) || helpers.getDirectorLanePlan?.() || null;
+      return plan?.__level1Contract && typeof plan.__level1Contract === 'object'
+        ? plan.__level1Contract
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const isContractBlockedOrnamentExecution = (base = null, enemyLike = null, groupLike = null) => {
+    const contract = getCurrentLevel1Contract();
+    if (!contract) return false;
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const ctx = base && typeof base === 'object' ? base : {};
+    const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    const sourceSystem = String(ctx?.sourceSystem || payload?.sourceSystem || ev?.sourceSystem || '').trim().toLowerCase();
+    if (sourceSystem && sourceSystem !== 'group') return false;
+    const laneId = String(ctx?.musicLaneId || payload?.musicLaneId || enemy?.musicLaneId || group?.musicLaneId || '').trim().toLowerCase();
+    const layer = String(ctx?.musicLayer || payload?.musicLayer || group?.musicLaneLayer || '').trim().toLowerCase();
+    const voiceKey = String(ctx?.musicVoiceKey || payload?.musicVoiceKey || '').trim().toLowerCase();
+    const callResponseLane = String(ctx?.callResponseLane || payload?.callResponseLane || enemy?.callResponseLane || group?.callResponseLane || '').trim().toLowerCase();
+    const profile = String(ctx?.musicProfileSourceType || payload?.musicProfileSourceType || enemy?.musicProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase();
+    const ornamentLike = laneId === 'sparkle_lane'
+      || layer === 'sparkle'
+      || voiceKey === 'answer_ornament'
+      || callResponseLane === 'response'
+      || profile === 'answer_ornament';
+    if (!ornamentLike) return false;
+    return contract.allowSparkle !== true || contract.contractAnswerActive !== true;
+  };
+  const noteContractBlockedOrnamentExecution = (phase, base = null, enemyLike = null, groupLike = null) => {
+    try {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const ctx = base && typeof base === 'object' ? base : {};
+      const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
+      const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+      const contract = getCurrentLevel1Contract();
+      helpers.noteMusicSystemEvent?.('music_contract_ornament_blocked', {
+        phase: String(phase || '').trim().toLowerCase(),
+        beatIndex,
+        stepIndex,
+        barIndex,
+        allowSparkle: contract?.allowSparkle === true,
+        contractAnswerActive: contract?.contractAnswerActive === true,
+        musicLaneId: String(ctx?.musicLaneId || payload?.musicLaneId || enemy?.musicLaneId || group?.musicLaneId || '').trim().toLowerCase(),
+        musicLayer: String(ctx?.musicLayer || payload?.musicLayer || group?.musicLaneLayer || '').trim().toLowerCase(),
+        musicVoiceKey: String(ctx?.musicVoiceKey || payload?.musicVoiceKey || '').trim().toLowerCase(),
+        callResponseLane: String(ctx?.callResponseLane || payload?.callResponseLane || enemy?.callResponseLane || group?.callResponseLane || '').trim().toLowerCase(),
+        musicProfileSourceType: String(ctx?.musicProfileSourceType || payload?.musicProfileSourceType || enemy?.musicProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase(),
+        actionType,
+      }, { beatIndex, stepIndex, barIndex });
+    } catch {}
+  };
   const logMusicLabExecution = (context = null) => {
     const base = context && typeof context === 'object' ? context : {};
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     const sourceEnemyId = Math.max(0, Math.trunc(Number(ev?.actorId) || 0));
     const sourceEnemy = sourceEnemyId > 0 ? helpers.getSwarmEnemyById?.(sourceEnemyId) : null;
     const sourceGroup = sourceEnemy ? helpers.getEnemyMusicGroup?.(sourceEnemy, undefined, { sync: false }) : null;
+    if (isContractBlockedOrnamentExecution(base, sourceEnemy, sourceGroup)) {
+      noteContractBlockedOrnamentExecution('log_execution', base, sourceEnemy, sourceGroup);
+      return;
+    }
     try {
       state.swarmMusicLab?.logExecutedEvent?.(ev, helpers.getMusicLabContext?.({
         beatIndex,
@@ -967,6 +1026,10 @@ export function executePerformedBeatEventRuntime(options = null) {
       noteIntroSlotExecution('execute_missing_group', {
         admissionReason: 'missing_group',
       });
+      return false;
+    }
+    if (isContractBlockedOrnamentExecution({ sourceSystem: 'group' }, enemy || null, group)) {
+      noteContractBlockedOrnamentExecution('execute_group', { sourceSystem: 'group' }, enemy || null, group);
       return false;
     }
     noteComposerExecutionStage('entered', {
