@@ -2581,22 +2581,6 @@ function buildBeatSwarmTransitionDebugText(payload, meta = {}) {
     const laneId = String(e?.musicLaneId || '').trim().toLowerCase();
     return laneId === 'primary_loop_lane';
   });
-
-  ov.addEventListener('change', (e) => {
-    const target = e.target instanceof HTMLElement ? e.target : null;
-    if (!target) return;
-    if (!target.matches('[data-music-spawn-type], [data-music-spawn-behavior], [data-music-group-count], [data-music-speed-scale]')) return;
-    const typeEl = ov.querySelector('[data-music-spawn-type]');
-    const behaviorEl = ov.querySelector('[data-music-spawn-behavior]');
-    const countEl = ov.querySelector('[data-music-group-count]');
-    const speedEl = ov.querySelector('[data-music-speed-scale]');
-    saveMusicRepeatUiState({
-      enemyType: String(typeEl?.value || 'drawsnake').trim().toLowerCase() || 'drawsnake',
-      behavior: String(behaviorEl?.value || 'none').trim().toLowerCase() || 'none',
-      groupCount: Math.max(1, Math.trunc(Number(countEl?.value) || 8)),
-      speedScale: Math.max(0.25, Math.min(4, Number(speedEl?.value) || 1)),
-    });
-  });
   const secondaryRenderEvents = eventTimeline.filter((e) => {
     if (!isBarInRange(e?.barIndex)) return false;
     const laneId = String(e?.musicLaneId || '').trim().toLowerCase();
@@ -3823,6 +3807,9 @@ function compactMusicLabPayloadForSave(payload = null) {
       pacingState: String(event.pacingState || ''),
       sourceSystem: String(event.sourceSystem || ''),
       enemyType: String(event.enemyType || ''),
+      actionCategory: String(event.actionCategory || payload.actionCategory || '').trim().toLowerCase(),
+      audioRequired: event.audioRequired === true || payload.audioRequired === true,
+      classificationReason: String(event.classificationReason || payload.classificationReason || '').trim().toLowerCase(),
       playerAudible: event.playerAudible === true,
       enemyAudible: event.enemyAudible === true ? true : (event.enemyAudible === false ? false : null),
       continuityId: String(event.continuityId || ''),
@@ -3837,6 +3824,9 @@ function compactMusicLabPayloadForSave(payload = null) {
       musicLaneId: String(event.musicLaneId || payload.musicLaneId || payload.foundationLaneId || ''),
       musicLayer: String(event.musicLayer || ''),
       musicProminence: String(event.musicProminence || ''),
+      intensityAuditionSection: String(event.intensityAuditionSection || payload.intensityAuditionSection || '').trim().toLowerCase(),
+      intensityCadenceStepAdmitted: event.intensityCadenceStepAdmitted === true || payload.intensityCadenceStepAdmitted === true,
+      intensityCadenceReason: String(event.intensityCadenceReason || payload.intensityCadenceReason || '').trim().toLowerCase(),
       audioGain: Number(event.audioGain) || 0,
       musicVoiceKey: String(event.musicVoiceKey || payload.musicVoiceKey || ''),
       resolvedPlaybackInstrumentId: String(event.resolvedPlaybackInstrumentId || ''),
@@ -3874,10 +3864,16 @@ function compactMusicLabPayloadForSave(payload = null) {
       threatClass: String(event.threatClass || ''),
       sourceSystem: String(event.sourceSystem || ''),
       enemyType: String(event.enemyType || ''),
+      actionCategory: String(event.actionCategory || payload.actionCategory || '').trim().toLowerCase(),
+      audioRequired: event.audioRequired === true || payload.audioRequired === true,
+      classificationReason: String(event.classificationReason || payload.classificationReason || '').trim().toLowerCase(),
       enemyAudible: event.enemyAudible === true ? true : (event.enemyAudible === false ? false : null),
       triggerVolume: Number(event.triggerVolume) || 0,
       approxPlaybackVolume: Number(event.approxPlaybackVolume) || 0,
       resolvedPlaybackInstrumentId: String(event.resolvedPlaybackInstrumentId || ''),
+      intensityAuditionSection: String(event.intensityAuditionSection || payload.intensityAuditionSection || '').trim().toLowerCase(),
+      intensityCadenceStepAdmitted: event.intensityCadenceStepAdmitted === true || payload.intensityCadenceStepAdmitted === true,
+      intensityCadenceReason: String(event.intensityCadenceReason || payload.intensityCadenceReason || '').trim().toLowerCase(),
       payload: {
         continuityId: String(payload.continuityId || ''),
         groupEventSource: String(payload.groupEventSource || ''),
@@ -3888,6 +3884,12 @@ function compactMusicLabPayloadForSave(payload = null) {
         musicVoiceKey: String(payload.musicVoiceKey || ''),
         audioGain: Number(payload.audioGain) || 0,
         callResponseLane: String(payload.callResponseLane || ''),
+        actionCategory: String(payload.actionCategory || event.actionCategory || '').trim().toLowerCase(),
+        audioRequired: payload.audioRequired === true || event.audioRequired === true,
+        classificationReason: String(payload.classificationReason || event.classificationReason || '').trim().toLowerCase(),
+        intensityAuditionSection: String(payload.intensityAuditionSection || event.intensityAuditionSection || '').trim().toLowerCase(),
+        intensityCadenceStepAdmitted: payload.intensityCadenceStepAdmitted === true || event.intensityCadenceStepAdmitted === true,
+        intensityCadenceReason: String(payload.intensityCadenceReason || event.intensityCadenceReason || '').trim().toLowerCase(),
       },
     };
   };
@@ -4160,6 +4162,10 @@ function compactMusicLabPayloadForSave(payload = null) {
         stepIndex: Number(item.stepIndex) || 0,
         activeEventSection: String(payload.activeEventSection || '').trim().toLowerCase(),
         eventBehaviorClass: String(payload.eventBehaviorClass || '').trim().toLowerCase(),
+        actionCategory: String(payload.actionCategory || '').trim().toLowerCase(),
+        audioRequired: payload.audioRequired === true,
+        classificationReason: String(payload.classificationReason || '').trim().toLowerCase(),
+        intensityAuditionSection: String(payload.intensityAuditionSection || '').trim().toLowerCase(),
         enteredBar: Number(payload.enteredBar) || -1,
         endBar: Number(payload.endBar) || -1,
         strongBeatActive: payload.strongBeatActive === true,
@@ -4167,6 +4173,23 @@ function compactMusicLabPayloadForSave(payload = null) {
         agitationBoost: Number(payload.agitationBoost) || 0,
         presentationPulseScale: Number(payload.presentationPulseScale) || 0,
         eligibleRoles: Array.isArray(payload.eligibleRoles) ? payload.eligibleRoles.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean) : [],
+      });
+      continue;
+    }
+    if (eventType === 'music_intensity_cadence_step_admitted') {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        groupId: Number(payload.groupId) || 0,
+        stepInBar: Number(payload.stepInBar) || 0,
+        musicLaneId: String(payload.musicLaneId || '').trim().toLowerCase(),
+        musicProfileSourceType: String(payload.musicProfileSourceType || '').trim().toLowerCase(),
+        intensityAuditionSection: String(payload.intensityAuditionSection || '').trim().toLowerCase(),
+        reason: String(payload.reason || '').trim().toLowerCase(),
       });
       continue;
     }

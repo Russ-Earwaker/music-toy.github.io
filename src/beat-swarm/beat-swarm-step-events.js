@@ -224,8 +224,22 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     if (stage === 'build') {
       if (lane === 'ornament') return [3, 7];
-      if (lane === 'lead') return barInPhrase < 3 ? [0, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5, 6, 7];
-      return [0, 2, 4, 5, 6];
+      if (lane === 'secondary') {
+        if (barInPhrase === 0) return [0, 4];
+        if (barInPhrase === 1) return [0, 4, 5];
+        if (barInPhrase === 2) return [0, 2, 3, 4, 5, 6];
+        return [0, 1, 2, 3, 4, 5, 6, 7];
+      }
+      if (lane === 'lead') {
+        if (barInPhrase === 0) return [0, 2, 4, 6];
+        if (barInPhrase === 1) return [0, 2, 3, 4, 6];
+        if (barInPhrase === 2) return [0, 2, 3, 4, 5, 6];
+        return [0, 1, 2, 3, 4, 5, 6, 7];
+      }
+      if (barInPhrase === 0) return [0, 4, 6];
+      if (barInPhrase === 1) return [0, 2, 4, 5, 6];
+      if (barInPhrase === 2) return [0, 2, 3, 4, 5, 6];
+      return [0, 1, 2, 3, 4, 5, 6, 7];
     }
     if (stage === 'peak') {
       if (lane === 'ornament') return [1, 3, 6, 7];

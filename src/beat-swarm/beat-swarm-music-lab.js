@@ -210,6 +210,9 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const phraseArchetype = String(context?.phraseArchetype ?? payload?.phraseArchetype ?? '').trim().toLowerCase();
   const reason = String(context?.reason ?? payload?.reason ?? '').trim().toLowerCase();
   const authoringClass = String(context?.authoringClass ?? payload?.authoringClass ?? '').trim().toLowerCase();
+  const actionCategory = String(context?.actionCategory ?? payload?.actionCategory ?? '').trim().toLowerCase();
+  const audioRequired = context?.audioRequired === true ? true : (payload?.audioRequired === true);
+  const classificationReason = String(context?.classificationReason ?? payload?.classificationReason ?? '').trim().toLowerCase();
   const leadFamily = String(context?.leadFamily ?? payload?.leadFamily ?? '').trim().toLowerCase();
   const leadContourId = String(context?.leadContourId ?? payload?.leadContourId ?? '').trim().toLowerCase();
   const leadContourEpoch = clampInt(context?.leadContourEpoch ?? payload?.leadContourEpoch, 0, 0);
@@ -220,6 +223,10 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const arrangementSupportStepBudget = clampInt(context?.arrangementSupportStepBudget ?? payload?.arrangementSupportStepBudget, 0, 0);
   const foundationPatternKey = String(context?.foundationPatternKey ?? payload?.foundationPatternKey ?? '').trim().toLowerCase();
   const foundationPhraseId = String(context?.foundationPhraseId ?? payload?.foundationPhraseId ?? '').trim().toLowerCase();
+  const intensityCadenceStepAdmitted = context?.intensityCadenceStepAdmitted === true
+    ? true
+    : (payload?.intensityCadenceStepAdmitted === true);
+  const intensityCadenceReason = String(context?.intensityCadenceReason ?? payload?.intensityCadenceReason ?? '').trim().toLowerCase();
   return {
     tMs: nowMs(),
     phase: String(phase || '').trim() || 'queued',
@@ -269,6 +276,9 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     phraseArchetype,
     reason,
     authoringClass,
+    actionCategory,
+    audioRequired,
+    classificationReason,
     leadFamily,
     leadContourId,
     leadContourEpoch,
@@ -279,6 +289,8 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     arrangementSupportStepBudget,
     foundationPatternKey,
     foundationPhraseId,
+    intensityCadenceStepAdmitted,
+    intensityCadenceReason,
     audioGain: Number(context?.audioGain ?? payload?.audioGain) || 0,
     resolvedPlaybackInstrumentId: String(context?.resolvedPlaybackInstrumentId || '').trim(),
     playbackKind: String(context?.playbackKind || '').trim().toLowerCase(),
@@ -575,6 +587,9 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     eventBehaviorWindow: String(payload?.eventBehaviorWindow || '').trim().toLowerCase(),
     activeEventSection: String(payload?.activeEventSection || '').trim().toLowerCase(),
     eventBehaviorClass: String(payload?.eventBehaviorClass || '').trim().toLowerCase(),
+    actionCategory: String(payload?.actionCategory || '').trim().toLowerCase(),
+    audioRequired: payload?.audioRequired === true,
+    classificationReason: String(payload?.classificationReason || '').trim().toLowerCase(),
     enteredBar: clampInt(payload?.enteredBar, -1, -1),
     endBar: clampInt(payload?.endBar, -1, -1),
     strongBeatActive: payload?.strongBeatActive === true,
@@ -3364,6 +3379,69 @@ function collectDeliveryDiagnostics(session, maxBarIndex) {
     mediumBeatByReason: computeDeficitMap(createdMediumBeatsByReason, executedMediumBeatsByReason),
   };
 }
+
+function collectEventSectionDiagnostics(session, maxBarIndex) {
+  const events = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
+    .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex)
+    .filter((e) => String(e?.eventType || '').trim().toLowerCase() === 'music_event_section_state');
+  const bySection = {};
+  const byStage = {};
+  const bySectionAndStage = {};
+  const byActionCategory = {};
+  const byBehaviorClass = {};
+  let activeCount = 0;
+  let beatBounceCount = 0;
+  let strongBeatCount = 0;
+  let movementEventCount = 0;
+  let audioRequiredCount = 0;
+  const samples = [];
+  for (const ev of events) {
+    const section = String(ev?.activeEventSection || '').trim().toLowerCase() || 'none';
+    const stage = String(ev?.intensityAuditionSection || '').trim().toLowerCase() || 'unknown';
+    const actionCategory = String(ev?.actionCategory || '').trim().toLowerCase() || 'unknown';
+    const behaviorClass = String(ev?.eventBehaviorClass || '').trim().toLowerCase() || 'none';
+    bySection[section] = (bySection[section] || 0) + 1;
+    byStage[stage] = (byStage[stage] || 0) + 1;
+    byActionCategory[actionCategory] = (byActionCategory[actionCategory] || 0) + 1;
+    byBehaviorClass[behaviorClass] = (byBehaviorClass[behaviorClass] || 0) + 1;
+    const sectionStageKey = `${section}:${stage}`;
+    bySectionAndStage[sectionStageKey] = (bySectionAndStage[sectionStageKey] || 0) + 1;
+    if (section !== 'none') activeCount += 1;
+    if (section === 'beat_bounce') beatBounceCount += 1;
+    if (ev?.strongBeatActive === true) strongBeatCount += 1;
+    if (actionCategory === 'movement_event') movementEventCount += 1;
+    if (ev?.audioRequired === true) audioRequiredCount += 1;
+    if (samples.length < 24 && (section !== 'none' || actionCategory === 'movement_event')) {
+      samples.push({
+        barIndex: clampInt(ev?.barIndex, 0, 0),
+        beatIndex: clampInt(ev?.beatIndex, 0, 0),
+        activeEventSection: section,
+        intensityAuditionSection: stage,
+        eventBehaviorClass: behaviorClass,
+        actionCategory,
+        audioRequired: ev?.audioRequired === true,
+        strongBeatActive: ev?.strongBeatActive === true,
+        presentationPulseScale: Number(ev?.presentationPulseScale) || 0,
+      });
+    }
+  }
+  return {
+    count: events.length,
+    activeCount,
+    activeRate: events.length ? (activeCount / events.length) : 0,
+    beatBounceCount,
+    strongBeatCount,
+    strongBeatRate: events.length ? (strongBeatCount / events.length) : 0,
+    movementEventCount,
+    audioRequiredCount,
+    bySection,
+    byStage,
+    bySectionAndStage,
+    byActionCategory,
+    byBehaviorClass,
+    sample: samples,
+  };
+}
 function collectExplosionReliabilityDiagnostics(session, maxBarIndex) {
   const logs = (Array.isArray(session?.systemEvents) ? session.systemEvents : [])
     .filter((e) => clampInt(e?.barIndex, 0, 0) <= maxBarIndex);
@@ -5537,6 +5615,64 @@ function collectRetroShmupStyleMetrics(metrics) {
 }
 
 function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
+  const collectActionCategoryTrace = (eventsLike) => {
+    const events = Array.isArray(eventsLike) ? eventsLike : [];
+    const byCategory = {};
+    const audioRequiredByCategory = {};
+    let categorizedCount = 0;
+    let audioRequiredCount = 0;
+    let audioRequiredSilentCount = 0;
+    for (const ev of events) {
+      if (!ev || typeof ev !== 'object') continue;
+      const category = String(ev?.actionCategory || '').trim().toLowerCase() || 'unknown';
+      byCategory[category] = (byCategory[category] || 0) + 1;
+      if (category !== 'unknown') categorizedCount += 1;
+      if (ev?.audioRequired === true) {
+        audioRequiredCount += 1;
+        audioRequiredByCategory[category] = (audioRequiredByCategory[category] || 0) + 1;
+        if (ev?.enemyAudible === false && ev?.playerAudible !== true) audioRequiredSilentCount += 1;
+      }
+    }
+    return {
+      eventCount: events.length,
+      categorizedCount,
+      byCategory,
+      audioRequiredCount,
+      audioRequiredSilentCount,
+      audioRequiredByCategory,
+    };
+  };
+  const collectIntensityCadenceTrace = (eventsLike, sessionLike = null, maxBar = Number.POSITIVE_INFINITY) => {
+    const directEvents = Array.isArray(eventsLike) ? eventsLike : [];
+    const systemEvents = (Array.isArray(sessionLike?.systemEvents) ? sessionLike.systemEvents : [])
+      .filter((ev) => clampInt(ev?.barIndex, 0, 0) <= maxBar)
+      .filter((ev) => String(ev?.eventType || '').trim().toLowerCase() === 'music_intensity_cadence_step_admitted')
+      .map((ev) => ({
+        intensityCadenceStepAdmitted: true,
+        intensityCadenceReason: String(ev?.reason || '').trim().toLowerCase(),
+        intensityAuditionSection: String(ev?.intensityAuditionSection || '').trim().toLowerCase(),
+      }));
+    const events = systemEvents.length ? systemEvents : directEvents;
+    const byReason = {};
+    const byStage = {};
+    let admittedCount = 0;
+    for (const ev of events) {
+      if (!ev || typeof ev !== 'object' || ev?.intensityCadenceStepAdmitted !== true) continue;
+      admittedCount += 1;
+      const reason = String(ev?.intensityCadenceReason || '').trim().toLowerCase() || 'unknown';
+      const stage = String(ev?.intensityAuditionSection || '').trim().toLowerCase() || 'unknown';
+      byReason[reason] = (byReason[reason] || 0) + 1;
+      byStage[stage] = (byStage[stage] || 0) + 1;
+    }
+    return {
+      eventCount: events.length,
+      systemEventCount: systemEvents.length,
+      admittedCount,
+      admittedRate: events.length ? (admittedCount / events.length) : 0,
+      byReason,
+      byStage,
+    };
+  };
   const roleBalance = collectRoleBalance(executedEvents);
   const threatBalance = collectThreatBalance(executedEvents);
   const threatBudgetUsage = collectThreatBudgetUsage(session, maxBarIndex);
@@ -5610,6 +5746,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const passDiagnostics = collectPassDiagnostics(executedEvents, session, maxBarIndex, handoff, spawnerPipeline);
   const sectionStability = collectSectionStability(session, maxBarIndex);
   const sectionPresentation = collectSectionPresentation(session, maxBarIndex);
+  const eventSectionDiagnostics = collectEventSectionDiagnostics(session, maxBarIndex);
   const readabilityStructureOnboarding = collectReadabilityStructureOnboarding(session, maxBarIndex);
   const grooveStability = collectGrooveStability(executedEvents, sectionStability);
   const foregroundCompetition = collectForegroundCompetitionDiagnostics(session, executedEvents, maxBarIndex);
@@ -5633,6 +5770,8 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const level1ContractCompliance = collectLevel1ContractComplianceTrace(session, executedEvents, maxBarIndex);
   const visualRoleReadabilityTrace = collectVisualRoleReadabilityTrace(session, maxBarIndex);
   const enemyActionGate = collectEnemyActionGateDiagnostics(session, maxBarIndex);
+  const actionCategoryTrace = collectActionCategoryTrace(executedEvents);
+  const intensityCadenceTrace = collectIntensityCadenceTrace(executedEvents, session, maxBarIndex);
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -5677,6 +5816,27 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     laneCompliance,
     roleBalance,
     threatBalance,
+    actionCategoryTrace,
+    actionCategoryEventCount: Number(actionCategoryTrace?.eventCount) || 0,
+    actionCategoryCategorizedCount: Number(actionCategoryTrace?.categorizedCount) || 0,
+    actionCategoryByType: actionCategoryTrace?.byCategory && typeof actionCategoryTrace.byCategory === 'object'
+      ? { ...actionCategoryTrace.byCategory }
+      : {},
+    audioRequiredEventCount: Number(actionCategoryTrace?.audioRequiredCount) || 0,
+    audioRequiredSilentCount: Number(actionCategoryTrace?.audioRequiredSilentCount) || 0,
+    audioRequiredByActionCategory: actionCategoryTrace?.audioRequiredByCategory && typeof actionCategoryTrace.audioRequiredByCategory === 'object'
+      ? { ...actionCategoryTrace.audioRequiredByCategory }
+      : {},
+    intensityCadenceTrace,
+    intensityCadenceSystemEventCount: Number(intensityCadenceTrace?.systemEventCount) || 0,
+    intensityCadenceAdmittedCount: Number(intensityCadenceTrace?.admittedCount) || 0,
+    intensityCadenceAdmittedRate: Number(intensityCadenceTrace?.admittedRate) || 0,
+    intensityCadenceByReason: intensityCadenceTrace?.byReason && typeof intensityCadenceTrace.byReason === 'object'
+      ? { ...intensityCadenceTrace.byReason }
+      : {},
+    intensityCadenceByStage: intensityCadenceTrace?.byStage && typeof intensityCadenceTrace.byStage === 'object'
+      ? { ...intensityCadenceTrace.byStage }
+      : {},
     threatBudgetUsage,
     directorFoundationActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.foundation) || 0,
     directorSecondaryLoopActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.secondary_loop) || 0,
@@ -5904,6 +6064,33 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       : {},
     sectionStability,
     sectionPresentation,
+    eventSectionDiagnostics,
+    eventSectionStateCount: Number(eventSectionDiagnostics?.count) || 0,
+    eventSectionActiveCount: Number(eventSectionDiagnostics?.activeCount) || 0,
+    eventSectionActiveRate: Number(eventSectionDiagnostics?.activeRate) || 0,
+    beatBounceEventSectionCount: Number(eventSectionDiagnostics?.beatBounceCount) || 0,
+    eventSectionStrongBeatCount: Number(eventSectionDiagnostics?.strongBeatCount) || 0,
+    eventSectionStrongBeatRate: Number(eventSectionDiagnostics?.strongBeatRate) || 0,
+    eventSectionMovementEventCount: Number(eventSectionDiagnostics?.movementEventCount) || 0,
+    eventSectionAudioRequiredCount: Number(eventSectionDiagnostics?.audioRequiredCount) || 0,
+    eventSectionBySection: eventSectionDiagnostics?.bySection && typeof eventSectionDiagnostics.bySection === 'object'
+      ? { ...eventSectionDiagnostics.bySection }
+      : {},
+    eventSectionByStage: eventSectionDiagnostics?.byStage && typeof eventSectionDiagnostics.byStage === 'object'
+      ? { ...eventSectionDiagnostics.byStage }
+      : {},
+    eventSectionBySectionAndStage: eventSectionDiagnostics?.bySectionAndStage && typeof eventSectionDiagnostics.bySectionAndStage === 'object'
+      ? { ...eventSectionDiagnostics.bySectionAndStage }
+      : {},
+    eventSectionByActionCategory: eventSectionDiagnostics?.byActionCategory && typeof eventSectionDiagnostics.byActionCategory === 'object'
+      ? { ...eventSectionDiagnostics.byActionCategory }
+      : {},
+    eventSectionByBehaviorClass: eventSectionDiagnostics?.byBehaviorClass && typeof eventSectionDiagnostics.byBehaviorClass === 'object'
+      ? { ...eventSectionDiagnostics.byBehaviorClass }
+      : {},
+    eventSectionSample: Array.isArray(eventSectionDiagnostics?.sample)
+      ? eventSectionDiagnostics.sample.slice(0, 24)
+      : [],
     readability: readabilityStructureOnboarding.readability,
     structure: readabilityStructureOnboarding.structure,
     onboarding: readabilityStructureOnboarding.onboarding,

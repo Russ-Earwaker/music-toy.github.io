@@ -71,8 +71,8 @@ function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
     const presentationWeight = Math.max(0.5, Number(enemy?.formationPresentationWeight) || 0.75);
     return {
       velocityDamping: 1 - (0.22 * pulse),
-      scaleBias: 1,
-      offsetYPx: 0,
+      scaleBias: 1 + (0.08 * pulse * presentationWeight),
+      offsetYPx: -(5 * pulse * presentationWeight),
     };
   }
   const activeEventSection = String(eventSectionRuntime?.activeEventSection || '').trim().toLowerCase();
@@ -90,10 +90,11 @@ function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
   const strongBeatActive = eventSectionRuntime?.strongBeatActive === true;
   if (!strongBeatActive) return { velocityDamping: 1, scaleBias: 1, offsetYPx: 0 };
   const presentationWeight = Math.max(0.5, Number(enemy?.formationPresentationWeight) || 0.7);
+  const pulseScale = Math.max(0, Math.min(0.24, Number(eventSectionRuntime?.presentationPulseScale) || 0));
   return {
     velocityDamping: Math.max(0.82, Math.min(1, Number(eventSectionRuntime?.motionDamping) || 1)),
-    scaleBias: 1,
-    offsetYPx: 0,
+    scaleBias: 1 + (pulseScale * presentationWeight),
+    offsetYPx: -(7 * pulseScale * presentationWeight),
   };
 }
 

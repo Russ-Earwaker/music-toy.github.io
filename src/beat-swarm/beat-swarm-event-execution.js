@@ -1,3 +1,5 @@
+import { classifyBeatSwarmPerformedAction } from './beat-swarm-action-categories.js';
+
 export function executePerformedBeatEventRuntime(options = null) {
   const ev = options?.event && typeof options.event === 'object' ? options.event : null;
   if (!ev) return false;
@@ -31,6 +33,7 @@ export function executePerformedBeatEventRuntime(options = null) {
   const stepIndex = Math.max(0, Math.trunc(Number(ev.stepIndex) || 0));
   const barIndex = Math.floor(beatIndex / Math.max(1, Math.trunc(Number(constants.composerBeatsPerBar) || 4)));
   const playerStepLikelyAudible = helpers.isPlayerWeaponStepLikelyAudible?.(stepIndex) === true;
+  const actionClassification = classifyBeatSwarmPerformedAction(ev, ev?.payload || null);
   const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
     ? state.musicModeRuntime
     : null;
@@ -116,6 +119,9 @@ export function executePerformedBeatEventRuntime(options = null) {
         callResponseLane: String(ctx?.callResponseLane || payload?.callResponseLane || enemy?.callResponseLane || group?.callResponseLane || '').trim().toLowerCase(),
         musicProfileSourceType: String(ctx?.musicProfileSourceType || payload?.musicProfileSourceType || enemy?.musicProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase(),
         actionType,
+        actionCategory: String(actionClassification.actionCategory || '').trim().toLowerCase(),
+        audioRequired: actionClassification.audioRequired === true,
+        classificationReason: String(actionClassification.classificationReason || '').trim().toLowerCase(),
       }, { beatIndex, stepIndex, barIndex });
     } catch {}
   };
@@ -135,6 +141,9 @@ export function executePerformedBeatEventRuntime(options = null) {
         stepIndex,
         barIndex,
         groupId: payloadGroupId,
+        actionCategory: String(base?.actionCategory || payload?.actionCategory || actionClassification.actionCategory || '').trim().toLowerCase(),
+        audioRequired: base?.audioRequired === true || payload?.audioRequired === true || actionClassification.audioRequired === true,
+        classificationReason: String(base?.classificationReason || payload?.classificationReason || actionClassification.classificationReason || '').trim().toLowerCase(),
         callResponseLane: String(base?.callResponseLane || payload?.callResponseLane || '').trim().toLowerCase(),
         callResponseQualified: base?.callResponseQualified === true
           ? true
@@ -456,7 +465,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     const letter = String(m[1] || '').toUpperCase();
     const accidental = String(m[2] || '');
     const octave = Math.trunc(Number(m[3]) || 3);
-    const clamped = octave >= 4 ? (octave - 1) : (octave < 2 ? 2 : octave);
+    const clamped = octave >= 4 ? 3 : (octave < 2 ? 2 : octave);
     return `${letter}${accidental}${clamped}`;
   };
   const buildPlaybackLoggingContext = (instrumentIdLike, triggerVolumeLike) => {
@@ -472,7 +481,6 @@ export function executePerformedBeatEventRuntime(options = null) {
       approxPlaybackVolume: triggerVolume * sampleVolumeMultiplier,
     };
   };
-  const hasExplicitOctave = (noteLike) => /^([A-Ga-g])([#b]?)(-?\d+)$/.test(String(noteLike || '').trim());
   const enemyForAction = helpers.getSwarmEnemyById?.(ev.actorId) || null;
   const composerEnemyGroups = Array.isArray(state?.composerEnemyGroups) ? state.composerEnemyGroups : [];
   const noteSlotSpawnerExecutionReason = (enemyLike, payload = null) => {
@@ -618,9 +626,8 @@ export function executePerformedBeatEventRuntime(options = null) {
       requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
       noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
       if (String(normalizedGroupRole || '') === String(constants?.roles?.bass || 'bass')) {
-        noteName = hasExplicitOctave(requestedNote)
-          ? String(requestedNote).trim()
-          : normalizeBassRegister(noteName, normalizeBassRegister(requestedNote || 'C3', 'C3'));
+        const bassFallbackNote = normalizeBassRegister(requestedNote || noteName || 'C3', 'C3');
+        noteName = normalizeBassRegister(noteName || requestedNote || bassFallbackNote, bassFallbackNote);
       }
       group.note = noteName;
       audioDedupKey = [
@@ -1078,9 +1085,8 @@ export function executePerformedBeatEventRuntime(options = null) {
     group.instrumentId = instrumentId;
     group.role = normalizedGroupRole;
     if (String(normalizedGroupRole || '') === String(constants?.roles?.bass || 'bass')) {
-      noteName = hasExplicitOctave(requestedNote)
-        ? String(requestedNote).trim()
-        : normalizeBassRegister(noteName, normalizeBassRegister(requestedNote || 'C3', 'C3'));
+      const bassFallbackNote = normalizeBassRegister(requestedNote || noteName || 'C3', 'C3');
+      noteName = normalizeBassRegister(noteName || requestedNote || bassFallbackNote, bassFallbackNote);
     }
     const duckForPlayer = false;
     const combatFeedback = isCombatFeedbackAction(ev);
@@ -1147,6 +1153,11 @@ export function executePerformedBeatEventRuntime(options = null) {
         }
       } catch {}
       try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
+      if (enemy) {
+        enemy.lastMusicalActionBeatIndex = beatIndex;
+        enemy.lastMusicalActionStepIndex = stepIndex;
+        enemy.lastMusicalActionAtMs = getPerfNow();
+      }
       noteComposerExecutionStage('audio_triggered', {
         hasGroup: true,
         instrumentId: String(instrumentId || '').trim(),

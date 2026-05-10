@@ -507,6 +507,54 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     ? (preDropActive ? 2 : (strongLeadWindowActive ? 3 : 2))
     : 1;
   const callCadenceRestSteps = 1;
+  const intensityCadenceAdmissionCounts = new Map();
+  const resolveIntensityCadenceAdmission = ({
+    groupLaneId = '',
+    musicProfileSourceType = '',
+    stepInBar = 0,
+    stepActive = false,
+    introSlotIdentityActive = false,
+    introStageCarrier = false,
+    introPercussionCarrier = false,
+  } = {}) => {
+    if (stepActive) return { active: true, reason: 'authored_step' };
+    if (introSlotIdentityActive || introStageCarrier || introPercussionCarrier) return { active: false, reason: 'intro_protected' };
+    if (activeMusicMode !== 'full_texture') return { active: false, reason: 'mode_not_full_texture' };
+    if (barIndex < 24) return { active: false, reason: 'intro_set_piece_protected' };
+    const laneId = String(groupLaneId || '').trim().toLowerCase();
+    const profile = normalizeComposerProfileSourceType(musicProfileSourceType);
+    const safeStep = Math.max(0, Math.trunc(Number(stepInBar) || 0)) % Math.max(1, stepsPerBar);
+    const secondaryRhythm = laneId === 'secondary_loop_lane' && (
+      profile === 'rhythm_lane'
+      || profile === 'rhythm_lane_backbeat'
+      || profile === 'secondary_bridge_backbeat'
+      || profile === 'spawner_rhythm_backbeat'
+      || profile === 'spawner_rhythm_motion'
+    );
+    if (!secondaryRhythm) return { active: false, reason: 'not_counter_rhythm' };
+    const applyAdmissionBudget = (reason, cap) => {
+      const key = `${intensityAuditionSection}:${stepAbs}:${reason}`;
+      const count = Math.max(0, Math.trunc(Number(intensityCadenceAdmissionCounts.get(key)) || 0));
+      if (count >= cap) return { active: false, reason: `${reason}_budget_full` };
+      intensityCadenceAdmissionCounts.set(key, count + 1);
+      return { active: true, reason };
+    };
+    if (intensityAuditionSection === 'build') {
+      const phraseSlot = barIndex % 4;
+      const buildSteps = phraseSlot >= 3
+        ? [1, 3, 5, 7]
+        : (phraseSlot >= 2 ? [3, 5] : (phraseSlot >= 1 ? [5] : []));
+      return buildSteps.includes(safeStep)
+        ? applyAdmissionBudget(`build_counter_subdivision_${safeStep}`, 1)
+        : { active: false, reason: 'build_subdivision_rest' };
+    }
+    if (intensityAuditionSection === 'peak') {
+      const peakSteps = (barIndex % 2) === 0 ? [2, 4, 6] : [4, 6];
+      if (peakSteps.includes(safeStep)) return applyAdmissionBudget(`peak_counter_subdivision_${safeStep}`, 2);
+      return { active: false, reason: 'peak_off_subdivision_rest' };
+    }
+    return { active: false, reason: 'stage_not_dense' };
+  };
   const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
   const getPrimaryLeadTraceFallback = () => {
     const arrangementPhraseIntent = String(musicModeRuntime?.level1ArrangementState?.phraseIntent || '').trim().toLowerCase();
@@ -616,6 +664,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       ? lockedIntroLane
       : (isSoloCarrier ? 'solo' : normalizeCallResponseLane(group?.callResponseLane, answerOrnamentCarrier ? 'response' : 'call'));
     const groupId = Math.max(0, Math.trunc(Number(group?.id) || 0));
+    const groupLaneId = String(
+      introSlotIdentityActive
+        ? (group?.introSlotMusicLaneId || group?.musicLaneId || '')
+        : (group?.musicLaneId || '')
+    ).trim().toLowerCase();
     if (!ornamentLaneOpen && isOrnamentLikeGroup(group)) {
       noteOrnamentSuppressed(
         ornamentStageAllowed ? 'ornament_lane_inactive' : 'ornament_stage_disabled',
@@ -880,11 +933,22 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     const stepActive = Array.isArray(lockedIntroSteps)
       ? !!lockedIntroSteps[step]
       : (Array.isArray(group.steps) && !!group.steps[step]);
-    if (!stepActive && !responseOverrideHit) {
+    const intensityCadenceAdmission = resolveIntensityCadenceAdmission({
+      groupLaneId,
+      musicProfileSourceType,
+      stepInBar: step,
+      stepActive,
+      introSlotIdentityActive,
+      introStageCarrier,
+      introPercussionCarrier,
+    });
+    const effectiveStepActive = stepActive || intensityCadenceAdmission.active === true;
+    if (!effectiveStepActive && !responseOverrideHit) {
       noteIntroCollectorState('collector_suppressed', { admissionReason: 'step_inactive' });
       noteEarlyCarrierTrace('suppressed', {
         branch: 'collector',
         admissionReason: 'step_inactive',
+        intensityCadenceReason: String(intensityCadenceAdmission.reason || '').trim().toLowerCase(),
       });
       if (slotRhythmCarrier) {
         const introSlotSuppressedPayload = {
@@ -901,6 +965,18 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       noteCallDiagnostic('step_inactive');
       noteResponseDiagnostic('step_inactive');
       continue;
+    }
+    if (!stepActive && intensityCadenceAdmission.active === true && noteMusicSystemEvent) {
+      noteMusicSystemEvent('music_intensity_cadence_step_admitted', {
+        groupId,
+        stepIndex: stepAbs,
+        beatIndex,
+        stepInBar: step,
+        musicLaneId: groupLaneId,
+        musicProfileSourceType,
+        intensityAuditionSection,
+        reason: String(intensityCadenceAdmission.reason || '').trim().toLowerCase(),
+      }, { beatIndex, stepIndex: stepAbs, barIndex });
     }
     const phraseRestUntilStepAbs = slotRhythmCarrier
       ? -1
@@ -1222,11 +1298,6 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       roles.lead
     );
     const isBassRole = groupRole === String(roles?.bass || 'bass');
-    const groupLaneId = String(
-      introSlotIdentityActive
-        ? (group?.introSlotMusicLaneId || group?.musicLaneId || '')
-        : (group?.musicLaneId || '')
-    ).trim().toLowerCase();
     if (
       groupLaneId === 'secondary_loop_lane'
       && rhythmProfileCarrier
@@ -1875,6 +1946,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           ) || 0)),
           arrangementSupportIntent: String(group?.arrangementSupportIntent || '').trim().toLowerCase(),
           arrangementSupportStepBudget: Math.max(0, Math.trunc(Number(group?.arrangementSupportStepBudget) || 0)),
+          intensityAuditionSection,
+          intensityCadenceStepAdmitted: !stepActive && intensityCadenceAdmission.active === true,
+          intensityCadenceReason: String(intensityCadenceAdmission.reason || '').trim().toLowerCase(),
         },
       }));
     }

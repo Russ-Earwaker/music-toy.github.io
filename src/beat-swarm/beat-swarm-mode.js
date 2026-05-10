@@ -15,6 +15,7 @@ import { buildPalette, midiToName } from '../note-helpers.js';
 import { createArtToyAt } from '../art/art-toy-factory.js';
 import { createSwarmDirector } from './swarm-director.js';
 import { createPerformedBeatEvent, BEAT_EVENT_ROLES, BEAT_EVENT_THREAT } from './beat-events.js';
+import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from './beat-swarm-action-categories.js';
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js';
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
@@ -3471,7 +3472,11 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
     || normalizeSwarmNoteName(ownerEnemy?.__bsLastSpawnerNote)
     || normalizeSwarmNoteName(ownerEnemy?.__bsLastDrawsnakeNote)
     || getSwarmPentatonicNoteByIndex(0);
-  const note = clampNoteToDirectorPool(requestedNoteRaw, beatIndex + stepIndex + ownerId) || requestedNoteRaw;
+  const note = clampNoteToDirectorRegisterTarget(
+    requestedNoteRaw,
+    beatIndex + stepIndex + ownerId,
+    'low'
+  ) || requestedNoteRaw;
   const instrumentId = resolveProtectedLaneInstrumentIdentity(
     foundationLane,
     group,
@@ -4206,7 +4211,18 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     const archetypePhraseTargets = phraseTargets.length
       ? phraseTargets
       : [phraseGravityTarget, group?.phraseRoot, group?.phraseFifth].map((n) => normalizeSwarmNoteName(n)).filter(Boolean);
-    const eventNoteName = resolvePhraseArchetypeNote(styledNoteName, phraseArchetypeState, archetypePhraseTargets) || styledNoteName;
+    const eventNoteNameRaw = resolvePhraseArchetypeNote(styledNoteName, phraseArchetypeState, archetypePhraseTargets) || styledNoteName;
+    const stageRegisterTarget = (() => {
+      const section = String(arrangementStateNow?.intensityAuditionSection || '').trim().toLowerCase();
+      if (section === 'release' || section === 'settle') {
+        if (musicLaneId === 'primary_loop_lane' || musicLaneId === 'secondary_loop_lane') return 'mid';
+      }
+      if (section === 'low' && musicLaneId === 'secondary_loop_lane') return 'mid';
+      return '';
+    })();
+    const eventNoteName = stageRegisterTarget
+      ? clampNoteToDirectorRegisterTarget(eventNoteNameRaw, stepIndex + Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0)), stageRegisterTarget)
+      : eventNoteNameRaw;
     const finalPhraseGravityHit = phraseGravityOpportunity
       ? normalizeSwarmNoteName(eventNoteName) === normalizeSwarmNoteName(phraseGravityTarget)
       : phraseGravityHit;
@@ -7566,7 +7582,7 @@ function resolvePhraseArchetypeNote(noteName, archetypeState = null, phraseTarge
   }
   if (archetype === 'return_groove') {
     if (progress > 0.72 && phraseTarget) return phraseTarget;
-    return noteAt(baseIdx + ((Math.trunc(Number(state.stepInPhrase) || 0) % 4) === 0 ? 0 : 1));
+    return baseNote;
   }
   if (archetype === 'counter_pulse') {
     return noteAt(baseIdx + ((Math.trunc(Number(state.stepInPhrase) || 0) % 8) >= 4 ? -1 : 0));
@@ -9380,6 +9396,11 @@ const eventSectionRuntime = {
   eligibleRoles: [],
   activeMusicMode: '',
   introStage: 'none',
+  currentBeatIndex: -1,
+  intensityAuditionSection: '',
+  actionCategory: 'unknown',
+  audioRequired: false,
+  classificationReason: '',
   showcaseReady: false,
   showcaseSkipReason: '',
   lastEvaluatedBar: -1,
@@ -10818,6 +10839,11 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
     sourceSystem,
     created?.actionType
   );
+  const actionClassification = classifyBeatSwarmPerformedAction(created, {
+    ...input,
+    sourceSystem,
+    authoringClass,
+  });
   const payload = created?.payload && typeof created.payload === 'object' ? created.payload : {};
   const explicitProtectedLaneId = String(payload?.musicLaneId || payload?.foundationLaneId || '').trim().toLowerCase();
   const protectedLaneClaim = resolveProtectedMusicLaneClaim(created, actor, actorGroup);
@@ -10857,6 +10883,9 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
     enemyRoleColor: String(input?.enemyRoleColor || actor?.musicRoleColor || '').trim().toLowerCase(),
     expectedInstrumentLane,
     actualInstrumentLane,
+    actionCategory: String(input?.actionCategory || actionClassification.actionCategory || '').trim().toLowerCase(),
+    audioRequired: input?.audioRequired === true || actionClassification.audioRequired === true,
+    classificationReason: String(input?.classificationReason || actionClassification.classificationReason || '').trim().toLowerCase(),
   };
   const derivedMusicProfileSourceType = String(
     input?.musicProfileSourceType
@@ -10951,8 +10980,16 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
   try {
     if (created?.payload && typeof created.payload === 'object') {
       created.payload.authoringClass = authoringClass;
+      created.payload.actionCategory = logContext.actionCategory;
+      created.payload.audioRequired = logContext.audioRequired === true;
+      created.payload.classificationReason = logContext.classificationReason;
     } else if (created) {
-      created.payload = { authoringClass };
+      created.payload = {
+        authoringClass,
+        actionCategory: logContext.actionCategory,
+        audioRequired: logContext.audioRequired === true,
+        classificationReason: logContext.classificationReason,
+      };
     }
     if (created?.payload && typeof created.payload === 'object') {
       if (!String(created.payload.callResponseLane || '').trim() && String(input?.callResponseLane || '').trim()) {
@@ -18903,12 +18940,22 @@ function clampNoteToDirectorRegisterTarget(noteName, fallbackIndex = 0, register
   const pool = Array.isArray(director.getNotePool?.()) ? director.getNotePool() : [];
   if (!pool.length) return baseNote;
   const baseMidi = noteNameToMidiRuntime(baseNote);
+  const transposeBaseIntoLowRegister = () => {
+    if (!Number.isFinite(baseMidi)) return baseNote;
+    let lowMidi = baseMidi;
+    while (lowMidi > 59) lowMidi -= 12;
+    while (lowMidi < 36) lowMidi += 12;
+    return normalizeSwarmNoteName(midiToName(lowMidi)) || baseNote;
+  };
+  if (target === 'low' && Number.isFinite(baseMidi) && classifyMidiRegister(baseMidi) !== 'low') {
+    return transposeBaseIntoLowRegister();
+  }
   const candidates = pool
     .map((candidate) => normalizeSwarmNoteName(candidate))
     .filter(Boolean)
     .map((candidate) => ({ note: candidate, midi: noteNameToMidiRuntime(candidate) }))
     .filter((entry) => Number.isFinite(entry.midi) && classifyMidiRegister(entry.midi) === target);
-  if (!candidates.length || !Number.isFinite(baseMidi)) return baseNote;
+  if (!candidates.length || !Number.isFinite(baseMidi)) return target === 'low' ? transposeBaseIntoLowRegister() : baseNote;
   let picked = candidates[0].note;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
@@ -20748,18 +20795,25 @@ function evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage = 'no
   } catch {}
   return musicModeRuntime;
 }
-function getBeatSwarmEventSectionIdForState(barIndex, beatIndex, introStage = 'none', activeMusicMode = '') {
+function getBeatSwarmEventSectionIdForState(barIndex, beatIndex, introStage = 'none', activeMusicMode = '', arrangementState = null) {
   const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const safeBeat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
   const beatsPerBar = Math.max(1, COMPOSER_BEATS_PER_BAR);
   const beatInBar = safeBeat % beatsPerBar;
   const halfBarBeat = Math.max(1, Math.floor(beatsPerBar / 2));
   const barCycle = safeBar % 32;
+  const intensityAuditionSection = String(arrangementState?.intensityAuditionSection || '').trim().toLowerCase();
+  const phraseSlot = barCycle % 4;
+  const intensityAuditionActive = !!intensityAuditionSection;
+  const legacyBeatBounceWindow = !intensityAuditionActive && safeBar >= 24 && barCycle >= 24 && barCycle <= 27;
+  const intensityBeatBounceWindow = (intensityAuditionSection === 'build' && phraseSlot >= 2)
+    || intensityAuditionSection === 'peak';
   const beatBounceWindow = String(activeMusicMode || '').trim().toLowerCase() === 'full_texture'
     && String(introStage || 'none').trim().toLowerCase() === 'none'
-    && safeBar >= 24
-    && barCycle >= 24
-    && barCycle <= 27;
+    && (legacyBeatBounceWindow || intensityBeatBounceWindow);
+  const sectionEndBar = legacyBeatBounceWindow
+    ? (safeBar + Math.max(0, 27 - barCycle))
+    : (safeBar + Math.max(0, 3 - phraseSlot));
   return {
     sectionId: beatBounceWindow ? 'beat_bounce' : 'none',
     safeBar,
@@ -20767,13 +20821,26 @@ function getBeatSwarmEventSectionIdForState(barIndex, beatIndex, introStage = 'n
     beatInBar,
     halfBarBeat,
     barCycle,
+    sectionEndBar,
+    intensityAuditionSection,
   };
 }
 function evaluateBeatSwarmEventShowcaseReadiness(barIndex, beatIndex, introStage = 'none', activeMusicModeState = null, levelPhaseState = null) {
+  const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const activeLevelPhase = String(levelPhaseState?.activeLevelPhase || '').trim().toLowerCase();
   const phaseVariant = String(levelPhaseState?.phaseVariant || 'default').trim().toLowerCase();
   const phaseValidity = String(levelPhaseState?.phaseValidity || 'valid').trim().toLowerCase();
   const activeMusicMode = String(activeMusicModeState?.activeMusicMode || '').trim().toLowerCase();
+  const lanePlan = buildDirectorLanePlanForBar(safeBar);
+  const arrangementState = lanePlan?.__arrangementState && typeof lanePlan.__arrangementState === 'object'
+    ? lanePlan.__arrangementState
+    : {};
+  const level1Contract = lanePlan?.__level1Contract && typeof lanePlan.__level1Contract === 'object'
+    ? lanePlan.__level1Contract
+    : {};
+  const intensityAuditionSection = String(arrangementState?.intensityAuditionSection || '').trim().toLowerCase();
+  const contractAllowsSparkle = level1Contract.contractSparkleActive === true;
+  const contractAllowsAnswer = level1Contract.contractAnswerActive === true;
   if (activeLevelPhase !== 'full_texture') {
     return { ready: false, reason: 'phase_not_full_texture' };
   }
@@ -20813,10 +20880,17 @@ function evaluateBeatSwarmEventShowcaseReadiness(barIndex, beatIndex, introStage
   if (!secondaryPresent) return { ready: false, reason: 'secondary_rhythm_missing' };
   if (readableRoles.size < 3) return { ready: false, reason: 'field_not_readable_enough' };
   if (totalAlive > 10) return { ready: false, reason: 'pressure_too_high' };
-  if (!(readableRoles.has('answer_ornament') && ornamentVisualWeight >= 0.85)) {
+  const ornamentRequired = (contractAllowsSparkle || contractAllowsAnswer) && intensityAuditionSection === 'peak';
+  if (ornamentRequired && !(readableRoles.has('answer_ornament') && ornamentVisualWeight >= 0.85)) {
     return { ready: false, reason: 'ornament_not_readable' };
   }
-  return { ready: true, reason: 'showcase_ready' };
+  return {
+    ready: true,
+    reason: 'showcase_ready',
+    intensityAuditionSection,
+    contractAllowsSparkle,
+    contractAllowsAnswer,
+  };
 }
 function getBeatSwarmEventBehaviorIdForSection(sectionId = 'none') {
   const normalizedSectionId = String(sectionId || 'none').trim().toLowerCase();
@@ -20926,7 +21000,11 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
   const activeMusicMode = String(musicState?.activeMusicMode || '').trim().toLowerCase();
   const activeLevelPhase = String(levelPhaseState?.activeLevelPhase || '').trim().toLowerCase();
   const phaseVariant = String(levelPhaseState?.phaseVariant || 'default').trim().toLowerCase();
-  const inferredEventSection = getBeatSwarmEventSectionIdForState(barIndex, beatIndex, introStage, activeMusicMode);
+  const lanePlan = buildDirectorLanePlanForBar(barIndex);
+  const arrangementState = lanePlan?.__arrangementState && typeof lanePlan.__arrangementState === 'object'
+    ? lanePlan.__arrangementState
+    : {};
+  const inferredEventSection = getBeatSwarmEventSectionIdForState(barIndex, beatIndex, introStage, activeMusicMode, arrangementState);
   const difficultyRamp = Math.max(0, Math.min(1, Math.max(0, Math.trunc(Number(barIndex) || 0)) / 96));
   const arrangementRamp = Math.max(0, Math.min(1, Math.max(0, Math.trunc(Number(barIndex) || 0)) / 64));
   const basePressure = activeLevelPhase === 'intro_teach'
@@ -21076,7 +21154,11 @@ function evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage = 
     : evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage, levelPhaseState);
   const activeMusicMode = String(musicState?.activeMusicMode || '').trim().toLowerCase();
   const activeLevelPhase = String(levelPhaseState?.activeLevelPhase || '').trim().toLowerCase();
-  const inferredEventSection = getBeatSwarmEventSectionIdForState(barIndex, beatIndex, introStage, activeMusicMode);
+  const lanePlan = buildDirectorLanePlanForBar(barIndex);
+  const arrangementState = lanePlan?.__arrangementState && typeof lanePlan.__arrangementState === 'object'
+    ? lanePlan.__arrangementState
+    : {};
+  const inferredEventSection = getBeatSwarmEventSectionIdForState(barIndex, beatIndex, introStage, activeMusicMode, arrangementState);
   const safeBar = inferredEventSection.safeBar;
   const safeBeat = inferredEventSection.safeBeat;
   const beatInBar = inferredEventSection.beatInBar;
@@ -21097,17 +21179,30 @@ function evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage = 
     eventSectionRuntime.enteredBar = nextSection === 'none' ? -1 : safeBar;
   }
   eventSectionRuntime.activeEventSection = nextSection;
-  eventSectionRuntime.eventBehaviorClass = nextSection === 'beat_bounce' ? 'presentation' : 'none';
-  eventSectionRuntime.endBar = nextSection === 'beat_bounce' ? (safeBar + Math.max(0, 27 - barCycle)) : -1;
+  const eventSectionClassification = classifyBeatSwarmEventSection(nextSection);
+  eventSectionRuntime.eventBehaviorClass = nextSection === 'beat_bounce' ? 'beat_synced_movement' : 'none';
+  eventSectionRuntime.actionCategory = String(eventSectionClassification.actionCategory || '').trim().toLowerCase();
+  eventSectionRuntime.audioRequired = eventSectionClassification.audioRequired === true;
+  eventSectionRuntime.classificationReason = String(eventSectionClassification.classificationReason || '').trim().toLowerCase();
+  eventSectionRuntime.endBar = nextSection === 'beat_bounce' ? Math.max(safeBar, Math.trunc(Number(inferredEventSection.sectionEndBar) || safeBar)) : -1;
   eventSectionRuntime.strongBeatActive = nextSection === 'beat_bounce' && (beatInBar === 0 || beatInBar === halfBarBeat);
-  eventSectionRuntime.motionDamping = eventSectionRuntime.strongBeatActive ? 0.88 : 1;
-  eventSectionRuntime.agitationBoost = nextSection === 'beat_bounce' ? 1.04 : 1;
-  eventSectionRuntime.presentationPulseScale = eventSectionRuntime.strongBeatActive ? 0.12 : 0;
+  const intensityAuditionSection = String(inferredEventSection.intensityAuditionSection || arrangementState?.intensityAuditionSection || '').trim().toLowerCase();
+  const peakPulse = intensityAuditionSection === 'peak';
+  eventSectionRuntime.motionDamping = eventSectionRuntime.strongBeatActive ? (peakPulse ? 0.82 : 0.86) : 1;
+  eventSectionRuntime.agitationBoost = nextSection === 'beat_bounce' ? (peakPulse ? 1.08 : 1.05) : 1;
+  eventSectionRuntime.presentationPulseScale = eventSectionRuntime.strongBeatActive ? (peakPulse ? 0.18 : 0.13) : 0;
   eventSectionRuntime.eligibleRoles = nextSection === 'beat_bounce'
-    ? ['foundation_groove', 'counter_rhythm', 'lead_phrase']
+    ? [
+        'foundation_groove',
+        'counter_rhythm',
+        'lead_phrase',
+        ...((showcaseDecision.contractAllowsSparkle === true || showcaseDecision.contractAllowsAnswer === true) ? ['answer_ornament'] : []),
+      ]
     : [];
   eventSectionRuntime.activeMusicMode = activeMusicMode;
   eventSectionRuntime.introStage = String(introStage || 'none').trim().toLowerCase();
+  eventSectionRuntime.currentBeatIndex = safeBeat;
+  eventSectionRuntime.intensityAuditionSection = intensityAuditionSection;
   eventSectionRuntime.showcaseReady = showcaseDecision.ready === true;
   eventSectionRuntime.showcaseSkipReason = nextSection === 'beat_bounce' ? '' : String(showcaseDecision.reason || '').trim().toLowerCase();
   if (previousSection !== nextSection && nextSection !== 'none') {
@@ -21119,6 +21214,9 @@ function evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage = 
       noteMusicSystemEvent?.('music_event_section_state', {
         activeEventSection: String(eventSectionRuntime.activeEventSection || '').trim().toLowerCase(),
         eventBehaviorClass: String(eventSectionRuntime.eventBehaviorClass || '').trim().toLowerCase(),
+        actionCategory: String(eventSectionRuntime.actionCategory || '').trim().toLowerCase(),
+        audioRequired: eventSectionRuntime.audioRequired === true,
+        classificationReason: String(eventSectionRuntime.classificationReason || '').trim().toLowerCase(),
         enteredBar: Math.max(-1, Math.trunc(Number(eventSectionRuntime.enteredBar) || -1)),
         endBar: Math.max(-1, Math.trunc(Number(eventSectionRuntime.endBar) || -1)),
         strongBeatActive: eventSectionRuntime.strongBeatActive === true,
@@ -21128,6 +21226,7 @@ function evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage = 
         eligibleRoles: Array.isArray(eventSectionRuntime.eligibleRoles) ? eventSectionRuntime.eligibleRoles.slice() : [],
         activeMusicMode,
         activeLevelPhase,
+        intensityAuditionSection: String(eventSectionRuntime.intensityAuditionSection || '').trim().toLowerCase(),
         introStage: String(introStage || 'none').trim().toLowerCase(),
         showcaseReady: eventSectionRuntime.showcaseReady === true,
         showcaseSkipReason: String(eventSectionRuntime.showcaseSkipReason || '').trim().toLowerCase(),
