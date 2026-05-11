@@ -72,7 +72,7 @@ import { SWARM_MAX_SPEED, SWARM_ACCEL, SWARM_DECEL, SWARM_TURN_WEIGHT, SWARM_JOY
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
 const BEAT_SWARM_THEME_ID = 'beat-swarm-shmup';
-const BEAT_SWARM_ENTRY_BPM = 132;
+const BEAT_SWARM_ENTRY_BPM = 136;
 const BEAT_SWARM_THEME_PRESET = Object.freeze({
   id: BEAT_SWARM_THEME_ID,
   catalogTheme: BEAT_SWARM_THEME_ID,
@@ -4211,7 +4211,18 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     const archetypePhraseTargets = phraseTargets.length
       ? phraseTargets
       : [phraseGravityTarget, group?.phraseRoot, group?.phraseFifth].map((n) => normalizeSwarmNoteName(n)).filter(Boolean);
-    const eventNoteNameRaw = resolvePhraseArchetypeNote(styledNoteName, phraseArchetypeState, archetypePhraseTargets) || styledNoteName;
+    const archetypeNoteName = resolvePhraseArchetypeNote(styledNoteName, phraseArchetypeState, archetypePhraseTargets) || styledNoteName;
+    const leadMotifAnchor = (musicLaneId === 'primary_loop_lane' && musicProfileSourceType === 'lead_melody')
+      ? resolveLevel1LeadMotifAnchorNote({
+        baseNote: archetypeNoteName,
+        stepIndex,
+        barIndex,
+        arrangementState: arrangementStateNow,
+      })
+      : null;
+    const eventNoteNameRaw = leadMotifAnchor?.active === true
+      ? leadMotifAnchor.note
+      : archetypeNoteName;
     const stageRegisterTarget = (() => {
       const section = String(arrangementStateNow?.intensityAuditionSection || '').trim().toLowerCase();
       if (section === 'release' || section === 'settle') {
@@ -4255,6 +4266,15 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         phraseArchetypeProgress: Number(phraseArchetypeState?.progress) || 0,
         phraseArchetypeStep: Math.max(0, Math.trunc(Number(phraseArchetypeState?.stepInPhrase) || 0)),
         phraseArchetypeSteps: Math.max(1, Math.trunc(Number(phraseArchetypeState?.phraseSteps) || 1)),
+        leadMotifAnchorActive: leadMotifAnchor?.active === true,
+        leadMotifId: String(leadMotifAnchor?.motifId || '').trim(),
+        leadMotifRole: String(leadMotifAnchor?.motifRole || '').trim().toLowerCase(),
+        leadMotifStepIndex: Math.max(-1, Math.trunc(Number(leadMotifAnchor?.motifStepIndex) || -1)),
+        leadMotifAgeBars: Math.max(0, Math.trunc(Number(leadMotifAnchor?.motifAgeBars) || 0)),
+        leadMotifReuseCount: Math.max(0, Math.trunc(Number(leadMotifAnchor?.reuseCount) || 0)),
+        leadMotifReturnCount: Math.max(0, Math.trunc(Number(leadMotifAnchor?.returnCount) || 0)),
+        leadMotifVariationCount: Math.max(0, Math.trunc(Number(leadMotifAnchor?.variationCount) || 0)),
+        intensityAuditionSection: intensityAuditionSectionNow,
         musicLayer: String(group?.musicLaneLayer || 'loops').trim().toLowerCase() || 'loops',
         musicProminence: eventMusicProminence,
         musicLaneId,
@@ -7497,6 +7517,149 @@ function getPhraseStepState(stepAbs = 0, phraseSteps = 4) {
     resolutionOpportunity,
   };
 }
+function resetLevel1LeadMotifRuntime() {
+  level1LeadMotifRuntime.motifId = '';
+  level1LeadMotifRuntime.notes = [];
+  level1LeadMotifRuntime.createdBar = -1;
+  level1LeadMotifRuntime.lastReturnBar = -1;
+  level1LeadMotifRuntime.lastEventBar = -1;
+  level1LeadMotifRuntime.createdCount = 0;
+  level1LeadMotifRuntime.reuseCount = 0;
+  level1LeadMotifRuntime.returnCount = 0;
+  level1LeadMotifRuntime.variationCount = 0;
+}
+function getDirectorPoolNoteAtOffset(baseNote, offset = 0, fallbackIndex = 0) {
+  const pool = ensureSwarmDirector().getNotePool();
+  if (!Array.isArray(pool) || !pool.length) return normalizeSwarmNoteName(baseNote) || getRandomSwarmPentatonicNote();
+  const normalizedBase = normalizeSwarmNoteName(baseNote);
+  const baseIdxRaw = normalizedBase ? pool.findIndex((note) => normalizeSwarmNoteName(note) === normalizedBase) : -1;
+  const baseIdx = baseIdxRaw >= 0
+    ? baseIdxRaw
+    : (Math.max(0, Math.trunc(Number(fallbackIndex) || 0)) % pool.length);
+  const idx = (((baseIdx + Math.trunc(Number(offset) || 0)) % pool.length) + pool.length) % pool.length;
+  return normalizeSwarmNoteName(pool[idx]) || normalizedBase || getRandomSwarmPentatonicNote();
+}
+function createLevel1LeadMotifAnchor(seedNote, barIndex = 0) {
+  const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const baseNote = clampNoteToDirectorRegisterTarget(
+    normalizeSwarmNoteName(seedNote) || getRandomSwarmPentatonicNote(),
+    safeBar,
+    'mid'
+  );
+  const motifNotes = [
+    baseNote,
+    getDirectorPoolNoteAtOffset(baseNote, -1, safeBar + 1),
+    baseNote,
+    getDirectorPoolNoteAtOffset(baseNote, 2, safeBar + 2),
+    getDirectorPoolNoteAtOffset(baseNote, 1, safeBar + 3),
+    getDirectorPoolNoteAtOffset(baseNote, -1, safeBar + 4),
+    getDirectorPoolNoteAtOffset(baseNote, 2, safeBar + 5),
+    baseNote,
+  ].map((note, idx) => clampNoteToDirectorRegisterTarget(note, safeBar + idx, 'mid'));
+  level1LeadMotifRuntime.motifId = `level1-hook-${safeBar}-${motifNotes.join('-').toLowerCase()}`;
+  level1LeadMotifRuntime.notes = motifNotes;
+  level1LeadMotifRuntime.createdBar = safeBar;
+  level1LeadMotifRuntime.lastReturnBar = safeBar;
+  level1LeadMotifRuntime.lastEventBar = safeBar;
+  level1LeadMotifRuntime.createdCount += 1;
+  try {
+    noteMusicSystemEvent('music_lead_motif_anchor', {
+      phase: 'created',
+      motifId: level1LeadMotifRuntime.motifId,
+      notes: motifNotes.slice(),
+      barIndex: safeBar,
+      personalityMotifReuseBias: LEVEL1_MUSIC_PERSONALITY.motifReuseBias,
+      personalityLeadDominance: LEVEL1_MUSIC_PERSONALITY.leadDominance,
+    }, { beatIndex: currentBeatIndex, stepIndex: currentBeatIndex * 2, barIndex: safeBar });
+  } catch {}
+  return level1LeadMotifRuntime;
+}
+function resolveLevel1LeadMotifAnchorNote(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const baseNote = normalizeSwarmNoteName(opts.baseNote) || getRandomSwarmPentatonicNote();
+  const barIndex = Math.max(0, Math.trunc(Number(opts.barIndex) || 0));
+  const stepIndex = Math.max(0, Math.trunc(Number(opts.stepIndex) || 0));
+  const arrangement = opts.arrangementState && typeof opts.arrangementState === 'object' ? opts.arrangementState : {};
+  const section = String(arrangement?.intensityAuditionSection || '').trim().toLowerCase();
+  const phraseIntent = String(arrangement?.phraseIntent || '').trim().toLowerCase();
+  const motifAllowed = barIndex >= 24 && section !== 'low' && section !== 'release';
+  if (!motifAllowed) {
+    return {
+      note: baseNote,
+      active: false,
+      motifId: '',
+      motifRole: 'passthrough',
+      motifStepIndex: -1,
+      motifAgeBars: 0,
+    };
+  }
+  const needsMotif = !level1LeadMotifRuntime.motifId
+    || !Array.isArray(level1LeadMotifRuntime.notes)
+    || level1LeadMotifRuntime.notes.length < 8
+    || (barIndex - Math.max(0, Math.trunc(Number(level1LeadMotifRuntime.createdBar) || 0))) >= 32;
+  if (needsMotif) createLevel1LeadMotifAnchor(baseNote, barIndex);
+  const motifNotes = Array.isArray(level1LeadMotifRuntime.notes) && level1LeadMotifRuntime.notes.length
+    ? level1LeadMotifRuntime.notes
+    : [baseNote];
+  const motifStepIndex = Math.max(0, stepIndex % motifNotes.length);
+  const barInPhrase = barIndex % 4;
+  const buildPressure = section === 'build' || phraseIntent === 'build';
+  const peakPressure = section === 'peak' || phraseIntent === 'cadence';
+  const phraseRole = (() => {
+    if (peakPressure && barInPhrase === 3) return 'hook_cadence_peak';
+    if (barInPhrase === 0) return 'hook_a';
+    if (barInPhrase === 1) return 'hook_a_repeat';
+    if (barInPhrase === 2) return 'hook_b_variation';
+    return 'hook_a_cadence';
+  })();
+  let note = normalizeSwarmNoteName(motifNotes[motifStepIndex]) || baseNote;
+  if (phraseRole === 'hook_a_repeat') {
+    const repeatLift = buildPressure || peakPressure ? 1 : 0;
+    if (repeatLift) note = getDirectorPoolNoteAtOffset(note, repeatLift, stepIndex);
+  } else if (phraseRole === 'hook_b_variation') {
+    const direction = peakPressure ? 2 : (buildPressure ? 1 : -1);
+    note = getDirectorPoolNoteAtOffset(note, direction, stepIndex);
+    level1LeadMotifRuntime.variationCount += 1;
+  } else if (phraseRole === 'hook_a_cadence') {
+    const cadenceLift = peakPressure ? 2 : (buildPressure ? 1 : 0);
+    if (cadenceLift) note = getDirectorPoolNoteAtOffset(note, cadenceLift, stepIndex);
+  } else if (phraseRole === 'hook_cadence_peak') {
+    note = getDirectorPoolNoteAtOffset(note, motifStepIndex >= 4 ? 3 : 2, stepIndex);
+  }
+  if (phraseRole !== 'hook_b_variation') {
+    level1LeadMotifRuntime.returnCount += 1;
+    level1LeadMotifRuntime.lastReturnBar = barIndex;
+  }
+  level1LeadMotifRuntime.reuseCount += 1;
+  level1LeadMotifRuntime.lastEventBar = barIndex;
+  const motifAgeBars = Math.max(0, barIndex - Math.max(0, Math.trunc(Number(level1LeadMotifRuntime.createdBar) || 0)));
+  try {
+    noteMusicSystemEvent('music_lead_motif_anchor', {
+      phase: phraseRole,
+      motifId: level1LeadMotifRuntime.motifId,
+      note,
+      baseNote,
+      motifStepIndex,
+      motifAgeBars,
+      intensityAuditionSection: section,
+      phraseIntent,
+      reuseCount: level1LeadMotifRuntime.reuseCount,
+      returnCount: level1LeadMotifRuntime.returnCount,
+      variationCount: level1LeadMotifRuntime.variationCount,
+    }, { beatIndex: currentBeatIndex, stepIndex, barIndex });
+  } catch {}
+  return {
+    note: clampNoteToDirectorRegisterTarget(note, stepIndex, peakPressure ? 'high' : 'mid'),
+    active: true,
+    motifId: level1LeadMotifRuntime.motifId,
+    motifRole: phraseRole,
+    motifStepIndex,
+    motifAgeBars,
+    reuseCount: level1LeadMotifRuntime.reuseCount,
+    returnCount: level1LeadMotifRuntime.returnCount,
+    variationCount: level1LeadMotifRuntime.variationCount,
+  };
+}
 function normalizePhraseGravityNoteList(values) {
   if (!Array.isArray(values) || !values.length) return [];
   const out = [];
@@ -9317,6 +9480,27 @@ const musicModeRuntime = {
   lastLevel1ArrangementTraceBar: -1,
   lastLevel1ContractTraceBar: -1,
 };
+const LEVEL1_MUSIC_PERSONALITY = Object.freeze({
+  motifReuseBias: 0.9,
+  bassDrive: 1,
+  leadDominance: 0.9,
+  repetitionTolerance: 0.9,
+  harmonicDrift: 0.2,
+  syncopation: 0.65,
+  phraseAggression: 0.85,
+  resolutionTendency: 0.35,
+});
+const level1LeadMotifRuntime = {
+  motifId: '',
+  notes: [],
+  createdBar: -1,
+  lastReturnBar: -1,
+  lastEventBar: -1,
+  createdCount: 0,
+  reuseCount: 0,
+  returnCount: 0,
+  variationCount: 0,
+};
 const levelPhaseRuntime = {
   activeLevelPhase: 'intro_teach',
   phaseVariant: 'default',
@@ -11125,6 +11309,7 @@ function startMusicLabSession(reason = 'unknown') {
   composerRuntime.lastSectionGameplayState = null;
   try { composerRuntime.motifThemeState?.clear?.(); } catch {}
   composerRuntime.lastForegroundMotifUsageBar = -1;
+  resetLevel1LeadMotifRuntime();
   harmonyRuntime.epochIndex = -1;
   harmonyRuntime.tonicRootNote = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';
   harmonyRuntime.rootNote = normalizeSwarmNoteName(DIRECTOR_HARMONY_CONFIG.baseRoot || 'C4') || 'C4';

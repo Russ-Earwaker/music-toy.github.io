@@ -223,10 +223,19 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const arrangementSupportStepBudget = clampInt(context?.arrangementSupportStepBudget ?? payload?.arrangementSupportStepBudget, 0, 0);
   const foundationPatternKey = String(context?.foundationPatternKey ?? payload?.foundationPatternKey ?? '').trim().toLowerCase();
   const foundationPhraseId = String(context?.foundationPhraseId ?? payload?.foundationPhraseId ?? '').trim().toLowerCase();
+  const intensityAuditionSection = String(context?.intensityAuditionSection ?? payload?.intensityAuditionSection ?? '').trim().toLowerCase();
   const intensityCadenceStepAdmitted = context?.intensityCadenceStepAdmitted === true
     ? true
     : (payload?.intensityCadenceStepAdmitted === true);
   const intensityCadenceReason = String(context?.intensityCadenceReason ?? payload?.intensityCadenceReason ?? '').trim().toLowerCase();
+  const leadMotifAnchorActive = context?.leadMotifAnchorActive === true ? true : (payload?.leadMotifAnchorActive === true);
+  const leadMotifId = String(context?.leadMotifId ?? payload?.leadMotifId ?? '').trim().toLowerCase();
+  const leadMotifRole = String(context?.leadMotifRole ?? payload?.leadMotifRole ?? '').trim().toLowerCase();
+  const leadMotifStepIndex = clampInt(context?.leadMotifStepIndex ?? payload?.leadMotifStepIndex, -1, -1);
+  const leadMotifAgeBars = clampInt(context?.leadMotifAgeBars ?? payload?.leadMotifAgeBars, 0, 0);
+  const leadMotifReuseCount = clampInt(context?.leadMotifReuseCount ?? payload?.leadMotifReuseCount, 0, 0);
+  const leadMotifReturnCount = clampInt(context?.leadMotifReturnCount ?? payload?.leadMotifReturnCount, 0, 0);
+  const leadMotifVariationCount = clampInt(context?.leadMotifVariationCount ?? payload?.leadMotifVariationCount, 0, 0);
   return {
     tMs: nowMs(),
     phase: String(phase || '').trim() || 'queued',
@@ -289,8 +298,17 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     arrangementSupportStepBudget,
     foundationPatternKey,
     foundationPhraseId,
+    intensityAuditionSection,
     intensityCadenceStepAdmitted,
     intensityCadenceReason,
+    leadMotifAnchorActive,
+    leadMotifId,
+    leadMotifRole,
+    leadMotifStepIndex,
+    leadMotifAgeBars,
+    leadMotifReuseCount,
+    leadMotifReturnCount,
+    leadMotifVariationCount,
     audioGain: Number(context?.audioGain ?? payload?.audioGain) || 0,
     resolvedPlaybackInstrumentId: String(context?.resolvedPlaybackInstrumentId || '').trim(),
     playbackKind: String(context?.playbackKind || '').trim().toLowerCase(),
@@ -390,6 +408,14 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     cause: String(payload?.cause || '').trim().toLowerCase(),
     motifScopeKey: String(payload?.motifScopeKey || '').trim().toLowerCase(),
     previousMotifScopeKey: String(payload?.previousMotifScopeKey || '').trim().toLowerCase(),
+    leadMotifId: String(payload?.leadMotifId || payload?.motifId || '').trim().toLowerCase(),
+    leadMotifRole: String(payload?.leadMotifRole || payload?.phase || '').trim().toLowerCase(),
+    leadMotifAnchorActive: payload?.leadMotifAnchorActive === true || String(eventType || '').trim().toLowerCase() === 'music_lead_motif_anchor',
+    leadMotifStepIndex: clampInt(payload?.leadMotifStepIndex ?? payload?.motifStepIndex, -1, -1),
+    leadMotifAgeBars: clampInt(payload?.leadMotifAgeBars ?? payload?.motifAgeBars, 0, 0),
+    leadMotifReuseCount: clampInt(payload?.leadMotifReuseCount ?? payload?.reuseCount, 0, 0),
+    leadMotifReturnCount: clampInt(payload?.leadMotifReturnCount ?? payload?.returnCount, 0, 0),
+    leadMotifVariationCount: clampInt(payload?.leadMotifVariationCount ?? payload?.variationCount, 0, 0),
     intent: String(payload?.intent || '').trim().toLowerCase(),
     motifEpoch: clampInt(payload?.motifEpoch, 0, 0),
     requestedLockIndex: clampInt(payload?.requestedLockIndex, 0, 0),
@@ -5673,6 +5699,50 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       byStage,
     };
   };
+  const collectLeadMotifAnchorTrace = (eventsLike, sessionLike = null, maxBar = Number.POSITIVE_INFINITY) => {
+    const events = Array.isArray(eventsLike) ? eventsLike : [];
+    const systemEvents = (Array.isArray(sessionLike?.systemEvents) ? sessionLike.systemEvents : [])
+      .filter((ev) => clampInt(ev?.barIndex, 0, 0) <= maxBar)
+      .filter((ev) => String(ev?.eventType || '').trim().toLowerCase() === 'music_lead_motif_anchor');
+    const byRole = {};
+    const byStage = {};
+    const motifIds = new Set();
+    let activeEvents = 0;
+    let returnEvents = 0;
+    let variationEvents = 0;
+    let createdEventsCount = 0;
+    let maxAgeBars = 0;
+    for (const ev of events) {
+      if (!ev || typeof ev !== 'object' || ev?.leadMotifAnchorActive !== true) continue;
+      activeEvents += 1;
+      const role = String(ev?.leadMotifRole || '').trim().toLowerCase() || 'unknown';
+      const stage = String(ev?.intensityAuditionSection || '').trim().toLowerCase() || 'unknown';
+      const motifId = String(ev?.leadMotifId || '').trim().toLowerCase();
+      if (motifId) motifIds.add(motifId);
+      byRole[role] = (byRole[role] || 0) + 1;
+      byStage[stage] = (byStage[stage] || 0) + 1;
+      if (role.includes('variation')) variationEvents += 1;
+      else if (role.startsWith('hook_')) returnEvents += 1;
+      maxAgeBars = Math.max(maxAgeBars, clampInt(ev?.leadMotifAgeBars, 0, 0));
+    }
+    for (const ev of systemEvents) {
+      const role = String(ev?.leadMotifRole || ev?.phase || '').trim().toLowerCase();
+      if (role === 'created') createdEventsCount += 1;
+    }
+    return {
+      activeEvents,
+      systemEventCount: systemEvents.length,
+      createdEvents: createdEventsCount,
+      distinctMotifCount: motifIds.size,
+      returnEvents,
+      variationEvents,
+      returnRate: activeEvents ? (returnEvents / activeEvents) : 0,
+      variationRate: activeEvents ? (variationEvents / activeEvents) : 0,
+      maxAgeBars,
+      byRole,
+      byStage,
+    };
+  };
   const roleBalance = collectRoleBalance(executedEvents);
   const threatBalance = collectThreatBalance(executedEvents);
   const threatBudgetUsage = collectThreatBudgetUsage(session, maxBarIndex);
@@ -5772,6 +5842,7 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const enemyActionGate = collectEnemyActionGateDiagnostics(session, maxBarIndex);
   const actionCategoryTrace = collectActionCategoryTrace(executedEvents);
   const intensityCadenceTrace = collectIntensityCadenceTrace(executedEvents, session, maxBarIndex);
+  const leadMotifAnchorTrace = collectLeadMotifAnchorTrace(executedEvents, session, maxBarIndex);
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -5836,6 +5907,14 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       : {},
     intensityCadenceByStage: intensityCadenceTrace?.byStage && typeof intensityCadenceTrace.byStage === 'object'
       ? { ...intensityCadenceTrace.byStage }
+      : {},
+    leadMotifAnchor: leadMotifAnchorTrace,
+    leadMotifAnchorActiveEvents: Number(leadMotifAnchorTrace?.activeEvents) || 0,
+    leadMotifAnchorCreatedEvents: Number(leadMotifAnchorTrace?.createdEvents) || 0,
+    leadMotifAnchorReturnRate: Number(leadMotifAnchorTrace?.returnRate) || 0,
+    leadMotifAnchorVariationRate: Number(leadMotifAnchorTrace?.variationRate) || 0,
+    leadMotifAnchorByStage: leadMotifAnchorTrace?.byStage && typeof leadMotifAnchorTrace.byStage === 'object'
+      ? { ...leadMotifAnchorTrace.byStage }
       : {},
     threatBudgetUsage,
     directorFoundationActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.foundation) || 0,
