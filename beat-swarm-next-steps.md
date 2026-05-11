@@ -134,6 +134,65 @@ Acceptance shape:
 - build and peak should reuse the hook more, not less
 - release may thin or soften the hook but should not erase musical identity permanently
 
+## Strategic Direction - Player Motif DNA
+
+The strongest long-term version of motif anchors is not pure generation.
+
+The player should eventually be able to provide a short constrained motif, and the director should interpret that motif as musical DNA.
+
+Mental model:
+
+```txt
+Player provides identity.
+Director provides context, orchestration, intensity, and transformation.
+```
+
+This is a future-facing priority because it solves the hardest musical problem:
+
+> procedural coherence vs memorable identity.
+
+The current generated motif-anchor work should be built as the same architecture that will later support player-authored motifs. Do not build the player motif editor yet, but do make motif logic compatible with that future.
+
+Important design rules:
+
+- the player motif should be short and constrained
+- motif pitch contour and motif rhythm should be stored separately
+- the system should transform the motif, not merely replay it
+- anchor notes should be preserved strongly
+- build and peak may fragment, repeat, octave-shift, compress, or ornament the motif
+- release should make the original identity recognizable again
+- mutation should use musical operations, not random note churn
+
+Useful future motif controls:
+
+- `motifPreservation`
+- `motifRhythmPattern`
+- `motifPitchContour`
+- `motifAnchorNotes`
+- `motifTransformationMode`
+
+Expected future transformations:
+
+- octave shift
+- rhythmic doubling
+- phrase truncation
+- call/response echo
+- ornament insertion
+- rest removal
+- phrase extension
+- controlled inversion or contour variation
+
+Priority:
+
+1. Make generated motif anchors musically convincing first.
+2. Refactor motif representation around pitch contour + rhythm identity.
+3. Add transformation modes for intensity stages.
+4. Only then consider a player-facing motif input workflow.
+
+The target experience is:
+
+> players create the DNA of the soundtrack while the game transforms it into a living arcade score.
+
 ## Implementation Target 2 - Bass As Engine
 
 The bass is currently stable, but it should feel more like propulsion.
