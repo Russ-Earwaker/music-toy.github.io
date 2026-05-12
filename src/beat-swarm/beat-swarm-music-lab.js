@@ -5706,6 +5706,10 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       .filter((ev) => String(ev?.eventType || '').trim().toLowerCase() === 'music_lead_motif_anchor');
     const byRole = {};
     const byStage = {};
+    const byStageRole = {};
+    const stageTotals = {};
+    const stageReturnCounts = {};
+    const stageVariationCounts = {};
     const motifIds = new Set();
     let activeEvents = 0;
     let returnEvents = 0;
@@ -5721,8 +5725,16 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       if (motifId) motifIds.add(motifId);
       byRole[role] = (byRole[role] || 0) + 1;
       byStage[stage] = (byStage[stage] || 0) + 1;
-      if (role.includes('variation')) variationEvents += 1;
-      else if (role.startsWith('hook_')) returnEvents += 1;
+      stageTotals[stage] = (stageTotals[stage] || 0) + 1;
+      if (!byStageRole[stage]) byStageRole[stage] = {};
+      byStageRole[stage][role] = (byStageRole[stage][role] || 0) + 1;
+      if (role.includes('variation')) {
+        variationEvents += 1;
+        stageVariationCounts[stage] = (stageVariationCounts[stage] || 0) + 1;
+      } else if (role.startsWith('hook_')) {
+        returnEvents += 1;
+        stageReturnCounts[stage] = (stageReturnCounts[stage] || 0) + 1;
+      }
       maxAgeBars = Math.max(maxAgeBars, clampInt(ev?.leadMotifAgeBars, 0, 0));
     }
     for (const ev of systemEvents) {
@@ -5738,9 +5750,18 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       variationEvents,
       returnRate: activeEvents ? (returnEvents / activeEvents) : 0,
       variationRate: activeEvents ? (variationEvents / activeEvents) : 0,
+      returnRateByStage: Object.fromEntries(Object.entries(stageTotals).map(([stage, total]) => [
+        stage,
+        total ? ((stageReturnCounts[stage] || 0) / total) : 0,
+      ])),
+      variationRateByStage: Object.fromEntries(Object.entries(stageTotals).map(([stage, total]) => [
+        stage,
+        total ? ((stageVariationCounts[stage] || 0) / total) : 0,
+      ])),
       maxAgeBars,
       byRole,
       byStage,
+      byStageRole,
     };
   };
   const collectBassEngineTrace = (eventsLike, sessionLike = null, maxBar = Number.POSITIVE_INFINITY) => {
@@ -6040,6 +6061,15 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     leadMotifAnchorVariationRate: Number(leadMotifAnchorTrace?.variationRate) || 0,
     leadMotifAnchorByStage: leadMotifAnchorTrace?.byStage && typeof leadMotifAnchorTrace.byStage === 'object'
       ? { ...leadMotifAnchorTrace.byStage }
+      : {},
+    leadMotifAnchorByStageRole: leadMotifAnchorTrace?.byStageRole && typeof leadMotifAnchorTrace.byStageRole === 'object'
+      ? { ...leadMotifAnchorTrace.byStageRole }
+      : {},
+    leadMotifAnchorReturnRateByStage: leadMotifAnchorTrace?.returnRateByStage && typeof leadMotifAnchorTrace.returnRateByStage === 'object'
+      ? { ...leadMotifAnchorTrace.returnRateByStage }
+      : {},
+    leadMotifAnchorVariationRateByStage: leadMotifAnchorTrace?.variationRateByStage && typeof leadMotifAnchorTrace.variationRateByStage === 'object'
+      ? { ...leadMotifAnchorTrace.variationRateByStage }
       : {},
     bassEngine: bassEngineTrace,
     bassEngineEventCount: Number(bassEngineTrace?.eventCount) || 0,
