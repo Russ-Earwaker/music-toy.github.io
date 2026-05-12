@@ -248,6 +248,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       return [0, 1, 2, 3, 4, 5, 6, 7];
     }
     if (stage === 'release') {
+      if (lane === 'lead') return [0, 4];
+      if (lane === 'foundation') return [0];
       return [];
     }
     return [0, 2, 4, 6];

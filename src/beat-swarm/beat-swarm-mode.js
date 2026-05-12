@@ -3475,7 +3475,7 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   const note = clampNoteToDirectorRegisterTarget(
     requestedNoteRaw,
     beatIndex + stepIndex + ownerId,
-    'low'
+    'sub'
   ) || requestedNoteRaw;
   const instrumentId = resolveProtectedLaneInstrumentIdentity(
     foundationLane,
@@ -3511,7 +3511,7 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
     payload: {
       groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
       continuityId: String(group?.continuityId || ownerEnemy?.musicContinuityId || '').trim(),
-      requestedNoteRaw,
+      requestedNoteRaw: note,
       musicLayer: 'foundation',
       musicProminence: 'full',
       musicLaneId: 'foundation_lane',
@@ -4225,6 +4225,7 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       : archetypeNoteName;
     const stageRegisterTarget = (() => {
       const section = String(arrangementStateNow?.intensityAuditionSection || '').trim().toLowerCase();
+      if (role === BEAT_EVENT_ROLES.BASS || musicLaneId === 'foundation_lane') return 'sub';
       if (section === 'release' || section === 'settle') {
         if (musicLaneId === 'primary_loop_lane' || musicLaneId === 'secondary_loop_lane') return 'mid';
       }
@@ -4257,7 +4258,9 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         callResponseQualified: (!isSoloCarrier && laneMode === 'call') ? acceptedStrongCall : true,
         callResponsePhraseProgress: responsePhraseProgressForEvent,
         audioGain: eventAudioGain,
-        requestedNoteRaw: gravityNoteNameRaw,
+        requestedNoteRaw: role === BEAT_EVENT_ROLES.BASS || musicLaneId === 'foundation_lane'
+          ? eventNoteName
+          : gravityNoteNameRaw,
         phraseGravityTarget,
         phraseGravityHit: finalPhraseGravityHit,
         phraseResolutionOpportunity,
@@ -7145,6 +7148,36 @@ function cloneFoundationPhraseEntry(phraseLike = null, fallbackId = 'foundation_
     patternKey: buildFoundationPhrasePatternKey(steps),
   };
 }
+function getLevel1IntensityFoundationPhrase(sectionLike = '', sectionBarLike = 0) {
+  const section = String(sectionLike || '').trim().toLowerCase();
+  const sectionBar = Math.max(0, Math.trunc(Number(sectionBarLike) || 0));
+  const phraseBar = sectionBar % 4;
+  if (section === 'low') {
+    return { id: 'level1_bass_low_anchor', family: 'level1_bass_anchor', steps: [true, false, false, false, true, false, false, false] };
+  }
+  if (section === 'medium') {
+    return { id: 'level1_bass_medium_pulse', family: 'level1_bass_pulse', steps: [true, false, true, false, true, false, false, false] };
+  }
+  if (section === 'build') {
+    const steps = phraseBar >= 2
+      ? [true, false, true, true, true, false, true, false]
+      : [true, false, true, false, true, false, true, false];
+    return { id: `level1_bass_build_drive_${phraseBar >= 2 ? 'push' : 'pulse'}`, family: 'level1_bass_drive', steps };
+  }
+  if (section === 'peak') {
+    const steps = phraseBar === 3
+      ? [true, true, true, false, true, true, true, false]
+      : [true, false, true, true, true, false, true, true];
+    return { id: `level1_bass_peak_engine_${phraseBar === 3 ? 'cadence' : 'drive'}`, family: 'level1_bass_engine', steps };
+  }
+  if (section === 'release') {
+    return { id: 'level1_bass_release_anchor', family: 'level1_bass_release', steps: [true, false, false, false, false, false, false, false] };
+  }
+  if (section === 'settle') {
+    return { id: 'level1_bass_settle_pulse', family: 'level1_bass_settle', steps: [true, false, false, false, true, false, false, false] };
+  }
+  return null;
+}
 function getFoundationPhraseLockDurationBars(seedKey = '') {
   const seed = hashStringSeed(`foundation-lock|${String(seedKey || '').trim()}`);
   return 8 + (Math.max(0, Math.floor(seededNoise01(seed) * 9)) % 9);
@@ -7319,7 +7352,15 @@ function ensureFoundationLanePlan(barIndex = 0, options = null) {
   const foundationLane = getMusicLaneRuntimeEntry('foundation_lane');
   const currentFamily = String(foundationLane?.phraseFamily || '').trim().toLowerCase();
   const lockedUntilBar = Math.max(-1, Math.trunc(Number(musicLayerRuntime.foundationPhraseLockedUntilBar) || -1));
-  if (currentPhraseId && currentSteps.some(Boolean) && !opts.forceRefresh && bar <= lockedUntilBar) {
+  const intensityAuditionState = getBeatSwarmMusicIntensityAuditionState(bar);
+  const intensityAuditionSection = String(intensityAuditionState?.id || '').trim().toLowerCase();
+  const intensityAuditionSectionBar = Math.max(0, Math.trunc(Number(intensityAuditionState?.auditionSectionBar) || 0));
+  const currentSectionId = intensityAuditionSection
+    ? `intensity_${intensityAuditionSection}`
+    : (String(composerRuntime.currentSectionId || 'default').trim().toLowerCase() || 'default');
+  const previousSectionId = String(foundationLane?.sectionId || '').trim().toLowerCase();
+  const intensityStageChanged = !!intensityAuditionSection && previousSectionId !== currentSectionId;
+  if (currentPhraseId && currentSteps.some(Boolean) && !opts.forceRefresh && !intensityStageChanged && bar <= lockedUntilBar) {
     return {
       laneId: String(musicLayerRuntime.foundationLaneId || 'foundation_lane'),
       phraseId: currentPhraseId,
@@ -7329,9 +7370,15 @@ function ensureFoundationLanePlan(barIndex = 0, options = null) {
       lockedUntilBar,
     };
   }
-  const currentSectionId = String(composerRuntime.currentSectionId || 'default').trim().toLowerCase() || 'default';
+  const intensityPhrase = getLevel1IntensityFoundationPhrase(intensityAuditionSection, intensityAuditionSectionBar);
+  if (intensityPhrase) {
+    if (foundationLane) foundationLane.phraseFamily = String(intensityPhrase.family || '').trim().toLowerCase();
+    return setFoundationLanePhrase(intensityPhrase, bar, {
+      identityChangeReason: intensityStageChanged ? 'section_restatement' : 'phrase_boundary_mutation',
+      sectionId: currentSectionId,
+    });
+  }
   const currentCycle = Math.max(0, Math.trunc(Number(composerRuntime.currentCycle) || 0));
-  const previousSectionId = String(foundationLane?.sectionId || '').trim().toLowerCase();
   const phrase = chooseFoundationLanePhrase(bar, {
     sectionId: currentSectionId,
     cycle: currentCycle,
@@ -7582,7 +7629,9 @@ function resolveLevel1LeadMotifAnchorNote(options = null) {
   const arrangement = opts.arrangementState && typeof opts.arrangementState === 'object' ? opts.arrangementState : {};
   const section = String(arrangement?.intensityAuditionSection || '').trim().toLowerCase();
   const phraseIntent = String(arrangement?.phraseIntent || '').trim().toLowerCase();
-  const motifAllowed = barIndex >= 24 && section !== 'low' && section !== 'release';
+  const auditionSectionBar = Math.max(0, Math.trunc(Number(arrangement?.intensityAuditionSectionBar) || 0));
+  const releaseEchoActive = section === 'release' && auditionSectionBar < 8;
+  const motifAllowed = barIndex >= 24 && section !== 'low' && (section !== 'release' || releaseEchoActive);
   if (!motifAllowed) {
     return {
       note: baseNote,
@@ -7605,8 +7654,11 @@ function resolveLevel1LeadMotifAnchorNote(options = null) {
   const barInPhrase = barIndex % 4;
   const buildPressure = section === 'build' || phraseIntent === 'build';
   const peakPressure = section === 'peak' || phraseIntent === 'cadence';
+  const releasePressure = releaseEchoActive || phraseIntent === 'recovery';
   const phraseRole = (() => {
+    if (releaseEchoActive) return auditionSectionBar < 2 ? 'hook_release_echo' : 'hook_release_resolve';
     if (peakPressure && barInPhrase === 3) return 'hook_cadence_peak';
+    if (buildPressure && (barInPhrase === 1 || barInPhrase === 2)) return 'hook_a_build_lift';
     if (barInPhrase === 0) return 'hook_a';
     if (barInPhrase === 1) return 'hook_a_repeat';
     if (barInPhrase === 2) return 'hook_b_variation';
@@ -7625,6 +7677,13 @@ function resolveLevel1LeadMotifAnchorNote(options = null) {
     if (cadenceLift) note = getDirectorPoolNoteAtOffset(note, cadenceLift, stepIndex);
   } else if (phraseRole === 'hook_cadence_peak') {
     note = getDirectorPoolNoteAtOffset(note, motifStepIndex >= 4 ? 3 : 2, stepIndex);
+  } else if (phraseRole === 'hook_a_build_lift') {
+    note = getDirectorPoolNoteAtOffset(note, motifStepIndex >= 4 ? 2 : 1, stepIndex);
+  } else if (phraseRole === 'hook_release_echo') {
+    note = getDirectorPoolNoteAtOffset(note, motifStepIndex >= 4 ? -1 : 0, stepIndex);
+  } else if (phraseRole === 'hook_release_resolve') {
+    const resolutionStep = motifStepIndex >= 4 ? -2 : -1;
+    note = getDirectorPoolNoteAtOffset(note, resolutionStep, stepIndex);
   }
   if (phraseRole !== 'hook_b_variation') {
     level1LeadMotifRuntime.returnCount += 1;
@@ -7649,7 +7708,7 @@ function resolveLevel1LeadMotifAnchorNote(options = null) {
     }, { beatIndex: currentBeatIndex, stepIndex, barIndex });
   } catch {}
   return {
-    note: clampNoteToDirectorRegisterTarget(note, stepIndex, peakPressure ? 'high' : 'mid'),
+    note: clampNoteToDirectorRegisterTarget(note, stepIndex, peakPressure ? 'high' : (releasePressure ? 'mid' : 'mid')),
     active: true,
     motifId: level1LeadMotifRuntime.motifId,
     motifRole: phraseRole,
@@ -8118,10 +8177,12 @@ function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
     { id: 'settle', startBar: 48, endBar: Number.POSITIVE_INFINITY, phraseIntent: 'body', sectionIntent: 'drop', tensionProfile: 'stable', energy: 0.38, layering: 0.44, rhythmicComplexity: 0.3, melodicActivity: 0.36, ornamentation: 0.02, stability: 0.82, musicalPressure: 0.4, laneIntensityScale: 0.68 },
   ];
   const active = sections.find((section) => auditionBar >= section.startBar && auditionBar < section.endBar) || sections[sections.length - 1];
+  const activeStartBar = Math.max(0, Math.trunc(Number(active?.startBar) || 0));
   return {
     ...active,
     barIndex,
     auditionBar,
+    auditionSectionBar: Math.max(0, auditionBar - activeStartBar),
     introBars: INTRO_BARS,
     auditionMode: mode,
   };
@@ -8188,7 +8249,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
   } else if (section === 'build') {
     activate('foundation', 0.66, 1);
     activate('secondary_loop', 0.64, 2);
-    activate('primary_loop', 0.72, 2);
+    activate('primary_loop', 0.82, 3);
     activate('support', 0.36, 1);
     quiet('sparkle');
     quiet('answer');
@@ -8200,9 +8261,12 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     activate('sparkle', 0.46, 1);
     activate('answer', 0.34, 1);
   } else if (section === 'release') {
-    activate('foundation', 0.24, 1);
+    const releaseSectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
+    const releaseEchoActive = releaseSectionBar < 8;
+    activate('foundation', releaseEchoActive ? 0.34 : 0.24, 1);
     quiet('secondary_loop');
-    quiet('primary_loop');
+    if (releaseEchoActive) activate('primary_loop', releaseSectionBar < 4 ? 0.42 : 0.28, 1);
+    else quiet('primary_loop');
     quiet('support');
     quiet('sparkle');
     quiet('answer');
@@ -8299,6 +8363,8 @@ function buildLevel1ArrangementState(options = {}) {
     sectionIntent: String(intensityAuditionState?.sectionIntent || options?.structureIntent || '').trim().toLowerCase(),
     tensionProfile: String(intensityAuditionState?.tensionProfile || options?.tensionProfile || '').trim().toLowerCase(),
     intensityAuditionSection: String(intensityAuditionState?.id || '').trim().toLowerCase(),
+    intensityAuditionBar: Math.max(-1, Math.trunc(Number(intensityAuditionState?.auditionBar) || -1)),
+    intensityAuditionSectionBar: Math.max(0, Math.trunc(Number(intensityAuditionState?.auditionSectionBar) || 0)),
     laneIntensityScale: Math.max(0.1, Math.min(1.6, Number(intensityAuditionState?.laneIntensityScale) || 1)),
     supportPatternBudget: supportBudget,
     barIndex: Math.max(0, Math.trunc(Number(options?.barIndex) || 0)),
@@ -19105,7 +19171,8 @@ function clampNoteToDirectorPool(noteName, fallbackIndex = 0) {
 }
 function classifyRegisterTarget(registerLike = '') {
   const raw = String(registerLike || '').trim().toLowerCase();
-  if (raw === 'sub' || raw === 'low') return 'low';
+  if (raw === 'sub') return 'sub';
+  if (raw === 'low') return 'low';
   if (raw === 'mid' || raw === 'mid_low' || raw === 'mid-low') return 'mid';
   if (raw === 'mid_high' || raw === 'mid-high' || raw === 'high') return 'high';
   return '';
@@ -19125,13 +19192,18 @@ function clampNoteToDirectorRegisterTarget(noteName, fallbackIndex = 0, register
   const pool = Array.isArray(director.getNotePool?.()) ? director.getNotePool() : [];
   if (!pool.length) return baseNote;
   const baseMidi = noteNameToMidiRuntime(baseNote);
-  const transposeBaseIntoLowRegister = () => {
+  const transposeBaseIntoRange = (minMidi, maxMidi) => {
     if (!Number.isFinite(baseMidi)) return baseNote;
-    let lowMidi = baseMidi;
-    while (lowMidi > 59) lowMidi -= 12;
-    while (lowMidi < 36) lowMidi += 12;
-    return normalizeSwarmNoteName(midiToName(lowMidi)) || baseNote;
+    let midi = baseMidi;
+    while (midi > maxMidi) midi -= 12;
+    while (midi < minMidi) midi += 12;
+    if (midi > maxMidi) midi = maxMidi;
+    if (midi < minMidi) midi = minMidi;
+    return normalizeSwarmNoteName(midiToName(midi)) || baseNote;
   };
+  const transposeBaseIntoLowRegister = () => transposeBaseIntoRange(36, 59);
+  const transposeBaseIntoSubRegister = () => transposeBaseIntoRange(36, 50);
+  if (target === 'sub') return transposeBaseIntoSubRegister();
   if (target === 'low' && Number.isFinite(baseMidi) && classifyMidiRegister(baseMidi) !== 'low') {
     return transposeBaseIntoLowRegister();
   }

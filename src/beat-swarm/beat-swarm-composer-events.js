@@ -616,7 +616,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     return lastCallStep + responseWindowSteps + responseWindowGraceSteps + Math.max(1, target);
   };
   const getGroupRegisterTarget = ({ lane = '', isBassRole = false, isPrimaryLoopOwnerGroup = false, isFoundationBufferGroup = false }) => {
-    if (isBassRole || isFoundationBufferGroup) return 'low';
+    if (isBassRole || isFoundationBufferGroup) return 'sub';
     if (isPrimaryLoopOwnerGroup) return 'mid';
     if (lane === 'response') return 'high';
     if (lane === 'call') return 'high';
@@ -1563,6 +1563,13 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && !isBassRole && !rhythmPercussionCarrier && Math.random() < resolutionGravityChance) {
       styledNoteName = playablePhraseGravityTarget;
     }
+    if (registerTarget === 'low' || registerTarget === 'sub') {
+      styledNoteName = clampNoteToDirectorRegisterTarget(
+        styledNoteName,
+        stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
+        registerTarget
+      );
+    }
     const phraseGravityHit = phraseGravityOpportunity
       ? normalizeSwarmNoteName(styledNoteName) === normalizeSwarmNoteName(playablePhraseGravityTarget)
       : false;
@@ -1927,7 +1934,7 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           audioGain: rhythmPercussionCarrier
             ? 1
             : clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain * restrainedGroupGain),
-          requestedNoteRaw: gravityNoteNameRaw,
+          requestedNoteRaw: registerTarget === 'low' || registerTarget === 'sub' ? styledNoteName : gravityNoteNameRaw,
           phraseGravityTarget,
           phraseGravityHit,
           phraseResolutionOpportunity,

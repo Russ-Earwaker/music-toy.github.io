@@ -464,8 +464,20 @@ export function executePerformedBeatEventRuntime(options = null) {
     if (!m) return String(fallback || 'C3').trim() || 'C3';
     const letter = String(m[1] || '').toUpperCase();
     const accidental = String(m[2] || '');
-    const octave = Math.trunc(Number(m[3]) || 3);
-    const clamped = octave >= 4 ? 3 : (octave < 2 ? 2 : octave);
+    const semitoneBase = (
+      letter === 'C' ? 0
+        : letter === 'D' ? 2
+          : letter === 'E' ? 4
+            : letter === 'F' ? 5
+              : letter === 'G' ? 7
+                : letter === 'A' ? 9
+                  : 11
+    );
+    const accidentalDelta = accidental === '#' ? 1 : (accidental === 'b' ? -1 : 0);
+    const pitchClass = Math.max(0, Math.min(11, semitoneBase + accidentalDelta));
+    let clamped = Math.trunc(Number(m[3]) || 3);
+    while (clamped > 2 && (clamped > 3 || (clamped === 3 && pitchClass > 2))) clamped -= 1;
+    while (clamped < 2) clamped += 1;
     return `${letter}${accidental}${clamped}`;
   };
   const buildPlaybackLoggingContext = (instrumentIdLike, triggerVolumeLike) => {

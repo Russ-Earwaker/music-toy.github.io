@@ -4003,7 +4003,7 @@ function collectMusicIntensityAuditionAssertion(metrics) {
   assertPass(Math.max(0, clampInt(peak?.maxActiveLaneCount, 0, 0)) >= 5, 'peak_stage_layer_stack_too_thin', { maxActiveLaneCount: Math.max(0, clampInt(peak?.maxActiveLaneCount, 0, 0)), minimum: 5 });
   assertPass(Math.max(0, clampInt(peak?.sparkle, 0, 0)) > 0, 'peak_stage_sparkle_missing', { sparkleCount: Math.max(0, clampInt(peak?.sparkle, 0, 0)) });
   assertPass(Math.max(0, clampInt(peak?.answer, 0, 0)) > 0, 'peak_stage_answer_missing', { answerCount: Math.max(0, clampInt(peak?.answer, 0, 0)) });
-  assertPass(Math.max(0, clampInt(release?.maxActiveLaneCount, 0, 0)) <= 1, 'release_stage_not_stripped_back', { maxActiveLaneCount: Math.max(0, clampInt(release?.maxActiveLaneCount, 0, 0)), maximum: 1 });
+  assertPass(Math.max(0, clampInt(release?.maxActiveLaneCount, 0, 0)) <= 2, 'release_stage_not_stripped_back', { maxActiveLaneCount: Math.max(0, clampInt(release?.maxActiveLaneCount, 0, 0)), maximum: 2 });
   assertPass(metrics?.laneContinuityAssertionPassed === true && Math.max(0, clampInt(metrics?.laneContinuityBreaks, 0, 0)) === 0, 'lane_continuity_failed', {
     laneContinuityBreaks: Math.max(0, clampInt(metrics?.laneContinuityBreaks, 0, 0)),
   });
@@ -4022,7 +4022,7 @@ function collectMusicIntensityAuditionAssertion(metrics) {
       energyRangeMin: 0.6,
       layeringRangeMin: 0.55,
       peakActiveLaneCountMin: 5,
-      releaseActiveLaneCountMax: 1,
+      releaseActiveLaneCountMax: 2,
     },
   };
 }
@@ -5743,6 +5743,129 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
       byStage,
     };
   };
+  const collectBassEngineTrace = (eventsLike, sessionLike = null, maxBar = Number.POSITIVE_INFINITY) => {
+    const events = Array.isArray(eventsLike) ? eventsLike : [];
+    const arrangementEvents = (Array.isArray(sessionLike?.systemEvents) ? sessionLike.systemEvents : [])
+      .filter((ev) => clampInt(ev?.barIndex, 0, 0) <= maxBar)
+      .filter((ev) => String(ev?.eventType || '').trim().toLowerCase() === 'music_level1_arrangement_state');
+    const stageByBar = new Map();
+    const stageBars = {};
+    for (const ev of arrangementEvents) {
+      const bar = clampInt(ev?.barIndex, 0, 0);
+      const stage = String(ev?.intensityAuditionSection || '').trim().toLowerCase() || 'unknown';
+      stageByBar.set(bar, stage);
+      if (!stageBars[stage]) stageBars[stage] = new Set();
+      stageBars[stage].add(bar);
+    }
+    const getStage = (ev) => {
+      const direct = String(ev?.intensityAuditionSection || '').trim().toLowerCase();
+      if (direct) return direct;
+      return stageByBar.get(clampInt(ev?.barIndex, 0, 0)) || 'unknown';
+    };
+    const isBassLike = (ev) => {
+      const role = String(ev?.role || '').trim().toLowerCase();
+      const laneId = String(ev?.musicLaneId || ev?.foundationLaneId || '').trim().toLowerCase();
+      const layer = String(ev?.musicLayer || '').trim().toLowerCase();
+      return role === 'bass' || laneId === 'foundation_lane' || layer === 'foundation';
+    };
+    const byStage = {};
+    const patternCounts = {};
+    const noteCounts = {};
+    let eventCount = 0;
+    let createdCount = 0;
+    let executedCount = 0;
+    let lowRegisterViolationCount = 0;
+    const lowRegisterViolations = [];
+    const sortedBassEvents = events
+      .filter((ev) => ev && typeof ev === 'object' && clampInt(ev?.barIndex, 0, 0) <= maxBar && isBassLike(ev))
+      .sort((a, b) => {
+        const stepDelta = clampInt(a?.stepIndex, 0, 0) - clampInt(b?.stepIndex, 0, 0);
+        if (stepDelta !== 0) return stepDelta;
+        return String(a?.phase || '').localeCompare(String(b?.phase || ''));
+      });
+    for (const ev of sortedBassEvents) {
+      eventCount += 1;
+      const phase = String(ev?.phase || '').trim().toLowerCase();
+      if (phase === 'created') createdCount += 1;
+      if (phase === 'executed') executedCount += 1;
+      const stage = getStage(ev);
+      if (!byStage[stage]) {
+        byStage[stage] = {
+          eventCount: 0,
+          createdCount: 0,
+          executedCount: 0,
+          uniqueStepCount: 0,
+          uniqueBarCount: 0,
+          eventsPerBar: 0,
+          maxStepGap: 0,
+          lowRegisterViolationCount: 0,
+          notes: {},
+          patternKeys: {},
+          phraseIds: {},
+          _steps: new Set(),
+          _bars: new Set(),
+          _lastStep: -1,
+        };
+      }
+      const bucket = byStage[stage];
+      bucket.eventCount += 1;
+      if (phase === 'created') bucket.createdCount += 1;
+      if (phase === 'executed') bucket.executedCount += 1;
+      const step = clampInt(ev?.stepIndex, 0, 0);
+      const bar = clampInt(ev?.barIndex, 0, 0);
+      bucket._steps.add(step);
+      bucket._bars.add(bar);
+      if (bucket._lastStep >= 0) bucket.maxStepGap = Math.max(bucket.maxStepGap, Math.max(0, step - bucket._lastStep));
+      bucket._lastStep = step;
+      const note = String(ev?.noteResolved || ev?.note || '').trim();
+      if (note) {
+        noteCounts[note] = (noteCounts[note] || 0) + 1;
+        bucket.notes[note] = (bucket.notes[note] || 0) + 1;
+        const midi = toMidi(note);
+        if (midi != null && midi > toMidi('D3')) {
+          lowRegisterViolationCount += 1;
+          bucket.lowRegisterViolationCount += 1;
+          if (lowRegisterViolations.length < 24) {
+            lowRegisterViolations.push({
+              phase,
+              barIndex: bar,
+              stepIndex: step,
+              note,
+              instrumentId: String(ev?.instrumentId || '').trim(),
+              musicLaneId: String(ev?.musicLaneId || '').trim().toLowerCase(),
+            });
+          }
+        }
+      }
+      const patternKey = String(ev?.foundationPatternKey || '').trim();
+      if (patternKey) {
+        patternCounts[patternKey] = (patternCounts[patternKey] || 0) + 1;
+        bucket.patternKeys[patternKey] = (bucket.patternKeys[patternKey] || 0) + 1;
+      }
+      const phraseId = String(ev?.foundationPhraseId || '').trim().toLowerCase();
+      if (phraseId) bucket.phraseIds[phraseId] = (bucket.phraseIds[phraseId] || 0) + 1;
+    }
+    for (const [stage, bucket] of Object.entries(byStage)) {
+      const stageBarCount = stageBars[stage] ? stageBars[stage].size : bucket._bars.size;
+      bucket.uniqueStepCount = bucket._steps.size;
+      bucket.uniqueBarCount = bucket._bars.size;
+      bucket.eventsPerBar = stageBarCount > 0 ? Number((bucket.eventCount / stageBarCount).toFixed(3)) : 0;
+      delete bucket._steps;
+      delete bucket._bars;
+      delete bucket._lastStep;
+    }
+    return {
+      eventCount,
+      createdCount,
+      executedCount,
+      byStage,
+      patternCounts,
+      noteCounts,
+      distinctPatternCount: Object.keys(patternCounts).length,
+      lowRegisterViolationCount,
+      lowRegisterViolations,
+    };
+  };
   const roleBalance = collectRoleBalance(executedEvents);
   const threatBalance = collectThreatBalance(executedEvents);
   const threatBudgetUsage = collectThreatBudgetUsage(session, maxBarIndex);
@@ -5843,6 +5966,8 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
   const actionCategoryTrace = collectActionCategoryTrace(executedEvents);
   const intensityCadenceTrace = collectIntensityCadenceTrace(executedEvents, session, maxBarIndex);
   const leadMotifAnchorTrace = collectLeadMotifAnchorTrace(executedEvents, session, maxBarIndex);
+  const bassEngineSourceEvents = createdEvents.length ? [...executedEvents, ...createdEvents] : executedEvents;
+  const bassEngineTrace = collectBassEngineTrace(bassEngineSourceEvents, session, maxBarIndex);
   const metrics = {
     notePoolCompliance,
     pitchEntropy,
@@ -5916,6 +6041,16 @@ function computeMetricsForEvents(session, executedEvents, maxBarIndex) {
     leadMotifAnchorByStage: leadMotifAnchorTrace?.byStage && typeof leadMotifAnchorTrace.byStage === 'object'
       ? { ...leadMotifAnchorTrace.byStage }
       : {},
+    bassEngine: bassEngineTrace,
+    bassEngineEventCount: Number(bassEngineTrace?.eventCount) || 0,
+    bassEngineByStage: bassEngineTrace?.byStage && typeof bassEngineTrace.byStage === 'object'
+      ? { ...bassEngineTrace.byStage }
+      : {},
+    bassEngineDistinctPatternCount: Number(bassEngineTrace?.distinctPatternCount) || 0,
+    bassEngineLowRegisterViolationCount: Number(bassEngineTrace?.lowRegisterViolationCount) || 0,
+    bassEngineLowRegisterViolations: Array.isArray(bassEngineTrace?.lowRegisterViolations)
+      ? bassEngineTrace.lowRegisterViolations.slice(0, 24)
+      : [],
     threatBudgetUsage,
     directorFoundationActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.foundation) || 0,
     directorSecondaryLoopActiveBeats: Number(threatBudgetUsage?.directorPlan?.laneActiveBeatCounts?.secondary_loop) || 0,
