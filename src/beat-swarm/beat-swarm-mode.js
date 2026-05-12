@@ -275,6 +275,17 @@ const weaponSubBoardState = {
     syncTimerId: 0,
   })),
 };
+const musicThemeSubBoardState = {
+  open: false,
+  themeId: '',
+  themeBoards: Object.fromEntries(PLAYER_MUSIC_THEME_SLOT_DEFS.map((def) => [def.id, {
+    artToyId: '',
+    boundPanelIds: new Set(),
+    scheduledTimeoutIds: new Set(),
+    lastBindSignature: '',
+    syncTimerId: 0,
+  }])),
+};
 const {
   countWeaponTuneActiveColumns,
   countWeaponTuneActiveEvents,
@@ -306,7 +317,7 @@ function clonePlayerMusicThemeData(dataLike = null) {
   if (!dataLike || typeof dataLike !== 'object') return null;
   const toyType = String(dataLike.toyType || '').trim();
   if (toyType === 'simpleRhythm') {
-    const steps = Math.max(1, Math.trunc(Number(dataLike.steps) || WEAPON_TUNE_STEPS));
+    const steps = Math.max(1, Math.min(WEAPON_TUNE_STEPS, Math.trunc(Number(dataLike.steps) || WEAPON_TUNE_STEPS)));
     const active = Array.from({ length: steps }, (_, idx) => !!(Array.isArray(dataLike.active) ? dataLike.active[idx] : false));
     return {
       toyType: 'simpleRhythm',
@@ -454,6 +465,15 @@ function setPlayerMusicTheme(themeId = '', nextTheme = null) {
   return getPlayerMusicTheme(id);
 }
 ensurePlayerMusicThemes();
+function getMusicThemeEditorState() {
+  return {
+    open: !!musicThemeSubBoardState.open,
+    themeId: String(musicThemeSubBoardState.themeId || ''),
+  };
+}
+function openPlayerMusicThemeEditor(themeId = '') {
+  return openMusicThemeSubBoardEditor(themeId);
+}
 const playerInstrumentRuntime = createBeatSwarmPlayerInstrumentRuntime({
   stepsPerBar: WEAPON_TUNE_STEPS,
   mode: 'guided_fire',
@@ -12285,6 +12305,12 @@ function setGameplayPaused(next) {
     } catch {}
     closeWeaponSubBoardEditor({ keepUi: true });
   }
+  if (!gameplayPaused && musicThemeSubBoardState.open) {
+    try {
+      if (window.__ArtInternal?.isActive?.()) window.__ArtInternal?.exit?.();
+    } catch {}
+    closeMusicThemeSubBoardEditor({ keepUi: true });
+  }
   if (gameplayPaused) {
     dragPointerId = null;
     setJoystickVisible(false);
@@ -12318,6 +12344,7 @@ function setGameplayPaused(next) {
     tuneEditorState.slotIndex = -1;
     tuneEditorState.beatTimer = 0;
     tuneEditorState.playheadStep = 0;
+    closeMusicThemeSubBoardEditor({ keepUi: true });
     stopComponentLivePreviews();
   }
 }
@@ -13286,6 +13313,9 @@ function scheduleWeaponSubBoardTuneChainSync(slotIndex, delayMs = 32) {
 }
 function hideWeaponSubBoardArtAnchor(slotIndex) {
   const artToyId = getWeaponSubBoardArtToyId(slotIndex);
+  hideWeaponSubBoardArtAnchorById(artToyId);
+}
+function hideWeaponSubBoardArtAnchorById(artToyId) {
   if (!artToyId) return;
   const sel = `.internal-art-anchor-ghost[data-art-toy-id="${CSS.escape(artToyId)}"]`;
   const ghosts = Array.from(document.querySelectorAll(sel));
@@ -13838,6 +13868,305 @@ function setPauseScreenSubBoardHidden(hidden) {
   pauseScreenEl.classList.toggle('is-subboard-hidden', !!hidden);
   overlayEl?.classList?.toggle?.('is-subboard-open', !!hidden);
 }
+function getMusicThemeSubBoardState(themeId = '') {
+  const id = normalizePlayerMusicThemeId(themeId);
+  if (!id) return null;
+  return musicThemeSubBoardState.themeBoards[id] || null;
+}
+function getMusicThemeSubBoardArtToyId(themeId = '') {
+  const state = getMusicThemeSubBoardState(themeId);
+  return String(state?.artToyId || '').trim();
+}
+function getMusicThemeToyKind(themeId = '') {
+  const theme = getPlayerMusicTheme(themeId);
+  return theme?.toyType === 'simpleRhythm' ? 'loopgrid' : 'drawgrid';
+}
+function ensureMusicThemeSubBoardArtToy(themeId = '') {
+  const id = normalizePlayerMusicThemeId(themeId);
+  const theme = getPlayerMusicTheme(id);
+  const state = getMusicThemeSubBoardState(id);
+  if (!theme || !state) return '';
+  const existingId = String(state.artToyId || '').trim();
+  const existing = existingId ? document.getElementById(existingId) : null;
+  if (existing && existing.classList?.contains?.('art-toy-panel')) return existingId;
+  const center = getSceneStartWorld();
+  const artPanel = createArtToyAt(theme.toyType === 'simpleRhythm' ? 'fireworks' : 'flashCircle', {
+    centerX: Number(center?.x) || 0,
+    centerY: Number(center?.y) || 0,
+    autoCenter: false,
+    showControlsOnSpawn: false,
+  });
+  if (!(artPanel instanceof HTMLElement)) return '';
+  try { artPanel.classList.add('beat-swarm-weapon-subboard-anchor'); } catch {}
+  try { artPanel.dataset.beatSwarmThemeId = id; } catch {}
+  try { artPanel.dataset.beatSwarmThemeSubboard = '1'; } catch {}
+  try { artPanel.dataset.beatSwarmSubboard = '1'; } catch {}
+  try { artPanel.dataset.pendingRandMusic = '0'; } catch {}
+  try { artPanel.dataset.pendingRandAll = '0'; } catch {}
+  state.artToyId = String(artPanel.id || '');
+  return state.artToyId;
+}
+function getMusicThemeSubBoardPanels(themeId = '') {
+  const id = normalizePlayerMusicThemeId(themeId);
+  const artToyId = getMusicThemeSubBoardArtToyId(id);
+  if (!artToyId) return [];
+  const kind = getMusicThemeToyKind(id);
+  const panels = Array.from(document.querySelectorAll(`.toy-panel[data-toy="${CSS.escape(kind)}"][data-art-owner-id="${CSS.escape(artToyId)}"]`));
+  panels.sort((a, b) => {
+    const ax = Number.parseFloat(a?.style?.left || '0') || 0;
+    const bx = Number.parseFloat(b?.style?.left || '0') || 0;
+    return ax - bx;
+  });
+  return panels.filter((p) => p instanceof HTMLElement);
+}
+function applySimpleRhythmThemeToPanel(theme, panel) {
+  if (!(panel instanceof HTMLElement) || !theme?.data) return false;
+  const data = clonePlayerMusicThemeData(theme.data);
+  if (!data || data.toyType !== 'simpleRhythm') return false;
+  const steps = Math.max(1, Math.min(WEAPON_TUNE_STEPS, Math.trunc(Number(data.steps) || WEAPON_TUNE_STEPS)));
+  const active = Array.from({ length: steps }, (_, idx) => !!data.active?.[idx]);
+  const targetMidi = noteNameToMidiRuntime(data.note || 'C3');
+  const applyNow = () => {
+    const st = panel.__gridState;
+    if (!st || !Array.isArray(st.steps)) return false;
+    st.steps = active.slice();
+    if (Array.isArray(st.notePalette) && Array.isArray(st.noteIndices)) {
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < st.notePalette.length; i++) {
+        const dist = Math.abs((Number(st.notePalette[i]) || 0) - targetMidi);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
+        }
+      }
+      st.noteIndices = Array.from({ length: steps }, () => bestIdx);
+    }
+    panel.dataset.instrument = data.instrumentId || 'BASS TONE 4';
+    panel.dataset.instrumentPersisted = '1';
+    try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: panel.dataset.instrument, value: panel.dataset.instrument }, bubbles: true })); } catch {}
+    try { panel.dispatchEvent(new CustomEvent('loopgrid:update', { detail: { reason: 'beat-swarm-theme-restore', steps: active.slice(), noteIndices: Array.isArray(st.noteIndices) ? st.noteIndices.slice() : [] } })); } catch {}
+    return true;
+  };
+  if (applyNow()) return true;
+  try {
+    panel.__pendingLoopGridState = {
+      steps: active.slice(),
+      instrument: data.instrumentId || 'BASS TONE 4',
+    };
+  } catch {}
+  return false;
+}
+function applyMusicThemeToSubBoardPanel(themeId = '', panel) {
+  const theme = getPlayerMusicTheme(themeId);
+  if (!theme || !(panel instanceof HTMLElement)) return false;
+  if (theme.toyType === 'simpleRhythm') return applySimpleRhythmThemeToPanel(theme, panel);
+  return applyWeaponTuneObjectToDrawgridPanel(theme.data?.tune || theme.data, panel);
+}
+function ensureMusicThemeSubBoardPanel(themeId = '', attempt = 0) {
+  const id = normalizePlayerMusicThemeId(themeId);
+  const artToyId = getMusicThemeSubBoardArtToyId(id);
+  if (!id || !artToyId) return [];
+  let panels = getMusicThemeSubBoardPanels(id);
+  if (!panels.length && attempt >= 2 && typeof window.MusicToyFactory?.create === 'function') {
+    const kind = getMusicThemeToyKind(id);
+    const worldEl = document.getElementById('board') || document.getElementById('internal-board-world');
+    const center = getSceneStartWorld();
+    try {
+      const p = window.MusicToyFactory.create(kind, {
+        centerX: Number(center?.x) || 0,
+        centerY: Number(center?.y) || 0,
+        autoCenter: false,
+        allowOffscreen: true,
+        skipSpawnPlacement: false,
+        containerEl: worldEl || undefined,
+        artOwnerId: artToyId,
+      });
+      if (p instanceof HTMLElement) {
+        try { p.classList.remove('art-internal-toy'); } catch {}
+        try { p.style.pointerEvents = 'auto'; } catch {}
+      }
+    } catch {}
+    panels = getMusicThemeSubBoardPanels(id);
+  }
+  for (const panel of panels) applyMusicThemeToSubBoardPanel(id, panel);
+  syncMusicThemeSubBoardBindings(id);
+  return panels;
+}
+function snapshotMusicThemeSubBoard(themeId = '') {
+  const id = normalizePlayerMusicThemeId(themeId);
+  const theme = getPlayerMusicTheme(id);
+  if (!theme) return;
+  const panels = getMusicThemeSubBoardPanels(id);
+  const panel = panels[0] || null;
+  if (!(panel instanceof HTMLElement)) return;
+  if (theme.toyType === 'simpleRhythm') {
+    const st = panel.__gridState || {};
+    const steps = Math.max(1, Math.min(WEAPON_TUNE_STEPS, Array.isArray(st.steps) ? st.steps.length : WEAPON_TUNE_STEPS));
+    const active = Array.from({ length: steps }, (_, idx) => !!st.steps?.[idx]);
+    const noteIndex = Array.isArray(st.noteIndices) ? Math.trunc(Number(st.noteIndices.find((v) => Number.isFinite(Number(v)))) || 0) : 0;
+    const midi = Array.isArray(st.notePalette) ? Number(st.notePalette[Math.max(0, Math.min(st.notePalette.length - 1, noteIndex))]) : NaN;
+    const note = Number.isFinite(midi) ? (normalizeSwarmNoteName(midiToName(midi)) || theme.data?.note || 'C3') : (theme.data?.note || 'C3');
+    setPlayerMusicTheme(id, {
+      autogenerated: false,
+      data: {
+        toyType: 'simpleRhythm',
+        steps,
+        active,
+        instrumentId: String(panel.dataset.instrument || theme.data?.instrumentId || 'BASS TONE 4'),
+        note,
+        patternKey: active.map((v) => (v ? '1' : '0')).join(''),
+      },
+    });
+    return;
+  }
+  try {
+    const st = panel.__drawToy?.getState?.();
+    if (!st || typeof st !== 'object') return;
+    setPlayerMusicTheme(id, {
+      autogenerated: false,
+      data: {
+        toyType: 'drawgrid',
+        tune: sanitizeWeaponTune(st),
+        motifRole: String(theme.data?.motifRole || (id === 'powerTheme' ? 'power_lead' : 'main_hook')),
+      },
+    });
+  } catch {}
+}
+function clearMusicThemeSubBoardBindings(themeId = '') {
+  const state = getMusicThemeSubBoardState(themeId);
+  if (!state) return;
+  for (const panelId of Array.from(state.boundPanelIds || [])) {
+    const panel = document.getElementById(panelId);
+    if (!panel) continue;
+    const updateHandler = panel.__beatSwarmMusicThemeUpdateHandler;
+    if (typeof updateHandler === 'function') {
+      try { panel.removeEventListener('drawgrid:update', updateHandler); } catch {}
+      try { panel.removeEventListener('loopgrid:update', updateHandler); } catch {}
+    }
+    delete panel.__beatSwarmMusicThemeUpdateHandler;
+  }
+  state.boundPanelIds.clear();
+}
+function clearMusicThemeSubBoardTimers(themeId = '') {
+  const state = getMusicThemeSubBoardState(themeId);
+  if (!state) return;
+  for (const timerId of Array.from(state.scheduledTimeoutIds || [])) {
+    try { clearTimeout(timerId); } catch {}
+  }
+  state.scheduledTimeoutIds.clear();
+  state.syncTimerId = 0;
+}
+function scheduleMusicThemeSubBoardSnapshot(themeId = '', delayMs = 40) {
+  const id = normalizePlayerMusicThemeId(themeId);
+  const state = getMusicThemeSubBoardState(id);
+  if (!state || state.syncTimerId) return;
+  const timerId = setTimeout(() => {
+    state.scheduledTimeoutIds.delete(timerId);
+    if (state.syncTimerId === timerId) state.syncTimerId = 0;
+    if (!musicThemeSubBoardState.open || musicThemeSubBoardState.themeId !== id) return;
+    snapshotMusicThemeSubBoard(id);
+    if (gameplayPaused) renderPauseWeaponUi();
+  }, Math.max(0, Math.trunc(Number(delayMs) || 0)));
+  state.syncTimerId = timerId;
+  state.scheduledTimeoutIds.add(timerId);
+}
+function syncMusicThemeSubBoardBindings(themeId = '') {
+  const id = normalizePlayerMusicThemeId(themeId);
+  const state = getMusicThemeSubBoardState(id);
+  if (!state) return;
+  const panels = getMusicThemeSubBoardPanels(id);
+  const panelIds = panels.map((p) => String(p.id || '')).filter(Boolean);
+  const bindSignature = panelIds.join('|');
+  if (state.lastBindSignature !== bindSignature) state.lastBindSignature = bindSignature;
+  const nextIds = new Set(panelIds);
+  for (const oldId of Array.from(state.boundPanelIds)) {
+    if (nextIds.has(oldId)) continue;
+    const oldPanel = document.getElementById(oldId);
+    const oldUpdate = oldPanel?.__beatSwarmMusicThemeUpdateHandler;
+    if (typeof oldUpdate === 'function') {
+      try { oldPanel.removeEventListener('drawgrid:update', oldUpdate); } catch {}
+      try { oldPanel.removeEventListener('loopgrid:update', oldUpdate); } catch {}
+    }
+    if (oldPanel) delete oldPanel.__beatSwarmMusicThemeUpdateHandler;
+    state.boundPanelIds.delete(oldId);
+  }
+  for (const panel of panels) {
+    if (!(panel instanceof HTMLElement) || !panel.id || state.boundPanelIds.has(panel.id)) continue;
+    const onUpdate = () => scheduleMusicThemeSubBoardSnapshot(id, 40);
+    panel.__beatSwarmMusicThemeUpdateHandler = onUpdate;
+    try { panel.addEventListener('drawgrid:update', onUpdate); } catch {}
+    try { panel.addEventListener('loopgrid:update', onUpdate); } catch {}
+    state.boundPanelIds.add(panel.id);
+  }
+}
+function closeMusicThemeSubBoardEditor(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const wasOpen = !!musicThemeSubBoardState.open;
+  const prevThemeId = normalizePlayerMusicThemeId(musicThemeSubBoardState.themeId);
+  if (wasOpen && prevThemeId) {
+    try { snapshotMusicThemeSubBoard(prevThemeId); } catch {}
+    clearMusicThemeSubBoardTimers(prevThemeId);
+  }
+  musicThemeSubBoardState.open = false;
+  musicThemeSubBoardState.themeId = '';
+  setPauseScreenSubBoardHidden(false);
+  if (opts.keepUi !== true && gameplayPaused) renderPauseWeaponUi();
+  if (wasOpen) persistBeatSwarmState();
+}
+function openMusicThemeSubBoardEditor(themeId = '') {
+  const id = normalizePlayerMusicThemeId(themeId);
+  if (!id || !active || !gameplayPaused) return false;
+  if (weaponSubBoardState.open) closeWeaponSubBoardEditor({ keepUi: true });
+  if (musicThemeSubBoardState.open && musicThemeSubBoardState.themeId !== id) closeMusicThemeSubBoardEditor({ keepUi: true });
+  ensurePlayerMusicThemes();
+  const artToyId = ensureMusicThemeSubBoardArtToy(id);
+  if (!artToyId) return false;
+  stagePickerState.open = false;
+  stagePickerState.slotIndex = -1;
+  stagePickerState.stageIndex = -1;
+  teardownWeaponTuneToyEditor();
+  tuneEditorState.open = false;
+  tuneEditorState.slotIndex = -1;
+  musicThemeSubBoardState.open = true;
+  musicThemeSubBoardState.themeId = id;
+  setPauseScreenSubBoardHidden(true);
+  try { window.__ArtInternal?.enter?.(artToyId); } catch {}
+  [120, 260, 520].forEach((delayMs, attempt) => {
+    const state = getMusicThemeSubBoardState(id);
+    const timerId = setTimeout(() => {
+      state?.scheduledTimeoutIds?.delete?.(timerId);
+      if (!musicThemeSubBoardState.open || musicThemeSubBoardState.themeId !== id) return;
+      ensureMusicThemeSubBoardPanel(id, attempt);
+      const panels = getMusicThemeSubBoardPanels(id);
+      for (const panel of panels) {
+        try { panel.dispatchEvent(new CustomEvent('toy:start', { bubbles: true })); } catch {}
+        try { panel.dataset.chainActive = 'true'; } catch {}
+        try { panel.dataset.forcePlayheadVisible = '1'; } catch {}
+      }
+    }, delayMs);
+    state?.scheduledTimeoutIds?.add?.(timerId);
+  });
+  return true;
+}
+function updateMusicThemeSubBoardSession() {
+  if (!musicThemeSubBoardState.open) return;
+  const id = normalizePlayerMusicThemeId(musicThemeSubBoardState.themeId);
+  const artToyId = getMusicThemeSubBoardArtToyId(id);
+  const activeInternal = !!window.__ArtInternal?.isActive?.();
+  if (!id || !artToyId || !activeInternal) {
+    const wasRunning = !!isRunning?.();
+    closeMusicThemeSubBoardEditor();
+    if (wasRunning) {
+      try { stopTransport?.(); } catch {}
+    }
+    if (!gameplayPaused) setGameplayPaused(true);
+    return;
+  }
+  hideWeaponSubBoardArtAnchorById(artToyId);
+  setPauseScreenSubBoardHidden(true);
+  syncMusicThemeSubBoardBindings(id);
+}
 function closeWeaponSubBoardEditor(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const wasOpen = !!weaponSubBoardState.open;
@@ -13996,6 +14325,28 @@ function destroyWeaponSubBoards() {
     slotState.artToyId = '';
   }
   closeWeaponSubBoardEditor({ keepUi: true });
+  destroyMusicThemeSubBoards();
+}
+function destroyMusicThemeSubBoards() {
+  if (window.__ArtInternal?.isActive?.()) {
+    try { window.__ArtInternal?.exit?.(); } catch {}
+  }
+  for (const def of PLAYER_MUSIC_THEME_SLOT_DEFS) {
+    const state = getMusicThemeSubBoardState(def.id);
+    if (!state) continue;
+    const artToyId = String(state.artToyId || '').trim();
+    clearMusicThemeSubBoardBindings(def.id);
+    clearMusicThemeSubBoardTimers(def.id);
+    if (artToyId) {
+      const artPanel = document.getElementById(artToyId);
+      if (artPanel) {
+        try { window.ArtToyFactory?.destroy?.(artPanel); } catch { try { artPanel.remove?.(); } catch {} }
+      }
+    }
+    state.artToyId = '';
+    state.lastBindSignature = '';
+  }
+  closeMusicThemeSubBoardEditor({ keepUi: true });
 }
 function teardownWeaponTuneToyEditor() {
   const panel = tuneEditorState.panel;
@@ -14080,6 +14431,7 @@ function ensurePauseWeaponUi() {
     getPauseWeaponDrag: () => pauseWeaponDrag,
     getStagePickerState: () => stagePickerState,
     getTuneEditorState: () => tuneEditorState,
+    getMusicThemeEditorState,
     getWeaponSubBoardState: () => weaponSubBoardState,
     getWeaponLoadout: () => weaponLoadout,
     getPreviewSelectedWeaponSlotIndex: () => previewSelectedWeaponSlotIndex,
@@ -14087,6 +14439,7 @@ function ensurePauseWeaponUi() {
     renderPauseWeaponUi,
     closeWeaponSubBoardEditor,
     openWeaponSubBoardEditor,
+    openPlayerMusicThemeEditor,
     getWeaponComponentDefById,
     clearHelpers,
     persistBeatSwarmState,
@@ -14108,6 +14461,7 @@ function renderPauseWeaponUi() {
     sanitizeWeaponTune,
     getWeaponTuneActivityStats,
     getWeaponTuneDamageScale,
+    getPlayerMusicThemes,
     maxWeaponStages: MAX_WEAPON_STAGES,
     getWeaponComponentDefForStage,
     renderComponentPreviewMarkup,
@@ -22487,7 +22841,10 @@ function tick(nowMs) {
   }
   withBeatSwarmPerfSample('sectionPresentation', () => updateSectionPresentationRuntime(dt));
   withBeatSwarmPerfSample('arenaPath', () => updateArenaPath(dt));
-  withBeatSwarmPerfSample('weaponSubBoard', () => updateWeaponSubBoardSession());
+  withBeatSwarmPerfSample('weaponSubBoard', () => {
+    updateWeaponSubBoardSession();
+    updateMusicThemeSubBoardSession();
+  });
   if (!framePressure.degraded || (perfFrameIndex % 8) === 0) {
     withBeatSwarmPerfSample('starfield', () => updateStarfieldVisual());
   }
