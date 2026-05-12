@@ -1,23 +1,32 @@
 # Beat Swarm - Next Steps
 
-## Current Direction - 2026-05-10
+## Current Status - 2026-05-12
 
-The technical music runtime is now healthy enough that the main problem is artistic direction, not basic reliability.
+The Beat Swarm music runtime is stable enough to move from director-authored music toward player-authored musical DNA.
 
 Recent tests have confirmed:
 
-- the protected intro structure is working again
-- the intensity-ramp test passes
+- the protected intro set piece is working:
+  1. player shooting only
+  2. one pulse layer
+  3. second beat/backbeat layer
+  4. melody enters and continues
+- music is not interrupted by normal enemy death or health changes
 - player/enemy weapons, explosions, and chain attacks remain reliable gameplay sounds
-- audio-required enemy actions are not being silently dropped
-- bass register drift has been fixed at execution and foundation keepalive creation
-- build/peak cadence can be increased without changing BPM
+- `audioRequiredSilentCount` is consistently `0`
+- bass/foundation notes stay in the intended low register
+- medium/build/peak/release intensity stages pass Music Lab checks
+- medium now has a clear pumping foundation pulse
+- build and peak ramp pressure without losing pattern focus
+- release reads as an actual release
+- lead motif anchors are recognizable enough for now
+- foundation timbre and pulse accenting sound good in listening tests
 
-The current musical issue:
+The current baseline direction is:
 
-> The system makes coherent procedural music, but it does not yet assert a strong arcade theme.
+> relentless propulsion + recognizable hooks.
 
-The target feel is closer to:
+The current style target remains:
 
 - neo-retro shmup
 - arcade synthwave
@@ -25,318 +34,302 @@ The target feel is closer to:
 - bullet-hell synth
 - techno arcade
 
-Core feel:
+## Completed Baseline Work
 
-> relentless propulsion + recognizable hooks.
+### Motif Anchors
 
-## Direction Reset
+Implemented and accepted as good enough for now:
 
-Do not continue solving this by adding more layers, more enemies, or more event sections.
+- Level 1 music personality profile
+- lead motif anchor runtime
+- longer motif lifetime
+- repeated call/lift/answer/resolve hook shape
+- build and peak transformations that preserve hook identity
+- Music Lab metrics for motif return and variation
 
-The next phase should make the existing music more forceful, more memorable, and more constrained.
+Current status:
 
-The current feedback diagnosis is:
+- peak lead return rate is stable
+- peak variation is suppressed
+- the lead is good enough to move on, but can be refined later
 
-- the music is too polite
-- the lead sounds like melodic improvisation instead of a recognizable hook
-- the bass is stable but still too supportive
-- peak intensity can still feel like extra activity instead of focused pressure
-- high intensity should become more patterned, not more chaotic
+### Bass As Engine
 
-The new active priority is:
+Implemented and accepted:
 
-> motif persistence + bass drive + lead dominance.
+- stable low-register foundation lane
+- medium `10101010` pump
+- build push pattern
+- peak pump/cadence pattern
+- stripped release anchor
+- foundation keepalive/register guards
+- Music Lab bass delivery and register metrics
 
-## Active Plan - Arcade Music Personality
+Current status:
 
-Add a narrow Level 1 music personality profile. This should not be a broad style-pack system yet.
+- medium/build/peak/release delivery is stable
+- bass register violations are `0`
+- listening tests say the groove now moves properly
 
-Initial Level 1 personality should bias toward:
+### Peak Means Focus
 
-- high motif reuse
-- high bass drive
-- high lead dominance
-- high repetition tolerance
-- low harmonic drift
-- medium-high syncopation
-- short phrase lengths
-- lower resolution tendency during build/peak
-- clear release after peak
+Implemented and accepted:
 
-Example shape:
+- peak support/sparkle/answer density reduced
+- peak hook reuse strengthened
+- peak bass drive remains patterned
+- simultaneous voice count remains controlled enough
+
+Current status:
+
+- Music Lab passes
+- peak is focused enough for the next phase
+
+### Foundation Sound Character
+
+Implemented and accepted:
+
+- foundation instrument identity locked to a consistent bass/drum timbre
+- foundation pulse accent contour added:
+  - downbeat strongest
+  - backbeat slightly lower
+  - pump steps lower again
+  - push/ghost steps tucked back
+
+Current status:
+
+- listening tests say it sounds good
+- no further cleanup is currently required
+
+## Active Direction - Player Music Theme UI
+
+We are now moving into player-generated music themes.
+
+Core principle:
+
+> Player provides identity. Director provides context, orchestration, intensity, and transformation.
+
+The player should not author the full score. They should provide short motifs and rhythms that the existing director/composer can later interpret, mutate, simplify, intensify, and orchestrate.
+
+This should start as UI/data support, not full runtime integration.
+
+## Theme Slots
+
+Use four player music theme slots:
+
+| Slot | Toy Type | Lane Role | Purpose |
+| --- | --- | --- | --- |
+| Lead Theme | Drawgrid | Lead / Main Hook | Main melody, player identity, call/response source |
+| Bass Drive | Simple Rhythm | Foundation / Bass Rhythm | Pumping bass rhythm / engine groove |
+| Accent Rhythm | Simple Rhythm | Accent / Percussion / Stabs | Attack accents and phrase punctuation |
+| Power Theme | Drawgrid | Powered-Up Lead | Featured super-mode / player dominance motif |
+
+Initial implementation may focus deepest behavior on the first two slots:
+
+1. Lead Theme
+2. Bass Drive
+
+But the UI and data model should anticipate all four slots so we do not redesign it later.
+
+## Active Implementation Target 1 - Theme Data Model
+
+Add a player music theme config object with generated defaults.
+
+Suggested shape:
 
 ```js
-level1MusicPersonality = {
-  motifReuseBias: 0.9,
-  bassDrive: 1.0,
-  leadDominance: 0.9,
-  repetitionTolerance: 0.9,
-  harmonicDrift: 0.2,
-  syncopation: 0.65,
-  phraseAggression: 0.85,
-  resolutionTendency: 0.35,
+playerMusicThemes = {
+  leadTheme: {
+    id: 'leadTheme',
+    label: 'Lead Theme',
+    toyType: 'drawgrid',
+    laneRole: 'lead',
+    autogenerated: true,
+    data: null,
+  },
+  bassDrive: {
+    id: 'bassDrive',
+    label: 'Bass Drive',
+    toyType: 'simpleRhythm',
+    laneRole: 'foundation',
+    autogenerated: true,
+    data: null,
+  },
+  accentRhythm: {
+    id: 'accentRhythm',
+    label: 'Accent Rhythm',
+    toyType: 'simpleRhythm',
+    laneRole: 'accent',
+    autogenerated: true,
+    data: null,
+  },
+  powerTheme: {
+    id: 'powerTheme',
+    label: 'Power Theme',
+    toyType: 'drawgrid',
+    laneRole: 'powerLead',
+    autogenerated: true,
+    data: null,
+  },
 };
 ```
 
-This profile should feed existing director/composer decisions rather than creating a second music brain.
+Implementation requirements:
 
-## Implementation Target 1 - Motif Anchors
+- auto-generate all slots by default
+- no empty theme slots on first open
+- keep theme data separate from weapon data
+- reuse existing Drawgrid/weapon serialization where sensible
+- expose clean accessors for future runtime integration:
 
-The lead needs phrase memory.
-
-Current behavior is too close to:
-
-```txt
-A B C D E F G
+```js
+getPlayerMusicTheme('leadTheme')
+getPlayerMusicTheme('bassDrive')
+getPlayerMusicTheme('accentRhythm')
+getPlayerMusicTheme('powerTheme')
 ```
 
-Target behavior:
+Do not bury this data inside UI-only state.
+
+## Active Implementation Target 2 - Pause UI Theme Row
+
+Add a Music Themes row at the bottom of the pause UI near the existing weapon setup UI.
+
+Suggested layout:
 
 ```txt
-A A B A
-A A C A
+Music Themes
+[Lead Theme] [Bass Drive] [Accent Rhythm] [Power Theme]
 ```
 
-First-pass motif anchor requirements:
+Behavior:
 
-- generate or choose a short 4-8 step lead motif
-- preserve both pitch contour and rhythm identity
-- keep the motif active for several bars
-- repeat it aggressively during build and peak
-- allow small substitutions, octave variants, and response forms
-- force periodic return to the hook
+- hover previews the slot
+- click opens the appropriate editor
+- closing pause/editor stops any preview
+- only one preview can play at once
+- fast hover movement should not stack previews
 
-Do not aim for a complete authored song.
+The row should be visually separated enough that players understand these are soundtrack theme slots, not weapon slots.
 
-The goal is:
+## Active Implementation Target 3 - Preview
 
-> recognizable procedural hook identity.
+Theme previews should be short, reliable, and independent from gameplay music state.
 
-Likely file areas:
+Preview rules:
 
-- `src/beat-swarm/beat-swarm-mode.js`
-- `src/beat-swarm/beat-swarm-composer-events.js`
-- `src/beat-swarm/beat-swarm-composer-maintenance.js`
-- `src/beat-swarm/beat-swarm-music-lab.js`
+- hover starts preview
+- mouse leave stops or fades preview
+- hovering a different button stops the previous preview first
+- clicking a button stops preview before opening the editor
+- pause menu close stops all previews
 
-Useful first metrics:
+Preview loops:
 
-- motif anchor creation count
-- motif reuse count
-- motif return rate
-- bars since last hook return
-- lead motif variation count
-- build/peak motif reuse share
+- Drawgrid themes: play 1-2 bars of motif
+- Simple Rhythm themes: play 1-2 bars using safe default instrument/pitch mapping
 
-Acceptance shape:
+Preview should not permanently alter gameplay music state.
 
-- the lead should be hummable/repeatable within one test run
-- build and peak should reuse the hook more, not less
-- release may thin or soften the hook but should not erase musical identity permanently
+## Active Implementation Target 4 - Editors
 
-## Strategic Direction - Player Motif DNA
+Clicking a slot should open the relevant editor with generated data already loaded.
 
-The strongest long-term version of motif anchors is not pure generation.
+Drawgrid slots:
 
-The player should eventually be able to provide a short constrained motif, and the director should interpret that motif as musical DNA.
+- Lead Theme
+- Power Theme
 
-Mental model:
+Simple Rhythm slots:
 
-```txt
-Player provides identity.
-Director provides context, orchestration, intensity, and transformation.
-```
+- Bass Drive
+- Accent Rhythm
 
-This is a future-facing priority because it solves the hardest musical problem:
+Rules:
 
-> procedural coherence vs memorable identity.
+- saving updates the theme slot data
+- cancelling preserves previous data
+- edited data survives pause menu open/close
+- edited data should persist through existing save/load if the app already supports that path
 
-The current generated motif-anchor work should be built as the same architecture that will later support player-authored motifs. Do not build the player motif editor yet, but do make motif logic compatible with that future.
+## Future Runtime Integration
 
-Important design rules:
+Do not do this in the first UI slice unless the UI/data work is already stable.
 
-- the player motif should be short and constrained
-- motif pitch contour and motif rhythm should be stored separately
-- the system should transform the motif, not merely replay it
-- anchor notes should be preserved strongly
-- build and peak may fragment, repeat, octave-shift, compress, or ornament the motif
-- release should make the original identity recognizable again
-- mutation should use musical operations, not random note churn
+Future use:
 
-Useful future motif controls:
+| Theme Slot | Runtime Use |
+| --- | --- |
+| Lead Theme | main motif seed, lead phrase material |
+| Bass Drive | bass rhythm mask / foundation groove |
+| Accent Rhythm | accent/stab rhythm mask |
+| Power Theme | powered-up lead takeover motif |
 
-- `motifPreservation`
-- `motifRhythmPattern`
-- `motifPitchContour`
-- `motifAnchorNotes`
-- `motifTransformationMode`
+Intensity transformations:
 
-Expected future transformations:
+| Intensity | Behavior |
+| --- | --- |
+| Low | fewer notes, sparse motif usage |
+| Medium | theme plays recognizably |
+| Build | add pickups, shorten rests, support answers |
+| Peak | repeat fragments, octave double, increase subdivision |
+| Release | strip back to sparse motif echo |
 
-- octave shift
-- rhythmic doubling
-- phrase truncation
-- call/response echo
-- ornament insertion
-- rest removal
-- phrase extension
-- controlled inversion or contour variation
+Important guardrails:
 
-Priority:
+- bass pitch/register should remain system-controlled at first
+- Bass Drive should be rhythm-only initially
+- player themes should work across future style profiles
+- style interpretation belongs to the director/profile, not the stored theme slot
 
-1. Make generated motif anchors musically convincing first.
-2. Refactor motif representation around pitch contour + rhythm identity.
-3. Add transformation modes for intensity stages.
-4. Only then consider a player-facing motif input workflow.
+## What Not To Expose Yet
 
-The target experience is:
+Do not expose these as player-authored controls in the first implementation:
 
-> players create the DNA of the soundtrack while the game transforms it into a living arcade score.
+- harmony
+- full arrangement state
+- transitions
+- silence windows
+- intensity curve
+- enemy family scheduling
+- all ornaments/fills
+- every individual conductor lane
 
-## Implementation Target 2 - Bass As Engine
+Reason:
 
-The bass is currently stable, but it should feel more like propulsion.
-
-Current problem:
-
-> bass supports the harmony instead of driving the level.
-
-Target behavior:
-
-- repeated low pulse
-- stronger eighth-note/subdivision pressure in build and peak
-- fewer polite gaps during high intensity
-- stable low register
-- simple, forceful bass identity
-- bass should stay distinct from lead chaos
-
-Do not make bass melodic first.
-
-First pass should focus on:
-
-- rhythmic insistence
-- low-register stability
-- repeated engine-like pulse
-- controlled stage changes:
-  - `low`: sparse anchor
-  - `medium`: steady pulse
-  - `build`: more offbeat pressure
-  - `peak`: relentless but patterned
-  - `release`: stripped down but still grounded
-
-Useful metrics:
-
-- bass step gap by stage
-- bass active-step count by stage
-- bass low-register compliance
-- bass pattern reuse count
-- bass peak/rest contrast
-
-Acceptance shape:
-
-- player should feel the level has an engine underneath it
-- build/peak bass should feel more urgent without becoming high-pitched or noisy
-- release should noticeably strip back without losing tonal grounding
-
-## Implementation Target 3 - Peak Means Focus
-
-Peak intensity should not mean democratic layer chatter.
-
-At peak:
-
-- hook reuse should increase
-- bass drive should increase
-- lead should dominate
-- ornaments should punctuate, not compete
-- support should reinforce rhythm, not start a second lead
-- melodic wandering should decrease
-
-Important rule:
-
-> aggressive arcade music is often more constrained than relaxed music.
-
-Peak should feel patterned and forceful, not random.
-
-## Keep From Current Runtime
-
-Preserve these working pieces:
-
-- protected intro set piece:
-  1. player shooting only
-  2. one pulse layer
-  3. second beat/backbeat layer
-  4. melody enters and continues
-- music lanes remain director-owned
-- enemies are carriers for normal music lanes
-- enemy death and HP should not interrupt normal lanes
-- special enemies may own special riffs, but only as explicit authored exceptions
-- gameplay sounds stay separate from musical-flow gating
-- central enemy action gate remains useful for timing attacks to music
-- build/peak cadence escalation within one BPM remains useful
-
-## Hold For Later
-
-Do not actively expand these areas until motif/bass identity improves:
-
-- formation spawning
-- event sections beyond the current safe beat-bounce concept
-- broad conductor scenes
-- large sample metadata migration
-- new special enemy families
-- HP-section readability tuning
-- framerate work, unless a new performance issue is reported
-
-These are still valid future topics, but they are not the current bottleneck.
+> The player should provide musical DNA, not manage the whole score.
 
 ## Current Testing Focus
 
-Use the Music Lab intensity-ramp test as the main listening pass.
+For the new theme UI phase, acceptance starts with UI/data behavior:
 
-The test should answer:
+- pause UI shows a Music Themes row
+- four buttons exist
+- all themes are auto-generated by default
+- hover preview works for every slot
+- only one preview plays at a time
+- click opens the correct editor type
+- edited theme data is saved back to the slot
+- closing pause/editor does not leave preview audio stuck playing
+- theme data is accessible outside the UI for future runtime integration
 
-- does the intro still teach the musical structure?
-- does the lead hook become recognizable?
-- does build increase pressure without becoming messy?
-- does peak feel forceful and patterned?
-- does release actually release?
-- does the bass stay low and driving?
-- do gameplay sounds remain reliable and standard volume?
+Continue running Music Lab intensity tests when touching runtime music behavior.
 
-Current useful guardrails:
+## Hold For Later
 
-- `musicIntensityAuditionPassed = true`
-- `audioRequiredSilentCount = 0`
-- bass/foundation created and executed notes stay in low register
-- max simultaneous voices stays controlled
-- build and peak cadence rise without causing clutter
+Do not actively expand these areas while building the theme UI:
 
-## Immediate Next Step
-
-Implement the first small version of motif anchors.
-
-Recommended first slice:
-
-1. Add a Level 1 music personality profile.
-2. Add a lead motif anchor runtime:
-   - current motif notes
-   - current motif rhythm
-   - motif age in bars
-   - last return bar
-   - variation count
-3. Bias primary lead generation toward `A A B A` style reuse.
-4. Increase motif reuse during `build` and `peak`.
-5. Add Music Lab metrics for motif creation/reuse/return.
-
-Only after the lead has a recognizable hook should we deepen bass drive further.
+- new enemy families
+- new event sections
+- formation spawning
+- HP readability tuning
+- broad conductor scenes
+- sample metadata migration
+- framerate work, unless a new performance issue is reported
+- deeper lead motif musicality polish
 
 ## Working Rule
 
 Use this tuning principle:
 
-> Stop preserving everything equally. Make the right thing unmistakable.
-
-For the next phase, the right things are:
-
-1. pumping bass
-2. recognizable lead hook
-3. controlled intensity contrast
+> The player creates short musical DNA. Beat Swarm turns it into a living arcade score.
