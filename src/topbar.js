@@ -31,7 +31,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
 
       const btn = document.querySelector('#topbar [data-action="toggle-play"]');
 
-      if (btn){ updatePlayButtonVisual(btn, !!Core?.isRunning?.()); }
+      if (btn){ updatePlayButtonVisual(btn, isTransportOrBeatSwarmSubBoardRunning()); }
 
     }catch{}
 
@@ -63,6 +63,9 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const label = btn.querySelector('.bpm-label');
     if (label) label.textContent = String(bpmNow);
     btn.title = `Tempo: ${bpmNow} BPM`;
+  }
+  function isTransportOrBeatSwarmSubBoardRunning(){
+    return !!(Core?.isRunning?.() || window.BeatSwarmMode?.isSubBoardPlaying?.());
   }
 
   function ensureBpmMetronomeAnimator(bar){
@@ -167,7 +170,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
           state.lastBpm = bpmRounded;
         }
 
-        const playing = !!Core?.isRunning?.();
+        const playing = isTransportOrBeatSwarmSubBoardRunning();
         if (!btn || !arm){
           state.raf = requestAnimationFrame(tick);
           return;
@@ -1221,7 +1224,7 @@ function ensureTopbar(){
       playBtn.classList.add('c-btn');
       if (!playBtn.dataset.helpPosition) playBtn.dataset.helpPosition = 'bottom';
     }
-    updatePlayButtonVisual(playBtn, !!Core?.isRunning?.());
+    updatePlayButtonVisual(playBtn, isTransportOrBeatSwarmSubBoardRunning());
 
     let bpmBtn = bar.querySelector('[data-action="bpm"]');
     if (!bpmBtn){
@@ -1926,10 +1929,11 @@ if (document.readyState === 'loading') {
       playBtn.addEventListener('click', resume, { passive: true });
       if (!playBtn.__transportSyncBound){
         const sync = () => {
-          try{ updatePlayButtonVisual(playBtn, !!Core?.isRunning?.()); }catch{}
+          try{ updatePlayButtonVisual(playBtn, isTransportOrBeatSwarmSubBoardRunning()); }catch{}
         };
         document.addEventListener('transport:resume', sync, { passive: true });
         document.addEventListener('transport:pause', sync, { passive: true });
+        document.addEventListener('beat-swarm:subboard-playback', sync, { passive: true });
         playBtn.__transportSyncBound = true;
       }
     }
@@ -1996,6 +2000,10 @@ if (document.readyState === 'loading') {
       }
 
       if (action === 'toggle-play'){
+        if (window.BeatSwarmMode?.isSubBoardOpen?.()) {
+          try { window.BeatSwarmMode?.toggleSubBoardPlayback?.(); } catch {}
+          return;
+        }
         const doToggle = async ()=>{
           try{
             await resumeAudioContextIfNeeded();

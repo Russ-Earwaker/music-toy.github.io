@@ -152,6 +152,32 @@ import {
 
 const drawgridLog = makeDebugLogger('mt_debug_logs', 'log');
 
+function isPanelTransportRunning(panel) {
+  const mainTransport = (typeof isRunning === 'function') && isRunning();
+  if (mainTransport) return true;
+  try {
+    return panel?.dataset?.beatSwarmSubboard === '1' && !!window.BeatSwarmMode?.isSubBoardPlaying?.();
+  } catch {
+    return false;
+  }
+}
+function getPanelLoopInfo(panel) {
+  try {
+    if (panel?.dataset?.beatSwarmSubboard === '1' && !!window.BeatSwarmMode?.isSubBoardPlaying?.()) {
+      const phase01 = Number(panel.__beatSwarmSubBoardLocalPhase01);
+      if (Number.isFinite(phase01)) {
+        const base = (typeof getLoopInfo === 'function') ? (getLoopInfo() || {}) : {};
+        return {
+          ...base,
+          phase01: Math.max(0, Math.min(0.999999, phase01)),
+          progress: Math.max(0, Math.min(0.999999, phase01)),
+        };
+      }
+    }
+  } catch {}
+  return (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
+}
+
 // Lightweight trace helpers (opt-in via console):
 //   window.__DG_NODE_SCALE_TRACE = true   // logs only when node scale inputs change
 //   window.__DG_RENDER_SCALE_TRACE = true // logs only when key render-basis inputs change
@@ -2005,7 +2031,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const separatePlayhead = hasPlayheadOverride
       ? !!window.__DG_PLAYHEAD_SEPARATE_CANVAS
       : (panel.__dgUseSeparatePlayhead !== undefined ? !!panel.__dgUseSeparatePlayhead : true);
-    const transportRunning = (typeof isRunning === 'function') && isRunning();
+    const transportRunning = isPanelTransportRunning(panel);
     const lastTransportRunning = !!panel.__dgLastTransportRunning;
     const ghostEmpty = !!panel.__dgGhostLayerEmpty;
     const flashEmpty = !!panel.__dgFlashLayerEmpty;
@@ -3173,8 +3199,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   const playheadSweepDeps = {
     onFrameStart,
-    getLoopInfo,
-    isRunning,
+    getLoopInfo: () => getPanelLoopInfo(panel),
+    isRunning: () => isPanelTransportRunning(panel),
     setOverlayCamState: (value) => { overlayCamState = value; },
     pushHeaderSweepAt: (x) => { FF.pushHeaderSweepAt(x); },
   };
@@ -3212,8 +3238,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   };
 
   const playheadRenderDeps = {
-    getLoopInfo,
-    isRunning,
+    getLoopInfo: () => getPanelLoopInfo(panel),
+    isRunning: () => isPanelTransportRunning(panel),
     readHeaderFpsHint,
     getQualityProfile: (opts = {}) => dgQuality.getProfile(opts),
     getTutorialHighlightMode: () => getTutorialHighlightMode(),
@@ -5666,7 +5692,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         }
         return false;
       })();
-      const transportRunning = (typeof isRunning === 'function') && isRunning();
+      const transportRunning = isPanelTransportRunning(panel);
       // Auto mode for playhead layer count: in heavy multi-toy pressure, fold playhead
       // into existing overlay layers to reduce compositor surfaces.
       try {

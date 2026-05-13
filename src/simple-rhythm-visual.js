@@ -18,6 +18,16 @@ import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
 import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
 
+function isPanelTransportRunning(panel) {
+  const mainTransport = (typeof isRunning === 'function') && isRunning();
+  if (mainTransport) return true;
+  try {
+    return panel?.dataset?.beatSwarmSubboard === '1' && !!window.BeatSwarmMode?.isSubBoardPlaying?.();
+  } catch {
+    return false;
+  }
+}
+
 // --- sizing helpers ---------------------------------------------------------
 function raf() {
   return new Promise(r => requestAnimationFrame(r));
@@ -1226,15 +1236,22 @@ function render(panel, opts = {}) {
 
   // While the transport is running we should keep visuals alive (playhead/decays).
   // Scheduler already requests, but this makes render() robust if called directly.
-  if ((typeof isRunning === 'function') && isRunning()) {
+  if (isPanelTransportRunning(panel)) {
     dirty?.requestRedraw?.('loopgrid:transport');
   }
 
-  const transportRunning = (typeof isRunning === 'function') && isRunning();
+  const transportRunning = isPanelTransportRunning(panel);
 
   // Compute playhead early for step-driven gating
   const loopInfo = getLoopInfo();
-  const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1;
+  const localSubBoardStep = Number(panel.__beatSwarmSubBoardLocalStep);
+  const useLocalSubBoardStep = panel?.dataset?.beatSwarmSubboard === '1'
+    && !!window.BeatSwarmMode?.isSubBoardPlaying?.()
+    && Number.isFinite(localSubBoardStep)
+    && localSubBoardStep >= 0;
+  const playheadCol = useLocalSubBoardStep
+    ? (Math.trunc(localSubBoardStep) % NUM_CUBES)
+    : (loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1);
   // Chain state can force a clear when this toy hands off to another.
   const isActiveInChain = panel.dataset.chainActive === 'true';
   const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);

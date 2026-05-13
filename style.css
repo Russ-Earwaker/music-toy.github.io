@@ -1093,7 +1093,7 @@ select.toy-instrument {
 
 /* Remove extra bottom padding under the volume bar in Draw toy footer */
 .toy-panel[data-toy="drawgrid"] .toy-footer {
-  padding: 10px 10px 1 10px;
+  padding: 10px 10px 1px 10px;
 }
 
 /* Prevent transient easing on drawgrid overlay canvases */
@@ -3406,6 +3406,44 @@ body.internal-board-active #board-main {
   display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;
+}
+
+body.beat-swarm-subboard-open .internal-art-anchor-ghost,
+body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.beat-swarm-subboard-play {
+  position: fixed;
+  left: 22px;
+  bottom: 22px;
+  display: none;
+  z-index: 130050;
+  --c-btn-size: 58px;
+  --c-btn-bg: rgba(52, 128, 190, 0.96);
+}
+
+.beat-swarm-subboard-play.is-visible {
+  display: block;
+}
+
+.beat-swarm-subboard-play-label {
+  position: absolute;
+  left: calc(var(--c-btn-size) + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: max-content;
+  max-width: 180px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(137, 178, 222, 0.52);
+  background: rgba(8, 14, 24, 0.92);
+  color: #eef8ff;
+  font: 700 12px/1 'Trebuchet MS', 'Segoe UI', sans-serif;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.42);
 }
 
 .beat-swarm-pause-title {
@@ -7287,6 +7325,33 @@ body.beat-swarm-active.internal-board-active .app-topbar {
   opacity: 0 !important;
   color: transparent !important;
   background: transparent !important;
+}
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-header,
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-header *,
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-footer,
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-footer * {
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: inherit !important;
+}
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-header,
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-footer {
+  display: flex !important;
+  pointer-events: auto !important;
+}
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-footer {
+  padding: 10px !important;
+}
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-volwrap {
+  width: 100% !important;
+  flex: 1 1 auto !important;
+}
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-title,
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-instrument,
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] [data-action] {
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 /* Drawgrid panel/background should vanish in overview (but keep layout) */
 .overview-mode .toy-panel[data-toy="drawgrid"],

@@ -5680,6 +5680,18 @@ function triggerConnectorPulse(fromId, toId) {
     }, durationMs);
 }
 
+try {
+    if (!window.__beatSwarmSubBoardConnectorPulseBound) {
+        window.__beatSwarmSubBoardConnectorPulseBound = true;
+        document.addEventListener('beat-swarm:subboard-chain-transition', (e) => {
+            const fromId = String(e?.detail?.fromId || '').trim();
+            const toId = String(e?.detail?.toId || '').trim();
+            if (!fromId || !toId) return;
+            triggerConnectorPulse(fromId, toId);
+        });
+    }
+} catch {}
+
 const g_outlineSyncQueue = new Set();
 let g_outlineSyncRaf = 0;
 // Pulse bookkeeping (avoid per-pulse timeouts)
