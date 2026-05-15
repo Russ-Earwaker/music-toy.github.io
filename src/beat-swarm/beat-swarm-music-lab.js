@@ -72,6 +72,22 @@ function normalizeSourceSystem(sourceSystem, actionType = '') {
   return 'unknown';
 }
 
+function deriveFoundationPlayerBassTrace(foundationPhraseIdLike = '', foundationPatternKeyLike = '', barIndexLike = 0) {
+  const phraseId = String(foundationPhraseIdLike || '').trim().toLowerCase();
+  const match = /^player_bass_drive_(\d+)_([01]+)$/.exec(phraseId);
+  if (!match) return null;
+  const barIndex = clampInt(barIndexLike, 0, 0);
+  const patternKey = String(foundationPatternKeyLike || match[2] || '').trim().toLowerCase();
+  const interpretationMode = barIndex >= 12 && barIndex < 20 ? 'literal_statement' : 'director_riff';
+  return {
+    foundationPlayerThemeSource: 'bassDrive',
+    foundationRawPatternKey: interpretationMode === 'literal_statement' ? patternKey : '',
+    foundationShapedPatternKey: patternKey,
+    foundationInterpretationMode: interpretationMode,
+    foundationPhrasePartIndex: clampInt(match[1], 0, 0),
+  };
+}
+
 function normalizeEnemyType(enemyType, sourceSystem = '', actionType = '') {
   const explicit = String(enemyType || '').trim().toLowerCase();
   if (explicit) return explicit;
@@ -223,6 +239,39 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const arrangementSupportStepBudget = clampInt(context?.arrangementSupportStepBudget ?? payload?.arrangementSupportStepBudget, 0, 0);
   const foundationPatternKey = String(context?.foundationPatternKey ?? payload?.foundationPatternKey ?? '').trim().toLowerCase();
   const foundationPhraseId = String(context?.foundationPhraseId ?? payload?.foundationPhraseId ?? '').trim().toLowerCase();
+  const derivedFoundationBassTrace = deriveFoundationPlayerBassTrace(foundationPhraseId, foundationPatternKey, barIndex);
+  const foundationPlayerThemeSource = String(
+    String(context?.foundationPlayerThemeSource ?? '').trim()
+    || String(payload?.foundationPlayerThemeSource ?? '').trim()
+    || derivedFoundationBassTrace?.foundationPlayerThemeSource
+    || ''
+  ).trim();
+  const foundationRawPatternKey = String(
+    String(context?.foundationRawPatternKey ?? '').trim()
+    || String(payload?.foundationRawPatternKey ?? '').trim()
+    || derivedFoundationBassTrace?.foundationRawPatternKey
+    || ''
+  ).trim().toLowerCase();
+  const foundationShapedPatternKey = String(
+    String(context?.foundationShapedPatternKey ?? '').trim()
+    || String(payload?.foundationShapedPatternKey ?? '').trim()
+    || derivedFoundationBassTrace?.foundationShapedPatternKey
+    || foundationPatternKey
+    || ''
+  ).trim().toLowerCase();
+  const foundationInterpretationMode = String(
+    String(context?.foundationInterpretationMode ?? '').trim()
+    || String(payload?.foundationInterpretationMode ?? '').trim()
+    || derivedFoundationBassTrace?.foundationInterpretationMode
+    || ''
+  ).trim().toLowerCase();
+  const foundationPhrasePartIndex = clampInt(
+    derivedFoundationBassTrace?.foundationPhrasePartIndex
+    ?? context?.foundationPhrasePartIndex
+    ?? payload?.foundationPhrasePartIndex,
+    0,
+    0
+  );
   const intensityAuditionSection = String(context?.intensityAuditionSection ?? payload?.intensityAuditionSection ?? '').trim().toLowerCase();
   const intensityCadenceStepAdmitted = context?.intensityCadenceStepAdmitted === true
     ? true
@@ -298,6 +347,11 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     arrangementSupportStepBudget,
     foundationPatternKey,
     foundationPhraseId,
+    foundationPlayerThemeSource,
+    foundationRawPatternKey,
+    foundationShapedPatternKey,
+    foundationInterpretationMode,
+    foundationPhrasePartIndex,
     intensityAuditionSection,
     intensityCadenceStepAdmitted,
     intensityCadenceReason,
@@ -3778,6 +3832,10 @@ function collectFoundationVariationTrace(events) {
   });
   const byPatternKey = {};
   const byPhraseId = {};
+  const byPlayerThemeSource = {};
+  const byRawPatternKey = {};
+  const byShapedPatternKey = {};
+  const byInterpretationMode = {};
   const inc = (target, keyLike) => {
     const key = String(keyLike || '').trim().toLowerCase() || 'unknown';
     target[key] = (target[key] || 0) + 1;
@@ -3785,11 +3843,19 @@ function collectFoundationVariationTrace(events) {
   for (const ev of foundationEvents) {
     inc(byPatternKey, ev?.foundationPatternKey);
     inc(byPhraseId, ev?.foundationPhraseId);
+    inc(byPlayerThemeSource, ev?.foundationPlayerThemeSource);
+    inc(byRawPatternKey, ev?.foundationRawPatternKey);
+    inc(byShapedPatternKey, ev?.foundationShapedPatternKey);
+    inc(byInterpretationMode, ev?.foundationInterpretationMode);
   }
   return {
     count: foundationEvents.length,
     byPatternKey,
     byPhraseId,
+    byPlayerThemeSource,
+    byRawPatternKey,
+    byShapedPatternKey,
+    byInterpretationMode,
     distinctPatternKeyCount: Object.keys(byPatternKey).filter((key) => key !== 'unknown').length,
     distinctPhraseIdCount: Object.keys(byPhraseId).filter((key) => key !== 'unknown').length,
     sample: foundationEvents.slice(0, 24).map((ev) => ({
@@ -3798,6 +3864,11 @@ function collectFoundationVariationTrace(events) {
       note: String(ev?.noteResolved || ev?.note || '').trim(),
       foundationPatternKey: String(ev?.foundationPatternKey || '').trim().toLowerCase(),
       foundationPhraseId: String(ev?.foundationPhraseId || '').trim().toLowerCase(),
+      foundationPlayerThemeSource: String(ev?.foundationPlayerThemeSource || '').trim(),
+      foundationRawPatternKey: String(ev?.foundationRawPatternKey || '').trim().toLowerCase(),
+      foundationShapedPatternKey: String(ev?.foundationShapedPatternKey || '').trim().toLowerCase(),
+      foundationInterpretationMode: String(ev?.foundationInterpretationMode || '').trim().toLowerCase(),
+      foundationPhrasePartIndex: clampInt(ev?.foundationPhrasePartIndex, 0, 0),
     })),
   };
 }

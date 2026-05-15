@@ -174,6 +174,40 @@ export function executePerformedBeatEventRuntime(options = null) {
             || sourceEnemy?.foundationPatternKey
             || ''
         ).trim().toLowerCase(),
+        foundationPlayerThemeSource: String(
+          base?.foundationPlayerThemeSource
+            || payload?.foundationPlayerThemeSource
+            || sourceGroup?.foundationPlayerThemeSource
+            || sourceEnemy?.foundationPlayerThemeSource
+            || ''
+        ).trim(),
+        foundationRawPatternKey: String(
+          base?.foundationRawPatternKey
+            || payload?.foundationRawPatternKey
+            || sourceGroup?.foundationRawPatternKey
+            || sourceEnemy?.foundationRawPatternKey
+            || ''
+        ).trim().toLowerCase(),
+        foundationShapedPatternKey: String(
+          base?.foundationShapedPatternKey
+            || payload?.foundationShapedPatternKey
+            || sourceGroup?.foundationShapedPatternKey
+            || sourceEnemy?.foundationShapedPatternKey
+            || ''
+        ).trim().toLowerCase(),
+        foundationInterpretationMode: String(
+          base?.foundationInterpretationMode
+            || payload?.foundationInterpretationMode
+            || sourceGroup?.foundationInterpretationMode
+            || sourceEnemy?.foundationInterpretationMode
+            || ''
+        ).trim().toLowerCase(),
+        foundationPhrasePartIndex: Math.max(0, Math.trunc(Number(
+          base?.foundationPhrasePartIndex
+            ?? payload?.foundationPhrasePartIndex
+            ?? sourceGroup?.foundationPhrasePartIndex
+            ?? sourceEnemy?.foundationPhrasePartIndex
+        ) || 0)),
         leadFamily: String(
           base?.leadFamily
             || payload?.leadFamily

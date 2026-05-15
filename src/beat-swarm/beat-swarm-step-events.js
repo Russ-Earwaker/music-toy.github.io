@@ -480,6 +480,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
                 foundationLaneId: String(lane.laneId || 'foundation_lane'),
                 foundationPhraseId: String(lane.phraseId || 'foundation_fallback'),
                 foundationPatternKey: String(lane.patternKey || ''),
+                foundationPlayerThemeSource: String(lane.playerThemeSource || ''),
+                foundationRawPatternKey: String(lane.rawPatternKey || ''),
+                foundationShapedPatternKey: String(lane.shapedPatternKey || lane.patternKey || ''),
+                foundationInterpretationMode: String(lane.interpretationMode || ''),
+                foundationPhrasePartIndex: Math.max(0, Math.trunc(Number(lane.phrasePartIndex) || 0)),
                 foundationStepIndex: Math.max(0, Math.trunc(Number(lane.stepIndex) || 0)),
               }
               : {};
@@ -1008,14 +1013,27 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const musicLaneId = String(payload.musicLaneId || '').trim().toLowerCase();
     const laneDrivenPrimaryLoop = musicLaneId === 'primary_loop_lane';
     const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
+    const foundationInterpretationMode = String(payload.foundationInterpretationMode || '').trim().toLowerCase();
+    const foundationPhraseId = String(payload.foundationPhraseId || '').trim().toLowerCase();
     const safeLayer = (layer === 'foundation' || layer === 'loops' || layer === 'sparkle') ? layer : 'sparkle';
     const safeProminence = (
       prominence === 'suppressed' || prominence === 'trace' || prominence === 'quiet' || prominence === 'full'
     ) ? prominence : 'full';
+    const isPlayerBassLiteralStatement = safeLayer === 'foundation'
+      && (
+        foundationInterpretationMode === 'literal_statement'
+        || (
+          !foundationInterpretationMode
+          && foundationPhraseId.startsWith('player_bass_drive_')
+          && barIndex >= 12
+          && barIndex < 20
+        )
+      );
     const foundationAssignedBefore = prominenceState.foundationAssigned === true;
     const deconflictedProminence = (() => {
       if (!playerLikelyAudible) return safeProminence;
       if (safeProminence !== 'full' && safeProminence !== 'quiet') return safeProminence;
+      if (isPlayerBassLiteralStatement) return 'full';
       // Preserve the tune skeleton under player fire: foundation stays anchored,
       // one loop voice can remain quiet, sparkle stays background-only.
       if (safeLayer === 'foundation' && safeProminence === 'full') return 'full';
@@ -1126,6 +1144,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const callResponseLane = String(payload.callResponseLane || '').trim().toLowerCase();
     const enemyType = String(ev?.enemyType || payload?.enemyType || '').trim().toLowerCase();
     const musicLaneId = String(payload.musicLaneId || '').trim().toLowerCase();
+    const foundationInterpretationMode = String(payload.foundationInterpretationMode || '').trim().toLowerCase();
+    const foundationPhraseId = String(payload.foundationPhraseId || '').trim().toLowerCase();
     const directorLane = getDirectorLanePlanForMusicLane(musicLaneId);
     const isPrimaryLoopLaneEvent = musicLaneId === 'primary_loop_lane';
     const continuityId = String(payload.continuityId || '').trim().toLowerCase();
@@ -1155,6 +1175,16 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const foregroundLockActive = isCompetingForegroundLoop && currentForegroundHeldLoops < foregroundLockLoops;
     const isFoundationStructuralStep = safeLayer === 'foundation'
       && (foundationStepIndexNow === 0 || foundationStepIndexNow === 3 || foundationStepIndexNow === 4);
+    const isPlayerBassLiteralStatement = safeLayer === 'foundation'
+      && (
+        foundationInterpretationMode === 'literal_statement'
+        || (
+          !foundationInterpretationMode
+          && foundationPhraseId.startsWith('player_bass_drive_')
+          && barIndex >= 12
+          && barIndex < 20
+        )
+      );
     let score = 0;
     if (safeLayer === 'foundation') score += 1000;
     else if (safeLayer === 'loops') score += 700;
@@ -1235,6 +1265,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       foregroundLockActive,
       isEstablishingForegroundLoop,
       isFoundationStructuralStep,
+      isPlayerBassLiteralStatement,
       isPrimaryLoopLaneEvent,
       callResponseLane,
       musicVoiceKey,
@@ -1359,6 +1390,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const finalProminence = (() => {
       if (selectedIds.has(item.idx)) {
         if (item.layer === 'foundation') {
+          if (item.isPlayerBassLiteralStatement) return 'full';
           if (item.isFoundationStructuralStep) return 'full';
           if (!playerLikelyAudible && !primaryLoopForegroundProtected) return 'full';
           return 'quiet';

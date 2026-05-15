@@ -3809,6 +3809,11 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
       foundationLaneId: foundationLane.laneId,
       foundationPhraseId: foundationLane.phraseId,
       foundationPatternKey: foundationLane.patternKey,
+      foundationPlayerThemeSource: foundationLane.playerThemeSource,
+      foundationRawPatternKey: foundationLane.rawPatternKey,
+      foundationShapedPatternKey: foundationLane.shapedPatternKey,
+      foundationInterpretationMode: foundationLane.interpretationMode,
+      foundationPhrasePartIndex: foundationLane.phrasePartIndex,
       foundationStepIndex: foundationLane.stepIndex,
       bassKeepaliveInjected: true,
       keepaliveOwnerId: ownerId,
@@ -7438,6 +7443,96 @@ function cloneFoundationPhraseEntry(phraseLike = null, fallbackId = 'foundation_
     patternKey: buildFoundationPhrasePatternKey(steps),
   };
 }
+function getPlayerSimpleRhythmMotifPatterns(themeId = '') {
+  const theme = getPlayerMusicTheme(themeId);
+  const data = theme?.toyType === 'simpleRhythm' && theme.data && typeof theme.data === 'object' ? theme.data : null;
+  if (!data) return [];
+  const steps = Math.max(1, Math.min(WEAPON_TUNE_STEPS, Math.trunc(Number(data.steps) || WEAPON_TUNE_STEPS)));
+  const patterns = [];
+  if (Array.isArray(data.patternChain)) {
+    for (const pattern of data.patternChain) {
+      const next = Array.from({ length: steps }, (_, idx) => !!(Array.isArray(pattern) ? pattern[idx] : false));
+      if (next.some(Boolean)) patterns.push(cloneFoundationPhraseSteps(next));
+    }
+  }
+  if (!patterns.length && Array.isArray(data.active)) {
+    const active = Array.from({ length: steps }, (_, idx) => !!data.active[idx]);
+    if (active.some(Boolean)) patterns.push(cloneFoundationPhraseSteps(active));
+  }
+  return patterns;
+}
+function shapePlayerBassDriveStepsForFoundation(baseStepsLike = null, sectionIdLike = '', options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  if (opts.literalStatement === true) {
+    const literal = cloneFoundationPhraseSteps(baseStepsLike);
+    if (!literal.some(Boolean)) literal[0] = true;
+    return literal;
+  }
+  const sectionId = String(sectionIdLike || '').trim().toLowerCase();
+  const raw = cloneFoundationPhraseSteps(baseStepsLike);
+  const shaped = raw.slice();
+  shaped[0] = true;
+  const hitCount = () => shaped.reduce((sum, step) => sum + (step ? 1 : 0), 0);
+  const enableFirst = (indices = []) => {
+    for (const idx of indices) {
+      if (hitCount() >= 4) break;
+      shaped[Math.max(0, Math.min(shaped.length - 1, Math.trunc(Number(idx) || 0)))] = true;
+    }
+  };
+  const thinTo = (maxHits, preferred = []) => {
+    const keep = new Set([0]);
+    for (const idx of preferred) {
+      if (keep.size >= maxHits) break;
+      const safeIdx = Math.max(0, Math.min(shaped.length - 1, Math.trunc(Number(idx) || 0)));
+      if (raw[safeIdx]) keep.add(safeIdx);
+    }
+    for (let i = 1; i < shaped.length && keep.size < maxHits; i += 1) {
+      if (raw[i]) keep.add(i);
+    }
+    for (let i = 0; i < shaped.length; i += 1) shaped[i] = keep.has(i);
+  };
+  if (sectionId.includes('release')) {
+    thinTo(2, [4, 2, 6]);
+  } else if (sectionId.includes('low') || sectionId.includes('settle')) {
+    thinTo(3, [4, 2, 6]);
+  } else if (sectionId.includes('build')) {
+    enableFirst([4, 2, 6]);
+  } else if (sectionId.includes('peak')) {
+    enableFirst([4, 2, 6, 3, 7]);
+  } else if (hitCount() < 2) {
+    enableFirst([4]);
+  }
+  if (!shaped.some(Boolean)) shaped[0] = true;
+  return shaped;
+}
+function getPlayerBassDriveFoundationPhrase(barIndex = 0, sectionIdLike = '') {
+  const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const pacingState = getCurrentPacingStateName();
+  if (isIntroPacingStateName(pacingState)) return null;
+  const introStage = String(getUnifiedIntroStage(bar, bar * Math.max(1, COMPOSER_BEATS_PER_BAR)) || '').trim().toLowerCase();
+  if (introStage && introStage !== 'none') return null;
+  const patterns = getPlayerSimpleRhythmMotifPatterns('bassDrive');
+  if (!patterns.length) return null;
+  const sectionId = String(sectionIdLike || 'body').trim().toLowerCase() || 'body';
+  const phrasePartIndex = Math.floor(bar / 4) % patterns.length;
+  const rawSteps = patterns[phrasePartIndex] || patterns[0];
+  const statementWindow = bar >= 12 && bar < 20;
+  const steps = shapePlayerBassDriveStepsForFoundation(rawSteps, sectionId, { literalStatement: statementWindow });
+  const rawPatternKey = buildFoundationPhrasePatternKey(rawSteps);
+  const patternKey = buildFoundationPhrasePatternKey(steps);
+  return {
+    id: `player_bass_drive_${phrasePartIndex}_${patternKey}`,
+    family: 'player_bass_drive',
+    source: 'player_theme',
+    themeId: 'bassDrive',
+    phrasePartIndex,
+    rawPatternKey,
+    shapedPatternKey: patternKey,
+    interpretationMode: statementWindow ? 'literal_statement' : 'director_riff',
+    steps,
+    patternKey,
+  };
+}
 function getLevel1IntensityFoundationPhrase(sectionLike = '', sectionBarLike = 0) {
   const section = String(sectionLike || '').trim().toLowerCase();
   const sectionBar = Math.max(0, Math.trunc(Number(sectionBarLike) || 0));
@@ -7558,6 +7653,13 @@ function setFoundationLanePhrase(phraseLike = null, barIndex = 0, options = null
   const prevPhraseId = String(musicLayerRuntime.foundationPhraseId || '').trim().toLowerCase();
   const prevPatternKey = buildFoundationPhrasePatternKey(musicLayerRuntime.foundationPhraseSteps);
   const nextPatternKey = buildFoundationPhrasePatternKey(steps);
+  const playerThemeSource = String(phrase?.source || '').trim().toLowerCase() === 'player_theme'
+    ? String(phrase?.themeId || '').trim()
+    : '';
+  const rawPatternKey = String(phrase?.rawPatternKey || '').trim();
+  const shapedPatternKey = String(phrase?.shapedPatternKey || nextPatternKey).trim();
+  const interpretationMode = String(phrase?.interpretationMode || '').trim().toLowerCase();
+  const phrasePartIndex = Math.max(0, Math.trunc(Number(phrase?.phrasePartIndex) || 0));
   const changed = (!!prevPhraseId && prevPhraseId !== nextPhraseId) || (!!prevPatternKey && prevPatternKey !== nextPatternKey);
   const lockDurationBars = getFoundationPhraseLockDurationBars(`${nextPhraseId}|${phrase.family}|${nextPatternKey}|${safeBar}`);
   musicLayerRuntime.foundationLaneId = 'foundation_lane';
@@ -7576,6 +7678,11 @@ function setFoundationLanePhrase(phraseLike = null, barIndex = 0, options = null
     foundationLane.phraseId = nextPhraseId;
     foundationLane.phraseFamily = String(phrase?.family || '').trim().toLowerCase();
     foundationLane.patternKey = nextPatternKey;
+    foundationLane.playerThemeSource = playerThemeSource;
+    foundationLane.rawPatternKey = rawPatternKey;
+    foundationLane.shapedPatternKey = shapedPatternKey;
+    foundationLane.interpretationMode = interpretationMode;
+    foundationLane.phrasePartIndex = phrasePartIndex;
     foundationLane.identityChangeReason = normalizeLaneIdentityChangeReason(
       opts?.identityChangeReason || (changed ? 'phrase_boundary_mutation' : '')
     );
@@ -7587,7 +7694,13 @@ function setFoundationLanePhrase(phraseLike = null, barIndex = 0, options = null
   return {
     laneId: musicLayerRuntime.foundationLaneId,
     phraseId: nextPhraseId,
+    family: String(phrase?.family || '').trim().toLowerCase(),
     steps: steps.slice(),
+    playerThemeSource,
+    rawPatternKey,
+    shapedPatternKey,
+    interpretationMode,
+    phrasePartIndex,
     startBar: safeBar,
     lockedUntilBar: musicLayerRuntime.foundationPhraseLockedUntilBar,
   };
@@ -7632,6 +7745,11 @@ function ensureFoundationLanePlan(barIndex = 0, options = null) {
       phraseId: introPhraseId,
       family: String(introDrumProfile.phraseFamily || 'intro_drum_loop').trim().toLowerCase(),
       steps: introSteps,
+      playerThemeSource: '',
+      rawPatternKey: '',
+      shapedPatternKey: introPatternKey,
+      interpretationMode: 'intro_set_piece',
+      phrasePartIndex: 0,
       startBar: musicLayerRuntime.foundationPhraseStartBar,
       lockedUntilBar: musicLayerRuntime.foundationPhraseLockedUntilBar,
     };
@@ -7650,12 +7768,27 @@ function ensureFoundationLanePlan(barIndex = 0, options = null) {
     : (String(composerRuntime.currentSectionId || 'default').trim().toLowerCase() || 'default');
   const previousSectionId = String(foundationLane?.sectionId || '').trim().toLowerCase();
   const intensityStageChanged = !!intensityAuditionSection && previousSectionId !== currentSectionId;
+  const playerBassPhrase = getPlayerBassDriveFoundationPhrase(bar, currentSectionId);
+  const currentIsPlayerBass = String(currentPhraseId || '').startsWith('player_bass_drive_')
+    || String(currentFamily || '').trim().toLowerCase() === 'player_bass_drive';
+  if (playerBassPhrase && (!currentIsPlayerBass || opts.forceRefresh || intensityStageChanged || bar > lockedUntilBar)) {
+    if (foundationLane) foundationLane.phraseFamily = String(playerBassPhrase.family || '').trim().toLowerCase();
+    return setFoundationLanePhrase(playerBassPhrase, bar, {
+      identityChangeReason: currentIsPlayerBass ? 'phrase_boundary_mutation' : 'section_restatement',
+      sectionId: currentSectionId,
+    });
+  }
   if (currentPhraseId && currentSteps.some(Boolean) && !opts.forceRefresh && !intensityStageChanged && bar <= lockedUntilBar) {
     return {
       laneId: String(musicLayerRuntime.foundationLaneId || 'foundation_lane'),
       phraseId: currentPhraseId,
       family: currentFamily,
       steps: currentSteps,
+      playerThemeSource: String(foundationLane?.playerThemeSource || '').trim(),
+      rawPatternKey: String(foundationLane?.rawPatternKey || '').trim(),
+      shapedPatternKey: String(foundationLane?.shapedPatternKey || currentPatternKey).trim(),
+      interpretationMode: String(foundationLane?.interpretationMode || '').trim().toLowerCase(),
+      phrasePartIndex: Math.max(0, Math.trunc(Number(foundationLane?.phrasePartIndex) || 0)),
       startBar: Math.max(0, Math.trunc(Number(musicLayerRuntime.foundationPhraseStartBar) || 0)),
       lockedUntilBar,
     };
@@ -7704,10 +7837,16 @@ function getFoundationLaneSnapshot(stepIndex = 0, barIndex = 0) {
   return {
     laneId: String(plan?.laneId || 'foundation_lane'),
     phraseId: String(plan?.phraseId || 'foundation_fallback').trim().toLowerCase() || 'foundation_fallback',
+    family: String(plan?.family || '').trim().toLowerCase(),
     steps,
     stepIndex: localStep,
     isActiveStep: !!steps[localStep],
     patternKey: steps.map((v) => (v ? '1' : '0')).join(''),
+    playerThemeSource: String(plan?.playerThemeSource || '').trim(),
+    rawPatternKey: String(plan?.rawPatternKey || '').trim(),
+    shapedPatternKey: String(plan?.shapedPatternKey || plan?.patternKey || '').trim(),
+    interpretationMode: String(plan?.interpretationMode || '').trim().toLowerCase(),
+    phrasePartIndex: Math.max(0, Math.trunc(Number(plan?.phrasePartIndex) || 0)),
     startBar: Math.max(0, Math.trunc(Number(plan?.startBar) || 0)),
     lockedUntilBar: Math.max(0, Math.trunc(Number(plan?.lockedUntilBar) || 0)),
   };
@@ -7730,9 +7869,19 @@ function applyFoundationLaneToPerformer(enemyLike = null, groupLike = null, cont
   group.foundationLaneId = lane.laneId;
   group.foundationPhraseId = lane.phraseId;
   group.foundationPatternKey = lane.patternKey;
+  group.foundationPlayerThemeSource = lane.playerThemeSource;
+  group.foundationRawPatternKey = lane.rawPatternKey;
+  group.foundationShapedPatternKey = lane.shapedPatternKey;
+  group.foundationInterpretationMode = lane.interpretationMode;
+  group.foundationPhrasePartIndex = lane.phrasePartIndex;
   enemy.foundationLaneId = lane.laneId;
   enemy.foundationPhraseId = lane.phraseId;
   enemy.foundationPatternKey = lane.patternKey;
+  enemy.foundationPlayerThemeSource = lane.playerThemeSource;
+  enemy.foundationRawPatternKey = lane.rawPatternKey;
+  enemy.foundationShapedPatternKey = lane.shapedPatternKey;
+  enemy.foundationInterpretationMode = lane.interpretationMode;
+  enemy.foundationPhrasePartIndex = lane.phrasePartIndex;
   if (String(enemy.enemyType || '').trim().toLowerCase() === 'drawsnake') {
     enemy.drawsnakeSteps = steps.slice();
   }
@@ -11490,6 +11639,48 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
   if (!logContext.musicLayer && derivedMusicLayer) logContext.musicLayer = derivedMusicLayer;
   if (!logContext.musicVoiceKey && derivedMusicVoiceKey) logContext.musicVoiceKey = derivedMusicVoiceKey;
   if (!logContext.callResponseLane && derivedCallResponseLane) logContext.callResponseLane = derivedCallResponseLane;
+  const derivedFoundationLane = (() => {
+    const laneId = String(
+      input?.musicLaneId
+      || input?.foundationLaneId
+      || created?.payload?.musicLaneId
+      || created?.payload?.foundationLaneId
+      || derivedMusicLaneId
+      || protectedLaneClaim
+      || ''
+    ).trim().toLowerCase();
+    const role = normalizeSwarmRole(created?.role || input?.role || created?.payload?.musicRole || roleKey || '', '');
+    const layer = String(input?.musicLayer || created?.payload?.musicLayer || derivedMusicLayer || '').trim().toLowerCase();
+    if (laneId !== 'foundation_lane' && role !== BEAT_EVENT_ROLES.BASS && layer !== 'foundation') return null;
+    return getMusicLaneRuntimeEntry('foundation_lane') || null;
+  })();
+  if (derivedFoundationLane) {
+    if (!String(logContext.foundationPhraseId || '').trim()) {
+      logContext.foundationPhraseId = String(derivedFoundationLane.phraseId || '').trim().toLowerCase();
+    }
+    if (!String(logContext.foundationPatternKey || '').trim()) {
+      logContext.foundationPatternKey = String(derivedFoundationLane.patternKey || '').trim().toLowerCase();
+    }
+    if (!String(logContext.foundationPlayerThemeSource || '').trim()) {
+      logContext.foundationPlayerThemeSource = String(derivedFoundationLane.playerThemeSource || '').trim();
+    }
+    if (!String(logContext.foundationRawPatternKey || '').trim()) {
+      logContext.foundationRawPatternKey = String(derivedFoundationLane.rawPatternKey || '').trim().toLowerCase();
+    }
+    if (!String(logContext.foundationShapedPatternKey || '').trim()) {
+      logContext.foundationShapedPatternKey = String(
+        derivedFoundationLane.shapedPatternKey
+        || derivedFoundationLane.patternKey
+        || ''
+      ).trim().toLowerCase();
+    }
+    if (!String(logContext.foundationInterpretationMode || '').trim()) {
+      logContext.foundationInterpretationMode = String(derivedFoundationLane.interpretationMode || '').trim().toLowerCase();
+    }
+    if (!(Math.max(0, Math.trunc(Number(logContext.foundationPhrasePartIndex) || 0)) > 0)) {
+      logContext.foundationPhrasePartIndex = Math.max(0, Math.trunc(Number(derivedFoundationLane.phrasePartIndex) || 0));
+    }
+  }
   const currentLevel1Contract = (() => {
     try {
       const plan = ensureSwarmDirector().getLanePlan?.() || null;
@@ -11566,6 +11757,30 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
       }
       if (!String(created.payload.musicProfileSourceType || '').trim() && derivedMusicProfileSourceType) {
         created.payload.musicProfileSourceType = derivedMusicProfileSourceType;
+      }
+      if (!String(created.payload.foundationPhraseId || '').trim() && String(logContext.foundationPhraseId || '').trim()) {
+        created.payload.foundationPhraseId = String(logContext.foundationPhraseId).trim().toLowerCase();
+      }
+      if (!String(created.payload.foundationPatternKey || '').trim() && String(logContext.foundationPatternKey || '').trim()) {
+        created.payload.foundationPatternKey = String(logContext.foundationPatternKey).trim().toLowerCase();
+      }
+      if (!String(created.payload.foundationPlayerThemeSource || '').trim() && String(logContext.foundationPlayerThemeSource || '').trim()) {
+        created.payload.foundationPlayerThemeSource = String(logContext.foundationPlayerThemeSource).trim();
+      }
+      if (!String(created.payload.foundationRawPatternKey || '').trim() && String(logContext.foundationRawPatternKey || '').trim()) {
+        created.payload.foundationRawPatternKey = String(logContext.foundationRawPatternKey).trim().toLowerCase();
+      }
+      if (!String(created.payload.foundationShapedPatternKey || '').trim() && String(logContext.foundationShapedPatternKey || '').trim()) {
+        created.payload.foundationShapedPatternKey = String(logContext.foundationShapedPatternKey).trim().toLowerCase();
+      }
+      if (!String(created.payload.foundationInterpretationMode || '').trim() && String(logContext.foundationInterpretationMode || '').trim()) {
+        created.payload.foundationInterpretationMode = String(logContext.foundationInterpretationMode).trim().toLowerCase();
+      }
+      if (
+        !(Math.max(0, Math.trunc(Number(created.payload.foundationPhrasePartIndex) || 0)) > 0)
+        && (Math.max(0, Math.trunc(Number(logContext.foundationPhrasePartIndex) || 0)) > 0)
+      ) {
+        created.payload.foundationPhrasePartIndex = Math.max(0, Math.trunc(Number(logContext.foundationPhrasePartIndex) || 0));
       }
       if (!String(created.payload.formationRole || '').trim() && derivedFormationRole) {
         created.payload.formationRole = derivedFormationRole;
