@@ -111,18 +111,32 @@ Core principle:
 
 The player should not author the full score. They should provide short motifs and rhythms that the existing director/composer can later interpret, mutate, simplify, intensify, and orchestrate.
 
+Authoring rule:
+
+- Beat Swarm theme boards must obey the same toy rules as the main Rhythmake interface.
+- Random/default generation should use the normal toy methodology: musically guided by default, but still editable by the player.
+- Beat Swarm should preserve the authored toy data, including intentional out-of-scale edits.
+- Musical cleanup, scale correction, riffing, harmonization, intensity shaping, and orchestration belong to the director/runtime interpretation layer, not to hidden changes in the visible toys.
+- The score should occasionally expose raw authored material so players can recognize their direct impact.
+
 This should start as UI/data support, not full runtime integration.
 
 ## Theme Slots
 
 Use four player music theme slots:
 
-| Slot | Toy Type | Lane Role | Purpose |
-| --- | --- | --- | --- |
-| Lead Theme | Drawgrid | Lead / Main Hook | Main melody, player identity, call/response source |
-| Bass Drive | Simple Rhythm | Foundation / Bass Rhythm | Pumping bass rhythm / engine groove |
-| Accent Rhythm | Simple Rhythm | Accent / Percussion / Stabs | Attack accents and phrase punctuation |
-| Power Theme | Drawgrid | Powered-Up Lead | Featured super-mode / player dominance motif |
+| Slot | Toy Type | Motif Length | Lane Role | Purpose |
+| --- | --- | --- | --- | --- |
+| Lead Theme | Drawgrid | 4 toys | Lead / Main Hook | Main melody, player identity, call/response source |
+| Bass Drive | Simple Rhythm | 2 toys | Foundation / Bass Rhythm | Pumping bass rhythm / engine groove |
+| Accent Rhythm | Simple Rhythm | 2 toys | Accent / Percussion / Stabs | Attack accents and phrase punctuation |
+| Power Theme | Drawgrid | 2 toys | Powered-Up Lead | Featured super-mode / player dominance motif |
+
+Motif length rule:
+
+- Lead Theme is the only extended phrase by default so players can author a recognizable call / continuation / answer / turnaround.
+- Weapon Rhythm, Bass Drive, Accent Rhythm, and Power Theme stay at 2 toys so functional layers remain readable and do not compete with the main hook.
+- Longer runtime variation should come from the director transforming these motifs, not from asking every slot to contain a long authored phrase.
 
 Initial implementation may focus deepest behavior on the first two slots:
 

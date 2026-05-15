@@ -7346,6 +7346,14 @@ body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy=
   width: 100% !important;
   flex: 1 1 auto !important;
 }
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="loopgrid"] .toy-footer {
+  display: flex !important;
+  padding: 10px !important;
+}
+body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="loopgrid"] .toy-volwrap {
+  width: 100% !important;
+  flex: 1 1 auto !important;
+}
 body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-title,
 body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-instrument,
 body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] [data-action] {

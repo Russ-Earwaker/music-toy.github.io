@@ -2057,7 +2057,11 @@ function bootDrawGrids(){
 }
 function getSequencedToys() {
   // Find all panels that have been initialized with a step function.
-  return Array.from(document.querySelectorAll('.toy-panel')).filter(p => typeof p.__sequencerStep === 'function');
+  return Array.from(document.querySelectorAll('.toy-panel')).filter(p => {
+    if (typeof p.__sequencerStep !== 'function') return false;
+    if (String(p?.dataset?.beatSwarmSubboard || '') === '1') return false;
+    return true;
+  });
 }
 
 const toyInitializers = {

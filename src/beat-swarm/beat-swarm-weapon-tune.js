@@ -3,6 +3,11 @@ export function createBeatSwarmWeaponTuneTools(options = {}) {
   const drawgridTuneNotePalette = Array.isArray(options.drawgridTuneNotePalette)
     ? options.drawgridTuneNotePalette.slice()
     : [];
+  const allowedRandomRows = Array.isArray(options.allowedRandomRows)
+    ? options.allowedRandomRows
+      .map((v) => Math.trunc(Number(v)))
+      .filter((v, i, arr) => v >= 0 && v < drawgridTuneNotePalette.length && arr.indexOf(v) === i)
+    : [];
   const maxWeaponSlots = Math.max(1, Math.trunc(Number(options.maxWeaponSlots) || 3));
   const weaponTuneChainLength = Math.max(1, Math.trunc(Number(options.weaponTuneChainLength) || 2));
   const weaponLoadout = Array.isArray(options.weaponLoadout) ? options.weaponLoadout : [];
@@ -26,6 +31,15 @@ export function createBeatSwarmWeaponTuneTools(options = {}) {
     return { kind: 'drawgrid', steps, notes, active, list, disabled };
   }
 
+  function pickRandomTuneRow(rowCount) {
+    const rows = Math.max(1, Math.trunc(Number(rowCount) || drawgridTuneNotePalette.length || 1));
+    const pool = allowedRandomRows.filter((row) => row >= 0 && row < rows);
+    if (pool.length) {
+      return pool[Math.max(0, Math.min(pool.length - 1, Math.trunc(Math.random() * pool.length)))] || 0;
+    }
+    return Math.max(0, Math.min(rows - 1, Math.trunc(Math.random() * rows)));
+  }
+
   function createRandomWeaponTune() {
     const base = createDefaultWeaponTune();
     const steps = Math.max(1, Math.trunc(Number(base.steps) || weaponTuneSteps));
@@ -36,14 +50,14 @@ export function createBeatSwarmWeaponTuneTools(options = {}) {
     const disabled = Array.from({ length: steps }, () => []);
     for (let s = 0; s < steps; s++) {
       if (Math.random() >= 0.62) continue;
-      const r = Math.max(0, Math.min(rows - 1, Math.trunc(Math.random() * rows)));
+      const r = pickRandomTuneRow(rows);
       active[s] = true;
       // Startup tune is monophonic so projectile count maps 1:1 to active notes.
       list[s] = [r];
     }
     if (!active.some(Boolean)) {
       const s = Math.max(0, Math.min(steps - 1, Math.trunc(Math.random() * steps)));
-      const r = Math.max(0, Math.min(rows - 1, Math.trunc(Math.random() * rows)));
+      const r = pickRandomTuneRow(rows);
       active[s] = true;
       list[s] = [r];
     }
@@ -62,7 +76,11 @@ export function createBeatSwarmWeaponTuneTools(options = {}) {
       for (let s = 0; s < steps; s++) {
         const col = Array.isArray(rawTune.cells[s]) ? rawTune.cells[s] : [];
         const picked = [];
-        for (let r = 0; r < Math.min(notes.length, col.length); r++) if (col[r]) picked.push(r);
+        for (let r = 0; r < Math.min(notes.length, col.length); r++) {
+          if (!col[r]) continue;
+          const row = r;
+          if (!picked.includes(row)) picked.push(row);
+        }
         if (picked.length) {
           active[s] = true;
           list[s] = picked;
@@ -79,12 +97,14 @@ export function createBeatSwarmWeaponTuneTools(options = {}) {
         const rowsRaw = Array.isArray(srcList?.[srcCol]) ? srcList[srcCol] : [];
         const rows = rowsRaw
           .map((v) => Math.trunc(Number(v)))
-          .filter((v) => v >= 0 && v < notes.length);
+          .filter((v) => v >= 0 && v < notes.length)
+          .filter((v, i, arr) => arr.indexOf(v) === i);
         active[s] = on && rows.length > 0;
         list[s] = rows;
         disabled[s] = (Array.isArray(srcDisabled?.[srcCol]) ? srcDisabled[srcCol] : [])
           .map((v) => Math.trunc(Number(v)))
-          .filter((v) => v >= 0 && v < notes.length);
+          .filter((v) => v >= 0 && v < notes.length)
+          .filter((v, i, arr) => arr.indexOf(v) === i);
       }
     }
     return { kind: 'drawgrid', steps, notes, active, list, disabled };
@@ -115,7 +135,7 @@ export function createBeatSwarmWeaponTuneTools(options = {}) {
     const steps = Math.max(1, Math.trunc(Number(fallback?.steps) || weaponTuneSteps));
     const rowCount = Math.max(1, Array.isArray(fallback?.notes) ? fallback.notes.length : drawgridTuneNotePalette.length);
     const step = Math.max(0, Math.min(steps - 1, Math.trunc(Math.random() * steps)));
-    const row = Math.max(0, Math.min(rowCount - 1, Math.trunc(Math.random() * rowCount)));
+    const row = pickRandomTuneRow(rowCount);
     fallback.active[step] = true;
     fallback.list[step] = [row];
     return fallback;
