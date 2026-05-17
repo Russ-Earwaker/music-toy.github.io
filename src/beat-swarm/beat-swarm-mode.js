@@ -4040,7 +4040,13 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     const idleRescueWindow = (stepIndex - lastEmitStep) >= Math.max(WEAPON_TUNE_STEPS, 8);
     if (!forceIntroPrimaryLoopWindow && !loneStartupSnakeWindow && !isCallResponseLaneActive(ownerEnemy?.callResponseLane, stepIndex, snakes.length) && !idleRescueWindow) return null;
     const steps = Array.isArray(group?.steps) ? group.steps : [];
-    if (!steps[step]) return null;
+    const leadThemeStep = getPlayerLeadThemePrimaryStep(barIndex, step, String(musicModeRuntime?.level1ArrangementState?.intensityAuditionSection || ''));
+    const leadThemeStepActive = leadThemeStep?.active === true;
+    const leadThemeLiteralRest = leadThemeStep
+      && leadThemeStep.interpretationMode === 'literal_statement'
+      && !leadThemeStepActive;
+    if (leadThemeLiteralRest) return null;
+    if (!steps[step] && !leadThemeStepActive) return null;
     const rows = Array.isArray(group?.rows) ? group.rows : [];
     let row = Math.max(0, Math.min(SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1, Math.trunc(Number(rows?.[step]) || 0)));
     if (styleId === 'retro_shooter') {
@@ -4050,7 +4056,9 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         row = row > prevRow ? (prevRow + 1) : (prevRow - 1);
       }
     }
-    const noteNameBase = getSwarmPentatonicNoteByIndex(row);
+    const noteNameBase = leadThemeStepActive
+      ? (normalizeSwarmNoteName(leadThemeStep?.note) || getSwarmPentatonicNoteByIndex(row))
+      : getSwarmPentatonicNoteByIndex(row);
     const phraseStep = getPhraseStepState(stepIndex, Array.isArray(group?.steps) ? group.steps.length : WEAPON_TUNE_STEPS);
     const rowHead = Math.max(0, Math.min(SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1, Math.trunc(Number(rows?.[0]) || row)));
     const rowMiddle = Math.max(0, Math.min(SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1, Math.trunc(Number(rows?.[Math.floor(rows.length * 0.5)]) || rowHead)));
@@ -4073,13 +4081,17 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     let noteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance)
       ? phraseGravityTarget
       : noteNameBase;
+    const playerLeadLiteralStatement = leadThemeStepActive && leadThemeStep?.interpretationMode === 'literal_statement';
+    if (playerLeadLiteralStatement) {
+      noteNameRaw = normalizeSwarmNoteName(leadThemeStep?.note) || noteNameRaw;
+    }
     if (styleId === 'retro_shooter') {
       const prevNote = normalizeSwarmNoteName(ownerEnemy?.__bsLastDrawsnakeNote);
       const prevRow = Math.max(0, Math.min(SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length - 1, Math.trunc(Number(ownerEnemy?.__bsLastDrawsnakeRow) || row)));
       const repeatChance = prevRow === row ? (motifRepeatBias * 0.05) : (motifRepeatBias * 0.01);
       if (!phraseStep.resolutionOpportunity && prevNote && Math.random() < repeatChance) noteNameRaw = prevNote;
     }
-    if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && Math.random() < 0.88) {
+    if (!playerLeadLiteralStatement && phraseStep.resolutionOpportunity && phraseGravityOpportunity && Math.random() < 0.88) {
       noteNameRaw = phraseGravityTarget;
     }
     const phraseGravityHit = phraseGravityOpportunity
@@ -4124,6 +4136,14 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         musicProminence: blendProminence,
         musicLaneId: 'primary_loop_lane',
         musicLaneDriven: true,
+        leadPlayerThemeSource: leadThemeStep ? 'leadTheme' : '',
+        leadThemeInterpretationMode: String(leadThemeStep?.interpretationMode || '').trim().toLowerCase(),
+        leadThemePartIndex: Math.max(0, Math.trunc(Number(leadThemeStep?.phrasePartIndex) || 0)),
+        leadThemeStepIndex: Math.max(0, Math.trunc(Number(leadThemeStep?.step) || 0)),
+        leadThemePatternKey: String(leadThemeStep?.patternKey || '').trim().toLowerCase(),
+        leadThemeContourKey: String(leadThemeStep?.contourKey || '').trim().toLowerCase(),
+        leadThemeRawStepActive: leadThemeStepActive,
+        leadThemeRawNote: normalizeSwarmNoteName(leadThemeStep?.rawNote) || '',
         introPrimaryLoopBlendWindow,
       },
     }, {
@@ -4132,6 +4152,14 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       sourceSystem: 'drawsnake',
       enemyType: 'drawsnake',
       groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+      leadPlayerThemeSource: leadThemeStep ? 'leadTheme' : '',
+      leadThemeInterpretationMode: String(leadThemeStep?.interpretationMode || '').trim().toLowerCase(),
+      leadThemePartIndex: Math.max(0, Math.trunc(Number(leadThemeStep?.phrasePartIndex) || 0)),
+      leadThemeStepIndex: Math.max(0, Math.trunc(Number(leadThemeStep?.step) || 0)),
+      leadThemePatternKey: String(leadThemeStep?.patternKey || '').trim().toLowerCase(),
+      leadThemeContourKey: String(leadThemeStep?.contourKey || '').trim().toLowerCase(),
+      leadThemeRawStepActive: leadThemeStepActive,
+      leadThemeRawNote: normalizeSwarmNoteName(leadThemeStep?.rawNote) || '',
     });
   } else if (ownerType === 'composer-group-member') {
     const minResponseDelaySteps = 2;
@@ -4167,6 +4195,18 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       hasLiveCallWindow = lastCallStep >= 0 && sinceCall >= minResponseDelaySteps && stepIndex <= pendingCallExpiresStepAbs;
       if (!laneActive && (continuingResponsePhrase || hasLiveCallWindow)) laneActive = true;
     }
+    const primaryLeadMelodyGroup = String(group?.musicLaneId || ownerEnemy?.musicLaneId || 'primary_loop_lane').trim().toLowerCase() === 'primary_loop_lane';
+    const arrangementStateForLeadTheme = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+      ? musicModeRuntime.level1ArrangementState
+      : null;
+    const leadThemeStep = primaryLeadMelodyGroup
+      ? getPlayerLeadThemePrimaryStep(barIndex, step, String(arrangementStateForLeadTheme?.intensityAuditionSection || ''))
+      : null;
+    const leadThemeStepActive = leadThemeStep?.active === true;
+    const leadThemeLiteralRest = leadThemeStep
+      && leadThemeStep.interpretationMode === 'literal_statement'
+      && !leadThemeStepActive;
+    if (leadThemeStep && laneMode !== 'response') laneActive = true;
     if (!laneActive) {
       try {
         noteMusicSystemEvent('music_primary_loop_group_suppressed', {
@@ -4232,7 +4272,8 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       && String(group?.musicProfileSourceType || '').trim().toLowerCase() === 'lead_melody'
       && (String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'lead_entry_merge'
         || String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'full_texture');
-    const stepActive = Array.isArray(group?.steps) && !!group.steps[step];
+    let stepActive = Array.isArray(group?.steps) && !!group.steps[step];
+    if (leadThemeStepActive) stepActive = true;
     const leadLastEmitStep = Math.max(-100000, Math.trunc(Number(group?.__bsLeadLastEmitStep) || -100000));
     const leadSilenceGap = stepIndex - leadLastEmitStep;
     const continuityLeadFill = primaryLeadContinuityProtected
@@ -4240,6 +4281,21 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       && !stepActive
       && leadSilenceGap >= 3
       && ((step % 2) === 1 || (step % 4) === 0);
+    if (leadThemeLiteralRest && !responseOverrideHit) {
+      try {
+        noteMusicSystemEvent('music_primary_loop_group_suppressed', {
+          reason: 'player_lead_theme_literal_rest',
+          groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
+          enemyId: Math.max(0, Math.trunc(Number(ownerEnemy?.id) || 0)),
+          stepIndex,
+          step,
+          leadPlayerThemeSource: 'leadTheme',
+          leadThemePatternKey: String(leadThemeStep?.patternKey || '').trim(),
+          leadThemePartIndex: Math.max(0, Math.trunc(Number(leadThemeStep?.phrasePartIndex) || 0)),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+      return null;
+    }
     if (!stepActive && !responseOverrideHit && !continuityLeadFill) {
       try {
         noteMusicSystemEvent('music_primary_loop_group_suppressed', {
@@ -4276,7 +4332,10 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     const stepDrivenNoteName = melodyStepDriven
       ? (normalizeSwarmNoteName(group?.notes?.[step]) || rowDrivenNoteName)
       : '';
-    const noteNameBaseRaw = stepDrivenNoteName || normalizeSwarmNoteName(group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
+    let noteNameBaseRaw = stepDrivenNoteName || normalizeSwarmNoteName(group?.notes?.[noteIdx]) || getRandomSwarmPentatonicNote();
+    if (leadThemeStepActive && laneMode !== 'response') {
+      noteNameBaseRaw = normalizeSwarmNoteName(leadThemeStep?.note) || noteNameBaseRaw;
+    }
     const noteNameBase = clampNoteToDirectorPool(noteNameBaseRaw, stepIndex + noteIdx);
     const responsePool = ensureSwarmDirector().getNotePool();
     const responseSeedNote = normalizeSwarmNoteName(chooseResponseNoteFromPool({
@@ -4331,7 +4390,8 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       : phraseGravityTargetBase;
     const gravityBiasChance = phraseStep.resolutionOpportunity ? 0.92 : 0.54;
     const phraseGravityOpportunity = !!phraseGravityTarget && phraseStep.nearPhraseEnd;
-    const gravityNoteNameRaw = (phraseGravityOpportunity && Math.random() < gravityBiasChance) ? phraseGravityTarget : noteNameRaw;
+    const playerLeadLiteralStatement = leadThemeStepActive && leadThemeStep?.interpretationMode === 'literal_statement';
+    const gravityNoteNameRaw = (!playerLeadLiteralStatement && phraseGravityOpportunity && Math.random() < gravityBiasChance) ? phraseGravityTarget : noteNameRaw;
     let styledNoteName = clampNoteToDirectorPool(gravityNoteNameRaw, stepIndex + noteIdx + (laneMode === 'response' ? 1 : 0));
     if (styleId === 'retro_shooter') {
       const prevNote = normalizeSwarmNoteName(group?.__bsLastComposerNote);
@@ -4368,7 +4428,7 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         group.__bsLeadRepeatCount = 0;
       }
     }
-    if (phraseStep.resolutionOpportunity && phraseGravityOpportunity && Math.random() < 0.84) {
+    if (!playerLeadLiteralStatement && phraseStep.resolutionOpportunity && phraseGravityOpportunity && Math.random() < 0.84) {
       styledNoteName = clampNoteToDirectorPool(phraseGravityTarget, stepIndex + noteIdx + (laneMode === 'response' ? 1 : 0));
     }
     const phraseGravityHit = phraseGravityOpportunity
@@ -4507,7 +4567,7 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       ? phraseTargets
       : [phraseGravityTarget, group?.phraseRoot, group?.phraseFifth].map((n) => normalizeSwarmNoteName(n)).filter(Boolean);
     const archetypeNoteName = resolvePhraseArchetypeNote(styledNoteName, phraseArchetypeState, archetypePhraseTargets) || styledNoteName;
-    const leadMotifAnchor = (musicLaneId === 'primary_loop_lane' && musicProfileSourceType === 'lead_melody')
+    const leadMotifAnchor = (musicLaneId === 'primary_loop_lane' && musicProfileSourceType === 'lead_melody' && !playerLeadLiteralStatement)
       ? resolveLevel1LeadMotifAnchorNote({
         baseNote: archetypeNoteName,
         stepIndex,
@@ -4572,6 +4632,14 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         leadMotifReuseCount: Math.max(0, Math.trunc(Number(leadMotifAnchor?.reuseCount) || 0)),
         leadMotifReturnCount: Math.max(0, Math.trunc(Number(leadMotifAnchor?.returnCount) || 0)),
         leadMotifVariationCount: Math.max(0, Math.trunc(Number(leadMotifAnchor?.variationCount) || 0)),
+        leadPlayerThemeSource: leadThemeStep ? 'leadTheme' : '',
+        leadThemeInterpretationMode: String(leadThemeStep?.interpretationMode || '').trim().toLowerCase(),
+        leadThemePartIndex: Math.max(0, Math.trunc(Number(leadThemeStep?.phrasePartIndex) || 0)),
+        leadThemeStepIndex: Math.max(0, Math.trunc(Number(leadThemeStep?.step) || 0)),
+        leadThemePatternKey: String(leadThemeStep?.patternKey || '').trim().toLowerCase(),
+        leadThemeContourKey: String(leadThemeStep?.contourKey || '').trim().toLowerCase(),
+        leadThemeRawStepActive: leadThemeStepActive,
+        leadThemeRawNote: normalizeSwarmNoteName(leadThemeStep?.rawNote) || '',
         intensityAuditionSection: intensityAuditionSectionNow,
         musicLayer: String(group?.musicLaneLayer || 'loops').trim().toLowerCase() || 'loops',
         musicProminence: eventMusicProminence,
@@ -4595,6 +4663,14 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       musicProfileSourceType,
       formationRole,
       phraseArchetype: String(phraseArchetypeState?.archetype || '').trim().toLowerCase(),
+      leadPlayerThemeSource: leadThemeStep ? 'leadTheme' : '',
+      leadThemeInterpretationMode: String(leadThemeStep?.interpretationMode || '').trim().toLowerCase(),
+      leadThemePartIndex: Math.max(0, Math.trunc(Number(leadThemeStep?.phrasePartIndex) || 0)),
+      leadThemeStepIndex: Math.max(0, Math.trunc(Number(leadThemeStep?.step) || 0)),
+      leadThemePatternKey: String(leadThemeStep?.patternKey || '').trim().toLowerCase(),
+      leadThemeContourKey: String(leadThemeStep?.contourKey || '').trim().toLowerCase(),
+      leadThemeRawStepActive: leadThemeStepActive,
+      leadThemeRawNote: normalizeSwarmNoteName(leadThemeStep?.rawNote) || '',
       reason: conflictYieldReason || musicProfileSourceType || formationRole || musicLaneId,
       enemyAudible: eventEnemyAudible,
     });
@@ -7460,6 +7536,98 @@ function getPlayerSimpleRhythmMotifPatterns(themeId = '') {
     if (active.some(Boolean)) patterns.push(cloneFoundationPhraseSteps(active));
   }
   return patterns;
+}
+function getPlayerLeadThemeMotifParts() {
+  const theme = getPlayerMusicTheme('leadTheme');
+  const data = theme?.toyType === 'drawgrid' && theme.data && typeof theme.data === 'object' ? theme.data : null;
+  if (!data) return [];
+  const motifLength = Math.max(1, Math.trunc(Number(theme?.motifLength) || 4));
+  const parts = [];
+  for (let partIndex = 0; partIndex < motifLength; partIndex += 1) {
+    const tune = createMusicThemeDrawgridTuneForChain('leadTheme', data, partIndex);
+    const steps = Math.max(1, Math.min(WEAPON_TUNE_STEPS, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS)));
+    const active = Array.from({ length: steps }, (_, stepIdx) => !!tune?.active?.[stepIdx]);
+    const rowsByStep = Array.from({ length: steps }, (_, stepIdx) => {
+      const rows = Array.isArray(tune?.list?.[stepIdx]) ? tune.list[stepIdx] : [];
+      return rows
+        .map((rowRaw) => Math.max(0, Math.min(DRAWGRID_TOY_ROW_NOTE_PALETTE.length - 1, Math.trunc(Number(rowRaw) || 0))))
+        .filter((row, idx, arr) => arr.indexOf(row) === idx)
+        .sort((a, b) => a - b);
+    });
+    const noteByStep = rowsByStep.map((rows, stepIdx) => {
+      if (!active[stepIdx] || !rows.length) return '';
+      const row = rows[0];
+      return normalizeSwarmNoteName(DRAWGRID_TOY_ROW_NOTE_PALETTE[row]) || '';
+    });
+    const rowByStep = rowsByStep.map((rows, stepIdx) => (active[stepIdx] && rows.length ? rows[0] : -1));
+    if (!active.some((stepOn, stepIdx) => stepOn && !!noteByStep[stepIdx])) continue;
+    const patternKey = active.map((stepOn, stepIdx) => (stepOn && noteByStep[stepIdx] ? '1' : '0')).join('');
+    const contourKey = rowsByStep
+      .map((rows, stepIdx) => (active[stepIdx] && rows.length ? String(rows[0]) : '-'))
+      .join('.');
+    parts.push({
+      themeId: 'leadTheme',
+      source: 'player_theme',
+      phrasePartIndex: partIndex,
+      steps,
+      active,
+      rowsByStep,
+      rowByStep,
+      noteByStep,
+      patternKey,
+      contourKey,
+    });
+  }
+  return parts;
+}
+function mapPlayerLeadThemeRowToDirectorNote(rowLike = -1, stepIndex = 0) {
+  const row = Math.trunc(Number(rowLike));
+  if (!(row >= 0)) return '';
+  const allowedRows = DRAWGRID_TOY_PENTATONIC_ROWS.length ? DRAWGRID_TOY_PENTATONIC_ROWS : [1, 4, 6, 8, 11];
+  let bestIdx = 0;
+  let bestDelta = Infinity;
+  for (let i = 0; i < allowedRows.length; i += 1) {
+    const delta = Math.abs(row - allowedRows[i]);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestIdx = i;
+    }
+  }
+  const pool = ensureSwarmDirector().getNotePool();
+  if (!Array.isArray(pool) || !pool.length) return '';
+  const contourIdx = Math.max(0, Math.min(pool.length - 1, (allowedRows.length - 1 - bestIdx)));
+  return normalizeSwarmNoteName(pool[contourIdx]) || clampNoteToDirectorPool(normalizeSwarmNoteName(DRAWGRID_TOY_ROW_NOTE_PALETTE[row]) || '', stepIndex);
+}
+function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLike = '') {
+  const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const pacingState = getCurrentPacingStateName();
+  if (isIntroPacingStateName(pacingState)) return null;
+  const introStage = String(getUnifiedIntroStage(bar, bar * Math.max(1, COMPOSER_BEATS_PER_BAR)) || '').trim().toLowerCase();
+  if (introStage && introStage !== 'none') return null;
+  const parts = getPlayerLeadThemeMotifParts();
+  if (!parts.length) return null;
+  const partIndex = bar % parts.length;
+  const part = parts[partIndex] || parts[0];
+  const step = ((Math.max(0, Math.trunc(Number(stepIndex) || 0)) % part.steps) + part.steps) % part.steps;
+  const rawNote = normalizeSwarmNoteName(part.noteByStep[step]) || '';
+  const rowIndex = Math.max(-1, Math.trunc(Number(part.rowByStep?.[step]) || -1));
+  const directorNote = mapPlayerLeadThemeRowToDirectorNote(rowIndex, stepIndex + part.phrasePartIndex) || clampNoteToDirectorPool(rawNote, stepIndex + part.phrasePartIndex);
+  const activeStep = !!part.active[step] && !!rawNote;
+  const sectionId = String(sectionIdLike || '').trim().toLowerCase();
+  const literalStatement = bar >= 20 && bar < 36;
+  return {
+    themeId: 'leadTheme',
+    source: 'player_theme',
+    phrasePartIndex: part.phrasePartIndex,
+    step,
+    active: activeStep,
+    note: activeStep ? directorNote : '',
+    rawNote,
+    rowIndex,
+    patternKey: part.patternKey,
+    contourKey: part.contourKey,
+    interpretationMode: literalStatement ? 'literal_statement' : (sectionId === 'release' ? 'release_riff' : 'director_riff'),
+  };
 }
 function shapePlayerBassDriveStepsForFoundation(baseStepsLike = null, sectionIdLike = '', options = null) {
   const opts = options && typeof options === 'object' ? options : {};
@@ -11710,6 +11878,7 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
     if (contractBlocksCreatedOrnament) return false;
     if (actionType === 'composer-group-explosion') return false;
     if (role === BEAT_EVENT_ROLES.BASS || laneId === 'foundation_lane') return true;
+    if (laneId === 'primary_loop_lane' || laneId === 'secondary_loop_lane') return false;
     if (laneId === 'sparkle_lane') return false;
     if (input?.enemyAudible === false) return false;
     if (musicProminence === 'trace') return false;
@@ -20781,9 +20950,55 @@ function collectSpawnerStepBeatEvents(stepIndex, beatIndex) {
     laneDrivenPrimaryLoop: true,
   });
 }
+function shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(eventLike = null) {
+  const ev = eventLike && typeof eventLike === 'object' ? eventLike : null;
+  if (!ev) return ev;
+  const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+  const beatIndex = Math.max(0, Math.trunc(Number(ev?.beatIndex) || 0));
+  const stepIndex = Math.max(0, Math.trunc(Number(ev?.stepIndex) || 0));
+  const barIndex = Math.max(0, Math.trunc(Number(ev?.barIndex) || Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR))));
+  const actorId = Math.max(0, Math.trunc(Number(ev?.actorId) || 0));
+  const enemy = actorId > 0 ? getSwarmEnemyById(actorId) : null;
+  const group = enemy ? getEnemyMusicGroup(enemy, undefined, { sync: false }) : null;
+  const laneId = String(payload?.musicLaneId || enemy?.musicLaneId || group?.musicLaneId || '').trim().toLowerCase();
+  const actionType = String(ev?.actionType || '').trim().toLowerCase();
+  const role = normalizeSwarmRole(ev?.role || payload?.musicRole || group?.role || getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.LEAD), BEAT_EVENT_ROLES.LEAD);
+  const loopLikeAction = actionType === 'composer-group-projectile'
+    || actionType === 'composer-group-explosion'
+    || actionType === 'drawsnake-projectile';
+  if (laneId !== 'primary_loop_lane' && !(loopLikeAction && role === BEAT_EVENT_ROLES.LEAD)) return ev;
+  const sectionId = String(musicModeRuntime?.level1ArrangementState?.intensityAuditionSection || '').trim().toLowerCase();
+  const leadThemeStep = getPlayerLeadThemePrimaryStep(barIndex, stepIndex, sectionId);
+  if (!leadThemeStep || typeof leadThemeStep !== 'object') return ev;
+  const leadThemeStepActive = leadThemeStep.active === true;
+  const leadThemeMode = String(leadThemeStep.interpretationMode || '').trim().toLowerCase();
+  if (leadThemeMode === 'literal_statement' && !leadThemeStepActive) return null;
+  const nextPayload = {
+    ...payload,
+    musicLayer: String(payload.musicLayer || 'loops').trim().toLowerCase() || 'loops',
+    musicLaneId: 'primary_loop_lane',
+    musicLaneDriven: true,
+    leadPlayerThemeSource: 'leadTheme',
+    leadThemeInterpretationMode: leadThemeMode,
+    leadThemePartIndex: Math.max(0, Math.trunc(Number(leadThemeStep.phrasePartIndex) || 0)),
+    leadThemeStepIndex: Math.max(0, Math.trunc(Number(leadThemeStep.step) || 0)),
+    leadThemePatternKey: String(leadThemeStep.patternKey || '').trim().toLowerCase(),
+    leadThemeContourKey: String(leadThemeStep.contourKey || '').trim().toLowerCase(),
+    leadThemeRawStepActive: leadThemeStepActive,
+    leadThemeRawNote: normalizeSwarmNoteName(leadThemeStep.rawNote) || '',
+  };
+  if (leadThemeStepActive && normalizeSwarmNoteName(leadThemeStep.note)) {
+    const note = normalizeSwarmNoteName(leadThemeStep.note);
+    nextPayload.requestedNoteRaw = note;
+    return { ...ev, note, payload: nextPayload };
+  }
+  return { ...ev, payload: nextPayload };
+}
 function executePerformedBeatEvent(event) {
+  const shapedEvent = shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(event);
+  if (!shapedEvent) return false;
   const ok = executePerformedBeatEventRuntime({
-    event,
+    event: shapedEvent,
     constants: {
       composerBeatsPerBar: COMPOSER_BEATS_PER_BAR,
       roles: BEAT_EVENT_ROLES,
@@ -21609,6 +21824,7 @@ function updateBeatWeapons(centerWorld) {
         getMusicLabContext,
         getOnboardingReadabilityDirective,
         getPlayerInstrumentStepDirective,
+        getPlayerLeadThemePrimaryStep,
         isPlayerWeaponStepLikelyAudible,
         isPlayerWeaponTuneStepAuthoredActive,
         noteBassFoundationOwnerState,

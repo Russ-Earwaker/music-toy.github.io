@@ -285,6 +285,17 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const leadMotifReuseCount = clampInt(context?.leadMotifReuseCount ?? payload?.leadMotifReuseCount, 0, 0);
   const leadMotifReturnCount = clampInt(context?.leadMotifReturnCount ?? payload?.leadMotifReturnCount, 0, 0);
   const leadMotifVariationCount = clampInt(context?.leadMotifVariationCount ?? payload?.leadMotifVariationCount, 0, 0);
+  const leadPlayerThemeSource = String(context?.leadPlayerThemeSource ?? payload?.leadPlayerThemeSource ?? '').trim().toLowerCase();
+  const leadThemeInterpretationMode = String(
+    String(context?.leadThemeInterpretationMode ?? '').trim()
+    || String(payload?.leadThemeInterpretationMode ?? '').trim()
+  ).trim().toLowerCase();
+  const leadThemePartIndex = clampInt(context?.leadThemePartIndex ?? payload?.leadThemePartIndex, 0, 0);
+  const leadThemeStepIndex = clampInt(context?.leadThemeStepIndex ?? payload?.leadThemeStepIndex, 0, 0);
+  const leadThemePatternKey = String(context?.leadThemePatternKey ?? payload?.leadThemePatternKey ?? '').trim().toLowerCase();
+  const leadThemeContourKey = String(context?.leadThemeContourKey ?? payload?.leadThemeContourKey ?? '').trim().toLowerCase();
+  const leadThemeRawStepActive = context?.leadThemeRawStepActive === true ? true : (payload?.leadThemeRawStepActive === true);
+  const leadThemeRawNote = String(context?.leadThemeRawNote ?? payload?.leadThemeRawNote ?? '').trim();
   return {
     tMs: nowMs(),
     phase: String(phase || '').trim() || 'queued',
@@ -363,6 +374,14 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     leadMotifReuseCount,
     leadMotifReturnCount,
     leadMotifVariationCount,
+    leadPlayerThemeSource,
+    leadThemeInterpretationMode,
+    leadThemePartIndex,
+    leadThemeStepIndex,
+    leadThemePatternKey,
+    leadThemeContourKey,
+    leadThemeRawStepActive,
+    leadThemeRawNote,
     audioGain: Number(context?.audioGain ?? payload?.audioGain) || 0,
     resolvedPlaybackInstrumentId: String(context?.resolvedPlaybackInstrumentId || '').trim(),
     playbackKind: String(context?.playbackKind || '').trim().toLowerCase(),
@@ -715,6 +734,7 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
         sameRegisterOverlapRisk: Number(payload.readability.sameRegisterOverlapRisk) || 0,
         playerAudibleShare: Number(payload.readability.playerAudibleShare) || 0,
         enemyForegroundEvents: clampInt(payload.readability.enemyForegroundEvents, 0, 0),
+        enemyNonFoundationForegroundEvents: clampInt(payload.readability.enemyNonFoundationForegroundEvents, 0, 0),
         enemyEvents: clampInt(payload.readability.enemyEvents, 0, 0),
         enemyCompetingDuringPlayer: clampInt(payload.readability.enemyCompetingDuringPlayer, 0, 0),
       }
@@ -2833,6 +2853,7 @@ function collectReadabilityStructureOnboarding(session, maxBarIndex) {
   let sumOverlapRisk = 0;
   let sumPlayerAudibleShare = 0;
   let sumEnemyForegroundShare = 0;
+  let sumEnemyNonFoundationForegroundShare = 0;
   let sumEnemyCompetitionShare = 0;
   let sumFoundationContinuityBars = 0;
   let sumFoundationAudibleEvents = 0;
@@ -2852,13 +2873,16 @@ function collectReadabilityStructureOnboarding(session, maxBarIndex) {
     const on = s?.onboarding && typeof s.onboarding === 'object' ? s.onboarding : {};
     const enemyEvents = Math.max(0, clampInt(r?.enemyEvents, 0, 0));
     const enemyForegroundEvents = Math.max(0, clampInt(r?.enemyForegroundEvents, 0, 0));
+    const enemyNonFoundationForegroundEvents = Math.max(0, clampInt(r?.enemyNonFoundationForegroundEvents, 0, 0));
     const enemyCompetingDuringPlayer = Math.max(0, clampInt(r?.enemyCompetingDuringPlayer, 0, 0));
     const foregroundShare = enemyEvents > 0 ? (enemyForegroundEvents / enemyEvents) : 0;
+    const nonFoundationForegroundShare = enemyEvents > 0 ? (enemyNonFoundationForegroundEvents / enemyEvents) : 0;
     const competitionShare = enemyEvents > 0 ? (enemyCompetingDuringPlayer / enemyEvents) : 0;
     sumMaskingRisk += Number(r?.playerMaskingRisk) || 0;
     sumOverlapRisk += Number(r?.sameRegisterOverlapRisk) || 0;
     sumPlayerAudibleShare += Number(r?.playerAudibleShare) || 0;
     sumEnemyForegroundShare += foregroundShare;
+    sumEnemyNonFoundationForegroundShare += nonFoundationForegroundShare;
     sumEnemyCompetitionShare += competitionShare;
     sumFoundationContinuityBars += Math.max(0, clampInt(st?.foundationContinuityBars, 0, 0));
     sumFoundationAudibleEvents += Math.max(0, clampInt(st?.foundationAudibleEvents, 0, 0));
@@ -2884,6 +2908,7 @@ function collectReadabilityStructureOnboarding(session, maxBarIndex) {
       avgSameRegisterOverlapRisk: snapshotCount > 0 ? (sumOverlapRisk / snapshotCount) : 0,
       avgPlayerAudibleShare: snapshotCount > 0 ? (sumPlayerAudibleShare / snapshotCount) : 0,
       avgEnemyForegroundShare: snapshotCount > 0 ? (sumEnemyForegroundShare / snapshotCount) : 0,
+      avgEnemyNonFoundationForegroundShare: snapshotCount > 0 ? (sumEnemyNonFoundationForegroundShare / snapshotCount) : 0,
       avgEnemyCompetitionShare: snapshotCount > 0 ? (sumEnemyCompetitionShare / snapshotCount) : 0,
       phaseCounts,
     },
@@ -3747,6 +3772,10 @@ function collectLeadVariationTrace(events) {
   const byContourEpoch = {};
   const bySectionTransitionRole = {};
   const bySectionArcEpoch = {};
+  const byPlayerThemeSource = {};
+  const byPlayerThemeMode = {};
+  const byPlayerThemePart = {};
+  let playerThemeActiveSteps = 0;
   const inc = (target, keyLike) => {
     const key = keyLike == null
       ? 'unknown'
@@ -3760,6 +3789,10 @@ function collectLeadVariationTrace(events) {
     inc(byContourEpoch, ev?.leadContourEpoch);
     inc(bySectionTransitionRole, ev?.sectionTransitionRole);
     inc(bySectionArcEpoch, ev?.sectionArcEpoch);
+    inc(byPlayerThemeSource, ev?.leadPlayerThemeSource);
+    inc(byPlayerThemeMode, ev?.leadThemeInterpretationMode);
+    if (String(ev?.leadPlayerThemeSource || '').trim()) inc(byPlayerThemePart, ev?.leadThemePartIndex);
+    if (ev?.leadThemeRawStepActive === true) playerThemeActiveSteps += 1;
   }
   return {
     count: leadEvents.length,
@@ -3769,6 +3802,10 @@ function collectLeadVariationTrace(events) {
     byContourEpoch,
     bySectionTransitionRole,
     bySectionArcEpoch,
+    byPlayerThemeSource,
+    byPlayerThemeMode,
+    byPlayerThemePart,
+    playerThemeActiveSteps,
     distinctFamilyCount: Object.keys(byFamily).filter((key) => key !== 'unknown').length,
     distinctContourCount: Object.keys(byContour).filter((key) => key !== 'unknown').length,
     sample: leadEvents.slice(0, 24).map((ev) => ({
@@ -3781,6 +3818,14 @@ function collectLeadVariationTrace(events) {
       leadCadenceVariant: clampInt(ev?.leadCadenceVariant, 0, 0),
       sectionTransitionRole: String(ev?.sectionTransitionRole || '').trim().toLowerCase(),
       sectionArcEpoch: clampInt(ev?.sectionArcEpoch, 0, 0),
+      leadPlayerThemeSource: String(ev?.leadPlayerThemeSource || '').trim().toLowerCase(),
+      leadThemeInterpretationMode: String(ev?.leadThemeInterpretationMode || '').trim().toLowerCase(),
+      leadThemePartIndex: clampInt(ev?.leadThemePartIndex, 0, 0),
+      leadThemeStepIndex: clampInt(ev?.leadThemeStepIndex, 0, 0),
+      leadThemePatternKey: String(ev?.leadThemePatternKey || '').trim().toLowerCase(),
+      leadThemeContourKey: String(ev?.leadThemeContourKey || '').trim().toLowerCase(),
+      leadThemeRawStepActive: ev?.leadThemeRawStepActive === true,
+      leadThemeRawNote: String(ev?.leadThemeRawNote || '').trim(),
     })),
   };
 }
@@ -4428,6 +4473,7 @@ function computeSummary(metrics) {
   const avgKnownIdentityCount = Number(metrics?.onboarding?.avgKnownIdentityCount) || 0;
   const avgEnemyCompetitionShare = Number(metrics?.readability?.avgEnemyCompetitionShare) || 0;
   const avgEnemyForegroundShare = Number(metrics?.readability?.avgEnemyForegroundShare) || 0;
+  const avgEnemyNonFoundationForegroundShare = Number(metrics?.readability?.avgEnemyNonFoundationForegroundShare) || 0;
   const headingCoverageRate = Number(metrics?.sectionPresentation?.headingCoverageRate) || 0;
   const uniqueHeadingTitles = Math.max(0, clampInt(metrics?.sectionPresentation?.uniqueHeadingTitles, 0, 0));
   const avgBarsBetweenHeadingChanges = Number(metrics?.sectionPresentation?.avgBarsBetweenHeadingChanges) || 0;
@@ -4543,7 +4589,10 @@ function computeSummary(metrics) {
       : 'volatile',
     onboardingNovelty: (avgRecentNovelIdentityCount <= 1.1 && noveltyPressureRate <= 0.25) ? 'controlled' : 'crowded',
     identityOnboarding: avgKnownIdentityCount >= 3 ? 'established' : 'early',
-    readabilityDensity: (avgEnemyCompetitionShare <= 0.2 && avgEnemyForegroundShare <= 0.35) ? 'clear' : 'busy',
+    readabilityDensity: (
+      avgEnemyNonFoundationForegroundShare <= 0.12
+      && avgEnemyCompetitionShare <= 0.32
+    ) ? 'clear' : 'busy',
     sectionPresentation: totalSectionChanges < 3
       ? 'insufficient_data'
       : (

@@ -542,15 +542,15 @@ export function collectComposerGroupStepBeatEvents(options = null) {
     if (intensityAuditionSection === 'build') {
       const phraseSlot = barIndex % 4;
       const buildSteps = phraseSlot >= 3
-        ? [1, 3, 5, 7]
-        : (phraseSlot >= 2 ? [3, 5] : (phraseSlot >= 1 ? [5] : []));
+        ? [5]
+        : (phraseSlot >= 2 ? [5] : []);
       return buildSteps.includes(safeStep)
         ? applyAdmissionBudget(`build_counter_subdivision_${safeStep}`, 1)
         : { active: false, reason: 'build_subdivision_rest' };
     }
     if (intensityAuditionSection === 'peak') {
-      const peakSteps = (barIndex % 2) === 0 ? [2, 4, 6] : [4, 6];
-      if (peakSteps.includes(safeStep)) return applyAdmissionBudget(`peak_counter_subdivision_${safeStep}`, 2);
+      const peakSteps = (barIndex % 2) === 0 ? [2, 6] : [6];
+      if (peakSteps.includes(safeStep)) return applyAdmissionBudget(`peak_counter_subdivision_${safeStep}`, 1);
       return { active: false, reason: 'peak_off_subdivision_rest' };
     }
     return { active: false, reason: 'stage_not_dense' };

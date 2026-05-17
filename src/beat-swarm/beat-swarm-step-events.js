@@ -75,6 +75,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const readabilityStepStats = {
     enemyEvents: 0,
     enemyForegroundEvents: 0,
+    enemyNonFoundationForegroundEvents: 0,
     enemyCompetingDuringPlayer: 0,
     sameRegisterOverlapDuringPlayer: 0,
     playerStepEmitted: false,
@@ -223,18 +224,18 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       return [0, 2, 4, 6];
     }
     if (stage === 'build') {
-      if (lane === 'ornament') return [3, 7];
+      if (lane === 'ornament') return [];
       if (lane === 'secondary') {
-        if (barInPhrase === 0) return [0, 4];
-        if (barInPhrase === 1) return [0, 4, 5];
-        if (barInPhrase === 2) return [0, 2, 3, 4, 5, 6];
-        return [0, 1, 2, 3, 4, 5, 6, 7];
+        if (barInPhrase === 0) return [4];
+        if (barInPhrase === 1) return [4];
+        if (barInPhrase === 2) return [2, 6];
+        return [1, 5];
       }
       if (lane === 'lead') {
         if (barInPhrase === 0) return [0, 2, 4, 6];
-        if (barInPhrase === 1) return [0, 2, 3, 4, 6];
-        if (barInPhrase === 2) return [0, 2, 3, 4, 5, 6];
-        return [0, 1, 2, 3, 4, 5, 6, 7];
+        if (barInPhrase === 1) return [0, 2, 4, 6];
+        if (barInPhrase === 2) return [0, 2, 4, 6];
+        return [0, 2, 4, 6, 7];
       }
       if (barInPhrase === 0) return [0, 4, 6];
       if (barInPhrase === 1) return [0, 2, 4, 5, 6];
@@ -242,8 +243,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       return [0, 1, 2, 3, 4, 5, 6, 7];
     }
     if (stage === 'peak') {
-      if (lane === 'ornament') return [1, 3, 6, 7];
-      if (lane === 'secondary') return [0, 1, 2, 4, 5, 6];
+      if (lane === 'ornament') return [3, 7];
+      if (lane === 'secondary') return [2, 6];
       if (lane === 'lead') return [0, 1, 2, 4, 6, 7];
       return [0, 1, 2, 3, 4, 5, 6, 7];
     }
@@ -992,6 +993,62 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     noteSlotSpawnerStage('shaped', effectiveEnemyEvents);
     effectiveEnemyEvents = applyEnemyMusicActionGate(effectiveEnemyEvents);
+    if (typeof helpers.getPlayerLeadThemePrimaryStep === 'function') {
+      const leadThemeStep = helpers.getPlayerLeadThemePrimaryStep(barIndex, stepIndex, currentEnemyMusicActionGateState.stage);
+      if (leadThemeStep && typeof leadThemeStep === 'object') {
+        const leadThemeStepActive = leadThemeStep.active === true;
+        const leadThemeLiteralRest = String(leadThemeStep.interpretationMode || '').trim().toLowerCase() === 'literal_statement'
+          && !leadThemeStepActive;
+        const isLeadThemePrimaryTarget = (ev) => {
+          if (!ev || typeof ev !== 'object') return false;
+          const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+          const musicLaneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
+          if (musicLaneId === 'primary_loop_lane') return true;
+          if (isPrimaryLoopLaneCandidate(ev)) return true;
+          const action = String(ev?.actionType || '').trim().toLowerCase();
+          const role = String(ev?.role || payload.musicRole || '').trim().toLowerCase();
+          const layer = String(payload.musicLayer || '').trim().toLowerCase();
+          const loopLikeAction = action === 'composer-group-projectile'
+            || action === 'composer-group-explosion'
+            || action === 'drawsnake-projectile';
+          return loopLikeAction && role === 'lead' && (layer === 'loops' || !layer);
+        };
+        effectiveEnemyEvents = effectiveEnemyEvents
+          .filter((ev) => {
+            return !(leadThemeLiteralRest && isLeadThemePrimaryTarget(ev));
+          })
+          .map((ev) => {
+            const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+            if (!isLeadThemePrimaryTarget(ev)) return ev;
+            const nextPayload = {
+              ...payload,
+              musicLayer: String(payload.musicLayer || 'loops').trim().toLowerCase() || 'loops',
+              musicLaneId: 'primary_loop_lane',
+              musicLaneDriven: true,
+              leadPlayerThemeSource: 'leadTheme',
+              leadThemeInterpretationMode: String(leadThemeStep.interpretationMode || '').trim().toLowerCase(),
+              leadThemePartIndex: Math.max(0, Math.trunc(Number(leadThemeStep.phrasePartIndex) || 0)),
+              leadThemeStepIndex: Math.max(0, Math.trunc(Number(leadThemeStep.step) || 0)),
+              leadThemePatternKey: String(leadThemeStep.patternKey || '').trim().toLowerCase(),
+              leadThemeContourKey: String(leadThemeStep.contourKey || '').trim().toLowerCase(),
+              leadThemeRawStepActive: leadThemeStepActive,
+              leadThemeRawNote: String(leadThemeStep.rawNote || '').trim(),
+            };
+            if (leadThemeStepActive && String(leadThemeStep.note || '').trim()) {
+              nextPayload.requestedNoteRaw = String(leadThemeStep.note || '').trim();
+              return {
+                ...ev,
+                note: String(leadThemeStep.note || '').trim(),
+                payload: nextPayload,
+              };
+            }
+            return {
+              ...ev,
+              payload: nextPayload,
+            };
+          });
+      }
+    }
     noteSlotSpawnerStage('gated', effectiveEnemyEvents);
     finishShapePerf();
   }
@@ -1013,27 +1070,32 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const musicLaneId = String(payload.musicLaneId || '').trim().toLowerCase();
     const laneDrivenPrimaryLoop = musicLaneId === 'primary_loop_lane';
     const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
-    const foundationInterpretationMode = String(payload.foundationInterpretationMode || '').trim().toLowerCase();
-    const foundationPhraseId = String(payload.foundationPhraseId || '').trim().toLowerCase();
     const safeLayer = (layer === 'foundation' || layer === 'loops' || layer === 'sparkle') ? layer : 'sparkle';
+    const foundationInterpretationMode = String(
+      payload.foundationInterpretationMode
+      || (safeLayer === 'foundation' ? foundationLaneSnapshot?.interpretationMode : '')
+      || ''
+    ).trim().toLowerCase();
+    const foundationPhraseId = String(
+      payload.foundationPhraseId
+      || (safeLayer === 'foundation' ? foundationLaneSnapshot?.phraseId : '')
+      || ''
+    ).trim().toLowerCase();
     const safeProminence = (
       prominence === 'suppressed' || prominence === 'trace' || prominence === 'quiet' || prominence === 'full'
     ) ? prominence : 'full';
-    const isPlayerBassLiteralStatement = safeLayer === 'foundation'
+    const isPlayerBassFoundation = safeLayer === 'foundation'
+      && foundationPhraseId.startsWith('player_bass_drive_');
+    const isPlayerBassLiteralStatement = isPlayerBassFoundation
       && (
         foundationInterpretationMode === 'literal_statement'
-        || (
-          !foundationInterpretationMode
-          && foundationPhraseId.startsWith('player_bass_drive_')
-          && barIndex >= 12
-          && barIndex < 20
-        )
+        || (!foundationInterpretationMode && barIndex >= 12 && barIndex < 20)
       );
     const foundationAssignedBefore = prominenceState.foundationAssigned === true;
     const deconflictedProminence = (() => {
       if (!playerLikelyAudible) return safeProminence;
       if (safeProminence !== 'full' && safeProminence !== 'quiet') return safeProminence;
-      if (isPlayerBassLiteralStatement) return 'full';
+      if (isPlayerBassFoundation) return 'full';
       // Preserve the tune skeleton under player fire: foundation stays anchored,
       // one loop voice can remain quiet, sparkle stays background-only.
       if (safeLayer === 'foundation' && safeProminence === 'full') return 'full';
@@ -1122,10 +1184,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const loopLengthSteps = Math.max(1, Math.trunc(Number(constants?.loopLengthSteps) || 8));
   const loopEstablishingWindowSteps = 16;
   const prominenceRank = { suppressed: 0, trace: 1, quiet: 2, full: 3 };
+  const denseArrangementStage = currentEnemyMusicActionGateState.stage === 'build'
+    || currentEnemyMusicActionGateState.stage === 'peak';
   const layerBudgets = {
     foundation: 1,
-    loops: currentForegroundIdentityLayer === 'loops' ? 1 : 2,
-    sparkle: 1,
+    loops: denseArrangementStage ? 1 : (currentForegroundIdentityLayer === 'loops' ? 1 : 2),
+    sparkle: currentEnemyMusicActionGateState.stage === 'peak' ? 1 : 0,
   };
   const sparkleAccentByAction = new Map();
   const foundationStepIndexNow = Math.max(0, Math.trunc(Number(foundationLaneSnapshot?.stepIndex) || 0));
@@ -1144,8 +1208,16 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const callResponseLane = String(payload.callResponseLane || '').trim().toLowerCase();
     const enemyType = String(ev?.enemyType || payload?.enemyType || '').trim().toLowerCase();
     const musicLaneId = String(payload.musicLaneId || '').trim().toLowerCase();
-    const foundationInterpretationMode = String(payload.foundationInterpretationMode || '').trim().toLowerCase();
-    const foundationPhraseId = String(payload.foundationPhraseId || '').trim().toLowerCase();
+    const foundationInterpretationMode = String(
+      payload.foundationInterpretationMode
+      || (safeLayer === 'foundation' ? foundationLaneSnapshot?.interpretationMode : '')
+      || ''
+    ).trim().toLowerCase();
+    const foundationPhraseId = String(
+      payload.foundationPhraseId
+      || (safeLayer === 'foundation' ? foundationLaneSnapshot?.phraseId : '')
+      || ''
+    ).trim().toLowerCase();
     const directorLane = getDirectorLanePlanForMusicLane(musicLaneId);
     const isPrimaryLoopLaneEvent = musicLaneId === 'primary_loop_lane';
     const continuityId = String(payload.continuityId || '').trim().toLowerCase();
@@ -1175,15 +1247,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const foregroundLockActive = isCompetingForegroundLoop && currentForegroundHeldLoops < foregroundLockLoops;
     const isFoundationStructuralStep = safeLayer === 'foundation'
       && (foundationStepIndexNow === 0 || foundationStepIndexNow === 3 || foundationStepIndexNow === 4);
-    const isPlayerBassLiteralStatement = safeLayer === 'foundation'
+    const isPlayerBassFoundation = safeLayer === 'foundation'
+      && foundationPhraseId.startsWith('player_bass_drive_');
+    const isPlayerBassLiteralStatement = isPlayerBassFoundation
       && (
         foundationInterpretationMode === 'literal_statement'
-        || (
-          !foundationInterpretationMode
-          && foundationPhraseId.startsWith('player_bass_drive_')
-          && barIndex >= 12
-          && barIndex < 20
-        )
+        || (!foundationInterpretationMode && barIndex >= 12 && barIndex < 20)
       );
     let score = 0;
     if (safeLayer === 'foundation') score += 1000;
@@ -1265,6 +1334,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       foregroundLockActive,
       isEstablishingForegroundLoop,
       isFoundationStructuralStep,
+      isPlayerBassFoundation,
       isPlayerBassLiteralStatement,
       isPrimaryLoopLaneEvent,
       callResponseLane,
@@ -1272,7 +1342,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       isProtectedIntroDrum,
       isReservedPercussionCompanion: musicVoiceKey === 'percussion_backbeat' && safeLayer === 'loops',
       score,
-      duplicateKey: isGroupedComposerLaneEvent(ev)
+      duplicateKey: isGroupedComposerLaneEvent(ev) && safeLayer === 'foundation'
         ? [
           safeLayer,
           role || 'role',
@@ -1326,6 +1396,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const duplicateWinner = duplicateWinnerByKey.get(item.duplicateKey);
     if (duplicateWinner && duplicateWinner !== item) continue;
     const groupedComposerEvent = isGroupedComposerLaneEvent(item?.ev);
+    const groupedComposerBudgetExempt = groupedComposerEvent && item.layer === 'foundation';
     if (item.layer === 'sparkle') {
       const actionKey = String(item?.ev?.actionType || '').trim().toLowerCase();
       const priorSparkle = sparkleAccentByAction.get(actionKey) || null;
@@ -1340,10 +1411,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       // with the newly entering lead.
     } else if (item.isReservedPercussionCompanion) {
       if (reservedPercussionCompanionSelected) continue;
-    } else if (!groupedComposerEvent && bucket.length >= budget) continue;
+    } else if (!groupedComposerBudgetExempt && bucket.length >= budget) continue;
     const registerCount = Math.max(0, Math.trunc(Number(selectedRegisterCounts.get(item.collisionRegisterKey) || 0)));
     if (
-      !groupedComposerEvent
+      !groupedComposerBudgetExempt
       &&
       !item.isProtectedIntroDrum
       &&
@@ -1357,7 +1428,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ) {
       continue;
     }
-    if (!groupedComposerEvent && !item.isProtectedIntroDrum && !item.isReservedPercussionCompanion && item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
+    if (!groupedComposerBudgetExempt && !item.isProtectedIntroDrum && !item.isReservedPercussionCompanion && item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
     bucket.push(item);
     selectedIds.add(item.idx);
     selectedRegisterCounts.set(item.collisionRegisterKey, registerCount + 1);
@@ -1390,7 +1461,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const finalProminence = (() => {
       if (selectedIds.has(item.idx)) {
         if (item.layer === 'foundation') {
-          if (item.isPlayerBassLiteralStatement) return 'full';
+          if (item.isPlayerBassFoundation) return 'full';
           if (item.isFoundationStructuralStep) return 'full';
           if (!playerLikelyAudible && !primaryLoopForegroundProtected) return 'full';
           return 'quiet';
@@ -1558,6 +1629,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (layerStepStats[safeLayer]) layerStepStats[safeLayer][safeProminence] += 1;
     readabilityStepStats.enemyEvents += 1;
     if (safeProminence === 'full') readabilityStepStats.enemyForegroundEvents += 1;
+    if (safeProminence === 'full' && safeLayer !== 'foundation') {
+      readabilityStepStats.enemyNonFoundationForegroundEvents += 1;
+    }
     if (
       playerLikelyAudible
       && safeLayer !== 'foundation'
