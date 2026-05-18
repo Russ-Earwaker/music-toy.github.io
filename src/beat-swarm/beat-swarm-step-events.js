@@ -110,7 +110,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   let filteredEnemyEvents = [];
   const normalizeGateStage = (stageLike = '') => {
     const raw = String(stageLike || '').trim().toLowerCase();
-    if (raw === 'intro' || raw === 'low' || raw === 'medium' || raw === 'build' || raw === 'peak' || raw === 'release' || raw === 'settle') return raw;
+    if (raw === 'intro' || raw === 'silent' || raw === 'low' || raw === 'medium' || raw === 'build' || raw === 'peak' || raw === 'release' || raw === 'settle') return raw;
     return '';
   };
   const getEnemyMusicActionGateState = () => {
@@ -204,6 +204,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const getEnemyMusicActionGateAllowedSteps = (stage, lane, gateState = null) => {
     const barInPhrase = ((Math.max(0, Math.trunc(Number(barIndex) || 0)) % 4) + 4) % 4;
     if (stage === 'intro') return null;
+    if (stage === 'silent') return [];
     if (lane === 'foundation') return null;
     if (stage === 'low') {
       if (lane === 'secondary') return [0, 4];
@@ -276,10 +277,20 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         || action.includes('chain')
         || action.includes('impact')
         || action.includes('collision');
-      const gateProtected = combatAuthored
-        || payload?.introDrumProtected === true
-        || payload?.introPrimaryLoopBlendWindow === true
-        || gateState.stage === 'intro';
+      const gameplayProtected = sourceSystem === 'player'
+        || sourceSystem === 'death'
+        || authoringClass === 'gameplayauthored'
+        || action === 'player-weapon-step'
+        || action === 'enemy-death-accent'
+        || action.includes('chain')
+        || action.includes('impact')
+        || action.includes('collision');
+      const gateProtected = (gateState.stage === 'silent' ? gameplayProtected : combatAuthored)
+        || gateState.stage === 'intro'
+        || (gateState.stage === 'intro' && (
+          payload?.introDrumProtected === true
+          || payload?.introPrimaryLoopBlendWindow === true
+        ));
       const lane = getEnemyMusicActionGateLane(ev);
       const directorLaneBlocked = (() => {
         if (gateProtected) return false;

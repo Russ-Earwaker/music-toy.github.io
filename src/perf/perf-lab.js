@@ -499,6 +499,13 @@ function ensureUI() {
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
       btn('musicLabRunBS0S3Arrangement5m', 'Music Lab: Run BS0 S3 Arrangement Musicality (1x5m, compact save)', 'primary'),
       btn('musicLabRunBS0S3IntensityRamp150s', 'Music Lab: Run BS0 S3 Intensity Ramp (1x150s, compact save)', 'primary'),
+      btn('musicLabRunBS0S3ListenSilent', 'Listen: Silent / Weapon Only (90s)', 'primary'),
+      btn('musicLabRunBS0S3ListenLow', 'Listen: Low Intensity (90s)', 'primary'),
+      btn('musicLabRunBS0S3ListenMedium', 'Listen: Medium Intensity (90s)', 'primary'),
+      btn('musicLabRunBS0S3ListenBuild', 'Listen: Build Intensity (90s)', 'primary'),
+      btn('musicLabRunBS0S3ListenPeak', 'Listen: Peak Intensity (90s)', 'primary'),
+      btn('musicLabRunBS0S3ListenRelease', 'Listen: Release Intensity (90s)', 'primary'),
+      btn('musicLabRunBS0S3ListenSettle', 'Listen: Settle Intensity (90s)', 'primary'),
       btn('musicLabSnapshot', 'Music Lab: Show Snapshot'),
       btn('musicLabExport', 'Music Lab: Export JSON'),
       btn('musicLabSaveResources', 'Music Lab: Save to resources'),
@@ -1434,6 +1441,19 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3IntensityRamp150s') {
       await runBS0s3MusicLabIntensityRamp150s();
+      return;
+    }
+    if (act.startsWith('musicLabRunBS0S3Listen')) {
+      const sectionByAction = {
+        musicLabRunBS0S3ListenSilent: 'silent',
+        musicLabRunBS0S3ListenLow: 'low',
+        musicLabRunBS0S3ListenMedium: 'medium',
+        musicLabRunBS0S3ListenBuild: 'build',
+        musicLabRunBS0S3ListenPeak: 'peak',
+        musicLabRunBS0S3ListenRelease: 'release',
+        musicLabRunBS0S3ListenSettle: 'settle',
+      };
+      await runBS0s3MusicLabIntensityListenSection(sectionByAction[act] || 'low');
       return;
     }
     if (act === 'musicLabSnapshot') {
@@ -4706,6 +4726,15 @@ async function saveMusicLabSessionToResourcesGlobal({
   if (payload && typeof payload === 'object' && beatSwarmStepEventsPerfSnapshot && typeof beatSwarmStepEventsPerfSnapshot === 'object') {
     payload.beatSwarmStepEventsPerfSnapshot = beatSwarmStepEventsPerfSnapshot;
   }
+  try {
+    const beatSwarmApi = getBeatSwarmApi();
+    const playerMusicThemes = beatSwarmApi && typeof beatSwarmApi.getPlayerMusicThemes === 'function'
+      ? beatSwarmApi.getPlayerMusicThemes()
+      : null;
+    if (payload && typeof payload === 'object' && playerMusicThemes && typeof playerMusicThemes === 'object') {
+      payload.playerMusicThemes = clonePerfJson(playerMusicThemes);
+    }
+  } catch {}
   const payloadDebug = {
     sessionId: String(payload?.sessionId || ''),
     eventTimelineCount: Array.isArray(payload?.eventTimeline) ? payload.eventTimeline.length : 0,
@@ -6176,6 +6205,48 @@ async function runBS0s3MusicLabIntensityRamp150s() {
     tagPrefix: 'BS0S3MusicLabIntensityRampRelease1x150s',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_intensity_ramp_release_1x150s',
     statusPrefix: 'Running BS0 S3 Music Lab intensity ramp/release audition (150 seconds, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabIntensityListenSection(sectionIdLike = 'low') {
+  const sectionId = String(sectionIdLike || 'low').trim().toLowerCase() || 'low';
+  const allowedSections = new Set(['silent', 'low', 'medium', 'build', 'peak', 'release', 'settle']);
+  const section = allowedSections.has(sectionId) ? sectionId : 'low';
+  const sectionLabel = section === 'silent'
+    ? 'Silent / Weapon Only'
+    : `${section.charAt(0).toUpperCase()}${section.slice(1)} Intensity`;
+  const sectionSlug = section.replace(/[^a-z0-9]+/g, '_');
+  await runBS0Stage(3, {
+    durationMs: 90000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'fixed_section',
+        fixedSection: section,
+      },
+    },
+    saveRunIdBase: `musicLab_bs0_s3_listen_${sectionSlug}_1x90s`,
+    saveNotes: [
+      `Beat Swarm Music Lab focused listening run: normal intro, then fixed ${sectionLabel} arrangement state.`,
+      'Listen for clarity of player-generated motifs, motif repetition fatigue, lane balance, and whether the state has a distinct musical identity.',
+    ].join(' '),
+    groupedScenarioName: `retro_shooter_intro_pacing_s3_listen_${sectionSlug}_1x90s`,
+    groupedRunId: `musicLab_bs0_s3_listen_${sectionSlug}_1x90s_scenario`,
+    groupedNotes: `Beat Swarm focused listening scenario: ${sectionLabel}, 1 run x 90 seconds, compact save.`,
+    tagPrefix: `BS0S3MusicLabListen${sectionLabel.replace(/[^A-Za-z0-9]+/g, '')}1x90s`,
+    labelPrefix: `BS0_stage3_beatswarm_static_fire_musiclab_listen_${sectionSlug}_1x90s`,
+    statusPrefix: `Running BS0 S3 focused listening pass: ${sectionLabel} (90 seconds, compact save)`,
     traceCapture: {
       enabled: false,
     },

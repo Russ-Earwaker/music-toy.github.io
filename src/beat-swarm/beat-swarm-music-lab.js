@@ -81,7 +81,7 @@ function deriveFoundationPlayerBassTrace(foundationPhraseIdLike = '', foundation
   const interpretationMode = barIndex >= 12 && barIndex < 20 ? 'literal_statement' : 'director_riff';
   return {
     foundationPlayerThemeSource: 'bassDrive',
-    foundationRawPatternKey: interpretationMode === 'literal_statement' ? patternKey : '',
+    foundationRawPatternKey: patternKey,
     foundationShapedPatternKey: patternKey,
     foundationInterpretationMode: interpretationMode,
     foundationPhrasePartIndex: clampInt(match[1], 0, 0),
@@ -202,6 +202,9 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
       : (payload?.phraseResolutionHit === true ? true : (payload?.phraseResolutionHit === false ? false : null)));
   const continuityId = String(context?.continuityId ?? payload?.continuityId ?? '').trim();
   const musicLaneId = String(context?.musicLaneId ?? payload?.musicLaneId ?? '').trim().toLowerCase();
+  const musicLanePhraseId = String(context?.musicLanePhraseId ?? payload?.musicLanePhraseId ?? '').trim().toLowerCase();
+  const musicLanePatternKey = String(context?.musicLanePatternKey ?? payload?.musicLanePatternKey ?? '').trim().toLowerCase();
+  const musicLanePlayerThemeSource = String(context?.musicLanePlayerThemeSource ?? payload?.musicLanePlayerThemeSource ?? '').trim();
   const foundationLaneId = String(context?.foundationLaneId ?? payload?.foundationLaneId ?? '').trim().toLowerCase();
   const enemyVisualId = String(context?.enemyVisualId ?? payload?.enemyVisualId ?? payload?.musicRoleVisualId ?? '').trim().toLowerCase();
   const enemyRoleColor = String(context?.enemyRoleColor ?? payload?.enemyRoleColor ?? payload?.musicRoleColor ?? '').trim().toLowerCase();
@@ -329,6 +332,9 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     phraseResolutionHit,
     continuityId,
     musicLaneId,
+    musicLanePhraseId,
+    musicLanePatternKey,
+    musicLanePlayerThemeSource,
     foundationLaneId,
     enemyVisualId,
     enemyRoleColor,
@@ -3923,11 +3929,22 @@ function collectArrangementSupportTrace(events) {
     const laneId = String(ev?.musicLaneId || '').trim().toLowerCase();
     const profile = String(ev?.musicProfileSourceType || '').trim().toLowerCase();
     const intent = String(ev?.arrangementSupportIntent || '').trim().toLowerCase();
-    return !!intent || laneId === 'secondary_loop_lane' || profile === 'secondary_bridge_backbeat' || profile === 'rhythm_lane';
+    const playerThemeSource = String(ev?.musicLanePlayerThemeSource || '').trim().toLowerCase();
+    return !!intent
+      || !!playerThemeSource
+      || laneId === 'secondary_loop_lane'
+      || laneId === 'sparkle_lane'
+      || profile === 'secondary_bridge_backbeat'
+      || profile === 'rhythm_lane';
   });
   const byIntent = {};
   const byStepBudget = {};
   const byProfileSourceType = {};
+  const byPlayerThemeSource = {};
+  const byPhraseId = {};
+  const byPatternKey = {};
+  const byInstrumentId = {};
+  const byNote = {};
   const inc = (target, keyLike) => {
     const key = keyLike == null
       ? 'unknown'
@@ -3938,16 +3955,34 @@ function collectArrangementSupportTrace(events) {
     inc(byIntent, ev?.arrangementSupportIntent);
     inc(byStepBudget, ev?.arrangementSupportStepBudget);
     inc(byProfileSourceType, ev?.musicProfileSourceType);
+    inc(byPlayerThemeSource, ev?.musicLanePlayerThemeSource);
+    inc(byPhraseId, ev?.musicLanePhraseId);
+    inc(byPatternKey, ev?.musicLanePatternKey);
+    inc(byInstrumentId, ev?.instrumentId);
+    inc(byNote, ev?.noteResolved || ev?.note);
   }
   return {
     count: supportEvents.length,
     byIntent,
     byStepBudget,
     byProfileSourceType,
+    byPlayerThemeSource,
+    byPhraseId,
+    byPatternKey,
+    byInstrumentId,
+    byNote,
     sample: supportEvents.slice(0, 24).map((ev) => ({
       barIndex: clampInt(ev?.barIndex, 0, 0),
       stepIndex: clampInt(ev?.stepIndex, 0, 0),
+      phase: String(ev?.phase || '').trim().toLowerCase(),
+      actionType: String(ev?.actionType || '').trim().toLowerCase(),
       musicLaneId: String(ev?.musicLaneId || '').trim().toLowerCase(),
+      musicLanePhraseId: String(ev?.musicLanePhraseId || '').trim().toLowerCase(),
+      musicLanePatternKey: String(ev?.musicLanePatternKey || '').trim().toLowerCase(),
+      musicLanePlayerThemeSource: String(ev?.musicLanePlayerThemeSource || '').trim(),
+      instrumentId: String(ev?.instrumentId || '').trim(),
+      note: String(ev?.note || '').trim(),
+      noteResolved: String(ev?.noteResolved || '').trim(),
       musicProfileSourceType: String(ev?.musicProfileSourceType || '').trim().toLowerCase(),
       arrangementSupportIntent: String(ev?.arrangementSupportIntent || '').trim().toLowerCase(),
       arrangementSupportStepBudget: clampInt(ev?.arrangementSupportStepBudget, 0, 0),
