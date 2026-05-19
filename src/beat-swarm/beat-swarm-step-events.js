@@ -247,7 +247,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       if (lane === 'ornament') return [3, 7];
       if (lane === 'secondary') return [2, 6];
       if (lane === 'lead') return [0, 1, 2, 4, 6, 7];
-      return [0, 1, 2, 3, 4, 5, 6, 7];
+      return [0, 4];
     }
     if (stage === 'release') {
       if (lane === 'lead') return [0, 4];
@@ -1104,6 +1104,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       );
     const foundationAssignedBefore = prominenceState.foundationAssigned === true;
     const deconflictedProminence = (() => {
+      if (currentEnemyMusicActionGateState.stage === 'peak' && safeLayer === 'loops' && laneDrivenPrimaryLoop) return 'full';
       if (!playerLikelyAudible) return safeProminence;
       if (safeProminence !== 'full' && safeProminence !== 'quiet') return safeProminence;
       if (isPlayerBassFoundation) return 'full';
@@ -1954,9 +1955,86 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }) || null;
     return ev || null;
   })();
+  const explicitPlayerAccentRhythmEvent = (() => {
+    const arrangementState = directorLanePlan?.__arrangementState && typeof directorLanePlan.__arrangementState === 'object'
+      ? directorLanePlan.__arrangementState
+      : (musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+        ? musicModeRuntime.level1ArrangementState
+        : null);
+    const stage = normalizeGateStage(
+      arrangementState?.intensityAuditionSection
+      || currentEnemyMusicActionGateState?.stage
+    );
+    if (stage !== 'medium' && stage !== 'build') return null;
+    const sectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
+    const phrase = helpers.getPlayerAccentRhythmMotionPhrase?.(barIndex, `intensity_${stage}`, {
+      sectionRelative: true,
+      sectionBar,
+      layerKey: 'backbeat',
+    }) || null;
+    const steps = Array.isArray(phrase?.steps) ? phrase.steps : [];
+    const localStep = ((stepIndex % 8) + 8) % 8;
+    if (!steps[localStep]) return null;
+    const actorId = Math.max(
+      0,
+      Math.trunc(Number(secondaryLoopLaneRuntime?.performerEnemyId) || 0)
+        || Math.trunc(Number(primaryLoopLaneRuntime?.performerEnemyId) || 0)
+    );
+    const groupId = Math.max(
+      0,
+      Math.trunc(Number(secondaryLoopLaneRuntime?.performerGroupId) || 0)
+        || Math.trunc(Number(primaryLoopLaneRuntime?.performerGroupId) || 0)
+    );
+    const instrumentId = String(helpers.getPlayerSimpleRhythmThemeInstrumentId?.('accentRhythm') || '').trim();
+    if (!instrumentId) return null;
+    const phraseId = String(phrase?.id || `player_accent_rhythm_${String(phrase?.patternKey || 'default').trim() || 'default'}`).trim();
+    const ev = helpers.createLoggedPerformedBeatEvent?.({
+      actorId,
+      beatIndex,
+      stepIndex,
+      role: constants.roles?.accent || 'accent',
+      note: 'C4',
+      instrumentId,
+      actionType: 'composer-group-projectile',
+      threatClass: constants.threat?.light || 'light',
+      visualSyncType: actorId > 0 ? 'group-pulse' : 'none',
+      payload: {
+        groupId,
+        groupEventSource: 'player_accent_rhythm_direct',
+        continuityId: 'player-accent-rhythm-direct',
+        ghostPlayback: actorId <= 0,
+        musicLayer: 'loops',
+        musicLaneId: 'secondary_loop_lane',
+        musicVoiceKey: 'percussion_backbeat',
+        musicProfileSourceType: 'spawner_rhythm_backbeat',
+        musicLanePlayerThemeSource: 'accentRhythm',
+        musicLanePhraseId: phraseId,
+        musicLanePatternKey: String(phrase?.patternKey || '').trim(),
+        musicLaneRawPatternKey: String(phrase?.rawPatternKey || '').trim(),
+        musicLaneShapedPatternKey: String(phrase?.shapedPatternKey || phrase?.patternKey || '').trim(),
+        musicLaneInterpretationMode: String(phrase?.interpretationMode || 'secondary_statement').trim().toLowerCase(),
+        musicLanePhrasePartIndex: Math.max(0, Math.trunc(Number(phrase?.phrasePartIndex) || 0)),
+        callResponseLane: 'call',
+        callResponseQualified: true,
+        callResponsePhraseProgress: localStep,
+        musicRegister: 'high',
+        musicProminence: stage === 'build' ? 'full' : 'quiet',
+        audioGain: stage === 'build' ? 0.54 : 0.42,
+        requestedNoteRaw: 'C4',
+        intensityAuditionSection: stage,
+      },
+    }, {
+      beatIndex,
+      stepIndex,
+      sourceSystem: 'music',
+      enemyType: 'composer-group-member',
+    }) || null;
+    return ev || null;
+  })();
 
   stepEvents = [
     ...stagedEnemyEvents,
+    explicitPlayerAccentRhythmEvent,
     explicitSparkleCompanionEvent,
     shouldEmitPlayerStepFinal
       ? helpers.createLoggedPerformedBeatEvent?.({

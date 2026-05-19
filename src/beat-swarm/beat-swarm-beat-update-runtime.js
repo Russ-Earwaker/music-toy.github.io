@@ -231,8 +231,11 @@ export function handleBeatStepChangeRuntime(options = null) {
         recordStepEventsPerfSample: helpers.recordStepEventsPerfSample,
         director,
         swarmMusicLab: helpers.swarmMusicLab,
-        getMusicLabContext: helpers.getMusicLabContext,
-      },
+          getMusicLabContext: helpers.getMusicLabContext,
+          getPlayerAccentRhythmMotionPhrase: helpers.getPlayerAccentRhythmMotionPhrase,
+          getPlayerLeadThemePrimaryStep: helpers.getPlayerLeadThemePrimaryStep,
+          getPlayerSimpleRhythmThemeInstrumentId: helpers.getPlayerSimpleRhythmThemeInstrumentId,
+        },
         state: {
           beatIndex,
           stepIndex,

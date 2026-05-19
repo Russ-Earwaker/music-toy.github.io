@@ -940,6 +940,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       };
       const baseSteps = Array.isArray(effectiveSpawnerProfile?.steps) ? effectiveSpawnerProfile.steps.slice(0, constants.weaponTuneSteps) : [];
       const baseNoteIndices = Array.isArray(effectiveSpawnerProfile?.noteIndices) ? effectiveSpawnerProfile.noteIndices.slice(0, constants.weaponTuneSteps) : [];
+      const playerAccentRhythmProfile = normalizedProfileSourceType === 'spawner_rhythm_backbeat'
+        && String(effectiveSpawnerProfile?.playerThemeSource || '').trim() === 'accentRhythm'
+        && baseSteps.some(Boolean);
       const introArrangementVariants = [
         {
           pulse: { steps: [true, false, false, false, true, false, false, false], noteIndices: [1, 0, 0, 0, 4, 0, 0, 0], baseNoteName: 'C3' },
@@ -1033,7 +1036,13 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           notes: ['C4', 'D#4', 'G4'],
         },
       };
-      const genericRhythmProfile = dedicatedSecondaryBridgeProfile
+      const genericRhythmProfile = playerAccentRhythmProfile
+        ? {
+            steps: baseSteps.slice(0, constants.weaponTuneSteps),
+            noteIndices: baseNoteIndices.slice(0, constants.weaponTuneSteps),
+            notes: [helpers.normalizeSwarmNoteName?.(effectiveSpawnerProfile?.baseNoteName) || fallbackBaseNoteName],
+          }
+        : dedicatedSecondaryBridgeProfile
         ? {
             steps: [false, true, false, true, false, false, true, false],
             noteIndices: [0, 4, 0, 5, 0, 0, 4, 0],
@@ -1116,6 +1125,12 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         arrangementSupportStepBudget: arrangementSupportShape
           ? Math.max(0, Math.trunc(Number(arrangementSupportShape.maxActiveCount) || 0))
           : 0,
+        musicLanePlayerThemeSource: playerAccentRhythmProfile ? 'accentRhythm' : '',
+        playerThemeSource: playerAccentRhythmProfile ? 'accentRhythm' : '',
+        rawPatternKey: playerAccentRhythmProfile ? String(effectiveSpawnerProfile?.rawPatternKey || '').trim() : '',
+        shapedPatternKey: playerAccentRhythmProfile ? String(effectiveSpawnerProfile?.shapedPatternKey || '').trim() : '',
+        interpretationMode: playerAccentRhythmProfile ? String(effectiveSpawnerProfile?.interpretationMode || '').trim().toLowerCase() : '',
+        phrasePartIndex: playerAccentRhythmProfile ? Math.max(0, Math.trunc(Number(effectiveSpawnerProfile?.phrasePartIndex) || 0)) : 0,
         instrumentId: sanitizeEnemyMusicInstrumentId(
           effectiveSpawnerProfile?.instrument,
           helpers.resolveSwarmSoundInstrumentId?.('projectile') || 'tone',
@@ -3623,6 +3638,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             sectionArcEpoch: Math.max(0, Math.trunc(Number(sharedSoloProfile?.sectionArcEpoch) || 0)),
             arrangementSupportIntent: String(sharedSoloProfile?.arrangementSupportIntent || '').trim().toLowerCase(),
             arrangementSupportStepBudget: Math.max(0, Math.trunc(Number(sharedSoloProfile?.arrangementSupportStepBudget) || 0)),
+            musicLanePlayerThemeSource: String(sharedSoloProfile?.musicLanePlayerThemeSource || sharedSoloProfile?.playerThemeSource || '').trim(),
+            musicLaneRawPatternKey: String(sharedSoloProfile?.rawPatternKey || '').trim(),
+            musicLaneShapedPatternKey: String(sharedSoloProfile?.shapedPatternKey || '').trim(),
+            musicLaneInterpretationMode: String(sharedSoloProfile?.interpretationMode || '').trim().toLowerCase(),
+            musicLanePhrasePartIndex: Math.max(0, Math.trunc(Number(sharedSoloProfile?.phrasePartIndex) || 0)),
             ...buildIntroSlotState({
               active: introStageSoloRhythmActive,
               profileSourceType: sharedProfileSourceType || '',
@@ -3727,6 +3747,18 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
               });
             } catch {}
           }
+          if (sharedSoloProfile?.playerThemeSource || sharedSoloProfile?.musicLanePlayerThemeSource) {
+            created.musicLanePlayerThemeSource = String(sharedSoloProfile.musicLanePlayerThemeSource || sharedSoloProfile.playerThemeSource || '').trim();
+            created.musicLaneRawPatternKey = String(sharedSoloProfile.rawPatternKey || '').trim();
+            created.musicLaneShapedPatternKey = String(sharedSoloProfile.shapedPatternKey || '').trim();
+            created.musicLaneInterpretationMode = String(sharedSoloProfile.interpretationMode || '').trim().toLowerCase();
+            created.musicLanePhrasePartIndex = Math.max(0, Math.trunc(Number(sharedSoloProfile.phrasePartIndex) || 0));
+            if (sharedSoloProfile.instrumentId) {
+              created.instrumentId = sharedSoloProfile.instrumentId;
+              created.instrument = sharedSoloProfile.instrumentId;
+              created.musicLaneInstrumentId = sharedSoloProfile.instrumentId;
+            }
+          }
           enforceLevel1NoSparkleOnGroup(created);
           applyFormationRuntimeToGroup(created);
           created.musicRole = String(
@@ -3756,7 +3788,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             preferredLaneId: created.musicLaneId || soloLaneId,
             instrumentId: created.instrumentId || instrumentId,
             continuityId: created.continuityId,
-            phraseId: String(created?.motif?.id || ''),
+            phraseId: String(sharedSoloProfile?.id || created?.motif?.id || ''),
             performerGroupId: Math.trunc(Number(created.id) || 0),
             performerType: 'composer-group',
             lockInstrument: true,
@@ -4264,6 +4296,13 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           }
           group.arrangementSupportIntent = String(sharedSoloProfile.arrangementSupportIntent || '').trim().toLowerCase();
           group.arrangementSupportStepBudget = Math.max(0, Math.trunc(Number(sharedSoloProfile.arrangementSupportStepBudget) || 0));
+          if (sharedSoloProfile.playerThemeSource || sharedSoloProfile.musicLanePlayerThemeSource) {
+            group.musicLanePlayerThemeSource = String(sharedSoloProfile.musicLanePlayerThemeSource || sharedSoloProfile.playerThemeSource || '').trim();
+            group.musicLaneRawPatternKey = String(sharedSoloProfile.rawPatternKey || '').trim();
+            group.musicLaneShapedPatternKey = String(sharedSoloProfile.shapedPatternKey || '').trim();
+            group.musicLaneInterpretationMode = String(sharedSoloProfile.interpretationMode || '').trim().toLowerCase();
+            group.musicLanePhrasePartIndex = Math.max(0, Math.trunc(Number(sharedSoloProfile.phrasePartIndex) || 0));
+          }
           const syncedSoloInstrumentId = (primaryLoopMelodyIdentity || !String(group?.instrumentId || group?.instrument || '').trim())
             ? sanitizeEnemyMusicInstrumentId(
                 sharedSoloProfile.instrumentId,
@@ -4376,6 +4415,13 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           }
           group.arrangementSupportIntent = String(sharedCarrierProfile.arrangementSupportIntent || '').trim().toLowerCase();
           group.arrangementSupportStepBudget = Math.max(0, Math.trunc(Number(sharedCarrierProfile.arrangementSupportStepBudget) || 0));
+          if (sharedCarrierProfile.playerThemeSource || sharedCarrierProfile.musicLanePlayerThemeSource) {
+            group.musicLanePlayerThemeSource = String(sharedCarrierProfile.musicLanePlayerThemeSource || sharedCarrierProfile.playerThemeSource || '').trim();
+            group.musicLaneRawPatternKey = String(sharedCarrierProfile.rawPatternKey || '').trim();
+            group.musicLaneShapedPatternKey = String(sharedCarrierProfile.shapedPatternKey || '').trim();
+            group.musicLaneInterpretationMode = String(sharedCarrierProfile.interpretationMode || '').trim().toLowerCase();
+            group.musicLanePhrasePartIndex = Math.max(0, Math.trunc(Number(sharedCarrierProfile.phrasePartIndex) || 0));
+          }
           const normalizedCarrierProfileSourceType = normalizeComposerProfileSourceType(musicProfileSourceType);
           const structuralRhythmCarrier = (
             normalizedCarrierProfileSourceType === 'secondary_bridge_backbeat'

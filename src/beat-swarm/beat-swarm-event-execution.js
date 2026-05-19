@@ -77,6 +77,21 @@ export function executePerformedBeatEventRuntime(options = null) {
       return null;
     }
   };
+  const normalizeIntensityStage = (stageLike = '') => {
+    const raw = String(stageLike || '').trim().toLowerCase();
+    if (raw === 'intro' || raw === 'silent' || raw === 'low' || raw === 'medium' || raw === 'build' || raw === 'peak' || raw === 'release' || raw === 'settle') return raw;
+    return '';
+  };
+  const getCurrentArrangementState = () => {
+    try {
+      const plan = helpers.getDirectorLanePlanForBar?.(barIndex) || helpers.getDirectorLanePlan?.() || null;
+      if (plan?.__arrangementState && typeof plan.__arrangementState === 'object') return plan.__arrangementState;
+    } catch {}
+    return musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+      ? musicModeRuntime.level1ArrangementState
+      : null;
+  };
+  const getCurrentIntensityStage = () => normalizeIntensityStage(getCurrentArrangementState()?.intensityAuditionSection);
   const isContractBlockedOrnamentExecution = (base = null, enemyLike = null, groupLike = null) => {
     const contract = getCurrentLevel1Contract();
     if (!contract) return false;
@@ -145,6 +160,15 @@ export function executePerformedBeatEventRuntime(options = null) {
         audioRequired: base?.audioRequired === true || payload?.audioRequired === true || actionClassification.audioRequired === true,
         classificationReason: String(base?.classificationReason || payload?.classificationReason || actionClassification.classificationReason || '').trim().toLowerCase(),
         callResponseLane: String(base?.callResponseLane || payload?.callResponseLane || '').trim().toLowerCase(),
+        musicLaneId: String(base?.musicLaneId || payload?.musicLaneId || '').trim().toLowerCase(),
+        musicLayer: String(base?.musicLayer || payload?.musicLayer || '').trim().toLowerCase(),
+        musicVoiceKey: String(base?.musicVoiceKey || payload?.musicVoiceKey || '').trim().toLowerCase(),
+        musicProminence: String(base?.musicProminence || payload?.musicProminence || '').trim().toLowerCase(),
+        musicProfileSourceType: String(base?.musicProfileSourceType || payload?.musicProfileSourceType || '').trim().toLowerCase(),
+        musicLanePhraseId: String(base?.musicLanePhraseId || payload?.musicLanePhraseId || '').trim().toLowerCase(),
+        musicLanePatternKey: String(base?.musicLanePatternKey || payload?.musicLanePatternKey || '').trim().toLowerCase(),
+        musicLanePlayerThemeSource: String(base?.musicLanePlayerThemeSource || payload?.musicLanePlayerThemeSource || '').trim(),
+        intensityAuditionSection: String(base?.intensityAuditionSection || payload?.intensityAuditionSection || getCurrentIntensityStage() || '').trim().toLowerCase(),
         callResponseQualified: base?.callResponseQualified === true
           ? true
           : (base?.callResponseQualified === false
@@ -250,6 +274,42 @@ export function executePerformedBeatEventRuntime(options = null) {
         ...base,
       }));
     } catch {}
+  };
+  const buildLeadThemeExecutionContext = (groupLike = null, enemyLike = null) => {
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
+    const laneId = String(payload?.musicLaneId || group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
+    if (laneId !== 'primary_loop_lane') return {};
+    const existingThemeSource = String(payload?.leadPlayerThemeSource || group?.leadPlayerThemeSource || enemy?.leadPlayerThemeSource || '').trim();
+    const existingMode = String(payload?.leadThemeInterpretationMode || group?.leadThemeInterpretationMode || enemy?.leadThemeInterpretationMode || '').trim().toLowerCase();
+    if (existingThemeSource || existingMode) {
+      return {
+        leadPlayerThemeSource: existingThemeSource,
+        leadThemeInterpretationMode: existingMode,
+        leadThemePartIndex: Math.max(0, Math.trunc(Number(payload?.leadThemePartIndex ?? group?.leadThemePartIndex ?? enemy?.leadThemePartIndex) || 0)),
+        leadThemeStepIndex: Math.max(0, Math.trunc(Number(payload?.leadThemeStepIndex ?? group?.leadThemeStepIndex ?? enemy?.leadThemeStepIndex) || 0)),
+        leadThemePatternKey: String(payload?.leadThemePatternKey || group?.leadThemePatternKey || enemy?.leadThemePatternKey || '').trim().toLowerCase(),
+        leadThemeContourKey: String(payload?.leadThemeContourKey || group?.leadThemeContourKey || enemy?.leadThemeContourKey || '').trim().toLowerCase(),
+        leadThemeRawStepActive: payload?.leadThemeRawStepActive === true || group?.leadThemeRawStepActive === true || enemy?.leadThemeRawStepActive === true,
+        leadThemeRawNote: String(payload?.leadThemeRawNote || group?.leadThemeRawNote || enemy?.leadThemeRawNote || '').trim(),
+      };
+    }
+    const section = getCurrentIntensityStage();
+    const leadThemeStep = typeof helpers.getPlayerLeadThemePrimaryStep === 'function'
+      ? helpers.getPlayerLeadThemePrimaryStep(barIndex, stepIndex, section)
+      : null;
+    if (!leadThemeStep || typeof leadThemeStep !== 'object') return {};
+    return {
+      leadPlayerThemeSource: 'leadTheme',
+      leadThemeInterpretationMode: String(leadThemeStep.interpretationMode || '').trim().toLowerCase(),
+      leadThemePartIndex: Math.max(0, Math.trunc(Number(leadThemeStep.phrasePartIndex) || 0)),
+      leadThemeStepIndex: Math.max(0, Math.trunc(Number(leadThemeStep.step) || 0)),
+      leadThemePatternKey: String(leadThemeStep.patternKey || '').trim().toLowerCase(),
+      leadThemeContourKey: String(leadThemeStep.contourKey || '').trim().toLowerCase(),
+      leadThemeRawStepActive: leadThemeStep.active === true,
+      leadThemeRawNote: String(leadThemeStep.rawNote || '').trim(),
+    };
   };
   const executionInstrumentRuntime = state.executionInstrumentRuntime && typeof state.executionInstrumentRuntime === 'object'
     ? state.executionInstrumentRuntime
@@ -1058,7 +1118,26 @@ export function executePerformedBeatEventRuntime(options = null) {
       return false;
     }
     const group = ghostPlayback
-      ? (composerEnemyGroups.find((g) => Math.max(0, Math.trunc(Number(g?.id) || 0)) === payloadGroupId) || null)
+      ? (
+        composerEnemyGroups.find((g) => Math.max(0, Math.trunc(Number(g?.id) || 0)) === payloadGroupId)
+        || {
+          id: 0,
+          role: ev?.role || payload?.musicRole || 'accent',
+          actionType,
+          instrumentId: ev?.instrumentId || '',
+          instrument: ev?.instrumentId || '',
+          musicLaneInstrumentId: ev?.instrumentId || '',
+          musicLaneId: payload?.musicLaneId || '',
+          musicLaneLayer: payload?.musicLayer || '',
+          musicProfileSourceType: payload?.musicProfileSourceType || '',
+          musicLanePlayerThemeSource: payload?.musicLanePlayerThemeSource || '',
+          musicLanePhraseId: payload?.musicLanePhraseId || '',
+          musicLanePatternKey: payload?.musicLanePatternKey || '',
+          callResponseLane: payload?.callResponseLane || '',
+          soloCarrierType: payload?.soloCarrierType || '',
+          lifecycleState: 'active',
+        }
+      )
       : helpers.getEnemyMusicGroup?.(enemy, actionType);
     try {
       if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
@@ -1080,6 +1159,38 @@ export function executePerformedBeatEventRuntime(options = null) {
         admissionReason: 'missing_group',
       });
       return false;
+    }
+    const suppressLegacySecondaryFallback = (() => {
+      const stage = getCurrentIntensityStage();
+      if (stage !== 'medium' && stage !== 'build') return false;
+      const laneId = String(payload?.musicLaneId || group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
+      if (laneId !== 'secondary_loop_lane') return false;
+      const playerThemeSource = String(
+        payload?.musicLanePlayerThemeSource
+          || group?.musicLanePlayerThemeSource
+          || enemy?.musicLanePlayerThemeSource
+          || ''
+      ).trim();
+      if (playerThemeSource) return false;
+      const continuityId = String(payload?.continuityId || ev?.continuityId || '').trim().toLowerCase();
+      const profileSourceType = String(
+        payload?.musicProfileSourceType
+          || group?.musicProfileSourceType
+          || enemy?.musicProfileSourceType
+          || ''
+      ).trim().toLowerCase();
+      const groupEventSource = String(payload?.groupEventSource || '').trim().toLowerCase();
+      return continuityId === 'secondary-loop-bridge-fallback'
+        || groupEventSource === 'secondary_loop_bridge_fallback'
+        || profileSourceType === 'secondary_bridge_backbeat';
+    })();
+    if (suppressLegacySecondaryFallback) {
+      noteComposerExecutionStage('suppressed_legacy_secondary_fallback', {
+        hasGroup: true,
+        musicLaneId: 'secondary_loop_lane',
+        intensityAuditionSection: getCurrentIntensityStage(),
+      });
+      return true;
     }
     if (isContractBlockedOrnamentExecution({ sourceSystem: 'group' }, enemy || null, group)) {
       noteContractBlockedOrnamentExecution('execute_group', { sourceSystem: 'group' }, enemy || null, group);
@@ -1229,6 +1340,7 @@ export function executePerformedBeatEventRuntime(options = null) {
         musicProminence,
         enemyType: 'composer-group-member',
         ghostPlayback: true,
+        ...buildLeadThemeExecutionContext(group, enemy || null),
         ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
       });
       noteComposerExecutionStage('completed_ghost', {
@@ -1308,6 +1420,7 @@ export function executePerformedBeatEventRuntime(options = null) {
       noteWasClamped: requestedNote ? requestedNote !== noteName : false,
       enemyAudible,
       musicProminence,
+      ...buildLeadThemeExecutionContext(group, enemy),
       ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
     });
     noteComposerExecutionStage('completed', {

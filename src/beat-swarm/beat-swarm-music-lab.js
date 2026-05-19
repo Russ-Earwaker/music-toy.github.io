@@ -288,13 +288,38 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const leadMotifReuseCount = clampInt(context?.leadMotifReuseCount ?? payload?.leadMotifReuseCount, 0, 0);
   const leadMotifReturnCount = clampInt(context?.leadMotifReturnCount ?? payload?.leadMotifReturnCount, 0, 0);
   const leadMotifVariationCount = clampInt(context?.leadMotifVariationCount ?? payload?.leadMotifVariationCount, 0, 0);
-  const leadPlayerThemeSource = String(context?.leadPlayerThemeSource ?? payload?.leadPlayerThemeSource ?? '').trim().toLowerCase();
+  const inferredPrimaryLeadThemeSource = musicLaneId === 'primary_loop_lane' ? 'leadTheme' : '';
+  const inferredPrimaryLeadMode = (() => {
+    if (musicLaneId !== 'primary_loop_lane') return '';
+    if (intensityAuditionSection === 'build') return 'build_assemble';
+    if (intensityAuditionSection === 'peak') return 'peak_riff';
+    if (intensityAuditionSection === 'release') return 'release_riff';
+    return 'director_riff';
+  })();
+  const leadPlayerThemeSource = String(
+    String(context?.leadPlayerThemeSource ?? '').trim()
+    || String(payload?.leadPlayerThemeSource ?? '').trim()
+    || inferredPrimaryLeadThemeSource
+  ).trim().toLowerCase();
   const leadThemeInterpretationMode = String(
     String(context?.leadThemeInterpretationMode ?? '').trim()
     || String(payload?.leadThemeInterpretationMode ?? '').trim()
+    || inferredPrimaryLeadMode
   ).trim().toLowerCase();
-  const leadThemePartIndex = clampInt(context?.leadThemePartIndex ?? payload?.leadThemePartIndex, 0, 0);
-  const leadThemeStepIndex = clampInt(context?.leadThemeStepIndex ?? payload?.leadThemeStepIndex, 0, 0);
+  const leadThemePartIndex = clampInt(
+    context?.leadThemePartIndex
+      ?? payload?.leadThemePartIndex
+      ?? (musicLaneId === 'primary_loop_lane' ? barIndex % 4 : 0),
+    0,
+    0
+  );
+  const leadThemeStepIndex = clampInt(
+    context?.leadThemeStepIndex
+      ?? payload?.leadThemeStepIndex
+      ?? (musicLaneId === 'primary_loop_lane' ? stepIndex % 8 : 0),
+    0,
+    0
+  );
   const leadThemePatternKey = String(context?.leadThemePatternKey ?? payload?.leadThemePatternKey ?? '').trim().toLowerCase();
   const leadThemeContourKey = String(context?.leadThemeContourKey ?? payload?.leadThemeContourKey ?? '').trim().toLowerCase();
   const leadThemeRawStepActive = context?.leadThemeRawStepActive === true ? true : (payload?.leadThemeRawStepActive === true);

@@ -7619,19 +7619,76 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   const directorNote = mapPlayerLeadThemeRowToDirectorNote(rowIndex, stepIndex + part.phrasePartIndex) || clampNoteToDirectorPool(rawNote, stepIndex + part.phrasePartIndex);
   const activeStep = !!part.active[step] && !!rawNote;
   const sectionId = String(sectionIdLike || '').trim().toLowerCase();
-  const literalStatement = bar >= 20 && bar < 36;
+  const arrangementState = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+    ? musicModeRuntime.level1ArrangementState
+    : null;
+  const sectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
+  const buildAssembly = sectionId === 'build';
+  const buildRevealPhase = buildAssembly
+    ? (sectionBar < 4 ? 0 : (sectionBar < 8 ? 1 : 2))
+    : -1;
+  const buildPartLimit = buildRevealPhase === 0
+    ? 1
+    : (buildRevealPhase === 1 ? Math.min(2, parts.length) : Math.min(3, parts.length));
+  const buildPartAllowed = !buildAssembly || part.phrasePartIndex < buildPartLimit;
+  const buildStepAllowed = (() => {
+    if (!buildAssembly) return true;
+    if (!buildPartAllowed) return false;
+    if (buildRevealPhase === 0) return step === 0 || step === 4;
+    if (buildRevealPhase === 1) return step === 0 || step === 2 || step === 4 || step === 6;
+    return true;
+  })();
+  const peakRiff = sectionId === 'peak';
+  const nearestPeakThemeNote = (() => {
+    if (!peakRiff || activeStep) return '';
+    for (let delta = 1; delta < part.steps; delta += 1) {
+      const prevStep = (step - delta + part.steps) % part.steps;
+      const nextStep = (step + delta) % part.steps;
+      const prevNote = part.active[prevStep] ? normalizeSwarmNoteName(part.noteByStep[prevStep]) : '';
+      if (prevNote) return prevNote;
+      const nextNote = part.active[nextStep] ? normalizeSwarmNoteName(part.noteByStep[nextStep]) : '';
+      if (nextNote) return nextNote;
+    }
+    return '';
+  })();
+  const peakPickupActive = peakRiff
+    && !activeStep
+    && !!nearestPeakThemeNote
+    && (step === 1 || step === 3 || step === 5 || step === 7);
+  const peakPickupNote = peakPickupActive
+    ? getDirectorPoolNoteAtOffset(
+      mapPlayerLeadThemeRowToDirectorNote(rowIndex, stepIndex + part.phrasePartIndex)
+        || clampNoteToDirectorPool(nearestPeakThemeNote, stepIndex + part.phrasePartIndex)
+        || nearestPeakThemeNote,
+      step >= 5 ? 2 : 1,
+      stepIndex
+    )
+    : '';
+  const resolvedActiveStep = (activeStep && buildStepAllowed) || peakPickupActive;
+  const resolvedNote = peakPickupActive
+    ? peakPickupNote
+    : (peakRiff && activeStep
+      ? getDirectorPoolNoteAtOffset(directorNote, step >= 4 ? 1 : 0, stepIndex)
+      : directorNote);
+  const literalStatement = sectionId === 'medium' && bar >= 20 && bar < 36;
+  const interpretationMode = buildAssembly
+    ? 'build_assemble'
+    : (peakRiff ? 'peak_riff' : (literalStatement ? 'literal_statement' : (sectionId === 'release' ? 'release_riff' : 'director_riff')));
   return {
     themeId: 'leadTheme',
     source: 'player_theme',
     phrasePartIndex: part.phrasePartIndex,
     step,
-    active: activeStep,
-    note: activeStep ? directorNote : '',
+    active: resolvedActiveStep,
+    note: resolvedActiveStep ? resolvedNote : '',
     rawNote,
     rowIndex,
     patternKey: part.patternKey,
     contourKey: part.contourKey,
-    interpretationMode: literalStatement ? 'literal_statement' : (sectionId === 'release' ? 'release_riff' : 'director_riff'),
+    interpretationMode,
+    buildRevealPhase,
+    buildPartAllowed,
+    peakPickupActive,
   };
 }
 function shapePlayerBassDriveStepsForFoundation(baseStepsLike = null, sectionIdLike = '', options = null) {
@@ -7730,7 +7787,7 @@ function shapePlayerAccentRhythmStepsForMotion(baseStepsLike = null, sectionIdLi
   const sectionId = String(sectionIdLike || '').trim().toLowerCase();
   const raw = cloneFoundationPhraseSteps(baseStepsLike);
   const shaped = raw.slice();
-  const maxHits = 1;
+  const maxHits = Math.max(1, Math.min(3, Math.trunc(Number(opts.maxHits) || 1)));
   const preferred = sectionId.includes('release')
     ? [7, 5, 3, 1]
     : [1, 3, 5, 7, 2, 6];
@@ -7753,15 +7810,25 @@ function getPlayerAccentRhythmMotionPhrase(barIndex = 0, sectionIdLike = '', opt
   const patterns = getPlayerSimpleRhythmMotifPatterns('accentRhythm');
   if (!patterns.length) return null;
   const opts = options && typeof options === 'object' ? options : {};
+  const layerKey = String(opts.layerKey || 'motion').trim().toLowerCase();
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const sectionId = String(sectionIdLike || 'body').trim().toLowerCase() || 'body';
   const sectionBar = Math.max(0, Math.trunc(Number(opts.sectionBar) || 0));
   const phraseBar = opts.sectionRelative === true ? sectionBar : bar;
-  if (!sectionId.includes('peak') && !sectionId.includes('clash')) return null;
-  if ((phraseBar % 4) !== 3) return null;
+  const peakLike = sectionId.includes('peak') || sectionId.includes('clash');
+  const secondaryLike = sectionId.includes('medium') || sectionId.includes('build');
+  if (layerKey === 'motion') {
+    if (!peakLike) return null;
+    if ((phraseBar % 4) !== 3) return null;
+  } else if (layerKey === 'backbeat') {
+    if (!secondaryLike && !peakLike) return null;
+  } else {
+    return null;
+  }
   const phrasePartIndex = phraseBar % patterns.length;
   const rawSteps = patterns[phrasePartIndex] || patterns[0];
-  const steps = shapePlayerAccentRhythmStepsForMotion(rawSteps, sectionId, { phrasePartIndex });
+  const maxHits = layerKey === 'backbeat' ? 2 : 1;
+  const steps = shapePlayerAccentRhythmStepsForMotion(rawSteps, sectionId, { phrasePartIndex, maxHits });
   if (!steps.some(Boolean)) return null;
   const patternKey = buildFoundationPhrasePatternKey(steps);
   const rawPatternKey = buildFoundationPhrasePatternKey(rawSteps);
@@ -7773,7 +7840,7 @@ function getPlayerAccentRhythmMotionPhrase(barIndex = 0, sectionIdLike = '', opt
     phrasePartIndex,
     rawPatternKey,
     shapedPatternKey: patternKey,
-    interpretationMode: sectionId.includes('release') ? 'release_punctuation' : 'director_support',
+    interpretationMode: layerKey === 'backbeat' ? 'secondary_statement' : (sectionId.includes('release') ? 'release_punctuation' : 'director_support'),
     steps,
     patternKey,
   };
@@ -17050,14 +17117,31 @@ function pickSpawnerGrooveLayerPattern(layerKey, barIndex = 0, sectionId = 'defa
   const intensityBucket = Math.max(0, Math.min(3, Math.trunc(clamp01(intensity) * 3.99)));
   const level1FullTextureActive = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase() === 'full_texture';
   const intensityAuditionState = getBeatSwarmMusicIntensityAuditionState(barIndex);
-  const intensityAuditionSection = String(intensityAuditionState?.id || '').trim().toLowerCase();
+  const arrangementAuditionSection = String(musicModeRuntime?.level1ArrangementState?.intensityAuditionSection || '').trim().toLowerCase();
+  const intensityAuditionSection = String(intensityAuditionState?.id || arrangementAuditionSection || '').trim().toLowerCase();
+  const intensityAuditionSectionBar = Math.max(
+    0,
+    Math.trunc(Number(
+      intensityAuditionState?.auditionSectionBar
+      ?? musicModeRuntime?.level1ArrangementState?.intensityAuditionSectionBar
+      ?? 0
+    ) || 0)
+  );
+  const directorLanePlan = ensureSwarmDirector().getLanePlan?.() || null;
+  const secondaryLoopAuditionFallback = layerKey === 'backbeat'
+    && !intensityAuditionSection
+    && barIndex >= 20
+    && directorLanePlan?.secondary_loop?.active === true;
   const sectionForPlayerAccent = intensityAuditionSection
     ? `intensity_${intensityAuditionSection}`
-    : String((energyState === 'peak' || energyState === 'clash') ? energyState : (sectionId || energyState || 'default')).trim().toLowerCase();
-  if (layerKey === 'motion') {
+    : (secondaryLoopAuditionFallback
+      ? 'intensity_medium'
+      : String((energyState === 'peak' || energyState === 'clash') ? energyState : (sectionId || energyState || 'default')).trim().toLowerCase());
+  if (layerKey === 'backbeat' || layerKey === 'motion') {
     const playerAccentPhrase = getPlayerAccentRhythmMotionPhrase(barIndex, sectionForPlayerAccent, {
       sectionRelative: !!intensityAuditionSection,
-      sectionBar: Math.max(0, Math.trunc(Number(intensityAuditionState?.auditionSectionBar) || 0)),
+      sectionBar: intensityAuditionSectionBar,
+      layerKey,
     });
     if (playerAccentPhrase?.steps?.some(Boolean)) {
       return {
@@ -17127,14 +17211,31 @@ function ensureSpawnerPercussionGroovePlan(barIndex = 0) {
     const shouldBeActive = !!desired[layerKey];
     const lockedUntilBar = Math.max(-1, Math.trunc(Number(layerState.lockedUntilBar) || -1));
     const intensityAuditionState = getBeatSwarmMusicIntensityAuditionState(barIndex);
-    const intensityAuditionSection = String(intensityAuditionState?.id || '').trim().toLowerCase();
+    const arrangementAuditionSection = String(musicModeRuntime?.level1ArrangementState?.intensityAuditionSection || '').trim().toLowerCase();
+    const intensityAuditionSection = String(intensityAuditionState?.id || arrangementAuditionSection || '').trim().toLowerCase();
+    const intensityAuditionSectionBar = Math.max(
+      0,
+      Math.trunc(Number(
+        intensityAuditionState?.auditionSectionBar
+        ?? musicModeRuntime?.level1ArrangementState?.intensityAuditionSectionBar
+        ?? 0
+      ) || 0)
+    );
+    const directorLanePlan = ensureSwarmDirector().getLanePlan?.() || null;
+    const secondaryLoopAuditionFallback = layerKey === 'backbeat'
+      && !intensityAuditionSection
+      && barIndex >= 20
+      && directorLanePlan?.secondary_loop?.active === true;
     const sectionForPlayerAccent = intensityAuditionSection
       ? `intensity_${intensityAuditionSection}`
-      : String((desired.energyState === 'peak' || desired.energyState === 'clash') ? desired.energyState : (desired.sectionId || desired.energyState || 'default')).trim().toLowerCase();
-    const playerAccentCadenceDue = layerKey === 'motion'
+      : (secondaryLoopAuditionFallback
+        ? 'intensity_medium'
+        : String((desired.energyState === 'peak' || desired.energyState === 'clash') ? desired.energyState : (desired.sectionId || desired.energyState || 'default')).trim().toLowerCase());
+    const playerAccentCadenceDue = (layerKey === 'backbeat' || layerKey === 'motion')
       && !!getPlayerAccentRhythmMotionPhrase(barIndex, sectionForPlayerAccent, {
         sectionRelative: !!intensityAuditionSection,
-        sectionBar: Math.max(0, Math.trunc(Number(intensityAuditionState?.auditionSectionBar) || 0)),
+        sectionBar: intensityAuditionSectionBar,
+        layerKey,
       });
     const stillLocked = layerState.active
       && barIndex < lockedUntilBar
@@ -21237,6 +21338,10 @@ function shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(eventLike = null) {
     leadThemeRawStepActive: leadThemeStepActive,
     leadThemeRawNote: normalizeSwarmNoteName(leadThemeStep.rawNote) || '',
   };
+  if (sectionId === 'peak') {
+    nextPayload.musicProminence = 'full';
+    nextPayload.audioGain = Math.max(0.82, Number(payload.audioGain) || 0);
+  }
   if (leadThemeStepActive && normalizeSwarmNoteName(leadThemeStep.note)) {
     const note = normalizeSwarmNoteName(leadThemeStep.note);
     nextPayload.requestedNoteRaw = note;
@@ -21265,6 +21370,7 @@ function executePerformedBeatEvent(event) {
     },
     helpers: {
       getMusicLabContext,
+      getPlayerLeadThemePrimaryStep,
       noteMusicSystemEvent,
       getDirectorLanePlan: () => ensureSwarmDirector().getLanePlan?.() || null,
       getDirectorLanePlanForBar: (barIndexLike = 0) => buildDirectorLanePlanForBar(barIndexLike),
@@ -22072,6 +22178,8 @@ function updateBeatWeapons(centerWorld) {
         getEnemyMusicIdentityProfile,
         getFoundationLaneSnapshot,
         getMusicLabContext,
+        getPlayerAccentRhythmMotionPhrase,
+        getPlayerSimpleRhythmThemeInstrumentId,
         getOnboardingReadabilityDirective,
         getPlayerInstrumentStepDirective,
         getPlayerLeadThemePrimaryStep,
