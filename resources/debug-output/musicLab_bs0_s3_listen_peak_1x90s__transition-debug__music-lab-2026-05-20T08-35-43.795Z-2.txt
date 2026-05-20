@@ -1,0 +1,95 @@
+Beat Swarm Transition Debug
+sessionId=music-lab-2026-05-20T08:35:43.795Z-2
+runId=musicLab_bs0_s3_listen_peak_1x90s
+label=music-lab-session
+leadEntryBar=17
+range=13-25
+
+Per-bar executed audible enemy events:
+bar 13: audibleEnemy=6 playerAudible=7 :: foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2
+bar 14: audibleEnemy=6 playerAudible=5 :: foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2
+bar 15: audibleEnemy=6 playerAudible=7 :: foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2
+bar 16: audibleEnemy=6 playerAudible=5 :: foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2
+bar 17: audibleEnemy=9 playerAudible=5 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:3, secondary_loop_lane|loops|call|full:2
+bar 18: audibleEnemy=8 playerAudible=3 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:2, secondary_loop_lane|loops|call|full:2
+bar 19: audibleEnemy=8 playerAudible=5 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:2, secondary_loop_lane|loops|call|full:2
+bar 20: audibleEnemy=12 playerAudible=3 :: primary_loop_lane|loops|call|full:6, foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2
+bar 21: audibleEnemy=10 playerAudible=6 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:4, secondary_loop_lane|loops|call|full:2
+bar 22: audibleEnemy=11 playerAudible=3 :: primary_loop_lane|loops|call|full:5, foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2
+bar 23: audibleEnemy=8 playerAudible=5 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:2, secondary_loop_lane|loops|call|full:2
+bar 24: audibleEnemy=11 playerAudible=3 :: primary_loop_lane|loops|call|full:5, foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2
+bar 25: audibleEnemy=9 playerAudible=6 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:3, secondary_loop_lane|loops|call|full:2
+
+Lead / Secondary Render Summary:
+bar 13: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 14: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 15: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 16: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 17: lead c/e/a/f/q/t=0/3/3/3/0/0 notes[F5:1, C#5:1, D#5:1] inst[RETRO SQUARE:3] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 18: lead c/e/a/f/q/t=0/2/2/2/0/0 notes[D#5:2] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 19: lead c/e/a/f/q/t=0/2/2/2/0/0 notes[C#5:1, D#5:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 20: lead c/e/a/f/q/t=0/6/6/6/0/0 notes[D#5:2, F5:2, A#4:1] inst[RETRO SQUARE:6] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 21: lead c/e/a/f/q/t=0/4/4/4/0/0 notes[C#5:2, F5:1, A#4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 22: lead c/e/a/f/q/t=0/5/5/5/0/0 notes[D#5:4, A#4:1] inst[RETRO SQUARE:5] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 23: lead c/e/a/f/q/t=0/2/2/2/0/0 notes[C#5:1, D#5:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 24: lead c/e/a/f/q/t=0/5/5/5/0/0 notes[D#5:2, F5:1, A#4:1] inst[RETRO SQUARE:5] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 25: lead c/e/a/f/q/t=0/3/3/3/0/0 notes[A#4:1, C#5:1, D#5:1] inst[RETRO SQUARE:3] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[A#4:2] inst[CLICK PERCUSSION SHORT:2]
+
+Transition snapshots:
+bar 13 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 14 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 15 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 16 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 17 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 18 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 19 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 20 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 21 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 22 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 23 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 24 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 25 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+
+Lead suppression events in range:
+
+Response events in range:
+bar 17 step 139 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 17 step 140 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 17 step 141 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 17 step 142 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 17 step 143 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 18 step 147 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 18 step 148 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 18 step 149 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 18 step 150 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=F2
+bar 18 step 151 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 19 step 152 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=F2
+bar 19 step 153 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 19 step 157 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 19 step 158 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 19 step 159 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 20 step 160 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=F2
+bar 20 step 161 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 20 step 162 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 20 step 163 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 20 step 166 phase=created actor=30 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=F2
+bar 20 step 167 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 21 step 168 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 21 step 169 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 21 step 170 phase=created actor=43 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 21 step 171 phase=created actor=43 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=D#2
+bar 21 step 172 phase=created actor=43 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=F2
+bar 21 step 173 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 22 step 176 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 22 step 177 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 22 step 178 phase=created actor=43 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 22 step 179 phase=created actor=43 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 22 step 180 phase=created actor=43 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 22 step 181 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 22 step 182 phase=created actor=43 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 22 step 183 phase=created actor=19 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 23 step 187 phase=created actor=51 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 23 step 188 phase=created actor=51 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 23 step 189 phase=created actor=43 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 23 step 190 phase=created actor=51 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3
+bar 23 step 191 phase=created actor=43 audible=n lane=foundation_lane layer=loops inst=BASS TONE 4 note=C#3

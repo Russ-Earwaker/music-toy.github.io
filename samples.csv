@@ -72,7 +72,7 @@ RetroAnalogSynthBass.wav,synth,synth,short note,Retro Analog Synth Bass,,RETRO A
 SynthSubBass.wav,foundation,synth,short note,Synth Sub Bass,,SYNTH SUB BASS,,,,,Gaming; beat-swarm-shmup,loopgrid,1,bass,low,spawner,foundation,loop|sustain|melodic,bass,protected_loop,,
 SubtleBassPercussive.wav,support,synth,short note,Subtle Bass Percussive,,SUBTLE BASS PERCUSSIVE,,,,,Gaming; beat-swarm-shmup,loopgrid,1,motion,low,spawner,support,loop|short|rhythmic|melodic,bass,answer_source,,
 RiserWhooshShort.wav,accent,synth,short note,Riser Whoosh Short,,RISER WHOOSH SHORT,,,,,Gaming; beat-swarm-shmup,,1,accent,high,death,accent,oneshot|short,fx,accent_only,,-6
-ClickPercussionShort.wav,support,synth,short note,Click Percussion Short,,CLICK PERCUSSION SHORT,,,C,5,Gaming; beat-swarm-shmup,loopgrid,1,motion,high,spawner,support,oneshot|short|rhythmic,percussion,accent_only,,9
+ClickPercussionShort.wav,support,synth,short note,Click Percussion Short,,CLICK PERCUSSION SHORT,,,C,5,Gaming; beat-swarm-shmup,loopgrid,1,accent,high,spawner,support,oneshot|short|rhythmic,percussion,accent_only,,9
 ClosedHatElectronicShort.wav,support,synth,short note,Closed Hat Electronic Short,,CLOSED HAT ELECTRONIC SHORT,,,,,Gaming; beat-swarm-shmup,loopgrid,1,motion,high,spawner,support,short|rhythmic,percussion,accent_only,,6
 SoftSynthPadShort1.wav,support,synth,short note,Soft Synth Pad Short 1,,SOFT SYNTH PAD SHORT 1,,,C,4,Gaming; beat-swarm-shmup,,1,support,mid,composition,support,sustain|melodic,synth,answer_source,TRUE,9
 SoftSynthPadShort2.wav,support,synth,short note,Soft Synth Pad Short 2,,SOFT SYNTH PAD SHORT 2,,,C,3,Gaming; beat-swarm-shmup,,1,support,mid,composition,support,sustain|melodic,synth,answer_source,TRUE,9

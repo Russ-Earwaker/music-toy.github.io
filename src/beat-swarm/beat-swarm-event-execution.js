@@ -106,6 +106,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     const voiceKey = String(ctx?.musicVoiceKey || payload?.musicVoiceKey || '').trim().toLowerCase();
     const callResponseLane = String(ctx?.callResponseLane || payload?.callResponseLane || enemy?.callResponseLane || group?.callResponseLane || '').trim().toLowerCase();
     const profile = String(ctx?.musicProfileSourceType || payload?.musicProfileSourceType || enemy?.musicProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase();
+    if (payload?.directorAuthorizedAnswerOrnament === true) return false;
     const ornamentLike = laneId === 'sparkle_lane'
       || layer === 'sparkle'
       || voiceKey === 'answer_ornament'
@@ -1254,10 +1255,15 @@ export function executePerformedBeatEventRuntime(options = null) {
       String(ev?.payload?.musicLaneId || '').trim().toLowerCase() === 'sparkle_lane'
       && String(ev?.payload?.musicVoiceKey || '').trim().toLowerCase() === 'answer_ornament'
     );
+    const executionLaneId = String(ev?.payload?.musicLaneId || group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
+    const peakPrimaryLoopLead = getCurrentIntensityStage() === 'peak'
+      && executionLaneId === 'primary_loop_lane';
     const normalizedProminence = normalizeEnemyProminenceForPlayerStep(
       String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
     );
     const musicProminence = combatFeedback
+      ? 'full'
+      : peakPrimaryLoopLead
       ? 'full'
       : ornamentCompanionDirect && normalizedProminence === 'trace'
       ? 'quiet'

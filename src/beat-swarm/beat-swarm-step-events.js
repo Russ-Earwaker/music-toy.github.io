@@ -172,6 +172,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     const lane = getEnemyMusicActionGateLane(ev);
     if (lane !== 'ornament') return false;
+    if (payload?.directorAuthorizedAnswerOrnament === true) return false;
     const sourceSystem = String(ev?.sourceSystem || payload?.sourceSystem || '').trim().toLowerCase();
     const action = String(ev?.actionType || '').trim().toLowerCase();
     if (sourceSystem === 'player' || sourceSystem === 'death' || action === 'enemy-death-accent') return false;
@@ -244,8 +245,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       return [0, 1, 2, 3, 4, 5, 6, 7];
     }
     if (stage === 'peak') {
-      if (lane === 'ornament') return [3, 7];
-      if (lane === 'secondary') return [2, 6];
+      if (lane === 'ornament') return [7];
+      if (lane === 'secondary') return [6];
       if (lane === 'lead') return [0, 1, 2, 4, 6, 7];
       return [0, 4];
     }
@@ -1481,6 +1482,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         if (item.layer === 'loops') {
           if (item.isProtectedIntroDrum) return 'quiet';
           if (item.isPrimaryLoopLaneEvent) {
+            if (currentEnemyMusicActionGateState.stage === 'peak') return 'full';
             if (primaryLoopForegroundProtected) {
               return 'full';
             }
@@ -1892,12 +1894,18 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const playerSoundVolumeMult = basePlayerSoundVolumeMult * globalStepGainScale;
   const sparkleStepMod8 = stepIndex % 8;
   const sparkleBarPattern = ((barIndex % 4) + 4) % 4;
-  const explicitSparkleCompanionWanted = (
-    answerOrnamentAllowed
+  const peakSparkleCompanionCue = currentEnemyMusicActionGateState.stage === 'peak'
+    && currentEnemyMusicActionGateState.contractAllowsAnswer === true
+    && sparkleBarPattern === 3
+    && sparkleStepMod8 === 7;
+  const defaultSparkleCompanionCue = currentEnemyMusicActionGateState.stage !== 'peak'
     && (
-    (sparkleBarPattern === 0 && sparkleStepMod8 === 2)
-    || (sparkleBarPattern === 3 && (sparkleStepMod8 === 2 || sparkleStepMod8 === 6))
-    )
+      (sparkleBarPattern === 0 && sparkleStepMod8 === 2)
+      || (sparkleBarPattern === 3 && (sparkleStepMod8 === 2 || sparkleStepMod8 === 6))
+    );
+  const explicitSparkleCompanionWanted = (
+    peakSparkleCompanionCue
+    || (answerOrnamentAllowed && defaultSparkleCompanionCue)
   );
   const explicitSparkleCompanionEvent = (() => {
     if (!explicitSparkleCompanionWanted) return null;
@@ -1911,7 +1919,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       Math.trunc(Number(secondaryLoopLaneRuntime?.performerGroupId) || 0)
         || Math.trunc(Number(primaryLoopLaneRuntime?.performerGroupId) || 0)
     );
-    if (!(sparkleActorId > 0 || sparkleGroupId > 0 || primaryLoopLaneActive || secondaryLoopLaneActive)) return null;
+    const peakDirectAnswer = currentEnemyMusicActionGateState.stage === 'peak';
+    if (!peakDirectAnswer && !(sparkleActorId > 0 || sparkleGroupId > 0 || primaryLoopLaneActive || secondaryLoopLaneActive)) return null;
     const sparkleNote = sparkleStepMod8 === 6 ? 'A4' : 'D5';
     const sparkleInstrumentId = String(
       helpers.getIdForDisplayName?.('Gaming Note')
@@ -1919,7 +1928,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         || helpers.getIdForDisplayName?.('Bell')
         || secondaryLoopLaneRuntime?.instrumentId
         || primaryLoopLaneRuntime?.instrumentId
-        || ''
+        || 'GAMING NOTE'
     ).trim();
     const ev = helpers.createLoggedPerformedBeatEvent?.({
       actorId: sparkleActorId,
@@ -1936,9 +1945,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         groupEventSource: 'answer_ornament_companion_direct',
         continuityId: 'answer-ornament-companion-direct',
         ghostPlayback: sparkleActorId <= 0,
+        sourceSystem: 'music',
+        directorAuthorizedAnswerOrnament: peakDirectAnswer,
         musicLayer: 'sparkle',
-        musicLaneId: 'sparkle_lane',
+        musicLaneId: peakDirectAnswer ? 'answer_lane' : 'sparkle_lane',
         musicVoiceKey: 'answer_ornament',
+        musicProfileSourceType: 'answer_ornament',
         callResponseLane: 'response',
         callResponseQualified: true,
         callResponsePhraseProgress: sparkleStepMod8 === 2 ? 1 : 2,
@@ -1952,6 +1964,16 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       stepIndex,
       sourceSystem: 'music',
       enemyType: 'composer-group-member',
+      expectedInstrumentLane: 'lead',
+      actualInstrumentLane: 'lead',
+      musicLaneId: peakDirectAnswer ? 'answer_lane' : 'sparkle_lane',
+      musicLayer: 'sparkle',
+      musicVoiceKey: 'answer_ornament',
+      musicProfileSourceType: 'answer_ornament',
+      callResponseLane: 'response',
+      callResponseQualified: true,
+      callResponsePhraseProgress: sparkleStepMod8 === 2 ? 1 : 2,
+      musicProminence: playerLikelyAudible ? 'trace' : 'quiet',
     }) || null;
     return ev || null;
   })();
@@ -1965,7 +1987,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       arrangementState?.intensityAuditionSection
       || currentEnemyMusicActionGateState?.stage
     );
-    if (stage !== 'medium' && stage !== 'build') return null;
+    if (stage !== 'medium' && stage !== 'build' && stage !== 'peak') return null;
     const sectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
     const phrase = helpers.getPlayerAccentRhythmMotionPhrase?.(barIndex, `intensity_${stage}`, {
       sectionRelative: true,
@@ -2019,7 +2041,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         callResponsePhraseProgress: localStep,
         musicRegister: 'high',
         musicProminence: stage === 'build' ? 'full' : 'quiet',
-        audioGain: stage === 'build' ? 0.54 : 0.42,
+        audioGain: stage === 'build' ? 0.54 : (stage === 'peak' ? 0.46 : 0.42),
         requestedNoteRaw: 'C4',
         intensityAuditionSection: stage,
       },

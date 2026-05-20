@@ -4920,6 +4920,17 @@ function collectMusicalityTargets(session, maxBarIndex) {
       lastAuthorityInstrumentId = '';
     }
   }
+  const compactLeadExclusive = stepsAnalyzed > 0
+    && stepsWithMultiplePrimaryLeads === 0
+    && stepsWithNoPrimaryLead === 0
+    && singleLeadShare >= 0.9;
+  if (authorityStepsAnalyzed === 0 && compactLeadExclusive) {
+    authorityStepsAnalyzed = stepsAnalyzed;
+    authorityActiveSteps = stepsWithSinglePrimaryLead;
+    authorityLongestGroupRunSteps = longestSinglePrimaryLeadRunSteps;
+    authorityLongestContinuityRunSteps = longestSinglePrimaryLeadRunSteps;
+    authorityLongestInstrumentRunSteps = longestSinglePrimaryLeadRunSteps;
+  }
   const authorityActiveShare = authorityStepsAnalyzed > 0 ? (authorityActiveSteps / authorityStepsAnalyzed) : 0;
   const authoritySwitches = authorityGroupSwitches + authorityContinuitySwitches + authorityInstrumentSwitches;
   const authorityStable = authorityStepsAnalyzed > 0
@@ -4928,10 +4939,6 @@ function collectMusicalityTargets(session, maxBarIndex) {
     && authorityLongestGroupRunSteps >= 64
     && authorityLongestContinuityRunSteps >= 64
     && authorityLongestInstrumentRunSteps >= 64;
-  const compactLeadExclusive = stepsAnalyzed > 0
-    && stepsWithMultiplePrimaryLeads === 0
-    && stepsWithNoPrimaryLead === 0
-    && singleLeadShare >= 0.9;
   const primaryLeadStatus = compactLeadExclusive || authorityStable
     ? 'exclusive'
     : (stepsWithSinglePrimaryLead > 0 || authorityActiveSteps > 0 ? 'contested' : 'missing');
