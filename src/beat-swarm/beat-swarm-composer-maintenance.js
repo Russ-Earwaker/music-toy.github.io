@@ -1051,8 +1051,12 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             notes: ['D4', 'G4', 'A#4'],
           }
         : (genericRhythmVariants[rhythmFamily] || genericRhythmVariants.pulse);
-      const resolvedSteps = introBuildRhythmActive ? introStrengthenedSteps : genericRhythmProfile.steps.slice(0, constants.weaponTuneSteps);
-      const resolvedNoteIndices = introBuildRhythmActive ? introStrengthenedNoteIndices : genericRhythmProfile.noteIndices.slice(0, constants.weaponTuneSteps);
+      const resolvedSteps = playerAccentRhythmProfile
+        ? genericRhythmProfile.steps.slice(0, constants.weaponTuneSteps)
+        : (introBuildRhythmActive ? introStrengthenedSteps : genericRhythmProfile.steps.slice(0, constants.weaponTuneSteps));
+      const resolvedNoteIndices = playerAccentRhythmProfile
+        ? genericRhythmProfile.noteIndices.slice(0, constants.weaponTuneSteps)
+        : (introBuildRhythmActive ? introStrengthenedNoteIndices : genericRhythmProfile.noteIndices.slice(0, constants.weaponTuneSteps));
       const shapedRhythmSteps = sustainedFullTextureNoShowcase
         ? (
           arrangementSupportShape
@@ -1093,7 +1097,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         : resolvedSteps.slice(0, constants.weaponTuneSteps).map((step) => !!step);
       const shapedRhythmNoteIndices = maskPatternValuesBySteps(resolvedNoteIndices, shapedRhythmSteps, 0);
       const baseNoteName = helpers.normalizeSwarmNoteName?.(
-        introPatternVariant?.baseNoteName || effectiveSpawnerProfile?.baseNoteName
+        playerAccentRhythmProfile
+          ? effectiveSpawnerProfile?.baseNoteName
+          : (introPatternVariant?.baseNoteName || effectiveSpawnerProfile?.baseNoteName)
       ) || 'C3';
       const level1RhythmLaneSupportProfile = sustainedFullTextureNoShowcase
         && level1CounterRhythmEpochLocked
@@ -1119,10 +1125,10 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         steps: shapedRhythmSteps,
         noteIndices: shapedRhythmNoteIndices,
         notePalette: Array.isArray(effectiveSpawnerProfile?.notePalette) ? effectiveSpawnerProfile.notePalette.slice() : [],
-        notes: introBuildRhythmActive ? [baseNoteName] : genericRhythmProfile.notes.slice(),
+        notes: (introBuildRhythmActive || playerAccentRhythmProfile) ? [baseNoteName] : genericRhythmProfile.notes.slice(),
         phraseRoot: baseNoteName,
-        phraseFifth: introBuildRhythmActive ? baseNoteName : (genericRhythmProfile.notes[1] || baseNoteName),
-        resolutionTargets: introBuildRhythmActive ? [baseNoteName] : genericRhythmProfile.notes.slice(0, 3),
+        phraseFifth: (introBuildRhythmActive || playerAccentRhythmProfile) ? baseNoteName : (genericRhythmProfile.notes[1] || baseNoteName),
+        resolutionTargets: (introBuildRhythmActive || playerAccentRhythmProfile) ? [baseNoteName] : genericRhythmProfile.notes.slice(0, 3),
         arrangementSupportIntent: level1ArrangementControlsIntroLocked ? '' : level1ArrangementPhraseIntent,
         arrangementSupportStepBudget: arrangementSupportShape
           ? Math.max(0, Math.trunc(Number(arrangementSupportShape.maxActiveCount) || 0))

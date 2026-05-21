@@ -7542,6 +7542,11 @@ function getPlayerSimpleRhythmThemeInstrumentId(themeId = '') {
   const data = theme?.toyType === 'simpleRhythm' && theme.data && typeof theme.data === 'object' ? theme.data : null;
   return String(data?.instrumentId || '').trim();
 }
+function getPlayerSimpleRhythmThemeNote(themeId = '') {
+  const theme = getPlayerMusicTheme(themeId);
+  const data = theme?.toyType === 'simpleRhythm' && theme.data && typeof theme.data === 'object' ? theme.data : null;
+  return normalizeSwarmNoteName(data?.note || '') || '';
+}
 function getPlayerLeadThemeMotifParts() {
   const theme = getPlayerMusicTheme('leadTheme');
   const data = theme?.toyType === 'drawgrid' && theme.data && typeof theme.data === 'object' ? theme.data : null;
@@ -7787,7 +7792,7 @@ function shapePlayerAccentRhythmStepsForMotion(baseStepsLike = null, sectionIdLi
   const sectionId = String(sectionIdLike || '').trim().toLowerCase();
   const raw = cloneFoundationPhraseSteps(baseStepsLike);
   const shaped = raw.slice();
-  const maxHits = Math.max(1, Math.min(3, Math.trunc(Number(opts.maxHits) || 1)));
+  const maxHits = Math.max(1, Math.min(WEAPON_TUNE_STEPS, Math.trunc(Number(opts.maxHits) || 1)));
   const preferred = sectionId.includes('release')
     ? [7, 5, 3, 1]
     : [1, 3, 5, 7, 2, 6];
@@ -7827,8 +7832,12 @@ function getPlayerAccentRhythmMotionPhrase(barIndex = 0, sectionIdLike = '', opt
   }
   const phrasePartIndex = phraseBar % patterns.length;
   const rawSteps = patterns[phrasePartIndex] || patterns[0];
-  const maxHits = layerKey === 'backbeat' ? 2 : 1;
-  const steps = shapePlayerAccentRhythmStepsForMotion(rawSteps, sectionId, { phrasePartIndex, maxHits });
+  const maxHits = layerKey === 'backbeat'
+    ? WEAPON_TUNE_STEPS
+    : 1;
+  const steps = layerKey === 'backbeat'
+    ? cloneFoundationPhraseSteps(rawSteps)
+    : shapePlayerAccentRhythmStepsForMotion(rawSteps, sectionId, { phrasePartIndex, maxHits });
   if (!steps.some(Boolean)) return null;
   const patternKey = buildFoundationPhrasePatternKey(steps);
   const rawPatternKey = buildFoundationPhrasePatternKey(rawSteps);
@@ -7840,9 +7849,12 @@ function getPlayerAccentRhythmMotionPhrase(barIndex = 0, sectionIdLike = '', opt
     phrasePartIndex,
     rawPatternKey,
     shapedPatternKey: patternKey,
-    interpretationMode: layerKey === 'backbeat' ? 'secondary_statement' : (sectionId.includes('release') ? 'release_punctuation' : 'director_support'),
+    interpretationMode: layerKey === 'backbeat'
+      ? (peakLike ? 'literal_peak_statement' : 'literal_secondary_statement')
+      : (sectionId.includes('release') ? 'release_punctuation' : 'director_support'),
     steps,
     patternKey,
+    noteName: getPlayerSimpleRhythmThemeNote('accentRhythm') || 'C4',
   };
 }
 function getLevel1IntensityFoundationPhrase(sectionLike = '', sectionBarLike = 0) {
@@ -17169,6 +17181,7 @@ function pickSpawnerGrooveLayerPattern(layerKey, barIndex = 0, sectionId = 'defa
         interpretationMode: String(playerAccentPhrase.interpretationMode || '').trim().toLowerCase(),
         phrasePartIndex: Math.max(0, Math.trunc(Number(playerAccentPhrase.phrasePartIndex) || 0)),
         instrument: getPlayerSimpleRhythmThemeInstrumentId('accentRhythm'),
+        noteName: getPlayerSimpleRhythmThemeNote('accentRhythm') || 'C4',
       };
     }
   }
@@ -17275,6 +17288,7 @@ function ensureSpawnerPercussionGroovePlan(barIndex = 0) {
     layerState.interpretationMode = String(chosen.interpretationMode || '');
     layerState.phrasePartIndex = Math.max(0, Math.trunc(Number(chosen.phrasePartIndex) || 0));
     layerState.instrumentId = String(chosen.instrument || '');
+    layerState.noteName = normalizeSwarmNoteName(chosen.noteName || '') || '';
     layerState.introducedBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
     layerState.lockedUntilBar = Math.max(0, Math.trunc(Number(barIndex) || 0))
       + Math.max(1, Math.trunc(Number(SPAWNER_PERCUSSION_LAYER_LOCK_BARS?.[layerKey]) || 4));
@@ -17333,7 +17347,8 @@ function buildSpawnerPercussionLayerProfile(layerKey = 'pulse', options = null) 
     noteIndices,
     notePalette: Array.from(LOOPGRID_FALLBACK_NOTE_PALETTE),
     instrument: String(layerState.instrumentId || '').trim() || resolveSpawnerPercussionSlotInstrument(normalizedLayerKey),
-    baseNoteName: normalizedLayerKey === 'motion' ? 'C4' : (normalizedLayerKey === 'backbeat' ? 'G3' : 'C3'),
+    baseNoteName: normalizeSwarmNoteName(layerState.noteName || '')
+      || (normalizedLayerKey === 'motion' ? 'C4' : (normalizedLayerKey === 'backbeat' ? 'G3' : 'C3')),
     continuityId: `spawner_percussion_${normalizedLayerKey}`,
     phraseId: `spawner_percussion_${normalizedLayerKey}_${String(layerState.patternId || 'default').trim().toLowerCase() || 'default'}`,
     patternKey: steps.map((step) => (step ? '1' : '0')).join(''),
@@ -22195,6 +22210,7 @@ function updateBeatWeapons(centerWorld) {
         getMusicLabContext,
         getPlayerAccentRhythmMotionPhrase,
         getPlayerSimpleRhythmThemeInstrumentId,
+        getPlayerSimpleRhythmThemeNote,
         getOnboardingReadabilityDirective,
         getPlayerInstrumentStepDirective,
         getPlayerLeadThemePrimaryStep,

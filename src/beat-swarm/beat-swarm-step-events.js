@@ -2009,13 +2009,14 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     );
     const instrumentId = String(helpers.getPlayerSimpleRhythmThemeInstrumentId?.('accentRhythm') || '').trim();
     if (!instrumentId) return null;
+    const noteName = String(helpers.getPlayerSimpleRhythmThemeNote?.('accentRhythm') || 'C4').trim() || 'C4';
     const phraseId = String(phrase?.id || `player_accent_rhythm_${String(phrase?.patternKey || 'default').trim() || 'default'}`).trim();
     const ev = helpers.createLoggedPerformedBeatEvent?.({
       actorId,
       beatIndex,
       stepIndex,
       role: constants.roles?.accent || 'accent',
-      note: 'C4',
+      note: noteName,
       instrumentId,
       actionType: 'composer-group-projectile',
       threatClass: constants.threat?.light || 'light',
@@ -2042,7 +2043,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         musicRegister: 'high',
         musicProminence: stage === 'build' ? 'full' : 'quiet',
         audioGain: stage === 'build' ? 0.54 : (stage === 'peak' ? 0.46 : 0.42),
-        requestedNoteRaw: 'C4',
+        requestedNoteRaw: noteName,
+        preserveRequestedNote: true,
         intensityAuditionSection: stage,
       },
     }, {

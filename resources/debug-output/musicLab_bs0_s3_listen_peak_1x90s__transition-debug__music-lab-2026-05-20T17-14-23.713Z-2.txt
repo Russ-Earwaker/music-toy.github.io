@@ -1,0 +1,64 @@
+Beat Swarm Transition Debug
+sessionId=music-lab-2026-05-20T17:14:23.713Z-2
+runId=musicLab_bs0_s3_listen_peak_1x90s
+label=music-lab-session
+leadEntryBar=15
+range=11-23
+
+Per-bar executed audible enemy events:
+bar 11: audibleEnemy=6 playerAudible=5 :: foundation_lane|foundation|solo|full:3, secondary_loop_lane|loops|solo|quiet:2, foundation_lane|foundation|solo|quiet:1
+bar 12: audibleEnemy=6 playerAudible=5 :: foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|solo|quiet:2
+bar 13: audibleEnemy=6 playerAudible=5 :: foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2
+bar 14: audibleEnemy=6 playerAudible=5 :: foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2
+bar 15: audibleEnemy=12 playerAudible=4 :: primary_loop_lane|loops|call|full:5, foundation_lane|foundation|solo|full:4, secondary_loop_lane|loops|call|full:2, answer_lane|sparkle|response|full:1
+bar 16: audibleEnemy=10 playerAudible=3 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:4, secondary_loop_lane|loops|call|full:2
+bar 17: audibleEnemy=10 playerAudible=4 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:4, secondary_loop_lane|loops|call|full:2
+bar 18: audibleEnemy=8 playerAudible=3 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:2, secondary_loop_lane|loops|call|full:2
+bar 19: audibleEnemy=9 playerAudible=4 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:2, secondary_loop_lane|loops|call|full:2, answer_lane|sparkle|response|full:1
+bar 20: audibleEnemy=10 playerAudible=4 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:4, secondary_loop_lane|loops|call|full:2
+bar 21: audibleEnemy=10 playerAudible=4 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:4, secondary_loop_lane|loops|call|full:2
+bar 22: audibleEnemy=10 playerAudible=3 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:4, secondary_loop_lane|loops|call|full:2
+bar 23: audibleEnemy=10 playerAudible=4 :: foundation_lane|foundation|solo|full:4, primary_loop_lane|loops|call|full:3, secondary_loop_lane|loops|call|full:2, answer_lane|sparkle|response|full:1
+
+Lead / Secondary Render Summary:
+bar 11: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/2/2/0/2/0 notes[D#4:2] inst[DRUM SNARE 2:2]
+bar 12: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/2/2/0/2/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 13: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 14: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 15: lead c/e/a/f/q/t=0/5/5/5/0/0 notes[D#4:2, C5:1, A#4:1] inst[RETRO SQUARE:5] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 16: lead c/e/a/f/q/t=0/4/4/4/0/0 notes[F4:2, G4:2] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 17: lead c/e/a/f/q/t=0/4/4/4/0/0 notes[G4:2, A#4:1, F4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 18: lead c/e/a/f/q/t=0/2/2/2/0/0 notes[D#4:1, A#4:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 19: lead c/e/a/f/q/t=0/2/2/2/0/0 notes[C5:1, D#4:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 20: lead c/e/a/f/q/t=0/4/4/4/0/0 notes[F4:3, G4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 21: lead c/e/a/f/q/t=0/4/4/4/0/0 notes[G4:2, D#4:1, A#4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 22: lead c/e/a/f/q/t=0/4/4/4/0/0 notes[A#4:2, D#4:2] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 23: lead c/e/a/f/q/t=0/3/3/3/0/0 notes[A#4:2, D#4:1] inst[RETRO SQUARE:3] | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[D#4:2] inst[CLICK PERCUSSION SHORT:2]
+
+Transition snapshots:
+bar 11 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 12 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 13 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 14 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 15 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 16 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 17 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 18 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 19 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 20 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 21 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 22 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 23 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+
+Lead suppression events in range:
+
+Response events in range:
+bar 15 step 127 phase=created actor=0 audible=n lane=answer_lane layer=sparkle inst=GAMING NOTE note=D5
+bar 15 step 127 phase=queued actor=0 audible=n lane=answer_lane layer=sparkle inst=GAMING NOTE note=D5
+bar 15 step 127 phase=executed actor=0 audible=y lane=answer_lane layer=sparkle inst=GAMING NOTE note=C5
+bar 19 step 159 phase=created actor=0 audible=n lane=answer_lane layer=sparkle inst=GAMING NOTE note=D5
+bar 19 step 159 phase=queued actor=0 audible=n lane=answer_lane layer=sparkle inst=GAMING NOTE note=D5
+bar 19 step 159 phase=executed actor=0 audible=y lane=answer_lane layer=sparkle inst=GAMING NOTE note=C5
+bar 23 step 191 phase=created actor=0 audible=n lane=answer_lane layer=sparkle inst=GAMING NOTE note=D5
+bar 23 step 191 phase=queued actor=0 audible=n lane=answer_lane layer=sparkle inst=GAMING NOTE note=D5
+bar 23 step 191 phase=executed actor=0 audible=y lane=answer_lane layer=sparkle inst=GAMING NOTE note=A#4
