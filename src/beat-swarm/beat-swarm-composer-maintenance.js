@@ -1057,7 +1057,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       const resolvedNoteIndices = playerAccentRhythmProfile
         ? genericRhythmProfile.noteIndices.slice(0, constants.weaponTuneSteps)
         : (introBuildRhythmActive ? introStrengthenedNoteIndices : genericRhythmProfile.noteIndices.slice(0, constants.weaponTuneSteps));
-      const shapedRhythmSteps = sustainedFullTextureNoShowcase
+      const shapedRhythmSteps = playerAccentRhythmProfile
+        ? resolvedSteps.slice(0, constants.weaponTuneSteps).map((step) => !!step)
+        : sustainedFullTextureNoShowcase
         ? (
           arrangementSupportShape
             ? (
@@ -1095,7 +1097,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
             )
         )
         : resolvedSteps.slice(0, constants.weaponTuneSteps).map((step) => !!step);
-      const shapedRhythmNoteIndices = maskPatternValuesBySteps(resolvedNoteIndices, shapedRhythmSteps, 0);
+      const shapedRhythmNoteIndices = playerAccentRhythmProfile
+        ? resolvedNoteIndices.slice(0, constants.weaponTuneSteps)
+        : maskPatternValuesBySteps(resolvedNoteIndices, shapedRhythmSteps, 0);
       const baseNoteName = helpers.normalizeSwarmNoteName?.(
         playerAccentRhythmProfile
           ? effectiveSpawnerProfile?.baseNoteName
@@ -1129,6 +1133,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         phraseRoot: baseNoteName,
         phraseFifth: (introBuildRhythmActive || playerAccentRhythmProfile) ? baseNoteName : (genericRhythmProfile.notes[1] || baseNoteName),
         resolutionTargets: (introBuildRhythmActive || playerAccentRhythmProfile) ? [baseNoteName] : genericRhythmProfile.notes.slice(0, 3),
+        musicLaneNoteName: playerAccentRhythmProfile ? baseNoteName : '',
         arrangementSupportIntent: level1ArrangementControlsIntroLocked ? '' : level1ArrangementPhraseIntent,
         arrangementSupportStepBudget: arrangementSupportShape
           ? Math.max(0, Math.trunc(Number(arrangementSupportShape.maxActiveCount) || 0))

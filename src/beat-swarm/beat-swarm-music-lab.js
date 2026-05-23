@@ -204,6 +204,10 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
   const musicLaneId = String(context?.musicLaneId ?? payload?.musicLaneId ?? '').trim().toLowerCase();
   const musicLanePhraseId = String(context?.musicLanePhraseId ?? payload?.musicLanePhraseId ?? '').trim().toLowerCase();
   const musicLanePatternKey = String(context?.musicLanePatternKey ?? payload?.musicLanePatternKey ?? '').trim().toLowerCase();
+  const musicLaneRawPatternKey = String(context?.musicLaneRawPatternKey ?? payload?.musicLaneRawPatternKey ?? '').trim().toLowerCase();
+  const musicLaneShapedPatternKey = String(context?.musicLaneShapedPatternKey ?? payload?.musicLaneShapedPatternKey ?? '').trim().toLowerCase();
+  const musicLaneInterpretationMode = String(context?.musicLaneInterpretationMode ?? payload?.musicLaneInterpretationMode ?? '').trim().toLowerCase();
+  const musicLanePhrasePartIndex = clampInt(context?.musicLanePhrasePartIndex ?? payload?.musicLanePhrasePartIndex, 0, 0);
   const musicLanePlayerThemeSource = String(context?.musicLanePlayerThemeSource ?? payload?.musicLanePlayerThemeSource ?? '').trim();
   const foundationLaneId = String(context?.foundationLaneId ?? payload?.foundationLaneId ?? '').trim().toLowerCase();
   const enemyVisualId = String(context?.enemyVisualId ?? payload?.enemyVisualId ?? payload?.musicRoleVisualId ?? '').trim().toLowerCase();
@@ -359,6 +363,10 @@ function makeEventRecord(event, phase, context, beatsPerBar) {
     musicLaneId,
     musicLanePhraseId,
     musicLanePatternKey,
+    musicLaneRawPatternKey,
+    musicLaneShapedPatternKey,
+    musicLaneInterpretationMode,
+    musicLanePhrasePartIndex,
     musicLanePlayerThemeSource,
     foundationLaneId,
     enemyVisualId,
@@ -794,6 +802,27 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
       }
       : null,
     chainEventId: clampInt(payload?.chainEventId, 0, 0),
+    status: String(payload?.status || '').trim().toLowerCase(),
+    themeId: String(payload?.themeId || '').trim(),
+    stage: String(payload?.stage || '').trim().toLowerCase(),
+    sectionBar: clampInt(payload?.sectionBar, -1, -1),
+    localStep: clampInt(payload?.localStep, -1, -1),
+    phrasePartIndex: clampInt(payload?.phrasePartIndex, -1, -1),
+    patternKey: String(payload?.patternKey || '').trim(),
+    rawPatternKey: String(payload?.rawPatternKey || '').trim(),
+    shapedPatternKey: String(payload?.shapedPatternKey || '').trim(),
+    interpretationMode: String(payload?.interpretationMode || '').trim().toLowerCase(),
+    expectedHit: payload?.expectedHit === true,
+    emittedHit: payload?.emittedHit === true,
+    riffHit: payload?.riffHit === true,
+    instrumentId: String(payload?.instrumentId || '').trim(),
+    requestedNote: String(payload?.requestedNote || '').trim(),
+    resolvedNote: String(payload?.resolvedNote || '').trim(),
+    noteName: String(payload?.noteName || '').trim(),
+    source: String(payload?.source || '').trim().toLowerCase(),
+    destOrId: String(payload?.destOrId || '').trim(),
+    preserveRequestedNote: payload?.preserveRequestedNote === true,
+    velocity: Number(payload?.velocity) || 0,
     weaponSlotIndex: clampInt(payload?.weaponSlotIndex, -1, -1),
     scheduledBeatIndex: clampInt(payload?.scheduledBeatIndex, 0, 0),
     impactEnemyId: clampInt(payload?.impactEnemyId, 0, 0),
@@ -7074,6 +7103,85 @@ export function createBeatSwarmMusicLab(options = null) {
           sessionSummary: cachedCheckpoint.sessionSummary,
         }
       : computeMetricsForEvents(metricsSession, executed, maxBar);
+    const getEventText = (ev) => [
+      ev?.instrumentId,
+      ev?.resolvedPlaybackInstrumentId,
+      ev?.playbackInstrumentId,
+      ev?.musicLanePlayerThemeSource,
+      ev?.playerThemeSource,
+      ev?.continuityId,
+      ev?.musicLaneId,
+      ev?.section,
+      ev?.eventType,
+      ev?.type,
+      ev?.payload?.instrumentId,
+      ev?.payload?.musicLanePlayerThemeSource,
+      ev?.payload?.playerThemeSource,
+      ev?.payload?.continuityId,
+      ev?.payload?.musicLaneId,
+    ].map((value) => String(value || '').trim()).filter(Boolean).join(' ').toLowerCase();
+    const isPinnedAccentRhythmEvent = (ev) => {
+      const text = getEventText(ev);
+      return text.includes('click percussion short')
+        || text.includes('accentrhythm')
+        || text.includes('accent_rhythm')
+        || text.includes('player_accent')
+        || text.includes('player-accent-rhythm')
+        || text.includes('music_player_accent_motif_track')
+        || text.includes('bassdrive')
+        || text.includes('bass_drive')
+        || text.includes('player_bass')
+        || text.includes('player-bass-drive')
+        || text.includes('director-player-bass-drive-bed')
+        || text.includes('music_player_bass_motif_track')
+        || text.includes('secondary_loop_lane')
+        || text.includes('foundation_lane')
+        || text.includes('music_click_percussion_trigger');
+    };
+    const mergeCompactPinned = (pinned, tail, limit) => {
+      const rows = [];
+      const seen = new Set();
+      for (const ev of [...(Array.isArray(pinned) ? pinned : []), ...(Array.isArray(tail) ? tail : [])]) {
+        if (!ev || typeof ev !== 'object') continue;
+        const key = [
+          ev.phase || ev.type || ev.eventType || '',
+          ev.beatIndex ?? '',
+          ev.stepIndex ?? '',
+          ev.enemyId ?? '',
+          ev.groupId ?? '',
+          ev.continuityId || ev.payload?.continuityId || '',
+          ev.instrumentId || ev.resolvedPlaybackInstrumentId || ev.payload?.instrumentId || '',
+          ev.noteName || ev.resolvedNote || ev.payload?.resolvedNote || '',
+        ].join('|');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rows.push(ev);
+      }
+      rows.sort((a, b) => {
+        const beatDelta = clampInt(a?.beatIndex, 0, 0) - clampInt(b?.beatIndex, 0, 0);
+        if (beatDelta) return beatDelta;
+        return clampInt(a?.stepIndex, 0, 0) - clampInt(b?.stepIndex, 0, 0);
+      });
+      return rows.slice(-Math.max(1, clampInt(limit, 1, 2000)));
+    };
+    const compactEventTimeline = Array.isArray(sourceEvents)
+      ? (compact
+        ? mergeCompactPinned(
+            Array.isArray(s.events) ? s.events.filter(isPinnedAccentRhythmEvent).slice(-512) : [],
+            sourceEvents.slice(-900),
+            1200
+          )
+        : sourceEvents.slice())
+      : [];
+    const compactSystemEvents = Array.isArray(sourceSystemEvents)
+      ? (compact
+        ? mergeCompactPinned(
+            Array.isArray(s.systemEvents) ? s.systemEvents.filter(isPinnedAccentRhythmEvent).slice(-256) : [],
+            sourceSystemEvents.slice(-300),
+            500
+          )
+        : sourceSystemEvents.slice())
+      : [];
     s.metrics = bundle.metrics;
     s.sessionSummary = bundle.sessionSummary;
     s.endedAtIso = new Date().toISOString();
@@ -7083,11 +7191,11 @@ export function createBeatSwarmMusicLab(options = null) {
       endedAtIso: String(s.endedAtIso || ''),
       beatsPerBar: s.beatsPerBar,
       metricsEveryBars: s.metricsEveryBars,
-      eventTimeline: Array.isArray(sourceEvents) ? (compact ? sourceEvents.slice(-900) : sourceEvents.slice()) : [],
+      eventTimeline: compactEventTimeline,
       paletteChanges: Array.isArray(s.paletteChanges) ? (compact ? s.paletteChanges.slice(-64) : s.paletteChanges.slice()) : [],
       pacingChanges: Array.isArray(s.pacingChanges) ? (compact ? s.pacingChanges.slice(-64) : s.pacingChanges.slice()) : [],
       enemyRemovals: Array.isArray(s.enemyRemovals) ? (compact ? s.enemyRemovals.slice(-512) : s.enemyRemovals.slice()) : [],
-      systemEvents: Array.isArray(sourceSystemEvents) ? (compact ? sourceSystemEvents.slice(-300) : sourceSystemEvents.slice()) : [],
+      systemEvents: compactSystemEvents,
       systemEventSummary: s.systemEventSummary && typeof s.systemEventSummary === 'object'
         ? { ...s.systemEventSummary }
         : {},

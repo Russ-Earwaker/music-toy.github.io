@@ -35,7 +35,7 @@ import(`./perf/perf-lab.js?v=${perfLabVersion}`).catch((err) => {
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
-import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js';
+import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-05-23-release-echo-v4';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';

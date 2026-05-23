@@ -540,10 +540,20 @@ export function executePerformedBeatEventRuntime(options = null) {
     const key = String(raw || '').trim().toLowerCase() || 'full';
     const entryAudibilityGrace = ev?.payload?.entryAudibilityGrace === true;
     const eventLaneId = String(ev?.payload?.musicLaneId || '').trim().toLowerCase();
+    const intensitySection = String(ev?.payload?.intensityAuditionSection || '').trim().toLowerCase();
+    const leadThemeMode = String(ev?.payload?.leadThemeInterpretationMode || '').trim().toLowerCase();
+    const continuityId = String(ev?.payload?.continuityId || '').trim().toLowerCase();
     if (!playerStepLikelyAudible) return key;
     if (actionType === 'player-weapon-step') return key;
     const eventLayer = String(ev?.payload?.musicLayer || '').trim().toLowerCase();
     if (eventLayer === 'foundation') return key;
+    if (
+      intensitySection === 'release'
+      && eventLaneId === 'primary_loop_lane'
+      && (leadThemeMode === 'release_riff' || continuityId === 'player-lead-theme-direct')
+    ) {
+      return key;
+    }
     if (primaryLoopForegroundProtected && eventLaneId === 'primary_loop_lane') {
       return key === 'suppressed' ? 'suppressed' : 'full';
     }
@@ -732,8 +742,8 @@ export function executePerformedBeatEventRuntime(options = null) {
         * (0.7 + ((Number(aggressionScale) || 0) * 0.3));
       requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
       noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
-      if (String(instrumentId || '').trim().toUpperCase() === 'CLICK PERCUSSION SHORT' && requestedNote) {
-        noteName = requestedNote;
+      if (String(instrumentId || '').trim().toUpperCase() === 'CLICK PERCUSSION SHORT') {
+        noteName = 'C4';
       }
       if (String(normalizedGroupRole || '') === String(constants?.roles?.bass || 'bass')) {
         const bassFallbackNote = normalizeBassRegister(requestedNote || noteName || 'C3', 'C3');
@@ -1006,8 +1016,8 @@ export function executePerformedBeatEventRuntime(options = null) {
     let noteName = preserveRequestedNote
       ? (requestedNote || String(ev.note || '').trim())
       : helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
-    if (String(ev?.instrumentId || group?.instrumentId || enemy?.drawsnakeInstrument || '').trim().toUpperCase() === 'CLICK PERCUSSION SHORT' && requestedNote) {
-      noteName = requestedNote;
+    if (String(ev?.instrumentId || group?.instrumentId || enemy?.drawsnakeInstrument || '').trim().toUpperCase() === 'CLICK PERCUSSION SHORT') {
+      noteName = 'C4';
     }
     group.note = noteName;
     withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.audioVisual', () => {
@@ -1224,8 +1234,8 @@ export function executePerformedBeatEventRuntime(options = null) {
         || enemy?.composerInstrument
         || ''
     ).trim();
-    if (String(lockedInstrumentId || '').trim().toUpperCase() === 'CLICK PERCUSSION SHORT' && requestedNote) {
-      noteName = requestedNote;
+    if (String(lockedInstrumentId || '').trim().toUpperCase() === 'CLICK PERCUSSION SHORT') {
+      noteName = 'C4';
     }
     const lockedLane = inferInstrumentLaneFromCatalogId(lockedInstrumentId, '');
     const normalizedGroupRole = lockedLane === String(constants?.roles?.bass || 'bass')
@@ -1279,11 +1289,19 @@ export function executePerformedBeatEventRuntime(options = null) {
       : helpers.clamp01?.(authoredAudioGain);
     const peakPrimaryLoopLead = getCurrentIntensityStage() === 'peak'
       && executionLaneId === 'primary_loop_lane';
+    const releaseLeadThemeEcho = String(ev?.payload?.intensityAuditionSection || '').trim().toLowerCase() === 'release'
+      && executionLaneId === 'primary_loop_lane'
+      && (
+        String(ev?.payload?.leadThemeInterpretationMode || '').trim().toLowerCase() === 'release_riff'
+        || String(ev?.payload?.continuityId || '').trim().toLowerCase() === 'player-lead-theme-direct'
+      );
     const normalizedProminence = normalizeEnemyProminenceForPlayerStep(
       String(ev?.payload?.musicProminence || 'full').trim().toLowerCase() || 'full'
     );
     const musicProminence = combatFeedback
       ? 'full'
+      : releaseLeadThemeEcho
+      ? 'quiet'
       : peakPrimaryLoopLead
       ? 'full'
       : answerOrnamentExecution

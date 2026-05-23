@@ -653,6 +653,16 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       || musicProfileSourceType === 'secondary_bridge_backbeat';
     const rhythmMotionCarrier = musicProfileSourceType === 'spawner_rhythm_motion';
     const slotRhythmCarrier = rhythmPulseCarrier || rhythmBackbeatCarrier || rhythmMotionCarrier;
+    const playerAccentRhythmCarrier = rhythmBackbeatCarrier
+      && String(group?.musicLanePlayerThemeSource || '').trim() === 'accentRhythm';
+    const playerAccentRhythmNoteName = playerAccentRhythmCarrier
+      ? (
+        normalizeSwarmNoteName(group?.musicLaneNoteName)
+        || normalizeSwarmNoteName(group?.phraseRoot)
+        || normalizeSwarmNoteName(Array.isArray(group?.notes) ? group.notes[0] : '')
+        || 'C4'
+      )
+      : '';
     const melodyProfileCarrier = musicProfileSourceType === 'lead_melody';
     const answerOrnamentCarrier = musicProfileSourceType === 'answer_ornament';
     const rhythmPercussionCarrier = introPercussionCarrier || rhythmProfileCarrier;
@@ -1187,11 +1197,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           role: lockedInstrumentLane === 'bass' ? 'bass' : lockedResolvedRole,
         }
       );
-      const lockedNoteName = normalizeSwarmNoteName(
+      const lockedNoteName = playerAccentRhythmCarrier ? playerAccentRhythmNoteName : (normalizeSwarmNoteName(
         Array.isArray(group?.introSlotNotes) && group.introSlotNotes.length
           ? group.introSlotNotes[0]
           : (Array.isArray(group?.notes) && group.notes.length ? group.notes[0] : '')
-      ) || getRandomSwarmPentatonicNote();
+      ) || getRandomSwarmPentatonicNote());
       const lockedPerformer = chooseEnemyForNote({
         group,
         noteName: lockedNoteName,
@@ -1256,6 +1266,11 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           musicRegister: rhythmPulseCarrier ? 'low' : 'mid',
           audioGain: 1,
           requestedNoteRaw: lockedNoteName,
+          preserveRequestedNote: playerAccentRhythmCarrier,
+          musicLanePlayerThemeSource: playerAccentRhythmCarrier ? 'accentRhythm' : '',
+          musicLanePhraseId: playerAccentRhythmCarrier ? String(group?.musicLanePhraseId || '').trim().toLowerCase() : '',
+          musicLanePatternKey: playerAccentRhythmCarrier ? String(group?.musicLanePatternKey || '').trim() : '',
+          musicLanePhrasePartIndex: playerAccentRhythmCarrier ? Math.max(0, Math.trunc(Number(group?.musicLanePhrasePartIndex) || 0)) : 0,
           phraseGravityTarget: '',
           phraseGravityHit: false,
           phraseResolutionOpportunity: false,
@@ -1569,6 +1584,9 @@ export function collectComposerGroupStepBeatEvents(options = null) {
         stepAbs + noteIdx + (lane === 'response' ? 1 : 0),
         registerTarget
       );
+    }
+    if (playerAccentRhythmCarrier && playerAccentRhythmNoteName) {
+      styledNoteName = playerAccentRhythmNoteName;
     }
     const phraseGravityHit = phraseGravityOpportunity
       ? normalizeSwarmNoteName(styledNoteName) === normalizeSwarmNoteName(playablePhraseGravityTarget)
@@ -1934,7 +1952,14 @@ export function collectComposerGroupStepBeatEvents(options = null) {
           audioGain: rhythmPercussionCarrier
             ? 1
             : clamp01(Number(group?.musicParticipationGain == null ? 1 : group.musicParticipationGain) * lifecycleAudioGain * restrainedGroupGain),
-          requestedNoteRaw: registerTarget === 'low' || registerTarget === 'sub' ? styledNoteName : gravityNoteNameRaw,
+          requestedNoteRaw: playerAccentRhythmCarrier
+            ? styledNoteName
+            : (registerTarget === 'low' || registerTarget === 'sub' ? styledNoteName : gravityNoteNameRaw),
+          preserveRequestedNote: playerAccentRhythmCarrier,
+          musicLanePlayerThemeSource: playerAccentRhythmCarrier ? 'accentRhythm' : String(group?.musicLanePlayerThemeSource || '').trim(),
+          musicLanePhraseId: playerAccentRhythmCarrier ? String(group?.musicLanePhraseId || '').trim().toLowerCase() : '',
+          musicLanePatternKey: playerAccentRhythmCarrier ? String(group?.musicLanePatternKey || '').trim() : '',
+          musicLanePhrasePartIndex: playerAccentRhythmCarrier ? Math.max(0, Math.trunc(Number(group?.musicLanePhrasePartIndex) || 0)) : 0,
           phraseGravityTarget,
           phraseGravityHit,
           phraseResolutionOpportunity,

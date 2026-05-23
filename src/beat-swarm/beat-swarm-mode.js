@@ -27,12 +27,55 @@ import { collectDrawSnakeStepBeatEvents as collectDrawSnakeStepEvents, collectSp
 import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRuntime, } from './beat-swarm-composer-spawn.js';
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
-import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js';
+import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-23-release-echo-v2';
 import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
 import { createBeatSwarmPlayerInstrumentRuntime } from './beat-swarm-player-instrument.js';
 import { applyArenaBoundaryResistanceRuntime, applyLaunchInnerCircleBounceRuntime, enforceArenaOuterLimitRuntime, } from './beat-swarm-arena-boundary.js';
+
+let beatSwarmExecutionTriggerEvent = null;
+
+function triggerBeatSwarmInstrument(instrument, noteName, when, destOrId, options = {}, velocity = 1.0) {
+  const instrumentId = String(instrument || '').trim();
+  const triggerPayload = beatSwarmExecutionTriggerEvent?.payload && typeof beatSwarmExecutionTriggerEvent.payload === 'object'
+    ? beatSwarmExecutionTriggerEvent.payload
+    : null;
+  const releaseLeadEchoTrigger = triggerPayload
+    && String(triggerPayload.intensityAuditionSection || '').trim().toLowerCase() === 'release'
+    && String(triggerPayload.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
+    && (
+      String(triggerPayload.leadThemeInterpretationMode || '').trim().toLowerCase() === 'release_riff'
+      || String(triggerPayload.continuityId || '').trim().toLowerCase() === 'player-lead-theme-direct'
+    );
+  const triggerVelocity = releaseLeadEchoTrigger
+    ? Math.min(Number(velocity) || 0, 0.16)
+    : velocity;
+  const resolvedNote = instrumentId.toUpperCase() === 'CLICK PERCUSSION SHORT'
+    ? 'C4'
+    : noteName;
+  if (instrumentId.toUpperCase() === 'CLICK PERCUSSION SHORT') {
+    try {
+      const stepIndex = Number.isFinite(Number(options?.stepIndex))
+        ? Number(options.stepIndex)
+        : (Number.isFinite(Number(options?.step))
+          ? Number(options.step)
+          : (Number.isFinite(Number(options?.index)) ? Number(options.index) : undefined));
+      noteMusicSystemEvent('music_click_percussion_trigger', {
+        instrumentId,
+        requestedNote: String(noteName || '').trim(),
+        resolvedNote: String(resolvedNote || '').trim(),
+        destOrId: String(destOrId || '').trim(),
+        source: String(options?.source || '').trim(),
+        preserveRequestedNote: options?.preserveRequestedNote === true,
+        velocity: Number.isFinite(Number(triggerVelocity)) ? Number(triggerVelocity) : 0,
+      }, {
+        stepIndex,
+      });
+    } catch {}
+  }
+  return triggerInstrument(instrument, resolvedNote, when, destOrId, options, triggerVelocity);
+}
 import { getOutwardOnlyInputRuntime, getShipFacingFromReleaseAimRuntime, shouldSuppressSteeringForReleaseRuntime, } from './beat-swarm-release-input.js';
 import { classifyEnemyDeathFamily, normalizeEnemyDeathFamily, normalizeInstrumentIdToken, normalizeSwarmNoteName, transposeSwarmNoteName, } from './beat-swarm-music-utils.js';
 import { createBeatSwarmWeaponTuneTools } from './beat-swarm-weapon-tune.js';
@@ -1949,7 +1992,7 @@ function directTriggerComposerCarrier(options = null) {
     ? Math.max(0.08, Math.min(0.4, (Number(SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME) || 0.24) * Math.max(0.6, audioGain)))
     : Math.max(0.18, Math.min(0.7, audioGain * (musicProminence === 'full' ? 0.62 : 0.5)));
   if (!visualOnly && instrumentId && note) {
-    try { triggerInstrument(instrumentId, note, undefined, 'master', {}, triggerVolume); } catch {}
+    try { triggerBeatSwarmInstrument(instrumentId, note, undefined, 'master', {}, triggerVolume); } catch {}
   }
   pulseEnemyMusicalRoleVisual(enemy, musicProminence === 'full' ? 'strong' : 'soft');
   pulseSoloCarrierActivationVisual(enemy);
@@ -3441,10 +3484,13 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   const beatIndex = Math.max(0, Math.trunc(Number(opts.beatIndex) || Number(currentBeatIndex) || 0));
   const stepIndex = Math.max(0, Math.trunc(Number(opts.stepIndex) || Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0));
   const barIndex = Math.max(0, Math.trunc(Number(opts.barIndex) || Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR))));
+  const auditionState = getBeatSwarmMusicIntensityAuditionState(barIndex);
+  const auditionSection = String(auditionState?.id || '').trim().toLowerCase();
+  const auditionBypassesIntro = !!auditionSection;
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
   const forceImmediate = opts.forceImmediate === true;
-  if (introStage !== 'none') return null;
-  if (barIndex < 4) return null;
+  if (!auditionBypassesIntro && introStage !== 'none') return null;
+  if (!auditionBypassesIntro && barIndex < 4) return null;
   const foundationLanePlan = getDirectorLanePlanEntryForMusicLaneId('foundation_lane');
   const foundationPreferredCarrier = String(foundationLanePlan?.preferredCarrier || '').trim().toLowerCase();
   const foundationPrefersSpawnerCarrier = foundationPreferredCarrier === 'spawner'
@@ -7272,6 +7318,15 @@ function getUnifiedIntroRampState(beatIndex = null) {
 }
 function getUnifiedIntroStage(barIndex = 0, beatIndex = null) {
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const testOverrides = typeof globalThis !== 'undefined'
+    && globalThis.__beatSwarmTestOverrides
+    && typeof globalThis.__beatSwarmTestOverrides === 'object'
+    ? globalThis.__beatSwarmTestOverrides
+    : null;
+  const musicIntensityAudition = testOverrides?.musicIntensityAudition && typeof testOverrides.musicIntensityAudition === 'object'
+    ? testOverrides.musicIntensityAudition
+    : null;
+  if (musicIntensityAudition?.enabled === true && Number(musicIntensityAudition.introBars) === 0) return 'none';
   const sessionAge = getBeatSwarmSessionAge(beatIndex);
   const beat = sessionAge.beat;
   const stateName = String(energyStateRuntime.state || 'intro').trim().toLowerCase();
@@ -7517,6 +7572,12 @@ function cloneFoundationPhraseEntry(phraseLike = null, fallbackId = 'foundation_
     family: String(phrase?.family || '').trim().toLowerCase(),
     steps,
     patternKey: buildFoundationPhrasePatternKey(steps),
+    source: String(phrase?.source || '').trim(),
+    themeId: String(phrase?.themeId || '').trim(),
+    rawPatternKey: String(phrase?.rawPatternKey || '').trim(),
+    shapedPatternKey: String(phrase?.shapedPatternKey || '').trim(),
+    interpretationMode: String(phrase?.interpretationMode || '').trim().toLowerCase(),
+    phrasePartIndex: Math.max(0, Math.trunc(Number(phrase?.phrasePartIndex) || 0)),
   };
 }
 function getPlayerSimpleRhythmMotifPatterns(themeId = '') {
@@ -7546,6 +7607,11 @@ function getPlayerSimpleRhythmThemeNote(themeId = '') {
   const theme = getPlayerMusicTheme(themeId);
   const data = theme?.toyType === 'simpleRhythm' && theme.data && typeof theme.data === 'object' ? theme.data : null;
   return normalizeSwarmNoteName(data?.note || '') || '';
+}
+function getPlayerDrawgridThemeInstrumentId(themeId = '') {
+  const theme = getPlayerMusicTheme(themeId);
+  const data = theme?.toyType === 'drawgrid' && theme.data && typeof theme.data === 'object' ? theme.data : null;
+  return String(data?.instrumentId || '').trim();
 }
 function getPlayerLeadThemeMotifParts() {
   const theme = getPlayerMusicTheme('leadTheme');
@@ -7610,20 +7676,24 @@ function mapPlayerLeadThemeRowToDirectorNote(rowLike = -1, stepIndex = 0) {
 }
 function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLike = '') {
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+  const sectionId = String(sectionIdLike || '').trim().toLowerCase();
+  const auditionState = getBeatSwarmMusicIntensityAuditionState(bar);
+  const auditionSection = String(auditionState?.id || '').trim().toLowerCase();
+  const auditionBypassesIntro = !!auditionSection;
   const pacingState = getCurrentPacingStateName();
-  if (isIntroPacingStateName(pacingState)) return null;
+  if (!auditionBypassesIntro && isIntroPacingStateName(pacingState)) return null;
   const introStage = String(getUnifiedIntroStage(bar, bar * Math.max(1, COMPOSER_BEATS_PER_BAR)) || '').trim().toLowerCase();
-  if (introStage && introStage !== 'none') return null;
+  if (!auditionBypassesIntro && introStage && introStage !== 'none') return null;
   const parts = getPlayerLeadThemeMotifParts();
   if (!parts.length) return null;
-  const partIndex = bar % parts.length;
+  const releaseEcho = sectionId === 'release';
+  const partIndex = releaseEcho ? 0 : (bar % parts.length);
   const part = parts[partIndex] || parts[0];
   const step = ((Math.max(0, Math.trunc(Number(stepIndex) || 0)) % part.steps) + part.steps) % part.steps;
   const rawNote = normalizeSwarmNoteName(part.noteByStep[step]) || '';
   const rowIndex = Math.max(-1, Math.trunc(Number(part.rowByStep?.[step]) || -1));
   const directorNote = mapPlayerLeadThemeRowToDirectorNote(rowIndex, stepIndex + part.phrasePartIndex) || clampNoteToDirectorPool(rawNote, stepIndex + part.phrasePartIndex);
   const activeStep = !!part.active[step] && !!rawNote;
-  const sectionId = String(sectionIdLike || '').trim().toLowerCase();
   const arrangementState = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
     ? musicModeRuntime.level1ArrangementState
     : null;
@@ -7669,12 +7739,33 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
       stepIndex
     )
     : '';
-  const resolvedActiveStep = (activeStep && buildStepAllowed) || peakPickupActive;
+  const releaseStepAllowed = releaseEcho
+    ? (sectionBar < 3
+      ? (step === 0 || step === 4)
+      : (sectionBar < 6 ? step === 4 : (sectionBar < 8 && sectionBar % 2 === 1 && step === 4)))
+    : true;
+  const releaseFallbackNote = (() => {
+    if (!releaseEcho || activeStep) return '';
+    for (let delta = 1; delta < part.steps; delta += 1) {
+      const prevStep = (step - delta + part.steps) % part.steps;
+      const nextStep = (step + delta) % part.steps;
+      const prevNote = part.active[prevStep] ? normalizeSwarmNoteName(part.noteByStep[prevStep]) : '';
+      if (prevNote) return clampNoteToDirectorPool(prevNote, stepIndex + part.phrasePartIndex);
+      const nextNote = part.active[nextStep] ? normalizeSwarmNoteName(part.noteByStep[nextStep]) : '';
+      if (nextNote) return clampNoteToDirectorPool(nextNote, stepIndex + part.phrasePartIndex);
+    }
+    return '';
+  })();
+  const resolvedActiveStep = releaseEcho
+    ? (releaseStepAllowed && (activeStep || !!releaseFallbackNote))
+    : ((activeStep && buildStepAllowed) || peakPickupActive);
   const resolvedNote = peakPickupActive
     ? peakPickupNote
-    : (peakRiff && activeStep
+    : (releaseEcho && !activeStep
+      ? releaseFallbackNote
+      : (peakRiff && activeStep
       ? getDirectorPoolNoteAtOffset(directorNote, step >= 4 ? 1 : 0, stepIndex)
-      : directorNote);
+      : directorNote));
   const literalStatement = sectionId === 'medium' && bar >= 20 && bar < 36;
   const interpretationMode = buildAssembly
     ? 'build_assemble'
@@ -7700,6 +7791,7 @@ function shapePlayerBassDriveStepsForFoundation(baseStepsLike = null, sectionIdL
   const opts = options && typeof options === 'object' ? options : {};
   if (opts.literalStatement === true) {
     const literal = cloneFoundationPhraseSteps(baseStepsLike);
+    if (opts.entryAnchor === true) literal[0] = true;
     if (!literal.some(Boolean)) literal[0] = true;
     return literal;
   }
@@ -7753,19 +7845,25 @@ function shapePlayerBassDriveStepsForFoundation(baseStepsLike = null, sectionIdL
 function getPlayerBassDriveFoundationPhrase(barIndex = 0, sectionIdLike = '', options = null) {
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const opts = options && typeof options === 'object' ? options : {};
+  const auditionState = getBeatSwarmMusicIntensityAuditionState(bar);
+  const auditionSection = String(auditionState?.id || '').trim().toLowerCase();
+  const auditionBypassesIntro = !!auditionSection;
   const pacingState = getCurrentPacingStateName();
-  if (isIntroPacingStateName(pacingState)) return null;
+  if (!auditionBypassesIntro && isIntroPacingStateName(pacingState)) return null;
   const introStage = String(getUnifiedIntroStage(bar, bar * Math.max(1, COMPOSER_BEATS_PER_BAR)) || '').trim().toLowerCase();
-  if (introStage && introStage !== 'none') return null;
+  if (!auditionBypassesIntro && introStage && introStage !== 'none') return null;
   const patterns = getPlayerSimpleRhythmMotifPatterns('bassDrive');
   if (!patterns.length) return null;
   const sectionId = String(sectionIdLike || 'body').trim().toLowerCase() || 'body';
   const sectionBar = Math.max(0, Math.trunc(Number(opts.sectionBar) || 0));
   const phrasePartIndex = (opts.sectionRelative === true ? sectionBar : bar) % patterns.length;
   const rawSteps = patterns[phrasePartIndex] || patterns[0];
-  const statementWindow = bar >= 12 && bar < 20;
+  const statementWindow = sectionId.includes('peak')
+    ? sectionBar < 16
+    : (bar >= 12 && bar < 20);
   const steps = shapePlayerBassDriveStepsForFoundation(rawSteps, sectionId, {
     literalStatement: statementWindow,
+    entryAnchor: sectionId.includes('peak') && sectionBar < 2,
     phrasePartIndex,
   });
   const rawPatternKey = buildFoundationPhrasePatternKey(rawSteps);
@@ -8086,7 +8184,10 @@ function ensureFoundationLanePlan(barIndex = 0, options = null) {
   const lockedUntilBar = Math.max(-1, Math.trunc(Number(musicLayerRuntime.foundationPhraseLockedUntilBar) || -1));
   const intensityAuditionState = getBeatSwarmMusicIntensityAuditionState(bar);
   const intensityAuditionSection = String(intensityAuditionState?.id || '').trim().toLowerCase();
-  const intensityAuditionSectionBar = Math.max(0, Math.trunc(Number(intensityAuditionState?.auditionSectionBar) || 0));
+  const rawIntensityAuditionSectionBar = Math.trunc(Number(intensityAuditionState?.auditionSectionBar) || 0);
+  const intensityAuditionSectionBar = intensityAuditionSection && rawIntensityAuditionSectionBar <= 0 && bar > 0
+    ? bar
+    : Math.max(0, rawIntensityAuditionSectionBar);
   const currentSectionId = intensityAuditionSection
     ? `intensity_${intensityAuditionSection}`
     : (String(composerRuntime.currentSectionId || 'default').trim().toLowerCase() || 'default');
@@ -8928,7 +9029,7 @@ function isBeatSwarmMusicIntensityAuditionEnabled() {
   const audition = overrides?.musicIntensityAudition;
   if (!audition || typeof audition !== 'object' || audition.enabled !== true) return false;
   const mode = String(audition.mode || 'ramp_release').trim().toLowerCase();
-  return mode === 'ramp_release' || mode === 'fixed_section';
+  return mode === 'ramp_release' || mode === 'fixed_section' || mode === 'release_transition';
 }
 function getBeatSwarmMusicIntensityAuditionSections() {
   return [
@@ -8950,15 +9051,28 @@ function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
   const audition = overrides?.musicIntensityAudition && typeof overrides.musicIntensityAudition === 'object'
     ? overrides.musicIntensityAudition
     : {};
-  const mode = String(audition.mode || 'ramp_release').trim().toLowerCase() === 'fixed_section'
+  const rawMode = String(audition.mode || 'ramp_release').trim().toLowerCase();
+  const mode = rawMode === 'fixed_section'
     ? 'fixed_section'
-    : 'ramp_release';
+    : (rawMode === 'release_transition' ? 'release_transition' : 'ramp_release');
   const barIndex = Math.max(0, Math.trunc(Number(barIndexLike) || 0));
   const sessionAge = getBeatSwarmSessionAge();
-  const INTRO_BARS = 12;
+  const configuredIntroBars = Number(audition.introBars);
+  const INTRO_BARS = Number.isFinite(configuredIntroBars)
+    ? Math.max(0, Math.min(32, Math.trunc(configuredIntroBars)))
+    : 12;
   const auditionBar = Math.max(-1, Math.trunc(Number(sessionAge.sessionAgeBars) || 0) - INTRO_BARS);
   if (auditionBar < 0) return null;
-  const sections = getBeatSwarmMusicIntensityAuditionSections();
+  const baseSections = getBeatSwarmMusicIntensityAuditionSections();
+  const sections = mode === 'release_transition'
+    ? [
+      { ...baseSections.find((section) => section.id === 'peak'), startBar: 0, endBar: 8 },
+      { ...baseSections.find((section) => section.id === 'build'), startBar: 8, endBar: 12 },
+      { ...baseSections.find((section) => section.id === 'medium'), startBar: 12, endBar: 16 },
+      { ...baseSections.find((section) => section.id === 'release'), startBar: 16, endBar: 26 },
+      { ...baseSections.find((section) => section.id === 'settle'), startBar: 26, endBar: Number.POSITIVE_INFINITY },
+    ].filter((section) => section && section.id)
+    : baseSections;
   const fixedSectionId = String(audition.fixedSection || audition.section || '').trim().toLowerCase();
   const fixedSection = mode === 'fixed_section'
     ? sections.find((section) => String(section?.id || '').trim().toLowerCase() === fixedSectionId)
@@ -9066,12 +9180,19 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
   } else if (section === 'release') {
     const releaseSectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
     const releaseEchoActive = releaseSectionBar < 8;
-    activate('foundation', releaseEchoActive ? 0.34 : 0.24, 1);
-    quiet('secondary_loop');
-    if (releaseEchoActive) activate('primary_loop', releaseSectionBar < 4 ? 0.42 : 0.28, 1);
+    const releaseImpact = releaseSectionBar === 0;
+    const releaseTail = releaseSectionBar > 0 && releaseSectionBar < 5;
+    activate('foundation', releaseImpact ? 0.5 : (releaseTail ? 0.38 : (releaseEchoActive ? 0.3 : 0.22)), 1);
+    if (releaseImpact) activate('secondary_loop', 0.48, 1);
+    else if (releaseTail && releaseSectionBar < 3) activate('secondary_loop', 0.24, 1);
+    else quiet('secondary_loop');
+    if (releaseImpact) activate('primary_loop', 0.58, 1);
+    else if (releaseEchoActive) activate('primary_loop', releaseTail ? (releaseSectionBar < 3 ? 0.42 : 0.3) : 0.24, 1);
     else quiet('primary_loop');
-    quiet('support');
-    quiet('sparkle');
+    if (releaseImpact) activate('support', 0.18, 1);
+    else quiet('support');
+    if (releaseImpact) activate('sparkle', 0.1, 1);
+    else quiet('sparkle');
     quiet('answer');
   } else if (section === 'settle') {
     activate('foundation', 0.44, 1);
@@ -12885,7 +13006,7 @@ function flushSwarmSoundEventsForBeat(beatIndex = currentBeatIndex) {
       const pitch = isDeathKey
         ? clampNoteToDirectorPool(rawPitch, beat + i)
         : rawPitch;
-      try { triggerInstrument(inst, pitch, when, 'master', {}, vol * defVolumeMult); } catch {}
+      try { triggerBeatSwarmInstrument(inst, pitch, when, 'master', {}, vol * defVolumeMult); } catch {}
     }
     swarmSoundEventState.played[key] = true;
   }
@@ -13056,7 +13177,7 @@ function playSwarmSoundEventImmediate(eventKey, volume = 1, noteName = null) {
   const def = SWARM_SOUND_EVENTS[key];
   const inst = resolveSwarmSoundInstrumentId(key);
   const note = normalizeSwarmNoteName(noteName) || String(def?.note || getRandomSwarmPentatonicNote());
-  try { triggerInstrument(inst, note, undefined, 'master', {}, vol); } catch {}
+  try { triggerBeatSwarmInstrument(inst, note, undefined, 'master', {}, vol); } catch {}
 }
 function getSwarmSoundEventTargetAudioTime(beatIndex = currentBeatIndex, stepIndex = null) {
   const info = getLoopInfo?.() || null;
@@ -13116,7 +13237,7 @@ function playSwarmSoundEventScheduled(eventKey, volume = 1, beatIndex = currentB
       stepIndex: Math.max(0, Math.trunc(Number(options?.stepIndex) || 0)),
     });
   }
-  try { triggerInstrument(inst, note, when ?? undefined, 'master', {}, vol); } catch {}
+  try { triggerBeatSwarmInstrument(inst, note, when ?? undefined, 'master', {}, vol); } catch {}
 }
 function createRandomWeaponStages() {
   const archetypes = Object.values(WEAPON_ARCHETYPES);
@@ -14733,7 +14854,7 @@ function auditionLoopgridSubBoardStep(panel, stepIndex, when) {
   const note = Number.isFinite(midi) ? (normalizeSwarmNoteName(midiToName(midi)) || 'C3') : 'C3';
   const instrument = String(panel.dataset.instrument || 'BASS TONE 4');
   const toyId = String(panel.__audioToyId || panel.dataset.audiotoyid || panel.id || 'master');
-  try { triggerInstrument(instrument, note, when, toyId, { source: 'beat-swarm-subboard-loopgrid', col: step, step, index: step }, 0.72); } catch {}
+  try { triggerBeatSwarmInstrument(instrument, note, when, toyId, { source: 'beat-swarm-subboard-loopgrid', col: step, step, index: step }, 0.72); } catch {}
   return true;
 }
 function auditionDrawgridSubBoardStep(panel, stepIndex, when) {
@@ -14755,7 +14876,7 @@ function auditionDrawgridSubBoardStep(panel, stepIndex, when) {
         if (disabled.has(row)) continue;
         const note = noteForRow(row);
         try {
-          triggerInstrument(instrument, note, when, toyId, { source: 'beat-swarm-subboard-drawgrid-pattern', step, row, col: step, index: step }, 0.64);
+          triggerBeatSwarmInstrument(instrument, note, when, toyId, { source: 'beat-swarm-subboard-drawgrid-pattern', step, row, col: step, index: step }, 0.64);
           played = true;
         } catch {}
       }
@@ -14778,7 +14899,7 @@ function auditionDrawgridSubBoardStep(panel, stepIndex, when) {
     const row = Math.max(0, Math.min(DRAWGRID_TOY_ROW_NOTE_PALETTE.length - 1, Math.trunc(Number(rowRaw) || 0)));
     const note = noteForRow(row);
     try {
-      triggerInstrument(instrument, note, when, toyId, { source: 'beat-swarm-subboard-drawgrid', step, row, col: step, index: step }, 0.64);
+      triggerBeatSwarmInstrument(instrument, note, when, toyId, { source: 'beat-swarm-subboard-drawgrid', step, row, col: step, index: step }, 0.64);
       played = true;
     } catch {}
   }
@@ -21382,9 +21503,31 @@ function shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(eventLike = null) {
 function executePerformedBeatEvent(event) {
   const shapedEvent = shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(event);
   if (!shapedEvent) return false;
-  const ok = executePerformedBeatEventRuntime({
-    event: shapedEvent,
-    constants: {
+  const executionEvent = (() => {
+    const payload = shapedEvent?.payload && typeof shapedEvent.payload === 'object' ? shapedEvent.payload : {};
+    const isReleaseLeadEcho = String(payload.intensityAuditionSection || '').trim().toLowerCase() === 'release'
+      && String(payload.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
+      && (
+        String(payload.leadThemeInterpretationMode || '').trim().toLowerCase() === 'release_riff'
+        || String(payload.continuityId || '').trim().toLowerCase() === 'player-lead-theme-direct'
+      );
+    if (!isReleaseLeadEcho) return shapedEvent;
+    return {
+      ...shapedEvent,
+      payload: {
+        ...payload,
+        musicProminence: 'quiet',
+        audioGain: Math.min(0.24, Math.max(0, Number(payload.audioGain) || 0.24)),
+      },
+    };
+  })();
+  const prevExecutionTriggerEvent = beatSwarmExecutionTriggerEvent;
+  beatSwarmExecutionTriggerEvent = executionEvent;
+  let ok = false;
+  try {
+    ok = executePerformedBeatEventRuntime({
+      event: executionEvent,
+      constants: {
       composerBeatsPerBar: COMPOSER_BEATS_PER_BAR,
       roles: BEAT_EVENT_ROLES,
       threat: BEAT_EVENT_THREAT,
@@ -21418,7 +21561,7 @@ function executePerformedBeatEvent(event) {
       shouldKeepEnemyAudibleDuringPlayerDuck,
       clampNoteToDirectorPool,
       syncSingletonEnemyStateFromMusicGroup,
-      triggerInstrument,
+      triggerInstrument: triggerBeatSwarmInstrument,
       flashSpawnerEnemyCell,
       getSpawnerNodeCellWorld,
       worldToScreen,
@@ -21449,7 +21592,10 @@ function executePerformedBeatEvent(event) {
       enemies,
       composerEnemyGroups,
     },
-  });
+    });
+  } finally {
+    beatSwarmExecutionTriggerEvent = prevExecutionTriggerEvent;
+  }
   if (ok) {
     noteTimingAuthorityEvent(
       event?.payload?.authoringClass || '',
@@ -22211,6 +22357,7 @@ function updateBeatWeapons(centerWorld) {
         getPlayerAccentRhythmMotionPhrase,
         getPlayerSimpleRhythmThemeInstrumentId,
         getPlayerSimpleRhythmThemeNote,
+        getPlayerDrawgridThemeInstrumentId,
         getOnboardingReadabilityDirective,
         getPlayerInstrumentStepDirective,
         getPlayerLeadThemePrimaryStep,
@@ -22375,8 +22522,11 @@ function updateEnemies(dt) {
       eventSectionRuntime: activeEventSectionRuntime,
       difficultyConfig,
       arenaCenterWorld,
-    },
-  });
+      },
+    });
+  } finally {
+    beatSwarmExecutionTriggerEvent = prevExecutionTriggerEvent;
+  }
 }
 function spawnFallbackEnemyOffscreen() {
   spawnFallbackEnemyOffscreenRuntime({

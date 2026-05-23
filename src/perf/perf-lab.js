@@ -504,7 +504,7 @@ function ensureUI() {
       btn('musicLabRunBS0S3ListenMedium', 'Listen: Medium Intensity (90s)', 'primary'),
       btn('musicLabRunBS0S3ListenBuild', 'Listen: Build Intensity (90s)', 'primary'),
       btn('musicLabRunBS0S3ListenPeak', 'Listen: Peak Intensity (90s)', 'primary'),
-      btn('musicLabRunBS0S3ListenRelease', 'Listen: Release Intensity (90s)', 'primary'),
+      btn('musicLabRunBS0S3ListenRelease', 'Listen: Peak -> Release -> Settle (60s)', 'primary'),
       btn('musicLabRunBS0S3ListenSettle', 'Listen: Settle Intensity (90s)', 'primary'),
       btn('musicLabSnapshot', 'Music Lab: Show Snapshot'),
       btn('musicLabExport', 'Music Lab: Export JSON'),
@@ -3842,6 +3842,22 @@ function compactMusicLabPayloadForSave(payload = null) {
         : (event.callResponseQualified === false ? false : null),
       callResponsePhraseProgress: Number(event.callResponsePhraseProgress) || 0,
       musicLaneId: String(event.musicLaneId || payload.musicLaneId || payload.foundationLaneId || ''),
+      musicLanePhraseId: String(event.musicLanePhraseId || payload.musicLanePhraseId || ''),
+      musicLanePatternKey: String(event.musicLanePatternKey || payload.musicLanePatternKey || ''),
+      musicLaneRawPatternKey: String(event.musicLaneRawPatternKey || payload.musicLaneRawPatternKey || ''),
+      musicLaneShapedPatternKey: String(event.musicLaneShapedPatternKey || payload.musicLaneShapedPatternKey || ''),
+      musicLaneInterpretationMode: String(event.musicLaneInterpretationMode || payload.musicLaneInterpretationMode || '').trim().toLowerCase(),
+      musicLanePhrasePartIndex: Number(event.musicLanePhrasePartIndex ?? payload.musicLanePhrasePartIndex) || 0,
+      musicLanePlayerThemeSource: String(event.musicLanePlayerThemeSource || payload.musicLanePlayerThemeSource || ''),
+      foundationPlayerThemeSource: String(event.foundationPlayerThemeSource || payload.foundationPlayerThemeSource || ''),
+      leadPlayerThemeSource: String(event.leadPlayerThemeSource || payload.leadPlayerThemeSource || ''),
+      leadThemeInterpretationMode: String(event.leadThemeInterpretationMode || payload.leadThemeInterpretationMode || '').trim().toLowerCase(),
+      leadThemePartIndex: Number(event.leadThemePartIndex ?? payload.leadThemePartIndex) || 0,
+      leadThemeStepIndex: Number(event.leadThemeStepIndex ?? payload.leadThemeStepIndex) || 0,
+      leadThemePatternKey: String(event.leadThemePatternKey || payload.leadThemePatternKey || ''),
+      leadThemeContourKey: String(event.leadThemeContourKey || payload.leadThemeContourKey || ''),
+      leadThemeRawStepActive: event.leadThemeRawStepActive === true || payload.leadThemeRawStepActive === true,
+      leadThemeRawNote: String(event.leadThemeRawNote || payload.leadThemeRawNote || ''),
       musicLayer: String(event.musicLayer || ''),
       musicProminence: String(event.musicProminence || ''),
       intensityAuditionSection: String(event.intensityAuditionSection || payload.intensityAuditionSection || '').trim().toLowerCase(),
@@ -3900,6 +3916,22 @@ function compactMusicLabPayloadForSave(payload = null) {
         ghostPlayback: payload.ghostPlayback === true,
         musicLayer: String(payload.musicLayer || ''),
         musicLaneId: String(payload.musicLaneId || ''),
+        musicLanePhraseId: String(payload.musicLanePhraseId || ''),
+        musicLanePatternKey: String(payload.musicLanePatternKey || ''),
+        musicLaneRawPatternKey: String(payload.musicLaneRawPatternKey || ''),
+        musicLaneShapedPatternKey: String(payload.musicLaneShapedPatternKey || ''),
+        musicLaneInterpretationMode: String(payload.musicLaneInterpretationMode || '').trim().toLowerCase(),
+        musicLanePhrasePartIndex: Number(payload.musicLanePhrasePartIndex) || 0,
+        musicLanePlayerThemeSource: String(payload.musicLanePlayerThemeSource || ''),
+        foundationPlayerThemeSource: String(payload.foundationPlayerThemeSource || ''),
+        leadPlayerThemeSource: String(payload.leadPlayerThemeSource || ''),
+        leadThemeInterpretationMode: String(payload.leadThemeInterpretationMode || '').trim().toLowerCase(),
+        leadThemePartIndex: Number(payload.leadThemePartIndex) || 0,
+        leadThemeStepIndex: Number(payload.leadThemeStepIndex) || 0,
+        leadThemePatternKey: String(payload.leadThemePatternKey || ''),
+        leadThemeContourKey: String(payload.leadThemeContourKey || ''),
+        leadThemeRawStepActive: payload.leadThemeRawStepActive === true,
+        leadThemeRawNote: String(payload.leadThemeRawNote || ''),
         musicProminence: String(payload.musicProminence || ''),
         musicVoiceKey: String(payload.musicVoiceKey || ''),
         audioGain: Number(payload.audioGain) || 0,
@@ -4210,6 +4242,83 @@ function compactMusicLabPayloadForSave(payload = null) {
         musicProfileSourceType: String(payload.musicProfileSourceType || '').trim().toLowerCase(),
         intensityAuditionSection: String(payload.intensityAuditionSection || '').trim().toLowerCase(),
         reason: String(payload.reason || '').trim().toLowerCase(),
+      });
+      continue;
+    }
+    if (
+      eventType === 'music_player_accent_motif_track'
+      || eventType === 'music_player_bass_motif_track'
+      || eventType === 'music_click_percussion_trigger'
+    ) {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        status: String(payload.status ?? item.status ?? '').trim().toLowerCase(),
+        themeId: String(payload.themeId ?? item.themeId ?? '').trim(),
+        stage: String(payload.stage ?? payload.intensityAuditionSection ?? item.stage ?? item.intensityAuditionSection ?? '').trim().toLowerCase(),
+        sectionBar: Number(payload.sectionBar ?? item.sectionBar) || 0,
+        localStep: Number(payload.localStep ?? item.localStep) || 0,
+        phrasePartIndex: Number(payload.phrasePartIndex ?? item.phrasePartIndex) || 0,
+        patternKey: String(payload.patternKey ?? item.patternKey ?? '').trim(),
+        rawPatternKey: String(payload.rawPatternKey ?? item.rawPatternKey ?? '').trim(),
+        shapedPatternKey: String(payload.shapedPatternKey ?? item.shapedPatternKey ?? '').trim(),
+        interpretationMode: String(payload.interpretationMode ?? item.interpretationMode ?? '').trim().toLowerCase(),
+        expectedHit: payload.expectedHit === true || item.expectedHit === true,
+        emittedHit: payload.emittedHit === true || item.emittedHit === true,
+        riffHit: payload.riffHit === true || item.riffHit === true,
+        instrumentId: String(payload.instrumentId ?? item.instrumentId ?? '').trim(),
+        requestedNote: String(payload.requestedNote ?? item.requestedNote ?? '').trim(),
+        resolvedNote: String(payload.resolvedNote ?? item.resolvedNote ?? '').trim(),
+        noteName: String(payload.noteName ?? item.noteName ?? '').trim(),
+        source: String(payload.source ?? item.source ?? '').trim().toLowerCase(),
+        destOrId: String(payload.destOrId ?? item.destOrId ?? '').trim(),
+        preserveRequestedNote: payload.preserveRequestedNote === true || item.preserveRequestedNote === true,
+        velocity: Number(payload.velocity ?? item.velocity) || 0,
+        reason: String(payload.reason ?? item.reason ?? '').trim().toLowerCase(),
+      });
+      continue;
+    }
+    if (
+      eventType === 'music_player_layer_state'
+      || eventType === 'music_foreground_motif_usage'
+      || eventType === 'music_motif_return_state'
+      || eventType === 'music_lead_motif_anchor'
+    ) {
+      const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item;
+      focusedSystemEvents.push({
+        tMs: Number(item.tMs) || 0,
+        eventType,
+        barIndex: Number(item.barIndex) || 0,
+        beatIndex: Number(item.beatIndex) || 0,
+        stepIndex: Number(item.stepIndex) || 0,
+        phase: String(payload.phase || item.phase || '').trim().toLowerCase(),
+        themeId: String(payload.themeId || item.themeId || '').trim(),
+        motifId: String(payload.motifId || item.motifId || '').trim(),
+        motifScopeKey: String(payload.motifScopeKey || item.motifScopeKey || '').trim(),
+        motifStepIndex: Number(payload.motifStepIndex ?? item.motifStepIndex) || 0,
+        motifAgeBars: Number(payload.motifAgeBars ?? item.motifAgeBars) || 0,
+        note: String(payload.note || item.note || '').trim(),
+        baseNote: String(payload.baseNote || item.baseNote || '').trim(),
+        intent: String(payload.intent || item.intent || '').trim().toLowerCase(),
+        sectionId: String(payload.sectionId || item.sectionId || '').trim().toLowerCase(),
+        intensityAuditionSection: String(payload.intensityAuditionSection || item.intensityAuditionSection || '').trim().toLowerCase(),
+        phraseIntent: String(payload.phraseIntent || item.phraseIntent || '').trim().toLowerCase(),
+        motifEpoch: Number(payload.motifEpoch ?? item.motifEpoch) || 0,
+        requestedLockIndex: Number(payload.requestedLockIndex ?? item.requestedLockIndex) || 0,
+        effectiveLockIndex: Number(payload.effectiveLockIndex ?? item.effectiveLockIndex) || 0,
+        lookbackLocks: Number(payload.lookbackLocks ?? item.lookbackLocks) || 0,
+        returnActive: payload.returnActive === true || item.returnActive === true,
+        preDropActive: payload.preDropActive === true || item.preDropActive === true,
+        liveSnakeCount: Number(payload.liveSnakeCount ?? item.liveSnakeCount) || 0,
+        matchingScopeSnakeCount: Number(payload.matchingScopeSnakeCount ?? item.matchingScopeSnakeCount) || 0,
+        primaryLoopUsesScope: payload.primaryLoopUsesScope === true || item.primaryLoopUsesScope === true,
+        reuseCount: Number(payload.reuseCount ?? item.reuseCount) || 0,
+        returnCount: Number(payload.returnCount ?? item.returnCount) || 0,
+        variationCount: Number(payload.variationCount ?? item.variationCount) || 0,
       });
       continue;
     }
@@ -6217,10 +6326,17 @@ async function runBS0s3MusicLabIntensityListenSection(sectionIdLike = 'low') {
   const section = allowedSections.has(sectionId) ? sectionId : 'low';
   const sectionLabel = section === 'silent'
     ? 'Silent / Weapon Only'
-    : `${section.charAt(0).toUpperCase()}${section.slice(1)} Intensity`;
-  const sectionSlug = section.replace(/[^a-z0-9]+/g, '_');
+    : (section === 'release'
+      ? 'Peak -> Release'
+      : `${section.charAt(0).toUpperCase()}${section.slice(1)} Intensity`);
+  const sectionSlug = section === 'release'
+    ? 'peak_release'
+    : section.replace(/[^a-z0-9]+/g, '_');
+  const durationMs = section === 'peak' ? 45000 : (section === 'release' ? 60000 : 90000);
+  const durationLabel = section === 'peak' ? '45s' : (section === 'release' ? '60s' : '90s');
+  const auditionMode = section === 'release' ? 'release_transition' : 'fixed_section';
   await runBS0Stage(3, {
-    durationMs: 90000,
+    durationMs,
     repeatCount: 1,
     freshResetEachRun: true,
     restartTransportEachRun: true,
@@ -6232,21 +6348,26 @@ async function runBS0s3MusicLabIntensityListenSection(sectionIdLike = 'low') {
     beatSwarmTestOverrides: {
       musicIntensityAudition: {
         enabled: true,
-        mode: 'fixed_section',
+        mode: auditionMode,
         fixedSection: section,
+        introBars: (section === 'peak' || section === 'release') ? 0 : 12,
       },
     },
-    saveRunIdBase: `musicLab_bs0_s3_listen_${sectionSlug}_1x90s`,
+    saveRunIdBase: `musicLab_bs0_s3_listen_${sectionSlug}_1x${durationLabel}`,
     saveNotes: [
-      `Beat Swarm Music Lab focused listening run: normal intro, then fixed ${sectionLabel} arrangement state.`,
+      section === 'peak'
+        ? 'Beat Swarm Music Lab focused listening run: fixed Peak Intensity from the start; intro skipped for motif clarity testing.'
+        : (section === 'release'
+          ? 'Beat Swarm Music Lab focused listening run: Peak, down-ramp, Release, then Settle, so both release entry and exit are tested.'
+          : `Beat Swarm Music Lab focused listening run: normal intro, then fixed ${sectionLabel} arrangement state.`),
       'Listen for clarity of player-generated motifs, motif repetition fatigue, lane balance, and whether the state has a distinct musical identity.',
     ].join(' '),
-    groupedScenarioName: `retro_shooter_intro_pacing_s3_listen_${sectionSlug}_1x90s`,
-    groupedRunId: `musicLab_bs0_s3_listen_${sectionSlug}_1x90s_scenario`,
-    groupedNotes: `Beat Swarm focused listening scenario: ${sectionLabel}, 1 run x 90 seconds, compact save.`,
-    tagPrefix: `BS0S3MusicLabListen${sectionLabel.replace(/[^A-Za-z0-9]+/g, '')}1x90s`,
-    labelPrefix: `BS0_stage3_beatswarm_static_fire_musiclab_listen_${sectionSlug}_1x90s`,
-    statusPrefix: `Running BS0 S3 focused listening pass: ${sectionLabel} (90 seconds, compact save)`,
+    groupedScenarioName: `retro_shooter_intro_pacing_s3_listen_${sectionSlug}_1x${durationLabel}`,
+    groupedRunId: `musicLab_bs0_s3_listen_${sectionSlug}_1x${durationLabel}_scenario`,
+    groupedNotes: `Beat Swarm focused listening scenario: ${sectionLabel}, 1 run x ${durationLabel}, compact save.`,
+    tagPrefix: `BS0S3MusicLabListen${sectionLabel.replace(/[^A-Za-z0-9]+/g, '')}1x${durationLabel}`,
+    labelPrefix: `BS0_stage3_beatswarm_static_fire_musiclab_listen_${sectionSlug}_1x${durationLabel}`,
+    statusPrefix: `Running BS0 S3 focused listening pass: ${sectionLabel} (${durationLabel}, compact save)`,
     traceCapture: {
       enabled: false,
     },
