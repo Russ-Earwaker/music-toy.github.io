@@ -27,7 +27,7 @@ import { collectDrawSnakeStepBeatEvents as collectDrawSnakeStepEvents, collectSp
 import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRuntime, } from './beat-swarm-composer-spawn.js';
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
-import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-23-release-echo-v2';
+import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-24-release-echo-v3';
 import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
@@ -51,6 +51,22 @@ function triggerBeatSwarmInstrument(instrument, noteName, when, destOrId, option
   const triggerVelocity = releaseLeadEchoTrigger
     ? Math.min(Number(velocity) || 0, 0.16)
     : velocity;
+  if (releaseLeadEchoTrigger) {
+    try {
+      noteMusicSystemEvent('music_release_lead_echo_trigger_clamp', {
+        instrumentId,
+        requestedNote: String(noteName || '').trim(),
+        requestedVelocity: Number.isFinite(Number(velocity)) ? Number(velocity) : 0,
+        finalVelocity: Number.isFinite(Number(triggerVelocity)) ? Number(triggerVelocity) : 0,
+        musicProminence: String(triggerPayload?.musicProminence || '').trim().toLowerCase(),
+        audioGain: Number(triggerPayload?.audioGain) || 0,
+        leadThemeInterpretationMode: String(triggerPayload?.leadThemeInterpretationMode || '').trim().toLowerCase(),
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(beatSwarmExecutionTriggerEvent?.beatIndex) || 0)),
+        stepIndex: Math.max(0, Math.trunc(Number(beatSwarmExecutionTriggerEvent?.stepIndex) || 0)),
+      });
+    } catch {}
+  }
   const resolvedNote = instrumentId.toUpperCase() === 'CLICK PERCUSSION SHORT'
     ? 'C4'
     : noteName;
@@ -22524,9 +22540,6 @@ function updateEnemies(dt) {
       arenaCenterWorld,
       },
     });
-  } finally {
-    beatSwarmExecutionTriggerEvent = prevExecutionTriggerEvent;
-  }
 }
 function spawnFallbackEnemyOffscreen() {
   spawnFallbackEnemyOffscreenRuntime({

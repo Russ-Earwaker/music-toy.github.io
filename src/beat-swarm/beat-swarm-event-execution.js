@@ -1062,6 +1062,57 @@ export function executePerformedBeatEventRuntime(options = null) {
   });
   }
 
+  if (actionType === 'player-lead-release-echo') {
+    return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.releaseLeadEcho', () => {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const requestedNote = String(payload?.requestedNoteRaw || ev?.note || '').trim();
+      const noteName = String(requestedNote || ev?.note || '').trim();
+      const instrumentId = String(ev?.instrumentId || '').trim();
+      if (!instrumentId || !noteName) return false;
+      const authoredGain = Number(payload?.audioGain == null ? 0.24 : payload.audioGain);
+      const triggerVolume = Math.max(0.06, Math.min(0.18, (Number.isFinite(authoredGain) ? authoredGain : 0.24) * 0.66));
+      try {
+        helpers.triggerInstrument?.(
+          instrumentId,
+          noteName,
+          undefined,
+          'master',
+          { source: 'beat-swarm-release-lead-echo', preserveRequestedNote: true, stepIndex },
+          triggerVolume
+        );
+      } catch {}
+      try {
+        helpers.noteMusicSystemEvent?.('music_release_lead_echo_triggered', {
+          instrumentId,
+          note: noteName,
+          triggerVolume,
+          musicProminence: 'quiet',
+          leadThemeInterpretationMode: String(payload?.leadThemeInterpretationMode || '').trim().toLowerCase(),
+          leadThemePartIndex: Math.max(0, Math.trunc(Number(payload?.leadThemePartIndex) || 0)),
+          leadThemeStepIndex: Math.max(0, Math.trunc(Number(payload?.leadThemeStepIndex) || 0)),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+      logMusicLabExecution({
+        sourceSystem: 'music',
+        requestedNote,
+        resolvedNote: noteName,
+        noteWasClamped: false,
+        enemyAudible: true,
+        musicProminence: 'quiet',
+        musicLaneId: 'primary_loop_lane',
+        musicLayer: 'loops',
+        musicVoiceKey: 'player_lead_release_echo',
+        callResponseLane: String(payload?.callResponseLane || 'call').trim().toLowerCase(),
+        callResponseQualified: payload?.callResponseQualified === true,
+        callResponsePhraseProgress: Math.max(0, Math.trunc(Number(payload?.callResponsePhraseProgress) || 0)),
+        intensityAuditionSection: 'release',
+        ...buildLeadThemeExecutionContext(null, null),
+        ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
+      });
+      return true;
+    });
+  }
+
   if (actionType === 'composer-group-projectile' || actionType === 'composer-group-explosion') {
     return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.composer', () => {
     let enemy = helpers.getSwarmEnemyById?.(ev.actorId);

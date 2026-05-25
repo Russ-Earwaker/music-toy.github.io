@@ -2215,7 +2215,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }) || null;
   })();
   const explicitPlayerLeadThemeEvent = (() => {
-    const { stage } = getDirectorMotifBedStageState();
+    const { stage, sectionBar } = getDirectorMotifBedStageState();
     if (stage !== 'peak' && stage !== 'release') return null;
     if (stage !== 'release' && primaryLoopForegroundPresent) return null;
     const stagedPrimaryLoopAlreadyPresent = stagedEnemyEvents.some((ev) => {
@@ -2225,9 +2225,35 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         && String(ev?.instrumentId || '').trim();
     });
     if (stage !== 'release' && stagedPrimaryLoopAlreadyPresent) return null;
-    const leadThemeStep = typeof helpers.getPlayerLeadThemePrimaryStep === 'function'
+    const localThemeStep = Math.max(0, Math.trunc(Number(stepIndex) || 0)) % 8;
+    const releaseEchoStepAllowed = stage !== 'release'
+      ? true
+      : (sectionBar < 4
+        ? (localThemeStep === 0 || localThemeStep === 4)
+        : (localThemeStep === 4 || (sectionBar < 7 && localThemeStep === 0)));
+    if (!releaseEchoStepAllowed) return null;
+    let leadThemeStep = typeof helpers.getPlayerLeadThemePrimaryStep === 'function'
       ? helpers.getPlayerLeadThemePrimaryStep(barIndex, stepIndex, stage)
       : null;
+    if (stage === 'release' && (!leadThemeStep || typeof leadThemeStep !== 'object' || leadThemeStep.active !== true || !String(leadThemeStep.note || '').trim())) {
+      const stepBase = Math.max(0, Math.trunc(Number(stepIndex) || 0)) - localThemeStep;
+      const candidateSteps = [localThemeStep, 0, 4, 2, 6, 1, 3, 5, 7];
+      for (const candidate of candidateSteps) {
+        const candidateStep = typeof helpers.getPlayerLeadThemePrimaryStep === 'function'
+          ? helpers.getPlayerLeadThemePrimaryStep(barIndex, stepBase + candidate, 'peak')
+          : null;
+        const candidateNote = String(candidateStep?.note || candidateStep?.rawNote || '').trim();
+        if (!candidateStep || typeof candidateStep !== 'object' || !candidateNote) continue;
+        leadThemeStep = {
+          ...candidateStep,
+          active: true,
+          note: candidateNote,
+          step: localThemeStep,
+          interpretationMode: 'release_riff',
+        };
+        break;
+      }
+    }
     if (!leadThemeStep || typeof leadThemeStep !== 'object' || leadThemeStep.active !== true) return null;
     const noteName = String(leadThemeStep.note || '').trim();
     if (!noteName) return null;
@@ -2245,7 +2271,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       role: constants.roles?.lead || 'lead',
       note: noteName,
       instrumentId,
-      actionType: 'composer-group-projectile',
+      actionType: stage === 'release' ? 'player-lead-release-echo' : 'composer-group-projectile',
       threatClass: constants.threat?.full || 'full',
       visualSyncType: actorId > 0 ? 'group-pulse' : 'none',
       payload: {
