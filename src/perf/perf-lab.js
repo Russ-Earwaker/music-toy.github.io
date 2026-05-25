@@ -505,6 +505,7 @@ function ensureUI() {
       btn('musicLabRunBS0S3ListenBuild', 'Listen: Build Intensity (90s)', 'primary'),
       btn('musicLabRunBS0S3ListenPeak', 'Listen: Peak Intensity (90s)', 'primary'),
       btn('musicLabRunBS0S3ListenRelease', 'Listen: Peak -> Release -> Settle (60s)', 'primary'),
+      btn('musicLabRunBS0S3ListenReleaseOnly', 'Listen: Release Only / No Intro (60s)', 'primary'),
       btn('musicLabRunBS0S3ListenSettle', 'Listen: Settle Intensity (90s)', 'primary'),
       btn('musicLabSnapshot', 'Music Lab: Show Snapshot'),
       btn('musicLabExport', 'Music Lab: Export JSON'),
@@ -1451,6 +1452,7 @@ function ensureUI() {
         musicLabRunBS0S3ListenBuild: 'build',
         musicLabRunBS0S3ListenPeak: 'peak',
         musicLabRunBS0S3ListenRelease: 'release',
+        musicLabRunBS0S3ListenReleaseOnly: 'release_only',
         musicLabRunBS0S3ListenSettle: 'settle',
       };
       await runBS0s3MusicLabIntensityListenSection(sectionByAction[act] || 'low');
@@ -6321,20 +6323,22 @@ async function runBS0s3MusicLabIntensityRamp150s() {
 }
 
 async function runBS0s3MusicLabIntensityListenSection(sectionIdLike = 'low') {
-  const sectionId = String(sectionIdLike || 'low').trim().toLowerCase() || 'low';
+  const requestedSectionId = String(sectionIdLike || 'low').trim().toLowerCase() || 'low';
+  const releaseOnly = requestedSectionId === 'release_only' || requestedSectionId === 'release-only';
+  const sectionId = releaseOnly ? 'release' : requestedSectionId;
   const allowedSections = new Set(['silent', 'low', 'medium', 'build', 'peak', 'release', 'settle']);
   const section = allowedSections.has(sectionId) ? sectionId : 'low';
   const sectionLabel = section === 'silent'
     ? 'Silent / Weapon Only'
     : (section === 'release'
-      ? 'Peak -> Release'
+      ? (releaseOnly ? 'Release Only / No Intro' : 'Peak -> Release')
       : `${section.charAt(0).toUpperCase()}${section.slice(1)} Intensity`);
   const sectionSlug = section === 'release'
-    ? 'peak_release'
+    ? (releaseOnly ? 'release_only' : 'peak_release')
     : section.replace(/[^a-z0-9]+/g, '_');
   const durationMs = section === 'peak' ? 45000 : (section === 'release' ? 60000 : 90000);
   const durationLabel = section === 'peak' ? '45s' : (section === 'release' ? '60s' : '90s');
-  const auditionMode = section === 'release' ? 'release_transition' : 'fixed_section';
+  const auditionMode = section === 'release' && !releaseOnly ? 'release_transition' : 'fixed_section';
   await runBS0Stage(3, {
     durationMs,
     repeatCount: 1,
@@ -6358,7 +6362,9 @@ async function runBS0s3MusicLabIntensityListenSection(sectionIdLike = 'low') {
       section === 'peak'
         ? 'Beat Swarm Music Lab focused listening run: fixed Peak Intensity from the start; intro skipped for motif clarity testing.'
         : (section === 'release'
-          ? 'Beat Swarm Music Lab focused listening run: Peak, then Release, then Settle, so both release entry and exit are tested.'
+          ? (releaseOnly
+            ? 'Beat Swarm Music Lab focused listening run: fixed Release from the start; intro skipped for isolated release tuning.'
+            : 'Beat Swarm Music Lab focused listening run: Peak, then Release, then Settle, so both release entry and exit are tested.')
           : `Beat Swarm Music Lab focused listening run: normal intro, then fixed ${sectionLabel} arrangement state.`),
       'Listen for clarity of player-generated motifs, motif repetition fatigue, lane balance, and whether the state has a distinct musical identity.',
     ].join(' '),

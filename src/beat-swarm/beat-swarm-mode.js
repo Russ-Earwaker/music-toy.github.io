@@ -9106,7 +9106,9 @@ function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
   const active = fixedSection
     || sections.filter((section) => section.id !== 'silent').find((section) => auditionBar >= section.startBar && auditionBar < section.endBar)
     || sections[sections.length - 1];
-  const activeStartBar = Math.max(0, Math.trunc(Number(active?.startBar) || 0));
+  const activeStartBar = mode === 'fixed_section'
+    ? 0
+    : Math.max(0, Math.trunc(Number(active?.startBar) || 0));
   return {
     ...active,
     barIndex,
