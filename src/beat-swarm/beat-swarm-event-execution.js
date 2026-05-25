@@ -1062,7 +1062,7 @@ export function executePerformedBeatEventRuntime(options = null) {
   });
   }
 
-  if (actionType === 'player-lead-release-echo') {
+  if (actionType === 'player-lead-release-echo' || actionType === 'player-lead-settle-echo') {
     return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.releaseLeadEcho', () => {
       const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
       const requestedNote = String(payload?.requestedNoteRaw || ev?.note || '').trim();
@@ -1070,23 +1070,40 @@ export function executePerformedBeatEventRuntime(options = null) {
       const instrumentId = String(ev?.instrumentId || '').trim();
       if (!instrumentId || !noteName) return false;
       const authoredGain = Number(payload?.audioGain == null ? 0.24 : payload.audioGain);
-      const triggerVolume = Math.max(0.06, Math.min(0.18, (Number.isFinite(authoredGain) ? authoredGain : 0.24) * 0.66));
+      const settleEcho = actionType === 'player-lead-settle-echo';
+      const motifSectionBar = Math.max(0, Math.trunc(Number(payload?.motifSectionBar) || 0));
+      const releaseGesturePhase = String(payload?.releaseGesturePhase || '').trim().toLowerCase();
+      const releaseEchoGain = (() => {
+        const baseGain = Number.isFinite(authoredGain) ? authoredGain : 0.24;
+        if (releaseGesturePhase === 'entry') return Math.max(0.72, baseGain);
+        if (releaseGesturePhase === 'decay') return Math.max(0.72, baseGain);
+        if (releaseGesturePhase === 'tail') return Math.max(0.72, baseGain);
+        if (motifSectionBar <= 1) return Math.max(0.42, baseGain);
+        if (motifSectionBar <= 3) return Math.max(0.34, baseGain);
+        if (motifSectionBar <= 5) return Math.max(0.28, baseGain);
+        return Math.max(0.24, baseGain);
+      })();
+      const triggerVolume = settleEcho
+        ? Math.max(0.16, Math.min(0.72, Number.isFinite(authoredGain) ? authoredGain : 0.72))
+        : Math.max(0.16, Math.min(0.72, releaseEchoGain));
       try {
         helpers.triggerInstrument?.(
           instrumentId,
           noteName,
           undefined,
           'master',
-          { source: 'beat-swarm-release-lead-echo', preserveRequestedNote: true, stepIndex },
+          { source: settleEcho ? 'beat-swarm-settle-lead-echo' : 'beat-swarm-release-lead-echo', preserveRequestedNote: true, stepIndex },
           triggerVolume
         );
       } catch {}
       try {
-        helpers.noteMusicSystemEvent?.('music_release_lead_echo_triggered', {
+        helpers.noteMusicSystemEvent?.(settleEcho ? 'music_settle_lead_echo_triggered' : 'music_release_lead_echo_triggered', {
           instrumentId,
           note: noteName,
           triggerVolume,
           musicProminence: 'quiet',
+          motifSectionBar,
+          releaseGesturePhase,
           leadThemeInterpretationMode: String(payload?.leadThemeInterpretationMode || '').trim().toLowerCase(),
           leadThemePartIndex: Math.max(0, Math.trunc(Number(payload?.leadThemePartIndex) || 0)),
           leadThemeStepIndex: Math.max(0, Math.trunc(Number(payload?.leadThemeStepIndex) || 0)),
@@ -1101,11 +1118,12 @@ export function executePerformedBeatEventRuntime(options = null) {
         musicProminence: 'quiet',
         musicLaneId: 'primary_loop_lane',
         musicLayer: 'loops',
-        musicVoiceKey: 'player_lead_release_echo',
+        musicVoiceKey: settleEcho ? 'player_lead_settle_echo' : 'player_lead_release_echo',
         callResponseLane: String(payload?.callResponseLane || 'call').trim().toLowerCase(),
         callResponseQualified: payload?.callResponseQualified === true,
         callResponsePhraseProgress: Math.max(0, Math.trunc(Number(payload?.callResponsePhraseProgress) || 0)),
-        intensityAuditionSection: 'release',
+        intensityAuditionSection: settleEcho ? 'settle' : 'release',
+        releaseGesturePhase,
         ...buildLeadThemeExecutionContext(null, null),
         ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
       });

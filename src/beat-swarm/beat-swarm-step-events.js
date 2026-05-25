@@ -2216,42 +2216,55 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   })();
   const explicitPlayerLeadThemeEvent = (() => {
     const { stage, sectionBar } = getDirectorMotifBedStageState();
-    if (stage !== 'peak' && stage !== 'release') return null;
-    if (stage !== 'release' && primaryLoopForegroundPresent) return null;
+    if (stage !== 'peak' && stage !== 'release' && stage !== 'settle') return null;
+    if (stage !== 'release' && stage !== 'settle' && primaryLoopForegroundPresent) return null;
     const stagedPrimaryLoopAlreadyPresent = stagedEnemyEvents.some((ev) => {
       const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
       return String(payload.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
         && String(ev?.role || payload.musicRole || '').trim().toLowerCase() === 'lead'
         && String(ev?.instrumentId || '').trim();
     });
-    if (stage !== 'release' && stagedPrimaryLoopAlreadyPresent) return null;
+    if (stage !== 'release' && stage !== 'settle' && stagedPrimaryLoopAlreadyPresent) return null;
     const localThemeStep = Math.max(0, Math.trunc(Number(stepIndex) || 0)) % 8;
-    const releaseEchoStepAllowed = stage !== 'release'
+    const releaseGesturePhase = stage === 'release'
+      ? (sectionBar <= 1 ? 'entry' : (sectionBar <= 5 ? 'decay' : 'tail'))
+      : '';
+    const memoryEchoStepAllowed = stage !== 'release' && stage !== 'settle'
       ? true
-      : (sectionBar < 4
-        ? (localThemeStep === 0 || localThemeStep === 4)
-        : (localThemeStep === 4 || (sectionBar < 7 && localThemeStep === 0)));
-    if (!releaseEchoStepAllowed) return null;
+      : (stage === 'release'
+      ? (releaseGesturePhase === 'entry'
+        ? (localThemeStep === 0 || localThemeStep === 2 || localThemeStep === 4 || localThemeStep === 6)
+        : (releaseGesturePhase === 'decay'
+          ? (localThemeStep === 0 || localThemeStep === 4)
+          : localThemeStep === 4))
+      : (localThemeStep === 0 || localThemeStep === 4));
+    if (!memoryEchoStepAllowed) return null;
     let leadThemeStep = typeof helpers.getPlayerLeadThemePrimaryStep === 'function'
       ? helpers.getPlayerLeadThemePrimaryStep(barIndex, stepIndex, stage)
       : null;
-    if (stage === 'release' && (!leadThemeStep || typeof leadThemeStep !== 'object' || leadThemeStep.active !== true || !String(leadThemeStep.note || '').trim())) {
+    if ((stage === 'release' || stage === 'settle') && (!leadThemeStep || typeof leadThemeStep !== 'object' || leadThemeStep.active !== true || !String(leadThemeStep.note || '').trim())) {
       const stepBase = Math.max(0, Math.trunc(Number(stepIndex) || 0)) - localThemeStep;
       const candidateSteps = [localThemeStep, 0, 4, 2, 6, 1, 3, 5, 7];
-      for (const candidate of candidateSteps) {
-        const candidateStep = typeof helpers.getPlayerLeadThemePrimaryStep === 'function'
-          ? helpers.getPlayerLeadThemePrimaryStep(barIndex, stepBase + candidate, 'peak')
-          : null;
-        const candidateNote = String(candidateStep?.note || candidateStep?.rawNote || '').trim();
-        if (!candidateStep || typeof candidateStep !== 'object' || !candidateNote) continue;
-        leadThemeStep = {
-          ...candidateStep,
-          active: true,
-          note: candidateNote,
-          step: localThemeStep,
-          interpretationMode: 'release_riff',
-        };
-        break;
+      const candidateBars = [barIndex, barIndex + 1, barIndex + 2, barIndex + 3, barIndex + 4, barIndex - 1, barIndex - 2, barIndex - 3, barIndex - 4]
+        .map((candidate) => Math.max(0, Math.trunc(Number(candidate) || 0)))
+        .filter((candidate, idx, arr) => arr.indexOf(candidate) === idx);
+      for (const candidateBar of candidateBars) {
+        for (const candidate of candidateSteps) {
+          const candidateStep = typeof helpers.getPlayerLeadThemePrimaryStep === 'function'
+            ? helpers.getPlayerLeadThemePrimaryStep(candidateBar, (candidateBar * 8) + candidate, 'peak')
+            : null;
+          const candidateNote = String(candidateStep?.note || candidateStep?.rawNote || '').trim();
+          if (!candidateStep || typeof candidateStep !== 'object' || !candidateNote) continue;
+          leadThemeStep = {
+            ...candidateStep,
+            active: true,
+            note: candidateNote,
+            step: localThemeStep,
+            interpretationMode: stage === 'settle' ? 'settle_echo' : 'release_riff',
+          };
+          break;
+        }
+        if (leadThemeStep && typeof leadThemeStep === 'object' && leadThemeStep.active === true && String(leadThemeStep.note || '').trim()) break;
       }
     }
     if (!leadThemeStep || typeof leadThemeStep !== 'object' || leadThemeStep.active !== true) return null;
@@ -2271,7 +2284,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       role: constants.roles?.lead || 'lead',
       note: noteName,
       instrumentId,
-      actionType: stage === 'release' ? 'player-lead-release-echo' : 'composer-group-projectile',
+      actionType: stage === 'release'
+        ? 'player-lead-release-echo'
+        : (stage === 'settle' ? 'player-lead-settle-echo' : 'composer-group-projectile'),
       threatClass: constants.threat?.full || 'full',
       visualSyncType: actorId > 0 ? 'group-pulse' : 'none',
       payload: {
@@ -2292,12 +2307,15 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         leadThemeContourKey: String(leadThemeStep.contourKey || '').trim().toLowerCase(),
         leadThemeRawStepActive: leadThemeStep.active === true,
         leadThemeRawNote: String(leadThemeStep.rawNote || '').trim(),
+        motifSectionBar: Math.max(0, Math.trunc(Number(sectionBar) || 0)),
+        releaseGesturePhase,
+        releaseEntryGesture: releaseGesturePhase === 'entry',
         callResponseLane: 'call',
         callResponseQualified: true,
         callResponsePhraseProgress: Math.max(0, Math.trunc(Number(leadThemeStep.step) || 0)),
         musicRegister: 'high',
-        musicProminence: stage === 'release' ? 'quiet' : 'full',
-        audioGain: stage === 'release' ? 0.24 : 0.72,
+        musicProminence: stage === 'release' || stage === 'settle' ? 'quiet' : 'full',
+        audioGain: stage === 'release' || stage === 'settle' ? 0.72 : 0.72,
         requestedNoteRaw: noteName,
         preserveRequestedNote: true,
         intensityAuditionSection: stage,

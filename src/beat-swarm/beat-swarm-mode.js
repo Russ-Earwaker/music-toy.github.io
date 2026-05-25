@@ -27,7 +27,7 @@ import { collectDrawSnakeStepBeatEvents as collectDrawSnakeStepEvents, collectSp
 import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRuntime, } from './beat-swarm-composer-spawn.js';
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
-import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-24-release-echo-v3';
+import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-25-settle-no-volume-drop-v1';
 import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
@@ -49,7 +49,7 @@ function triggerBeatSwarmInstrument(instrument, noteName, when, destOrId, option
       || String(triggerPayload.continuityId || '').trim().toLowerCase() === 'player-lead-theme-direct'
     );
   const triggerVelocity = releaseLeadEchoTrigger
-    ? Math.min(Number(velocity) || 0, 0.16)
+    ? velocity
     : velocity;
   if (releaseLeadEchoTrigger) {
     try {
@@ -58,6 +58,7 @@ function triggerBeatSwarmInstrument(instrument, noteName, when, destOrId, option
         requestedNote: String(noteName || '').trim(),
         requestedVelocity: Number.isFinite(Number(velocity)) ? Number(velocity) : 0,
         finalVelocity: Number.isFinite(Number(triggerVelocity)) ? Number(triggerVelocity) : 0,
+        releaseVolumeTestNoClamp: true,
         musicProminence: String(triggerPayload?.musicProminence || '').trim().toLowerCase(),
         audioGain: Number(triggerPayload?.audioGain) || 0,
         leadThemeInterpretationMode: String(triggerPayload?.leadThemeInterpretationMode || '').trim().toLowerCase(),
@@ -7702,18 +7703,22 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   if (!auditionBypassesIntro && introStage && introStage !== 'none') return null;
   const parts = getPlayerLeadThemeMotifParts();
   if (!parts.length) return null;
+  const arrangementState = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
+    ? musicModeRuntime.level1ArrangementState
+    : null;
+  const sectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
   const releaseEcho = sectionId === 'release';
-  const partIndex = releaseEcho ? 0 : (bar % parts.length);
+  const settleEcho = sectionId === 'settle';
+  const memoryEcho = releaseEcho || settleEcho;
+  const partIndex = releaseEcho
+    ? 0
+    : (settleEcho ? (sectionBar % Math.min(2, parts.length)) : (bar % parts.length));
   const part = parts[partIndex] || parts[0];
   const step = ((Math.max(0, Math.trunc(Number(stepIndex) || 0)) % part.steps) + part.steps) % part.steps;
   const rawNote = normalizeSwarmNoteName(part.noteByStep[step]) || '';
   const rowIndex = Math.max(-1, Math.trunc(Number(part.rowByStep?.[step]) || -1));
   const directorNote = mapPlayerLeadThemeRowToDirectorNote(rowIndex, stepIndex + part.phrasePartIndex) || clampNoteToDirectorPool(rawNote, stepIndex + part.phrasePartIndex);
   const activeStep = !!part.active[step] && !!rawNote;
-  const arrangementState = musicModeRuntime?.level1ArrangementState && typeof musicModeRuntime.level1ArrangementState === 'object'
-    ? musicModeRuntime.level1ArrangementState
-    : null;
-  const sectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
   const buildAssembly = sectionId === 'build';
   const buildRevealPhase = buildAssembly
     ? (sectionBar < 4 ? 0 : (sectionBar < 8 ? 1 : 2))
@@ -7760,8 +7765,13 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
       ? (step === 0 || step === 4)
       : (sectionBar < 6 ? step === 4 : (sectionBar < 8 && sectionBar % 2 === 1 && step === 4)))
     : true;
+  const settleStepAllowed = settleEcho
+    ? (sectionBar < 2
+      ? (step === 0 || step === 4)
+      : (step === 0 || step === 4))
+    : true;
   const releaseFallbackNote = (() => {
-    if (!releaseEcho || activeStep) return '';
+    if (!memoryEcho || activeStep) return '';
     for (let delta = 1; delta < part.steps; delta += 1) {
       const prevStep = (step - delta + part.steps) % part.steps;
       const nextStep = (step + delta) % part.steps;
@@ -7774,10 +7784,12 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   })();
   const resolvedActiveStep = releaseEcho
     ? (releaseStepAllowed && (activeStep || !!releaseFallbackNote))
-    : ((activeStep && buildStepAllowed) || peakPickupActive);
+    : (settleEcho
+      ? (settleStepAllowed && (activeStep || !!releaseFallbackNote))
+      : ((activeStep && buildStepAllowed) || peakPickupActive));
   const resolvedNote = peakPickupActive
     ? peakPickupNote
-    : (releaseEcho && !activeStep
+    : (memoryEcho && !activeStep
       ? releaseFallbackNote
       : (peakRiff && activeStep
       ? getDirectorPoolNoteAtOffset(directorNote, step >= 4 ? 1 : 0, stepIndex)
@@ -7785,7 +7797,7 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   const literalStatement = sectionId === 'medium' && bar >= 20 && bar < 36;
   const interpretationMode = buildAssembly
     ? 'build_assemble'
-    : (peakRiff ? 'peak_riff' : (literalStatement ? 'literal_statement' : (sectionId === 'release' ? 'release_riff' : 'director_riff')));
+    : (peakRiff ? 'peak_riff' : (literalStatement ? 'literal_statement' : (releaseEcho ? 'release_riff' : (settleEcho ? 'settle_echo' : 'director_riff'))));
   return {
     themeId: 'leadTheme',
     source: 'player_theme',
@@ -9082,9 +9094,7 @@ function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
   const baseSections = getBeatSwarmMusicIntensityAuditionSections();
   const sections = mode === 'release_transition'
     ? [
-      { ...baseSections.find((section) => section.id === 'peak'), startBar: 0, endBar: 8 },
-      { ...baseSections.find((section) => section.id === 'build'), startBar: 8, endBar: 12 },
-      { ...baseSections.find((section) => section.id === 'medium'), startBar: 12, endBar: 16 },
+      { ...baseSections.find((section) => section.id === 'peak'), startBar: 0, endBar: 16 },
       { ...baseSections.find((section) => section.id === 'release'), startBar: 16, endBar: 26 },
       { ...baseSections.find((section) => section.id === 'settle'), startBar: 26, endBar: Number.POSITIVE_INFINITY },
     ].filter((section) => section && section.id)
@@ -21486,8 +21496,9 @@ function shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(eventLike = null) {
     || actionType === 'drawsnake-projectile';
   if (laneId !== 'primary_loop_lane' && !(loopLikeAction && role === BEAT_EVENT_ROLES.LEAD)) return ev;
   const sectionId = String(musicModeRuntime?.level1ArrangementState?.intensityAuditionSection || '').trim().toLowerCase();
+  if (sectionId === 'settle' && actionType !== 'player-lead-settle-echo') return null;
   const leadThemeStep = getPlayerLeadThemePrimaryStep(barIndex, stepIndex, sectionId);
-  if (!leadThemeStep || typeof leadThemeStep !== 'object') return ev;
+  if (!leadThemeStep || typeof leadThemeStep !== 'object') return sectionId === 'settle' ? null : ev;
   const leadThemeStepActive = leadThemeStep.active === true;
   const leadThemeMode = String(leadThemeStep.interpretationMode || '').trim().toLowerCase();
   if (leadThemeMode === 'literal_statement' && !leadThemeStepActive) return null;
@@ -21508,6 +21519,13 @@ function shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(eventLike = null) {
   if (sectionId === 'peak') {
     nextPayload.musicProminence = 'full';
     nextPayload.audioGain = Math.max(0.82, Number(payload.audioGain) || 0);
+  }
+  if (sectionId === 'settle') {
+    if (!leadThemeStepActive) return null;
+    nextPayload.musicProminence = 'quiet';
+    nextPayload.audioGain = actionType === 'player-lead-settle-echo'
+      ? Math.max(0.72, Number(payload.audioGain) || 0)
+      : Math.min(0.24, Math.max(0, Number(payload.audioGain) || 0.24));
   }
   if (leadThemeStepActive && normalizeSwarmNoteName(leadThemeStep.note)) {
     const note = normalizeSwarmNoteName(leadThemeStep.note);

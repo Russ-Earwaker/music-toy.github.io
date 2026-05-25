@@ -6358,7 +6358,7 @@ async function runBS0s3MusicLabIntensityListenSection(sectionIdLike = 'low') {
       section === 'peak'
         ? 'Beat Swarm Music Lab focused listening run: fixed Peak Intensity from the start; intro skipped for motif clarity testing.'
         : (section === 'release'
-          ? 'Beat Swarm Music Lab focused listening run: Peak, down-ramp, Release, then Settle, so both release entry and exit are tested.'
+          ? 'Beat Swarm Music Lab focused listening run: Peak, then Release, then Settle, so both release entry and exit are tested.'
           : `Beat Swarm Music Lab focused listening run: normal intro, then fixed ${sectionLabel} arrangement state.`),
       'Listen for clarity of player-generated motifs, motif repetition fatigue, lane balance, and whether the state has a distinct musical identity.',
     ].join(' '),
