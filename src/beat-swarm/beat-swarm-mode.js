@@ -7725,7 +7725,7 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     : -1;
   const buildPartLimit = buildRevealPhase === 0
     ? 1
-    : (buildRevealPhase === 1 ? Math.min(2, parts.length) : Math.min(3, parts.length));
+    : (buildRevealPhase === 1 ? Math.min(2, parts.length) : parts.length);
   const buildPartAllowed = !buildAssembly || part.phrasePartIndex < buildPartLimit;
   const buildStepAllowed = (() => {
     if (!buildAssembly) return true;
@@ -7735,8 +7735,8 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     return true;
   })();
   const peakRiff = sectionId === 'peak';
-  const nearestPeakThemeNote = (() => {
-    if (!peakRiff || activeStep) return '';
+  const nearestThemeNote = (() => {
+    if ((!peakRiff && !buildAssembly) || activeStep) return '';
     for (let delta = 1; delta < part.steps; delta += 1) {
       const prevStep = (step - delta + part.steps) % part.steps;
       const nextStep = (step + delta) % part.steps;
@@ -7749,14 +7749,28 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   })();
   const peakPickupActive = peakRiff
     && !activeStep
-    && !!nearestPeakThemeNote
+    && !!nearestThemeNote
     && (step === 1 || step === 3 || step === 5 || step === 7);
+  const buildPickupActive = buildAssembly
+    && buildRevealPhase >= 2
+    && !activeStep
+    && !!nearestThemeNote
+    && (step === 3 || step === 7);
   const peakPickupNote = peakPickupActive
     ? getDirectorPoolNoteAtOffset(
       mapPlayerLeadThemeRowToDirectorNote(rowIndex, stepIndex + part.phrasePartIndex)
-        || clampNoteToDirectorPool(nearestPeakThemeNote, stepIndex + part.phrasePartIndex)
-        || nearestPeakThemeNote,
+        || clampNoteToDirectorPool(nearestThemeNote, stepIndex + part.phrasePartIndex)
+        || nearestThemeNote,
       step >= 5 ? 2 : 1,
+      stepIndex
+    )
+    : '';
+  const buildPickupNote = buildPickupActive
+    ? getDirectorPoolNoteAtOffset(
+      mapPlayerLeadThemeRowToDirectorNote(rowIndex, stepIndex + part.phrasePartIndex)
+        || clampNoteToDirectorPool(nearestThemeNote, stepIndex + part.phrasePartIndex)
+        || nearestThemeNote,
+      step >= 7 ? 1 : 0,
       stepIndex
     )
     : '';
@@ -7786,14 +7800,15 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     ? (releaseStepAllowed && (activeStep || !!releaseFallbackNote))
     : (settleEcho
       ? (settleStepAllowed && (activeStep || !!releaseFallbackNote))
-      : ((activeStep && buildStepAllowed) || peakPickupActive));
+      : ((activeStep && buildStepAllowed) || peakPickupActive || buildPickupActive));
   const resolvedNote = peakPickupActive
     ? peakPickupNote
+    : (buildPickupActive ? buildPickupNote
     : (memoryEcho && !activeStep
       ? releaseFallbackNote
       : (peakRiff && activeStep
       ? getDirectorPoolNoteAtOffset(directorNote, step >= 4 ? 1 : 0, stepIndex)
-      : directorNote));
+      : directorNote)));
   const literalStatement = sectionId === 'medium' && bar >= 20 && bar < 36;
   const interpretationMode = buildAssembly
     ? 'build_assemble'
@@ -7812,6 +7827,7 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     interpretationMode,
     buildRevealPhase,
     buildPartAllowed,
+    buildPickupActive,
     peakPickupActive,
   };
 }
@@ -9188,10 +9204,14 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     quiet('sparkle');
     quiet('answer');
   } else if (section === 'build') {
-    activate('foundation', 0.66, 1);
-    activate('secondary_loop', 0.64, 2);
-    activate('primary_loop', 0.82, 3);
-    activate('support', 0.36, 1);
+    const buildSectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
+    const buildEarly = buildSectionBar < 4;
+    const buildMid = buildSectionBar >= 4 && buildSectionBar < 8;
+    activate('foundation', buildEarly ? 0.62 : (buildMid ? 0.72 : 0.82), 1);
+    activate('secondary_loop', buildEarly ? 0.32 : (buildMid ? 0.52 : 0.76), buildEarly ? 1 : 2);
+    activate('primary_loop', buildEarly ? 0.44 : (buildMid ? 0.68 : 0.9), buildEarly ? 1 : (buildMid ? 2 : 3));
+    if (buildEarly) quiet('support');
+    else activate('support', buildMid ? 0.22 : 0.36, 1);
     quiet('sparkle');
     quiet('answer');
   } else if (section === 'peak') {

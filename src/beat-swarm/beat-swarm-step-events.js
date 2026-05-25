@@ -2346,6 +2346,16 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const steps = Array.isArray(phrase?.steps) ? phrase.steps : [];
     const localStep = ((stepIndex % 8) + 8) % 8;
     if (!steps[localStep]) return null;
+    if (stage === 'build') {
+      const hitSteps = steps
+        .map((hit, idx) => hit ? idx : -1)
+        .filter((idx) => idx >= 0);
+      const buildHitBudget = sectionBar < 4
+        ? 1
+        : (sectionBar < 8 ? Math.min(2, hitSteps.length) : Math.min(3, hitSteps.length));
+      const allowedBuildHits = new Set(hitSteps.slice(0, buildHitBudget));
+      if (!allowedBuildHits.has(localStep)) return null;
+    }
     const actorId = Math.max(
       0,
       Math.trunc(Number(secondaryLoopLaneRuntime?.performerEnemyId) || 0)
