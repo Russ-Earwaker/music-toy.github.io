@@ -27,8 +27,8 @@ import { collectDrawSnakeStepBeatEvents as collectDrawSnakeStepEvents, collectSp
 import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRuntime, } from './beat-swarm-composer-spawn.js';
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
-import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-25-settle-no-volume-drop-v1';
-import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js';
+import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-26-secondary-fallback-suppress-v1';
+import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-05-26-digital-answer-literal-v1';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
 import { createBeatSwarmPlayerInstrumentRuntime } from './beat-swarm-player-instrument.js';
@@ -7691,6 +7691,58 @@ function mapPlayerLeadThemeRowToDirectorNote(rowLike = -1, stepIndex = 0) {
   const contourIdx = Math.max(0, Math.min(pool.length - 1, (allowedRows.length - 1 - bestIdx)));
   return normalizeSwarmNoteName(pool[contourIdx]) || clampNoteToDirectorPool(normalizeSwarmNoteName(DRAWGRID_TOY_ROW_NOTE_PALETTE[row]) || '', stepIndex);
 }
+function getPlayerLeadThemeEchoPolicy(sectionIdLike = '', sectionBarLike = 0, partsLengthLike = 0, stepLike = 0) {
+  const sectionId = String(sectionIdLike || '').trim().toLowerCase();
+  const sectionBar = Math.max(0, Math.trunc(Number(sectionBarLike) || 0));
+  const partsLength = Math.max(1, Math.trunc(Number(partsLengthLike) || 1));
+  const step = Math.max(0, Math.trunc(Number(stepLike) || 0)) % 8;
+  if (sectionId === 'release') {
+    const phase = sectionBar <= 1 ? 'entry' : (sectionBar <= 5 ? 'decay' : 'tail');
+    return {
+      sectionId,
+      phase,
+      cycle: 0,
+      partIndex: 0,
+      stepAllowed: phase === 'entry'
+        ? (step === 0 || step === 2 || step === 4 || step === 6)
+        : (phase === 'decay'
+          ? (step === 0 || step === 4)
+          : (sectionBar < 8 && sectionBar % 2 === 1 && step === 4)),
+      variationKind: phase,
+    };
+  }
+  if (sectionId === 'settle') {
+    const cycle = Math.floor(sectionBar / 4) % 3;
+    const earlyPartCount = Math.min(2, partsLength);
+    const partIndex = sectionBar < 4
+      ? (sectionBar % Math.max(1, earlyPartCount))
+      : ((sectionBar + cycle) % partsLength);
+    const variationStep = sectionBar >= 2 && (
+      (cycle === 1 && sectionBar % 2 === 1 && step === 6)
+      || (cycle === 2 && sectionBar % 4 === 2 && step === 2)
+    );
+    return {
+      sectionId,
+      phase: sectionBar < 2 ? 'entry' : (variationStep ? 'variation' : 'anchor'),
+      cycle,
+      partIndex,
+      stepAllowed: step === 0 || step === 4 || variationStep,
+      anchorOffset: sectionBar >= 4 && step === 4 && cycle === 1
+        ? -1
+        : (sectionBar >= 8 && step === 0 && cycle === 2 ? 1 : 0),
+      variationKind: variationStep ? (step === 6 ? 'upper_echo' : 'pickup_echo') : 'anchor_echo',
+    };
+  }
+  return {
+    sectionId,
+    phase: '',
+    cycle: 0,
+    partIndex: 0,
+    stepAllowed: true,
+    anchorOffset: 0,
+    variationKind: '',
+  };
+}
 function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLike = '') {
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const sectionId = String(sectionIdLike || '').trim().toLowerCase();
@@ -7710,9 +7762,13 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   const releaseEcho = sectionId === 'release';
   const settleEcho = sectionId === 'settle';
   const memoryEcho = releaseEcho || settleEcho;
+  const localStep = Math.max(0, Math.trunc(Number(stepIndex) || 0)) % 8;
+  const echoPolicy = memoryEcho
+    ? getPlayerLeadThemeEchoPolicy(sectionId, sectionBar, parts.length, localStep)
+    : null;
   const partIndex = releaseEcho
     ? 0
-    : (settleEcho ? (sectionBar % Math.min(2, parts.length)) : (bar % parts.length));
+    : (settleEcho ? Math.max(0, Math.min(parts.length - 1, Math.trunc(Number(echoPolicy?.partIndex) || 0))) : (bar % parts.length));
   const part = parts[partIndex] || parts[0];
   const step = ((Math.max(0, Math.trunc(Number(stepIndex) || 0)) % part.steps) + part.steps) % part.steps;
   const rawNote = normalizeSwarmNoteName(part.noteByStep[step]) || '';
@@ -7721,7 +7777,7 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   const activeStep = !!part.active[step] && !!rawNote;
   const buildAssembly = sectionId === 'build';
   const buildRevealPhase = buildAssembly
-    ? (sectionBar < 4 ? 0 : (sectionBar < 8 ? 1 : 2))
+    ? (sectionBar < 3 ? 0 : (sectionBar < 7 ? 1 : 2))
     : -1;
   const buildPartLimit = buildRevealPhase === 0
     ? 1
@@ -7752,10 +7808,10 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     && !!nearestThemeNote
     && (step === 1 || step === 3 || step === 5 || step === 7);
   const buildPickupActive = buildAssembly
-    && buildRevealPhase >= 2
+    && buildRevealPhase >= 1
     && !activeStep
     && !!nearestThemeNote
-    && (step === 3 || step === 7);
+    && (buildRevealPhase >= 2 ? (step === 3 || step === 7) : step === 7);
   const peakPickupNote = peakPickupActive
     ? getDirectorPoolNoteAtOffset(
       mapPlayerLeadThemeRowToDirectorNote(rowIndex, stepIndex + part.phrasePartIndex)
@@ -7780,9 +7836,7 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
       : (sectionBar < 6 ? step === 4 : (sectionBar < 8 && sectionBar % 2 === 1 && step === 4)))
     : true;
   const settleStepAllowed = settleEcho
-    ? (sectionBar < 2
-      ? (step === 0 || step === 4)
-      : (step === 0 || step === 4))
+    ? echoPolicy?.stepAllowed === true
     : true;
   const releaseFallbackNote = (() => {
     if (!memoryEcho || activeStep) return '';
@@ -7801,7 +7855,10 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     : (settleEcho
       ? (settleStepAllowed && (activeStep || !!releaseFallbackNote))
       : ((activeStep && buildStepAllowed) || peakPickupActive || buildPickupActive));
-  const resolvedNote = peakPickupActive
+  const memoryEchoAnchorOffset = memoryEcho
+    ? Math.trunc(Number(echoPolicy?.anchorOffset) || 0)
+    : 0;
+  const resolvedNoteBase = peakPickupActive
     ? peakPickupNote
     : (buildPickupActive ? buildPickupNote
     : (memoryEcho && !activeStep
@@ -7809,6 +7866,9 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
       : (peakRiff && activeStep
       ? getDirectorPoolNoteAtOffset(directorNote, step >= 4 ? 1 : 0, stepIndex)
       : directorNote)));
+  const resolvedNote = memoryEcho && resolvedActiveStep && memoryEchoAnchorOffset
+    ? getDirectorPoolNoteAtOffset(resolvedNoteBase, memoryEchoAnchorOffset, stepIndex)
+    : resolvedNoteBase;
   const literalStatement = sectionId === 'medium' && bar >= 20 && bar < 36;
   const interpretationMode = buildAssembly
     ? 'build_assemble'
@@ -7829,6 +7889,7 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     buildPartAllowed,
     buildPickupActive,
     peakPickupActive,
+    echoPolicy,
   };
 }
 function shapePlayerBassDriveStepsForFoundation(baseStepsLike = null, sectionIdLike = '', options = null) {
@@ -9205,15 +9266,23 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     quiet('answer');
   } else if (section === 'build') {
     const buildSectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
-    const buildEarly = buildSectionBar < 4;
-    const buildMid = buildSectionBar >= 4 && buildSectionBar < 8;
-    activate('foundation', buildEarly ? 0.62 : (buildMid ? 0.72 : 0.82), 1);
-    activate('secondary_loop', buildEarly ? 0.32 : (buildMid ? 0.52 : 0.76), buildEarly ? 1 : 2);
-    activate('primary_loop', buildEarly ? 0.44 : (buildMid ? 0.68 : 0.9), buildEarly ? 1 : (buildMid ? 2 : 3));
-    if (buildEarly) quiet('support');
-    else activate('support', buildMid ? 0.22 : 0.36, 1);
-    quiet('sparkle');
-    quiet('answer');
+    const buildEarly = buildSectionBar < 3;
+    const buildMid = buildSectionBar >= 3 && buildSectionBar < 7;
+    activate('foundation', buildEarly ? 0.76 : (buildMid ? 0.82 : 0.87), 1);
+    activate('secondary_loop', buildEarly ? 0.46 : (buildMid ? 0.66 : 0.82), buildEarly ? 1 : 2);
+    activate('primary_loop', buildEarly ? 0.54 : (buildMid ? 0.78 : 0.94), buildEarly ? 1 : (buildMid ? 2 : 3));
+    activate('support', buildEarly ? 0.14 : (buildMid ? 0.26 : 0.38), 1);
+    if (buildEarly || buildMid) {
+      quiet('sparkle');
+      quiet('answer');
+    } else {
+      activate('sparkle', 0.16, 1);
+      activate('answer', 0.08, 1);
+      if (plan.answer && typeof plan.answer === 'object') {
+        plan.answer.targetCount = 0;
+        plan.answer.directOnly = true;
+      }
+    }
   } else if (section === 'peak') {
     activate('foundation', 0.88, 1);
     activate('secondary_loop', 0.86, 2);
@@ -21513,6 +21582,7 @@ function shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(eventLike = null) {
   const laneId = String(payload?.musicLaneId || enemy?.musicLaneId || group?.musicLaneId || '').trim().toLowerCase();
   const actionType = String(ev?.actionType || '').trim().toLowerCase();
   const role = normalizeSwarmRole(ev?.role || payload?.musicRole || group?.role || getSwarmRoleForEnemy(enemy, BEAT_EVENT_ROLES.LEAD), BEAT_EVENT_ROLES.LEAD);
+  if (actionType === 'player-lead-settle-echo' || actionType === 'player-lead-release-echo') return ev;
   const loopLikeAction = actionType === 'composer-group-projectile'
     || actionType === 'composer-group-explosion'
     || actionType === 'drawsnake-projectile';
@@ -21600,6 +21670,7 @@ function executePerformedBeatEvent(event) {
     helpers: {
       getMusicLabContext,
       getPlayerLeadThemePrimaryStep,
+      getPlayerLeadThemeEchoPolicy,
       noteMusicSystemEvent,
       getDirectorLanePlan: () => ensureSwarmDirector().getLanePlan?.() || null,
       getDirectorLanePlanForBar: (barIndexLike = 0) => buildDirectorLanePlanForBar(barIndexLike),
@@ -22417,6 +22488,7 @@ function updateBeatWeapons(centerWorld) {
         getOnboardingReadabilityDirective,
         getPlayerInstrumentStepDirective,
         getPlayerLeadThemePrimaryStep,
+        getPlayerLeadThemeEchoPolicy,
         isPlayerWeaponStepLikelyAudible,
         isPlayerWeaponTuneStepAuthoredActive,
         noteBassFoundationOwnerState,

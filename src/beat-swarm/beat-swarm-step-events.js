@@ -246,7 +246,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       return [0, 2, 4, 6];
     }
     if (stage === 'build') {
-      if (lane === 'ornament') return [];
+      if (lane === 'ornament') {
+        const sectionBar = Math.max(0, Math.trunc(Number(gateState?.sectionBar) || 0));
+        if (sectionBar >= 10) return [3, 7];
+        if (sectionBar >= 8) return [7];
+        return [];
+      }
       if (lane === 'secondary') {
         if (barInPhrase === 0) return [4];
         if (barInPhrase === 1) return [4];
@@ -2026,6 +2031,14 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     && currentEnemyMusicActionGateState.contractAllowsAnswer === true
     && sparkleBarPattern === 3
     && sparkleStepMod8 === 7;
+  const buildSparklePreviewCue = currentEnemyMusicActionGateState.stage === 'build'
+    && currentEnemyMusicActionGateState.sectionBar >= 8
+    && currentEnemyMusicActionGateState.contractAllowsSparkle === true
+    && currentEnemyMusicActionGateState.contractAllowsAnswer === true
+    && (
+      sparkleStepMod8 === 7
+      || (currentEnemyMusicActionGateState.sectionBar >= 10 && sparkleStepMod8 === 3)
+    );
   const defaultSparkleCompanionCue = currentEnemyMusicActionGateState.stage !== 'peak'
     && (
       (sparkleBarPattern === 0 && sparkleStepMod8 === 2)
@@ -2033,6 +2046,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     );
   const explicitSparkleCompanionWanted = (
     peakSparkleCompanionCue
+    || buildSparklePreviewCue
     || (answerOrnamentAllowed && defaultSparkleCompanionCue)
   );
   const explicitSparkleCompanionEvent = (() => {
@@ -2048,10 +2062,14 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         || Math.trunc(Number(primaryLoopLaneRuntime?.performerGroupId) || 0)
     );
     const peakDirectAnswer = currentEnemyMusicActionGateState.stage === 'peak';
-    if (!peakDirectAnswer && !(sparkleActorId > 0 || sparkleGroupId > 0 || primaryLoopLaneActive || secondaryLoopLaneActive)) return null;
+    const directOrnamentPreview = peakDirectAnswer || buildSparklePreviewCue;
+    if (!directOrnamentPreview && !(sparkleActorId > 0 || sparkleGroupId > 0 || primaryLoopLaneActive || secondaryLoopLaneActive)) return null;
     const sparkleNote = sparkleStepMod8 === 6 ? 'A4' : 'D5';
     const sparkleInstrumentId = String(
-      helpers.getIdForDisplayName?.('Gaming Note')
+      helpers.getIdForDisplayName?.('Digital Synth Lead Short')
+        || helpers.getIdForDisplayName?.('DIGITAL SYNTH LEAD SHORT')
+        || 'DIGITAL SYNTH LEAD SHORT'
+        || helpers.getIdForDisplayName?.('Gaming Note')
         || helpers.getIdForDisplayName?.('Retro Triangle')
         || helpers.getIdForDisplayName?.('Bell')
         || secondaryLoopLaneRuntime?.instrumentId
@@ -2074,9 +2092,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         continuityId: 'answer-ornament-companion-direct',
         ghostPlayback: sparkleActorId <= 0,
         sourceSystem: 'music',
-        directorAuthorizedAnswerOrnament: peakDirectAnswer,
+        directorAuthorizedAnswerOrnament: directOrnamentPreview,
+        buildOrnamentPreview: buildSparklePreviewCue,
         musicLayer: 'sparkle',
-        musicLaneId: peakDirectAnswer ? 'answer_lane' : 'sparkle_lane',
+        musicLaneId: directOrnamentPreview ? 'answer_lane' : 'sparkle_lane',
         musicVoiceKey: 'answer_ornament',
         musicProfileSourceType: 'answer_ornament',
         callResponseLane: 'response',
@@ -2084,7 +2103,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         callResponsePhraseProgress: sparkleStepMod8 === 2 ? 1 : 2,
         musicRegister: 'mid',
         musicProminence: playerLikelyAudible ? 'trace' : 'quiet',
-        audioGain: playerLikelyAudible ? 0.14 : (sparkleBarPattern === 3 ? 0.34 : 0.24),
+        audioGain: buildSparklePreviewCue
+          ? (currentEnemyMusicActionGateState.sectionBar >= 10 ? 0.24 : 0.18)
+          : (playerLikelyAudible ? 0.14 : (sparkleBarPattern === 3 ? 0.34 : 0.24)),
         requestedNoteRaw: sparkleNote,
       },
     }, {
@@ -2094,7 +2115,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       enemyType: 'composer-group-member',
       expectedInstrumentLane: 'lead',
       actualInstrumentLane: 'lead',
-      musicLaneId: peakDirectAnswer ? 'answer_lane' : 'sparkle_lane',
+      musicLaneId: directOrnamentPreview ? 'answer_lane' : 'sparkle_lane',
       musicLayer: 'sparkle',
       musicVoiceKey: 'answer_ornament',
       musicProfileSourceType: 'answer_ornament',
@@ -2216,20 +2237,48 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   })();
   const explicitPlayerLeadThemeEvent = (() => {
     const { stage, sectionBar } = getDirectorMotifBedStageState();
-    if (stage !== 'peak' && stage !== 'release' && stage !== 'settle') return null;
-    if (stage !== 'release' && stage !== 'settle' && primaryLoopForegroundPresent) return null;
+    if (stage !== 'build' && stage !== 'peak' && stage !== 'release' && stage !== 'settle') return null;
+    const buildLeadSupplement = stage === 'build' && sectionBar >= 3;
+    if (!buildLeadSupplement && stage !== 'release' && stage !== 'settle' && primaryLoopForegroundPresent) return null;
     const stagedPrimaryLoopAlreadyPresent = stagedEnemyEvents.some((ev) => {
       const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
       return String(payload.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
         && String(ev?.role || payload.musicRole || '').trim().toLowerCase() === 'lead'
         && String(ev?.instrumentId || '').trim();
     });
-    if (stage !== 'release' && stage !== 'settle' && stagedPrimaryLoopAlreadyPresent) return null;
+    if (buildLeadSupplement && stagedPrimaryLoopAlreadyPresent) return null;
+    if (!buildLeadSupplement && stage !== 'release' && stage !== 'settle' && stagedPrimaryLoopAlreadyPresent) return null;
     const localThemeStep = Math.max(0, Math.trunc(Number(stepIndex) || 0)) % 8;
+    const leadEchoPolicy = typeof helpers.getPlayerLeadThemeEchoPolicy === 'function'
+      ? helpers.getPlayerLeadThemeEchoPolicy(stage, sectionBar, 4, localThemeStep)
+      : null;
     const releaseGesturePhase = stage === 'release'
-      ? (sectionBar <= 1 ? 'entry' : (sectionBar <= 5 ? 'decay' : 'tail'))
+      ? (String(leadEchoPolicy?.phase || '').trim().toLowerCase() || (sectionBar <= 1 ? 'entry' : (sectionBar <= 5 ? 'decay' : 'tail')))
       : '';
-    const memoryEchoStepAllowed = stage !== 'release' && stage !== 'settle'
+    const settleEchoCycle = stage === 'settle'
+      ? Math.max(0, Math.trunc(Number(leadEchoPolicy?.cycle) || 0))
+      : 0;
+    const settleEchoStepAllowed = stage === 'settle' && leadEchoPolicy
+      ? leadEchoPolicy.stepAllowed === true
+      : (stage === 'settle'
+      ? (() => {
+        if (sectionBar < 2) return localThemeStep === 0 || localThemeStep === 4;
+        if (settleEchoCycle === 1 && sectionBar % 2 === 1) return localThemeStep === 0 || localThemeStep === 4 || localThemeStep === 6;
+        if (settleEchoCycle === 2 && sectionBar % 4 === 2) return localThemeStep === 0 || localThemeStep === 2 || localThemeStep === 4;
+        return localThemeStep === 0 || localThemeStep === 4;
+      })()
+      : false);
+    const settleDirectVariationStep = stage === 'settle'
+      && sectionBar >= 2
+      && (
+        ((sectionBar % 4) === 1 && localThemeStep === 2)
+        || ((sectionBar % 4) === 3 && localThemeStep === 6)
+      );
+    const memoryEchoStepAllowed = buildLeadSupplement
+      ? (sectionBar < 7
+        ? (localThemeStep === 2 || localThemeStep === 6 || localThemeStep === 7)
+        : (localThemeStep === 1 || localThemeStep === 3 || localThemeStep === 5 || localThemeStep === 7))
+      : (stage !== 'release' && stage !== 'settle'
       ? true
       : (stage === 'release'
       ? (releaseGesturePhase === 'entry'
@@ -2237,14 +2286,16 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         : (releaseGesturePhase === 'decay'
           ? (localThemeStep === 0 || localThemeStep === 4)
           : localThemeStep === 4))
-      : (localThemeStep === 0 || localThemeStep === 4));
+      : (settleEchoStepAllowed || settleDirectVariationStep)));
     if (!memoryEchoStepAllowed) return null;
     let leadThemeStep = typeof helpers.getPlayerLeadThemePrimaryStep === 'function'
       ? helpers.getPlayerLeadThemePrimaryStep(barIndex, stepIndex, stage)
       : null;
-    if ((stage === 'release' || stage === 'settle') && (!leadThemeStep || typeof leadThemeStep !== 'object' || leadThemeStep.active !== true || !String(leadThemeStep.note || '').trim())) {
+    if ((buildLeadSupplement || stage === 'release' || stage === 'settle') && (!leadThemeStep || typeof leadThemeStep !== 'object' || leadThemeStep.active !== true || !String(leadThemeStep.note || '').trim())) {
       const stepBase = Math.max(0, Math.trunc(Number(stepIndex) || 0)) - localThemeStep;
-      const candidateSteps = [localThemeStep, 0, 4, 2, 6, 1, 3, 5, 7];
+      const candidateSteps = buildLeadSupplement
+        ? [localThemeStep, 0, 2, 4, 6, 1, 3, 5, 7]
+        : [localThemeStep, 0, 4, 2, 6, 1, 3, 5, 7];
       const candidateBars = [barIndex, barIndex + 1, barIndex + 2, barIndex + 3, barIndex + 4, barIndex - 1, barIndex - 2, barIndex - 3, barIndex - 4]
         .map((candidate) => Math.max(0, Math.trunc(Number(candidate) || 0)))
         .filter((candidate, idx, arr) => arr.indexOf(candidate) === idx);
@@ -2260,7 +2311,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
             active: true,
             note: candidateNote,
             step: localThemeStep,
-            interpretationMode: stage === 'settle' ? 'settle_echo' : 'release_riff',
+            interpretationMode: buildLeadSupplement
+              ? 'build_assemble'
+              : (stage === 'settle' ? 'settle_echo' : 'release_riff'),
+            echoPolicy: leadEchoPolicy || candidateStep.echoPolicy || null,
           };
           break;
         }
@@ -2309,16 +2363,25 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         leadThemeRawNote: String(leadThemeStep.rawNote || '').trim(),
         motifSectionBar: Math.max(0, Math.trunc(Number(sectionBar) || 0)),
         releaseGesturePhase,
+        settleEchoCycle: Math.max(0, Math.trunc(Number(leadThemeStep.echoPolicy?.cycle ?? settleEchoCycle) || 0)),
+        leadEchoVariationKind: settleDirectVariationStep
+          ? (localThemeStep === 6 ? 'upper_echo' : 'pickup_echo')
+          : String(leadThemeStep.echoPolicy?.variationKind || leadEchoPolicy?.variationKind || '').trim().toLowerCase(),
+        leadEchoAnchorOffset: Math.trunc(Number(leadThemeStep.echoPolicy?.anchorOffset ?? leadEchoPolicy?.anchorOffset) || 0),
+        settleDirectVariationStep,
         releaseEntryGesture: releaseGesturePhase === 'entry',
         callResponseLane: 'call',
         callResponseQualified: true,
         callResponsePhraseProgress: Math.max(0, Math.trunc(Number(leadThemeStep.step) || 0)),
         musicRegister: 'high',
         musicProminence: stage === 'release' || stage === 'settle' ? 'quiet' : 'full',
-        audioGain: stage === 'release' || stage === 'settle' ? 0.72 : 0.72,
+        audioGain: buildLeadSupplement
+          ? (sectionBar >= 7 ? 0.7 : 0.62)
+          : (stage === 'release' || stage === 'settle' ? 0.72 : 0.72),
         requestedNoteRaw: noteName,
         preserveRequestedNote: true,
         intensityAuditionSection: stage,
+        buildLeadSupplement,
       },
     }, {
       beatIndex,
@@ -2350,9 +2413,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       const hitSteps = steps
         .map((hit, idx) => hit ? idx : -1)
         .filter((idx) => idx >= 0);
-      const buildHitBudget = sectionBar < 4
-        ? 1
-        : (sectionBar < 8 ? Math.min(2, hitSteps.length) : Math.min(3, hitSteps.length));
+      const buildHitBudget = sectionBar < 3
+        ? Math.min(2, hitSteps.length)
+        : (sectionBar < 7 ? Math.min(3, hitSteps.length) : hitSteps.length);
       const allowedBuildHits = new Set(hitSteps.slice(0, buildHitBudget));
       if (!allowedBuildHits.has(localStep)) return null;
     }

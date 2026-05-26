@@ -499,6 +499,7 @@ function ensureUI() {
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
       btn('musicLabRunBS0S3Arrangement5m', 'Music Lab: Run BS0 S3 Arrangement Musicality (1x5m, compact save)', 'primary'),
       btn('musicLabRunBS0S3IntensityRamp150s', 'Music Lab: Run BS0 S3 Intensity Ramp (1x150s, compact save)', 'primary'),
+      btn('musicLabRunBS0S3IntensityRampDebug150s', 'Music Lab: Run BS0 S3 Intensity Ramp Debug (1x150s, full save)', 'primary'),
       btn('musicLabRunBS0S3ListenSilent', 'Listen: Silent / Weapon Only (90s)', 'primary'),
       btn('musicLabRunBS0S3ListenLow', 'Listen: Low Intensity (90s)', 'primary'),
       btn('musicLabRunBS0S3ListenMedium', 'Listen: Medium Intensity (90s)', 'primary'),
@@ -1442,6 +1443,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3IntensityRamp150s') {
       await runBS0s3MusicLabIntensityRamp150s();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3IntensityRampDebug150s') {
+      await runBS0s3MusicLabIntensityRampDebug150s();
       return;
     }
     if (act.startsWith('musicLabRunBS0S3Listen')) {
@@ -4780,6 +4785,7 @@ async function saveMusicLabSessionToResourcesGlobal({
   scenarioName = '',
   testCategory = '',
   forceCompactSave = false,
+  allowLargeSave = false,
   payloadOverride = null,
 } = {}) {
   const api = getMusicLabApiGlobal();
@@ -4909,7 +4915,7 @@ async function saveMusicLabSessionToResourcesGlobal({
       preflightBundleBytes = String(JSON.stringify(preflightBundle) || '').length;
     } catch {}
   }
-  if (forceCompactSave === true || preflightBundleBytes > 5000000) {
+  if (forceCompactSave === true || (allowLargeSave !== true && preflightBundleBytes > 5000000)) {
     const compacted = compactMusicLabPayloadForSave(payload);
     payloadForSave = compacted.payload;
     compactedSave = compacted.compacted === true;
@@ -5880,6 +5886,7 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           scenarioName: groupedScenarioName,
           testCategory: groupedScenarioName,
           forceCompactSave: cfg.forceCompactSave === true,
+          allowLargeSave: cfg.allowLargeSave === true,
         };
         const deferredExport = deferMusicLabSaveUntilBatchEnd
           ? exportMusicLabPayloadForDeferredSave()
@@ -6316,6 +6323,41 @@ async function runBS0s3MusicLabIntensityRamp150s() {
     tagPrefix: 'BS0S3MusicLabIntensityRampRelease1x150s',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_intensity_ramp_release_1x150s',
     statusPrefix: 'Running BS0 S3 Music Lab intensity ramp/release audition (150 seconds, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabIntensityRampDebug150s() {
+  await runBS0Stage(3, {
+    durationMs: 150000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: false,
+    allowLargeSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'ramp_release',
+      },
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_intensity_ramp_debug_full_1x150s',
+    saveNotes: [
+      'Beat Swarm Music Lab intensity audition debug: full event timeline save for inspecting exact instruments, roles, and lane events across intro, low, medium, build, peak, release, and settle.',
+      'Use this when compact saves only retain the settle tail and exact full-flow event attribution is needed.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_intensity_ramp_debug_full_1x150s',
+    groupedRunId: 'musicLab_bs0_s3_intensity_ramp_debug_full_1x150s_scenario',
+    groupedNotes: 'Beat Swarm Music Lab full-timeline intensity audition debug: 1 run x 150 seconds, no forced compact save.',
+    tagPrefix: 'BS0S3MusicLabIntensityRampDebugFull1x150s',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_intensity_ramp_debug_full_1x150s',
+    statusPrefix: 'Running BS0 S3 Music Lab intensity ramp debug (150 seconds, full save)',
     traceCapture: {
       enabled: false,
     },

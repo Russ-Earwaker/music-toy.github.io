@@ -1104,6 +1104,9 @@ export function executePerformedBeatEventRuntime(options = null) {
           musicProminence: 'quiet',
           motifSectionBar,
           releaseGesturePhase,
+          settleEchoCycle: Math.max(0, Math.trunc(Number(payload?.settleEchoCycle) || 0)),
+          leadEchoVariationKind: String(payload?.leadEchoVariationKind || '').trim().toLowerCase(),
+          leadEchoAnchorOffset: Math.trunc(Number(payload?.leadEchoAnchorOffset) || 0),
           leadThemeInterpretationMode: String(payload?.leadThemeInterpretationMode || '').trim().toLowerCase(),
           leadThemePartIndex: Math.max(0, Math.trunc(Number(payload?.leadThemePartIndex) || 0)),
           leadThemeStepIndex: Math.max(0, Math.trunc(Number(payload?.leadThemeStepIndex) || 0)),
@@ -1124,6 +1127,9 @@ export function executePerformedBeatEventRuntime(options = null) {
         callResponsePhraseProgress: Math.max(0, Math.trunc(Number(payload?.callResponsePhraseProgress) || 0)),
         intensityAuditionSection: settleEcho ? 'settle' : 'release',
         releaseGesturePhase,
+        settleEchoCycle: Math.max(0, Math.trunc(Number(payload?.settleEchoCycle) || 0)),
+        leadEchoVariationKind: String(payload?.leadEchoVariationKind || '').trim().toLowerCase(),
+        leadEchoAnchorOffset: Math.trunc(Number(payload?.leadEchoAnchorOffset) || 0),
         ...buildLeadThemeExecutionContext(null, null),
         ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
       });
@@ -1251,7 +1257,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     }
     const suppressLegacySecondaryFallback = (() => {
       const stage = getCurrentIntensityStage();
-      if (stage !== 'medium' && stage !== 'build') return false;
+      if (!stage) return false;
       const laneId = String(payload?.musicLaneId || group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
       if (laneId !== 'secondary_loop_lane') return false;
       const playerThemeSource = String(

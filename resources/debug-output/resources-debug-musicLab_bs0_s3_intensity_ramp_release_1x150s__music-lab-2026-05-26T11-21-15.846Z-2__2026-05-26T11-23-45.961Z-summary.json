@@ -1,0 +1,248 @@
+{
+  "kind": "music-lab-summary",
+  "runId": "musicLab_bs0_s3_intensity_ramp_release_1x150s",
+  "label": "music-lab-session",
+  "scenarioName": "retro_shooter_intro_pacing_s3_intensity_ramp_release_1x150s",
+  "sessionId": "music-lab-2026-05-26T11:21:15.846Z-2",
+  "saveTimestampIso": "2026-05-26T11:23:45.961Z",
+  "saveInstanceId": "musicLab_bs0_s3_intensity_ramp_release_1x150s__music-lab-2026-05-26T11:21:15.846Z-2__2026-05-26T11-23-45.961Z",
+  "compactedSave": true,
+  "compactedSaveDetail": "focused_musicality_targets_and_recent_tail",
+  "payloadDebug": {
+    "sessionId": "music-lab-2026-05-26T11:21:15.846Z-2",
+    "eventTimelineCount": 3458,
+    "executedEventCount": 0,
+    "createdEventCount": 0,
+    "spawnerPipelineEventCount": 0,
+    "metricsHistoryCount": 22,
+    "beatSwarmPerfBucketCount": 39,
+    "beatSwarmStepEventsPerfBucketCount": 46,
+    "preflightBundleBytes": 0,
+    "bundleBytes": 1394251
+  },
+  "sessionSummary": {
+    "sessionId": "music-lab-2026-05-26T11:21:15.846Z-2",
+    "startedAtIso": "2026-05-26T11:21:15.846Z",
+    "endedAtIso": "2026-05-26T11:23:45.955Z",
+    "eventCount": 3458,
+    "paletteChangeCount": 2,
+    "pacingChangeCount": 16,
+    "metrics": {
+      "notePoolCompliance": 0.9606741573033708,
+      "intervalSmoothShare": 0.9490084985835694,
+      "motifReuseRate": 0.8455743879472694,
+      "responseRate": 0.2834850455136541,
+      "paletteContinuityScore": 1,
+      "playerMaskingRate": 0,
+      "enemyExecutedToCreatedRate": 1.4547619047619047,
+      "spawnerExecutedToCreatedRate": 1,
+      "bassExecutedToCreatedRate": 1.5510204081632653,
+      "skippedCreatedEvents": 0,
+      "spawnerSkippedCreatedEvents": 0,
+      "bassSkippedCreatedEvents": 0,
+      "maxEnemyStepsWithoutBass": 5,
+      "visualRoleThreeRoleReadableShare": 0.9058823529411765,
+      "visualRoleFullTextureThreeRoleReadableShare": 1,
+      "visualRoleSupportCollapsedDuringLeadShare": 0,
+      "visualRoleFullTextureLeadWithSupportVisibleShare": 1,
+      "visualRoleAvgDistinctReadableRoleCount": 3.3176470588235296,
+      "visualRoleAvgSupportVisualWeight": 2.938588235294118,
+      "formationRoleFullTextureThreeRoleReadableShare": 0.8939393939393939,
+      "formationRoleFullTextureLeadWithSupportVisibleShare": 1,
+      "formationRoleSupportCollapsedDuringLeadShare": 0,
+      "formationRoleAvgDistinctReadableRoleCount": 2.6,
+      "laneContinuityAssertionPassed": true,
+      "laneContinuityBreaks": 0,
+      "laneResetHandoffs": 0,
+      "laneCarrierTransferred": 28,
+      "laneCarrierUnbound": 14,
+      "laneSystemVoiceFallbacks": 0,
+      "laneVacantFallbacks": 0,
+      "protectedLaneVacantFallbacks": 0,
+      "level1ContractCompliancePassed": false,
+      "level1ContractMusicalEventCount": 611,
+      "level1ContractViolationCount": 9,
+      "level1ContractViolationRate": 0.014729950900163666,
+      "level1ContractRoleViolationCount": 0,
+      "level1ContractSparkleViolationCount": 9,
+      "level1ContractAnswerViolationCount": 0,
+      "level1ArrangementMusicalityPassed": true,
+      "level1ArrangementMusicalityFailureCount": 0,
+      "level1ArrangementTraceCount": 85,
+      "level1ArrangementIntroSetPieceViolationCount": 3,
+      "level1ArrangementPostIntroCount": 70,
+      "arrangementSupportCount": 93,
+      "musicIntensityAuditionDetected": true,
+      "musicIntensityAuditionPassed": false,
+      "musicIntensityAuditionFailureCount": 1
+    },
+    "laneContinuityAssertion": {
+      "passed": true,
+      "ownerChanges": 86,
+      "preservedHandoffs": 65,
+      "resetHandoffs": 0,
+      "continuityBreaks": 0,
+      "carrierTransferred": 28,
+      "carrierUnbound": 14,
+      "systemVoiceFallbacks": 0,
+      "vacantFallbacks": 0,
+      "protectedLaneCarrierUnbound": 14,
+      "protectedLaneVacantFallbacks": 0,
+      "sameContinuityInstrumentDrift": 0,
+      "sameContinuityPhraseDrift": 0,
+      "sameContinuityPatternDrift": 1
+    },
+    "level1ArrangementMusicality": {
+      "passed": true,
+      "status": "skipped_intensity_audition",
+      "skipped": true,
+      "reason": "Intensity audition uses a forced lane/layer stack and is validated by musicIntensityAudition instead of the normal arrangement musicality contract."
+    },
+    "musicIntensityAudition": {
+      "passed": false,
+      "status": "failed",
+      "failureCount": 1,
+      "failures": [
+        {
+          "id": "release_stage_not_stripped_back",
+          "maxActiveLaneCount": 5,
+          "maximum": 2
+        }
+      ],
+      "stageCounts": {
+        "unknown": 12,
+        "low": 8,
+        "medium": 8,
+        "build": 12,
+        "peak": 12,
+        "release": 8,
+        "settle": 25
+      },
+      "lanePresence": {
+        "low": {
+          "count": 8,
+          "foundation": 8,
+          "secondary_loop": 8,
+          "primary_loop": 0,
+          "support": 0,
+          "sparkle": 0,
+          "answer": 0,
+          "maxActiveLaneCount": 2
+        },
+        "medium": {
+          "count": 8,
+          "foundation": 8,
+          "secondary_loop": 8,
+          "primary_loop": 8,
+          "support": 0,
+          "sparkle": 0,
+          "answer": 0,
+          "maxActiveLaneCount": 3
+        },
+        "build": {
+          "count": 12,
+          "foundation": 12,
+          "secondary_loop": 12,
+          "primary_loop": 12,
+          "support": 12,
+          "sparkle": 5,
+          "answer": 5,
+          "maxActiveLaneCount": 6
+        },
+        "peak": {
+          "count": 12,
+          "foundation": 12,
+          "secondary_loop": 12,
+          "primary_loop": 12,
+          "support": 12,
+          "sparkle": 12,
+          "answer": 12,
+          "maxActiveLaneCount": 6
+        },
+        "release": {
+          "count": 8,
+          "foundation": 8,
+          "secondary_loop": 3,
+          "primary_loop": 8,
+          "support": 1,
+          "sparkle": 1,
+          "answer": 0,
+          "maxActiveLaneCount": 5
+        },
+        "settle": {
+          "count": 25,
+          "foundation": 25,
+          "secondary_loop": 25,
+          "primary_loop": 25,
+          "support": 0,
+          "sparkle": 0,
+          "answer": 0,
+          "maxActiveLaneCount": 3
+        }
+      },
+      "energyRange": 0.816,
+      "layeringRange": 0.76,
+      "thresholds": {
+        "stageTraceMin": 2,
+        "energyRangeMin": 0.6,
+        "layeringRangeMin": 0.55,
+        "peakActiveLaneCountMin": 5,
+        "releaseActiveLaneCountMax": 2
+      }
+    },
+    "visualRoleReadability": {
+      "count": 85,
+      "fullTextureCount": 66,
+      "threeRoleReadableShare": 0.9058823529411765,
+      "fullTextureThreeRoleReadableShare": 1,
+      "supportCollapsedDuringLeadShare": 0,
+      "leadWithSupportVisibleShare": 0.8235294117647058,
+      "fullTextureLeadWithSupportVisibleShare": 1,
+      "avgDistinctReadableRoleCount": 3.3176470588235296,
+      "avgSupportVisualWeight": 2.938588235294118,
+      "formationFullTextureThreeRoleReadableShare": 0.8939393939393939,
+      "formationFullTextureLeadWithSupportVisibleShare": 1,
+      "formationSupportCollapsedDuringLeadShare": 0,
+      "formationAvgDistinctReadableRoleCount": 2.6,
+      "byFormationReadableRoleSet": {
+        "none": 4,
+        "foundation_groove": 4,
+        "counter_rhythm|foundation_groove": 7,
+        "counter_rhythm|foundation_groove|lead_phrase": 63,
+        "counter_rhythm|lead_phrase": 7
+      },
+      "byFormationArchetypeRole": {
+        "foundation_groove:foundation_anchor_line": 74,
+        "counter_rhythm:backbeat_pair": 77,
+        "lead_phrase:lead_arc": 70
+      },
+      "readableRoleShares": {
+        "foundation_groove": 0.9411764705882353,
+        "counter_rhythm": 0.9058823529411765,
+        "lead_phrase": 0.8235294117647058,
+        "answer_ornament": 0.6470588235294118
+      },
+      "byReadableRoleSet": {
+        "none": 4,
+        "foundation_groove": 4,
+        "answer_ornament|counter_rhythm|foundation_groove": 7,
+        "answer_ornament|counter_rhythm|foundation_groove|lead_phrase": 47,
+        "counter_rhythm|foundation_groove|lead_phrase": 22,
+        "answer_ornament|counter_rhythm|lead_phrase": 1
+      },
+      "byEnemyHealthSection": {}
+    },
+    "systemEventSummary": {
+      "totalCount": 0,
+      "countsByType": {},
+      "countsByReason": {},
+      "countsByVisualFailureReason": {},
+      "uniqueSectionIds": []
+    }
+  },
+  "transitionDebug": {
+    "ok": true,
+    "fileName": "musicLab_bs0_s3_intensity_ramp_release_1x150s__transition-debug__music-lab-2026-05-26T11-21-15.846Z-2.txt",
+    "postUrl": "http://localhost:5174/debug-output"
+  }
+}
