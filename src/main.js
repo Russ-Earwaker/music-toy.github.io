@@ -28,14 +28,14 @@ import { getRect } from './layout-cache.js';
 
 import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
 
-const perfLabVersion = '2026-05-26-full-debug-large-save-v1';
+const perfLabVersion = '2026-05-27-composition-flow-test-v1';
 import(`./perf/perf-lab.js?v=${perfLabVersion}`).catch((err) => {
   try { console.warn('[main] perf lab import failed', err); } catch {}
 });
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
-import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-05-26-secondary-fallback-digital-answer-v1';
+import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-05-27-release-contract-foundation-primary-v1';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';

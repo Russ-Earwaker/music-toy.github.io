@@ -27,7 +27,7 @@ import { collectDrawSnakeStepBeatEvents as collectDrawSnakeStepEvents, collectSp
 import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRuntime, } from './beat-swarm-composer-spawn.js';
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
-import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-26-secondary-fallback-suppress-v1';
+import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-27-secondary-fallback-top-level-v1';
 import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-05-26-digital-answer-literal-v1';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
@@ -9297,19 +9297,13 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
   } else if (section === 'release') {
     const releaseSectionBar = Math.max(0, Math.trunc(Number(arrangementState?.intensityAuditionSectionBar) || 0));
     const releaseEchoActive = releaseSectionBar < 8;
-    const releaseImpact = releaseSectionBar === 0;
     const releaseTail = releaseSectionBar > 0 && releaseSectionBar < 5;
-    activate('foundation', releaseImpact ? 0.5 : (releaseTail ? 0.38 : (releaseEchoActive ? 0.3 : 0.22)), 1);
-    if (releaseImpact) activate('secondary_loop', 0.48, 1);
-    else if (releaseTail && releaseSectionBar < 3) activate('secondary_loop', 0.24, 1);
-    else quiet('secondary_loop');
-    if (releaseImpact) activate('primary_loop', 0.58, 1);
-    else if (releaseEchoActive) activate('primary_loop', releaseTail ? (releaseSectionBar < 3 ? 0.42 : 0.3) : 0.24, 1);
+    activate('foundation', releaseSectionBar === 0 ? 0.5 : (releaseTail ? 0.38 : (releaseEchoActive ? 0.3 : 0.22)), 1);
+    quiet('secondary_loop');
+    if (releaseEchoActive) activate('primary_loop', releaseSectionBar === 0 ? 0.58 : (releaseTail ? (releaseSectionBar < 3 ? 0.42 : 0.3) : 0.24), 1);
     else quiet('primary_loop');
-    if (releaseImpact) activate('support', 0.18, 1);
-    else quiet('support');
-    if (releaseImpact) activate('sparkle', 0.1, 1);
-    else quiet('sparkle');
+    quiet('support');
+    quiet('sparkle');
     quiet('answer');
   } else if (section === 'settle') {
     activate('foundation', 0.44, 1);

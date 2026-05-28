@@ -1257,11 +1257,14 @@ export function executePerformedBeatEventRuntime(options = null) {
     }
     const suppressLegacySecondaryFallback = (() => {
       const stage = getCurrentIntensityStage();
-      if (!stage) return false;
-      const laneId = String(payload?.musicLaneId || group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
+      const eventStage = String(ev?.intensityAuditionSection || payload?.intensityAuditionSection || '').trim().toLowerCase();
+      const activeStage = eventStage || stage;
+      if (!activeStage) return false;
+      const laneId = String(payload?.musicLaneId || ev?.musicLaneId || group?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase();
       if (laneId !== 'secondary_loop_lane') return false;
       const playerThemeSource = String(
         payload?.musicLanePlayerThemeSource
+          || ev?.musicLanePlayerThemeSource
           || group?.musicLanePlayerThemeSource
           || enemy?.musicLanePlayerThemeSource
           || ''
@@ -1270,14 +1273,17 @@ export function executePerformedBeatEventRuntime(options = null) {
       const continuityId = String(payload?.continuityId || ev?.continuityId || '').trim().toLowerCase();
       const profileSourceType = String(
         payload?.musicProfileSourceType
+          || ev?.musicProfileSourceType
           || group?.musicProfileSourceType
           || enemy?.musicProfileSourceType
           || ''
       ).trim().toLowerCase();
       const groupEventSource = String(payload?.groupEventSource || '').trim().toLowerCase();
+      const instrumentId = String(ev?.resolvedPlaybackInstrumentId || ev?.instrumentId || group?.instrumentId || '').trim().toUpperCase();
       return continuityId === 'secondary-loop-bridge-fallback'
         || groupEventSource === 'secondary_loop_bridge_fallback'
-        || profileSourceType === 'secondary_bridge_backbeat';
+        || profileSourceType === 'secondary_bridge_backbeat'
+        || instrumentId === 'DRUM SNARE 2';
     })();
     if (suppressLegacySecondaryFallback) {
       noteComposerExecutionStage('suppressed_legacy_secondary_fallback', {

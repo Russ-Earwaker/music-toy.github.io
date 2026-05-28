@@ -498,8 +498,9 @@ function ensureUI() {
       btn('musicLabDisable', 'Music Lab: Disable'),
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
       btn('musicLabRunBS0S3Arrangement5m', 'Music Lab: Run BS0 S3 Arrangement Musicality (1x5m, compact save)', 'primary'),
+      btn('musicLabRunBS0S3CompositionFlow4m', 'Music Lab: Run BS0 S3 Composition Full Flow (1x4m, compact save)', 'primary'),
       btn('musicLabRunBS0S3IntensityRamp150s', 'Music Lab: Run BS0 S3 Intensity Ramp (1x150s, compact save)', 'primary'),
-      btn('musicLabRunBS0S3IntensityRampDebug150s', 'Music Lab: Run BS0 S3 Intensity Ramp Debug (1x150s, full save)', 'primary'),
+      btn('musicLabRunBS0S3IntensityRampDebug150s', 'Music Lab: Run BS0 S3 Intensity Ramp Debug (1x150s, compact save)', 'primary'),
       btn('musicLabRunBS0S3ListenSilent', 'Listen: Silent / Weapon Only (90s)', 'primary'),
       btn('musicLabRunBS0S3ListenLow', 'Listen: Low Intensity (90s)', 'primary'),
       btn('musicLabRunBS0S3ListenMedium', 'Listen: Medium Intensity (90s)', 'primary'),
@@ -1439,6 +1440,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3Arrangement5m') {
       await runBS0s3MusicLabArrangement5m();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3CompositionFlow4m') {
+      await runBS0s3MusicLabCompositionFlow4m();
       return;
     }
     if (act === 'musicLabRunBS0S3IntensityRamp150s') {
@@ -6329,16 +6334,15 @@ async function runBS0s3MusicLabIntensityRamp150s() {
   });
 }
 
-async function runBS0s3MusicLabIntensityRampDebug150s() {
+async function runBS0s3MusicLabCompositionFlow4m() {
   await runBS0Stage(3, {
-    durationMs: 150000,
+    durationMs: 240000,
     repeatCount: 1,
     freshResetEachRun: true,
     restartTransportEachRun: true,
     resetMusicLabEachRun: true,
     saveMusicLabEachRun: true,
-    forceCompactSave: false,
-    allowLargeSave: true,
+    forceCompactSave: true,
     keepMusicLabRealtimeMetrics: true,
     publishPerfArtifacts: false,
     beatSwarmTestOverrides: {
@@ -6347,17 +6351,52 @@ async function runBS0s3MusicLabIntensityRampDebug150s() {
         mode: 'ramp_release',
       },
     },
-    saveRunIdBase: 'musicLab_bs0_s3_intensity_ramp_debug_full_1x150s',
+    saveRunIdBase: 'musicLab_bs0_s3_composition_full_flow_1x4m',
     saveNotes: [
-      'Beat Swarm Music Lab intensity audition debug: full event timeline save for inspecting exact instruments, roles, and lane events across intro, low, medium, build, peak, release, and settle.',
-      'Use this when compact saves only retain the settle tail and exact full-flow event attribution is needed.',
+      'Beat Swarm Music Lab composition full-flow listen: normal intro set piece into low, medium, build, peak, release, and settle.',
+      'Assess the music as a complete composition: identity/style, bass drive, motif recognition, section transitions, release shape, repetition, and combat-audio separation.',
     ].join(' '),
-    groupedScenarioName: 'retro_shooter_intro_pacing_s3_intensity_ramp_debug_full_1x150s',
-    groupedRunId: 'musicLab_bs0_s3_intensity_ramp_debug_full_1x150s_scenario',
-    groupedNotes: 'Beat Swarm Music Lab full-timeline intensity audition debug: 1 run x 150 seconds, no forced compact save.',
-    tagPrefix: 'BS0S3MusicLabIntensityRampDebugFull1x150s',
-    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_intensity_ramp_debug_full_1x150s',
-    statusPrefix: 'Running BS0 S3 Music Lab intensity ramp debug (150 seconds, full save)',
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_composition_full_flow_1x4m',
+    groupedRunId: 'musicLab_bs0_s3_composition_full_flow_1x4m_scenario',
+    groupedNotes: 'Beat Swarm composition full-flow scenario: 1 run x 4 minutes, compact save, focused on whole-track listening rather than isolated intensity diagnosis.',
+    tagPrefix: 'BS0S3MusicLabCompositionFullFlow1x4m',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_composition_full_flow_1x4m',
+    statusPrefix: 'Running BS0 S3 Music Lab composition full flow (4 minutes, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabIntensityRampDebug150s() {
+  await runBS0Stage(3, {
+    durationMs: 150000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    allowLargeSave: false,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'ramp_release',
+      },
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_intensity_ramp_debug_compact_1x150s',
+    saveNotes: [
+      'Beat Swarm Music Lab intensity audition debug: compact save for checking stage metrics and recent/pinned event detail without large resource files.',
+      'Use full-save instrumentation only temporarily when exact full-flow event attribution is needed.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_intensity_ramp_debug_compact_1x150s',
+    groupedRunId: 'musicLab_bs0_s3_intensity_ramp_debug_compact_1x150s_scenario',
+    groupedNotes: 'Beat Swarm Music Lab compact intensity audition debug: 1 run x 150 seconds, compact save.',
+    tagPrefix: 'BS0S3MusicLabIntensityRampDebugCompact1x150s',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_intensity_ramp_debug_compact_1x150s',
+    statusPrefix: 'Running BS0 S3 Music Lab intensity ramp debug (150 seconds, compact save)',
     traceCapture: {
       enabled: false,
     },
