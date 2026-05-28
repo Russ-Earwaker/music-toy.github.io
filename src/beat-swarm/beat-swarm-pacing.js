@@ -6,7 +6,10 @@ const PACING_STATES = Object.freeze({
   INTRO_RESPONSE: 'intro_response',
   MAIN_LOW: 'main_low',
   MAIN_MID: 'main_mid',
+  BUILD: 'build',
   PEAK: 'peak',
+  RELEASE: 'release',
+  SETTLE: 'settle',
   BREAK: 'break',
 });
 
@@ -19,8 +22,15 @@ const INTRO_SEQUENCE = Object.freeze([
 const LOOP_SEQUENCE = Object.freeze([
   Object.freeze({ id: PACING_STATES.MAIN_LOW, bars: 8 }),
   Object.freeze({ id: PACING_STATES.MAIN_MID, bars: 8 }),
-  Object.freeze({ id: PACING_STATES.PEAK, bars: 4 }),
-  Object.freeze({ id: PACING_STATES.BREAK, bars: 4 }),
+  Object.freeze({ id: PACING_STATES.BUILD, bars: 12 }),
+  Object.freeze({ id: PACING_STATES.PEAK, bars: 12 }),
+  Object.freeze({ id: PACING_STATES.RELEASE, bars: 8 }),
+  Object.freeze({ id: PACING_STATES.SETTLE, bars: 8 }),
+  Object.freeze({ id: PACING_STATES.MAIN_MID, bars: 8 }),
+  Object.freeze({ id: PACING_STATES.BUILD, bars: 12 }),
+  Object.freeze({ id: PACING_STATES.PEAK, bars: 12 }),
+  Object.freeze({ id: PACING_STATES.RELEASE, bars: 8 }),
+  Object.freeze({ id: PACING_STATES.SETTLE, bars: 8 }),
 ]);
 
 function getPacingCapsForState(stateName, responseMode = 'group') {
@@ -82,6 +92,17 @@ function getPacingCapsForState(stateName, responseMode = 'group') {
       responseMode: 'group',
     };
   }
+  if (s === PACING_STATES.BUILD) {
+    return {
+      maxFallbackEnemies: 0,
+      maxSpawners: 1,
+      maxDrawSnakes: 1,
+      maxComposerGroups: 4,
+      maxComposerGroupSize: 4,
+      maxComposerPerformers: 3,
+      responseMode: 'either',
+    };
+  }
   if (s === PACING_STATES.PEAK) {
     return {
       maxFallbackEnemies: 0,
@@ -91,6 +112,28 @@ function getPacingCapsForState(stateName, responseMode = 'group') {
       maxComposerGroupSize: 5,
       maxComposerPerformers: 3,
       responseMode: 'either',
+    };
+  }
+  if (s === PACING_STATES.RELEASE) {
+    return {
+      maxFallbackEnemies: 0,
+      maxSpawners: 0,
+      maxDrawSnakes: 0,
+      maxComposerGroups: 2,
+      maxComposerGroupSize: 2,
+      maxComposerPerformers: 1,
+      responseMode: 'group',
+    };
+  }
+  if (s === PACING_STATES.SETTLE) {
+    return {
+      maxFallbackEnemies: 0,
+      maxSpawners: 0,
+      maxDrawSnakes: 0,
+      maxComposerGroups: 3,
+      maxComposerGroupSize: 3,
+      maxComposerPerformers: 2,
+      responseMode: 'group',
     };
   }
   if (s === PACING_STATES.BREAK) {

@@ -499,6 +499,7 @@ function ensureUI() {
       btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
       btn('musicLabRunBS0S3Arrangement5m', 'Music Lab: Run BS0 S3 Arrangement Musicality (1x5m, compact save)', 'primary'),
       btn('musicLabRunBS0S3CompositionFlow4m', 'Music Lab: Run BS0 S3 Composition Full Flow (1x4m, compact save)', 'primary'),
+      btn('musicLabRunBS0S3CompositionPacing4m', 'Music Lab: Run BS0 S3 Composition Pacing Flow (1x4m, compact save)', 'primary'),
       btn('musicLabRunBS0S3IntensityRamp150s', 'Music Lab: Run BS0 S3 Intensity Ramp (1x150s, compact save)', 'primary'),
       btn('musicLabRunBS0S3IntensityRampDebug150s', 'Music Lab: Run BS0 S3 Intensity Ramp Debug (1x150s, compact save)', 'primary'),
       btn('musicLabRunBS0S3ListenSilent', 'Listen: Silent / Weapon Only (90s)', 'primary'),
@@ -1444,6 +1445,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3CompositionFlow4m') {
       await runBS0s3MusicLabCompositionFlow4m();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3CompositionPacing4m') {
+      await runBS0s3MusicLabCompositionPacingFlow4m();
       return;
     }
     if (act === 'musicLabRunBS0S3IntensityRamp150s') {
@@ -6362,6 +6367,40 @@ async function runBS0s3MusicLabCompositionFlow4m() {
     tagPrefix: 'BS0S3MusicLabCompositionFullFlow1x4m',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_composition_full_flow_1x4m',
     statusPrefix: 'Running BS0 S3 Music Lab composition full flow (4 minutes, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabCompositionPacingFlow4m() {
+  await runBS0Stage(3, {
+    durationMs: 240000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'composition_loop',
+      },
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_composition_pacing_flow_1x4m',
+    saveNotes: [
+      'Beat Swarm Music Lab composition pacing flow: normal intro set piece, then repeated low/medium/build/peak/release/short-settle cycles.',
+      'Assess whether music and enemy presentation can breathe, resolve, and regain momentum without spending the rest of the run in settle.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_intro_pacing_s3_composition_pacing_flow_1x4m',
+    groupedRunId: 'musicLab_bs0_s3_composition_pacing_flow_1x4m_scenario',
+    groupedNotes: 'Beat Swarm composition pacing scenario: 1 run x 4 minutes, compact save, focused on repeated music pacing cycles instead of a single ramp into long settle.',
+    tagPrefix: 'BS0S3MusicLabCompositionPacingFlow1x4m',
+    labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_composition_pacing_flow_1x4m',
+    statusPrefix: 'Running BS0 S3 Music Lab composition pacing flow (4 minutes, compact save)',
     traceCapture: {
       enabled: false,
     },

@@ -638,6 +638,14 @@ export const DIRECTOR_ENERGY_STATE_CONFIG = Object.freeze({
     budgets: Object.freeze({ maxFullThreatsPerBeat: 1, maxLightThreatsPerBeat: 4, maxAudibleAccentsPerBeat: 8, maxCosmeticPerBeat: 10 }),
     composer: Object.freeze({ drumLoops: 1, drawSnakes: 0, intensity: 0.48 }),
   }),
+  release: Object.freeze({
+    budgets: Object.freeze({ maxFullThreatsPerBeat: 1, maxLightThreatsPerBeat: 3, maxAudibleAccentsPerBeat: 7, maxCosmeticPerBeat: 9 }),
+    composer: Object.freeze({ drumLoops: 1, drawSnakes: 0, intensity: 0.54 }),
+  }),
+  settle: Object.freeze({
+    budgets: Object.freeze({ maxFullThreatsPerBeat: 1, maxLightThreatsPerBeat: 4, maxAudibleAccentsPerBeat: 8, maxCosmeticPerBeat: 11 }),
+    composer: Object.freeze({ drumLoops: 1, drawSnakes: 0, intensity: 0.62 }),
+  }),
   peak: Object.freeze({
     budgets: Object.freeze({ maxFullThreatsPerBeat: 4, maxLightThreatsPerBeat: 7, maxAudibleAccentsPerBeat: 10, maxCosmeticPerBeat: 18 }),
     composer: Object.freeze({ drumLoops: 2, drawSnakes: 1, intensity: 1.12 }),
@@ -648,6 +656,8 @@ export const DIRECTOR_ENERGY_STATE_ALIAS = Object.freeze({
   mini_break: 'break',
   boss_phase: 'peak',
   swarm_chaos: 'clash',
+  release_down: 'release',
+  settle_down: 'settle',
 });
 export const DIRECTOR_STATE_THEME_CONFIG = Object.freeze({
   intro: Object.freeze({
@@ -710,6 +720,36 @@ export const DIRECTOR_STATE_THEME_CONFIG = Object.freeze({
       Object.freeze({ notes: Object.freeze(['F4', 'C4', 'A#4']), steps: Object.freeze([1, 0, 0, 0, 1, 0, 1, 0]), actionType: 'projectile' }),
     ]),
   }),
+  release: Object.freeze({
+    notePool: Object.freeze(['C4', 'F4', 'A#4']),
+    spawnerRhythms: Object.freeze([
+      Object.freeze([1, 0, 0, 0, 1, 0, 0, 0]),
+      Object.freeze([1, 0, 0, 1, 0, 0, 1, 0]),
+    ]),
+    drawsnakePhrases: Object.freeze([
+      Object.freeze({ steps: Object.freeze([1, 0, 0, 1, 0, 0, 0, 1]), rows: Object.freeze([0, 1, 0, 2, 1, 0, 1, 2]) }),
+      Object.freeze({ steps: Object.freeze([1, 0, 0, 0, 1, 0, 1, 0]), rows: Object.freeze([2, 1, 0, 1, 2, 1, 0, 1]) }),
+    ]),
+    composerPhrases: Object.freeze([
+      Object.freeze({ notes: Object.freeze(['C4', 'A#4', 'F4']), steps: Object.freeze([1, 0, 0, 1, 0, 0, 0, 1]), actionType: 'projectile' }),
+      Object.freeze({ notes: Object.freeze(['F4', 'C4', 'A#4']), steps: Object.freeze([1, 0, 0, 0, 1, 0, 1, 0]), actionType: 'projectile' }),
+    ]),
+  }),
+  settle: Object.freeze({
+    notePool: Object.freeze(['C4', 'D#4', 'F4', 'G4', 'A#4']),
+    spawnerRhythms: Object.freeze([
+      Object.freeze([1, 0, 0, 0, 1, 0, 0, 0]),
+      Object.freeze([1, 0, 0, 1, 0, 0, 1, 0]),
+    ]),
+    drawsnakePhrases: Object.freeze([
+      Object.freeze({ steps: Object.freeze([1, 0, 0, 1, 0, 0, 0, 1]), rows: Object.freeze([0, 1, 0, 2, 1, 0, 1, 2]) }),
+      Object.freeze({ steps: Object.freeze([1, 0, 0, 0, 1, 0, 1, 0]), rows: Object.freeze([2, 1, 0, 1, 2, 1, 0, 1]) }),
+    ]),
+    composerPhrases: Object.freeze([
+      Object.freeze({ notes: Object.freeze(['C4', 'A#4', 'F4']), steps: Object.freeze([1, 0, 0, 1, 0, 0, 0, 1]), actionType: 'projectile' }),
+      Object.freeze({ notes: Object.freeze(['F4', 'C4', 'A#4']), steps: Object.freeze([1, 0, 0, 0, 1, 0, 1, 0]), actionType: 'projectile' }),
+    ]),
+  }),
   peak: Object.freeze({
     notePool: Object.freeze(['C4', 'D#4', 'F4', 'G4', 'A#4']),
     spawnerRhythms: Object.freeze([
@@ -731,6 +771,8 @@ export const DIRECTOR_CALL_RESPONSE_STATE_CONFIG = Object.freeze({
   build: Object.freeze({ enabled: true, stepsPerPhrase: 4 }),
   clash: Object.freeze({ enabled: true, stepsPerPhrase: 2 }),
   break: Object.freeze({ enabled: false, stepsPerPhrase: 4 }),
+  release: Object.freeze({ enabled: false, stepsPerPhrase: 6 }),
+  settle: Object.freeze({ enabled: true, stepsPerPhrase: 4 }),
   peak: Object.freeze({ enabled: true, stepsPerPhrase: 2 }),
 });
 export const DIRECTOR_CALL_RESPONSE_PACING_CONFIG = Object.freeze({
@@ -739,7 +781,10 @@ export const DIRECTOR_CALL_RESPONSE_PACING_CONFIG = Object.freeze({
   intro_response: Object.freeze({ enabled: true, stepsPerPhrase: 4 }),
   main_low: Object.freeze({ enabled: true, stepsPerPhrase: 4 }),
   main_mid: Object.freeze({ enabled: true, stepsPerPhrase: 3 }),
+  build: Object.freeze({ enabled: true, stepsPerPhrase: 3 }),
   peak: Object.freeze({ enabled: true, stepsPerPhrase: 2 }),
+  release: Object.freeze({ enabled: false, stepsPerPhrase: 6 }),
+  settle: Object.freeze({ enabled: true, stepsPerPhrase: 4 }),
   break: Object.freeze({ enabled: false, stepsPerPhrase: 6 }),
 });
 export const PACING_ARRANGEMENT_INTENSITY_MULT = Object.freeze({
@@ -748,7 +793,10 @@ export const PACING_ARRANGEMENT_INTENSITY_MULT = Object.freeze({
   intro_response: 0.78,
   main_low: 0.9,
   main_mid: 1,
+  build: 1.08,
   peak: 1.1,
+  release: 0.72,
+  settle: 0.84,
   break: 0.72,
 });
 export const ENERGY_GRAVITY_CONFIG = Object.freeze({
@@ -766,6 +814,8 @@ export const DIRECTOR_STRUCTURE_INTENT_CONFIG = Object.freeze({
   build: Object.freeze({ intent: 'build', drawSnakeDelta: 0, drumLoopDelta: 0, intensityMul: 0.98, responseStepsDelta: 1, responseEnabled: true }),
   clash: Object.freeze({ intent: 'drive', drawSnakeDelta: 0, drumLoopDelta: 0, intensityMul: 1.02, responseStepsDelta: 0, responseEnabled: true }),
   break: Object.freeze({ intent: 'drop', drawSnakeDelta: -1, drumLoopDelta: 0, intensityMul: 0.82, responseStepsDelta: 1, responseEnabled: true }),
+  release: Object.freeze({ intent: 'drop', drawSnakeDelta: -1, drumLoopDelta: 0, intensityMul: 0.76, responseStepsDelta: 2, responseEnabled: false }),
+  settle: Object.freeze({ intent: 'body', drawSnakeDelta: -1, drumLoopDelta: 0, intensityMul: 0.86, responseStepsDelta: 1, responseEnabled: true }),
   peak: Object.freeze({ intent: 'peak', drawSnakeDelta: 0, drumLoopDelta: 0, intensityMul: 1.08, responseStepsDelta: -1, responseEnabled: true }),
 });
 export const DIRECTOR_PRE_DROP_CONFIG = Object.freeze({
@@ -787,6 +837,8 @@ export const DIRECTOR_HARMONY_CONFIG = Object.freeze({
     drive: 7,
     drop: 0,
     peak: 7,
+    release: 0,
+    settle: 0,
   }),
   preDropOffset: 7,
 });

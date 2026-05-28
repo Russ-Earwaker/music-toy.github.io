@@ -5,7 +5,7 @@ const DEFAULT_STEPS_PER_BAR = 8;
 const DEFAULT_ENERGY_STATE = 'intro';
 const DEFAULT_CARRIER_TYPE = 'none';
 
-const ENERGY_STATES = Object.freeze(['intro', 'build', 'clash', 'break', 'peak']);
+const ENERGY_STATES = Object.freeze(['intro', 'build', 'clash', 'break', 'peak', 'release', 'settle']);
 const DIRECTOR_LANE_IDS = Object.freeze([
   'foundation',
   'secondary_loop',
