@@ -1,312 +1,130 @@
-I think the current direction is actually pointing at the answer already — the logs show Codex has started introducing “release echoes” and reinterpretations instead of hard-cutting the player theme. You’ve now got things like:
+Weapon Gate Lab: Note/Silence Gate Generation Logic
 
-* `leadThemeInterpretationMode: "release_riff"`
-* `actionType: "player-lead-release-echo"`
-* quieter motif fragments during release instead of full statements
-* foundation continuing while lead fragments decay away
+The player cannot avoid gates. Every gate covers the full corridor height, so the system decides what kind of choice the player is about to make before the gate appears.
 
-That’s the right instinct. 
+Each gate fills exactly one weapon slot in sequence:
 
-The core issue is this:
+1. Toy 1, slot 1
+2. Toy 1, slot 2
+3. ...
+4. Toy 1, slot 8
+5. Toy 2, slot 1
+6. ...
+7. Toy 2, slot 8
 
-> A player motif psychologically becomes “their identity.”
-> Cutting it dead feels like the game rejecting the player.
+There are 16 total slots.
 
-But:
+A slot can become either:
 
-> Fully continuing the motif prevents the music from emotionally releasing tension.
+* Note slot: stores a selected pentatonic note and later fires a projectile in the final weapon loop.
+* Silence/Damage Up slot: stores a disabled/silent slot. No final projectile fires on that slot, but the weapon damage budget can later treat the missing shot as extra damage.
 
-So the answer is probably not:
+Gate types:
 
-* “play motif”
-* or “stop motif”
+1. Note Gate
+   All sections are notes from one octave of the current pentatonic scale.
 
-It’s:
+2. Silence Gate
+   All sections are Damage Up/silence. This forces a silence but still lets the player pass through a section.
 
-# transform motif
+3. Mixed Gate
+   Contains mostly notes plus one or more Damage Up sections. The Damage Up section position must be randomized vertically, not fixed at top or bottom.
 
-That gives you musical continuity *and* pacing control.
+Important:
+A note selection fires a single preview projectile immediately. This projectile should hit a small target spawned ahead of the player. This is only feedback. It does not mean the final weapon loop is firing yet.
 
----
+Damage Up/silence selection should give feedback, but does not fire a note preview projectile.
 
-# Recommended model
+Generation goal:
+Do not pre-author a fixed pattern. Use live ratio/streak logic so the final 16-slot result has a nice musical distribution of notes and silences.
 
-## Peak = Full Ownership
+Track this state:
 
-At peak:
+* totalSlots = 16
+* targetSilences
+* targetNotes = totalSlots - targetSilences
+* selectedNotes
+* selectedSilences
+* remainingSlots
+* remainingNotesNeeded
+* remainingSilencesNeeded
+* currentNoteStreak
+* currentSilenceStreak
+* maxNoteStreak
+* maxSilenceStreak
 
-* full motif
-* literal rhythm
-* full contour
-* layered doubling
-* riffing around it
-* strongest instrumentation
-* highest density
+Target silence count should initially be guided by the existing DrawGrid/random weapon tune density logic. For example, if the current weapon randomiser usually creates around 4–6 silences in a 16-step pattern, use that range.
 
-This says:
+Before spawning each gate, decide whether the next gate should be note-only, silence-only, or mixed.
 
-> “Your theme has taken over the battlefield.”
+Hard rules:
 
-That’s emotionally satisfying.
+* If currentSilenceStreak >= maxSilenceStreak, spawn a Note Gate.
+* If remainingSlots == remainingNotesNeeded, spawn a Note Gate.
+* If remainingSlots == remainingSilencesNeeded, spawn a Silence Gate, unless this would violate maxSilenceStreak.
+* Never allow the generator to drift into a state where it must place too many forced silences in a row at the end.
+* If selectedSilences is already at targetSilences, spawn only Note Gates for the remaining slots.
+* If selectedNotes is already at targetNotes, spawn Silence Gates, but only if streak rules allow it. Ideally the ratio logic should prevent reaching this bad state.
 
----
+Soft rules:
 
-# Release should feel like MEMORY
+* If the player is behind on silences, increase the chance of Mixed Gates or Silence Gates.
+* If the player is ahead on silences, use Note Gates.
+* If the player is close to the target ratio, prefer Mixed Gates.
+* If the player has had several notes in a row, increase the chance of allowing Damage Up.
+* If the player has just taken a silence, reduce the chance of another silence unless the target ratio urgently requires it.
 
-Not continuation.
+Suggested decision model:
 
-The player motif should become:
+For each upcoming gate, evaluate possible outcomes:
 
-* echoes
-* fragments
-* call/response remnants
-* slowed contours
-* isolated intervals
-* trailing answers
+Option A: next slot becomes a note.
+Option B: next slot becomes a silence.
 
-Like:
+Reject any option that makes it impossible to finish with the desired note/silence count and max streak rules.
 
-> the battlefield remembering the theme after the chaos ends.
+If only note is valid:
 
-This preserves emotional continuity without maintaining peak intensity.
+* Spawn Note Gate.
 
----
+If only silence is valid:
 
-# The important rule
+* Spawn Silence Gate.
 
-## Release should preserve:
+If both are valid:
 
-* contour identity
-* rhythmic DNA
-* emotional recognisability
+* Spawn Mixed Gate, but adjust the number of Damage Up sections based on ratio pressure.
 
-But reduce:
+Example mixed gate tuning:
 
-* density
-* completeness
-* cadence certainty
-* rhythmic confidence
-
----
-
-# Practical transformation ladder
-
-Instead of ON/OFF, think:
-
-| State   | Motif Treatment            |
-| ------- | -------------------------- |
-| Intro   | tiny hints                 |
-| Build   | partial motif statements   |
-| Main    | recognizable motif         |
-| Peak    | full motif + embellishment |
-| Release | fragmented echoes          |
-| Settle  | sparse stable identity     |
-
----
-
-# Specific techniques that will work VERY well
-
-## 1. Motif Decay
-
-Peak:
-
-```text
-A - C - D - G
-```
-
-Release:
-
-```text
-A --- D ---
-```
-
-Then:
-
-```text
---- C ---
-```
-
-Then:
-
-```text
-A -------
-```
-
-Same identity.
-Less intensity.
-
----
-
-# 2. Rhythm Preservation / Pitch Reduction
-
-Keep rhythm.
-Simplify pitch.
-
-Peak:
-
-```text
-A C D G
-```
-
-Release:
-
-```text
-A A A G
-```
-
-This is VERY effective psychologically because rhythm carries identity strongly.
-
----
-
-# 3. Interval Echoes
-
-Only replay:
-
-* first leap
-* final cadence
-* strongest accent interval
-
-Example:
-
-```text
-A -> G
-```
-
-becomes the recognizable emotional signature.
-
----
-
-# 4. Delayed Ghost Responses
-
-This is probably your strongest option.
-
-Peak:
-
-```text
-Player motif immediately drives action
-```
-
-Release:
-
-```text
-Music responds TO remembered fragments
-```
-
-So instead of:
-
-> motif causes battle
-
-it becomes:
-
-> environment recalls battle
-
-That creates emotional cooldown naturally.
-
----
-
-# 5. Harmonic Dissolve
-
-Peak:
-
-* motif fully harmonized
-* doubled octaves
-* support voices
-
-Release:
-
-* single lonely line
-* no doubling
-* weaker instrumentation
-* more silence between phrases
-
-This creates “space reopening.”
-
----
-
-# What Settle should do
-
-Settle should NOT return to:
-
-* generic music
-* unrelated motifs
-
-That destroys ownership.
-
-Instead:
-
-> settle = stable domesticated version of the player identity
-
-Like:
-
-* motif simplified into groove
-* bass retains player rhythm DNA
-* percussion references motif accents
-* lead only occasionally references contour
-
-The player should subconsciously feel:
-
-> “the world has absorbed my theme.”
-
-That’s extremely powerful.
-
----
-
-# The bigger pacing insight
-
-Right now your system seems to think intensity is:
-
-```text
-more motif = more intensity
-less motif = less intensity
-```
-
-But musically, intensity is actually controlled by:
-
-* certainty
-* density
-* layering
-* register
-* rhythmic pressure
-* cadence frequency
-* harmonic tension
-
-So you can preserve motif identity almost permanently if you:
-
-* reduce certainty
-* reduce density
-* increase spacing
-* fragment phrases
-
-That’s the breakthrough.
-
----
-
-# Strong recommendation
-
-I would formalize motif interpretation modes as actual pacing tools:
-
-| Interpretation Mode | Usage              |
-| ------------------- | ------------------ |
-| literal             | onboarding/main    |
-| embellished         | build              |
-| dominant            | peak               |
-| fragmented          | release            |
-| echo                | settle             |
-| dormant             | ambient continuity |
-
-Then intensity states select:
-
-* interpretation mode
-* phrase completeness %
-* rhythm preservation %
-* contour preservation %
-* ornamentation %
-* silence %
-
-instead of just:
-
-```js
-play motif yes/no
-```
-
-That’ll massively improve emotional continuity.
+* Need more notes: 5 note sections, 1 Damage Up section.
+* Balanced: 4 note sections, 1 Damage Up section.
+* Need more silences: 3 note sections, 2 Damage Up sections.
+* Silence urgent but not forced: 2 note sections, 3 Damage Up sections.
+
+The important design principle is:
+The player should feel like they are choosing, but the generator should quietly protect the final weapon loop from becoming musically ugly.
+
+Debug output:
+Log each gate decision clearly:
+
+* gateIndex
+* toyIndex
+* slotIndex
+* gateType
+* availableSections
+* selectedSection
+* storedResult
+* selectedNotes
+* selectedSilences
+* currentNoteStreak
+* currentSilenceStreak
+* reason for gate type
+
+Example reasons:
+
+* "balanced: mixed gate"
+* "silence streak maxed: force note"
+* "too few silences: silence pressure"
+* "target silences reached: force note"
+* "remaining slots require silence"

@@ -500,6 +500,8 @@ function ensureUI() {
       btn('musicLabRunBS0S3Arrangement5m', 'Music Lab: Run BS0 S3 Arrangement Musicality (1x5m, compact save)', 'primary'),
       btn('musicLabRunBS0S3CompositionFlow4m', 'Music Lab: Run BS0 S3 Composition Full Flow (1x4m, compact save)', 'primary'),
       btn('musicLabRunBS0S3CompositionPacing4m', 'Music Lab: Run BS0 S3 Composition Pacing Flow (1x4m, compact save)', 'primary'),
+      btn('weaponGateBeatSwarmStart', 'Prototype: Beat Swarm Gate Start', 'primary'),
+      btn('weaponGateLabOpen', 'Prototype: Weapon Gate Onboarding Lab', 'primary'),
       btn('musicLabRunBS0S3IntensityRamp150s', 'Music Lab: Run BS0 S3 Intensity Ramp (1x150s, compact save)', 'primary'),
       btn('musicLabRunBS0S3IntensityRampDebug150s', 'Music Lab: Run BS0 S3 Intensity Ramp Debug (1x150s, compact save)', 'primary'),
       btn('musicLabRunBS0S3ListenSilent', 'Listen: Silent / Weapon Only (90s)', 'primary'),
@@ -1449,6 +1451,27 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3CompositionPacing4m') {
       await runBS0s3MusicLabCompositionPacingFlow4m();
+      return;
+    }
+    if (act === 'weaponGateLabOpen') {
+      if (window.__WeaponGateLab?.open) {
+        window.__WeaponGateLab.open();
+        setStatus('Weapon Gate Onboarding Lab opened');
+      } else {
+        setStatus('Weapon Gate Lab unavailable; hard refresh and try again');
+      }
+      return;
+    }
+    if (act === 'weaponGateBeatSwarmStart') {
+      const api = getBeatSwarmApi();
+      if (!api) {
+        setStatus('Beat Swarm API unavailable; hard refresh and try again');
+        return;
+      }
+      try { api.exit?.(); } catch {}
+      try { api.enter?.({ weaponGateIntro: true }); } catch {}
+      try { if (!isRunning()) startTransport(); } catch {}
+      setStatus('Beat Swarm gate start launched');
       return;
     }
     if (act === 'musicLabRunBS0S3IntensityRamp150s') {

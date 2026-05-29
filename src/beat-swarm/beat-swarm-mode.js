@@ -19,6 +19,7 @@ import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from 
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-composition-policy-v1';
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
 import { maintainComposerEnemyGroupsLifecycle } from './beat-swarm-composer-lifecycle.js';
@@ -574,6 +575,48 @@ function getPlayerMusicTheme(themeId = '') {
 function getPlayerMusicThemes() {
   return serializePlayerMusicThemes();
 }
+function getWeaponTuneRowForGateNote(noteName = '') {
+  const raw = normalizeSwarmNoteName(noteName) || '';
+  const pitchClass = raw.replace(/-?\d+$/, '');
+  if (!pitchClass) return DRAWGRID_TOY_PENTATONIC_ROWS[0] || 0;
+  const row = DRAWGRID_TOY_ROW_NOTE_PALETTE.findIndex((candidate) => (
+    (normalizeSwarmNoteName(candidate) || '').replace(/-?\d+$/, '') === pitchClass
+  ));
+  return row >= 0 ? row : (DRAWGRID_TOY_PENTATONIC_ROWS[0] || 0);
+}
+function applyWeaponGateSelectionsToWeapon(slotIndex = 0, selections = null) {
+  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
+  const source = Array.isArray(selections) ? selections : [];
+  const chain = [];
+  for (let toy = 0; toy < WEAPON_TUNE_CHAIN_LENGTH; toy += 1) {
+    const active = Array.from({ length: WEAPON_TUNE_STEPS }, () => false);
+    const list = Array.from({ length: WEAPON_TUNE_STEPS }, () => []);
+    for (let step = 0; step < WEAPON_TUNE_STEPS; step += 1) {
+      const sel = source[(toy * WEAPON_TUNE_STEPS) + step] || null;
+      if (String(sel?.kind || '') !== 'note') continue;
+      active[step] = true;
+      list[step] = [getWeaponTuneRowForGateNote(sel.note)];
+    }
+    chain.push(sanitizeWeaponTune({
+      kind: 'drawgrid',
+      steps: WEAPON_TUNE_STEPS,
+      notes: DRAWGRID_TOY_ROW_NOTE_PALETTE.slice(),
+      active,
+      list,
+      disabled: Array.from({ length: WEAPON_TUNE_STEPS }, () => []),
+    }));
+  }
+  weaponLoadout[idx].tuneChain = chain;
+  weaponLoadout[idx].tune = sanitizeWeaponTune(chain[0]);
+  persistBeatSwarmState();
+  renderPauseWeaponUi();
+  return {
+    slotIndex: idx,
+    tune: sanitizeWeaponTune(weaponLoadout[idx].tune),
+    tuneChain: sanitizeWeaponTuneChain(weaponLoadout[idx].tuneChain),
+    damageScale: getWeaponTuneDamageScale(idx),
+  };
+}
 function setPlayerMusicTheme(themeId = '', nextTheme = null) {
   const id = normalizePlayerMusicThemeId(themeId);
   if (!id) return null;
@@ -613,6 +656,11 @@ const playerInstrumentRuntime = createBeatSwarmPlayerInstrumentRuntime({
   lockedPattern: [1, 0, 1, 0, 1, 0, 1, 0],
   customPatternEnabled: false,
   customPattern: [1, 0, 0, 1, 0, 0, 1, 0],
+});
+const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
+  getOverlayEl: () => overlayEl,
+  triggerInstrument: triggerBeatSwarmInstrument,
+  applySelections: applyWeaponGateSelectionsToWeapon,
 });
 const PLAYER_WEAPON_SOUND_MIX_MULT = 0.52;
 const composerEnemyGroups = [];
@@ -24648,6 +24696,20 @@ function tick(nowMs) {
   const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
   const centerWorld = getViewportCenterWorld();
   const input = getInputVector();
+  if (weaponGateIntroRuntime.isActive()) {
+    velocityX = 0;
+    velocityY = 0;
+    clearEnemies();
+    clearPickups();
+    clearProjectiles();
+    clearEffects();
+    try { weaponGateIntroRuntime.update(dt, input); } catch {}
+    try { applyCameraDelta(220 * dt, 0); } catch {}
+    try { updateArenaVisual(scale, false); } catch {}
+    withBeatSwarmPerfSample('shipFacing', () => updateShipFacing(dt, 1, 0, 90));
+    rafId = requestAnimationFrame(tick);
+    return;
+  }
   const motionState = {
     borderForceEnabled,
     velocityX,
@@ -24948,7 +25010,8 @@ function unbindInput() {
 }
 export function enterBeatSwarmMode(options = null) {
   if (active) return true;
-  const restoreState = options && typeof options === 'object' ? options.restoreState : null;
+  const enterOptions = options && typeof options === 'object' ? options : {};
+  const restoreState = enterOptions.restoreState || null;
   ensureUi();
   enterBeatSwarmThemeOverride(restoreState);
   enterBeatSwarmTempo(restoreState);
@@ -25138,10 +25201,14 @@ export function enterBeatSwarmMode(options = null) {
       persistBeatSwarmState,
     },
   });
+  if (enterOptions.weaponGateIntro === true) {
+    try { weaponGateIntroRuntime.start({ seed: enterOptions.weaponGateSeed || '' }); } catch {}
+  }
   return true;
 }
 export function exitBeatSwarmMode() {
   if (!active) return true;
+  try { weaponGateIntroRuntime.stop(); } catch {}
   perfEnemyRepeatRuntime.enabled = false;
   perfEnemyRepeatRuntime.enemyType = '';
   perfEnemyRepeatRuntime.behavior = 'none';
@@ -25278,6 +25345,7 @@ export const BeatSwarmMode = {
   isSubBoardPlaying: isBeatSwarmSubBoardPlaying,
   toggleSubBoardPlayback: toggleBeatSwarmSubBoardPlayback,
   getSubBoardPendingDrawgridState: getWeaponSubBoardPendingDrawgridState,
+  applyWeaponGateSelectionsToWeapon,
   getPlayerMusicTheme,
   getPlayerMusicThemes,
   setPlayerMusicTheme,

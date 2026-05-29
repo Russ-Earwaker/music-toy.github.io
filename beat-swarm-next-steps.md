@@ -1,6 +1,6 @@
 # Beat Swarm - Next Steps
 
-## Current Status - 2026-05-25
+## Current Status - 2026-05-29
 
 Beat Swarm has moved from director-only music into player-authored musical DNA that the director interprets at runtime.
 
@@ -23,7 +23,9 @@ Confirmed baseline:
 - player theme boards exist and use the normal Rhythmake toy behavior
 - generated theme defaults are audible in the theme editors
 - player motifs are now feeding the runtime score
-- peak, release, and settle are being tuned around player motif recognition
+- peak, release, and settle are acceptable for now and should return later for a polish pass
+- composition pacing now has an explicit flow through low, medium, build, peak, release, and settle
+- gameplay/enemy pressure is being aligned to director pacing instead of letting enemies drive the score
 
 The current baseline direction is:
 
@@ -266,6 +268,73 @@ Current priority tests:
 3. Listen: Peak -> Release -> Settle
 4. Full intensity flow once individual states are acceptable
 
+## Active Prototype - Weapon Gate Onboarding Lab
+
+New prototype goal:
+
+> Build a standalone side-on corridor lab where the player authors a 16-slot weapon tune by flying through unavoidable musical gates.
+
+This is not part of the main Beat Swarm sequence yet. It is a test lab for whether weapon tune authoring can be taught through movement and immediate feedback instead of only through the pause-board editor.
+
+Core loop:
+
+- player flies horizontally through a corridor
+- top and bottom barriers bounce the player vertically and add strong forward boost
+- 16 vertical gates appear in order, mapped to the weapon tune chain:
+  - Toy 1, slots 1-8
+  - Toy 2, slots 1-8
+- each gate spans the playable height and is split into vertical selectable sections
+- each section is either a pentatonic note choice or Damage Up
+- the player cannot avoid gates; passing through a section assigns that slot
+- note choices store a note and fire one preview projectile into a small target
+- Damage Up stores a disabled/silent slot and gives clear non-note feedback
+- after 16 gates, log/show the completed tune chain
+
+Design intent:
+
+- teach that weapon rhythm/tune slots are authored one decision at a time
+- make silence feel like a deliberate power tradeoff, not a missing note
+- confirm note selections with immediate audio/impact feedback
+- avoid implying this is the final weapon firing pattern; preview shots only confirm the selected note
+
+Prototype files:
+
+- `src/beat-swarm/weapon-gate-lab.js`
+- `src/beat-swarm/weapon-gate-lab-gates.js`
+- `src/beat-swarm/weapon-gate-lab-ratio.js`
+- `src/beat-swarm/weapon-gate-lab-render.js`
+
+Generation rules:
+
+- use ratio-based gate generation instead of a fixed authored gate sequence
+- track target silence count, selected notes/silences, remaining slots, note streak, and silence streak
+- avoid too many notes or silences in a row
+- force note gates when silence count is too high
+- increase Damage Up chance when notes are over target
+- never allow the system to paint itself into a corner where it must create an ugly forced silence chain
+
+Debug controls:
+
+- restart lab
+- generate with seed
+- set target silence count
+- set max silence streak
+- slow motion / normal speed
+- print gate decisions to console
+
+Acceptance criteria:
+
+- lab launches independently from main Beat Swarm
+- player is forced through 16 gates
+- each gate assigns exactly one slot in order
+- note sections store notes
+- Damage Up sections store disabled/silent slots
+- note selections fire one preview projectile into a spawned target
+- Damage Up selections give clear feedback without firing a note projectile
+- completed 16-slot chain is logged clearly
+- generated gates stay close to target note/silence ratio
+- max silence streak is respected unless explicitly overridden by debug settings
+
 ## Hold For Later
 
 Do not actively expand these areas while tuning motif transformation:
@@ -279,4 +348,3 @@ Do not actively expand these areas while tuning motif transformation:
 - framerate work, unless a new performance issue is reported
 - deeper Power Theme behavior
 - boss/special set-piece variation
-
