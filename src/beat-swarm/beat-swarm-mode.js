@@ -212,6 +212,14 @@ const perfLabRuntime = {
   autoMovePhase: 0,
   autoMoveMagnitude: 0.82,
 };
+const weaponGateCurrentRuntime = {
+  charge: 0,
+  wasFighting: false,
+  pushN: 0,
+  releaseAngleDeg: 0,
+  releaseVx: 0,
+  releaseVy: 0,
+};
 const beatSwarmFramePressureRuntime = {
   degradedUntilMs: 0,
   severeUntilMs: 0,
@@ -657,12 +665,23 @@ const playerInstrumentRuntime = createBeatSwarmPlayerInstrumentRuntime({
   customPatternEnabled: false,
   customPattern: [1, 0, 0, 1, 0, 0, 1, 0],
 });
+const PLAYER_WEAPON_SOUND_MIX_MULT = 0.52;
 const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
   getOverlayEl: () => overlayEl,
   triggerInstrument: triggerBeatSwarmInstrument,
+  triggerWeaponNote(noteName = 'C4', source = 'weapon-gate-intro') {
+    triggerBeatSwarmInstrument(
+      BEAT_SWARM_THEME_PRESET.gameplay.playerWeapon,
+      noteName,
+      undefined,
+      'master',
+      { source, sourceSystem: 'player', actionType: 'player-weapon-step' },
+      PLAYER_WEAPON_SOUND_MIX_MULT
+    );
+    pulsePlayerShipNoteFlash();
+  },
   applySelections: applyWeaponGateSelectionsToWeapon,
 });
-const PLAYER_WEAPON_SOUND_MIX_MULT = 0.52;
 const composerEnemyGroups = [];
 let composerEnemyGroupIdSeq = 1;
 const singletonEnemyMusicGroups = new Map();
@@ -24420,6 +24439,12 @@ function updateArenaVisual(scale = 1, showLimit = false) {
     helpers: { worldToScreen },
   });
 }
+function setArenaIntroBlend(blend01 = 1) {
+  const blend = Math.max(0, Math.min(1, Number(blend01) || 0));
+  if (arenaRingEl) arenaRingEl.style.opacity = `${blend.toFixed(3)}`;
+  if (arenaCoreEl) arenaCoreEl.style.opacity = `${blend.toFixed(3)}`;
+  if (arenaLimitEl) arenaLimitEl.style.opacity = '0';
+}
 function setResistanceVisual(visible, angleDeg = 0, strength = 0) {
   setResistanceVisualRuntime({
     resistanceEl,
@@ -24703,10 +24728,74 @@ function tick(nowMs) {
     clearPickups();
     clearProjectiles();
     clearEffects();
-    try { weaponGateIntroRuntime.update(dt, input); } catch {}
-    try { applyCameraDelta(220 * dt, 0); } catch {}
-    try { updateArenaVisual(scale, false); } catch {}
-    withBeatSwarmPerfSample('shipFacing', () => updateShipFacing(dt, 1, 0, 90));
+    const inputX = Number(input?.x) || 0;
+    const inputY = Number(input?.y) || 0;
+    const inputMag = Math.min(1, Math.hypot(inputX, inputY));
+    const currentFight = Math.max(0, -inputX);
+    const fightingCurrent = currentFight > 0.18 && inputMag > 0.2;
+    if (fightingCurrent) {
+      const counterForce = weaponGateCurrentRuntime.pushN * weaponGateCurrentRuntime.pushN * 1.65;
+      weaponGateCurrentRuntime.pushN = clamp01(weaponGateCurrentRuntime.pushN + ((currentFight * 1.15) - counterForce) * dt);
+      const releaseN = Math.max(weaponGateCurrentRuntime.pushN, currentFight * 0.25);
+      weaponGateCurrentRuntime.charge = Math.min(1, weaponGateCurrentRuntime.charge + dt * (0.3 + releaseN * 0.8 + currentFight * 0.7));
+      weaponGateCurrentRuntime.wasFighting = true;
+      weaponGateCurrentRuntime.releaseAngleDeg = Math.atan2(-inputY, -inputX) * 180 / Math.PI;
+      releaseBeatLevel = Math.max(1, Math.ceil(weaponGateCurrentRuntime.charge * SWARM_RELEASE_BEAT_LEVEL_MAX));
+      releaseForcePrimed = weaponGateCurrentRuntime.charge >= 0.55;
+      const resistanceAngle = (Math.atan2(inputY, inputX) * 180 / Math.PI) + 90;
+      const releaseImpulse = getReactiveReleaseImpulse(releaseN, weaponGateCurrentRuntime.charge);
+      setResistanceVisual(true, resistanceAngle, releaseN * currentFight * 0.8);
+      setReactiveArrowVisual(true, weaponGateCurrentRuntime.releaseAngleDeg, releaseImpulse);
+    } else if (weaponGateCurrentRuntime.wasFighting) {
+      const charge = Math.max(0, Math.min(1, Number(weaponGateCurrentRuntime.charge) || 0));
+      const releaseN = Math.max(weaponGateCurrentRuntime.pushN, charge * 0.35);
+      if (charge > 0.18) {
+        const impulse = getReactiveReleaseImpulse(releaseN, charge);
+        const releaseRad = weaponGateCurrentRuntime.releaseAngleDeg * Math.PI / 180;
+        weaponGateCurrentRuntime.releaseVx += Math.cos(releaseRad) * impulse * 0.36;
+        weaponGateCurrentRuntime.releaseVy += Math.sin(releaseRad) * impulse * 0.36;
+        lastLaunchBeatLevel = Math.max(lastLaunchBeatLevel, Math.ceil(charge * SWARM_RELEASE_BEAT_LEVEL_MAX));
+        postReleaseAssistTimer = Math.max(postReleaseAssistTimer, 0.35 + charge * 0.35);
+        pulseReactiveArrowCharge();
+      }
+      weaponGateCurrentRuntime.charge = 0;
+      weaponGateCurrentRuntime.wasFighting = false;
+      weaponGateCurrentRuntime.pushN = 0;
+      releaseForcePrimed = false;
+      releaseBeatLevel = 0;
+      setResistanceVisual(false);
+      setReactiveArrowVisual(false);
+    } else {
+      weaponGateCurrentRuntime.charge = Math.max(0, weaponGateCurrentRuntime.charge - dt * 1.4);
+      weaponGateCurrentRuntime.pushN = Math.max(0, weaponGateCurrentRuntime.pushN - dt * 1.2);
+      releaseForcePrimed = false;
+      releaseBeatLevel = 0;
+    }
+    const releaseDx = weaponGateCurrentRuntime.releaseVx * dt;
+    const releaseDy = weaponGateCurrentRuntime.releaseVy * dt;
+    weaponGateCurrentRuntime.releaseVx *= Math.max(0, 1 - dt * 3.2);
+    weaponGateCurrentRuntime.releaseVy *= Math.max(0, 1 - dt * 3.2);
+    const resistanceSlow = weaponGateCurrentRuntime.pushN * (150 + currentFight * 55);
+    const currentDx = Math.max(38, 220 - resistanceSlow) * dt;
+    const clampedReleaseDx = Math.max(-currentDx * 0.65, Math.min(currentDx * 3.6, releaseDx));
+    const releaseScale = Math.abs(releaseDx) > 0.001 ? clampedReleaseDx / releaseDx : 0;
+    const introForwardDelta = currentDx + clampedReleaseDx;
+    const introSideDelta = inputY * 120 * dt + (releaseDy * releaseScale);
+    let appliedIntroSideDelta = introSideDelta;
+    try {
+      const introMove = weaponGateIntroRuntime.update(dt, input, { forwardDelta: introForwardDelta, sideDelta: introSideDelta });
+      if (introMove && typeof introMove === 'object') {
+        appliedIntroSideDelta = Number(introMove.sideDelta) || 0;
+        if (introMove.reflectedY) weaponGateCurrentRuntime.releaseVy *= -0.78;
+      }
+    } catch {}
+    try { applyCameraDelta(introForwardDelta, appliedIntroSideDelta); } catch {}
+    try {
+      updateArenaVisual(scale, false);
+      setArenaIntroBlend(weaponGateIntroRuntime.getArenaBlend());
+      updateStarfieldVisual();
+    } catch {}
+    withBeatSwarmPerfSample('shipFacing', () => updateShipFacing(dt, input.x, input.y));
     rafId = requestAnimationFrame(tick);
     return;
   }
@@ -25022,6 +25111,14 @@ export function enterBeatSwarmMode(options = null) {
   perfLabRuntime.autoMoveEnabled = false;
   perfLabRuntime.autoMoveMagnitude = 0.82;
   perfLabRuntime.autoMovePhase = Math.random() * Math.PI * 2;
+  weaponGateCurrentRuntime.charge = 0;
+  weaponGateCurrentRuntime.wasFighting = false;
+  weaponGateCurrentRuntime.pushN = 0;
+  weaponGateCurrentRuntime.releaseAngleDeg = 0;
+  weaponGateCurrentRuntime.releaseVx = 0;
+  weaponGateCurrentRuntime.releaseVy = 0;
+  releaseForcePrimed = false;
+  releaseBeatLevel = 0;
   perfEnemyRepeatRuntime.enabled = false;
   perfEnemyRepeatRuntime.enemyType = '';
   perfEnemyRepeatRuntime.behavior = 'none';

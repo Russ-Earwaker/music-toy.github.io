@@ -1,13 +1,10 @@
 import { createSeededRng, createWeaponGateRatioState, decideGateType, applyWeaponGateSelection } from './weapon-gate-lab-ratio.js';
 import { createWeaponGate, summarizeWeaponGateSelection } from './weapon-gate-lab-gates.js';
-
 const NOTE_POOL = Object.freeze(['C4', 'D#4', 'F4', 'G4', 'A#4']);
 const TOTAL_SLOTS = 16;
-
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, Number(v) || 0));
 }
-
 function hashSeed(seed) {
   const s = String(seed || '1');
   let h = 2166136261;
@@ -21,7 +18,7 @@ function ensureStyle() {
   style.id = 'beat-swarm-weapon-gate-intro-style';
   style.textContent = `
     .beat-swarm-weapon-gate-intro{position:fixed;inset:0;z-index:3;pointer-events:none;overflow:hidden}
-    .beat-swarm-weapon-gate-corridor{position:absolute;left:0;right:0;border-top:4px solid rgba(100,216,255,.8);border-bottom:4px solid rgba(100,216,255,.8);background:rgba(10,29,43,.36);box-shadow:inset 0 0 42px rgba(76,205,255,.1)}
+    .beat-swarm-weapon-gate-corridor{position:absolute;width:100vw;border-top:4px solid rgba(100,216,255,.8);border-bottom:4px solid rgba(100,216,255,.8);background:rgba(10,29,43,.36);box-shadow:inset 0 0 42px rgba(76,205,255,.1)}
     .beat-swarm-weapon-gate-wall-pulse{position:absolute;left:0;right:0;height:8px;margin-top:-4px;background:#fff59b;box-shadow:0 0 26px #fff59b}
     .beat-swarm-weapon-gate{position:absolute;width:64px;border:2px solid rgba(142,232,255,.86);box-shadow:0 0 18px rgba(100,216,255,.22)}
     .beat-swarm-weapon-gate.is-next{border-color:#fff59b;box-shadow:0 0 26px rgba(255,245,155,.5)}
@@ -40,10 +37,8 @@ function ensureStyle() {
   `;
   document.head.appendChild(style);
 }
-
 export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   let state = null;
-
   function getLayer() {
     const overlay = deps.getOverlayEl?.();
     if (!(overlay instanceof HTMLElement)) return null;
@@ -55,7 +50,6 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     }
     return layer;
   }
-
   function appendNextGate() {
     const slotIndex = state.gates.length;
     if (slotIndex >= TOTAL_SLOTS) return;
@@ -91,6 +85,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       wallPulseY: 0,
       phase: 'gate',
       completeDelay: 0,
+      outroDuration: 5.0,
     };
     appendNextGate();
     render();
@@ -98,20 +93,6 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   }
 
   function stop() {
-    const ship = deps.getOverlayEl?.()?.querySelector?.('.beat-swarm-ship-wrap');
-    if (ship instanceof HTMLElement) {
-      ship.style.transition = 'top 420ms ease';
-      ship.style.left = '50%';
-      ship.style.top = '50%';
-      ship.style.transform = 'translate(-50%, -50%)';
-      setTimeout(() => {
-        if (!ship.isConnected) return;
-        ship.style.transition = '';
-        ship.style.left = '';
-        ship.style.top = '';
-        ship.style.transform = '';
-      }, 460);
-    }
     if (state?.layer) {
       const layer = state.layer;
       layer.style.transition = 'opacity 420ms ease';
@@ -132,8 +113,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     if (!gate) return;
     const shipX = window.innerWidth * 0.5;
     if ((gate.x - state.progress) > shipX) return;
-    const top = window.innerHeight * 0.22;
-    const bottom = window.innerHeight * 0.82;
+    const { top, bottom } = getLogicalBounds();
     const rel = clamp((state.y - top) / Math.max(1, bottom - top), 0, 0.999);
     const idx = Math.max(0, Math.min(gate.sections.length - 1, Math.floor(rel * gate.sections.length)));
     const section = gate.sections[idx];
@@ -148,7 +128,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     state.feedbackTtl = 0.58;
     if (selection.kind === 'note') {
       spawnShot(selection.note);
-      try { deps.triggerInstrument?.('retro square', selection.note || 'C4', undefined, 'weapon-gate-intro', { source: 'weapon-gate-intro' }, 0.8); } catch {}
+      triggerWeaponNote(selection.note, 'weapon-gate-intro');
     }
     state.nextGateIndex += 1;
     if (state.nextGateIndex >= TOTAL_SLOTS) finish();
@@ -157,7 +137,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
 
   function finish() {
     state.phase = 'motif';
-    state.completeDelay = 4.1;
+    state.completeDelay = state.outroDuration;
     state.motifStep = 0;
     state.motifTimer = 0.2;
     state.feedbackKind = 'complete';
@@ -166,44 +146,56 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     try { deps.applySelections?.(0, state.selections); } catch {}
   }
 
-  function update(dt, input = null) {
+  function update(dt, input = null, options = null) {
     if (!state) return false;
+    const forwardDelta = Math.max(0, Number(options?.forwardDelta) || 0);
+    const sideDelta = Number(options?.sideDelta) || 0;
+    let appliedSideDelta = sideDelta;
+    let reflectedY = false;
     state.feedbackTtl = Math.max(0, state.feedbackTtl - dt);
     state.wallPulseTtl = Math.max(0, state.wallPulseTtl - dt);
     updateShots(dt);
     if (state.phase === 'motif') {
       state.speed = Math.min(760, state.speed + 24 * dt);
-      state.progress += state.speed * dt;
+      state.progress += forwardDelta || (state.speed * dt);
+      state.y += sideDelta;
+      state.y += ((window.innerHeight * 0.5) - state.y) * Math.min(1, dt * 1.65);
       updateMotifPreview(dt);
       state.completeDelay -= dt;
-      moveShip();
       render();
       if (state.completeDelay <= 0) {
         stop();
         try { deps.onComplete?.(); } catch {}
       }
-      return true;
+      return { active: true, sideDelta: appliedSideDelta, reflectedY };
     }
-    const top = window.innerHeight * 0.22;
-    const bottom = window.innerHeight * 0.82;
+    const { top, bottom } = getLogicalBounds();
     state.speed = Math.min(700, state.speed + 16 * dt);
-    state.progress += state.speed * dt;
+    state.progress += forwardDelta || (state.speed * dt);
     state.vy += clamp(Number(input?.y) || 0, -1, 1) * 1400 * dt;
     state.vy *= Math.pow(0.05, dt);
-    state.y += state.vy * dt;
-    if (state.y < top + 20) bounce(top + 20, 1);
-    if (state.y > bottom - 20) bounce(bottom - 20, -1);
-    moveShip();
+    state.y += (state.vy * dt) + sideDelta;
+    if (state.y < top + 20) {
+      if (sideDelta < 0) appliedSideDelta = Math.abs(sideDelta) * 0.78;
+      reflectedY = true;
+      bounce(top + 20, 1);
+    }
+    if (state.y > bottom - 20) {
+      if (sideDelta > 0) appliedSideDelta = -Math.abs(sideDelta) * 0.78;
+      reflectedY = true;
+      bounce(bottom - 20, -1);
+    }
     chooseCurrentGate();
     render();
-    return true;
+    return { active: true, sideDelta: appliedSideDelta, reflectedY };
   }
 
   function spawnShot(note) {
     const shipX = window.innerWidth * 0.5;
-    const target = { x: shipX + 250, y: state.y, ttl: 0.95, hit: false };
+    const shipY = window.innerHeight * 0.5;
+    const target = { x: shipX + 250, y: shipY, ttl: 0.95, hit: false };
     state.targets.push(target);
-    state.shots.push({ x: shipX + 26, y: state.y, vx: 780, note, ttl: 0.95, target });
+    state.shots.push({ x: shipX + 26, y: shipY, vx: 780, note, ttl: 0.95, target });
   }
 
   function updateShots(dt) {
@@ -226,48 +218,56 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       const sel = state.selections[state.motifStep] || null;
       if (sel?.kind === 'note') {
         spawnShot(sel.note);
-        try { deps.triggerInstrument?.('retro square', sel.note || 'C4', undefined, 'weapon-gate-intro', { source: 'weapon-gate-motif-preview' }, 0.82); } catch {}
+        triggerWeaponNote(sel.note, 'weapon-gate-motif-preview');
       }
       state.motifStep += 1;
       state.motifTimer += 0.2;
     }
   }
 
+  function triggerWeaponNote(note, source) {
+    try {
+      if (typeof deps.triggerWeaponNote === 'function') deps.triggerWeaponNote(note || 'C4', source);
+      else deps.triggerInstrument?.('LASER', note || 'C4', undefined, 'weapon-gate-intro', { source }, 0.85);
+    } catch {}
+  }
   function bounce(y, dir) {
     state.y = y;
-    state.vy = dir * Math.max(380, Math.abs(state.vy) * 0.9);
+    state.vy = dir * Math.max(460, Math.abs(state.vy) * 0.9);
     state.speed = Math.min(740, state.speed + 80);
     state.wallPulseTtl = 0.25;
-    state.wallPulseY = y;
+    const bounds = getCorridorBounds();
+    state.wallPulseY = dir > 0 ? bounds.top : bounds.bottom;
   }
 
-  function moveShip() {
-    const ship = deps.getOverlayEl?.()?.querySelector?.('.beat-swarm-ship-wrap');
-    if (!(ship instanceof HTMLElement)) return;
-    ship.style.transition = 'none';
-    ship.style.left = '50%';
-    ship.style.top = `${state.y.toFixed(1)}px`;
-    ship.style.transform = 'translate(-50%, -50%)';
+  function getCorridorBounds() {
+    const { top: baseTop, bottom: baseBottom } = getLogicalBounds();
+    const offset = (window.innerHeight * 0.5) - state.y;
+    return { top: baseTop + offset, bottom: baseBottom + offset };
+  }
+  function getLogicalBounds() {
+    return { top: window.innerHeight * 0.22, bottom: window.innerHeight * 0.82 };
   }
 
   function render() {
     if (!state?.layer) return;
-    const top = window.innerHeight * 0.22;
-    const bottom = window.innerHeight * 0.82;
+    const { top, bottom } = getCorridorBounds();
     const h = bottom - top;
+    const outroT = state.phase === 'motif' ? Math.max(0, state.outroDuration - state.completeDelay) : 0;
+    const corridorX = state.phase === 'motif' ? -Math.min(window.innerWidth + 180, outroT * 360) : 0;
+    const corridorOpacity = state.phase === 'motif' ? Math.max(0, 1 - Math.max(0, outroT - 2.2) / 1.8) : 1;
     const gateHtml = state.gates.map((gate) => renderGate(gate, gate.x - state.progress, top, h)).join('');
     const pulse = state.wallPulseTtl > 0 ? `<div class="beat-swarm-weapon-gate-wall-pulse" style="top:${state.wallPulseY}px;opacity:${Math.min(1, state.wallPulseTtl / 0.25).toFixed(2)}"></div>` : '';
     const targetHtml = state.targets.map((target) => `<div class="beat-swarm-weapon-gate-target${target.hit ? ' is-hit' : ''}" style="left:${target.x}px;top:${target.y}px;opacity:${Math.min(1, target.ttl * 2).toFixed(2)}"></div>`).join('');
     const shotHtml = state.shots.map((shot) => `<div class="beat-swarm-weapon-gate-shot" style="left:${shot.x}px;top:${shot.y}px"></div>`).join('');
     const impactClass = state.feedbackKind === 'damage' ? ' is-damage' : '';
     state.layer.innerHTML = `
-      <div class="beat-swarm-weapon-gate-corridor" style="top:${top}px;height:${h}px"></div>
+      <div class="beat-swarm-weapon-gate-corridor" style="left:${corridorX}px;top:${top}px;height:${h}px;opacity:${corridorOpacity.toFixed(2)}"></div>
       ${pulse}${gateHtml}${targetHtml}${shotHtml}
       <div class="beat-swarm-weapon-gate-hud">Gate ${Math.min(state.nextGateIndex + 1, TOTAL_SLOTS)}/${TOTAL_SLOTS}<br>Notes ${state.ratioState.selectedNotes}/${state.ratioState.targetNotes} Silence ${state.ratioState.selectedSilences}/${state.ratioState.targetSilences}<br>${state.summary.join(' ')}</div>
       ${state.feedbackTtl > 0 ? `<div class="beat-swarm-weapon-gate-impact${impactClass}">${state.feedbackText}</div>` : ''}
     `;
   }
-
   function renderGate(gate, x, top, h) {
     if (x < -100 || x > window.innerWidth + 140) return '';
     const sectionH = h / gate.sections.length;
@@ -287,5 +287,9 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     update,
     isActive: () => !!state,
     getState: () => state,
+    getArenaBlend: () => {
+      if (!state || state.phase !== 'motif') return 0;
+      return clamp((state.outroDuration - state.completeDelay) / 2.2, 0, 1);
+    },
   };
 }
