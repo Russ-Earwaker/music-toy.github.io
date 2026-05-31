@@ -34,6 +34,7 @@ function ensureStyle() {
     .beat-swarm-weapon-gate-target{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:#ff8ec7;border:2px solid #fff;box-shadow:0 0 22px rgba(255,142,199,.75)}
     .beat-swarm-weapon-gate-target.is-hit{background:#fff59b;box-shadow:0 0 30px rgba(255,245,155,.95);transform:scale(1.35)}
     .beat-swarm-weapon-gate-shot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#7df8ff;box-shadow:0 0 18px rgba(125,248,255,.9)}
+    .beat-swarm-weapon-note-map{position:absolute;inset:0;overflow:visible}.beat-swarm-weapon-note-line{stroke:rgba(170,232,255,.34);stroke-width:1.5;filter:drop-shadow(0 0 4px rgba(170,232,255,.35))}.beat-swarm-weapon-note-star{position:absolute;border-radius:50%;background:#d9f7ff;box-shadow:0 0 12px rgba(170,232,255,.72),0 0 26px rgba(170,232,255,.32)}
   `;
   document.head.appendChild(style);
 }
@@ -76,6 +77,9 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       vy: 0,
       shots: [],
       targets: [],
+      noteStars: [],
+      noteStarPulseT: 0,
+      noteStarPulseSlot: -1,
       motifStep: 0,
       motifTimer: 0.35,
       feedbackText: 'Shape your weapon rhythm',
@@ -127,6 +131,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     state.feedbackText = selection.kind === 'damage' ? `Damage Up: slot ${selection.slotIndex + 1} silent` : `${selection.note} selected`;
     state.feedbackTtl = 0.58;
     if (selection.kind === 'note') {
+      addNoteStar(selection);
       spawnShot(selection.note);
       triggerWeaponNote(selection.note, 'weapon-gate-intro');
     }
@@ -154,7 +159,9 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     let reflectedY = false;
     state.feedbackTtl = Math.max(0, state.feedbackTtl - dt);
     state.wallPulseTtl = Math.max(0, state.wallPulseTtl - dt);
+    state.noteStarPulseT = Math.max(0, (Number(state.noteStarPulseT) || 0) - dt);
     updateShots(dt);
+    for (const star of state.noteStars) star.age = (Number(star.age) || 0) + dt;
     if (state.phase === 'motif') {
       state.speed = Math.min(760, state.speed + 24 * dt);
       state.progress += forwardDelta || (state.speed * dt);
@@ -217,12 +224,20 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     while (state.motifTimer <= 0 && state.motifStep < TOTAL_SLOTS) {
       const sel = state.selections[state.motifStep] || null;
       if (sel?.kind === 'note') {
+        state.noteStarPulseT = 0.18;
+        state.noteStarPulseSlot = state.motifStep;
         spawnShot(sel.note);
         triggerWeaponNote(sel.note, 'weapon-gate-motif-preview');
       }
       state.motifStep += 1;
       state.motifTimer += 0.2;
     }
+  }
+
+  function addNoteStar(selection) {
+    const slot = Math.max(0, Math.min(TOTAL_SLOTS - 1, Number(selection?.slotIndex) || 0));
+    const noteIndex = Math.max(0, NOTE_POOL.indexOf(selection?.note || 'C4'));
+    state.noteStars.push({ x: window.innerWidth * (0.14 + (slot / Math.max(1, TOTAL_SLOTS - 1)) * 0.72), y: window.innerHeight * (0.24 + ((NOTE_POOL.length - 1 - noteIndex) / Math.max(1, NOTE_POOL.length - 1)) * 0.52), note: selection.note || '', slot, age: 0 });
   }
 
   function triggerWeaponNote(note, source) {
@@ -241,13 +256,10 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   }
 
   function getCorridorBounds() {
-    const { top: baseTop, bottom: baseBottom } = getLogicalBounds();
-    const offset = (window.innerHeight * 0.5) - state.y;
-    return { top: baseTop + offset, bottom: baseBottom + offset };
+    const b = getLogicalBounds(), offset = (window.innerHeight * 0.5) - state.y;
+    return { top: b.top + offset, bottom: b.bottom + offset };
   }
-  function getLogicalBounds() {
-    return { top: window.innerHeight * 0.22, bottom: window.innerHeight * 0.82 };
-  }
+  function getLogicalBounds() { return { top: window.innerHeight / 3, bottom: window.innerHeight * 2 / 3 }; }
 
   function render() {
     if (!state?.layer) return;
@@ -260,13 +272,28 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     const pulse = state.wallPulseTtl > 0 ? `<div class="beat-swarm-weapon-gate-wall-pulse" style="top:${state.wallPulseY}px;opacity:${Math.min(1, state.wallPulseTtl / 0.25).toFixed(2)}"></div>` : '';
     const targetHtml = state.targets.map((target) => `<div class="beat-swarm-weapon-gate-target${target.hit ? ' is-hit' : ''}" style="left:${target.x}px;top:${target.y}px;opacity:${Math.min(1, target.ttl * 2).toFixed(2)}"></div>`).join('');
     const shotHtml = state.shots.map((shot) => `<div class="beat-swarm-weapon-gate-shot" style="left:${shot.x}px;top:${shot.y}px"></div>`).join('');
+    const noteMapHtml = renderNoteMap();
     const impactClass = state.feedbackKind === 'damage' ? ' is-damage' : '';
     state.layer.innerHTML = `
       <div class="beat-swarm-weapon-gate-corridor" style="left:${corridorX}px;top:${top}px;height:${h}px;opacity:${corridorOpacity.toFixed(2)}"></div>
-      ${pulse}${gateHtml}${targetHtml}${shotHtml}
+      ${noteMapHtml}${pulse}${gateHtml}${targetHtml}${shotHtml}
       <div class="beat-swarm-weapon-gate-hud">Gate ${Math.min(state.nextGateIndex + 1, TOTAL_SLOTS)}/${TOTAL_SLOTS}<br>Notes ${state.ratioState.selectedNotes}/${state.ratioState.targetNotes} Silence ${state.ratioState.selectedSilences}/${state.ratioState.targetSilences}<br>${state.summary.join(' ')}</div>
       ${state.feedbackTtl > 0 ? `<div class="beat-swarm-weapon-gate-impact${impactClass}">${state.feedbackText}</div>` : ''}
     `;
+  }
+  function renderNoteMap() {
+    const stars = state.noteStars;
+    if (!stars.length) return '';
+    const endProgress = 760 + ((TOTAL_SLOTS - 1) * 690) - (window.innerWidth * 0.5);
+    const completion = Math.max(0, Math.min(1, (state.progress + 520) / Math.max(1, endProgress + 520)));
+    const ox = window.innerWidth * 0.24 * (1 - completion), oy = ((window.innerHeight * 0.5) - state.y) * 0.08;
+    const pulse = Math.max(0, Math.min(1, (Number(state.noteStarPulseT) || 0) / 0.18));
+    const lines = stars.slice(1).map((star, i) => {
+      const prev = stars[i];
+      return `<line class="beat-swarm-weapon-note-line" x1="${(prev.x + ox).toFixed(1)}" y1="${(prev.y + oy).toFixed(1)}" x2="${(star.x + ox).toFixed(1)}" y2="${(star.y + oy).toFixed(1)}"></line>`;
+    }).join('');
+    const dots = stars.map((star) => { const flash = Math.max(0, 1 - (Number(star.age) || 0) / 0.55), stepPulse = star.slot === state.noteStarPulseSlot ? pulse : 0, glow = Math.max(flash, stepPulse), size = 12 + glow * 10; return `<div class="beat-swarm-weapon-note-star" title="${star.note}" style="left:${(star.x + ox).toFixed(1)}px;top:${(star.y + oy).toFixed(1)}px;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;margin:${(-size / 2).toFixed(1)}px 0 0 ${(-size / 2).toFixed(1)}px;opacity:${(0.58 + glow * 0.36).toFixed(2)}"></div>`; }).join('');
+    return `<svg class="beat-swarm-weapon-note-map" aria-hidden="true">${lines}</svg>${dots}`;
   }
   function renderGate(gate, x, top, h) {
     if (x < -100 || x > window.innerWidth + 140) return '';
