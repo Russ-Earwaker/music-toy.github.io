@@ -35,6 +35,7 @@ function ensureStyle() {
     .beat-swarm-weapon-gate-target.is-hit{background:#fff59b;box-shadow:0 0 30px rgba(255,245,155,.95);transform:scale(1.35)}
     .beat-swarm-weapon-gate-shot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#7df8ff;box-shadow:0 0 18px rgba(125,248,255,.9)}
     .beat-swarm-weapon-note-map{position:absolute;inset:0;overflow:visible}.beat-swarm-weapon-note-line{stroke:rgba(170,232,255,.34);stroke-width:1.5;filter:drop-shadow(0 0 4px rgba(170,232,255,.35))}.beat-swarm-weapon-note-star{position:absolute;border-radius:50%;background:#d9f7ff;box-shadow:0 0 12px rgba(170,232,255,.72),0 0 26px rgba(170,232,255,.32)}
+    .beat-swarm-weapon-dash-pickup{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:#b7f4ff;box-shadow:0 0 18px rgba(183,244,255,.9),0 0 34px rgba(183,244,255,.45)}
   `;
   document.head.appendChild(style);
 }
@@ -77,6 +78,8 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       vy: 0,
       shots: [],
       targets: [],
+      dashPickup: null,
+      dashPickupCooldown: 0.9,
       noteStars: [],
       noteStarPulseT: 0,
       noteStarPulseSlot: -1,
@@ -161,6 +164,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     state.wallPulseTtl = Math.max(0, state.wallPulseTtl - dt);
     state.noteStarPulseT = Math.max(0, (Number(state.noteStarPulseT) || 0) - dt);
     updateShots(dt);
+    const pickupDash = updateDashPickup(dt, input);
     for (const star of state.noteStars) star.age = (Number(star.age) || 0) + dt;
     if (state.phase === 'motif') {
       state.speed = Math.min(760, state.speed + 24 * dt);
@@ -174,7 +178,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
         stop();
         try { deps.onComplete?.(); } catch {}
       }
-      return { active: true, sideDelta: appliedSideDelta, reflectedY };
+      return { active: true, sideDelta: appliedSideDelta, reflectedY, pickupDash };
     }
     const { top, bottom } = getLogicalBounds();
     state.speed = Math.min(700, state.speed + 16 * dt);
@@ -194,7 +198,31 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     }
     chooseCurrentGate();
     render();
-    return { active: true, sideDelta: appliedSideDelta, reflectedY };
+    return { active: true, sideDelta: appliedSideDelta, reflectedY, pickupDash };
+  }
+
+  function updateDashPickup(dt, input = null) {
+    if (state.phase !== 'gate') return null;
+    state.dashPickupCooldown = Math.max(0, (Number(state.dashPickupCooldown) || 0) - dt);
+    if (!state.dashPickup && state.dashPickupCooldown <= 0) {
+      state.dashPickup = { x: state.progress + window.innerWidth + 180, y: state.y };
+    }
+    const p = state.dashPickup;
+    if (!p) return null;
+    const sx = p.x - state.progress, sy = p.y + ((window.innerHeight * 0.5) - state.y);
+    const shipX = window.innerWidth * 0.5, shipY = window.innerHeight * 0.5;
+    if (sx < -40) {
+      state.dashPickup = null;
+      state.dashPickupCooldown = 1.25;
+      return null;
+    }
+    if (Math.hypot(sx - shipX, sy - shipY) > 34) return null;
+    state.dashPickup = null;
+    state.dashPickupCooldown = 1.8;
+    const ix = Number(input?.x) || 0, iy = Number(input?.y) || 0, mag = Math.hypot(ix, iy);
+    if (mag > 0.2) return { x: ix / mag, y: iy / mag, power: 760 };
+    const angle = (state.rng() < 0.5 ? -1 : 1) * ((Math.PI / 8) + (state.rng() * Math.PI / 8));
+    return { x: Math.cos(angle), y: Math.sin(angle), power: 760 };
   }
 
   function spawnShot(note) {
@@ -272,14 +300,21 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     const pulse = state.wallPulseTtl > 0 ? `<div class="beat-swarm-weapon-gate-wall-pulse" style="top:${state.wallPulseY}px;opacity:${Math.min(1, state.wallPulseTtl / 0.25).toFixed(2)}"></div>` : '';
     const targetHtml = state.targets.map((target) => `<div class="beat-swarm-weapon-gate-target${target.hit ? ' is-hit' : ''}" style="left:${target.x}px;top:${target.y}px;opacity:${Math.min(1, target.ttl * 2).toFixed(2)}"></div>`).join('');
     const shotHtml = state.shots.map((shot) => `<div class="beat-swarm-weapon-gate-shot" style="left:${shot.x}px;top:${shot.y}px"></div>`).join('');
+    const pickupHtml = renderDashPickup();
     const noteMapHtml = renderNoteMap();
     const impactClass = state.feedbackKind === 'damage' ? ' is-damage' : '';
     state.layer.innerHTML = `
       <div class="beat-swarm-weapon-gate-corridor" style="left:${corridorX}px;top:${top}px;height:${h}px;opacity:${corridorOpacity.toFixed(2)}"></div>
-      ${noteMapHtml}${pulse}${gateHtml}${targetHtml}${shotHtml}
+      ${noteMapHtml}${pulse}${gateHtml}${pickupHtml}${targetHtml}${shotHtml}
       <div class="beat-swarm-weapon-gate-hud">Gate ${Math.min(state.nextGateIndex + 1, TOTAL_SLOTS)}/${TOTAL_SLOTS}<br>Notes ${state.ratioState.selectedNotes}/${state.ratioState.targetNotes} Silence ${state.ratioState.selectedSilences}/${state.ratioState.targetSilences}<br>${state.summary.join(' ')}</div>
       ${state.feedbackTtl > 0 ? `<div class="beat-swarm-weapon-gate-impact${impactClass}">${state.feedbackText}</div>` : ''}
     `;
+  }
+  function renderDashPickup() {
+    const p = state.dashPickup;
+    if (!p) return '';
+    const sx = p.x - state.progress, sy = p.y + ((window.innerHeight * 0.5) - state.y);
+    return `<div class="beat-swarm-weapon-dash-pickup" style="left:${sx.toFixed(1)}px;top:${sy.toFixed(1)}px"></div>`;
   }
   function renderNoteMap() {
     const stars = state.noteStars;

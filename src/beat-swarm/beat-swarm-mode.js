@@ -220,6 +220,7 @@ const weaponGateCurrentRuntime = {
   releaseVx: 0,
   releaseVy: 0,
 };
+const WEAPON_GATE_CORRIDOR_SPEED = 440;
 const beatSwarmFramePressureRuntime = {
   degradedUntilMs: 0,
   severeUntilMs: 0,
@@ -24776,7 +24777,7 @@ function tick(nowMs) {
     weaponGateCurrentRuntime.releaseVx *= Math.max(0, 1 - dt * 3.2);
     weaponGateCurrentRuntime.releaseVy *= Math.max(0, 1 - dt * 3.2);
     const resistanceSlow = weaponGateCurrentRuntime.pushN * (150 + currentFight * 55);
-    const currentDx = Math.max(38, 220 - resistanceSlow) * dt;
+    const currentDx = Math.max(38, WEAPON_GATE_CORRIDOR_SPEED - resistanceSlow) * dt;
     const clampedReleaseDx = Math.max(-currentDx * 0.65, Math.min(currentDx * 3.6, releaseDx));
     const releaseScale = Math.abs(releaseDx) > 0.001 ? clampedReleaseDx / releaseDx : 0;
     const introForwardDelta = currentDx + clampedReleaseDx;
@@ -24787,6 +24788,12 @@ function tick(nowMs) {
       if (introMove && typeof introMove === 'object') {
         appliedIntroSideDelta = Number(introMove.sideDelta) || 0;
         if (introMove.reflectedY) weaponGateCurrentRuntime.releaseVy *= -0.78;
+        if (introMove.pickupDash) {
+          const dashPower = Number(introMove.pickupDash.power) || 0;
+          weaponGateCurrentRuntime.releaseVx += (Number(introMove.pickupDash.x) || 0) * dashPower;
+          weaponGateCurrentRuntime.releaseVy += (Number(introMove.pickupDash.y) || 0) * dashPower;
+          pulseReactiveArrowCharge();
+        }
       }
     } catch {}
     try { applyCameraDelta(introForwardDelta, appliedIntroSideDelta); } catch {}
