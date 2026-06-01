@@ -221,6 +221,10 @@ const weaponGateCurrentRuntime = {
   releaseVy: 0,
 };
 const WEAPON_GATE_CORRIDOR_SPEED = 440;
+const weaponGateMusicRuntime = {
+  lowAfterComplete: false,
+  startBar: 0,
+};
 const beatSwarmFramePressureRuntime = {
   degradedUntilMs: 0,
   severeUntilMs: 0,
@@ -671,17 +675,22 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
   getOverlayEl: () => overlayEl,
   triggerInstrument: triggerBeatSwarmInstrument,
   triggerWeaponNote(noteName = 'C4', source = 'weapon-gate-intro') {
-    triggerBeatSwarmInstrument(
-      BEAT_SWARM_THEME_PRESET.gameplay.playerWeapon,
-      noteName,
-      undefined,
-      'master',
-      { source, sourceSystem: 'player', actionType: 'player-weapon-step' },
-      PLAYER_WEAPON_SOUND_MIX_MULT
-    );
-    pulsePlayerShipNoteFlash();
+    triggerPlayerWeaponGateNote(noteName, source);
+  },
+  getWeaponStepSeconds() {
+    return Math.max(0.05, getGameplayBeatLen() * COMPOSER_BEATS_PER_BAR / Math.max(1, WEAPON_TUNE_STEPS));
   },
   applySelections: applyWeaponGateSelectionsToWeapon,
+  onComplete() {
+    const bar = Math.max(0, Math.floor(Math.max(0, Number(currentBeatIndex) || 0) / Math.max(1, COMPOSER_BEATS_PER_BAR)));
+    arenaCenterWorld = getViewportCenterWorld();
+    weaponGateMusicRuntime.lowAfterComplete = true;
+    weaponGateMusicRuntime.startBar = bar;
+    lastWeaponTuneStepIndex = null;
+    energyStateRuntime.state = 'intro';
+    energyStateRuntime.stateStartBar = bar;
+    energyStateRuntime.lastAppliedBar = -1;
+  },
 });
 const composerEnemyGroups = [];
 let composerEnemyGroupIdSeq = 1;
@@ -9244,6 +9253,12 @@ function getBeatSwarmMusicIntensityAuditionCompositionLoopSections() {
   ].filter((section) => section && section.id);
 }
 function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
+  if (weaponGateMusicRuntime.lowAfterComplete) {
+    const low = getBeatSwarmMusicIntensityAuditionSections().find((section) => section.id === 'low');
+    const barIndex = Math.max(0, Math.trunc(Number(barIndexLike) || 0));
+    const sectionBar = Math.max(0, barIndex - Math.max(0, Math.trunc(Number(weaponGateMusicRuntime.startBar) || 0)));
+    return low ? { ...low, barIndex, auditionBar: sectionBar, auditionSectionBar: sectionBar, introBars: 0, auditionMode: 'weapon_gate_low' } : null;
+  }
   if (typeof globalThis === 'undefined') return null;
   if (!isBeatSwarmMusicIntensityAuditionEnabled()) return null;
   const overrides = globalThis.__beatSwarmTestOverrides && typeof globalThis.__beatSwarmTestOverrides === 'object'
@@ -14807,6 +14822,27 @@ function triggerWeaponFromSubBoardNote(slotIndex, rowIndex) {
     forcedNoteName: weaponSubBoardRowToNoteName(rowIndex),
     directSound: true,
     debugSource: 'subboard-note',
+    debugBeatIndex: beatIndex,
+  });
+}
+function triggerPlayerWeaponGateNote(noteName = 'C4', source = 'weapon-gate-intro') {
+  if (!active) return;
+  const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
+  const weapon = weaponLoadout[idx];
+  const stages = sanitizeWeaponStages(weapon?.stages);
+  if (!stages.length) return;
+  const centerWorld = getViewportCenterWorld();
+  const beatIndex = Number.isFinite(currentBeatIndex) ? Math.trunc(currentBeatIndex) : 0;
+  pulsePlayerShipNoteFlash();
+  triggerWeaponStage(stages[0], centerWorld, beatIndex, stages.slice(1), {
+    origin: centerWorld,
+    impactPoint: centerWorld,
+    weaponSlotIndex: idx,
+    stageIndex: 0,
+    damageScale: getWeaponTuneDamageScale(idx),
+    forcedNoteName: normalizeSwarmNoteName(noteName) || 'C4',
+    directSound: true,
+    debugSource: source,
     debugBeatIndex: beatIndex,
   });
 }
@@ -24798,6 +24834,7 @@ function tick(nowMs) {
     } catch {}
     try { applyCameraDelta(introForwardDelta, appliedIntroSideDelta); } catch {}
     try {
+      arenaCenterWorld = getViewportCenterWorld();
       updateArenaVisual(scale, false);
       setArenaIntroBlend(weaponGateIntroRuntime.getArenaBlend());
       updateStarfieldVisual();
@@ -25124,6 +25161,8 @@ export function enterBeatSwarmMode(options = null) {
   weaponGateCurrentRuntime.releaseAngleDeg = 0;
   weaponGateCurrentRuntime.releaseVx = 0;
   weaponGateCurrentRuntime.releaseVy = 0;
+  weaponGateMusicRuntime.lowAfterComplete = false;
+  weaponGateMusicRuntime.startBar = 0;
   releaseForcePrimed = false;
   releaseBeatLevel = 0;
   perfEnemyRepeatRuntime.enabled = false;

@@ -31,9 +31,9 @@ function ensureStyle() {
     .beat-swarm-weapon-gate-hud{position:absolute;left:18px;top:18px;padding:10px 12px;border:1px solid rgba(100,216,255,.45);border-radius:8px;background:rgba(0,0,0,.5);font:13px ui-monospace,Consolas,monospace;color:#e8f8ff}
     .beat-swarm-weapon-gate-impact{position:absolute;left:50%;top:13%;transform:translateX(-50%);font:800 40px system-ui,sans-serif;text-shadow:0 0 24px currentColor;color:#fff59b}
     .beat-swarm-weapon-gate-impact.is-damage{color:#ff6a72}
-    .beat-swarm-weapon-gate-target{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:#ff8ec7;border:2px solid #fff;box-shadow:0 0 22px rgba(255,142,199,.75)}
-    .beat-swarm-weapon-gate-target.is-hit{background:#fff59b;box-shadow:0 0 30px rgba(255,245,155,.95);transform:scale(1.35)}
-    .beat-swarm-weapon-gate-shot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#7df8ff;box-shadow:0 0 18px rgba(125,248,255,.9)}
+    .beat-swarm-weapon-gate-target{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:1px solid rgba(222,245,255,.48);box-shadow:0 0 16px rgba(172,228,255,.28)}
+    .beat-swarm-weapon-gate-target.is-hit{background:rgba(222,245,255,.28);box-shadow:0 0 24px rgba(172,228,255,.54);transform:scale(1.18)}
+    .beat-swarm-weapon-gate-shot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:rgba(222,245,255,.96);box-shadow:0 0 10px rgba(172,228,255,.84)}
     .beat-swarm-weapon-note-map{position:absolute;inset:0;overflow:visible}.beat-swarm-weapon-note-line{stroke:rgba(170,232,255,.34);stroke-width:1.5;filter:drop-shadow(0 0 4px rgba(170,232,255,.35))}.beat-swarm-weapon-note-star{position:absolute;border-radius:50%;background:#d9f7ff;box-shadow:0 0 12px rgba(170,232,255,.72),0 0 26px rgba(170,232,255,.32)}
     .beat-swarm-weapon-dash-pickup{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:#b7f4ff;box-shadow:0 0 18px rgba(183,244,255,.9),0 0 34px rgba(183,244,255,.45)}
   `;
@@ -147,7 +147,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     state.phase = 'motif';
     state.completeDelay = state.outroDuration;
     state.motifStep = 0;
-    state.motifTimer = 0.2;
+    state.motifTimer = getWeaponStepSeconds();
     state.feedbackKind = 'complete';
     state.feedbackText = 'Weapon tune complete';
     state.feedbackTtl = 1.4;
@@ -249,17 +249,23 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
 
   function updateMotifPreview(dt) {
     state.motifTimer -= dt;
-    while (state.motifTimer <= 0 && state.motifStep < TOTAL_SLOTS) {
-      const sel = state.selections[state.motifStep] || null;
+    const stepSeconds = getWeaponStepSeconds();
+    while (state.motifTimer <= 0) {
+      const slot = state.motifStep % TOTAL_SLOTS;
+      const sel = state.selections[slot] || null;
       if (sel?.kind === 'note') {
         state.noteStarPulseT = 0.18;
-        state.noteStarPulseSlot = state.motifStep;
+        state.noteStarPulseSlot = slot;
         spawnShot(sel.note);
         triggerWeaponNote(sel.note, 'weapon-gate-motif-preview');
       }
       state.motifStep += 1;
-      state.motifTimer += 0.2;
+      state.motifTimer += stepSeconds;
     }
+  }
+
+  function getWeaponStepSeconds() {
+    try { return Math.max(0.05, Math.min(0.6, Number(deps.getWeaponStepSeconds?.()) || 0.2)); } catch { return 0.2; }
   }
 
   function addNoteStar(selection) {
@@ -294,7 +300,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     const { top, bottom } = getCorridorBounds();
     const h = bottom - top;
     const outroT = state.phase === 'motif' ? Math.max(0, state.outroDuration - state.completeDelay) : 0;
-    const corridorX = state.phase === 'motif' ? -Math.min(window.innerWidth + 180, outroT * 360) : 0;
+    const corridorX = state.phase === 'motif' ? -Math.min(window.innerWidth + 180, outroT * 720) : 0;
     const corridorOpacity = state.phase === 'motif' ? Math.max(0, 1 - Math.max(0, outroT - 2.2) / 1.8) : 1;
     const gateHtml = state.gates.map((gate) => renderGate(gate, gate.x - state.progress, top, h)).join('');
     const pulse = state.wallPulseTtl > 0 ? `<div class="beat-swarm-weapon-gate-wall-pulse" style="top:${state.wallPulseY}px;opacity:${Math.min(1, state.wallPulseTtl / 0.25).toFixed(2)}"></div>` : '';
@@ -351,7 +357,9 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     getState: () => state,
     getArenaBlend: () => {
       if (!state || state.phase !== 'motif') return 0;
-      return clamp((state.outroDuration - state.completeDelay) / 2.2, 0, 1);
+      const t = state.outroDuration - state.completeDelay;
+      const corridorClearT = (window.innerWidth + 180) / 720;
+      return clamp((t - corridorClearT) / 0.95, 0, 1);
     },
   };
 }

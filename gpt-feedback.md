@@ -1,130 +1,309 @@
-Weapon Gate Lab: Note/Silence Gate Generation Logic
+Here’s a Codex-ready plan:
 
-The player cannot avoid gates. Every gate covers the full corridor height, so the system decides what kind of choice the player is about to make before the gate appears.
+# Beat Swarm - Tap Orb Foundation Beat Plan
 
-Each gate fills exactly one weapon slot in sequence:
+## Goal
 
-1. Toy 1, slot 1
-2. Toy 1, slot 2
-3. ...
-4. Toy 1, slot 8
-5. Toy 2, slot 1
-6. ...
-7. Toy 2, slot 8
+Implement the first reusable music-building interaction for Beat Swarm: **Tap Orbs**.
 
-There are 16 total slots.
+This mechanic is used to build the **foundation beat** of the music, one instrument/part at a time.
 
-A slot can become either:
+The player kills special enemies, which drop music orbs. These orbs move to the outside of the circle arena, become unreachable, then wait for player input. When tapped, they trigger a beat sound, create a large visual payoff, damage nearby enemies, and add that instrument/part into the active drum loop.
 
-* Note slot: stores a selected pentatonic note and later fires a projectile in the final weapon loop.
-* Silence/Damage Up slot: stores a disabled/silent slot. No final projectile fires on that slot, but the weapon damage budget can later treat the missing shot as extra damage.
+This should be implemented as a reusable system so later instruments can use the same pattern.
 
-Gate types:
+---
 
-1. Note Gate
-   All sections are notes from one octave of the current pentatonic scale.
+## Core Design
 
-2. Silence Gate
-   All sections are Damage Up/silence. This forces a silence but still lets the player pass through a section.
+### Initial State
 
-3. Mixed Gate
-   Contains mostly notes plus one or more Damage Up sections. The Damage Up section position must be randomized vertically, not fixed at top or bottom.
+At the start of this section:
 
-Important:
-A note selection fires a single preview projectile immediately. This projectile should hit a small target spawned ahead of the player. This is only feedback. It does not mean the final weapon loop is firing yet.
+* There is no beat yet.
+* Enemies should be silent.
+* Enemies should not fire weapons.
+* The arena should feel dead/inactive.
+* This creates contrast for when the beat activates.
 
-Damage Up/silence selection should give feedback, but does not fire a note preview projectile.
+Enemies may still move and be killed, but their musical and weapon behaviour should be inactive until the relevant beat layer is created.
 
-Generation goal:
-Do not pre-author a fixed pattern. Use live ratio/streak logic so the final 16-slot result has a nice musical distribution of notes and silences.
+---
 
-Track this state:
+## Flow
 
-* totalSlots = 16
-* targetSilences
-* targetNotes = totalSlots - targetSilences
-* selectedNotes
-* selectedSilences
-* remainingSlots
-* remainingNotesNeeded
-* remainingSilencesNeeded
-* currentNoteStreak
-* currentSilenceStreak
-* maxNoteStreak
-* maxSilenceStreak
+### 1. Spawn Foundation Enemy Wave
 
-Target silence count should initially be guided by the existing DrawGrid/random weapon tune density logic. For example, if the current weapon randomiser usually creates around 4–6 silences in a 16-step pattern, use that range.
+Spawn a small wave of enemies.
 
-Before spawning each gate, decide whether the next gate should be note-only, silence-only, or mixed.
+One enemy in the wave should be marked as a **Beat Carrier**.
 
-Hard rules:
+The Beat Carrier represents the first foundation instrument.
 
-* If currentSilenceStreak >= maxSilenceStreak, spawn a Note Gate.
-* If remainingSlots == remainingNotesNeeded, spawn a Note Gate.
-* If remainingSlots == remainingSilencesNeeded, spawn a Silence Gate, unless this would violate maxSilenceStreak.
-* Never allow the generator to drift into a state where it must place too many forced silences in a row at the end.
-* If selectedSilences is already at targetSilences, spawn only Note Gates for the remaining slots.
-* If selectedNotes is already at targetNotes, spawn Silence Gates, but only if streak rules allow it. Ideally the ratio logic should prevent reaching this bad state.
+Example:
 
-Soft rules:
+* `instrumentId: "foundation_kick"`
+* `beatTrackId: "foundation_01"`
+* `orbType: "tap_orb"`
 
-* If the player is behind on silences, increase the chance of Mixed Gates or Silence Gates.
-* If the player is ahead on silences, use Note Gates.
-* If the player is close to the target ratio, prefer Mixed Gates.
-* If the player has had several notes in a row, increase the chance of allowing Damage Up.
-* If the player has just taken a silence, reduce the chance of another silence unless the target ratio urgently requires it.
+The Beat Carrier should be visually marked if possible.
 
-Suggested decision model:
+---
 
-For each upcoming gate, evaluate possible outcomes:
+### 2. Beat Carrier Dies
 
-Option A: next slot becomes a note.
-Option B: next slot becomes a silence.
+When the Beat Carrier is killed:
 
-Reject any option that makes it impossible to finish with the desired note/silence count and max streak rules.
+* Spawn a Tap Orb at the enemy death position.
+* The orb should contain the instrument/track data from the enemy.
+* The orb should not immediately activate.
+* It should begin travelling toward a target position outside the circle arena.
 
-If only note is valid:
+---
 
-* Spawn Note Gate.
+### 3. Orb Travels To Arena Rim
 
-If only silence is valid:
+The Tap Orb should:
 
-* Spawn Silence Gate.
+* Move from the death position to a position just outside the circle arena.
+* Choose a stable resting position around the arena rim.
+* Be unreachable by the player.
+* Grow slightly as it reaches its final position.
+* Settle into an idle/pulsing state.
 
-If both are valid:
+Once settled:
 
-* Spawn Mixed Gate, but adjust the number of Damage Up sections based on ratio pressure.
+* Show the word **“TAP”** on or near the orb.
+* Pulse visually to attract attention.
+* Wait for player input.
 
-Example mixed gate tuning:
+---
 
-* Need more notes: 5 note sections, 1 Damage Up section.
-* Balanced: 4 note sections, 1 Damage Up section.
-* Need more silences: 3 note sections, 2 Damage Up sections.
-* Silence urgent but not forced: 2 note sections, 3 Damage Up sections.
+### 4. Player Taps Orb
 
-The important design principle is:
-The player should feel like they are choosing, but the generator should quietly protect the final weapon loop from becoming musically ugly.
+When the player taps/clicks the orb:
 
-Debug output:
-Log each gate decision clearly:
+* The orb is consumed.
+* The corresponding beat sound plays.
+* The corresponding instrument/track is added to the active drum loop.
+* A short-range explosion occurs at/near the orb’s arena position.
+* Nearby enemies take damage or are destroyed.
+* The arena and enemies produce a strong synced visual flash.
 
-* gateIndex
-* toyIndex
-* slotIndex
-* gateType
-* availableSections
-* selectedSection
-* storedResult
-* selectedNotes
-* selectedSilences
-* currentNoteStreak
-* currentSilenceStreak
-* reason for gate type
+This should feel extremely satisfying.
 
-Example reasons:
+---
 
-* "balanced: mixed gate"
-* "silence streak maxed: force note"
-* "too few silences: silence pressure"
-* "target silences reached: force note"
-* "remaining slots require silence"
+## Multi-Orb Behaviour
+
+The system should support multiple Tap Orbs active at once.
+
+If the player taps more than one orb close together:
+
+* Do not play all beat sounds exactly simultaneously unless that is intended.
+* Queue the triggered beats in sequence.
+* Each triggered orb should still explode and produce its own visual payoff.
+* The loop should add each triggered instrument/part in the correct order.
+
+For now, a simple queue is acceptable.
+
+Example:
+
+1. Player taps Kick Orb.
+2. Kick is added to drum loop.
+3. Player quickly taps Snare Orb.
+4. Snare is queued and added after the kick trigger moment.
+
+---
+
+## Per-Instrument Structure
+
+This mechanic should be data-driven per instrument.
+
+Each Beat Carrier / Tap Orb should define:
+
+* `instrumentId`
+* `beatTrackId`
+* `soundId`
+* `loopLayer`
+* `orbColor`
+* `explosionRadius`
+* `damageAmount`
+* `targetArenaSlot`
+* `activationOrder`
+* `tapPromptText`
+
+Example config:
+
+```js
+{
+  instrumentId: "foundation_kick",
+  beatTrackId: "foundation_01",
+  soundId: "kick_01",
+  loopLayer: "foundation",
+  orbColor: "#ffcc33",
+  explosionRadius: 120,
+  damageAmount: 999,
+  activationOrder: 1,
+  tapPromptText: "TAP"
+}
+```
+
+This should allow us to build the music in sequence:
+
+1. Foundation kick
+2. Foundation second beat layer
+3. Later rhythmic sections
+4. Later melodic or special layers
+
+For this task, focus on the foundation layer only.
+
+---
+
+## Visual Payoff Requirements
+
+Triggering a Tap Orb should produce a major visual reward.
+
+Minimum desired effects:
+
+* Full-screen flash.
+* Circle arena flash.
+* Orb explosion.
+* Enemy flash.
+* Pulse wave from orb toward arena centre.
+* Optional camera shake.
+* Optional brief slowdown/hit-stop.
+
+The arena circle should visibly react.
+
+Enemies should flash even if they are not damaged, so the whole space feels musically activated.
+
+The first successful Tap Orb should make the dead arena feel like it has woken up.
+
+---
+
+## Combat Behaviour Before Beat Activation
+
+Before the foundation beat exists:
+
+* Enemies are silent.
+* Enemies do not fire.
+* Enemies may move.
+* Enemies may approach or pressure the player.
+* The lack of firing should feel intentional and eerie.
+
+After the first foundation beat is activated:
+
+* The relevant beat layer starts.
+* Enemy firing can become enabled.
+* Arena pulse visuals can begin.
+* Combat should feel more alive and rhythmic.
+
+---
+
+## Implementation Notes
+
+Please keep this modular.
+
+Suggested pieces:
+
+### BeatCarrier
+
+Enemy flag/component/data that defines what orb it drops.
+
+Responsibilities:
+
+* Store beat/orb config.
+* On death, spawn Tap Orb with config.
+
+---
+
+### TapOrb
+
+Object spawned from BeatCarrier death.
+
+States:
+
+* `traveling`
+* `settling`
+* `ready`
+* `triggered`
+* `consumed`
+
+Responsibilities:
+
+* Move to arena rim target.
+* Grow/settle.
+* Display TAP prompt when ready.
+* Detect player tap/click.
+* Notify music system on activation.
+* Spawn explosion/visual effects.
+* Remove itself after activation.
+
+---
+
+### BeatOrbManager
+
+System for managing active and queued orbs.
+
+Responsibilities:
+
+* Track active Tap Orbs.
+* Assign rim positions.
+* Handle multiple simultaneous taps.
+* Queue beat activations if needed.
+* Notify music/conductor systems.
+
+---
+
+### Music/Conductor Integration
+
+On Tap Orb activation:
+
+* Add the matching instrument/track to the active drum loop.
+* Ensure timing is quantized/synchronised.
+* For now, simple sequencing is acceptable.
+* This should eventually support multiple instruments and layers.
+
+Suggested event:
+
+```js
+onBeatOrbActivated({
+  instrumentId,
+  beatTrackId,
+  soundId,
+  loopLayer
+});
+```
+
+---
+
+## Acceptance Criteria
+
+* A special enemy can drop a Tap Orb on death.
+* The Tap Orb travels to a resting position outside the circle arena.
+* The orb grows/settles and displays “TAP”.
+* Player can tap/click the orb.
+* Tapping the orb plays the assigned beat sound.
+* Tapping the orb adds that instrument/track to the active foundation loop.
+* Tapping the orb causes a satisfying explosion and arena-wide visual flash.
+* Enemies are silent and do not fire before the foundation beat activates.
+* After the first foundation beat activates, combat/music state can transition to active.
+* System supports more than one Tap Orb existing at once.
+* Tap Orb data is per-instrument, not hardcoded to one sound.
+* Code should be modular enough to reuse this mechanic for later beat layers.
+
+---
+
+## Not In Scope Yet
+
+Do not implement the other orb type yet:
+
+* Enemy dies.
+* Orb tracks the player.
+* Orb gets faster over time.
+* Orb reaches player and triggers beat.
+
+That will be used later for other rhythmic sections.
+
+For this task, only implement the Tap Orb foundation beat mechanic.
