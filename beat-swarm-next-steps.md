@@ -1,6 +1,6 @@
 # Beat Swarm - Next Steps
 
-## Current Status - 2026-05-29
+## Current Status - 2026-06-01
 
 Beat Swarm has moved from director-only music into player-authored musical DNA that the director interprets at runtime.
 
@@ -26,6 +26,12 @@ Confirmed baseline:
 - peak, release, and settle are acceptable for now and should return later for a polish pass
 - composition pacing now has an explicit flow through low, medium, build, peak, release, and settle
 - gameplay/enemy pressure is being aligned to director pacing instead of letting enemies drive the score
+- the weapon-gate onboarding sequence is now integrated into Beat Swarm level start:
+  - the player authors a 16-slot weapon motif by flying through note / Damage Up gates
+  - note choices create a subtle constellation trail in the starfield
+  - the completed weapon motif is applied to the normal weapon tune toys
+  - the corridor hands off into the arena and low-intensity music
+  - corridor weapon audio now uses the main player weapon sound path
 
 The current baseline direction is:
 
@@ -143,30 +149,39 @@ These modes should select:
 | Release | motif memory, fragments, echoes, reduced certainty | preserve identity while releasing tension |
 | Settle | stable domesticated identity | make the world feel like it absorbed the player's theme |
 
-## Current Focus - Peak To Release To Settle
+## Current Focus - Tap Orb Foundation Beat
 
-Current listening target:
+The next major prototype is the first arena-side music-building interaction:
 
-- peak should play the player motif strongly and confidently
-- release should not hard-cut the lead
-- release should not continue the full peak statement
-- release should transform the lead into sparse memory:
-  - downbeat/midpoint fragments
-  - repeated motif anchors
-  - recognizable rhythm DNA
-  - lower density
-  - quieter volume
-- settle should feel different from release:
-  - release = decay and loss of certainty
-  - settle = stable, quiet identity
+> The weapon gate creates the player's weapon motif. Tap Orbs then let the player wake up and build the foundation beat inside the arena.
 
-Recent implementation direction:
+V1 should implement one foundation Tap Orb only.
 
-- `player-lead-release-echo` exists as a dedicated director music action
-- release lead echo should bypass projectile/composer-group attack behavior
-- release echo should use player motif notes as source material
-- release echo should start at the release downbeat rather than waiting a bar
-- settle should keep occasional motif identity without sounding like peak restarted
+Flow:
+
+1. After the weapon-gate handoff, enter a foundation-build state.
+2. Player weapon remains active.
+3. Enemies may move and be killed, but enemy firing and enemy music are inactive until the first beat is introduced.
+4. Spawn a small enemy wave with one marked Beat Carrier.
+5. When the Beat Carrier dies, spawn one Tap Orb at the death position.
+6. The Tap Orb travels to an unreachable resting slot just outside the arena rim.
+7. Once settled, the orb pulses and displays `TAP`.
+8. Player tap gives immediate subtle feedback.
+9. The gameplay payoff is quantized:
+   - on the next beat/step, the beat sound plays
+   - the orb explodes
+   - nearby enemies are damaged or destroyed
+   - the arena and enemies flash in sync
+   - the director receives one new foundation beat hit
+10. After the first foundation beat is active, enemy firing/music can wake up.
+
+Important rule:
+
+> A Tap Orb adds one beat hit to a director-owned foundation loop. It does not unlock or generate a full drum pattern by itself.
+
+Later Tap Orbs can keep adding hits or layers until the instrumental lane is built.
+
+If the player does not activate a beat for a long time, we should eventually enter an unskippable tutorial pause state with clearer direction. That tutorial fallback is not required for V1, but the foundation-build state should make room for it.
 
 ## Practical Techniques To Implement
 
@@ -250,90 +265,117 @@ Release:
 
 ## Current Testing Focus
 
-Use Music Lab and listening tests to answer:
+Use playtests and Music Lab where useful to answer:
 
-- Does each intensity state sound distinct?
-- Is the player Lead Theme recognizable at peak?
-- Does release preserve motif identity without sustaining peak energy?
-- Is settle clearly different from release?
-- Does Bass Drive stay in register and enter at the intended time?
-- Does Accent Rhythm play the correct player-authored sequence and instrument?
-- Do runtime motif transformations still feel connected to the pause-menu theme boards?
-- Are there hard cuts when moving between peak, release, and settle?
+- Does the weapon-gate sequence hand off without a visible/audio snap?
+- Does the player weapon motif continue at the correct tempo after the corridor?
+- Does the arena fade in with the player centered?
+- Does the post-gate state feel like low intensity rather than the old intro/build pattern?
+- Does the first Tap Orb clearly communicate that the player is building the beat?
+- Does Tap Orb activation feel quantized and satisfying?
+- Does the foundation loop add exactly one beat hit per activated orb?
+- Do enemies remain readable while the arena is musically inactive?
 
-Current priority tests:
+## Tap Orb V1 Implementation Plan
 
-1. Listen: Peak only
-2. Listen: Release only, no intro
-3. Listen: Peak -> Release -> Settle
-4. Full intensity flow once individual states are acceptable
+Create a modular Tap Orb system rather than expanding `beat-swarm-mode.js` directly.
 
-## Active Prototype - Weapon Gate Onboarding Lab
+Suggested module:
 
-New prototype goal:
+- `src/beat-swarm/beat-swarm-tap-orbs.js`
 
-> Build a standalone side-on corridor lab where the player authors a 16-slot weapon tune by flying through unavoidable musical gates.
+Suggested responsibilities:
 
-This is not part of the main Beat Swarm sequence yet. It is a test lab for whether weapon tune authoring can be taught through movement and immediate feedback instead of only through the pause-board editor.
+### Beat Carrier
 
-Core loop:
+- enemy flag/config that identifies an orb drop
+- stores foundation beat data:
+  - `instrumentId`
+  - `beatTrackId`
+  - `soundId`
+  - `loopLayer`
+  - `orbColor`
+  - `explosionRadius`
+  - `damageAmount`
+  - `targetArenaSlot`
+  - `activationOrder`
+  - `tapPromptText`
+- on death, creates one Tap Orb
 
-- player flies horizontally through a corridor
-- top and bottom barriers bounce the player vertically and add strong forward boost
-- 16 vertical gates appear in order, mapped to the weapon tune chain:
-  - Toy 1, slots 1-8
-  - Toy 2, slots 1-8
-- each gate spans the playable height and is split into vertical selectable sections
-- each section is either a pentatonic note choice or Damage Up
-- the player cannot avoid gates; passing through a section assigns that slot
-- note choices store a note and fire one preview projectile into a small target
-- Damage Up stores a disabled/silent slot and gives clear non-note feedback
-- after 16 gates, log/show the completed tune chain
+### Tap Orb
 
-Design intent:
+States:
 
-- teach that weapon rhythm/tune slots are authored one decision at a time
-- make silence feel like a deliberate power tradeoff, not a missing note
-- confirm note selections with immediate audio/impact feedback
-- avoid implying this is the final weapon firing pattern; preview shots only confirm the selected note
+- `traveling`
+- `settling`
+- `ready`
+- `queued`
+- `triggered`
+- `consumed`
 
-Prototype files:
+Responsibilities:
+
+- travel from carrier death position to arena rim
+- choose a stable resting point just outside the arena
+- pulse and show `TAP` when ready
+- detect click/tap
+- give immediate subtle tap feedback
+- queue quantized activation
+- trigger visual payoff and notify the director on the beat
+
+### Beat Orb Manager
+
+- track active Tap Orbs
+- assign rim slots
+- queue activations if several orbs are tapped close together
+- run quantized activation timing
+- report activated beat hits to the director/conductor
+
+Director event shape:
+
+```js
+onBeatOrbActivated({
+  instrumentId,
+  beatTrackId,
+  soundId,
+  loopLayer,
+  stepIndex,
+});
+```
+
+V1 acceptance criteria:
+
+- after the weapon gate, Beat Swarm enters foundation-build state
+- one Beat Carrier spawns
+- killing it creates one Tap Orb
+- orb travels to the arena rim and becomes tappable
+- tapping the orb gives immediate feedback
+- beat sound, explosion, arena flash, and damage occur on the next quantized beat/step
+- director receives one foundation beat hit
+- active foundation loop now includes that one hit
+- enemies can begin firing/music after the first foundation beat activates
+
+## Completed / Parked Prototype - Weapon Gate Onboarding
+
+The weapon gate sequence has moved from standalone lab into the main Beat Swarm level start.
+
+Current status:
+
+- 16 gates author the player weapon motif
+- Damage Up represents silent/disabled slots plus damage tradeoff
+- note selections use the main player weapon sound path
+- selected notes create a subtle starfield constellation
+- dash/current/pickup interactions make the corridor active even for low-input players
+- the completed motif is applied to the normal weapon setup toys
+
+Keep polishing only if transition issues are reported.
+
+Parked standalone lab files:
 
 - `src/beat-swarm/weapon-gate-lab.js`
 - `src/beat-swarm/weapon-gate-lab-gates.js`
 - `src/beat-swarm/weapon-gate-lab-ratio.js`
 - `src/beat-swarm/weapon-gate-lab-render.js`
-
-Generation rules:
-
-- use ratio-based gate generation instead of a fixed authored gate sequence
-- track target silence count, selected notes/silences, remaining slots, note streak, and silence streak
-- avoid too many notes or silences in a row
-- force note gates when silence count is too high
-- increase Damage Up chance when notes are over target
-- never allow the system to paint itself into a corner where it must create an ugly forced silence chain
-
-Debug controls:
-
-- restart lab
-- generate with seed
-- set target silence count
-- set max silence streak
-- slow motion / normal speed
-- print gate decisions to console
-
-Acceptance criteria:
-
-- lab launches independently from main Beat Swarm
-- player is forced through 16 gates
-- each gate assigns exactly one slot in order
-- note sections store notes
-- Damage Up sections store disabled/silent slots
-- note selections fire one preview projectile into a spawned target
-- Damage Up selections give clear feedback without firing a note projectile
-- completed 16-slot chain is logged clearly
-- generated gates stay close to target note/silence ratio
-- max silence streak is respected unless explicitly overridden by debug settings
 
 ## Hold For Later
 
