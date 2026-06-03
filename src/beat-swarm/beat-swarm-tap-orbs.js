@@ -18,6 +18,12 @@ function normalizePoint(p = null) {
   };
 }
 
+function isFoundationCompleteState(state) {
+  if (!state || typeof state !== 'object') return false;
+  const target = Math.max(1, Math.min(FOUNDATION_STEPS, Math.trunc(Number(state.targetHitCount) || DEFAULT_TARGET_HIT_COUNT)));
+  return state.foundationHits instanceof Set && state.foundationHits.size >= target;
+}
+
 function installStyles() {
   if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
   const style = document.createElement('style');
@@ -139,6 +145,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     foundationActivated: false,
     foundationComplete: false,
     targetHitCount: DEFAULT_TARGET_HIT_COUNT,
+    lastLoopBeatIndex: -1,
     nextOrbId: 1,
     foundationHits: new Set(),
     orbs: [],
@@ -193,6 +200,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.foundationActivated = false;
     state.foundationComplete = false;
     state.targetHitCount = Math.max(1, Math.min(FOUNDATION_STEPS, Math.trunc(Number(options.targetHitCount) || DEFAULT_TARGET_HIT_COUNT)));
+    state.lastLoopBeatIndex = -1;
     state.foundationHits.clear();
     clearDom();
     ensureRoot();
@@ -204,6 +212,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.foundationActivated = false;
     state.foundationComplete = false;
     state.targetHitCount = DEFAULT_TARGET_HIT_COUNT;
+    state.lastLoopBeatIndex = -1;
     state.foundationHits.clear();
     clearDom();
   }
@@ -220,7 +229,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
   }
 
   function spawnFromCarrierDeath(options = {}) {
-    if (!state.active || state.foundationComplete) return null;
+    if (!state.active || isFoundationCompleteState(state)) return null;
     const root = ensureRoot();
     if (!(root instanceof HTMLElement)) return null;
     const source = normalizePoint(options.world || options);
@@ -252,12 +261,30 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     const clock = deps.getBeatClock?.() || {};
     const beatIndex = Math.max(0, Math.trunc(Number(clock.beatIndex) || 0));
     const stepIndex = Math.max(0, Math.trunc(Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+    const slot = findNextFreeFoundationSlot(stepIndex, 1, orb);
+    if (!slot) return false;
     orb.status = 'queued';
-    orb.queuedBeatIndex = beatIndex + 1;
-    orb.queuedStepIndex = (stepIndex + 1) % FOUNDATION_STEPS;
+    orb.queuedBeatIndex = beatIndex + slot.stepOffset;
+    orb.queuedStepIndex = slot.stepIndex;
     try { orb.el?.classList?.remove?.('is-ready'); } catch {}
     try { orb.el?.classList?.add?.('is-queued'); } catch {}
     return true;
+  }
+
+  function findNextFreeFoundationSlot(fromStepIndex = 0, minOffset = 1, ignoreOrb = null) {
+    const start = Math.max(0, Math.trunc(Number(fromStepIndex) || 0) % FOUNDATION_STEPS);
+    const reservedSteps = new Set(state.foundationHits);
+    for (const entry of state.orbs) {
+      if (!entry || entry === ignoreOrb || entry.status !== 'queued') continue;
+      reservedSteps.add(Math.max(0, Math.trunc(Number(entry.queuedStepIndex) || 0) % FOUNDATION_STEPS));
+    }
+    let stepOffset = Math.max(1, Math.trunc(Number(minOffset) || 1));
+    while (stepOffset <= FOUNDATION_STEPS) {
+      const stepIndex = (start + stepOffset) % FOUNDATION_STEPS;
+      if (!reservedSteps.has(stepIndex)) return { stepIndex, stepOffset };
+      stepOffset += 1;
+    }
+    return null;
   }
 
   function pulseFoundationFlash() {
@@ -272,23 +299,23 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     if (!orb || orb.status !== 'queued') return false;
     const clock = deps.getBeatClock?.() || {};
     const beatIndex = Math.max(0, Math.trunc(Number(clock.beatIndex) || 0));
-    const requestedStepIndex = Math.max(0, Math.trunc(Number(orb.queuedStepIndex) || Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
-    let stepIndex = requestedStepIndex;
+    let stepIndex = Math.max(0, Math.trunc(Number(orb.queuedStepIndex) || Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+    const requestedStepIndex = stepIndex;
     if (state.foundationHits.has(stepIndex)) {
-      for (let offset = 1; offset < FOUNDATION_STEPS; offset += 1) {
-        const candidate = (requestedStepIndex + offset) % FOUNDATION_STEPS;
-        if (!state.foundationHits.has(candidate)) {
-          stepIndex = candidate;
-          break;
-        }
-      }
+      const currentStepIndex = Math.max(0, Math.trunc(Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+      const slot = findNextFreeFoundationSlot(currentStepIndex, 1, orb);
+      if (!slot) return false;
+      orb.queuedBeatIndex = beatIndex + slot.stepOffset;
+      orb.queuedStepIndex = slot.stepIndex;
+      return false;
     }
     orb.status = 'triggered';
     orb.triggerT = ORB_TRIGGER_SECONDS;
     state.foundationActivated = true;
     state.foundationHits.add(stepIndex);
-    state.foundationComplete = state.foundationHits.size >= state.targetHitCount;
+    state.foundationComplete = isFoundationCompleteState(state);
     state.carrierWaveSpawned = false;
+    state.lastLoopBeatIndex = beatIndex;
     try {
       deps.onBeatOrbActivated?.({
         instrumentId: 'BASS TONE 4',
@@ -393,6 +420,24 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
       if (state.orbs[i]?.status !== 'consumed') continue;
       state.orbs.splice(i, 1);
     }
+    updateFoundationLoopPlayback();
+  }
+
+  function updateFoundationLoopPlayback() {
+    if (!state.foundationActivated || !state.foundationHits.size || isFoundationCompleteState(state)) return;
+    const clock = deps.getBeatClock?.() || {};
+    const beatIndex = Math.max(0, Math.trunc(Number(clock.beatIndex) || 0));
+    if (beatIndex === state.lastLoopBeatIndex) return;
+    state.lastLoopBeatIndex = beatIndex;
+    const stepIndex = Math.max(0, Math.trunc(Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+    if (!state.foundationHits.has(stepIndex)) return;
+    try {
+      deps.playFoundationBeat?.({
+        stepIndex,
+        beatIndex,
+        source: 'tap-orb-foundation-loop',
+      });
+    } catch {}
   }
 
   function markCarrierEnemy(enemy) {
@@ -432,6 +477,6 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     hasCarrierWaveSpawned: () => state.carrierWaveSpawned === true,
     isActive: () => state.active === true,
     hasActivatedFoundationBeat: () => state.foundationActivated === true,
-    isFoundationComplete: () => state.foundationComplete === true,
+    isFoundationComplete: () => isFoundationCompleteState(state),
   };
 }

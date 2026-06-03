@@ -45,6 +45,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
     ? state.musicModeRuntime
     : null;
+  const suppressDirectorMusic = state.suppressDirectorMusic === true;
   const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
   const primaryLoopForegroundProtected = activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture';
   const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
@@ -398,21 +399,23 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     let spawnerEvents = [];
     let drawSnakeEvents = [];
     let composerEvents = [];
-    const finishCollectSpawnerPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.spawner');
-    spawnerStep = helpers.collectSpawnerStepBeatEvents?.(stepIndex, beatIndex);
-    finishCollectSpawnerPerf();
-    if (spawnerStep?.stats && typeof spawnerStep.stats === 'object') {
-      spawnerStepStats = spawnerStep.stats;
+    if (!suppressDirectorMusic) {
+      const finishCollectSpawnerPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.spawner');
+      spawnerStep = helpers.collectSpawnerStepBeatEvents?.(stepIndex, beatIndex);
+      finishCollectSpawnerPerf();
+      if (spawnerStep?.stats && typeof spawnerStep.stats === 'object') {
+        spawnerStepStats = spawnerStep.stats;
+      }
+      spawnerEvents = Array.isArray(spawnerStep?.events) ? spawnerStep.events : [];
+
+      const finishCollectDrawSnakePerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.drawsnake');
+      drawSnakeEvents = helpers.collectDrawSnakeStepBeatEvents?.(stepIndex, beatIndex) || [];
+      finishCollectDrawSnakePerf();
+
+      const finishCollectComposerPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.composer');
+      composerEvents = helpers.collectComposerGroupStepBeatEvents?.(stepIndex, beatIndex) || [];
+      finishCollectComposerPerf();
     }
-    spawnerEvents = Array.isArray(spawnerStep?.events) ? spawnerStep.events : [];
-
-    const finishCollectDrawSnakePerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.drawsnake');
-    drawSnakeEvents = helpers.collectDrawSnakeStepBeatEvents?.(stepIndex, beatIndex) || [];
-    finishCollectDrawSnakePerf();
-
-    const finishCollectComposerPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.collect.composer');
-    composerEvents = helpers.collectComposerGroupStepBeatEvents?.(stepIndex, beatIndex) || [];
-    finishCollectComposerPerf();
 
     rawEnemyEvents = [
       ...spawnerEvents,
@@ -1008,7 +1011,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   }
   {
   const finishShapeEmittersPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters');
-    if (foundationLaneActive && !hasProtectedFoundationEvent && typeof helpers.createBassFoundationKeepaliveEvent === 'function') {
+    if (!suppressDirectorMusic && foundationLaneActive && !hasProtectedFoundationEvent && typeof helpers.createBassFoundationKeepaliveEvent === 'function') {
       const finishShapeEmittersBassPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bass');
       const keepalive = helpers.createBassFoundationKeepaliveEvent({
         beatIndex,
@@ -1034,7 +1037,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         finishShapeEmittersBassReplacePerf();
       }
       finishShapeEmittersBassPerf();
-    } else if (!hasBassEnemyEvent && typeof helpers.createBassFoundationKeepaliveEvent === 'function') {
+    } else if (!suppressDirectorMusic && !hasBassEnemyEvent && typeof helpers.createBassFoundationKeepaliveEvent === 'function') {
       const finishShapeEmittersBassPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bass');
       const keepalive = helpers.createBassFoundationKeepaliveEvent({
         beatIndex,
@@ -1049,7 +1052,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       }
       finishShapeEmittersBassPerf();
     }
-    if (typeof helpers.createPrimaryLoopLaneEvent === 'function') {
+    if (!suppressDirectorMusic && typeof helpers.createPrimaryLoopLaneEvent === 'function') {
       const finishShapeEmittersLoopPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.loop');
       const primaryLoopEvent = helpers.createPrimaryLoopLaneEvent({
         beatIndex,
@@ -1821,7 +1824,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       || String(ev?.role || payload?.musicRole || '').trim().toLowerCase() === 'bass';
   });
   if (
-    foundationLaneActive
+    !suppressDirectorMusic
+    && foundationLaneActive
     && !hasEmittedFoundationEvent
     && typeof helpers.createBassFoundationKeepaliveEvent === 'function'
   ) {
@@ -2050,6 +2054,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     || (answerOrnamentAllowed && defaultSparkleCompanionCue)
   );
   const explicitSparkleCompanionEvent = (() => {
+    if (suppressDirectorMusic) return null;
     if (!explicitSparkleCompanionWanted) return null;
     const sparkleActorId = Math.max(
       0,
@@ -2127,6 +2132,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     return ev || null;
   })();
   const explicitPlayerBassDriveEvent = (() => {
+    if (suppressDirectorMusic) return null;
     const bedState = getDirectorMotifBedStageState();
     if (bedState.stage !== 'peak') return null;
     const lane = helpers.getFoundationLaneSnapshot?.(stepIndex, barIndex) || null;
@@ -2236,6 +2242,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }) || null;
   })();
   const explicitPlayerLeadThemeEvent = (() => {
+    if (suppressDirectorMusic) return null;
     const { stage, sectionBar } = getDirectorMotifBedStageState();
     if (stage !== 'build' && stage !== 'peak' && stage !== 'release' && stage !== 'settle') return null;
     const buildLeadSupplement = stage === 'build' && sectionBar >= 3;
@@ -2399,6 +2406,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }) || null;
   })();
   const explicitPlayerAccentRhythmEvent = (() => {
+    if (suppressDirectorMusic) return null;
     const { stage, sectionBar } = getDirectorMotifBedStageState();
     if (stage !== 'medium' && stage !== 'build' && stage !== 'peak') return null;
     const phrase = helpers.getPlayerAccentRhythmMotionPhrase?.(barIndex, `intensity_${stage}`, {
@@ -2508,6 +2516,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     return ev || null;
   })();
   const explicitPlayerAccentRhythmRiffEvent = (() => {
+    if (suppressDirectorMusic) return null;
     const { stage, sectionBar } = getDirectorMotifBedStageState();
     if (stage !== 'peak') return null;
     if (sectionBar < 16) return null;
@@ -2739,7 +2748,15 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
 
   {
     const finishExecutePerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.execute');
-    const drained = helpers.director?.drainBeatEventsForStep?.(beatIndex, stepIndex) || [];
+    const drainedRaw = helpers.director?.drainBeatEventsForStep?.(beatIndex, stepIndex) || [];
+    const drained = suppressDirectorMusic
+      ? drainedRaw.filter((ev) => {
+        const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+        const actionType = String(ev?.actionType || payload?.actionType || '').trim().toLowerCase();
+        const sourceSystem = String(ev?.sourceSystem || payload?.sourceSystem || '').trim().toLowerCase();
+        return actionType === 'player-weapon-step' || sourceSystem === 'player';
+      })
+      : drainedRaw;
     for (const ev of drained) {
       try {
         const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};

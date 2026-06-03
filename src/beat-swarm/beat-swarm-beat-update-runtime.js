@@ -241,6 +241,7 @@ export function handleBeatStepChangeRuntime(options = null) {
           stepIndex,
           barIndex,
           centerWorld,
+          suppressDirectorMusic: state.suppressDirectorMusic === true,
           musicLaneRuntime: state.musicLaneRuntime,
           loopAdmissionRuntime: state.loopAdmissionRuntime,
           musicModeRuntime: state.musicModeRuntime,

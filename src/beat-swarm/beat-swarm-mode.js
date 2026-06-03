@@ -688,6 +688,7 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
     weaponGateMusicRuntime.lowAfterComplete = true;
     weaponGateMusicRuntime.startBar = bar;
     tapOrbRuntime.start({ startBar: bar, targetHitCount: 4 });
+    try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
     lastWeaponTuneStepIndex = null;
     energyStateRuntime.state = 'intro';
     energyStateRuntime.stateStartBar = bar;
@@ -9308,7 +9309,7 @@ function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
     const silent = sections.find((section) => section.id === 'silent');
     const barIndex = Math.max(0, Math.trunc(Number(barIndexLike) || 0));
     const sectionBar = Math.max(0, barIndex - Math.max(0, Math.trunc(Number(weaponGateMusicRuntime.startBar) || 0)));
-    const section = tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete() && !tapOrbRuntime.hasActivatedFoundationBeat()
+    const section = tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete()
       ? (silent || low)
       : low;
     return section ? { ...section, barIndex, auditionBar: sectionBar, auditionSectionBar: sectionBar, introBars: 0, auditionMode: tapOrbRuntime.isActive() ? 'tap_orb_foundation_build' : 'weapon_gate_low' } : null;
@@ -22717,6 +22718,7 @@ function updateBeatWeapons(centerWorld) {
   const stepState = {
     lastSpawnerEnemyStepIndex,
     lastWeaponTuneStepIndex,
+    suppressDirectorMusic: isTapOrbFoundationBuildWaiting(),
     musicModeRuntime: activeMusicModeRuntime,
     enemyDirectorRuntime: activeEnemyDirectorRuntime,
   };
