@@ -4,6 +4,7 @@ const ORB_TRAVEL_SPEED_WORLD = 620;
 const ORB_SETTLE_SECONDS = 0.28;
 const ORB_TRIGGER_SECONDS = 0.34;
 const FOUNDATION_STEPS = 8;
+const DEFAULT_TARGET_HIT_COUNT = 4;
 
 function clamp01(v) {
   return Math.max(0, Math.min(1, Number(v) || 0));
@@ -136,6 +137,8 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     startedBar: 0,
     carrierWaveSpawned: false,
     foundationActivated: false,
+    foundationComplete: false,
+    targetHitCount: DEFAULT_TARGET_HIT_COUNT,
     nextOrbId: 1,
     foundationHits: new Set(),
     orbs: [],
@@ -188,6 +191,8 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.startedBar = Math.max(0, Math.trunc(Number(options.startBar) || 0));
     state.carrierWaveSpawned = false;
     state.foundationActivated = false;
+    state.foundationComplete = false;
+    state.targetHitCount = Math.max(1, Math.min(FOUNDATION_STEPS, Math.trunc(Number(options.targetHitCount) || DEFAULT_TARGET_HIT_COUNT)));
     state.foundationHits.clear();
     clearDom();
     ensureRoot();
@@ -197,6 +202,8 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.active = false;
     state.carrierWaveSpawned = false;
     state.foundationActivated = false;
+    state.foundationComplete = false;
+    state.targetHitCount = DEFAULT_TARGET_HIT_COUNT;
     state.foundationHits.clear();
     clearDom();
   }
@@ -213,7 +220,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
   }
 
   function spawnFromCarrierDeath(options = {}) {
-    if (!state.active || state.foundationActivated) return null;
+    if (!state.active || state.foundationComplete) return null;
     const root = ensureRoot();
     if (!(root instanceof HTMLElement)) return null;
     const source = normalizePoint(options.world || options);
@@ -265,11 +272,23 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     if (!orb || orb.status !== 'queued') return false;
     const clock = deps.getBeatClock?.() || {};
     const beatIndex = Math.max(0, Math.trunc(Number(clock.beatIndex) || 0));
-    const stepIndex = Math.max(0, Math.trunc(Number(orb.queuedStepIndex) || Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+    const requestedStepIndex = Math.max(0, Math.trunc(Number(orb.queuedStepIndex) || Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+    let stepIndex = requestedStepIndex;
+    if (state.foundationHits.has(stepIndex)) {
+      for (let offset = 1; offset < FOUNDATION_STEPS; offset += 1) {
+        const candidate = (requestedStepIndex + offset) % FOUNDATION_STEPS;
+        if (!state.foundationHits.has(candidate)) {
+          stepIndex = candidate;
+          break;
+        }
+      }
+    }
     orb.status = 'triggered';
     orb.triggerT = ORB_TRIGGER_SECONDS;
     state.foundationActivated = true;
     state.foundationHits.add(stepIndex);
+    state.foundationComplete = state.foundationHits.size >= state.targetHitCount;
+    state.carrierWaveSpawned = false;
     try {
       deps.onBeatOrbActivated?.({
         instrumentId: 'BASS TONE 4',
@@ -277,6 +296,10 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
         soundId: 'tap_orb_foundation',
         loopLayer: 'foundation',
         stepIndex,
+        requestedStepIndex,
+        hitCount: state.foundationHits.size,
+        targetHitCount: state.targetHitCount,
+        complete: state.foundationComplete,
         beatIndex,
       });
     } catch {}
@@ -403,8 +426,12 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     markCarrierEnemy,
     noteCarrierWaveSpawned,
     getFoundationSteps,
+    getFoundationHitCount: () => state.foundationHits.size,
+    getTargetHitCount: () => state.targetHitCount,
+    hasActiveOrb: () => state.orbs.some((orb) => orb && orb.status !== 'consumed'),
     hasCarrierWaveSpawned: () => state.carrierWaveSpawned === true,
     isActive: () => state.active === true,
     hasActivatedFoundationBeat: () => state.foundationActivated === true,
+    isFoundationComplete: () => state.foundationComplete === true,
   };
 }

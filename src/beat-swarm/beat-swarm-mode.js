@@ -687,7 +687,7 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
     arenaCenterWorld = getViewportCenterWorld();
     weaponGateMusicRuntime.lowAfterComplete = true;
     weaponGateMusicRuntime.startBar = bar;
-    tapOrbRuntime.start({ startBar: bar });
+    tapOrbRuntime.start({ startBar: bar, targetHitCount: 4 });
     lastWeaponTuneStepIndex = null;
     energyStateRuntime.state = 'intro';
     energyStateRuntime.stateStartBar = bar;
@@ -9308,7 +9308,7 @@ function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
     const silent = sections.find((section) => section.id === 'silent');
     const barIndex = Math.max(0, Math.trunc(Number(barIndexLike) || 0));
     const sectionBar = Math.max(0, barIndex - Math.max(0, Math.trunc(Number(weaponGateMusicRuntime.startBar) || 0)));
-    const section = tapOrbRuntime.isActive() && !tapOrbRuntime.hasActivatedFoundationBeat()
+    const section = tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete() && !tapOrbRuntime.hasActivatedFoundationBeat()
       ? (silent || low)
       : low;
     return section ? { ...section, barIndex, auditionBar: sectionBar, auditionSectionBar: sectionBar, introBars: 0, auditionMode: tapOrbRuntime.isActive() ? 'tap_orb_foundation_build' : 'weapon_gate_low' } : null;
@@ -17031,10 +17031,10 @@ function damageEnemiesNearTapOrb(world = null, radiusWorld = 180, amount = 8) {
   }
 }
 function isTapOrbFoundationBuildWaiting() {
-  return tapOrbRuntime.isActive() && !tapOrbRuntime.hasActivatedFoundationBeat();
+  return tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete();
 }
 function spawnTapOrbFoundationCarrierWave(centerWorld = null) {
-  if (!enemyLayerEl || tapOrbRuntime.hasCarrierWaveSpawned()) return false;
+  if (!enemyLayerEl || tapOrbRuntime.hasCarrierWaveSpawned() || tapOrbRuntime.hasActiveOrb()) return false;
   const center = centerWorld && typeof centerWorld === 'object'
     ? centerWorld
     : (arenaCenterWorld || getViewportCenterWorld());
@@ -17068,6 +17068,8 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null) {
     noteMusicSystemEvent('tap_orb_carrier_spawned', {
       carrierEnemyId: Math.max(0, Math.trunc(Number(carrier.id) || 0)),
       enemyCount: offsets.length,
+      foundationHitCount: tapOrbRuntime.getFoundationHitCount(),
+      foundationTargetHitCount: tapOrbRuntime.getTargetHitCount(),
     }, {
       beatIndex: currentBeatIndex,
       stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
@@ -17077,8 +17079,8 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null) {
 }
 function updateTapOrbFoundationBuild(dt = 0, centerWorld = null) {
   if (!tapOrbRuntime.isActive()) return;
-  if (isTapOrbFoundationBuildWaiting()) spawnTapOrbFoundationCarrierWave(centerWorld);
   tapOrbRuntime.update(dt);
+  if (isTapOrbFoundationBuildWaiting()) spawnTapOrbFoundationCarrierWave(centerWorld);
 }
 function clearEnemies() {
   while (enemies.length) {
