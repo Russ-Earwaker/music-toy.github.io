@@ -3765,6 +3765,7 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   const sinceInjectedBass = stepIndex - Math.max(-1000000, Math.trunc(Number(bassKeepaliveRuntime.lastInjectedBassStep) || -1000000));
   if (!forceImmediate && sinceInjectedBass < bassKeepaliveCadenceSteps) return null;
   const foundationLane = getFoundationLaneSnapshot(stepIndex, barIndex);
+  if (weaponGateMusicRuntime.lowAfterComplete && !foundationLane.isActiveStep) return null;
   const emergencyFoundationRecovery = !foundationLane.isActiveStep
     && !forceImmediate
     && sinceNaturalBass >= 6
@@ -4059,13 +4060,17 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   const introLockedLoop = !!introDrumProfile && ownerType === 'spawner';
   const slotOwnedSpawnerOwner = ownerType === 'spawner' && !!String(ownerEnemy?.musicVoiceKey || '').trim();
   if (introLockedLoop && slotOwnedSpawnerOwner) return null;
-  const requestedNoteRaw = normalizeSwarmNoteName(group?.note)
+  const playerFoundationLiteralNote = weaponGateMusicRuntime.lowAfterComplete
+    && String(foundationLane?.playerThemeSource || '').trim() === 'bassDrive'
+    ? (normalizeSwarmNoteName(getPlayerSimpleRhythmThemeNote('bassDrive')) || 'C3')
+    : '';
+  const requestedNoteRaw = playerFoundationLiteralNote || normalizeSwarmNoteName(group?.note)
     || normalizeSwarmNoteName(ownerEnemy?.spawnerNoteName)
     || normalizeSwarmNoteName(ownerEnemy?.drawsnakePrimaryNote)
     || normalizeSwarmNoteName(ownerEnemy?.__bsLastSpawnerNote)
     || normalizeSwarmNoteName(ownerEnemy?.__bsLastDrawsnakeNote)
     || getSwarmPentatonicNoteByIndex(0);
-  const note = clampNoteToDirectorRegisterTarget(
+  const note = playerFoundationLiteralNote || clampNoteToDirectorRegisterTarget(
     requestedNoteRaw,
     beatIndex + stepIndex + ownerId,
     'sub'
@@ -4878,10 +4883,15 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
         arrangementState: arrangementStateNow,
       })
       : null;
-    const eventNoteNameRaw = leadMotifAnchor?.active === true
+    const playerFoundationLiteralNote = weaponGateMusicRuntime.lowAfterComplete
+      && musicLaneId === 'foundation_lane'
+      ? (normalizeSwarmNoteName(getPlayerSimpleRhythmThemeNote('bassDrive')) || 'C3')
+      : '';
+    const eventNoteNameRaw = playerFoundationLiteralNote || (leadMotifAnchor?.active === true
       ? leadMotifAnchor.note
-      : archetypeNoteName;
+      : archetypeNoteName);
     const stageRegisterTarget = (() => {
+      if (playerFoundationLiteralNote) return '';
       const section = String(arrangementStateNow?.intensityAuditionSection || '').trim().toLowerCase();
       if (role === BEAT_EVENT_ROLES.BASS || musicLaneId === 'foundation_lane') return 'sub';
       if (section === 'release' || section === 'settle') {
@@ -9592,7 +9602,8 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     quiet('answer');
   } else if (section === 'low') {
     activate('foundation', 0.32, 1);
-    activate('secondary_loop', 0.18, 1);
+    if (weaponGateMusicRuntime.lowAfterComplete) quiet('secondary_loop');
+    else activate('secondary_loop', 0.18, 1);
     quiet('primary_loop');
     quiet('support');
     quiet('sparkle');
@@ -12793,7 +12804,10 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
       || createdRole === BEAT_EVENT_ROLES.BASS
       || actualInstrumentLane === 'bass'
     );
-    if (shouldForceFoundationRegister) {
+    const preservePlayerFoundationNote = weaponGateMusicRuntime.lowAfterComplete
+      && createdLaneId === 'foundation_lane'
+      && normalizeSwarmNoteName(getPlayerSimpleRhythmThemeNote('bassDrive'));
+    if (shouldForceFoundationRegister && !preservePlayerFoundationNote) {
       const clampedBassNote = clampNoteToDirectorRegisterTarget(
         created?.note || created?.payload?.requestedNoteRaw || '',
         Math.max(0, Math.trunc(Number(created?.stepIndex) || 0)) + actorId,
@@ -12809,6 +12823,17 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
           }
         }
       }
+    } else if (preservePlayerFoundationNote) {
+      created.note = preservePlayerFoundationNote;
+      if (created.payload && typeof created.payload === 'object') {
+        created.payload.requestedNoteRaw = preservePlayerFoundationNote;
+        created.payload.musicRegister = 'player_theme';
+        if (!String(created.payload.musicLaneId || '').trim() && createdLaneId === 'foundation_lane') {
+          created.payload.musicLaneId = 'foundation_lane';
+        }
+      }
+    }
+    if (shouldForceFoundationRegister) {
       const foundationInstrumentId = sanitizeEnemyMusicInstrumentId(
         BEAT_SWARM_FOUNDATION_INSTRUMENT_ID,
         created?.instrumentId || 'tone',
@@ -23517,6 +23542,7 @@ function inferBeatSwarmLevelPhaseFromState(barIndex = 0, introStage = 'none') {
 function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'none') {
   const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const safeBeat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
+  const gateFoundationHandoffHold = weaponGateMusicRuntime.lowAfterComplete === true;
   const inferredPhaseId = inferBeatSwarmLevelPhaseFromState(safeBar, introStage);
   const previousPhaseEnteredBar = Math.max(-1, Math.trunc(Number(levelPhaseRuntime.phaseEnteredBar) || -1));
   const previousTimeInPhaseBars = Math.max(0, safeBar - Math.max(0, previousPhaseEnteredBar));
@@ -23526,6 +23552,11 @@ function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'n
     activePhaseId = inferredPhaseId;
   } else if (!(BEAT_SWARM_LEVEL_PHASE_POLICIES[activePhaseId])) {
     activePhaseId = inferredPhaseId;
+  }
+  if (gateFoundationHandoffHold) {
+    activePhaseId = tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete()
+      ? 'intro_teach'
+      : 'groove_establish';
   }
   const currentPolicy = getBeatSwarmLevelPhasePolicy(activePhaseId);
   const snapshot = buildBeatSwarmPhaseRequirementSnapshot(safeBar, introStage, {
@@ -23580,6 +23611,16 @@ function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'n
       : 'default';
     degradeApplied = phaseVariant !== 'default';
     phaseValidity = fallbackHardEval.unmet.length > 0 ? 'invalid' : (degradeApplied ? 'degraded' : 'valid');
+  }
+  if (gateFoundationHandoffHold) {
+    activePhaseId = tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete()
+      ? 'intro_teach'
+      : 'groove_establish';
+    phaseVariant = 'foundation_only';
+    phaseValidity = 'valid';
+    degradeApplied = true;
+    fallbackPending = false;
+    transitionBlockedThisTick = true;
   }
   const activePolicy = getBeatSwarmLevelPhasePolicy(activePhaseId);
   const activeHardEval = evaluateBeatSwarmRequirementSet(activePolicy.hardRequirements, snapshot);
