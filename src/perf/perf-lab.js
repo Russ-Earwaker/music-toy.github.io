@@ -500,7 +500,9 @@ function ensureUI() {
       btn('musicLabRunBS0S3Arrangement5m', 'Music Lab: Run BS0 S3 Arrangement Musicality (1x5m, compact save)', 'primary'),
       btn('musicLabRunBS0S3CompositionFlow4m', 'Music Lab: Run BS0 S3 Composition Full Flow (1x4m, compact save)', 'primary'),
       btn('musicLabRunBS0S3CompositionPacing4m', 'Music Lab: Run BS0 S3 Composition Pacing Flow (1x4m, compact save)', 'primary'),
+      btn('musicLabRunBS0S3TapOrbFoundationDebug', 'Music Lab: Tap-Orb Foundation Commit Debug (1x75s, compact save)', 'primary'),
       btn('weaponGateBeatSwarmStart', 'Prototype: Beat Swarm Gate Start', 'primary'),
+      btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Music Lab: Gate Start Tap-Orb Handoff Debug (1x150s, compact save)', 'primary'),
       btn('weaponGateLabOpen', 'Prototype: Weapon Gate Onboarding Lab', 'primary'),
       btn('musicLabRunBS0S3IntensityRamp150s', 'Music Lab: Run BS0 S3 Intensity Ramp (1x150s, compact save)', 'primary'),
       btn('musicLabRunBS0S3IntensityRampDebug150s', 'Music Lab: Run BS0 S3 Intensity Ramp Debug (1x150s, compact save)', 'primary'),
@@ -1453,6 +1455,10 @@ function ensureUI() {
       await runBS0s3MusicLabCompositionPacingFlow4m();
       return;
     }
+    if (act === 'musicLabRunBS0S3TapOrbFoundationDebug') {
+      await runBS0s3MusicLabTapOrbFoundationDebug75s();
+      return;
+    }
     if (act === 'weaponGateLabOpen') {
       if (window.__WeaponGateLab?.open) {
         window.__WeaponGateLab.open();
@@ -1472,6 +1478,10 @@ function ensureUI() {
       try { api.enter?.({ weaponGateIntro: true }); } catch {}
       try { if (!isRunning()) startTransport(); } catch {}
       setStatus('Beat Swarm gate start launched');
+      return;
+    }
+    if (act === 'musicLabRunBS0S3GateStartTapOrbDebug') {
+      await runBS0s3MusicLabGateStartTapOrbHandoffDebug150s();
       return;
     }
     if (act === 'musicLabRunBS0S3IntensityRamp150s') {
@@ -5764,6 +5774,37 @@ async function runBS0Stage(stageCount = 1, opts = null) {
         setStatus(`BS0 S${stageCount} failed (Beat Swarm debug API unavailable)`);
         return { ok: false, reason: 'debug_api_unavailable', stageCount, runIndex, repeatCount, durationMs };
       }
+      if (typeof cfg.setupAfterPrepare === 'function') {
+        try {
+          await cfg.setupAfterPrepare({
+            runIndex,
+            repeatCount,
+            durationMs,
+            stageCount,
+            musicLabApi: musicLabApi || getMusicLabApiGlobal(),
+          });
+        } catch (err) {
+          setStatus(`BS0 S${stageCount} failed (setup hook failed)`);
+          setOutput({
+            ok: false,
+            stageCount,
+            runIndex,
+            repeatCount,
+            durationMs,
+            reason: 'setup_after_prepare_failed',
+            error: String(err && err.message || err || 'unknown_error'),
+          });
+          return {
+            ok: false,
+            stageCount,
+            runIndex,
+            repeatCount,
+            durationMs,
+            reason: 'setup_after_prepare_failed',
+            error: String(err && err.message || err || 'unknown_error'),
+          };
+        }
+      }
       if (traceCaptureConfig?.enabled === true) {
         try {
           await startMusicTraceCaptureForPerfRun({
@@ -6424,6 +6465,144 @@ async function runBS0s3MusicLabCompositionPacingFlow4m() {
     tagPrefix: 'BS0S3MusicLabCompositionPacingFlow1x4m',
     labelPrefix: 'BS0_stage3_beatswarm_static_fire_musiclab_composition_pacing_flow_1x4m',
     statusPrefix: 'Running BS0 S3 Music Lab composition pacing flow (4 minutes, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabTapOrbFoundationDebug75s() {
+  const debugPattern = [
+    true, false, false, true, false, false, false, false,
+    false, false, true, false, false, false, true, false,
+  ];
+  const debugPatternKey = ['10010000', '00100010'];
+  await runBS0Stage(3, {
+    durationMs: 75000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'fixed_section',
+        fixedSection: 'low',
+        introBars: 0,
+      },
+    },
+    async setupAfterPrepare() {
+      const debugApi = window.__beatSwarmDebug;
+      const modeApi = window.BeatSwarmMode;
+      const apply = typeof debugApi?.applyTapOrbFoundationDebugPattern === 'function'
+        ? debugApi.applyTapOrbFoundationDebugPattern.bind(debugApi)
+        : (typeof modeApi?.applyTapOrbFoundationDebugPattern === 'function'
+          ? modeApi.applyTapOrbFoundationDebugPattern.bind(modeApi)
+          : null);
+      if (typeof apply !== 'function') {
+        throw new Error('tap_orb_foundation_debug_api_unavailable');
+      }
+      const result = apply(debugPattern, {
+        source: 'perf_lab_tap_orb_foundation_debug',
+        instrumentId: 'BASS TONE 4',
+        note: 'C3',
+      });
+      const bassTheme = (() => {
+        try { return window.BeatSwarmMode?.getPlayerMusicTheme?.('bassDrive') || null; } catch { return null; }
+      })();
+      try {
+        window.__beatSwarmTapOrbFoundationDebugExpected = {
+          patternChain: debugPatternKey.slice(),
+          instrumentId: 'BASS TONE 4',
+          note: 'C3',
+          result,
+          bassTheme,
+        };
+      } catch {}
+      setOutput({
+        ok: true,
+        setup: 'tap_orb_foundation_debug_pattern_applied',
+        expectedPatternChain: debugPatternKey,
+        expectedInstrumentId: 'BASS TONE 4',
+        expectedNote: 'C3',
+        result,
+        bassTheme,
+      });
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_tap_orb_foundation_debug_1x75s',
+    saveNotes: [
+      'Beat Swarm Music Lab tap-orb foundation debug: seed the completed tap-orb Bass Drive motif as two 8-step toys, then run fixed Low Intensity with no intro.',
+      `Expected Bass Drive patternChain=${debugPatternKey.join('|')}, instrument=BASS TONE 4, note=C3.`,
+      'Validate that the committed pause-menu Bass Drive motif and the director foundation lane match the seeded two-toy rhythm, without instrument substitution.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_tap_orb_foundation_debug_1x75s',
+    groupedRunId: 'musicLab_bs0_s3_tap_orb_foundation_debug_1x75s_scenario',
+    groupedNotes: `Tap-orb foundation debug scenario: expected two-toy Bass Drive pattern ${debugPatternKey.join('|')} at BASS TONE 4 / C3.`,
+    tagPrefix: 'BS0S3TapOrbFoundationDebug1x75s',
+    labelPrefix: 'BS0_stage3_beatswarm_tap_orb_foundation_debug_1x75s',
+    statusPrefix: 'Running BS0 S3 tap-orb foundation commit debug (75 seconds, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabGateStartTapOrbHandoffDebug150s() {
+  await runBS0Stage(3, {
+    durationMs: 150000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    async setupAfterPrepare() {
+      const api = getBeatSwarmApi();
+      if (!api || typeof api.enter !== 'function') {
+        throw new Error('beat_swarm_api_unavailable');
+      }
+      try { api.exit?.(); } catch {}
+      await waitForPerfLabMs(80);
+      try { api.enter?.({ weaponGateIntro: true }); } catch (err) {
+        throw new Error(`weapon_gate_intro_start_failed:${String(err?.message || err)}`);
+      }
+      try { if (!isRunning()) startTransport(); } catch {}
+      try {
+        window.__beatSwarmGateStartTapOrbDebugExpected = {
+          mode: 'real_gate_start_handoff',
+          expectedFoundationTheme: 'bassDrive',
+          expectedInstrumentFromTheme: 'BASS TONE 4',
+          traceEvents: [
+            'tap_orb_foundation_activated',
+            'tap_orb_foundation_committed_to_bass_drive',
+            'tap_orb_foundation_lane_resolved',
+          ],
+        };
+      } catch {}
+      setOutput({
+        ok: true,
+        setup: 'weapon_gate_intro_started_for_tap_orb_handoff_debug',
+        notes: 'Complete the gate corridor and tap-orb foundation sequence. The saved Music Lab output will include tap-orb commit and foundation lane resolution trace events.',
+      });
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_gate_start_tap_orb_handoff_debug_1x150s',
+    saveNotes: [
+      'Beat Swarm Music Lab gate-start tap-orb handoff debug: run the real gate corridor, then tap-orb foundation creation, then low-intensity handoff.',
+      'Use tap_orb_foundation_committed_to_bass_drive and tap_orb_foundation_lane_resolved events to compare committed Bass Drive motif/instrument against director foundation lane playback.',
+      'Expected result: while tap orbs are active, temporary tap loop plays; after completion, committed Bass Drive patternChain remains recognizable and uses the Bass Drive theme instrument/note.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_gate_start_tap_orb_handoff_debug_1x150s',
+    groupedRunId: 'musicLab_bs0_s3_gate_start_tap_orb_handoff_debug_1x150s_scenario',
+    groupedNotes: 'Gate Start tap-orb handoff debug: real onboarding flow with compact Music Lab save for commit/lane/playback instrument tracing.',
+    tagPrefix: 'BS0S3GateStartTapOrbHandoffDebug1x150s',
+    labelPrefix: 'BS0_stage3_beatswarm_gate_start_tap_orb_handoff_debug_1x150s',
+    statusPrefix: 'Running BS0 S3 Gate Start tap-orb handoff debug (150 seconds, compact save)',
     traceCapture: {
       enabled: false,
     },

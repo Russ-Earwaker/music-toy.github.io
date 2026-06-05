@@ -3,7 +3,7 @@ const ORB_REST_RADIUS_MULT = 1.08;
 const ORB_TRAVEL_SPEED_WORLD = 620;
 const ORB_SETTLE_SECONDS = 0.28;
 const ORB_TRIGGER_SECONDS = 0.34;
-const FOUNDATION_STEPS = 8;
+const DEFAULT_FOUNDATION_STEPS = 16;
 const DEFAULT_TARGET_HIT_COUNT = 4;
 
 function clamp01(v) {
@@ -20,8 +20,33 @@ function normalizePoint(p = null) {
 
 function isFoundationCompleteState(state) {
   if (!state || typeof state !== 'object') return false;
-  const target = Math.max(1, Math.min(FOUNDATION_STEPS, Math.trunc(Number(state.targetHitCount) || DEFAULT_TARGET_HIT_COUNT)));
+  const stepCount = getFoundationStepCount(state);
+  const target = Math.max(1, Math.min(stepCount, Math.trunc(Number(state.targetHitCount) || DEFAULT_TARGET_HIT_COUNT)));
   return state.foundationHits instanceof Set && state.foundationHits.size >= target;
+}
+
+function getFoundationStepCount(state = null) {
+  return Math.max(1, Math.trunc(Number(state?.stepCount) || DEFAULT_FOUNDATION_STEPS));
+}
+
+function getClockStepIndex(clock = {}, fallbackBeatIndex = 0, stepCount = DEFAULT_FOUNDATION_STEPS) {
+  const raw = Number.isFinite(Number(clock.motifStepIndex))
+    ? Number(clock.motifStepIndex)
+    : (Number.isFinite(Number(clock.foundationStepIndex))
+      ? Number(clock.foundationStepIndex)
+      : (Number.isFinite(Number(clock.stepIndex)) ? Number(clock.stepIndex) : fallbackBeatIndex));
+  const step = Math.trunc(Number(raw) || 0);
+  const count = Math.max(1, Math.trunc(Number(stepCount) || DEFAULT_FOUNDATION_STEPS));
+  return ((step % count) + count) % count;
+}
+
+function getClockTriggerIndex(clock = {}, fallbackBeatIndex = 0) {
+  const raw = Number.isFinite(Number(clock.tickIndex))
+    ? Number(clock.tickIndex)
+    : (Number.isFinite(Number(clock.absoluteStepIndex))
+      ? Number(clock.absoluteStepIndex)
+      : (Number.isFinite(Number(clock.stepIndex)) ? Number(clock.stepIndex) : fallbackBeatIndex));
+  return Math.max(0, Math.trunc(Number(raw) || 0));
 }
 
 function installStyles() {
@@ -144,6 +169,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     carrierWaveSpawned: false,
     foundationActivated: false,
     foundationComplete: false,
+    stepCount: DEFAULT_FOUNDATION_STEPS,
     targetHitCount: DEFAULT_TARGET_HIT_COUNT,
     lastLoopBeatIndex: -1,
     nextOrbId: 1,
@@ -199,7 +225,8 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.carrierWaveSpawned = false;
     state.foundationActivated = false;
     state.foundationComplete = false;
-    state.targetHitCount = Math.max(1, Math.min(FOUNDATION_STEPS, Math.trunc(Number(options.targetHitCount) || DEFAULT_TARGET_HIT_COUNT)));
+    state.stepCount = Math.max(1, Math.trunc(Number(options.stepCount) || DEFAULT_FOUNDATION_STEPS));
+    state.targetHitCount = Math.max(1, Math.min(state.stepCount, Math.trunc(Number(options.targetHitCount) || DEFAULT_TARGET_HIT_COUNT)));
     state.lastLoopBeatIndex = -1;
     state.foundationHits.clear();
     clearDom();
@@ -211,6 +238,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.carrierWaveSpawned = false;
     state.foundationActivated = false;
     state.foundationComplete = false;
+    state.stepCount = DEFAULT_FOUNDATION_STEPS;
     state.targetHitCount = DEFAULT_TARGET_HIT_COUNT;
     state.lastLoopBeatIndex = -1;
     state.foundationHits.clear();
@@ -260,11 +288,13 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     if (!orb || orb.status !== 'ready') return false;
     const clock = deps.getBeatClock?.() || {};
     const beatIndex = Math.max(0, Math.trunc(Number(clock.beatIndex) || 0));
-    const stepIndex = Math.max(0, Math.trunc(Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+    const triggerIndex = getClockTriggerIndex(clock, beatIndex);
+    const stepCount = getFoundationStepCount(state);
+    const stepIndex = getClockStepIndex(clock, beatIndex, stepCount);
     const slot = findNextFreeFoundationSlot(stepIndex, 1, orb);
     if (!slot) return false;
     orb.status = 'queued';
-    orb.queuedBeatIndex = beatIndex + slot.stepOffset;
+    orb.queuedBeatIndex = triggerIndex + slot.stepOffset;
     orb.queuedStepIndex = slot.stepIndex;
     try { orb.el?.classList?.remove?.('is-ready'); } catch {}
     try { orb.el?.classList?.add?.('is-queued'); } catch {}
@@ -272,15 +302,16 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
   }
 
   function findNextFreeFoundationSlot(fromStepIndex = 0, minOffset = 1, ignoreOrb = null) {
-    const start = Math.max(0, Math.trunc(Number(fromStepIndex) || 0) % FOUNDATION_STEPS);
+    const stepCount = getFoundationStepCount(state);
+    const start = ((Math.trunc(Number(fromStepIndex) || 0) % stepCount) + stepCount) % stepCount;
     const reservedSteps = new Set(state.foundationHits);
     for (const entry of state.orbs) {
       if (!entry || entry === ignoreOrb || entry.status !== 'queued') continue;
-      reservedSteps.add(Math.max(0, Math.trunc(Number(entry.queuedStepIndex) || 0) % FOUNDATION_STEPS));
+      reservedSteps.add(((Math.trunc(Number(entry.queuedStepIndex) || 0) % stepCount) + stepCount) % stepCount);
     }
     let stepOffset = Math.max(1, Math.trunc(Number(minOffset) || 1));
-    while (stepOffset <= FOUNDATION_STEPS) {
-      const stepIndex = (start + stepOffset) % FOUNDATION_STEPS;
+    while (stepOffset <= stepCount) {
+      const stepIndex = (start + stepOffset) % stepCount;
       if (!reservedSteps.has(stepIndex)) return { stepIndex, stepOffset };
       stepOffset += 1;
     }
@@ -299,13 +330,18 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     if (!orb || orb.status !== 'queued') return false;
     const clock = deps.getBeatClock?.() || {};
     const beatIndex = Math.max(0, Math.trunc(Number(clock.beatIndex) || 0));
-    let stepIndex = Math.max(0, Math.trunc(Number(orb.queuedStepIndex) || Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+    const triggerIndex = getClockTriggerIndex(clock, beatIndex);
+    const stepCount = getFoundationStepCount(state);
+    const queuedStepRaw = Number(orb.queuedStepIndex);
+    let stepIndex = ((Math.trunc(Number.isFinite(queuedStepRaw) && queuedStepRaw >= 0
+      ? queuedStepRaw
+      : getClockStepIndex(clock, beatIndex, stepCount)) % stepCount) + stepCount) % stepCount;
     const requestedStepIndex = stepIndex;
     if (state.foundationHits.has(stepIndex)) {
-      const currentStepIndex = Math.max(0, Math.trunc(Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+      const currentStepIndex = getClockStepIndex(clock, beatIndex, stepCount);
       const slot = findNextFreeFoundationSlot(currentStepIndex, 1, orb);
       if (!slot) return false;
-      orb.queuedBeatIndex = beatIndex + slot.stepOffset;
+      orb.queuedBeatIndex = triggerIndex + slot.stepOffset;
       orb.queuedStepIndex = slot.stepIndex;
       return false;
     }
@@ -315,7 +351,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.foundationHits.add(stepIndex);
     state.foundationComplete = isFoundationCompleteState(state);
     state.carrierWaveSpawned = false;
-    state.lastLoopBeatIndex = beatIndex;
+    state.lastLoopBeatIndex = triggerIndex;
     try {
       deps.onBeatOrbActivated?.({
         instrumentId: 'BASS TONE 4',
@@ -380,7 +416,8 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     } else if (orb.status === 'queued') {
       const clock = deps.getBeatClock?.() || {};
       const beatIndex = Math.max(0, Math.trunc(Number(clock.beatIndex) || 0));
-      if (beatIndex >= Math.max(0, Math.trunc(Number(orb.queuedBeatIndex) || 0))) {
+      const triggerIndex = getClockTriggerIndex(clock, beatIndex);
+      if (triggerIndex >= Math.max(0, Math.trunc(Number(orb.queuedBeatIndex) || 0))) {
         triggerOrb(orb);
       }
     } else if (orb.status === 'triggered') {
@@ -427,9 +464,10 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     if (!state.foundationActivated || !state.foundationHits.size || isFoundationCompleteState(state)) return;
     const clock = deps.getBeatClock?.() || {};
     const beatIndex = Math.max(0, Math.trunc(Number(clock.beatIndex) || 0));
-    if (beatIndex === state.lastLoopBeatIndex) return;
-    state.lastLoopBeatIndex = beatIndex;
-    const stepIndex = Math.max(0, Math.trunc(Number(clock.stepIndex) || beatIndex) % FOUNDATION_STEPS);
+    const triggerIndex = getClockTriggerIndex(clock, beatIndex);
+    if (triggerIndex === state.lastLoopBeatIndex) return;
+    state.lastLoopBeatIndex = triggerIndex;
+    const stepIndex = getClockStepIndex(clock, beatIndex, getFoundationStepCount(state));
     if (!state.foundationHits.has(stepIndex)) return;
     try {
       deps.playFoundationBeat?.({
@@ -455,9 +493,10 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
   }
 
   function getFoundationSteps() {
-    const steps = Array.from({ length: FOUNDATION_STEPS }, () => false);
+    const stepCount = getFoundationStepCount(state);
+    const steps = Array.from({ length: stepCount }, () => false);
     for (const hit of state.foundationHits) {
-      const idx = Math.max(0, Math.min(FOUNDATION_STEPS - 1, Math.trunc(Number(hit) || 0)));
+      const idx = Math.max(0, Math.min(stepCount - 1, Math.trunc(Number(hit) || 0)));
       steps[idx] = true;
     }
     return steps;

@@ -356,6 +356,9 @@ export function installBeatSwarmDebugGlobalRuntime(deps = {}) {
       preparePerfScenario(options) {
         return api.preparePerfScenario(options);
       },
+      applyTapOrbFoundationDebugPattern(pattern, options) {
+        return api.applyTapOrbFoundationDebugPattern(pattern, options);
+      },
       setBorderForceEnabled(next) {
         return api.setBorderForceEnabled(next);
       },
@@ -498,6 +501,9 @@ export function createBeatSwarmDebugApiRuntime(deps = {}) {
     },
     preparePerfScenario(options = null) {
       return helpers.preparePerfScenario?.(options);
+    },
+    applyTapOrbFoundationDebugPattern(pattern = null, options = null) {
+      return helpers.applyTapOrbFoundationDebugPattern?.(pattern, options);
     },
     setBorderForceEnabled(next) {
       return helpers.setBorderForceEnabled?.(next);
