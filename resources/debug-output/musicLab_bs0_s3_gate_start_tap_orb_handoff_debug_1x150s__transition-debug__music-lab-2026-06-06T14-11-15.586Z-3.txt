@@ -1,0 +1,34 @@
+Beat Swarm Transition Debug
+sessionId=music-lab-2026-06-06T14:11:15.586Z-3
+runId=musicLab_bs0_s3_gate_start_tap_orb_handoff_debug_1x150s
+label=music-lab-session
+leadEntryBar=0
+range=8-16
+
+Per-bar executed audible enemy events:
+bar 8: audibleEnemy=0 playerAudible=0
+bar 9: audibleEnemy=0 playerAudible=0
+bar 10: audibleEnemy=0 playerAudible=0
+bar 11: audibleEnemy=0 playerAudible=0
+bar 12: audibleEnemy=0 playerAudible=0
+bar 13: audibleEnemy=0 playerAudible=0
+bar 14: audibleEnemy=0 playerAudible=0
+bar 15: audibleEnemy=0 playerAudible=1
+bar 16: audibleEnemy=4 playerAudible=6 :: -|-|-|quiet:4
+
+Lead / Secondary Render Summary:
+bar 8: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 9: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 10: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 11: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 12: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 13: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 14: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 15: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 16: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+
+Transition snapshots:
+
+Lead suppression events in range:
+
+Response events in range:

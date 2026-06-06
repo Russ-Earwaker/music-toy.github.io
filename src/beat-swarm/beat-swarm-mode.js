@@ -29,7 +29,7 @@ import { collectDrawSnakeStepBeatEvents as collectDrawSnakeStepEvents, collectSp
 import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRuntime, } from './beat-swarm-composer-spawn.js';
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
-import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-05-27-secondary-fallback-top-level-v1';
+import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-06-06-tap-orb-preserve-note-v1';
 import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-05-26-digital-answer-literal-v1';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
@@ -836,7 +836,11 @@ const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
   playFoundationBeat({ stepIndex = 0 } = {}) {
     const inst = getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 4';
     const note = getPlayerSimpleRhythmThemeNote('bassDrive') || 'C3';
-    triggerBeatSwarmInstrument(inst, note, undefined, 'master', { source: 'tap-orb-foundation', stepIndex }, 0.92);
+    triggerBeatSwarmInstrument(inst, note, undefined, 'master', {
+      source: 'tap-orb-foundation',
+      musicLaneId: 'foundation_lane',
+      stepIndex,
+    }, 0.54);
     pulsePlayerShipNoteFlash();
   },
   addExplosion(world, radiusWorld, ttl) {
@@ -4884,7 +4888,7 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
       })
       : null;
     const playerFoundationLiteralNote = weaponGateMusicRuntime.lowAfterComplete
-      && musicLaneId === 'foundation_lane'
+      && (musicLaneId === 'foundation_lane' || role === BEAT_EVENT_ROLES.BASS)
       ? (normalizeSwarmNoteName(getPlayerSimpleRhythmThemeNote('bassDrive')) || 'C3')
       : '';
     const eventNoteNameRaw = playerFoundationLiteralNote || (leadMotifAnchor?.active === true
@@ -12805,7 +12809,7 @@ function createLoggedPerformedBeatEvent(eventLike, context = null) {
       || actualInstrumentLane === 'bass'
     );
     const preservePlayerFoundationNote = weaponGateMusicRuntime.lowAfterComplete
-      && createdLaneId === 'foundation_lane'
+      && shouldForceFoundationRegister
       && normalizeSwarmNoteName(getPlayerSimpleRhythmThemeNote('bassDrive'));
     if (shouldForceFoundationRegister && !preservePlayerFoundationNote) {
       const clampedBassNote = clampNoteToDirectorRegisterTarget(
@@ -17226,27 +17230,47 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null) {
   const center = centerWorld && typeof centerWorld === 'object'
     ? centerWorld
     : (arenaCenterWorld || getViewportCenterWorld());
-  const screen = worldToScreen(center) || { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 };
-  const offsets = [
-    { x: 0, y: -96, carrier: true },
-    { x: -110, y: 52, carrier: false },
-    { x: 118, y: 64, carrier: false },
-    { x: 18, y: 128, carrier: false },
+  const spawnSpecs = [
+    { carrier: true, formationSpawnRegion: 'mid_side', formationArchetype: 'backbeat_pair' },
+    { carrier: false, formationSpawnRegion: 'side_diagonal', formationArchetype: 'syncopation_stair' },
+    { carrier: false, formationSpawnRegion: 'lower_outer', formationArchetype: 'foundation_anchor_line' },
+    { carrier: false, formationSpawnRegion: 'upper_mid', formationArchetype: 'lead_arc' },
   ];
   let carrier = null;
-  for (const offset of offsets) {
-    const enemy = spawnEnemyAt(screen.x + offset.x, screen.y + offset.y, {
-      hp: offset.carrier ? 3 : 1,
-      role: offset.carrier ? BEAT_EVENT_ROLES.BASS : BEAT_EVENT_ROLES.ACCENT,
-      instrumentId: offset.carrier ? 'BASS TONE 4' : '',
-      note: offset.carrier ? 'C3' : '',
-      layer: offset.carrier ? 'foundation' : 'sparkle',
+  for (let i = 0; i < spawnSpecs.length; i += 1) {
+    const spec = spawnSpecs[i];
+    const point = getRandomOffscreenSpawnPointRuntime({
+      constants: {
+        enemyFallbackSpawnMarginPx: ENEMY_FALLBACK_SPAWN_MARGIN_PX,
+      },
+      helpers: { randRange },
+      memberIndex: i,
+      memberCount: spawnSpecs.length,
+      group: {
+        id: Math.max(1, Math.trunc(Number(currentBeatIndex) || 0)) + i,
+        formationSpawnRegion: spec.formationSpawnRegion,
+        formationArchetype: spec.formationArchetype,
+      },
+    }) || getRandomOffscreenSpawnPoint();
+    if (!point) continue;
+    const enemy = spawnEnemyAt(point.x, point.y, {
+      hp: spec.carrier ? 3 : 1,
+      role: spec.carrier ? BEAT_EVENT_ROLES.BASS : BEAT_EVENT_ROLES.ACCENT,
+      instrumentId: spec.carrier ? 'BASS TONE 4' : '',
+      note: spec.carrier ? 'C3' : '',
+      layer: spec.carrier ? 'foundation' : 'sparkle',
       skipMusicGroupInit: true,
     });
     if (!enemy) continue;
-    enemy.vx = offset.carrier ? 0 : ((Math.random() - 0.5) * 20);
-    enemy.vy = offset.carrier ? 0 : ((Math.random() - 0.5) * 20);
-    if (offset.carrier) {
+    const towardCenter = {
+      x: Number(center.x) - Number(enemy.wx),
+      y: Number(center.y) - Number(enemy.wy),
+    };
+    const len = Math.max(1, Math.hypot(towardCenter.x, towardCenter.y));
+    const speed = spec.carrier ? 34 : 26;
+    enemy.vx = (towardCenter.x / len) * speed;
+    enemy.vy = (towardCenter.y / len) * speed;
+    if (spec.carrier) {
       carrier = enemy;
       tapOrbRuntime.markCarrierEnemy(enemy);
     }
@@ -17255,7 +17279,7 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null) {
     tapOrbRuntime.noteCarrierWaveSpawned();
     noteMusicSystemEvent('tap_orb_carrier_spawned', {
       carrierEnemyId: Math.max(0, Math.trunc(Number(carrier.id) || 0)),
-      enemyCount: offsets.length,
+      enemyCount: spawnSpecs.length,
       foundationHitCount: tapOrbRuntime.getFoundationHitCount(),
       foundationTargetHitCount: tapOrbRuntime.getTargetHitCount(),
     }, {
@@ -22087,17 +22111,39 @@ function shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(eventLike = null) {
 function executePerformedBeatEvent(event) {
   const shapedEvent = shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(event);
   if (!shapedEvent) return false;
-  const executionEvent = (() => {
+  const playerFoundationExecutionNote = (() => {
     const payload = shapedEvent?.payload && typeof shapedEvent.payload === 'object' ? shapedEvent.payload : {};
+    if (weaponGateMusicRuntime.lowAfterComplete !== true) return '';
+    const laneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
+    const source = String(payload.foundationPlayerThemeSource || payload.musicLanePlayerThemeSource || '').trim();
+    const role = normalizeSwarmRole(shapedEvent?.role || '', '');
+    if (source !== 'bassDrive' && laneId !== 'foundation_lane' && role !== BEAT_EVENT_ROLES.BASS) return '';
+    return normalizeSwarmNoteName(getPlayerSimpleRhythmThemeNote('bassDrive')) || 'C3';
+  })();
+  const foundationShapedEvent = playerFoundationExecutionNote
+    ? {
+      ...shapedEvent,
+      note: playerFoundationExecutionNote,
+      payload: {
+        ...(shapedEvent.payload && typeof shapedEvent.payload === 'object' ? shapedEvent.payload : {}),
+        requestedNoteRaw: playerFoundationExecutionNote,
+        noteResolved: playerFoundationExecutionNote,
+        musicRegister: 'player_theme',
+        preserveRequestedNote: true,
+      },
+    }
+    : shapedEvent;
+  const executionEvent = (() => {
+    const payload = foundationShapedEvent?.payload && typeof foundationShapedEvent.payload === 'object' ? foundationShapedEvent.payload : {};
     const isReleaseLeadEcho = String(payload.intensityAuditionSection || '').trim().toLowerCase() === 'release'
       && String(payload.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
       && (
         String(payload.leadThemeInterpretationMode || '').trim().toLowerCase() === 'release_riff'
         || String(payload.continuityId || '').trim().toLowerCase() === 'player-lead-theme-direct'
       );
-    if (!isReleaseLeadEcho) return shapedEvent;
+    if (!isReleaseLeadEcho) return foundationShapedEvent;
     return {
-      ...shapedEvent,
+      ...foundationShapedEvent,
       payload: {
         ...payload,
         musicProminence: 'quiet',

@@ -1306,7 +1306,10 @@ export function executePerformedBeatEventRuntime(options = null) {
     });
     const aggressionScale = helpers.getEnemyAggressionScale?.(enemy, group?.lifecycleState || 'active');
     const requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
-    let noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
+    const preserveRequestedNote = ev?.payload?.preserveRequestedNote === true;
+    let noteName = preserveRequestedNote
+      ? (requestedNote || String(ev.note || '').trim())
+      : helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
     const lockedInstrumentId = String(
       ev?.instrumentId
         || group?.instrumentId
