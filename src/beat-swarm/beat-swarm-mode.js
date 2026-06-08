@@ -20,7 +20,7 @@ import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-composition-policy-v1';
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
 import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js';
-import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js';
+import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-08-tap-orb-director-integration-v10';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
 import { maintainComposerEnemyGroupsLifecycle } from './beat-swarm-composer-lifecycle.js';
@@ -225,6 +225,12 @@ const WEAPON_GATE_CORRIDOR_SPEED = 440;
 const weaponGateMusicRuntime = {
   lowAfterComplete: false,
   startBar: 0,
+};
+const beatSwarmOnboardingRuntime = {
+  phase: 'idle',
+  phaseStartBar: 0,
+  weaponGateCompleteBar: -1,
+  foundationCompleteBar: -1,
 };
 let tapOrbFoundationCommitted = false;
 let tapOrbFoundationLiteralUntilBar = -1;
@@ -647,6 +653,41 @@ function getCurrentBeatSwarmBarIndex() {
   return Math.max(0, Math.trunc((Number(currentBeatIndex) || 0) / Math.max(1, COMPOSER_BEATS_PER_BAR)));
 }
 
+function setBeatSwarmOnboardingPhase(phaseLike = 'idle', barLike = null) {
+  const phase = String(phaseLike || 'idle').trim().toLowerCase() || 'idle';
+  const bar = Number.isFinite(Number(barLike))
+    ? Math.max(0, Math.trunc(Number(barLike) || 0))
+    : getCurrentBeatSwarmBarIndex();
+  beatSwarmOnboardingRuntime.phase = phase;
+  beatSwarmOnboardingRuntime.phaseStartBar = bar;
+  if (phase === 'tap_orb_foundation') beatSwarmOnboardingRuntime.weaponGateCompleteBar = bar;
+  if (phase === 'foundation_confirm') beatSwarmOnboardingRuntime.foundationCompleteBar = bar;
+  if (phase === 'idle') {
+    beatSwarmOnboardingRuntime.weaponGateCompleteBar = -1;
+    beatSwarmOnboardingRuntime.foundationCompleteBar = -1;
+  }
+  try {
+    noteMusicSystemEvent('beat_swarm_onboarding_phase', {
+      phase,
+      weaponGateCompleteBar: beatSwarmOnboardingRuntime.weaponGateCompleteBar,
+      foundationCompleteBar: beatSwarmOnboardingRuntime.foundationCompleteBar,
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+      barIndex: bar,
+    });
+  } catch {}
+  return phase;
+}
+
+function isBeatSwarmOnboardingLowGrooveActive() {
+  return weaponGateMusicRuntime.lowAfterComplete === true
+    && (
+      beatSwarmOnboardingRuntime.phase === 'tap_orb_foundation'
+      || beatSwarmOnboardingRuntime.phase === 'foundation_confirm'
+      || beatSwarmOnboardingRuntime.phase === 'low_groove'
+    );
+}
+
 function armTapOrbFoundationLiteralConfirmWindow(startBarLike = null) {
   const startBar = Number.isFinite(Number(startBarLike))
     ? Math.max(0, Math.trunc(Number(startBarLike) || 0))
@@ -662,6 +703,7 @@ function commitTapOrbFoundationToBassDriveTheme(event = null) {
   if (!patternChain.some((pattern) => pattern.some(Boolean))) return null;
   tapOrbFoundationCommitted = true;
   const literalUntilBar = armTapOrbFoundationLiteralConfirmWindow();
+  setBeatSwarmOnboardingPhase('foundation_confirm');
   const active = patternChain[0].slice(0, WEAPON_TUNE_STEPS);
   const note = getPlayerSimpleRhythmThemeNote('bassDrive') || 'C3';
   const instrumentId = getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 4';
@@ -693,6 +735,33 @@ function commitTapOrbFoundationToBassDriveTheme(event = null) {
   } catch {}
   try { renderPauseWeaponUi(); } catch {}
   return theme;
+}
+
+function refreshTapOrbFoundationLaneFromRuntime(event = null) {
+  if (!tapOrbRuntime.isActive() || !tapOrbRuntime.hasActivatedFoundationBeat()) return null;
+  const bar = getCurrentBeatSwarmBarIndex();
+  const phrase = getPlayerBassDriveFoundationPhrase(bar, 'tap_orb_foundation_build', {
+    sectionRelative: false,
+  });
+  if (!phrase?.steps?.some?.(Boolean)) return null;
+  const result = setFoundationLanePhrase(phrase, bar, {
+    identityChangeReason: event?.complete ? 'tap_orb_complete' : 'tap_orb_update',
+    sectionId: 'tap_orb_foundation_build',
+  });
+  try {
+    noteMusicSystemEvent('tap_orb_foundation_lane_live_update', {
+      phraseId: String(result?.phraseId || '').trim(),
+      patternKey: buildFoundationPhrasePatternKey(result?.steps),
+      hitCount: Math.max(0, Math.trunc(Number(event?.hitCount) || tapOrbRuntime.getFoundationHitCount?.() || 0)),
+      targetHitCount: Math.max(0, Math.trunc(Number(event?.targetHitCount) || tapOrbRuntime.getTargetHitCount?.() || 0)),
+      complete: event?.complete === true,
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(event?.beatIndex) || Number(currentBeatIndex) || 0)),
+      barIndex: bar,
+      stepIndex: Math.max(0, Math.trunc(Number(event?.stepIndex) || 0)),
+    });
+  } catch {}
+  return result;
 }
 
 function applyTapOrbFoundationDebugPattern(patternLike = null, options = null) {
@@ -801,9 +870,10 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
     weaponGateMusicRuntime.lowAfterComplete = true;
     weaponGateMusicRuntime.startBar = bar;
     tapOrbFoundationCommitted = false;
+    setBeatSwarmOnboardingPhase('tap_orb_foundation', bar);
     tapOrbRuntime.start({
       startBar: bar,
-      targetHitCount: 4,
+      targetHitCount: 8,
       stepCount: WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH,
     });
     try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
@@ -843,15 +913,54 @@ const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
     }, 0.54);
     pulsePlayerShipNoteFlash();
   },
+  shouldContinueFoundationBridge() {
+    const bar = getCurrentBeatSwarmBarIndex();
+    return tapOrbFoundationLiteralUntilBar >= 0 && bar < tapOrbFoundationLiteralUntilBar;
+  },
+  shouldSuppressFoundationBridgeStep(event = {}) {
+    if (tapOrbFoundationCommitted !== true) return false;
+    const steps = Array.isArray(musicLayerRuntime.foundationPhraseSteps)
+      ? musicLayerRuntime.foundationPhraseSteps
+      : [];
+    if (!steps.length) return false;
+    const lane = getMusicLaneRuntimeEntry('foundation_lane');
+    const phraseId = String(lane?.phraseId || musicLayerRuntime.foundationPhraseId || '').trim().toLowerCase();
+    if (!phraseId) return false;
+    const stepIndex = Math.max(0, Math.trunc(Number(event?.stepIndex) || 0));
+    return steps[stepIndex % steps.length] === true;
+  },
   addExplosion(world, radiusWorld, ttl) {
     addExplosionEffect(world, radiusWorld, ttl);
   },
   damageEnemiesNear(world, radiusWorld, amount) {
     damageEnemiesNearTapOrb(world, radiusWorld, amount);
   },
+  onPlayerOrbCollision(event = {}) {
+    const normal = event?.normalWorld && typeof event.normalWorld === 'object'
+      ? event.normalWorld
+      : {};
+    let nx = Number(normal.x) || 0;
+    let ny = Number(normal.y) || 0;
+    const mag = Math.hypot(nx, ny);
+    if (mag > 0.001) {
+      nx /= mag;
+      ny /= mag;
+    } else {
+      nx = -0.7;
+      ny = -0.35;
+    }
+    const bouncePower = 1120;
+    try { applyCameraDelta(nx * 46, ny * 46); } catch {}
+    velocityX += nx * bouncePower;
+    velocityY += ny * bouncePower;
+    postReleaseAssistTimer = Math.max(postReleaseAssistTimer, 0.18);
+    try { pulseReactiveArrowCharge(); } catch {}
+  },
   onBeatOrbActivated(event) {
+    try { refreshTapOrbFoundationLaneFromRuntime(event); } catch {}
     if (event?.complete === true) {
       try { commitTapOrbFoundationToBassDriveTheme(event); } catch {}
+      try { refreshTapOrbFoundationLaneFromRuntime(event); } catch {}
     }
     noteMusicSystemEvent('tap_orb_foundation_activated', event, {
       beatIndex: Math.max(0, Math.trunc(Number(event?.beatIndex) || Number(currentBeatIndex) || 0)),
@@ -3750,8 +3859,15 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   const auditionBypassesIntro = !!auditionSection;
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
   const forceImmediate = opts.forceImmediate === true;
-  if (!auditionBypassesIntro && introStage !== 'none') return null;
-  if (!auditionBypassesIntro && barIndex < 4) return null;
+  const tapOrbFoundationBuildActive = tapOrbRuntime.isActive()
+    && !tapOrbRuntime.isFoundationComplete()
+    && tapOrbRuntime.hasActivatedFoundationBeat();
+  const tapOrbFoundationLiteralActive = tapOrbFoundationLiteralUntilBar >= 0
+    && barIndex < tapOrbFoundationLiteralUntilBar;
+  const tapOrbFoundationConfirmActive = tapOrbFoundationCommitted === true
+    && isBeatSwarmOnboardingLowGrooveActive();
+  if (!tapOrbFoundationBuildActive && !tapOrbFoundationLiteralActive && !tapOrbFoundationConfirmActive && !auditionBypassesIntro && introStage !== 'none') return null;
+  if (!tapOrbFoundationBuildActive && !tapOrbFoundationLiteralActive && !tapOrbFoundationConfirmActive && !auditionBypassesIntro && barIndex < 4) return null;
   const foundationLanePlan = getDirectorLanePlanEntryForMusicLaneId('foundation_lane');
   const foundationPreferredCarrier = String(foundationLanePlan?.preferredCarrier || '').trim().toLowerCase();
   const foundationPrefersSpawnerCarrier = foundationPreferredCarrier === 'spawner'
@@ -3775,6 +3891,73 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
     && sinceNaturalBass >= 6
     && sinceInjectedBass >= 6;
   if (!foundationLane.isActiveStep && !emergencyFoundationRecovery) return null;
+  const tapOrbFoundationGhostActive = tapOrbFoundationBuildActive || tapOrbFoundationLiteralActive || tapOrbFoundationConfirmActive;
+  if (tapOrbFoundationGhostActive && foundationLane.isActiveStep) {
+    const note = normalizeSwarmNoteName(getPlayerSimpleRhythmThemeNote('bassDrive')) || 'C3';
+    const instrumentId = getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 4';
+    const pulseAccent = resolveFoundationLanePulseAccent(foundationLane.stepIndex, 'tap_orb_foundation_build');
+    const event = createLoggedPerformedBeatEvent({
+      actorId: 0,
+      beatIndex,
+      stepIndex,
+      role: BEAT_EVENT_ROLES.BASS,
+      note,
+      instrumentId,
+      actionType: 'composer-group-explosion',
+      threatClass: BEAT_EVENT_THREAT.LIGHT,
+      visualSyncType: 'foundation-keepalive',
+      payload: {
+        groupId: 0,
+        ghostPlayback: true,
+        groupEventSource: 'tap_orb_foundation_director',
+        continuityId: 'tap-orb-foundation',
+        requestedNoteRaw: note,
+        musicLayer: 'foundation',
+        musicProminence: 'full',
+        musicLaneId: 'foundation_lane',
+        musicLaneDriven: true,
+        foundationLaneId: foundationLane.laneId,
+        foundationPhraseId: foundationLane.phraseId,
+        foundationPatternKey: foundationLane.patternKey,
+        foundationPlayerThemeSource: foundationLane.playerThemeSource || 'bassDrive',
+        foundationRawPatternKey: foundationLane.rawPatternKey || foundationLane.patternKey,
+        foundationShapedPatternKey: foundationLane.shapedPatternKey || foundationLane.patternKey,
+        foundationInterpretationMode: foundationLane.interpretationMode || 'literal_statement',
+        foundationPhrasePartIndex: foundationLane.phrasePartIndex,
+        foundationStepIndex: foundationLane.stepIndex,
+        bassKeepaliveInjected: true,
+        keepaliveOwnerId: 0,
+        keepaliveOwnerType: 'director',
+        keepaliveReason: tapOrbFoundationBuildActive ? 'tap_orb_live_foundation' : 'tap_orb_confirm_foundation',
+        musicAccent: String(pulseAccent?.accent || '').trim(),
+        audioGain: Math.max(0.62, Math.min(1, Number(pulseAccent?.audioGain) || 0.78)),
+      },
+    }, {
+      beatIndex,
+      stepIndex,
+      sourceSystem: 'group',
+      enemyType: 'director',
+      groupId: 0,
+      expectedInstrumentLane: 'bass',
+      actualInstrumentLane: 'bass',
+      actionCategory: 'gameplay_attack',
+      audioRequired: true,
+      classificationReason: 'tap_orb_foundation_director',
+    });
+    bassKeepaliveRuntime.lastInjectedBassStep = stepIndex;
+    try {
+      noteMusicSystemEvent('tap_orb_foundation_director_keepalive', {
+        phraseId: foundationLane.phraseId,
+        patternKey: foundationLane.patternKey,
+        stepIndex: foundationLane.stepIndex,
+        note,
+        instrumentId,
+        buildActive: tapOrbFoundationBuildActive,
+        literalActive: tapOrbFoundationLiteralActive,
+      }, { beatIndex, stepIndex, barIndex });
+    } catch {}
+    return event;
+  }
   const center = opts.centerWorld && typeof opts.centerWorld === 'object'
     ? opts.centerWorld
     : (centerWorld && typeof centerWorld === 'object' ? centerWorld : { x: 0, y: 0 });
@@ -8209,38 +8392,39 @@ function shapePlayerBassDriveStepsForFoundation(baseStepsLike = null, sectionIdL
 function getPlayerBassDriveFoundationPhrase(barIndex = 0, sectionIdLike = '', options = null) {
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const opts = options && typeof options === 'object' ? options : {};
+  const sectionId = String(sectionIdLike || 'body').trim().toLowerCase() || 'body';
+  if (tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete() && tapOrbRuntime.hasActivatedFoundationBeat()) {
+    const tapPatterns = splitTapOrbFoundationStepsIntoBassDrivePatterns(tapOrbRuntime.getFoundationSteps());
+    const phrasePartIndex = bar % Math.max(1, tapPatterns.length);
+    const steps = cloneFoundationPhraseSteps(tapPatterns[phrasePartIndex] || tapPatterns[0]);
+    const patternKey = buildFoundationPhrasePatternKey(steps);
+    return {
+      id: `tap_orb_foundation_${phrasePartIndex}_${patternKey}`,
+      family: 'tap_orb_foundation',
+      source: 'player_tap_orb',
+      themeId: 'bassDrive',
+      phrasePartIndex,
+      rawPatternKey: patternKey,
+      shapedPatternKey: patternKey,
+      interpretationMode: 'literal_statement',
+      steps,
+      patternKey,
+    };
+  }
+  const patterns = getPlayerSimpleRhythmMotifPatterns('bassDrive');
+  if (!patterns.length) return null;
+  const tapOrbLiteralWindow = (tapOrbFoundationLiteralUntilBar >= 0 && bar < tapOrbFoundationLiteralUntilBar)
+    || (tapOrbFoundationCommitted === true && weaponGateMusicRuntime.lowAfterComplete === true);
   const auditionState = getBeatSwarmMusicIntensityAuditionState(bar);
   const auditionSection = String(auditionState?.id || '').trim().toLowerCase();
-  const auditionBypassesIntro = !!auditionSection;
+  const auditionBypassesIntro = !!auditionSection || tapOrbLiteralWindow;
   const pacingState = getCurrentPacingStateName();
   if (!auditionBypassesIntro && isIntroPacingStateName(pacingState)) return null;
   const introStage = String(getUnifiedIntroStage(bar, bar * Math.max(1, COMPOSER_BEATS_PER_BAR)) || '').trim().toLowerCase();
   if (!auditionBypassesIntro && introStage && introStage !== 'none') return null;
-  const patterns = getPlayerSimpleRhythmMotifPatterns('bassDrive');
-  if (!patterns.length) return null;
-  const sectionId = String(sectionIdLike || 'body').trim().toLowerCase() || 'body';
-  if (tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete() && tapOrbRuntime.hasActivatedFoundationBeat()) {
-    const steps = cloneFoundationPhraseSteps(tapOrbRuntime.getFoundationSteps());
-    if (steps.some(Boolean)) {
-      const patternKey = buildFoundationPhrasePatternKey(steps);
-      return {
-        id: `tap_orb_foundation_${patternKey}`,
-        family: 'tap_orb_foundation',
-        source: 'player_tap_orb',
-        themeId: 'bassDrive',
-        phrasePartIndex: 0,
-        rawPatternKey: patternKey,
-        shapedPatternKey: patternKey,
-        interpretationMode: 'literal_statement',
-        steps,
-        patternKey,
-      };
-    }
-  }
   const sectionBar = Math.max(0, Math.trunc(Number(opts.sectionBar) || 0));
   const phrasePartIndex = (opts.sectionRelative === true ? sectionBar : bar) % patterns.length;
   const rawSteps = patterns[phrasePartIndex] || patterns[0];
-  const tapOrbLiteralWindow = tapOrbFoundationLiteralUntilBar >= 0 && bar < tapOrbFoundationLiteralUntilBar;
   const statementWindow = tapOrbLiteralWindow || (sectionId.includes('peak')
     ? sectionBar < 16
     : (bar >= 12 && bar < 20));
@@ -8538,6 +8722,17 @@ function setFoundationLanePhrase(phraseLike = null, barIndex = 0, options = null
 function ensureFoundationLanePlan(barIndex = 0, options = null) {
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const opts = options && typeof options === 'object' ? options : {};
+  const tapOrbBuildPhrase = getPlayerBassDriveFoundationPhrase(bar, 'tap_orb_foundation_build', {
+    sectionRelative: false,
+  });
+  if (tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete() && tapOrbRuntime.hasActivatedFoundationBeat() && tapOrbBuildPhrase) {
+    const foundationLane = getMusicLaneRuntimeEntry('foundation_lane');
+    if (foundationLane) foundationLane.phraseFamily = String(tapOrbBuildPhrase.family || '').trim().toLowerCase();
+    return setFoundationLanePhrase(tapOrbBuildPhrase, bar, {
+      identityChangeReason: 'tap_orb_update',
+      sectionId: 'tap_orb_foundation_build',
+    });
+  }
   const introPacingState = getCurrentPacingStateName();
   const introDrumProfile = getLockedIntroDrumSpawnerProfile(bar, introPacingState);
   if (introDrumProfile) {
@@ -17226,7 +17421,7 @@ function isTapOrbFoundationBuildWaiting() {
   return tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete();
 }
 function spawnTapOrbFoundationCarrierWave(centerWorld = null) {
-  if (!enemyLayerEl || tapOrbRuntime.hasCarrierWaveSpawned() || tapOrbRuntime.hasActiveOrb()) return false;
+  if (!enemyLayerEl || tapOrbRuntime.hasCarrierWaveSpawned()) return false;
   const center = centerWorld && typeof centerWorld === 'object'
     ? centerWorld
     : (arenaCenterWorld || getViewportCenterWorld());
@@ -17291,8 +17486,23 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null) {
 }
 function updateTapOrbFoundationBuild(dt = 0, centerWorld = null) {
   if (!tapOrbRuntime.isActive()) return;
-  tapOrbRuntime.update(dt);
+  tapOrbRuntime.update(dt, { playerWorld: centerWorld });
   if (isTapOrbFoundationBuildWaiting()) spawnTapOrbFoundationCarrierWave(centerWorld);
+}
+function resetWeaponGateTapOrbOnboardingState() {
+  setBeatSwarmOnboardingPhase('idle');
+  weaponGateMusicRuntime.lowAfterComplete = false;
+  weaponGateMusicRuntime.startBar = 0;
+  tapOrbFoundationCommitted = false;
+  tapOrbFoundationLiteralUntilBar = -1;
+  try { tapOrbRuntime.stop(); } catch {}
+  try { weaponGateIntroRuntime.stop(); } catch {}
+  try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
+  clearPendingWeaponChainEvents();
+  resetBassFoundationOwnerRuntime();
+  resetBassKeepaliveRuntime();
+  lastWeaponTuneStepIndex = null;
+  lastSpawnerEnemyStepIndex = null;
 }
 function clearEnemies() {
   while (enemies.length) {
@@ -22948,10 +23158,13 @@ function updateBeatWeapons(centerWorld) {
   const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, currentIntroStage);
   const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, currentIntroStage, activeLevelPhaseRuntime);
   const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, currentIntroStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
+  const tapOrbAwaitingFirstFoundationTap = tapOrbRuntime.isActive()
+    && !tapOrbRuntime.isFoundationComplete()
+    && !tapOrbRuntime.hasActivatedFoundationBeat();
   const stepState = {
     lastSpawnerEnemyStepIndex,
     lastWeaponTuneStepIndex,
-    suppressDirectorMusic: isTapOrbFoundationBuildWaiting(),
+    suppressDirectorMusic: tapOrbAwaitingFirstFoundationTap,
     musicModeRuntime: activeMusicModeRuntime,
     enemyDirectorRuntime: activeEnemyDirectorRuntime,
   };
@@ -25341,8 +25554,8 @@ function tick(nowMs) {
   if (!framePressure.severe || (perfFrameIndex % 2) === 0) {
     withBeatSwarmPerfSample('updateEnemies', () => updateEnemies(dt));
   }
-  withBeatSwarmPerfSample('pickupsCombat', () => updatePickupsAndCombat(dt));
   withBeatSwarmPerfSample('tapOrbFoundation', () => updateTapOrbFoundationBuild(dt, centerWorldAfterMove));
+  withBeatSwarmPerfSample('pickupsCombat', () => updatePickupsAndCombat(dt));
   withBeatSwarmPerfSample('spawnerRuntime', () => {
     try { spawnerRuntime?.update?.(dt); } catch {}
   });
@@ -25524,8 +25737,20 @@ function unbindInput() {
   });
 }
 export function enterBeatSwarmMode(options = null) {
-  if (active) return true;
   const enterOptions = options && typeof options === 'object' ? options : {};
+  if (active) {
+    if (enterOptions.weaponGateIntro === true) {
+      resetWeaponGateTapOrbOnboardingState();
+      clearEnemies();
+      clearPickups();
+      clearProjectiles();
+      clearEffects();
+      clearHelpers();
+      setBeatSwarmOnboardingPhase('weapon_gate');
+      try { weaponGateIntroRuntime.start({ seed: enterOptions.weaponGateSeed || '' }); } catch {}
+    }
+    return true;
+  }
   const restoreState = enterOptions.restoreState || null;
   ensureUi();
   enterBeatSwarmThemeOverride(restoreState);
@@ -25543,11 +25768,7 @@ export function enterBeatSwarmMode(options = null) {
   weaponGateCurrentRuntime.releaseAngleDeg = 0;
   weaponGateCurrentRuntime.releaseVx = 0;
   weaponGateCurrentRuntime.releaseVy = 0;
-  weaponGateMusicRuntime.lowAfterComplete = false;
-  weaponGateMusicRuntime.startBar = 0;
-  tapOrbFoundationCommitted = false;
-  tapOrbFoundationLiteralUntilBar = -1;
-  try { tapOrbRuntime.stop(); } catch {}
+  resetWeaponGateTapOrbOnboardingState();
   releaseForcePrimed = false;
   releaseBeatLevel = 0;
   perfEnemyRepeatRuntime.enabled = false;
@@ -25730,6 +25951,7 @@ export function enterBeatSwarmMode(options = null) {
     },
   });
   if (enterOptions.weaponGateIntro === true) {
+    setBeatSwarmOnboardingPhase('weapon_gate');
     try { weaponGateIntroRuntime.start({ seed: enterOptions.weaponGateSeed || '' }); } catch {}
   }
   return true;
@@ -25737,6 +25959,7 @@ export function enterBeatSwarmMode(options = null) {
 export function exitBeatSwarmMode() {
   if (!active) return true;
   try { weaponGateIntroRuntime.stop(); } catch {}
+  setBeatSwarmOnboardingPhase('idle');
   tapOrbFoundationCommitted = false;
   tapOrbFoundationLiteralUntilBar = -1;
   try { tapOrbRuntime.stop(); } catch {}
