@@ -72,8 +72,8 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       selections: Array.from({ length: TOTAL_SLOTS }, () => null),
       summary: Array.from({ length: TOTAL_SLOTS }, () => '-'),
       nextGateIndex: 0,
-      progress: -520,
-      speed: 360,
+      progress: -1120,
+      speed: 0,
       y: window.innerHeight * 0.5,
       vy: 0,
       shots: [],
@@ -85,12 +85,12 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       noteStarPulseSlot: -1,
       motifStep: 0,
       motifTimer: 0.35,
-      feedbackText: 'Shape your weapon rhythm',
+      feedbackText: 'Pull back to launch',
       feedbackKind: '',
       feedbackTtl: 1.2,
       wallPulseTtl: 0,
       wallPulseY: 0,
-      phase: 'gate',
+      phase: 'prelaunch',
       completeDelay: 0,
       outroDuration: 2.35,
     };
@@ -168,6 +168,15 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     updateShots(dt);
     const pickupDash = updateDashPickup(dt, input);
     for (const star of state.noteStars) star.age = (Number(star.age) || 0) + dt;
+    if (state.phase === 'prelaunch') {
+      const { top, bottom } = getLogicalBounds();
+      state.speed = 0;
+      state.y += sideDelta * 0.55;
+      state.y += ((window.innerHeight * 0.5) - state.y) * Math.min(1, dt * 4.8);
+      state.y = clamp(state.y, top + 34, bottom - 34);
+      render();
+      return { active: true, sideDelta: (state.y - window.innerHeight * 0.5) * -0.18 * dt, reflectedY, pickupDash, prelaunch: true };
+    }
     if (state.phase === 'outro') {
       state.speed = Math.min(820, state.speed + 28 * dt);
       state.progress += forwardDelta || (state.speed * dt);
@@ -341,9 +350,19 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   return {
     start,
     stop,
+    launch() {
+      if (!state || state.phase !== 'prelaunch') return false;
+      state.phase = 'gate';
+      state.speed = 620;
+      state.feedbackKind = 'launch';
+      state.feedbackText = 'Launch';
+      state.feedbackTtl = 0.65;
+      return true;
+    },
     update,
     isActive: () => !!state,
     getState: () => state,
+    getPhase: () => state?.phase || '',
     getArenaBlend,
   };
   function getArenaBlend() {

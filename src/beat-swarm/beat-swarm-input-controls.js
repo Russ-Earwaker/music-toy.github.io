@@ -37,6 +37,7 @@ export function updateShipFacingRuntime(options = null) {
   const inputX = Number(options?.inputX) || 0;
   const inputY = Number(options?.inputY) || 0;
   const overrideTargetDeg = options?.overrideTargetDeg;
+  const turnRateMultiplier = Math.max(0.1, Number(options?.turnRateMultiplier) || 1);
   const state = options?.state && typeof options.state === 'object' ? options.state : {};
   const velocityX = Number(state.velocityX) || 0;
   const velocityY = Number(state.velocityY) || 0;
@@ -58,7 +59,7 @@ export function updateShipFacingRuntime(options = null) {
     return v;
   };
   const delta = wrap(targetDeg - shipFacingDeg);
-  const turnRate = 10 * dt;
+  const turnRate = 10 * turnRateMultiplier * dt;
   shipFacingDeg += delta * Math.min(1, turnRate);
   const overlayEl = state.overlayEl || null;
   const ship = overlayEl?.querySelector?.('.beat-swarm-ship');

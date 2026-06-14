@@ -19,8 +19,8 @@ import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from 
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-composition-policy-v1';
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-06-13-gate-normal-weapon-v8';
-import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-13-gate-normal-weapon-v8';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-06-14-gate-plunger-v7';
+import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-14-gate-plunger-v7';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
 import { maintainComposerEnemyGroupsLifecycle } from './beat-swarm-composer-lifecycle.js';
@@ -25295,7 +25295,7 @@ function getInputVector() {
     },
   });
 }
-function updateShipFacing(dt, inputX, inputY, overrideTargetDeg = null) {
+function updateShipFacing(dt, inputX, inputY, overrideTargetDeg = null, turnRateMultiplier = 1) {
   const facingState = {
     dragPointerId,
     velocityX,
@@ -25308,6 +25308,7 @@ function updateShipFacing(dt, inputX, inputY, overrideTargetDeg = null) {
     inputX,
     inputY,
     overrideTargetDeg,
+    turnRateMultiplier,
     state: facingState,
   });
   shipFacingDeg = Number(facingState.shipFacingDeg) || 0;
@@ -25377,6 +25378,8 @@ function tick(nowMs) {
   if (weaponGateIntroRuntime.isActive()) {
     const gateHandoffActive = tapOrbRuntime.isActive()
       || beatSwarmOnboardingRuntime.phase === 'tap_orb_foundation';
+    const gatePhase = String(weaponGateIntroRuntime.getPhase?.() || '');
+    const gatePrelaunchActive = gatePhase === 'prelaunch';
     velocityX = 0;
     velocityY = 0;
     if (!gateHandoffActive) {
@@ -25406,9 +25409,13 @@ function tick(nowMs) {
       const releaseN = Math.max(weaponGateCurrentRuntime.pushN, charge * 0.35);
       if (charge > 0.18) {
         const impulse = getReactiveReleaseImpulse(releaseN, charge);
+        const launchedFromPrelaunch = gatePrelaunchActive
+          ? weaponGateIntroRuntime.launch?.() === true
+          : false;
         const releaseRad = weaponGateCurrentRuntime.releaseAngleDeg * Math.PI / 180;
-        weaponGateCurrentRuntime.releaseVx += Math.cos(releaseRad) * impulse * 0.36;
-        weaponGateCurrentRuntime.releaseVy += Math.sin(releaseRad) * impulse * 0.36;
+        const impulseScale = launchedFromPrelaunch ? 0.64 : 0.36;
+        weaponGateCurrentRuntime.releaseVx += Math.cos(releaseRad) * impulse * impulseScale;
+        weaponGateCurrentRuntime.releaseVy += Math.sin(releaseRad) * impulse * impulseScale;
         lastLaunchBeatLevel = Math.max(lastLaunchBeatLevel, Math.ceil(charge * SWARM_RELEASE_BEAT_LEVEL_MAX));
         postReleaseAssistTimer = Math.max(postReleaseAssistTimer, 0.35 + charge * 0.35);
         pulseReactiveArrowCharge();
@@ -25431,7 +25438,9 @@ function tick(nowMs) {
     weaponGateCurrentRuntime.releaseVx *= Math.max(0, 1 - dt * 3.2);
     weaponGateCurrentRuntime.releaseVy *= Math.max(0, 1 - dt * 3.2);
     const resistanceSlow = weaponGateCurrentRuntime.pushN * (150 + currentFight * 55);
-    const currentDx = Math.max(38, WEAPON_GATE_CORRIDOR_SPEED - resistanceSlow) * dt;
+    const phaseAfterRelease = String(weaponGateIntroRuntime.getPhase?.() || '');
+    const prelaunchStillActive = phaseAfterRelease === 'prelaunch';
+    const currentDx = prelaunchStillActive ? 0 : Math.max(38, WEAPON_GATE_CORRIDOR_SPEED - resistanceSlow) * dt;
     const clampedReleaseDx = Math.max(-currentDx * 0.65, Math.min(currentDx * 3.6, releaseDx));
     const releaseScale = Math.abs(releaseDx) > 0.001 ? clampedReleaseDx / releaseDx : 0;
     const introForwardDelta = currentDx + clampedReleaseDx;
@@ -25466,7 +25475,18 @@ function tick(nowMs) {
       withBeatSwarmPerfSample('gateHandoff.tapOrbFoundation', () => updateTapOrbFoundationBuild(dt, handoffCenterWorld));
       withBeatSwarmPerfSample('gateHandoff.pickupsCombat', () => updatePickupsAndCombat(dt));
     }
-    withBeatSwarmPerfSample('shipFacing', () => updateShipFacing(dt, input.x, input.y));
+    const gateInputHeld = inputMag > 0.2;
+    let gateFacingDeg;
+    let gateFacingTurnRate = 1;
+    if (gatePrelaunchActive) {
+      gateFacingDeg = weaponGateCurrentRuntime.releaseAngleDeg + 90;
+    } else if (gateInputHeld) {
+      gateFacingDeg = (Math.atan2(-inputY, -inputX) * 180 / Math.PI) + 90;
+    } else {
+      gateFacingDeg = (Math.atan2(appliedIntroSideDelta, Math.max(0.001, introForwardDelta)) * 180 / Math.PI) + 90;
+      gateFacingTurnRate = 2.35;
+    }
+    withBeatSwarmPerfSample('shipFacing', () => updateShipFacing(dt, input.x, input.y, gateFacingDeg, gateFacingTurnRate));
     rafId = requestAnimationFrame(tick);
     return;
   }
