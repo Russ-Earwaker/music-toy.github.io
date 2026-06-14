@@ -19,8 +19,8 @@ import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from 
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-composition-policy-v1';
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js';
-import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-08-tap-orb-director-integration-v10';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-06-13-gate-normal-weapon-v8';
+import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-13-gate-normal-weapon-v8';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
 import { maintainComposerEnemyGroupsLifecycle } from './beat-swarm-composer-lifecycle.js';
@@ -234,6 +234,8 @@ const beatSwarmOnboardingRuntime = {
 };
 let tapOrbFoundationCommitted = false;
 let tapOrbFoundationLiteralUntilBar = -1;
+let tapOrbFoundationCarrierRequestReason = '';
+let tapOrbFoundationCarrierEarliestStep = -1;
 const TAP_ORB_FOUNDATION_LITERAL_CONFIRM_BARS = 8;
 const beatSwarmFramePressureRuntime = {
   degradedUntilMs: 0,
@@ -865,7 +867,15 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
   },
   applySelections: applyWeaponGateSelectionsToWeapon,
   onComplete() {
+    startTapOrbFoundationHandoffFromWeaponGate();
+  },
+});
+function startTapOrbFoundationHandoffFromWeaponGate() {
+  if (tapOrbRuntime.isActive() || beatSwarmOnboardingRuntime.phase === 'tap_orb_foundation') return;
     const bar = Math.max(0, Math.floor(Math.max(0, Number(currentBeatIndex) || 0) / Math.max(1, COMPOSER_BEATS_PER_BAR)));
+    const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
+    const handoffStep = Math.max(0, Math.trunc(Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0));
+    const weaponLoopSteps = Math.max(1, WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH);
     arenaCenterWorld = getViewportCenterWorld();
     weaponGateMusicRuntime.lowAfterComplete = true;
     weaponGateMusicRuntime.startBar = bar;
@@ -876,13 +886,14 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
       targetHitCount: 8,
       stepCount: WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH,
     });
+    tapOrbFoundationCarrierRequestReason = 'weapon_gate_handoff';
+    tapOrbFoundationCarrierEarliestStep = handoffStep + (weaponLoopSteps * 2);
     try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
     lastWeaponTuneStepIndex = null;
     energyStateRuntime.state = 'intro';
     energyStateRuntime.stateStartBar = bar;
     energyStateRuntime.lastAppliedBar = -1;
-  },
-});
+}
 const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
   getOverlayEl: () => overlayEl,
   getArenaCenterWorld: () => arenaCenterWorld || getViewportCenterWorld(),
@@ -17420,8 +17431,10 @@ function damageEnemiesNearTapOrb(world = null, radiusWorld = 180, amount = 8) {
 function isTapOrbFoundationBuildWaiting() {
   return tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete();
 }
-function spawnTapOrbFoundationCarrierWave(centerWorld = null) {
+function spawnTapOrbFoundationCarrierWave(centerWorld = null, options = null) {
   if (!enemyLayerEl || tapOrbRuntime.hasCarrierWaveSpawned()) return false;
+  const opts = options && typeof options === 'object' ? options : {};
+  const reason = String(opts.reason || tapOrbFoundationCarrierRequestReason || 'foundation_waiting').trim().toLowerCase() || 'foundation_waiting';
   const center = centerWorld && typeof centerWorld === 'object'
     ? centerWorld
     : (arenaCenterWorld || getViewportCenterWorld());
@@ -17477,17 +17490,24 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null) {
       enemyCount: spawnSpecs.length,
       foundationHitCount: tapOrbRuntime.getFoundationHitCount(),
       foundationTargetHitCount: tapOrbRuntime.getTargetHitCount(),
+      reason,
     }, {
       beatIndex: currentBeatIndex,
       stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
     });
   }
+  if (carrier) tapOrbFoundationCarrierRequestReason = '';
   return !!carrier;
 }
 function updateTapOrbFoundationBuild(dt = 0, centerWorld = null) {
   if (!tapOrbRuntime.isActive()) return;
   tapOrbRuntime.update(dt, { playerWorld: centerWorld });
-  if (isTapOrbFoundationBuildWaiting()) spawnTapOrbFoundationCarrierWave(centerWorld);
+  if (!isTapOrbFoundationBuildWaiting()) return;
+  const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
+  const currentStep = Math.max(0, Math.trunc(Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0));
+  if (tapOrbFoundationCarrierEarliestStep >= 0 && currentStep < tapOrbFoundationCarrierEarliestStep) return;
+  const reason = String(tapOrbFoundationCarrierRequestReason || 'foundation_waiting').trim().toLowerCase() || 'foundation_waiting';
+  spawnTapOrbFoundationCarrierWave(centerWorld, { reason });
 }
 function resetWeaponGateTapOrbOnboardingState() {
   setBeatSwarmOnboardingPhase('idle');
@@ -17495,6 +17515,8 @@ function resetWeaponGateTapOrbOnboardingState() {
   weaponGateMusicRuntime.startBar = 0;
   tapOrbFoundationCommitted = false;
   tapOrbFoundationLiteralUntilBar = -1;
+  tapOrbFoundationCarrierRequestReason = '';
+  tapOrbFoundationCarrierEarliestStep = -1;
   try { tapOrbRuntime.stop(); } catch {}
   try { weaponGateIntroRuntime.stop(); } catch {}
   try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
@@ -24976,9 +24998,13 @@ function maintainEnemyPopulation() {
   // Section 1: fallback generic enemies are intentionally disabled.
   // Musical participation should come from explicit enemy groups/systems only.
 }
-function updatePickupsAndCombat(dt) {
+function updatePickupsAndCombat(dt, options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
   updatePickupsAndCombatRuntimeWrapper({
     dt,
+    flags: {
+      suppressWeaponRuntime: opts.suppressWeaponRuntime === true,
+    },
     constants: {
       pickupCollectRadiusPx: PICKUP_COLLECT_RADIUS_PX,
       projectileHitRadiusPx: PROJECTILE_HIT_RADIUS_PX,
@@ -25349,12 +25375,14 @@ function tick(nowMs) {
   const centerWorld = getViewportCenterWorld();
   const input = getInputVector();
   if (weaponGateIntroRuntime.isActive()) {
+    const gateHandoffActive = tapOrbRuntime.isActive()
+      || beatSwarmOnboardingRuntime.phase === 'tap_orb_foundation';
     velocityX = 0;
     velocityY = 0;
-    clearEnemies();
-    clearPickups();
-    clearProjectiles();
-    clearEffects();
+    if (!gateHandoffActive) {
+      clearEnemies();
+      clearPickups();
+    }
     const inputX = Number(input?.x) || 0;
     const inputY = Number(input?.y) || 0;
     const inputMag = Math.min(1, Math.hypot(inputX, inputY));
@@ -25409,9 +25437,11 @@ function tick(nowMs) {
     const introForwardDelta = currentDx + clampedReleaseDx;
     const introSideDelta = inputY * 120 * dt + (releaseDy * releaseScale);
     let appliedIntroSideDelta = introSideDelta;
+    let gateCompletedThisFrame = false;
     try {
       const introMove = weaponGateIntroRuntime.update(dt, input, { forwardDelta: introForwardDelta, sideDelta: introSideDelta });
       if (introMove && typeof introMove === 'object') {
+        gateCompletedThisFrame = introMove.handoffComplete === true || introMove.active === false;
         appliedIntroSideDelta = Number(introMove.sideDelta) || 0;
         if (introMove.reflectedY) weaponGateCurrentRuntime.releaseVy *= -0.78;
         if (introMove.pickupDash) {
@@ -25426,9 +25456,16 @@ function tick(nowMs) {
     try {
       arenaCenterWorld = getViewportCenterWorld();
       updateArenaVisual(scale, false);
-      setArenaIntroBlend(weaponGateIntroRuntime.getArenaBlend());
+      setArenaIntroBlend(gateCompletedThisFrame ? 1 : weaponGateIntroRuntime.getArenaBlend());
       updateStarfieldVisual();
     } catch {}
+    if (tapOrbRuntime.isActive()) {
+      const handoffCenterWorld = getViewportCenterWorld();
+      processPendingEnemyDeaths(now, currentBeatIndex);
+      withBeatSwarmPerfSample('gateHandoff.updateEnemies', () => updateEnemies(dt));
+      withBeatSwarmPerfSample('gateHandoff.tapOrbFoundation', () => updateTapOrbFoundationBuild(dt, handoffCenterWorld));
+      withBeatSwarmPerfSample('gateHandoff.pickupsCombat', () => updatePickupsAndCombat(dt));
+    }
     withBeatSwarmPerfSample('shipFacing', () => updateShipFacing(dt, input.x, input.y));
     rafId = requestAnimationFrame(tick);
     return;
@@ -25560,9 +25597,7 @@ function tick(nowMs) {
     try { spawnerRuntime?.update?.(dt); } catch {}
   });
   if (!maintainPerfEnemyRepeatMode()) {
-    if (isTapOrbFoundationBuildWaiting()) {
-      spawnTapOrbFoundationCarrierWave(centerWorldAfterMove);
-    } else {
+    if (!isTapOrbFoundationBuildWaiting()) {
       maintainEnemyPopulation();
     }
     if (!framePressure.severe && !isTapOrbFoundationBuildWaiting()) {
@@ -25962,6 +25997,8 @@ export function exitBeatSwarmMode() {
   setBeatSwarmOnboardingPhase('idle');
   tapOrbFoundationCommitted = false;
   tapOrbFoundationLiteralUntilBar = -1;
+  tapOrbFoundationCarrierRequestReason = '';
+  tapOrbFoundationCarrierEarliestStep = -1;
   try { tapOrbRuntime.stop(); } catch {}
   perfEnemyRepeatRuntime.enabled = false;
   perfEnemyRepeatRuntime.enemyType = '';

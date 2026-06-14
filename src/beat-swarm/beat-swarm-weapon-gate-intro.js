@@ -92,7 +92,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       wallPulseY: 0,
       phase: 'gate',
       completeDelay: 0,
-      outroDuration: 5.0,
+      outroDuration: 2.35,
     };
     appendNextGate();
     render();
@@ -144,14 +144,16 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   }
 
   function finish() {
-    state.phase = 'motif';
+    const selections = Array.isArray(state?.selections) ? state.selections.slice() : [];
+    try { deps.applySelections?.(0, selections); } catch {}
+    try { deps.onComplete?.(); } catch {}
+    state.phase = 'outro';
     state.completeDelay = state.outroDuration;
-    state.motifStep = 0;
-    state.motifTimer = getWeaponStepSeconds();
     state.feedbackKind = 'complete';
     state.feedbackText = 'Weapon tune complete';
-    state.feedbackTtl = 1.4;
-    try { deps.applySelections?.(0, state.selections); } catch {}
+    state.feedbackTtl = 0.9;
+    state.shots = [];
+    state.targets = [];
   }
 
   function update(dt, input = null, options = null) {
@@ -166,19 +168,18 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     updateShots(dt);
     const pickupDash = updateDashPickup(dt, input);
     for (const star of state.noteStars) star.age = (Number(star.age) || 0) + dt;
-    if (state.phase === 'motif') {
-      state.speed = Math.min(760, state.speed + 24 * dt);
+    if (state.phase === 'outro') {
+      state.speed = Math.min(820, state.speed + 28 * dt);
       state.progress += forwardDelta || (state.speed * dt);
       state.y += sideDelta;
-      state.y += ((window.innerHeight * 0.5) - state.y) * Math.min(1, dt * 1.65);
-      updateMotifPreview(dt);
+      state.y += ((window.innerHeight * 0.5) - state.y) * Math.min(1, dt * 2.3);
       state.completeDelay -= dt;
       render();
       if (state.completeDelay <= 0) {
         stop();
-        try { deps.onComplete?.(); } catch {}
+        return { active: false, sideDelta: appliedSideDelta, reflectedY, pickupDash, handoffComplete: true };
       }
-      return { active: true, sideDelta: appliedSideDelta, reflectedY, pickupDash };
+      return { active: true, sideDelta: appliedSideDelta, reflectedY, pickupDash, handoffComplete: true };
     }
     const { top, bottom } = getLogicalBounds();
     state.speed = Math.min(700, state.speed + 16 * dt);
@@ -197,6 +198,9 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       bounce(bottom - 20, -1);
     }
     chooseCurrentGate();
+    if (!state) {
+      return { active: false, sideDelta: appliedSideDelta, reflectedY, pickupDash, handoffComplete: true };
+    }
     render();
     return { active: true, sideDelta: appliedSideDelta, reflectedY, pickupDash };
   }
@@ -247,27 +251,6 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     state.targets = state.targets.filter((target) => target.ttl > 0);
   }
 
-  function updateMotifPreview(dt) {
-    state.motifTimer -= dt;
-    const stepSeconds = getWeaponStepSeconds();
-    while (state.motifTimer <= 0) {
-      const slot = state.motifStep % TOTAL_SLOTS;
-      const sel = state.selections[slot] || null;
-      if (sel?.kind === 'note') {
-        state.noteStarPulseT = 0.18;
-        state.noteStarPulseSlot = slot;
-        spawnShot(sel.note);
-        triggerWeaponNote(sel.note, 'weapon-gate-motif-preview');
-      }
-      state.motifStep += 1;
-      state.motifTimer += stepSeconds;
-    }
-  }
-
-  function getWeaponStepSeconds() {
-    try { return Math.max(0.05, Math.min(0.6, Number(deps.getWeaponStepSeconds?.()) || 0.2)); } catch { return 0.2; }
-  }
-
   function addNoteStar(selection) {
     const slot = Math.max(0, Math.min(TOTAL_SLOTS - 1, Number(selection?.slotIndex) || 0));
     const noteIndex = Math.max(0, NOTE_POOL.indexOf(selection?.note || 'C4'));
@@ -276,9 +259,14 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
 
   function triggerWeaponNote(note, source) {
     try {
-      if (typeof deps.triggerWeaponNote === 'function') deps.triggerWeaponNote(note || 'C4', source);
-      else deps.triggerInstrument?.('LASER', note || 'C4', undefined, 'weapon-gate-intro', { source }, 0.85);
+      if (typeof deps.triggerWeaponNote === 'function') {
+        deps.triggerWeaponNote(note || 'C4', source);
+        return true;
+      }
+      deps.triggerInstrument?.('LASER', note || 'C4', undefined, 'weapon-gate-intro', { source }, 0.85);
+      return true;
     } catch {}
+    return false;
   }
   function bounce(y, dir) {
     state.y = y;
@@ -299,9 +287,10 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     if (!state?.layer) return;
     const { top, bottom } = getCorridorBounds();
     const h = bottom - top;
-    const outroT = state.phase === 'motif' ? Math.max(0, state.outroDuration - state.completeDelay) : 0;
-    const corridorX = state.phase === 'motif' ? -Math.min(window.innerWidth + 180, outroT * 720) : 0;
-    const corridorOpacity = state.phase === 'motif' ? Math.max(0, 1 - Math.max(0, outroT - 2.2) / 1.8) : 1;
+    const outroT = state.phase === 'outro' ? Math.max(0, state.outroDuration - state.completeDelay) : 0;
+    const outroN = state.phase === 'outro' ? clamp(outroT / Math.max(0.001, state.outroDuration), 0, 1) : 0;
+    const corridorX = state.phase === 'outro' ? -Math.min(window.innerWidth + 180, outroN * (window.innerWidth + 180)) : 0;
+    const corridorOpacity = state.phase === 'outro' ? Math.max(0, 1 - Math.max(0, outroN - 0.42) / 0.58) : 1;
     const gateHtml = state.gates.map((gate) => renderGate(gate, gate.x - state.progress, top, h)).join('');
     const pulse = state.wallPulseTtl > 0 ? `<div class="beat-swarm-weapon-gate-wall-pulse" style="top:${state.wallPulseY}px;opacity:${Math.min(1, state.wallPulseTtl / 0.25).toFixed(2)}"></div>` : '';
     const targetHtml = state.targets.map((target) => `<div class="beat-swarm-weapon-gate-target${target.hit ? ' is-hit' : ''}" style="left:${target.x}px;top:${target.y}px;opacity:${Math.min(1, target.ttl * 2).toFixed(2)}"></div>`).join('');
@@ -355,11 +344,11 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     update,
     isActive: () => !!state,
     getState: () => state,
-    getArenaBlend: () => {
-      if (!state || state.phase !== 'motif') return 0;
-      const t = state.outroDuration - state.completeDelay;
-      const corridorClearT = (window.innerWidth + 180) / 720;
-      return clamp((t - corridorClearT) / 0.95, 0, 1);
-    },
+    getArenaBlend,
   };
+  function getArenaBlend() {
+    if (!state || state.phase !== 'outro') return 0;
+    const t = Math.max(0, state.outroDuration - state.completeDelay);
+    return clamp(t / 0.95, 0, 1);
+  }
 }

@@ -3,6 +3,7 @@ export function updatePickupsAndCombatRuntimeWrapper(options = null) {
   const state = options?.state && typeof options.state === 'object' ? options.state : {};
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
+  const flags = options?.flags && typeof options.flags === 'object' ? options.flags : {};
   helpers.updateBeatSwarmPickupsAndCombatRuntime?.({
     constants: {
       pickupCollectRadiusPx: Number(constants.pickupCollectRadiusPx) || 0,
@@ -52,6 +53,7 @@ export function updatePickupsAndCombatRuntimeWrapper(options = null) {
     state: {
       dt,
       currentBeatIndex: Math.max(0, Math.trunc(Number(state.currentBeatIndex) || 0)),
+      suppressWeaponRuntime: flags.suppressWeaponRuntime === true,
       pickups: state.pickups,
       projectiles: state.projectiles,
       pooledHostileRedProjectiles: state.pooledHostileRedProjectiles,

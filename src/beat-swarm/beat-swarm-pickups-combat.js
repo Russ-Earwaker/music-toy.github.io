@@ -27,6 +27,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   const enemies = Array.isArray(state.enemies) ? state.enemies : [];
   const equippedWeapons = state.equippedWeapons instanceof Set ? state.equippedWeapons : new Set();
   const currentBeatIndex = Math.max(0, Math.trunc(Number(state.currentBeatIndex) || 0));
+  const suppressWeaponRuntime = state.suppressWeaponRuntime === true;
   const dt = Math.max(0, Number(state.dt) || 0);
   const enemyById = new Map();
   const enemySpatialBuckets = new Map();
@@ -559,9 +560,11 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   withPerfSample('pickupsCombat.energyGravity', () => {
     helpers.updateEnergyGravityRuntime?.(dt, centerWorld, scale);
   });
-  withPerfSample('pickupsCombat.weaponRuntime', () => {
-    helpers.updateBeatWeapons?.(centerWorld);
-  });
+  if (!suppressWeaponRuntime) {
+    withPerfSample('pickupsCombat.weaponRuntime', () => {
+      helpers.updateBeatWeapons?.(centerWorld);
+    });
+  }
   withPerfSample('pickupsCombat.soundFlush', () => {
     helpers.flushSwarmSoundEventsForBeat?.(currentBeatIndex);
   });
