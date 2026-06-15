@@ -5,6 +5,9 @@ const ORB_SETTLE_SECONDS = 0.28;
 const ORB_TRIGGER_SECONDS = 0.34;
 const ORB_RING_SLOT_COUNT = 8;
 const ORB_COLLISION_RADIUS_PX = 94;
+const ORB_READY_HOLD_SECONDS = 2.0;
+const ORB_APPROACH_ACCEL_WORLD = 24;
+const ORB_APPROACH_MAX_SPEED_WORLD = 92;
 const DEFAULT_FOUNDATION_STEPS = 16;
 const DEFAULT_TARGET_HIT_COUNT = 4;
 const POST_COMPLETE_LOOP_CYCLES = 8;
@@ -338,6 +341,8 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
       target,
       slotIndex,
       settleT: 0,
+      readyHoldT: ORB_READY_HOLD_SECONDS,
+      approachSpeed: 0,
       triggerT: 0,
       queuedBeatIndex: -1,
       queuedStepIndex: -1,
@@ -467,11 +472,35 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     orb.y += (dy / dist) * step;
   }
 
-  function updateOrbState(orb, dt) {
+  function updateReadyOrbApproach(orb, dt, playerWorld = null) {
+    if (!orb || orb.status !== 'ready') return;
+    if (orb.readyHoldT > 0) {
+      orb.readyHoldT = Math.max(0, Number(orb.readyHoldT) - dt);
+      orb.approachSpeed = 0;
+      orb.x = orb.target.x;
+      orb.y = orb.target.y;
+      return;
+    }
+    const player = playerWorld && typeof playerWorld === 'object' ? normalizePoint(playerWorld) : null;
+    if (!player) return;
+    const dx = player.x - orb.x;
+    const dy = player.y - orb.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= 0.001) return;
+    orb.approachSpeed = Math.min(
+      ORB_APPROACH_MAX_SPEED_WORLD,
+      Math.max(0, Number(orb.approachSpeed) || 0) + (ORB_APPROACH_ACCEL_WORLD * dt)
+    );
+    const step = Math.min(dist, orb.approachSpeed * dt);
+    orb.x += (dx / dist) * step;
+    orb.y += (dy / dist) * step;
+  }
+
+  function updateOrbState(orb, dt, playerWorld = null) {
     if (!orb) return;
     if (orb.status !== 'triggered' && orb.status !== 'consumed') {
       orb.target = getTargetWorld(orb.slotIndex);
-      if (orb.status === 'ready' || orb.status === 'queued') {
+      if (orb.status === 'queued') {
         orb.x = orb.target.x;
         orb.y = orb.target.y;
       }
@@ -487,11 +516,15 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
         orb.x = orb.target.x;
         orb.y = orb.target.y;
         orb.status = 'ready';
+        orb.readyHoldT = ORB_READY_HOLD_SECONDS;
+        orb.approachSpeed = 0;
         try {
           orb.el?.classList?.remove?.('is-settling');
           orb.el?.classList?.add?.('is-ready');
         } catch {}
       }
+    } else if (orb.status === 'ready') {
+      updateReadyOrbApproach(orb, dt, playerWorld);
     } else if (orb.status === 'queued') {
       const clock = deps.getBeatClock?.() || {};
       const beatIndex = Math.max(0, Math.trunc(Number(clock.beatIndex) || 0));
@@ -568,11 +601,12 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     if (!state.active) return;
     ensureRoot();
     const safeDt = Math.max(0, Math.min(0.1, Number(dt) || 0));
+    const playerWorld = context?.playerWorld || context?.centerWorld || null;
     for (const orb of state.orbs) {
-      updateOrbState(orb, safeDt);
+      updateOrbState(orb, safeDt, playerWorld);
       renderOrb(orb);
     }
-    handlePlayerCollision(context?.playerWorld || context?.centerWorld || null);
+    handlePlayerCollision(playerWorld);
     for (let i = state.orbs.length - 1; i >= 0; i -= 1) {
       if (state.orbs[i]?.status !== 'consumed') continue;
       state.orbs.splice(i, 1);

@@ -36,7 +36,7 @@ import './beat-swarm/weapon-gate-lab.js?v=2026-05-29-weapon-gate-lab-v5';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
-import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-06-14-gate-plunger-v7';
+import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-06-15-tap-orb-approach-v1';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';
