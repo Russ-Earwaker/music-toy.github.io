@@ -16586,13 +16586,89 @@ function applyCameraDelta(dx, dy) {
   const nextY = y - dy;
   try { window.__setBoardViewportNow?.(s, nextX, nextY); } catch {}
 }
+function getBoardStageElement() {
+  try {
+    return document.querySelector('main#board, #board, #world, .world, .canvas-world');
+  } catch {
+    return null;
+  }
+}
 function getViewportCenterClient() {
+  const shipWrap = overlayEl?.querySelector?.('.beat-swarm-ship-wrap') || null;
+  if (shipWrap?.getBoundingClientRect) {
+    const rect = shipWrap.getBoundingClientRect();
+    if (rect && Number.isFinite(rect.left) && Number.isFinite(rect.width) && rect.width > 0 && rect.height > 0) {
+      return { x: rect.left + rect.width * 0.5, y: rect.top + rect.height * 0.5 };
+    }
+  }
   return { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 };
 }
 function getViewportCenterWorld() {
   const c = getViewportCenterClient();
   const w = screenToWorld({ x: c.x, y: c.y });
   return (w && Number.isFinite(w.x) && Number.isFinite(w.y)) ? w : { x: 0, y: 0 };
+}
+let beatSwarmResizeAnchorWorld = null;
+let beatSwarmResizeRaf = 0;
+let beatSwarmResizeHandlerBound = false;
+let beatSwarmResizeAnchorLocked = false;
+function getBeatSwarmCameraScale() {
+  const z = getZoomState();
+  const s = Number.isFinite(z?.targetScale)
+    ? z.targetScale
+    : (Number.isFinite(z?.currentScale) ? z.currentScale : SWARM_CAMERA_TARGET_SCALE);
+  return Math.max(0.3, Math.min(1, Number(s) || SWARM_CAMERA_TARGET_SCALE));
+}
+function updateBeatSwarmResizeAnchor(worldPoint = null, force = false) {
+  if (beatSwarmResizeAnchorLocked && !force) return;
+  const w = worldPoint && Number.isFinite(worldPoint.x) && Number.isFinite(worldPoint.y)
+    ? worldPoint
+    : getViewportCenterWorld();
+  beatSwarmResizeAnchorWorld = { x: Number(w.x) || 0, y: Number(w.y) || 0 };
+}
+function refreshBeatSwarmProjectedVisualsForResize() {
+  const scale = getBeatSwarmCameraScale();
+  try { updateArenaVisual(scale, false); } catch {}
+  try { updateEnemies(0); } catch {}
+  try { tapOrbRuntime?.update?.(0, {}); } catch {}
+  try { updateStarfieldVisual(); } catch {}
+}
+function onBeatSwarmWindowResize() {
+  if (!active) return;
+  const anchor = beatSwarmResizeAnchorWorld && Number.isFinite(beatSwarmResizeAnchorWorld.x) && Number.isFinite(beatSwarmResizeAnchorWorld.y)
+    ? { x: beatSwarmResizeAnchorWorld.x, y: beatSwarmResizeAnchorWorld.y }
+    : getViewportCenterWorld();
+  if (beatSwarmResizeRaf) {
+    try { cancelAnimationFrame(beatSwarmResizeRaf); } catch {}
+    beatSwarmResizeRaf = 0;
+  }
+  beatSwarmResizeAnchorLocked = true;
+  beatSwarmResizeRaf = requestAnimationFrame(() => {
+    beatSwarmResizeRaf = 0;
+    if (!active) {
+      beatSwarmResizeAnchorLocked = false;
+      return;
+    }
+    snapCameraToWorld(anchor, getBeatSwarmCameraScale());
+    beatSwarmResizeAnchorLocked = false;
+    updateBeatSwarmResizeAnchor(anchor, true);
+    refreshBeatSwarmProjectedVisualsForResize();
+  });
+}
+function bindBeatSwarmResizeHandler() {
+  if (beatSwarmResizeHandlerBound) return;
+  beatSwarmResizeHandlerBound = true;
+  try { window.addEventListener('resize', onBeatSwarmWindowResize, { passive: true }); } catch {}
+}
+function unbindBeatSwarmResizeHandler() {
+  if (!beatSwarmResizeHandlerBound) return;
+  beatSwarmResizeHandlerBound = false;
+  try { window.removeEventListener('resize', onBeatSwarmWindowResize); } catch {}
+  if (beatSwarmResizeRaf) {
+    try { cancelAnimationFrame(beatSwarmResizeRaf); } catch {}
+    beatSwarmResizeRaf = 0;
+  }
+  beatSwarmResizeAnchorLocked = false;
 }
 function getSceneStartWorld() {
   try {
@@ -16616,10 +16692,22 @@ function snapCameraToWorld(worldPoint, scaleValue = SWARM_CAMERA_TARGET_SCALE) {
     ? worldPoint
     : getViewportCenterWorld();
   const s = Math.max(0.3, Math.min(1, Number(scaleValue) || 0.6));
-  const cx = window.innerWidth * 0.5;
-  const cy = window.innerHeight * 0.5;
-  const tx = cx - (w.x * s);
-  const ty = cy - (w.y * s);
+  const c = getViewportCenterClient();
+  const z = getZoomState();
+  const currentX = Number.isFinite(z?.targetX) ? z.targetX : (Number.isFinite(z?.currentX) ? z.currentX : 0);
+  const currentY = Number.isFinite(z?.targetY) ? z.targetY : (Number.isFinite(z?.currentY) ? z.currentY : 0);
+  const stageEl = getBoardStageElement();
+  let layoutLeft = 0;
+  let layoutTop = 0;
+  try {
+    if (stageEl?.getBoundingClientRect) {
+      const rect = stageEl.getBoundingClientRect();
+      layoutLeft = (Number(rect?.left) || 0) - currentX;
+      layoutTop = (Number(rect?.top) || 0) - currentY;
+    }
+  } catch {}
+  const tx = c.x - layoutLeft - (w.x * s);
+  const ty = c.y - layoutTop - (w.y * s);
   try { window.__setBoardViewportNow?.(s, tx, ty); } catch {}
 }
 function applyBeatSwarmCameraScaleWithRetry(retries = 0) {
@@ -25324,6 +25412,7 @@ function tick(nowMs) {
   const framePressure = applyBeatSwarmFramePressureBudget(now);
   syncBeatSwarmFramePressureVisualState(framePressure);
   if (gameplayPaused) {
+    updateBeatSwarmResizeAnchor();
     updatePausedTickFrameRuntimeWrapper({
       dt,
       state: {
@@ -25374,6 +25463,7 @@ function tick(nowMs) {
   const z = getZoomState();
   const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
   const centerWorld = getViewportCenterWorld();
+  updateBeatSwarmResizeAnchor(centerWorld);
   const input = getInputVector();
   if (weaponGateIntroRuntime.isActive()) {
     const gateHandoffActive = tapOrbRuntime.isActive()
@@ -25771,8 +25861,11 @@ function onKeyDown(ev) {
 }
 function bindInput() {
   bindBeatSwarmInputRuntimeWrapper({ targets: { overlayEl, document, window }, handlers: { onPointerDown, onPointerMove, onPointerUp, onKeyDown, onWheel, onTransportPause, onTransportResume, onMusicSystemEvent: handleBeatSwarmMusicSystemEvent } });
+  updateBeatSwarmResizeAnchor();
+  bindBeatSwarmResizeHandler();
 }
 function unbindInput() {
+  unbindBeatSwarmResizeHandler();
   unbindBeatSwarmInputRuntimeWrapper({
     targets: {
       overlayEl,
@@ -25985,6 +26078,7 @@ export function enterBeatSwarmMode(options = null) {
   arenaCenterWorld = enterSceneState.arenaCenterWorld && typeof enterSceneState.arenaCenterWorld === 'object'
     ? { x: Number(enterSceneState.arenaCenterWorld.x) || 0, y: Number(enterSceneState.arenaCenterWorld.y) || 0 }
     : null;
+  updateBeatSwarmResizeAnchor(arenaCenterWorld || getViewportCenterWorld());
   finalizeEnterBeatSwarmRuntimeWrapper({
     state: {
       swarmDirectorHudEnabled: !!swarmDirectorDebug.hudEnabled,

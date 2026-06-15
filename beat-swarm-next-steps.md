@@ -381,6 +381,11 @@ Parked standalone lab files:
 
 Do not actively expand these areas while tuning motif transformation:
 
+- window-resize visual alignment bug:
+  - player ship and starfield stay correctly centered
+  - arena ring, enemies, and other projected overlay elements can lag or shift differently while resizing Chrome
+  - likely caused by mixed board-transform and DOM-overlay projection refresh paths
+  - low priority unless resize behavior becomes important for playtesting or presentation
 - new enemy families
 - new event sections
 - formation spawning
