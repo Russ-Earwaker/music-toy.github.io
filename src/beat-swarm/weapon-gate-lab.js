@@ -1,6 +1,6 @@
 import { triggerInstrument } from '../audio-samples.js';
-import { createSeededRng, createWeaponGateRatioState, decideGateType, applyWeaponGateSelection } from './weapon-gate-lab-ratio.js';
-import { createWeaponGate, createWeaponTuneChainFromSelections, summarizeWeaponGateSelection } from './weapon-gate-lab-gates.js';
+import { createSeededRng, createWeaponGateRatioState, decideGateType, applyWeaponGateSelection } from './beat-swarm-weapon-gate-ratio.js';
+import { createWeaponGate, createWeaponTuneChainFromSelections, summarizeWeaponGateSelection } from './beat-swarm-weapon-gate-core.js';
 import { renderWeaponGateLab } from './weapon-gate-lab-render.js';
 import { createWeaponGateLoopPlayer } from './weapon-gate-lab-playback.js';
 

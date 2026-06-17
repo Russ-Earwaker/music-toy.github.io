@@ -1,5 +1,5 @@
-import { createSeededRng, createWeaponGateRatioState, decideGateType, applyWeaponGateSelection } from './weapon-gate-lab-ratio.js';
-import { createWeaponGate, summarizeWeaponGateSelection } from './weapon-gate-lab-gates.js';
+import { createSeededRng, createWeaponGateRatioState, decideGateType, applyWeaponGateSelection } from './beat-swarm-weapon-gate-ratio.js';
+import { createWeaponGate, summarizeWeaponGateSelection } from './beat-swarm-weapon-gate-core.js';
 const NOTE_POOL = Object.freeze(['C4', 'D#4', 'F4', 'G4', 'A#4']);
 const TOTAL_SLOTS = 16;
 function clamp(v, min, max) {

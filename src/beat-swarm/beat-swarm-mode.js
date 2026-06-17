@@ -19,7 +19,8 @@ import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from 
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-composition-policy-v1';
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-06-15-tap-orb-approach-v1';
+import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-06-17-onboarding-core-v1';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-15-tap-orb-approach-v1';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
@@ -222,21 +223,10 @@ const weaponGateCurrentRuntime = {
   releaseVy: 0,
 };
 const WEAPON_GATE_CORRIDOR_SPEED = 440;
-const weaponGateMusicRuntime = {
-  lowAfterComplete: false,
-  startBar: 0,
-};
-const beatSwarmOnboardingRuntime = {
-  phase: 'idle',
-  phaseStartBar: 0,
-  weaponGateCompleteBar: -1,
-  foundationCompleteBar: -1,
-};
-let tapOrbFoundationCommitted = false;
-let tapOrbFoundationLiteralUntilBar = -1;
-let tapOrbFoundationCarrierRequestReason = '';
-let tapOrbFoundationCarrierEarliestStep = -1;
-const TAP_ORB_FOUNDATION_LITERAL_CONFIRM_BARS = 8;
+const beatSwarmOnboardingState = createBeatSwarmOnboardingState();
+const weaponGateMusicRuntime = beatSwarmOnboardingState.weaponGateMusicRuntime;
+const beatSwarmOnboardingRuntime = beatSwarmOnboardingState.phaseRuntime;
+const tapOrbFoundationRuntime = beatSwarmOnboardingState.tapOrbFoundationRuntime;
 const beatSwarmFramePressureRuntime = {
   degradedUntilMs: 0,
   severeUntilMs: 0,
@@ -656,18 +646,10 @@ function getCurrentBeatSwarmBarIndex() {
 }
 
 function setBeatSwarmOnboardingPhase(phaseLike = 'idle', barLike = null) {
-  const phase = String(phaseLike || 'idle').trim().toLowerCase() || 'idle';
   const bar = Number.isFinite(Number(barLike))
     ? Math.max(0, Math.trunc(Number(barLike) || 0))
     : getCurrentBeatSwarmBarIndex();
-  beatSwarmOnboardingRuntime.phase = phase;
-  beatSwarmOnboardingRuntime.phaseStartBar = bar;
-  if (phase === 'tap_orb_foundation') beatSwarmOnboardingRuntime.weaponGateCompleteBar = bar;
-  if (phase === 'foundation_confirm') beatSwarmOnboardingRuntime.foundationCompleteBar = bar;
-  if (phase === 'idle') {
-    beatSwarmOnboardingRuntime.weaponGateCompleteBar = -1;
-    beatSwarmOnboardingRuntime.foundationCompleteBar = -1;
-  }
+  const phase = beatSwarmOnboardingState.setPhase(phaseLike, bar);
   try {
     noteMusicSystemEvent('beat_swarm_onboarding_phase', {
       phase,
@@ -682,28 +664,22 @@ function setBeatSwarmOnboardingPhase(phaseLike = 'idle', barLike = null) {
 }
 
 function isBeatSwarmOnboardingLowGrooveActive() {
-  return weaponGateMusicRuntime.lowAfterComplete === true
-    && (
-      beatSwarmOnboardingRuntime.phase === 'tap_orb_foundation'
-      || beatSwarmOnboardingRuntime.phase === 'foundation_confirm'
-      || beatSwarmOnboardingRuntime.phase === 'low_groove'
-    );
+  return beatSwarmOnboardingState.isLowGrooveActive();
 }
 
 function armTapOrbFoundationLiteralConfirmWindow(startBarLike = null) {
   const startBar = Number.isFinite(Number(startBarLike))
     ? Math.max(0, Math.trunc(Number(startBarLike) || 0))
     : getCurrentBeatSwarmBarIndex();
-  tapOrbFoundationLiteralUntilBar = startBar + TAP_ORB_FOUNDATION_LITERAL_CONFIRM_BARS;
-  return tapOrbFoundationLiteralUntilBar;
+  return beatSwarmOnboardingState.armLiteralConfirmWindow(startBar);
 }
 
 function commitTapOrbFoundationToBassDriveTheme(event = null) {
   if (!event?.complete) return null;
-  if (tapOrbFoundationCommitted) return null;
+  if (tapOrbFoundationRuntime.committed) return null;
   const patternChain = splitTapOrbFoundationStepsIntoBassDrivePatterns(tapOrbRuntime.getFoundationSteps());
   if (!patternChain.some((pattern) => pattern.some(Boolean))) return null;
-  tapOrbFoundationCommitted = true;
+  beatSwarmOnboardingState.commitFoundation();
   const literalUntilBar = armTapOrbFoundationLiteralConfirmWindow();
   setBeatSwarmOnboardingPhase('foundation_confirm');
   const active = patternChain[0].slice(0, WEAPON_TUNE_STEPS);
@@ -791,7 +767,7 @@ function applyTapOrbFoundationDebugPattern(patternLike = null, options = null) {
       patternKey: active.map((v) => (v ? '1' : '0')).join(''),
     },
   });
-  tapOrbFoundationCommitted = true;
+  beatSwarmOnboardingState.commitFoundation();
   const literalUntilBar = armTapOrbFoundationLiteralConfirmWindow();
   try {
     noteMusicSystemEvent('tap_orb_foundation_debug_pattern_applied', {
@@ -877,17 +853,13 @@ function startTapOrbFoundationHandoffFromWeaponGate() {
     const handoffStep = Math.max(0, Math.trunc(Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0));
     const weaponLoopSteps = Math.max(1, WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH);
     arenaCenterWorld = getViewportCenterWorld();
-    weaponGateMusicRuntime.lowAfterComplete = true;
-    weaponGateMusicRuntime.startBar = bar;
-    tapOrbFoundationCommitted = false;
+    beatSwarmOnboardingState.startTapOrbFoundation({ bar, handoffStep, weaponLoopSteps });
     setBeatSwarmOnboardingPhase('tap_orb_foundation', bar);
     tapOrbRuntime.start({
       startBar: bar,
       targetHitCount: 8,
       stepCount: WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH,
     });
-    tapOrbFoundationCarrierRequestReason = 'weapon_gate_handoff';
-    tapOrbFoundationCarrierEarliestStep = handoffStep + (weaponLoopSteps * 2);
     try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
     lastWeaponTuneStepIndex = null;
     energyStateRuntime.state = 'intro';
@@ -926,10 +898,10 @@ const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
   },
   shouldContinueFoundationBridge() {
     const bar = getCurrentBeatSwarmBarIndex();
-    return tapOrbFoundationLiteralUntilBar >= 0 && bar < tapOrbFoundationLiteralUntilBar;
+    return tapOrbFoundationRuntime.literalUntilBar >= 0 && bar < tapOrbFoundationRuntime.literalUntilBar;
   },
   shouldSuppressFoundationBridgeStep(event = {}) {
-    if (tapOrbFoundationCommitted !== true) return false;
+    if (tapOrbFoundationRuntime.committed !== true) return false;
     const steps = Array.isArray(musicLayerRuntime.foundationPhraseSteps)
       ? musicLayerRuntime.foundationPhraseSteps
       : [];
@@ -3873,9 +3845,9 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   const tapOrbFoundationBuildActive = tapOrbRuntime.isActive()
     && !tapOrbRuntime.isFoundationComplete()
     && tapOrbRuntime.hasActivatedFoundationBeat();
-  const tapOrbFoundationLiteralActive = tapOrbFoundationLiteralUntilBar >= 0
-    && barIndex < tapOrbFoundationLiteralUntilBar;
-  const tapOrbFoundationConfirmActive = tapOrbFoundationCommitted === true
+  const tapOrbFoundationLiteralActive = tapOrbFoundationRuntime.literalUntilBar >= 0
+    && barIndex < tapOrbFoundationRuntime.literalUntilBar;
+  const tapOrbFoundationConfirmActive = tapOrbFoundationRuntime.committed === true
     && isBeatSwarmOnboardingLowGrooveActive();
   if (!tapOrbFoundationBuildActive && !tapOrbFoundationLiteralActive && !tapOrbFoundationConfirmActive && !auditionBypassesIntro && introStage !== 'none') return null;
   if (!tapOrbFoundationBuildActive && !tapOrbFoundationLiteralActive && !tapOrbFoundationConfirmActive && !auditionBypassesIntro && barIndex < 4) return null;
@@ -8424,8 +8396,8 @@ function getPlayerBassDriveFoundationPhrase(barIndex = 0, sectionIdLike = '', op
   }
   const patterns = getPlayerSimpleRhythmMotifPatterns('bassDrive');
   if (!patterns.length) return null;
-  const tapOrbLiteralWindow = (tapOrbFoundationLiteralUntilBar >= 0 && bar < tapOrbFoundationLiteralUntilBar)
-    || (tapOrbFoundationCommitted === true && weaponGateMusicRuntime.lowAfterComplete === true);
+  const tapOrbLiteralWindow = (tapOrbFoundationRuntime.literalUntilBar >= 0 && bar < tapOrbFoundationRuntime.literalUntilBar)
+    || (tapOrbFoundationRuntime.committed === true && weaponGateMusicRuntime.lowAfterComplete === true);
   const auditionState = getBeatSwarmMusicIntensityAuditionState(bar);
   const auditionSection = String(auditionState?.id || '').trim().toLowerCase();
   const auditionBypassesIntro = !!auditionSection || tapOrbLiteralWindow;
@@ -8705,8 +8677,8 @@ function setFoundationLanePhrase(phraseLike = null, barIndex = 0, options = null
         patternKey: nextPatternKey,
         interpretationMode,
         phrasePartIndex,
-        committed: tapOrbFoundationCommitted === true,
-        literalUntilBar: Math.max(-1, Math.trunc(Number(tapOrbFoundationLiteralUntilBar) || -1)),
+        committed: tapOrbFoundationRuntime.committed === true,
+        literalUntilBar: Math.max(-1, Math.trunc(Number(tapOrbFoundationRuntime.literalUntilBar) || -1)),
         themeInstrumentId: getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || '',
         themeNote: getPlayerSimpleRhythmThemeNote('bassDrive') || '',
         lockedUntilBar: musicLayerRuntime.foundationPhraseLockedUntilBar,
@@ -17522,7 +17494,7 @@ function isTapOrbFoundationBuildWaiting() {
 function spawnTapOrbFoundationCarrierWave(centerWorld = null, options = null) {
   if (!enemyLayerEl || tapOrbRuntime.hasCarrierWaveSpawned()) return false;
   const opts = options && typeof options === 'object' ? options : {};
-  const reason = String(opts.reason || tapOrbFoundationCarrierRequestReason || 'foundation_waiting').trim().toLowerCase() || 'foundation_waiting';
+  const reason = String(opts.reason || tapOrbFoundationRuntime.carrierRequestReason || 'foundation_waiting').trim().toLowerCase() || 'foundation_waiting';
   const center = centerWorld && typeof centerWorld === 'object'
     ? centerWorld
     : (arenaCenterWorld || getViewportCenterWorld());
@@ -17584,7 +17556,7 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null, options = null) {
       stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
     });
   }
-  if (carrier) tapOrbFoundationCarrierRequestReason = '';
+  if (carrier) beatSwarmOnboardingState.clearCarrierRequest();
   return !!carrier;
 }
 function updateTapOrbFoundationBuild(dt = 0, centerWorld = null) {
@@ -17593,18 +17565,13 @@ function updateTapOrbFoundationBuild(dt = 0, centerWorld = null) {
   if (!isTapOrbFoundationBuildWaiting()) return;
   const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
   const currentStep = Math.max(0, Math.trunc(Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0));
-  if (tapOrbFoundationCarrierEarliestStep >= 0 && currentStep < tapOrbFoundationCarrierEarliestStep) return;
-  const reason = String(tapOrbFoundationCarrierRequestReason || 'foundation_waiting').trim().toLowerCase() || 'foundation_waiting';
+  if (tapOrbFoundationRuntime.carrierEarliestStep >= 0 && currentStep < tapOrbFoundationRuntime.carrierEarliestStep) return;
+  const reason = String(tapOrbFoundationRuntime.carrierRequestReason || 'foundation_waiting').trim().toLowerCase() || 'foundation_waiting';
   spawnTapOrbFoundationCarrierWave(centerWorld, { reason });
 }
 function resetWeaponGateTapOrbOnboardingState() {
+  beatSwarmOnboardingState.reset();
   setBeatSwarmOnboardingPhase('idle');
-  weaponGateMusicRuntime.lowAfterComplete = false;
-  weaponGateMusicRuntime.startBar = 0;
-  tapOrbFoundationCommitted = false;
-  tapOrbFoundationLiteralUntilBar = -1;
-  tapOrbFoundationCarrierRequestReason = '';
-  tapOrbFoundationCarrierEarliestStep = -1;
   try { tapOrbRuntime.stop(); } catch {}
   try { weaponGateIntroRuntime.stop(); } catch {}
   try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
@@ -26108,11 +26075,8 @@ export function enterBeatSwarmMode(options = null) {
 export function exitBeatSwarmMode() {
   if (!active) return true;
   try { weaponGateIntroRuntime.stop(); } catch {}
+  beatSwarmOnboardingState.reset();
   setBeatSwarmOnboardingPhase('idle');
-  tapOrbFoundationCommitted = false;
-  tapOrbFoundationLiteralUntilBar = -1;
-  tapOrbFoundationCarrierRequestReason = '';
-  tapOrbFoundationCarrierEarliestStep = -1;
   try { tapOrbRuntime.stop(); } catch {}
   perfEnemyRepeatRuntime.enabled = false;
   perfEnemyRepeatRuntime.enemyType = '';
