@@ -1,11 +1,10 @@
 import { triggerInstrument } from '../audio-samples.js';
+import { hashWeaponGateSeed, WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-onboarding-selection-v1';
 import { createSeededRng, createWeaponGateRatioState, decideGateType, applyWeaponGateSelection } from './beat-swarm-weapon-gate-ratio.js';
 import { createWeaponGate, createWeaponTuneChainFromSelections, summarizeWeaponGateSelection } from './beat-swarm-weapon-gate-core.js';
 import { renderWeaponGateLab } from './weapon-gate-lab-render.js';
 import { createWeaponGateLoopPlayer } from './weapon-gate-lab-playback.js';
 
-const NOTE_POOL = Object.freeze(['C4', 'D#4', 'F4', 'G4', 'A#4']);
-const TOTAL_SLOTS = 16;
 let lab = null;
 let loopPlayer = createWeaponGateLoopPlayer();
 
@@ -20,8 +19,8 @@ function makeOverlay() {
     <div class="weapon-gate-lab__bar">
       <strong>Weapon Gate Lab</strong>
       <label>Seed <input data-wgl-seed value="1337" /></label>
-      <label>Target Silences <input data-wgl-silences type="number" min="0" max="16" value="6" /></label>
-      <label>Max Silence Streak <input data-wgl-streak type="number" min="1" max="16" value="2" /></label>
+      <label>Target Silences <input data-wgl-silences type="number" min="0" max="${WEAPON_GATE_TOTAL_SLOTS}" value="${WEAPON_GATE_TARGET_SILENCES}" /></label>
+      <label>Max Silence Streak <input data-wgl-streak type="number" min="1" max="${WEAPON_GATE_TOTAL_SLOTS}" value="${WEAPON_GATE_MAX_SILENCE_STREAK}" /></label>
       <button type="button" data-wgl-restart>Restart</button>
       <button type="button" data-wgl-speed>Slow Motion</button>
       <button type="button" data-wgl-print>Print Decisions</button>
@@ -52,10 +51,10 @@ function installStyles() {
 
 function createState(root) {
   const seed = String(root.querySelector('[data-wgl-seed]')?.value || '1337');
-  const targetSilences = Math.max(0, Math.min(TOTAL_SLOTS, Math.trunc(Number(root.querySelector('[data-wgl-silences]')?.value) || 6)));
-  const maxSilenceStreak = Math.max(1, Math.min(TOTAL_SLOTS, Math.trunc(Number(root.querySelector('[data-wgl-streak]')?.value) || 2)));
-  const rng = createSeededRng(hashSeed(seed));
-  const ratioState = createWeaponGateRatioState({ totalSlots: TOTAL_SLOTS, targetSilences, maxSilenceStreak });
+  const targetSilences = Math.max(0, Math.min(WEAPON_GATE_TOTAL_SLOTS, Math.trunc(Number(root.querySelector('[data-wgl-silences]')?.value) || WEAPON_GATE_TARGET_SILENCES)));
+  const maxSilenceStreak = Math.max(1, Math.min(WEAPON_GATE_TOTAL_SLOTS, Math.trunc(Number(root.querySelector('[data-wgl-streak]')?.value) || WEAPON_GATE_MAX_SILENCE_STREAK)));
+  const rng = createSeededRng(hashWeaponGateSeed(seed));
+  const ratioState = createWeaponGateRatioState({ totalSlots: WEAPON_GATE_TOTAL_SLOTS, targetSilences, maxSilenceStreak });
   const state = {
     root,
     canvas: root.querySelector('canvas'),
@@ -64,8 +63,8 @@ function createState(root) {
     rng,
     gates: [],
     ratioState,
-    selections: Array.from({ length: TOTAL_SLOTS }, () => null),
-    selectionSummary: Array.from({ length: TOTAL_SLOTS }, () => '-'),
+    selections: Array.from({ length: WEAPON_GATE_TOTAL_SLOTS }, () => null),
+    selectionSummary: Array.from({ length: WEAPON_GATE_TOTAL_SLOTS }, () => '-'),
     nextGateIndex: 0,
     complete: false,
     slowMotion: false,
@@ -93,16 +92,9 @@ function createState(root) {
 
 function appendNextGate(state) {
   const slotIndex = state.gates.length;
-  if (slotIndex >= TOTAL_SLOTS) return;
+  if (slotIndex >= WEAPON_GATE_TOTAL_SLOTS) return;
   const decision = decideGateType(state.ratioState, slotIndex, state.rng);
-  state.gates.push(createWeaponGate(slotIndex, decision, { rng: state.rng, notePool: NOTE_POOL }));
-}
-
-function hashSeed(seed) {
-  const s = String(seed || '1');
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return h >>> 0;
+  state.gates.push(createWeaponGate(slotIndex, decision, { rng: state.rng, notePool: WEAPON_GATE_NOTE_POOL }));
 }
 
 function resize(state) {
@@ -162,7 +154,7 @@ function updateGateCrossings(state) {
   applyWeaponGateSelection(state.ratioState, selection);
   handleSelectionFeedback(state, selection);
   state.nextGateIndex += 1;
-  if (state.nextGateIndex >= TOTAL_SLOTS) finishLab(state);
+  if (state.nextGateIndex >= WEAPON_GATE_TOTAL_SLOTS) finishLab(state);
   else appendNextGate(state);
 }
 
@@ -201,7 +193,7 @@ function updatePreview(state, dt) {
 
 function finishLab(state) {
   state.complete = true;
-  const chain = createWeaponTuneChainFromSelections(state.selections, NOTE_POOL);
+  const chain = createWeaponTuneChainFromSelections(state.selections, WEAPON_GATE_NOTE_POOL);
   state.completedTuneChain = chain;
   state.feedbackKind = 'complete';
   state.feedbackText = 'Weapon tune complete';

@@ -32,11 +32,11 @@ const perfLabVersion = '2026-06-05-gate-start-tap-orb-debug-v1';
 import(`./perf/perf-lab.js?v=${perfLabVersion}`).catch((err) => {
   try { console.warn('[main] perf lab import failed', err); } catch {}
 });
-import './beat-swarm/weapon-gate-lab.js?v=2026-06-17-onboarding-core-v1';
+import './beat-swarm/weapon-gate-lab.js?v=2026-06-18-onboarding-selection-v1';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
-import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-06-17-onboarding-state-v1';
+import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-06-18-onboarding-selection-v1';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';
