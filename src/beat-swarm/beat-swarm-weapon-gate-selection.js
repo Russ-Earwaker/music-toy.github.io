@@ -1,9 +1,9 @@
 import { applyWeaponGateSelection } from './beat-swarm-weapon-gate-ratio.js';
 import { summarizeWeaponGateSelection } from './beat-swarm-weapon-gate-core.js';
-import { WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-onboarding-selection-v1';
-import { addWeaponGateNoteStar, spawnWeaponGateShot } from './beat-swarm-weapon-gate-effects.js?v=2026-06-18-onboarding-selection-v1';
-import { clampWeaponGateValue, getWeaponGateLogicalBounds, getWeaponGateShipScreenPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-onboarding-selection-v1';
-import { appendNextWeaponGate } from './beat-swarm-weapon-gate-state.js?v=2026-06-18-onboarding-selection-v1';
+import { WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
+import { addWeaponGateNoteStar, spawnWeaponGateShot } from './beat-swarm-weapon-gate-effects.js?v=2026-06-18-corridor-curve-v1';
+import { clampWeaponGateValue, getWeaponGateCorridorWorldBounds, getWeaponGateShipScreenPoint, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
+import { appendNextWeaponGate } from './beat-swarm-weapon-gate-state.js?v=2026-06-18-corridor-curve-v1';
 
 export function chooseCurrentWeaponGate(state, options = {}) {
   if (!state) return null;
@@ -11,7 +11,7 @@ export function chooseCurrentWeaponGate(state, options = {}) {
   if (!gate) return null;
   const shipX = getWeaponGateShipScreenPoint().x;
   if ((gate.x - state.progress) > shipX) return null;
-  const { top, bottom } = getWeaponGateLogicalBounds();
+  const { top, bottom } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
   const rel = clampWeaponGateValue((state.y - top) / Math.max(1, bottom - top), 0, 0.999);
   const idx = Math.max(0, Math.min(gate.sections.length - 1, Math.floor(rel * gate.sections.length)));
   const section = gate.sections[idx];

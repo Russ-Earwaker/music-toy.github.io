@@ -1,20 +1,39 @@
 import { createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
 import { createWeaponGate } from './beat-swarm-weapon-gate-core.js';
+import { getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
 import {
   hashWeaponGateSeed,
+  WEAPON_GATE_CURVE_AMPLITUDE,
+  WEAPON_GATE_CURVE_ANGLE_SCALE,
+  WEAPON_GATE_CURVE_VARIANCE,
+  WEAPON_GATE_CURVE_WAVELENGTH,
   WEAPON_GATE_MAX_SILENCE_STREAK,
   WEAPON_GATE_NOTE_POOL,
   WEAPON_GATE_SPACING,
   WEAPON_GATE_START_X,
   WEAPON_GATE_TARGET_SILENCES,
   WEAPON_GATE_TOTAL_SLOTS,
-} from './beat-swarm-weapon-gate-config.js?v=2026-06-18-onboarding-selection-v1';
+} from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 
 export function createWeaponGateIntroState(layer, options = {}) {
   const seed = String(options.seed || `level-start-${Date.now()}`);
+  const seedHash = hashWeaponGateSeed(seed);
   const state = {
     layer,
-    rng: createSeededRng(hashWeaponGateSeed(seed)),
+    rng: createSeededRng(seedHash),
+    corridorCurveSeed: seedHash,
+    corridorCurveAmplitude: Number.isFinite(Number(options.corridorCurveAmplitude))
+      ? Number(options.corridorCurveAmplitude)
+      : WEAPON_GATE_CURVE_AMPLITUDE,
+    corridorCurveVariance: Number.isFinite(Number(options.corridorCurveVariance))
+      ? Number(options.corridorCurveVariance)
+      : WEAPON_GATE_CURVE_VARIANCE,
+    corridorCurveWavelength: Number.isFinite(Number(options.corridorCurveWavelength))
+      ? Number(options.corridorCurveWavelength)
+      : WEAPON_GATE_CURVE_WAVELENGTH,
+    corridorCurveAngleScale: Number.isFinite(Number(options.corridorCurveAngleScale))
+      ? Number(options.corridorCurveAngleScale)
+      : WEAPON_GATE_CURVE_ANGLE_SCALE,
     ratioState: createWeaponGateRatioState({
       totalSlots: WEAPON_GATE_TOTAL_SLOTS,
       targetSilences: WEAPON_GATE_TARGET_SILENCES,
@@ -46,6 +65,7 @@ export function createWeaponGateIntroState(layer, options = {}) {
     completeDelay: 0,
     outroDuration: 2.35,
   };
+  state.y = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state)).center;
   appendNextWeaponGate(state);
   return state;
 }

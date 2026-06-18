@@ -1,4 +1,4 @@
-import { getWeaponGateShipScreenPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-onboarding-selection-v1';
+import { getWeaponGateShipScreenPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
 
 export function updateWeaponGateDashPickup(state, dt = 0, input = null) {
   if (!state || state.phase !== 'gate') return null;

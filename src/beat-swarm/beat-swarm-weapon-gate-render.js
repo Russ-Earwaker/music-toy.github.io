@@ -1,4 +1,4 @@
-import { getWeaponGateEndProgress, getWeaponGateLogicalBounds } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-onboarding-selection-v1';
+import { getWeaponGateCorridorScreenBoundsAtX, getWeaponGateEndProgress, getWeaponGateLogicalBounds } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, Number(v) || 0));
@@ -10,7 +10,9 @@ export function ensureWeaponGateIntroStyle() {
   style.id = 'beat-swarm-weapon-gate-intro-style';
   style.textContent = `
     .beat-swarm-weapon-gate-intro{position:fixed;inset:0;z-index:3;pointer-events:none;overflow:hidden}
-    .beat-swarm-weapon-gate-corridor{position:absolute;width:100vw;border-top:4px solid rgba(100,216,255,.8);border-bottom:4px solid rgba(100,216,255,.8);background:rgba(10,29,43,.36);box-shadow:inset 0 0 42px rgba(76,205,255,.1)}
+    .beat-swarm-weapon-gate-corridor{position:absolute;inset:0;overflow:visible}
+    .beat-swarm-weapon-gate-corridor-fill{fill:rgba(10,29,43,.36);filter:drop-shadow(0 0 18px rgba(76,205,255,.12))}
+    .beat-swarm-weapon-gate-corridor-edge{fill:none;stroke:rgba(100,216,255,.8);stroke-width:4;filter:drop-shadow(0 0 8px rgba(76,205,255,.2))}
     .beat-swarm-weapon-gate-wall-pulse{position:absolute;left:0;right:0;height:8px;margin-top:-4px;background:#fff59b;box-shadow:0 0 26px #fff59b}
     .beat-swarm-weapon-gate{position:absolute;width:64px;border:2px solid rgba(142,232,255,.86);box-shadow:0 0 18px rgba(100,216,255,.22)}
     .beat-swarm-weapon-gate.is-next{border-color:#fff59b;box-shadow:0 0 26px rgba(255,245,155,.5)}
@@ -46,7 +48,7 @@ export function renderWeaponGateIntro(state, options = {}) {
   const outroN = state.phase === 'outro' ? clamp(outroT / Math.max(0.001, state.outroDuration), 0, 1) : 0;
   const corridorX = state.phase === 'outro' ? -Math.min(window.innerWidth + 180, outroN * (window.innerWidth + 180)) : 0;
   const corridorOpacity = state.phase === 'outro' ? Math.max(0, 1 - Math.max(0, outroN - 0.42) / 0.58) : 1;
-  const gateHtml = state.gates.map((gate) => renderGate(state, gate, gate.x - state.progress, top, h)).join('');
+  const gateHtml = state.gates.map((gate) => renderGate(state, gate, gate.x - state.progress)).join('');
   const pulse = state.wallPulseTtl > 0
     ? `<div class="beat-swarm-weapon-gate-wall-pulse" style="top:${state.wallPulseY}px;opacity:${Math.min(1, state.wallPulseTtl / 0.25).toFixed(2)}"></div>`
     : '';
@@ -54,7 +56,7 @@ export function renderWeaponGateIntro(state, options = {}) {
   const shotHtml = state.shots.map((shot) => `<div class="beat-swarm-weapon-gate-shot" style="left:${shot.x}px;top:${shot.y}px"></div>`).join('');
   const impactClass = state.feedbackKind === 'damage' ? ' is-damage' : '';
   state.layer.innerHTML = `
-    <div class="beat-swarm-weapon-gate-corridor" style="left:${corridorX}px;top:${top}px;height:${h}px;opacity:${corridorOpacity.toFixed(2)}"></div>
+    ${renderCorridorBand(state, corridorX, corridorOpacity)}
     ${renderNoteMap(state, notePool, totalSlots)}${pulse}${gateHtml}${renderDashPickup(state)}${targetHtml}${shotHtml}
     <div class="beat-swarm-weapon-gate-hud">Gate ${Math.min(state.nextGateIndex + 1, totalSlots)}/${totalSlots}<br>Notes ${state.ratioState.selectedNotes}/${state.ratioState.targetNotes} Silence ${state.ratioState.selectedSilences}/${state.ratioState.targetSilences}<br>${state.summary.join(' ')}</div>
     ${state.feedbackTtl > 0 ? `<div class="beat-swarm-weapon-gate-impact${impactClass}">${state.feedbackText}</div>` : ''}
@@ -92,8 +94,28 @@ function renderNoteMap(state, notePool, totalSlots) {
   return `<svg class="beat-swarm-weapon-note-map" aria-hidden="true">${lines}</svg>${dots}`;
 }
 
-function renderGate(state, gate, x, top, h) {
+function renderCorridorBand(state, corridorX = 0, opacity = 1) {
+  const step = 96;
+  const startX = -180;
+  const endX = window.innerWidth + 220;
+  const samples = [];
+  for (let x = startX; x <= endX; x += step) {
+    samples.push({ x, bounds: getWeaponGateCorridorScreenBoundsAtX(state, x) });
+  }
+  if (!samples.length || samples[samples.length - 1].x < endX) {
+    samples.push({ x: endX, bounds: getWeaponGateCorridorScreenBoundsAtX(state, endX) });
+  }
+  const topPath = samples.map((sample, idx) => `${idx === 0 ? 'M' : 'L'} ${(sample.x + corridorX).toFixed(1)} ${sample.bounds.top.toFixed(1)}`).join(' ');
+  const bottomPath = samples.map((sample, idx) => `${idx === 0 ? 'M' : 'L'} ${(sample.x + corridorX).toFixed(1)} ${sample.bounds.bottom.toFixed(1)}`).join(' ');
+  const fillPath = `${topPath} ${samples.slice().reverse().map((sample) => `L ${(sample.x + corridorX).toFixed(1)} ${sample.bounds.bottom.toFixed(1)}`).join(' ')} Z`;
+  return `<svg class="beat-swarm-weapon-gate-corridor" aria-hidden="true" style="opacity:${Number(opacity).toFixed(2)}"><path class="beat-swarm-weapon-gate-corridor-fill" d="${fillPath}"></path><path class="beat-swarm-weapon-gate-corridor-edge" d="${topPath}"></path><path class="beat-swarm-weapon-gate-corridor-edge" d="${bottomPath}"></path></svg>`;
+}
+
+function renderGate(state, gate, x) {
   if (x < -100 || x > window.innerWidth + 140) return '';
+  const bounds = getWeaponGateCorridorScreenBoundsAtX(state, x);
+  const top = bounds.top;
+  const h = Math.max(1, bounds.bottom - bounds.top);
   const sectionH = h / gate.sections.length;
   const next = gate.slotIndex === state.nextGateIndex && !gate.selected ? ' is-next' : '';
   const selected = gate.selected ? ' is-selected' : '';

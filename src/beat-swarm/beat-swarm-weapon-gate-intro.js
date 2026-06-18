@@ -1,10 +1,10 @@
-import { WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-onboarding-selection-v1';
-import { applyWeaponGateWallBounce, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-06-18-onboarding-selection-v1';
-import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateLogicalBounds } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-onboarding-selection-v1';
-import { updateWeaponGateDashPickup } from './beat-swarm-weapon-gate-pickups.js?v=2026-06-18-onboarding-selection-v1';
-import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-06-18-onboarding-selection-v1';
-import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-06-18-onboarding-selection-v1';
-import { createWeaponGateIntroState } from './beat-swarm-weapon-gate-state.js?v=2026-06-18-onboarding-selection-v1';
+import { WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
+import { applyWeaponGateWallBounce, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-06-18-corridor-curve-v1';
+import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
+import { updateWeaponGateDashPickup } from './beat-swarm-weapon-gate-pickups.js?v=2026-06-18-corridor-curve-v1';
+import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-06-18-corridor-curve-v1';
+import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-06-18-corridor-curve-v1';
+import { createWeaponGateIntroState } from './beat-swarm-weapon-gate-state.js?v=2026-06-18-corridor-curve-v1';
 
 export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   let state = null;
@@ -53,19 +53,20 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     tickWeaponGateTransientEffects(state, dt);
     const pickupDash = updateWeaponGateDashPickup(state, dt, input);
     if (state.phase === 'prelaunch') {
-      const { top, bottom } = getWeaponGateLogicalBounds();
+      const { top, bottom, center } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
       state.speed = 0;
       state.y += sideDelta * 0.55;
-      state.y += ((window.innerHeight * 0.5) - state.y) * Math.min(1, dt * 4.8);
+      state.y += (center - state.y) * Math.min(1, dt * 4.8);
       state.y = clampWeaponGateValue(state.y, top + 34, bottom - 34);
       render();
-      return { active: true, sideDelta: (state.y - window.innerHeight * 0.5) * -0.18 * dt, reflectedY, pickupDash, prelaunch: true };
+      return { active: true, sideDelta: (state.y - center) * -0.18 * dt, reflectedY, pickupDash, prelaunch: true };
     }
     if (state.phase === 'outro') {
+      const { center } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
       state.speed = Math.min(820, state.speed + 28 * dt);
       state.progress += forwardDelta || (state.speed * dt);
       state.y += sideDelta;
-      state.y += ((window.innerHeight * 0.5) - state.y) * Math.min(1, dt * 2.3);
+      state.y += (center - state.y) * Math.min(1, dt * 2.3);
       state.completeDelay -= dt;
       render();
       if (state.completeDelay <= 0) {
@@ -74,7 +75,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       }
       return { active: true, sideDelta: appliedSideDelta, reflectedY, pickupDash, handoffComplete: true };
     }
-    const { top, bottom } = getWeaponGateLogicalBounds();
+    const { top, bottom } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
     state.speed = Math.min(700, state.speed + 16 * dt);
     state.progress += forwardDelta || (state.speed * dt);
     state.vy += clampWeaponGateValue(Number(input?.y) || 0, -1, 1) * 1400 * dt;

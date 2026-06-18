@@ -1,5 +1,5 @@
 import { triggerInstrument } from '../audio-samples.js';
-import { hashWeaponGateSeed, WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-onboarding-selection-v1';
+import { hashWeaponGateSeed, WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { createSeededRng, createWeaponGateRatioState, decideGateType, applyWeaponGateSelection } from './beat-swarm-weapon-gate-ratio.js';
 import { createWeaponGate, createWeaponTuneChainFromSelections, summarizeWeaponGateSelection } from './beat-swarm-weapon-gate-core.js';
 import { renderWeaponGateLab } from './weapon-gate-lab-render.js';

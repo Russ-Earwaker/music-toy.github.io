@@ -4,6 +4,10 @@ export const WEAPON_GATE_TARGET_SILENCES = 6;
 export const WEAPON_GATE_MAX_SILENCE_STREAK = 2;
 export const WEAPON_GATE_START_X = 760;
 export const WEAPON_GATE_SPACING = 690;
+export const WEAPON_GATE_CURVE_AMPLITUDE = 82;
+export const WEAPON_GATE_CURVE_VARIANCE = 0.38;
+export const WEAPON_GATE_CURVE_WAVELENGTH = 1850;
+export const WEAPON_GATE_CURVE_ANGLE_SCALE = 0.72;
 
 export function hashWeaponGateSeed(seed) {
   const s = String(seed || '1');
