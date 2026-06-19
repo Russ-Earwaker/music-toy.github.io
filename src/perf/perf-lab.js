@@ -501,6 +501,7 @@ function ensureUI() {
       btn('musicLabRunBS0S3CompositionFlow4m', 'Music Lab: Run BS0 S3 Composition Full Flow (1x4m, compact save)', 'primary'),
       btn('musicLabRunBS0S3CompositionPacing4m', 'Music Lab: Run BS0 S3 Composition Pacing Flow (1x4m, compact save)', 'primary'),
       btn('musicLabRunBS0S3TapOrbFoundationDebug', 'Music Lab: Tap-Orb Foundation Commit Debug (1x75s, compact save)', 'primary'),
+      btn('musicLabRunBS0S3AccentRewriteDebug', 'Music Lab: Accent Rewrite Tap-Orb Debug (1x90s, compact save)', 'primary'),
       btn('weaponGateBeatSwarmStart', 'Prototype: Beat Swarm Gate Start', 'primary'),
       btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Music Lab: Gate Start Tap-Orb Handoff Debug (1x150s, compact save)', 'primary'),
       btn('weaponGateLabOpen', 'Prototype: Weapon Gate Onboarding Lab', 'primary'),
@@ -1457,6 +1458,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3TapOrbFoundationDebug') {
       await runBS0s3MusicLabTapOrbFoundationDebug75s();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3AccentRewriteDebug') {
+      await runBS0s3MusicLabAccentRewriteDebug90s();
       return;
     }
     if (act === 'weaponGateLabOpen') {
@@ -6545,6 +6550,75 @@ async function runBS0s3MusicLabTapOrbFoundationDebug75s() {
     tagPrefix: 'BS0S3TapOrbFoundationDebug1x75s',
     labelPrefix: 'BS0_stage3_beatswarm_tap_orb_foundation_debug_1x75s',
     statusPrefix: 'Running BS0 S3 tap-orb foundation commit debug (75 seconds, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabAccentRewriteDebug90s() {
+  await runBS0Stage(3, {
+    durationMs: 90000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'fixed_section',
+        fixedSection: 'medium',
+        introBars: 0,
+      },
+    },
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startTapOrbAccentRewriteEvent !== 'function') {
+        throw new Error('accent_rewrite_debug_api_unavailable');
+      }
+      const result = modeApi.startTapOrbAccentRewriteEvent({
+        source: 'perf_lab_accent_rewrite_debug',
+        reason: 'accent_rewrite_lab',
+        durationBars: 16,
+      });
+      try {
+        window.__beatSwarmAccentRewriteDebugExpected = {
+          mode: 'tap_orb_accent_rewrite',
+          expectedTheme: 'accentRhythm',
+          expectedInstrumentFromTheme: 'CLICK PERCUSSION SHORT',
+          traceEvents: [
+            'beat_swarm_music_rewrite_event_requested',
+            'beat_swarm_music_rewrite_event_started',
+            'tap_orb_accent_rewrite_activated',
+            'tap_orb_accent_rewrite_committed_to_theme',
+            'beat_swarm_music_rewrite_event_completed',
+          ],
+          result,
+        };
+      } catch {}
+      setOutput({
+        ok: true,
+        setup: 'tap_orb_accent_rewrite_started',
+        notes: 'Collect eight tap orbs. The saved Music Lab output should show accent rewrite activation and commit events, and the pause-menu Accent Rhythm should match the collected two-toy pattern.',
+        result,
+      });
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_accent_rewrite_tap_orb_debug_1x90s',
+    saveNotes: [
+      'Beat Swarm Music Lab accent rewrite debug: fixed Medium Intensity, intro skipped, immediately starts a tap-orb Accent Rhythm rewrite event.',
+      'Expected result: eight collected orb slots become the two-toy Accent Rhythm motif, using the existing Accent Rhythm instrument/note.',
+      'Use tap_orb_accent_rewrite_committed_to_theme and beat_swarm_music_rewrite_event_completed to verify the event lifecycle and committed motif.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_accent_rewrite_tap_orb_debug_1x90s',
+    groupedRunId: 'musicLab_bs0_s3_accent_rewrite_tap_orb_debug_1x90s_scenario',
+    groupedNotes: 'Accent rewrite debug scenario: tap-orb interaction authors the Accent Rhythm player motif during a fixed Medium Intensity run.',
+    tagPrefix: 'BS0S3AccentRewriteTapOrbDebug1x90s',
+    labelPrefix: 'BS0_stage3_beatswarm_accent_rewrite_tap_orb_debug_1x90s',
+    statusPrefix: 'Running BS0 S3 accent rewrite tap-orb debug (90 seconds, compact save)',
     traceCapture: {
       enabled: false,
     },

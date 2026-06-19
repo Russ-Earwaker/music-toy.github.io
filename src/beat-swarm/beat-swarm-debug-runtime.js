@@ -281,6 +281,21 @@ export function installBeatSwarmDebugGlobalRuntime(deps = {}) {
       getDirectorDebugSnapshot() {
         return api.getDirectorDebugSnapshot();
       },
+      getMusicRewriteEventState() {
+        return api.getMusicRewriteEventState();
+      },
+      getMusicRewriteEventEligibility(context) {
+        return api.getMusicRewriteEventEligibility(context);
+      },
+      requestMusicRewriteEvent(eventLike) {
+        return api.requestMusicRewriteEvent(eventLike);
+      },
+      tickMusicRewriteEvents(bar) {
+        return api.tickMusicRewriteEvents(bar);
+      },
+      completeMusicRewriteEvent(result) {
+        return api.completeMusicRewriteEvent(result);
+      },
       getEnergyGravityState() {
         return api.getEnergyGravityState();
       },
@@ -399,6 +414,21 @@ export function createBeatSwarmDebugApiRuntime(deps = {}) {
     },
     getDirectorDebugSnapshot() {
       return helpers.swarmDirectorDebug?.snapshot ? { ...helpers.swarmDirectorDebug.snapshot } : null;
+    },
+    getMusicRewriteEventState() {
+      return helpers.getBeatSwarmMusicRewriteEventSnapshot?.() || null;
+    },
+    getMusicRewriteEventEligibility(context = null) {
+      return helpers.getBeatSwarmMusicRewriteEventEligibility?.(context) || null;
+    },
+    requestMusicRewriteEvent(eventLike = null) {
+      return helpers.requestBeatSwarmMusicRewriteEvent?.(eventLike) || null;
+    },
+    tickMusicRewriteEvents(bar = null) {
+      return helpers.tickBeatSwarmMusicRewriteEvents?.(bar) || null;
+    },
+    completeMusicRewriteEvent(result = null) {
+      return helpers.completeBeatSwarmMusicRewriteEvent?.(result) || null;
     },
     getEnergyGravityState() {
       const energyGravityRuntime = helpers.energyGravityRuntime || {};

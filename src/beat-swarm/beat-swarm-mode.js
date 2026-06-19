@@ -20,8 +20,9 @@ import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-composition-policy-v1';
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
+import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-18-music-events-v1';
 import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-06-18-corridor-curve-v1';
-import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-15-tap-orb-approach-v1';
+import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-19-accent-rewrite-lane-mute-v1';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
 import { maintainComposerEnemyGroupsLifecycle } from './beat-swarm-composer-lifecycle.js';
@@ -31,7 +32,7 @@ import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRun
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-06-06-tap-orb-preserve-note-v1';
-import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-05-26-digital-answer-literal-v1';
+import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-06-19-accent-rewrite-isolate-v1';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
 import { createBeatSwarmPlayerInstrumentRuntime } from './beat-swarm-player-instrument.js';
@@ -227,6 +228,18 @@ const beatSwarmOnboardingState = createBeatSwarmOnboardingState();
 const weaponGateMusicRuntime = beatSwarmOnboardingState.weaponGateMusicRuntime;
 const beatSwarmOnboardingRuntime = beatSwarmOnboardingState.phaseRuntime;
 const tapOrbFoundationRuntime = beatSwarmOnboardingState.tapOrbFoundationRuntime;
+const beatSwarmMusicEventRuntime = createBeatSwarmMusicEventRuntime();
+const tapOrbAuthoringRuntime = {
+  themeId: 'bassDrive',
+  eventId: '',
+  reason: 'foundation',
+};
+function isTapOrbAccentRewriteActive() {
+  return String(tapOrbAuthoringRuntime.themeId || '').trim() === 'accentRhythm';
+}
+function isTapOrbBassDriveAuthoringActive() {
+  return String(tapOrbAuthoringRuntime.themeId || '').trim() === 'bassDrive';
+}
 const beatSwarmFramePressureRuntime = {
   degradedUntilMs: 0,
   severeUntilMs: 0,
@@ -645,6 +658,149 @@ function getCurrentBeatSwarmBarIndex() {
   return Math.max(0, Math.trunc((Number(currentBeatIndex) || 0) / Math.max(1, COMPOSER_BEATS_PER_BAR)));
 }
 
+function requestBeatSwarmMusicRewriteEvent(eventLike = null) {
+  const request = eventLike && typeof eventLike === 'object' ? eventLike : {};
+  const requestedBar = Number.isFinite(Number(request.requestedBar ?? request.bar))
+    ? Math.max(0, Math.trunc(Number(request.requestedBar ?? request.bar) || 0))
+    : getCurrentBeatSwarmBarIndex();
+  const event = beatSwarmMusicEventRuntime.requestEvent({
+    ...request,
+    requestedBar,
+  });
+  try {
+    noteMusicSystemEvent('beat_swarm_music_rewrite_event_requested', {
+      id: String(event?.id || '').trim(),
+      type: String(event?.type || '').trim(),
+      laneId: String(event?.laneId || '').trim(),
+      themeId: String(event?.themeId || '').trim(),
+      source: String(event?.source || '').trim(),
+      reason: String(event?.reason || '').trim(),
+      requestedBar,
+      expiresBar: Math.max(0, Math.trunc(Number(event?.expiresBar) || 0)),
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+      barIndex: requestedBar,
+    });
+  } catch {}
+  return event;
+}
+
+function tickBeatSwarmMusicRewriteEvents(barLike = null) {
+  const bar = Number.isFinite(Number(barLike))
+    ? Math.max(0, Math.trunc(Number(barLike) || 0))
+    : getCurrentBeatSwarmBarIndex();
+  const before = beatSwarmMusicEventRuntime.getSnapshot();
+  const event = beatSwarmMusicEventRuntime.tick({ bar });
+  if (!before.activeEvent && event) {
+    try {
+      noteMusicSystemEvent('beat_swarm_music_rewrite_event_started', {
+        id: String(event.id || '').trim(),
+        type: String(event.type || '').trim(),
+        laneId: String(event.laneId || '').trim(),
+        themeId: String(event.themeId || '').trim(),
+        source: String(event.source || '').trim(),
+        reason: String(event.reason || '').trim(),
+        startBar: Math.max(0, Math.trunc(Number(event.startBar) || 0)),
+        expiresBar: Math.max(0, Math.trunc(Number(event.expiresBar) || 0)),
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+        barIndex: bar,
+      });
+    } catch {}
+  }
+  return event;
+}
+
+function completeBeatSwarmMusicRewriteEvent(resultLike = null) {
+  const bar = getCurrentBeatSwarmBarIndex();
+  const completed = beatSwarmMusicEventRuntime.completeActive({
+    bar,
+    result: resultLike && typeof resultLike === 'object' ? resultLike : {},
+  });
+  if (completed) {
+    try {
+      noteMusicSystemEvent('beat_swarm_music_rewrite_event_completed', {
+        id: String(completed.id || '').trim(),
+        type: String(completed.type || '').trim(),
+        laneId: String(completed.laneId || '').trim(),
+        themeId: String(completed.themeId || '').trim(),
+        completedBar: Math.max(0, Math.trunc(Number(completed.completedBar) || 0)),
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+        barIndex: bar,
+      });
+    } catch {}
+  }
+  return completed;
+}
+
+function getBeatSwarmMusicRewriteEventSnapshot() {
+  return beatSwarmMusicEventRuntime.getSnapshot();
+}
+
+function getBeatSwarmMusicRewriteEventEligibility(contextLike = null) {
+  const context = contextLike && typeof contextLike === 'object' ? contextLike : {};
+  const beatIndex = Number.isFinite(Number(context.beatIndex))
+    ? Math.max(0, Math.trunc(Number(context.beatIndex) || 0))
+    : Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
+  const barIndex = Number.isFinite(Number(context.barIndex))
+    ? Math.max(0, Math.trunc(Number(context.barIndex) || 0))
+    : Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
+  const introStage = String(context.introStage || getUnifiedIntroStage(barIndex, beatIndex)).trim().toLowerCase();
+  const pacingSnapshot = context.pacingSnapshot && typeof context.pacingSnapshot === 'object'
+    ? context.pacingSnapshot
+    : (swarmPacingRuntime.getSnapshot?.() || null);
+  const pacingState = String(pacingSnapshot?.state || '').trim().toLowerCase();
+  const onboardingPhase = String(beatSwarmOnboardingRuntime.phase || '').trim().toLowerCase();
+  const musicEvents = getBeatSwarmMusicRewriteEventSnapshot();
+
+  if (!active) {
+    return { eligible: false, reason: 'mode_inactive', allowedTypes: [], suggestedType: '', barIndex, beatIndex, pacingState, onboardingPhase };
+  }
+  if (weaponGateIntroRuntime.isActive?.()) {
+    return { eligible: false, reason: 'weapon_gate_active', allowedTypes: [], suggestedType: '', barIndex, beatIndex, pacingState, onboardingPhase };
+  }
+  if (tapOrbRuntime.isActive?.()) {
+    return { eligible: false, reason: 'tap_orb_active', allowedTypes: [], suggestedType: '', barIndex, beatIndex, pacingState, onboardingPhase };
+  }
+  if (onboardingPhase === 'weapon_gate' || onboardingPhase === 'tap_orb_foundation') {
+    return { eligible: false, reason: `onboarding_${onboardingPhase}`, allowedTypes: [], suggestedType: '', barIndex, beatIndex, pacingState, onboardingPhase };
+  }
+  if (introStage && introStage !== 'none') {
+    return { eligible: false, reason: `intro_${introStage}`, allowedTypes: [], suggestedType: '', barIndex, beatIndex, pacingState, onboardingPhase };
+  }
+  if (musicEvents.hasActiveEvent) {
+    return { eligible: false, reason: 'rewrite_event_busy', allowedTypes: [], suggestedType: '', barIndex, beatIndex, pacingState, onboardingPhase };
+  }
+  if (pacingSnapshot && pacingSnapshot.inLoop !== true) {
+    return { eligible: false, reason: 'pacing_intro', allowedTypes: [], suggestedType: '', barIndex, beatIndex, pacingState, onboardingPhase };
+  }
+
+  let allowedTypes = [];
+  if (pacingState === 'main_low') {
+    allowedTypes = ['accent_rewrite'];
+  } else if (pacingState === 'main_mid') {
+    allowedTypes = ['accent_rewrite', 'lead_rewrite'];
+  } else if (pacingState === 'settle' || pacingState === 'break') {
+    allowedTypes = ['lead_rewrite', 'accent_rewrite'];
+  }
+
+  if (!allowedTypes.length) {
+    return { eligible: false, reason: `pacing_${pacingState || 'unknown'}`, allowedTypes: [], suggestedType: '', barIndex, beatIndex, pacingState, onboardingPhase };
+  }
+
+  return {
+    eligible: true,
+    reason: 'eligible',
+    allowedTypes,
+    suggestedType: allowedTypes[0],
+    barIndex,
+    beatIndex,
+    pacingState,
+    onboardingPhase,
+  };
+}
+
 function setBeatSwarmOnboardingPhase(phaseLike = 'idle', barLike = null) {
   const bar = Number.isFinite(Number(barLike))
     ? Math.max(0, Math.trunc(Number(barLike) || 0))
@@ -715,7 +871,56 @@ function commitTapOrbFoundationToBassDriveTheme(event = null) {
   return theme;
 }
 
+function commitTapOrbAccentRewriteToTheme(event = null) {
+  if (!event?.complete) return null;
+  const patternChain = splitTapOrbFoundationStepsIntoBassDrivePatterns(tapOrbRuntime.getFoundationSteps());
+  if (!patternChain.some((pattern) => pattern.some(Boolean))) return null;
+  const active = patternChain[0].slice(0, WEAPON_TUNE_STEPS);
+  const note = getPlayerSimpleRhythmThemeNote('accentRhythm') || 'C4';
+  const instrumentId = getPlayerSimpleRhythmThemeInstrumentId('accentRhythm') || 'CLICK PERCUSSION SHORT';
+  const theme = setPlayerMusicTheme('accentRhythm', {
+    autogenerated: false,
+    data: {
+      toyType: 'simpleRhythm',
+      steps: WEAPON_TUNE_STEPS,
+      active,
+      patternChain: patternChain.map((pattern) => pattern.slice(0, WEAPON_TUNE_STEPS)),
+      instrumentId,
+      note,
+      patternKey: active.map((v) => (v ? '1' : '0')).join(''),
+    },
+  });
+  const completed = completeBeatSwarmMusicRewriteEvent({
+    themeId: 'accentRhythm',
+    patternChain: patternChain.map((pattern) => pattern.map((v) => (v ? 1 : 0)).join('')),
+    instrumentId,
+    note,
+    hitCount: Math.max(0, Math.trunc(Number(event?.hitCount) || 0)),
+    targetHitCount: Math.max(0, Math.trunc(Number(event?.targetHitCount) || 0)),
+  });
+  try {
+    noteMusicSystemEvent('tap_orb_accent_rewrite_committed_to_theme', {
+      themeId: 'accentRhythm',
+      eventId: String(tapOrbAuthoringRuntime.eventId || completed?.id || '').trim(),
+      patternChain: patternChain.map((pattern) => pattern.map((v) => (v ? 1 : 0)).join('')),
+      instrumentId,
+      note,
+      hitCount: Math.max(0, Math.trunc(Number(event?.hitCount) || 0)),
+      targetHitCount: Math.max(0, Math.trunc(Number(event?.targetHitCount) || 0)),
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(event?.beatIndex) || Number(currentBeatIndex) || 0)),
+      stepIndex: Math.max(0, Math.trunc(Number(event?.stepIndex) || 0)),
+    });
+  } catch {}
+  tapOrbAuthoringRuntime.themeId = 'bassDrive';
+  tapOrbAuthoringRuntime.eventId = '';
+  tapOrbAuthoringRuntime.reason = 'accent_rewrite_complete';
+  try { renderPauseWeaponUi(); } catch {}
+  return theme;
+}
+
 function refreshTapOrbFoundationLaneFromRuntime(event = null) {
+  if (!isTapOrbBassDriveAuthoringActive()) return null;
   if (!tapOrbRuntime.isActive() || !tapOrbRuntime.hasActivatedFoundationBeat()) return null;
   const bar = getCurrentBeatSwarmBarIndex();
   const phrase = getPlayerBassDriveFoundationPhrase(bar, 'tap_orb_foundation_build', {
@@ -852,18 +1057,72 @@ function startTapOrbFoundationHandoffFromWeaponGate() {
     const handoffStep = Math.max(0, Math.trunc(Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0));
     const weaponLoopSteps = Math.max(1, WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH);
     arenaCenterWorld = getViewportCenterWorld();
+    tapOrbAuthoringRuntime.themeId = 'bassDrive';
+    tapOrbAuthoringRuntime.eventId = '';
+    tapOrbAuthoringRuntime.reason = 'foundation';
     beatSwarmOnboardingState.startTapOrbFoundation({ bar, handoffStep, weaponLoopSteps });
     setBeatSwarmOnboardingPhase('tap_orb_foundation', bar);
     tapOrbRuntime.start({
       startBar: bar,
       targetHitCount: 8,
       stepCount: WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH,
+      authoringThemeId: 'bassDrive',
+      authoringLaneId: 'foundation_lane',
     });
     try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
     lastWeaponTuneStepIndex = null;
     energyStateRuntime.state = 'intro';
     energyStateRuntime.stateStartBar = bar;
     energyStateRuntime.lastAppliedBar = -1;
+}
+function startTapOrbAccentRewriteEvent(options = null) {
+  if (tapOrbRuntime.isActive()) return null;
+  const opts = options && typeof options === 'object' ? options : {};
+  const bar = Number.isFinite(Number(opts.bar))
+    ? Math.max(0, Math.trunc(Number(opts.bar) || 0))
+    : getCurrentBeatSwarmBarIndex();
+  const event = requestBeatSwarmMusicRewriteEvent({
+    type: 'accent_rewrite',
+    laneId: 'secondary_loop_lane',
+    themeId: 'accentRhythm',
+    source: String(opts.source || 'director').trim() || 'director',
+    reason: String(opts.reason || 'accent_motif_refresh').trim() || 'accent_motif_refresh',
+    requestedBar: bar,
+    durationBars: Math.max(4, Math.trunc(Number(opts.durationBars) || 12)),
+    payload: {
+      interaction: 'tap_orb_rhythm_authoring',
+      targetHitCount: 8,
+      stepCount: WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH,
+    },
+  });
+  const started = tickBeatSwarmMusicRewriteEvents(bar);
+  tapOrbAuthoringRuntime.themeId = 'accentRhythm';
+  tapOrbAuthoringRuntime.eventId = String(started?.id || event?.id || '').trim();
+  tapOrbAuthoringRuntime.reason = 'accent_rewrite';
+  arenaCenterWorld = getViewportCenterWorld();
+  tapOrbRuntime.start({
+    startBar: bar,
+    targetHitCount: 8,
+    stepCount: WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH,
+    authoringThemeId: 'accentRhythm',
+    authoringLaneId: 'secondary_loop_lane',
+  });
+  clearSpawnerGrooveLayerState(percussionGrooveRuntime.backbeat);
+  clearSpawnerGrooveLayerState(percussionGrooveRuntime.motion);
+  try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
+  try {
+    noteMusicSystemEvent('tap_orb_accent_rewrite_started', {
+      eventId: tapOrbAuthoringRuntime.eventId,
+      themeId: 'accentRhythm',
+      targetHitCount: 8,
+      stepCount: WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH,
+      reason: String(opts.reason || 'accent_motif_refresh').trim() || 'accent_motif_refresh',
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+      barIndex: bar,
+    });
+  } catch {}
+  return getBeatSwarmMusicRewriteEventSnapshot();
 }
 const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
   getOverlayEl: () => overlayEl,
@@ -885,21 +1144,92 @@ const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
     };
   },
   worldToScreen,
-  playFoundationBeat({ stepIndex = 0 } = {}) {
-    const inst = getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 4';
-    const note = getPlayerSimpleRhythmThemeNote('bassDrive') || 'C3';
+  playFoundationBeat(event = {}) {
+    const stepIndex = Math.max(0, Math.trunc(Number(event?.stepIndex) || 0));
+    const themeId = isTapOrbAccentRewriteActive()
+      ? 'accentRhythm'
+      : (String(event?.themeId || tapOrbAuthoringRuntime.themeId || 'bassDrive').trim() || 'bassDrive');
+    const accent = themeId === 'accentRhythm';
+    const inst = getPlayerSimpleRhythmThemeInstrumentId(themeId) || (accent ? 'CLICK PERCUSSION SHORT' : 'BASS TONE 4');
+    const note = getPlayerSimpleRhythmThemeNote(themeId) || (accent ? 'C4' : 'C3');
     triggerBeatSwarmInstrument(inst, note, undefined, 'master', {
-      source: 'tap-orb-foundation',
-      musicLaneId: 'foundation_lane',
+      source: accent ? 'tap-orb-accent-rewrite' : 'tap-orb-foundation',
+      musicLaneId: accent ? 'secondary_loop_lane' : 'foundation_lane',
       stepIndex,
-    }, 0.54);
+    }, accent ? 0.62 : 0.54);
+    pulsePlayerShipNoteFlash();
+  },
+  playOrbImpactFeedback(event = {}) {
+    const themeId = isTapOrbAccentRewriteActive()
+      ? 'accentRhythm'
+      : (String(event?.themeId || tapOrbAuthoringRuntime.themeId || 'bassDrive').trim() || 'bassDrive');
+    const accent = themeId === 'accentRhythm';
+    const inst = getPlayerSimpleRhythmThemeInstrumentId(themeId) || (accent ? 'CLICK PERCUSSION SHORT' : 'BASS TONE 4');
+    const note = getPlayerSimpleRhythmThemeNote(themeId) || (accent ? 'C4' : 'C3');
+    if (accent) {
+      try {
+        triggerBeatSwarmInstrument('Arcade Blip', 'C5', undefined, 'master', {
+          source: 'tap-orb-accent-rewrite-impact-confirm',
+          musicLayer: 'ui',
+          musicLaneId: '',
+          stepIndex: Math.max(0, Math.trunc(Number(event?.stepIndex) || 0)),
+          requestedStepIndex: Math.max(0, Math.trunc(Number(event?.requestedStepIndex) || 0)),
+          queuedBeatIndex: Math.max(0, Math.trunc(Number(event?.queuedBeatIndex) || 0)),
+        }, 0.42);
+      } catch {}
+    } else {
+      try { playSwarmSoundEventImmediate('playerProjectile', 0.46, note); } catch {}
+      try {
+        triggerBeatSwarmInstrument(inst, note, undefined, 'master', {
+          source: 'tap-orb-foundation-impact-direct',
+          musicLaneId: 'foundation_lane',
+          stepIndex: Math.max(0, Math.trunc(Number(event?.stepIndex) || 0)),
+          requestedStepIndex: Math.max(0, Math.trunc(Number(event?.requestedStepIndex) || 0)),
+          queuedBeatIndex: Math.max(0, Math.trunc(Number(event?.queuedBeatIndex) || 0)),
+        }, 0.58);
+      } catch {}
+    }
+    try {
+      noteMusicSystemEvent(accent ? 'tap_orb_accent_rewrite_impact_feedback' : 'tap_orb_foundation_impact_feedback', {
+        themeId,
+        eventId: String(tapOrbAuthoringRuntime.eventId || '').trim(),
+        instrumentId: accent ? 'Arcade Blip' : inst,
+        note: accent ? 'C5' : note,
+        musicalLaneHit: false,
+        stepIndex: Math.max(0, Math.trunc(Number(event?.stepIndex) || 0)),
+        requestedStepIndex: Math.max(0, Math.trunc(Number(event?.requestedStepIndex) || 0)),
+        queuedBeatIndex: Math.max(0, Math.trunc(Number(event?.queuedBeatIndex) || 0)),
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(event?.beatIndex) || Number(currentBeatIndex) || 0)),
+      });
+    } catch {}
+    try { pulsePlayerShipNoteFlash(); } catch {}
+  },
+  onBeatOrbQueued(event = {}) {
+    const themeId = String(event?.themeId || tapOrbAuthoringRuntime.themeId || 'bassDrive').trim() || 'bassDrive';
+    if (themeId !== 'accentRhythm') return;
+    try {
+      noteMusicSystemEvent('tap_orb_accent_rewrite_queued', {
+        themeId: 'accentRhythm',
+        eventId: String(tapOrbAuthoringRuntime.eventId || '').trim(),
+        stepIndex: Math.max(0, Math.trunc(Number(event?.stepIndex) || 0)),
+        requestedStepIndex: Math.max(0, Math.trunc(Number(event?.requestedStepIndex) || 0)),
+        queuedBeatIndex: Math.max(0, Math.trunc(Number(event?.queuedBeatIndex) || 0)),
+        hitCount: Math.max(0, Math.trunc(Number(event?.hitCount) || 0)),
+        targetHitCount: Math.max(0, Math.trunc(Number(event?.targetHitCount) || 0)),
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(event?.beatIndex) || Number(currentBeatIndex) || 0)),
+      });
+    } catch {}
     pulsePlayerShipNoteFlash();
   },
   shouldContinueFoundationBridge() {
+    if (!isTapOrbBassDriveAuthoringActive()) return false;
     const bar = getCurrentBeatSwarmBarIndex();
     return tapOrbFoundationRuntime.literalUntilBar >= 0 && bar < tapOrbFoundationRuntime.literalUntilBar;
   },
   shouldSuppressFoundationBridgeStep(event = {}) {
+    if (!isTapOrbBassDriveAuthoringActive()) return false;
     if (tapOrbFoundationRuntime.committed !== true) return false;
     const steps = Array.isArray(musicLayerRuntime.foundationPhraseSteps)
       ? musicLayerRuntime.foundationPhraseSteps
@@ -939,6 +1269,22 @@ const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
     try { pulseReactiveArrowCharge(); } catch {}
   },
   onBeatOrbActivated(event) {
+    const themeId = String(event?.themeId || tapOrbAuthoringRuntime.themeId || 'bassDrive').trim() || 'bassDrive';
+    if (themeId === 'accentRhythm') {
+      if (event?.complete === true) {
+        try { commitTapOrbAccentRewriteToTheme(event); } catch {}
+        try { tapOrbRuntime.stop(); } catch {}
+      }
+      noteMusicSystemEvent('tap_orb_accent_rewrite_activated', {
+        ...event,
+        themeId: 'accentRhythm',
+        eventId: String(tapOrbAuthoringRuntime.eventId || '').trim(),
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(event?.beatIndex) || Number(currentBeatIndex) || 0)),
+        stepIndex: Math.max(0, Math.trunc(Number(event?.stepIndex) || 0)),
+      });
+      return;
+    }
     try { refreshTapOrbFoundationLaneFromRuntime(event); } catch {}
     if (event?.complete === true) {
       try { commitTapOrbFoundationToBassDriveTheme(event); } catch {}
@@ -3841,12 +4187,16 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   const auditionBypassesIntro = !!auditionSection;
   const introStage = getUnifiedIntroStage(barIndex, beatIndex);
   const forceImmediate = opts.forceImmediate === true;
-  const tapOrbFoundationBuildActive = tapOrbRuntime.isActive()
+  const tapOrbFoundationAuthoringActive = isTapOrbBassDriveAuthoringActive();
+  const tapOrbFoundationBuildActive = tapOrbFoundationAuthoringActive
+    && tapOrbRuntime.isActive()
     && !tapOrbRuntime.isFoundationComplete()
     && tapOrbRuntime.hasActivatedFoundationBeat();
-  const tapOrbFoundationLiteralActive = tapOrbFoundationRuntime.literalUntilBar >= 0
+  const tapOrbFoundationLiteralActive = tapOrbFoundationAuthoringActive
+    && tapOrbFoundationRuntime.literalUntilBar >= 0
     && barIndex < tapOrbFoundationRuntime.literalUntilBar;
-  const tapOrbFoundationConfirmActive = tapOrbFoundationRuntime.committed === true
+  const tapOrbFoundationConfirmActive = tapOrbFoundationAuthoringActive
+    && tapOrbFoundationRuntime.committed === true
     && isBeatSwarmOnboardingLowGrooveActive();
   if (!tapOrbFoundationBuildActive && !tapOrbFoundationLiteralActive && !tapOrbFoundationConfirmActive && !auditionBypassesIntro && introStage !== 'none') return null;
   if (!tapOrbFoundationBuildActive && !tapOrbFoundationLiteralActive && !tapOrbFoundationConfirmActive && !auditionBypassesIntro && barIndex < 4) return null;
@@ -8375,7 +8725,7 @@ function getPlayerBassDriveFoundationPhrase(barIndex = 0, sectionIdLike = '', op
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const opts = options && typeof options === 'object' ? options : {};
   const sectionId = String(sectionIdLike || 'body').trim().toLowerCase() || 'body';
-  if (tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete() && tapOrbRuntime.hasActivatedFoundationBeat()) {
+  if (isTapOrbBassDriveAuthoringActive() && tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete() && tapOrbRuntime.hasActivatedFoundationBeat()) {
     const tapPatterns = splitTapOrbFoundationStepsIntoBassDrivePatterns(tapOrbRuntime.getFoundationSteps());
     const phrasePartIndex = bar % Math.max(1, tapPatterns.length);
     const steps = cloneFoundationPhraseSteps(tapPatterns[phrasePartIndex] || tapPatterns[0]);
@@ -8395,8 +8745,9 @@ function getPlayerBassDriveFoundationPhrase(barIndex = 0, sectionIdLike = '', op
   }
   const patterns = getPlayerSimpleRhythmMotifPatterns('bassDrive');
   if (!patterns.length) return null;
-  const tapOrbLiteralWindow = (tapOrbFoundationRuntime.literalUntilBar >= 0 && bar < tapOrbFoundationRuntime.literalUntilBar)
-    || (tapOrbFoundationRuntime.committed === true && weaponGateMusicRuntime.lowAfterComplete === true);
+  const tapOrbLiteralWindow = isTapOrbBassDriveAuthoringActive()
+    && ((tapOrbFoundationRuntime.literalUntilBar >= 0 && bar < tapOrbFoundationRuntime.literalUntilBar)
+      || (tapOrbFoundationRuntime.committed === true && weaponGateMusicRuntime.lowAfterComplete === true));
   const auditionState = getBeatSwarmMusicIntensityAuditionState(bar);
   const auditionSection = String(auditionState?.id || '').trim().toLowerCase();
   const auditionBypassesIntro = !!auditionSection || tapOrbLiteralWindow;
@@ -8459,6 +8810,7 @@ function shapePlayerAccentRhythmStepsForMotion(baseStepsLike = null, sectionIdLi
   return shaped;
 }
 function getPlayerAccentRhythmMotionPhrase(barIndex = 0, sectionIdLike = '', options = null) {
+  if (isTapOrbAccentRewriteActive()) return null;
   const patterns = getPlayerSimpleRhythmMotifPatterns('accentRhythm');
   if (!patterns.length) return null;
   const opts = options && typeof options === 'object' ? options : {};
@@ -8707,7 +9059,7 @@ function ensureFoundationLanePlan(barIndex = 0, options = null) {
   const tapOrbBuildPhrase = getPlayerBassDriveFoundationPhrase(bar, 'tap_orb_foundation_build', {
     sectionRelative: false,
   });
-  if (tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete() && tapOrbRuntime.hasActivatedFoundationBeat() && tapOrbBuildPhrase) {
+  if (isTapOrbBassDriveAuthoringActive() && tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete() && tapOrbRuntime.hasActivatedFoundationBeat() && tapOrbBuildPhrase) {
     const foundationLane = getMusicLaneRuntimeEntry('foundation_lane');
     if (foundationLane) foundationLane.phraseFamily = String(tapOrbBuildPhrase.family || '').trim().toLowerCase();
     return setFoundationLanePhrase(tapOrbBuildPhrase, bar, {
@@ -9662,10 +10014,10 @@ function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
     const silent = sections.find((section) => section.id === 'silent');
     const barIndex = Math.max(0, Math.trunc(Number(barIndexLike) || 0));
     const sectionBar = Math.max(0, barIndex - Math.max(0, Math.trunc(Number(weaponGateMusicRuntime.startBar) || 0)));
-    const section = tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete()
+    const section = tapOrbAuthoringRuntime.themeId === 'bassDrive' && tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete()
       ? (silent || low)
       : low;
-    return section ? { ...section, barIndex, auditionBar: sectionBar, auditionSectionBar: sectionBar, introBars: 0, auditionMode: tapOrbRuntime.isActive() ? 'tap_orb_foundation_build' : 'weapon_gate_low' } : null;
+    return section ? { ...section, barIndex, auditionBar: sectionBar, auditionSectionBar: sectionBar, introBars: 0, auditionMode: tapOrbAuthoringRuntime.themeId === 'bassDrive' && tapOrbRuntime.isActive() ? 'tap_orb_foundation_build' : 'weapon_gate_low' } : null;
   }
   if (typeof globalThis === 'undefined') return null;
   if (!isBeatSwarmMusicIntensityAuditionEnabled()) return null;
@@ -17488,11 +17840,13 @@ function damageEnemiesNearTapOrb(world = null, radiusWorld = 180, amount = 8) {
   }
 }
 function isTapOrbFoundationBuildWaiting() {
-  return tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete();
+  return isTapOrbBassDriveAuthoringActive() && tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete();
 }
 function spawnTapOrbFoundationCarrierWave(centerWorld = null, options = null) {
   if (!enemyLayerEl || tapOrbRuntime.hasCarrierWaveSpawned()) return false;
   const opts = options && typeof options === 'object' ? options : {};
+  const authoringThemeId = String(tapOrbAuthoringRuntime.themeId || 'bassDrive').trim() || 'bassDrive';
+  const authoringAccent = authoringThemeId === 'accentRhythm';
   const reason = String(opts.reason || tapOrbFoundationRuntime.carrierRequestReason || 'foundation_waiting').trim().toLowerCase() || 'foundation_waiting';
   const center = centerWorld && typeof centerWorld === 'object'
     ? centerWorld
@@ -17522,10 +17876,14 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null, options = null) {
     if (!point) continue;
     const enemy = spawnEnemyAt(point.x, point.y, {
       hp: spec.carrier ? 3 : 1,
-      role: spec.carrier ? BEAT_EVENT_ROLES.BASS : BEAT_EVENT_ROLES.ACCENT,
-      instrumentId: spec.carrier ? 'BASS TONE 4' : '',
-      note: spec.carrier ? 'C3' : '',
-      layer: spec.carrier ? 'foundation' : 'sparkle',
+      role: spec.carrier
+        ? (authoringAccent ? BEAT_EVENT_ROLES.ACCENT : BEAT_EVENT_ROLES.BASS)
+        : BEAT_EVENT_ROLES.ACCENT,
+      instrumentId: spec.carrier && !authoringAccent ? 'BASS TONE 4' : '',
+      note: spec.carrier && !authoringAccent ? 'C3' : '',
+      layer: spec.carrier
+        ? (authoringAccent ? 'accent' : 'foundation')
+        : 'sparkle',
       skipMusicGroupInit: true,
     });
     if (!enemy) continue;
@@ -17547,6 +17905,8 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null, options = null) {
     noteMusicSystemEvent('tap_orb_carrier_spawned', {
       carrierEnemyId: Math.max(0, Math.trunc(Number(carrier.id) || 0)),
       enemyCount: spawnSpecs.length,
+      themeId: authoringThemeId,
+      laneId: authoringAccent ? 'secondary_loop_lane' : 'foundation_lane',
       foundationHitCount: tapOrbRuntime.getFoundationHitCount(),
       foundationTargetHitCount: tapOrbRuntime.getTargetHitCount(),
       reason,
@@ -17555,12 +17915,18 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null, options = null) {
       stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
     });
   }
-  if (carrier) beatSwarmOnboardingState.clearCarrierRequest();
+  if (carrier && isTapOrbBassDriveAuthoringActive()) beatSwarmOnboardingState.clearCarrierRequest();
   return !!carrier;
 }
 function updateTapOrbFoundationBuild(dt = 0, centerWorld = null) {
   if (!tapOrbRuntime.isActive()) return;
   tapOrbRuntime.update(dt, { playerWorld: centerWorld });
+  if (!isTapOrbBassDriveAuthoringActive()) {
+    if (!tapOrbRuntime.isFoundationComplete()) {
+      spawnTapOrbFoundationCarrierWave(centerWorld, { reason: `${String(tapOrbAuthoringRuntime.themeId || 'motif').trim().toLowerCase()}_rewrite_waiting` });
+    }
+    return;
+  }
   if (!isTapOrbFoundationBuildWaiting()) return;
   const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
   const currentStep = Math.max(0, Math.trunc(Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0));
@@ -17570,6 +17936,10 @@ function updateTapOrbFoundationBuild(dt = 0, centerWorld = null) {
 }
 function resetWeaponGateTapOrbOnboardingState() {
   beatSwarmOnboardingState.reset();
+  beatSwarmMusicEventRuntime.reset();
+  tapOrbAuthoringRuntime.themeId = 'bassDrive';
+  tapOrbAuthoringRuntime.eventId = '';
+  tapOrbAuthoringRuntime.reason = 'foundation';
   setBeatSwarmOnboardingPhase('idle');
   try { tapOrbRuntime.stop(); } catch {}
   try { weaponGateIntroRuntime.stop(); } catch {}
@@ -18046,6 +18416,7 @@ function getDesiredSpawnerGrooveLayers(barIndex = 0) {
   let motion = hasDirectorLanePlan
     ? (laneActive(sparkleLanePlan) && lanePrefersSpawner(sparkleLanePlan))
     : (drumLoops >= 2 || intensity >= 0.62);
+  const accentRewriteActive = isTapOrbAccentRewriteActive();
   if (intensityAuditionSection === 'silent') {
     return {
       barIndex: Math.max(0, Math.trunc(Number(barIndex) || 0)),
@@ -18088,6 +18459,10 @@ function getDesiredSpawnerGrooveLayers(barIndex = 0) {
     }
   }
   if (!pulse) {
+    backbeat = false;
+    motion = false;
+  }
+  if (accentRewriteActive) {
     backbeat = false;
     motion = false;
   }
@@ -23234,13 +23609,25 @@ function updateBeatWeapons(centerWorld) {
   const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, currentIntroStage);
   const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, currentIntroStage, activeLevelPhaseRuntime);
   const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, currentIntroStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
-  const tapOrbAwaitingFirstFoundationTap = tapOrbRuntime.isActive()
+  const musicRewriteSnapshot = getBeatSwarmMusicRewriteEventSnapshot();
+  const musicRewriteEligibility = getBeatSwarmMusicRewriteEventEligibility({
+    beatIndex,
+    barIndex,
+    introStage: currentIntroStage,
+    pacingSnapshot,
+  });
+  if (musicRewriteSnapshot.hasActiveEvent || (musicRewriteSnapshot.queuedCount > 0 && musicRewriteEligibility.eligible)) {
+    tickBeatSwarmMusicRewriteEvents(barIndex);
+  }
+  const tapOrbAwaitingFirstFoundationTap = tapOrbAuthoringRuntime.themeId === 'bassDrive'
+    && tapOrbRuntime.isActive()
     && !tapOrbRuntime.isFoundationComplete()
     && !tapOrbRuntime.hasActivatedFoundationBeat();
   const stepState = {
     lastSpawnerEnemyStepIndex,
     lastWeaponTuneStepIndex,
     suppressDirectorMusic: tapOrbAwaitingFirstFoundationTap,
+    suppressedMusicLaneIds: isTapOrbAccentRewriteActive() ? new Set(['foundation_lane', 'secondary_loop_lane']) : null,
     musicModeRuntime: activeMusicModeRuntime,
     enemyDirectorRuntime: activeEnemyDirectorRuntime,
   };
@@ -23877,6 +24264,9 @@ function inferBeatSwarmLevelPhaseFromState(barIndex = 0, introStage = 'none') {
 function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'none') {
   const safeBar = Math.max(0, Math.trunc(Number(barIndex) || 0));
   const safeBeat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
+  const tapOrbFoundationHandoffActive = isTapOrbBassDriveAuthoringActive()
+    && tapOrbRuntime.isActive()
+    && !tapOrbRuntime.isFoundationComplete();
   const gateFoundationHandoffHold = weaponGateMusicRuntime.lowAfterComplete === true;
   const inferredPhaseId = inferBeatSwarmLevelPhaseFromState(safeBar, introStage);
   const previousPhaseEnteredBar = Math.max(-1, Math.trunc(Number(levelPhaseRuntime.phaseEnteredBar) || -1));
@@ -23889,7 +24279,7 @@ function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'n
     activePhaseId = inferredPhaseId;
   }
   if (gateFoundationHandoffHold) {
-    activePhaseId = tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete()
+    activePhaseId = tapOrbFoundationHandoffActive
       ? 'intro_teach'
       : 'groove_establish';
   }
@@ -23948,7 +24338,7 @@ function evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage = 'n
     phaseValidity = fallbackHardEval.unmet.length > 0 ? 'invalid' : (degradeApplied ? 'degraded' : 'valid');
   }
   if (gateFoundationHandoffHold) {
-    activePhaseId = tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete()
+    activePhaseId = tapOrbFoundationHandoffActive
       ? 'intro_teach'
       : 'groove_establish';
     phaseVariant = 'foundation_only';
@@ -26075,6 +26465,10 @@ export function exitBeatSwarmMode() {
   if (!active) return true;
   try { weaponGateIntroRuntime.stop(); } catch {}
   beatSwarmOnboardingState.reset();
+  beatSwarmMusicEventRuntime.reset();
+  tapOrbAuthoringRuntime.themeId = 'bassDrive';
+  tapOrbAuthoringRuntime.eventId = '';
+  tapOrbAuthoringRuntime.reason = 'foundation';
   setBeatSwarmOnboardingPhase('idle');
   try { tapOrbRuntime.stop(); } catch {}
   perfEnemyRepeatRuntime.enabled = false;
@@ -26215,6 +26609,10 @@ export const BeatSwarmMode = {
   getSubBoardPendingDrawgridState: getWeaponSubBoardPendingDrawgridState,
   applyWeaponGateSelectionsToWeapon,
   applyTapOrbFoundationDebugPattern,
+  startTapOrbAccentRewriteEvent,
+  requestMusicRewriteEvent: requestBeatSwarmMusicRewriteEvent,
+  getMusicRewriteEventSnapshot: getBeatSwarmMusicRewriteEventSnapshot,
+  getMusicRewriteEventEligibility: getBeatSwarmMusicRewriteEventEligibility,
   getPlayerMusicTheme,
   getPlayerMusicThemes,
   setPlayerMusicTheme,
@@ -26337,6 +26735,11 @@ installBeatSwarmDebugGlobalRuntime({
       swarmDirectorDebug,
       getEnergyGravityMetrics,
       energyGravityRuntime,
+      getBeatSwarmMusicRewriteEventSnapshot,
+      getBeatSwarmMusicRewriteEventEligibility,
+      requestBeatSwarmMusicRewriteEvent,
+      tickBeatSwarmMusicRewriteEvents,
+      completeBeatSwarmMusicRewriteEvent,
       getWeaponTuneActivityStats,
       getWeaponTuneDamageScale,
       playerInstrumentRuntime,

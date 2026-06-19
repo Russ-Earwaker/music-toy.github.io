@@ -1,0 +1,34 @@
+Beat Swarm Transition Debug
+sessionId=music-lab-2026-06-19T10:08:07.742Z-2
+runId=musicLab_bs0_s3_accent_rewrite_tap_orb_debug_1x90s
+label=music-lab-session
+leadEntryBar=0
+range=8-16
+
+Per-bar executed audible enemy events:
+bar 8: audibleEnemy=7 playerAudible=6 :: secondary_loop_lane|loops|call|full:3, -|-|-|quiet:2, foundation_lane|foundation|-|full:1, foundation_lane|foundation|-|quiet:1
+bar 9: audibleEnemy=8 playerAudible=6 :: secondary_loop_lane|loops|call|full:6, foundation_lane|foundation|-|full:1, -|-|-|quiet:1
+bar 10: audibleEnemy=9 playerAudible=6 :: -|-|-|quiet:4, secondary_loop_lane|loops|call|full:3, foundation_lane|foundation|-|full:1, foundation_lane|foundation|-|quiet:1
+bar 11: audibleEnemy=10 playerAudible=6 :: secondary_loop_lane|loops|call|full:6, -|-|-|quiet:3, foundation_lane|foundation|-|full:1
+bar 12: audibleEnemy=6 playerAudible=6 :: secondary_loop_lane|loops|call|full:3, -|-|-|quiet:1, foundation_lane|foundation|-|full:1, foundation_lane|foundation|-|quiet:1
+bar 13: audibleEnemy=7 playerAudible=6 :: secondary_loop_lane|loops|call|full:6, foundation_lane|foundation|-|full:1
+bar 14: audibleEnemy=7 playerAudible=6 :: secondary_loop_lane|loops|call|full:3, foundation_lane|foundation|-|quiet:2, -|-|-|quiet:1, foundation_lane|foundation|-|full:1
+bar 15: audibleEnemy=11 playerAudible=6 :: secondary_loop_lane|loops|call|full:6, -|-|-|quiet:4, foundation_lane|foundation|-|full:1
+bar 16: audibleEnemy=10 playerAudible=6 :: secondary_loop_lane|loops|call|full:3, -|-|-|quiet:3, foundation_lane|foundation|-|quiet:3, foundation_lane|foundation|-|full:1
+
+Lead / Secondary Render Summary:
+bar 8: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 9: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=6/6/6/6/0/0 notes[C4:6] inst[CLICK PERCUSSION SHORT:6]
+bar 10: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 11: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=6/6/6/6/0/0 notes[C4:6] inst[CLICK PERCUSSION SHORT:6]
+bar 12: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 13: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=6/6/6/6/0/0 notes[C4:6] inst[CLICK PERCUSSION SHORT:6]
+bar 14: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 15: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=6/6/6/6/0/0 notes[C4:6] inst[CLICK PERCUSSION SHORT:6]
+bar 16: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+
+Transition snapshots:
+
+Lead suppression events in range:
+
+Response events in range:

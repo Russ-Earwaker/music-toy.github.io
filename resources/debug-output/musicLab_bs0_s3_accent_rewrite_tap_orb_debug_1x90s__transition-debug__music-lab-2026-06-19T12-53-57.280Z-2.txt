@@ -1,0 +1,55 @@
+Beat Swarm Transition Debug
+sessionId=music-lab-2026-06-19T12:53:57.280Z-2
+runId=musicLab_bs0_s3_accent_rewrite_tap_orb_debug_1x90s
+label=music-lab-session
+leadEntryBar=14
+range=10-22
+
+Per-bar executed audible enemy events:
+bar 10: audibleEnemy=10 playerAudible=3 :: foundation_lane|foundation|solo|full:6, -|-|-|quiet:4
+bar 11: audibleEnemy=5 playerAudible=6 :: foundation_lane|foundation|call|full:3, foundation_lane|foundation|solo|full:1, -|-|-|quiet:1
+bar 12: audibleEnemy=9 playerAudible=3 :: foundation_lane|foundation|call|full:7, -|-|-|quiet:2
+bar 13: audibleEnemy=7 playerAudible=6 :: foundation_lane|foundation|call|full:4, -|-|-|quiet:3
+bar 14: audibleEnemy=10 playerAudible=3 :: foundation_lane|foundation|call|full:7, primary_loop_lane|loops|call|quiet:2, -|-|-|quiet:1
+bar 15: audibleEnemy=6 playerAudible=6 :: foundation_lane|foundation|call|full:4, primary_loop_lane|loops|call|full:1, primary_loop_lane|loops|call|quiet:1
+bar 16: audibleEnemy=13 playerAudible=3 :: foundation_lane|foundation|call|full:7, -|-|-|quiet:3, primary_loop_lane|loops|call|full:2, primary_loop_lane|loops|call|quiet:1
+bar 17: audibleEnemy=11 playerAudible=6 :: -|-|-|quiet:5, foundation_lane|foundation|call|full:4, primary_loop_lane|loops|call|quiet:1, primary_loop_lane|loops|call|full:1
+bar 18: audibleEnemy=9 playerAudible=3 :: foundation_lane|foundation|call|full:7, -|-|-|quiet:1, primary_loop_lane|loops|call|quiet:1
+bar 19: audibleEnemy=4 playerAudible=6 :: foundation_lane|foundation|call|full:4
+bar 20: audibleEnemy=9 playerAudible=3 :: foundation_lane|foundation|call|full:7, primary_loop_lane|loops|call|full:1, -|-|-|quiet:1
+bar 21: audibleEnemy=6 playerAudible=6 :: foundation_lane|foundation|call|full:4, primary_loop_lane|loops|call|full:1, -|-|-|quiet:1
+bar 22: audibleEnemy=13 playerAudible=3 :: foundation_lane|foundation|call|full:7, -|-|-|quiet:3, primary_loop_lane|loops|call|quiet:2, primary_loop_lane|loops|call|full:1
+
+Lead / Secondary Render Summary:
+bar 10: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 11: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 12: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 13: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 14: lead c/e/a/f/q/t=0/2/2/0/2/0 notes[C#5:1, A#4:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 15: lead c/e/a/f/q/t=0/2/2/1/1/0 notes[A#4:2] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 16: lead c/e/a/f/q/t=0/3/3/2/1/0 notes[F5:1, C#5:1, D#5:1] inst[RETRO SQUARE:3] | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 17: lead c/e/a/f/q/t=0/2/2/1/1/0 notes[D#5:2] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 18: lead c/e/a/f/q/t=0/1/1/0/1/0 notes[A#4:1] inst[RETRO SQUARE:1] | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 19: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 20: lead c/e/a/f/q/t=0/1/1/1/0/0 notes[C#5:1] inst[RETRO SQUARE:1] | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 21: lead c/e/a/f/q/t=0/1/1/1/0/0 notes[D#5:1] inst[RETRO SQUARE:1] | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 22: lead c/e/a/f/q/t=0/3/3/1/2/0 notes[A#4:2, C#5:1] inst[RETRO SQUARE:3] | secondary c/e/a/f/q/t=0/0/0/0/0/0
+
+Transition snapshots:
+bar 10 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 11 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 12 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 13 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 14 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 15 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 16 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 17 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 18 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 19 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 20 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 21 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 22 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+
+Lead suppression events in range:
+
+Response events in range:

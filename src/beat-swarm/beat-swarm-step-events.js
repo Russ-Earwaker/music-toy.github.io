@@ -46,6 +46,19 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ? state.musicModeRuntime
     : null;
   const suppressDirectorMusic = state.suppressDirectorMusic === true;
+  const suppressedMusicLaneIds = state.suppressedMusicLaneIds instanceof Set
+    ? state.suppressedMusicLaneIds
+    : new Set(Array.isArray(state.suppressedMusicLaneIds) ? state.suppressedMusicLaneIds : []);
+  const isMusicLaneSuppressed = (ev = null) => {
+    if (!ev || !suppressedMusicLaneIds.size) return false;
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const laneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
+    return !!laneId && suppressedMusicLaneIds.has(laneId);
+  };
+  const isLaneSuppressed = (laneIdLike = '') => {
+    const laneId = String(laneIdLike || '').trim().toLowerCase();
+    return !!laneId && suppressedMusicLaneIds.has(laneId);
+  };
   const activeMusicMode = String(musicModeRuntime?.activeMusicMode || '').trim().toLowerCase();
   const primaryLoopForegroundProtected = activeMusicMode === 'lead_entry_merge' || activeMusicMode === 'full_texture';
   const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
@@ -421,7 +434,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       ...spawnerEvents,
       ...drawSnakeEvents,
       ...composerEvents,
-    ];
+    ].filter((ev) => !isMusicLaneSuppressed(ev));
     noteSlotSpawnerStage('raw', rawEnemyEvents);
 
     let enemyKeepCount = 0;
@@ -1011,7 +1024,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   }
   {
   const finishShapeEmittersPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters');
-    if (!suppressDirectorMusic && foundationLaneActive && !hasProtectedFoundationEvent && typeof helpers.createBassFoundationKeepaliveEvent === 'function') {
+    if (!suppressDirectorMusic && !isLaneSuppressed('foundation_lane') && foundationLaneActive && !hasProtectedFoundationEvent && typeof helpers.createBassFoundationKeepaliveEvent === 'function') {
       const finishShapeEmittersBassPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bass');
       const keepalive = helpers.createBassFoundationKeepaliveEvent({
         beatIndex,
@@ -1037,7 +1050,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         finishShapeEmittersBassReplacePerf();
       }
       finishShapeEmittersBassPerf();
-    } else if (!suppressDirectorMusic && !hasBassEnemyEvent && typeof helpers.createBassFoundationKeepaliveEvent === 'function') {
+    } else if (!suppressDirectorMusic && !isLaneSuppressed('foundation_lane') && !hasBassEnemyEvent && typeof helpers.createBassFoundationKeepaliveEvent === 'function') {
       const finishShapeEmittersBassPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.bass');
       const keepalive = helpers.createBassFoundationKeepaliveEvent({
         beatIndex,
@@ -1825,6 +1838,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   });
   if (
     !suppressDirectorMusic
+    && !isLaneSuppressed('foundation_lane')
     && foundationLaneActive
     && !hasEmittedFoundationEvent
     && typeof helpers.createBassFoundationKeepaliveEvent === 'function'
@@ -2133,6 +2147,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   })();
   const explicitPlayerBassDriveEvent = (() => {
     if (suppressDirectorMusic) return null;
+    if (isLaneSuppressed('foundation_lane')) return null;
     const bedState = getDirectorMotifBedStageState();
     if (bedState.stage !== 'peak') return null;
     const lane = helpers.getFoundationLaneSnapshot?.(stepIndex, barIndex) || null;
