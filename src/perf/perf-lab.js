@@ -453,73 +453,83 @@ function ensureUI() {
   const MUSIC_LAB = {
     title: 'Music Lab - Beat Swarm Diagnostics',
     controls: [
-      `<label class="perf-lab-toggle">Repeat enemy
-        <select class="perf-lab-select" data-music-spawn-type>
-          <option value="drawsnake">DrawSnake</option>
-          <option value="spawner">Spawner</option>
-          <option value="dumb">Dumb</option>
-          <option value="composer-group-member">Composer Enemy</option>
-          <option value="group">Composer Group</option>
-        </select>
-      </label>`,
-      `<label class="perf-lab-toggle">Behavior
-        <select class="perf-lab-select" data-music-spawn-behavior>
-          <option value="none">None</option>
-          <option value="beat_bounce_event">Beat Bounce Event</option>
-          <option value="winding_chain">Winding Chain</option>
-          <option value="paired_dance">Paired Dance</option>
-          <option value="advancing_line">Advancing Line</option>
-        </select>
-      </label>`,
-      `<label class="perf-lab-toggle">Group size
-        <select class="perf-lab-select" data-music-group-count>
-          <option value="4">4</option>
-          <option value="6">6</option>
-          <option value="8" selected>8</option>
-          <option value="10">10</option>
-          <option value="12">12</option>
-        </select>
-      </label>`,
-      `<label class="perf-lab-toggle">Speed
-        <select class="perf-lab-select" data-music-speed-scale>
-          <option value="0.8">0.8x</option>
-          <option value="1" selected>1.0x</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-          <option value="1.8">1.8x</option>
-          <option value="2.2">2.2x</option>
-        </select>
-      </label>`,
-      `<label class="perf-lab-toggle"><input type="checkbox" data-music-repeat-persistent checked /> Repeat enemy stays alive</label>`,
-      btn('musicEnemyRepeatStart', 'Music: Start Repeat Spawn', 'primary'),
-      btn('musicEnemyRepeatTimedDebug', 'Music: Timed Debug Run (20s)', 'primary'),
-      btn('musicEnemyRepeatStop', 'Music: Stop Repeat Spawn'),
-      btn('musicLabEnable', 'Music Lab: Enable'),
-      btn('musicLabDisable', 'Music Lab: Disable'),
-      btn('musicLabReset', 'Music Lab: Reset Session', 'primary'),
-      btn('musicLabRunBS0S3Arrangement5m', 'Music Lab: Run BS0 S3 Arrangement Musicality (1x5m, compact save)', 'primary'),
-      btn('musicLabRunBS0S3CompositionFlow4m', 'Music Lab: Run BS0 S3 Composition Full Flow (1x4m, compact save)', 'primary'),
-      btn('musicLabRunBS0S3CompositionPacing4m', 'Music Lab: Run BS0 S3 Composition Pacing Flow (1x4m, compact save)', 'primary'),
-      btn('musicLabRunBS0S3TapOrbFoundationDebug', 'Music Lab: Tap-Orb Foundation Commit Debug (1x75s, compact save)', 'primary'),
-      btn('musicLabRunBS0S3AccentRewriteDebug', 'Music Lab: Accent Rewrite Tap-Orb Debug (1x90s, compact save)', 'primary'),
-      btn('musicLabRunBS0S3MusicMissileRewriteDebug', 'Music Lab: Music Missile Accent Rewrite (1x120s, compact save)', 'primary'),
-      btn('weaponGateBeatSwarmStart', 'Prototype: Beat Swarm Gate Start', 'primary'),
-      btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Music Lab: Gate Start Tap-Orb Handoff Debug (1x150s, compact save)', 'primary'),
-      btn('weaponGateLabOpen', 'Prototype: Weapon Gate Onboarding Lab', 'primary'),
-      btn('musicLabRunBS0S3IntensityRamp150s', 'Music Lab: Run BS0 S3 Intensity Ramp (1x150s, compact save)', 'primary'),
-      btn('musicLabRunBS0S3IntensityRampDebug150s', 'Music Lab: Run BS0 S3 Intensity Ramp Debug (1x150s, compact save)', 'primary'),
-      btn('musicLabRunBS0S3ListenSilent', 'Listen: Silent / Weapon Only (90s)', 'primary'),
-      btn('musicLabRunBS0S3ListenLow', 'Listen: Low Intensity (90s)', 'primary'),
-      btn('musicLabRunBS0S3ListenMedium', 'Listen: Medium Intensity (90s)', 'primary'),
-      btn('musicLabRunBS0S3ListenBuild', 'Listen: Build Intensity (90s)', 'primary'),
-      btn('musicLabRunBS0S3ListenPeak', 'Listen: Peak Intensity (90s)', 'primary'),
-      btn('musicLabRunBS0S3ListenRelease', 'Listen: Peak -> Release -> Settle (60s)', 'primary'),
-      btn('musicLabRunBS0S3ListenReleaseOnly', 'Listen: Release Only / No Intro (60s)', 'primary'),
-      btn('musicLabRunBS0S3ListenSettle', 'Listen: Settle Intensity (90s)', 'primary'),
-      btn('musicLabSnapshot', 'Music Lab: Show Snapshot'),
-      btn('musicLabExport', 'Music Lab: Export JSON'),
-      btn('musicLabSaveResources', 'Music Lab: Save to resources'),
-      btn('musicLabDownload', 'Music Lab: Download JSON'),
+      `<div class="perf-lab-music-current">
+        <div class="perf-lab-controlsTitle">Current Work</div>
+        ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Tap Orbs + Missiles (1x180s)', 'primary')}
+      </div>`,
+      `<details class="perf-lab-music-group">
+        <summary>Component Tests</summary>
+        <div class="perf-lab-music-group-body">
+          ${btn('musicLabRunBS0S3TapOrbFoundationDebug', 'Tap-Orb Foundation Commit (1x75s)', 'primary')}
+          ${btn('musicLabRunBS0S3AccentRewriteDebug', 'Accent Rewrite Tap Orbs (1x90s)', 'primary')}
+          ${btn('musicLabRunBS0S3MusicMissileRewriteDebug', 'Music Missile Accent Rewrite (1x120s)', 'primary')}
+          ${btn('weaponGateBeatSwarmStart', 'Start Beat Swarm Gate Sequence', 'primary')}
+          ${btn('weaponGateLabOpen', 'Open Weapon Gate Prototype', 'primary')}
+        </div>
+      </details>`,
+      `<details class="perf-lab-music-group">
+        <summary>Composition and Pacing</summary>
+        <div class="perf-lab-music-group-body">
+          ${btn('musicLabRunBS0S3Arrangement5m', 'Arrangement Musicality (1x5m)', 'primary')}
+          ${btn('musicLabRunBS0S3CompositionFlow4m', 'Composition Full Flow (1x4m)', 'primary')}
+          ${btn('musicLabRunBS0S3CompositionPacing4m', 'Composition Pacing Flow (1x4m)', 'primary')}
+          ${btn('musicLabRunBS0S3IntensityRamp150s', 'Intensity Ramp (1x150s)', 'primary')}
+          ${btn('musicLabRunBS0S3IntensityRampDebug150s', 'Intensity Ramp Debug (1x150s)', 'primary')}
+        </div>
+      </details>`,
+      `<details class="perf-lab-music-group">
+        <summary>Intensity Listening Tests</summary>
+        <div class="perf-lab-music-group-body">
+          ${btn('musicLabRunBS0S3ListenSilent', 'Silent / Weapon Only (90s)', 'primary')}
+          ${btn('musicLabRunBS0S3ListenLow', 'Low Intensity (90s)', 'primary')}
+          ${btn('musicLabRunBS0S3ListenMedium', 'Medium Intensity (90s)', 'primary')}
+          ${btn('musicLabRunBS0S3ListenBuild', 'Build Intensity (90s)', 'primary')}
+          ${btn('musicLabRunBS0S3ListenPeak', 'Peak Intensity (90s)', 'primary')}
+          ${btn('musicLabRunBS0S3ListenRelease', 'Peak to Release to Settle (60s)', 'primary')}
+          ${btn('musicLabRunBS0S3ListenReleaseOnly', 'Release Only / No Intro (60s)', 'primary')}
+          ${btn('musicLabRunBS0S3ListenSettle', 'Settle Intensity (90s)', 'primary')}
+        </div>
+      </details>`,
+      `<details class="perf-lab-music-group">
+        <summary>Enemy Spawn Diagnostics</summary>
+        <div class="perf-lab-music-group-body">
+          <label class="perf-lab-toggle">Repeat enemy
+            <select class="perf-lab-select" data-music-spawn-type>
+              <option value="drawsnake">DrawSnake</option><option value="spawner">Spawner</option><option value="dumb">Dumb</option>
+              <option value="composer-group-member">Composer Enemy</option><option value="group">Composer Group</option>
+            </select>
+          </label>
+          <label class="perf-lab-toggle">Behavior
+            <select class="perf-lab-select" data-music-spawn-behavior>
+              <option value="none">None</option><option value="beat_bounce_event">Beat Bounce Event</option>
+              <option value="winding_chain">Winding Chain</option><option value="paired_dance">Paired Dance</option><option value="advancing_line">Advancing Line</option>
+            </select>
+          </label>
+          <label class="perf-lab-toggle">Group size
+            <select class="perf-lab-select" data-music-group-count>
+              <option value="4">4</option><option value="6">6</option><option value="8" selected>8</option><option value="10">10</option><option value="12">12</option>
+            </select>
+          </label>
+          <label class="perf-lab-toggle">Speed
+            <select class="perf-lab-select" data-music-speed-scale>
+              <option value="0.8">0.8x</option><option value="1" selected>1.0x</option><option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option><option value="1.8">1.8x</option><option value="2.2">2.2x</option>
+            </select>
+          </label>
+          <label class="perf-lab-toggle"><input type="checkbox" data-music-repeat-persistent checked /> Repeat enemy stays alive</label>
+          ${btn('musicEnemyRepeatStart', 'Start Repeat Spawn', 'primary')}
+          ${btn('musicEnemyRepeatTimedDebug', 'Timed Debug Run (20s)', 'primary')}
+          ${btn('musicEnemyRepeatStop', 'Stop Repeat Spawn')}
+        </div>
+      </details>`,
+      `<details class="perf-lab-music-group">
+        <summary>Session and Export</summary>
+        <div class="perf-lab-music-group-body">
+          ${btn('musicLabEnable', 'Enable Music Lab')}${btn('musicLabDisable', 'Disable Music Lab')}
+          ${btn('musicLabReset', 'Reset Session', 'primary')}${btn('musicLabSnapshot', 'Show Snapshot')}
+          ${btn('musicLabExport', 'Export JSON')}${btn('musicLabSaveResources', 'Save to resources')}${btn('musicLabDownload', 'Download JSON')}
+        </div>
+      </details>`,
     ].join(''),
   };
 
@@ -812,6 +822,34 @@ function ensureUI() {
         font-weight:600;
         opacity:0.85;
         margin:0 0 8px;
+      }
+      .perf-lab-music-current,
+      .perf-lab-music-group{
+        flex:1 0 100%;
+        min-width:0;
+      }
+      .perf-lab-music-current{
+        padding:10px;
+        border:1px solid rgba(126,205,255,0.34);
+        border-radius:6px;
+        background:rgba(86,155,208,0.1);
+      }
+      .perf-lab-music-group{
+        border-top:1px solid rgba(255,255,255,0.1);
+        padding-top:8px;
+      }
+      .perf-lab-music-group summary{
+        cursor:pointer;
+        font-size:12px;
+        font-weight:600;
+        opacity:0.82;
+        padding:4px 0;
+      }
+      .perf-lab-music-group-body{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        padding:8px 0 2px;
       }
       .perf-lab-qlab-buttons{
         gap:8px;
@@ -6704,7 +6742,7 @@ async function runBS0s3MusicLabMusicMissileRewriteDebug120s() {
 
 async function runBS0s3MusicLabGateStartTapOrbHandoffDebug150s() {
   await runBS0Stage(3, {
-    durationMs: 150000,
+    durationMs: 180000,
     repeatCount: 1,
     freshResetEachRun: true,
     restartTransportEachRun: true,
@@ -6726,34 +6764,38 @@ async function runBS0s3MusicLabGateStartTapOrbHandoffDebug150s() {
       try { if (!isRunning()) startTransport(); } catch {}
       try {
         window.__beatSwarmGateStartTapOrbDebugExpected = {
-          mode: 'real_gate_start_handoff',
+          mode: 'gate_foundation_missile_sequence',
           expectedFoundationTheme: 'bassDrive',
           expectedInstrumentFromTheme: 'BASS TONE 4',
           traceEvents: [
+            'tap_orb_foundation_rewrite_started',
             'tap_orb_foundation_activated',
             'tap_orb_foundation_committed_to_bass_drive',
             'tap_orb_foundation_lane_resolved',
+            'music_missile_rewrite_started',
+            'music_missile_quantized_explosion',
+            'music_missile_rewrite_committed_to_theme',
           ],
         };
       } catch {}
       setOutput({
         ok: true,
-        setup: 'weapon_gate_intro_started_for_tap_orb_handoff_debug',
-        notes: 'Complete the gate corridor and tap-orb foundation sequence. The saved Music Lab output will include tap-orb commit and foundation lane resolution trace events.',
+        setup: 'weapon_gate_foundation_missile_sequence_started',
+        notes: 'Complete the gate corridor, author Bass Drive with tap orbs, then author Accent Rhythm with music missiles.',
       });
     },
-    saveRunIdBase: 'musicLab_bs0_s3_gate_start_tap_orb_handoff_debug_1x150s',
+    saveRunIdBase: 'musicLab_bs0_s3_gate_foundation_missile_sequence_1x180s',
     saveNotes: [
-      'Beat Swarm Music Lab gate-start tap-orb handoff debug: run the real gate corridor, then tap-orb foundation creation, then low-intensity handoff.',
+      'Beat Swarm Music Lab onboarding sequence: run the real gate corridor, event-driven tap-orb foundation creation, then music-missile Accent Rhythm creation.',
       'Use tap_orb_foundation_committed_to_bass_drive and tap_orb_foundation_lane_resolved events to compare committed Bass Drive motif/instrument against director foundation lane playback.',
-      'Expected result: while tap orbs are active, temporary tap loop plays; after completion, committed Bass Drive patternChain remains recognizable and uses the Bass Drive theme instrument/note.',
+      'Expected result: the weapon, Bass Drive, and Accent Rhythm motifs commit in order without replacing or interrupting the preceding motif.',
     ].join(' '),
-    groupedScenarioName: 'retro_shooter_gate_start_tap_orb_handoff_debug_1x150s',
-    groupedRunId: 'musicLab_bs0_s3_gate_start_tap_orb_handoff_debug_1x150s_scenario',
-    groupedNotes: 'Gate Start tap-orb handoff debug: real onboarding flow with compact Music Lab save for commit/lane/playback instrument tracing.',
-    tagPrefix: 'BS0S3GateStartTapOrbHandoffDebug1x150s',
-    labelPrefix: 'BS0_stage3_beatswarm_gate_start_tap_orb_handoff_debug_1x150s',
-    statusPrefix: 'Running BS0 S3 Gate Start tap-orb handoff debug (150 seconds, compact save)',
+    groupedScenarioName: 'retro_shooter_gate_foundation_missile_sequence_1x180s',
+    groupedRunId: 'musicLab_bs0_s3_gate_foundation_missile_sequence_1x180s_scenario',
+    groupedNotes: 'Complete onboarding chain: gate weapon motif, tap-orb Bass Drive event, and music-missile Accent Rhythm event.',
+    tagPrefix: 'BS0S3GateFoundationMissileSequence1x180s',
+    labelPrefix: 'BS0_stage3_beatswarm_gate_foundation_missile_sequence_1x180s',
+    statusPrefix: 'Running BS0 S3 gate + tap orbs + missiles (180 seconds, compact save)',
     traceCapture: {
       enabled: false,
     },

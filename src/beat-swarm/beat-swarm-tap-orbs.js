@@ -415,11 +415,17 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
       if (!entry || entry === ignoreOrb || entry.status !== 'queued') continue;
       reservedSteps.add(((Math.trunc(Number(entry.queuedStepIndex) || 0) % stepCount) + stepCount) % stepCount);
     }
-    let stepOffset = Math.max(1, Math.trunc(Number(minOffset) || 1));
-    while (stepOffset <= stepCount) {
-      const stepIndex = (start + stepOffset) % stepCount;
-      if (!reservedSteps.has(stepIndex)) return { stepIndex, stepOffset };
-      stepOffset += 1;
+    const firstOffset = Math.max(1, Math.trunc(Number(minOffset) || 1));
+    for (const requireSpacing of [true, false]) {
+      let stepOffset = firstOffset;
+      while (stepOffset <= stepCount) {
+        const stepIndex = (start + stepOffset) % stepCount;
+        const previousStep = (stepIndex - 1 + stepCount) % stepCount;
+        const nextStep = (stepIndex + 1) % stepCount;
+        const spaced = !reservedSteps.has(previousStep) && !reservedSteps.has(nextStep);
+        if (!reservedSteps.has(stepIndex) && (!requireSpacing || spaced)) return { stepIndex, stepOffset };
+        stepOffset += 1;
+      }
     }
     return null;
   }
@@ -460,7 +466,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
       state.foundationCompleteTriggerIndex = triggerIndex;
     }
     state.lastLoopBeatIndex = triggerIndex;
-    try { deps.playFoundationBeat?.({ stepIndex, beatIndex, themeId: state.authoringThemeId, laneId: state.authoringLaneId, world: { x: orb.x, y: orb.y } }); } catch {}
+    try { deps.playFoundationBeat?.({ stepIndex, triggerIndex, beatIndex, themeId: state.authoringThemeId, laneId: state.authoringLaneId, source: 'tap-orb-activation', world: { x: orb.x, y: orb.y } }); } catch {}
     try {
       deps.onBeatOrbActivated?.({
         instrumentId: 'BASS TONE 4',
@@ -478,7 +484,6 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
       });
     } catch {}
     try { deps.addExplosion?.({ x: orb.x, y: orb.y }, 150, 0.3); } catch {}
-    try { deps.damageEnemiesNear?.({ x: orb.x, y: orb.y }, 190, 8); } catch {}
     pulseFoundationFlash();
     try {
       orb.el?.classList?.remove?.('is-queued');
@@ -691,6 +696,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     try {
       deps.playFoundationBeat?.({
         stepIndex,
+        triggerIndex,
         beatIndex,
         themeId: state.authoringThemeId,
         laneId: state.authoringLaneId,

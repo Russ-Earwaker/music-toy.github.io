@@ -3,7 +3,7 @@ const MAX_ITEMS = 8;
 const PICKUP_TRAVEL_SPEED = 520;
 const PICKUP_COLLECT_RADIUS = 76;
 const PICKUP_MAGNET_RADIUS = 260;
-const PICKUP_MAGNET_SPEED = 760;
+const PICKUP_MAGNET_SPEED = 1500;
 const MISSILE_ORBIT_RADIUS = 270;
 const MISSILE_ORBIT_SPEED = 1.85;
 const MISSILE_SEEK_SPEED = 980;
@@ -120,6 +120,8 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     trails: [],
     pendingDetonations: [],
     motifHits: new Set(),
+    postCompleteUntilTick: -1,
+    postCompleteNotified: false,
     rootEl: null,
     promptEl: null,
   };
@@ -155,6 +157,8 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     state.missiles.length = 0;
     state.trails.length = 0;
     state.motifHits.clear();
+    state.postCompleteUntilTick = -1;
+    state.postCompleteNotified = false;
     try { state.rootEl?.remove?.(); } catch {}
     state.rootEl = null;
     state.promptEl = null;
@@ -215,6 +219,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       y: source.y,
       anchorAngle: (-Math.PI / 2) + (index * Math.PI * 2 / state.targetHitCount),
       anchorRadiusN: index % 2 === 0 ? 0.56 : 0.72,
+      magneticLatched: false,
       el,
     };
     state.pickups.push(pickup);
@@ -369,6 +374,11 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       targetHitCount: state.targetHitCount,
     });
     const complete = state.motifHits.size >= state.targetHitCount;
+    if (complete) {
+      state.active = false;
+      state.postCompleteUntilTick = state.lastClockTick + (state.stepCount * 2);
+      state.postCompleteNotified = false;
+    }
     deps.onMotifHit?.({
       stepIndex: entry.stepIndex,
       themeId: state.themeId,
@@ -379,7 +389,6 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       complete,
       steps: getMotifSteps(),
     });
-    if (complete) state.active = false;
   }
 
   function getMotifSteps() {
@@ -455,15 +464,15 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
         y: arena.y + Math.sin(pickup.anchorAngle) * arenaRadius * pickup.anchorRadiusN,
       };
       const playerDist = Math.hypot(pickup.x - player.x, pickup.y - player.y);
-      const magnetic = playerDist <= PICKUP_MAGNET_RADIUS;
+      if (playerDist <= PICKUP_MAGNET_RADIUS) pickup.magneticLatched = true;
+      const magnetic = pickup.magneticLatched === true;
       if (magnetic) target = player;
       pickup.el?.classList?.toggle?.('is-magnetic', magnetic);
       const dx = target.x - pickup.x;
       const dy = target.y - pickup.y;
       const dist = Math.hypot(dx, dy);
-      const magneticStrength = magnetic ? clamp01(1 - (playerDist / PICKUP_MAGNET_RADIUS)) : 0;
       const speed = magnetic
-        ? PICKUP_MAGNET_SPEED * (0.65 + magneticStrength * 0.75)
+        ? Math.min(2400, PICKUP_MAGNET_SPEED + (playerDist * 1.5))
         : PICKUP_TRAVEL_SPEED;
       const step = Math.min(dist, speed * dt);
       if (dist > 0.001) {
@@ -540,8 +549,22 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
 
   function updateMotifLoop() {
     if (!state.motifHits.size) return;
+    if (!state.active && state.postCompleteUntilTick < 0) return;
     const clock = deps.getBeatClock?.() || {};
     const tick = getClockTick(clock);
+    if (state.postCompleteUntilTick >= 0 && tick > state.postCompleteUntilTick) {
+      state.postCompleteUntilTick = -1;
+      if (!state.postCompleteNotified) {
+        state.postCompleteNotified = true;
+        deps.onPostCompletePlayback?.({
+          eventId: state.eventId,
+          themeId: state.themeId,
+          laneId: state.laneId,
+          steps: getMotifSteps(),
+        });
+      }
+      return;
+    }
     if (tick === state.lastClockTick) return;
     state.lastClockTick = tick;
     const stepIndex = getClockStep(clock, state.stepCount);
@@ -558,7 +581,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
   }
 
   function update(dt = 0) {
-    if (!state.active && !state.missiles.length && !state.pendingDetonations.length && !state.trails.length) return;
+    if (!state.active && state.postCompleteUntilTick < 0 && !state.missiles.length && !state.pendingDetonations.length && !state.trails.length) return;
     ensureRoot();
     const safeDt = Math.max(0, Math.min(0.1, Number(dt) || 0));
     const player = point(deps.getPlayerWorld?.());
@@ -587,6 +610,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     noteCarrierSpawned,
     canAcceptDrop,
     isActive: () => state.active,
+    isPostCompletePlaybackActive: () => state.postCompleteUntilTick >= getClockTick(deps.getBeatClock?.()),
     getMotifSteps,
     getSnapshot: () => ({
       active: state.active,
@@ -600,6 +624,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       hitCount: state.motifHits.size,
       targetHitCount: state.targetHitCount,
       complete: state.motifHits.size >= state.targetHitCount,
+      postCompletePlaybackActive: state.postCompleteUntilTick >= getClockTick(deps.getBeatClock?.()),
     }),
   };
 }

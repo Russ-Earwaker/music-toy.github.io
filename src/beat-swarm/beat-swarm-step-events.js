@@ -52,7 +52,17 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const isMusicLaneSuppressed = (ev = null) => {
     if (!ev || !suppressedMusicLaneIds.size) return false;
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
-    const laneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
+    const explicitLaneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
+    const musicLayer = String(payload.musicLayer || '').trim().toLowerCase();
+    const role = String(ev?.role || payload.musicRole || '').trim().toLowerCase();
+    const inferredLaneId = musicLayer === 'foundation' || role === 'bass'
+      ? 'foundation_lane'
+      : (musicLayer === 'lead' || role === 'lead'
+        ? 'primary_loop_lane'
+        : (musicLayer === 'loops' || musicLayer === 'accent' || role === 'accent'
+          ? 'secondary_loop_lane'
+          : ''));
+    const laneId = explicitLaneId || inferredLaneId;
     return !!laneId && suppressedMusicLaneIds.has(laneId);
   };
   const isLaneSuppressed = (laneIdLike = '') => {
