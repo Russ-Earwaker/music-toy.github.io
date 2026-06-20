@@ -540,6 +540,13 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
             opacity = 0.22 + (0.34 * eased);
           } else if (fx.kind === 'hostile-explosion') {
             opacity = Math.max(0, Math.min(1, fx.ttl / Math.max(0.01, Number(constants.composerGroupExplosionTtl) || 0.01)));
+          } else if (fx.kind === 'music-explosion') {
+            const total = Math.max(0.1, Number(fx.duration) || Number(constants.explosionTtl) || 0.72);
+            const elapsedN = Math.max(0, Math.min(1, 1 - (fx.ttl / total)));
+            const attackN = Math.min(1, elapsedN / 0.08);
+            const decayN = Math.max(0, (elapsedN - 0.08) / 0.92);
+            radiusScale = 0.18 + (0.82 * (1 - ((1 - attackN) * (1 - attackN)))) + (0.12 * decayN);
+            opacity = elapsedN <= 0.08 ? 1 : Math.pow(1 - decayN, 0.72);
           }
           const c = helpers.worldToScreen?.({ x: Number(fx.at?.x) || 0, y: Number(fx.at?.y) || 0 });
           if (!c) return;

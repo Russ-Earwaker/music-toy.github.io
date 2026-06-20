@@ -21,7 +21,7 @@ import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-compo
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-18-music-events-v1';
-import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-06-20-music-missile-v3';
+import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-06-20-music-missile-v4';
 import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-06-18-corridor-curve-v1';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-19-accent-rewrite-lane-mute-v1';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
@@ -1432,7 +1432,15 @@ const musicMissileRuntime = createBeatSwarmMusicMissileRuntime({
       musicLaneId: String(event.laneId || 'secondary_loop_lane').trim() || 'secondary_loop_lane',
       stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
       eventId: String(event.eventId || '').trim(),
-    }, loopPlayback ? 0.66 : 0.94);
+    }, loopPlayback ? 0.66 : 1.0);
+    if (!loopPlayback) {
+      triggerBeatSwarmInstrument('Gaming Bling', note, undefined, 'master', {
+        source: 'music-missile-impact-shimmer',
+        musicLaneId: String(event.laneId || 'secondary_loop_lane').trim() || 'secondary_loop_lane',
+        stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
+        eventId: String(event.eventId || '').trim(),
+      }, 0.32);
+    }
     try { pulsePlayerShipNoteFlash(); } catch {}
   },
   createMusicExplosion(event = {}) {
@@ -17212,6 +17220,19 @@ function snapCameraToWorld(worldPoint, scaleValue = SWARM_CAMERA_TARGET_SCALE) {
   const ty = c.y - layoutTop - (w.y * s);
   try { window.__setBoardViewportNow?.(s, tx, ty); } catch {}
 }
+const MUSIC_MISSILE_FLIGHT_CAMERA_SCALE = 0.39;
+function updateMusicMissileCameraZoom(dt = 0, centerWorld = null) {
+  const snapshot = musicMissileRuntime?.getSnapshot?.() || {};
+  const missileInFlight = Number(snapshot.seekingCount) > 0 || Number(snapshot.pendingDetonationCount) > 0;
+  const desiredScale = missileInFlight ? MUSIC_MISSILE_FLIGHT_CAMERA_SCALE : SWARM_CAMERA_TARGET_SCALE;
+  const currentScale = getBeatSwarmCameraScale();
+  if (Math.abs(desiredScale - currentScale) < 0.0005) return;
+  const response = desiredScale < currentScale ? 5.5 : 3.2;
+  const blend = 1 - Math.exp(-Math.max(0, Number(dt) || 0) * response);
+  const nextScale = currentScale + ((desiredScale - currentScale) * blend);
+  snapCameraToWorld(centerWorld || getViewportCenterWorld(), nextScale);
+  try { updateArenaVisual(nextScale, false); } catch {}
+}
 function applyBeatSwarmCameraScaleWithRetry(retries = 0) {
   const apply = () => {
     try {
@@ -25785,6 +25806,7 @@ function addMusicExplosionEffect(centerW, radiusWorld = 285, ttlOverride = 0.72)
   effects.push({
     kind: 'music-explosion',
     ttl: Math.max(0.1, Number(ttlOverride) || 0.72),
+    duration: Math.max(0.1, Number(ttlOverride) || 0.72),
     at: { ...centerW },
     radiusWorld: Math.max(1, Number(radiusWorld) || 285),
     weaponSlotIndex: null,
@@ -26315,6 +26337,7 @@ function tick(nowMs) {
   withBeatSwarmPerfSample('tapOrbFoundation', () => updateTapOrbFoundationBuild(dt, centerWorldAfterMove));
   withBeatSwarmPerfSample('musicMissileEvent', () => {
     musicMissileRuntime.update(dt);
+    updateMusicMissileCameraZoom(dt, centerWorldAfterMove);
     spawnMusicMissileCarrierEnemy(centerWorldAfterMove);
   });
   withBeatSwarmPerfSample('pickupsCombat', () => updatePickupsAndCombat(dt));

@@ -9,7 +9,7 @@ export const SWARM_TURN_WEIGHT = 0.35; // lower = heavier directional change
 export const SWARM_JOYSTICK_RADIUS = 70; // px
 export const SWARM_STOP_EPS = 8; // px/sec
 export const WEAPON_TUNE_STEPS = 8;
-export const SWARM_CAMERA_TARGET_SCALE = 0.5; // smaller = further out
+export const SWARM_CAMERA_TARGET_SCALE = 0.46; // smaller = further out
 export const SWARM_ARENA_RADIUS_WORLD = 1100;
 export const SWARM_ARENA_RESIST_RANGE_WORLD = SWARM_ARENA_RADIUS_WORLD * 0.25; // reduced outer band by half
 export const SWARM_ARENA_INWARD_ACCEL_WORLD = 380;

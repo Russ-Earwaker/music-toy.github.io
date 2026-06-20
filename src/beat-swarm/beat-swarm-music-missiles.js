@@ -89,7 +89,7 @@ function installStyles() {
     .beat-swarm-music-missile-trail {
       position: fixed; left: 0; top: 0; height: 5px; transform-origin: left center;
       border-radius: 999px; pointer-events: none;
-      background: linear-gradient(90deg, rgba(92,128,255,.08), rgba(151,210,255,.48), rgba(255,255,255,.9));
+      background: rgba(210, 240, 255, .9);
       box-shadow: 0 0 10px rgba(139,207,255,.54);
     }
     .beat-swarm-music-missile.is-seeking { box-shadow: 0 0 18px #fff, 0 0 42px rgba(164,116,255,.9); }
@@ -440,6 +440,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       const lifeN = clamp01(trail.ttl / TRAIL_LIFETIME_SECONDS);
       trail.el.style.width = `${length.toFixed(2)}px`;
       trail.el.style.opacity = `${(lifeN * lifeN).toFixed(3)}`;
+      trail.el.style.height = `${(1.5 + (3.5 * lifeN)).toFixed(2)}px`;
       trail.el.style.transform = `translate(${from.x.toFixed(2)}px, ${from.y.toFixed(2)}px) rotate(${angle.toFixed(2)}deg)`;
     }
   }
