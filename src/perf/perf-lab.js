@@ -502,6 +502,7 @@ function ensureUI() {
       btn('musicLabRunBS0S3CompositionPacing4m', 'Music Lab: Run BS0 S3 Composition Pacing Flow (1x4m, compact save)', 'primary'),
       btn('musicLabRunBS0S3TapOrbFoundationDebug', 'Music Lab: Tap-Orb Foundation Commit Debug (1x75s, compact save)', 'primary'),
       btn('musicLabRunBS0S3AccentRewriteDebug', 'Music Lab: Accent Rewrite Tap-Orb Debug (1x90s, compact save)', 'primary'),
+      btn('musicLabRunBS0S3MusicMissileRewriteDebug', 'Music Lab: Music Missile Accent Rewrite (1x120s, compact save)', 'primary'),
       btn('weaponGateBeatSwarmStart', 'Prototype: Beat Swarm Gate Start', 'primary'),
       btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Music Lab: Gate Start Tap-Orb Handoff Debug (1x150s, compact save)', 'primary'),
       btn('weaponGateLabOpen', 'Prototype: Weapon Gate Onboarding Lab', 'primary'),
@@ -1462,6 +1463,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3AccentRewriteDebug') {
       await runBS0s3MusicLabAccentRewriteDebug90s();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3MusicMissileRewriteDebug') {
+      await runBS0s3MusicLabMusicMissileRewriteDebug120s();
       return;
     }
     if (act === 'weaponGateLabOpen') {
@@ -6622,6 +6627,78 @@ async function runBS0s3MusicLabAccentRewriteDebug90s() {
     traceCapture: {
       enabled: false,
     },
+  });
+}
+
+async function runBS0s3MusicLabMusicMissileRewriteDebug120s() {
+  await runBS0Stage(3, {
+    durationMs: 120000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'fixed_section',
+        fixedSection: 'medium',
+        introBars: 0,
+      },
+    },
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startMusicMissileAccentRewriteEvent !== 'function') {
+        throw new Error('music_missile_rewrite_debug_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const result = modeApi.startMusicMissileAccentRewriteEvent({
+        source: 'perf_lab_music_missile_rewrite',
+        reason: 'music_missile_accent_rewrite_lab',
+        durationBars: 24,
+      });
+      try {
+        window.__beatSwarmMusicMissileDebugExpected = {
+          mode: 'music_missile_accent_rewrite',
+          expectedTheme: 'accentRhythm',
+          expectedInstrumentFromTheme: 'CLICK PERCUSSION SHORT',
+          traceEvents: [
+            'music_missile_rewrite_started',
+            'music_missile_carrier_spawned',
+            'music_missile_pickup_spawned',
+            'music_missile_collected',
+            'music_missile_released',
+            'music_missile_impact_queued',
+            'music_missile_quantized_explosion',
+            'music_missile_motif_hit',
+            'music_missile_rewrite_committed_to_theme',
+          ],
+          result,
+        };
+      } catch {}
+      setOutput({
+        ok: true,
+        setup: 'music_missile_accent_rewrite_started',
+        notes: 'Kill marked carriers, collect their pickups, then release orbiting music missiles or ram them into enemies. Eight quantized explosions complete the Accent Rhythm motif.',
+        result,
+      });
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_music_missile_accent_rewrite_1x120s',
+    saveNotes: [
+      'Beat Swarm Music Lab music-missile rewrite debug: fixed Medium Intensity with intro skipped.',
+      'Marked enemies drop arena-anchored pickups. Pickups create wide-orbit music missiles.',
+      'Release or orbit-ram impacts detonate on quantized steps and author the two-toy Accent Rhythm motif.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_music_missile_accent_rewrite_1x120s',
+    groupedRunId: 'musicLab_bs0_s3_music_missile_accent_rewrite_1x120s_scenario',
+    groupedNotes: 'Music missile interaction authors Accent Rhythm from eight quantized missile explosions.',
+    tagPrefix: 'BS0S3MusicMissileAccentRewrite1x120s',
+    labelPrefix: 'BS0_stage3_beatswarm_music_missile_accent_rewrite_1x120s',
+    statusPrefix: 'Running BS0 S3 music missile accent rewrite (120 seconds, compact save)',
+    traceCapture: { enabled: false },
   });
 }
 
