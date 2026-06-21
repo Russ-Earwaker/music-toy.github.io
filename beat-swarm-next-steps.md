@@ -1,6 +1,6 @@
 # Beat Swarm - Next Steps
 
-## Current Status - 2026-06-01
+## Current Status - 2026-06-21
 
 Beat Swarm has moved from director-only music into player-authored musical DNA that the director interprets at runtime.
 
@@ -149,39 +149,41 @@ These modes should select:
 | Release | motif memory, fragments, echoes, reduced certainty | preserve identity while releasing tension |
 | Settle | stable domesticated identity | make the world feel like it absorbed the player's theme |
 
-## Current Focus - Tap Orb Foundation Beat
+## Current Focus - Reusable Music-Authoring Events
 
-The next major prototype is the first arena-side music-building interaction:
+The integrated level-start sequence is now:
 
-> The weapon gate creates the player's weapon motif. Tap Orbs then let the player wake up and build the foundation beat inside the arena.
+1. weapon gates author the player weapon motif
+2. Tap Orbs author a rhythm motif
+3. Music Missiles author a rhythm motif
+4. completed motifs return to director ownership
 
-V1 should implement one foundation Tap Orb only.
+Tap Orbs and Music Missiles are interaction types, not lane-specific events. The director supplies a target descriptor:
 
-Flow:
+- `eventType`
+- `themeId`
+- `laneId`
+- motif step count
+- target hit count
 
-1. After the weapon-gate handoff, enter a foundation-build state.
-2. Player weapon remains active.
-3. Enemies may move and be killed, but enemy firing and enemy music are inactive until the first beat is introduced.
-4. Spawn a small enemy wave with one marked Beat Carrier.
-5. When the Beat Carrier dies, spawn one Tap Orb at the death position.
-6. The Tap Orb travels to an unreachable resting slot just outside the arena rim.
-7. Once settled, the orb pulses and displays `TAP`.
-8. Player tap gives immediate subtle feedback.
-9. The gameplay payoff is quantized:
-   - on the next beat/step, the beat sound plays
-   - the orb explodes
-   - nearby enemies are damaged or destroyed
-   - the arena and enemies flash in sync
-   - the director receives one new foundation beat hit
-10. After the first foundation beat is active, enemy firing/music can wake up.
+The same interaction can therefore author Bass Drive, Accent Rhythm, or another registered rhythm theme. Bass Drive and Accent Rhythm are current presets, not hardcoded limits.
 
-Important rule:
+Core rule:
 
-> A Tap Orb adds one beat hit to a director-owned foundation loop. It does not unlock or generate a full drum pattern by itself.
+> An authoring event describes how the player creates musical data. Its target descriptor decides where that data belongs.
 
-Later Tap Orbs can keep adding hits or layers until the instrumental lane is built.
+Future melody events should use the same request/start/commit lifecycle with `melody_rewrite`, but use interactions designed for pitched note and contour selection rather than forcing melody through rhythm-only Tap Orb logic.
 
-If the player does not activate a beat for a long time, we should eventually enter an unskippable tutorial pause state with clearer direction. That tutorial fallback is not required for V1, but the foundation-build state should make room for it.
+### Deferred Retest - Tap-Orb Construction Playback
+
+- During the active Tap Orb sequence, Foundation hits can still sound like near-simultaneous double/triple triggers.
+- Post-event director playback is no longer duplicated.
+- The saved motif contains all eight intended hits, but adjacent authored subdivisions and/or an unresolved construction-only trigger path may still be contributing.
+- Retest later with `tap_orb_quantized_motif_trigger` and `tap_orb_quantized_motif_duplicate_suppressed` telemetry before making further musical changes.
+
+Future onboarding safeguard:
+
+- if the player does not activate a required authoring interaction for a long time, enter an unskippable tutorial pause with clearer direction
 
 ## Practical Techniques To Implement
 

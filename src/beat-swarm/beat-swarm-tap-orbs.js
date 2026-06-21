@@ -11,6 +11,7 @@ const ORB_APPROACH_MAX_SPEED_WORLD = 92;
 const DEFAULT_FOUNDATION_STEPS = 16;
 const DEFAULT_TARGET_HIT_COUNT = 4;
 const POST_COMPLETE_LOOP_CYCLES = 8;
+const ORB_MAX_TRAVEL_SECONDS = 6;
 
 function clamp01(v) {
   return Math.max(0, Math.min(1, Number(v) || 0));
@@ -182,6 +183,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     foundationCompleteTriggerIndex: -1,
     stepCount: DEFAULT_FOUNDATION_STEPS,
     targetHitCount: DEFAULT_TARGET_HIT_COUNT,
+    placementMode: 'free',
     authoringThemeId: 'bassDrive',
     authoringLaneId: 'foundation_lane',
     lastLoopBeatIndex: -1,
@@ -242,6 +244,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.foundationCompleteTriggerIndex = -1;
     state.stepCount = Math.max(1, Math.trunc(Number(options.stepCount) || DEFAULT_FOUNDATION_STEPS));
     state.targetHitCount = Math.max(1, Math.min(state.stepCount, Math.trunc(Number(options.targetHitCount) || DEFAULT_TARGET_HIT_COUNT)));
+    state.placementMode = String(options.placementMode || 'free').trim().toLowerCase() || 'free';
     state.authoringThemeId = String(options.authoringThemeId || 'bassDrive').trim() || 'bassDrive';
     state.authoringLaneId = String(options.authoringLaneId || (state.authoringThemeId === 'accentRhythm' ? 'secondary_loop_lane' : 'foundation_lane')).trim()
       || (state.authoringThemeId === 'accentRhythm' ? 'secondary_loop_lane' : 'foundation_lane');
@@ -260,6 +263,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.foundationCompleteTriggerIndex = -1;
     state.stepCount = DEFAULT_FOUNDATION_STEPS;
     state.targetHitCount = DEFAULT_TARGET_HIT_COUNT;
+    state.placementMode = 'free';
     state.authoringThemeId = 'bassDrive';
     state.authoringLaneId = 'foundation_lane';
     state.lastLoopBeatIndex = -1;
@@ -355,9 +359,21 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
       queuedStepIndex: -1,
       collisionLatched: false,
       collisionBounceApplied: false,
+      ageSeconds: 0,
+      travelSeconds: 0,
       el,
     };
     state.orbs.push(orb);
+    try {
+      deps.onOrbSpawned?.({
+        id: orb.id,
+        slotIndex: orb.slotIndex,
+        status: orb.status,
+        activeOrbCount: getUnqueuedActiveOrbCount(),
+        remainingPlannedHitCount: getRemainingPlannedHitCount(),
+        targetHitCount: getFoundationTargetHitCount(state),
+      });
+    } catch {}
     return orb;
   }
 
@@ -416,16 +432,11 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
       reservedSteps.add(((Math.trunc(Number(entry.queuedStepIndex) || 0) % stepCount) + stepCount) % stepCount);
     }
     const firstOffset = Math.max(1, Math.trunc(Number(minOffset) || 1));
-    for (const requireSpacing of [true, false]) {
-      let stepOffset = firstOffset;
-      while (stepOffset <= stepCount) {
-        const stepIndex = (start + stepOffset) % stepCount;
-        const previousStep = (stepIndex - 1 + stepCount) % stepCount;
-        const nextStep = (stepIndex + 1) % stepCount;
-        const spaced = !reservedSteps.has(previousStep) && !reservedSteps.has(nextStep);
-        if (!reservedSteps.has(stepIndex) && (!requireSpacing || spaced)) return { stepIndex, stepOffset };
-        stepOffset += 1;
-      }
+    let stepOffset = firstOffset;
+    while (stepOffset <= stepCount) {
+      const stepIndex = (start + stepOffset) % stepCount;
+      if (!reservedSteps.has(stepIndex)) return { stepIndex, stepOffset };
+      stepOffset += 1;
     }
     return null;
   }
@@ -495,13 +506,14 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
 
   function updateOrbMotion(orb, dt) {
     if (!orb || orb.status !== 'traveling') return;
+    orb.travelSeconds = Math.max(0, Number(orb.travelSeconds) || 0) + Math.max(0, Number(dt) || 0);
     orb.target = getTargetWorld(orb.slotIndex);
     const target = normalizePoint(orb.target);
     const dx = target.x - orb.x;
     const dy = target.y - orb.y;
     const dist = Math.hypot(dx, dy);
     const step = ORB_TRAVEL_SPEED_WORLD * Math.max(0, Number(dt) || 0);
-    if (dist <= Math.max(4, step)) {
+    if (dist <= Math.max(4, step) || orb.travelSeconds >= ORB_MAX_TRAVEL_SECONDS) {
       orb.x = target.x;
       orb.y = target.y;
       orb.status = 'settling';
@@ -542,6 +554,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
 
   function updateOrbState(orb, dt, playerWorld = null) {
     if (!orb) return;
+    orb.ageSeconds = Math.max(0, Number(orb.ageSeconds) || 0) + Math.max(0, Number(dt) || 0);
     if (orb.status !== 'triggered' && orb.status !== 'consumed') {
       orb.target = getTargetWorld(orb.slotIndex);
       if (orb.status === 'queued') {
@@ -754,5 +767,21 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     isActive: () => state.active === true,
     hasActivatedFoundationBeat: () => state.foundationActivated === true,
     isFoundationComplete: () => isFoundationCompleteState(state),
+    getSnapshot: () => ({
+      active: state.active === true,
+      themeId: state.authoringThemeId,
+      laneId: state.authoringLaneId,
+      hitCount: state.foundationHits.size,
+      targetHitCount: getFoundationTargetHitCount(state),
+      remainingPlannedHitCount: getRemainingPlannedHitCount(),
+      orbs: state.orbs.map((orb) => ({
+        id: orb.id,
+        status: orb.status,
+        slotIndex: orb.slotIndex,
+        ageSeconds: Number(Number(orb.ageSeconds || 0).toFixed(2)),
+        travelSeconds: Number(Number(orb.travelSeconds || 0).toFixed(2)),
+        queuedStepIndex: orb.queuedStepIndex,
+      })),
+    }),
   };
 }

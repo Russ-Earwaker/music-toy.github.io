@@ -456,6 +456,7 @@ function ensureUI() {
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
         ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Tap Orbs + Missiles (1x180s)', 'primary')}
+        ${btn('musicLabRunBS0S3MusicMissileBassRewriteDebug', 'Test Reuse Matrix: Missiles/Tap Orbs -> Bass/Accent (1x360s)', 'primary')}
       </div>`,
       `<details class="perf-lab-music-group">
         <summary>Component Tests</summary>
@@ -1505,6 +1506,20 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3MusicMissileRewriteDebug') {
       await runBS0s3MusicLabMusicMissileRewriteDebug120s();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3MusicMissileBassRewriteDebug') {
+      await runBS0s3MusicLabMusicMissileRewriteDebug120s({
+        themeId: 'bassDrive',
+        laneId: 'foundation_lane',
+        expectedInstrument: 'BASS TONE 4',
+        durationMs: 360000,
+        followupEvents: [
+          { interaction: 'music_missile', themeId: 'accentRhythm', laneId: 'secondary_loop_lane' },
+          { interaction: 'tap_orb', themeId: 'bassDrive', laneId: 'foundation_lane' },
+          { interaction: 'tap_orb', themeId: 'accentRhythm', laneId: 'secondary_loop_lane' },
+        ],
+      });
       return;
     }
     if (act === 'weaponGateLabOpen') {
@@ -6668,9 +6683,18 @@ async function runBS0s3MusicLabAccentRewriteDebug90s() {
   });
 }
 
-async function runBS0s3MusicLabMusicMissileRewriteDebug120s() {
+async function runBS0s3MusicLabMusicMissileRewriteDebug120s(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const themeId = String(opts.themeId || 'accentRhythm').trim() || 'accentRhythm';
+  const laneId = String(opts.laneId || 'secondary_loop_lane').trim() || 'secondary_loop_lane';
+  const expectedInstrument = String(opts.expectedInstrument || (laneId === 'foundation_lane' ? 'BASS TONE 4' : 'CLICK PERCUSSION SHORT')).trim();
+  const targetSlug = `${themeId}_${laneId}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+  const targetLabel = themeId === 'bassDrive' ? 'Bass Drive' : (themeId === 'accentRhythm' ? 'Accent Rhythm' : themeId);
+  const durationMs = Math.max(30000, Math.trunc(Number(opts.durationMs) || 120000));
+  const durationSeconds = Math.round(durationMs / 1000);
+  const followupEvents = Array.isArray(opts.followupEvents) ? opts.followupEvents.filter(Boolean) : [];
   await runBS0Stage(3, {
-    durationMs: 120000,
+    durationMs,
     repeatCount: 1,
     freshResetEachRun: true,
     restartTransportEachRun: true,
@@ -6689,20 +6713,75 @@ async function runBS0s3MusicLabMusicMissileRewriteDebug120s() {
     },
     async setupAfterPrepare() {
       const modeApi = window.BeatSwarmMode;
-      if (!modeApi || typeof modeApi.startMusicMissileAccentRewriteEvent !== 'function') {
+      if (!modeApi || typeof modeApi.startMusicMissileRhythmRewriteEvent !== 'function') {
         throw new Error('music_missile_rewrite_debug_api_unavailable');
       }
       try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
-      const result = modeApi.startMusicMissileAccentRewriteEvent({
+      const result = modeApi.startMusicMissileRhythmRewriteEvent({
+        themeId,
+        laneId,
         source: 'perf_lab_music_missile_rewrite',
-        reason: 'music_missile_accent_rewrite_lab',
-        durationBars: 24,
+        reason: `music_missile_${targetSlug}_rewrite_lab`,
+        durationBars: 4096,
       });
+      if (followupEvents.length) {
+        const firstEventId = String(result?.activeEvent?.id || '').trim();
+        void (async () => {
+          const deadline = Date.now() + Math.max(30000, durationMs - 30000);
+          let previousEventId = firstEventId;
+          let previousInteraction = 'music_missile';
+          for (let index = 0; index < followupEvents.length; index += 1) {
+            let completed = false;
+            while (Date.now() < deadline) {
+              await waitForPerfLabMs(500);
+              const snapshot = modeApi.getMusicRewriteEventSnapshot?.() || {};
+              completed = Array.isArray(snapshot.history)
+                && snapshot.history.some((entry) => String(entry?.id || '').trim() === previousEventId && entry?.status === 'complete');
+              if (completed) break;
+            }
+            if (!completed) throw new Error(`event_completion_timeout:${previousEventId}`);
+            if (previousInteraction === 'music_missile') {
+              while (Date.now() < deadline && modeApi.getMusicMissileEventSnapshot?.()?.postCompletePlaybackActive === true) {
+                await waitForPerfLabMs(250);
+              }
+            }
+            const next = followupEvents[index] || {};
+            const interaction = String(next.interaction || 'tap_orb').trim().toLowerCase();
+            const nextThemeId = String(next.themeId || 'accentRhythm').trim() || 'accentRhythm';
+            const nextLaneId = String(next.laneId || 'secondary_loop_lane').trim() || 'secondary_loop_lane';
+            const startEvent = interaction === 'music_missile'
+              ? modeApi.startMusicMissileRhythmRewriteEvent
+              : modeApi.startTapOrbRhythmRewriteEvent;
+            const nextResult = startEvent?.({
+              themeId: nextThemeId,
+              laneId: nextLaneId,
+              source: 'perf_lab_rhythm_reuse_matrix',
+              reason: `${interaction}_${nextThemeId}_${nextLaneId}_reuse_matrix`,
+              durationBars: 4096,
+            });
+            previousEventId = String(nextResult?.activeEvent?.id || '').trim();
+            previousInteraction = interaction;
+            if (!previousEventId) throw new Error(`event_start_failed:${index + 2}:${interaction}:${nextThemeId}`);
+            setOutput({
+              ok: true,
+              setup: 'rhythm_reuse_matrix_event_started',
+              eventNumber: index + 2,
+              interaction,
+              nextThemeId,
+              nextLaneId,
+              nextResult,
+            });
+          }
+        })().catch((err) => {
+          setOutput({ ok: false, error: `rhythm_reuse_sequence_failed:${String(err?.message || err)}` });
+        });
+      }
       try {
         window.__beatSwarmMusicMissileDebugExpected = {
-          mode: 'music_missile_accent_rewrite',
-          expectedTheme: 'accentRhythm',
-          expectedInstrumentFromTheme: 'CLICK PERCUSSION SHORT',
+          mode: 'music_missile_rhythm_rewrite',
+          expectedTheme: themeId,
+          expectedLane: laneId,
+          expectedInstrumentFromTheme: expectedInstrument,
           traceEvents: [
             'music_missile_rewrite_started',
             'music_missile_carrier_spawned',
@@ -6719,23 +6798,23 @@ async function runBS0s3MusicLabMusicMissileRewriteDebug120s() {
       } catch {}
       setOutput({
         ok: true,
-        setup: 'music_missile_accent_rewrite_started',
-        notes: 'Kill marked carriers, collect their pickups, then release orbiting music missiles or ram them into enemies. Eight quantized explosions complete the Accent Rhythm motif.',
+        setup: 'music_missile_rhythm_rewrite_started',
+        notes: `Kill marked carriers, collect their pickups, then release orbiting music missiles. Eight quantized explosions should commit ${targetLabel} on ${laneId}.`,
         result,
       });
     },
-    saveRunIdBase: 'musicLab_bs0_s3_music_missile_accent_rewrite_1x120s',
+    saveRunIdBase: `musicLab_bs0_s3_music_missile_${targetSlug}_rewrite_1x${durationSeconds}s`,
     saveNotes: [
-      'Beat Swarm Music Lab music-missile rewrite debug: fixed Medium Intensity with intro skipped.',
+      `Beat Swarm Music Lab music-missile rewrite debug targeting ${targetLabel} on ${laneId}: fixed Medium Intensity with intro skipped.`,
       'Marked enemies drop arena-anchored pickups. Pickups create wide-orbit music missiles.',
-      'Release or orbit-ram impacts detonate on quantized steps and author the two-toy Accent Rhythm motif.',
+      `Release or orbit-ram impacts detonate on quantized steps and author the two-toy ${targetLabel} motif.`,
     ].join(' '),
-    groupedScenarioName: 'retro_shooter_music_missile_accent_rewrite_1x120s',
-    groupedRunId: 'musicLab_bs0_s3_music_missile_accent_rewrite_1x120s_scenario',
-    groupedNotes: 'Music missile interaction authors Accent Rhythm from eight quantized missile explosions.',
-    tagPrefix: 'BS0S3MusicMissileAccentRewrite1x120s',
-    labelPrefix: 'BS0_stage3_beatswarm_music_missile_accent_rewrite_1x120s',
-    statusPrefix: 'Running BS0 S3 music missile accent rewrite (120 seconds, compact save)',
+    groupedScenarioName: `retro_shooter_music_missile_${targetSlug}_rewrite_1x${durationSeconds}s`,
+    groupedRunId: `musicLab_bs0_s3_music_missile_${targetSlug}_rewrite_1x${durationSeconds}s_scenario`,
+    groupedNotes: `Music missile interaction authors ${targetLabel} from eight quantized missile explosions.`,
+    tagPrefix: `BS0S3MusicMissile${targetSlug}Rewrite1x${durationSeconds}s`,
+    labelPrefix: `BS0_stage3_beatswarm_music_missile_${targetSlug}_rewrite_1x${durationSeconds}s`,
+    statusPrefix: `Running BS0 S3 music missile ${targetLabel} rewrite (${durationSeconds} seconds, compact save)`,
     traceCapture: { enabled: false },
   });
 }

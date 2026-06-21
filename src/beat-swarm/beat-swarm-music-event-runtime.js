@@ -1,4 +1,6 @@
 const VALID_EVENT_TYPES = Object.freeze([
+  'rhythm_rewrite',
+  'melody_rewrite',
   'foundation_rewrite',
   'lead_rewrite',
   'accent_rewrite',
@@ -77,7 +79,9 @@ function createEventFromRequest(request = null, id = '') {
     status: 'queued',
     requestedBar,
     startBar: -1,
-    expiresBar: requestedBar + durationBars,
+    expiresBar: req.requiresPlayerCompletion === true || req.payload?.requiresPlayerCompletion === true
+      ? -1
+      : requestedBar + durationBars,
     completedBar: -1,
     cancelledBar: -1,
     cancelReason: '',
@@ -114,7 +118,7 @@ export function createBeatSwarmMusicEventRuntime() {
     activeEvent = queue.shift();
     activeEvent.status = 'active';
     activeEvent.startBar = bar;
-    if (!(activeEvent.expiresBar > bar)) {
+    if (activeEvent.expiresBar >= 0 && !(activeEvent.expiresBar > bar)) {
       activeEvent.expiresBar = bar + normalizeDurationBars(opts.durationBars || activeEvent.payload?.durationBars);
     }
     return cloneEvent(activeEvent);

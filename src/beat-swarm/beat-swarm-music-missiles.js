@@ -9,6 +9,7 @@ const MISSILE_ORBIT_SPEED = 1.85;
 const MISSILE_SEEK_SPEED = 980;
 const MISSILE_TURN_RATE = 6.4;
 const MISSILE_HIT_RADIUS = 58;
+const MISSILE_MAX_SEEK_SECONDS = 4;
 const ENEMY_RAM_RADIUS = 72;
 const TRAIL_SAMPLE_SECONDS = 0.035;
 const TRAIL_LIFETIME_SECONDS = 0.9;
@@ -111,6 +112,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     laneId: 'secondary_loop_lane',
     stepCount: 16,
     targetHitCount: MAX_ITEMS,
+    placementMode: 'free',
     nextId: 1,
     lastClockTick: -1,
     lastCarrierTick: -1000000,
@@ -173,6 +175,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     state.laneId = String(opts.laneId || 'secondary_loop_lane').trim() || 'secondary_loop_lane';
     state.stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || 16));
     state.targetHitCount = Math.max(1, Math.min(MAX_ITEMS, Math.trunc(Number(opts.targetHitCount) || MAX_ITEMS)));
+    state.placementMode = String(opts.placementMode || 'free').trim().toLowerCase() || 'free';
     state.nextId = 1;
     state.lastClockTick = -1;
     state.lastCarrierTick = -1000000;
@@ -267,6 +270,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       trailLastX: center.x,
       trailLastY: center.y,
       trailPrimed: false,
+      seekSeconds: 0,
       el,
     };
     state.missiles.push(missile);
@@ -307,6 +311,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     for (const missile of orbiting) {
       const target = getNearestEnemy(missile.x, missile.y, reservedTargets);
       missile.state = 'seek';
+      missile.seekSeconds = 0;
       missile.targetEnemyId = Math.trunc(Number(target?.id) || 0);
       if (missile.targetEnemyId > 0) reservedTargets.add(missile.targetEnemyId);
       const dir = target
@@ -494,6 +499,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
         missile.x = player.x + Math.cos(missile.angle) * MISSILE_ORBIT_RADIUS;
         missile.y = player.y + Math.sin(missile.angle) * MISSILE_ORBIT_RADIUS;
       } else if (missile.state === 'seek') {
+        missile.seekSeconds = Math.max(0, Number(missile.seekSeconds) || 0) + dt;
         let target = findEnemyById(missile.targetEnemyId);
         if (!target) {
           const reservedTargets = new Set(
@@ -520,6 +526,10 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
         } else {
           missile.x += missile.vx * dt;
           missile.y += missile.vy * dt;
+        }
+        if (missile.seekSeconds >= MISSILE_MAX_SEEK_SECONDS) {
+          queueDetonation(missile, { x: missile.x, y: missile.y }, target, 'seek_timeout');
+          continue;
         }
       }
       appendTrailSegment(missile, dt);
