@@ -10,7 +10,7 @@ const ORB_APPROACH_ACCEL_WORLD = 24;
 const ORB_APPROACH_MAX_SPEED_WORLD = 92;
 const DEFAULT_FOUNDATION_STEPS = 16;
 const DEFAULT_TARGET_HIT_COUNT = 4;
-const POST_COMPLETE_LOOP_CYCLES = 8;
+const POST_COMPLETE_LOOP_CYCLES = 1;
 const ORB_MAX_TRAVEL_SECONDS = 6;
 
 function clamp01(v) {
@@ -190,6 +190,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     lastCarrierWaveTriggerIndex: -1000000,
     nextOrbId: 1,
     foundationHits: new Set(),
+    postCompleteNotified: false,
     orbs: [],
     rootEl: null,
     flashEl: null,
@@ -251,6 +252,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.lastLoopBeatIndex = -1;
     state.lastCarrierWaveTriggerIndex = -1000000;
     state.foundationHits.clear();
+    state.postCompleteNotified = false;
     clearDom();
     ensureRoot();
   }
@@ -269,6 +271,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     state.lastLoopBeatIndex = -1;
     state.lastCarrierWaveTriggerIndex = -1000000;
     state.foundationHits.clear();
+    state.postCompleteNotified = false;
     clearDom();
   }
 
@@ -673,6 +676,24 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     }
     handlePlayerCollision(playerWorld);
     updateFoundationLoopPlayback();
+    if (isFoundationCompleteState(state) && state.postCompleteNotified !== true) {
+      const clock = deps.getBeatClock?.() || {};
+      const triggerIndex = getClockTriggerIndex(clock, Math.max(0, Math.trunc(Number(clock.beatIndex) || 0)));
+      const bridgeEnd = Math.max(0, Math.trunc(Number(state.foundationCompleteTriggerIndex) || 0)) + getFoundationStepCount(state);
+      if (triggerIndex > bridgeEnd) {
+        state.postCompleteNotified = true;
+        const payload = {
+          themeId: state.authoringThemeId,
+          laneId: state.authoringLaneId,
+          steps: getFoundationSteps(),
+          hitCount: state.foundationHits.size,
+          targetHitCount: state.targetHitCount,
+        };
+        stop();
+        try { deps.onPostCompletePlayback?.(payload); } catch {}
+        return;
+      }
+    }
     for (let i = state.orbs.length - 1; i >= 0; i -= 1) {
       if (state.orbs[i]?.status !== 'consumed') continue;
       state.orbs.splice(i, 1);

@@ -6744,6 +6744,10 @@ async function runBS0s3MusicLabMusicMissileRewriteDebug120s(options = null) {
               while (Date.now() < deadline && modeApi.getMusicMissileEventSnapshot?.()?.postCompletePlaybackActive === true) {
                 await waitForPerfLabMs(250);
               }
+            } else if (previousInteraction === 'tap_orb') {
+              while (Date.now() < deadline && modeApi.getTapOrbEventSnapshot?.()?.active === true) {
+                await waitForPerfLabMs(250);
+              }
             }
             const next = followupEvents[index] || {};
             const interaction = String(next.interaction || 'tap_orb').trim().toLowerCase();

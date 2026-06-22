@@ -121,6 +121,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     missiles: [],
     trails: [],
     pendingDetonations: [],
+    terminalMissileIds: new Set(),
     motifHits: new Set(),
     postCompleteUntilTick: -1,
     postCompleteNotified: false,
@@ -155,6 +156,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     state.missiles.forEach(removeEntry);
     state.trails.forEach(removeEntry);
     state.pendingDetonations.length = 0;
+    state.terminalMissileIds.clear();
     state.pickups.length = 0;
     state.missiles.length = 0;
     state.trails.length = 0;
@@ -301,7 +303,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
   }
 
   function releaseAllMissiles() {
-    const orbiting = state.missiles.filter((entry) => entry.state === 'orbit');
+    const orbiting = state.missiles.filter((entry) => entry.state === 'orbit' && !state.terminalMissileIds.has(entry.id));
     const reservedTargets = new Set(
       state.missiles
         .filter((entry) => entry.state === 'seek' && Number(entry.targetEnemyId) > 0)
@@ -337,11 +339,12 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
   }
 
   function queueDetonation(missile, at, enemy = null, reason = 'impact') {
-    if (!missile || missile.state === 'queued') return false;
+    if (!missile || missile.state === 'queued' || state.terminalMissileIds.has(missile.id)) return false;
     const clock = deps.getBeatClock?.() || {};
     const slot = findNextFreeStep(getClockStep(clock, state.stepCount));
     if (!slot) return false;
     missile.state = 'queued';
+    state.terminalMissileIds.add(missile.id);
     removeEntry(missile);
     const idx = state.missiles.indexOf(missile);
     if (idx >= 0) state.missiles.splice(idx, 1);
@@ -381,7 +384,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     const complete = state.motifHits.size >= state.targetHitCount;
     if (complete) {
       state.active = false;
-      state.postCompleteUntilTick = state.lastClockTick + (state.stepCount * 2);
+      state.postCompleteUntilTick = state.lastClockTick + state.stepCount;
       state.postCompleteNotified = false;
     }
     deps.onMotifHit?.({
