@@ -235,6 +235,9 @@ export function handleBeatStepChangeRuntime(options = null) {
           getPlayerAccentRhythmMotionPhrase: helpers.getPlayerAccentRhythmMotionPhrase,
           getPlayerLeadThemePrimaryStep: helpers.getPlayerLeadThemePrimaryStep,
           getPlayerSimpleRhythmThemeInstrumentId: helpers.getPlayerSimpleRhythmThemeInstrumentId,
+          getPlayerSimpleRhythmThemeNote: helpers.getPlayerSimpleRhythmThemeNote,
+          getPlayerSimpleRhythmThemePlaybackStep: helpers.getPlayerSimpleRhythmThemePlaybackStep,
+          isPlayerMusicThemeAuthored: helpers.isPlayerMusicThemeAuthored,
         },
         state: {
           beatIndex,
@@ -242,6 +245,7 @@ export function handleBeatStepChangeRuntime(options = null) {
           barIndex,
           centerWorld,
           suppressDirectorMusic: state.suppressDirectorMusic === true,
+          suppressedMusicLaneIds: state.suppressedMusicLaneIds,
           musicLaneRuntime: state.musicLaneRuntime,
           loopAdmissionRuntime: state.loopAdmissionRuntime,
           musicModeRuntime: state.musicModeRuntime,

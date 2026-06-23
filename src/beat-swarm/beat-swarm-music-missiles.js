@@ -623,7 +623,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     noteCarrierSpawned,
     canAcceptDrop,
     isActive: () => state.active,
-    isPostCompletePlaybackActive: () => state.postCompleteUntilTick >= getClockTick(deps.getBeatClock?.()),
+    isPostCompletePlaybackActive: () => state.postCompleteUntilTick >= 0 && state.postCompleteNotified !== true,
     getMotifSteps,
     getSnapshot: () => ({
       active: state.active,
@@ -637,7 +637,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       hitCount: state.motifHits.size,
       targetHitCount: state.targetHitCount,
       complete: state.motifHits.size >= state.targetHitCount,
-      postCompletePlaybackActive: state.postCompleteUntilTick >= getClockTick(deps.getBeatClock?.()),
+      postCompletePlaybackActive: state.postCompleteUntilTick >= 0 && state.postCompleteNotified !== true,
     }),
   };
 }

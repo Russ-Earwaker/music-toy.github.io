@@ -2159,32 +2159,18 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (suppressDirectorMusic) return null;
     if (isLaneSuppressed('foundation_lane')) return null;
     const bedState = getDirectorMotifBedStageState();
-    if (bedState.stage !== 'peak') return null;
+    if (bedState.stage === 'silent') return null;
+    if (helpers.isPlayerMusicThemeAuthored?.('bassDrive') !== true) return null;
+    const authoredStep = helpers.getPlayerSimpleRhythmThemePlaybackStep?.('bassDrive', stepIndex) || null;
     const lane = helpers.getFoundationLaneSnapshot?.(stepIndex, barIndex) || null;
-    if (!lane || lane.isActiveStep !== true) {
+    if (!authoredStep || authoredStep.active !== true) {
       notePlayerBassMotifTrack('skipped', {
         stage: bedState.stage,
         sectionBar: bedState.sectionBar,
-        localStep: lane?.stepIndex ?? (((stepIndex % 8) + 8) % 8),
+        localStep: authoredStep?.localStep ?? (((stepIndex % 8) + 8) % 8),
         expectedHit: false,
         emittedHit: false,
         reason: 'inactive_step',
-      });
-      return null;
-    }
-    if (String(lane.playerThemeSource || '').trim() !== 'bassDrive') {
-      notePlayerBassMotifTrack('skipped', {
-        stage: bedState.stage,
-        sectionBar: bedState.sectionBar,
-        localStep: lane.stepIndex,
-        patternKey: lane.patternKey,
-        rawPatternKey: lane.rawPatternKey,
-        shapedPatternKey: lane.shapedPatternKey,
-        interpretationMode: lane.interpretationMode,
-        phrasePartIndex: lane.phrasePartIndex,
-        expectedHit: true,
-        emittedHit: false,
-        reason: 'not_player_bass_drive',
       });
       return null;
     }
@@ -2199,12 +2185,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     notePlayerBassMotifTrack('literal_emitted', {
       stage: bedState.stage,
       sectionBar: bedState.sectionBar,
-      localStep: lane.stepIndex,
-      patternKey: lane.patternKey,
-      rawPatternKey: lane.rawPatternKey,
-      shapedPatternKey: lane.shapedPatternKey,
-      interpretationMode: lane.interpretationMode,
-      phrasePartIndex: lane.phrasePartIndex,
+      localStep: authoredStep.localStep,
+      patternKey: authoredStep.patternKey,
+      rawPatternKey: authoredStep.patternKey,
+      shapedPatternKey: authoredStep.patternKey,
+      interpretationMode: 'authored_literal_continuity',
+      phrasePartIndex: authoredStep.phrasePartIndex,
       expectedHit: true,
       emittedHit: true,
       instrumentId,
@@ -2232,21 +2218,21 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         musicLaneId: 'foundation_lane',
         musicVoiceKey: 'player_bass_drive',
         musicLaneDriven: true,
-        foundationLaneId: String(lane.laneId || 'foundation_lane'),
-        foundationPhraseId: String(lane.phraseId || 'player_bass_drive').trim().toLowerCase(),
-        foundationPatternKey: String(lane.patternKey || '').trim(),
+        foundationLaneId: String(lane?.laneId || 'foundation_lane'),
+        foundationPhraseId: `player_bass_drive_authored_${authoredStep.phrasePartIndex}`,
+        foundationPatternKey: authoredStep.patternKey,
         foundationPlayerThemeSource: 'bassDrive',
-        foundationRawPatternKey: String(lane.rawPatternKey || '').trim(),
-        foundationShapedPatternKey: String(lane.shapedPatternKey || lane.patternKey || '').trim(),
-        foundationInterpretationMode: String(lane.interpretationMode || '').trim().toLowerCase(),
-        foundationPhrasePartIndex: Math.max(0, Math.trunc(Number(lane.phrasePartIndex) || 0)),
-        foundationStepIndex: Math.max(0, Math.trunc(Number(lane.stepIndex) || 0)),
+        foundationRawPatternKey: authoredStep.patternKey,
+        foundationShapedPatternKey: authoredStep.patternKey,
+        foundationInterpretationMode: 'authored_literal_continuity',
+        foundationPhrasePartIndex: authoredStep.phrasePartIndex,
+        foundationStepIndex: authoredStep.localStep,
         callResponseLane: 'call',
         callResponseQualified: true,
-        callResponsePhraseProgress: Math.max(0, Math.trunc(Number(lane.stepIndex) || 0)),
+        callResponsePhraseProgress: authoredStep.sequenceStep,
         musicRegister: 'low',
         musicProminence: 'full',
-        audioGain: 0.7,
+        audioGain: 1,
         requestedNoteRaw: noteName,
         preserveRequestedNote: true,
         intensityAuditionSection: bedState.stage,
@@ -2432,6 +2418,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   })();
   const explicitPlayerAccentRhythmEvent = (() => {
     if (suppressDirectorMusic) return null;
+    if (isLaneSuppressed('secondary_loop_lane')) return null;
     const { stage, sectionBar } = getDirectorMotifBedStageState();
     if (stage !== 'medium' && stage !== 'build' && stage !== 'peak') return null;
     const phrase = helpers.getPlayerAccentRhythmMotionPhrase?.(barIndex, `intensity_${stage}`, {
@@ -2439,10 +2426,14 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       sectionBar,
       layerKey: 'backbeat',
     }) || null;
+    const authoredContinuity = helpers.isPlayerMusicThemeAuthored?.('accentRhythm') === true;
+    const authoredStep = authoredContinuity
+      ? (helpers.getPlayerSimpleRhythmThemePlaybackStep?.('accentRhythm', stepIndex) || null)
+      : null;
     const steps = Array.isArray(phrase?.steps) ? phrase.steps : [];
-    const localStep = ((stepIndex % 8) + 8) % 8;
-    if (!steps[localStep]) return null;
-    if (stage === 'build') {
+    const localStep = authoredStep?.localStep ?? (((stepIndex % 8) + 8) % 8);
+    if (authoredContinuity ? authoredStep?.active !== true : !steps[localStep]) return null;
+    if (!authoredContinuity && stage === 'build') {
       const hitSteps = steps
         .map((hit, idx) => hit ? idx : -1)
         .filter((idx) => idx >= 0);
@@ -2480,16 +2471,25 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       return null;
     }
     const noteName = String(helpers.getPlayerSimpleRhythmThemeNote?.('accentRhythm') || 'C4').trim() || 'C4';
-    const phraseId = String(phrase?.id || `player_accent_rhythm_${String(phrase?.patternKey || 'default').trim() || 'default'}`).trim();
+    const phrasePartIndex = authoredStep?.phrasePartIndex ?? Math.max(0, Math.trunc(Number(phrase?.phrasePartIndex) || 0));
+    const patternKey = String(authoredStep?.patternKey || phrase?.patternKey || '').trim();
+    const rawPatternKey = authoredContinuity ? patternKey : String(phrase?.rawPatternKey || '').trim();
+    const shapedPatternKey = authoredContinuity ? patternKey : String(phrase?.shapedPatternKey || phrase?.patternKey || '').trim();
+    const interpretationMode = authoredContinuity
+      ? 'authored_literal_continuity'
+      : String(phrase?.interpretationMode || 'secondary_statement').trim().toLowerCase();
+    const phraseId = authoredContinuity
+      ? `player_accent_rhythm_authored_${phrasePartIndex}`
+      : String(phrase?.id || `player_accent_rhythm_${patternKey || 'default'}`).trim();
     notePlayerAccentMotifTrack('literal_emitted', {
       stage,
       sectionBar,
       localStep,
-      phrasePartIndex: phrase?.phrasePartIndex,
-      patternKey: phrase?.patternKey,
-      rawPatternKey: phrase?.rawPatternKey,
-      shapedPatternKey: phrase?.shapedPatternKey,
-      interpretationMode: phrase?.interpretationMode,
+      phrasePartIndex,
+      patternKey,
+      rawPatternKey,
+      shapedPatternKey,
+      interpretationMode,
       expectedHit: true,
       emittedHit: true,
       instrumentId,
@@ -2517,17 +2517,17 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         musicProfileSourceType: 'spawner_rhythm_backbeat',
         musicLanePlayerThemeSource: 'accentRhythm',
         musicLanePhraseId: phraseId,
-        musicLanePatternKey: String(phrase?.patternKey || '').trim(),
-        musicLaneRawPatternKey: String(phrase?.rawPatternKey || '').trim(),
-        musicLaneShapedPatternKey: String(phrase?.shapedPatternKey || phrase?.patternKey || '').trim(),
-        musicLaneInterpretationMode: String(phrase?.interpretationMode || 'secondary_statement').trim().toLowerCase(),
-        musicLanePhrasePartIndex: Math.max(0, Math.trunc(Number(phrase?.phrasePartIndex) || 0)),
+        musicLanePatternKey: patternKey,
+        musicLaneRawPatternKey: rawPatternKey,
+        musicLaneShapedPatternKey: shapedPatternKey,
+        musicLaneInterpretationMode: interpretationMode,
+        musicLanePhrasePartIndex: phrasePartIndex,
         callResponseLane: 'call',
         callResponseQualified: true,
-        callResponsePhraseProgress: localStep,
+        callResponsePhraseProgress: authoredStep?.sequenceStep ?? localStep,
         musicRegister: 'high',
-        musicProminence: stage === 'medium' ? 'quiet' : 'full',
-        audioGain: stage === 'peak' ? 0.62 : (stage === 'build' ? 0.56 : 0.42),
+        musicProminence: authoredContinuity ? 'full' : (stage === 'medium' ? 'quiet' : 'full'),
+        audioGain: authoredContinuity ? 0.62 : (stage === 'peak' ? 0.62 : (stage === 'build' ? 0.56 : 0.42)),
         requestedNoteRaw: noteName,
         preserveRequestedNote: true,
         intensityAuditionSection: stage,
@@ -2542,6 +2542,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   })();
   const explicitPlayerAccentRhythmRiffEvent = (() => {
     if (suppressDirectorMusic) return null;
+    if (isLaneSuppressed('secondary_loop_lane')) return null;
     const { stage, sectionBar } = getDirectorMotifBedStageState();
     if (stage !== 'peak') return null;
     if (sectionBar < 16) return null;
@@ -2652,8 +2653,18 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }) || null;
   })();
 
+  const stagedEventsForFinalPlayback = (explicitPlayerBassDriveEvent || explicitPlayerAccentRhythmEvent)
+    ? stagedEnemyEvents.filter((ev) => {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const laneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
+      const layer = String(payload.musicLayer || '').trim().toLowerCase();
+      if (explicitPlayerBassDriveEvent && (laneId === 'foundation_lane' || layer === 'foundation')) return false;
+      if (explicitPlayerAccentRhythmEvent && (laneId === 'secondary_loop_lane' || layer === 'loops' || layer === 'accent')) return false;
+      return true;
+    })
+    : stagedEnemyEvents;
   stepEvents = [
-    ...stagedEnemyEvents,
+    ...stagedEventsForFinalPlayback,
     explicitPlayerBassDriveEvent,
     explicitPlayerLeadThemeEvent,
     explicitPlayerAccentRhythmEvent,
