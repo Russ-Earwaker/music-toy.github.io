@@ -14,6 +14,11 @@ const ENEMY_RAM_RADIUS = 72;
 const TRAIL_SAMPLE_SECONDS = 0.035;
 const TRAIL_LIFETIME_SECONDS = 0.9;
 const TRAIL_MIN_SEGMENT_WORLD = 8;
+const PICKUP_MIN_ROCKETS = 2;
+const PICKUP_MAX_ROCKETS = 4;
+const PICKUP_ROCKET_ORBIT_RADIUS = 171;
+const PICKUP_ROCKET_SPIN_SECONDS = 1.6;
+const PICKUP_ROCKET_RELEASE_SPEED = 720;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
@@ -48,6 +53,42 @@ function getClockTick(clock = null) {
   return Math.max(0, Math.trunc(Number(raw) || 0));
 }
 
+function randInt(min, max) {
+  const lo = Math.ceil(Number(min) || 0);
+  const hi = Math.floor(Number(max) || lo);
+  return lo + Math.floor(Math.random() * Math.max(1, hi - lo + 1));
+}
+
+function buildPickupRocketPlan(totalRockets = MAX_ITEMS) {
+  let remaining = Math.max(PICKUP_MIN_ROCKETS, Math.min(MAX_ITEMS, Math.trunc(Number(totalRockets) || MAX_ITEMS)));
+  const plan = [];
+  while (remaining > 0) {
+    if (remaining <= PICKUP_MAX_ROCKETS && remaining !== 1) {
+      plan.push(remaining);
+      break;
+    }
+    const min = PICKUP_MIN_ROCKETS;
+    const max = Math.min(PICKUP_MAX_ROCKETS, remaining - PICKUP_MIN_ROCKETS);
+    const candidates = [];
+    for (let count = min; count <= max; count += 1) {
+      const next = remaining - count;
+      if (next === 0 || next >= PICKUP_MIN_ROCKETS) candidates.push(count);
+    }
+    const count = candidates.length ? candidates[randInt(0, candidates.length - 1)] : Math.min(PICKUP_MAX_ROCKETS, remaining);
+    plan.push(count);
+    remaining -= count;
+  }
+  return plan;
+}
+
+function getPickupRocketAngle(pickup = null, rocketIndex = 0) {
+  const count = Math.max(1, Math.trunc(Number(pickup?.rocketCount) || 1));
+  const base = (Math.PI * 2 * Math.max(0, Math.trunc(Number(rocketIndex) || 0)) / count) - (Math.PI / 2);
+  const elapsed = Math.max(0, Number(pickup?.spinElapsed) || 0);
+  const spin = elapsed * (Math.PI * 2 / PICKUP_ROCKET_SPIN_SECONDS);
+  return base + spin;
+}
+
 function installStyles() {
   if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
   const style = document.createElement('style');
@@ -57,17 +98,35 @@ function installStyles() {
     .beat-swarm-music-pickup,
     .beat-swarm-music-missile { position: fixed; left: 0; top: 0; transform: translate(-9999px, -9999px); pointer-events: none; }
     .beat-swarm-music-pickup {
-      width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
+      width: 68px; height: 68px; margin: -34px 0 0 -34px; border-radius: 50%;
       border: 2px solid rgba(255,255,255,.92);
       background: radial-gradient(circle, rgba(255,255,255,.98) 0 13%, rgba(142,224,255,.7) 30%, rgba(102,139,255,.16) 68%, transparent 72%);
       box-shadow: 0 0 18px rgba(255,255,255,.8), 0 0 34px rgba(117,205,255,.48);
+      overflow: visible; isolation: isolate; will-change: transform; transform-style: preserve-3d;
     }
     .beat-swarm-music-pickup::before {
       content: ''; position: absolute; inset: -74px; border-radius: 50%;
       border: 1px solid rgba(168,226,255,.2); box-shadow: inset 0 0 26px rgba(129,203,255,.08);
     }
     .beat-swarm-music-pickup.is-magnetic::before { border-color: rgba(220,247,255,.62); box-shadow: 0 0 24px rgba(160,222,255,.3), inset 0 0 30px rgba(160,222,255,.18); }
-    .beat-swarm-music-pickup::after { content: '\\266A'; display: grid; place-items: center; height: 100%; color: #fff; font: 700 25px/1 system-ui; text-shadow: 0 0 10px #fff; }
+    .beat-swarm-music-pickup::after {
+      content: attr(data-rocket-count); position: relative; z-index: 2; display: grid; place-items: center; height: 100%;
+      color: #fff; font: 800 25px/1 system-ui; text-shadow: 0 0 10px #fff, 0 0 20px rgba(142,224,255,.9);
+    }
+    .beat-swarm-music-pickup-rocket {
+      position: fixed; left: 0; top: 0; width: 29px; height: 12px; margin: -6px 0 0 -15px;
+      border-radius: 55% 80% 80% 55%; border: 1px solid rgba(255,255,255,.84);
+      background: linear-gradient(180deg, #fff 0 24%, #c8f3ff 46%, #759eff 100%);
+      box-shadow: 0 0 10px rgba(255,255,255,.7), 0 0 18px rgba(116,182,255,.45);
+      transform-origin: 50% 50%; transform: translate(-9999px, -9999px); pointer-events: none;
+      z-index: 3;
+    }
+    .beat-swarm-music-pickup-rocket::before {
+      content: ''; position: absolute; left: 3px; top: -4px; width: 11px; height: 19px;
+      background: linear-gradient(90deg, rgba(121,145,255,.82), rgba(235,247,255,.95));
+      clip-path: polygon(0 0, 100% 30%, 100% 70%, 0 100%, 32% 50%);
+      z-index: -1;
+    }
     .beat-swarm-music-missile {
       width: 29px; height: 12px; margin: -6px 0 0 -15px; border-radius: 55% 80% 80% 55%;
       border: 1px solid rgba(255,255,255,.95);
@@ -127,6 +186,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     postCompleteNotified: false,
     rootEl: null,
     promptEl: null,
+    pickupRocketPlan: [],
   };
 
   function ensureRoot() {
@@ -141,7 +201,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     if (!(state.promptEl instanceof HTMLElement)) {
       state.promptEl = document.createElement('div');
       state.promptEl.className = 'beat-swarm-music-missile-prompt';
-      state.promptEl.textContent = 'RELEASE TO LAUNCH';
+      state.promptEl.textContent = '';
       state.rootEl.appendChild(state.promptEl);
     }
     return state.rootEl;
@@ -149,6 +209,12 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
 
   function removeEntry(entry) {
     try { entry?.el?.remove?.(); } catch {}
+    if (Array.isArray(entry?.visualRockets)) {
+      for (const rocket of entry.visualRockets) {
+        try { rocket?.el?.remove?.(); } catch {}
+      }
+      entry.visualRockets.length = 0;
+    }
   }
 
   function clear() {
@@ -168,6 +234,19 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     state.promptEl = null;
   }
 
+  function addPickupRocketVisuals(pickup = null) {
+    const count = Math.max(1, Math.trunc(Number(pickup?.rocketCount) || 1));
+    const root = ensureRoot();
+    if (!(root instanceof HTMLElement) || !pickup) return;
+    pickup.visualRockets = [];
+    for (let i = 0; i < count; i += 1) {
+      const rocket = document.createElement('div');
+      rocket.className = 'beat-swarm-music-pickup-rocket';
+      root.appendChild(rocket);
+      pickup.visualRockets.push({ el: rocket, rocketIndex: i });
+    }
+  }
+
   function start(options = null) {
     const opts = options && typeof options === 'object' ? options : {};
     clear();
@@ -182,6 +261,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     state.lastClockTick = -1;
     state.lastCarrierTick = -1000000;
     state.wasInputHeld = deps.isInputHeld?.() === true;
+    state.pickupRocketPlan = buildPickupRocketPlan(state.targetHitCount);
     ensureRoot();
   }
 
@@ -192,11 +272,12 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
   }
 
   function getReservedCount() {
-    return state.pickups.length + state.missiles.length + state.pendingDetonations.length + state.motifHits.size;
+    const pickupRockets = state.pickups.reduce((sum, pickup) => sum + Math.max(1, Math.trunc(Number(pickup.rocketCount) || 1)), 0);
+    return pickupRockets + state.missiles.length + state.pendingDetonations.length + state.motifHits.size;
   }
 
   function canAcceptDrop() {
-    return state.active && getReservedCount() < state.targetHitCount;
+    return state.active && state.pickupRocketPlan.length > 0 && getReservedCount() < state.targetHitCount;
   }
 
   function noteCarrierSpawned() {
@@ -218,6 +299,8 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     const el = document.createElement('div');
     el.className = 'beat-swarm-music-pickup';
     root.appendChild(el);
+    const rocketCount = Math.max(PICKUP_MIN_ROCKETS, Math.min(PICKUP_MAX_ROCKETS, Math.trunc(Number(state.pickupRocketPlan.shift()) || PICKUP_MIN_ROCKETS)));
+    el.dataset.rocketCount = String(rocketCount);
     const pickup = {
       id: state.nextId++,
       x: source.x,
@@ -225,10 +308,13 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       anchorAngle: (-Math.PI / 2) + (index * Math.PI * 2 / state.targetHitCount),
       anchorRadiusN: index % 2 === 0 ? 0.56 : 0.72,
       magneticLatched: false,
+      rocketCount,
+      spinElapsed: Math.random() * PICKUP_ROCKET_SPIN_SECONDS,
       el,
     };
+    addPickupRocketVisuals(pickup);
     state.pickups.push(pickup);
-    deps.onPickupSpawned?.({ id: pickup.id, eventId: state.eventId, themeId: state.themeId });
+    deps.onPickupSpawned?.({ id: pickup.id, eventId: state.eventId, themeId: state.themeId, rocketCount });
     return pickup;
   }
 
@@ -252,13 +338,15 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     return (bestStart + bestGap * 0.5) % (Math.PI * 2);
   }
 
-  function spawnOrbitingMissile() {
+  function spawnOrbitingMissile(options = null) {
     if (state.missiles.length >= MAX_ITEMS) return null;
+    const opts = options && typeof options === 'object' ? options : {};
     const root = ensureRoot();
-    const center = point(deps.getPlayerWorld?.());
+    const center = opts.world ? point(opts.world) : point(deps.getPlayerWorld?.());
     const el = document.createElement('div');
     el.className = 'beat-swarm-music-missile';
     root?.appendChild?.(el);
+    const angle = Number.isFinite(Number(opts.angle)) ? Number(opts.angle) : pickOpenOrbitAngle();
     const missile = {
       id: state.nextId++,
       state: 'orbit',
@@ -266,7 +354,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       y: center.y,
       vx: 0,
       vy: 0,
-      angle: pickOpenOrbitAngle(),
+      angle,
       targetEnemyId: 0,
       trailSampleT: 0,
       trailLastX: center.x,
@@ -275,6 +363,10 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       seekSeconds: 0,
       el,
     };
+    if (opts.velocity && typeof opts.velocity === 'object') {
+      missile.vx = Number(opts.velocity.x) || 0;
+      missile.vy = Number(opts.velocity.y) || 0;
+    }
     state.missiles.push(missile);
     deps.onMissileCollected?.({ id: missile.id, eventId: state.eventId, activeCount: state.missiles.length });
     return missile;
@@ -316,9 +408,18 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       missile.seekSeconds = 0;
       missile.targetEnemyId = Math.trunc(Number(target?.id) || 0);
       if (missile.targetEnemyId > 0) reservedTargets.add(missile.targetEnemyId);
-      const dir = target
+      const targetDir = target
         ? normalize((Number(target.wx) || 0) - missile.x, (Number(target.wy) || 0) - missile.y)
         : normalize(Math.cos(missile.angle), Math.sin(missile.angle));
+      const momentum = Math.hypot(Number(missile.vx) || 0, Number(missile.vy) || 0) > 0.001
+        ? normalize(missile.vx, missile.vy, targetDir.x, targetDir.y)
+        : targetDir;
+      const dir = normalize(
+        momentum.x * 0.72 + targetDir.x * 0.48,
+        momentum.y * 0.72 + targetDir.y * 0.48,
+        targetDir.x,
+        targetDir.y
+      );
       missile.vx = dir.x * MISSILE_SEEK_SPEED;
       missile.vy = dir.y * MISSILE_SEEK_SPEED;
       missile.el?.classList?.add?.('is-seeking');
@@ -410,6 +511,17 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     el.style.transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px)${rotation}`;
   }
 
+  function renderPickupRockets(pickup = null) {
+    if (!pickup || !Array.isArray(pickup.visualRockets)) return;
+    for (const rocket of pickup.visualRockets) {
+      const angle = getPickupRocketAngle(pickup, rocket.rocketIndex);
+      renderAt(rocket.el, {
+        x: pickup.x + Math.cos(angle) * PICKUP_ROCKET_ORBIT_RADIUS,
+        y: pickup.y + Math.sin(angle) * PICKUP_ROCKET_ORBIT_RADIUS,
+      }, angle + (Math.PI / 2));
+    }
+  }
+
   function appendTrailSegment(missile, dt) {
     if (!missile) return;
     missile.trailSampleT = Math.max(0, Number(missile.trailSampleT) || 0) + dt;
@@ -467,6 +579,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     const arenaRadius = Math.max(120, Number(deps.getArenaRadius?.()) || 500);
     for (let i = state.pickups.length - 1; i >= 0; i -= 1) {
       const pickup = state.pickups[i];
+      pickup.spinElapsed = Math.max(0, Number(pickup.spinElapsed) || 0) + dt;
       let target = {
         x: arena.x + Math.cos(pickup.anchorAngle) * arenaRadius * pickup.anchorRadiusN,
         y: arena.y + Math.sin(pickup.anchorAngle) * arenaRadius * pickup.anchorRadiusN,
@@ -488,10 +601,27 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
         pickup.y += dy / dist * step;
       }
       renderAt(pickup.el, pickup);
+      renderPickupRockets(pickup);
       if (Math.hypot(pickup.x - player.x, pickup.y - player.y) > PICKUP_COLLECT_RADIUS) continue;
       removeEntry(pickup);
       state.pickups.splice(i, 1);
-      spawnOrbitingMissile();
+      const rocketCount = Math.max(1, Math.trunc(Number(pickup.rocketCount) || 1));
+      for (let rocket = 0; rocket < rocketCount; rocket += 1) {
+        const angle = getPickupRocketAngle(pickup, rocket);
+        const tangent = angle + (Math.PI / 2);
+        spawnOrbitingMissile({
+          world: {
+            x: pickup.x + Math.cos(angle) * PICKUP_ROCKET_ORBIT_RADIUS,
+            y: pickup.y + Math.sin(angle) * PICKUP_ROCKET_ORBIT_RADIUS,
+          },
+          velocity: {
+            x: Math.cos(tangent) * PICKUP_ROCKET_RELEASE_SPEED,
+            y: Math.sin(tangent) * PICKUP_ROCKET_RELEASE_SPEED,
+          },
+          angle: tangent,
+        });
+      }
+      releaseAllMissiles();
     }
   }
 
@@ -603,13 +733,10 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     updateTrails(safeDt);
     updatePendingDetonations();
     updateMotifLoop();
-    const inputHeld = deps.isInputHeld?.() === true;
-    if (state.wasInputHeld && !inputHeld) releaseAllMissiles();
-    state.wasInputHeld = inputHeld;
-    const hasOrbiting = state.missiles.some((entry) => entry.state === 'orbit');
+    state.wasInputHeld = deps.isInputHeld?.() === true;
     if (state.promptEl) {
-      state.promptEl.textContent = inputHeld ? 'RELEASE TO LAUNCH' : 'HOLD, THEN RELEASE';
-      state.promptEl.classList.toggle('is-visible', hasOrbiting);
+      state.promptEl.textContent = '';
+      state.promptEl.classList.remove('is-visible');
     }
   }
 

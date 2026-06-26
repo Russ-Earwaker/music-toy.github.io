@@ -741,13 +741,18 @@ export function executePerformedBeatEventRuntime(options = null) {
         * Math.max(0.18, prominenceGain)
         * (0.7 + ((Number(aggressionScale) || 0) * 0.3));
       requestedNote = String(ev?.payload?.requestedNoteRaw || ev.note || '').trim();
-      noteName = helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
+      const preserveRequestedNote = ev?.payload?.preserveRequestedNote === true;
+      noteName = preserveRequestedNote
+        ? (requestedNote || String(ev.note || '').trim())
+        : helpers.clampNoteToDirectorPool?.(requestedNote || ev.note, beatIndex + ev.stepIndex + ev.actorId);
       if (String(instrumentId || '').trim().toUpperCase() === 'CLICK PERCUSSION SHORT') {
         noteName = 'C4';
       }
       if (String(normalizedGroupRole || '') === String(constants?.roles?.bass || 'bass')) {
         const bassFallbackNote = normalizeBassRegister(requestedNote || noteName || 'C3', 'C3');
-        noteName = normalizeBassRegister(noteName || requestedNote || bassFallbackNote, bassFallbackNote);
+        noteName = preserveRequestedNote
+          ? (requestedNote || noteName || bassFallbackNote)
+          : normalizeBassRegister(noteName || requestedNote || bassFallbackNote, bassFallbackNote);
       }
       group.note = noteName;
       audioDedupKey = [

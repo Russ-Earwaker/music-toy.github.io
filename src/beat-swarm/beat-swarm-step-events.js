@@ -2155,6 +2155,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }) || null;
     return ev || null;
   })();
+  const authoredBassDriveContinuityActive = !suppressDirectorMusic
+    && !isLaneSuppressed('foundation_lane')
+    && getDirectorMotifBedStageState().stage !== 'silent'
+    && helpers.isPlayerMusicThemeAuthored?.('bassDrive') === true;
   const explicitPlayerBassDriveEvent = (() => {
     if (suppressDirectorMusic) return null;
     if (isLaneSuppressed('foundation_lane')) return null;
@@ -2653,12 +2657,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }) || null;
   })();
 
-  const stagedEventsForFinalPlayback = (explicitPlayerBassDriveEvent || explicitPlayerAccentRhythmEvent)
+  const stagedEventsForFinalPlayback = (authoredBassDriveContinuityActive || explicitPlayerBassDriveEvent || explicitPlayerAccentRhythmEvent)
     ? stagedEnemyEvents.filter((ev) => {
       const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
       const laneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
       const layer = String(payload.musicLayer || '').trim().toLowerCase();
-      if (explicitPlayerBassDriveEvent && (laneId === 'foundation_lane' || layer === 'foundation')) return false;
+      if (authoredBassDriveContinuityActive && (laneId === 'foundation_lane' || layer === 'foundation')) return false;
       if (explicitPlayerAccentRhythmEvent && (laneId === 'secondary_loop_lane' || layer === 'loops' || layer === 'accent')) return false;
       return true;
     })
