@@ -457,6 +457,7 @@ function ensureUI() {
         <div class="perf-lab-controlsTitle">Current Work</div>
         ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Tap Orbs + Missiles (1x180s)', 'primary')}
         ${btn('musicLabRunBS0S3MusicMissileBassRewriteDebug', 'Test Reuse Matrix: Missiles/Tap Orbs -> Bass/Accent (1x360s)', 'primary')}
+        ${btn('musicLabRunBS0S3PinballBouncerRewriteDebug', 'Pinball Bouncer Accent Rewrite (1x120s)', 'primary')}
       </div>`,
       `<details class="perf-lab-music-group">
         <summary>Component Tests</summary>
@@ -1506,6 +1507,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3MusicMissileRewriteDebug') {
       await runBS0s3MusicLabMusicMissileRewriteDebug120s();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3PinballBouncerRewriteDebug') {
+      await runBS0s3MusicLabPinballBouncerRewriteDebug120s();
       return;
     }
     if (act === 'musicLabRunBS0S3MusicMissileBassRewriteDebug') {
@@ -6819,6 +6824,81 @@ async function runBS0s3MusicLabMusicMissileRewriteDebug120s(options = null) {
     tagPrefix: `BS0S3MusicMissile${targetSlug}Rewrite1x${durationSeconds}s`,
     labelPrefix: `BS0_stage3_beatswarm_music_missile_${targetSlug}_rewrite_1x${durationSeconds}s`,
     statusPrefix: `Running BS0 S3 music missile ${targetLabel} rewrite (${durationSeconds} seconds, compact save)`,
+    traceCapture: { enabled: false },
+  });
+}
+
+async function runBS0s3MusicLabPinballBouncerRewriteDebug120s(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const themeId = String(opts.themeId || 'accentRhythm').trim() || 'accentRhythm';
+  const laneId = String(opts.laneId || 'secondary_loop_lane').trim() || 'secondary_loop_lane';
+  const durationMs = Math.max(30000, Math.trunc(Number(opts.durationMs) || 120000));
+  const durationSeconds = Math.max(1, Math.round(durationMs / 1000));
+  await runBS0Stage(3, {
+    durationMs,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'fixed_section',
+        fixedSection: 'medium',
+        introBars: 0,
+      },
+    },
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startPinballBouncerRhythmRewriteEvent !== 'function') {
+        throw new Error('pinball_bouncer_rewrite_debug_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const result = modeApi.startPinballBouncerRhythmRewriteEvent({
+        themeId,
+        laneId,
+        source: 'perf_lab_pinball_bouncer_rewrite',
+        reason: `pinball_bouncer_${themeId}_${laneId}_rewrite_lab`,
+        durationBars: 4096,
+      });
+      try {
+        window.__beatSwarmPinballBouncerDebugExpected = {
+          mode: 'pinball_bouncer_rhythm_rewrite',
+          expectedTheme: themeId,
+          expectedLane: laneId,
+          traceEvents: [
+            'pinball_bouncer_rewrite_started',
+            'pinball_bouncer_spawned',
+            'pinball_bouncer_hit_queued',
+            'pinball_bouncer_quantized_impact',
+            'pinball_bouncer_motif_hit',
+            'pinball_bouncer_rewrite_committed_to_theme',
+          ],
+          result,
+        };
+      } catch {}
+      setOutput({
+        ok: true,
+        setup: 'pinball_bouncer_rhythm_rewrite_started',
+        notes: 'Bump eight pinball bouncers. Each collision should bounce the player, queue a quantized note, remove the bouncer, and commit the authored motif.',
+        result,
+      });
+    },
+    saveRunIdBase: `musicLab_bs0_s3_pinball_bouncer_${themeId}_${laneId}_rewrite_1x${durationSeconds}s`,
+    saveNotes: [
+      `Beat Swarm Music Lab pinball-bouncer rewrite debug targeting ${themeId} on ${laneId}: fixed Medium Intensity with intro skipped.`,
+      'Bouncers stage into the arena, become bright on arrival, then author rhythm notes when the player collides with them.',
+    ].join(' '),
+    groupedScenarioName: `retro_shooter_pinball_bouncer_${themeId}_${laneId}_rewrite_1x${durationSeconds}s`,
+    groupedRunId: `musicLab_bs0_s3_pinball_bouncer_${themeId}_${laneId}_rewrite_1x${durationSeconds}s_scenario`,
+    groupedNotes: `Pinball bouncer interaction authors ${themeId} from eight quantized collision bounces.`,
+    tagPrefix: `BS0S3PinballBouncer${themeId}Rewrite1x${durationSeconds}s`,
+    labelPrefix: `BS0_stage3_beatswarm_pinball_bouncer_${themeId}_${laneId}_rewrite_1x${durationSeconds}s`,
+    statusPrefix: `Running BS0 S3 pinball bouncer ${themeId} rewrite (${durationSeconds} seconds, compact save)`,
     traceCapture: { enabled: false },
   });
 }

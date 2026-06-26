@@ -3,9 +3,9 @@ import { buildPalette, midiToName } from '../note-helpers.js';
 import { BEAT_EVENT_ROLES, BEAT_EVENT_THREAT } from './beat-events.js';
 
 export const SWARM_MAX_SPEED = 920; // px/sec
-export const SWARM_ACCEL = 2100; // px/sec^2
-export const SWARM_DECEL = 2.8; // release damping
-export const SWARM_TURN_WEIGHT = 0.35; // lower = heavier directional change
+export const SWARM_ACCEL = 5200; // px/sec^2
+export const SWARM_DECEL = 4.6; // release damping
+export const SWARM_TURN_WEIGHT = 0.86; // lower = heavier directional change
 export const SWARM_JOYSTICK_RADIUS = 70; // px
 export const SWARM_STOP_EPS = 8; // px/sec
 export const WEAPON_TUNE_STEPS = 8;
