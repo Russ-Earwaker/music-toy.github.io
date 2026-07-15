@@ -21,9 +21,9 @@ import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-compo
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
-import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-06-25-pickup-rocket-orbit-wide-v9';
-import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-15-pinball-bouncers-v18';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-06-18-corridor-curve-v1';
+import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-15-pinball-bouncers-v23';
+import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-15-pinball-bouncers-v23';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-15-pinball-bouncers-v23';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-22-quantized-bridge-v5';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
@@ -184,7 +184,7 @@ const BEAT_SWARM_THEME_PRESET = Object.freeze({
   id: BEAT_SWARM_THEME_ID,
   catalogTheme: BEAT_SWARM_THEME_ID,
   roles: Object.freeze({
-    bass: 'BASS TONE 4',
+    bass: 'BASS TONE 3',
     lead: 'RETRO SAW',
     accent: 'RETRO SQUARE',
     motion: 'GAMING BLING',
@@ -266,7 +266,7 @@ const weaponGateCurrentRuntime = {
   releaseVx: 0,
   releaseVy: 0,
 };
-const WEAPON_GATE_CORRIDOR_SPEED = 440;
+const WEAPON_GATE_CORRIDOR_SPEED = 620;
 const beatSwarmOnboardingState = createBeatSwarmOnboardingState();
 const weaponGateMusicRuntime = beatSwarmOnboardingState.weaponGateMusicRuntime;
 const beatSwarmOnboardingRuntime = beatSwarmOnboardingState.phaseRuntime;
@@ -284,14 +284,20 @@ let tapOrbFoundationLastAudioTriggerIndex = -1;
 const musicMissileAuthoringRuntime = {
   completeOnboardingOnHandoff: false,
   handoffPublished: false,
+  chainPinballBouncersOnHandoff: false,
+  chainPinballBouncersStarted: false,
 };
+const pinballBouncerAuthoringRuntime = {
+  handoffPublished: false,
+};
+let weaponGateOnboardingSequenceMode = 'tap_orbs_missiles';
 const RHYTHM_REWRITE_TARGETS = Object.freeze({
   bassDrive: Object.freeze({
     themeId: 'bassDrive',
     laneId: 'foundation_lane',
     role: 'bass',
     layer: 'foundation',
-    defaultInstrumentId: 'BASS TONE 4',
+    defaultInstrumentId: 'BASS TONE 3',
     defaultNote: 'C3',
     placementMode: 'toy_eighth_grid',
   }),
@@ -320,8 +326,8 @@ function resolveRhythmRewriteTarget(targetLike = null) {
     laneId,
     role: String(src.role || configured?.role || (foundation ? 'bass' : 'accent')).trim() || (foundation ? 'bass' : 'accent'),
     layer: String(src.layer || configured?.layer || (foundation ? 'foundation' : 'accent')).trim() || (foundation ? 'foundation' : 'accent'),
-    defaultInstrumentId: String(src.defaultInstrumentId || configured?.defaultInstrumentId || (foundation ? 'BASS TONE 4' : 'CLICK PERCUSSION SHORT')).trim()
-      || (foundation ? 'BASS TONE 4' : 'CLICK PERCUSSION SHORT'),
+    defaultInstrumentId: String(src.defaultInstrumentId || configured?.defaultInstrumentId || (foundation ? 'BASS TONE 3' : 'CLICK PERCUSSION SHORT')).trim()
+      || (foundation ? 'BASS TONE 3' : 'CLICK PERCUSSION SHORT'),
     defaultNote: String(src.defaultNote || configured?.defaultNote || (foundation ? 'C3' : 'C4')).trim() || (foundation ? 'C3' : 'C4'),
     placementMode: String(src.placementMode || configured?.placementMode || (foundation ? 'toy_eighth_grid' : 'free')).trim()
       || (foundation ? 'toy_eighth_grid' : 'free'),
@@ -626,7 +632,7 @@ function createPlayerMusicThemeSimpleRhythmData(themeId = '') {
     steps,
     active: active.slice(0, steps),
     patternChain: patternChain.map((pattern) => pattern.slice(0, steps)),
-    instrumentId: accent ? 'CLICK PERCUSSION SHORT' : 'BASS TONE 4',
+    instrumentId: accent ? 'CLICK PERCUSSION SHORT' : 'BASS TONE 3',
     note: accent ? 'C4' : 'C3',
     patternKey: active.map((v) => (v ? '1' : '0')).join(''),
   };
@@ -980,7 +986,7 @@ function commitTapOrbFoundationToBassDriveTheme(event = null) {
   setBeatSwarmOnboardingPhase('foundation_confirm');
   const active = patternChain[0].slice(0, WEAPON_TUNE_STEPS);
   const note = getPlayerSimpleRhythmThemeNote('bassDrive') || 'C3';
-  const instrumentId = getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 4';
+  const instrumentId = getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 3';
   const theme = setPlayerMusicTheme('bassDrive', {
     autogenerated: false,
     data: {
@@ -1199,6 +1205,7 @@ function commitPinballBouncerRewriteToTheme(event = null) {
     stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
   });
   if (!result) return null;
+  pinballBouncerAuthoringRuntime.handoffPublished = true;
   try {
     noteMusicSystemEvent('pinball_bouncer_rewrite_committed_to_theme', {
       eventId: String(event.eventId || result.completed?.id || '').trim(),
@@ -1332,7 +1339,7 @@ function applyTapOrbFoundationDebugPattern(patternLike = null, options = null) {
   const patternChain = splitTapOrbFoundationStepsIntoBassDrivePatterns(source);
   const active = patternChain[0].slice(0, WEAPON_TUNE_STEPS);
   const note = normalizeSwarmNoteName(opts.note || getPlayerSimpleRhythmThemeNote('bassDrive') || 'C3') || 'C3';
-  const instrumentId = String(opts.instrumentId || getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 4').trim() || 'BASS TONE 4';
+  const instrumentId = String(opts.instrumentId || getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 3').trim() || 'BASS TONE 3';
   const theme = setPlayerMusicTheme('bassDrive', {
     autogenerated: false,
     data: {
@@ -1420,11 +1427,23 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
   },
   applySelections: applyWeaponGateSelectionsToWeapon,
   onComplete() {
-    startTapOrbFoundationRewriteEvent({
-      source: 'onboarding',
-      reason: 'weapon_gate_foundation_rewrite',
-      chainMusicMissiles: true,
-    });
+    if (weaponGateOnboardingSequenceMode === 'missiles_bouncers') {
+      startMusicMissileRhythmRewriteEvent({
+        themeId: 'bassDrive',
+        laneId: 'foundation_lane',
+        source: 'onboarding',
+        reason: 'weapon_gate_missile_foundation_rewrite',
+        chainPinballBouncers: true,
+        initialCarrierDelayTicks: WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH * 2,
+        durationBars: 4096,
+      });
+    } else {
+      startTapOrbFoundationRewriteEvent({
+        source: 'onboarding',
+        reason: 'weapon_gate_foundation_rewrite',
+        chainMusicMissiles: true,
+      });
+    }
   },
 });
 function startTapOrbFoundationRewriteEvent(options = null) {
@@ -1564,10 +1583,15 @@ function startMusicMissileRhythmRewriteEvent(options = null) {
   });
   const themeId = target.themeId;
   const laneId = target.laneId;
+  if (weaponGateOnboardingSequenceMode === 'missiles_bouncers') {
+    setBeatSwarmOnboardingPhase('music_missiles');
+  }
   const eventType = String(opts.eventType || 'rhythm_rewrite').trim() || 'rhythm_rewrite';
   const targetHitCount = Math.max(1, Math.min(8, Math.trunc(Number(opts.targetHitCount) || 8)));
   const stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || (WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH)));
   musicMissileAuthoringRuntime.completeOnboardingOnHandoff = opts.completeOnboardingOnHandoff === true;
+  musicMissileAuthoringRuntime.chainPinballBouncersOnHandoff = opts.chainPinballBouncers === true;
+  musicMissileAuthoringRuntime.chainPinballBouncersStarted = false;
   musicMissileAuthoringRuntime.handoffPublished = false;
   const bar = Number.isFinite(Number(opts.bar))
     ? Math.max(0, Math.trunc(Number(opts.bar) || 0))
@@ -1596,6 +1620,7 @@ function startMusicMissileRhythmRewriteEvent(options = null) {
     targetHitCount,
     stepCount,
     placementMode: target.placementMode,
+    initialCarrierDelayTicks: Math.max(0, Math.trunc(Number(opts.initialCarrierDelayTicks) || 0)),
   });
   try {
     noteMusicSystemEvent('music_missile_rewrite_started', {
@@ -1625,6 +1650,9 @@ function startPinballBouncerRhythmRewriteEvent(options = null) {
   });
   const themeId = target.themeId;
   const laneId = target.laneId;
+  if (weaponGateOnboardingSequenceMode === 'missiles_bouncers') {
+    setBeatSwarmOnboardingPhase('pinball_bouncers');
+  }
   const eventType = String(opts.eventType || 'rhythm_rewrite').trim() || 'rhythm_rewrite';
   const targetHitCount = Math.max(1, Math.min(8, Math.trunc(Number(opts.targetHitCount) || 8)));
   const stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || (WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH)));
@@ -1648,6 +1676,7 @@ function startPinballBouncerRhythmRewriteEvent(options = null) {
   });
   const started = tickBeatSwarmMusicRewriteEvents(bar);
   const eventId = String(started?.id || event?.id || '').trim();
+  pinballBouncerAuthoringRuntime.handoffPublished = false;
   pinballBouncerRuntime.start({
     eventId,
     themeId,
@@ -1700,7 +1729,7 @@ const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
     const themeId = String(event?.themeId || tapOrbAuthoringRuntime.themeId || 'bassDrive').trim() || 'bassDrive';
     const laneId = String(event?.laneId || tapOrbAuthoringRuntime.laneId || 'foundation_lane').trim() || 'foundation_lane';
     const accent = laneId !== 'foundation_lane';
-    const inst = getPlayerSimpleRhythmThemeInstrumentId(themeId) || (accent ? 'CLICK PERCUSSION SHORT' : 'BASS TONE 4');
+    const inst = getPlayerSimpleRhythmThemeInstrumentId(themeId) || (accent ? 'CLICK PERCUSSION SHORT' : 'BASS TONE 3');
     const note = getPlayerSimpleRhythmThemeNote(themeId) || (accent ? 'C4' : 'C3');
     if (!accent && tapOrbRuntime.isActive() && triggerIndex === tapOrbFoundationLastAudioTriggerIndex) {
       try {
@@ -2006,11 +2035,26 @@ const musicMissileRuntime = createBeatSwarmMusicMissileRuntime({
     if (!musicMissileAuthoringRuntime.handoffPublished) {
       try { finalizeCommittedRhythmLaneHandoff(event?.laneId, 'music_missile_complete'); } catch {}
     }
+    if (musicMissileAuthoringRuntime.chainPinballBouncersOnHandoff && !musicMissileAuthoringRuntime.chainPinballBouncersStarted) {
+      musicMissileAuthoringRuntime.chainPinballBouncersStarted = true;
+      try {
+        startPinballBouncerRhythmRewriteEvent({
+          themeId: 'accentRhythm',
+          laneId: 'secondary_loop_lane',
+          source: 'onboarding',
+          reason: 'music_missile_to_pinball_bouncer_accent_rewrite',
+          durationBars: 4096,
+        });
+      } catch {}
+    }
     if (musicMissileAuthoringRuntime.completeOnboardingOnHandoff) {
       weaponGateMusicRuntime.lowAfterComplete = true;
       setBeatSwarmOnboardingPhase('complete');
     }
     musicMissileAuthoringRuntime.completeOnboardingOnHandoff = false;
+    if (musicMissileAuthoringRuntime.chainPinballBouncersStarted) {
+      musicMissileAuthoringRuntime.chainPinballBouncersOnHandoff = false;
+    }
     musicMissileAuthoringRuntime.handoffPublished = false;
     try {
       noteMusicSystemEvent('music_missile_post_complete_playback_handoff', event, {
@@ -2116,7 +2160,14 @@ const pinballBouncerRuntime = createBeatSwarmPinballBouncerRuntime({
     if (event.complete === true) commitPinballBouncerRewriteToTheme(event);
   },
   onPostCompletePlayback(event = {}) {
-    try { finalizeCommittedRhythmLaneHandoff(event?.laneId, 'pinball_bouncer_complete'); } catch {}
+    if (!pinballBouncerAuthoringRuntime.handoffPublished) {
+      try { finalizeCommittedRhythmLaneHandoff(event?.laneId, 'pinball_bouncer_complete'); } catch {}
+    }
+    pinballBouncerAuthoringRuntime.handoffPublished = false;
+    if (weaponGateOnboardingSequenceMode === 'missiles_bouncers') {
+      weaponGateMusicRuntime.lowAfterComplete = true;
+      setBeatSwarmOnboardingPhase('complete');
+    }
     try {
       noteMusicSystemEvent('pinball_bouncer_post_complete_playback_handoff', event, {
         beatIndex: currentBeatIndex,
@@ -2617,12 +2668,12 @@ function resolveProtectedMusicLaneClaim(eventLike = null, actorLike = null, grou
 const BEAT_SWARM_ROLE_INSTRUMENT_ROTATION = Object.freeze({
   minBarsPerInstrument: 6,
   pools: Object.freeze({
-    bass: Object.freeze(['BASS TONE 4']),
+    bass: Object.freeze(['BASS TONE 3']),
     lead: Object.freeze(['RETRO SQUARE', 'RETRO SAW', 'GAMING NOTE', 'RETRO TRIANGLE']),
     accent: Object.freeze(['LASER', 'RETRO PROJECTILE SUBTLE', 'TONE']),
   }),
 });
-const BEAT_SWARM_FOUNDATION_INSTRUMENT_ID = 'BASS TONE 4';
+const BEAT_SWARM_FOUNDATION_INSTRUMENT_ID = 'BASS TONE 3';
 const roleInstrumentRotationRuntime = {
   lastByRole: new Map(),
   lastByRoleEnemyType: new Map(),
@@ -5056,7 +5107,7 @@ function createBassFoundationKeepaliveEventRuntime(options = null) {
   if (tapOrbFoundationBuildActive) return null;
   if (tapOrbFoundationGhostActive && foundationLane.isActiveStep) {
     const note = normalizeSwarmNoteName(getPlayerSimpleRhythmThemeNote('bassDrive')) || 'C3';
-    const instrumentId = getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 4';
+    const instrumentId = getPlayerSimpleRhythmThemeInstrumentId('bassDrive') || 'BASS TONE 3';
     const pulseAccent = resolveFoundationLanePulseAccent(foundationLane.stepIndex, 'tap_orb_foundation_build');
     const event = createLoggedPerformedBeatEvent({
       actorId: 0,
@@ -6739,17 +6790,14 @@ function getSectionPresentationProfile(sectionId = '', energyState = '') {
   return base;
 }
 function applySectionStarfieldProfile(profile = null, withBurst = true) {
-  const star = profile && typeof profile === 'object' ? profile : {};
-  starfieldSectionRuntime.tint = String(star?.tint || '#000000').trim() || '#000000';
-  starfieldSectionRuntime.parallaxIntensity = Math.max(0.5, Math.min(1.8, Number(star?.parallaxIntensity) || 1));
-  starfieldSectionRuntime.density = Math.max(0.2, Math.min(1, Number(star?.density) || 0.72));
-  starfieldSectionRuntime.twinkleRate = Math.max(0.05, Math.min(2.4, Number(star?.twinkleRate) || 0.45));
-  starfieldSectionRuntime.pulseStrength = Math.max(0, Math.min(1, Number(star?.pulseStrength) || 0.2));
-  starfieldSectionRuntime.entryBurstStrength = Math.max(0, Math.min(1.2, Number(star?.entryBurst) || 0.3));
-  if (withBurst) {
-    starfieldSectionRuntime.entryBurstDur = 0.9;
-    starfieldSectionRuntime.entryBurstT = starfieldSectionRuntime.entryBurstDur;
-  }
+  starfieldSectionRuntime.tint = '#000000';
+  starfieldSectionRuntime.parallaxIntensity = 1;
+  starfieldSectionRuntime.density = 1;
+  starfieldSectionRuntime.twinkleRate = 0;
+  starfieldSectionRuntime.pulseStrength = 0;
+  starfieldSectionRuntime.entryBurstStrength = 0;
+  starfieldSectionRuntime.entryBurstDur = 0;
+  starfieldSectionRuntime.entryBurstT = 0;
 }
 function hideSectionHeading() {
   sectionPresentationRuntime.visibleUntilMs = 0;
@@ -10841,18 +10889,16 @@ function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
   if (weaponGateMusicRuntime.lowAfterComplete) {
     const sections = getBeatSwarmMusicIntensityAuditionSections();
     const low = sections.find((section) => section.id === 'low');
-    const medium = sections.find((section) => section.id === 'medium');
     const silent = sections.find((section) => section.id === 'silent');
     const barIndex = Math.max(0, Math.trunc(Number(barIndexLike) || 0));
     const sectionBar = Math.max(0, barIndex - Math.max(0, Math.trunc(Number(weaponGateMusicRuntime.startBar) || 0)));
     const foundationBuildActive = tapOrbAuthoringRuntime.themeId === 'bassDrive' && tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete();
-    const onboardingComplete = String(beatSwarmOnboardingRuntime.phase || '').trim().toLowerCase() === 'complete';
     const section = foundationBuildActive
       ? (silent || low)
-      : (onboardingComplete ? (medium || low) : low);
+      : low;
     const auditionMode = foundationBuildActive
       ? 'tap_orb_foundation_build'
-      : (onboardingComplete ? 'onboarding_complete_medium' : 'weapon_gate_low');
+      : 'onboarding_weapon_bass_accent_build';
     return section ? { ...section, barIndex, auditionBar: sectionBar, auditionSectionBar: sectionBar, introBars: 0, auditionMode } : null;
   }
   if (typeof globalThis === 'undefined') return null;
@@ -10971,7 +11017,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     quiet('answer');
   } else if (section === 'low') {
     activate('foundation', 0.32, 1);
-    if (weaponGateMusicRuntime.lowAfterComplete) quiet('secondary_loop');
+    if (weaponGateMusicRuntime.lowAfterComplete && !isPlayerMusicThemeAuthored('accentRhythm')) quiet('secondary_loop');
     else activate('secondary_loop', 0.18, 1);
     quiet('primary_loop');
     quiet('support');
@@ -16728,7 +16774,7 @@ function auditionLoopgridSubBoardStep(panel, stepIndex, when) {
   const noteIndex = Array.isArray(st.noteIndices) ? Math.max(0, Math.trunc(Number(st.noteIndices[step]) || 0)) : 0;
   const midi = Array.isArray(st.notePalette) ? Number(st.notePalette[Math.max(0, Math.min(st.notePalette.length - 1, noteIndex))]) : NaN;
   const note = Number.isFinite(midi) ? (normalizeSwarmNoteName(midiToName(midi)) || 'C3') : 'C3';
-  const instrument = String(panel.dataset.instrument || 'BASS TONE 4');
+  const instrument = String(panel.dataset.instrument || 'BASS TONE 3');
   const toyId = String(panel.__audioToyId || panel.dataset.audiotoyid || panel.id || 'master');
   try { triggerBeatSwarmInstrument(instrument, note, when, toyId, { source: 'beat-swarm-subboard-loopgrid', col: step, step, index: step }, 0.72); } catch {}
   return true;
@@ -17073,7 +17119,7 @@ function applySimpleRhythmThemeToPanel(theme, panel, chainIndex = 0) {
       }
       st.noteIndices = Array.from({ length: steps }, () => bestIdx);
     }
-    panel.dataset.instrument = data.instrumentId || 'BASS TONE 4';
+    panel.dataset.instrument = data.instrumentId || 'BASS TONE 3';
     panel.dataset.instrumentPersisted = '1';
     try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: panel.dataset.instrument, value: panel.dataset.instrument }, bubbles: true })); } catch {}
     try { panel.dispatchEvent(new CustomEvent('loopgrid:update', { detail: { reason: 'beat-swarm-theme-restore', steps: active.slice(), noteIndices: Array.isArray(st.noteIndices) ? st.noteIndices.slice() : [] } })); } catch {}
@@ -17083,7 +17129,7 @@ function applySimpleRhythmThemeToPanel(theme, panel, chainIndex = 0) {
   try {
     panel.__pendingLoopGridState = {
       steps: active.slice(),
-      instrument: data.instrumentId || 'BASS TONE 4',
+      instrument: data.instrumentId || 'BASS TONE 3',
     };
   } catch {}
   return false;
@@ -17265,7 +17311,7 @@ function snapshotMusicThemeSubBoard(themeId = '') {
         steps,
         active,
         patternChain,
-        instrumentId: String(panel.dataset.instrument || theme.data?.instrumentId || 'BASS TONE 4'),
+        instrumentId: String(panel.dataset.instrument || theme.data?.instrumentId || 'BASS TONE 3'),
         note,
         patternKey: active.map((v) => (v ? '1' : '0')).join(''),
       },
@@ -17916,7 +17962,7 @@ function clearStarfield() {
   if (starfieldLayerEl) {
     starfieldLayerEl.style.clipPath = '';
     starfieldLayerEl.style.webkitClipPath = '';
-    starfieldLayerEl.style.background = 'transparent';
+    starfieldLayerEl.style.background = '';
   }
 }
 function createStarElement(starMeta) {
@@ -17929,27 +17975,111 @@ function createStarElement(starMeta) {
   el.style.opacity = alpha.toFixed(3);
   return el;
 }
+function ensureSpaceBackdropElements() {
+  if (!starfieldLayerEl) return null;
+  let backdrop = starfieldLayerEl.querySelector('.beat-swarm-space-backdrop');
+  if (backdrop instanceof HTMLElement) return backdrop;
+  backdrop = document.createElement('div');
+  backdrop.className = 'beat-swarm-space-backdrop';
+  const cloud = document.createElement('div');
+  cloud.className = 'beat-swarm-nebula-cloud';
+  cloud.dataset.nx = '0.66';
+  cloud.dataset.ny = '0.34';
+  cloud.dataset.p = '0.94';
+  backdrop.appendChild(cloud);
+  const gasCloudSpecs = [
+    { nx: 0.18, ny: 0.72, p: 0.97, variant: 1 },
+    { nx: 0.74, ny: 0.18, p: 0.95, variant: 2 },
+    { nx: 0.48, ny: 0.46, p: 0.985, variant: 3 },
+    { nx: 0.88, ny: 0.78, p: 0.96, variant: 4 },
+  ];
+  gasCloudSpecs.forEach((spec) => {
+    const gas = document.createElement('div');
+    gas.className = `beat-swarm-gas-cloud is-${spec.variant}`;
+    gas.dataset.nx = String(spec.nx);
+    gas.dataset.ny = String(spec.ny);
+    gas.dataset.p = String(spec.p);
+    backdrop.appendChild(gas);
+  });
+  const parallaxStarSpecs = [
+    { nx: 0.05, ny: 0.12, p: 0.72, size: 2.5, opacity: 0.78 },
+    { nx: 0.11, ny: 0.31, p: 0.86, size: 1.7, opacity: 0.58 },
+    { nx: 0.16, ny: 0.72, p: 0.78, size: 2.2, opacity: 0.68 },
+    { nx: 0.22, ny: 0.18, p: 0.9, size: 1.5, opacity: 0.55 },
+    { nx: 0.27, ny: 0.86, p: 0.74, size: 3.1, opacity: 0.72 },
+    { nx: 0.33, ny: 0.42, p: 0.82, size: 2, opacity: 0.62 },
+    { nx: 0.38, ny: 0.08, p: 0.69, size: 2.8, opacity: 0.78 },
+    { nx: 0.44, ny: 0.67, p: 0.88, size: 1.6, opacity: 0.56 },
+    { nx: 0.49, ny: 0.27, p: 0.76, size: 2.3, opacity: 0.7 },
+    { nx: 0.55, ny: 0.91, p: 0.84, size: 1.8, opacity: 0.58 },
+    { nx: 0.61, ny: 0.36, p: 0.7, size: 3, opacity: 0.76 },
+    { nx: 0.66, ny: 0.14, p: 0.92, size: 1.4, opacity: 0.52 },
+    { nx: 0.72, ny: 0.78, p: 0.79, size: 2.4, opacity: 0.68 },
+    { nx: 0.79, ny: 0.23, p: 0.73, size: 2.7, opacity: 0.72 },
+    { nx: 0.84, ny: 0.59, p: 0.87, size: 1.7, opacity: 0.58 },
+    { nx: 0.91, ny: 0.81, p: 0.71, size: 3.3, opacity: 0.74 },
+    { nx: 0.95, ny: 0.39, p: 0.83, size: 2.1, opacity: 0.64 },
+    { nx: 0.18, ny: 0.52, p: 0.66, size: 3.8, opacity: 0.7, special: true },
+  ];
+  parallaxStarSpecs.forEach((spec, index) => {
+    const star = document.createElement('div');
+    star.className = spec.special === true
+      ? 'beat-swarm-large-star is-special'
+      : `beat-swarm-parallax-pixel-star is-${(index % 3) + 1}`;
+    star.dataset.nx = String(spec.nx);
+    star.dataset.ny = String(spec.ny);
+    star.dataset.p = String(spec.p);
+    const pixelSize = spec.special === true ? 112 : Math.max(1, Number(spec.size) || 2);
+    star.style.width = `${pixelSize}px`;
+    star.style.height = `${pixelSize}px`;
+    star.style.marginLeft = `${(-pixelSize / 2).toFixed(1)}px`;
+    star.style.marginTop = `${(-pixelSize / 2).toFixed(1)}px`;
+    star.style.opacity = String(spec.opacity);
+    backdrop.appendChild(star);
+  });
+  const specs = [
+    { nx: 0.16, ny: 0.24, p: 0.9, size: 42, hue: 'violet', moons: 1, orbit: 34, speed: 0.025 },
+    { nx: 0.82, ny: 0.68, p: 0.86, size: 58, hue: 'cyan', moons: 2, orbit: 44, speed: -0.018 },
+    { nx: 0.34, ny: 0.78, p: 0.92, size: 34, hue: 'pink', moons: 1, orbit: 29, speed: 0.033 },
+  ];
+  specs.forEach((spec, index) => {
+    const system = document.createElement('div');
+    system.className = `beat-swarm-planet-system is-${spec.hue}`;
+    system.dataset.nx = String(spec.nx);
+    system.dataset.ny = String(spec.ny);
+    system.dataset.p = String(spec.p);
+    system.dataset.orbitSpeed = String(spec.speed);
+    system.dataset.orbitSeed = String(index * 0.29);
+    const planet = document.createElement('div');
+    planet.className = 'beat-swarm-planet';
+    planet.style.width = `${spec.size}px`;
+    planet.style.height = `${spec.size}px`;
+    planet.style.marginLeft = `${(-spec.size / 2).toFixed(1)}px`;
+    planet.style.marginTop = `${(-spec.size / 2).toFixed(1)}px`;
+    system.appendChild(planet);
+    for (let moonIndex = 0; moonIndex < spec.moons; moonIndex += 1) {
+      const orbit = document.createElement('div');
+      orbit.className = 'beat-swarm-moon-orbit';
+      const orbitSize = spec.orbit + (moonIndex * 15);
+      orbit.dataset.offset = String(moonIndex / Math.max(1, spec.moons));
+      orbit.style.width = `${orbitSize * 2}px`;
+      orbit.style.height = `${orbitSize * 2}px`;
+      orbit.style.marginLeft = `${-orbitSize}px`;
+      orbit.style.marginTop = `${-orbitSize}px`;
+      const moon = document.createElement('div');
+      moon.className = 'beat-swarm-moon';
+      moon.style.transform = `translate(${orbitSize}px, 0)`;
+      orbit.appendChild(moon);
+      system.appendChild(orbit);
+    }
+    backdrop.appendChild(system);
+  });
+  try { starfieldLayerEl.prepend(backdrop); } catch { starfieldLayerEl.appendChild(backdrop); }
+  return backdrop;
+}
 function buildInfiniteStarfield(stars = null) {
   if (!starfieldLayerEl) return;
-  const source = Array.isArray(stars) ? stars : null;
-  const count = source ? source.length : SWARM_STARFIELD_COUNT;
-  for (let i = 0; i < count; i++) {
-    const meta = source?.[i] || {};
-    const p = source
-      ? Math.max(0.08, Math.min(0.98, Number(meta.p) || SWARM_STARFIELD_PARALLAX_MIN))
-      : (SWARM_STARFIELD_PARALLAX_MIN + ((SWARM_STARFIELD_PARALLAX_MAX - SWARM_STARFIELD_PARALLAX_MIN) * Math.pow(Math.random(), 0.65)));
-    const star = {
-      nx: source ? (Math.max(0, Math.min(1, Number(meta.nx) || 0))) : Math.random(),
-      ny: source ? (Math.max(0, Math.min(1, Number(meta.ny) || 0))) : Math.random(),
-      p,
-      size: source ? Math.max(1.05, Number(meta.size) || 1.45) : randRange(1.0, 2.35),
-      alpha: source ? Math.max(0.45, Number(meta.alpha) || 0.72) : randRange(0.45, 0.98),
-      el: null,
-    };
-    star.el = createStarElement(star);
-    try { starfieldLayerEl.appendChild(star.el); } catch {}
-    starfieldStars.push(star);
-  }
+  ensureSpaceBackdropElements();
 }
 function initStarfieldNear(centerWorld) {
   if (!centerWorld || !starfieldLayerEl) return;
@@ -17995,57 +18125,62 @@ function restoreStarfieldFromState(stateStarfield, centerWorld, anchorWorld = nu
   }
   buildInfiniteStarfield(sourceStars);
 }
+function updateSpaceBackdropVisual(w = window.innerWidth, h = window.innerHeight, camDxWorld = 0, camDyWorld = 0) {
+  const backdrop = ensureSpaceBackdropElements();
+  if (!(backdrop instanceof HTMLElement)) return;
+  const beatLen = Math.max(0.05, Number(getGameplayBeatLen()) || 0.44);
+  const nowSeconds = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now() * 0.001
+    : Date.now() * 0.001;
+  const beatPhase = nowSeconds / beatLen;
+  const elements = backdrop.querySelectorAll('[data-nx][data-ny]');
+  elements.forEach((el) => {
+    const nx = Math.max(0, Math.min(1, Number(el.dataset.nx) || 0.5));
+    const ny = Math.max(0, Math.min(1, Number(el.dataset.ny) || 0.5));
+    const p = Math.max(0.08, Math.min(0.98, Number(el.dataset.p) || 0.9));
+    const parallax = (1 - p) * 0.12;
+    const x = ((nx * w) - (camDxWorld * parallax));
+    const y = ((ny * h) - (camDyWorld * parallax));
+    el.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+    if (el.classList.contains('beat-swarm-planet-system')) {
+      const speed = Number(el.dataset.orbitSpeed) || 0.2;
+      const seed = Number(el.dataset.orbitSeed) || 0;
+      el.querySelectorAll('.beat-swarm-moon-orbit').forEach((orbit) => {
+        const offset = Number(orbit.dataset.offset) || 0;
+        const deg = ((beatPhase * speed + seed + offset) * 360) % 360;
+        orbit.style.transform = `rotate(${deg.toFixed(2)}deg)`;
+      });
+    }
+  });
+}
 function updateStarfieldVisual() {
-  if (!starfieldStars.length || !starfieldLayerEl) return;
-  starfieldVisualPhase += 0.016 * Math.max(0.1, Number(starfieldSectionRuntime.twinkleRate) || 0.45);
-  const burst01 = starfieldSectionRuntime.entryBurstDur > 0
-    ? Math.max(0, Math.min(1, starfieldSectionRuntime.entryBurstT / Math.max(0.001, starfieldSectionRuntime.entryBurstDur)))
-    : 0;
-  const burstStrength = Math.max(0, Number(starfieldSectionRuntime.entryBurstStrength) || 0) * burst01;
-  const parallaxIntensity = Math.max(0.5, Number(starfieldSectionRuntime.parallaxIntensity) || 1) * (1 + (burstStrength * 0.25));
-  const density = Math.max(0.2, Math.min(1, Number(starfieldSectionRuntime.density) || 0.72));
-  const pulseStrength = Math.max(0, Math.min(1, Number(starfieldSectionRuntime.pulseStrength) || 0.2));
-  const camWorld = getViewportCenterWorld();
-  const z = getZoomState();
-  const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
-  const anchor = starfieldParallaxAnchorWorld || camWorld;
-  const camDxPx = ((Number(camWorld?.x) || 0) - (Number(anchor?.x) || 0)) * Math.max(0.001, scale || 1);
-  const camDyPx = ((Number(camWorld?.y) || 0) - (Number(anchor?.y) || 0)) * Math.max(0.001, scale || 1);
-  const splitPoint = worldToScreen({ x: Number(starfieldSplitWorldX) || 0, y: Number(camWorld?.y) || 0 });
-  const splitX = Math.max(0, Math.min(window.innerWidth, Number(splitPoint?.x) || 0));
-  const rightW = Math.max(0, window.innerWidth - splitX);
+  if (!starfieldLayerEl) return;
+  if (!starfieldStars.length) buildInfiniteStarfield();
+  starfieldVisualPhase += 0.004;
   const w = Math.max(1, window.innerWidth);
   const h = Math.max(1, window.innerHeight);
-  if (rightW <= 0.5) {
-    starfieldLayerEl.style.clipPath = '';
-    starfieldLayerEl.style.webkitClipPath = '';
-    starfieldLayerEl.style.background = 'transparent';
-    for (const star of starfieldStars) {
-      if (star.el) star.el.style.opacity = '0';
-    }
-    return;
-  }
-  starfieldLayerEl.style.background = String(starfieldSectionRuntime.tint || '#000000') || '#000000';
-  const clip = `inset(0px 0px 0px ${splitX.toFixed(2)}px)`;
-  starfieldLayerEl.style.clipPath = clip;
-  starfieldLayerEl.style.webkitClipPath = clip;
+  const camWorld = getViewportCenterWorld();
+  const anchor = starfieldParallaxAnchorWorld || camWorld;
+  const camDxWorld = (Number(camWorld?.x) || 0) - (Number(anchor?.x) || 0);
+  const camDyWorld = (Number(camWorld?.y) || 0) - (Number(anchor?.y) || 0);
+  starfieldLayerEl.hidden = false;
+  starfieldLayerEl.style.background = '';
+  starfieldLayerEl.style.clipPath = '';
+  starfieldLayerEl.style.webkitClipPath = '';
+  updateSpaceBackdropVisual(w, h, camDxWorld, camDyWorld);
   for (let i = 0; i < starfieldStars.length; i++) {
     const star = starfieldStars[i];
     const p = Math.max(0.08, Math.min(0.98, Number(star.p) || 0.82));
     const baseX = (Math.max(0, Math.min(1, Number(star.nx) || 0)) * w);
     const baseY = (Math.max(0, Math.min(1, Number(star.ny) || 0)) * h);
-    const shiftX = -camDxPx * (1 - p) * SWARM_STARFIELD_PARALLAX_SHIFT_SCALE * parallaxIntensity;
-    const shiftY = -camDyPx * (1 - p) * SWARM_STARFIELD_PARALLAX_SHIFT_SCALE * parallaxIntensity;
-    let localX = baseX + shiftX;
-    let localY = baseY + shiftY;
+    const parallax = (1 - p) * 0.18;
+    let localX = baseX - (camDxWorld * parallax);
+    let localY = baseY - (camDyWorld * parallax);
     localX = ((localX % w) + w) % w;
     localY = ((localY % h) + h) % h;
     if (star.el) {
-      const twinkle = 0.76 + (0.24 * Math.sin(starfieldVisualPhase + (i * 0.91)));
-      const densityGate = (i / Math.max(1, starfieldStars.length)) <= density ? 1 : 0;
       const baseAlpha = Math.max(0.45, Math.min(1, Number(star.alpha) || 0.78));
-      const pulse = 1 + (pulseStrength * 0.18 * Math.sin((starfieldVisualPhase * 0.75) + (i * 0.12)));
-      const alpha = baseAlpha * twinkle * pulse * densityGate;
+      const alpha = baseAlpha * (0.92 + (0.08 * Math.sin(starfieldVisualPhase + (i * 0.71))));
       star.el.style.opacity = `${Math.max(0, Math.min(1, alpha)).toFixed(3)}`;
       star.el.style.transform = `translate(${localX.toFixed(2)}px, ${localY.toFixed(2)}px)`;
     }
@@ -18673,10 +18808,18 @@ function damageEnemiesNearTapOrb(world = null, radiusWorld = 180, amount = 8) {
 function isTapOrbFoundationBuildWaiting() {
   return isTapOrbBassDriveAuthoringActive() && tapOrbRuntime.isActive() && !tapOrbRuntime.isFoundationComplete();
 }
+function countAvailableCombatTargets() {
+  return enemies.filter((enemy) => {
+    if (!enemy || enemy.__bsRemoved === true || Number(enemy.hp) <= 0 || enemy.retreating === true) return false;
+    if (enemy.musicMissileCarrier === true || enemy.tapOrbCarrier === true) return false;
+    return true;
+  }).length;
+}
 function spawnMusicMissileCarrierEnemy(centerWorld = null) {
   if (!enemyLayerEl || !musicMissileRuntime.isActive() || !musicMissileRuntime.shouldSpawnCarrier()) return false;
   const existingCarrier = enemies.some((enemy) => enemy?.musicMissileCarrier === true && Number(enemy?.hp) > 0 && enemy?.__bsRemoved !== true);
   if (existingCarrier) return false;
+  if (weaponGateOnboardingSequenceMode === 'missiles_bouncers' && countAvailableCombatTargets() < 6) return false;
   const center = centerWorld && typeof centerWorld === 'object'
     ? centerWorld
     : (arenaCenterWorld || getViewportCenterWorld());
@@ -18821,6 +18964,9 @@ function resetWeaponGateTapOrbOnboardingState() {
   beatSwarmMusicEventRuntime.reset();
   try { musicMissileRuntime.stop(); } catch {}
   musicMissileAuthoringRuntime.completeOnboardingOnHandoff = false;
+  musicMissileAuthoringRuntime.chainPinballBouncersOnHandoff = false;
+  musicMissileAuthoringRuntime.chainPinballBouncersStarted = false;
+  pinballBouncerAuthoringRuntime.handoffPublished = false;
   tapOrbAuthoringRuntime.themeId = 'bassDrive';
   tapOrbAuthoringRuntime.laneId = 'foundation_lane';
   tapOrbAuthoringRuntime.eventType = 'rhythm_rewrite';
@@ -18910,25 +19056,6 @@ function applyBeatSwarmFramePressureBudget(nowMs = performance.now()) {
   if (lastFrameMs >= 140) beatSwarmFramePressureRuntime.severeUntilMs = Math.max(beatSwarmFramePressureRuntime.severeUntilMs, now + 1800);
   const severe = now < Math.max(0, Number(beatSwarmFramePressureRuntime.severeUntilMs) || 0);
   const degraded = severe || now < Math.max(0, Number(beatSwarmFramePressureRuntime.degradedUntilMs) || 0);
-  if (degraded && (now - (Number(beatSwarmFramePressureRuntime.lastCullMs) || 0)) >= 350) {
-    beatSwarmFramePressureRuntime.lastCullMs = now;
-    const maxEnemies = severe ? 26 : 36;
-    if (enemies.length > maxEnemies) {
-      const candidates = enemies
-        .map((enemy, index) => ({ enemy, index, priority: getEnemyPressureCullPriority(enemy) }))
-        .sort((a, b) => (a.priority - b.priority) || (a.index - b.index));
-      let removeCount = enemies.length - maxEnemies;
-      for (const item of candidates) {
-        if (removeCount <= 0) break;
-        if (!item?.enemy) continue;
-        const idx = enemies.indexOf(item.enemy);
-        if (idx < 0) continue;
-        removeEnemy(item.enemy, severe ? 'frame_pressure_severe_cull' : 'frame_pressure_cull');
-        enemies.splice(idx, 1);
-        removeCount -= 1;
-      }
-    }
-  }
   return { degraded, severe };
 }
 function syncBeatSwarmFramePressureVisualState(framePressure) {
@@ -24525,6 +24652,12 @@ function updateBeatWeapons(centerWorld) {
     && !tapOrbRuntime.isFoundationComplete()
     && !tapOrbRuntime.hasActivatedFoundationBeat();
   const suppressedMusicLaneIds = new Set();
+  const onboardingAssemblyActive = weaponGateOnboardingSequenceMode === 'missiles_bouncers'
+    && String(beatSwarmOnboardingRuntime.phase || '').trim().toLowerCase() !== 'idle';
+  const onboardingBassAuthored = isPlayerMusicThemeAuthored('bassDrive');
+  const onboardingAccentAuthored = isPlayerMusicThemeAuthored('accentRhythm');
+  const onboardingMissileAuthoringActive = onboardingAssemblyActive
+    && (isMusicMissileRewriteActive() || isMusicMissilePostCompletePlaybackActive());
   if (tapOrbRuntime.isActive()) {
     const authoredLaneId = String(tapOrbAuthoringRuntime.laneId || '').trim().toLowerCase();
     if (authoredLaneId) suppressedMusicLaneIds.add(authoredLaneId);
@@ -24533,10 +24666,17 @@ function updateBeatWeapons(centerWorld) {
     const missileLaneId = String(musicMissileRuntime.getSnapshot()?.laneId || '').trim().toLowerCase();
     if (missileLaneId) suppressedMusicLaneIds.add(missileLaneId);
   }
+  if (onboardingAssemblyActive) {
+    suppressedMusicLaneIds.add('primary_loop_lane');
+    suppressedMusicLaneIds.add('sparkle_lane');
+    suppressedMusicLaneIds.add('answer_lane');
+    if (!onboardingBassAuthored) suppressedMusicLaneIds.add('foundation_lane');
+    if (!onboardingAccentAuthored) suppressedMusicLaneIds.add('secondary_loop_lane');
+  }
   const stepState = {
     lastSpawnerEnemyStepIndex,
     lastWeaponTuneStepIndex,
-    suppressDirectorMusic: tapOrbAwaitingFirstFoundationTap,
+    suppressDirectorMusic: tapOrbAwaitingFirstFoundationTap || (onboardingMissileAuthoringActive && !onboardingBassAuthored),
     suppressedMusicLaneIds: suppressedMusicLaneIds.size ? suppressedMusicLaneIds : null,
     musicModeRuntime: activeMusicModeRuntime,
     enemyDirectorRuntime: activeEnemyDirectorRuntime,
@@ -26530,7 +26670,7 @@ function addPinballShockwaveEffect(centerW) {
         at: { x: entry.wx, y: entry.wy },
         sourceCenter: { x: Number(centerW.x) || 0, y: Number(centerW.y) || 0 },
         targetEnemyId: entry.enemyId,
-        radiusWorld: 285,
+        radiusWorld: 170,
         shockwaveDamage: 3,
         shockwavePushPower: 1250,
         source: 'scheduled_shockwave_snapshot',
@@ -26846,9 +26986,7 @@ function tick(nowMs) {
     updateWeaponSubBoardSession();
     updateMusicThemeSubBoardSession();
   });
-  if (!framePressure.degraded || (perfFrameIndex % 8) === 0) {
-    withBeatSwarmPerfSample('starfield', () => updateStarfieldVisual());
-  }
+  withBeatSwarmPerfSample('starfield', () => updateStarfieldVisual());
   enemyHealthRampSeconds = Math.max(0, Number(enemyHealthRampSeconds) || 0) + dt;
   updateEnemySpawnHealthScaling();
   updateSpawnHealthDebugUi();
@@ -26966,7 +27104,7 @@ function tick(nowMs) {
     if (gatePrelaunchActive) {
       gateFacingDeg = weaponGateCurrentRuntime.releaseAngleDeg + 90;
     } else if (gateInputHeld) {
-      gateFacingDeg = (Math.atan2(-inputY, -inputX) * 180 / Math.PI) + 90;
+      gateFacingDeg = (Math.atan2(inputY, inputX) * 180 / Math.PI) + 90;
     } else {
       gateFacingDeg = (Math.atan2(appliedIntroSideDelta, Math.max(0.001, introForwardDelta)) * 180 / Math.PI) + 90;
       gateFacingTurnRate = 2.35;
@@ -27098,10 +27236,10 @@ function tick(nowMs) {
   }
   withBeatSwarmPerfSample('tapOrbFoundation', () => updateTapOrbFoundationBuild(dt, centerWorldAfterMove));
   withBeatSwarmPerfSample('musicMissileEvent', () => {
+    spawnMusicMissileCarrierEnemy(centerWorldAfterMove);
     musicMissileRuntime.update(dt);
     pinballBouncerRuntime.update(dt);
     updateMusicMissileCameraZoom(dt, centerWorldAfterMove);
-    spawnMusicMissileCarrierEnemy(centerWorldAfterMove);
   });
   withBeatSwarmPerfSample('pickupsCombat', () => updatePickupsAndCombat(dt));
   withBeatSwarmPerfSample('spawnerRuntime', () => {
@@ -27287,6 +27425,9 @@ function unbindInput() {
 }
 export function enterBeatSwarmMode(options = null) {
   const enterOptions = options && typeof options === 'object' ? options : {};
+  weaponGateOnboardingSequenceMode = String(enterOptions.weaponGateSequence || '').trim() === 'missiles_bouncers'
+    ? 'missiles_bouncers'
+    : 'tap_orbs_missiles';
   if (active) {
     if (enterOptions.weaponGateIntro === true) {
       resetWeaponGateTapOrbOnboardingState();
@@ -27336,11 +27477,11 @@ export function enterBeatSwarmMode(options = null) {
   window.__beatSwarmActive = true;
   document.body.classList.add('beat-swarm-active');
   try { window.ToySpawner?.close?.(); } catch {}
-  if (overlayEl) overlayEl.hidden = true;
+  if (overlayEl) overlayEl.hidden = false;
   if (exitBtn) exitBtn.hidden = false;
-  if (starfieldLayerEl) starfieldLayerEl.hidden = true;
+  if (starfieldLayerEl) starfieldLayerEl.hidden = false;
   if (spawnerLayerEl) spawnerLayerEl.hidden = true;
-  if (enemyLayerEl) enemyLayerEl.hidden = true;
+  if (enemyLayerEl) enemyLayerEl.hidden = false;
   setJoystickVisible(false);
   setThrustFxVisual(false);
   clearEnemies();
@@ -27512,6 +27653,7 @@ export function enterBeatSwarmMode(options = null) {
 export function exitBeatSwarmMode() {
   if (!active) return true;
   try { weaponGateIntroRuntime.stop(); } catch {}
+  weaponGateOnboardingSequenceMode = 'tap_orbs_missiles';
   try { setSoundThemeKey(beatSwarmPreviousSoundThemeKey); } catch {}
   beatSwarmPreviousSoundThemeKey = '';
   beatSwarmOnboardingState.reset();

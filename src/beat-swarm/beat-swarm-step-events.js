@@ -1075,7 +1075,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       }
       finishShapeEmittersBassPerf();
     }
-    if (!suppressDirectorMusic && typeof helpers.createPrimaryLoopLaneEvent === 'function') {
+    if (!suppressDirectorMusic && !isLaneSuppressed('primary_loop_lane') && typeof helpers.createPrimaryLoopLaneEvent === 'function') {
       const finishShapeEmittersLoopPerf = createDirectPerfMark('pickupsCombat.weaponRuntime.stepChange.processEvents.shape.emitters.loop');
       const primaryLoopEvent = helpers.createPrimaryLoopLaneEvent({
         beatIndex,
@@ -2181,7 +2181,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const instrumentId = String(
       helpers.getPlayerSimpleRhythmThemeInstrumentId?.('bassDrive')
         || foundationLaneRuntime?.instrumentId
-        || 'BASS TONE 4'
+        || 'BASS TONE 3'
     ).trim();
     const noteName = String(helpers.getPlayerSimpleRhythmThemeNote?.('bassDrive') || 'C3').trim() || 'C3';
     const actorId = Math.max(0, Math.trunc(Number(foundationLaneRuntime?.performerEnemyId) || 0));
@@ -2258,6 +2258,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   })();
   const explicitPlayerLeadThemeEvent = (() => {
     if (suppressDirectorMusic) return null;
+    if (isLaneSuppressed('primary_loop_lane')) return null;
     const { stage, sectionBar } = getDirectorMotifBedStageState();
     if (stage !== 'build' && stage !== 'peak' && stage !== 'release' && stage !== 'settle') return null;
     const buildLeadSupplement = stage === 'build' && sectionBar >= 3;
@@ -2424,13 +2425,14 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (suppressDirectorMusic) return null;
     if (isLaneSuppressed('secondary_loop_lane')) return null;
     const { stage, sectionBar } = getDirectorMotifBedStageState();
-    if (stage !== 'medium' && stage !== 'build' && stage !== 'peak') return null;
+    const authoredContinuity = helpers.isPlayerMusicThemeAuthored?.('accentRhythm') === true;
+    if (stage !== 'low' && stage !== 'medium' && stage !== 'build' && stage !== 'peak') return null;
+    if (stage === 'low' && !authoredContinuity) return null;
     const phrase = helpers.getPlayerAccentRhythmMotionPhrase?.(barIndex, `intensity_${stage}`, {
       sectionRelative: true,
       sectionBar,
       layerKey: 'backbeat',
     }) || null;
-    const authoredContinuity = helpers.isPlayerMusicThemeAuthored?.('accentRhythm') === true;
     const authoredStep = authoredContinuity
       ? (helpers.getPlayerSimpleRhythmThemePlaybackStep?.('accentRhythm', stepIndex) || null)
       : null;
@@ -2531,7 +2533,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         callResponsePhraseProgress: authoredStep?.sequenceStep ?? localStep,
         musicRegister: 'high',
         musicProminence: authoredContinuity ? 'full' : (stage === 'medium' ? 'quiet' : 'full'),
-        audioGain: authoredContinuity ? 0.62 : (stage === 'peak' ? 0.62 : (stage === 'build' ? 0.56 : 0.42)),
+        audioGain: authoredContinuity ? (stage === 'low' ? 0.58 : 0.62) : (stage === 'peak' ? 0.62 : (stage === 'build' ? 0.56 : 0.42)),
         requestedNoteRaw: noteName,
         preserveRequestedNote: true,
         intensityAuditionSection: stage,

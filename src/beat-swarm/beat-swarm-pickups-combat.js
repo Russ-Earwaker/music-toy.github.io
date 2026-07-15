@@ -517,14 +517,9 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
                   ttl: 0.6,
                   duration: 0.6,
                   at: impactAt,
-                  radiusWorld: Math.max(220, (Number(constants.explosionRadiusWorld) || 180) * 1.35),
+                  radiusWorld: Math.max(150, (Number(constants.explosionRadiusWorld) || 180) * 0.9),
                   el: impactEl,
                 });
-                helpers.addMusicExplosionEffect?.(
-                  impactAt,
-                  Math.max(260, (Number(constants.explosionRadiusWorld) || 180) * 1.55),
-                  0.68
-                );
                 helpers.noteMusicSystemEvent?.('pinball_shockwave_enemy_hit_fx_spawned', {
                   enemyId,
                   source,
@@ -718,7 +713,6 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
                   target.vx = (Number(target.vx) || 0) + ((Number(dir.x) || 0) * Math.max(0, Number(fx.shockwavePushPower) || 0));
                   target.vy = (Number(target.vy) || 0) + ((Number(dir.y) || 0) * Math.max(0, Number(fx.shockwavePushPower) || 0));
                   helpers.damageEnemy?.(target, Math.max(0, Number(fx.shockwaveDamage) || 0));
-                  helpers.addMusicExplosionEffect?.(fx.at, Math.max(260, Number(fx.radiusWorld) || 285), 0.68);
                   helpers.noteMusicSystemEvent?.('pinball_shockwave_enemy_hit_fx_spawned', {
                     enemyId: Math.trunc(Number(fx.targetEnemyId) || 0),
                     source: String(fx.source || 'scheduled_shockwave_snapshot'),

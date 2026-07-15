@@ -3215,7 +3215,8 @@ body.internal-board-active #board-main {
 }
 
 .beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-star {
-  display: none !important;
+  opacity: .38 !important;
+  box-shadow: 0 0 3px rgba(184, 222, 255, 0.36);
 }
 
 .beat-swarm-overlay.is-frame-pressure-low-detail .beat-swarm-enemy,
@@ -4437,7 +4438,188 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   inset: 0;
   pointer-events: none;
   overflow: hidden;
+  background:
+    linear-gradient(rgba(0, 0, 0, .12), rgba(0, 0, 0, .18)),
+      url("./src/art/BeatSwarm/Starfield.png") center center / cover no-repeat,
+    #000;
   z-index: 0;
+}
+
+.beat-swarm-space-backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.beat-swarm-nebula-cloud {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: min(62vw, 760px);
+  height: min(42vw, 500px);
+  margin-left: max(-31vw, -380px);
+  margin-top: max(-21vw, -250px);
+  opacity: .36;
+  mix-blend-mode: screen;
+  filter: blur(12px) saturate(1.22);
+  background:
+    radial-gradient(ellipse at 36% 48%, rgba(87, 205, 255, .38) 0 12%, rgba(87, 205, 255, .22) 24%, transparent 56%),
+    radial-gradient(ellipse at 64% 42%, rgba(255, 80, 225, .32) 0 10%, rgba(142, 67, 255, .22) 31%, transparent 63%),
+    radial-gradient(ellipse at 50% 62%, rgba(139, 228, 255, .18) 0 18%, transparent 58%),
+    linear-gradient(130deg, transparent 0 18%, rgba(135, 70, 255, .18) 34%, rgba(78, 205, 255, .14) 54%, transparent 82%);
+  border-radius: 48% 56% 45% 62%;
+}
+
+.beat-swarm-gas-cloud {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: min(170vw, 2040px);
+  aspect-ratio: 1.62;
+  margin-left: max(-85vw, -1020px);
+  margin-top: max(-52vw, -625px);
+  pointer-events: none;
+  opacity: .34;
+  mix-blend-mode: screen;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter: saturate(1.24) contrast(1.08) brightness(1.12);
+  z-index: 0;
+}
+
+.beat-swarm-gas-cloud.is-1 {
+  width: min(190vw, 2260px);
+  opacity: .32;
+  background-image: url("./src/art/BeatSwarm/GasCloud1-rgba.png");
+  transform: rotate(-8deg);
+}
+
+.beat-swarm-gas-cloud.is-2 {
+  width: min(158vw, 1900px);
+  opacity: .29;
+  background-image: url("./src/art/BeatSwarm/GasCloud2-rgba.png");
+  transform: rotate(9deg);
+}
+
+.beat-swarm-gas-cloud.is-3 {
+  width: min(210vw, 2500px);
+  opacity: .25;
+  background-image: url("./src/art/BeatSwarm/GasCloud3-rgba.png");
+  transform: rotate(2deg);
+}
+
+.beat-swarm-gas-cloud.is-4 {
+  width: min(148vw, 1780px);
+  opacity: .28;
+  background-image: url("./src/art/BeatSwarm/GasCloud4-rgba.png");
+  transform: rotate(-15deg);
+}
+
+.beat-swarm-parallax-pixel-star {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  background: rgba(228, 244, 255, .95);
+  border-radius: 1px;
+  box-shadow: 0 0 4px rgba(196, 226, 255, .58);
+  z-index: 1;
+}
+
+.beat-swarm-parallax-pixel-star.is-2 {
+  background: rgba(255, 218, 250, .92);
+  box-shadow: 0 0 5px rgba(255, 175, 245, .45);
+}
+
+.beat-swarm-parallax-pixel-star.is-3 {
+  background: rgba(196, 246, 255, .94);
+  box-shadow: 0 0 5px rgba(128, 228, 255, .46);
+}
+
+.beat-swarm-large-star {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  background: url("./src/art/BeatSwarm/starLarge.png") center center / contain no-repeat;
+  mix-blend-mode: screen;
+  filter:
+    saturate(1.22)
+    brightness(1.18)
+    drop-shadow(0 0 16px rgba(255, 255, 255, .48))
+    drop-shadow(0 0 36px rgba(165, 210, 255, .38));
+  z-index: 1;
+}
+
+.beat-swarm-planet-system {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  opacity: .76;
+  filter: drop-shadow(0 0 10px rgba(130, 185, 255, .2));
+}
+
+.beat-swarm-planet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, .34) 0 8%, transparent 25%),
+    radial-gradient(circle at 70% 76%, rgba(0, 0, 0, .52) 0 35%, transparent 68%),
+    url("./src/art/BeatSwarm/planet-rgba.png") center center / cover no-repeat;
+  box-shadow:
+    inset -12px -10px 18px rgba(0, 0, 0, .64),
+    inset 9px 7px 12px rgba(255, 255, 255, .18),
+    0 0 16px rgba(154, 202, 255, .22);
+}
+
+.beat-swarm-planet-system.is-violet .beat-swarm-planet {
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, .34) 0 8%, transparent 25%),
+    radial-gradient(circle at 70% 76%, rgba(0, 0, 0, .52) 0 35%, transparent 68%),
+    url("./src/art/BeatSwarm/planet2-rgba.png") center center / cover no-repeat;
+  filter: hue-rotate(260deg) saturate(1.18);
+}
+
+.beat-swarm-planet-system.is-cyan .beat-swarm-planet {
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, .34) 0 8%, transparent 25%),
+    radial-gradient(circle at 70% 76%, rgba(0, 0, 0, .52) 0 35%, transparent 68%),
+    url("./src/art/BeatSwarm/planet3-rgba.png") center center / cover no-repeat;
+  filter: hue-rotate(185deg) saturate(1.1);
+}
+
+.beat-swarm-planet-system.is-pink .beat-swarm-planet {
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, .34) 0 8%, transparent 25%),
+    radial-gradient(circle at 70% 76%, rgba(0, 0, 0, .52) 0 35%, transparent 68%),
+    url("./src/art/BeatSwarm/planet4-rgba.png") center center / cover no-repeat;
+  filter: hue-rotate(310deg) saturate(1.2);
+}
+
+.beat-swarm-moon-orbit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(188, 218, 255, .08);
+  transform-origin: 50% 50%;
+}
+
+.beat-swarm-moon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: rgba(227, 243, 255, .92);
+  box-shadow: 0 0 8px rgba(185, 226, 255, .45);
 }
 
 .beat-swarm-star {
@@ -4451,6 +4633,7 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   box-shadow: 0 0 6px rgba(184, 222, 255, 0.5);
   transform: translate(-9999px, -9999px);
   opacity: 0;
+  z-index: 2;
 }
 
 .beat-swarm-arena-ring {
@@ -7367,22 +7550,22 @@ body.beat-swarm-active.internal-board-active .app-topbar {
   margin-left: 0;
   margin-top: 0;
   border-radius: 50%;
-  border: 8px solid rgba(255, 255, 255, 0.98);
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.94) 0 13%, rgba(255, 74, 226, 0.44) 38%, transparent 76%);
+  border: 5px solid rgba(255, 255, 255, 0.94);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 9%, rgba(255, 74, 226, 0.28) 34%, transparent 72%);
   box-shadow:
-    0 0 30px rgba(255, 255, 255, 0.98),
-    0 0 64px rgba(255, 68, 226, 0.9),
-    inset 0 0 24px rgba(255, 255, 255, 0.42);
+    0 0 18px rgba(255, 255, 255, 0.82),
+    0 0 38px rgba(255, 68, 226, 0.62),
+    inset 0 0 16px rgba(255, 255, 255, 0.28);
   pointer-events: none;
 }
 
 .beat-swarm-fx-pinball-shockwave-hit.is-debug-visible::before {
   content: "";
   position: absolute;
-  inset: 18%;
+  inset: 24%;
   border-radius: 50%;
-  border: 4px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 0 22px rgba(255, 255, 255, 0.88);
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.72);
 }
 body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-header,
 body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-header *,

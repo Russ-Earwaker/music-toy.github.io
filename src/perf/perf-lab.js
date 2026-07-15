@@ -455,7 +455,7 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
-        ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Tap Orbs + Missiles (1x180s)', 'primary')}
+        ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Missiles + Bouncers (1x180s)', 'primary')}
         ${btn('musicLabRunBS0S3MusicMissileBassRewriteDebug', 'Test Reuse Matrix: Missiles/Tap Orbs -> Bass/Accent (1x360s)', 'primary')}
         ${btn('musicLabRunBS0S3PinballBouncerRewriteDebug', 'Pinball Bouncer Accent Rewrite (1x120s)', 'primary')}
       </div>`,
@@ -1517,7 +1517,7 @@ function ensureUI() {
       await runBS0s3MusicLabMusicMissileRewriteDebug120s({
         themeId: 'bassDrive',
         laneId: 'foundation_lane',
-        expectedInstrument: 'BASS TONE 4',
+        expectedInstrument: 'BASS TONE 3',
         durationMs: 360000,
         followupEvents: [
           { interaction: 'music_missile', themeId: 'accentRhythm', laneId: 'secondary_loop_lane' },
@@ -6576,7 +6576,7 @@ async function runBS0s3MusicLabTapOrbFoundationDebug75s() {
       }
       const result = apply(debugPattern, {
         source: 'perf_lab_tap_orb_foundation_debug',
-        instrumentId: 'BASS TONE 4',
+        instrumentId: 'BASS TONE 3',
         note: 'C3',
       });
       const bassTheme = (() => {
@@ -6585,7 +6585,7 @@ async function runBS0s3MusicLabTapOrbFoundationDebug75s() {
       try {
         window.__beatSwarmTapOrbFoundationDebugExpected = {
           patternChain: debugPatternKey.slice(),
-          instrumentId: 'BASS TONE 4',
+          instrumentId: 'BASS TONE 3',
           note: 'C3',
           result,
           bassTheme,
@@ -6595,7 +6595,7 @@ async function runBS0s3MusicLabTapOrbFoundationDebug75s() {
         ok: true,
         setup: 'tap_orb_foundation_debug_pattern_applied',
         expectedPatternChain: debugPatternKey,
-        expectedInstrumentId: 'BASS TONE 4',
+        expectedInstrumentId: 'BASS TONE 3',
         expectedNote: 'C3',
         result,
         bassTheme,
@@ -6604,12 +6604,12 @@ async function runBS0s3MusicLabTapOrbFoundationDebug75s() {
     saveRunIdBase: 'musicLab_bs0_s3_tap_orb_foundation_debug_1x75s',
     saveNotes: [
       'Beat Swarm Music Lab tap-orb foundation debug: seed the completed tap-orb Bass Drive motif as two 8-step toys, then run fixed Low Intensity with no intro.',
-      `Expected Bass Drive patternChain=${debugPatternKey.join('|')}, instrument=BASS TONE 4, note=C3.`,
+      `Expected Bass Drive patternChain=${debugPatternKey.join('|')}, instrument=BASS TONE 3, note=C3.`,
       'Validate that the committed pause-menu Bass Drive motif and the director foundation lane match the seeded two-toy rhythm, without instrument substitution.',
     ].join(' '),
     groupedScenarioName: 'retro_shooter_tap_orb_foundation_debug_1x75s',
     groupedRunId: 'musicLab_bs0_s3_tap_orb_foundation_debug_1x75s_scenario',
-    groupedNotes: `Tap-orb foundation debug scenario: expected two-toy Bass Drive pattern ${debugPatternKey.join('|')} at BASS TONE 4 / C3.`,
+    groupedNotes: `Tap-orb foundation debug scenario: expected two-toy Bass Drive pattern ${debugPatternKey.join('|')} at BASS TONE 3 / C3.`,
     tagPrefix: 'BS0S3TapOrbFoundationDebug1x75s',
     labelPrefix: 'BS0_stage3_beatswarm_tap_orb_foundation_debug_1x75s',
     statusPrefix: 'Running BS0 S3 tap-orb foundation commit debug (75 seconds, compact save)',
@@ -6692,7 +6692,7 @@ async function runBS0s3MusicLabMusicMissileRewriteDebug120s(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const themeId = String(opts.themeId || 'accentRhythm').trim() || 'accentRhythm';
   const laneId = String(opts.laneId || 'secondary_loop_lane').trim() || 'secondary_loop_lane';
-  const expectedInstrument = String(opts.expectedInstrument || (laneId === 'foundation_lane' ? 'BASS TONE 4' : 'CLICK PERCUSSION SHORT')).trim();
+  const expectedInstrument = String(opts.expectedInstrument || (laneId === 'foundation_lane' ? 'BASS TONE 3' : 'CLICK PERCUSSION SHORT')).trim();
   const targetSlug = `${themeId}_${laneId}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
   const targetLabel = themeId === 'bassDrive' ? 'Bass Drive' : (themeId === 'accentRhythm' ? 'Accent Rhythm' : themeId);
   const durationMs = Math.max(30000, Math.trunc(Number(opts.durationMs) || 120000));
@@ -6921,44 +6921,43 @@ async function runBS0s3MusicLabGateStartTapOrbHandoffDebug150s() {
       }
       try { api.exit?.(); } catch {}
       await waitForPerfLabMs(80);
-      try { api.enter?.({ weaponGateIntro: true }); } catch (err) {
+      try { api.enter?.({ weaponGateIntro: true, weaponGateSequence: 'missiles_bouncers' }); } catch (err) {
         throw new Error(`weapon_gate_intro_start_failed:${String(err?.message || err)}`);
       }
       try { if (!isRunning()) startTransport(); } catch {}
       try {
         window.__beatSwarmGateStartTapOrbDebugExpected = {
-          mode: 'gate_foundation_missile_sequence',
-          expectedFoundationTheme: 'bassDrive',
-          expectedInstrumentFromTheme: 'BASS TONE 4',
+          mode: 'gate_missile_pinball_sequence',
+          expectedMissileTheme: 'bassDrive',
+          expectedPinballTheme: 'accentRhythm',
           traceEvents: [
-            'tap_orb_foundation_rewrite_started',
-            'tap_orb_foundation_activated',
-            'tap_orb_foundation_committed_to_bass_drive',
-            'tap_orb_foundation_lane_resolved',
             'music_missile_rewrite_started',
             'music_missile_quantized_explosion',
             'music_missile_rewrite_committed_to_theme',
+            'pinball_bouncer_rewrite_started',
+            'pinball_bouncer_quantized_impact',
+            'pinball_bouncer_rewrite_committed_to_theme',
           ],
         };
       } catch {}
       setOutput({
         ok: true,
-        setup: 'weapon_gate_foundation_missile_sequence_started',
-        notes: 'Complete the gate corridor, author Bass Drive with tap orbs, then author Accent Rhythm with music missiles.',
+        setup: 'weapon_gate_missile_pinball_sequence_started',
+        notes: 'Complete the gate corridor, author Bass Drive with rocket pickups, then author Accent Rhythm with pinball bouncers.',
       });
     },
-    saveRunIdBase: 'musicLab_bs0_s3_gate_foundation_missile_sequence_1x180s',
+    saveRunIdBase: 'musicLab_bs0_s3_gate_missile_pinball_sequence_1x180s',
     saveNotes: [
-      'Beat Swarm Music Lab onboarding sequence: run the real gate corridor, event-driven tap-orb foundation creation, then music-missile Accent Rhythm creation.',
-      'Use tap_orb_foundation_committed_to_bass_drive and tap_orb_foundation_lane_resolved events to compare committed Bass Drive motif/instrument against director foundation lane playback.',
+      'Beat Swarm Music Lab onboarding sequence: run the real gate corridor, event-driven music-missile Bass Drive creation, then pinball-bouncer Accent Rhythm creation.',
+      'Use music_missile_rewrite_committed_to_theme and pinball_bouncer_rewrite_committed_to_theme events to compare committed motifs against director lane playback.',
       'Expected result: the weapon, Bass Drive, and Accent Rhythm motifs commit in order without replacing or interrupting the preceding motif.',
     ].join(' '),
-    groupedScenarioName: 'retro_shooter_gate_foundation_missile_sequence_1x180s',
-    groupedRunId: 'musicLab_bs0_s3_gate_foundation_missile_sequence_1x180s_scenario',
-    groupedNotes: 'Complete onboarding chain: gate weapon motif, tap-orb Bass Drive event, and music-missile Accent Rhythm event.',
-    tagPrefix: 'BS0S3GateFoundationMissileSequence1x180s',
-    labelPrefix: 'BS0_stage3_beatswarm_gate_foundation_missile_sequence_1x180s',
-    statusPrefix: 'Running BS0 S3 gate + tap orbs + missiles (180 seconds, compact save)',
+    groupedScenarioName: 'retro_shooter_gate_missile_pinball_sequence_1x180s',
+    groupedRunId: 'musicLab_bs0_s3_gate_missile_pinball_sequence_1x180s_scenario',
+    groupedNotes: 'Complete onboarding chain: gate weapon motif, music-missile Bass Drive event, and pinball-bouncer Accent Rhythm event.',
+    tagPrefix: 'BS0S3GateMissilePinballSequence1x180s',
+    labelPrefix: 'BS0_stage3_beatswarm_gate_missile_pinball_sequence_1x180s',
+    statusPrefix: 'Running BS0 S3 gate + missiles + bouncers (180 seconds, compact save)',
     traceCapture: {
       enabled: false,
     },

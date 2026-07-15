@@ -63,7 +63,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     }
     if (state.phase === 'outro') {
       const { center } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
-      state.speed = Math.min(820, state.speed + 28 * dt);
+      state.speed = Math.min(1100, state.speed + 36 * dt);
       state.progress += forwardDelta || (state.speed * dt);
       state.y += sideDelta;
       state.y += (center - state.y) * Math.min(1, dt * 2.3);
@@ -76,7 +76,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       return { active: true, sideDelta: appliedSideDelta, reflectedY, pickupDash, handoffComplete: true };
     }
     const { top, bottom } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
-    state.speed = Math.min(700, state.speed + 16 * dt);
+    state.speed = Math.min(980, state.speed + 24 * dt);
     state.progress += forwardDelta || (state.speed * dt);
     state.vy += clampWeaponGateValue(Number(input?.y) || 0, -1, 1) * 1400 * dt;
     state.vy *= Math.pow(0.05, dt);
@@ -130,7 +130,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     launch() {
       if (!state || state.phase !== 'prelaunch') return false;
       state.phase = 'gate';
-      state.speed = 620;
+      state.speed = 820;
       state.feedbackKind = 'launch';
       state.feedbackText = 'Launch';
       state.feedbackTtl = 0.65;

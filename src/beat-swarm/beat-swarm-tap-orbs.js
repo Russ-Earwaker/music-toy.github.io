@@ -483,7 +483,7 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
     try { deps.playFoundationBeat?.({ stepIndex, triggerIndex, beatIndex, themeId: state.authoringThemeId, laneId: state.authoringLaneId, source: 'tap-orb-activation', world: { x: orb.x, y: orb.y } }); } catch {}
     try {
       deps.onBeatOrbActivated?.({
-        instrumentId: 'BASS TONE 4',
+        instrumentId: 'BASS TONE 3',
         beatTrackId: 'foundation',
         soundId: 'tap_orb_foundation',
         loopLayer: 'foundation',

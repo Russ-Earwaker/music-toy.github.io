@@ -175,6 +175,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     nextId: 1,
     lastClockTick: -1,
     lastCarrierTick: -1000000,
+    initialCarrierAvailableTick: -1000000,
     wasInputHeld: false,
     pickups: [],
     missiles: [],
@@ -260,6 +261,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     state.nextId = 1;
     state.lastClockTick = -1;
     state.lastCarrierTick = -1000000;
+    state.initialCarrierAvailableTick = getClockTick(deps.getBeatClock?.()) + Math.max(0, Math.trunc(Number(opts.initialCarrierDelayTicks) || 0));
     state.wasInputHeld = deps.isInputHeld?.() === true;
     state.pickupRocketPlan = buildPickupRocketPlan(state.targetHitCount);
     ensureRoot();
@@ -287,6 +289,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
   function shouldSpawnCarrier() {
     if (!canAcceptDrop()) return false;
     const tick = getClockTick(deps.getBeatClock?.());
+    if (tick < state.initialCarrierAvailableTick) return false;
     return (tick - state.lastCarrierTick) >= Math.max(4, Math.floor(state.stepCount / 2));
   }
 
