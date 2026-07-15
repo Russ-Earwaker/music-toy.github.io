@@ -488,7 +488,158 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           const basePxRadius = Math.max(18, (Number(fx.radiusWorld) || Number(constants.explosionRadiusWorld) || 0) * Math.max(0.001, scale || 1));
           let radiusScale = 1;
           let opacity = Math.max(0, Math.min(1, fx.ttl / (Number(constants.explosionTtl) || 1)));
-          if (fx.kind === 'explosion-prime') {
+          if (fx.kind === 'pinball-shockwave') {
+            const center = {
+              x: Number(fx.at?.x) || 0,
+              y: Number(fx.at?.y) || 0,
+            };
+            const previousRadius = Math.max(0, Number(fx.previousRadiusWorld) || 0);
+            const currentRadius = Math.max(previousRadius, (Number(fx.currentRadiusWorld) || 0) + (Math.max(0, Number(fx.expandSpeedWorld) || 0) * dt));
+            const maxRadius = Math.max(1, Number(fx.radiusWorld) || currentRadius);
+            const ringWidth = Math.max(32, Number(fx.ringWidthWorld) || 170);
+            fx.previousRadiusWorld = previousRadius;
+            fx.currentRadiusWorld = currentRadius;
+            if (!(fx.hitEnemyIds instanceof Set)) fx.hitEnemyIds = new Set();
+            let consideredEnemies = 0;
+            let closestEnemyDistanceToRing = Infinity;
+            let frameHitCount = 0;
+            const spawnShockwaveHitFx = (enemy, source = 'radius') => {
+              if (!enemy || enemy.__bsRemoved || enemy.hp <= 0) return false;
+              const enemyId = Math.trunc(Number(enemy.id) || 0);
+              const impactAt = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+              try {
+                const impactEl = document.createElement('div');
+                impactEl.className = 'beat-swarm-fx-pinball-shockwave-hit is-debug-visible';
+                impactEl.style.transform = 'translate(-9999px, -9999px)';
+                enemyLayerEl?.appendChild?.(impactEl);
+                effects.push({
+                  kind: 'pinball-shockwave-hit',
+                  ttl: 0.6,
+                  duration: 0.6,
+                  at: impactAt,
+                  radiusWorld: Math.max(220, (Number(constants.explosionRadiusWorld) || 180) * 1.35),
+                  el: impactEl,
+                });
+                helpers.addMusicExplosionEffect?.(
+                  impactAt,
+                  Math.max(260, (Number(constants.explosionRadiusWorld) || 180) * 1.55),
+                  0.68
+                );
+                helpers.noteMusicSystemEvent?.('pinball_shockwave_enemy_hit_fx_spawned', {
+                  enemyId,
+                  source,
+                  hitCount: fx.hitEnemyIds.size,
+                  currentRadiusWorld: currentRadius,
+                  previousRadiusWorld: previousRadius,
+                  impactX: impactAt.x,
+                  impactY: impactAt.y,
+                }, { beatIndex: currentBeatIndex, stepIndex: 0 });
+                try {
+                  const dbg = globalThis.__beatSwarmPinballShockwaveDebug && typeof globalThis.__beatSwarmPinballShockwaveDebug === 'object'
+                    ? globalThis.__beatSwarmPinballShockwaveDebug
+                    : {};
+                  dbg.lastHit = {
+                    enemyId,
+                    source,
+                    hitCount: fx.hitEnemyIds.size,
+                    currentRadiusWorld: currentRadius,
+                    previousRadiusWorld: previousRadius,
+                    impactX: impactAt.x,
+                    impactY: impactAt.y,
+                    at: Date.now(),
+                  };
+                  dbg.totalHits = Math.max(0, Math.trunc(Number(dbg.totalHits) || 0)) + 1;
+                  globalThis.__beatSwarmPinballShockwaveDebug = dbg;
+                  if (globalThis.__beatSwarmPinballShockwaveConsole === true) {
+                    console.info('[PinballShockwave] enemy hit', dbg.lastHit);
+                  }
+                } catch {}
+                return true;
+              } catch {
+                return false;
+              }
+            };
+            for (const enemy of enemies.slice()) {
+              if (!enemy || enemy.__bsRemoved || enemy.hp <= 0) continue;
+              consideredEnemies += 1;
+              const enemyId = Math.trunc(Number(enemy.id) || 0);
+              if (enemyId > 0 && fx.hitEnemyIds.has(enemyId)) continue;
+              const dx = (Number(enemy.wx) || 0) - center.x;
+              const dy = (Number(enemy.wy) || 0) - center.y;
+              const dist = Math.hypot(dx, dy);
+              closestEnemyDistanceToRing = Math.min(closestEnemyDistanceToRing, Math.abs(dist - currentRadius));
+              // Once the expanding wave has reached an enemy, register the hit.
+              // The hitEnemyIds set keeps this one-shot, so we do not need a narrow
+              // frame-band test that can miss fast-moving enemies or sparse frames.
+              if (dist > currentRadius + ringWidth) continue;
+              frameHitCount += 1;
+              const dir = helpers.normalizeDir?.(dx, dy, 1, 0) || { x: 1, y: 0 };
+              const impactAt = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+              enemy.vx = (Number(enemy.vx) || 0) + ((Number(dir.x) || 0) * Math.max(0, Number(fx.pushPower) || 0));
+              enemy.vy = (Number(enemy.vy) || 0) + ((Number(dir.y) || 0) * Math.max(0, Number(fx.pushPower) || 0));
+              if (enemyId > 0) fx.hitEnemyIds.add(enemyId);
+              spawnShockwaveHitFx(enemy, 'radius');
+              helpers.damageEnemy?.(enemy, Math.max(0, Number(fx.damage) || 0));
+            }
+            if (frameHitCount <= 0 && fx.debugFallbackUsed !== true && currentRadius > Math.max(220, ringWidth)) {
+              let fallbackEnemy = null;
+              let fallbackD2 = Infinity;
+              for (const enemy of enemies.slice()) {
+                if (!enemy || enemy.__bsRemoved || enemy.hp <= 0) continue;
+                const enemyId = Math.trunc(Number(enemy.id) || 0);
+                if (enemyId > 0 && fx.hitEnemyIds.has(enemyId)) continue;
+                const dx = (Number(enemy.wx) || 0) - center.x;
+                const dy = (Number(enemy.wy) || 0) - center.y;
+                const d2 = (dx * dx) + (dy * dy);
+                if (d2 < fallbackD2) {
+                  fallbackD2 = d2;
+                  fallbackEnemy = enemy;
+                }
+              }
+              if (fallbackEnemy) {
+                const enemyId = Math.trunc(Number(fallbackEnemy.id) || 0);
+                const dx = (Number(fallbackEnemy.wx) || 0) - center.x;
+                const dy = (Number(fallbackEnemy.wy) || 0) - center.y;
+                const dir = helpers.normalizeDir?.(dx, dy, 1, 0) || { x: 1, y: 0 };
+                fallbackEnemy.vx = (Number(fallbackEnemy.vx) || 0) + ((Number(dir.x) || 0) * Math.max(0, Number(fx.pushPower) || 0));
+                fallbackEnemy.vy = (Number(fallbackEnemy.vy) || 0) + ((Number(dir.y) || 0) * Math.max(0, Number(fx.pushPower) || 0));
+                if (enemyId > 0) fx.hitEnemyIds.add(enemyId);
+                fx.debugFallbackUsed = true;
+                frameHitCount += 1;
+                spawnShockwaveHitFx(fallbackEnemy, 'nearest_fallback');
+                helpers.damageEnemy?.(fallbackEnemy, Math.max(0, Number(fx.damage) || 0));
+              }
+            }
+            try {
+              const dbg = globalThis.__beatSwarmPinballShockwaveDebug && typeof globalThis.__beatSwarmPinballShockwaveDebug === 'object'
+                ? globalThis.__beatSwarmPinballShockwaveDebug
+                : {};
+              dbg.active = true;
+              dbg.lastFrame = {
+                consideredEnemies,
+                frameHitCount,
+                totalRecordedHits: fx.hitEnemyIds.size,
+                currentRadiusWorld: currentRadius,
+                previousRadiusWorld: previousRadius,
+                maxRadiusWorld: maxRadius,
+                ringWidthWorld: ringWidth,
+                closestEnemyDistanceToRing: Number.isFinite(closestEnemyDistanceToRing) ? closestEnemyDistanceToRing : null,
+                centerX: center.x,
+                centerY: center.y,
+                at: Date.now(),
+              };
+              globalThis.__beatSwarmPinballShockwaveDebug = dbg;
+            } catch {}
+            fx.previousRadiusWorld = currentRadius;
+            if (currentRadius >= maxRadius) {
+              try { fx.el?.remove?.(); } catch {}
+              effects.splice(i, 1);
+              removedDuringExplosionUpdate = true;
+              return;
+            }
+            radiusScale = currentRadius / maxRadius;
+            opacity = 1;
+          } else if (fx.kind === 'explosion-prime') {
         const anchorId = Number.isFinite(fx.anchorEnemyId) ? Math.trunc(fx.anchorEnemyId) : null;
         if (anchorId) {
           const anchorEnemy = getEnemyById(anchorId);
@@ -547,6 +698,40 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
             const decayN = Math.max(0, (elapsedN - 0.08) / 0.92);
             radiusScale = 0.18 + (0.82 * (1 - ((1 - attackN) * (1 - attackN)))) + (0.12 * decayN);
             opacity = elapsedN <= 0.08 ? 1 : Math.pow(1 - decayN, 0.72);
+          } else if (fx.kind === 'pinball-shockwave-hit') {
+            if (Number(fx.startDelay) > 0) {
+              fx.startDelay = Math.max(0, (Number(fx.startDelay) || 0) - dt);
+              if (fx.startDelay > 0) {
+                try {
+                  fx.el.style.opacity = '0';
+                  fx.el.style.transform = 'translate(-9999px, -9999px)';
+                } catch {}
+                return;
+              } else {
+                fx.ttl = Math.max(0.05, Number(fx.duration) || 0.6);
+                const target = Number.isFinite(Number(fx.targetEnemyId)) ? getEnemyById(fx.targetEnemyId) : null;
+                if (target && target.__bsRemoved !== true && !(Number(target.hp) <= 0)) {
+                  fx.at = { x: Number(target.wx) || 0, y: Number(target.wy) || 0 };
+                  const dx = (Number(target.wx) || 0) - (Number(fx.sourceCenter?.x) || 0);
+                  const dy = (Number(target.wy) || 0) - (Number(fx.sourceCenter?.y) || 0);
+                  const dir = helpers.normalizeDir?.(dx, dy, 1, 0) || { x: 1, y: 0 };
+                  target.vx = (Number(target.vx) || 0) + ((Number(dir.x) || 0) * Math.max(0, Number(fx.shockwavePushPower) || 0));
+                  target.vy = (Number(target.vy) || 0) + ((Number(dir.y) || 0) * Math.max(0, Number(fx.shockwavePushPower) || 0));
+                  helpers.damageEnemy?.(target, Math.max(0, Number(fx.shockwaveDamage) || 0));
+                  helpers.addMusicExplosionEffect?.(fx.at, Math.max(260, Number(fx.radiusWorld) || 285), 0.68);
+                  helpers.noteMusicSystemEvent?.('pinball_shockwave_enemy_hit_fx_spawned', {
+                    enemyId: Math.trunc(Number(fx.targetEnemyId) || 0),
+                    source: String(fx.source || 'scheduled_shockwave_snapshot'),
+                    impactX: Number(fx.at?.x) || 0,
+                    impactY: Number(fx.at?.y) || 0,
+                  }, { beatIndex: currentBeatIndex, stepIndex: 0 });
+                }
+              }
+            }
+            const total = Math.max(0.05, Number(fx.duration) || 0.24);
+            const elapsedN = Math.max(0, Math.min(1, 1 - (fx.ttl / total)));
+            radiusScale = 0.34 + (0.9 * (1 - ((1 - elapsedN) * (1 - elapsedN))));
+            opacity = Math.max(0.18, Math.pow(1 - elapsedN, 0.34));
           }
           const c = helpers.worldToScreen?.({ x: Number(fx.at?.x) || 0, y: Number(fx.at?.y) || 0 });
           if (!c) return;

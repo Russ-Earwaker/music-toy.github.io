@@ -1,10 +1,10 @@
 const STYLE_ID = 'beat-swarm-pinball-bouncer-style';
 const MAX_HITS = 8;
-const MAX_ACTIVE_BOUNCERS = 3;
+const MAX_ACTIVE_BOUNCERS = 4;
 const ARRIVAL_SECONDS = 3.0;
 const HIT_FLASH_SECONDS = 0.18;
 const BOUNCER_HIT_RADIUS = 132;
-const BOUNCER_BOUNCE_POWER = 1220;
+const BOUNCER_BOUNCE_POWER = 3400;
 const POST_COMPLETE_LOOP_STEPS = 16;
 const TWO_PI = Math.PI * 2;
 
@@ -316,8 +316,8 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     const remaining = Math.max(0, state.targetHitCount - state.spawnedHitCount);
     if (remaining <= 0) return 0;
     if (remaining <= MAX_ACTIVE_BOUNCERS) return remaining;
-    if (remaining === 4) return 2;
-    return Math.random() < 0.5 ? 2 : 3;
+    if (remaining === 5) return Math.random() < 0.5 ? 2 : 3;
+    return 2 + Math.floor(Math.random() * 3);
   }
 
   function spawnBouncer(groupIndex = 0, groupCount = 1, groupOffset = 0) {

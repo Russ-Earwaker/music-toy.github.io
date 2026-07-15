@@ -43,6 +43,8 @@ export function updatePickupsAndCombatRuntimeWrapper(options = null) {
       hasPendingWeaponChainEventById: helpers.hasPendingWeaponChainEventById,
       getGameplayBeatLen: helpers.getGameplayBeatLen,
       applyAoeAt: helpers.applyAoeAt,
+      applyPinballShockwavePlayerPush: helpers.applyPinballShockwavePlayerPush,
+      addMusicExplosionEffect: helpers.addMusicExplosionEffect,
       noteMusicSystemEvent: helpers.noteMusicSystemEvent,
       getPerfNow: helpers.getPerfNow,
       recordPerfSample: helpers.recordPerfSample,

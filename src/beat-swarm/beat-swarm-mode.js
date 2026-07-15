@@ -22,7 +22,7 @@ import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-06-25-pickup-rocket-orbit-wide-v9';
-import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-06-26-pinball-bouncers-v8';
+import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-15-pinball-bouncers-v18';
 import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-06-18-corridor-curve-v1';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-22-quantized-bridge-v5';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
@@ -2058,7 +2058,8 @@ const pinballBouncerRuntime = createBeatSwarmPinballBouncerRuntime({
   },
   createImpactEffect(event = {}) {
     const at = event.at && typeof event.at === 'object' ? event.at : getViewportCenterWorld();
-    try { addMusicExplosionEffect(at, 170, 0.32); } catch {}
+    try { addMusicExplosionEffect(at, 285, 0.72); } catch {}
+    try { addPinballShockwaveEffect(at); } catch {}
     try {
       noteMusicSystemEvent('pinball_bouncer_quantized_impact', {
         eventId: String(event.eventId || '').trim(),
@@ -2084,7 +2085,7 @@ const pinballBouncerRuntime = createBeatSwarmPinballBouncerRuntime({
       nx = 1;
       ny = 0;
     }
-    const power = Math.max(200, Math.min(2200, Number(event.power) || 1220));
+    const power = Math.max(200, Math.min(5200, Number(event.power) || 3400));
     const speed = Math.hypot(velocityX, velocityY);
     if (speed > 80) {
       const dot = velocityX * nx + velocityY * ny;
@@ -2093,9 +2094,9 @@ const pinballBouncerRuntime = createBeatSwarmPinballBouncerRuntime({
         velocityY = velocityY - (2 * dot * ny);
       }
     }
-    velocityX += nx * power * 0.72;
-    velocityY += ny * power * 0.72;
-    try { applyCameraDelta(nx * 34, ny * 34); } catch {}
+    velocityX += nx * power;
+    velocityY += ny * power;
+    try { applyCameraDelta(nx * 80, ny * 80); } catch {}
     postReleaseAssistTimer = Math.max(postReleaseAssistTimer, 0.16);
     try { pulseReactiveArrowCharge(); } catch {}
   },
@@ -26402,6 +26403,8 @@ function updatePickupsAndCombat(dt, options = null) {
       hasPendingWeaponChainEventById,
       getGameplayBeatLen,
       applyAoeAt,
+      applyPinballShockwavePlayerPush,
+      addMusicExplosionEffect,
       noteMusicSystemEvent,
       getPerfNow: getBeatSwarmPerfNow,
       recordPerfSample: recordBeatSwarmPerfSample,
@@ -26462,6 +26465,115 @@ function addMusicExplosionEffect(centerW, radiusWorld = 285, ttlOverride = 0.72)
     weaponSlotIndex: null,
     el,
   });
+}
+function getVisibleScreenRadiusWorld(padWorld = 420) {
+  const scale = Math.max(0.001, getBeatSwarmCameraScale());
+  const diagonalPx = Math.hypot(window.innerWidth || 0, window.innerHeight || 0);
+  return (diagonalPx / scale) + Math.max(0, Number(padWorld) || 0);
+}
+function addPinballShockwaveEffect(centerW) {
+  if (!enemyLayerEl || !centerW) return;
+  const el = document.createElement('div');
+  el.className = 'beat-swarm-fx-pinball-shockwave';
+  el.style.transform = 'translate(-9999px, -9999px)';
+  enemyLayerEl.appendChild(el);
+  const maxRadiusWorld = getVisibleScreenRadiusWorld(520);
+  const expandSpeedWorld = 1850;
+  const duration = Math.max(0.25, maxRadiusWorld / expandSpeedWorld);
+  effects.push({
+    kind: 'pinball-shockwave',
+    ttl: duration + 0.35,
+    duration,
+    at: { x: Number(centerW.x) || 0, y: Number(centerW.y) || 0 },
+    radiusWorld: maxRadiusWorld,
+    currentRadiusWorld: 0,
+    previousRadiusWorld: 0,
+    expandSpeedWorld,
+    ringWidthWorld: 170,
+    damage: 3,
+    pushPower: 1250,
+    hitEnemyIds: new Set(),
+    hitPlayer: false,
+    el,
+  });
+  try {
+    const candidates = (Array.isArray(enemies) ? enemies : [])
+      .filter((enemy) => enemy && enemy.__bsRemoved !== true && !(Number(enemy.hp) <= 0))
+      .map((enemy) => {
+        const wx = Number(enemy.wx) || 0;
+        const wy = Number(enemy.wy) || 0;
+        const dx = wx - (Number(centerW.x) || 0);
+        const dy = wy - (Number(centerW.y) || 0);
+        return {
+          enemy,
+          enemyId: Math.trunc(Number(enemy.id) || 0),
+          wx,
+          wy,
+          d: Math.hypot(dx, dy),
+        };
+      })
+      .filter((entry) => entry.enemyId > 0 && entry.d <= maxRadiusWorld)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 18);
+    for (const entry of candidates) {
+      const impactEl = document.createElement('div');
+      impactEl.className = 'beat-swarm-fx-pinball-shockwave-hit is-debug-visible';
+      impactEl.style.transform = 'translate(-9999px, -9999px)';
+      impactEl.style.opacity = '0';
+      enemyLayerEl.appendChild(impactEl);
+      const delay = Math.max(0.02, entry.d / Math.max(1, expandSpeedWorld));
+      effects.push({
+        kind: 'pinball-shockwave-hit',
+        ttl: delay + 0.6,
+        duration: 0.6,
+        startDelay: delay,
+        at: { x: entry.wx, y: entry.wy },
+        sourceCenter: { x: Number(centerW.x) || 0, y: Number(centerW.y) || 0 },
+        targetEnemyId: entry.enemyId,
+        radiusWorld: 285,
+        shockwaveDamage: 3,
+        shockwavePushPower: 1250,
+        source: 'scheduled_shockwave_snapshot',
+        el: impactEl,
+      });
+    }
+  } catch {}
+  try {
+    window.__beatSwarmPinballShockwaveDebug = {
+      active: true,
+      createdAt: Date.now(),
+      centerX: Number(centerW.x) || 0,
+      centerY: Number(centerW.y) || 0,
+      maxRadiusWorld,
+      expandSpeedWorld,
+      totalHits: 0,
+      lastFrame: null,
+      lastHit: null,
+    };
+    noteMusicSystemEvent('pinball_shockwave_created', {
+      centerX: Number(centerW.x) || 0,
+      centerY: Number(centerW.y) || 0,
+      maxRadiusWorld,
+      expandSpeedWorld,
+    }, {
+      beatIndex: currentBeatIndex,
+      stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+    });
+  } catch {}
+}
+function applyPinballShockwavePlayerPush(event = {}) {
+  const center = event?.center && typeof event.center === 'object' ? event.center : null;
+  const player = event?.player && typeof event.player === 'object' ? event.player : getViewportCenterWorld();
+  if (!center || !player) return;
+  const dx = (Number(player.x) || 0) - (Number(center.x) || 0);
+  const dy = (Number(player.y) || 0) - (Number(center.y) || 0);
+  const dir = normalizeDir(dx, dy, 1, 0);
+  const power = Math.max(0, Number(event?.pushPower) || 1250);
+  velocityX += (Number(dir.x) || 0) * power;
+  velocityY += (Number(dir.y) || 0) * power;
+  try { applyCameraDelta((Number(dir.x) || 0) * 44, (Number(dir.y) || 0) * 44); } catch {}
+  postReleaseAssistTimer = Math.max(postReleaseAssistTimer, 0.12);
+  try { pulseReactiveArrowCharge(); } catch {}
 }
 function setArenaIntroBlend(blend01 = 1) {
   const blend = Math.max(0, Math.min(1, Number(blend01) || 0));

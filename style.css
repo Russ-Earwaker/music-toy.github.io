@@ -7342,6 +7342,48 @@ body.beat-swarm-active.internal-board-active .app-topbar {
   font: 700 52px/1 system-ui, sans-serif;
   text-shadow: 0 0 14px #fff;
 }
+
+.beat-swarm-fx-pinball-shockwave {
+  position: fixed;
+  width: 0;
+  height: 0;
+  margin-left: 0;
+  margin-top: 0;
+  border-radius: 50%;
+  border: 7px solid rgba(255, 255, 255, 0.96);
+  background: transparent;
+  box-shadow:
+    0 0 26px rgba(255, 255, 255, 0.92),
+    0 0 64px rgba(255, 68, 226, 0.72),
+    inset 0 0 28px rgba(255, 255, 255, 0.32);
+  pointer-events: none;
+}
+
+.beat-swarm-fx-pinball-shockwave-hit {
+  position: fixed;
+  z-index: 45;
+  width: 0;
+  height: 0;
+  margin-left: 0;
+  margin-top: 0;
+  border-radius: 50%;
+  border: 8px solid rgba(255, 255, 255, 0.98);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.94) 0 13%, rgba(255, 74, 226, 0.44) 38%, transparent 76%);
+  box-shadow:
+    0 0 30px rgba(255, 255, 255, 0.98),
+    0 0 64px rgba(255, 68, 226, 0.9),
+    inset 0 0 24px rgba(255, 255, 255, 0.42);
+  pointer-events: none;
+}
+
+.beat-swarm-fx-pinball-shockwave-hit.is-debug-visible::before {
+  content: "";
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 22px rgba(255, 255, 255, 0.88);
+}
 body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-header,
 body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-header *,
 body.beat-swarm-subboard-open .toy-panel[data-beat-swarm-subboard="1"][data-toy="drawgrid"] .toy-footer,
