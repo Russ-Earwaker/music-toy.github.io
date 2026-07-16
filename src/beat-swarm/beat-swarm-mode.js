@@ -23,7 +23,7 @@ import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-15-pinball-bouncers-v23';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-15-pinball-bouncers-v23';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-15-pinball-bouncers-v23';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-16-pinball-bouncers-v45';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-22-quantized-bridge-v5';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
@@ -266,7 +266,7 @@ const weaponGateCurrentRuntime = {
   releaseVx: 0,
   releaseVy: 0,
 };
-const WEAPON_GATE_CORRIDOR_SPEED = 620;
+const WEAPON_GATE_CORRIDOR_SPEED = 760;
 const beatSwarmOnboardingState = createBeatSwarmOnboardingState();
 const weaponGateMusicRuntime = beatSwarmOnboardingState.weaponGateMusicRuntime;
 const beatSwarmOnboardingRuntime = beatSwarmOnboardingState.phaseRuntime;
@@ -27101,7 +27101,8 @@ function tick(nowMs) {
     const gateInputHeld = inputMag > 0.2;
     let gateFacingDeg;
     let gateFacingTurnRate = 1;
-    if (gatePrelaunchActive) {
+    if (gatePrelaunchActive || fightingCurrent) {
+      // During prelaunch, face the future launch vector, not the drag direction.
       gateFacingDeg = weaponGateCurrentRuntime.releaseAngleDeg + 90;
     } else if (gateInputHeld) {
       gateFacingDeg = (Math.atan2(inputY, inputX) * 180 / Math.PI) + 90;

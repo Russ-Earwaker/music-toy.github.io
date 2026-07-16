@@ -13,6 +13,8 @@ export function ensureWeaponGateIntroStyle() {
     .beat-swarm-weapon-gate-corridor{position:absolute;inset:0;overflow:visible}
     .beat-swarm-weapon-gate-corridor-fill{fill:rgba(10,29,43,.36);filter:drop-shadow(0 0 18px rgba(76,205,255,.12))}
     .beat-swarm-weapon-gate-corridor-edge{fill:none;stroke:rgba(100,216,255,.8);stroke-width:4;filter:drop-shadow(0 0 8px rgba(76,205,255,.2))}
+    .beat-swarm-weapon-gate-flow{position:absolute;left:0;top:0;width:74px;height:3px;margin:-1.5px 0 0 -37px;border-radius:999px;transform-origin:50% 50%;background:linear-gradient(90deg,transparent,rgba(147,230,255,.18),rgba(225,251,255,.72),rgba(147,230,255,.2),transparent);box-shadow:0 0 9px rgba(118,224,255,.36);mix-blend-mode:screen}
+    .beat-swarm-weapon-gate-flow.is-soft{height:2px;background:linear-gradient(90deg,transparent,rgba(118,224,255,.12),rgba(217,249,255,.42),rgba(118,224,255,.12),transparent);box-shadow:0 0 7px rgba(118,224,255,.2)}
     .beat-swarm-weapon-gate-wall-pulse{position:absolute;left:0;right:0;height:8px;margin-top:-4px;background:#fff59b;box-shadow:0 0 26px #fff59b}
     .beat-swarm-weapon-gate{position:absolute;width:64px;border:2px solid rgba(142,232,255,.86);box-shadow:0 0 18px rgba(100,216,255,.22)}
     .beat-swarm-weapon-gate.is-next{border-color:#fff59b;box-shadow:0 0 26px rgba(255,245,155,.5)}
@@ -57,10 +59,54 @@ export function renderWeaponGateIntro(state, options = {}) {
   const impactClass = state.feedbackKind === 'damage' ? ' is-damage' : '';
   state.layer.innerHTML = `
     ${renderCorridorBand(state, corridorX, corridorOpacity)}
+    ${renderCorridorFlowParticles(state, corridorX, corridorOpacity)}
     ${renderNoteMap(state, notePool, totalSlots)}${pulse}${gateHtml}${renderDashPickup(state)}${targetHtml}${shotHtml}
     <div class="beat-swarm-weapon-gate-hud">Gate ${Math.min(state.nextGateIndex + 1, totalSlots)}/${totalSlots}<br>Notes ${state.ratioState.selectedNotes}/${state.ratioState.targetNotes} Silence ${state.ratioState.selectedSilences}/${state.ratioState.targetSilences}<br>${state.summary.join(' ')}</div>
     ${state.feedbackTtl > 0 ? `<div class="beat-swarm-weapon-gate-impact${impactClass}">${state.feedbackText}</div>` : ''}
   `;
+}
+
+function renderCorridorFlowParticles(state, corridorX = 0, opacity = 1) {
+  const laneOffsets = [-0.72, -0.52, -0.34, -0.18, 0, 0.18, 0.34, 0.52, 0.72];
+  const spacing = 82;
+  const width = Math.max(1, window.innerWidth);
+  const progress = Number(state?.progress) || 0;
+  const flowDistance = progress + (Math.max(0, Number(state?.flowTime) || 0) * 520);
+  const items = [];
+  laneOffsets.forEach((offset, laneIndex) => {
+    const laneSpacing = spacing + ((laneIndex % 3) * 7);
+    const phase = ((flowDistance * (0.55 + laneIndex * 0.035) + laneIndex * 43) % laneSpacing + laneSpacing) % laneSpacing;
+    for (let i = -3; i < Math.ceil(width / laneSpacing) + 4; i += 1) {
+      const x = (i * laneSpacing) - phase + corridorX;
+      if (x < -110 || x > width + 120) continue;
+      const localX = x - corridorX;
+      const bounds = getWeaponGateCorridorScreenBoundsAtX(state, localX);
+      const prev = getWeaponGateCorridorScreenBoundsAtX(state, localX - 32);
+      const next = getWeaponGateCorridorScreenBoundsAtX(state, localX + 32);
+      const angle = Math.atan2(next.center - prev.center, 64) * 180 / Math.PI;
+      const laneRipple = Math.sin((flowDistance * 0.01) + (i * 0.9) + (laneIndex * 1.7)) * bounds.halfHeight * 0.035;
+      const y = bounds.center + (offset * bounds.halfHeight * 0.86) + laneRipple;
+      const edgeFade = Math.max(0.18, 1 - Math.abs(offset) * 0.52);
+      const depth = 0.5 + (((i + laneIndex) % 5 + 5) % 5) * 0.1;
+      const alpha = Math.max(0, Math.min(1, opacity * edgeFade * (0.2 + depth * 0.34)));
+      const scaleX = 0.72 + depth * 0.46;
+      const scaleY = 0.68 + edgeFade * 0.38;
+      const soft = Math.abs(offset) > 0.5 || ((i + laneIndex) % 3 === 0);
+      items.push(`<div class="beat-swarm-weapon-gate-flow${soft ? ' is-soft' : ''}" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;opacity:${alpha.toFixed(2)};transform:rotate(${angle.toFixed(2)}deg) scale(${scaleX.toFixed(2)},${scaleY.toFixed(2)})"></div>`);
+    }
+  });
+  const bands = laneOffsets.slice(1, -1).map((offset, idx) => {
+    const x = ((idx * 151) - ((flowDistance * 0.32 + idx * 29) % 151) + corridorX);
+    const wrappedX = ((x % (width + 220)) + (width + 220)) % (width + 220) - 110;
+    const localX = wrappedX - corridorX;
+    const bounds = getWeaponGateCorridorScreenBoundsAtX(state, localX);
+    const y = bounds.center + (offset * bounds.halfHeight * 0.72);
+    const prev = getWeaponGateCorridorScreenBoundsAtX(state, localX - 42);
+    const next = getWeaponGateCorridorScreenBoundsAtX(state, localX + 42);
+    const angle = Math.atan2(next.center - prev.center, 84) * 180 / Math.PI;
+    return `<div class="beat-swarm-weapon-gate-flow is-soft" style="left:${wrappedX.toFixed(1)}px;top:${y.toFixed(1)}px;opacity:${(opacity * 0.12).toFixed(2)};transform:rotate(${angle.toFixed(2)}deg) scale(2.1,.75)"></div>`;
+  });
+  return items.join('') + bands.join('');
 }
 
 function renderDashPickup(state) {

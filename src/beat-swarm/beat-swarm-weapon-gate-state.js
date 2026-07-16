@@ -61,6 +61,7 @@ export function createWeaponGateIntroState(layer, options = {}) {
     feedbackTtl: 1.2,
     wallPulseTtl: 0,
     wallPulseY: 0,
+    flowTime: 0,
     phase: 'prelaunch',
     completeDelay: 0,
     outroDuration: 2.35,

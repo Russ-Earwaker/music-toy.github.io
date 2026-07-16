@@ -2,9 +2,9 @@ import { WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-wea
 import { applyWeaponGateWallBounce, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-06-18-corridor-curve-v1';
 import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
 import { updateWeaponGateDashPickup } from './beat-swarm-weapon-gate-pickups.js?v=2026-06-18-corridor-curve-v1';
-import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-06-18-corridor-curve-v1';
+import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-16-pinball-bouncers-v45';
 import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-06-18-corridor-curve-v1';
-import { createWeaponGateIntroState } from './beat-swarm-weapon-gate-state.js?v=2026-06-18-corridor-curve-v1';
+import { createWeaponGateIntroState } from './beat-swarm-weapon-gate-state.js?v=2026-07-16-pinball-bouncers-v45';
 
 export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   let state = null;
@@ -51,6 +51,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     let appliedSideDelta = sideDelta;
     let reflectedY = false;
     tickWeaponGateTransientEffects(state, dt);
+    state.flowTime = Math.max(0, Number(state.flowTime) || 0) + dt;
     const pickupDash = updateWeaponGateDashPickup(state, dt, input);
     if (state.phase === 'prelaunch') {
       const { top, bottom, center } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
