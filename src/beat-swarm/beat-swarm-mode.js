@@ -23,7 +23,7 @@ import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-15-pinball-bouncers-v23';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-15-pinball-bouncers-v23';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-16-pinball-bouncers-v45';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-17-pinball-bouncers-v46';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-22-quantized-bridge-v5';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
@@ -216,6 +216,7 @@ let spawnerLayerEl = null;
 let enemyLayerEl = null;
 let spawnHealthDebugEl = null;
 let starfieldLayerEl = null;
+let surfaceFieldCanvasEl = null;
 let arenaRingEl = null;
 let arenaCoreEl = null;
 let arenaLimitEl = null;
@@ -241,6 +242,11 @@ let arenaPathRetargetTimer = 0;
 let starfieldParallaxAnchorWorld = null;
 let starfieldSplitWorldX = 0;
 let starfieldVisualPhase = 0;
+const SURFACE_FIELD_MAX_PARTICLES = 240;
+const SURFACE_FIELD_AMBIENT_TARGET = 92;
+const surfaceFieldParticles = [];
+let surfaceFieldCanvasW = 0;
+let surfaceFieldCanvasH = 0;
 let borderForceEnabled = true;
 let gameplayPaused = false;
 let activeDamageSoundStageIndex = null;
@@ -14936,6 +14942,7 @@ function ensureUi() {
       </div>
       <div class="beat-swarm-pause-screen" aria-hidden="true"></div>
       <div class="beat-swarm-starfield-layer" aria-hidden="true"></div>
+      <canvas class="beat-swarm-surface-field" aria-hidden="true"></canvas>
       <div class="beat-swarm-spawner-layer" aria-hidden="true"></div>
       <div class="beat-swarm-enemy-layer" aria-hidden="true"></div>
       <div class="beat-swarm-resistance" aria-hidden="true"></div>
@@ -14954,6 +14961,7 @@ function ensureUi() {
   sectionHeadingSubtitleEl = overlayEl.querySelector('.beat-swarm-section-heading-subtitle');
   pauseScreenEl = overlayEl.querySelector('.beat-swarm-pause-screen');
   starfieldLayerEl = overlayEl.querySelector('.beat-swarm-starfield-layer');
+  surfaceFieldCanvasEl = overlayEl.querySelector('.beat-swarm-surface-field');
   spawnerLayerEl = overlayEl.querySelector('.beat-swarm-spawner-layer');
   enemyLayerEl = overlayEl.querySelector('.beat-swarm-enemy-layer');
   spawnHealthDebugEl = overlayEl.querySelector('.beat-swarm-spawn-health-debug');
@@ -18001,35 +18009,26 @@ function ensureSpaceBackdropElements() {
     gas.dataset.p = String(spec.p);
     backdrop.appendChild(gas);
   });
-  const parallaxStarSpecs = [
-    { nx: 0.05, ny: 0.12, p: 0.72, size: 2.5, opacity: 0.78 },
-    { nx: 0.11, ny: 0.31, p: 0.86, size: 1.7, opacity: 0.58 },
-    { nx: 0.16, ny: 0.72, p: 0.78, size: 2.2, opacity: 0.68 },
-    { nx: 0.22, ny: 0.18, p: 0.9, size: 1.5, opacity: 0.55 },
-    { nx: 0.27, ny: 0.86, p: 0.74, size: 3.1, opacity: 0.72 },
-    { nx: 0.33, ny: 0.42, p: 0.82, size: 2, opacity: 0.62 },
-    { nx: 0.38, ny: 0.08, p: 0.69, size: 2.8, opacity: 0.78 },
-    { nx: 0.44, ny: 0.67, p: 0.88, size: 1.6, opacity: 0.56 },
-    { nx: 0.49, ny: 0.27, p: 0.76, size: 2.3, opacity: 0.7 },
-    { nx: 0.55, ny: 0.91, p: 0.84, size: 1.8, opacity: 0.58 },
-    { nx: 0.61, ny: 0.36, p: 0.7, size: 3, opacity: 0.76 },
-    { nx: 0.66, ny: 0.14, p: 0.92, size: 1.4, opacity: 0.52 },
-    { nx: 0.72, ny: 0.78, p: 0.79, size: 2.4, opacity: 0.68 },
-    { nx: 0.79, ny: 0.23, p: 0.73, size: 2.7, opacity: 0.72 },
-    { nx: 0.84, ny: 0.59, p: 0.87, size: 1.7, opacity: 0.58 },
-    { nx: 0.91, ny: 0.81, p: 0.71, size: 3.3, opacity: 0.74 },
-    { nx: 0.95, ny: 0.39, p: 0.83, size: 2.1, opacity: 0.64 },
-    { nx: 0.18, ny: 0.52, p: 0.66, size: 3.8, opacity: 0.7, special: true },
-  ];
+  const parallaxStarSpecs = Array.from({ length: 72 }, (_, index) => {
+    const a = Math.sin((index + 1) * 12.9898) * 43758.5453;
+    const b = Math.sin((index + 7) * 78.233) * 24634.6345;
+    const c = Math.sin((index + 13) * 37.719) * 9517.217;
+    const frac = (value) => value - Math.floor(value);
+    return {
+      nx: 0.03 + (frac(a) * 0.94),
+      ny: 0.05 + (frac(b) * 0.9),
+      p: 0.64 + (frac(c) * 0.3),
+      size: 1 + (frac(a + b) * 2.8),
+      opacity: 0.42 + (frac(b + c) * 0.36),
+    };
+  });
   parallaxStarSpecs.forEach((spec, index) => {
     const star = document.createElement('div');
-    star.className = spec.special === true
-      ? 'beat-swarm-large-star is-special'
-      : `beat-swarm-parallax-pixel-star is-${(index % 3) + 1}`;
+    star.className = `beat-swarm-parallax-pixel-star is-${(index % 3) + 1}`;
     star.dataset.nx = String(spec.nx);
     star.dataset.ny = String(spec.ny);
     star.dataset.p = String(spec.p);
-    const pixelSize = spec.special === true ? 112 : Math.max(1, Number(spec.size) || 2);
+    const pixelSize = Math.max(1, Number(spec.size) || 2);
     star.style.width = `${pixelSize}px`;
     star.style.height = `${pixelSize}px`;
     star.style.marginLeft = `${(-pixelSize / 2).toFixed(1)}px`;
@@ -18185,6 +18184,296 @@ function updateStarfieldVisual() {
       star.el.style.transform = `translate(${localX.toFixed(2)}px, ${localY.toFixed(2)}px)`;
     }
   }
+}
+function spawnSurfaceDebris(world = null, options = null) {
+  if (!world || !Number.isFinite(Number(world.x)) || !Number.isFinite(Number(world.y))) return;
+  const opts = options && typeof options === 'object' ? options : {};
+  const count = Math.max(1, Math.min(28, Math.trunc(Number(opts.count) || 10)));
+  const power = Math.max(0, Number(opts.power) || 120);
+  const baseSize = Math.max(1, Number(opts.size) || 2.4);
+  for (let i = 0; i < count; i += 1) {
+    if (surfaceFieldParticles.length >= SURFACE_FIELD_MAX_PARTICLES) surfaceFieldParticles.shift();
+    const angle = Math.random() * Math.PI * 2;
+    const speed = power * (0.22 + Math.random() * 0.78);
+    const dist = Math.random() * 20;
+    const ttl = 2.2 + Math.random() * 2.7;
+    surfaceFieldParticles.push({
+      kind: 'dust',
+      x: Number(world.x) + Math.cos(angle) * dist,
+      y: Number(world.y) + Math.sin(angle) * dist,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      ttl,
+      maxTtl: ttl,
+      size: baseSize * (0.7 + Math.random() * 1.2),
+      hue: Math.random() < 0.55 ? 195 : (Math.random() < 0.5 ? 285 : 330),
+    });
+  }
+}
+function spawnSurfaceCorpse(enemy = null, world = null) {
+  if (!world || !Number.isFinite(Number(world.x)) || !Number.isFinite(Number(world.y))) return;
+  const type = String(enemy?.enemyType || '').trim().toLowerCase();
+  const radius = Math.max(14, Number(enemy?.hitRadiusWorld) || Number(enemy?.radiusWorld) || 34);
+  const templates = type === 'spawner'
+    ? [
+        ['rect', 1.15, 0.42], ['rect', 0.9, 0.36], ['tri', 0.7, 0.7],
+        ['line', 1.3, 0.18], ['rect', 0.62, 0.38], ['tri', 0.5, 0.5],
+      ]
+    : type === 'drawsnake'
+      ? [
+          ['line', 1.6, 0.16], ['line', 1.35, 0.16], ['line', 1.1, 0.16],
+          ['tri', 0.55, 0.55], ['rect', 0.58, 0.26],
+        ]
+      : type === 'composer-group-member'
+        ? [['tri', 0.55, 0.55], ['rect', 0.48, 0.3], ['line', 0.72, 0.14]]
+        : [['rect', 0.78, 0.34], ['tri', 0.68, 0.68], ['line', 1.05, 0.16], ['rect', 0.52, 0.42]];
+  const hueBase = type === 'spawner' ? 194 : (type === 'drawsnake' ? 304 : (type === 'composer-group-member' ? 46 : 220));
+  for (let i = 0; i < templates.length; i += 1) {
+    if (surfaceFieldParticles.length >= SURFACE_FIELD_MAX_PARTICLES) surfaceFieldParticles.shift();
+    const [shape, lenScale, thickScale] = templates[i];
+    const angle = (i / Math.max(1, templates.length)) * Math.PI * 2 + Math.random() * 0.55;
+    const speed = 35 + Math.random() * 95;
+    const ttl = 9 + Math.random() * 5;
+    surfaceFieldParticles.push({
+      kind: 'shard',
+      shape,
+      x: Number(world.x) + Math.cos(angle) * radius * 0.28,
+      y: Number(world.y) + Math.sin(angle) * radius * 0.28,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      ttl,
+      maxTtl: ttl,
+      size: Math.max(10, radius * 0.84),
+      lengthScale: Number(lenScale) || 1,
+      thicknessScale: Number(thickScale) || 0.3,
+      rot: angle + Math.PI * (Math.random() - 0.5),
+      vr: (Math.random() - 0.5) * 2.2,
+      hue: hueBase + (Math.random() - 0.5) * 24,
+    });
+  }
+}
+function pushSurfaceDebris(centerWorld = null, radiusWorld = 160, power = 260) {
+  if (!centerWorld || !surfaceFieldParticles.length) return;
+  const cx = Number(centerWorld.x) || 0;
+  const cy = Number(centerWorld.y) || 0;
+  const radius = Math.max(1, Number(radiusWorld) || 1);
+  const force = Math.max(0, Number(power) || 0);
+  for (const p of surfaceFieldParticles) {
+    const dx = (Number(p.x) || 0) - cx;
+    const dy = (Number(p.y) || 0) - cy;
+    const d = Math.hypot(dx, dy);
+    if (!(d < radius) || d <= 0.001) continue;
+    const n = 1 - (d / radius);
+    const kindBoost = p.kind === 'shard' ? 1.75 : (p.kind === 'ambient' ? 0.42 : 1);
+    p.vx += (dx / d) * force * n * kindBoost;
+    p.vy += (dy / d) * force * n * kindBoost;
+    p.flash = Math.max(Number(p.flash) || 0, n * (p.kind === 'ambient' ? 0.35 : 1));
+  }
+}
+function applySurfaceRepeller(centerWorld = null, radiusWorld = 180, power = 220, dt = 0, options = null) {
+  if (!centerWorld || !surfaceFieldParticles.length) return;
+  const cx = Number(centerWorld.x) || 0;
+  const cy = Number(centerWorld.y) || 0;
+  const radius = Math.max(1, Number(radiusWorld) || 1);
+  const force = Math.max(0, Number(power) || 0);
+  const safeDt = Math.max(0, Math.min(0.08, Number(dt) || 0));
+  const kindScale = options && typeof options.kindScale === 'object' ? options.kindScale : null;
+  for (const p of surfaceFieldParticles) {
+    const dx = (Number(p.x) || 0) - cx;
+    const dy = (Number(p.y) || 0) - cy;
+    const d = Math.hypot(dx, dy);
+    if (!(d < radius) || d <= 0.001) continue;
+    const n = 1 - (d / radius);
+    const scale = Math.max(0, Number(kindScale?.[p.kind]) || 1);
+    p.vx += (dx / d) * force * n * safeDt * scale;
+    p.vy += (dy / d) * force * n * safeDt * scale;
+    p.flash = Math.max(Number(p.flash) || 0, n * Math.min(1, scale));
+  }
+}
+function applySurfaceShockwaveFronts(dt = 0) {
+  if (!surfaceFieldParticles.length || !Array.isArray(effects) || !effects.length) return;
+  const safeDt = Math.max(0, Math.min(0.08, Number(dt) || 0));
+  for (const fx of effects) {
+    if (fx?.kind !== 'pinball-shockwave') continue;
+    const cx = Number(fx?.at?.x);
+    const cy = Number(fx?.at?.y);
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+    const currentRadius = Math.max(0, Number(fx.currentRadiusWorld) || 0);
+    const previousRadius = Math.max(0, Number(fx.__surfaceFieldRadiusWorld) || Number(fx.previousRadiusWorld) || 0);
+    const nextRadius = Math.max(currentRadius, previousRadius);
+    const minRadius = Math.max(0, Math.min(previousRadius, nextRadius) - 60);
+    const maxRadius = Math.max(minRadius + 1, nextRadius + Math.max(120, Number(fx.ringWidthWorld) || 170));
+    const power = Math.max(0, Number(fx.pushPower) || 1250);
+    for (const p of surfaceFieldParticles) {
+      const dx = (Number(p.x) || 0) - cx;
+      const dy = (Number(p.y) || 0) - cy;
+      const d = Math.hypot(dx, dy);
+      if (!(d >= minRadius && d <= maxRadius) || d <= 0.001) continue;
+      const edgeDistance = Math.abs(d - nextRadius);
+      const n = Math.max(0, 1 - edgeDistance / Math.max(80, Number(fx.ringWidthWorld) || 170));
+      if (!(n > 0)) continue;
+      const kindBoost = p.kind === 'shard' ? 1.45 : (p.kind === 'ambient' ? 0.18 : 0.65);
+      p.vx += (dx / d) * power * n * safeDt * kindBoost;
+      p.vy += (dy / d) * power * n * safeDt * kindBoost;
+      p.flash = Math.max(Number(p.flash) || 0, n * (p.kind === 'ambient' ? 0.22 : 0.85));
+    }
+    fx.__surfaceFieldRadiusWorld = nextRadius;
+  }
+}
+function maintainSurfaceAmbientParticles(playerWorld = null) {
+  const center = arenaCenterWorld || playerWorld;
+  if (!center || !Number.isFinite(Number(center.x)) || !Number.isFinite(Number(center.y))) return;
+  const cx = Number(center.x) || 0;
+  const cy = Number(center.y) || 0;
+  const radius = Math.max(80, SWARM_ARENA_RADIUS_WORLD * 0.82);
+  let ambientCount = 0;
+  for (let i = surfaceFieldParticles.length - 1; i >= 0; i -= 1) {
+    const p = surfaceFieldParticles[i];
+    if (p?.kind !== 'ambient') continue;
+    ambientCount += 1;
+    const dx = (Number(p.x) || 0) - cx;
+    const dy = (Number(p.y) || 0) - cy;
+    if (Math.hypot(dx, dy) > radius * 1.08) {
+      surfaceFieldParticles.splice(i, 1);
+      ambientCount -= 1;
+    }
+  }
+  while (ambientCount < SURFACE_FIELD_AMBIENT_TARGET && surfaceFieldParticles.length < SURFACE_FIELD_MAX_PARTICLES) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = radius * Math.sqrt(Math.random()) * 0.98;
+    const drift = 5 + Math.random() * 14;
+    const tangent = angle + Math.PI * 0.5 + (Math.random() - 0.5) * 0.9;
+    const ttl = 7 + Math.random() * 6;
+    surfaceFieldParticles.push({
+      kind: 'ambient',
+      x: cx + Math.cos(angle) * dist,
+      y: cy + Math.sin(angle) * dist,
+      vx: Math.cos(tangent) * drift,
+      vy: Math.sin(tangent) * drift,
+      ttl,
+      maxTtl: ttl,
+      size: 3.2 + Math.random() * 3.8,
+      hue: Math.random() < 0.55 ? 194 : (Math.random() < 0.5 ? 286 : 326),
+      pulse: Math.random() * Math.PI * 2,
+    });
+    ambientCount += 1;
+  }
+}
+function updateSurfaceReactiveField(dt = 0, playerWorld = null) {
+  if (!(surfaceFieldCanvasEl instanceof HTMLCanvasElement)) return;
+  const w = Math.max(1, Math.trunc(Number(window.innerWidth) || 1));
+  const h = Math.max(1, Math.trunc(Number(window.innerHeight) || 1));
+  if (surfaceFieldCanvasW !== w || surfaceFieldCanvasH !== h) {
+    surfaceFieldCanvasW = w;
+    surfaceFieldCanvasH = h;
+    surfaceFieldCanvasEl.width = w;
+    surfaceFieldCanvasEl.height = h;
+  }
+  const ctx = surfaceFieldCanvasEl.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, w, h);
+  const safeDt = Math.max(0, Math.min(0.05, Number(dt) || 0));
+  const player = playerWorld && typeof playerWorld === 'object' ? playerWorld : null;
+  maintainSurfaceAmbientParticles(player);
+  if (!surfaceFieldParticles.length) return;
+  applySurfaceShockwaveFronts(safeDt);
+  if (player) {
+    applySurfaceRepeller(player, 210, 270, safeDt, {
+      kindScale: { ambient: 1.15, dust: 0.8, shard: 0.35 },
+    });
+  }
+  if (dragPointerId !== null && Number.isFinite(Number(dragNowX)) && Number.isFinite(Number(dragNowY))) {
+    const pointerWorld = screenToWorld({ x: Number(dragNowX) || 0, y: Number(dragNowY) || 0 });
+    if (pointerWorld && Number.isFinite(pointerWorld.x) && Number.isFinite(pointerWorld.y)) {
+      applySurfaceRepeller(pointerWorld, 190, 360, safeDt, {
+        kindScale: { ambient: 1.45, dust: 0.95, shard: 0.3 },
+      });
+    }
+  }
+  if (player && Math.hypot(velocityX, velocityY) > 20) {
+    const px = Number(player.x) || 0;
+    const py = Number(player.y) || 0;
+    for (const p of surfaceFieldParticles) {
+      const dx = (Number(p.x) || 0) - px;
+      const dy = (Number(p.y) || 0) - py;
+      const d = Math.hypot(dx, dy);
+      if (!(d < 150) || d <= 0.001) continue;
+      const n = 1 - d / 150;
+      p.vx += ((dx / d) * 145 + velocityX * 0.14) * n * safeDt;
+      p.vy += ((dy / d) * 145 + velocityY * 0.14) * n * safeDt;
+      p.flash = Math.max(Number(p.flash) || 0, n * 0.8);
+    }
+  }
+  for (let i = surfaceFieldParticles.length - 1; i >= 0; i -= 1) {
+    const p = surfaceFieldParticles[i];
+    p.ttl = Math.max(0, Number(p.ttl) - safeDt);
+    if (p.ttl <= 0) {
+      surfaceFieldParticles.splice(i, 1);
+      continue;
+    }
+    p.x += (Number(p.vx) || 0) * safeDt;
+    p.y += (Number(p.vy) || 0) * safeDt;
+    p.vx *= Math.pow(p.kind === 'ambient' ? 0.82 : (p.kind === 'shard' ? 0.34 : 0.22), safeDt);
+    p.vy *= Math.pow(p.kind === 'ambient' ? 0.82 : (p.kind === 'shard' ? 0.34 : 0.22), safeDt);
+    p.rot = (Number(p.rot) || 0) + (Number(p.vr) || 0) * safeDt;
+    p.flash = Math.max(0, (Number(p.flash) || 0) - safeDt * 1.25);
+    const s = worldToScreen({ x: p.x, y: p.y });
+    if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
+    if (s.x < -40 || s.y < -40 || s.x > w + 40 || s.y > h + 40) continue;
+    const life = Math.max(0, Math.min(1, p.ttl / Math.max(0.001, Number(p.maxTtl) || 1)));
+    const hue = Math.trunc(Number(p.hue) || 195);
+    if (p.kind === 'ambient') {
+      const pulse = 0.72 + 0.28 * Math.sin(starfieldVisualPhase * 1.4 + (Number(p.pulse) || 0));
+      const speedGlow = Math.min(0.65, Math.hypot(Number(p.vx) || 0, Number(p.vy) || 0) / 260);
+      const flashGlow = Math.min(0.55, Number(p.flash) || 0);
+      ctx.globalAlpha = Math.max(0, Math.min(0.72, life * (0.44 + speedGlow + flashGlow) * pulse));
+      ctx.fillStyle = `hsl(${hue} 100% 78%)`;
+      const size = Math.max(1, Number(p.size) || 2) * (0.95 + pulse * 0.35 + speedGlow * 0.4 + flashGlow * 0.55);
+      ctx.fillRect(s.x - size * 0.5, s.y - size * 0.5, size, size);
+    } else if (p.kind === 'shard') {
+      const size = Math.max(4, Number(p.size) || 10) * (0.74 + life * 0.24);
+      const len = size * Math.max(0.25, Number(p.lengthScale) || 1);
+      const thick = Math.max(2, size * Math.max(0.1, Number(p.thicknessScale) || 0.3));
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(Number(p.rot) || 0);
+      ctx.globalAlpha = Math.min(0.95, life * (0.7 + Math.min(0.35, Number(p.flash) || 0)));
+      ctx.fillStyle = `hsl(${hue} 92% 67%)`;
+      ctx.strokeStyle = `hsl(${hue} 100% 82%)`;
+      ctx.lineWidth = 1.2;
+      if (p.shape === 'tri') {
+        ctx.beginPath();
+        ctx.moveTo(len * 0.48, 0);
+        ctx.lineTo(-len * 0.28, -thick * 0.9);
+        ctx.lineTo(-len * 0.42, thick * 0.78);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (p.shape === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(-len * 0.5, 0);
+        ctx.lineTo(len * 0.5, 0);
+        ctx.stroke();
+      } else {
+        ctx.fillRect(-len * 0.5, -thick * 0.5, len, thick);
+        ctx.strokeRect(-len * 0.5, -thick * 0.5, len, thick);
+      }
+      ctx.restore();
+    } else {
+      ctx.globalAlpha = life * 0.68;
+      ctx.fillStyle = `hsl(${hue} 100% 76%)`;
+      const size = Math.max(1, Number(p.size) || 2) * (0.75 + life * 0.55);
+      ctx.fillRect(s.x - size * 0.5, s.y - size * 0.5, size, size);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+function clearSurfaceReactiveField() {
+  surfaceFieldParticles.length = 0;
+  try {
+    const ctx = surfaceFieldCanvasEl?.getContext?.('2d');
+    ctx?.clearRect?.(0, 0, surfaceFieldCanvasEl.width || 0, surfaceFieldCanvasEl.height || 0);
+  } catch {}
 }
 function resetArenaPathState() {
   arenaPathHeadingRad = Math.random() * Math.PI * 2;
@@ -18733,6 +19022,14 @@ function damageEnemy(enemy, amount = 1) {
       x: window.innerWidth * 0.5,
       y: window.innerHeight * 0.5,
     };
+    const isComposerGroupMember = String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member';
+    const deathWorld = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+    spawnSurfaceDebris(deathWorld, {
+      count: isComposerGroupMember ? 5 : 9,
+      power: isComposerGroupMember ? 95 : 145,
+      size: isComposerGroupMember ? 1.8 : 2.3,
+    });
+    spawnSurfaceCorpse(enemy, deathWorld);
     if (enemy.tapOrbCarrier === true && enemy.tapOrbDropped !== true) {
       enemy.tapOrbDropped = true;
       try { tapOrbRuntime.spawnFromCarrierDeath({ world: { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 } }); } catch {}
@@ -18744,7 +19041,6 @@ function damageEnemy(enemy, amount = 1) {
     if (idx >= 0) enemies.splice(idx, 1);
     enemy.vx = 0;
     enemy.vy = 0;
-    const isComposerGroupMember = String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member';
     const deathEl = isComposerGroupMember
       ? null
       : withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.deathFx', () => {
@@ -26592,6 +26888,8 @@ function updateArenaVisual(scale = 1, showLimit = false) {
 }
 function addMusicExplosionEffect(centerW, radiusWorld = 285, ttlOverride = 0.72) {
   if (!enemyLayerEl) return;
+  spawnSurfaceDebris(centerW, { count: 12, power: 170, size: 2.4 });
+  pushSurfaceDebris(centerW, Math.max(320, (Number(radiusWorld) || 285) * 1.8), 780);
   const el = document.createElement('div');
   el.className = 'beat-swarm-fx-explosion is-music-explosion';
   el.style.transform = 'translate(-9999px, -9999px)';
@@ -26613,6 +26911,7 @@ function getVisibleScreenRadiusWorld(padWorld = 420) {
 }
 function addPinballShockwaveEffect(centerW) {
   if (!enemyLayerEl || !centerW) return;
+  spawnSurfaceDebris(centerW, { count: 18, power: 240, size: 2.8 });
   const el = document.createElement('div');
   el.className = 'beat-swarm-fx-pinball-shockwave';
   el.style.transform = 'translate(-9999px, -9999px)';
@@ -26636,6 +26935,7 @@ function addPinballShockwaveEffect(centerW) {
     hitPlayer: false,
     el,
   });
+  pushSurfaceDebris(centerW, Math.min(maxRadiusWorld, 1120), 1280);
   try {
     const candidates = (Array.isArray(enemies) ? enemies : [])
       .filter((enemy) => enemy && enemy.__bsRemoved !== true && !(Number(enemy.hp) <= 0))
@@ -27243,6 +27543,7 @@ function tick(nowMs) {
     updateMusicMissileCameraZoom(dt, centerWorldAfterMove);
   });
   withBeatSwarmPerfSample('pickupsCombat', () => updatePickupsAndCombat(dt));
+  withBeatSwarmPerfSample('surfaceField', () => updateSurfaceReactiveField(dt, centerWorldAfterMove));
   withBeatSwarmPerfSample('spawnerRuntime', () => {
     try { spawnerRuntime?.update?.(dt); } catch {}
   });
@@ -27437,6 +27738,7 @@ export function enterBeatSwarmMode(options = null) {
       clearProjectiles();
       clearEffects();
       clearHelpers();
+      clearSurfaceReactiveField();
       setBeatSwarmOnboardingPhase('weapon_gate');
       try { weaponGateIntroRuntime.start({ seed: enterOptions.weaponGateSeed || '' }); } catch {}
     }
@@ -27490,6 +27792,7 @@ export function enterBeatSwarmMode(options = null) {
   clearProjectiles();
   clearEffects();
   clearHelpers();
+  clearSurfaceReactiveField();
   clearPendingWeaponChainEvents();
   if (!restoreState) weaponChainEventSeq = 1;
   beatSwarmSessionStartBeatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
@@ -27675,6 +27978,7 @@ export function exitBeatSwarmMode() {
   perfEnemyRepeatRuntime.composerGroupId = 0;
   perfEnemyRepeatRuntime.persistent = true;
   perfEnemyRepeatRuntime.lastRhythmStep = -1;
+  clearSurfaceReactiveField();
   destroyWeaponSubBoards();
   const exitState = {
     active,

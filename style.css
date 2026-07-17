@@ -4452,6 +4452,16 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   z-index: 0;
 }
 
+.beat-swarm-surface-field {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: screen;
+}
+
 .beat-swarm-nebula-cloud {
   position: absolute;
   left: 0;
@@ -4536,21 +4546,6 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
 .beat-swarm-parallax-pixel-star.is-3 {
   background: rgba(196, 246, 255, .94);
   box-shadow: 0 0 5px rgba(128, 228, 255, .46);
-}
-
-.beat-swarm-large-star {
-  position: absolute;
-  left: 0;
-  top: 0;
-  pointer-events: none;
-  background: url("./src/art/BeatSwarm/starLarge.png") center center / contain no-repeat;
-  mix-blend-mode: screen;
-  filter:
-    saturate(1.22)
-    brightness(1.18)
-    drop-shadow(0 0 16px rgba(255, 255, 255, .48))
-    drop-shadow(0 0 36px rgba(165, 210, 255, .38));
-  z-index: 1;
 }
 
 .beat-swarm-planet-system {

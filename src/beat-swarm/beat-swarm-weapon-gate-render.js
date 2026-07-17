@@ -67,25 +67,23 @@ export function renderWeaponGateIntro(state, options = {}) {
 }
 
 function renderCorridorFlowParticles(state, corridorX = 0, opacity = 1) {
-  const laneOffsets = [-0.72, -0.52, -0.34, -0.18, 0, 0.18, 0.34, 0.52, 0.72];
-  const spacing = 82;
+  const laneOffsets = [-0.58, -0.18, 0.18, 0.58];
+  const spacing = 170;
   const width = Math.max(1, window.innerWidth);
   const progress = Number(state?.progress) || 0;
-  const flowDistance = progress + (Math.max(0, Number(state?.flowTime) || 0) * 520);
+  const flowDistance = progress + (Math.max(0, Number(state?.flowTime) || 0) * 470);
   const items = [];
   laneOffsets.forEach((offset, laneIndex) => {
-    const laneSpacing = spacing + ((laneIndex % 3) * 7);
+    const laneSpacing = spacing + ((laneIndex % 2) * 28);
     const phase = ((flowDistance * (0.55 + laneIndex * 0.035) + laneIndex * 43) % laneSpacing + laneSpacing) % laneSpacing;
-    for (let i = -3; i < Math.ceil(width / laneSpacing) + 4; i += 1) {
+    for (let i = -2; i < Math.ceil(width / laneSpacing) + 3; i += 1) {
       const x = (i * laneSpacing) - phase + corridorX;
       if (x < -110 || x > width + 120) continue;
       const localX = x - corridorX;
       const bounds = getWeaponGateCorridorScreenBoundsAtX(state, localX);
-      const prev = getWeaponGateCorridorScreenBoundsAtX(state, localX - 32);
-      const next = getWeaponGateCorridorScreenBoundsAtX(state, localX + 32);
-      const angle = Math.atan2(next.center - prev.center, 64) * 180 / Math.PI;
-      const laneRipple = Math.sin((flowDistance * 0.01) + (i * 0.9) + (laneIndex * 1.7)) * bounds.halfHeight * 0.035;
-      const y = bounds.center + (offset * bounds.halfHeight * 0.86) + laneRipple;
+      const next = getWeaponGateCorridorScreenBoundsAtX(state, localX + 72);
+      const angle = Math.atan2(next.center - bounds.center, 72) * 180 / Math.PI;
+      const y = bounds.center + (offset * bounds.halfHeight * 0.82);
       const edgeFade = Math.max(0.18, 1 - Math.abs(offset) * 0.52);
       const depth = 0.5 + (((i + laneIndex) % 5 + 5) % 5) * 0.1;
       const alpha = Math.max(0, Math.min(1, opacity * edgeFade * (0.2 + depth * 0.34)));
@@ -95,18 +93,7 @@ function renderCorridorFlowParticles(state, corridorX = 0, opacity = 1) {
       items.push(`<div class="beat-swarm-weapon-gate-flow${soft ? ' is-soft' : ''}" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;opacity:${alpha.toFixed(2)};transform:rotate(${angle.toFixed(2)}deg) scale(${scaleX.toFixed(2)},${scaleY.toFixed(2)})"></div>`);
     }
   });
-  const bands = laneOffsets.slice(1, -1).map((offset, idx) => {
-    const x = ((idx * 151) - ((flowDistance * 0.32 + idx * 29) % 151) + corridorX);
-    const wrappedX = ((x % (width + 220)) + (width + 220)) % (width + 220) - 110;
-    const localX = wrappedX - corridorX;
-    const bounds = getWeaponGateCorridorScreenBoundsAtX(state, localX);
-    const y = bounds.center + (offset * bounds.halfHeight * 0.72);
-    const prev = getWeaponGateCorridorScreenBoundsAtX(state, localX - 42);
-    const next = getWeaponGateCorridorScreenBoundsAtX(state, localX + 42);
-    const angle = Math.atan2(next.center - prev.center, 84) * 180 / Math.PI;
-    return `<div class="beat-swarm-weapon-gate-flow is-soft" style="left:${wrappedX.toFixed(1)}px;top:${y.toFixed(1)}px;opacity:${(opacity * 0.12).toFixed(2)};transform:rotate(${angle.toFixed(2)}deg) scale(2.1,.75)"></div>`;
-  });
-  return items.join('') + bands.join('');
+  return items.join('');
 }
 
 function renderDashPickup(state) {
