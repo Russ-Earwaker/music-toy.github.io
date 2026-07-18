@@ -62,6 +62,8 @@ export function applyWeaponGateWallBounce(state, y = 0, dir = 1) {
   state.vy = dir * Math.max(460, Math.abs(state.vy) * 0.9);
   state.speed = Math.min(740, state.speed + 80);
   state.wallPulseTtl = 0.25;
+  state.wallPulseX = getWeaponGateShipScreenPoint().x;
   const bounds = getWeaponGateCorridorBounds(state);
   state.wallPulseY = dir > 0 ? bounds.top : bounds.bottom;
+  state.wallPulseDir = dir > 0 ? 1 : -1;
 }

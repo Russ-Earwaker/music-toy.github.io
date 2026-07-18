@@ -120,8 +120,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     effectiveIntent: 'intro',
   };
 
-  const playerTuneAuthoredStep = helpers.isPlayerWeaponTuneStepAuthoredActive?.(stepIndex) === true;
+  const suppressPlayerWeapon = state.suppressPlayerWeapon === true;
+  const playerTuneAuthoredStep = !suppressPlayerWeapon && helpers.isPlayerWeaponTuneStepAuthoredActive?.(stepIndex) === true;
   const shouldEmitPlayerStep = (() => {
+    if (suppressPlayerWeapon) return false;
     if (!(playerStepDirective.emit === true || playerTuneAuthoredStep)) return false;
     const mode = String(playerStepDirective.mode || '').trim().toLowerCase();
     if (!playerTuneAuthoredStep && mode === 'guided_fire') return (stepIndex % 2) === 0;
@@ -2752,28 +2754,6 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       noteContractBlockedOrnamentEvent('queue', ev);
       continue;
     }
-    try {
-      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
-      const actionType = String(ev?.actionType || '').trim().toLowerCase();
-      const instrumentId = String(ev?.instrumentId || '').trim().toUpperCase();
-      const noteName = String(ev?.note || '').trim().toUpperCase();
-      const isSquareCandidate = String(payload?.soloCarrierType || '').trim().toLowerCase() === 'rhythm'
-        || (actionType === 'composer-group-explosion' && instrumentId === 'BASS TONE 3' && noteName === 'C3');
-      if (false && isSquareCandidate && typeof globalThis?.console?.log === 'function') {
-        globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
-          eventType: 'square_queue_event',
-          beatIndex,
-          stepIndex,
-          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
-          actionType,
-          instrumentId: String(ev?.instrumentId || '').trim(),
-          noteName: String(ev?.note || '').trim(),
-          musicProminence: String(payload?.musicProminence || '').trim().toLowerCase(),
-          audioGain: Number(payload?.audioGain) || 0,
-          soloCarrierType: String(payload?.soloCarrierType || '').trim().toLowerCase(),
-        }));
-      }
-    } catch {}
     const queued = helpers.director?.enqueueBeatEvent?.(ev);
     if (!queued) continue;
     queuedStepEvents += 1;
@@ -2799,30 +2779,6 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         return actionType === 'player-weapon-step' || sourceSystem === 'player';
       })
       : drainedRaw;
-    for (const ev of drained) {
-      try {
-        const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
-        const actionType = String(ev?.actionType || '').trim().toLowerCase();
-        const instrumentId = String(ev?.instrumentId || '').trim().toUpperCase();
-        const noteName = String(ev?.note || '').trim().toUpperCase();
-        const isSquareCandidate = String(payload?.soloCarrierType || '').trim().toLowerCase() === 'rhythm'
-          || (actionType === 'composer-group-explosion' && instrumentId === 'BASS TONE 3' && noteName === 'C3');
-        if (false && isSquareCandidate && typeof globalThis?.console?.log === 'function') {
-          globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
-            eventType: 'square_drain_event',
-            beatIndex,
-            stepIndex,
-            actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
-            actionType,
-            instrumentId: String(ev?.instrumentId || '').trim(),
-            noteName: String(ev?.note || '').trim(),
-            musicProminence: String(payload?.musicProminence || '').trim().toLowerCase(),
-            audioGain: Number(payload?.audioGain) || 0,
-            soloCarrierType: String(payload?.soloCarrierType || '').trim().toLowerCase(),
-          }));
-        }
-      } catch {}
-    }
     noteSlotSpawnerStage('drained', drained);
     for (const ev of drained) {
       if (isContractBlockedOrnamentEvent(ev)) {

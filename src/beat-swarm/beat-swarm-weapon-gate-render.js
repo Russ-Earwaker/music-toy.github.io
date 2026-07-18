@@ -15,7 +15,7 @@ export function ensureWeaponGateIntroStyle() {
     .beat-swarm-weapon-gate-corridor-edge{fill:none;stroke:rgba(100,216,255,.8);stroke-width:4;filter:drop-shadow(0 0 8px rgba(76,205,255,.2))}
     .beat-swarm-weapon-gate-flow{position:absolute;left:0;top:0;width:74px;height:3px;margin:-1.5px 0 0 -37px;border-radius:999px;transform-origin:50% 50%;background:linear-gradient(90deg,transparent,rgba(147,230,255,.18),rgba(225,251,255,.72),rgba(147,230,255,.2),transparent);box-shadow:0 0 9px rgba(118,224,255,.36);mix-blend-mode:screen}
     .beat-swarm-weapon-gate-flow.is-soft{height:2px;background:linear-gradient(90deg,transparent,rgba(118,224,255,.12),rgba(217,249,255,.42),rgba(118,224,255,.12),transparent);box-shadow:0 0 7px rgba(118,224,255,.2)}
-    .beat-swarm-weapon-gate-wall-pulse{position:absolute;left:0;right:0;height:8px;margin-top:-4px;background:#fff59b;box-shadow:0 0 26px #fff59b}
+    .beat-swarm-weapon-gate-wall-pulse{position:absolute;width:230px;height:9px;margin:-4.5px 0 0 -115px;border-radius:999px;transform-origin:50% 50%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),#fff59b,rgba(255,255,255,.85),transparent);box-shadow:0 0 22px #fff59b,0 0 42px rgba(100,216,255,.35)}
     .beat-swarm-weapon-gate{position:absolute;width:64px;border:2px solid rgba(142,232,255,.86);box-shadow:0 0 18px rgba(100,216,255,.22)}
     .beat-swarm-weapon-gate.is-next{border-color:#fff59b;box-shadow:0 0 26px rgba(255,245,155,.5)}
     .beat-swarm-weapon-gate.is-selected{opacity:.42}
@@ -30,7 +30,8 @@ export function ensureWeaponGateIntroStyle() {
     .beat-swarm-weapon-gate-target{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:1px solid rgba(222,245,255,.48);box-shadow:0 0 16px rgba(172,228,255,.28)}
     .beat-swarm-weapon-gate-target.is-hit{background:rgba(222,245,255,.28);box-shadow:0 0 24px rgba(172,228,255,.54);transform:scale(1.18)}
     .beat-swarm-weapon-gate-shot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:rgba(222,245,255,.96);box-shadow:0 0 10px rgba(172,228,255,.84)}
-    .beat-swarm-weapon-note-map{position:absolute;inset:0;overflow:visible}.beat-swarm-weapon-note-line{stroke:rgba(170,232,255,.34);stroke-width:1.5;filter:drop-shadow(0 0 4px rgba(170,232,255,.35))}.beat-swarm-weapon-note-star{position:absolute;border-radius:50%;background:#d9f7ff;box-shadow:0 0 12px rgba(170,232,255,.72),0 0 26px rgba(170,232,255,.32)}
+    .beat-swarm-weapon-note-handoff{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden;transition:opacity 120ms linear}
+    .beat-swarm-weapon-note-map{position:absolute;inset:0;overflow:visible}.beat-swarm-weapon-note-line{stroke:rgba(170,232,255,.36);stroke-width:1.6;filter:drop-shadow(0 0 5px rgba(170,232,255,.38))}.beat-swarm-weapon-note-star{position:absolute;border-radius:50%;background:#d9f7ff;box-shadow:0 0 12px rgba(170,232,255,.72),0 0 26px rgba(170,232,255,.32);transition:opacity 80ms linear}
     .beat-swarm-weapon-dash-pickup{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:#b7f4ff;box-shadow:0 0 18px rgba(183,244,255,.9),0 0 34px rgba(183,244,255,.45)}
   `;
   document.head.appendChild(style);
@@ -51,9 +52,7 @@ export function renderWeaponGateIntro(state, options = {}) {
   const corridorX = state.phase === 'outro' ? -Math.min(window.innerWidth + 180, outroN * (window.innerWidth + 180)) : 0;
   const corridorOpacity = state.phase === 'outro' ? Math.max(0, 1 - Math.max(0, outroN - 0.42) / 0.58) : 1;
   const gateHtml = state.gates.map((gate) => renderGate(state, gate, gate.x - state.progress)).join('');
-  const pulse = state.wallPulseTtl > 0
-    ? `<div class="beat-swarm-weapon-gate-wall-pulse" style="top:${state.wallPulseY}px;opacity:${Math.min(1, state.wallPulseTtl / 0.25).toFixed(2)}"></div>`
-    : '';
+  const pulse = renderWallPulse(state);
   const targetHtml = state.targets.map((target) => `<div class="beat-swarm-weapon-gate-target${target.hit ? ' is-hit' : ''}" style="left:${target.x}px;top:${target.y}px;opacity:${Math.min(1, target.ttl * 2).toFixed(2)}"></div>`).join('');
   const shotHtml = state.shots.map((shot) => `<div class="beat-swarm-weapon-gate-shot" style="left:${shot.x}px;top:${shot.y}px"></div>`).join('');
   const impactClass = state.feedbackKind === 'damage' ? ' is-damage' : '';
@@ -64,6 +63,18 @@ export function renderWeaponGateIntro(state, options = {}) {
     <div class="beat-swarm-weapon-gate-hud">Gate ${Math.min(state.nextGateIndex + 1, totalSlots)}/${totalSlots}<br>Notes ${state.ratioState.selectedNotes}/${state.ratioState.targetNotes} Silence ${state.ratioState.selectedSilences}/${state.ratioState.targetSilences}<br>${state.summary.join(' ')}</div>
     ${state.feedbackTtl > 0 ? `<div class="beat-swarm-weapon-gate-impact${impactClass}">${state.feedbackText}</div>` : ''}
   `;
+}
+
+function renderWallPulse(state) {
+  if (!(state?.wallPulseTtl > 0)) return '';
+  const x = Number(state.wallPulseX) || (window.innerWidth * 0.5);
+  const dir = Number(state.wallPulseDir) >= 0 ? 1 : -1;
+  const bounds = getWeaponGateCorridorScreenBoundsAtX(state, x);
+  const next = getWeaponGateCorridorScreenBoundsAtX(state, x + 72);
+  const angle = Math.atan2(next.center - bounds.center, 72) * 180 / Math.PI;
+  const y = dir > 0 ? bounds.top : bounds.bottom;
+  const opacity = Math.min(1, Math.max(0, Number(state.wallPulseTtl) || 0) / 0.25);
+  return `<div class="beat-swarm-weapon-gate-wall-pulse" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;opacity:${opacity.toFixed(2)};transform:rotate(${angle.toFixed(2)}deg) scale(${(0.88 + opacity * 0.28).toFixed(2)},1)"></div>`;
 }
 
 function renderCorridorFlowParticles(state, corridorX = 0, opacity = 1) {
@@ -105,6 +116,7 @@ function renderDashPickup(state) {
 }
 
 function renderNoteMap(state, notePool, totalSlots) {
+  if (state?.hideNoteMap === true) return '';
   const stars = state.noteStars;
   if (!stars.length) return '';
   const endProgress = getWeaponGateEndProgress(totalSlots);
@@ -120,9 +132,12 @@ function renderNoteMap(state, notePool, totalSlots) {
     const flash = Math.max(0, 1 - (Number(star.age) || 0) / 0.55);
     const stepPulse = star.slot === state.noteStarPulseSlot ? pulse : 0;
     const glow = Math.max(flash, stepPulse);
-    const size = 12 + glow * 10;
+    const size = 12 + glow * 16;
     const note = String(star.note || notePool[0] || '').trim();
-    return `<div class="beat-swarm-weapon-note-star" title="${note}" style="left:${(star.x + ox).toFixed(1)}px;top:${(star.y + oy).toFixed(1)}px;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;margin:${(-size / 2).toFixed(1)}px 0 0 ${(-size / 2).toFixed(1)}px;opacity:${(0.58 + glow * 0.36).toFixed(2)}"></div>`;
+    const shadow = glow > 0
+      ? `0 0 ${(14 + glow * 10).toFixed(1)}px rgba(255,255,255,${(0.5 + glow * 0.42).toFixed(2)}),0 0 ${(32 + glow * 24).toFixed(1)}px rgba(170,232,255,${(0.32 + glow * 0.34).toFixed(2)})`
+      : '0 0 12px rgba(170,232,255,.72),0 0 26px rgba(170,232,255,.32)';
+    return `<div class="beat-swarm-weapon-note-star" title="${note}" style="left:${(star.x + ox).toFixed(1)}px;top:${(star.y + oy).toFixed(1)}px;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;margin:${(-size / 2).toFixed(1)}px 0 0 ${(-size / 2).toFixed(1)}px;opacity:${(0.58 + glow * 0.4).toFixed(2)};box-shadow:${shadow};background:${glow > 0.55 ? '#fff' : '#d9f7ff'}"></div>`;
   }).join('');
   return `<svg class="beat-swarm-weapon-note-map" aria-hidden="true">${lines}</svg>${dots}`;
 }

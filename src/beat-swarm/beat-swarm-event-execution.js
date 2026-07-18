@@ -1186,28 +1186,6 @@ export function executePerformedBeatEventRuntime(options = null) {
         }, { beatIndex, stepIndex, barIndex });
       } catch {}
     };
-    const payloadSoloCarrierType = String(ev?.payload?.soloCarrierType || '').trim().toLowerCase();
-    const isSquareCandidate = payloadSoloCarrierType === 'rhythm'
-      || (
-        String(ev?.actionType || '').trim().toLowerCase() === 'composer-group-explosion'
-        && String(ev?.instrumentId || '').trim().toUpperCase() === 'BASS TONE 3'
-        && String(ev?.note || '').trim().toUpperCase() === 'C3'
-      );
-    try {
-      if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
-        globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
-          eventType: 'square_exec_lookup',
-          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
-          foundEnemy: !!enemy,
-          enemyType: String(enemy?.enemyType || '').trim().toLowerCase(),
-          enemySoloCarrierType: String(enemy?.soloCarrierType || '').trim().toLowerCase(),
-          actionType,
-          instrumentId: String(ev?.instrumentId || '').trim(),
-          noteName: String(ev?.note || '').trim(),
-          payloadSoloCarrierType,
-        }));
-      }
-    } catch {}
     if ((!enemy || String(enemy?.enemyType || '') !== 'composer-group-member') && !ghostPlayback) {
       noteComposerExecutionStage('missing_enemy', {
         failureReason: !enemy ? 'missing_enemy' : 'wrong_enemy_type',
@@ -1239,18 +1217,6 @@ export function executePerformedBeatEventRuntime(options = null) {
         }
       )
       : helpers.getEnemyMusicGroup?.(enemy, actionType);
-    try {
-      if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
-        globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
-          eventType: 'square_exec_group',
-          actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
-          foundGroup: !!group,
-          groupId: Math.max(0, Math.trunc(Number(group?.id) || 0)),
-          groupSoloCarrierType: String(group?.soloCarrierType || '').trim().toLowerCase(),
-          payloadSoloCarrierType: String(ev?.payload?.soloCarrierType || '').trim().toLowerCase(),
-        }));
-      }
-    } catch {}
     if (!group) {
       noteComposerExecutionStage('missing_group', {
         failureReason: 'missing_group',
@@ -1431,18 +1397,6 @@ export function executePerformedBeatEventRuntime(options = null) {
       }
     }
     if (enemyAudible) {
-      try {
-        if (false && isSquareCandidate && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
-          globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
-            eventType: 'square_exec_trigger',
-            actorId: Math.max(0, Math.trunc(Number(ev?.actorId) || 0)),
-            instrumentId: String(instrumentId || '').trim(),
-            noteName: String(noteName || '').trim(),
-            triggerVolume: Number(triggerVolume) || 0,
-            execSoloType,
-          }));
-        }
-      } catch {}
       try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
       if (enemy) {
         enemy.lastMusicalActionBeatIndex = beatIndex;
@@ -1507,19 +1461,6 @@ export function executePerformedBeatEventRuntime(options = null) {
         enemy.el.classList.add('is-solo-note-active');
         try { enemy.el.style.setProperty('--bs-solo-pulse-level', '1'); } catch {}
       }
-      try {
-        if (false && typeof globalThis !== 'undefined' && typeof globalThis.console?.log === 'function') {
-          globalThis.console.log('[BS-INTRO-DEBUG]', JSON.stringify({
-            eventType: 'square_exec_direct_pulse',
-            enemyId: Math.trunc(Number(enemy?.id) || 0),
-            groupId: Math.trunc(Number(group?.id) || 0),
-            soloCarrierType: execSoloType,
-            pulseDur: directPulseDur,
-            className: enemy?.el instanceof HTMLElement ? String(enemy.el.className || '') : '',
-            hasEl: enemy?.el instanceof HTMLElement,
-          }));
-        }
-      } catch {}
     }
     enemy.composerActionPulseDur = Math.max(0.01, Number(enemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);
     enemy.composerActionPulseT = Math.max(0.01, Number(enemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);

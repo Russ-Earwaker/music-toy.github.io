@@ -54,6 +54,7 @@ export function finishWeaponGateSelection(state, options = {}) {
   try { options.applySelections?.(0, selections); } catch {}
   try { options.onComplete?.(); } catch {}
   state.phase = 'outro';
+  state.hideNoteMap = true;
   state.completeDelay = state.outroDuration;
   state.feedbackKind = 'complete';
   state.feedbackText = 'Weapon tune complete';
