@@ -7,8 +7,15 @@ export function tickWeaponGateTransientEffects(state, dt = 0) {
   state.feedbackTtl = Math.max(0, state.feedbackTtl - safeDt);
   state.wallPulseTtl = Math.max(0, state.wallPulseTtl - safeDt);
   state.noteStarPulseT = Math.max(0, (Number(state.noteStarPulseT) || 0) - safeDt);
+  for (const gate of state.gates || []) {
+    if (!gate || !(Number(gate.heroTtl) > 0)) continue;
+    gate.heroTtl = Math.max(0, (Number(gate.heroTtl) || 0) - safeDt);
+  }
   updateWeaponGateShots(state, safeDt);
-  for (const star of state.noteStars) star.age = (Number(star.age) || 0) + safeDt;
+  for (const star of state.noteStars) {
+    star.age = (Number(star.age) || 0) + safeDt;
+    star.burstT = Math.max(0, (Number(star.burstT) || 0) - safeDt);
+  }
 }
 
 export function spawnWeaponGateShot(state, note = 'C4') {
@@ -51,8 +58,11 @@ export function addWeaponGateNoteStar(state, selection = null) {
     note: selection?.note || '',
     slot: point.slot,
     age: 0,
+    burstT: 0.56,
   };
   state.noteStars.push(star);
+  state.noteStarPulseSlot = point.slot;
+  state.noteStarPulseT = Math.max(Number(state.noteStarPulseT) || 0, 0.22);
   return star;
 }
 

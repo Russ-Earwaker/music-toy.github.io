@@ -1,9 +1,9 @@
 import { WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
-import { applyWeaponGateWallBounce, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-18-rhythm-visuals-v10';
+import { applyWeaponGateWallBounce, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-19-rhythm-visuals-v32';
 import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
 import { updateWeaponGateDashPickup } from './beat-swarm-weapon-gate-pickups.js?v=2026-06-18-corridor-curve-v1';
-import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-18-rhythm-visuals-v10';
-import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-18-rhythm-visuals-v10';
+import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-19-rhythm-visuals-v32';
+import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-19-rhythm-visuals-v32';
 import { createWeaponGateIntroState } from './beat-swarm-weapon-gate-state.js?v=2026-07-16-pinball-bouncers-v45';
 
 export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {

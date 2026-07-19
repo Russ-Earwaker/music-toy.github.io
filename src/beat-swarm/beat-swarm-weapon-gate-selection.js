@@ -1,7 +1,7 @@
 import { applyWeaponGateSelection } from './beat-swarm-weapon-gate-ratio.js';
 import { summarizeWeaponGateSelection } from './beat-swarm-weapon-gate-core.js';
 import { WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
-import { addWeaponGateNoteStar, spawnWeaponGateShot } from './beat-swarm-weapon-gate-effects.js?v=2026-06-18-corridor-curve-v1';
+import { addWeaponGateNoteStar, spawnWeaponGateShot } from './beat-swarm-weapon-gate-effects.js?v=2026-07-19-rhythm-visuals-v32';
 import { clampWeaponGateValue, getWeaponGateCorridorWorldBounds, getWeaponGateShipScreenPoint, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
 import { appendNextWeaponGate } from './beat-swarm-weapon-gate-state.js?v=2026-06-18-corridor-curve-v1';
 
@@ -26,6 +26,8 @@ export function chooseCurrentWeaponGate(state, options = {}) {
   };
   gate.selected = true;
   gate.selectedSectionIndex = idx;
+  gate.heroTtl = 0.72;
+  gate.heroSectionIndex = idx;
   state.selections[gate.slotIndex] = selection;
   state.summary[gate.slotIndex] = summarizeWeaponGateSelection(selection);
   applyWeaponGateSelection(state.ratioState, selection);

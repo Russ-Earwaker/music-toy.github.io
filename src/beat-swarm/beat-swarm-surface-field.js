@@ -1,5 +1,6 @@
 const SURFACE_FIELD_MAX_PARTICLES = 240;
 const SURFACE_FIELD_AMBIENT_TARGET = 92;
+const SURFACE_FIELD_RING_STREAM_TARGET = 76;
 
 function isFinitePoint(point) {
   return !!point && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y));
@@ -108,10 +109,10 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
       const d = Math.hypot(dx, dy);
       if (!(d < radius) || d <= 0.001) continue;
       const n = 1 - (d / radius);
-      const kindBoost = p.kind === 'shard' ? 1.75 : (p.kind === 'ambient' ? 0.42 : 1);
+      const kindBoost = p.kind === 'shard' ? 1.75 : ((p.kind === 'ambient' || p.kind === 'ringStream') ? 0.42 : 1);
       p.vx += (dx / d) * force * n * kindBoost;
       p.vy += (dy / d) * force * n * kindBoost;
-      p.flash = Math.max(Number(p.flash) || 0, n * (p.kind === 'ambient' ? 0.35 : 1));
+      p.flash = Math.max(Number(p.flash) || 0, n * ((p.kind === 'ambient' || p.kind === 'ringStream') ? 0.35 : 1));
     }
   }
 
@@ -133,6 +134,28 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
       p.vx += (dx / d) * force * n * safeDt * scale;
       p.vy += (dy / d) * force * n * safeDt * scale;
       p.flash = Math.max(Number(p.flash) || 0, n * Math.min(1, scale));
+    }
+  }
+
+  function applyContactBurst(centerWorld = null, radiusWorld = 70, power = 880, dt = 0, options = null) {
+    if (!isFinitePoint(centerWorld) || !particles.length) return;
+    const cx = Number(centerWorld.x) || 0;
+    const cy = Number(centerWorld.y) || 0;
+    const radius = Math.max(1, Number(radiusWorld) || 1);
+    const force = Math.max(0, Number(power) || 0);
+    const safeDt = Math.max(0, Math.min(0.08, Number(dt) || 0));
+    const kindScale = options && typeof options.kindScale === 'object' ? options.kindScale : null;
+    for (const p of particles) {
+      if (!(p.kind === 'ambient' || p.kind === 'ringStream')) continue;
+      const dx = (Number(p.x) || 0) - cx;
+      const dy = (Number(p.y) || 0) - cy;
+      const d = Math.hypot(dx, dy);
+      if (!(d < radius) || d <= 0.001) continue;
+      const n = Math.pow(1 - (d / radius), 1.7);
+      const scale = Math.max(0, Number(kindScale?.[p.kind]) || 1);
+      p.vx += (dx / d) * force * n * safeDt * scale;
+      p.vy += (dy / d) * force * n * safeDt * scale;
+      p.flash = Math.max(Number(p.flash) || 0, n);
     }
   }
 
@@ -160,10 +183,10 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
         const edgeDistance = Math.abs(d - nextRadius);
         const n = Math.max(0, 1 - edgeDistance / Math.max(80, Number(fx.ringWidthWorld) || 170));
         if (!(n > 0)) continue;
-        const kindBoost = p.kind === 'shard' ? 1.45 : (p.kind === 'ambient' ? 0.18 : 0.65);
+        const kindBoost = p.kind === 'shard' ? 1.45 : ((p.kind === 'ambient' || p.kind === 'ringStream') ? 0.18 : 0.65);
         p.vx += (dx / d) * power * n * safeDt * kindBoost;
         p.vy += (dy / d) * power * n * safeDt * kindBoost;
-        p.flash = Math.max(Number(p.flash) || 0, n * (p.kind === 'ambient' ? 0.22 : 0.85));
+        p.flash = Math.max(Number(p.flash) || 0, n * ((p.kind === 'ambient' || p.kind === 'ringStream') ? 0.22 : 0.85));
       }
       fx.__surfaceFieldRadiusWorld = nextRadius;
     }
@@ -203,11 +226,67 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
         vy: Math.sin(tangent) * drift,
         ttl,
         maxTtl: ttl,
-        size: 3.2 + Math.random() * 3.8,
-        hue: Math.random() < 0.55 ? 194 : (Math.random() < 0.5 ? 286 : 326),
+        size: 1.8,
+        hue: 194,
         pulse: Math.random() * Math.PI * 2,
       });
       ambientCount += 1;
+    }
+  }
+
+  function resetRingStreamParticle(p, center, arenaRadiusWorld) {
+    const angle = Math.random() * Math.PI * 2;
+    const resistRange = Math.max(80, Number(constants.swarmArenaResistRangeWorld) || arenaRadiusWorld * 0.16);
+    const outerRadius = arenaRadiusWorld * (0.99 + Math.random() * 0.015);
+    const innerRadius = Math.max(arenaRadiusWorld * 0.72, arenaRadiusWorld - resistRange * (0.92 + Math.random() * 0.08));
+    p.kind = 'ringStream';
+    p.angle = angle;
+    p.radial = outerRadius;
+    p.innerRadial = innerRadius;
+    p.outerRadial = outerRadius;
+    p.radialSpeed = arenaRadiusWorld * (0.035 + Math.random() * 0.035);
+    p.x = (Number(center.x) || 0) + Math.cos(angle) * outerRadius;
+    p.y = (Number(center.y) || 0) + Math.sin(angle) * outerRadius;
+    p.vx = 0;
+    p.vy = 0;
+    p.ttl = 9999;
+    p.maxTtl = 9999;
+    p.size = 2.1;
+    p.hue = 194;
+    p.pulse = Math.random() * Math.PI * 2;
+    p.flash = 0;
+  }
+
+  function maintainRingStreamParticles(dt = 0, center = null) {
+    if (!isFinitePoint(center)) return;
+    const arenaRadiusWorld = Math.max(1, Number(constants.swarmArenaRadiusWorld) || 1100);
+    let ringCount = 0;
+    for (let i = particles.length - 1; i >= 0; i -= 1) {
+      const p = particles[i];
+      if (p?.kind !== 'ringStream') continue;
+      ringCount += 1;
+      p.radial = (Number(p.radial) || arenaRadiusWorld) - (Number(p.radialSpeed) || 40) * Math.max(0, Number(dt) || 0);
+      p.angle = (Number(p.angle) || 0) + Math.sin((Number(p.pulse) || 0) + (Number(p.radial) || 0) * 0.001) * 0.0008;
+      const innerRadial = Math.max(1, Number(p.innerRadial) || arenaRadiusWorld * 0.74);
+      if ((Number(p.radial) || 0) <= innerRadial) {
+        resetRingStreamParticle(p, center, arenaRadiusWorld);
+      } else {
+        const a = Number(p.angle) || 0;
+        const r = Number(p.radial) || arenaRadiusWorld;
+        p.x = (Number(center.x) || 0) + Math.cos(a) * r;
+        p.y = (Number(center.y) || 0) + Math.sin(a) * r;
+      }
+    }
+    while (ringCount < SURFACE_FIELD_RING_STREAM_TARGET && particles.length < SURFACE_FIELD_MAX_PARTICLES) {
+      const p = {};
+      resetRingStreamParticle(p, center, arenaRadiusWorld);
+      const span = Math.max(1, (Number(p.outerRadial) || arenaRadiusWorld) - (Number(p.innerRadial) || arenaRadiusWorld * 0.74));
+      p.radial = (Number(p.innerRadial) || arenaRadiusWorld * 0.74) + Math.random() * span;
+      const a = Number(p.angle) || 0;
+      p.x = (Number(center.x) || 0) + Math.cos(a) * p.radial;
+      p.y = (Number(center.y) || 0) + Math.sin(a) * p.radial;
+      particles.push(p);
+      ringCount += 1;
     }
   }
 
@@ -226,20 +305,35 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
     ctx.clearRect(0, 0, w, h);
     const safeDt = Math.max(0, Math.min(0.05, Number(dt) || 0));
     const player = playerWorld && typeof playerWorld === 'object' ? playerWorld : null;
-    maintainAmbientParticles(player);
+    const state = getState() || {};
+    const arenaVisible = state.arenaVisible !== false;
+    const arenaCenter = state.arenaCenterWorld || player;
+    if (arenaVisible) {
+      maintainAmbientParticles(player);
+      maintainRingStreamParticles(safeDt, arenaCenter);
+    } else {
+      for (let i = particles.length - 1; i >= 0; i -= 1) {
+        if (particles[i]?.kind === 'ambient' || particles[i]?.kind === 'ringStream') particles.splice(i, 1);
+      }
+    }
     if (!particles.length) return;
     applyShockwaveFronts(safeDt);
-    const state = getState() || {};
     if (player) {
       applyRepeller(player, 210, 270, safeDt, {
-        kindScale: { ambient: 1.15, dust: 0.8, shard: 0.35 },
+        kindScale: { ambient: 1.15, ringStream: 1.15, dust: 0.8, shard: 0.35 },
+      });
+      applyContactBurst(player, 86, 1220, safeDt, {
+        kindScale: { ambient: 1.15, ringStream: 1.15 },
       });
     }
     if (state.dragPointerId !== null && Number.isFinite(Number(state.dragNowX)) && Number.isFinite(Number(state.dragNowY))) {
       const pointerWorld = screenToWorld({ x: Number(state.dragNowX) || 0, y: Number(state.dragNowY) || 0 });
       if (isFinitePoint(pointerWorld)) {
         applyRepeller(pointerWorld, 190, 360, safeDt, {
-          kindScale: { ambient: 1.45, dust: 0.95, shard: 0.3 },
+          kindScale: { ambient: 1.45, ringStream: 1.45, dust: 0.95, shard: 0.3 },
+        });
+        applyContactBurst(pointerWorld, 74, 980, safeDt, {
+          kindScale: { ambient: 1.35, ringStream: 1.35 },
         });
       }
     }
@@ -259,7 +353,6 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
         p.flash = Math.max(Number(p.flash) || 0, n * 0.8);
       }
     }
-    const phase = Number(state.starfieldVisualPhase) || 0;
     for (let i = particles.length - 1; i >= 0; i -= 1) {
       const p = particles[i];
       p.ttl = Math.max(0, Number(p.ttl) - safeDt);
@@ -278,13 +371,13 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
       if (s.x < -40 || s.y < -40 || s.x > w + 40 || s.y > h + 40) continue;
       const life = Math.max(0, Math.min(1, p.ttl / Math.max(0.001, Number(p.maxTtl) || 1)));
       const hue = Math.trunc(Number(p.hue) || 195);
-      if (p.kind === 'ambient') {
-        const pulse = 0.72 + 0.28 * Math.sin(phase * 1.4 + (Number(p.pulse) || 0));
-        const speedGlow = Math.min(0.65, Math.hypot(Number(p.vx) || 0, Number(p.vy) || 0) / 260);
-        const flashGlow = Math.min(0.55, Number(p.flash) || 0);
-        ctx.globalAlpha = Math.max(0, Math.min(0.72, life * (0.44 + speedGlow + flashGlow) * pulse));
-        ctx.fillStyle = `hsl(${hue} 100% 78%)`;
-        const size = Math.max(1, Number(p.size) || 2) * (0.95 + pulse * 0.35 + speedGlow * 0.4 + flashGlow * 0.55);
+      if (p.kind === 'ambient' || p.kind === 'ringStream') {
+        const speedGlow = Math.min(1, Math.hypot(Number(p.vx) || 0, Number(p.vy) || 0) / 230);
+        const flashGlow = Math.min(1, Number(p.flash) || 0);
+        const motionGlow = Math.max(speedGlow, flashGlow);
+        ctx.globalAlpha = Math.max(0, Math.min(1, arenaVisible ? 1 : 0));
+        ctx.fillStyle = motionGlow > 0.08 ? `hsl(${hue} 100% 86%)` : `hsl(${hue} 96% 66%)`;
+        const size = Math.max(1.1, Number(p.size) || 1.8) * (1 + motionGlow * 1.65);
         ctx.fillRect(s.x - size * 0.5, s.y - size * 0.5, size, size);
       } else if (p.kind === 'shard') {
         const size = Math.max(4, Number(p.size) || 10) * (0.74 + life * 0.24);

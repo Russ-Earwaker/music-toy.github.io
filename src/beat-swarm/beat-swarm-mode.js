@@ -22,9 +22,9 @@ import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-15-pinball-bouncers-v23';
-import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-15-pinball-bouncers-v23';
-import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-18-surface-field-v1';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-18-rhythm-visuals-v10';
+import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-19-pinball-bouncers-v24';
+import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-19-rhythm-visuals-v32';
 import { WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-22-quantized-bridge-v5';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
@@ -256,9 +256,11 @@ let dragNowY = 0;
 let velocityX = 0;
 let velocityY = 0;
 let shipFacingDeg = 0;
+let arenaIntroBlend = 1;
 const surfaceFieldRuntime = createBeatSwarmSurfaceFieldRuntime({
   constants: {
     swarmArenaRadiusWorld: SWARM_ARENA_RADIUS_WORLD,
+    swarmArenaResistRangeWorld: SWARM_ARENA_RESIST_RANGE_WORLD,
   },
   getState: () => ({
     arenaCenterWorld,
@@ -268,6 +270,7 @@ const surfaceFieldRuntime = createBeatSwarmSurfaceFieldRuntime({
     velocityX,
     velocityY,
     starfieldVisualPhase,
+    arenaVisible: arenaIntroBlend > 0.08,
     effects,
   }),
   helpers: {
@@ -1547,8 +1550,7 @@ function maybeStartWeaponGatePostHandoffOnboardingEvent(stepIndex = 0) {
   }
 }
 function shouldSuppressPlayerWeaponForWeaponGate() {
-  return weaponGateIntroRuntime.isActive?.() === true
-    && !(weaponTunePlaybackRuntime.handoffVisual && weaponTunePlaybackRuntime.handoffVisual.active === true);
+  return weaponGateIntroRuntime.isActive?.() === true;
 }
 function startTapOrbFoundationRewriteEvent(options = null) {
   if (tapOrbRuntime.isActive() || beatSwarmOnboardingRuntime.phase === 'tap_orb_foundation') return null;
@@ -1866,6 +1868,7 @@ const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
       musicLaneId: laneId,
       stepIndex,
     }, accent ? 0.62 : 0.54);
+    try { pulseMusicMotifConstellation(laneId, stepIndex, 0.24); } catch {}
     try {
       noteMusicSystemEvent('tap_orb_quantized_motif_trigger', {
         themeId,
@@ -2102,8 +2105,12 @@ const musicMissileRuntime = createBeatSwarmMusicMissileRuntime({
       stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
       eventId: String(event.eventId || '').trim(),
     }, loopPlayback ? 0.66 : 1.0);
+    try { pulseMusicMotifConstellation(target.laneId, event.stepIndex, loopPlayback ? 0.24 : 0.34); } catch {}
     if (!loopPlayback) {
-      triggerBeatSwarmInstrument('Gaming Bling', note, undefined, 'master', {
+      const shimmerInstrumentId = getIdForDisplayName('Gaming Bling')
+        || resolveSwarmSoundInstrumentId('enemyDeath')
+        || 'tone';
+      triggerBeatSwarmInstrument(shimmerInstrumentId, note, undefined, 'master', {
         source: 'music-missile-impact-shimmer',
         musicLaneId: target.laneId,
         stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
@@ -2115,7 +2122,7 @@ const musicMissileRuntime = createBeatSwarmMusicMissileRuntime({
   createMusicExplosion(event = {}) {
     const at = event.at && typeof event.at === 'object' ? event.at : getViewportCenterWorld();
     try { addMusicExplosionEffect(at, 285, 0.72); } catch {}
-    try { damageEnemiesNearTapOrb(at, 285, 16); } catch {}
+    try { damageEnemiesNearTapOrb(at, 285, 16, { suppressDeathSound: true, source: 'music_missile_explosion' }); } catch {}
     try {
       noteMusicSystemEvent('music_missile_quantized_explosion', {
         eventId: String(event.eventId || '').trim(),
@@ -2222,6 +2229,7 @@ const pinballBouncerRuntime = createBeatSwarmPinballBouncerRuntime({
       stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
       eventId: String(event.eventId || '').trim(),
     }, event.loopPlayback === true ? 0.64 : 0.92);
+    try { pulseMusicMotifConstellation(target.laneId, event.stepIndex, event.loopPlayback === true ? 0.24 : 0.34); } catch {}
     try { pulsePlayerShipNoteFlash(); } catch {}
   },
   createImpactEffect(event = {}) {
@@ -12435,6 +12443,19 @@ const rhythmAuthoringTimelineRuntime = {
   completed: false,
   fadeT: 0,
 };
+const musicMotifConstellationRuntime = {
+  layer: null,
+  bursts: [],
+  constellations: [],
+  lastStepIndex: -1,
+};
+const musicMotifConstellationDebug = {
+  launches: 0,
+  pulseLogs: 0,
+  missingPulseKeys: new Set(),
+  last: null,
+  history: [],
+};
 let currentBeatIndex = 0;
 let beatSwarmSessionStartBeatIndex = 0;
 let beatSwarmSessionSeed = 0;
@@ -13820,7 +13841,32 @@ function logWeaponTuneFireDebug(event, payload = null) {
     console.log('[BS-TUNE-DEBUG]', event, { seq: weaponTuneFireDebug.seq, ...(payload && typeof payload === 'object' ? payload : {}) });
   } catch {}
 }
-function clearWeaponGateHandoffVisual() {
+function completeWeaponGateHandoffConstellation(reason = 'weapon_handoff_complete', stepIndex = 0) {
+  const visual = weaponTunePlaybackRuntime.handoffVisual;
+  const snapshot = visual && typeof visual === 'object' && visual.constellation && typeof visual.constellation === 'object'
+    ? visual.constellation
+    : null;
+  if (!snapshot || visual.completed === true) return false;
+  visual.completed = true;
+  noteMusicMotifConstellationDebug('timeline-complete', {
+    eventId: String(snapshot.eventId || ''),
+    mode: String(snapshot.mode || 'weapon'),
+    laneId: String(snapshot.laneId || ''),
+    reason: String(reason || 'weapon_handoff_complete'),
+    stepCount: Math.max(1, Math.trunc(Number(snapshot.stepCount) || 1)),
+    stepIndex: getWeaponTunePlaybackStepIndex(stepIndex),
+    activeSteps: Array.isArray(snapshot.steps)
+      ? snapshot.steps.map((activeStep, idx) => activeStep ? idx : -1).filter((idx) => idx >= 0)
+      : [],
+  });
+  launchMusicMotifConstellationFromTimeline(snapshot);
+  return true;
+}
+function clearWeaponGateHandoffVisual(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  if (opts.launchConstellation === true) {
+    completeWeaponGateHandoffConstellation(opts.reason || 'weapon_handoff_clear', opts.stepIndex);
+  }
   weaponTunePlaybackRuntime.handoffVisual = null;
   weaponTunePlaybackRuntime.pendingAlignToFirst = false;
   clearPendingWeaponGatePostHandoffOnboardingEvent();
@@ -13849,6 +13895,16 @@ function snapshotWeaponGateHandoffVisual() {
     active: false,
     anchorStepIndex: 0,
     fadeLoops: 4,
+    completed: false,
+    constellation: {
+      mode: 'weapon',
+      eventId: 'weapon-gate-handoff',
+      themeId: 'playerWeapon',
+      laneId: 'player_weapon_lane',
+      stepCount: getWeaponTuneMotifStepCount(),
+      steps: Array.from({ length: getWeaponTuneMotifStepCount() }, (_, idx) => nodes.some((node) => node.slot === idx && node.active !== false)),
+      nodes,
+    },
   };
   startMusicMotifVisualizer({
     mode: 'weapon',
@@ -13890,16 +13946,27 @@ function updateWeaponGateHandoffVisual(dt = 0, stepIndex = null) {
     const fadeSteps = motifSteps * Math.max(1, Math.trunc(Number(visual.fadeLoops) || 4));
     rhythmAuthoringTimelineRuntime.fadeT = Math.max(0, 1 - (elapsed / Math.max(1, fadeSteps)));
     if (elapsed >= fadeSteps) {
-      clearWeaponGateHandoffVisual();
+      clearWeaponGateHandoffVisual({
+        launchConstellation: true,
+        reason: 'weapon_handoff_fade_complete',
+        stepIndex,
+      });
       return;
     }
   }
   renderMusicMotifVisualizer();
 }
 function ensureRhythmAuthoringTimelineStyle() {
-  if (document.getElementById('beat-swarm-rhythm-authoring-timeline-style')) return;
-  const style = document.createElement('style');
-  style.id = 'beat-swarm-rhythm-authoring-timeline-style';
+  if (typeof document === 'undefined') return;
+  const styleVersion = '2026-07-19-rhythm-visuals-v32';
+  let style = document.getElementById('beat-swarm-rhythm-authoring-timeline-style');
+  if (!(style instanceof HTMLStyleElement)) {
+    style = document.createElement('style');
+    style.id = 'beat-swarm-rhythm-authoring-timeline-style';
+    document.head.appendChild(style);
+  }
+  if (style.dataset.beatSwarmVersion === styleVersion) return;
+  style.dataset.beatSwarmVersion = styleVersion;
   style.textContent = `
     .beat-swarm-rhythm-timeline{position:fixed;left:50%;top:50%;width:min(820px,78vw);height:min(320px,44vh);transform:translate(-50%,-50%);z-index:2;pointer-events:none;opacity:1;transition:opacity 140ms linear}
     .beat-swarm-rhythm-timeline.is-weapon{left:0;top:0;width:100vw;height:100vh;transform:none}
@@ -13912,8 +13979,34 @@ function ensureRhythmAuthoringTimelineStyle() {
     .beat-swarm-rhythm-timeline-playhead{position:absolute;width:58px;height:20px;margin:-10px 0 0 -29px;opacity:.72;will-change:left,top,transform;filter:drop-shadow(0 0 10px rgba(170,232,255,.55))}
     .beat-swarm-rhythm-timeline-playhead::before{content:"";position:absolute;left:6px;right:4px;top:8px;height:3px;border-radius:999px;background:linear-gradient(90deg,transparent,rgba(170,232,255,.32),rgba(255,255,255,.86),rgba(170,232,255,.34),transparent);box-shadow:0 0 14px rgba(170,232,255,.5),0 0 32px rgba(170,232,255,.24)}
     .beat-swarm-rhythm-timeline-playhead::after{content:"";position:absolute;left:13px;top:9px;width:4px;height:4px;border-radius:50%;background:rgba(217,247,255,.78);box-shadow:12px -4px 0 -1px rgba(170,232,255,.48),25px 5px 0 -1px rgba(170,232,255,.38),38px -2px 0 -1.5px rgba(255,255,255,.55),0 0 10px rgba(170,232,255,.58),12px -4px 10px rgba(170,232,255,.35),25px 5px 10px rgba(170,232,255,.28),38px -2px 10px rgba(255,255,255,.32)}
+    .beat-swarm-motif-constellation-layer{position:fixed;inset:0;z-index:4;pointer-events:none;overflow:hidden}
+    .beat-swarm-motif-constellation-star{position:absolute;left:0;top:0;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#f6fdff;box-shadow:0 0 12px rgba(255,255,255,.78),0 0 26px rgba(170,232,255,.42),0 0 46px rgba(100,216,255,.18);opacity:.78;transform:translate(0,0) scale(1);transition:transform 1900ms cubic-bezier(.14,.84,.18,1),opacity 700ms ease 1300ms,width 90ms ease,height 90ms ease,margin 90ms ease,box-shadow 90ms ease,filter 90ms ease,background-color 90ms ease;will-change:transform,opacity,box-shadow,width,height,filter}
+    .beat-swarm-motif-constellation-star.is-settled::after{opacity:0}
+    .beat-swarm-motif-constellation-star.is-pulse{width:18px;height:18px;margin:-9px 0 0 -9px;background:#fff;border:1px solid rgba(255,255,255,.94);filter:brightness(2.05);box-shadow:0 0 22px rgba(255,255,255,.96),0 0 50px rgba(170,232,255,.72),0 0 82px rgba(100,216,255,.42);opacity:1!important}
+    .beat-swarm-motif-constellation-star::after{content:"";position:absolute;left:-32px;top:3px;width:34px;height:2px;border-radius:999px;background:linear-gradient(90deg,transparent,rgba(170,232,255,.44),rgba(217,247,255,.82));transform-origin:100% 50%;transform:rotate(var(--trail-angle,0deg));opacity:.72}
+    .beat-swarm-motif-constellation-particle{position:absolute;left:0;top:0;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:rgba(217,247,255,.98);box-shadow:0 0 14px rgba(170,232,255,.86),0 0 30px rgba(100,216,255,.42);opacity:.94;transform:translate(0,0) scale(1);transition:transform 1300ms cubic-bezier(.2,.78,.16,1),opacity 520ms ease 760ms;will-change:transform,opacity}
   `;
-  document.head.appendChild(style);
+}
+function noteMusicMotifConstellationDebug(kind, payload = null) {
+  const entry = {
+    kind: String(kind || 'unknown'),
+    atMs: getBeatSwarmPerfNow(),
+    ...(payload && typeof payload === 'object' ? payload : {}),
+  };
+  musicMotifConstellationDebug.last = entry;
+  musicMotifConstellationDebug.history.push(entry);
+  while (musicMotifConstellationDebug.history.length > 80) musicMotifConstellationDebug.history.shift();
+  try {
+    window.__LAST_BEAT_SWARM_CONSTELLATION_DEBUG = entry;
+    window.__BEAT_SWARM_CONSTELLATION_DEBUG_HISTORY = musicMotifConstellationDebug.history.slice();
+  } catch {}
+  try {
+    if (window.__BEAT_SWARM_CONSTELLATION_DEBUG === true) {
+      const kind = String(entry.kind || '');
+      const isExpectedPulseMiss = kind === 'pulse-no-lane' || kind === 'pulse-no-star';
+      if (!isExpectedPulseMiss) console.info('[BeatSwarmConstellation]', entry.kind, entry);
+    }
+  } catch {}
 }
 function getMusicMotifVisualizerLayer() {
   if (!(overlayEl instanceof HTMLElement)) return null;
@@ -13956,11 +14049,391 @@ function clearRhythmAuthoringTimeline() {
     : (overlayEl instanceof HTMLElement ? overlayEl.querySelector('.beat-swarm-rhythm-timeline') : null);
   if (layer instanceof HTMLElement) layer.innerHTML = '';
 }
+function clearMusicMotifConstellations(removeLayer = false) {
+  for (const constellation of Array.isArray(musicMotifConstellationRuntime.constellations)
+    ? musicMotifConstellationRuntime.constellations
+    : []) {
+    for (const star of Array.isArray(constellation?.stars) ? constellation.stars : []) {
+      try { star?.el?.remove?.(); } catch {}
+    }
+  }
+  for (const burst of Array.isArray(musicMotifConstellationRuntime.bursts)
+    ? musicMotifConstellationRuntime.bursts
+    : []) {
+    for (const el of Array.isArray(burst?.els) ? burst.els : []) {
+      try { el?.remove?.(); } catch {}
+    }
+  }
+  musicMotifConstellationRuntime.constellations = [];
+  musicMotifConstellationRuntime.bursts = [];
+  musicMotifConstellationRuntime.lastStepIndex = -1;
+  musicMotifConstellationDebug.launches = 0;
+  musicMotifConstellationDebug.pulseLogs = 0;
+  musicMotifConstellationDebug.missingPulseKeys.clear();
+  if (removeLayer && musicMotifConstellationRuntime.layer instanceof HTMLElement) {
+    try { musicMotifConstellationRuntime.layer.remove(); } catch {}
+    musicMotifConstellationRuntime.layer = null;
+  }
+}
+function getMusicMotifConstellationLayer() {
+  if (typeof document === 'undefined') return null;
+  ensureRhythmAuthoringTimelineStyle();
+  let layer = musicMotifConstellationRuntime.layer;
+  if (!(layer instanceof HTMLElement) || !layer.isConnected) {
+    const parent = overlayEl instanceof HTMLElement ? overlayEl : document.body;
+    layer = parent?.querySelector?.('.beat-swarm-motif-constellation-layer');
+    if (!(layer instanceof HTMLElement)) {
+      layer = document.createElement('div');
+      layer.className = 'beat-swarm-motif-constellation-layer';
+      parent?.appendChild?.(layer);
+    }
+    musicMotifConstellationRuntime.layer = layer;
+  }
+  return layer;
+}
+function getMusicMotifConstellationTarget(rt = null) {
+  const lane = String(rt?.laneId || '').trim().toLowerCase();
+  const mode = String(rt?.mode || '').trim().toLowerCase();
+  const w = Math.max(1, Number(window.innerWidth) || 1);
+  const h = Math.max(1, Number(window.innerHeight) || 1);
+  let slotIndex = 3;
+  if (mode === 'weapon') slotIndex = 0;
+  else if (lane === 'foundation_lane') slotIndex = 1;
+  else if (lane === 'secondary_loop_lane') slotIndex = 2;
+  const angleDeg = -90 + (slotIndex * 120);
+  const angle = angleDeg * Math.PI / 180;
+  const radiusX = w * 0.34;
+  const radiusY = h * 0.32;
+  return {
+    x: (w * 0.5) + (Math.cos(angle) * radiusX),
+    y: (h * 0.5) + (Math.sin(angle) * radiusY),
+  };
+}
+function getMusicMotifConstellationParallaxOffset(depth = 0.64, anchorWorldOverride = null) {
+  let camWorld = null;
+  try { camWorld = getViewportCenterWorld(); } catch {}
+  const anchor = anchorWorldOverride || starfieldParallaxAnchorWorld || camWorld || { x: 0, y: 0 };
+  const camDxWorld = (Number(camWorld?.x) || 0) - (Number(anchor?.x) || 0);
+  const camDyWorld = (Number(camWorld?.y) || 0) - (Number(anchor?.y) || 0);
+  const p = Math.max(0.08, Math.min(0.98, Number(depth) || 0.64));
+  const parallax = (1 - p) * 0.18;
+  return {
+    x: -(camDxWorld * parallax),
+    y: -(camDyWorld * parallax),
+  };
+}
+function updateMotifConstellationStarParallax(star = null) {
+  if (!star?.settled || !(star.el instanceof HTMLElement)) return;
+  const w = Math.max(1, Number(window.innerWidth) || 1);
+  const h = Math.max(1, Number(window.innerHeight) || 1);
+  const offset = getMusicMotifConstellationParallaxOffset(star.depth, star.anchorWorld);
+  const x = (Math.max(0, Math.min(1, Number(star.nx) || 0.5)) * w) + offset.x;
+  const y = (Math.max(0, Math.min(1, Number(star.ny) || 0.5)) * h) + offset.y;
+  const scale = Math.max(0.05, Number(star.baseScale) || 0.72);
+  star.el.style.left = `${x.toFixed(1)}px`;
+  star.el.style.top = `${y.toFixed(1)}px`;
+  star.el.style.transform = `translate(0,0) scale(${scale.toFixed(2)})`;
+  star.el.style.opacity = `${Math.max(0, Math.min(1, Number(star.baseOpacity) || 0.9)).toFixed(2)}`;
+}
+function getMusicMotifTimelineScreenPoints(rt = null) {
+  const localRt = rt && typeof rt === 'object' ? rt : rhythmAuthoringTimelineRuntime;
+  const stepCount = Math.max(1, Math.trunc(Number(localRt.stepCount) || 1));
+  const steps = Array.from({ length: stepCount }, (_, idx) => localRt.steps?.[idx] === true);
+  const activeIndices = steps.map((activeStep, idx) => activeStep ? idx : -1).filter((idx) => idx >= 0);
+  if (!activeIndices.length) return [];
+  if (localRt.mode === 'weapon' && Array.isArray(localRt.nodes) && localRt.nodes.length) {
+    const points = [];
+    for (const idx of activeIndices) {
+      const node = localRt.nodes.find((entry) => Math.trunc(Number(entry?.slot) || 0) === idx);
+      if (!node) continue;
+      const x = Number(node.x);
+      const y = Number(node.y);
+      if (Number.isFinite(x) && Number.isFinite(y)) points.push({ x, y, step: idx });
+    }
+    if (points.length) return points;
+  }
+  const w = Math.max(1, Number(window.innerWidth) || 1);
+  const h = Math.max(1, Number(window.innerHeight) || 1);
+  const timelineW = Math.min(820, w * 0.78);
+  const timelineH = Math.min(320, h * 0.44);
+  const left = (w - timelineW) * 0.5;
+  const top = (h - timelineH) * 0.5;
+  const leftPad = 18;
+  const rightPad = 18;
+  const usableWidth = 100 - leftPad - rightPad;
+  return activeIndices.map((idx) => {
+    const xPct = stepCount <= 1 ? 50 : leftPad + ((idx / (stepCount - 1)) * usableWidth);
+    const phase = (idx / Math.max(1, stepCount - 1)) * Math.PI * 2;
+    const yPct = localRt.mode === 'rhythm'
+      ? 50
+      : 50 + Math.sin(phase * 1.5) * 16 + Math.sin(phase * 0.5 + 0.7) * 7;
+    return {
+      x: left + (timelineW * xPct / 100),
+      y: top + (timelineH * yPct / 100),
+      step: idx,
+    };
+  });
+}
+function startMotifConstellationElementMove(el, dx = 0, dy = 0, scale = 1, opacity = 0.9, durationMs = 1900) {
+  if (!(el instanceof HTMLElement)) return null;
+  const tx = Number(dx) || 0;
+  const ty = Number(dy) || 0;
+  const finalScale = Math.max(0.01, Number(scale) || 1);
+  const finalOpacity = Math.max(0, Math.min(1, Number(opacity) || 0));
+  const finalTransform = `translate(${tx.toFixed(1)}px,${ty.toFixed(1)}px) scale(${finalScale.toFixed(2)})`;
+  el.style.transform = 'translate(0,0) scale(1)';
+  el.style.opacity = '1';
+  try {
+    if (typeof el.animate === 'function') {
+      const animation = el.animate(
+        [
+          { transform: 'translate(0,0) scale(1)', opacity: 1 },
+          { transform: finalTransform, opacity: finalOpacity },
+        ],
+        {
+          duration: Math.max(80, Math.trunc(Number(durationMs) || 1900)),
+          easing: 'cubic-bezier(.14,.84,.18,1)',
+          fill: 'forwards',
+        }
+      );
+      animation.onfinish = () => {
+        el.style.transform = finalTransform;
+        el.style.opacity = `${finalOpacity.toFixed(2)}`;
+      };
+      return animation;
+    }
+  } catch {}
+  requestAnimationFrame(() => {
+    el.style.transform = finalTransform;
+    el.style.opacity = `${finalOpacity.toFixed(2)}`;
+  });
+  return null;
+}
+function createMotifConstellationLaunchParticles(layer, point, dx = 0, dy = 0, count = 3) {
+  if (!(layer instanceof HTMLElement)) return [];
+  const particles = [];
+  const total = Math.max(0, Math.trunc(Number(count) || 0));
+  for (let i = 0; i < total; i += 1) {
+    const t = total <= 1 ? 0.5 : i / (total - 1);
+    const side = (i % 2 === 0 ? 1 : -1) * (5 + i * 2);
+    const px = (Number(point?.x) || 0) - dx * t * 0.16;
+    const py = (Number(point?.y) || 0) - dy * t * 0.16 + side;
+    const particle = document.createElement('div');
+    particle.className = 'beat-swarm-motif-constellation-particle';
+    particle.style.left = `${px.toFixed(1)}px`;
+    particle.style.top = `${py.toFixed(1)}px`;
+    particle.style.transitionDelay = `${(i * 42).toFixed(0)}ms`;
+    layer.appendChild(particle);
+    const driftX = dx * (0.42 + t * 0.38);
+    const driftY = dy * (0.42 + t * 0.38) - side * 1.6;
+    startMotifConstellationElementMove(particle, driftX, driftY, 0.25, 0, 1300);
+    window.setTimeout(() => {
+      try { particle.remove(); } catch {}
+    }, 1600 + i * 42);
+    particles.push(particle);
+  }
+  return particles;
+}
+function launchMusicMotifConstellationFromTimeline(sourceRuntime = null) {
+  const rt = sourceRuntime && typeof sourceRuntime === 'object' ? sourceRuntime : rhythmAuthoringTimelineRuntime;
+  const layer = getMusicMotifConstellationLayer();
+  if (!(layer instanceof HTMLElement)) {
+    noteMusicMotifConstellationDebug('launch-no-layer', {
+      mode: String(rt.mode || ''),
+      laneId: String(rt.laneId || ''),
+      eventId: String(rt.eventId || ''),
+      stepCount: Math.max(1, Math.trunc(Number(rt.stepCount) || 1)),
+    });
+    return;
+  }
+  const points = getMusicMotifTimelineScreenPoints(rt)
+    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+  const hadTimelinePoints = points.length > 0;
+  if (!points.length) {
+    const target = getMusicMotifConstellationTarget(rt);
+    points.push({ x: window.innerWidth * 0.5, y: window.innerHeight * 0.5, step: 0 });
+    points.push({ x: window.innerWidth * 0.5 + 48, y: window.innerHeight * 0.5, step: Math.max(1, Math.trunc(Number(rt.stepCount) || 2) - 1) });
+    points.push({ x: window.innerWidth * 0.5 + 96, y: window.innerHeight * 0.5, step: Math.max(0, Math.floor((Number(rt.stepCount) || 2) / 2)) });
+    for (const point of points) {
+      point.x = Number(point.x) || target.x;
+      point.y = Number(point.y) || target.y;
+    }
+  }
+  const minX = Math.min(...points.map((p) => p.x));
+  const maxX = Math.max(...points.map((p) => p.x));
+  const minY = Math.min(...points.map((p) => p.y));
+  const maxY = Math.max(...points.map((p) => p.y));
+  const center = { x: (minX + maxX) * 0.5, y: (minY + maxY) * 0.5 };
+  const target = getMusicMotifConstellationTarget(rt);
+  const scale = rt.mode === 'weapon' ? 0.34 : 0.48;
+  const burstEls = [];
+  const stars = [];
+  const constellationKey = `${String(rt.mode || 'rhythm')}:${String(rt.laneId || rt.themeId || 'motif')}`;
+  const activeSteps = Array.isArray(rt.steps)
+    ? rt.steps.map((activeStep, idx) => activeStep ? idx : -1).filter((idx) => idx >= 0)
+    : [];
+  musicMotifConstellationDebug.launches += 1;
+  musicMotifConstellationDebug.missingPulseKeys.clear();
+  noteMusicMotifConstellationDebug('launch-start', {
+    launch: musicMotifConstellationDebug.launches,
+    key: constellationKey,
+    mode: String(rt.mode || 'rhythm'),
+    laneId: String(rt.laneId || ''),
+    eventId: String(rt.eventId || ''),
+    stepCount: Math.max(1, Math.trunc(Number(rt.stepCount) || 1)),
+    activeSteps,
+    pointCount: points.length,
+    hadTimelinePoints,
+    target,
+    layerConnected: layer.isConnected === true,
+    childCountBefore: layer.childElementCount,
+  });
+  for (let i = musicMotifConstellationRuntime.constellations.length - 1; i >= 0; i -= 1) {
+    const old = musicMotifConstellationRuntime.constellations[i];
+    if (old?.key !== constellationKey) continue;
+    for (const star of Array.isArray(old.stars) ? old.stars : []) {
+      try { star?.el?.remove?.(); } catch {}
+    }
+    musicMotifConstellationRuntime.constellations.splice(i, 1);
+  }
+  for (const point of points) {
+    const destX = target.x + (point.x - center.x) * scale;
+    const destY = target.y + (point.y - center.y) * scale;
+    const dx = destX - point.x;
+    const dy = destY - point.y;
+    const star = document.createElement('div');
+    star.className = 'beat-swarm-motif-constellation-star';
+    star.style.left = `${point.x.toFixed(1)}px`;
+    star.style.top = `${point.y.toFixed(1)}px`;
+    star.style.setProperty('--trail-angle', `${(Math.atan2(dy, dx) * 180 / Math.PI).toFixed(2)}deg`);
+    layer.appendChild(star);
+    const depthSeed = ((Math.trunc(Number(point.step) || 0) * 17) + stars.length) % 7;
+    const starEntry = {
+      el: star,
+      step: Math.max(0, Math.trunc(Number(point.step) || 0)),
+      pulseT: 0,
+      settled: false,
+      nx: Math.max(0.02, Math.min(0.98, destX / Math.max(1, Number(window.innerWidth) || 1))),
+      ny: Math.max(0.04, Math.min(0.96, destY / Math.max(1, Number(window.innerHeight) || 1))),
+      depth: Math.max(0.36, Math.min(0.86, (rt.mode === 'weapon' ? 0.42 : 0.48) + depthSeed * 0.04)),
+      baseScale: 0.62,
+      baseOpacity: 0.82,
+      anchorWorld: null,
+    };
+    stars.push(starEntry);
+    for (const particle of createMotifConstellationLaunchParticles(layer, point, dx, dy, rt.mode === 'weapon' ? 4 : 3)) {
+      burstEls.push(particle);
+    }
+    const animation = startMotifConstellationElementMove(star, dx, dy, starEntry.baseScale, starEntry.baseOpacity);
+    window.setTimeout(() => {
+      try { animation?.cancel?.(); } catch {}
+      starEntry.settled = true;
+      try {
+        const anchorWorld = getViewportCenterWorld();
+        starEntry.anchorWorld = {
+          x: Number(anchorWorld?.x) || 0,
+          y: Number(anchorWorld?.y) || 0,
+        };
+      } catch {}
+      try { star.classList.add('is-settled'); } catch {}
+      updateMotifConstellationStarParallax(starEntry);
+      noteMusicMotifConstellationDebug('star-settled', {
+        key: constellationKey,
+        laneId: String(rt.laneId || ''),
+        step: starEntry.step,
+        nx: starEntry.nx,
+        ny: starEntry.ny,
+        depth: starEntry.depth,
+        anchorWorld: starEntry.anchorWorld,
+        connected: star.isConnected === true,
+        left: star.style.left,
+        top: star.style.top,
+      });
+    }, 1900);
+  }
+  musicMotifConstellationRuntime.bursts.push({
+    ttl: 1.7,
+    els: burstEls,
+  });
+  musicMotifConstellationRuntime.constellations.push({
+    key: constellationKey,
+    mode: String(rt.mode || 'rhythm'),
+    laneId: String(rt.laneId || ''),
+    stepCount: Math.max(1, Math.trunc(Number(rt.stepCount) || 1)),
+    stars,
+  });
+  noteMusicMotifConstellationDebug('launch-created', {
+    key: constellationKey,
+    mode: String(rt.mode || 'rhythm'),
+    laneId: String(rt.laneId || ''),
+    starCount: stars.length,
+    childCountAfter: layer.childElementCount,
+    constellations: musicMotifConstellationRuntime.constellations.map((c) => ({
+      key: String(c?.key || ''),
+      laneId: String(c?.laneId || ''),
+      stepCount: Math.max(1, Math.trunc(Number(c?.stepCount) || 1)),
+      stars: Array.isArray(c?.stars) ? c.stars.length : 0,
+    })),
+  });
+}
+function pulseMusicMotifConstellation(laneId = '', stepIndex = 0, duration = 0.24) {
+  const lane = String(laneId || '').trim();
+  if (!lane) return;
+  const step = Math.max(0, Math.trunc(Number(stepIndex) || 0));
+  let matchedLane = false;
+  let matchedStar = false;
+  constellationsLoop:
+  for (const constellation of musicMotifConstellationRuntime.constellations) {
+    if (String(constellation?.laneId || '').trim() !== lane) continue;
+    matchedLane = true;
+    const stepCount = Math.max(1, Math.trunc(Number(constellation?.stepCount) || 1));
+    const normalized = ((step % stepCount) + stepCount) % stepCount;
+    const stars = Array.isArray(constellation?.stars) ? constellation.stars : [];
+    for (const star of stars) {
+      if (Math.trunc(Number(star.step) || 0) !== normalized) continue;
+      matchedStar = true;
+      star.pulseT = Math.max(Number(star.pulseT) || 0, Math.max(0.16, Number(duration) || 0.34));
+      if (star.el instanceof HTMLElement) star.el.classList.add('is-pulse');
+      if (musicMotifConstellationDebug.pulseLogs < 16) {
+        musicMotifConstellationDebug.pulseLogs += 1;
+        noteMusicMotifConstellationDebug('pulse-hit', {
+          laneId: lane,
+          step,
+          normalized,
+          key: String(constellation?.key || ''),
+          starCount: stars.length,
+        });
+      }
+      continue constellationsLoop;
+    }
+  }
+  if (!matchedLane || !matchedStar) {
+    const key = `${lane}:${step}:${matchedLane ? 'no-star' : 'no-lane'}`;
+    if (!musicMotifConstellationDebug.missingPulseKeys.has(key)) {
+      musicMotifConstellationDebug.missingPulseKeys.add(key);
+      noteMusicMotifConstellationDebug(matchedLane ? 'pulse-no-star' : 'pulse-no-lane', {
+        laneId: lane,
+        step,
+        activeConstellations: musicMotifConstellationRuntime.constellations.map((c) => ({
+          key: String(c?.key || ''),
+          laneId: String(c?.laneId || ''),
+          stepCount: Math.max(1, Math.trunc(Number(c?.stepCount) || 1)),
+          stars: Array.isArray(c?.stars) ? c.stars.length : 0,
+        })),
+      });
+    }
+  }
+}
 function startMusicMotifVisualizer(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
+  const nextMode = String(opts.mode || 'rhythm').trim() === 'weapon' ? 'weapon' : 'rhythm';
+  if (nextMode !== 'weapon' && rhythmAuthoringTimelineRuntime.mode === 'weapon') {
+    completeWeaponGateHandoffConstellation('weapon_handoff_replaced_by_rhythm', currentBeatIndex);
+    weaponTunePlaybackRuntime.handoffVisual = null;
+  }
   const stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || (WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH)));
   rhythmAuthoringTimelineRuntime.active = true;
-  rhythmAuthoringTimelineRuntime.mode = String(opts.mode || 'rhythm').trim() === 'weapon' ? 'weapon' : 'rhythm';
+  rhythmAuthoringTimelineRuntime.mode = nextMode;
   rhythmAuthoringTimelineRuntime.eventId = String(opts.eventId || '').trim();
   rhythmAuthoringTimelineRuntime.themeId = String(opts.themeId || '').trim();
   rhythmAuthoringTimelineRuntime.laneId = String(opts.laneId || '').trim();
@@ -14090,10 +14563,64 @@ function noteRhythmAuthoringTimelineHit(event = null) {
   rt.steps[stepIndex] = true;
   pulseMusicMotifVisualizerStep(stepIndex, 0.36);
   if (ev.complete === true) {
-    rt.completed = true;
-    rt.fadeT = 5.5;
+    noteMusicMotifConstellationDebug('timeline-complete', {
+      eventId: String(rt.eventId || ''),
+      mode: String(rt.mode || 'rhythm'),
+      laneId: String(rt.laneId || ''),
+      stepCount,
+      stepIndex,
+      activeSteps: Array.isArray(rt.steps)
+        ? rt.steps.map((activeStep, idx) => activeStep ? idx : -1).filter((idx) => idx >= 0)
+        : [],
+    });
+    renderMusicMotifVisualizer();
+    launchMusicMotifConstellationFromTimeline();
+    const completedEventId = String(rt.eventId || '').trim();
+    window.setTimeout(() => {
+      if (String(rhythmAuthoringTimelineRuntime.eventId || '').trim() !== completedEventId) return;
+      clearRhythmAuthoringTimeline();
+    }, 320);
+    return;
   }
   renderMusicMotifVisualizer();
+}
+function updateMusicMotifConstellations(dt = 0) {
+  const safeDt = Math.max(0, Number(dt) || 0);
+  let stepIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
+  try {
+    const directorStep = Number(ensureSwarmDirector().getSnapshot?.()?.stepIndex);
+    if (Number.isFinite(directorStep)) stepIndex = Math.max(0, Math.trunc(directorStep));
+  } catch {}
+  const stepChanged = stepIndex !== Math.trunc(Number(musicMotifConstellationRuntime.lastStepIndex) || -1);
+  musicMotifConstellationRuntime.lastStepIndex = stepIndex;
+  const constellations = Array.isArray(musicMotifConstellationRuntime.constellations)
+    ? musicMotifConstellationRuntime.constellations
+    : [];
+  for (const constellation of constellations) {
+    const stepCount = Math.max(1, Math.trunc(Number(constellation?.stepCount) || 1));
+    const mode = String(constellation?.mode || '').trim().toLowerCase();
+    const playbackStep = mode === 'weapon' ? getWeaponTunePlaybackStepIndex(stepIndex) : stepIndex;
+    const normalizedStep = ((playbackStep % stepCount) + stepCount) % stepCount;
+    const stars = Array.isArray(constellation?.stars) ? constellation.stars : [];
+    for (const star of stars) {
+      star.pulseT = Math.max(0, (Number(star.pulseT) || 0) - safeDt);
+      if (stepChanged && Math.trunc(Number(star.step) || 0) === normalizedStep) {
+        star.pulseT = Math.max(Number(star.pulseT) || 0, 0.34);
+      }
+      if (star.el instanceof HTMLElement) {
+        updateMotifConstellationStarParallax(star);
+        star.el.classList.toggle('is-pulse', star.pulseT > 0);
+      }
+    }
+  }
+  const bursts = musicMotifConstellationRuntime.bursts;
+  if (!Array.isArray(bursts) || !bursts.length) return;
+  for (let i = bursts.length - 1; i >= 0; i -= 1) {
+    const burst = bursts[i];
+    burst.ttl = Math.max(0, (Number(burst.ttl) || 0) - safeDt);
+    if (burst.ttl > 0) continue;
+    bursts.splice(i, 1);
+  }
 }
 function updateRhythmAuthoringTimeline(dt = 0) {
   const rt = rhythmAuthoringTimelineRuntime;
@@ -17112,20 +17639,24 @@ function triggerPlayerWeaponGateNote(noteName = 'C4', source = 'weapon-gate-intr
   const weapon = weaponLoadout[idx];
   const stages = sanitizeWeaponStages(weapon?.stages);
   if (!stages.length) return;
-  const centerWorld = getViewportCenterWorld();
   const beatIndex = Number.isFinite(currentBeatIndex) ? Math.trunc(currentBeatIndex) : 0;
+  const first = stages[0];
+  const archetype = String(first?.archetype || '').trim().toLowerCase();
+  const variant = String(first?.variant || '').trim().toLowerCase();
+  const soundKey = getPlayerWeaponSoundEventKeyForStage(archetype, variant) || PLAYER_WEAPON_SOUND_EVENT_KEYS.projectile;
   pulsePlayerShipNoteFlash();
-  triggerWeaponStage(stages[0], centerWorld, beatIndex, stages.slice(1), {
-    origin: centerWorld,
-    impactPoint: centerWorld,
-    weaponSlotIndex: idx,
-    stageIndex: 0,
-    damageScale: getWeaponTuneDamageScale(idx),
-    forcedNoteName: normalizeSwarmNoteName(noteName) || 'C4',
-    directSound: true,
-    debugSource: source,
-    debugBeatIndex: beatIndex,
-  });
+  playSwarmSoundEventScheduled(
+    soundKey,
+    PLAYER_WEAPON_SOUND_MIX_MULT,
+    beatIndex,
+    normalizeSwarmNoteName(noteName) || 'C4',
+    {
+      sourceSystem: 'player',
+      actionType: `${archetype || 'projectile'}-${variant || 'standard'}`,
+      authoringClass: 'gameplayauthored',
+      source,
+    }
+  );
 }
 function scheduleWeaponFromSubBoardNote(slotIndex, rowIndex, whenAudio) {
   const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
@@ -19267,27 +19798,29 @@ function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = curren
         normalizeSwarmNoteName(d.soundNote) || getRandomSwarmPentatonicNote(),
         beat + Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || 0))
       );
-      executePerformedBeatEvent(createLoggedPerformedBeatEvent({
-        actorId: Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || 0)),
-        beatIndex: beat,
-        stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
-        role: BEAT_EVENT_ROLES.ACCENT,
-        note: requestedNoteRaw || getRandomSwarmPentatonicNote(),
-        instrumentId: resolveSwarmSoundInstrumentId(deathEventKey) || '',
-        actionType: 'enemy-death-accent',
-        threatClass: BEAT_EVENT_THREAT.ACCENT,
-        visualSyncType: 'death-pop',
-        payload: {
-          volume: Math.max(0.001, Math.min(1, Number(d.soundVolume) || 0)),
-          soundFamily: deathFamily,
-          soundEventKey: deathEventKey,
-          requestedNoteRaw,
-        },
-      }, {
-        beatIndex: beat,
-        sourceSystem: 'death',
-        enemyType: 'death',
-      }));
+      if (d.suppressDeathSound !== true) {
+        executePerformedBeatEvent(createLoggedPerformedBeatEvent({
+          actorId: Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || 0)),
+          beatIndex: beat,
+          stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+          role: BEAT_EVENT_ROLES.ACCENT,
+          note: requestedNoteRaw || getRandomSwarmPentatonicNote(),
+          instrumentId: resolveSwarmSoundInstrumentId(deathEventKey) || '',
+          actionType: 'enemy-death-accent',
+          threatClass: BEAT_EVENT_THREAT.ACCENT,
+          visualSyncType: 'death-pop',
+          payload: {
+            volume: Math.max(0.001, Math.min(1, Number(d.soundVolume) || 0)),
+            soundFamily: deathFamily,
+            soundEventKey: deathEventKey,
+            requestedNoteRaw,
+          },
+        }, {
+          beatIndex: beat,
+          sourceSystem: 'death',
+          enemyType: 'death',
+        }));
+      }
     }
     if (d.popped && now >= (Number(d.removeAt) || 0)) {
       try { el.remove?.(); } catch {}
@@ -19300,7 +19833,8 @@ function updateEnemyHealthUi(enemy) {
   const t = Math.max(0, Math.min(1, enemy.hp / Math.max(1, enemy.maxHp)));
   enemy.hpFillEl.style.transform = `scaleX(${t.toFixed(4)})`;
 }
-function damageEnemy(enemy, amount = 1) {
+function damageEnemy(enemy, amount = 1, options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
   const getPerfNow = getBeatSwarmPerfNow;
   const recordPerfSample = recordBeatSwarmStepEventsPerfSample;
   const withPerfSample = (name, fn) => {
@@ -19393,12 +19927,15 @@ function damageEnemy(enemy, amount = 1) {
           try { enemyLayerEl?.appendChild?.(el); } catch {}
           return el;
         });
+    const suppressDeathSound = opts.suppressDeathSound === true || enemy?.suppressNextDeathSound === true;
     const deathFamily = classifyEnemyDeathFamily(enemy);
     const deathEventKey = resolveEnemyDeathEventKey(deathFamily, 'enemyDeathMedium');
     withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove', () => {
       removeEnemy(enemy, 'killed');
     });
     if (deathEl) {
+      const stageVolume = Math.max(0, Math.min(1, Number(getStageSoundVolume(activeDamageSoundStageIndex)) || 0));
+      const deathSoundVolume = Math.max(0.09, stageVolume || 0.28) * 0.36;
       pendingEnemyDeaths.push({
         el: deathEl,
         wx: Number(enemy.wx) || 0,
@@ -19407,7 +19944,8 @@ function damageEnemy(enemy, amount = 1) {
           normalizeSwarmNoteName(enemy.soundNote) || getRandomSwarmPentatonicNote(),
           Math.max(0, Math.trunc(Number(enemy?.id) || 0)) + Math.max(0, Math.trunc(Number(currentBeatIndex) || 0))
         ),
-        soundVolume: getStageSoundVolume(activeDamageSoundStageIndex),
+        soundVolume: deathSoundVolume,
+        suppressDeathSound,
         soundFamily: deathFamily,
         soundEventKey: deathEventKey,
         sourceEnemyId: Number.isFinite(enemy?.id) ? Math.trunc(enemy.id) : null,
@@ -19422,7 +19960,7 @@ function damageEnemy(enemy, amount = 1) {
   }
   return false;
 }
-function damageEnemiesNearTapOrb(world = null, radiusWorld = 180, amount = 8) {
+function damageEnemiesNearTapOrb(world = null, radiusWorld = 180, amount = 8, options = null) {
   const center = world && typeof world === 'object'
     ? { x: Number(world.x) || 0, y: Number(world.y) || 0 }
     : getViewportCenterWorld();
@@ -19435,7 +19973,7 @@ function damageEnemiesNearTapOrb(world = null, radiusWorld = 180, amount = 8) {
     return Math.hypot(dx, dy) <= radius;
   });
   for (const enemy of targets) {
-    try { damageEnemy(enemy, damage); } catch {}
+    try { damageEnemy(enemy, damage, options); } catch {}
   }
 }
 function isTapOrbFoundationBuildWaiting() {
@@ -19615,6 +20153,7 @@ function resetWeaponGateTapOrbOnboardingState() {
   weaponTunePlaybackRuntime.stepOffset = 0;
   clearWeaponGateHandoffVisual();
   clearRhythmAuthoringTimeline();
+  clearMusicMotifConstellations(true);
   lastWeaponTuneStepIndex = null;
   lastSpawnerEnemyStepIndex = null;
 }
@@ -27370,6 +27909,7 @@ function applyPinballShockwavePlayerPush(event = {}) {
 }
 function setArenaIntroBlend(blend01 = 1) {
   const blend = Math.max(0, Math.min(1, Number(blend01) || 0));
+  arenaIntroBlend = blend;
   if (arenaRingEl) arenaRingEl.style.opacity = `${blend.toFixed(3)}`;
   if (arenaCoreEl) arenaCoreEl.style.opacity = `${blend.toFixed(3)}`;
   if (arenaLimitEl) arenaLimitEl.style.opacity = '0';
@@ -27642,6 +28182,7 @@ function tick(nowMs) {
   withBeatSwarmPerfSample('starfield', () => updateStarfieldVisual());
   updateWeaponGateHandoffVisual(dt, Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || currentBeatIndex || 0)));
   updateRhythmAuthoringTimeline(dt);
+  updateMusicMotifConstellations(dt);
   enemyHealthRampSeconds = Math.max(0, Number(enemyHealthRampSeconds) || 0) + dt;
   updateEnemySpawnHealthScaling();
   updateSpawnHealthDebugUi();
@@ -28235,6 +28776,7 @@ export function enterBeatSwarmMode(options = null) {
   weaponTunePlaybackRuntime.stepOffset = 0;
   clearWeaponGateHandoffVisual();
   clearRhythmAuthoringTimeline();
+  clearMusicMotifConstellations(true);
   enemyHealthRampSeconds = 0;
   updateEnemySpawnHealthScaling();
   updateSpawnHealthDebugUi();
@@ -28313,6 +28855,7 @@ export function exitBeatSwarmMode() {
   weaponTunePlaybackRuntime.stepOffset = 0;
   clearWeaponGateHandoffVisual();
   clearRhythmAuthoringTimeline();
+  clearMusicMotifConstellations(true);
   weaponGateOnboardingSequenceMode = 'tap_orbs_missiles';
   try { setSoundThemeKey(beatSwarmPreviousSoundThemeKey); } catch {}
   beatSwarmPreviousSoundThemeKey = '';

@@ -324,7 +324,7 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     if (!state.active || state.spawnedHitCount >= state.targetHitCount) return null;
     const root = ensureRoot();
     if (!(root instanceof HTMLElement)) return null;
-    const shapes = ['circle', 'pill', 'square', 'triangle'];
+    const shapes = ['circle', 'pill', 'square'];
     const id = state.nextId++;
     const safeGroupCount = Math.max(1, Math.trunc(Number(groupCount) || 1));
     const safeGroupIndex = Math.max(0, Math.trunc(Number(groupIndex) || 0));
@@ -333,7 +333,7 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     const radiusN = 0.38 + Math.random() * 0.28;
     const size = 0.88 + Math.random() * 0.28;
     const shape = shapes[(id + Math.floor(Math.random() * shapes.length)) % shapes.length];
-    const rotationDeg = (Math.random() * 70) - 35 + (shape === 'triangle' ? 0 : (Math.random() < 0.5 ? 0 : 90));
+    const rotationDeg = (Math.random() * 70) - 35 + (Math.random() < 0.5 ? 0 : 90);
     const el = document.createElement('div');
     el.className = `beat-swarm-pinball-bouncer shape-${shape}`;
     root.appendChild(el);
