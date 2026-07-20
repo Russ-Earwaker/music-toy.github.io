@@ -1139,6 +1139,60 @@ export function executePerformedBeatEventRuntime(options = null) {
         ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
       });
       return true;
+  });
+  }
+
+  if (actionType === 'player-lead-theme-direct') {
+    return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.playerLeadDirect', () => {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const requestedNote = String(payload?.requestedNoteRaw || ev?.note || '').trim();
+      const noteName = String(requestedNote || ev?.note || '').trim();
+      const instrumentId = String(ev?.instrumentId || payload?.instrumentId || '').trim();
+      if (!instrumentId || !noteName) return false;
+      const authoredGain = Number(payload?.audioGain == null ? 0.72 : payload.audioGain);
+      const triggerVolume = Math.max(0.18, Math.min(1, Number.isFinite(authoredGain) ? authoredGain : 0.72));
+      try {
+        helpers.triggerInstrument?.(
+          instrumentId,
+          noteName,
+          undefined,
+          'master',
+          {
+            source: 'beat-swarm-player-lead-theme-direct',
+            preserveRequestedNote: true,
+            stepIndex,
+            leadGateLiteralLoop: payload?.leadGateLiteralLoop === true,
+          },
+          triggerVolume
+        );
+      } catch {}
+      try {
+        helpers.noteMusicSystemEvent?.('music_player_lead_theme_direct_triggered', {
+          instrumentId,
+          note: noteName,
+          triggerVolume,
+          musicProminence: String(payload?.musicProminence || 'full').trim().toLowerCase() || 'full',
+          musicLaneId: 'primary_loop_lane',
+          leadGateLiteralLoop: payload?.leadGateLiteralLoop === true,
+          leadGateRelativeStep: Math.max(0, Math.trunc(Number(payload?.leadGateRelativeStep) || 0)),
+          leadThemePartIndex: Math.max(0, Math.trunc(Number(payload?.leadThemePartIndex) || 0)),
+          leadThemeStepIndex: Math.max(0, Math.trunc(Number(payload?.leadThemeStepIndex) || 0)),
+        }, { beatIndex, stepIndex, barIndex });
+      } catch {}
+      logMusicLabExecution({
+        sourceSystem: 'music',
+        requestedNote,
+        resolvedNote: noteName,
+        noteWasClamped: false,
+        enemyAudible: true,
+        musicProminence: 'full',
+        musicLaneId: 'primary_loop_lane',
+        musicLayer: 'loops',
+        musicVoiceKey: 'player_lead_theme',
+        ...buildLeadThemeExecutionContext(null, null),
+        ...buildPlaybackLoggingContext(instrumentId, triggerVolume),
+      });
+      return true;
     });
   }
 

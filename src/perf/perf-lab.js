@@ -455,6 +455,7 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
+        ${btn('musicLabRunBS0S3GateToLeadGatesDebug', 'Run Gate -> Lead Gates (1x60s)', 'primary')}
         ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Missiles + Bouncers (1x180s)', 'primary')}
         ${btn('musicLabRunBS0S3MusicMissileBassRewriteDebug', 'Test Reuse Matrix: Missiles/Tap Orbs -> Bass/Accent (1x360s)', 'primary')}
         ${btn('musicLabRunBS0S3PinballBouncerRewriteDebug', 'Pinball Bouncer Accent Rewrite (1x120s)', 'primary')}
@@ -1546,6 +1547,10 @@ function ensureUI() {
       try { api.enter?.({ weaponGateIntro: true }); } catch {}
       try { if (!isRunning()) startTransport(); } catch {}
       setStatus('Beat Swarm gate start launched');
+      return;
+    }
+    if (act === 'musicLabRunBS0S3GateToLeadGatesDebug') {
+      await runBS0s3MusicLabGateToLeadGatesDebug120s();
       return;
     }
     if (act === 'musicLabRunBS0S3GateStartTapOrbDebug') {
@@ -6958,6 +6963,71 @@ async function runBS0s3MusicLabGateStartTapOrbHandoffDebug150s() {
     tagPrefix: 'BS0S3GateMissilePinballSequence1x180s',
     labelPrefix: 'BS0_stage3_beatswarm_gate_missile_pinball_sequence_1x180s',
     statusPrefix: 'Running BS0 S3 gate + missiles + bouncers (180 seconds, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabGateToLeadGatesDebug120s() {
+  await runBS0Stage(3, {
+    durationMs: 60000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      leadGateAuthoringOnly: true,
+    },
+    async setupAfterPrepare() {
+      const api = getBeatSwarmApi();
+      if (!api || typeof api.enter !== 'function') {
+        throw new Error('beat_swarm_api_unavailable');
+      }
+      try { api.exit?.(); } catch {}
+      await waitForPerfLabMs(80);
+      try { window.__BEAT_SWARM_LEAD_GATE_DEBUG = true; } catch {}
+      try { api.enter?.({ weaponGateIntro: true, weaponGateSequence: 'lead_gates' }); } catch (err) {
+        throw new Error(`weapon_gate_lead_gate_start_failed:${String(err?.message || err)}`);
+      }
+      try { if (!isRunning()) startTransport(); } catch {}
+      try {
+        window.__beatSwarmGateToLeadGatesDebugExpected = {
+          mode: 'gate_to_lead_gates',
+          expectedTheme: 'leadTheme',
+          expectedLane: 'primary_loop_lane',
+          debugFlag: '__BEAT_SWARM_LEAD_GATE_DEBUG',
+          traceEvents: [
+            'lead_gate_rewrite_started',
+            'lead_gate_note_selected',
+            'lead_gate_rewrite_committed_to_theme',
+            'music_primary_loop_lane_emitted',
+          ],
+        };
+      } catch {}
+      setOutput({
+        ok: true,
+        setup: 'weapon_gate_to_lead_gates_started',
+        notes: 'Complete the weapon gate corridor, then watch the lead gates cross the arena centre. Broader music variation is suppressed for this focused 60s test.',
+      });
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_gate_to_lead_gates_debug_1x60s',
+    saveNotes: [
+      'Beat Swarm Music Lab lead-gate debug: run the real weapon gate corridor, then directly enter the lead-theme gate authoring event.',
+      'Focused authoring-only override suppresses foundation, accent, support, sparkle, and answer lanes so broader arrangement variation does not mask the gate test.',
+      'Console flag __BEAT_SWARM_LEAD_GATE_DEBUG is enabled; inspect [BeatSwarmLeadGate] motion/select/complete logs for gate speed and commit diagnostics.',
+      'Expected result: gates move visibly across the arena, select notes at centre crossing, commit leadTheme, and primary_loop_lane repeats afterward.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_gate_to_lead_gates_debug_1x60s',
+    groupedRunId: 'musicLab_bs0_s3_gate_to_lead_gates_debug_1x60s_scenario',
+    groupedNotes: 'Isolated gate corridor into lead-theme gate authoring debug scenario.',
+    tagPrefix: 'BS0S3GateToLeadGatesDebug1x60s',
+    labelPrefix: 'BS0_stage3_beatswarm_gate_to_lead_gates_debug_1x60s',
+    statusPrefix: 'Running BS0 S3 gate -> lead gates debug (60 seconds, compact save)',
     traceCapture: {
       enabled: false,
     },
