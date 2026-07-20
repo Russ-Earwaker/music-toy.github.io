@@ -1131,7 +1131,25 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     noteSlotSpawnerStage('shaped', effectiveEnemyEvents);
     effectiveEnemyEvents = applyEnemyMusicActionGate(effectiveEnemyEvents);
-    if (typeof helpers.getPlayerLeadThemePrimaryStep === 'function') {
+    const leadGateAuthoringOnly = (typeof helpers.isBeatSwarmLeadGateAuthoringOnlyTest === 'function'
+      && helpers.isBeatSwarmLeadGateAuthoringOnlyTest())
+      || (typeof helpers.isLeadGateLiteralPlaybackActive === 'function'
+        && helpers.isLeadGateLiteralPlaybackActive());
+    if (leadGateAuthoringOnly) {
+      effectiveEnemyEvents = effectiveEnemyEvents.filter((ev) => {
+        if (!ev || typeof ev !== 'object') return true;
+        const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+        const musicLaneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
+        const action = String(ev?.actionType || '').trim().toLowerCase();
+        const role = String(ev?.role || payload.musicRole || '').trim().toLowerCase();
+        const layer = String(payload.musicLayer || '').trim().toLowerCase();
+        const loopLikeAction = action === 'composer-group-projectile'
+          || action === 'composer-group-explosion'
+          || action === 'drawsnake-projectile';
+        return musicLaneId !== 'primary_loop_lane'
+          && !(loopLikeAction && role === 'lead' && (layer === 'loops' || !layer));
+      });
+    } else if (typeof helpers.getPlayerLeadThemePrimaryStep === 'function') {
       const leadThemeStep = helpers.getPlayerLeadThemePrimaryStep(barIndex, stepIndex, currentEnemyMusicActionGateState.stage);
       if (leadThemeStep && typeof leadThemeStep === 'object') {
         const leadThemeStepActive = leadThemeStep.active === true;
@@ -2261,6 +2279,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const explicitPlayerLeadThemeEvent = (() => {
     if (suppressDirectorMusic) return null;
     if (isLaneSuppressed('primary_loop_lane')) return null;
+    if ((typeof helpers.isBeatSwarmLeadGateAuthoringOnlyTest === 'function'
+      && helpers.isBeatSwarmLeadGateAuthoringOnlyTest())
+      || (typeof helpers.isLeadGateLiteralPlaybackActive === 'function'
+        && helpers.isLeadGateLiteralPlaybackActive())) return null;
     const { stage, sectionBar } = getDirectorMotifBedStageState();
     if (stage !== 'build' && stage !== 'peak' && stage !== 'release' && stage !== 'settle') return null;
     const buildLeadSupplement = stage === 'build' && sectionBar >= 3;

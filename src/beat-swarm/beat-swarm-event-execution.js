@@ -1145,7 +1145,10 @@ export function executePerformedBeatEventRuntime(options = null) {
   if (actionType === 'player-lead-theme-direct') {
     return withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.playerLeadDirect', () => {
       const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
-      const requestedNote = String(payload?.requestedNoteRaw || ev?.note || '').trim();
+      const literalGateNote = payload?.leadGateLiteralLoop === true
+        ? String(payload?.leadThemeRawNote || '').trim()
+        : '';
+      const requestedNote = String(literalGateNote || payload?.requestedNoteRaw || ev?.note || '').trim();
       const noteName = String(requestedNote || ev?.note || '').trim();
       const instrumentId = String(ev?.instrumentId || payload?.instrumentId || '').trim();
       if (!instrumentId || !noteName) return false;
