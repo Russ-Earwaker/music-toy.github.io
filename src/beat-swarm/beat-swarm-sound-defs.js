@@ -5,7 +5,7 @@ export const SWARM_SOUND_EVENTS = Object.freeze({
   boomerang: Object.freeze({ instrumentDisplay: 'Tone (Sine)', note: 'G3' }),
   beam: Object.freeze({ instrumentDisplay: 'Laser', note: 'C3' }),
   explosion: Object.freeze({ instrumentDisplay: 'Retro Explosion Subtle', note: 'C4' }),
-  enemyDeathSmall: Object.freeze({ instrumentDisplay: 'Arcade Blip', note: 'C5', volumeMult: 0.82, arpStepSec: 0.012, arpMaxNotes: 3, pitchDropSemitones: 2 }),
+  enemyDeathSmall: Object.freeze({ instrumentDisplay: 'Gaming Note', note: 'C5', volumeMult: 0.82, arpStepSec: 0.012, arpMaxNotes: 3, pitchDropSemitones: 2 }),
   enemyDeathMedium: Object.freeze({ instrumentDisplay: 'Gaming Bling', note: 'C4', volumeMult: 0.9, arpStepSec: 0.022, arpMaxNotes: 4, pitchDropSemitones: 4 }),
   enemyDeathLarge: Object.freeze({ instrumentDisplay: 'Bass Tone 4', note: 'C3', volumeMult: 1, arpStepSec: 0.032, arpMaxNotes: 5, pitchDropSemitones: 7 }),
   // Legacy key kept for compatibility with older runtime/debug calls.

@@ -146,7 +146,7 @@ import { classifyEnemyDeathFamily, normalizeEnemyDeathFamily, normalizeInstrumen
 import { createBeatSwarmWeaponTuneTools } from './beat-swarm-weapon-tune.js';
 import { WEAPON_ARCHETYPES, WEAPON_COMPONENTS } from './beat-swarm-weapon-defs.js';
 import { createBeatSwarmSoundRoutingTools } from './beat-swarm-sound-routing.js';
-import { PLAYER_WEAPON_SOUND_EVENT_KEYS, SWARM_ENEMY_DEATH_EVENT_KEY_BY_FAMILY, SWARM_SOUND_EVENTS, } from './beat-swarm-sound-defs.js';
+import { PLAYER_WEAPON_SOUND_EVENT_KEYS, SWARM_ENEMY_DEATH_EVENT_KEY_BY_FAMILY, SWARM_SOUND_EVENTS, } from './beat-swarm-sound-defs.js?v=2026-07-20-death-sound-v34';
 import { applyPausePreviewLingeringAoeBeatRuntime, firePausePreviewWeaponsOnBeatRuntime, processPausePreviewPendingChainsRuntime, updatePausePreviewProjectilesAndEffectsRuntime, } from './beat-swarm-pause-preview-update.js';
 import { addPausePreviewBeamRuntime, addPausePreviewExplosionRuntime, addPausePreviewLaserRuntime, applyPausePreviewAoeAtRuntime, countPausePreviewOrbitingHomingMissilesRuntime, queuePausePreviewChainRuntime, spawnPausePreviewBoomerangProjectileRuntime, spawnPausePreviewHomingMissileRuntime, spawnPausePreviewProjectileFromDirectionRuntime, spawnPausePreviewProjectileRuntime, triggerPausePreviewWeaponStageRuntime, } from './beat-swarm-pause-preview-spawn.js';
 import { damagePausePreviewEnemyRuntime, ensurePausePreviewExplosionBiasEnemyRuntime, ensurePausePreviewStateRuntime, getPausePreviewBeatLenRuntime, getPausePreviewNearestEnemiesRuntime, nudgePausePreviewEnemiesIntoActionRuntime, previewSelectionContainsBoomerangRuntime, previewSelectionStartsWithExplosionRuntime, removePausePreviewEnemyRuntime, resetPausePreviewStateRuntime, spawnPausePreviewEnemyRuntime, } from './beat-swarm-pause-preview-state.js';
@@ -1550,7 +1550,9 @@ function maybeStartWeaponGatePostHandoffOnboardingEvent(stepIndex = 0) {
   }
 }
 function shouldSuppressPlayerWeaponForWeaponGate() {
-  return weaponGateIntroRuntime.isActive?.() === true;
+  if (weaponGateIntroRuntime.isActive?.() !== true) return false;
+  const handoffVisual = weaponTunePlaybackRuntime.handoffVisual;
+  return !(handoffVisual && handoffVisual.active === true);
 }
 function startTapOrbFoundationRewriteEvent(options = null) {
   if (tapOrbRuntime.isActive() || beatSwarmOnboardingRuntime.phase === 'tap_orb_foundation') return null;
@@ -2106,17 +2108,6 @@ const musicMissileRuntime = createBeatSwarmMusicMissileRuntime({
       eventId: String(event.eventId || '').trim(),
     }, loopPlayback ? 0.66 : 1.0);
     try { pulseMusicMotifConstellation(target.laneId, event.stepIndex, loopPlayback ? 0.24 : 0.34); } catch {}
-    if (!loopPlayback) {
-      const shimmerInstrumentId = getIdForDisplayName('Gaming Bling')
-        || resolveSwarmSoundInstrumentId('enemyDeath')
-        || 'tone';
-      triggerBeatSwarmInstrument(shimmerInstrumentId, note, undefined, 'master', {
-        source: 'music-missile-impact-shimmer',
-        musicLaneId: target.laneId,
-        stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
-        eventId: String(event.eventId || '').trim(),
-      }, 0.32);
-    }
     try { pulsePlayerShipNoteFlash(); } catch {}
   },
   createMusicExplosion(event = {}) {
@@ -16227,6 +16218,34 @@ function playSwarmSoundEventImmediate(eventKey, volume = 1, noteName = null) {
   const note = normalizeSwarmNoteName(noteName) || String(def?.note || getRandomSwarmPentatonicNote());
   try { triggerBeatSwarmInstrument(inst, note, undefined, 'master', {}, vol); } catch {}
 }
+function playEnemyDeathSoundImmediate(eventKey, volume = 1, noteName = null, beatIndex = currentBeatIndex, sourceEnemyId = 0) {
+  const key = String(eventKey || '').trim();
+  if (!isEnemyDeathSoundEventKey(key) || !SWARM_SOUND_EVENTS[key]) return;
+  const def = SWARM_SOUND_EVENTS[key];
+  const inst = resolveSwarmSoundInstrumentId(key);
+  const baseNote = clampNoteToDirectorPool(
+    normalizeSwarmNoteName(noteName) || String(def?.note || getRandomSwarmPentatonicNote()),
+    Math.max(0, Math.trunc(Number(beatIndex) || 0)) + Math.max(0, Math.trunc(Number(sourceEnemyId) || 0))
+  );
+  const vol = Math.max(0.001, Math.min(1, Number(volume) || 0));
+  const defVolumeMult = Math.max(0.1, Math.min(1.6, Number(def?.volumeMult) || 1));
+  const arpStepSec = Math.max(0.004, Number(def?.arpStepSec) || 0.028);
+  const arpMaxNotes = Math.max(1, Math.trunc(Number(def?.arpMaxNotes) || 1));
+  const pitchDropSemitones = Math.max(0, Math.trunc(Number(def?.pitchDropSemitones) || 0));
+  const nowAudio = Number(getLoopInfo?.()?.now);
+  const notePool = SWARM_PENTATONIC_NOTES_ONE_OCTAVE.length ? SWARM_PENTATONIC_NOTES_ONE_OCTAVE : [baseNote];
+  const startIndex = Math.max(0, Math.trunc(Number(sourceEnemyId) || 0)) % Math.max(1, notePool.length);
+  const count = Math.min(arpMaxNotes, notePool.length);
+  for (let i = 0; i < count; i++) {
+    const poolNote = normalizeSwarmNoteName(i === 0 ? baseNote : notePool[(startIndex + i) % notePool.length]) || baseNote;
+    const rawPitch = pitchDropSemitones > 0
+      ? transposeSwarmNoteName(poolNote, -Math.min(pitchDropSemitones, i))
+      : poolNote;
+    const pitch = clampNoteToDirectorPool(rawPitch, Math.max(0, Math.trunc(Number(beatIndex) || 0)) + i);
+    const when = Number.isFinite(nowAudio) ? nowAudio + (i * arpStepSec) : undefined;
+    try { triggerBeatSwarmInstrument(inst, pitch, when, 'master', { source: 'enemy-death-direct' }, vol * defVolumeMult); } catch {}
+  }
+}
 function getSwarmSoundEventTargetAudioTime(beatIndex = currentBeatIndex, stepIndex = null) {
   const info = getLoopInfo?.() || null;
   const beatLen = Number(info?.beatLen) || 0;
@@ -19772,6 +19791,107 @@ function hasPendingWeaponChainEventById(eventId) {
   if (!(id > 0)) return false;
   return pendingWeaponChainEvents.some((ev) => Math.trunc(Number(ev?.eventId) || 0) === id);
 }
+function finalizePendingEnemyDeath(d, beat = currentBeatIndex) {
+  const enemy = d?.enemy || null;
+  if (!enemy || enemy.__bsRemoved === true) return false;
+  const getPerfNow = getBeatSwarmPerfNow;
+  const recordPerfSample = recordBeatSwarmStepEventsPerfSample;
+  const withPerfSample = (name, fn) => {
+    if (typeof fn !== 'function') return undefined;
+    const startedAt = getPerfNow();
+    try {
+      return fn();
+    } finally {
+      recordPerfSample(name, Math.max(0, getPerfNow() - startedAt));
+    }
+  };
+  if (String(enemy?.enemyType || '') === 'spawner' && Array.isArray(enemy?.spawnerNodeEnemyIds)) {
+    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.quantizedDeath.linkedCleanup', () => {
+      const linkedIds = enemy.spawnerNodeEnemyIds.map((id) => Math.trunc(Number(id) || 0)).filter((id) => id > 0);
+      for (const linkedId of linkedIds) {
+        const child = enemies.find((e) => Math.trunc(Number(e?.id) || 0) === linkedId) || null;
+        if (!child || child.__bsRemoved === true) continue;
+        removeEnemy(child, 'killed', { beatIndex: beat, stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)) });
+        const childIdx = enemies.indexOf(child);
+        if (childIdx >= 0) enemies.splice(childIdx, 1);
+      }
+    });
+  }
+  const linkedSpawnerId = Math.trunc(Number(enemy?.linkedSpawnerId) || 0);
+  const linkedSpawnerStepIndex = Math.trunc(Number(enemy?.linkedSpawnerStepIndex) || 0);
+  const linkedEnemyMaxHp = Math.max(0, Number(enemy?.maxHp) || 0);
+  if (linkedSpawnerId > 0) {
+    clearSpawnerNodeEnemyReference(linkedSpawnerId, linkedSpawnerStepIndex, enemy?.id);
+    const owner = enemies.find((e) => Math.trunc(Number(e?.id) || 0) === linkedSpawnerId && String(e?.enemyType || '') === 'spawner') || null;
+    if (owner && linkedEnemyMaxHp > 0 && owner.__bsPendingDeath !== true) {
+      damageEnemy(owner, linkedEnemyMaxHp);
+    }
+  }
+  const isComposerGroupMember = String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member';
+  const deathWorld = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+  spawnSurfaceDebris(deathWorld, {
+    count: isComposerGroupMember ? 5 : 9,
+    power: isComposerGroupMember ? 95 : 145,
+    size: isComposerGroupMember ? 1.8 : 2.3,
+  });
+  spawnSurfaceCorpse(enemy, deathWorld);
+  if (enemy.tapOrbCarrier === true && enemy.tapOrbDropped !== true) {
+    enemy.tapOrbDropped = true;
+    try { tapOrbRuntime.spawnFromCarrierDeath({ world: { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 } }); } catch {}
+  }
+  if (enemy.musicMissileCarrier === true && enemy.musicMissilePickupDropped !== true) {
+    enemy.musicMissilePickupDropped = true;
+    try { musicMissileRuntime.spawnPickupFromCarrierDeath({ world: { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 } }); } catch {}
+  }
+  const suppressDeathSound = d.suppressDeathSound === true;
+  const deathFamily = normalizeEnemyDeathFamily(d?.soundFamily, 'medium');
+  const deathEventKey = String(d?.soundEventKey || '').trim() || resolveEnemyDeathEventKey(deathFamily, 'enemyDeathMedium');
+  const sourceEnemyId = Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || Number(enemy?.id) || 0));
+  const requestedNoteRaw = clampNoteToDirectorPool(
+    normalizeSwarmNoteName(d?.soundNote) || normalizeSwarmNoteName(enemy.soundNote) || getRandomSwarmPentatonicNote(),
+    Math.max(0, Math.trunc(Number(beat) || 0)) + sourceEnemyId
+  );
+  const deathSoundVolume = Math.max(0.001, Math.min(1, Number(d?.soundVolume) || 0.16));
+  if (!suppressDeathSound) {
+    playEnemyDeathSoundImmediate(deathEventKey, deathSoundVolume, requestedNoteRaw, beat, sourceEnemyId);
+    noteGameplayFamilyEvent('death', beat);
+    try {
+      noteMusicSystemEvent('enemy_death_sound_triggered', {
+        sourceEnemyId,
+        enemyType: String(enemy?.enemyType || '').trim().toLowerCase(),
+        soundFamily: deathFamily,
+        soundEventKey: deathEventKey,
+        requestedNoteRaw,
+        volume: deathSoundVolume,
+        source: String(d?.source || 'quantized_death').trim() || 'quantized_death',
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(beat) || 0)),
+        stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+      });
+    } catch {}
+  } else {
+    try {
+      noteMusicSystemEvent('enemy_death_sound_suppressed', {
+        sourceEnemyId,
+        enemyType: String(enemy?.enemyType || '').trim().toLowerCase(),
+        soundFamily: deathFamily,
+        soundEventKey: deathEventKey,
+        source: String(d?.source || 'quantized_death').trim() || 'quantized_death',
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(beat) || 0)),
+        stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+      });
+    } catch {}
+  }
+  removeEnemy(enemy, 'killed', {
+    beatIndex: beat,
+    stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+  });
+  const idx = enemies.indexOf(enemy);
+  if (idx >= 0) enemies.splice(idx, 1);
+  noteEnergyGravityKill();
+  return true;
+}
 function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = currentBeatIndex) {
   const now = Number(nowTs) || performance.now();
   const beat = Math.max(0, Math.trunc(Number(beatIndex) || 0));
@@ -19779,7 +19899,11 @@ function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = curren
     const d = pendingEnemyDeaths[i];
     const el = d?.el || null;
     if (!el) {
-      pendingEnemyDeaths.splice(i, 1);
+      if (!d.popped && (beat >= (Number(d.popBeat) || 0) || now >= (Number(d.fallbackPopAt) || 0))) {
+        finalizePendingEnemyDeath(d, beat);
+        d.popped = true;
+        pendingEnemyDeaths.splice(i, 1);
+      }
       continue;
     }
     const s = worldToScreen({ x: Number(d.wx) || 0, y: Number(d.wy) || 0 });
@@ -19788,6 +19912,7 @@ function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = curren
       el.style.setProperty('--bs-death-y', `${s.y}px`);
     }
     if (!d.popped && (beat >= (Number(d.popBeat) || 0) || now >= (Number(d.fallbackPopAt) || 0))) {
+      finalizePendingEnemyDeath(d, beat);
       el.classList.remove('is-dying');
       el.classList.add('is-death-pop');
       d.popped = true;
@@ -19799,27 +19924,19 @@ function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = curren
         beat + Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || 0))
       );
       if (d.suppressDeathSound !== true) {
-        executePerformedBeatEvent(createLoggedPerformedBeatEvent({
-          actorId: Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || 0)),
-          beatIndex: beat,
-          stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
-          role: BEAT_EVENT_ROLES.ACCENT,
-          note: requestedNoteRaw || getRandomSwarmPentatonicNote(),
-          instrumentId: resolveSwarmSoundInstrumentId(deathEventKey) || '',
-          actionType: 'enemy-death-accent',
-          threatClass: BEAT_EVENT_THREAT.ACCENT,
-          visualSyncType: 'death-pop',
-          payload: {
-            volume: Math.max(0.001, Math.min(1, Number(d.soundVolume) || 0)),
+        try {
+          noteMusicSystemEvent('enemy_death_pop_visual', {
+            sourceEnemyId: Math.max(0, Math.trunc(Number(d?.sourceEnemyId) || 0)),
             soundFamily: deathFamily,
             soundEventKey: deathEventKey,
             requestedNoteRaw,
-          },
-        }, {
-          beatIndex: beat,
-          sourceSystem: 'death',
-          enemyType: 'death',
-        }));
+            soundAlreadyPlayed: d.suppressDeathSound !== true,
+            source: 'pending-death-pop',
+          }, {
+            beatIndex: beat,
+            stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+          });
+        } catch {}
       }
     }
     if (d.popped && now >= (Number(d.removeAt) || 0)) {
@@ -19846,7 +19963,7 @@ function damageEnemy(enemy, amount = 1, options = null) {
       recordPerfSample(name, Math.max(0, getPerfNow() - startedAt));
     }
   };
-  if (!enemy || !Number.isFinite(enemy.hp)) return false;
+  if (!enemy || !Number.isFinite(enemy.hp) || enemy.__bsPendingDeath === true) return false;
   enemy.hp -= Math.max(0, Number(amount) || 0);
   withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.hitFlash', () => {
     pulseHitFlash(enemy.el);
@@ -19858,29 +19975,6 @@ function damageEnemy(enemy, amount = 1, options = null) {
   }
   updateEnemyHealthUi(enemy);
   if (enemy.hp <= 0) {
-    if (String(enemy?.enemyType || '') === 'spawner' && Array.isArray(enemy?.spawnerNodeEnemyIds)) {
-      withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.linkedCleanup', () => {
-        const linkedIds = enemy.spawnerNodeEnemyIds.map((id) => Math.trunc(Number(id) || 0)).filter((id) => id > 0);
-        for (const linkedId of linkedIds) {
-          const child = enemies.find((e) => Math.trunc(Number(e?.id) || 0) === linkedId) || null;
-          if (!child) continue;
-          removeEnemy(child, 'killed');
-          const childIdx = enemies.indexOf(child);
-          if (childIdx >= 0) enemies.splice(childIdx, 1);
-        }
-      });
-    }
-    const linkedSpawnerId = Math.trunc(Number(enemy?.linkedSpawnerId) || 0);
-    const linkedSpawnerStepIndex = Math.trunc(Number(enemy?.linkedSpawnerStepIndex) || 0);
-    const linkedEnemyMaxHp = Math.max(0, Number(enemy?.maxHp) || 0);
-    if (linkedSpawnerId > 0) {
-      clearSpawnerNodeEnemyReference(linkedSpawnerId, linkedSpawnerStepIndex, enemy?.id);
-      const owner = enemies.find((e) => Math.trunc(Number(e?.id) || 0) === linkedSpawnerId && String(e?.enemyType || '') === 'spawner') || null;
-      if (owner && linkedEnemyMaxHp > 0) {
-        damageEnemy(owner, linkedEnemyMaxHp);
-      }
-    }
-    const idx = enemies.indexOf(enemy);
     const screenFromTransform = (() => {
       const tr = String(enemy?.el?.style?.transform || '');
       const m = tr.match(/translate\(\s*([-\d.]+)px,\s*([-\d.]+)px\s*\)/i);
@@ -19894,24 +19988,15 @@ function damageEnemy(enemy, amount = 1, options = null) {
       y: window.innerHeight * 0.5,
     };
     const isComposerGroupMember = String(enemy?.enemyType || '').trim().toLowerCase() === 'composer-group-member';
-    const deathWorld = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
-    spawnSurfaceDebris(deathWorld, {
-      count: isComposerGroupMember ? 5 : 9,
-      power: isComposerGroupMember ? 95 : 145,
-      size: isComposerGroupMember ? 1.8 : 2.3,
-    });
-    spawnSurfaceCorpse(enemy, deathWorld);
-    if (enemy.tapOrbCarrier === true && enemy.tapOrbDropped !== true) {
-      enemy.tapOrbDropped = true;
-      try { tapOrbRuntime.spawnFromCarrierDeath({ world: { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 } }); } catch {}
-    }
-    if (enemy.musicMissileCarrier === true && enemy.musicMissilePickupDropped !== true) {
-      enemy.musicMissilePickupDropped = true;
-      try { musicMissileRuntime.spawnPickupFromCarrierDeath({ world: { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 } }); } catch {}
-    }
-    if (idx >= 0) enemies.splice(idx, 1);
+    enemy.__bsPendingDeath = true;
     enemy.vx = 0;
     enemy.vy = 0;
+    enemy.hp = 0;
+    enemy.retreating = false;
+    if (enemy.el instanceof HTMLElement) {
+      enemy.el.classList.add('is-dying');
+      enemy.el.style.pointerEvents = 'none';
+    }
     const deathEl = isComposerGroupMember
       ? null
       : withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.deathFx', () => {
@@ -19930,32 +20015,50 @@ function damageEnemy(enemy, amount = 1, options = null) {
     const suppressDeathSound = opts.suppressDeathSound === true || enemy?.suppressNextDeathSound === true;
     const deathFamily = classifyEnemyDeathFamily(enemy);
     const deathEventKey = resolveEnemyDeathEventKey(deathFamily, 'enemyDeathMedium');
-    withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.directDamage.remove', () => {
-      removeEnemy(enemy, 'killed');
-    });
+    const stageVolume = Math.max(0, Math.min(1, Number(getStageSoundVolume(activeDamageSoundStageIndex)) || 0));
+    const deathSoundVolume = Math.max(0.16, stageVolume || 0.32) * 0.46;
+    const sourceEnemyId = Math.max(0, Math.trunc(Number(enemy?.id) || 0));
+    const deathSoundNote = clampNoteToDirectorPool(
+      normalizeSwarmNoteName(enemy.soundNote) || getRandomSwarmPentatonicNote(),
+      sourceEnemyId + Math.max(0, Math.trunc(Number(currentBeatIndex) || 0))
+    );
     if (deathEl) {
-      const stageVolume = Math.max(0, Math.min(1, Number(getStageSoundVolume(activeDamageSoundStageIndex)) || 0));
-      const deathSoundVolume = Math.max(0.09, stageVolume || 0.28) * 0.36;
       pendingEnemyDeaths.push({
+        enemy,
         el: deathEl,
         wx: Number(enemy.wx) || 0,
         wy: Number(enemy.wy) || 0,
-        soundNote: clampNoteToDirectorPool(
-          normalizeSwarmNoteName(enemy.soundNote) || getRandomSwarmPentatonicNote(),
-          Math.max(0, Math.trunc(Number(enemy?.id) || 0)) + Math.max(0, Math.trunc(Number(currentBeatIndex) || 0))
-        ),
+        soundNote: deathSoundNote,
         soundVolume: deathSoundVolume,
         suppressDeathSound,
         soundFamily: deathFamily,
         soundEventKey: deathEventKey,
         sourceEnemyId: Number.isFinite(enemy?.id) ? Math.trunc(enemy.id) : null,
+        source: String(opts.source || 'damageEnemy').trim() || 'damageEnemy',
+        popBeat: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) + 1,
+        fallbackPopAt: (performance.now() || 0) + (ENEMY_DEATH_POP_FALLBACK_SECONDS * 1000),
+        popped: false,
+        removeAt: 0,
+      });
+    } else {
+      pendingEnemyDeaths.push({
+        enemy,
+        el: null,
+        wx: Number(enemy.wx) || 0,
+        wy: Number(enemy.wy) || 0,
+        soundNote: deathSoundNote,
+        soundVolume: deathSoundVolume,
+        suppressDeathSound,
+        soundFamily: deathFamily,
+        soundEventKey: deathEventKey,
+        sourceEnemyId: Number.isFinite(enemy?.id) ? Math.trunc(enemy.id) : null,
+        source: String(opts.source || 'damageEnemy').trim() || 'damageEnemy',
         popBeat: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) + 1,
         fallbackPopAt: (performance.now() || 0) + (ENEMY_DEATH_POP_FALLBACK_SECONDS * 1000),
         popped: false,
         removeAt: 0,
       });
     }
-    noteEnergyGravityKill();
     return true;
   }
   return false;
@@ -24744,6 +24847,7 @@ function shouldKeepEnemyEventDuringPlayerStep(ev, keepCount = 0) {
   if (action === 'drawsnake-projectile') return true;
   if (action === 'composer-group-projectile') return true;
   if (action === 'composer-group-explosion') return true;
+  if (action === 'enemy-death-accent') return true;
   if ((sourceSystem === 'player' || sourceSystem === 'death' || authoringClass === 'gameplayauthored') && (
     action.includes('projectile')
     || action.includes('explosion')
@@ -25101,6 +25205,7 @@ function getNearestEnemy(worldX, worldY, excludeEnemyId = null) {
   let best = null;
   let bestD2 = Infinity;
   for (const e of enemies) {
+    if (!e || e.__bsRemoved === true || e.__bsPendingDeath === true || Number(e.hp) <= 0 || e.retreating === true) continue;
     const eid = Number.isFinite(e?.id) ? Math.trunc(e.id) : null;
     if (exId !== null && eid === exId) continue;
     const dx = (e.wx - worldX);
@@ -25114,7 +25219,9 @@ function getNearestEnemy(worldX, worldY, excludeEnemyId = null) {
   return best;
 }
 function getNearestEnemies(worldX, worldY, count = 1) {
-  const scored = enemies.map((e) => {
+  const scored = enemies.filter((e) => (
+    e && e.__bsRemoved !== true && e.__bsPendingDeath !== true && Number(e.hp) > 0 && e.retreating !== true
+  )).map((e) => {
     const dx = e.wx - worldX;
     const dy = e.wy - worldY;
     return { e, d2: (dx * dx) + (dy * dy) };
@@ -28195,7 +28302,8 @@ function tick(nowMs) {
   updateBeatSwarmResizeAnchor(centerWorld);
   const input = getInputVector();
   let weaponGateFrameRuntime = null;
-  if (weaponGateIntroRuntime.isActive()) {
+  const weaponGateHandoffPlaybackActive = weaponTunePlaybackRuntime.handoffVisual?.active === true;
+  if (weaponGateIntroRuntime.isActive() && !weaponGateHandoffPlaybackActive) {
     const gatePhase = String(weaponGateIntroRuntime.getPhase?.() || '');
     const gatePrelaunchActive = gatePhase === 'prelaunch';
     velocityX = 0;
@@ -28299,6 +28407,11 @@ function tick(nowMs) {
       active: true,
       centerWorld: getViewportCenterWorld(),
     };
+  } else if (weaponGateIntroRuntime.isActive()) {
+    try {
+      weaponGateIntroRuntime.update(dt, input, { forwardDelta: 0, sideDelta: 0 });
+      setArenaIntroBlend(weaponGateIntroRuntime.getArenaBlend());
+    } catch {}
   }
   const motionState = {
     borderForceEnabled,
