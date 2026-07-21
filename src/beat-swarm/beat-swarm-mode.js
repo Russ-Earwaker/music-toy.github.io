@@ -23,7 +23,7 @@ import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-15-pinball-bouncers-v23';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-19-pinball-bouncers-v24';
-import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-21-lead-ball-v8';
+import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-21-lead-ball-v17';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
 import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-19-rhythm-visuals-v32';
 import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-19-rhythm-visuals-v32';
@@ -3169,6 +3169,20 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
       }, {
         beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
         stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
+      });
+    } catch {}
+  },
+  onCompleteExplosion(event = {}) {
+    const at = event.at && typeof event.at === 'object' ? event.at : getViewportCenterWorld();
+    try { addMusicExplosionEffect(at, 285, 0.72); } catch {}
+    try {
+      noteMusicSystemEvent('lead_ball_complete_explosion', {
+        eventId: String(event.eventId || '').trim(),
+        hitCount: Math.max(0, Math.trunc(Number(event.hitCount) || 0)),
+        targetHitCount: Math.max(0, Math.trunc(Number(event.targetHitCount) || 0)),
+      }, {
+        beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+        stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
       });
     } catch {}
   },
