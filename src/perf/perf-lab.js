@@ -456,6 +456,7 @@ function ensureUI() {
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
         ${btn('musicLabRunBS0S3GateToLeadGatesDebug', 'Run Gate -> Lead Gates (1x60s)', 'primary')}
+        ${btn('musicLabRunBS0S3GateToLeadBallDebug', 'Run Gate -> Lead Ball (1x60s)', 'primary')}
         ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Missiles + Bouncers (1x180s)', 'primary')}
         ${btn('musicLabRunBS0S3MusicMissileBassRewriteDebug', 'Test Reuse Matrix: Missiles/Tap Orbs -> Bass/Accent (1x360s)', 'primary')}
         ${btn('musicLabRunBS0S3PinballBouncerRewriteDebug', 'Pinball Bouncer Accent Rewrite (1x120s)', 'primary')}
@@ -1551,6 +1552,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3GateToLeadGatesDebug') {
       await runBS0s3MusicLabGateToLeadGatesDebug120s();
+      return;
+    }
+    if (act === 'musicLabRunBS0S3GateToLeadBallDebug') {
+      await runBS0s3MusicLabGateToLeadBallDebug60s();
       return;
     }
     if (act === 'musicLabRunBS0S3GateStartTapOrbDebug') {
@@ -7028,6 +7033,70 @@ async function runBS0s3MusicLabGateToLeadGatesDebug120s() {
     tagPrefix: 'BS0S3GateToLeadGatesDebug1x60s',
     labelPrefix: 'BS0_stage3_beatswarm_gate_to_lead_gates_debug_1x60s',
     statusPrefix: 'Running BS0 S3 gate -> lead gates debug (60 seconds, compact save)',
+    traceCapture: {
+      enabled: false,
+    },
+  });
+}
+
+async function runBS0s3MusicLabGateToLeadBallDebug60s() {
+  await runBS0Stage(3, {
+    durationMs: 60000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      leadGateAuthoringOnly: true,
+    },
+    async setupAfterPrepare() {
+      const api = getBeatSwarmApi();
+      if (!api || typeof api.enter !== 'function') {
+        throw new Error('beat_swarm_api_unavailable');
+      }
+      try { api.exit?.(); } catch {}
+      await waitForPerfLabMs(80);
+      try { window.__BEAT_SWARM_LEAD_BALL_DEBUG = true; } catch {}
+      try { api.enter?.({ weaponGateIntro: true, weaponGateSequence: 'lead_ball' }); } catch (err) {
+        throw new Error(`weapon_gate_lead_ball_start_failed:${String(err?.message || err)}`);
+      }
+      try { if (!isRunning()) startTransport(); } catch {}
+      try {
+        window.__beatSwarmGateToLeadBallDebugExpected = {
+          mode: 'gate_to_lead_ball',
+          expectedTheme: 'leadTheme',
+          expectedLane: 'primary_loop_lane',
+          traceEvents: [
+            'lead_ball_rewrite_requested',
+            'lead_ball_rewrite_started',
+            'lead_ball_motif_hit',
+            'lead_ball_rewrite_committed_to_theme',
+            'music_primary_loop_lane_emitted',
+          ],
+        };
+      } catch {}
+      setOutput({
+        ok: true,
+        setup: 'weapon_gate_to_lead_ball_started',
+        notes: 'Complete the weapon gate corridor, then bump the lead ball so it authors a lead motif from quantized enemy impacts.',
+      });
+    },
+    saveRunIdBase: 'musicLab_bs0_s3_gate_to_lead_ball_debug_1x60s',
+    saveNotes: [
+      'Beat Swarm Music Lab lead-ball debug: real weapon gate corridor, then lead ball authoring event.',
+      'Focused authoring-only override suppresses broader arrangement lanes so the lead-ball motif can be heard clearly.',
+      'Expected result: the ball hits enemies on quantized beats, commits leadTheme, and primary_loop_lane repeats afterward.',
+    ].join(' '),
+    groupedScenarioName: 'retro_shooter_gate_to_lead_ball_debug_1x60s',
+    groupedRunId: 'musicLab_bs0_s3_gate_to_lead_ball_debug_1x60s_scenario',
+    groupedNotes: 'Isolated gate corridor into lead-ball theme authoring debug scenario.',
+    tagPrefix: 'BS0S3GateToLeadBallDebug1x60s',
+    labelPrefix: 'BS0_stage3_beatswarm_gate_to_lead_ball_debug_1x60s',
+    statusPrefix: 'Running BS0 S3 gate -> lead ball debug (60 seconds, compact save)',
     traceCapture: {
       enabled: false,
     },

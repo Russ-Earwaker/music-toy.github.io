@@ -226,7 +226,7 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
         vy: Math.sin(tangent) * drift,
         ttl,
         maxTtl: ttl,
-        size: 1.8,
+        size: 2.3,
         hue: 194,
         pulse: Math.random() * Math.PI * 2,
       });
@@ -251,7 +251,7 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
     p.vy = 0;
     p.ttl = 9999;
     p.maxTtl = 9999;
-    p.size = 2.1;
+    p.size = 2.7;
     p.hue = 194;
     p.pulse = Math.random() * Math.PI * 2;
     p.flash = 0;
@@ -375,9 +375,9 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
         const speedGlow = Math.min(1, Math.hypot(Number(p.vx) || 0, Number(p.vy) || 0) / 230);
         const flashGlow = Math.min(1, Number(p.flash) || 0);
         const motionGlow = Math.max(speedGlow, flashGlow);
-        ctx.globalAlpha = Math.max(0, Math.min(1, arenaVisible ? 1 : 0));
+        ctx.globalAlpha = Math.max(0, Math.min(1, arenaVisible ? 0.92 : 0));
         ctx.fillStyle = motionGlow > 0.08 ? `hsl(${hue} 100% 86%)` : `hsl(${hue} 96% 66%)`;
-        const size = Math.max(1.1, Number(p.size) || 1.8) * (1 + motionGlow * 1.65);
+        const size = Math.max(1.4, Number(p.size) || 2.2) * (1 + motionGlow * 1.9);
         ctx.fillRect(s.x - size * 0.5, s.y - size * 0.5, size, size);
       } else if (p.kind === 'shard') {
         const size = Math.max(4, Number(p.size) || 10) * (0.74 + life * 0.24);
