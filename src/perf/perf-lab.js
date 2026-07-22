@@ -457,7 +457,7 @@ function ensureUI() {
         <div class="perf-lab-controlsTitle">Current Work</div>
         ${btn('musicLabRunBS0S3GateToLeadGatesDebug', 'Run Gate -> Lead Gates (1x60s)', 'primary')}
         ${btn('musicLabRunBS0S3GateToLeadBallDebug', 'Run Gate -> Lead Ball (1x60s)', 'primary')}
-        ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Missiles + Bouncers (1x180s)', 'primary')}
+        ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Missiles + Bouncers + Balls (1x180s)', 'primary')}
         ${btn('musicLabRunBS0S3MusicMissileBassRewriteDebug', 'Test Reuse Matrix: Missiles/Tap Orbs -> Bass/Accent (1x360s)', 'primary')}
         ${btn('musicLabRunBS0S3PinballBouncerRewriteDebug', 'Pinball Bouncer Accent Rewrite (1x120s)', 'primary')}
       </div>`,
@@ -6937,9 +6937,10 @@ async function runBS0s3MusicLabGateStartTapOrbHandoffDebug150s() {
       try { if (!isRunning()) startTransport(); } catch {}
       try {
         window.__beatSwarmGateStartTapOrbDebugExpected = {
-          mode: 'gate_missile_pinball_sequence',
+          mode: 'gate_missile_pinball_lead_ball_sequence',
           expectedMissileTheme: 'bassDrive',
           expectedPinballTheme: 'accentRhythm',
+          expectedLeadTheme: 'leadTheme',
           traceEvents: [
             'music_missile_rewrite_started',
             'music_missile_quantized_explosion',
@@ -6947,27 +6948,30 @@ async function runBS0s3MusicLabGateStartTapOrbHandoffDebug150s() {
             'pinball_bouncer_rewrite_started',
             'pinball_bouncer_quantized_impact',
             'pinball_bouncer_rewrite_committed_to_theme',
+            'lead_ball_rewrite_started',
+            'lead_ball_quantized_impact',
+            'lead_ball_rewrite_committed_to_theme',
           ],
         };
       } catch {}
       setOutput({
         ok: true,
-        setup: 'weapon_gate_missile_pinball_sequence_started',
-        notes: 'Complete the gate corridor, author Bass Drive with rocket pickups, then author Accent Rhythm with pinball bouncers.',
+        setup: 'weapon_gate_missile_pinball_lead_ball_sequence_started',
+        notes: 'Complete the gate corridor, author Bass Drive with rocket pickups, author Accent Rhythm with pinball bouncers, then author Lead Theme with the two-ball pickup event.',
       });
     },
-    saveRunIdBase: 'musicLab_bs0_s3_gate_missile_pinball_sequence_1x180s',
+    saveRunIdBase: 'musicLab_bs0_s3_gate_missile_pinball_lead_ball_sequence_1x180s',
     saveNotes: [
-      'Beat Swarm Music Lab onboarding sequence: run the real gate corridor, event-driven music-missile Bass Drive creation, then pinball-bouncer Accent Rhythm creation.',
-      'Use music_missile_rewrite_committed_to_theme and pinball_bouncer_rewrite_committed_to_theme events to compare committed motifs against director lane playback.',
-      'Expected result: the weapon, Bass Drive, and Accent Rhythm motifs commit in order without replacing or interrupting the preceding motif.',
+      'Beat Swarm Music Lab onboarding sequence: run the real gate corridor, event-driven music-missile Bass Drive creation, pinball-bouncer Accent Rhythm creation, then two-ball Lead Theme creation.',
+      'Use the missile, pinball-bouncer, and lead-ball rewrite commit events to compare committed motifs against director lane playback.',
+      'Expected result: the weapon, Bass Drive, Accent Rhythm, and Lead Theme motifs commit in order without replacing or interrupting the preceding motif.',
     ].join(' '),
-    groupedScenarioName: 'retro_shooter_gate_missile_pinball_sequence_1x180s',
-    groupedRunId: 'musicLab_bs0_s3_gate_missile_pinball_sequence_1x180s_scenario',
-    groupedNotes: 'Complete onboarding chain: gate weapon motif, music-missile Bass Drive event, and pinball-bouncer Accent Rhythm event.',
-    tagPrefix: 'BS0S3GateMissilePinballSequence1x180s',
-    labelPrefix: 'BS0_stage3_beatswarm_gate_missile_pinball_sequence_1x180s',
-    statusPrefix: 'Running BS0 S3 gate + missiles + bouncers (180 seconds, compact save)',
+    groupedScenarioName: 'retro_shooter_gate_missile_pinball_lead_ball_sequence_1x180s',
+    groupedRunId: 'musicLab_bs0_s3_gate_missile_pinball_lead_ball_sequence_1x180s_scenario',
+    groupedNotes: 'Complete onboarding chain: gate weapon motif, music-missile Bass Drive, pinball-bouncer Accent Rhythm, and two-ball Lead Theme events.',
+    tagPrefix: 'BS0S3GateMissilePinballLeadBallSequence1x180s',
+    labelPrefix: 'BS0_stage3_beatswarm_gate_missile_pinball_lead_ball_sequence_1x180s',
+    statusPrefix: 'Running BS0 S3 gate + missiles + bouncers + balls (180 seconds, compact save)',
     traceCapture: {
       enabled: false,
     },

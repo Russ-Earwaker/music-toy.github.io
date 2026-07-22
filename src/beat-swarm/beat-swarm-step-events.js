@@ -46,6 +46,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ? state.musicModeRuntime
     : null;
   const suppressDirectorMusic = state.suppressDirectorMusic === true;
+  const preserveAuthoredAccentContinuity = state.preserveAuthoredAccentContinuity === true;
   const suppressedMusicLaneIds = state.suppressedMusicLaneIds instanceof Set
     ? state.suppressedMusicLaneIds
     : new Set(Array.isArray(state.suppressedMusicLaneIds) ? state.suppressedMusicLaneIds : []);
@@ -1378,6 +1379,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ).trim().toLowerCase();
     const directorLane = getDirectorLanePlanForMusicLane(musicLaneId);
     const isPrimaryLoopLaneEvent = musicLaneId === 'primary_loop_lane';
+    const isLeadAuthoringLiteralReplay = payload?.leadAuthoringLiteralReplay === true;
     const continuityId = String(payload.continuityId || '').trim().toLowerCase();
     const noteResolved = String(ev?.noteResolved || ev?.note || payload?.noteResolved || payload?.requestedNoteRaw || '').trim().toLowerCase();
     const identityKey = [
@@ -1418,6 +1420,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     else score += 300;
     if (isFreshEntryAudibility(ev)) score += Math.max(0, Number(constants.entryAudibilityScoreBoost) || 110);
     if (isPrimaryLoopLaneEvent) score += 220;
+    if (isLeadAuthoringLiteralReplay) score += 10000;
     score += (prominenceRank[safeProminence] || 0) * 40;
     if (safeLayer === 'foundation' && playerLikelyAudible) score += 180;
     if (isCurrentForegroundLoop) score += Math.max(0, Number(constants.currentForegroundScoreBoost) || 120);
@@ -1495,6 +1498,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       isPlayerBassFoundation,
       isPlayerBassLiteralStatement,
       isPrimaryLoopLaneEvent,
+      isLeadAuthoringLiteralReplay,
       callResponseLane,
       musicVoiceKey,
       isProtectedIntroDrum,
@@ -1563,7 +1567,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     const bucket = keptByLayer[item.layer] || [];
     const budget = Math.max(0, Math.trunc(Number(layerBudgets[item.layer]) || 0));
-    if (item.isProtectedIntroDrum) {
+    if (item.isLeadAuthoringLiteralReplay) {
+      // Player-authored literal playback is the event output, not optional arrangement texture.
+      // It must survive the generic loop budget so rhythm companions can sound beside it.
+    } else if (item.isProtectedIntroDrum) {
       // During the intro drum-to-lead blend window, keep the pulse/backbeat
       // slots alive as first-class material instead of making them compete
       // with the newly entering lead.
@@ -1575,6 +1582,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       !groupedComposerBudgetExempt
       &&
       !item.isProtectedIntroDrum
+      && !item.isLeadAuthoringLiteralReplay
       &&
       !item.isReservedPercussionCompanion
       &&
@@ -1586,11 +1594,15 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ) {
       continue;
     }
-    if (!groupedComposerBudgetExempt && !item.isProtectedIntroDrum && !item.isReservedPercussionCompanion && item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
+    if (!groupedComposerBudgetExempt && !item.isProtectedIntroDrum && !item.isLeadAuthoringLiteralReplay && !item.isReservedPercussionCompanion && item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
     bucket.push(item);
     selectedIds.add(item.idx);
-    selectedRegisterCounts.set(item.collisionRegisterKey, registerCount + 1);
-    if (item.melodicCollisionKey) selectedMelodicCollisionKeys.add(item.melodicCollisionKey);
+    // Percussion companions occupy the rhythm lane, not melodic register space.
+    // Counting them here made an accent hit suppress a same-step lead note.
+    if (!item.isReservedPercussionCompanion) {
+      selectedRegisterCounts.set(item.collisionRegisterKey, registerCount + 1);
+      if (item.melodicCollisionKey) selectedMelodicCollisionKeys.add(item.melodicCollisionKey);
+    }
     if (item.isReservedPercussionCompanion) reservedPercussionCompanionSelected = true;
     if (keptByLayer[item.layer] !== bucket) keptByLayer[item.layer] = bucket;
   }
@@ -2448,7 +2460,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const explicitPlayerAccentRhythmEvent = (() => {
     if (suppressDirectorMusic) return null;
     if (isLaneSuppressed('secondary_loop_lane')) return null;
-    const { stage, sectionBar } = getDirectorMotifBedStageState();
+    const motifBedState = getDirectorMotifBedStageState();
+    const stage = preserveAuthoredAccentContinuity
+      && !['low', 'medium', 'build', 'peak'].includes(String(motifBedState.stage || '').trim().toLowerCase())
+      ? 'low'
+      : motifBedState.stage;
+    const sectionBar = motifBedState.sectionBar;
     const authoredContinuity = helpers.isPlayerMusicThemeAuthored?.('accentRhythm') === true;
     if (stage !== 'low' && stage !== 'medium' && stage !== 'build' && stage !== 'peak') return null;
     if (stage === 'low' && !authoredContinuity) return null;
@@ -2689,7 +2706,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       const laneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
       const layer = String(payload.musicLayer || '').trim().toLowerCase();
       if (authoredBassDriveContinuityActive && (laneId === 'foundation_lane' || layer === 'foundation')) return false;
-      if (explicitPlayerAccentRhythmEvent && (laneId === 'secondary_loop_lane' || layer === 'loops' || layer === 'accent')) return false;
+      const role = String(ev?.role || payload.musicRole || '').trim().toLowerCase();
+      if (explicitPlayerAccentRhythmEvent && (laneId === 'secondary_loop_lane' || layer === 'accent' || role === 'accent')) return false;
       return true;
     })
     : stagedEnemyEvents;

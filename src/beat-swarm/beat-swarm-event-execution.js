@@ -1152,8 +1152,11 @@ export function executePerformedBeatEventRuntime(options = null) {
       const noteName = String(requestedNote || ev?.note || '').trim();
       const instrumentId = String(ev?.instrumentId || payload?.instrumentId || '').trim();
       if (!instrumentId || !noteName) return false;
-      const authoredGain = Number(payload?.audioGain == null ? 0.72 : payload.audioGain);
-      const triggerVolume = Math.max(0.18, Math.min(1, Number.isFinite(authoredGain) ? authoredGain : 0.72));
+      const literalAuthoringReplay = payload?.leadAuthoringLiteralReplay === true;
+      const defaultGain = literalAuthoringReplay ? 0.92 : 0.72;
+      const authoredGain = Number(payload?.audioGain == null ? defaultGain : payload.audioGain);
+      const triggerVolume = Math.max(0.18, Math.min(1, Number.isFinite(authoredGain) ? authoredGain : defaultGain));
+      const leadAuthoringSource = String(payload?.leadAuthoringSource || '').trim().toLowerCase();
       try {
         helpers.triggerInstrument?.(
           instrumentId,
@@ -1161,7 +1164,9 @@ export function executePerformedBeatEventRuntime(options = null) {
           undefined,
           'master',
           {
-            source: 'beat-swarm-player-lead-theme-direct',
+            source: literalAuthoringReplay
+              ? `${leadAuthoringSource || 'lead-authoring'}-motif-loop`
+              : 'beat-swarm-player-lead-theme-direct',
             preserveRequestedNote: true,
             stepIndex,
             leadGateLiteralLoop: payload?.leadGateLiteralLoop === true,
@@ -1177,6 +1182,8 @@ export function executePerformedBeatEventRuntime(options = null) {
           musicProminence: String(payload?.musicProminence || 'full').trim().toLowerCase() || 'full',
           musicLaneId: 'primary_loop_lane',
           leadGateLiteralLoop: payload?.leadGateLiteralLoop === true,
+          leadAuthoringLiteralReplay,
+          leadAuthoringSource,
           leadGateRelativeStep: Math.max(0, Math.trunc(Number(payload?.leadGateRelativeStep) || 0)),
           leadThemePartIndex: Math.max(0, Math.trunc(Number(payload?.leadThemePartIndex) || 0)),
           leadThemeStepIndex: Math.max(0, Math.trunc(Number(payload?.leadThemeStepIndex) || 0)),

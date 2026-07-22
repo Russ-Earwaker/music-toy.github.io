@@ -10,6 +10,7 @@ const BALL_BUMP_RADIUS = 94;
 const BALL_MAX_IDLE_SECONDS = 10;
 const BALL_PICKUP_RADIUS = 74;
 const BALL_COUNT = 2;
+const BALL_CONTACT_COOLDOWN = 0.3;
 const DEFAULT_STEP_COUNT = 32;
 const DEFAULT_TARGET_HITS = 18;
 
@@ -121,6 +122,9 @@ function ensureStyle() {
     .beat-swarm-lead-ball.is-ready {
       animation: beatSwarmLeadBallReady .72s ease-in-out infinite alternate;
     }
+    .beat-swarm-lead-ball.is-note-hit {
+      animation: beatSwarmLeadBallNoteHit .24s ease-out;
+    }
     .beat-swarm-lead-ball-trail {
       position: absolute;
       left: 0;
@@ -165,6 +169,11 @@ function ensureStyle() {
       45% { opacity: .9; transform: var(--bs-lead-impact-transform, translate(-9999px, -9999px)) scale(1.02); }
       100% { opacity: 0; transform: var(--bs-lead-impact-transform, translate(-9999px, -9999px)) scale(1.48); }
     }
+    @keyframes beatSwarmLeadBallNoteHit {
+      0% { filter: brightness(4.2); box-shadow: 0 0 18px rgba(255,255,255,1), 0 0 46px rgba(103,235,255,.98); }
+      42% { filter: brightness(2.5); box-shadow: 0 0 15px rgba(255,255,255,.92), 0 0 34px rgba(103,235,255,.78); }
+      100% { filter: brightness(1); box-shadow: 0 0 12px rgba(115,234,255,.62); }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -190,6 +199,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     hitEnemyIds: new Set(),
     lastTargetEnemyId: 0,
     committed: false,
+    completionExplosionsFired: false,
     captureStartTick: -1,
     captureEndTick: -1,
     lastClockTick: -1,
@@ -258,6 +268,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.hitEnemyIds.clear();
     state.lastTargetEnemyId = 0;
     state.committed = false;
+    state.completionExplosionsFired = false;
     state.captureStartTick = -1;
     state.captureEndTick = -1;
     state.lastClockTick = -1;
@@ -315,6 +326,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
         vx: Math.cos(angle) * BALL_SPEED,
         vy: Math.sin(angle) * BALL_SPEED,
         targetEnemyId: 0,
+        lastContactEnemyId: 0,
+        contactCooldown: 0,
         el: createBallEl(),
       };
     });
@@ -492,16 +505,19 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       laneId: state.laneId,
       selections: state.selections.slice(),
     });
-    const explosionWorlds = ballWorlds.length ? ballWorlds : [null];
-    for (const at of explosionWorlds) {
-      deps.onCompleteExplosion?.({
-        eventId: state.eventId,
-        themeId: state.themeId,
-        laneId: state.laneId,
-        at,
-        hitCount: state.hitSteps.size,
-        targetHitCount: state.targetHitCount,
-      });
+    if (!state.completionExplosionsFired) {
+      const explosionWorlds = ballWorlds.length ? ballWorlds : [null];
+      for (const at of explosionWorlds) {
+        deps.onCompleteExplosion?.({
+          eventId: state.eventId,
+          themeId: state.themeId,
+          laneId: state.laneId,
+          at,
+          hitCount: state.hitSteps.size,
+          targetHitCount: state.targetHitCount,
+        });
+      }
+      state.completionExplosionsFired = true;
     }
   }
 
@@ -540,23 +556,21 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
   function queueHit(enemy = null, at = null, options = null) {
     const opts = options && typeof options === 'object' ? options : {};
     if (!enemy) return false;
-    if (state.committed || state.hitSteps.size >= state.targetHitCount) return false;
-    if (state.hitSteps.size + state.pendingHits.length >= state.targetHitCount) return false;
+    if (state.committed || state.hitSteps.size >= state.stepCount) return false;
+    if (state.hitSteps.size + state.pendingHits.length >= state.stepCount) return false;
     const enemyId = Math.trunc(Number(enemy.id) || 0);
     if (enemyId && state.pendingEnemyIds.has(enemyId)) return false;
-    if (enemyId && state.hitEnemyIds.has(enemyId)) return false;
+    if (enemyId && state.hitEnemyIds.has(enemyId) && opts.allowRepeatEnemy !== true) return false;
     const clock = deps.getBeatClock?.() || {};
     const baseTriggerTick = getClockTick(clock) + 1;
     const slot = findFreeCaptureSlot(baseTriggerTick);
-    if (!slot) {
-      completeEvent();
-      return false;
-    }
+    if (!slot) return false;
     const world = point(at || enemyPoint(enemy));
     const note = String(deps.getNoteForWorld?.(world) || getEnemyNote(enemy) || '').trim();
     state.pendingHits.push({
       enemy,
       enemyId,
+      ball: opts.ball || null,
       at: world,
       note,
       stepIndex: slot.stepIndex,
@@ -579,7 +593,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
   function triggerHit(entry = null) {
     if (!entry) return;
     if (entry.enemyId) state.pendingEnemyIds.delete(entry.enemyId);
-    if (state.committed || state.hitSteps.size >= state.targetHitCount) return;
+    if (state.committed || state.hitSteps.size >= state.stepCount) return;
     const stepIndex = Math.max(0, Math.trunc(Number(entry.stepIndex) || 0));
     const note = String(entry.note || deps.getNoteForWorld?.(entry.at) || '').trim();
     const hitTick = getClockTick(deps.getBeatClock?.());
@@ -595,6 +609,12 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.lastNotes.push(note);
     while (state.lastNotes.length > 6) state.lastNotes.shift();
     state.lastClockTick = getClockTick(deps.getBeatClock?.());
+    if (entry.ball?.el instanceof HTMLElement) {
+      entry.ball.el.classList.remove('is-note-hit');
+      void entry.ball.el.offsetWidth;
+      entry.ball.el.classList.add('is-note-hit');
+      window.setTimeout(() => entry.ball?.el?.classList?.remove?.('is-note-hit'), 260);
+    }
     spawnImpact(entry.at);
     deps.createImpactEffect?.({
       at: entry.at,
@@ -614,23 +634,17 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       hitCount: state.hitSteps.size,
       targetHitCount: state.targetHitCount,
     });
-    const complete = state.hitSteps.size >= state.targetHitCount;
-    if (complete) {
-      completeEvent({ note, stepIndex });
-    }
-    if (!complete) {
-      deps.onMotifHit?.({
-        note,
-        stepIndex,
-        themeId: state.themeId,
-        laneId: state.laneId,
-        eventId: state.eventId,
-        hitCount: state.hitSteps.size,
-        targetHitCount: state.targetHitCount,
-        complete: false,
-        selections: state.selections.slice(),
-      });
-    }
+    deps.onMotifHit?.({
+      note,
+      stepIndex,
+      themeId: state.themeId,
+      laneId: state.laneId,
+      eventId: state.eventId,
+      hitCount: state.hitSteps.size,
+      targetHitCount: state.targetHitCount,
+      complete: false,
+      selections: state.selections.slice(),
+    });
   }
 
   function getSegmentDistanceInfo(pointLike = null, fromLike = null, toLike = null) {
@@ -652,14 +666,17 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     };
   }
 
-  function findCollisionEnemy(fromLike = null, toLike = null) {
+  function findCollisionEnemy(ballActor = null, fromLike = null, toLike = null) {
     const enemies = getLiveEnemies();
     let best = null;
     let bestInfo = null;
     for (const enemy of enemies) {
       const enemyId = Math.trunc(Number(enemy?.id) || 0);
-      if (enemyId && state.pendingEnemyIds.has(enemyId)) continue;
-      if (enemyId && state.hitEnemyIds.has(enemyId)) continue;
+      if (
+        enemyId
+        && enemyId === Math.trunc(Number(ballActor?.lastContactEnemyId) || 0)
+        && Number(ballActor?.contactCooldown) > 0
+      ) continue;
       const info = getSegmentDistanceInfo(enemyPoint(enemy), fromLike, toLike);
       if (info.distance > BALL_INCIDENTAL_HIT_RADIUS) continue;
       if (!bestInfo || info.t < bestInfo.t) {
@@ -727,17 +744,33 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     enemy.vy = (Number(enemy.vy) || 0) - normal.y * 360;
     const targetId = Math.trunc(Number(ball.targetEnemyId) || 0);
     const enemyId = Math.trunc(Number(enemy?.id) || 0);
-    const queued = queueHit(enemy, hitWorld, { ball, keepDestination: targetId > 0 && enemyId !== targetId });
+    ball.lastContactEnemyId = enemyId;
+    ball.contactCooldown = BALL_CONTACT_COOLDOWN;
+    const queued = queueHit(enemy, hitWorld, {
+      ball,
+      keepDestination: targetId > 0 && enemyId !== targetId,
+      allowRepeatEnemy: true,
+    });
     if (enemyId === targetId || !getEnemyById(targetId)) ball.targetEnemyId = 0;
     return queued;
   }
 
   function updatePendingHits() {
     const tick = getClockTick(deps.getBeatClock?.());
-    for (let i = state.pendingHits.length - 1; i >= 0; i -= 1) {
-      const entry = state.pendingHits[i];
-      if (tick < entry.triggerTick) continue;
-      state.pendingHits.splice(i, 1);
+    const due = [];
+    const waiting = [];
+    for (const entry of state.pendingHits) {
+      if (tick >= entry.triggerTick) due.push(entry);
+      else waiting.push(entry);
+    }
+    state.pendingHits = waiting;
+    due.sort((a, b) => {
+      const tickDelta = Math.trunc(Number(a?.triggerTick) || 0) - Math.trunc(Number(b?.triggerTick) || 0);
+      if (tickDelta) return tickDelta;
+      return Math.trunc(Number(a?.stepIndex) || 0) - Math.trunc(Number(b?.stepIndex) || 0);
+    });
+    for (const entry of due) {
+      if (state.committed) break;
       triggerHit(entry);
     }
     if (state.active && state.captureEndTick >= 0 && tick > state.captureEndTick && state.pendingHits.length <= 0) {
@@ -791,6 +824,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
 
   function updateBall(ball, dt) {
     if (!state.active || !ball) return;
+    ball.contactCooldown = Math.max(0, (Number(ball.contactCooldown) || 0) - dt);
     const target = getCurrentTargetEnemy(ball);
     if (target) {
       ball.targetEnemyId = Math.trunc(Number(target.id) || 0);
@@ -812,7 +846,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const previousBall = { x: ball.x, y: ball.y };
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
-    const collision = findCollisionEnemy(previousBall, ball);
+    const collision = findCollisionEnemy(ball, previousBall, ball);
     if (collision) {
       handleEnemyCollision(ball, collision.enemy, { x: collision.info.x, y: collision.info.y });
     }
@@ -886,7 +920,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       hitCount: state.hitSteps.size,
       targetHitCount: state.targetHitCount,
       pendingHitCount: state.pendingHits.length,
-      complete: state.hitSteps.size >= state.targetHitCount,
+      complete: state.committed,
+      densityTargetReached: state.hitSteps.size >= state.targetHitCount,
       pickupActive: !!state.pickup,
       ballCount: state.balls.length,
       postCompletePlaybackActive: state.postCompleteUntilTick >= 0 && state.postCompleteNotified !== true,
