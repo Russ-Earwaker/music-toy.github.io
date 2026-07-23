@@ -25,8 +25,8 @@ import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-19-pinball-bouncers-v24';
 import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-22-lead-ball-window-v31';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-19-rhythm-visuals-v32';
-import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-19-rhythm-visuals-v32';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-23-weapon-gate-cadence-v6';
+import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-23-weapon-gate-cadence-v1';
 import { WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { applyWeaponGateSelection, createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-22-quantized-bridge-v5';
@@ -293,8 +293,8 @@ const weaponGateCurrentRuntime = {
   releaseAngleDeg: 0,
   releaseVx: 0,
   releaseVy: 0,
+  enemySpawnCooldown: 0,
 };
-const WEAPON_GATE_CORRIDOR_SPEED = 760;
 const beatSwarmOnboardingState = createBeatSwarmOnboardingState();
 const weaponGateMusicRuntime = beatSwarmOnboardingState.weaponGateMusicRuntime;
 const beatSwarmOnboardingRuntime = beatSwarmOnboardingState.phaseRuntime;
@@ -1596,10 +1596,74 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
   getWeaponStepSeconds() {
     return Math.max(0.05, getGameplayBeatLen() * COMPOSER_BEATS_PER_BAR / Math.max(1, WEAPON_TUNE_STEPS));
   },
+  getWeaponStepAlignmentDelay() {
+    const stepSeconds = Math.max(0.05, getGameplayBeatLen() * COMPOSER_BEATS_PER_BAR / Math.max(1, WEAPON_TUNE_STEPS));
+    try {
+      const info = typeof getLoopInfo === 'function' ? getLoopInfo() : null;
+      const barLen = Math.max(stepSeconds, Number(info?.barLen) || 0);
+      const phaseSeconds = Math.max(0, Math.min(1, Number(info?.phase01) || 0)) * barLen;
+      const intoStep = ((phaseSeconds % stepSeconds) + stepSeconds) % stepSeconds;
+      return intoStep < 0.008 || stepSeconds - intoStep < 0.008 ? 0 : stepSeconds - intoStep;
+    } catch {
+      return 0;
+    }
+  },
   applySelections: applyWeaponGateSelectionsToWeapon,
+  onSelection(selection, selections, state) {
+    applyWeaponGateSelectionsToWeapon(0, selections);
+    const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
+    const stepIndex = Math.max(0, Math.trunc(Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0));
+    const audioAudit = state.gateAudioAudit && typeof state.gateAudioAudit === 'object'
+      ? state.gateAudioAudit
+      : (state.gateAudioAudit = { noteSelections: 0, silenceSelections: 0, queuedNotes: 0, flushedNotes: 0 });
+    if (state?.livePlaybackStarted !== true) {
+      alignWeaponTunePlaybackToFirstStep(stepIndex);
+      state.livePlaybackStarted = true;
+      state.livePlaybackAnchorStep = stepIndex;
+    }
+    if (String(selection?.kind || '') === 'note') {
+      audioAudit.noteSelections += 1;
+      audioAudit.queuedNotes += 1;
+      state.pendingWeaponGateNote = {
+        note: String(selection.note || ''),
+        selectedSlotIndex: Math.max(0, Math.trunc(Number(selection.slotIndex) || 0)),
+        crossedAtStepIndex: stepIndex,
+      };
+      noteMusicSystemEvent('weapon_gate_note_queued', {
+        slotIndex: state.pendingWeaponGateNote.selectedSlotIndex,
+        note: state.pendingWeaponGateNote.note,
+      }, { beatIndex: currentBeatIndex, stepIndex });
+    } else {
+      audioAudit.silenceSelections += 1;
+      state.pendingWeaponGateNote = null;
+      state.manualWeaponFireStepIndex = Number.NaN;
+      noteMusicSystemEvent('weapon_gate_silence_selected', {
+        slotIndex: Math.max(0, Math.trunc(Number(selection?.slotIndex) || 0)),
+      }, { beatIndex: currentBeatIndex, stepIndex });
+    }
+    globalThis.__LAST_BEAT_SWARM_WEAPON_GATE_AUDIO_AUDIT = { ...audioAudit };
+    return true;
+  },
   onComplete() {
-    snapshotWeaponGateHandoffVisual();
+    const state = weaponGateIntroRuntime.getState?.() || null;
+    const audioAudit = state?.gateAudioAudit && typeof state.gateAudioAudit === 'object'
+      ? state.gateAudioAudit
+      : {};
+    audioAudit.selectionComplete = true;
+    globalThis.__LAST_BEAT_SWARM_WEAPON_GATE_AUDIO_AUDIT = {
+      noteSelections: Math.max(0, Math.trunc(Number(audioAudit.noteSelections) || 0)),
+      silenceSelections: Math.max(0, Math.trunc(Number(audioAudit.silenceSelections) || 0)),
+      queuedNotes: Math.max(0, Math.trunc(Number(audioAudit.queuedNotes) || 0)),
+      flushedNotes: Math.max(0, Math.trunc(Number(audioAudit.flushedNotes) || 0)),
+      pendingAtComplete: state?.pendingWeaponGateNote ? 1 : 0,
+      complete: true,
+    };
+    noteMusicSystemEvent('weapon_gate_audio_audit_complete', globalThis.__LAST_BEAT_SWARM_WEAPON_GATE_AUDIO_AUDIT, {
+      beatIndex: currentBeatIndex,
+      stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+    });
     scheduleWeaponGatePostHandoffOnboardingEvent();
+    snapshotWeaponGateHandoffVisual();
   },
 });
 function clearPendingWeaponGatePostHandoffOnboardingEvent() {
@@ -1674,10 +1738,46 @@ function maybeStartWeaponGatePostHandoffOnboardingEvent(stepIndex = 0) {
     startLeadBallThemeEvent(pending.options);
   }
 }
-function shouldSuppressPlayerWeaponForWeaponGate() {
+function shouldSuppressPlayerWeaponForWeaponGate(stepIndex = null) {
   if (weaponGateIntroRuntime.isActive?.() !== true) return false;
+  const gateState = weaponGateIntroRuntime.getState?.() || null;
+  const requestedStep = Number(stepIndex);
+  const manualStep = Number(gateState?.manualWeaponFireStepIndex);
+  if (Number.isFinite(requestedStep) && Number.isFinite(manualStep) && Math.trunc(requestedStep) === Math.trunc(manualStep)) {
+    return true;
+  }
+  if (gateState?.livePlaybackStarted === true) return false;
   const handoffVisual = weaponTunePlaybackRuntime.handoffVisual;
   return !(handoffVisual && handoffVisual.active === true);
+}
+function flushPendingWeaponGateNote(stepIndex = null, stepChanged = false) {
+  if (stepChanged !== true || weaponGateIntroRuntime.isActive?.() !== true) return false;
+  const gateState = weaponGateIntroRuntime.getState?.() || null;
+  const pending = gateState?.pendingWeaponGateNote;
+  if (!pending || typeof pending !== 'object') return false;
+  const scheduledStepIndex = Math.max(0, Math.trunc(Number(stepIndex) || 0));
+  gateState.pendingWeaponGateNote = null;
+  gateState.manualWeaponFireStepIndex = scheduledStepIndex;
+  const audioAudit = gateState.gateAudioAudit && typeof gateState.gateAudioAudit === 'object'
+    ? gateState.gateAudioAudit
+    : (gateState.gateAudioAudit = { noteSelections: 0, silenceSelections: 0, queuedNotes: 0, flushedNotes: 0 });
+  audioAudit.flushedNotes += 1;
+  triggerPlayerWeaponGateNote(
+    String(pending.note || 'C4'),
+    'weapon-gate-quantized-selection',
+    scheduledStepIndex
+  );
+  globalThis.__LAST_BEAT_SWARM_WEAPON_GATE_AUDIO_AUDIT = {
+    ...audioAudit,
+    pendingAfterFlush: gateState.pendingWeaponGateNote ? 1 : 0,
+    complete: audioAudit.selectionComplete === true,
+  };
+  noteMusicSystemEvent('weapon_gate_note_flushed', {
+    slotIndex: Math.max(0, Math.trunc(Number(pending.selectedSlotIndex) || 0)),
+    note: String(pending.note || 'C4'),
+    crossedAtStepIndex: Math.max(0, Math.trunc(Number(pending.crossedAtStepIndex) || 0)),
+  }, { beatIndex: currentBeatIndex, stepIndex: scheduledStepIndex });
+  return true;
 }
 function startTapOrbFoundationRewriteEvent(options = null) {
   if (tapOrbRuntime.isActive() || beatSwarmOnboardingRuntime.phase === 'tap_orb_foundation') return null;
@@ -2411,6 +2511,46 @@ function ensureLeadBallEnemyTargets(targetCount = 10) {
     if (enemies.length > before) spawned += 1;
   }
   return spawned;
+}
+
+function maintainWeaponGateCorridorTargets(dt = 0) {
+  if (!enemyLayerEl || String(weaponGateIntroRuntime.getPhase?.() || '') !== 'gate') {
+    weaponGateCurrentRuntime.enemySpawnCooldown = 0;
+    return 0;
+  }
+  const safeDt = Math.max(0, Number(dt) || 0);
+  weaponGateCurrentRuntime.enemySpawnCooldown = Math.max(
+    0,
+    (Number(weaponGateCurrentRuntime.enemySpawnCooldown) || 0) - safeDt
+  );
+  const width = Math.max(1, Number(window?.innerWidth) || 1);
+  const height = Math.max(1, Number(window?.innerHeight) || 1);
+  const liveTargets = enemies.filter((enemy) => {
+    if (!enemy || enemy.__bsRemoved === true || enemy.__bsPendingDeath === true || !(Number(enemy.hp) > 0)) return false;
+    if (enemy.__weaponGateCorridorTarget !== true) return false;
+    const screen = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
+    return screen
+      && Number.isFinite(screen.x)
+      && Number.isFinite(screen.y)
+      && screen.x >= -120
+      && screen.x <= width + 320
+      && screen.y >= -120
+      && screen.y <= height + 120;
+  });
+  const targetCount = 4;
+  if (liveTargets.length >= targetCount || weaponGateCurrentRuntime.enemySpawnCooldown > 0) return 0;
+  const spawnX = width + randRange(110, 240);
+  const spawnY = randRange(height * 0.37, height * 0.63);
+  const enemy = spawnEnemyAt(spawnX, spawnY, {
+    hp: 2,
+    skipMusicGroupInit: true,
+    role: BEAT_EVENT_ROLES.MOTION,
+    layer: 'support',
+  });
+  if (!enemy) return 0;
+  enemy.__weaponGateCorridorTarget = true;
+  weaponGateCurrentRuntime.enemySpawnCooldown = 0.28;
+  return 1;
 }
 function startLeadBallThemeEvent(options = null) {
   if (leadGateAuthoringRuntime.active || isLeadBallThemeEventActive()) return null;
@@ -15089,7 +15229,10 @@ function clearWeaponGateHandoffVisual(options = null) {
 }
 function snapshotWeaponGateHandoffVisual() {
   const state = weaponGateIntroRuntime.getState?.() || null;
-  weaponTunePlaybackRuntime.pendingAlignToFirst = true;
+  const livePlaybackStarted = state?.livePlaybackStarted === true;
+  const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
+  const currentStep = Math.max(0, Math.trunc(Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0));
+  weaponTunePlaybackRuntime.pendingAlignToFirst = !livePlaybackStarted;
   const nodes = Array.isArray(state?.noteStars)
     ? state.noteStars
       .map((star) => ({
@@ -15107,8 +15250,8 @@ function snapshotWeaponGateHandoffVisual() {
     return;
   }
   weaponTunePlaybackRuntime.handoffVisual = {
-    active: false,
-    anchorStepIndex: 0,
+    active: livePlaybackStarted,
+    anchorStepIndex: livePlaybackStarted ? currentStep : 0,
     fadeLoops: 4,
     completed: false,
     constellation: {
@@ -15129,6 +15272,13 @@ function snapshotWeaponGateHandoffVisual() {
     nodes,
     label: '',
   });
+  if (livePlaybackStarted) {
+    if (weaponTunePlaybackRuntime.pendingOnboardingEvent && weaponTunePlaybackRuntime.pendingOnboardingAnchorStep < 0) {
+      weaponTunePlaybackRuntime.pendingOnboardingAnchorStep = currentStep;
+    }
+    rhythmAuthoringTimelineRuntime.completed = false;
+    rhythmAuthoringTimelineRuntime.fadeT = 0;
+  }
 }
 function beginWeaponGateHandoffPlayback(stepIndex = 0) {
   alignWeaponTunePlaybackToFirstStep(stepIndex);
@@ -18902,30 +19052,37 @@ function triggerWeaponFromSubBoardNote(slotIndex, rowIndex) {
     debugBeatIndex: beatIndex,
   });
 }
-function triggerPlayerWeaponGateNote(noteName = 'C4', source = 'weapon-gate-intro') {
+function triggerPlayerWeaponGateNote(noteName = 'C4', source = 'weapon-gate-intro', weaponStepIndex = null) {
   if (!active) return;
   const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
   const weapon = weaponLoadout[idx];
   const stages = sanitizeWeaponStages(weapon?.stages);
   if (!stages.length) return;
-  const beatIndex = Number.isFinite(currentBeatIndex) ? Math.trunc(currentBeatIndex) : 0;
+  const scheduledBeatIndex = Number.isFinite(currentBeatIndex) ? Math.trunc(currentBeatIndex) : 0;
+  const requestedStepIndex = Number(weaponStepIndex);
+  const directorStepIndex = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
+  const scheduledStepIndex = Math.max(0, Math.trunc(
+    Number.isFinite(requestedStepIndex)
+      ? requestedStepIndex
+      : (Number.isFinite(directorStepIndex) ? directorStepIndex : Number(currentBeatIndex) || 0)
+  ));
   const first = stages[0];
-  const archetype = String(first?.archetype || '').trim().toLowerCase();
-  const variant = String(first?.variant || '').trim().toLowerCase();
-  const soundKey = getPlayerWeaponSoundEventKeyForStage(archetype, variant) || PLAYER_WEAPON_SOUND_EVENT_KEYS.projectile;
+  const rest = stages.slice(1);
+  const centerWorld = getViewportCenterWorld();
+  const damageScale = getWeaponTuneDamageScale(idx);
   pulsePlayerShipNoteFlash();
-  playSwarmSoundEventScheduled(
-    soundKey,
-    PLAYER_WEAPON_SOUND_MIX_MULT,
-    beatIndex,
-    normalizeSwarmNoteName(noteName) || 'C4',
-    {
-      sourceSystem: 'player',
-      actionType: `${archetype || 'projectile'}-${variant || 'standard'}`,
-      authoringClass: 'gameplayauthored',
-      source,
-    }
-  );
+  triggerWeaponStage(first, centerWorld, scheduledBeatIndex, rest, {
+    origin: centerWorld,
+    impactPoint: centerWorld,
+    weaponSlotIndex: idx,
+    stageIndex: 0,
+    damageScale,
+    forcedNoteName: weaponSubBoardRowToNoteName(getWeaponTuneRowForGateNote(noteName)),
+    directSound: true,
+    debugSource: source,
+    debugBeatIndex: scheduledBeatIndex,
+    debugStepIndex: scheduledStepIndex,
+  });
 }
 function scheduleWeaponFromSubBoardNote(slotIndex, rowIndex, whenAudio) {
   const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(slotIndex) || 0)));
@@ -27081,7 +27238,7 @@ function applyLingeringAoeBeat(beatIndex) {
   });
 }
 function fireConfiguredWeaponsOnBeat(centerWorld, beatIndex, contextBeatIndex = beatIndex, options = null) {
-  if (shouldSuppressPlayerWeaponForWeaponGate()) {
+  if (shouldSuppressPlayerWeaponForWeaponGate(beatIndex)) {
     return { fired: false, playerAudible: false, suppressed: true, reason: 'weapon_gate_authoring' };
   }
   return fireConfiguredWeaponsOnBeatRuntime({
@@ -27185,6 +27342,7 @@ function updateBeatWeapons(centerWorld) {
   const beatIndex = prelude.beatIndex;
   const stepIndex = prelude.stepIndex;
   const barIndex = prelude.barIndex;
+  flushPendingWeaponGateNote(stepIndex, tick?.stepChanged === true);
   if (weaponTunePlaybackRuntime.pendingAlignToFirst) {
     beginWeaponGateHandoffPlayback(stepIndex);
     weaponTunePlaybackRuntime.pendingAlignToFirst = false;
@@ -27250,7 +27408,7 @@ function updateBeatWeapons(centerWorld) {
   const onboardingAccentAuthored = onboardingPhaseForAssembly === 'lead_ball';
   const onboardingMissileAuthoringActive = onboardingAssemblyActive
     && (isMusicMissileRewriteActive() || isMusicMissilePostCompletePlaybackActive());
-  const suppressPlayerWeaponForGate = shouldSuppressPlayerWeaponForWeaponGate();
+  const suppressPlayerWeaponForGate = shouldSuppressPlayerWeaponForWeaponGate(stepIndex);
   if (tapOrbRuntime.isActive()) {
     const authoredLaneId = String(tapOrbAuthoringRuntime.laneId || '').trim().toLowerCase();
     if (authoredLaneId) suppressedMusicLaneIds.add(authoredLaneId);
@@ -27356,7 +27514,10 @@ function updateBeatWeapons(centerWorld) {
   readabilityStepStats = stepUpdate?.readabilityStepStats || readabilityStepStats;
   queuedStepEvents += Math.max(0, Math.trunc(Number(stepUpdate?.queuedStepEvents) || 0));
   drainedStepEvents += Math.max(0, Math.trunc(Number(stepUpdate?.drainedStepEvents) || 0));
-  if (stepChanged) pulseWeaponGateHandoffVisual(stepIndex);
+  if (stepChanged) {
+    weaponGateIntroRuntime.pulseMotifStep?.(getWeaponTunePlaybackStepIndex(stepIndex));
+    pulseWeaponGateHandoffVisual(stepIndex);
+  }
   if (stepChanged) pulseRhythmAuthoringTimelineRepeat(stepIndex);
   if (stepChanged) updateLeadGateThemeEvent(0, stepIndex);
   updateWeaponGateHandoffVisual(0, stepIndex);
@@ -29631,7 +29792,7 @@ function tick(nowMs) {
     const inputY = Number(input?.y) || 0;
     const inputMag = Math.min(1, Math.hypot(inputX, inputY));
     const currentFight = Math.max(0, -inputX);
-    const fightingCurrent = currentFight > 0.18 && inputMag > 0.2;
+    const fightingCurrent = gatePrelaunchActive && currentFight > 0.18 && inputMag > 0.2;
     if (fightingCurrent) {
       const counterForce = weaponGateCurrentRuntime.pushN * weaponGateCurrentRuntime.pushN * 1.65;
       weaponGateCurrentRuntime.pushN = clamp01(weaponGateCurrentRuntime.pushN + ((currentFight * 1.15) - counterForce) * dt);
@@ -29654,9 +29815,14 @@ function tick(nowMs) {
           ? weaponGateIntroRuntime.launch?.() === true
           : false;
         const releaseRad = weaponGateCurrentRuntime.releaseAngleDeg * Math.PI / 180;
-        const impulseScale = launchedFromPrelaunch ? 0.64 : 0.36;
-        weaponGateCurrentRuntime.releaseVx += Math.cos(releaseRad) * impulse * impulseScale;
-        weaponGateCurrentRuntime.releaseVy += Math.sin(releaseRad) * impulse * impulseScale;
+        if (!launchedFromPrelaunch) {
+          const impulseScale = 0.36;
+          weaponGateCurrentRuntime.releaseVx += Math.cos(releaseRad) * impulse * impulseScale;
+          weaponGateCurrentRuntime.releaseVy += Math.sin(releaseRad) * impulse * impulseScale;
+        } else {
+          weaponGateCurrentRuntime.releaseVx = 0;
+          weaponGateCurrentRuntime.releaseVy = 0;
+        }
         lastLaunchBeatLevel = Math.max(lastLaunchBeatLevel, Math.ceil(charge * SWARM_RELEASE_BEAT_LEVEL_MAX));
         postReleaseAssistTimer = Math.max(postReleaseAssistTimer, 0.35 + charge * 0.35);
         pulseReactiveArrowCharge();
@@ -29674,32 +29840,18 @@ function tick(nowMs) {
       releaseForcePrimed = false;
       releaseBeatLevel = 0;
     }
-    const releaseDx = weaponGateCurrentRuntime.releaseVx * dt;
-    const releaseDy = weaponGateCurrentRuntime.releaseVy * dt;
     weaponGateCurrentRuntime.releaseVx *= Math.max(0, 1 - dt * 3.2);
     weaponGateCurrentRuntime.releaseVy *= Math.max(0, 1 - dt * 3.2);
-    const resistanceSlow = weaponGateCurrentRuntime.pushN * (150 + currentFight * 55);
-    const phaseAfterRelease = String(weaponGateIntroRuntime.getPhase?.() || '');
-    const prelaunchStillActive = phaseAfterRelease === 'prelaunch';
-    const currentDx = prelaunchStillActive ? 0 : Math.max(38, WEAPON_GATE_CORRIDOR_SPEED - resistanceSlow) * dt;
-    const clampedReleaseDx = Math.max(-currentDx * 0.65, Math.min(currentDx * 3.6, releaseDx));
-    const releaseScale = Math.abs(releaseDx) > 0.001 ? clampedReleaseDx / releaseDx : 0;
-    const introForwardDelta = currentDx + clampedReleaseDx;
-    const introSideDelta = inputY * 120 * dt + (releaseDy * releaseScale);
+    let introForwardDelta = 0;
+    const introSideDelta = inputY * 300 * dt;
     let appliedIntroSideDelta = introSideDelta;
     let gateCompletedThisFrame = false;
     try {
       const introMove = weaponGateIntroRuntime.update(dt, input, { forwardDelta: introForwardDelta, sideDelta: introSideDelta });
       if (introMove && typeof introMove === 'object') {
         gateCompletedThisFrame = introMove.handoffComplete === true || introMove.active === false;
+        introForwardDelta = Math.max(0, Number(introMove.forwardDelta) || 0);
         appliedIntroSideDelta = Number(introMove.sideDelta) || 0;
-        if (introMove.reflectedY) weaponGateCurrentRuntime.releaseVy *= -0.78;
-        if (introMove.pickupDash) {
-          const dashPower = Number(introMove.pickupDash.power) || 0;
-          weaponGateCurrentRuntime.releaseVx += (Number(introMove.pickupDash.x) || 0) * dashPower;
-          weaponGateCurrentRuntime.releaseVy += (Number(introMove.pickupDash.y) || 0) * dashPower;
-          pulseReactiveArrowCharge();
-        }
       }
     } catch {}
     try { applyCameraDelta(introForwardDelta, appliedIntroSideDelta); } catch {}
@@ -29852,6 +30004,7 @@ function tick(nowMs) {
     velocityY = Number(motionState.velocityY) || 0;
   }
   const centerWorldAfterMove = weaponGateFrameRuntime?.centerWorld || moveResult?.centerWorldAfterMove || getViewportCenterWorld();
+  if (weaponGateFrameRuntime) maintainWeaponGateCorridorTargets(dt);
   processPendingEnemyDeaths(now, currentBeatIndex);
   if (!framePressure.severe || (perfFrameIndex % 2) === 0) {
     withBeatSwarmPerfSample('updateEnemies', () => updateEnemies(dt));
@@ -30062,6 +30215,7 @@ export function enterBeatSwarmMode(options = null) {
   if (active) {
     if (enterOptions.weaponGateIntro === true) {
       resetWeaponGateTapOrbOnboardingState();
+      weaponGateCurrentRuntime.enemySpawnCooldown = 0;
       clearEnemies();
       clearPickups();
       clearProjectiles();
@@ -30092,6 +30246,7 @@ export function enterBeatSwarmMode(options = null) {
   weaponGateCurrentRuntime.releaseAngleDeg = 0;
   weaponGateCurrentRuntime.releaseVx = 0;
   weaponGateCurrentRuntime.releaseVy = 0;
+  weaponGateCurrentRuntime.enemySpawnCooldown = 0;
   resetWeaponGateTapOrbOnboardingState();
   releaseForcePrimed = false;
   releaseBeatLevel = 0;

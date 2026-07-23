@@ -3,7 +3,7 @@ import { summarizeWeaponGateSelection } from './beat-swarm-weapon-gate-core.js';
 import { WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { addWeaponGateNoteStar, spawnWeaponGateShot } from './beat-swarm-weapon-gate-effects.js?v=2026-07-19-rhythm-visuals-v32';
 import { clampWeaponGateValue, getWeaponGateCorridorWorldBounds, getWeaponGateShipScreenPoint, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
-import { appendNextWeaponGate } from './beat-swarm-weapon-gate-state.js?v=2026-06-18-corridor-curve-v1';
+import { appendNextWeaponGate } from './beat-swarm-weapon-gate-state.js?v=2026-07-23-weapon-gate-cadence-v1';
 
 export function chooseCurrentWeaponGate(state, options = {}) {
   if (!state) return null;
@@ -36,10 +36,16 @@ export function chooseCurrentWeaponGate(state, options = {}) {
     ? `Damage Up: slot ${selection.slotIndex + 1} silent`
     : `${selection.note} selected`;
   state.feedbackTtl = 0.58;
+  let handledByLiveWeapon = false;
+  try {
+    handledByLiveWeapon = options.onSelection?.(selection, state.selections.slice(), state) === true;
+  } catch {}
   if (selection.kind === 'note') {
     addWeaponGateNoteStar(state, selection);
-    spawnWeaponGateShot(state, selection.note);
-    try { options.triggerWeaponNote?.(selection.note, 'weapon-gate-intro'); } catch {}
+    if (!handledByLiveWeapon) {
+      spawnWeaponGateShot(state, selection.note);
+      try { options.triggerWeaponNote?.(selection.note, 'weapon-gate-intro'); } catch {}
+    }
   }
   state.nextGateIndex += 1;
   if (state.nextGateIndex >= WEAPON_GATE_TOTAL_SLOTS) {

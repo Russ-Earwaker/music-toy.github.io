@@ -1,11 +1,10 @@
 import { WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
-import { getWeaponGateCorridorBounds, getWeaponGateNoteStarPosition, getWeaponGateShipScreenPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
+import { getWeaponGateNoteStarPosition, getWeaponGateShipScreenPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
 
 export function tickWeaponGateTransientEffects(state, dt = 0) {
   if (!state) return;
   const safeDt = Math.max(0, Number(dt) || 0);
   state.feedbackTtl = Math.max(0, state.feedbackTtl - safeDt);
-  state.wallPulseTtl = Math.max(0, state.wallPulseTtl - safeDt);
   state.noteStarPulseT = Math.max(0, (Number(state.noteStarPulseT) || 0) - safeDt);
   for (const gate of state.gates || []) {
     if (!gate || !(Number(gate.heroTtl) > 0)) continue;
@@ -64,16 +63,4 @@ export function addWeaponGateNoteStar(state, selection = null) {
   state.noteStarPulseSlot = point.slot;
   state.noteStarPulseT = Math.max(Number(state.noteStarPulseT) || 0, 0.22);
   return star;
-}
-
-export function applyWeaponGateWallBounce(state, y = 0, dir = 1) {
-  if (!state) return;
-  state.y = Number(y) || 0;
-  state.vy = dir * Math.max(460, Math.abs(state.vy) * 0.9);
-  state.speed = Math.min(740, state.speed + 80);
-  state.wallPulseTtl = 0.25;
-  state.wallPulseX = getWeaponGateShipScreenPoint().x;
-  const bounds = getWeaponGateCorridorBounds(state);
-  state.wallPulseY = dir > 0 ? bounds.top : bounds.bottom;
-  state.wallPulseDir = dir > 0 ? 1 : -1;
 }

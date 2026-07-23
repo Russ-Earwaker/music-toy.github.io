@@ -1,0 +1,42 @@
+Beat Swarm Transition Debug
+sessionId=music-lab-2026-07-23T14:21:40.070Z-3
+runId=musicLab_bs0_s3_gate_missile_pinball_lead_ball_sequence_1x180s
+label=music-lab-session
+leadEntryBar=71
+range=67-79
+
+Per-bar executed audible enemy events:
+bar 67: audibleEnemy=7 playerAudible=5 :: foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:3
+bar 68: audibleEnemy=9 playerAudible=5 :: secondary_loop_lane|loops|call|full:5, foundation_lane|foundation|call|full:4
+bar 69: audibleEnemy=7 playerAudible=5 :: foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:3
+bar 70: audibleEnemy=4 playerAudible=5 :: foundation_lane|foundation|call|full:4
+bar 71: audibleEnemy=9 playerAudible=5 :: foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:3, primary_loop_lane|loops|-|full:2
+bar 72: audibleEnemy=14 playerAudible=5 :: primary_loop_lane|loops|-|full:5, secondary_loop_lane|loops|call|full:5, foundation_lane|foundation|call|full:4
+bar 73: audibleEnemy=13 playerAudible=5 :: primary_loop_lane|loops|-|full:6, foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:3
+bar 74: audibleEnemy=13 playerAudible=5 :: secondary_loop_lane|loops|call|full:5, foundation_lane|foundation|call|full:4, primary_loop_lane|loops|-|full:4
+bar 75: audibleEnemy=9 playerAudible=5 :: foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:3, primary_loop_lane|loops|-|full:2
+bar 76: audibleEnemy=14 playerAudible=5 :: primary_loop_lane|loops|-|full:5, secondary_loop_lane|loops|call|full:5, foundation_lane|foundation|call|full:4
+bar 77: audibleEnemy=13 playerAudible=5 :: primary_loop_lane|loops|-|full:6, foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:3
+bar 78: audibleEnemy=13 playerAudible=5 :: secondary_loop_lane|loops|call|full:5, foundation_lane|foundation|call|full:4, primary_loop_lane|loops|-|full:4
+bar 79: audibleEnemy=9 playerAudible=5 :: foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:3, primary_loop_lane|loops|-|full:2
+
+Lead / Secondary Render Summary:
+bar 67: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 68: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=5/5/5/5/0/0 notes[C4:5] inst[CLICK PERCUSSION SHORT:5]
+bar 69: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 70: lead c/e/a/f/q/t=2/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 71: lead c/e/a/f/q/t=2/2/2/2/0/0 notes[F4:1, C4:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 72: lead c/e/a/f/q/t=5/5/5/5/0/0 notes[F4:3, C4:1, A#4:1] inst[RETRO SQUARE:5] | secondary c/e/a/f/q/t=5/5/5/5/0/0 notes[C4:5] inst[CLICK PERCUSSION SHORT:5]
+bar 73: lead c/e/a/f/q/t=6/6/6/6/0/0 notes[C4:3, D#4:2, A#4:1] inst[RETRO SQUARE:6] | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 74: lead c/e/a/f/q/t=4/4/4/4/0/0 notes[F4:3, C4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=5/5/5/5/0/0 notes[C4:5] inst[CLICK PERCUSSION SHORT:5]
+bar 75: lead c/e/a/f/q/t=2/2/2/2/0/0 notes[F4:1, C4:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 76: lead c/e/a/f/q/t=5/5/5/5/0/0 notes[F4:3, C4:1, A#4:1] inst[RETRO SQUARE:5] | secondary c/e/a/f/q/t=5/5/5/5/0/0 notes[C4:5] inst[CLICK PERCUSSION SHORT:5]
+bar 77: lead c/e/a/f/q/t=6/6/6/6/0/0 notes[C4:3, D#4:2, A#4:1] inst[RETRO SQUARE:6] | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 78: lead c/e/a/f/q/t=4/4/4/4/0/0 notes[F4:3, C4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=5/5/5/5/0/0 notes[C4:5] inst[CLICK PERCUSSION SHORT:5]
+bar 79: lead c/e/a/f/q/t=2/2/2/2/0/0 notes[F4:1, C4:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+
+Transition snapshots:
+
+Lead suppression events in range:
+
+Response events in range:

@@ -9,11 +9,14 @@ import {
   WEAPON_GATE_CURVE_WAVELENGTH,
   WEAPON_GATE_MAX_SILENCE_STREAK,
   WEAPON_GATE_NOTE_POOL,
+  WEAPON_GATE_FIRST_ARRIVAL_STEPS,
   WEAPON_GATE_SPACING,
   WEAPON_GATE_START_X,
   WEAPON_GATE_TARGET_SILENCES,
   WEAPON_GATE_TOTAL_SLOTS,
-} from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
+  getWeaponGateAuthoredSchedule,
+  getWeaponGateTravelDistance,
+} from './beat-swarm-weapon-gate-config.js?v=2026-07-23-weapon-gate-cadence-v6';
 
 export function createWeaponGateIntroState(layer, options = {}) {
   const seed = String(options.seed || `level-start-${Date.now()}`);
@@ -43,6 +46,12 @@ export function createWeaponGateIntroState(layer, options = {}) {
     selections: Array.from({ length: WEAPON_GATE_TOTAL_SLOTS }, () => null),
     summary: Array.from({ length: WEAPON_GATE_TOTAL_SLOTS }, () => '-'),
     nextGateIndex: 0,
+    gateSchedule: getWeaponGateAuthoredSchedule(),
+    gateScheduleReady: false,
+    gateStepSeconds: 0.22,
+    gateArrivalOffsetSeconds: 0,
+    launchProgress: -1120,
+    launchElapsed: 0,
     progress: -1120,
     speed: 0,
     y: window.innerHeight * 0.5,
@@ -59,29 +68,58 @@ export function createWeaponGateIntroState(layer, options = {}) {
     feedbackText: 'Pull back to launch',
     feedbackKind: '',
     feedbackTtl: 1.2,
-    wallPulseTtl: 0,
-    wallPulseY: 0,
     flowTime: 0,
     phase: 'prelaunch',
     completeDelay: 0,
     outroDuration: 2.35,
   };
   state.y = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state)).center;
-  appendNextWeaponGate(state);
   return state;
 }
 
 export function appendNextWeaponGate(state) {
   if (!state) return null;
-  const slotIndex = state.gates.length;
-  if (slotIndex >= WEAPON_GATE_TOTAL_SLOTS) return null;
-  const decision = decideGateType(state.ratioState, slotIndex, state.rng);
+  const ordinal = state.gates.length;
+  const scheduleEntry = state.gateSchedule?.[ordinal] || null;
+  if (!scheduleEntry || ordinal >= WEAPON_GATE_TOTAL_SLOTS) return null;
+  const slotIndex = Math.max(0, Math.trunc(Number(scheduleEntry.slotIndex) || 0));
+  const ratioDecision = decideGateType(state.ratioState, ordinal, state.rng);
+  const decision = scheduleEntry.forceNote === true
+    ? {
+      ...ratioDecision,
+      type: 'note',
+      reason: 'opening pulse pass: note only',
+      damageSectionCount: 0,
+    }
+    : ratioDecision;
   const gate = createWeaponGate(slotIndex, decision, {
     rng: state.rng,
     notePool: WEAPON_GATE_NOTE_POOL,
     gateSpacing: WEAPON_GATE_SPACING,
     startX: WEAPON_GATE_START_X,
   });
+  const stepSeconds = Math.max(0.05, Number(state.gateStepSeconds) || 0.22);
+  const targetStep = WEAPON_GATE_FIRST_ARRIVAL_STEPS + Math.max(0, Number(scheduleEntry.absoluteStep) || 0);
+  const targetSeconds = (targetStep * stepSeconds) + Math.max(0, Number(state.gateArrivalOffsetSeconds) || 0);
+  gate.passIndex = Math.max(0, Math.trunc(Number(scheduleEntry.passIndex) || 0));
+  gate.motifStep = Math.max(0, Math.trunc(Number(scheduleEntry.motifStep) || 0));
+  gate.targetStep = targetStep;
+  gate.x = (Number(state.launchProgress) || 0)
+    + getWeaponGateTravelDistance(targetSeconds)
+    + (window.innerWidth * 0.5);
   state.gates.push(gate);
   return gate;
+}
+
+export function initializeWeaponGateSchedule(state, stepSeconds = 0.22, alignmentDelaySeconds = 0) {
+  if (!state) return false;
+  state.gateStepSeconds = Math.max(0.05, Number(stepSeconds) || 0.22);
+  state.gateArrivalOffsetSeconds = Math.max(0, Number(alignmentDelaySeconds) || 0);
+  state.launchProgress = Number(state.progress) || 0;
+  state.launchElapsed = 0;
+  state.gates = [];
+  state.nextGateIndex = 0;
+  state.gateScheduleReady = true;
+  appendNextWeaponGate(state);
+  return true;
 }

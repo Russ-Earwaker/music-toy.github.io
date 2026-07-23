@@ -1,10 +1,16 @@
-import { WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
-import { applyWeaponGateWallBounce, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-19-rhythm-visuals-v32';
+import {
+  WEAPON_GATE_CRUISE_SPEED,
+  WEAPON_GATE_LAUNCH_DECEL_SECONDS,
+  WEAPON_GATE_LAUNCH_SPEED,
+  WEAPON_GATE_NOTE_POOL,
+  WEAPON_GATE_TOTAL_SLOTS,
+  getWeaponGateTravelDistance,
+} from './beat-swarm-weapon-gate-config.js?v=2026-07-23-weapon-gate-cadence-v6';
+import { tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-19-rhythm-visuals-v32';
 import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
-import { updateWeaponGateDashPickup } from './beat-swarm-weapon-gate-pickups.js?v=2026-06-18-corridor-curve-v1';
-import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-19-rhythm-visuals-v32';
-import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-19-rhythm-visuals-v32';
-import { createWeaponGateIntroState } from './beat-swarm-weapon-gate-state.js?v=2026-07-16-pinball-bouncers-v45';
+import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-23-weapon-gate-cadence-v1';
+import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-23-weapon-gate-cadence-v2';
+import { createWeaponGateIntroState, initializeWeaponGateSchedule } from './beat-swarm-weapon-gate-state.js?v=2026-07-23-weapon-gate-cadence-v6';
 
 export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   let state = null;
@@ -46,13 +52,10 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
 
   function update(dt, input = null, options = null) {
     if (!state) return false;
-    const forwardDelta = Math.max(0, Number(options?.forwardDelta) || 0);
     const sideDelta = Number(options?.sideDelta) || 0;
     let appliedSideDelta = sideDelta;
-    let reflectedY = false;
     tickWeaponGateTransientEffects(state, dt);
     state.flowTime = Math.max(0, Number(state.flowTime) || 0) + dt;
-    const pickupDash = updateWeaponGateDashPickup(state, dt, input);
     if (state.phase === 'prelaunch') {
       const { top, bottom, center } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
       state.speed = 0;
@@ -60,48 +63,43 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       state.y += (center - state.y) * Math.min(1, dt * 4.8);
       state.y = clampWeaponGateValue(state.y, top + 34, bottom - 34);
       render();
-      return { active: true, sideDelta: (state.y - center) * -0.18 * dt, reflectedY, pickupDash, prelaunch: true };
+      return { active: true, forwardDelta: 0, sideDelta: (state.y - center) * -0.18 * dt, prelaunch: true };
     }
     if (state.phase === 'outro') {
       const { center } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
       state.speed = Math.min(1100, state.speed + 36 * dt);
-      state.progress += forwardDelta || (state.speed * dt);
+      const forwardDelta = state.speed * dt;
+      state.progress += forwardDelta;
       state.y += sideDelta;
       state.y += (center - state.y) * Math.min(1, dt * 2.3);
       state.completeDelay -= dt;
       render();
       if (state.completeDelay <= 0) {
         stop();
-        return { active: false, sideDelta: appliedSideDelta, reflectedY, pickupDash, handoffComplete: true };
+        return { active: false, forwardDelta, sideDelta: appliedSideDelta, handoffComplete: true };
       }
-      return { active: true, sideDelta: appliedSideDelta, reflectedY, pickupDash, handoffComplete: true };
+      return { active: true, forwardDelta, sideDelta: appliedSideDelta, handoffComplete: true };
     }
     const { top, bottom } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
-    state.speed = Math.min(980, state.speed + 24 * dt);
-    state.progress += forwardDelta || (state.speed * dt);
-    state.vy += clampWeaponGateValue(Number(input?.y) || 0, -1, 1) * 1400 * dt;
-    state.vy *= Math.pow(0.05, dt);
-    state.y += (state.vy * dt) + sideDelta;
-    if (state.y < top + 20) {
-      if (sideDelta < 0) appliedSideDelta = Math.abs(sideDelta) * 0.78;
-      reflectedY = true;
-      applyWeaponGateWallBounce(state, top + 20, 1);
-    }
-    if (state.y > bottom - 20) {
-      if (sideDelta > 0) appliedSideDelta = -Math.abs(sideDelta) * 0.78;
-      reflectedY = true;
-      applyWeaponGateWallBounce(state, bottom - 20, -1);
-    }
+    state.launchElapsed = Math.max(0, Number(state.launchElapsed) || 0) + dt;
+    const launchN = clampWeaponGateValue(state.launchElapsed / Math.max(0.001, WEAPON_GATE_LAUNCH_DECEL_SECONDS), 0, 1);
+    state.speed = WEAPON_GATE_LAUNCH_SPEED + ((WEAPON_GATE_CRUISE_SPEED - WEAPON_GATE_LAUNCH_SPEED) * launchN);
+    const nextProgress = (Number(state.launchProgress) || 0) + getWeaponGateTravelDistance(state.launchElapsed);
+    const forwardDelta = Math.max(0, nextProgress - (Number(state.progress) || 0));
+    state.progress = nextProgress;
+    state.y = clampWeaponGateValue(state.y + sideDelta, top + 20, bottom - 20);
+    appliedSideDelta = state.y <= top + 20 || state.y >= bottom - 20 ? 0 : sideDelta;
     chooseCurrentWeaponGate(state, {
       applySelections: deps.applySelections,
       onComplete: deps.onComplete,
+      onSelection: deps.onSelection,
       triggerWeaponNote,
     });
     if (!state) {
-      return { active: false, sideDelta: appliedSideDelta, reflectedY, pickupDash, handoffComplete: true };
+      return { active: false, forwardDelta, sideDelta: appliedSideDelta, handoffComplete: true };
     }
     render();
-    return { active: true, sideDelta: appliedSideDelta, reflectedY, pickupDash };
+    return { active: true, forwardDelta, sideDelta: appliedSideDelta };
   }
 
   function triggerWeaponNote(note, source) {
@@ -131,7 +129,12 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     launch() {
       if (!state || state.phase !== 'prelaunch') return false;
       state.phase = 'gate';
-      state.speed = 820;
+      state.speed = WEAPON_GATE_LAUNCH_SPEED;
+      initializeWeaponGateSchedule(
+        state,
+        deps.getWeaponStepSeconds?.(),
+        deps.getWeaponStepAlignmentDelay?.()
+      );
       state.feedbackKind = 'launch';
       state.feedbackText = 'Launch';
       state.feedbackTtl = 0.65;
@@ -141,6 +144,17 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     isActive: () => !!state,
     getState: () => state,
     getPhase: () => state?.phase || '',
+    pulseMotifStep(stepIndex = 0) {
+      if (!state || state.livePlaybackStarted !== true) return false;
+      const slot = ((Math.trunc(Number(stepIndex) || 0) % WEAPON_GATE_TOTAL_SLOTS) + WEAPON_GATE_TOTAL_SLOTS) % WEAPON_GATE_TOTAL_SLOTS;
+      if (!state.noteStars.some((star) => {
+        const starSlot = Number(star?.slot);
+        return Number.isFinite(starSlot) && Math.trunc(starSlot) === slot;
+      })) return false;
+      state.noteStarPulseSlot = slot;
+      state.noteStarPulseT = Math.max(Number(state.noteStarPulseT) || 0, 0.22);
+      return true;
+    },
     getArenaBlend,
   };
   function getArenaBlend() {

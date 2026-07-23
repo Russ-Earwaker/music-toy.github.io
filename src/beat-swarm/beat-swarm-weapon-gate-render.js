@@ -1,6 +1,6 @@
 import { getWeaponGateCorridorScreenBoundsAtX, getWeaponGateEndProgress, getWeaponGateLogicalBounds, getWeaponGateShipScreenPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
 
-const WEAPON_GATE_INTRO_STYLE_VERSION = '2026-07-19-rhythm-visuals-v32';
+const WEAPON_GATE_INTRO_STYLE_VERSION = '2026-07-23-weapon-gate-cadence-v1';
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, Number(v) || 0));
@@ -20,13 +20,7 @@ export function ensureWeaponGateIntroStyle() {
     .beat-swarm-weapon-gate-corridor{position:absolute;inset:0;overflow:visible}
     .beat-swarm-weapon-gate-corridor-fill{fill:rgba(10,29,43,.36);filter:drop-shadow(0 0 18px rgba(76,205,255,.12))}
     .beat-swarm-weapon-gate-corridor-edge{fill:none;stroke:rgba(100,216,255,.8);stroke-width:4;filter:drop-shadow(0 0 8px rgba(76,205,255,.2))}
-    .beat-swarm-weapon-gate-flow{position:absolute;left:0;top:0;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;transform-origin:50% 50%;background:rgba(100,216,255,.96);box-shadow:0 0 8px rgba(100,216,255,.5),0 0 18px rgba(100,216,255,.22);mix-blend-mode:screen}
-    .beat-swarm-weapon-gate-ricochet{position:absolute;width:330px;height:110px;margin:-55px 0 0 -165px;transform-origin:50% 50%;opacity:1}
-    .beat-swarm-weapon-gate-ricochet-flash{position:absolute;left:50%;top:50%;width:320px;height:17px;margin:-8.5px 0 0 -160px;border-radius:999px;background:linear-gradient(90deg,transparent,rgba(255,245,155,.2),rgba(255,245,155,.64),rgba(255,255,255,.98),#fff59b,rgba(255,245,155,.64),rgba(255,245,155,.2),transparent);box-shadow:0 0 28px #fff59b,0 0 58px rgba(255,245,155,.48),0 0 78px rgba(100,216,255,.24)}
-    .beat-swarm-weapon-gate-ricochet-line{position:absolute;left:50%;top:50%;height:3px;border-radius:999px;transform-origin:0 50%;background:linear-gradient(90deg,#fff,rgba(255,245,155,.96),transparent);box-shadow:0 0 14px rgba(255,245,155,.9),0 0 28px rgba(255,245,155,.44)}
-    .beat-swarm-weapon-gate-ricochet-line.is-main{width:88px}
-    .beat-swarm-weapon-gate-ricochet-line.is-side{width:54px;height:2px;opacity:.82}
-    .beat-swarm-weapon-gate-ricochet-spark{position:absolute;left:50%;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;background:#fff59b;box-shadow:0 0 18px #fff,0 0 34px rgba(255,245,155,.72)}
+    .beat-swarm-weapon-gate-flow{position:absolute;left:0;top:0;width:2px;height:2px;margin:-1px 0 0 -1px;border-radius:50%;transform-origin:50% 50%;background:rgba(100,216,255,.96);box-shadow:0 0 5px rgba(100,216,255,.46),0 0 10px rgba(100,216,255,.18);mix-blend-mode:screen}
     .beat-swarm-weapon-gate{position:absolute;width:64px;border:2px solid rgba(142,232,255,.86);box-shadow:0 0 18px rgba(100,216,255,.22)}
     .beat-swarm-weapon-gate.is-next{border-color:#fff59b;box-shadow:0 0 26px rgba(255,245,155,.5)}
     .beat-swarm-weapon-gate.is-selected{opacity:1}
@@ -66,40 +60,15 @@ export function renderWeaponGateIntro(state, options = {}) {
   const corridorX = state.phase === 'outro' ? -Math.min(window.innerWidth + 180, outroN * (window.innerWidth + 180)) : 0;
   const corridorOpacity = state.phase === 'outro' ? Math.max(0, 1 - Math.max(0, outroN - 0.42) / 0.58) : 1;
   const gateHtml = state.gates.map((gate) => renderGate(state, gate, gate.x - state.progress)).join('');
-  const pulse = renderWallPulse(state);
   const targetHtml = state.targets.map((target) => `<div class="beat-swarm-weapon-gate-target${target.hit ? ' is-hit' : ''}" style="left:${target.x}px;top:${target.y}px;opacity:${Math.min(1, target.ttl * 2).toFixed(2)}"></div>`).join('');
   const shotHtml = state.shots.map((shot) => `<div class="beat-swarm-weapon-gate-shot" style="left:${shot.x}px;top:${shot.y}px"></div>`).join('');
   const impactClass = state.feedbackKind === 'damage' ? ' is-damage' : '';
   state.layer.innerHTML = `
     ${renderCorridorBand(state, corridorX, corridorOpacity)}
     ${renderCorridorFlowParticles(state, corridorX, corridorOpacity)}
-    ${renderNoteMap(state, notePool, totalSlots)}${pulse}${gateHtml}${renderDashPickup(state)}${targetHtml}${shotHtml}
+    ${renderNoteMap(state, notePool, totalSlots)}${gateHtml}${renderDashPickup(state)}${targetHtml}${shotHtml}
     <div class="beat-swarm-weapon-gate-hud">Gate ${Math.min(state.nextGateIndex + 1, totalSlots)}/${totalSlots}<br>Notes ${state.ratioState.selectedNotes}/${state.ratioState.targetNotes} Silence ${state.ratioState.selectedSilences}/${state.ratioState.targetSilences}<br>${state.summary.join(' ')}</div>
     ${state.feedbackTtl > 0 ? `<div class="beat-swarm-weapon-gate-impact${impactClass}">${state.feedbackText}</div>` : ''}
-  `;
-}
-
-function renderWallPulse(state) {
-  if (!(state?.wallPulseTtl > 0)) return '';
-  const x = Number(state.wallPulseX) || (window.innerWidth * 0.5);
-  const dir = Number(state.wallPulseDir) >= 0 ? 1 : -1;
-  const bounds = getWeaponGateCorridorScreenBoundsAtX(state, x);
-  const next = getWeaponGateCorridorScreenBoundsAtX(state, x + 72);
-  const angle = Math.atan2(next.center - bounds.center, 72) * 180 / Math.PI;
-  const y = dir > 0 ? bounds.top : bounds.bottom;
-  const opacity = Math.min(1, Math.max(0, Number(state.wallPulseTtl) || 0) / 0.25);
-  const bounceSign = dir > 0 ? 1 : -1;
-  const baseAngle = bounceSign * 34;
-  const scale = 0.78 + opacity * 0.34;
-  return `
-    <div class="beat-swarm-weapon-gate-ricochet" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px;opacity:${opacity.toFixed(2)};transform:rotate(${angle.toFixed(2)}deg) scale(${scale.toFixed(2)})">
-      <div class="beat-swarm-weapon-gate-ricochet-flash"></div>
-      <div class="beat-swarm-weapon-gate-ricochet-spark"></div>
-      <div class="beat-swarm-weapon-gate-ricochet-line is-main" style="transform:rotate(${baseAngle.toFixed(2)}deg)"></div>
-      <div class="beat-swarm-weapon-gate-ricochet-line is-side" style="transform:rotate(${(baseAngle + bounceSign * 26).toFixed(2)}deg)"></div>
-      <div class="beat-swarm-weapon-gate-ricochet-line is-side" style="transform:rotate(${(baseAngle - bounceSign * 30).toFixed(2)}deg)"></div>
-      <div class="beat-swarm-weapon-gate-ricochet-line is-side" style="transform:rotate(${(baseAngle + 180 - bounceSign * 18).toFixed(2)}deg);width:34px;opacity:.58"></div>
-    </div>
   `;
 }
 
@@ -209,7 +178,7 @@ function renderGate(state, gate, x) {
   const top = bounds.top;
   const h = Math.max(1, bounds.bottom - bounds.top);
   const sectionH = h / gate.sections.length;
-  const next = gate.slotIndex === state.nextGateIndex && !gate.selected ? ' is-next' : '';
+  const next = gate === state.gates[state.nextGateIndex] && !gate.selected ? ' is-next' : '';
   const selected = gate.selected ? ' is-selected' : '';
   const hero = gate.heroTtl > 0 ? ' is-hero' : '';
   const sections = gate.sections.map((section, i) => {
