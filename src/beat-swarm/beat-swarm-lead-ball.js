@@ -186,6 +186,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     laneId: 'primary_loop_lane',
     stepCount: DEFAULT_STEP_COUNT,
     targetHitCount: DEFAULT_TARGET_HITS,
+    ballCount: BALL_COUNT,
+    deferPickupUntilCarrierDeath: false,
     rootEl: null,
     pickupEl: null,
     pickup: null,
@@ -257,6 +259,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.laneId = 'primary_loop_lane';
     state.stepCount = DEFAULT_STEP_COUNT;
     state.targetHitCount = DEFAULT_TARGET_HITS;
+    state.ballCount = BALL_COUNT;
+    state.deferPickupUntilCarrierDeath = false;
     state.pickup = null;
     state.balls = [];
     state.previousPlayer = null;
@@ -291,11 +295,19 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.laneId = String(opts.laneId || 'primary_loop_lane').trim();
     state.stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || DEFAULT_STEP_COUNT));
     state.targetHitCount = Math.max(1, Math.min(state.stepCount, Math.trunc(Number(opts.targetHitCount) || DEFAULT_TARGET_HITS)));
+    state.ballCount = Math.max(1, Math.min(BALL_COUNT, Math.trunc(Number(opts.ballCount) || BALL_COUNT)));
+    state.deferPickupUntilCarrierDeath = opts.deferPickupUntilCarrierDeath === true;
     state.selections = Array.from({ length: state.stepCount }, () => null);
-    state.pickup = {
-      x: center.x + radius * 0.18,
-      y: center.y,
-    };
+    state.pickup = state.deferPickupUntilCarrierDeath
+      ? null
+      : {
+        x: center.x + radius * 0.18,
+        y: center.y,
+      };
+    if (state.pickupEl instanceof HTMLElement) {
+      state.pickupEl.style.opacity = state.pickup ? '1' : '0';
+      if (!state.pickup) state.pickupEl.style.transform = 'translate(-9999px, -9999px)';
+    }
     state.previousPlayer = player;
     deps.onStarted?.({
       eventId: state.eventId,
@@ -316,8 +328,9 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const moveDir = normalize(px - prev.x, py - prev.y, 1, 0);
     const baseAngle = Math.atan2(moveDir.y, moveDir.x);
     const spread = 0.42;
-    state.balls = Array.from({ length: BALL_COUNT }, (_, index) => {
-      const offset = BALL_COUNT <= 1 ? 0 : (index - ((BALL_COUNT - 1) / 2)) * spread;
+    const ballCount = Math.max(1, Math.trunc(Number(state.ballCount) || 1));
+    state.balls = Array.from({ length: ballCount }, (_, index) => {
+      const offset = ballCount <= 1 ? 0 : (index - ((ballCount - 1) / 2)) * spread;
       const angle = baseAngle + offset;
       return {
         id: index + 1,
@@ -337,6 +350,15 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     }
     state.pickup = null;
     deps.onLaunched?.({ eventId: state.eventId, x: origin.x, y: origin.y, ballCount: state.balls.length });
+  }
+
+  function spawnPickupFromCarrierDeath(options = null) {
+    if (!state.active || state.pickup || state.balls.length > 0) return null;
+    const source = point(options?.world || options || deps.getArenaCenterWorld?.());
+    state.pickup = { x: source.x, y: source.y };
+    state.deferPickupUntilCarrierDeath = false;
+    if (state.pickupEl instanceof HTMLElement) state.pickupEl.style.opacity = '1';
+    return { ...state.pickup, eventId: state.eventId, ballCount: state.ballCount };
   }
 
   function stop() {
@@ -910,6 +932,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     start,
     stop,
     update,
+    spawnPickupFromCarrierDeath,
     isActive: () => state.active,
     isPostCompletePlaybackActive: () => state.postCompleteUntilTick >= 0 && state.postCompleteNotified !== true,
     getSnapshot: () => ({

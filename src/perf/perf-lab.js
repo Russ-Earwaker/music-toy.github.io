@@ -457,7 +457,7 @@ function ensureUI() {
         <div class="perf-lab-controlsTitle">Current Work</div>
         ${btn('musicLabRunBS0S3GateToLeadGatesDebug', 'Run Gate -> Lead Gates (1x60s)', 'primary')}
         ${btn('musicLabRunBS0S3GateToLeadBallDebug', 'Run Gate -> Lead Ball (1x60s)', 'primary')}
-        ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Missiles + Bouncers + Balls (1x180s)', 'primary')}
+        ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Incremental Contributions (1x180s)', 'primary')}
         ${btn('musicLabRunBS0S3MusicMissileBassRewriteDebug', 'Test Reuse Matrix: Missiles/Tap Orbs -> Bass/Accent (1x360s)', 'primary')}
         ${btn('musicLabRunBS0S3PinballBouncerRewriteDebug', 'Pinball Bouncer Accent Rewrite (1x120s)', 'primary')}
       </div>`,

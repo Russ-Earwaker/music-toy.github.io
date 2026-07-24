@@ -251,6 +251,7 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     spawnedHitCount: 0,
     pendingHits: [],
     motifHits: new Set(),
+    backingSteps: new Set(),
     previousPlayer: null,
     rootEl: null,
     postCompleteUntilTick: -1,
@@ -278,6 +279,7 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     state.bouncers.length = 0;
     state.pendingHits.length = 0;
     state.motifHits.clear();
+    state.backingSteps.clear();
     state.postCompleteUntilTick = -1;
     state.postCompleteNotified = false;
     try { state.rootEl?.remove?.(); } catch {}
@@ -293,6 +295,11 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     state.laneId = String(opts.laneId || 'secondary_loop_lane').trim() || 'secondary_loop_lane';
     state.stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || 16));
     state.targetHitCount = Math.max(1, Math.min(MAX_HITS, Math.trunc(Number(opts.targetHitCount) || MAX_HITS)));
+    state.backingSteps = new Set(
+      (Array.isArray(opts.backingSteps) ? opts.backingSteps : [])
+        .map((value, index) => value ? index : -1)
+        .filter((index) => index >= 0 && index < state.stepCount)
+    );
     state.nextId = 1;
     state.spawnedHitCount = 0;
     state.lastClockTick = -1;
@@ -398,7 +405,7 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
   }
 
   function findNextFreeStep(fromStep = 0) {
-    const reserved = new Set(state.motifHits);
+    const reserved = new Set([...state.backingSteps, ...state.motifHits]);
     state.pendingHits.forEach((entry) => reserved.add(entry.stepIndex));
     for (let offset = 1; offset <= state.stepCount; offset += 1) {
       const stepIndex = (fromStep + offset) % state.stepCount;
@@ -493,7 +500,7 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
   }
 
   function updateMotifLoop() {
-    if (!state.motifHits.size) return;
+    if (!state.motifHits.size && !state.backingSteps.size) return;
     if (!state.active && state.postCompleteUntilTick < 0) return;
     const clock = deps.getBeatClock?.() || {};
     const tick = getClockTick(clock);
@@ -513,7 +520,7 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     if (tick === state.lastClockTick) return;
     state.lastClockTick = tick;
     const stepIndex = getClockStep(clock, state.stepCount);
-    if (!state.motifHits.has(stepIndex)) return;
+    if (!state.motifHits.has(stepIndex) && !state.backingSteps.has(stepIndex)) return;
     deps.playMotifNote?.({
       stepIndex,
       themeId: state.themeId,

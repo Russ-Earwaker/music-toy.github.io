@@ -183,6 +183,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     pendingDetonations: [],
     terminalMissileIds: new Set(),
     motifHits: new Set(),
+    backingSteps: new Set(),
     postCompleteUntilTick: -1,
     postCompleteNotified: false,
     rootEl: null,
@@ -228,6 +229,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     state.missiles.length = 0;
     state.trails.length = 0;
     state.motifHits.clear();
+    state.backingSteps.clear();
     state.postCompleteUntilTick = -1;
     state.postCompleteNotified = false;
     try { state.rootEl?.remove?.(); } catch {}
@@ -258,6 +260,11 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     state.stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || 16));
     state.targetHitCount = Math.max(1, Math.min(MAX_ITEMS, Math.trunc(Number(opts.targetHitCount) || MAX_ITEMS)));
     state.placementMode = String(opts.placementMode || 'free').trim().toLowerCase() || 'free';
+    state.backingSteps = new Set(
+      (Array.isArray(opts.backingSteps) ? opts.backingSteps : [])
+        .map((value, index) => value ? index : -1)
+        .filter((index) => index >= 0 && index < state.stepCount)
+    );
     state.nextId = 1;
     state.lastClockTick = -1;
     state.lastCarrierTick = -1000000;
@@ -433,7 +440,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
   }
 
   function findNextFreeStep(fromStep = 0) {
-    const reserved = new Set(state.motifHits);
+    const reserved = new Set([...state.backingSteps, ...state.motifHits]);
     state.pendingDetonations.forEach((entry) => reserved.add(entry.stepIndex));
     for (let offset = 1; offset <= state.stepCount; offset += 1) {
       const stepIndex = (fromStep + offset) % state.stepCount;
@@ -694,7 +701,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
   }
 
   function updateMotifLoop() {
-    if (!state.motifHits.size) return;
+    if (!state.motifHits.size && !state.backingSteps.size) return;
     if (!state.active && state.postCompleteUntilTick < 0) return;
     const clock = deps.getBeatClock?.() || {};
     const tick = getClockTick(clock);
@@ -714,7 +721,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     if (tick === state.lastClockTick) return;
     state.lastClockTick = tick;
     const stepIndex = getClockStep(clock, state.stepCount);
-    if (!state.motifHits.has(stepIndex)) return;
+    if (!state.motifHits.has(stepIndex) && !state.backingSteps.has(stepIndex)) return;
     deps.playMotifNote?.({
       stepIndex,
       themeId: state.themeId,
