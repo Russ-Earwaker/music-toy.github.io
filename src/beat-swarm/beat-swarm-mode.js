@@ -25,7 +25,7 @@ import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-19-pinball-bouncers-v24';
 import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-22-lead-ball-window-v31';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-23-weapon-gate-cadence-v6';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-24-weapon-gate-layering-v1';
 import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-23-weapon-gate-cadence-v1';
 import { WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { applyWeaponGateSelection, createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
@@ -1615,23 +1615,21 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
     const stepIndex = Math.max(0, Math.trunc(Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0));
     const audioAudit = state.gateAudioAudit && typeof state.gateAudioAudit === 'object'
       ? state.gateAudioAudit
-      : (state.gateAudioAudit = { noteSelections: 0, silenceSelections: 0, queuedNotes: 0, flushedNotes: 0 });
+      : (state.gateAudioAudit = { noteSelections: 0, silenceSelections: 0, transportArmedNotes: 0 });
     if (state?.livePlaybackStarted !== true) {
-      alignWeaponTunePlaybackToFirstStep(stepIndex);
+      const firstPlaybackStep = stepIndex + 1;
+      alignWeaponTunePlaybackToFirstStep(firstPlaybackStep);
       state.livePlaybackStarted = true;
-      state.livePlaybackAnchorStep = stepIndex;
+      state.livePlaybackAnchorStep = firstPlaybackStep;
     }
     if (String(selection?.kind || '') === 'note') {
       audioAudit.noteSelections += 1;
-      audioAudit.queuedNotes += 1;
-      state.pendingWeaponGateNote = {
+      audioAudit.transportArmedNotes += 1;
+      state.pendingWeaponGateNote = null;
+      state.manualWeaponFireStepIndex = Number.NaN;
+      noteMusicSystemEvent('weapon_gate_note_transport_armed', {
+        slotIndex: Math.max(0, Math.trunc(Number(selection.slotIndex) || 0)),
         note: String(selection.note || ''),
-        selectedSlotIndex: Math.max(0, Math.trunc(Number(selection.slotIndex) || 0)),
-        crossedAtStepIndex: stepIndex,
-      };
-      noteMusicSystemEvent('weapon_gate_note_queued', {
-        slotIndex: state.pendingWeaponGateNote.selectedSlotIndex,
-        note: state.pendingWeaponGateNote.note,
       }, { beatIndex: currentBeatIndex, stepIndex });
     } else {
       audioAudit.silenceSelections += 1;
@@ -1653,9 +1651,7 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
     globalThis.__LAST_BEAT_SWARM_WEAPON_GATE_AUDIO_AUDIT = {
       noteSelections: Math.max(0, Math.trunc(Number(audioAudit.noteSelections) || 0)),
       silenceSelections: Math.max(0, Math.trunc(Number(audioAudit.silenceSelections) || 0)),
-      queuedNotes: Math.max(0, Math.trunc(Number(audioAudit.queuedNotes) || 0)),
-      flushedNotes: Math.max(0, Math.trunc(Number(audioAudit.flushedNotes) || 0)),
-      pendingAtComplete: state?.pendingWeaponGateNote ? 1 : 0,
+      transportArmedNotes: Math.max(0, Math.trunc(Number(audioAudit.transportArmedNotes) || 0)),
       complete: true,
     };
     noteMusicSystemEvent('weapon_gate_audio_audit_complete', globalThis.__LAST_BEAT_SWARM_WEAPON_GATE_AUDIO_AUDIT, {
@@ -1749,35 +1745,6 @@ function shouldSuppressPlayerWeaponForWeaponGate(stepIndex = null) {
   if (gateState?.livePlaybackStarted === true) return false;
   const handoffVisual = weaponTunePlaybackRuntime.handoffVisual;
   return !(handoffVisual && handoffVisual.active === true);
-}
-function flushPendingWeaponGateNote(stepIndex = null, stepChanged = false) {
-  if (stepChanged !== true || weaponGateIntroRuntime.isActive?.() !== true) return false;
-  const gateState = weaponGateIntroRuntime.getState?.() || null;
-  const pending = gateState?.pendingWeaponGateNote;
-  if (!pending || typeof pending !== 'object') return false;
-  const scheduledStepIndex = Math.max(0, Math.trunc(Number(stepIndex) || 0));
-  gateState.pendingWeaponGateNote = null;
-  gateState.manualWeaponFireStepIndex = scheduledStepIndex;
-  const audioAudit = gateState.gateAudioAudit && typeof gateState.gateAudioAudit === 'object'
-    ? gateState.gateAudioAudit
-    : (gateState.gateAudioAudit = { noteSelections: 0, silenceSelections: 0, queuedNotes: 0, flushedNotes: 0 });
-  audioAudit.flushedNotes += 1;
-  triggerPlayerWeaponGateNote(
-    String(pending.note || 'C4'),
-    'weapon-gate-quantized-selection',
-    scheduledStepIndex
-  );
-  globalThis.__LAST_BEAT_SWARM_WEAPON_GATE_AUDIO_AUDIT = {
-    ...audioAudit,
-    pendingAfterFlush: gateState.pendingWeaponGateNote ? 1 : 0,
-    complete: audioAudit.selectionComplete === true,
-  };
-  noteMusicSystemEvent('weapon_gate_note_flushed', {
-    slotIndex: Math.max(0, Math.trunc(Number(pending.selectedSlotIndex) || 0)),
-    note: String(pending.note || 'C4'),
-    crossedAtStepIndex: Math.max(0, Math.trunc(Number(pending.crossedAtStepIndex) || 0)),
-  }, { beatIndex: currentBeatIndex, stepIndex: scheduledStepIndex });
-  return true;
 }
 function startTapOrbFoundationRewriteEvent(options = null) {
   if (tapOrbRuntime.isActive() || beatSwarmOnboardingRuntime.phase === 'tap_orb_foundation') return null;
@@ -27342,7 +27309,6 @@ function updateBeatWeapons(centerWorld) {
   const beatIndex = prelude.beatIndex;
   const stepIndex = prelude.stepIndex;
   const barIndex = prelude.barIndex;
-  flushPendingWeaponGateNote(stepIndex, tick?.stepChanged === true);
   if (weaponTunePlaybackRuntime.pendingAlignToFirst) {
     beginWeaponGateHandoffPlayback(stepIndex);
     weaponTunePlaybackRuntime.pendingAlignToFirst = false;

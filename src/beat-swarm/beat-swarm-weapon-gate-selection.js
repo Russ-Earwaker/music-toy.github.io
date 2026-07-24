@@ -10,7 +10,8 @@ export function chooseCurrentWeaponGate(state, options = {}) {
   const gate = state.gates[state.nextGateIndex];
   if (!gate) return null;
   const shipX = getWeaponGateShipScreenPoint().x;
-  if ((gate.x - state.progress) > shipX) return null;
+  const selectionLookahead = Math.max(18, Math.max(0, Number(state.speed) || 0) * 0.075);
+  if ((gate.x - state.progress) > shipX + selectionLookahead) return null;
   const { top, bottom } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
   const rel = clampWeaponGateValue((state.y - top) / Math.max(1, bottom - top), 0, 0.999);
   const idx = Math.max(0, Math.min(gate.sections.length - 1, Math.floor(rel * gate.sections.length)));
