@@ -6,11 +6,11 @@ import {
   WEAPON_GATE_TOTAL_SLOTS,
   getWeaponGateTravelDistance,
 } from './beat-swarm-weapon-gate-config.js?v=2026-07-23-weapon-gate-cadence-v6';
-import { tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-19-rhythm-visuals-v32';
-import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
-import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-23-weapon-gate-cadence-v1';
-import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-24-weapon-gate-layering-v1';
-import { createWeaponGateIntroState, initializeWeaponGateSchedule } from './beat-swarm-weapon-gate-state.js?v=2026-07-23-weapon-gate-cadence-v6';
+import { pulseWeaponGateGhost, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-26-weapon-gate-ghosts-v3';
+import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
+import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
+import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-26-weapon-gate-quantized-v1';
+import { createWeaponGateIntroState, initializeWeaponGateSchedule } from './beat-swarm-weapon-gate-state.js?v=2026-07-26-weapon-gate-ghosts-v1';
 
 export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   let state = null;
@@ -153,6 +153,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       })) return false;
       state.noteStarPulseSlot = slot;
       state.noteStarPulseT = Math.max(Number(state.noteStarPulseT) || 0, 0.22);
+      pulseWeaponGateGhost(state, slot);
       return true;
     },
     getArenaBlend,

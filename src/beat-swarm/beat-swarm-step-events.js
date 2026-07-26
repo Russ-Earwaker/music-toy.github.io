@@ -46,6 +46,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ? state.musicModeRuntime
     : null;
   const suppressDirectorMusic = state.suppressDirectorMusic === true;
+  const weaponGatePlaybackActive = state.weaponGatePlaybackActive === true;
   const preserveAuthoredAccentContinuity = state.preserveAuthoredAccentContinuity === true;
   const suppressedMusicLaneIds = state.suppressedMusicLaneIds instanceof Set
     ? state.suppressedMusicLaneIds
@@ -1913,6 +1914,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const crowdedMusicalStep = foundationSelected && primaryLoopForegroundPresent;
   const shouldEmitPlayerStepFinal = (() => {
     if (!shouldEmitPlayerStep) return false;
+    if (weaponGatePlaybackActive && playerTuneAuthoredStep) return true;
     if (!crowdedMusicalStep) return true;
     if (playerStepDirective.manualOverrideActive === true) return true;
     if (String(playerStepDirective.presentation || '').trim().toLowerCase() === 'restrained' && !playerTuneAuthoredStep) {
@@ -2191,6 +2193,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     && !isLaneSuppressed('foundation_lane')
     && getDirectorMotifBedStageState().stage !== 'silent'
     && helpers.isPlayerMusicThemeAuthored?.('bassDrive') === true;
+  const authoredAccentRhythmContinuityActive = !suppressDirectorMusic
+    && !isLaneSuppressed('secondary_loop_lane')
+    && getDirectorMotifBedStageState().stage !== 'silent'
+    && helpers.isPlayerMusicThemeAuthored?.('accentRhythm') === true;
   const explicitPlayerBassDriveEvent = (() => {
     if (suppressDirectorMusic) return null;
     if (isLaneSuppressed('foundation_lane')) return null;
@@ -2700,14 +2706,22 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }) || null;
   })();
 
-  const stagedEventsForFinalPlayback = (authoredBassDriveContinuityActive || explicitPlayerBassDriveEvent || explicitPlayerAccentRhythmEvent)
+  const stagedEventsForFinalPlayback = (
+    authoredBassDriveContinuityActive
+    || authoredAccentRhythmContinuityActive
+    || explicitPlayerBassDriveEvent
+    || explicitPlayerAccentRhythmEvent
+  )
     ? stagedEnemyEvents.filter((ev) => {
       const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
       const laneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
       const layer = String(payload.musicLayer || '').trim().toLowerCase();
       if (authoredBassDriveContinuityActive && (laneId === 'foundation_lane' || layer === 'foundation')) return false;
       const role = String(ev?.role || payload.musicRole || '').trim().toLowerCase();
-      if (explicitPlayerAccentRhythmEvent && (laneId === 'secondary_loop_lane' || layer === 'accent' || role === 'accent')) return false;
+      if (
+        authoredAccentRhythmContinuityActive
+        && (laneId === 'secondary_loop_lane' || layer === 'accent' || role === 'accent')
+      ) return false;
       return true;
     })
     : stagedEnemyEvents;

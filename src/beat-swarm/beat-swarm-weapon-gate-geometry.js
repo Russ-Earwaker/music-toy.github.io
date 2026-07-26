@@ -105,7 +105,7 @@ export function getWeaponGateNoteStarPosition({
   const noteIndex = Math.max(0, safeNotePool.indexOf(note || safeNotePool[0]));
   return {
     x: Number(viewportWidth) * (0.14 + (slot / Math.max(1, safeTotalSlots - 1)) * 0.72),
-    y: Number(viewportHeight) * (0.24 + ((safeNotePool.length - 1 - noteIndex) / Math.max(1, safeNotePool.length - 1)) * 0.52),
+    y: Number(viewportHeight) * (0.075 + ((safeNotePool.length - 1 - noteIndex) / Math.max(1, safeNotePool.length - 1)) * 0.14),
     slot,
   };
 }

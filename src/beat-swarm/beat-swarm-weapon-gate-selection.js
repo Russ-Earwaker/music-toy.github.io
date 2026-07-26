@@ -1,17 +1,22 @@
 import { applyWeaponGateSelection } from './beat-swarm-weapon-gate-ratio.js';
 import { summarizeWeaponGateSelection } from './beat-swarm-weapon-gate-core.js';
 import { WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
-import { addWeaponGateNoteStar, spawnWeaponGateShot } from './beat-swarm-weapon-gate-effects.js?v=2026-07-19-rhythm-visuals-v32';
-import { clampWeaponGateValue, getWeaponGateCorridorWorldBounds, getWeaponGateShipScreenPoint, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
-import { appendNextWeaponGate } from './beat-swarm-weapon-gate-state.js?v=2026-07-23-weapon-gate-cadence-v1';
+import { addWeaponGateNoteStar, spawnWeaponGateShot } from './beat-swarm-weapon-gate-effects.js?v=2026-07-26-weapon-gate-ghosts-v3';
+import { clampWeaponGateValue, getWeaponGateCorridorScreenBoundsAtX, getWeaponGateCorridorWorldBounds, getWeaponGateShipScreenPoint, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
+import { appendNextWeaponGate } from './beat-swarm-weapon-gate-state.js?v=2026-07-26-weapon-gate-ghosts-v1';
 
 export function chooseCurrentWeaponGate(state, options = {}) {
   if (!state) return null;
   const gate = state.gates[state.nextGateIndex];
   if (!gate) return null;
   const shipX = getWeaponGateShipScreenPoint().x;
-  const selectionLookahead = Math.max(18, Math.max(0, Number(state.speed) || 0) * 0.075);
-  if ((gate.x - state.progress) > shipX + selectionLookahead) return null;
+  const gateScreenX = gate.x - state.progress;
+  const selectionLeadSeconds = Math.min(
+    0.024,
+    Math.max(0.008, (Number(state.gateStepSeconds) || 0.22) * 0.11)
+  );
+  const selectionLookahead = Math.max(6, (Number(state.speed) || 0) * selectionLeadSeconds);
+  if (gateScreenX > shipX + selectionLookahead) return null;
   const { top, bottom } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
   const rel = clampWeaponGateValue((state.y - top) / Math.max(1, bottom - top), 0, 0.999);
   const idx = Math.max(0, Math.min(gate.sections.length - 1, Math.floor(rel * gate.sections.length)));
@@ -24,6 +29,9 @@ export function chooseCurrentWeaponGate(state, options = {}) {
     reason: gate.reason,
     availableSections: gate.sections,
     selectedSection: section,
+    gateScreenX,
+    crossingOffsetX: gateScreenX - shipX,
+    selectionLeadSeconds,
   };
   gate.selected = true;
   gate.selectedSectionIndex = idx;
@@ -42,7 +50,12 @@ export function chooseCurrentWeaponGate(state, options = {}) {
     handledByLiveWeapon = options.onSelection?.(selection, state.selections.slice(), state) === true;
   } catch {}
   if (selection.kind === 'note') {
-    addWeaponGateNoteStar(state, selection);
+    const screenBounds = getWeaponGateCorridorScreenBoundsAtX(state, gateScreenX);
+    const sectionHeight = Math.max(1, screenBounds.bottom - screenBounds.top) / Math.max(1, gate.sections.length);
+    addWeaponGateNoteStar(state, selection, {
+      x: gateScreenX,
+      y: screenBounds.top + ((idx + 0.5) * sectionHeight),
+    });
     if (!handledByLiveWeapon) {
       spawnWeaponGateShot(state, selection.note);
       try { options.triggerWeaponNote?.(selection.note, 'weapon-gate-intro'); } catch {}

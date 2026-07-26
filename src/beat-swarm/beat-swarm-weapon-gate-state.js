@@ -1,6 +1,6 @@
 import { createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
 import { createWeaponGate } from './beat-swarm-weapon-gate-core.js';
-import { getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
+import { getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
 import {
   hashWeaponGateSeed,
   WEAPON_GATE_CURVE_AMPLITUDE,
@@ -61,6 +61,8 @@ export function createWeaponGateIntroState(layer, options = {}) {
     dashPickup: null,
     dashPickupCooldown: 0.9,
     noteStars: [],
+    noteTransfers: [],
+    ghostGatePulses: [],
     noteStarPulseT: 0,
     noteStarPulseSlot: -1,
     motifStep: 0,

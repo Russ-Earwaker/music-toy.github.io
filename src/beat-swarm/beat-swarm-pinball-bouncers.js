@@ -504,7 +504,22 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     if (!state.active && state.postCompleteUntilTick < 0) return;
     const clock = deps.getBeatClock?.() || {};
     const tick = getClockTick(clock);
-    if (state.postCompleteUntilTick >= 0 && tick > state.postCompleteUntilTick) {
+    const completingPostPlayback = state.postCompleteUntilTick >= 0 && tick > state.postCompleteUntilTick;
+    if (tick === state.lastClockTick) return;
+    state.lastClockTick = tick;
+    const stepIndex = getClockStep(clock, state.stepCount);
+    if (state.motifHits.has(stepIndex) || state.backingSteps.has(stepIndex)) {
+      deps.playMotifNote?.({
+        stepIndex,
+        themeId: state.themeId,
+        laneId: state.laneId,
+        eventId: state.eventId,
+        loopPlayback: true,
+        hitCount: state.motifHits.size,
+        targetHitCount: state.targetHitCount,
+      });
+    }
+    if (completingPostPlayback) {
       state.postCompleteUntilTick = -1;
       if (!state.postCompleteNotified) {
         state.postCompleteNotified = true;
@@ -517,19 +532,6 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
       }
       return;
     }
-    if (tick === state.lastClockTick) return;
-    state.lastClockTick = tick;
-    const stepIndex = getClockStep(clock, state.stepCount);
-    if (!state.motifHits.has(stepIndex) && !state.backingSteps.has(stepIndex)) return;
-    deps.playMotifNote?.({
-      stepIndex,
-      themeId: state.themeId,
-      laneId: state.laneId,
-      eventId: state.eventId,
-      loopPlayback: true,
-      hitCount: state.motifHits.size,
-      targetHitCount: state.targetHitCount,
-    });
   }
 
   function update(dt = 0) {

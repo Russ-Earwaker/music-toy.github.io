@@ -22,11 +22,11 @@ import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-24-incremental-contributions-v1';
-import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-24-incremental-contributions-v1';
+import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-26-accent-handoff-v1';
 import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-24-incremental-contributions-v1';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-24-weapon-gate-layering-v1';
-import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-23-weapon-gate-cadence-v1';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-26-weapon-gate-ghosts-v3';
+import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
 import { WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { applyWeaponGateSelection, createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-22-quantized-bridge-v5';
@@ -39,7 +39,7 @@ import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRun
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-07-22-lead-ball-v22';
-import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-07-22-lead-ball-window-v31';
+import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-07-26-authored-lane-continuity-v1';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
 import { createBeatSwarmPlayerInstrumentRuntime } from './beat-swarm-player-instrument.js';
@@ -1970,26 +1970,60 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
       ? state.gateAudioAudit
       : (state.gateAudioAudit = { noteSelections: 0, silenceSelections: 0, transportArmedNotes: 0 });
     if (state?.livePlaybackStarted !== true) {
-      const firstPlaybackStep = stepIndex;
+      const firstPlaybackStep = stepIndex + 1;
       alignWeaponTunePlaybackToFirstStep(firstPlaybackStep);
       state.livePlaybackStarted = true;
       state.livePlaybackAnchorStep = firstPlaybackStep;
     }
     if (String(selection?.kind || '') === 'note') {
+      const selectedSlot = Math.max(0, Math.trunc(Number(selection.slotIndex) || 0));
+      const currentPlaybackSlot = getWeaponTunePlaybackStepIndex(stepIndex);
+      const nextStepIndex = stepIndex + 1;
+      const nextPlaybackSlot = getWeaponTunePlaybackStepIndex(nextStepIndex);
+      const quantizedForNextStep = nextPlaybackSlot === selectedSlot;
+      const lateForCurrentStep = currentPlaybackSlot === selectedSlot;
+      const scheduledStepIndex = quantizedForNextStep ? nextStepIndex : stepIndex;
       audioAudit.noteSelections += 1;
       audioAudit.transportArmedNotes += 1;
       state.pendingWeaponGateNote = null;
-      state.manualWeaponFireStepIndex = stepIndex;
-      triggerPlayerWeaponGateNote(
-        String(selection.note || 'C4'),
-        'weapon-gate-collision',
-        stepIndex,
-        { immediateSound: true }
-      );
+      state.manualWeaponFireStepIndex = Number.NaN;
+      if (!quantizedForNextStep) {
+        state.manualWeaponFireStepIndex = stepIndex;
+        triggerPlayerWeaponGateNote(
+          String(selection.note || 'C4'),
+          'weapon-gate-late-collision',
+          stepIndex,
+          { immediateSound: true }
+        );
+      }
       noteMusicSystemEvent('weapon_gate_note_transport_armed', {
-        slotIndex: Math.max(0, Math.trunc(Number(selection.slotIndex) || 0)),
+        slotIndex: selectedSlot,
+        playbackSlot: quantizedForNextStep ? nextPlaybackSlot : currentPlaybackSlot,
+        currentPlaybackSlot,
+        nextPlaybackSlot,
+        scheduledStepIndex,
+        slotAligned: quantizedForNextStep,
+        lateForCurrentStep,
+        crossingOffsetX: Number(selection.crossingOffsetX) || 0,
+        selectionLeadSeconds: Number(selection.selectionLeadSeconds) || 0,
         note: String(selection.note || ''),
       }, { beatIndex: currentBeatIndex, stepIndex });
+      noteMusicSystemEvent(
+        quantizedForNextStep
+          ? 'weapon_gate_note_slot_aligned'
+          : 'weapon_gate_note_slot_misaligned',
+        {
+          slotIndex: selectedSlot,
+          playbackSlot: quantizedForNextStep ? nextPlaybackSlot : currentPlaybackSlot,
+          currentPlaybackSlot,
+          nextPlaybackSlot,
+          scheduledStepIndex,
+          lateForCurrentStep,
+          crossingOffsetX: Number(selection.crossingOffsetX) || 0,
+          selectionLeadSeconds: Number(selection.selectionLeadSeconds) || 0,
+        },
+        { beatIndex: currentBeatIndex, stepIndex }
+      );
     } else {
       audioAudit.silenceSelections += 1;
       state.pendingWeaponGateNote = null;
@@ -2894,6 +2928,27 @@ function startLeadBallThemeEvent(options = null) {
   const eventId = String(opts.eventId || `lead-ball-${Date.now().toString(36)}`).trim();
   const stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || getLeadGateAuthoringStepCount()));
   const targetHitCount = Math.max(1, Math.min(stepCount, Math.trunc(Number(opts.targetHitCount) || 18)));
+  const accentSteps = getPlayerThemeRhythmSteps(
+    'accentRhythm',
+    WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH
+  );
+  const accentLoopSteps = Math.max(1, accentSteps.length || (WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH));
+  const upcomingAccentOffsets = [];
+  for (let offset = 0; offset < accentLoopSteps; offset += 1) {
+    if (accentSteps[(currentStep + offset) % accentLoopSteps]) upcomingAccentOffsets.push(offset);
+  }
+  noteMusicSystemEvent('lead_ball_accent_continuity_armed', {
+    eventId,
+    currentStep,
+    accentActiveSteps: accentSteps
+      .map((active, index) => active ? index : -1)
+      .filter((index) => index >= 0),
+    upcomingAccentOffsets,
+    accentLaneSuppressed: false,
+  }, {
+    beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+    stepIndex: currentStep,
+  });
   ensureLeadBallEnemyTargets(Math.max(12, targetHitCount));
   leadBallAuthoringRuntime.handoffPublished = false;
   leadBallAuthoringRuntime.contributionMode = opts.contributionMode === 'extend' ? 'extend' : 'replace';
@@ -15604,7 +15659,7 @@ function snapshotWeaponGateHandoffVisual() {
     ? state.noteStars
       .map((star) => ({
         x: Number(star?.x) || 0,
-        y: (Number(star?.y) || 0) + (((window.innerHeight * 0.5) - (Number(state?.y) || 0)) * 0.08),
+        y: Number(star?.y) || 0,
         note: String(star?.note || '').trim(),
         slot: Math.max(0, Math.min(WEAPON_GATE_TOTAL_SLOTS - 1, Math.trunc(Number(star?.slot) || 0))),
         active: true,
@@ -27852,6 +27907,9 @@ function updateBeatWeapons(centerWorld) {
   const onboardingMissileAuthoringActive = onboardingAssemblyActive
     && (isMusicMissileRewriteActive() || isMusicMissilePostCompletePlaybackActive());
   const suppressPlayerWeaponForGate = shouldSuppressPlayerWeaponForWeaponGate(stepIndex);
+  const weaponGateState = weaponGateIntroRuntime.getState?.() || null;
+  const weaponGatePlaybackActive = weaponGateIntroRuntime.isActive?.() === true
+    && weaponGateState?.livePlaybackStarted === true;
   if (tapOrbRuntime.isActive()) {
     const authoredLaneId = String(tapOrbAuthoringRuntime.laneId || '').trim().toLowerCase();
     if (authoredLaneId) suppressedMusicLaneIds.add(authoredLaneId);
@@ -27882,6 +27940,7 @@ function updateBeatWeapons(centerWorld) {
     lastSpawnerEnemyStepIndex,
     lastWeaponTuneStepIndex,
     suppressPlayerWeapon: suppressPlayerWeaponForGate,
+    weaponGatePlaybackActive,
     suppressDirectorMusic: tapOrbAwaitingFirstFoundationTap || (onboardingMissileAuthoringActive && !onboardingBassAuthored),
     preserveAuthoredAccentContinuity: onboardingAccentAuthored,
     suppressedMusicLaneIds: suppressedMusicLaneIds.size ? suppressedMusicLaneIds : null,
