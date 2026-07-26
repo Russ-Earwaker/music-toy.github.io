@@ -9,8 +9,8 @@ import {
 import { pulseWeaponGateGhost, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-26-weapon-gate-ghosts-v3';
 import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
 import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
-import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-26-weapon-gate-quantized-v1';
-import { createWeaponGateIntroState, initializeWeaponGateSchedule } from './beat-swarm-weapon-gate-state.js?v=2026-07-26-weapon-gate-ghosts-v1';
+import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-26-weapon-gate-transport-v2';
+import { createWeaponGateIntroState, initializeWeaponGateSchedule } from './beat-swarm-weapon-gate-state.js?v=2026-07-26-weapon-gate-transport-v2';
 
 export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   let state = null;
@@ -130,11 +130,14 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       if (!state || state.phase !== 'prelaunch') return false;
       state.phase = 'gate';
       state.speed = WEAPON_GATE_LAUNCH_SPEED;
+      const alignmentDelay = deps.getWeaponStepAlignmentDelay?.();
       initializeWeaponGateSchedule(
         state,
         deps.getWeaponStepSeconds?.(),
-        deps.getWeaponStepAlignmentDelay?.()
+        alignmentDelay,
+        deps.getWeaponTransportStep?.()
       );
+      deps.onWeaponScheduleInitialized?.(state);
       state.feedbackKind = 'launch';
       state.feedbackText = 'Launch';
       state.feedbackTtl = 0.65;

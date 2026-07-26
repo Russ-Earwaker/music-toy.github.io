@@ -189,6 +189,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     rootEl: null,
     promptEl: null,
     pickupRocketPlan: [],
+    lastArenaCenter: null,
   };
 
   function ensureRoot() {
@@ -235,6 +236,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     try { state.rootEl?.remove?.(); } catch {}
     state.rootEl = null;
     state.promptEl = null;
+    state.lastArenaCenter = null;
   }
 
   function addPickupRocketVisuals(pickup = null) {
@@ -271,6 +273,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     state.initialCarrierAvailableTick = getClockTick(deps.getBeatClock?.()) + Math.max(0, Math.trunc(Number(opts.initialCarrierDelayTicks) || 0));
     state.wasInputHeld = deps.isInputHeld?.() === true;
     state.pickupRocketPlan = buildPickupRocketPlan(state.targetHitCount);
+    state.lastArenaCenter = point(deps.getArenaCenterWorld?.());
     ensureRoot();
   }
 
@@ -317,6 +320,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       y: source.y,
       anchorAngle: (-Math.PI / 2) + (index * Math.PI * 2 / state.targetHitCount),
       anchorRadiusN: index % 2 === 0 ? 0.56 : 0.72,
+      arenaContained: false,
       magneticLatched: false,
       rocketCount,
       spinElapsed: Math.random() * PICKUP_ROCKET_SPIN_SECONDS,
@@ -587,8 +591,15 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
   function updatePickups(dt, player) {
     const arena = point(deps.getArenaCenterWorld?.());
     const arenaRadius = Math.max(120, Number(deps.getArenaRadius?.()) || 500);
+    const previousArena = state.lastArenaCenter || arena;
+    const arenaDx = arena.x - previousArena.x;
+    const arenaDy = arena.y - previousArena.y;
+    state.lastArenaCenter = arena;
+    const containmentRadius = Math.max(60, arenaRadius - PICKUP_ROCKET_ORBIT_RADIUS - 40);
     for (let i = state.pickups.length - 1; i >= 0; i -= 1) {
       const pickup = state.pickups[i];
+      pickup.x += arenaDx;
+      pickup.y += arenaDy;
       pickup.spinElapsed = Math.max(0, Number(pickup.spinElapsed) || 0) + dt;
       let target = {
         x: arena.x + Math.cos(pickup.anchorAngle) * arenaRadius * pickup.anchorRadiusN,
@@ -609,6 +620,14 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       if (dist > 0.001) {
         pickup.x += dx / dist * step;
         pickup.y += dy / dist * step;
+      }
+      const arenaOffsetX = pickup.x - arena.x;
+      const arenaOffsetY = pickup.y - arena.y;
+      const arenaDistance = Math.hypot(arenaOffsetX, arenaOffsetY);
+      if (arenaDistance <= containmentRadius) pickup.arenaContained = true;
+      if (pickup.arenaContained === true && arenaDistance > containmentRadius && arenaDistance > 0.001) {
+        pickup.x = arena.x + (arenaOffsetX / arenaDistance) * containmentRadius;
+        pickup.y = arena.y + (arenaOffsetY / arenaDistance) * containmentRadius;
       }
       renderAt(pickup.el, pickup);
       renderPickupRockets(pickup);

@@ -21,11 +21,11 @@ import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-compo
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
-import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-24-incremental-contributions-v1';
+import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-26-arena-pickups-v1';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-26-accent-handoff-v1';
-import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-24-incremental-contributions-v1';
+import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-26-arena-pickups-v1';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-26-weapon-gate-ghosts-v3';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-26-weapon-gate-transport-v2';
 import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
 import { WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { applyWeaponGateSelection, createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
@@ -1961,6 +1961,38 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
       return 0;
     }
   },
+  getWeaponTransportStep() {
+    const stepSeconds = Math.max(0.05, getGameplayBeatLen() * COMPOSER_BEATS_PER_BAR / Math.max(1, WEAPON_TUNE_STEPS));
+    try {
+      const info = typeof getLoopInfo === 'function' ? getLoopInfo() : null;
+      const elapsed = Number(info?.now) - Number(info?.loopStartTime);
+      if (Number.isFinite(elapsed) && elapsed >= 0) {
+        return Math.max(0, Math.floor((elapsed / stepSeconds) + 1e-6));
+      }
+    } catch {}
+    const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
+    return Math.max(0, Math.trunc(
+      Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0
+    ));
+  },
+  onWeaponScheduleInitialized(state) {
+    const anchorStep = Math.max(0, Math.trunc(Number(state?.gatePlaybackAnchorStep) || 0));
+    alignWeaponTunePlaybackToFirstStep(anchorStep);
+    if (state && typeof state === 'object') {
+      state.livePlaybackAnchorStep = anchorStep;
+    }
+    noteMusicSystemEvent('weapon_gate_transport_anchor', {
+      launchStepIndex: Math.max(0, Math.trunc(Number(state?.gateLaunchStepIndex) || 0)),
+      nextBoundaryOffset: Math.max(0, Math.trunc(Number(state?.gateNextBoundaryOffset) || 0)),
+      anchorStep,
+      firstGateTargetStep: Math.max(0, Math.trunc(Number(state?.gates?.[0]?.targetStep) || 0)),
+      arrivalOffsetSeconds: Math.max(0, Number(state?.gateArrivalOffsetSeconds) || 0),
+      stepSeconds: Math.max(0, Number(state?.gateStepSeconds) || 0),
+    }, {
+      beatIndex: currentBeatIndex,
+      stepIndex: anchorStep,
+    });
+  },
   applySelections: applyWeaponGateSelectionsToWeapon,
   onSelection(selection, selections, state) {
     applyWeaponGateSelectionsToWeapon(0, selections);
@@ -1970,24 +2002,20 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
       ? state.gateAudioAudit
       : (state.gateAudioAudit = { noteSelections: 0, silenceSelections: 0, transportArmedNotes: 0 });
     if (state?.livePlaybackStarted !== true) {
-      const firstPlaybackStep = stepIndex + 1;
-      alignWeaponTunePlaybackToFirstStep(firstPlaybackStep);
       state.livePlaybackStarted = true;
-      state.livePlaybackAnchorStep = firstPlaybackStep;
     }
     if (String(selection?.kind || '') === 'note') {
       const selectedSlot = Math.max(0, Math.trunc(Number(selection.slotIndex) || 0));
+      const scheduledStepIndex = Math.max(0, Math.trunc(Number(selection.playbackStepIndex) || 0));
       const currentPlaybackSlot = getWeaponTunePlaybackStepIndex(stepIndex);
-      const nextStepIndex = stepIndex + 1;
-      const nextPlaybackSlot = getWeaponTunePlaybackStepIndex(nextStepIndex);
-      const quantizedForNextStep = nextPlaybackSlot === selectedSlot;
-      const lateForCurrentStep = currentPlaybackSlot === selectedSlot;
-      const scheduledStepIndex = quantizedForNextStep ? nextStepIndex : stepIndex;
+      const scheduledPlaybackSlot = getWeaponTunePlaybackStepIndex(scheduledStepIndex);
+      const transportReady = stepIndex < scheduledStepIndex && scheduledPlaybackSlot === selectedSlot;
+      const missedScheduledStep = stepIndex >= scheduledStepIndex;
       audioAudit.noteSelections += 1;
       audioAudit.transportArmedNotes += 1;
       state.pendingWeaponGateNote = null;
       state.manualWeaponFireStepIndex = Number.NaN;
-      if (!quantizedForNextStep) {
+      if (missedScheduledStep) {
         state.manualWeaponFireStepIndex = stepIndex;
         triggerPlayerWeaponGateNote(
           String(selection.note || 'C4'),
@@ -1998,27 +2026,27 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
       }
       noteMusicSystemEvent('weapon_gate_note_transport_armed', {
         slotIndex: selectedSlot,
-        playbackSlot: quantizedForNextStep ? nextPlaybackSlot : currentPlaybackSlot,
+        playbackSlot: scheduledPlaybackSlot,
         currentPlaybackSlot,
-        nextPlaybackSlot,
         scheduledStepIndex,
-        slotAligned: quantizedForNextStep,
-        lateForCurrentStep,
+        slotAligned: transportReady,
+        missedScheduledStep,
+        stepsUntilScheduled: scheduledStepIndex - stepIndex,
         crossingOffsetX: Number(selection.crossingOffsetX) || 0,
         selectionLeadSeconds: Number(selection.selectionLeadSeconds) || 0,
         note: String(selection.note || ''),
       }, { beatIndex: currentBeatIndex, stepIndex });
       noteMusicSystemEvent(
-        quantizedForNextStep
+        transportReady
           ? 'weapon_gate_note_slot_aligned'
           : 'weapon_gate_note_slot_misaligned',
         {
           slotIndex: selectedSlot,
-          playbackSlot: quantizedForNextStep ? nextPlaybackSlot : currentPlaybackSlot,
+          playbackSlot: scheduledPlaybackSlot,
           currentPlaybackSlot,
-          nextPlaybackSlot,
           scheduledStepIndex,
-          lateForCurrentStep,
+          missedScheduledStep,
+          stepsUntilScheduled: scheduledStepIndex - stepIndex,
           crossingOffsetX: Number(selection.crossingOffsetX) || 0,
           selectionLeadSeconds: Number(selection.selectionLeadSeconds) || 0,
         },

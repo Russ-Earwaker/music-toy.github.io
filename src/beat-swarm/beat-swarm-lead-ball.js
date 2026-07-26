@@ -9,6 +9,7 @@ const BALL_HOP_PATH_RADIUS = 280;
 const BALL_BUMP_RADIUS = 94;
 const BALL_MAX_IDLE_SECONDS = 10;
 const BALL_PICKUP_RADIUS = 74;
+const BALL_PICKUP_TRAVEL_SPEED = 620;
 const BALL_COUNT = 2;
 const BALL_CONTACT_COOLDOWN = 0.3;
 const DEFAULT_STEP_COUNT = 32;
@@ -211,6 +212,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     impacts: [],
     trails: [],
     elapsed: 0,
+    lastArenaCenter: null,
   };
 
   function ensureRoot() {
@@ -280,6 +282,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.postCompleteNotified = false;
     state.lastNotes.length = 0;
     state.elapsed = 0;
+    state.lastArenaCenter = null;
   }
 
   function start(options = null) {
@@ -303,7 +306,11 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       : {
         x: center.x + radius * 0.18,
         y: center.y,
+        anchorAngle: 0,
+        anchorRadiusN: 0.18,
+        arenaContained: true,
       };
+    state.lastArenaCenter = center;
     if (state.pickupEl instanceof HTMLElement) {
       state.pickupEl.style.opacity = state.pickup ? '1' : '0';
       if (!state.pickup) state.pickupEl.style.transform = 'translate(-9999px, -9999px)';
@@ -355,7 +362,16 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
   function spawnPickupFromCarrierDeath(options = null) {
     if (!state.active || state.pickup || state.balls.length > 0) return null;
     const source = point(options?.world || options || deps.getArenaCenterWorld?.());
-    state.pickup = { x: source.x, y: source.y };
+    const center = point(deps.getArenaCenterWorld?.() || deps.getPlayerWorld?.());
+    const sourceAngle = Math.atan2(source.y - center.y, source.x - center.x);
+    state.pickup = {
+      x: source.x,
+      y: source.y,
+      anchorAngle: sourceAngle,
+      anchorRadiusN: 0.52,
+      arenaContained: false,
+    };
+    state.lastArenaCenter = center;
     state.deferPickupUntilCarrierDeath = false;
     if (state.pickupEl instanceof HTMLElement) state.pickupEl.style.opacity = '1';
     return { ...state.pickup, eventId: state.eventId, ballCount: state.ballCount };
@@ -835,8 +851,36 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     });
   }
 
-  function updatePickup(player) {
+  function updatePickup(player, dt) {
     if (!state.active || !state.pickup) return;
+    const arena = point(deps.getArenaCenterWorld?.() || player);
+    const previousArena = state.lastArenaCenter || arena;
+    state.pickup.x += arena.x - previousArena.x;
+    state.pickup.y += arena.y - previousArena.y;
+    state.lastArenaCenter = arena;
+    const arenaRadius = Math.max(120, Number(deps.getArenaRadius?.()) || 900);
+    const containmentRadius = Math.max(50, arenaRadius - BALL_PICKUP_RADIUS - 24);
+    const targetRadius = Math.min(containmentRadius, arenaRadius * Math.max(0, Number(state.pickup.anchorRadiusN) || 0.52));
+    const target = {
+      x: arena.x + Math.cos(Number(state.pickup.anchorAngle) || 0) * targetRadius,
+      y: arena.y + Math.sin(Number(state.pickup.anchorAngle) || 0) * targetRadius,
+    };
+    const targetDx = target.x - state.pickup.x;
+    const targetDy = target.y - state.pickup.y;
+    const targetDistance = Math.hypot(targetDx, targetDy);
+    const travel = Math.min(targetDistance, BALL_PICKUP_TRAVEL_SPEED * Math.max(0, Number(dt) || 0));
+    if (targetDistance > 0.001) {
+      state.pickup.x += (targetDx / targetDistance) * travel;
+      state.pickup.y += (targetDy / targetDistance) * travel;
+    }
+    const arenaDx = state.pickup.x - arena.x;
+    const arenaDy = state.pickup.y - arena.y;
+    const arenaDistance = Math.hypot(arenaDx, arenaDy);
+    if (arenaDistance <= containmentRadius) state.pickup.arenaContained = true;
+    if (state.pickup.arenaContained === true && arenaDistance > containmentRadius && arenaDistance > 0.001) {
+      state.pickup.x = arena.x + (arenaDx / arenaDistance) * containmentRadius;
+      state.pickup.y = arena.y + (arenaDy / arenaDistance) * containmentRadius;
+    }
     const dx = state.pickup.x - player.x;
     const dy = state.pickup.y - player.y;
     if (Math.hypot(dx, dy) <= BALL_PICKUP_RADIUS + 42) {
@@ -904,7 +948,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const safeDt = Math.max(0, Math.min(0.1, Number(dt) || 0));
     state.elapsed += safeDt;
     const player = point(deps.getPlayerWorld?.());
-    updatePickup(player);
+    updatePickup(player, safeDt);
     for (const ball of state.balls) updateBall(ball, safeDt);
     updatePendingHits();
     updateMotifLoop();

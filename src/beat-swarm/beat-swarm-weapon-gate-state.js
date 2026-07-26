@@ -50,6 +50,9 @@ export function createWeaponGateIntroState(layer, options = {}) {
     gateScheduleReady: false,
     gateStepSeconds: 0.22,
     gateArrivalOffsetSeconds: 0,
+    gateLaunchStepIndex: 0,
+    gateNextBoundaryOffset: 0,
+    gatePlaybackAnchorStep: -1,
     launchProgress: -1120,
     launchElapsed: 0,
     progress: -1120,
@@ -106,6 +109,11 @@ export function appendNextWeaponGate(state) {
   gate.passIndex = Math.max(0, Math.trunc(Number(scheduleEntry.passIndex) || 0));
   gate.motifStep = Math.max(0, Math.trunc(Number(scheduleEntry.motifStep) || 0));
   gate.targetStep = targetStep;
+  gate.playbackStepIndex = Math.max(
+    0,
+    Math.trunc(Number(state.gatePlaybackAnchorStep) || 0)
+      + Math.max(0, Math.trunc(Number(scheduleEntry.absoluteStep) || 0))
+  );
   gate.x = (Number(state.launchProgress) || 0)
     + getWeaponGateTravelDistance(targetSeconds)
     + (window.innerWidth * 0.5);
@@ -113,10 +121,22 @@ export function appendNextWeaponGate(state) {
   return gate;
 }
 
-export function initializeWeaponGateSchedule(state, stepSeconds = 0.22, alignmentDelaySeconds = 0) {
+export function initializeWeaponGateSchedule(
+  state,
+  stepSeconds = 0.22,
+  alignmentDelaySeconds = 0,
+  launchStepIndex = 0
+) {
   if (!state) return false;
   state.gateStepSeconds = Math.max(0.05, Number(stepSeconds) || 0.22);
   state.gateArrivalOffsetSeconds = Math.max(0, Number(alignmentDelaySeconds) || 0);
+  const nextBoundaryOffset = state.gateArrivalOffsetSeconds > 0.008 ? 1 : 0;
+  state.gateLaunchStepIndex = Math.max(0, Math.trunc(Number(launchStepIndex) || 0));
+  state.gateNextBoundaryOffset = nextBoundaryOffset;
+  state.gatePlaybackAnchorStep = Math.max(
+    0,
+    state.gateLaunchStepIndex + nextBoundaryOffset + WEAPON_GATE_FIRST_ARRIVAL_STEPS
+  );
   state.launchProgress = Number(state.progress) || 0;
   state.launchElapsed = 0;
   state.gates = [];
