@@ -2193,7 +2193,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     && !isLaneSuppressed('foundation_lane')
     && getDirectorMotifBedStageState().stage !== 'silent'
     && helpers.isPlayerMusicThemeAuthored?.('bassDrive') === true;
-  const authoredAccentRhythmContinuityActive = !suppressDirectorMusic
+  const authoredAccentMusicAllowed = !suppressDirectorMusic || preserveAuthoredAccentContinuity;
+  const authoredAccentRhythmContinuityActive = authoredAccentMusicAllowed
     && !isLaneSuppressed('secondary_loop_lane')
     && getDirectorMotifBedStageState().stage !== 'silent'
     && helpers.isPlayerMusicThemeAuthored?.('accentRhythm') === true;
@@ -2464,7 +2465,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }) || null;
   })();
   const explicitPlayerAccentRhythmEvent = (() => {
-    if (suppressDirectorMusic) return null;
+    if (!authoredAccentMusicAllowed) return null;
     if (isLaneSuppressed('secondary_loop_lane')) return null;
     const motifBedState = getDirectorMotifBedStageState();
     const stage = preserveAuthoredAccentContinuity

@@ -23,9 +23,9 @@ import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-26-arena-pickups-v1';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-26-accent-handoff-v1';
-import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-26-arena-pickups-v1';
+import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-28-shield-ricochet-v2';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-26-weapon-gate-transport-v2';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-28-weapon-gate-clock-v1';
 import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
 import { WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { applyWeaponGateSelection, createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
@@ -39,7 +39,7 @@ import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRun
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-07-22-lead-ball-v22';
-import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-07-26-authored-lane-continuity-v1';
+import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-07-28-lead-ball-accent-v1';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
 import { createBeatSwarmPlayerInstrumentRuntime } from './beat-swarm-player-instrument.js';
@@ -332,7 +332,11 @@ const musicContributionRuntime = {
   completedIds: [],
 };
 const MUSIC_CONTRIBUTION_PROTECTION_LOOPS = 4;
+const MUSIC_CONTRIBUTION_RECALL_INTERVAL_LOOPS = 4;
 const musicContributionProtectionRuntime = {
+  byLaneId: new Map(),
+};
+const musicContributionIdentityRuntime = {
   byLaneId: new Map(),
 };
 const leadGateAuthoringRuntime = {
@@ -480,7 +484,7 @@ function createFirstLevelMusicContributionPlan() {
   return [
     { id: 'foundation-rockets-1', interaction: 'music_missile', themeId: 'bassDrive', laneId: 'foundation_lane', amount: 2 },
     { id: 'foundation-rockets-2', interaction: 'music_missile', themeId: 'bassDrive', laneId: 'foundation_lane', amount: 2 },
-    { id: 'accent-bouncer-1', interaction: 'pinball_bouncer', themeId: 'accentRhythm', laneId: 'secondary_loop_lane', amount: 1 },
+    { id: 'accent-bouncer-1', interaction: 'pinball_bouncer', themeId: 'accentRhythm', laneId: 'secondary_loop_lane', amount: 1, gapSteps: 8 },
     { id: 'accent-bouncer-2', interaction: 'pinball_bouncer', themeId: 'accentRhythm', laneId: 'secondary_loop_lane', amount: 1 },
     { id: 'lead-ball-1', interaction: 'lead_ball', themeId: 'leadTheme', laneId: 'primary_loop_lane', amount: 8, ballCount: 1, gapSteps: 0 },
   ];
@@ -493,6 +497,7 @@ function resetMusicContributionRuntime() {
   musicContributionRuntime.nextEligibleStep = -1;
   musicContributionRuntime.completedIds = [];
   musicContributionProtectionRuntime.byLaneId.clear();
+  musicContributionIdentityRuntime.byLaneId.clear();
   globalThis.__LAST_BEAT_SWARM_CONTRIBUTION_PROTECTION = null;
 }
 
@@ -547,6 +552,23 @@ function isMusicContributionLiteralProtected(laneIdLike = '', stepIndexLike = nu
   return !!getMusicContributionProtection(laneIdLike, stepIndexLike);
 }
 
+function isMusicContributionLiteralRecallActive(laneIdLike = '', stepIndexLike = null) {
+  const laneId = String(laneIdLike || '').trim().toLowerCase();
+  const identity = musicContributionIdentityRuntime.byLaneId.get(laneId) || null;
+  if (!identity) return false;
+  const hasExplicitStep = stepIndexLike !== null
+    && stepIndexLike !== undefined
+    && Number.isFinite(Number(stepIndexLike));
+  const stepIndex = hasExplicitStep
+    ? Math.max(0, Math.trunc(Number(stepIndexLike) || 0))
+    : getCurrentMusicContributionStep();
+  if (stepIndex < identity.protectedUntilStep) return false;
+  const loopSteps = Math.max(1, Math.trunc(Number(identity.loopSteps) || 1));
+  const loopIndex = Math.floor((stepIndex - identity.protectedUntilStep) / loopSteps);
+  return (loopIndex % MUSIC_CONTRIBUTION_RECALL_INTERVAL_LOOPS)
+    === (MUSIC_CONTRIBUTION_RECALL_INTERVAL_LOOPS - 1);
+}
+
 function armMusicContributionProtection(laneIdLike = '', themeIdLike = '', eventIdLike = '') {
   const laneId = String(laneIdLike || '').trim().toLowerCase();
   if (!laneId) return null;
@@ -563,6 +585,7 @@ function armMusicContributionProtection(laneIdLike = '', themeIdLike = '', event
     protectedLoops: MUSIC_CONTRIBUTION_PROTECTION_LOOPS,
   };
   musicContributionProtectionRuntime.byLaneId.set(laneId, protection);
+  musicContributionIdentityRuntime.byLaneId.set(laneId, { ...protection });
   globalThis.__LAST_BEAT_SWARM_CONTRIBUTION_PROTECTION = { ...protection };
   noteMusicSystemEvent('music_contribution_protection_armed', protection, {
     stepIndex: startStep,
@@ -966,7 +989,6 @@ function clonePlayerMusicThemeData(dataLike = null) {
     const patternChain = Array.isArray(dataLike.patternChain)
       ? dataLike.patternChain
         .map((pattern) => Array.from({ length: steps }, (_, idx) => !!(Array.isArray(pattern) ? pattern[idx] : false)))
-        .filter((pattern) => intentionallyEmpty || pattern.some(Boolean))
       : [];
     return {
       toyType: 'simpleRhythm',
@@ -1975,6 +1997,13 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
       Number.isFinite(directorStepRaw) ? directorStepRaw : Number(currentBeatIndex) || 0
     ));
   },
+  getWeaponTransportTime() {
+    try {
+      const now = Number(getLoopInfo?.()?.now);
+      if (Number.isFinite(now)) return now;
+    } catch {}
+    return Number.NaN;
+  },
   onWeaponScheduleInitialized(state) {
     const anchorStep = Math.max(0, Math.trunc(Number(state?.gatePlaybackAnchorStep) || 0));
     alignWeaponTunePlaybackToFirstStep(anchorStep);
@@ -2951,6 +2980,10 @@ function maintainWeaponGateCorridorTargets(dt = 0) {
 function startLeadBallThemeEvent(options = null) {
   if (leadGateAuthoringRuntime.active || isLeadBallThemeEventActive()) return null;
   const opts = options && typeof options === 'object' ? options : {};
+  const source = String(opts.source || '').trim().toLowerCase();
+  const deferPickupUntilCarrierDeath = opts.deferPickupUntilCarrierDeath === true
+    || source === 'onboarding'
+    || source === 'director';
   const stepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
   const currentStep = Math.max(0, Math.trunc(Number.isFinite(stepRaw) ? stepRaw : Number(currentBeatIndex) || 0));
   const eventId = String(opts.eventId || `lead-ball-${Date.now().toString(36)}`).trim();
@@ -3000,7 +3033,7 @@ function startLeadBallThemeEvent(options = null) {
     stepCount,
     targetHitCount,
     ballCount: Math.max(1, Math.trunc(Number(opts.ballCount) || 2)),
-    deferPickupUntilCarrierDeath: opts.deferPickupUntilCarrierDeath === true,
+    deferPickupUntilCarrierDeath,
   });
   try {
     noteMusicSystemEvent('lead_ball_rewrite_requested', {
@@ -3628,6 +3661,7 @@ const pinballBouncerRuntime = createBeatSwarmPinballBouncerRuntime({
     const at = event.at && typeof event.at === 'object' ? event.at : getViewportCenterWorld();
     try { addMusicExplosionEffect(at, 285, 0.72); } catch {}
     try { addPinballShockwaveEffect(at); } catch {}
+    try { holdMusicInteractionCameraZoom(1400); } catch {}
     try {
       noteMusicSystemEvent('pinball_bouncer_quantized_impact', {
         eventId: String(event.eventId || '').trim(),
@@ -3771,6 +3805,7 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
   onCompleteExplosion(event = {}) {
     const at = event.at && typeof event.at === 'object' ? event.at : getViewportCenterWorld();
     try { addMusicExplosionEffect(at, 285, 0.72); } catch {}
+    try { holdMusicInteractionCameraZoom(1200); } catch {}
     try {
       noteMusicSystemEvent('lead_ball_complete_explosion', {
         eventId: String(event.eventId || '').trim(),
@@ -11319,7 +11354,8 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   const parts = getPlayerLeadThemeMotifParts();
   if (!parts.length) return null;
   const contributionProtected = isMusicContributionLiteralProtected('primary_loop_lane');
-  if (opts.literalGatePlayback === true || contributionProtected) {
+  const literalRecall = isMusicContributionLiteralRecallActive('primary_loop_lane');
+  if (opts.literalGatePlayback === true || contributionProtected || literalRecall) {
     const motifSteps = Math.max(1, parts.reduce((sum, part) => sum + Math.max(1, Math.trunc(Number(part?.steps) || WEAPON_TUNE_STEPS)), 0));
     let motifStep = ((Math.max(0, Math.trunc(Number(stepIndex) || 0)) % motifSteps) + motifSteps) % motifSteps;
     let part = parts[0];
@@ -11347,7 +11383,9 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
       rowIndex,
       patternKey: String(part?.patternKey || '').trim(),
       contourKey: String(part?.contourKey || '').trim(),
-      interpretationMode: contributionProtected ? 'contribution_literal_protection' : 'lead_gate_literal_loop',
+      interpretationMode: contributionProtected
+        ? 'contribution_literal_protection'
+        : (literalRecall ? 'player_motif_literal_recall' : 'lead_gate_literal_loop'),
       buildRevealPhase: -1,
       buildPartAllowed: true,
       buildPickupActive: false,
@@ -20950,11 +20988,34 @@ function snapCameraToWorld(worldPoint, scaleValue = SWARM_CAMERA_TARGET_SCALE) {
   const ty = c.y - layoutTop - (w.y * s);
   try { window.__setBoardViewportNow?.(s, tx, ty); } catch {}
 }
-const MUSIC_MISSILE_FLIGHT_CAMERA_SCALE = 0.39;
-function updateMusicMissileCameraZoom(dt = 0, centerWorld = null) {
-  const snapshot = musicMissileRuntime?.getSnapshot?.() || {};
-  const missileInFlight = Number(snapshot.seekingCount) > 0 || Number(snapshot.pendingDetonationCount) > 0;
-  const desiredScale = missileInFlight ? MUSIC_MISSILE_FLIGHT_CAMERA_SCALE : SWARM_CAMERA_TARGET_SCALE;
+const MUSIC_INTERACTION_CAMERA_SCALE = 0.39;
+let musicInteractionCameraHoldUntilMs = 0;
+function holdMusicInteractionCameraZoom(durationMs = 0) {
+  const nowMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+  musicInteractionCameraHoldUntilMs = Math.max(
+    musicInteractionCameraHoldUntilMs,
+    nowMs + Math.max(0, Number(durationMs) || 0)
+  );
+}
+function updateMusicInteractionCameraZoom(dt = 0, centerWorld = null) {
+  const missileSnapshot = musicMissileRuntime?.getSnapshot?.() || {};
+  const leadBallSnapshot = leadBallRuntime?.getSnapshot?.() || {};
+  const missileInFlight = Number(missileSnapshot.seekingCount) > 0
+    || Number(missileSnapshot.pendingDetonationCount) > 0;
+  const leadBallInFlight = Number(leadBallSnapshot.ballCount) > 0;
+  const pinballShockwaveActive = effects.some((effect) => (
+    effect?.kind === 'pinball-shockwave' && Number(effect?.ttl) > 0
+  ));
+  const nowMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+  const interactionActive = missileInFlight
+    || leadBallInFlight
+    || pinballShockwaveActive
+    || nowMs < musicInteractionCameraHoldUntilMs;
+  const desiredScale = interactionActive ? MUSIC_INTERACTION_CAMERA_SCALE : SWARM_CAMERA_TARGET_SCALE;
   const currentScale = getBeatSwarmCameraScale();
   if (Math.abs(desiredScale - currentScale) < 0.0005) return;
   const response = desiredScale < currentScale ? 2.6 : 1.8;
@@ -21365,6 +21426,26 @@ function removeEnemy(enemy, reason = 'unknown', context = null) {
   const beatIndex = Math.max(0, Math.trunc(Number(ctx.beatIndex) || Number(currentBeatIndex) || 0));
   const stepIndex = Math.max(0, Math.trunc(Number(ctx.stepIndex) || Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0));
   const barIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
+  const shouldPreserveMusicEventCarrier = (
+    enemy.musicMissileCarrier === true
+    || enemy.leadBallCarrier === true
+    || enemy.tapOrbCarrier === true
+  ) && (
+    removalReason === 'expired'
+    || removalReason === 'retreated'
+    || removalReason === 'director_cleanup'
+    || removalReason === 'section_change_cleanup'
+    || removalReason === 'restore_overflow'
+  );
+  if (shouldPreserveMusicEventCarrier) {
+    enemy.hp = Math.max(1, Number(enemy?.hp) || 1);
+    enemy.retreating = false;
+    enemy.lifecycleState = 'active';
+    enemy.composerRetiring = false;
+    enemy.retreatReason = '';
+    enemy.retreatOrigin = '';
+    return;
+  }
   const shouldPreserveIntroCarrierMember = (() => {
     if (removalReason === 'mode_exit_clear') return false;
     const preservableIntroRemoval = removalReason === 'expired'
@@ -22046,9 +22127,9 @@ function spawnMusicMissileCarrierEnemy(centerWorld = null) {
   return true;
 }
 function maintainLeadBallContributionCarrier(centerWorld = null) {
-  if (!leadBallRuntime.isActive() || musicContributionRuntime.current?.interaction !== 'lead_ball') return false;
+  if (!leadBallRuntime.isActive()) return false;
   const snapshot = leadBallRuntime.getSnapshot?.() || {};
-  if (snapshot.pickupActive || snapshot.ballCount > 0) return false;
+  if (snapshot.awaitingCarrier !== true || snapshot.pickupActive || snapshot.ballCount > 0) return false;
   const existingCarrier = enemies.some((enemy) => (
     enemy?.leadBallCarrier === true && Number(enemy?.hp) > 0 && enemy?.__bsRemoved !== true
   ));
@@ -27953,6 +28034,10 @@ function updateBeatWeapons(centerWorld) {
     if (!onboardingBassAuthored) suppressedMusicLaneIds.add('foundation_lane');
     if (!onboardingAccentAuthored) suppressedMusicLaneIds.add('secondary_loop_lane');
   }
+  const preserveAccentThroughLeadBall = isLeadBallThemeEventActive() && onboardingAccentAuthored;
+  if (preserveAccentThroughLeadBall) {
+    suppressedMusicLaneIds.delete('secondary_loop_lane');
+  }
   if (isBeatSwarmLeadGateAuthoringOnlyTest()) {
     suppressedMusicLaneIds.add('foundation_lane');
     suppressedMusicLaneIds.add('secondary_loop_lane');
@@ -27970,7 +28055,7 @@ function updateBeatWeapons(centerWorld) {
     suppressPlayerWeapon: suppressPlayerWeaponForGate,
     weaponGatePlaybackActive,
     suppressDirectorMusic: tapOrbAwaitingFirstFoundationTap || (onboardingMissileAuthoringActive && !onboardingBassAuthored),
-    preserveAuthoredAccentContinuity: onboardingAccentAuthored,
+    preserveAuthoredAccentContinuity: onboardingAccentAuthored || preserveAccentThroughLeadBall,
     suppressedMusicLaneIds: suppressedMusicLaneIds.size ? suppressedMusicLaneIds : null,
     musicModeRuntime: activeMusicModeRuntime,
     enemyDirectorRuntime: activeEnemyDirectorRuntime,
@@ -30548,7 +30633,7 @@ function tick(nowMs) {
     maintainLeadBallEnemyTargets();
     leadBallRuntime.update(dt);
     updateLeadGateThemeEvent(dt);
-    updateMusicMissileCameraZoom(dt, centerWorldAfterMove);
+    updateMusicInteractionCameraZoom(dt, centerWorldAfterMove);
   });
   withBeatSwarmPerfSample('pickupsCombat', () => updatePickupsAndCombat(dt));
   withBeatSwarmPerfSample('surfaceField', () => updateSurfaceReactiveField(dt, centerWorldAfterMove));

@@ -3,7 +3,7 @@ import { summarizeWeaponGateSelection } from './beat-swarm-weapon-gate-core.js';
 import { WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { addWeaponGateNoteStar, spawnWeaponGateShot } from './beat-swarm-weapon-gate-effects.js?v=2026-07-26-weapon-gate-ghosts-v3';
 import { clampWeaponGateValue, getWeaponGateCorridorScreenBoundsAtX, getWeaponGateCorridorWorldBounds, getWeaponGateShipScreenPoint, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
-import { appendNextWeaponGate } from './beat-swarm-weapon-gate-state.js?v=2026-07-26-weapon-gate-transport-v2';
+import { appendNextWeaponGate } from './beat-swarm-weapon-gate-state.js?v=2026-07-28-weapon-gate-clock-v1';
 
 export function chooseCurrentWeaponGate(state, options = {}) {
   if (!state) return null;

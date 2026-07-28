@@ -55,6 +55,7 @@ export function createWeaponGateIntroState(layer, options = {}) {
     gatePlaybackAnchorStep: -1,
     launchProgress: -1120,
     launchElapsed: 0,
+    launchClockTime: Number.NaN,
     progress: -1120,
     speed: 0,
     y: window.innerHeight * 0.5,
@@ -125,7 +126,8 @@ export function initializeWeaponGateSchedule(
   state,
   stepSeconds = 0.22,
   alignmentDelaySeconds = 0,
-  launchStepIndex = 0
+  launchStepIndex = 0,
+  launchClockTime = Number.NaN
 ) {
   if (!state) return false;
   state.gateStepSeconds = Math.max(0.05, Number(stepSeconds) || 0.22);
@@ -139,6 +141,9 @@ export function initializeWeaponGateSchedule(
   );
   state.launchProgress = Number(state.progress) || 0;
   state.launchElapsed = 0;
+  state.launchClockTime = Number.isFinite(Number(launchClockTime))
+    ? Number(launchClockTime)
+    : Number.NaN;
   state.gates = [];
   state.nextGateIndex = 0;
   state.gateScheduleReady = true;

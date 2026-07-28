@@ -9,8 +9,8 @@ import {
 import { pulseWeaponGateGhost, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-26-weapon-gate-ghosts-v3';
 import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
 import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
-import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-26-weapon-gate-transport-v2';
-import { createWeaponGateIntroState, initializeWeaponGateSchedule } from './beat-swarm-weapon-gate-state.js?v=2026-07-26-weapon-gate-transport-v2';
+import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-28-weapon-gate-clock-v1';
+import { createWeaponGateIntroState, initializeWeaponGateSchedule } from './beat-swarm-weapon-gate-state.js?v=2026-07-28-weapon-gate-clock-v1';
 
 export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   let state = null;
@@ -81,7 +81,13 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       return { active: true, forwardDelta, sideDelta: appliedSideDelta, handoffComplete: true };
     }
     const { top, bottom } = getWeaponGateCorridorWorldBounds(state, getWeaponGateShipWorldX(state));
-    state.launchElapsed = Math.max(0, Number(state.launchElapsed) || 0) + dt;
+    const transportNow = Number(deps.getWeaponTransportTime?.());
+    const clockElapsed = Number.isFinite(transportNow) && Number.isFinite(Number(state.launchClockTime))
+      ? Math.max(0, transportNow - Number(state.launchClockTime))
+      : Number.NaN;
+    state.launchElapsed = Number.isFinite(clockElapsed)
+      ? clockElapsed
+      : Math.max(0, Number(state.launchElapsed) || 0) + dt;
     const launchN = clampWeaponGateValue(state.launchElapsed / Math.max(0.001, WEAPON_GATE_LAUNCH_DECEL_SECONDS), 0, 1);
     state.speed = WEAPON_GATE_LAUNCH_SPEED + ((WEAPON_GATE_CRUISE_SPEED - WEAPON_GATE_LAUNCH_SPEED) * launchN);
     const nextProgress = (Number(state.launchProgress) || 0) + getWeaponGateTravelDistance(state.launchElapsed);
@@ -135,7 +141,8 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
         state,
         deps.getWeaponStepSeconds?.(),
         alignmentDelay,
-        deps.getWeaponTransportStep?.()
+        deps.getWeaponTransportStep?.(),
+        deps.getWeaponTransportTime?.()
       );
       deps.onWeaponScheduleInitialized?.(state);
       state.feedbackKind = 'launch';
