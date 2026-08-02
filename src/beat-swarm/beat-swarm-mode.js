@@ -23,9 +23,9 @@ import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-26-arena-pickups-v1';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-26-accent-handoff-v1';
-import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-07-28-shield-ricochet-v2';
+import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-02-band-marker-cleanup-v3';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-07-28-weapon-gate-clock-v1';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-08-02-weapon-warmup-v1';
 import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
 import { WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { applyWeaponGateSelection, createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
@@ -39,7 +39,7 @@ import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRun
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-07-22-lead-ball-v22';
-import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-07-28-lead-ball-accent-v1';
+import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-08-02-lead-ball-accent-audit-v1';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js';
 import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js';
 import { createBeatSwarmPlayerInstrumentRuntime } from './beat-swarm-player-instrument.js';
@@ -159,8 +159,8 @@ import { getArchetypeDef, getVariantDef, getWeaponComponentDefById, getWeaponCom
 import { createHelperVisualsRuntime, fireHelperPayloadAtRuntime, fireHelpersOnBeatRuntime, getEnemyByIdRuntime, getHelperKeyRuntime, hasActiveHelperByKeyRuntime, spawnHelperRuntime, updateHelpersRuntime, } from './beat-swarm-helpers-runtime.js';
 import { countOrbitingHomingMissilesRuntime, getOffsetPointRuntime, getProjectileChainSpawnOffsetWorldRuntime, getShipFacingDirWorldRuntime, normalizeDirRuntime, pulseHitFlashRuntime, } from './beat-swarm-combat-utils.js';
 import { beginPauseWeaponDragRuntime, clearPauseWeaponDragMarkersRuntime, clearPauseWeaponDragProxyRuntime, getPauseWeaponDropTargetAtClientRuntime, getPauseWeaponStageCellFromEventTargetRuntime, parsePauseWeaponStageCellRuntime, reorderWeaponStagesRuntime, resetPauseWeaponDragRuntime, updatePauseWeaponDragVisualRuntime, } from './beat-swarm-pause-weapon-drag.js';
-import { applyAoeAtRuntime, applyLingeringAoeBeatRuntime, clearBeamEffectsForWeaponSlotRuntime, clearPendingWeaponChainsForSlotRuntime, fireConfiguredWeaponsOnBeatRuntime, processPendingWeaponChainsRuntime, queueWeaponChainRuntime, shouldPlayBeamSoundForBeatRuntime, spawnBoomerangProjectileRuntime, spawnHomingMissileRuntime, spawnProjectileFromDirectionRuntime, spawnProjectileRuntime, triggerWeaponStageRuntime, } from './beat-swarm-weapon-chain-core.js?v=2026-07-26-weapon-gate-collision-v1';
-import { handleBeatPreludeRuntime, handleBeatStepChangeRuntime, handleBeatTailRuntime, handleTransportStoppedBeatUpdateRuntime, updateMusicLabSignaturesRuntime, } from './beat-swarm-beat-update-runtime.js?v=2026-06-22-authoring-forwarding-v2';
+import { applyAoeAtRuntime, applyLingeringAoeBeatRuntime, clearBeamEffectsForWeaponSlotRuntime, clearPendingWeaponChainsForSlotRuntime, fireConfiguredWeaponsOnBeatRuntime, processPendingWeaponChainsRuntime, queueWeaponChainRuntime, shouldPlayBeamSoundForBeatRuntime, spawnBoomerangProjectileRuntime, spawnHomingMissileRuntime, spawnProjectileFromDirectionRuntime, spawnProjectileRuntime, triggerWeaponStageRuntime, } from './beat-swarm-weapon-chain-core.js?v=2026-08-02-first-gate-audit-v2';
+import { handleBeatPreludeRuntime, handleBeatStepChangeRuntime, handleBeatTailRuntime, handleTransportStoppedBeatUpdateRuntime, updateMusicLabSignaturesRuntime, } from './beat-swarm-beat-update-runtime.js?v=2026-08-02-step-state-forwarding-v1';
 import { configureInitialSpawnerEnablementRuntime, getEnemySpawnScaleRuntime, getRandomOffscreenSpawnPointRuntime, keepDrawSnakeEnemyOnscreenRuntimeWrapper, spawnFallbackEnemyOffscreenRuntime, } from './beat-swarm-spawn-utils.js';
 import { addHostileRedExplosionEffectRuntime, getAliveEnemiesByIdsRuntime, spawnHostileRedProjectileAtRuntime, triggerCosmeticSyncAtRuntime, triggerLowThreatBurstAtRuntime, } from './beat-swarm-hostile-effects.js';
 import { maintainComposerEnemyGroupsRuntime } from './beat-swarm-composer-maintenance.js';
@@ -1965,6 +1965,31 @@ const playerInstrumentRuntime = createBeatSwarmPlayerInstrumentRuntime({
 const PLAYER_WEAPON_SOUND_MIX_MULT = 0.62;
 const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
   getOverlayEl: () => overlayEl,
+  warmWeaponSound() {
+    const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
+    const stages = sanitizeWeaponStages(weaponLoadout[idx]?.stages);
+    const first = stages[0] || null;
+    if (!first) return;
+    const eventKey = getPlayerWeaponSoundEventKeyForStage(first.archetype, first.variant);
+    const instrumentId = eventKey ? resolveSwarmSoundInstrumentId(eventKey) : '';
+    if (!instrumentId) return;
+    const nowAudio = Number(getLoopInfo?.()?.now);
+    triggerBeatSwarmInstrument(
+      instrumentId,
+      'C4',
+      Number.isFinite(nowAudio) ? nowAudio + 0.016 : undefined,
+      'master',
+      { source: 'weapon-gate-silent-warmup' },
+      0.001
+    );
+    noteMusicSystemEvent('weapon_gate_sound_warmed', {
+      eventKey,
+      instrumentId,
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+      stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+    });
+  },
   triggerWeaponNote(noteName = 'C4', source = 'weapon-gate-intro', weaponStepIndex = null, options = null) {
     triggerPlayerWeaponGateNote(noteName, source, weaponStepIndex, options);
   },
@@ -2030,10 +2055,9 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
     const audioAudit = state.gateAudioAudit && typeof state.gateAudioAudit === 'object'
       ? state.gateAudioAudit
       : (state.gateAudioAudit = { noteSelections: 0, silenceSelections: 0, transportArmedNotes: 0 });
-    if (state?.livePlaybackStarted !== true) {
-      state.livePlaybackStarted = true;
-    }
     if (String(selection?.kind || '') === 'note') {
+      const firstAuthoredNote = audioAudit.noteSelections === 0;
+      if (!firstAuthoredNote && state?.livePlaybackStarted !== true) state.livePlaybackStarted = true;
       const selectedSlot = Math.max(0, Math.trunc(Number(selection.slotIndex) || 0));
       const scheduledStepIndex = Math.max(0, Math.trunc(Number(selection.playbackStepIndex) || 0));
       const currentPlaybackSlot = getWeaponTunePlaybackStepIndex(stepIndex);
@@ -2044,14 +2068,22 @@ const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
       audioAudit.transportArmedNotes += 1;
       state.pendingWeaponGateNote = null;
       state.manualWeaponFireStepIndex = Number.NaN;
-      if (missedScheduledStep) {
-        state.manualWeaponFireStepIndex = stepIndex;
+      if (firstAuthoredNote || missedScheduledStep) {
+        state.manualWeaponFireStepIndex = firstAuthoredNote ? scheduledStepIndex : stepIndex;
         triggerPlayerWeaponGateNote(
           String(selection.note || 'C4'),
-          'weapon-gate-late-collision',
+          firstAuthoredNote ? 'weapon-gate-first-collision' : 'weapon-gate-late-collision',
           stepIndex,
-          { immediateSound: true }
+          {
+            immediateSound: true,
+            soundDelaySeconds: firstAuthoredNote
+              ? Math.max(0, Number(selection.selectionLeadSeconds) || 0) + 0.004
+              : 0,
+          }
         );
+        if (firstAuthoredNote) {
+          state.livePlaybackStartStepIndex = scheduledStepIndex + 1;
+        }
       }
       noteMusicSystemEvent('weapon_gate_note_transport_armed', {
         slotIndex: selectedSlot,
@@ -2182,6 +2214,23 @@ function shouldSuppressPlayerWeaponForWeaponGate(stepIndex = null) {
   if (weaponGateIntroRuntime.isActive?.() !== true) return false;
   const gateState = weaponGateIntroRuntime.getState?.() || null;
   const requestedStep = Number(stepIndex);
+  const livePlaybackStartStep = Number(gateState?.livePlaybackStartStepIndex);
+  if (
+    gateState?.livePlaybackStarted !== true
+    && Number.isFinite(requestedStep)
+    && Number.isFinite(livePlaybackStartStep)
+    && Math.trunc(requestedStep) >= Math.trunc(livePlaybackStartStep)
+  ) {
+    gateState.livePlaybackStarted = true;
+    gateState.livePlaybackStartStepIndex = Number.NaN;
+    noteMusicSystemEvent('weapon_gate_live_playback_started', {
+      requestedStep: Math.trunc(requestedStep),
+      firstCollisionOwnedThroughStep: Math.trunc(livePlaybackStartStep) - 1,
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+      stepIndex: Math.trunc(requestedStep),
+    });
+  }
   const manualStep = Number(gateState?.manualWeaponFireStepIndex);
   if (Number.isFinite(requestedStep) && Number.isFinite(manualStep) && Math.trunc(requestedStep) === Math.trunc(manualStep)) {
     return true;
@@ -2377,6 +2426,7 @@ function startMusicMissileRhythmRewriteEvent(options = null) {
     stepCount,
     targetHitCount,
     interaction: 'music_missile_authoring',
+    showTimeline: false,
   });
   try {
     noteMusicSystemEvent('music_missile_rewrite_started', {
@@ -2443,6 +2493,7 @@ function startPinballBouncerRhythmRewriteEvent(options = null) {
     stepCount,
     targetHitCount,
     interaction: 'pinball_bouncer_authoring',
+    showTimeline: false,
   });
   try {
     noteMusicSystemEvent('pinball_bouncer_rewrite_started', {
@@ -2635,6 +2686,73 @@ function getLeadGateNoteForPlayerWorld(playerWorldLike = null) {
   const n = Math.max(0, Math.min(1, ((Number(player?.y) || 0) - top) / Math.max(1, bottom - top)));
   const idx = Math.max(0, Math.min(notes.length - 1, Math.round(n * (notes.length - 1))));
   return notes[idx] || notes[notes.length - 1] || 'C4';
+}
+function getLeadBallNoteBandForWorld(worldLike = null) {
+  const notes = getLeadGateNoteOptions();
+  const world = worldLike && typeof worldLike === 'object' ? worldLike : getViewportCenterWorld();
+  const center = arenaCenterWorld && Number.isFinite(arenaCenterWorld.x) && Number.isFinite(arenaCenterWorld.y)
+    ? arenaCenterWorld
+    : getViewportCenterWorld();
+  const middleIndex = Math.floor(notes.length / 2);
+  const bandHeightWorld = Math.max(80, SWARM_ARENA_RADIUS_WORLD * 0.28);
+  const bandOffset = Math.round(((Number(world?.y) || 0) - Number(center.y || 0)) / bandHeightWorld);
+  const noteIndex = Math.max(0, Math.min(notes.length - 1, middleIndex + bandOffset));
+  const worldTop = Number(center.y || 0) + ((noteIndex - middleIndex - 0.5) * bandHeightWorld);
+  const worldBottom = Number(center.y || 0) + ((noteIndex - middleIndex + 0.5) * bandHeightWorld);
+  return {
+    note: notes[noteIndex] || notes[notes.length - 1] || 'C4',
+    noteIndex,
+    centerWorldX: Number(center.x) || 0,
+    centerWorldY: Number(center.y) || 0,
+    bandHeightWorld,
+    worldTop,
+    worldBottom,
+    openTop: noteIndex === 0,
+    openBottom: noteIndex === notes.length - 1,
+    impactWorldY: Number(world?.y) || 0,
+  };
+}
+function flashLeadBallNoteHeightBand(noteBandLike = '') {
+  if (typeof document === 'undefined') return;
+  const bandData = noteBandLike && typeof noteBandLike === 'object'
+    ? noteBandLike
+    : getLeadBallNoteBandForWorld(getViewportCenterWorld());
+  const host = overlayEl instanceof HTMLElement ? overlayEl : document.body;
+  const bounds = host.getBoundingClientRect?.() || null;
+  const hostTop = Number(bounds?.top) || 0;
+  const hostHeight = Math.max(1, Number(bounds?.height) || window.innerHeight || 1);
+  const centerWorldX = Number(bandData?.centerWorldX) || Number(arenaCenterWorld?.x) || 0;
+  const topClient = Number(worldToScreen({ x: centerWorldX, y: Number(bandData?.worldTop) || 0 })?.y);
+  const bottomClient = Number(worldToScreen({ x: centerWorldX, y: Number(bandData?.worldBottom) || 0 })?.y);
+  if (!Number.isFinite(topClient) || !Number.isFinite(bottomClient)) return;
+  const top = bandData?.openTop === true
+    ? 0
+    : Math.max(0, Math.min(topClient, bottomClient) - hostTop);
+  const bottom = bandData?.openBottom === true
+    ? hostHeight
+    : Math.min(hostHeight, Math.max(topClient, bottomClient) - hostTop);
+  const height = Math.max(18, bottom - top);
+  const band = document.createElement('div');
+  band.className = 'beat-swarm-lead-note-height-band';
+  band.style.position = 'absolute';
+  band.style.top = `${top.toFixed(1)}px`;
+  band.style.height = `${height.toFixed(1)}px`;
+  host.appendChild(band);
+  noteMusicSystemEvent('lead_ball_note_band_rendered', {
+    note: String(bandData?.note || ''),
+    noteIndex: Math.max(0, Math.trunc(Number(bandData?.noteIndex) || 0)),
+    impactWorldY: Number(bandData?.impactWorldY) || 0,
+    arenaCenterWorldY: Number(bandData?.centerWorldY) || 0,
+    markerWorldY: (Number(bandData?.worldTop) + Number(bandData?.worldBottom)) * 0.5,
+    topClientY: top + hostTop,
+    bottomClientY: top + height + hostTop,
+  }, {
+    beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
+    stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
+  });
+  window.setTimeout(() => {
+    try { band.remove(); } catch {}
+  }, 900);
 }
 function getLeadGateSectionSelectionForPlayer(sectionsLike = null, playerWorldLike = null) {
   const sections = Array.isArray(sectionsLike) && sectionsLike.length
@@ -2880,7 +2998,7 @@ function completeLeadGateThemeEvent(stepIndex = 0) {
       stepIndex: Math.max(0, Math.trunc(Number(stepIndex) || 0)),
       activeSteps: leadGateAuthoringRuntime.selections.map((sel, idx) => sel?.note ? idx : -1).filter((idx) => idx >= 0),
     });
-    launchMusicMotifConstellationFromTimeline();
+    if (rhythmAuthoringTimelineRuntime.showTimeline) launchMusicMotifConstellationFromTimeline();
     const completedEventId = String(rhythmAuthoringTimelineRuntime.eventId || '').trim();
     window.setTimeout(() => {
       if (String(rhythmAuthoringTimelineRuntime.eventId || '').trim() !== completedEventId) return;
@@ -3024,6 +3142,7 @@ function startLeadBallThemeEvent(options = null) {
     stepCount,
     targetHitCount,
     interaction: 'lead_ball_authoring',
+    showTimeline: false,
     nodes: [],
   });
   const started = leadBallRuntime.start({
@@ -3091,7 +3210,7 @@ function commitLeadBallSelectionsToTheme(selectionsLike = null, eventId = '') {
         ? committedSelections.map((sel, idx) => sel?.note ? idx : -1).filter((idx) => idx >= 0)
         : [],
     });
-    launchMusicMotifConstellationFromTimeline();
+    if (rhythmAuthoringTimelineRuntime.showTimeline) launchMusicMotifConstellationFromTimeline();
     const completedEventId = String(rhythmAuthoringTimelineRuntime.eventId || '').trim();
     window.setTimeout(() => {
       if (String(rhythmAuthoringTimelineRuntime.eventId || '').trim() !== completedEventId) return;
@@ -3768,10 +3887,40 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
     };
   },
   getNoteForWorld(world = null) {
-    return getLeadGateNoteForPlayerWorld(world);
+    return getLeadBallNoteBandForWorld(world).note;
+  },
+  getNoteBandForWorld(world = null) {
+    return getLeadBallNoteBandForWorld(world);
+  },
+  triggerBandImpact(event = {}) {
+    const noteBand = event.noteBand && typeof event.noteBand === 'object'
+      ? event.noteBand
+      : getLeadBallNoteBandForWorld(event.markerWorld || event.at);
+    try { flashLeadBallNoteHeightBand(noteBand); } catch {}
+    let damagedCount = 0;
+    const worldTop = Math.min(Number(noteBand.worldTop) || 0, Number(noteBand.worldBottom) || 0);
+    const worldBottom = Math.max(Number(noteBand.worldTop) || 0, Number(noteBand.worldBottom) || 0);
+    for (const enemy of enemies.slice()) {
+      if (!enemy || enemy.__bsRemoved === true || enemy.__bsPendingDeath === true || !(Number(enemy.hp) > 0)) continue;
+      const enemyY = Number(enemy.wy) || 0;
+      const insideBand = noteBand.openTop === true
+        ? enemyY <= worldBottom
+        : (noteBand.openBottom === true ? enemyY >= worldTop : enemyY >= worldTop && enemyY <= worldBottom);
+      if (!insideBand) continue;
+      try {
+        if (damageEnemy(enemy, 1, { source: 'lead_ball_band', suppressDeathSound: false })) damagedCount += 1;
+      } catch {}
+    }
+    noteMusicSystemEvent('lead_ball_note_band_flash', {
+      eventId: String(event.eventId || '').trim(),
+      note: normalizeSwarmNoteName(event.note || '') || '',
+      noteIndex: Math.max(0, Math.trunc(Number(noteBand.noteIndex) || 0)),
+      stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
+      damagedCount,
+    }, { beatIndex: currentBeatIndex, stepIndex: event.stepIndex });
   },
   playMotifNote(event = {}) {
-    const note = normalizeSwarmNoteName(event.note || '') || getLeadGateNoteForPlayerWorld(getViewportCenterWorld());
+    const note = normalizeSwarmNoteName(event.note || '') || getLeadBallNoteBandForWorld(getViewportCenterWorld()).note;
     const instrumentId = getPlayerDrawgridThemeInstrumentId('leadTheme') || 'RETRO SQUARE';
     const loopPlayback = event.loopPlayback === true;
     triggerBeatSwarmInstrument(instrumentId, note, undefined, 'master', {
@@ -3786,9 +3935,6 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
   createImpactEffect(event = {}) {
     const at = event.at && typeof event.at === 'object' ? event.at : getViewportCenterWorld();
     try { addMusicExplosionEffect(at, 150, 0.58); } catch {}
-    try {
-      if (event.enemy) damageEnemy(event.enemy, 1, { source: 'lead_ball', suppressDeathSound: false });
-    } catch {}
     try {
       noteMusicSystemEvent('lead_ball_quantized_impact', {
         eventId: String(event.eventId || '').trim(),
@@ -3855,6 +4001,7 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
       rt.nodes.sort((a, b) => Math.trunc(Number(a.slot) || 0) - Math.trunc(Number(b.slot) || 0));
       rt.steps[stepIndex] = true;
       pulseMusicMotifVisualizerStep(stepIndex, 0.42);
+      revealMusicMotifConstellationStep(rt, stepIndex);
       renderMusicMotifVisualizer();
     }
     if (note) {
@@ -14269,6 +14416,7 @@ const rhythmAuthoringTimelineRuntime = {
   themeId: '',
   laneId: '',
   interaction: '',
+  showTimeline: true,
   stepCount: 16,
   targetHitCount: 8,
   steps: [],
@@ -15811,7 +15959,7 @@ function updateWeaponGateHandoffVisual(dt = 0, stepIndex = null) {
 }
 function ensureRhythmAuthoringTimelineStyle() {
   if (typeof document === 'undefined') return;
-  const styleVersion = '2026-07-19-rhythm-visuals-v32';
+  const styleVersion = '2026-08-02-band-fill-v2';
   let style = document.getElementById('beat-swarm-rhythm-authoring-timeline-style');
   if (!(style instanceof HTMLStyleElement)) {
     style = document.createElement('style');
@@ -15836,6 +15984,8 @@ function ensureRhythmAuthoringTimelineStyle() {
     .beat-swarm-motif-constellation-star{position:absolute;left:0;top:0;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#f6fdff;box-shadow:0 0 12px rgba(255,255,255,.78),0 0 26px rgba(170,232,255,.42),0 0 46px rgba(100,216,255,.18);opacity:.78;transform:translate(0,0) scale(1);transition:transform 1900ms cubic-bezier(.14,.84,.18,1),opacity 700ms ease 1300ms,width 90ms ease,height 90ms ease,margin 90ms ease,box-shadow 90ms ease,filter 90ms ease,background-color 90ms ease;will-change:transform,opacity,box-shadow,width,height,filter}
     .beat-swarm-motif-constellation-star.is-settled::after{opacity:0}
     .beat-swarm-motif-constellation-star.is-pulse{width:18px;height:18px;margin:-9px 0 0 -9px;background:#fff;border:1px solid rgba(255,255,255,.94);filter:brightness(2.05);box-shadow:0 0 22px rgba(255,255,255,.96),0 0 50px rgba(170,232,255,.72),0 0 82px rgba(100,216,255,.42);opacity:1!important}
+    .beat-swarm-motif-constellation-star.is-created{animation:beat-swarm-constellation-created 680ms cubic-bezier(.16,.78,.2,1) both}
+    @keyframes beat-swarm-constellation-created{0%{opacity:0;filter:brightness(4);box-shadow:0 0 4px rgba(255,255,255,0)}22%{opacity:1;filter:brightness(3.4);box-shadow:0 0 34px rgba(255,255,255,1),0 0 78px rgba(170,232,255,.9),0 0 120px rgba(100,216,255,.62)}100%{opacity:.82;filter:brightness(1);box-shadow:0 0 12px rgba(255,255,255,.78),0 0 26px rgba(170,232,255,.42),0 0 46px rgba(100,216,255,.18)}}
     .beat-swarm-motif-constellation-star::after{content:"";position:absolute;left:-32px;top:3px;width:34px;height:2px;border-radius:999px;background:linear-gradient(90deg,transparent,rgba(170,232,255,.44),rgba(217,247,255,.82));transform-origin:100% 50%;transform:rotate(var(--trail-angle,0deg));opacity:.72}
     .beat-swarm-motif-constellation-particle{position:absolute;left:0;top:0;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:rgba(217,247,255,.98);box-shadow:0 0 14px rgba(170,232,255,.86),0 0 30px rgba(100,216,255,.42);opacity:.94;transform:translate(0,0) scale(1);transition:transform 1300ms cubic-bezier(.2,.78,.16,1),opacity 520ms ease 760ms;will-change:transform,opacity}
     .beat-swarm-lead-gate-layer{position:fixed;inset:0;z-index:3;pointer-events:none;overflow:hidden}
@@ -15843,6 +15993,8 @@ function ensureRhythmAuthoringTimelineStyle() {
     .beat-swarm-lead-gate .beat-swarm-weapon-gate-section.is-aimed{opacity:1;filter:brightness(1.45) saturate(1.28);outline:2px solid rgba(217,247,255,.86);outline-offset:-3px;background:rgba(55,111,142,.94);box-shadow:inset 0 0 18px rgba(170,232,255,.34),0 0 18px rgba(170,232,255,.28)}
     .beat-swarm-lead-gate .beat-swarm-weapon-gate-section.is-rest{background:rgba(22,24,32,.9);color:rgba(217,247,255,.72);letter-spacing:.08em}
     .beat-swarm-lead-gate .beat-swarm-weapon-gate-section.is-rest.is-aimed{background:rgba(72,47,80,.94);outline-color:rgba(255,245,155,.82);box-shadow:inset 0 0 18px rgba(255,245,155,.24),0 0 18px rgba(255,245,155,.22)}
+    .beat-swarm-lead-note-height-band{position:fixed;left:0;width:100vw;pointer-events:none;z-index:6;opacity:0;background:linear-gradient(90deg,transparent 0%,rgba(127,225,255,.14) 12%,rgba(217,247,255,.32) 50%,rgba(127,225,255,.14) 88%,transparent 100%);box-shadow:inset 0 0 38px rgba(100,216,255,.18),0 0 28px rgba(100,216,255,.28);animation:beat-swarm-lead-note-band 760ms ease-out both}
+    @keyframes beat-swarm-lead-note-band{0%{opacity:0;filter:brightness(2.4)}15%{opacity:.92;filter:brightness(1.8)}100%{opacity:0;filter:brightness(1)}}
   `;
 }
 function noteMusicMotifConstellationDebug(kind, payload = null) {
@@ -15888,6 +16040,7 @@ function clearRhythmAuthoringTimeline() {
   rhythmAuthoringTimelineRuntime.themeId = '';
   rhythmAuthoringTimelineRuntime.laneId = '';
   rhythmAuthoringTimelineRuntime.interaction = '';
+  rhythmAuthoringTimelineRuntime.showTimeline = true;
   rhythmAuthoringTimelineRuntime.steps = [];
   rhythmAuthoringTimelineRuntime.nodes = [];
   rhythmAuthoringTimelineRuntime.playheadStep = -1;
@@ -15905,7 +16058,10 @@ function clearRhythmAuthoringTimeline() {
   const layer = rhythmAuthoringTimelineRuntime.layer instanceof HTMLElement
     ? rhythmAuthoringTimelineRuntime.layer
     : (overlayEl instanceof HTMLElement ? overlayEl.querySelector('.beat-swarm-rhythm-timeline') : null);
-  if (layer instanceof HTMLElement) layer.innerHTML = '';
+  if (layer instanceof HTMLElement) {
+    layer.innerHTML = '';
+    layer.style.display = 'none';
+  }
 }
 function clearMusicMotifConstellations(removeLayer = false) {
   for (const constellation of Array.isArray(musicMotifConstellationRuntime.constellations)
@@ -16254,6 +16410,78 @@ function launchMusicMotifConstellationFromTimeline(sourceRuntime = null) {
     })),
   });
 }
+function revealMusicMotifConstellationStep(sourceRuntime = null, stepIndexLike = 0) {
+  const rt = sourceRuntime && typeof sourceRuntime === 'object' ? sourceRuntime : rhythmAuthoringTimelineRuntime;
+  const layer = getMusicMotifConstellationLayer();
+  if (!(layer instanceof HTMLElement)) return null;
+  const stepCount = Math.max(1, Math.trunc(Number(rt.stepCount) || 1));
+  const step = ((Math.trunc(Number(stepIndexLike) || 0) % stepCount) + stepCount) % stepCount;
+  const mode = String(rt.mode || 'rhythm').trim().toLowerCase() || 'rhythm';
+  const laneId = String(rt.laneId || '').trim();
+  const key = `${mode}:${laneId || rt.themeId || 'motif'}`;
+  let constellation = musicMotifConstellationRuntime.constellations.find((entry) => String(entry?.key || '') === key) || null;
+  if (!constellation) {
+    const target = getMusicMotifConstellationTarget(rt, key);
+    constellation = {
+      key,
+      mode,
+      laneId,
+      eventId: String(rt.eventId || '').trim(),
+      targetSlot: Math.max(0, Math.trunc(Number(target.slotIndex) || 0)),
+      target,
+      stepCount,
+      stars: [],
+    };
+    musicMotifConstellationRuntime.constellations.push(constellation);
+  }
+  constellation.stepCount = stepCount;
+  constellation.eventId = String(rt.eventId || constellation.eventId || '').trim();
+  const existing = constellation.stars.find((star) => Math.trunc(Number(star?.step) || 0) === step) || null;
+  if (existing) {
+    existing.pulseT = Math.max(Number(existing.pulseT) || 0, 0.58);
+    existing.el?.classList?.add?.('is-pulse');
+    return existing;
+  }
+  const target = constellation.target || getMusicMotifConstellationTarget(rt, key);
+  const stepN = stepCount <= 1 ? 0.5 : step / (stepCount - 1);
+  const spreadX = mode === 'lead' ? 250 : 190;
+  let destY = Number(target.y) || (window.innerHeight * 0.5);
+  if (mode === 'lead' && Array.isArray(rt.nodes)) {
+    const node = rt.nodes.find((entry) => Math.trunc(Number(entry?.slot) || -1) === step) || null;
+    if (Number.isFinite(Number(node?.y))) {
+      const sourceN = Math.max(0, Math.min(1, Number(node.y) / Math.max(1, Number(window.innerHeight) || 1)));
+      destY += (sourceN - 0.5) * 150;
+    }
+  }
+  const destX = (Number(target.x) || (window.innerWidth * 0.5)) + ((stepN - 0.5) * spreadX);
+  const starEl = document.createElement('div');
+  starEl.className = 'beat-swarm-motif-constellation-star is-settled is-created is-pulse';
+  layer.appendChild(starEl);
+  let anchorWorld = null;
+  try {
+    const anchor = getViewportCenterWorld();
+    anchorWorld = { x: Number(anchor?.x) || 0, y: Number(anchor?.y) || 0 };
+  } catch {}
+  const star = {
+    el: starEl,
+    step,
+    pulseT: 0.58,
+    settled: true,
+    nx: Math.max(0.02, Math.min(0.98, destX / Math.max(1, Number(window.innerWidth) || 1))),
+    ny: Math.max(0.04, Math.min(0.96, destY / Math.max(1, Number(window.innerHeight) || 1))),
+    depth: mode === 'lead' ? 0.5 : 0.54,
+    baseScale: 0.62,
+    baseOpacity: 0.82,
+    anchorWorld,
+  };
+  constellation.stars.push(star);
+  updateMotifConstellationStarParallax(star);
+  window.setTimeout(() => {
+    try { starEl.classList.remove('is-created'); } catch {}
+  }, 700);
+  noteMusicMotifConstellationDebug('live-star-created', { key, mode, laneId, step, stepCount });
+  return star;
+}
 function pulseMusicMotifConstellation(laneId = '', stepIndex = 0, duration = 0.24) {
   const lane = String(laneId || '').trim();
   if (!lane) return;
@@ -16317,6 +16545,7 @@ function startMusicMotifVisualizer(options = null) {
   rhythmAuthoringTimelineRuntime.themeId = String(opts.themeId || '').trim();
   rhythmAuthoringTimelineRuntime.laneId = String(opts.laneId || '').trim();
   rhythmAuthoringTimelineRuntime.interaction = String(opts.interaction || 'rhythm_authoring').trim();
+  rhythmAuthoringTimelineRuntime.showTimeline = opts.showTimeline !== false;
   rhythmAuthoringTimelineRuntime.stepCount = stepCount;
   rhythmAuthoringTimelineRuntime.targetHitCount = Math.max(1, Math.trunc(Number(opts.targetHitCount) || 8));
   rhythmAuthoringTimelineRuntime.steps = Array.from({ length: stepCount }, () => false);
@@ -16346,7 +16575,8 @@ function startMusicMotifVisualizer(options = null) {
   rhythmAuthoringTimelineRuntime.playheadToStep = -1;
   rhythmAuthoringTimelineRuntime.playheadT = 0;
   rhythmAuthoringTimelineRuntime.playheadDuration = Math.max(0.06, getBeatSwarmSubBoardStepLen() * 0.96);
-  getMusicMotifVisualizerLayer();
+  const layer = getMusicMotifVisualizerLayer();
+  if (layer instanceof HTMLElement) layer.style.display = rhythmAuthoringTimelineRuntime.showTimeline ? '' : 'none';
   renderMusicMotifVisualizer();
 }
 function startRhythmAuthoringTimeline(options = null) {
@@ -16440,6 +16670,7 @@ function noteRhythmAuthoringTimelineHit(event = null) {
   }
   const stepIndex = ((Math.trunc(Number(ev.stepIndex) || 0) % stepCount) + stepCount) % stepCount;
   rt.steps[stepIndex] = true;
+  if (!rt.showTimeline) revealMusicMotifConstellationStep(rt, stepIndex);
   pulseMusicMotifVisualizerStep(stepIndex, 0.36);
   if (ev.complete === true) {
     noteMusicMotifConstellationDebug('timeline-complete', {
@@ -16453,7 +16684,7 @@ function noteRhythmAuthoringTimelineHit(event = null) {
         : [],
     });
     renderMusicMotifVisualizer();
-    launchMusicMotifConstellationFromTimeline();
+    if (rt.showTimeline) launchMusicMotifConstellationFromTimeline();
     const completedEventId = String(rt.eventId || '').trim();
     window.setTimeout(() => {
       if (String(rhythmAuthoringTimelineRuntime.eventId || '').trim() !== completedEventId) return;
@@ -16539,6 +16770,12 @@ function renderMusicMotifVisualizer() {
   const rt = rhythmAuthoringTimelineRuntime;
   const layer = getMusicMotifVisualizerLayer();
   if (!(layer instanceof HTMLElement) || !rt.active) return;
+  if (!rt.showTimeline) {
+    layer.innerHTML = '';
+    layer.style.display = 'none';
+    return;
+  }
+  layer.style.display = '';
   layer.className = `beat-swarm-rhythm-timeline${rt.mode === 'weapon' ? ' is-weapon' : (rt.mode === 'lead' ? ' is-lead' : '')}`;
   const stepCount = Math.max(1, Math.trunc(Number(rt.stepCount) || 1));
   const steps = Array.from({ length: stepCount }, (_, idx) => rt.steps[idx] === true);
@@ -18165,12 +18402,26 @@ function playSwarmSoundEventScheduled(eventKey, volume = 1, beatIndex = currentB
     && Number.isFinite(Number(options?.stepIndex))
   ) ? getCurrentWeaponStepBoundaryAudioTime(0) : null;
   const immediate = options?.immediate === true;
+  const nowAudio = Number(getLoopInfo?.()?.now);
   const when = immediate
-    ? null
+    ? (Number.isFinite(nowAudio)
+      ? nowAudio + Math.max(0.012, Number(options?.delaySeconds) || 0)
+      : null)
     : (Number.isFinite(directPlayerTargetAudioTime)
       ? directPlayerTargetAudioTime
       : getSwarmSoundEventTargetAudioTime(beatIndex, options?.stepIndex));
-  const nowAudio = Number(getLoopInfo?.()?.now);
+  if (String(options?.debugSource || '').trim().toLowerCase() === 'weapon-gate-first-collision') {
+    noteMusicSystemEvent('weapon_gate_first_note_audio_scheduled', {
+      eventKey: key,
+      note,
+      delaySeconds: Math.max(0, Number(options?.delaySeconds) || 0),
+      targetAudioTime: Number.isFinite(when) ? when : null,
+      schedulingAudioTime: Number.isFinite(nowAudio) ? nowAudio : null,
+    }, {
+      beatIndex: Math.max(0, Math.trunc(Number(beatIndex) || 0)),
+      stepIndex: Math.max(0, Math.trunc(Number(options?.stepIndex) || 0)),
+    });
+  }
   if (
     String(options?.sourceSystem || '').trim().toLowerCase() === 'player'
     && Number.isFinite(Number(options?.stepIndex))
@@ -19571,6 +19822,7 @@ function triggerPlayerWeaponGateNote(noteName = 'C4', source = 'weapon-gate-intr
     forcedNoteName: weaponSubBoardRowToNoteName(getWeaponTuneRowForGateNote(noteName)),
     directSound: true,
     immediateSound: options?.immediateSound === true,
+    soundDelaySeconds: Math.max(0, Number(options?.soundDelaySeconds) || 0),
     debugSource: source,
     debugBeatIndex: scheduledBeatIndex,
     debugStepIndex: scheduledStepIndex,
@@ -28056,6 +28308,7 @@ function updateBeatWeapons(centerWorld) {
     weaponGatePlaybackActive,
     suppressDirectorMusic: tapOrbAwaitingFirstFoundationTap || (onboardingMissileAuthoringActive && !onboardingBassAuthored),
     preserveAuthoredAccentContinuity: onboardingAccentAuthored || preserveAccentThroughLeadBall,
+    auditLeadBallAccentContinuity: isLeadBallThemeEventActive(),
     suppressedMusicLaneIds: suppressedMusicLaneIds.size ? suppressedMusicLaneIds : null,
     musicModeRuntime: activeMusicModeRuntime,
     enemyDirectorRuntime: activeEnemyDirectorRuntime,

@@ -48,6 +48,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const suppressDirectorMusic = state.suppressDirectorMusic === true;
   const weaponGatePlaybackActive = state.weaponGatePlaybackActive === true;
   const preserveAuthoredAccentContinuity = state.preserveAuthoredAccentContinuity === true;
+  const auditLeadBallAccentContinuity = state.auditLeadBallAccentContinuity === true;
   const suppressedMusicLaneIds = state.suppressedMusicLaneIds instanceof Set
     ? state.suppressedMusicLaneIds
     : new Set(Array.isArray(state.suppressedMusicLaneIds) ? state.suppressedMusicLaneIds : []);
@@ -2706,6 +2707,27 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       enemyType: 'composer-group-member',
     }) || null;
   })();
+
+  if (auditLeadBallAccentContinuity) {
+    const authoredStep = helpers.getPlayerSimpleRhythmThemePlaybackStep?.('accentRhythm', stepIndex) || null;
+    const motifBedState = getDirectorMotifBedStageState();
+    try {
+      const expectedHit = authoredStep?.active === true;
+      const emittedHit = !!explicitPlayerAccentRhythmEvent;
+      const auditEventType = expectedHit
+        ? (emittedHit ? 'lead_ball_accent_expected_emitted' : 'lead_ball_accent_expected_missing')
+        : 'lead_ball_accent_rest';
+      helpers.noteMusicSystemEvent?.(auditEventType, {
+        stage: String(motifBedState.stage || '').trim().toLowerCase(),
+        localStep: Math.max(0, Math.trunc(Number(authoredStep?.localStep) || 0)),
+        expectedHit,
+        emittedHit,
+        authored: helpers.isPlayerMusicThemeAuthored?.('accentRhythm') === true,
+        musicAllowed: authoredAccentMusicAllowed,
+        laneSuppressed: isLaneSuppressed('secondary_loop_lane'),
+      }, { beatIndex, stepIndex });
+    } catch {}
+  }
 
   const stagedEventsForFinalPlayback = (
     authoredBassDriveContinuityActive

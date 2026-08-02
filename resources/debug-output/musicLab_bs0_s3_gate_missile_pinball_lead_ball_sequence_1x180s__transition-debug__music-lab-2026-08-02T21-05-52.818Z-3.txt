@@ -1,0 +1,44 @@
+Beat Swarm Transition Debug
+sessionId=music-lab-2026-08-02T21:05:52.818Z-3
+runId=musicLab_bs0_s3_gate_missile_pinball_lead_ball_sequence_1x180s
+label=music-lab-session
+leadEntryBar=43
+range=39-51
+
+Per-bar executed audible enemy events:
+bar 39: audibleEnemy=5 playerAudible=5 :: foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:1
+bar 40: audibleEnemy=1 playerAudible=5 :: secondary_loop_lane|loops|call|full:1
+bar 41: audibleEnemy=5 playerAudible=5 :: foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:1
+bar 42: audibleEnemy=1 playerAudible=5 :: secondary_loop_lane|loops|call|full:1
+bar 43: audibleEnemy=6 playerAudible=5 :: foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:1, primary_loop_lane|loops|call|quiet:1
+bar 44: audibleEnemy=5 playerAudible=5 :: primary_loop_lane|loops|-|full:4, secondary_loop_lane|loops|call|full:1
+bar 45: audibleEnemy=7 playerAudible=5 :: foundation_lane|foundation|call|full:4, primary_loop_lane|loops|-|full:2, secondary_loop_lane|loops|call|full:1
+bar 46: audibleEnemy=2 playerAudible=5 :: secondary_loop_lane|loops|call|full:1, primary_loop_lane|loops|-|full:1
+bar 47: audibleEnemy=9 playerAudible=5 :: primary_loop_lane|loops|-|full:4, foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:1
+bar 48: audibleEnemy=5 playerAudible=5 :: primary_loop_lane|loops|-|full:4, secondary_loop_lane|loops|call|full:1
+bar 49: audibleEnemy=7 playerAudible=5 :: foundation_lane|foundation|call|full:4, primary_loop_lane|loops|-|full:2, secondary_loop_lane|loops|call|full:1
+bar 50: audibleEnemy=2 playerAudible=5 :: secondary_loop_lane|loops|call|full:1, primary_loop_lane|loops|-|full:1
+bar 51: audibleEnemy=9 playerAudible=5 :: primary_loop_lane|loops|-|full:4, foundation_lane|foundation|call|full:4, secondary_loop_lane|loops|call|full:1
+
+Lead / Secondary Render Summary:
+bar 39: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 40: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 41: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 42: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 43: lead c/e/a/f/q/t=3/1/1/0/1/0 notes[F3:1] inst[RETRO SQUARE:1] | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 44: lead c/e/a/f/q/t=4/4/4/4/0/0 notes[A#4:1, G4:1, F4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 45: lead c/e/a/f/q/t=2/2/2/2/0/0 notes[C4:1, A#4:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 46: lead c/e/a/f/q/t=1/1/1/1/0/0 notes[F4:1] inst[RETRO SQUARE:1] | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 47: lead c/e/a/f/q/t=4/4/4/4/0/0 notes[A#4:3, C4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 48: lead c/e/a/f/q/t=4/4/4/4/0/0 notes[A#4:1, G4:1, F4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 49: lead c/e/a/f/q/t=2/2/2/2/0/0 notes[C4:1, A#4:1] inst[RETRO SQUARE:2] | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 50: lead c/e/a/f/q/t=1/1/1/1/0/0 notes[F4:1] inst[RETRO SQUARE:1] | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+bar 51: lead c/e/a/f/q/t=4/4/4/4/0/0 notes[A#4:3, C4:1] inst[RETRO SQUARE:4] | secondary c/e/a/f/q/t=1/1/1/1/0/0 notes[C4:1] inst[CLICK PERCUSSION SHORT:1]
+
+Transition snapshots:
+bar 39 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+bar 40 intro= energy= pacing= support=n/a answer=n/a primary=n/a effectiveSupport=0 effectiveAnswer=0 groups=0
+
+Lead suppression events in range:
+
+Response events in range:

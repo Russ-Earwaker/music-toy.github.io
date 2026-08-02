@@ -9,7 +9,7 @@ import {
 import { pulseWeaponGateGhost, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-26-weapon-gate-ghosts-v3';
 import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
 import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
-import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-07-28-weapon-gate-clock-v1';
+import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-08-02-physical-crossing-v1';
 import { createWeaponGateIntroState, initializeWeaponGateSchedule } from './beat-swarm-weapon-gate-state.js?v=2026-07-28-weapon-gate-clock-v1';
 
 export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
@@ -134,6 +134,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     stop,
     launch() {
       if (!state || state.phase !== 'prelaunch') return false;
+      try { deps.warmWeaponSound?.(); } catch {}
       state.phase = 'gate';
       state.speed = WEAPON_GATE_LAUNCH_SPEED;
       const alignmentDelay = deps.getWeaponStepAlignmentDelay?.();

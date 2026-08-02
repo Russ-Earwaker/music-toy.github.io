@@ -158,6 +158,55 @@ function ensureStyle() {
     .beat-swarm-lead-ball-impact.is-live {
       animation: beatSwarmLeadBallImpact .36s ease-out forwards;
     }
+    .beat-swarm-lead-band-marker {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 18px;
+      height: 72px;
+      margin-left: -9px;
+      margin-top: -36px;
+      border: 1px solid rgba(214, 249, 255, .84);
+      border-radius: 999px;
+      background: linear-gradient(180deg, transparent, rgba(122, 232, 255, .5), transparent);
+      box-shadow: 0 0 16px rgba(105, 226, 255, .72), inset 0 0 12px rgba(255,255,255,.34);
+      transform: translate(-9999px, -9999px);
+      opacity: .82;
+    }
+    .beat-swarm-lead-band-marker-node {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 16px;
+      height: 16px;
+      margin-left: -8px;
+      margin-top: -8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.94);
+      background: rgba(183, 245, 255, .94);
+      box-shadow: 0 0 16px rgba(255,255,255,.84), 0 0 30px rgba(105,226,255,.72);
+    }
+    .beat-swarm-lead-band-marker-node::before,
+    .beat-swarm-lead-band-marker-node::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 12px;
+      height: 3px;
+      margin-top: -1.5px;
+      background: linear-gradient(90deg, rgba(255,255,255,.96), rgba(108,229,255,.74), transparent);
+      box-shadow: 0 0 12px rgba(115,232,255,.9);
+      transform-origin: 0 50%;
+      opacity: 0;
+    }
+    .beat-swarm-lead-band-marker-node::after { transform: rotate(180deg); }
+    .beat-swarm-lead-band-marker.is-triggered .beat-swarm-lead-band-marker-node::before {
+      animation: beatSwarmLeadBandBurstRight .68s ease-out forwards;
+    }
+    .beat-swarm-lead-band-marker.is-triggered .beat-swarm-lead-band-marker-node::after {
+      animation: beatSwarmLeadBandBurstLeft .68s ease-out forwards;
+    }
     @keyframes beatSwarmLeadBallReady {
       from { filter: brightness(1); transform: var(--bs-lead-ball-transform, translate(-9999px, -9999px)) scale(.96); }
       to { filter: brightness(1.32); transform: var(--bs-lead-ball-transform, translate(-9999px, -9999px)) scale(1.04); }
@@ -175,6 +224,14 @@ function ensureStyle() {
       0% { filter: brightness(4.2); box-shadow: 0 0 18px rgba(255,255,255,1), 0 0 46px rgba(103,235,255,.98); }
       42% { filter: brightness(2.5); box-shadow: 0 0 15px rgba(255,255,255,.92), 0 0 34px rgba(103,235,255,.78); }
       100% { filter: brightness(1); box-shadow: 0 0 12px rgba(115,234,255,.62); }
+    }
+    @keyframes beatSwarmLeadBandBurstRight {
+      0% { width: 10px; opacity: 1; filter: brightness(3); }
+      100% { width: 70vw; opacity: 0; filter: brightness(1); }
+    }
+    @keyframes beatSwarmLeadBandBurstLeft {
+      0% { width: 10px; opacity: 1; filter: brightness(3); transform: rotate(180deg); }
+      100% { width: 70vw; opacity: 0; filter: brightness(1); transform: rotate(180deg); }
     }
   `;
   document.head.appendChild(style);
@@ -211,6 +268,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     postCompleteNotified: false,
     lastNotes: [],
     impacts: [],
+    bandMarkers: [],
     trails: [],
     elapsed: 0,
     lastArenaCenter: null,
@@ -248,8 +306,12 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     for (const entry of state.impacts) {
       try { entry.el?.remove?.(); } catch {}
     }
+    for (const entry of state.bandMarkers) {
+      try { entry.el?.remove?.(); } catch {}
+    }
     state.trails.length = 0;
     state.impacts.length = 0;
+    state.bandMarkers.length = 0;
     try { state.rootEl?.remove?.(); } catch {}
     state.rootEl = null;
     state.pickupEl = null;
@@ -282,6 +344,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.postCompleteUntilTick = -1;
     state.postCompleteNotified = false;
     state.lastNotes.length = 0;
+    for (const entry of state.bandMarkers) {
+      try { entry.el?.remove?.(); } catch {}
+    }
+    state.bandMarkers.length = 0;
     state.elapsed = 0;
     state.lastArenaCenter = null;
   }
@@ -564,6 +630,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       }
     }
     state.balls = [];
+    for (const entry of state.pendingHits) removeBandMarker(entry?.marker);
     state.pendingHits.length = 0;
     state.pendingEnemyIds.clear();
     state.postCompleteUntilTick = -1;
@@ -633,6 +700,51 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.impacts.push({ el, age: 0, ttl: 0.42 });
   }
 
+  function createBandMarker(world = null, noteBand = null) {
+    const root = ensureRoot();
+    if (!(root instanceof HTMLElement)) return null;
+    const el = document.createElement('div');
+    el.className = 'beat-swarm-lead-band-marker';
+    const nodeEl = document.createElement('div');
+    nodeEl.className = 'beat-swarm-lead-band-marker-node';
+    el.appendChild(nodeEl);
+    root.appendChild(el);
+    const impactWorld = point(world);
+    const markerWorld = point(world);
+    const bandTop = Number(noteBand?.worldTop);
+    const bandBottom = Number(noteBand?.worldBottom);
+    if (Number.isFinite(bandTop) && Number.isFinite(bandBottom)) {
+      markerWorld.y = (bandTop + bandBottom) * 0.5;
+    }
+    const marker = {
+      el,
+      nodeEl,
+      world: markerWorld,
+      impactWorld,
+      noteBand: noteBand && typeof noteBand === 'object' ? { ...noteBand } : null,
+      triggered: false,
+      age: 0,
+      ttl: Infinity,
+    };
+    state.bandMarkers.push(marker);
+    return marker;
+  }
+
+  function triggerBandMarker(marker = null) {
+    if (!marker) return;
+    marker.triggered = true;
+    marker.age = 0;
+    marker.ttl = 0.76;
+    if (marker.el instanceof HTMLElement) marker.el.classList.add('is-triggered');
+  }
+
+  function removeBandMarker(marker = null) {
+    if (!marker) return;
+    try { marker.el?.remove?.(); } catch {}
+    const index = state.bandMarkers.indexOf(marker);
+    if (index >= 0) state.bandMarkers.splice(index, 1);
+  }
+
   function queueHit(enemy = null, at = null, options = null) {
     const opts = options && typeof options === 'object' ? options : {};
     if (!enemy) return false;
@@ -646,13 +758,17 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const slot = findFreeCaptureSlot(baseTriggerTick);
     if (!slot) return false;
     const world = point(at || enemyPoint(enemy));
-    const note = String(deps.getNoteForWorld?.(world) || getEnemyNote(enemy) || '').trim();
+    const noteBand = deps.getNoteBandForWorld?.(world) || null;
+    const note = String(noteBand?.note || deps.getNoteForWorld?.(world) || getEnemyNote(enemy) || '').trim();
+    const marker = createBandMarker(world, noteBand);
     state.pendingHits.push({
       enemy,
       enemyId,
       ball: opts.ball || null,
       at: world,
       note,
+      noteBand,
+      marker,
       stepIndex: slot.stepIndex,
       triggerTick: slot.triggerTick,
     });
@@ -661,7 +777,9 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       themeId: state.themeId,
       laneId: state.laneId,
       enemyId,
+      at: world,
       note,
+      noteBand,
       stepIndex: slot.stepIndex,
     });
     if (enemyId) state.pendingEnemyIds.add(enemyId);
@@ -673,7 +791,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
   function triggerHit(entry = null) {
     if (!entry) return;
     if (entry.enemyId) state.pendingEnemyIds.delete(entry.enemyId);
-    if (state.committed || state.hitSteps.size >= state.stepCount) return;
+    if (state.committed || state.hitSteps.size >= state.stepCount) {
+      removeBandMarker(entry.marker);
+      return;
+    }
     const stepIndex = Math.max(0, Math.trunc(Number(entry.stepIndex) || 0));
     const note = String(entry.note || deps.getNoteForWorld?.(entry.at) || '').trim();
     const hitTick = getClockTick(deps.getBeatClock?.());
@@ -696,10 +817,20 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       window.setTimeout(() => entry.ball?.el?.classList?.remove?.('is-note-hit'), 260);
     }
     spawnImpact(entry.at);
+    triggerBandMarker(entry.marker);
+    deps.triggerBandImpact?.({
+      at: entry.at,
+      markerWorld: entry.marker?.world || entry.at,
+      note,
+      noteBand: entry.noteBand || null,
+      stepIndex,
+      eventId: state.eventId,
+    });
     deps.createImpactEffect?.({
       at: entry.at,
       enemy: entry.enemy,
       note,
+      noteBand: entry.noteBand || null,
       stepIndex,
       eventId: state.eventId,
       hitCount: state.hitSteps.size,
@@ -707,6 +838,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     });
     deps.playMotifNote?.({
       note,
+      noteBand: entry.noteBand || null,
       stepIndex,
       themeId: state.themeId,
       laneId: state.laneId,
@@ -806,11 +938,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     return best ? { enemy: best, info: bestInfo } : null;
   }
 
-  function handleEnemyCollision(ballActor = null, enemy = null, collisionWorld = null) {
+  function handleEnemyCollision(ballActor = null, enemy = null) {
     if (!enemy || !ballActor) return false;
     const ball = ballActor;
     const enemyWorld = enemyPoint(enemy);
-    const hitWorld = point(collisionWorld || enemyWorld);
     const normal = normalize(ball.x - enemyWorld.x, ball.y - enemyWorld.y, -ball.vx, -ball.vy);
     const distance = Math.hypot(ball.x - enemyWorld.x, ball.y - enemyWorld.y);
     const separation = Math.max(0, BALL_HIT_RADIUS - distance) + 10;
@@ -823,7 +954,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const enemyId = Math.trunc(Number(enemy?.id) || 0);
     ball.lastContactEnemyId = enemyId;
     ball.contactCooldown = BALL_CONTACT_COOLDOWN;
-    const queued = queueHit(enemy, hitWorld, {
+    const queued = queueHit(enemy, point(ball), {
       ball,
       keepDestination: targetId > 0 && enemyId !== targetId,
       allowRepeatEnemy: false,
@@ -872,10 +1003,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       if (tickDelta) return tickDelta;
       return Math.trunc(Number(a?.stepIndex) || 0) - Math.trunc(Number(b?.stepIndex) || 0);
     });
-    for (const entry of due) {
-      if (state.committed) break;
-      triggerHit(entry);
-    }
+    for (const entry of due) triggerHit(entry);
     if (state.active && state.captureEndTick >= 0 && tick > state.captureEndTick && state.pendingHits.length <= 0) {
       completeEvent();
     }
@@ -977,7 +1105,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     ball.y += ball.vy * dt;
     const collision = findCollisionEnemy(ball, previousBall, ball);
     if (collision) {
-      handleEnemyCollision(ball, collision.enemy, { x: collision.info.x, y: collision.info.y });
+      handleEnemyCollision(ball, collision.enemy);
     }
     spawnTrail(ball);
   }
@@ -1003,10 +1131,49 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
         state.impacts.splice(i, 1);
       }
     }
+    for (let i = state.bandMarkers.length - 1; i >= 0; i -= 1) {
+      const entry = state.bandMarkers[i];
+      if (entry.triggered) entry.age += dt;
+      if (entry.el instanceof HTMLElement) {
+        const centerScreen = deps.worldToScreen?.(entry.world);
+        const impactScreen = deps.worldToScreen?.(entry.impactWorld);
+        const bandTop = Number(entry.noteBand?.worldTop);
+        const bandBottom = Number(entry.noteBand?.worldBottom);
+        const topScreen = Number.isFinite(bandTop)
+          ? deps.worldToScreen?.({ x: entry.world.x, y: bandTop })
+          : null;
+        const bottomScreen = Number.isFinite(bandBottom)
+          ? deps.worldToScreen?.({ x: entry.world.x, y: bandBottom })
+          : null;
+        if (centerScreen && Number.isFinite(centerScreen.x) && Number.isFinite(centerScreen.y)) {
+          const markerHeight = Math.max(
+            28,
+            Math.abs((Number(bottomScreen?.y) || centerScreen.y + 36) - (Number(topScreen?.y) || centerScreen.y - 36))
+          );
+          entry.el.style.height = `${markerHeight.toFixed(1)}px`;
+          entry.el.style.marginTop = `${(-markerHeight * 0.5).toFixed(1)}px`;
+          entry.el.style.transform = `translate(${centerScreen.x.toFixed(2)}px, ${centerScreen.y.toFixed(2)}px)`;
+          if (entry.nodeEl instanceof HTMLElement && impactScreen && Number.isFinite(impactScreen.y)) {
+            entry.nodeEl.style.top = `${(impactScreen.y - centerScreen.y + markerHeight * 0.5).toFixed(1)}px`;
+          }
+        }
+      }
+      if (entry.triggered && entry.age >= entry.ttl) {
+        try { entry.el?.remove?.(); } catch {}
+        state.bandMarkers.splice(i, 1);
+      }
+    }
   }
 
   function update(dt = 0) {
-    if (!state.active && state.postCompleteUntilTick < 0 && !state.pendingHits.length && !state.trails.length && !state.impacts.length) return;
+    if (
+      !state.active
+      && state.postCompleteUntilTick < 0
+      && !state.pendingHits.length
+      && !state.trails.length
+      && !state.impacts.length
+      && !state.bandMarkers.length
+    ) return;
     ensureRoot();
     const safeDt = Math.max(0, Math.min(0.1, Number(dt) || 0));
     state.elapsed += safeDt;

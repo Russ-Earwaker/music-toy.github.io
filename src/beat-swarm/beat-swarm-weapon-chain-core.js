@@ -528,6 +528,7 @@ export function triggerWeaponStageRuntime(options = null) {
   const forcedNoteName = helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || null;
   const directSound = !!context?.directSound;
   const immediateSound = context?.immediateSound === true;
+  const soundDelaySeconds = Math.max(0, Number(context?.soundDelaySeconds) || 0);
   const playerSoundVolumeMult = Math.max(0.1, Math.min(1, Number(context?.playerSoundVolumeMult) || 1));
   const gameplayWeaponSoundVolume = (() => {
     const volumeArchetype = (archetype === 'laser' && variant === 'hitscan') ? 'projectile' : archetype;
@@ -544,6 +545,7 @@ export function triggerWeaponStageRuntime(options = null) {
     forcedNoteName: helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || null,
     directSound,
     immediateSound,
+    soundDelaySeconds,
     debugSource: String(context?.debugSource || ''),
     debugStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
     debugBeatIndex: Number.isFinite(context?.debugBeatIndex) ? Math.trunc(context.debugBeatIndex) : null,
@@ -585,6 +587,8 @@ export function triggerWeaponStageRuntime(options = null) {
               actionType: `${archetype}-${variant}`,
               authoringClass: 'gameplayauthored',
               immediate: immediateSound,
+              delaySeconds: soundDelaySeconds,
+              debugSource: String(context?.debugSource || ''),
             }
           );
         } else {
@@ -680,6 +684,8 @@ export function triggerWeaponStageRuntime(options = null) {
                 actionType: `${archetype}-${variant}`,
                 authoringClass: 'gameplayauthored',
                 immediate: immediateSound,
+                delaySeconds: soundDelaySeconds,
+                debugSource: String(context?.debugSource || ''),
               }
             );
           } else {
@@ -775,6 +781,8 @@ export function triggerWeaponStageRuntime(options = null) {
               actionType: `${archetype}-${variant}`,
               authoringClass: 'gameplayauthored',
               immediate: immediateSound,
+              delaySeconds: soundDelaySeconds,
+              debugSource: String(context?.debugSource || ''),
             }
           );
         } else {
@@ -873,8 +881,10 @@ export function triggerWeaponStageRuntime(options = null) {
               stepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
               sourceSystem: 'player',
               actionType: `${archetype}-${variant}`,
-              authoringClass: 'gameplayauthored',
-              immediate: immediateSound,
+                authoringClass: 'gameplayauthored',
+                immediate: immediateSound,
+                delaySeconds: soundDelaySeconds,
+                debugSource: String(context?.debugSource || ''),
             }
           );
         } else {
