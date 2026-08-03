@@ -18,12 +18,12 @@ import { createPerformedBeatEvent, BEAT_EVENT_ROLES, BEAT_EVENT_THREAT } from '.
 import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from './beat-swarm-action-categories.js';
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-composition-policy-v1';
-import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js';
+import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js?v=2026-08-03-lead-audit-pinning-v1';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-26-arena-pickups-v1';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-26-accent-handoff-v1';
-import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-02-band-marker-cleanup-v3';
+import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-03-lead-pitch-timing-audit-v9';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
 import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-08-02-weapon-warmup-v1';
 import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
@@ -2637,7 +2637,10 @@ function createLeadGateSectionsForPlan(planEntry = null, rngLike = null) {
   return notes;
 }
 function getLeadGateNoteOptions() {
-  return WEAPON_TUNE_NOTES_ONE_OCTAVE.slice().reverse();
+  return WEAPON_TUNE_NOTES_ONE_OCTAVE
+    .slice()
+    .reverse()
+    .map((note) => normalizeSwarmNoteName(transposeSwarmNoteName(note, -12)) || note);
 }
 function getLeadGateAuthoringStepSeconds() {
   return Math.max(0.12, getGameplayBeatLen() * COMPOSER_BEATS_PER_BAR / Math.max(1, WEAPON_TUNE_STEPS));
@@ -2696,63 +2699,25 @@ function getLeadBallNoteBandForWorld(worldLike = null) {
   const middleIndex = Math.floor(notes.length / 2);
   const bandHeightWorld = Math.max(80, SWARM_ARENA_RADIUS_WORLD * 0.28);
   const bandOffset = Math.round(((Number(world?.y) || 0) - Number(center.y || 0)) / bandHeightWorld);
-  const noteIndex = Math.max(0, Math.min(notes.length - 1, middleIndex + bandOffset));
+  const noteIndex = middleIndex + bandOffset;
+  const playableNoteIndex = Math.max(0, Math.min(notes.length - 1, noteIndex));
   const worldTop = Number(center.y || 0) + ((noteIndex - middleIndex - 0.5) * bandHeightWorld);
   const worldBottom = Number(center.y || 0) + ((noteIndex - middleIndex + 0.5) * bandHeightWorld);
   return {
-    note: notes[noteIndex] || notes[notes.length - 1] || 'C4',
+    note: notes[playableNoteIndex] || notes[notes.length - 1] || 'C3',
     noteIndex,
+    playableNoteIndex,
+    pitchClamped: playableNoteIndex !== noteIndex,
+    preferredOctave: noteIndex >= 0 && noteIndex < notes.length,
     centerWorldX: Number(center.x) || 0,
     centerWorldY: Number(center.y) || 0,
     bandHeightWorld,
     worldTop,
     worldBottom,
-    openTop: noteIndex === 0,
-    openBottom: noteIndex === notes.length - 1,
+    openTop: false,
+    openBottom: false,
     impactWorldY: Number(world?.y) || 0,
   };
-}
-function flashLeadBallNoteHeightBand(noteBandLike = '') {
-  if (typeof document === 'undefined') return;
-  const bandData = noteBandLike && typeof noteBandLike === 'object'
-    ? noteBandLike
-    : getLeadBallNoteBandForWorld(getViewportCenterWorld());
-  const host = overlayEl instanceof HTMLElement ? overlayEl : document.body;
-  const bounds = host.getBoundingClientRect?.() || null;
-  const hostTop = Number(bounds?.top) || 0;
-  const hostHeight = Math.max(1, Number(bounds?.height) || window.innerHeight || 1);
-  const centerWorldX = Number(bandData?.centerWorldX) || Number(arenaCenterWorld?.x) || 0;
-  const topClient = Number(worldToScreen({ x: centerWorldX, y: Number(bandData?.worldTop) || 0 })?.y);
-  const bottomClient = Number(worldToScreen({ x: centerWorldX, y: Number(bandData?.worldBottom) || 0 })?.y);
-  if (!Number.isFinite(topClient) || !Number.isFinite(bottomClient)) return;
-  const top = bandData?.openTop === true
-    ? 0
-    : Math.max(0, Math.min(topClient, bottomClient) - hostTop);
-  const bottom = bandData?.openBottom === true
-    ? hostHeight
-    : Math.min(hostHeight, Math.max(topClient, bottomClient) - hostTop);
-  const height = Math.max(18, bottom - top);
-  const band = document.createElement('div');
-  band.className = 'beat-swarm-lead-note-height-band';
-  band.style.position = 'absolute';
-  band.style.top = `${top.toFixed(1)}px`;
-  band.style.height = `${height.toFixed(1)}px`;
-  host.appendChild(band);
-  noteMusicSystemEvent('lead_ball_note_band_rendered', {
-    note: String(bandData?.note || ''),
-    noteIndex: Math.max(0, Math.trunc(Number(bandData?.noteIndex) || 0)),
-    impactWorldY: Number(bandData?.impactWorldY) || 0,
-    arenaCenterWorldY: Number(bandData?.centerWorldY) || 0,
-    markerWorldY: (Number(bandData?.worldTop) + Number(bandData?.worldBottom)) * 0.5,
-    topClientY: top + hostTop,
-    bottomClientY: top + height + hostTop,
-  }, {
-    beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
-    stepIndex: Math.max(0, Math.trunc(Number(ensureSwarmDirector().getSnapshot()?.stepIndex) || 0)),
-  });
-  window.setTimeout(() => {
-    try { band.remove(); } catch {}
-  }, 900);
 }
 function getLeadGateSectionSelectionForPlayer(sectionsLike = null, playerWorldLike = null) {
   const sections = Array.isArray(sectionsLike) && sectionsLike.length
@@ -3896,7 +3861,6 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
     const noteBand = event.noteBand && typeof event.noteBand === 'object'
       ? event.noteBand
       : getLeadBallNoteBandForWorld(event.markerWorld || event.at);
-    try { flashLeadBallNoteHeightBand(noteBand); } catch {}
     let damagedCount = 0;
     const worldTop = Math.min(Number(noteBand.worldTop) || 0, Number(noteBand.worldBottom) || 0);
     const worldBottom = Math.max(Number(noteBand.worldTop) || 0, Number(noteBand.worldBottom) || 0);
@@ -3914,7 +3878,7 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
     noteMusicSystemEvent('lead_ball_note_band_flash', {
       eventId: String(event.eventId || '').trim(),
       note: normalizeSwarmNoteName(event.note || '') || '',
-      noteIndex: Math.max(0, Math.trunc(Number(noteBand.noteIndex) || 0)),
+      noteIndex: Math.trunc(Number(noteBand.noteIndex) || 0),
       stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
       damagedCount,
     }, { beatIndex: currentBeatIndex, stepIndex: event.stepIndex });
@@ -3989,6 +3953,14 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
   },
   onHitQueued(event = {}) {
     try { noteMusicSystemEvent('lead_ball_hit_queued', event, { beatIndex: currentBeatIndex }); } catch {}
+  },
+  onHitRejected(event = {}) {
+    try {
+      noteMusicSystemEvent('lead_ball_hit_rejected', event, {
+        beatIndex: currentBeatIndex,
+        stepIndex: Math.max(0, Math.trunc(Number(event.tickIndex) || 0)),
+      });
+    } catch {}
   },
   onMotifHit(event = {}) {
     const stepIndex = Math.max(0, Math.trunc(Number(event.stepIndex) || 0));
@@ -7539,6 +7511,22 @@ function createLeadGateDirectPrimaryLoopEventRuntime(options = null) {
     musicVoiceKey: 'player_lead_theme',
     musicProminence: 'full',
   });
+  if (String(leadGateLiteralPlaybackRuntime.source || '').trim() === 'lead_ball') {
+    const targetAudioTime = getSwarmSoundEventTargetAudioTime(beatIndex, stepIndexRaw);
+    const nowAudioTime = Number(getLoopInfo?.()?.now);
+    noteMusicSystemEvent('lead_ball_literal_loop_timing', {
+      eventId: Math.max(0, Math.trunc(Number(event?.id) || 0)),
+      note: noteName,
+      motifSlot: leadGateMotifSlot,
+      relativeStepIndex,
+      playbackStartStep: startStep,
+      targetAudioTime: Number.isFinite(targetAudioTime) ? targetAudioTime : null,
+      schedulingAudioTime: Number.isFinite(nowAudioTime) ? nowAudioTime : null,
+      schedulingOffsetMs: Number.isFinite(targetAudioTime) && Number.isFinite(nowAudioTime)
+        ? (nowAudioTime - targetAudioTime) * 1000
+        : null,
+    }, { beatIndex, stepIndex: stepIndexRaw, barIndex });
+  }
   try {
     noteMusicSystemEvent('music_primary_loop_lane_emitted', {
       enemyId: 0,
@@ -15959,7 +15947,7 @@ function updateWeaponGateHandoffVisual(dt = 0, stepIndex = null) {
 }
 function ensureRhythmAuthoringTimelineStyle() {
   if (typeof document === 'undefined') return;
-  const styleVersion = '2026-08-02-band-fill-v2';
+  const styleVersion = '2026-08-03-unified-band-visual-v3';
   let style = document.getElementById('beat-swarm-rhythm-authoring-timeline-style');
   if (!(style instanceof HTMLStyleElement)) {
     style = document.createElement('style');
@@ -15993,8 +15981,6 @@ function ensureRhythmAuthoringTimelineStyle() {
     .beat-swarm-lead-gate .beat-swarm-weapon-gate-section.is-aimed{opacity:1;filter:brightness(1.45) saturate(1.28);outline:2px solid rgba(217,247,255,.86);outline-offset:-3px;background:rgba(55,111,142,.94);box-shadow:inset 0 0 18px rgba(170,232,255,.34),0 0 18px rgba(170,232,255,.28)}
     .beat-swarm-lead-gate .beat-swarm-weapon-gate-section.is-rest{background:rgba(22,24,32,.9);color:rgba(217,247,255,.72);letter-spacing:.08em}
     .beat-swarm-lead-gate .beat-swarm-weapon-gate-section.is-rest.is-aimed{background:rgba(72,47,80,.94);outline-color:rgba(255,245,155,.82);box-shadow:inset 0 0 18px rgba(255,245,155,.24),0 0 18px rgba(255,245,155,.22)}
-    .beat-swarm-lead-note-height-band{position:fixed;left:0;width:100vw;pointer-events:none;z-index:6;opacity:0;background:linear-gradient(90deg,transparent 0%,rgba(127,225,255,.14) 12%,rgba(217,247,255,.32) 50%,rgba(127,225,255,.14) 88%,transparent 100%);box-shadow:inset 0 0 38px rgba(100,216,255,.18),0 0 28px rgba(100,216,255,.28);animation:beat-swarm-lead-note-band 760ms ease-out both}
-    @keyframes beat-swarm-lead-note-band{0%{opacity:0;filter:brightness(2.4)}15%{opacity:.92;filter:brightness(1.8)}100%{opacity:0;filter:brightness(1)}}
   `;
 }
 function noteMusicMotifConstellationDebug(kind, payload = null) {

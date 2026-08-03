@@ -185,6 +185,20 @@ function ensureStyle() {
       border: 1px solid rgba(255,255,255,.94);
       background: rgba(183, 245, 255, .94);
       box-shadow: 0 0 16px rgba(255,255,255,.84), 0 0 30px rgba(105,226,255,.72);
+      z-index: 1;
+    }
+    .beat-swarm-lead-band-marker-fill {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 200vw;
+      height: 100%;
+      transform: translateX(-50%);
+      background: linear-gradient(90deg, transparent 0%, rgba(127,225,255,.13) 20%, rgba(217,247,255,.34) 50%, rgba(127,225,255,.13) 80%, transparent 100%);
+      box-shadow: inset 0 0 38px rgba(100,216,255,.2), 0 0 28px rgba(100,216,255,.24);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 0;
     }
     .beat-swarm-lead-band-marker-node::before,
     .beat-swarm-lead-band-marker-node::after {
@@ -532,6 +546,9 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       const arenaIdeal = Math.min(arenaRadius * 0.74, 760);
       const arenaProximityPenalty = Math.max(0, arenaDistance - arenaIdeal) * 1.15;
       const arenaCoreBonus = arenaDistance <= arenaRadius * 0.92 ? 520 : 0;
+      const preferredOctaveHalfHeight = arenaRadius * 0.7;
+      const outsidePreferredOctave = Math.max(0, Math.abs((Number(enemy.wy) || 0) - arenaCenter.y) - preferredOctaveHalfHeight);
+      const octaveRangePenalty = outsidePreferredOctave * 6.5;
       const note = getEnemyNote(enemy);
       const repeatPenalty = repeatNote && note === repeatNote ? 1200 : 0;
       const otherBallNotePenalty = note && avoidNotes.has(note) ? 3800 : 0;
@@ -546,7 +563,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       const straightRouteBonus = distance > 520 ? alignment * Math.min(1180, distance * 0.72) : alignment * 40;
       const preferredDistanceBonus = distance >= 860 && distance <= 1650 ? 420 : 0;
       const destinationDistanceBonus = opts.distant === true && distance >= 1150 ? Math.min(1300, distance * 0.62) : 0;
-      const score = distance + closePenalty + flatRoutePenalty + arenaProximityPenalty + repeatPenalty + otherBallNotePenalty - straightRouteBonus - preferredDistanceBonus - verticalTravelBonus - destinationDistanceBonus - arenaCoreBonus;
+      const score = distance + closePenalty + flatRoutePenalty + arenaProximityPenalty + octaveRangePenalty + repeatPenalty + otherBallNotePenalty - straightRouteBonus - preferredDistanceBonus - verticalTravelBonus - destinationDistanceBonus - arenaCoreBonus;
       if (score < bestScore) {
         bestScore = score;
         best = enemy;
@@ -705,8 +722,11 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     if (!(root instanceof HTMLElement)) return null;
     const el = document.createElement('div');
     el.className = 'beat-swarm-lead-band-marker';
+    const bandEl = document.createElement('div');
+    bandEl.className = 'beat-swarm-lead-band-marker-fill';
     const nodeEl = document.createElement('div');
     nodeEl.className = 'beat-swarm-lead-band-marker-node';
+    el.appendChild(bandEl);
     el.appendChild(nodeEl);
     root.appendChild(el);
     const impactWorld = point(world);
@@ -718,6 +738,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     }
     const marker = {
       el,
+      bandEl,
       nodeEl,
       world: markerWorld,
       impactWorld,
@@ -730,12 +751,65 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     return marker;
   }
 
+  function positionBandMarker(marker = null) {
+    if (!(marker?.el instanceof HTMLElement)) return false;
+    const centerScreen = deps.worldToScreen?.(marker.world);
+    const impactScreen = deps.worldToScreen?.(marker.impactWorld);
+    if (!centerScreen || !Number.isFinite(centerScreen.x) || !Number.isFinite(centerScreen.y)) return false;
+    const bandTop = Number(marker.noteBand?.worldTop);
+    const bandBottom = Number(marker.noteBand?.worldBottom);
+    const topScreen = Number.isFinite(bandTop)
+      ? deps.worldToScreen?.({ x: marker.world.x, y: bandTop })
+      : null;
+    const bottomScreen = Number.isFinite(bandBottom)
+      ? deps.worldToScreen?.({ x: marker.world.x, y: bandBottom })
+      : null;
+    const markerHeight = Math.max(
+      28,
+      Math.abs((Number(bottomScreen?.y) || centerScreen.y + 36) - (Number(topScreen?.y) || centerScreen.y - 36))
+    );
+    marker.el.style.height = `${markerHeight.toFixed(1)}px`;
+    marker.el.style.marginTop = `${(-markerHeight * 0.5).toFixed(1)}px`;
+    marker.el.style.transform = `translate(${centerScreen.x.toFixed(2)}px, ${centerScreen.y.toFixed(2)}px)`;
+    if (marker.nodeEl instanceof HTMLElement && impactScreen && Number.isFinite(impactScreen.y)) {
+      marker.nodeEl.style.top = `${(impactScreen.y - centerScreen.y + markerHeight * 0.5).toFixed(1)}px`;
+    }
+    return true;
+  }
+
   function triggerBandMarker(marker = null) {
     if (!marker) return;
     marker.triggered = true;
     marker.age = 0;
-    marker.ttl = 0.76;
-    if (marker.el instanceof HTMLElement) marker.el.classList.add('is-triggered');
+    marker.ttl = 0.9;
+    if (marker.el instanceof HTMLElement) {
+      positionBandMarker(marker);
+      marker.el.classList.remove('is-triggered');
+      void marker.el.offsetWidth;
+      window.requestAnimationFrame(() => {
+        if (marker.triggered && marker.el?.isConnected) marker.el.classList.add('is-triggered');
+      });
+    }
+  }
+
+  function rejectHit(reason = 'unknown', enemy = null, at = null) {
+    const clock = deps.getBeatClock?.() || {};
+    deps.onHitRejected?.({
+      eventId: state.eventId,
+      themeId: state.themeId,
+      laneId: state.laneId,
+      reason: String(reason || 'unknown'),
+      enemyId: Math.trunc(Number(enemy?.id) || 0),
+      at: point(at || enemyPoint(enemy)),
+      tickIndex: getClockTick(clock),
+      captureStartTick: state.captureStartTick,
+      captureEndTick: state.captureEndTick,
+      hitCount: state.hitSteps.size,
+      pendingHitCount: state.pendingHits.length,
+      stepCount: state.stepCount,
+      committed: state.committed === true,
+    });
+    return false;
   }
 
   function removeBandMarker(marker = null) {
@@ -747,16 +821,21 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
 
   function queueHit(enemy = null, at = null, options = null) {
     const opts = options && typeof options === 'object' ? options : {};
-    if (!enemy) return false;
-    if (state.committed || state.hitSteps.size >= state.stepCount) return false;
-    if (state.hitSteps.size + state.pendingHits.length >= state.stepCount) return false;
+    if (!enemy) return rejectHit('missing_enemy', enemy, at);
+    if (state.committed) return rejectHit('event_committed', enemy, at);
+    if (state.hitSteps.size >= state.stepCount) return rejectHit('step_capacity_reached', enemy, at);
+    if (state.hitSteps.size + state.pendingHits.length >= state.stepCount) {
+      return rejectHit('step_capacity_reserved', enemy, at);
+    }
     const enemyId = Math.trunc(Number(enemy.id) || 0);
-    if (enemyId && state.pendingEnemyIds.has(enemyId)) return false;
-    if (enemyId && state.hitEnemyIds.has(enemyId) && opts.allowRepeatEnemy !== true) return false;
+    if (enemyId && state.pendingEnemyIds.has(enemyId)) return rejectHit('enemy_pending', enemy, at);
+    if (enemyId && state.hitEnemyIds.has(enemyId) && opts.allowRepeatEnemy !== true) {
+      return rejectHit('enemy_already_used', enemy, at);
+    }
     const clock = deps.getBeatClock?.() || {};
     const baseTriggerTick = getClockTick(clock) + 1;
     const slot = findFreeCaptureSlot(baseTriggerTick);
-    if (!slot) return false;
+    if (!slot) return rejectHit('no_free_capture_slot', enemy, at);
     const world = point(at || enemyPoint(enemy));
     const noteBand = deps.getNoteBandForWorld?.(world) || null;
     const note = String(noteBand?.note || deps.getNoteForWorld?.(world) || getEnemyNote(enemy) || '').trim();
@@ -825,6 +904,9 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       noteBand: entry.noteBand || null,
       stepIndex,
       eventId: state.eventId,
+      triggerTick: Math.max(0, Math.trunc(Number(entry.triggerTick) || 0)),
+      actualTick: hitTick,
+      tickDelta: hitTick - Math.max(0, Math.trunc(Number(entry.triggerTick) || 0)),
     });
     deps.createImpactEffect?.({
       at: entry.at,
@@ -835,6 +917,9 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       eventId: state.eventId,
       hitCount: state.hitSteps.size,
       targetHitCount: state.targetHitCount,
+      triggerTick: Math.max(0, Math.trunc(Number(entry.triggerTick) || 0)),
+      actualTick: hitTick,
+      tickDelta: hitTick - Math.max(0, Math.trunc(Number(entry.triggerTick) || 0)),
     });
     deps.playMotifNote?.({
       note,
@@ -856,6 +941,9 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       targetHitCount: state.targetHitCount,
       complete: false,
       selections: state.selections.slice(),
+      triggerTick: Math.max(0, Math.trunc(Number(entry.triggerTick) || 0)),
+      actualTick: hitTick,
+      tickDelta: hitTick - Math.max(0, Math.trunc(Number(entry.triggerTick) || 0)),
     });
   }
 
@@ -1134,28 +1222,18 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     for (let i = state.bandMarkers.length - 1; i >= 0; i -= 1) {
       const entry = state.bandMarkers[i];
       if (entry.triggered) entry.age += dt;
-      if (entry.el instanceof HTMLElement) {
-        const centerScreen = deps.worldToScreen?.(entry.world);
-        const impactScreen = deps.worldToScreen?.(entry.impactWorld);
-        const bandTop = Number(entry.noteBand?.worldTop);
-        const bandBottom = Number(entry.noteBand?.worldBottom);
-        const topScreen = Number.isFinite(bandTop)
-          ? deps.worldToScreen?.({ x: entry.world.x, y: bandTop })
-          : null;
-        const bottomScreen = Number.isFinite(bandBottom)
-          ? deps.worldToScreen?.({ x: entry.world.x, y: bandBottom })
-          : null;
-        if (centerScreen && Number.isFinite(centerScreen.x) && Number.isFinite(centerScreen.y)) {
-          const markerHeight = Math.max(
-            28,
-            Math.abs((Number(bottomScreen?.y) || centerScreen.y + 36) - (Number(topScreen?.y) || centerScreen.y - 36))
-          );
-          entry.el.style.height = `${markerHeight.toFixed(1)}px`;
-          entry.el.style.marginTop = `${(-markerHeight * 0.5).toFixed(1)}px`;
-          entry.el.style.transform = `translate(${centerScreen.x.toFixed(2)}px, ${centerScreen.y.toFixed(2)}px)`;
-          if (entry.nodeEl instanceof HTMLElement && impactScreen && Number.isFinite(impactScreen.y)) {
-            entry.nodeEl.style.top = `${(impactScreen.y - centerScreen.y + markerHeight * 0.5).toFixed(1)}px`;
-          }
+      positionBandMarker(entry);
+      if (entry.bandEl instanceof HTMLElement) {
+        if (entry.triggered) {
+          const progress = Math.max(0, Math.min(1, entry.age / Math.max(0.001, entry.ttl)));
+          const opacity = progress <= 0.14
+            ? 0.94
+            : 0.94 * Math.pow(1 - ((progress - 0.14) / 0.86), 1.35);
+          entry.bandEl.style.opacity = `${Math.max(0, opacity).toFixed(3)}`;
+          entry.bandEl.style.filter = `brightness(${(1 + (1 - progress) * 1.5).toFixed(3)})`;
+        } else {
+          entry.bandEl.style.opacity = '0';
+          entry.bandEl.style.filter = 'brightness(1)';
         }
       }
       if (entry.triggered && entry.age >= entry.ttl) {
