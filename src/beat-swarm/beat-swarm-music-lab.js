@@ -7138,9 +7138,7 @@ export function createBeatSwarmMusicLab(options = null) {
         || text.includes('foundation_lane')
         || text.includes('music_click_percussion_trigger')
         || text.includes('lead_ball')
-        || text.includes('lead-ball')
-        || text.includes('leadtheme')
-        || text.includes('primary_loop_lane');
+        || text.includes('lead-ball');
     };
     const mergeCompactPinned = (pinned, tail, limit) => {
       const rows = [];
