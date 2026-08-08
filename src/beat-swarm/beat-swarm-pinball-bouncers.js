@@ -1,3 +1,5 @@
+import { updateMusicObjectAutoActivation } from './beat-swarm-music-object-auto-activation.js?v=2026-08-08-auto-activation-v2';
+
 const STYLE_ID = 'beat-swarm-pinball-bouncer-style';
 const MAX_HITS = 8;
 const MAX_ACTIVE_BOUNCERS = 4;
@@ -354,6 +356,8 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
       anchorRadiusN: radiusN,
       rotationDeg,
       size,
+      autoActivationLastPulseTick: -1,
+      autoPulseT: 0,
       el,
     };
     state.bouncers.push(bouncer);
@@ -394,10 +398,13 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     const activeBounceN = clamp01(1 - (activeAge / 0.34));
     const activeBounce = Math.sin(activeBounceN * Math.PI) * 0.2;
     const impactBounce = Math.sin(impactN * Math.PI) * 0.24;
-    const scale = (0.24 + eased * 0.76 + activeBounce + impactBounce) * (Number(bouncer.size) || 1);
+    const warningN = Math.max(0, Math.min(1, (Number(bouncer.autoPulseT) || 0) / 0.34));
+    const warningBounce = Math.sin(warningN * Math.PI) * 0.12;
+    const scale = (0.24 + eased * 0.76 + activeBounce + impactBounce + warningBounce) * (Number(bouncer.size) || 1);
     const opacity = 0.2 + eased * 0.78;
     const rotate = Number(bouncer.rotationDeg) || 0;
     el.style.opacity = opacity.toFixed(3);
+    el.style.filter = `brightness(${(1 + warningN * 0.9 + impactN * 1.15).toFixed(3)})`;
     el.style.transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px) rotate(${rotate.toFixed(2)}deg) scale(${scale.toFixed(3)})`;
     el.classList.toggle('is-arrived', arriveN >= 1);
     el.classList.toggle('is-activating', activeBounceN > 0 && arriveN >= 1 && impactN <= 0);
@@ -414,16 +421,18 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     return null;
   }
 
-  function queueHit(bouncer = null, player = null) {
+  function queueHit(bouncer = null, player = null, options = null) {
     if (!bouncer || bouncer.hitQueued === true) return false;
     const at = getBouncerWorld(bouncer);
     const normal = normalize((Number(player?.x) || 0) - at.x, (Number(player?.y) || 0) - at.y, 1, 0);
-    deps.onPlayerBounced?.({
-      normalWorld: normal,
-      power: BOUNCER_BOUNCE_POWER,
-      at,
-      eventId: state.eventId,
-    });
+    if (options?.bouncePlayer !== false) {
+      deps.onPlayerBounced?.({
+        normalWorld: normal,
+        power: BOUNCER_BOUNCE_POWER,
+        at,
+        eventId: state.eventId,
+      });
+    }
     const clock = deps.getBeatClock?.() || {};
     const slot = findNextFreeStep(getClockStep(clock, state.stepCount));
     if (!slot) return false;
@@ -543,6 +552,7 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     if (canSpawnGroup()) spawnGroup();
     for (const bouncer of state.bouncers.slice()) {
       bouncer.age = Math.max(0, Number(bouncer.age) || 0) + safeDt;
+      bouncer.autoPulseT = Math.max(0, (Number(bouncer.autoPulseT) || 0) - safeDt);
       if (bouncer.impactAge >= 0) bouncer.impactAge += safeDt;
       renderBouncer(bouncer);
       if (bouncer.hitQueued === true) {
@@ -554,6 +564,12 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
         continue;
       }
       if (bouncer.age < ARRIVAL_SECONDS) continue;
+      const autoActivation = updateMusicObjectAutoActivation(bouncer, deps.getBeatClock?.());
+      if (autoActivation.pulse) bouncer.autoPulseT = 0.34;
+      if (autoActivation.activate) {
+        queueHit(bouncer, null, { bouncePlayer: false });
+        continue;
+      }
       const at = getBouncerWorld(bouncer);
       const hitRadius = BOUNCER_HIT_RADIUS * (Number(bouncer.size) || 1);
       if (

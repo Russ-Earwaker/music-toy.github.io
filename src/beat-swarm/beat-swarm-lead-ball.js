@@ -1,3 +1,5 @@
+import { updateMusicObjectAutoActivation } from './beat-swarm-music-object-auto-activation.js?v=2026-08-08-auto-activation-v2';
+
 const STYLE_ID = 'beat-swarm-lead-ball-style';
 const BALL_RADIUS = 42;
 const BALL_SPEED = 1450;
@@ -8,7 +10,6 @@ const BALL_INCIDENTAL_HIT_RADIUS = 150;
 const BALL_HOP_PATH_RADIUS = 280;
 const BALL_HOP_MIN_TRAVEL = 260;
 const BALL_BUMP_RADIUS = 94;
-const BALL_MAX_IDLE_SECONDS = 10;
 const BALL_PICKUP_RADIUS = 74;
 const BALL_PICKUP_TRAVEL_SPEED = 620;
 const BALL_COUNT = 2;
@@ -390,6 +391,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
         anchorAngle: 0,
         anchorRadiusN: 0.18,
         arenaContained: true,
+        autoActivationLastPulseTick: -1,
+        autoPulseT: 0,
       };
     state.lastArenaCenter = center;
     if (state.pickupEl instanceof HTMLElement) {
@@ -452,6 +455,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       anchorAngle: sourceAngle,
       anchorRadiusN: 0.52,
       arenaContained: false,
+      autoActivationLastPulseTick: -1,
+      autoPulseT: 0,
     };
     state.lastArenaCenter = center;
     state.deferPickupUntilCarrierDeath = false;
@@ -1134,6 +1139,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
 
   function updatePickup(player, dt) {
     if (!state.active || !state.pickup) return;
+    state.pickup.autoPulseT = Math.max(0, (Number(state.pickup.autoPulseT) || 0) - dt);
+    let autoActivation = { pulse: false, activate: false };
     const arena = point(deps.getArenaCenterWorld?.() || player);
     const previousArena = state.lastArenaCenter || arena;
     state.pickup.x += arena.x - previousArena.x;
@@ -1162,10 +1169,16 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       state.pickup.x = arena.x + (arenaDx / arenaDistance) * containmentRadius;
       state.pickup.y = arena.y + (arenaDy / arenaDistance) * containmentRadius;
     }
+    if (Math.max(0, targetDistance - travel) <= 1) {
+      autoActivation = updateMusicObjectAutoActivation(state.pickup, deps.getBeatClock?.());
+      if (autoActivation.pulse) state.pickup.autoPulseT = 0.34;
+    }
     const dx = state.pickup.x - player.x;
     const dy = state.pickup.y - player.y;
     if (Math.hypot(dx, dy) <= BALL_PICKUP_RADIUS + 42) {
       releaseBallsFromPickup(player);
+    } else if (autoActivation.activate) {
+      releaseBallsFromPickup({ x: state.pickup.x - 80, y: state.pickup.y });
     }
   }
 
@@ -1264,9 +1277,13 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     if (state.pickup && state.pickupEl instanceof HTMLElement) {
       const screen = deps.worldToScreen?.(state.pickup);
       if (screen && Number.isFinite(screen.x) && Number.isFinite(screen.y)) {
-        const transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px)`;
+        const pulseN = Math.max(0, Math.min(1, (Number(state.pickup.autoPulseT) || 0) / 0.34));
+        const pulseScale = 1 + Math.sin(pulseN * Math.PI) * 0.22;
+        const transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px) scale(${pulseScale.toFixed(3)})`;
         state.pickupEl.style.setProperty('--bs-lead-pickup-transform', transform);
         state.pickupEl.style.transform = transform;
+        state.pickupEl.style.removeProperty('scale');
+        state.pickupEl.style.filter = `brightness(${(1 + pulseN * 0.9).toFixed(3)})`;
       }
     }
     for (const ball of state.balls) {
@@ -1275,9 +1292,6 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       renderAt(ball.el, ball, angle);
     }
     state.previousPlayer = player;
-    if (state.active && state.elapsed > BALL_MAX_IDLE_SECONDS && state.pickup) {
-      releaseBallsFromPickup({ x: state.pickup.x - 80, y: state.pickup.y });
-    }
   }
 
   return {

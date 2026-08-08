@@ -1,3 +1,5 @@
+import { updateMusicObjectAutoActivation } from './beat-swarm-music-object-auto-activation.js?v=2026-08-08-auto-activation-v2';
+
 const STYLE_ID = 'beat-swarm-music-missile-style';
 const MAX_ITEMS = 8;
 const PICKUP_TRAVEL_SPEED = 520;
@@ -324,6 +326,8 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       magneticLatched: false,
       rocketCount,
       spinElapsed: Math.random() * PICKUP_ROCKET_SPIN_SECONDS,
+      autoActivationLastPulseTick: -1,
+      autoPulseT: 0,
       el,
     };
     addPickupRocketVisuals(pickup);
@@ -588,6 +592,31 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     }
   }
 
+  function activatePickup(pickup = null, index = -1) {
+    if (!pickup) return false;
+    removeEntry(pickup);
+    const pickupIndex = index >= 0 ? index : state.pickups.indexOf(pickup);
+    if (pickupIndex >= 0) state.pickups.splice(pickupIndex, 1);
+    const rocketCount = Math.max(1, Math.trunc(Number(pickup.rocketCount) || 1));
+    for (let rocket = 0; rocket < rocketCount; rocket += 1) {
+      const angle = getPickupRocketAngle(pickup, rocket);
+      const tangent = angle + (Math.PI / 2);
+      spawnOrbitingMissile({
+        world: {
+          x: pickup.x + Math.cos(angle) * PICKUP_ROCKET_ORBIT_RADIUS,
+          y: pickup.y + Math.sin(angle) * PICKUP_ROCKET_ORBIT_RADIUS,
+        },
+        velocity: {
+          x: Math.cos(tangent) * PICKUP_ROCKET_RELEASE_SPEED,
+          y: Math.sin(tangent) * PICKUP_ROCKET_RELEASE_SPEED,
+        },
+        angle: tangent,
+      });
+    }
+    releaseAllMissiles();
+    return true;
+  }
+
   function updatePickups(dt, player) {
     const arena = point(deps.getArenaCenterWorld?.());
     const arenaRadius = Math.max(120, Number(deps.getArenaRadius?.()) || 500);
@@ -601,9 +630,12 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       pickup.x += arenaDx;
       pickup.y += arenaDy;
       pickup.spinElapsed = Math.max(0, Number(pickup.spinElapsed) || 0) + dt;
+      pickup.autoPulseT = Math.max(0, (Number(pickup.autoPulseT) || 0) - dt);
+      let autoActivation = { pulse: false, activate: false };
+      const anchorRadius = Math.min(containmentRadius, arenaRadius * pickup.anchorRadiusN);
       let target = {
-        x: arena.x + Math.cos(pickup.anchorAngle) * arenaRadius * pickup.anchorRadiusN,
-        y: arena.y + Math.sin(pickup.anchorAngle) * arenaRadius * pickup.anchorRadiusN,
+        x: arena.x + Math.cos(pickup.anchorAngle) * anchorRadius,
+        y: arena.y + Math.sin(pickup.anchorAngle) * anchorRadius,
       };
       const playerDist = Math.hypot(pickup.x - player.x, pickup.y - player.y);
       if (playerDist <= PICKUP_MAGNET_RADIUS) pickup.magneticLatched = true;
@@ -629,28 +661,21 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
         pickup.x = arena.x + (arenaOffsetX / arenaDistance) * containmentRadius;
         pickup.y = arena.y + (arenaOffsetY / arenaDistance) * containmentRadius;
       }
-      renderAt(pickup.el, pickup);
-      renderPickupRockets(pickup);
-      if (Math.hypot(pickup.x - player.x, pickup.y - player.y) > PICKUP_COLLECT_RADIUS) continue;
-      removeEntry(pickup);
-      state.pickups.splice(i, 1);
-      const rocketCount = Math.max(1, Math.trunc(Number(pickup.rocketCount) || 1));
-      for (let rocket = 0; rocket < rocketCount; rocket += 1) {
-        const angle = getPickupRocketAngle(pickup, rocket);
-        const tangent = angle + (Math.PI / 2);
-        spawnOrbitingMissile({
-          world: {
-            x: pickup.x + Math.cos(angle) * PICKUP_ROCKET_ORBIT_RADIUS,
-            y: pickup.y + Math.sin(angle) * PICKUP_ROCKET_ORBIT_RADIUS,
-          },
-          velocity: {
-            x: Math.cos(tangent) * PICKUP_ROCKET_RELEASE_SPEED,
-            y: Math.sin(tangent) * PICKUP_ROCKET_RELEASE_SPEED,
-          },
-          angle: tangent,
-        });
+      if (!magnetic && dist <= 1) {
+        autoActivation = updateMusicObjectAutoActivation(pickup, deps.getBeatClock?.());
+        if (autoActivation.pulse) pickup.autoPulseT = 0.34;
       }
-      releaseAllMissiles();
+      renderAt(pickup.el, pickup);
+      if (pickup.el instanceof HTMLElement) {
+        const pulseN = Math.max(0, Math.min(1, pickup.autoPulseT / 0.34));
+        const pulseScale = 1 + Math.sin(pulseN * Math.PI) * 0.22;
+        pickup.el.style.removeProperty('scale');
+        pickup.el.style.transform += ` scale(${pulseScale.toFixed(3)})`;
+        pickup.el.style.filter = `brightness(${(1 + pulseN * 0.9).toFixed(3)})`;
+      }
+      renderPickupRockets(pickup);
+      if (!autoActivation.activate && Math.hypot(pickup.x - player.x, pickup.y - player.y) > PICKUP_COLLECT_RADIUS) continue;
+      activatePickup(pickup, i);
     }
   }
 

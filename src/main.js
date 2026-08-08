@@ -36,7 +36,7 @@ import './beat-swarm/weapon-gate-lab.js?v=2026-06-18-corridor-curve-v1';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
-import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-08-05-lead-audit-pinning-v13';
+import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-08-08-object-autoactivation-v4';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';

@@ -128,7 +128,10 @@ function renderDashPickup(state) {
 
 function renderNoteMap(state, notePool, totalSlots) {
   if (state?.hideNoteMap === true) return '';
-  const stars = state.noteStars;
+  const stars = [...state.noteStars].sort((a, b) => {
+    const slotDelta = Math.trunc(Number(a?.slot) || 0) - Math.trunc(Number(b?.slot) || 0);
+    return slotDelta || ((Number(a?.x) || 0) - (Number(b?.x) || 0));
+  });
   if (!stars.length) return '';
   const endProgress = getWeaponGateEndProgress(totalSlots);
   const completion = Math.max(0, Math.min(1, (state.progress + 520) / Math.max(1, endProgress + 520)));

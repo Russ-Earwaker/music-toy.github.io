@@ -21,12 +21,12 @@ import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-compo
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js?v=2026-08-05-lead-audit-pinning-v2';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
-import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-07-26-arena-pickups-v1';
-import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-07-26-accent-handoff-v1';
-import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-03-lead-pitch-timing-audit-v9';
+import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-08-08-object-autoactivation-v4';
+import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-08-08-object-autoactivation-v4';
+import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-08-object-autoactivation-v4';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-07-19-surface-field-v6';
-import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-08-02-weapon-warmup-v1';
-import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
+import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-08-05-launch-vector-v1';
+import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-08-05-temporal-lines-v1';
 import { WEAPON_GATE_MAX_SILENCE_STREAK, WEAPON_GATE_TARGET_SILENCES, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 import { applyWeaponGateSelection, createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-22-quantized-bridge-v5';
@@ -30664,10 +30664,14 @@ function tick(nowMs) {
       const releaseN = Math.max(weaponGateCurrentRuntime.pushN, charge * 0.35);
       if (charge > 0.18) {
         const impulse = getReactiveReleaseImpulse(releaseN, charge);
-        const launchedFromPrelaunch = gatePrelaunchActive
-          ? weaponGateIntroRuntime.launch?.() === true
-          : false;
         const releaseRad = weaponGateCurrentRuntime.releaseAngleDeg * Math.PI / 180;
+        const launchDirection = {
+          x: Math.cos(releaseRad),
+          y: Math.sin(releaseRad),
+        };
+        const launchedFromPrelaunch = gatePrelaunchActive
+          ? weaponGateIntroRuntime.launch?.(launchDirection) === true
+          : false;
         if (!launchedFromPrelaunch) {
           const impulseScale = 0.36;
           weaponGateCurrentRuntime.releaseVx += Math.cos(releaseRad) * impulse * impulseScale;

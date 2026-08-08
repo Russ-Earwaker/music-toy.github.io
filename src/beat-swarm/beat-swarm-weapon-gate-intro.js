@@ -8,7 +8,7 @@ import {
 } from './beat-swarm-weapon-gate-config.js?v=2026-07-23-weapon-gate-cadence-v6';
 import { pulseWeaponGateGhost, tickWeaponGateTransientEffects } from './beat-swarm-weapon-gate-effects.js?v=2026-07-26-weapon-gate-ghosts-v3';
 import { clampWeaponGateValue, getWeaponGateCorridorBounds, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
-import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-07-26-weapon-gate-ghosts-v3';
+import { ensureWeaponGateIntroStyle, renderWeaponGateIntro } from './beat-swarm-weapon-gate-render.js?v=2026-08-05-temporal-lines-v1';
 import { chooseCurrentWeaponGate } from './beat-swarm-weapon-gate-selection.js?v=2026-08-02-physical-crossing-v1';
 import { createWeaponGateIntroState, initializeWeaponGateSchedule } from './beat-swarm-weapon-gate-state.js?v=2026-07-28-weapon-gate-clock-v1';
 
@@ -93,8 +93,11 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
     const nextProgress = (Number(state.launchProgress) || 0) + getWeaponGateTravelDistance(state.launchElapsed);
     const forwardDelta = Math.max(0, nextProgress - (Number(state.progress) || 0));
     state.progress = nextProgress;
-    state.y = clampWeaponGateValue(state.y + sideDelta, top + 20, bottom - 20);
-    appliedSideDelta = state.y <= top + 20 || state.y >= bottom - 20 ? 0 : sideDelta;
+    const launchSideDelta = (Number(state.launchSideVelocity) || 0) * dt;
+    state.launchSideVelocity = (Number(state.launchSideVelocity) || 0) * Math.max(0, 1 - dt * 3.8);
+    const previousY = state.y;
+    state.y = clampWeaponGateValue(state.y + sideDelta + launchSideDelta, top + 20, bottom - 20);
+    appliedSideDelta = state.y - previousY;
     chooseCurrentWeaponGate(state, {
       applySelections: deps.applySelections,
       onComplete: deps.onComplete,
@@ -132,11 +135,15 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
   return {
     start,
     stop,
-    launch() {
+    launch(direction = null) {
       if (!state || state.phase !== 'prelaunch') return false;
       try { deps.warmWeaponSound?.(); } catch {}
       state.phase = 'gate';
       state.speed = WEAPON_GATE_LAUNCH_SPEED;
+      const directionX = Number(direction?.x) || 1;
+      const directionY = Number(direction?.y) || 0;
+      const directionLength = Math.max(0.001, Math.hypot(directionX, directionY));
+      state.launchSideVelocity = (directionY / directionLength) * WEAPON_GATE_LAUNCH_SPEED;
       const alignmentDelay = deps.getWeaponStepAlignmentDelay?.();
       initializeWeaponGateSchedule(
         state,
