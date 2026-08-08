@@ -46,6 +46,7 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
     : null;
   const el = pooledEl instanceof HTMLElement ? pooledEl : document.createElement('div');
   el.className = 'beat-swarm-projectile is-hostile-red';
+  if (opts?.homing === true) el.classList.add('is-hostile-homing');
   enemyLayerEl.appendChild(el);
   const pooledProjectile = pooledHostileRedProjectileStates && pooledHostileRedProjectileStates.length
     ? pooledHostileRedProjectileStates.pop()
@@ -59,7 +60,7 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   projectile.wy = Number(origin.y) || 0;
   projectile.vx = Math.cos(ang) * speed;
   projectile.vy = Math.sin(ang) * speed;
-  projectile.ttl = Number(constants.projectileLifetime) || 1.5;
+  projectile.ttl = Math.max(0.2, Number(opts?.projectileLifetime) || Number(constants.projectileLifetime) || 1.5);
   projectile.damage = Math.max(0.1, Number(opts?.damage) || 1);
   projectile.kind = 'hostile-red';
   projectile.hitEnemyIds = hitEnemyIds;
@@ -85,6 +86,9 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   projectile.ignoreEnemyId = null;
   projectile.hasEnteredScreen = false;
   projectile.hostileToEnemies = false;
+  projectile.hostileHoming = opts?.homing === true;
+  projectile.hostileHomingSpeed = Math.max(120, Number(opts?.speed) || speed);
+  projectile.hostileHomingTurnRate = Math.max(0.1, Number(opts?.homingTurnRate) || 1.4);
   projectile.hostileNoteName = hostileNoteName;
   projectile.hostileInstrument = hostileInstrument;
   projectile.el = el;

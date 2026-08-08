@@ -4930,6 +4930,262 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   transition: filter 80ms linear, box-shadow 80ms linear;
 }
 
+.beat-swarm-enemy.is-gunner-enemy {
+  --bs-role-color: #294657;
+  --bs-role-color-bright: #9ae8ff;
+  --bs-role-color-deep: #101b26;
+  --bs-role-border-color: rgba(202, 244, 255, 0.92);
+  --bs-role-glow-color: rgba(67, 205, 255, 0.5);
+  width: 54px;
+  height: 54px;
+  margin-left: -27px;
+  margin-top: -27px;
+  border-radius: 8px;
+  clip-path: polygon(22% 0, 78% 0, 100% 22%, 100% 78%, 78% 100%, 22% 100%, 0 78%, 0 22%);
+  background: radial-gradient(circle at 50% 45%, #5c8597 0 16%, #294657 18% 52%, #101b26 54% 100%);
+  border: 3px solid var(--bs-role-border-color);
+  box-shadow: inset 0 0 0 5px rgba(8, 18, 27, 0.72), 0 0 18px var(--bs-role-glow-color);
+}
+
+.beat-swarm-enemy.is-gunner-enemy.is-combat-active {
+  box-shadow: inset 0 0 0 5px rgba(8, 18, 27, 0.72), 0 0 26px rgba(103, 223, 255, 0.72);
+}
+
+.beat-swarm-enemy.is-seeker-enemy {
+  --bs-role-border-color: rgba(255, 224, 163, 0.94);
+  --bs-role-glow-color: rgba(255, 174, 65, 0.52);
+  width: 58px;
+  height: 58px;
+  margin-left: -29px;
+  margin-top: -29px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #fff4b2 0 9%, #b56a22 11% 24%, #332117 27% 54%, #101820 56% 100%);
+  border: 3px solid var(--bs-role-border-color);
+  box-shadow: inset 0 0 0 6px rgba(8, 17, 25, 0.74), 0 0 20px var(--bs-role-glow-color);
+}
+
+.beat-swarm-enemy.is-seeker-enemy.is-combat-active {
+  box-shadow: inset 0 0 0 6px rgba(8, 17, 25, 0.74), 0 0 30px rgba(255, 190, 84, 0.8);
+}
+
+.beat-swarm-enemy.is-laser-spinner-enemy {
+  --bs-role-border-color: rgba(224, 184, 255, 0.96);
+  --bs-role-glow-color: rgba(185, 75, 255, 0.58);
+  width: 64px;
+  height: 64px;
+  margin-left: -32px;
+  margin-top: -32px;
+  border-radius: 18px;
+  transform-origin: center;
+  background: radial-gradient(circle, #f7dcff 0 8%, #8f42b8 10% 20%, #261a38 23% 52%, #10151f 55% 100%);
+  border: 3px solid var(--bs-role-border-color);
+  box-shadow: inset 0 0 0 7px rgba(14, 11, 25, 0.78), 0 0 24px var(--bs-role-glow-color);
+}
+
+.beat-swarm-enemy.is-laser-spinner-enemy.is-combat-active {
+  box-shadow: inset 0 0 0 7px rgba(14, 11, 25, 0.78), 0 0 34px rgba(211, 105, 255, 0.82);
+}
+
+.beat-swarm-enemy.is-shape-caster-enemy {
+  --bs-role-border-color: rgba(138, 255, 221, 0.96);
+  --bs-role-glow-color: rgba(43, 235, 189, 0.54);
+  width: 66px;
+  height: 66px;
+  margin-left: -33px;
+  margin-top: -33px;
+  border-radius: 0;
+  clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%);
+  background: radial-gradient(circle, #d8fff5 0 8%, #36b99b 10% 20%, #183c3d 23% 54%, #0b171d 57% 100%);
+  border: 3px solid var(--bs-role-border-color);
+  box-shadow: inset 0 0 0 7px rgba(7, 24, 27, 0.78), 0 0 24px var(--bs-role-glow-color);
+}
+
+.beat-swarm-enemy.is-shape-caster-enemy.is-combat-active {
+  filter: brightness(calc(1.15 + (var(--bs-role-pulse) * 0.32)));
+}
+
+.beat-swarm-enemy.is-charger-enemy {
+  --bs-role-border-color: rgba(255, 225, 178, 0.96);
+  --bs-role-glow-color: rgba(255, 119, 58, 0.58);
+  width: 70px;
+  height: 54px;
+  margin-left: -35px;
+  margin-top: -27px;
+  border-radius: 0;
+  clip-path: polygon(0 14%, 62% 14%, 100% 50%, 62% 86%, 0 86%, 18% 50%);
+  background: linear-gradient(90deg, #251a18 0 20%, #864027 48%, #ffb05e 76%, #fff1c5 100%);
+  border: 3px solid var(--bs-role-border-color);
+  box-shadow: 0 0 24px var(--bs-role-glow-color);
+}
+
+.beat-swarm-enemy.is-charger-enemy.is-combat-active {
+  filter: brightness(calc(1.18 + (var(--bs-role-pulse) * 0.32)));
+}
+
+.beat-swarm-enemy.is-conductor-enemy {
+  --bs-role-border-color: rgba(190, 255, 250, 0.98);
+  --bs-role-glow-color: rgba(47, 232, 218, 0.66);
+  width: 72px;
+  height: 72px;
+  margin-left: -36px;
+  margin-top: -36px;
+  border-radius: 22px;
+  clip-path: polygon(50% 0, 64% 27%, 100% 36%, 73% 55%, 79% 100%, 50% 76%, 21% 100%, 27% 55%, 0 36%, 36% 27%);
+  background: radial-gradient(circle, #e8fffc 0 8%, #42d8ca 10% 19%, #173d43 22% 56%, #09161d 59% 100%);
+  border: 3px solid var(--bs-role-border-color);
+  box-shadow: inset 0 0 0 7px rgba(6, 25, 29, 0.8), 0 0 28px var(--bs-role-glow-color);
+}
+
+.beat-swarm-enemy.is-conductor-enemy.is-combat-active {
+  filter: brightness(calc(1.2 + (var(--bs-role-pulse) * 0.36)));
+}
+
+.beat-swarm-conductor-link {
+  position: fixed;
+  z-index: 1;
+  height: 3px;
+  transform-origin: left center;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, rgba(136, 255, 245, 0.92) 0 12px, rgba(70, 213, 230, 0.2) 12px 20px);
+  box-shadow: 0 0 9px rgba(74, 244, 232, 0.75);
+  animation: beat-swarm-conductor-link-pulse 0.88s ease-in-out infinite alternate;
+}
+
+.beat-swarm-conductor-link.is-shield_field {
+  height: 5px;
+  background: linear-gradient(90deg, rgba(210, 255, 251, 0.94), rgba(63, 222, 234, 0.42));
+}
+
+.beat-swarm-enemy.is-conductor-protected {
+  filter: brightness(1.08);
+}
+
+.beat-swarm-conductor-shield {
+  --bs-conductor-shield-strength: 0.58;
+  position: fixed;
+  z-index: 2;
+  width: 94px;
+  height: 94px;
+  margin-left: -47px;
+  margin-top: -47px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 9px rgba(72, 246, 232, calc(0.28 + (var(--bs-conductor-shield-strength) * 0.34))));
+  animation: beat-swarm-conductor-shield-pulse 1.05s ease-in-out infinite alternate;
+}
+
+.beat-swarm-conductor-shield::before,
+.beat-swarm-conductor-shield::after {
+  content: '';
+  position: absolute;
+  clip-path: polygon(25% 6%, 75% 6%, 98% 50%, 75% 94%, 25% 94%, 2% 50%);
+}
+
+.beat-swarm-conductor-shield::before {
+  inset: 0;
+  background: rgba(122, 255, 245, calc(0.48 + (var(--bs-conductor-shield-strength) * 0.34)));
+}
+
+.beat-swarm-conductor-shield::after {
+  inset: 5px;
+  background: rgba(8, 32, 39, 0.14);
+  box-shadow: inset 0 0 18px rgba(117, 255, 245, 0.2);
+}
+
+.beat-swarm-conductor-shield.is-hit {
+  animation: beat-swarm-conductor-shield-hit 220ms ease-out, beat-swarm-conductor-shield-pulse 1.05s ease-in-out 220ms infinite alternate;
+}
+
+@keyframes beat-swarm-conductor-link-pulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+@keyframes beat-swarm-conductor-shield-pulse {
+  from { opacity: 0.62; }
+  to { opacity: 0.92; }
+}
+
+@keyframes beat-swarm-conductor-shield-hit {
+  0% { opacity: 1; filter: brightness(2.8) drop-shadow(0 0 20px #fff); }
+  42% { opacity: 1; filter: brightness(1.8) drop-shadow(0 0 16px rgba(104, 255, 245, 0.96)); }
+  100% { opacity: 0.72; filter: brightness(1) drop-shadow(0 0 9px rgba(72, 246, 232, 0.58)); }
+}
+
+.beat-swarm-charge-telegraph {
+  position: fixed;
+  z-index: 1;
+  height: 4px;
+  transform-origin: left center;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, rgba(255, 202, 126, 0.82) 0 22px, rgba(255, 118, 72, 0.12) 22px 38px);
+  box-shadow: 0 0 12px rgba(255, 126, 67, 0.58);
+}
+
+.beat-swarm-charge-telegraph.is-intercept {
+  background: repeating-linear-gradient(90deg, rgba(255, 231, 166, 0.9) 0 14px, rgba(255, 75, 120, 0.18) 14px 28px);
+}
+
+.beat-swarm-charge-telegraph.is-active {
+  height: 9px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.94), rgba(255, 147, 64, 0.76), rgba(255, 80, 62, 0.05));
+  box-shadow: 0 0 18px rgba(255, 197, 117, 0.82);
+}
+
+.beat-swarm-hostile-laser {
+  position: fixed;
+  z-index: 1;
+  height: 7px;
+  transform-origin: left center;
+  pointer-events: none;
+}
+
+.beat-swarm-hostile-laser.is-warning {
+  height: 2px;
+  background: repeating-linear-gradient(90deg, rgba(255, 174, 242, 0.72) 0 16px, rgba(255, 174, 242, 0.08) 16px 28px);
+  box-shadow: 0 0 9px rgba(223, 102, 255, 0.42);
+}
+
+.beat-swarm-hostile-laser.is-active {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.98), rgba(232, 99, 255, 0.94) 24%, rgba(153, 50, 255, 0.68));
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.88), 0 0 24px rgba(210, 73, 255, 0.86);
+}
+
+.beat-swarm-hostile-shape {
+  position: fixed;
+  z-index: 1;
+  pointer-events: none;
+  transform-origin: center;
+  transition: filter 100ms linear, opacity 100ms linear;
+}
+
+.beat-swarm-hostile-shape.is-circle {
+  border-radius: 50%;
+}
+
+.beat-swarm-hostile-shape.is-hex {
+  clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%);
+}
+
+.beat-swarm-hostile-shape.is-warning {
+  border: 3px dashed rgba(255, 218, 119, 0.9);
+  background: rgba(255, 191, 72, 0.08);
+  box-shadow: 0 0 18px rgba(255, 189, 75, 0.46);
+  opacity: 0.82;
+}
+
+.beat-swarm-hostile-shape.is-active.is-safe-inside {
+  border: 6px solid rgba(116, 255, 220, 0.96);
+  background: radial-gradient(circle, rgba(76, 255, 211, 0.04), rgba(76, 255, 211, 0.14));
+  box-shadow: inset 0 0 30px rgba(67, 255, 214, 0.18), 0 0 18px rgba(79, 255, 218, 0.82), 0 0 0 200vmax rgba(255, 52, 104, 0.065);
+}
+
+.beat-swarm-hostile-shape.is-active.is-safe-outside {
+  border: 6px solid rgba(255, 104, 151, 0.98);
+  background: rgba(255, 47, 111, 0.2);
+  box-shadow: inset 0 0 42px rgba(255, 41, 106, 0.28), 0 0 24px rgba(255, 75, 137, 0.84);
+}
+
+
 .beat-swarm-enemy.is-spawner-enemy {
   width: 172px;
   height: 172px;
@@ -7503,6 +7759,16 @@ body.beat-swarm-active.internal-board-active .app-topbar {
   opacity: 0 !important;
   color: transparent !important;
   background: transparent !important;
+}
+
+.beat-swarm-projectile.is-hostile-red.is-hostile-homing {
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  margin-top: -9px;
+  border: 2px solid rgba(255, 239, 184, 0.94);
+  background: radial-gradient(circle at 36% 34%, #fff9d7 0 18%, #ffb33d 42%, #d94b2f 76%, #6f1825 100%);
+  box-shadow: 0 0 18px rgba(255, 183, 62, 0.96), 0 0 32px rgba(255, 83, 54, 0.5);
 }
 
 .beat-swarm-fx-explosion.is-music-explosion {

@@ -455,6 +455,14 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
+        ${btn('musicLabRunShapeCasterSeekerCombinationDebug', 'Run Shape Caster + Seeker (1x45s)', 'primary')}
+        ${btn('musicLabRunShapeCasterGunnerCombinationDebug', 'Run Shape Caster + Gunners (1x45s)', 'primary')}
+        ${btn('musicLabRunConductorCombatDebug', 'Run Conductor Profiles (1x60s)', 'primary')}
+        ${btn('musicLabRunChargerCombatDebug', 'Run Charger Profiles (1x60s)', 'primary')}
+        ${btn('musicLabRunShapeCasterCombatDebug', 'Run Shape Caster Profiles (1x60s)', 'primary')}
+        ${btn('musicLabRunLaserSpinnerCombatDebug', 'Run Laser Spinner Profiles (1x60s)', 'primary')}
+        ${btn('musicLabRunSeekerCombatDebug', 'Run Seeker Combat Profiles (1x60s)', 'primary')}
+        ${btn('musicLabRunGunnerCombatDebug', 'Run Gunner Combat Profiles (1x60s)', 'primary')}
         ${btn('musicLabRunBS0S3GateToLeadGatesDebug', 'Run Gate -> Lead Gates (1x60s)', 'primary')}
         ${btn('musicLabRunBS0S3GateToLeadBallDebug', 'Run Gate -> Lead Ball (1x60s)', 'primary')}
         ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Incremental Contributions (1x180s)', 'primary')}
@@ -1501,6 +1509,38 @@ function ensureUI() {
     }
     if (act === 'musicLabRunBS0S3TapOrbFoundationDebug') {
       await runBS0s3MusicLabTapOrbFoundationDebug75s();
+      return;
+    }
+    if (act === 'musicLabRunGunnerCombatDebug') {
+      await runGunnerCombatProfilesDebug();
+      return;
+    }
+    if (act === 'musicLabRunSeekerCombatDebug') {
+      await runSeekerCombatProfilesDebug();
+      return;
+    }
+    if (act === 'musicLabRunLaserSpinnerCombatDebug') {
+      await runLaserSpinnerCombatProfilesDebug();
+      return;
+    }
+    if (act === 'musicLabRunShapeCasterCombatDebug') {
+      await runShapeCasterCombatProfilesDebug();
+      return;
+    }
+    if (act === 'musicLabRunChargerCombatDebug') {
+      await runChargerCombatProfilesDebug();
+      return;
+    }
+    if (act === 'musicLabRunConductorCombatDebug') {
+      await runConductorCombatProfilesDebug();
+      return;
+    }
+    if (act === 'musicLabRunShapeCasterGunnerCombinationDebug') {
+      await runShapeCasterGunnerCombinationDebug();
+      return;
+    }
+    if (act === 'musicLabRunShapeCasterSeekerCombinationDebug') {
+      await runShapeCasterSeekerCombinationDebug();
       return;
     }
     if (act === 'musicLabRunBS0S3AccentRewriteDebug') {
@@ -7257,6 +7297,370 @@ async function runBS0s3MusicLabSingle1m() {
   });
 }
 
+async function runGunnerCombatProfilesDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_gunner_combat_profiles_1x60s',
+    saveNotes: 'Gunner combat profile test: 16 beats each of straight, spread, and burst, followed by all patterns together.',
+    groupedScenarioName: 'beat_swarm_gunner_combat_profiles_1x60s',
+    groupedRunId: 'musicLab_gunner_combat_profiles_1x60s_scenario',
+    groupedNotes: 'Focused Gunner vertical slice using production enemy combat scheduling and hostile projectiles.',
+    tagPrefix: 'GunnerCombatProfiles1x60s',
+    labelPrefix: 'BS0_gunner_combat_profiles_1x60s',
+    statusPrefix: 'Running Gunner combat profiles: straight, spread, burst, combined',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startGunnerCombatTest !== 'function') {
+        throw new Error('gunner_combat_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startGunnerCombatTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 3) {
+        throw new Error('gunner_combat_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_GUNNER_COMBAT_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+      ],
+      maxLines: 420,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-gunner-combat-profiles',
+    },
+  });
+}
+
+async function runSeekerCombatProfilesDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_seeker_combat_profiles_1x60s',
+    saveNotes: 'Seeker combat profile test: 16 beats of pursuit with a strong homing shot, 16 beats of interception with a weak homing swarm, then both together.',
+    groupedScenarioName: 'beat_swarm_seeker_combat_profiles_1x60s',
+    groupedRunId: 'musicLab_seeker_combat_profiles_1x60s_scenario',
+    groupedNotes: 'Focused Seeker vertical slice using production movement, combat scheduling, and hostile projectiles.',
+    tagPrefix: 'SeekerCombatProfiles1x60s',
+    labelPrefix: 'BS0_seeker_combat_profiles_1x60s',
+    statusPrefix: 'Running Seeker combat profiles: pursuit, interception, combined',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startSeekerCombatTest !== 'function') {
+        throw new Error('seeker_combat_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startSeekerCombatTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 2) {
+        throw new Error('seeker_combat_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_SEEKER_COMBAT_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+      ],
+      maxLines: 420,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-seeker-combat-profiles',
+    },
+  });
+}
+
+async function runLaserSpinnerCombatProfilesDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_laser_spinner_profiles_1x60s',
+    saveNotes: 'Laser Spinner test: 16 beats of a sweeping laser, 16 beats of rotating radial spokes, then both hazards together.',
+    groupedScenarioName: 'beat_swarm_laser_spinner_profiles_1x60s',
+    groupedRunId: 'musicLab_laser_spinner_profiles_1x60s_scenario',
+    groupedNotes: 'Focused Laser Spinner vertical slice using production combat scheduling and a persistent hostile hazard runtime.',
+    tagPrefix: 'LaserSpinnerProfiles1x60s',
+    labelPrefix: 'BS0_laser_spinner_profiles_1x60s',
+    statusPrefix: 'Running Laser Spinner profiles: sweep, radial, combined',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startLaserSpinnerCombatTest !== 'function') {
+        throw new Error('laser_spinner_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startLaserSpinnerCombatTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 2) {
+        throw new Error('laser_spinner_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_LASER_SPINNER_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+        'enemy_laser_activated',
+        'enemy_laser_player_contact',
+      ],
+      maxLines: 520,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-laser-spinner-profiles',
+    },
+  });
+}
+
+async function runShapeCasterCombatProfilesDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_shape_caster_profiles_1x60s',
+    saveNotes: 'Shape Caster test: 16 beats of safe-inside approach regions, 16 beats of safe-outside evacuation regions, then both together.',
+    groupedScenarioName: 'beat_swarm_shape_caster_profiles_1x60s',
+    groupedRunId: 'musicLab_shape_caster_profiles_1x60s_scenario',
+    groupedNotes: 'Focused Shape Caster vertical slice using production combat scheduling, persistent regions, and surface-field destruction.',
+    tagPrefix: 'ShapeCasterProfiles1x60s',
+    labelPrefix: 'BS0_shape_caster_profiles_1x60s',
+    statusPrefix: 'Running Shape Caster profiles: safe inside, safe outside, combined',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startShapeCasterCombatTest !== 'function') {
+        throw new Error('shape_caster_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startShapeCasterCombatTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 2) {
+        throw new Error('shape_caster_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_SHAPE_CASTER_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+        'enemy_shape_activated',
+        'enemy_shape_player_contact',
+      ],
+      maxLines: 520,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-shape-caster-profiles',
+    },
+  });
+}
+
+async function runChargerCombatProfilesDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_charger_profiles_1x60s',
+    saveNotes: 'Charger test: 16 beats of direct aimed charges, 16 beats of predictive interception charges, then both together.',
+    groupedScenarioName: 'beat_swarm_charger_profiles_1x60s',
+    groupedRunId: 'musicLab_charger_profiles_1x60s_scenario',
+    groupedNotes: 'Focused Charger vertical slice using production combat scheduling and physical enemy movement.',
+    tagPrefix: 'ChargerProfiles1x60s',
+    labelPrefix: 'BS0_charger_profiles_1x60s',
+    statusPrefix: 'Running Charger profiles: direct, intercept, combined',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startChargerCombatTest !== 'function') {
+        throw new Error('charger_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startChargerCombatTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 2) {
+        throw new Error('charger_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_CHARGER_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+        'enemy_charge_activated',
+        'enemy_charge_player_contact',
+      ],
+      maxLines: 520,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-charger-profiles',
+    },
+  });
+}
+
+async function runConductorCombatProfilesDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_conductor_profiles_1x60s',
+    saveNotes: 'Conductor test: 16 beats shielding a pair, 16 beats shielding a wider field, then both conductors with four active Gunner threats.',
+    groupedScenarioName: 'beat_swarm_conductor_profiles_1x60s',
+    groupedRunId: 'musicLab_conductor_profiles_1x60s_scenario',
+    groupedNotes: 'Focused Conductor vertical slice testing visible protection links and target-priority combat.',
+    tagPrefix: 'ConductorProfiles1x60s',
+    labelPrefix: 'BS0_conductor_profiles_1x60s',
+    statusPrefix: 'Running Conductor profiles: pair, field, combined',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startConductorCombatTest !== 'function') {
+        throw new Error('conductor_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startConductorCombatTest();
+      if (
+        snapshot?.active !== true
+        || !Array.isArray(snapshot?.enemyIds)
+        || snapshot.enemyIds.length !== 2
+        || !Array.isArray(snapshot?.supportEnemyIds)
+        || snapshot.supportEnemyIds.length !== 4
+      ) {
+        throw new Error('conductor_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_CONDUCTOR_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+        'enemy_conductor_links_created',
+        'enemy_conductor_damage_absorbed',
+      ],
+      maxLines: 620,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-conductor-profiles',
+    },
+  });
+}
+
+async function runShapeCasterGunnerCombinationDebug() {
+  await runBS0Stage(1, {
+    durationMs: 45000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_shape_caster_gunner_combo_1x45s',
+    saveNotes: 'Combination test: remain inside the Shape Caster safe circle while threading spread and burst fire from two Gunners.',
+    groupedScenarioName: 'beat_swarm_shape_caster_gunner_combo_1x45s',
+    groupedRunId: 'musicLab_shape_caster_gunner_combo_1x45s_scenario',
+    groupedNotes: 'First mixed-profile validation using only shared production combat scheduling.',
+    tagPrefix: 'ShapeCasterGunnerCombo1x45s',
+    labelPrefix: 'BS0_shape_caster_gunner_combo_1x45s',
+    statusPrefix: 'Running Shape Caster + Gunner combination',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startShapeCasterGunnerCombinationTest !== 'function') {
+        throw new Error('shape_caster_gunner_combination_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startShapeCasterGunnerCombinationTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 3) {
+        throw new Error('shape_caster_gunner_combination_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_SHAPE_GUNNER_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_combination_started',
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+        'enemy_shape_activated',
+        'enemy_shape_player_contact',
+      ],
+      maxLines: 620,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-shape-caster-gunner-combo',
+    },
+  });
+}
+
+async function runShapeCasterSeekerCombinationDebug() {
+  await runBS0Stage(1, {
+    durationMs: 45000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_shape_caster_seeker_combo_1x45s',
+    saveNotes: 'Combination test: remain inside the Shape Caster safe circle while managing a pursuing Seeker and its sustained homing shots.',
+    groupedScenarioName: 'beat_swarm_shape_caster_seeker_combo_1x45s',
+    groupedRunId: 'musicLab_shape_caster_seeker_combo_1x45s_scenario',
+    groupedNotes: 'Mixed-profile approach-versus-retreat validation using shared production combat scheduling.',
+    tagPrefix: 'ShapeCasterSeekerCombo1x45s',
+    labelPrefix: 'BS0_shape_caster_seeker_combo_1x45s',
+    statusPrefix: 'Running Shape Caster + Seeker combination',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startShapeCasterSeekerCombinationTest !== 'function') {
+        throw new Error('shape_caster_seeker_combination_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startShapeCasterSeekerCombinationTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 2) {
+        throw new Error('shape_caster_seeker_combination_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_SHAPE_SEEKER_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_combination_started',
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+        'enemy_shape_activated',
+        'enemy_shape_player_contact',
+      ],
+      maxLines: 620,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-shape-caster-seeker-combo',
+    },
+  });
+}
+
 async function runBS0BehaviorTaxonomyDebug() {
   await runBS0Stage(3, {
     durationMs: 60000,
@@ -11801,6 +12205,14 @@ try {
     runBS0s4,
     runBS0s5,
     runBS0s3MusicLabTriplet,
+    runGunnerCombatProfilesDebug,
+    runSeekerCombatProfilesDebug,
+    runLaserSpinnerCombatProfilesDebug,
+    runShapeCasterCombatProfilesDebug,
+    runChargerCombatProfilesDebug,
+    runConductorCombatProfilesDebug,
+    runShapeCasterGunnerCombinationDebug,
+    runShapeCasterSeekerCombinationDebug,
     runBS0BehaviorTaxonomyDebug,
     runBS0a,
     runBS0b,

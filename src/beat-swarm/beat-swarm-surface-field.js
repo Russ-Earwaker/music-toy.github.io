@@ -12,6 +12,7 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
   const helpers = opts.helpers && typeof opts.helpers === 'object' ? opts.helpers : {};
   const getState = typeof opts.getState === 'function' ? opts.getState : () => ({});
   const particles = [];
+  let damageRegions = [];
   let canvasEl = null;
   let canvasW = 0;
   let canvasH = 0;
@@ -157,6 +158,38 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
       p.vy += (dy / d) * force * n * safeDt * scale;
       p.flash = Math.max(Number(p.flash) || 0, n);
     }
+  }
+
+  function destroyParticlesInRegion(centerWorld = null, options = null) {
+    if (!isFinitePoint(centerWorld) || !particles.length) return 0;
+    const cx = Number(centerWorld.x) || 0;
+    const cy = Number(centerWorld.y) || 0;
+    const radius = Math.max(1, Number(options?.radiusWorld) || 1);
+    const outerRadius = Math.max(radius, Number(options?.outerRadiusWorld) || radius);
+    const dangerMode = String(options?.dangerMode || 'inside').trim().toLowerCase();
+    let removed = 0;
+    for (let index = particles.length - 1; index >= 0; index -= 1) {
+      const particle = particles[index];
+      const distance = Math.hypot((Number(particle?.x) || 0) - cx, (Number(particle?.y) || 0) - cy);
+      const inDanger = dangerMode === 'outside'
+        ? distance > radius && distance <= outerRadius
+        : distance <= radius;
+      if (!inDanger) continue;
+      particles.splice(index, 1);
+      removed += 1;
+    }
+    return removed;
+  }
+
+  function setDamageRegions(regions = null) {
+    damageRegions = Array.isArray(regions)
+      ? regions.filter((region) => isFinitePoint(region?.center)).map((region) => ({
+          center: { x: Number(region.center.x) || 0, y: Number(region.center.y) || 0 },
+          radiusWorld: Math.max(1, Number(region.radiusWorld) || 1),
+          outerRadiusWorld: Math.max(1, Number(region.outerRadiusWorld) || Number(region.radiusWorld) || 1),
+          dangerMode: String(region.dangerMode || 'inside').trim().toLowerCase(),
+        }))
+      : [];
   }
 
   function applyShockwaveFronts(dt = 0) {
@@ -316,6 +349,7 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
         if (particles[i]?.kind === 'ambient' || particles[i]?.kind === 'ringStream') particles.splice(i, 1);
       }
     }
+    for (const region of damageRegions) destroyParticlesInRegion(region.center, region);
     if (!particles.length) return;
     applyShockwaveFronts(safeDt);
     if (player) {
@@ -420,6 +454,7 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
 
   function clear() {
     particles.length = 0;
+    damageRegions = [];
     try {
       const ctx = canvasEl?.getContext?.('2d');
       ctx?.clearRect?.(0, 0, canvasEl.width || 0, canvasEl.height || 0);
@@ -431,6 +466,8 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
     spawnDebris,
     spawnCorpse,
     pushDebris,
+    destroyParticlesInRegion,
+    setDamageRegions,
     update,
     clear,
   };

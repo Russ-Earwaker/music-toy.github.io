@@ -495,6 +495,21 @@ function resolveSingleBehaviorMotionRuntime(enemy, centerWorld, state, constants
   if (!singleBehaviorId || singleBehaviorId === 'none' || singleBehaviorId === 'default_motion') return null;
   if (enemy?.retreating) return null;
   const dt = Math.max(0, Number(state?.dt) || 0);
+  if (singleBehaviorId === 'hold_position') {
+    const anchorX = Number.isFinite(Number(enemy?.combatAnchorX)) ? Number(enemy.combatAnchorX) : Number(enemy?.wx) || 0;
+    const anchorY = Number.isFinite(Number(enemy?.combatAnchorY)) ? Number(enemy.combatAnchorY) : Number(enemy?.wy) || 0;
+    const anchorDx = anchorX - (Number(enemy?.wx) || 0);
+    const anchorDy = anchorY - (Number(enemy?.wy) || 0);
+    const anchorDist = Math.hypot(anchorDx, anchorDy);
+    const maxSpeed = Math.max(40, Number(constants?.enemyMaxSpeed) || 140);
+    const desiredSpeed = Math.min(maxSpeed * 0.82, anchorDist * 2.8);
+    return {
+      overrideVelocity: true,
+      desiredVx: anchorDist > 1 ? (anchorDx / anchorDist) * desiredSpeed : 0,
+      desiredVy: anchorDist > 1 ? (anchorDy / anchorDist) * desiredSpeed : 0,
+      blend: Math.max(0.28, Math.min(0.62, 0.34 + (dt * 2.4))),
+    };
+  }
   const dx = Number(centerWorld?.x) - (Number(enemy?.wx) || 0);
   const dy = Number(centerWorld?.y) - (Number(enemy?.wy) || 0);
   const dist = Math.hypot(dx, dy) || 1;
@@ -503,6 +518,30 @@ function resolveSingleBehaviorMotionRuntime(enemy, centerWorld, state, constants
   const normalX = -dirY;
   const normalY = dirX;
   const enemyMaxSpeed = Math.max(40, Number(constants?.enemyMaxSpeed) || 0);
+  if (singleBehaviorId === 'pursue_player') {
+    const approachScale = Math.max(0.18, Math.min(1, (dist - 54) / 180));
+    return {
+      overrideVelocity: true,
+      desiredVx: dirX * enemyMaxSpeed * 0.68 * approachScale,
+      desiredVy: dirY * enemyMaxSpeed * 0.68 * approachScale,
+      blend: 0.24,
+    };
+  }
+  if (singleBehaviorId === 'intercept_player') {
+    const predictionSeconds = 0.72;
+    const targetX = (Number(centerWorld?.x) || 0) + ((Number(state?.playerVelocityX) || 0) * predictionSeconds);
+    const targetY = (Number(centerWorld?.y) || 0) + ((Number(state?.playerVelocityY) || 0) * predictionSeconds);
+    const interceptDx = targetX - (Number(enemy?.wx) || 0);
+    const interceptDy = targetY - (Number(enemy?.wy) || 0);
+    const interceptDist = Math.hypot(interceptDx, interceptDy) || 1;
+    const speedScale = Math.max(0.24, Math.min(1, (interceptDist - 46) / 210));
+    return {
+      overrideVelocity: true,
+      desiredVx: (interceptDx / interceptDist) * enemyMaxSpeed * 0.82 * speedScale,
+      desiredVy: (interceptDy / interceptDist) * enemyMaxSpeed * 0.82 * speedScale,
+      blend: 0.28,
+    };
+  }
   const beatState = getBehaviorBeatProgressRuntime(enemy, state, `single_${singleBehaviorId}`, 0.26);
   const sharedInstrumentPulseStrength = (() => {
     const instrumentId = String(
@@ -999,7 +1038,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       return 1 + (strength * pulseScale);
     };
     if (enemyType === 'spawner') helpers.updateSpawnerEnemyFlash?.(e, state.dt);
-    const isPersistentSpecialEnemy = enemyType === 'spawner' || enemyType === 'drawsnake';
+    const isPersistentSpecialEnemy = enemyType === 'spawner' || enemyType === 'drawsnake' || e?.combatCharging === true;
     if (e?.retreating) {
       const away = helpers.normalizeDir?.(
         (Number(e.wx) || 0) - (Number(centerWorld.x) || 0),
@@ -1297,7 +1336,9 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       || s.x > globalThis.window.innerWidth + offscreenRemovePad
       || s.y > globalThis.window.innerHeight + offscreenRemovePad;
     if (isOffscreenBeyondGracePad) {
-      e.offscreenGraceT = Math.max(0, Number(e.offscreenGraceT) || 0) + (Number(state.dt) || 0);
+      e.offscreenGraceT = e?.combatCharging === true
+        ? 0
+        : Math.max(0, Number(e.offscreenGraceT) || 0) + (Number(state.dt) || 0);
       if (!isPersistentSpecialEnemy && Number(e.offscreenGraceT) >= effectiveOffscreenGraceSeconds) {
         helpers.removeEnemy?.(e, 'retreated');
         enemies.splice(i, 1);
@@ -1405,7 +1446,10 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
           e.soloPulseDebugLastLoggedT = 0;
         }
       }
-      e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})`;
+      const combatRotation = Number.isFinite(Number(e?.combatFacingAngle))
+        ? ` rotate(${Number(e.combatFacingAngle).toFixed(4)}rad)`
+        : '';
+      e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})${combatRotation}`;
     }
     if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
     if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {

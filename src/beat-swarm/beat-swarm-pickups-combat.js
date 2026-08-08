@@ -153,7 +153,8 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       p.collisionGraceT = Math.max(0, Number(p.collisionGraceT) - dt);
       const isBoomerang = String(p.kind || 'standard') === 'boomerang';
       const isHoming = String(p.kind || 'standard') === 'homing-missile';
-      const useTtlDespawn = isBoomerang || isHoming;
+      const isHostileHoming = String(p.kind || '') === 'hostile-red' && p.hostileHoming === true;
+      const useTtlDespawn = isBoomerang || isHoming || isHostileHoming;
       withPerfSample('pickupsCombat.projectiles.motion', () => {
         if (isBoomerang) {
           p.boomTheta = (Number(p.boomTheta) || 0) + ((Number(p.boomOmega) || 0) * dt);
@@ -166,6 +167,21 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           const perpY = Number(p.boomPerpY) || 0;
           p.wx = (Number(p.boomCenterX) || 0) + (dirX * (1 + c) * r) + (perpX * s * r);
           p.wy = (Number(p.boomCenterY) || 0) + (dirY * (1 + c) * r) + (perpY * s * r);
+        } else if (isHostileHoming) {
+          const desired = helpers.normalizeDir?.(centerWorld.x - p.wx, centerWorld.y - p.wy, p.vx, p.vy) || { x: 0, y: 0 };
+          const current = helpers.normalizeDir?.(p.vx, p.vy, desired.x, desired.y) || desired;
+          const steer = Math.max(0, Math.min(1, (Number(p.hostileHomingTurnRate) || 1.4) * dt));
+          const direction = helpers.normalizeDir?.(
+            (current.x * (1 - steer)) + (desired.x * steer),
+            (current.y * (1 - steer)) + (desired.y * steer),
+            desired.x,
+            desired.y,
+          ) || desired;
+          const speed = Math.max(120, Number(p.hostileHomingSpeed) || Math.hypot(Number(p.vx) || 0, Number(p.vy) || 0));
+          p.vx = direction.x * speed;
+          p.vy = direction.y * speed;
+          p.wx += p.vx * dt;
+          p.wy += p.vy * dt;
         } else if (isHoming) {
           let stateName = String(p.homingState || 'orbit');
           const orbitRadius = Math.max(20, Number(p.orbitRadius) || Number(constants.projectileHomingOrbitRadiusWorld) || 0);
