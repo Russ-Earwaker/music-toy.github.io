@@ -1,7 +1,7 @@
 import {
   getBeatSwarmEnemyAttackPattern,
   getBeatSwarmEnemyCombatProfile,
-} from './beat-swarm-enemy-combat-profiles.js?v=2026-08-08-conductor-v2';
+} from './beat-swarm-enemy-combat-profiles.js?v=2026-08-09-laser-motifs-v2';
 
 function normalizeBeat(value) {
   return Math.max(0, Math.trunc(Number(value) || 0));
@@ -85,16 +85,64 @@ export function createBeatSwarmEnemyCombatRuntime() {
       if (!profile || !pattern || enemy.combatLastProcessedBeat === beatIndex) continue;
       enemy.combatLastProcessedBeat = beatIndex;
 
-      if (!Number.isFinite(Number(enemy.combatNextAttackBeat))) enemy.combatNextAttackBeat = beatIndex + 1;
-      const burstDue = Number(enemy.combatBurstRemaining) > 0
+      if (pattern.requiresAnchor === true) {
+        const anchorDistance = Math.hypot(
+          (Number(enemy.combatAnchorX) || 0) - (Number(enemy.wx) || 0),
+          (Number(enemy.combatAnchorY) || 0) - (Number(enemy.wy) || 0),
+        );
+        if (anchorDistance > Math.max(12, Number(pattern.anchorToleranceWorld) || 42)) {
+          enemy.combatAnchorReady = false;
+          enemy.combatNextAttackBeat = beatIndex + 1;
+          continue;
+        }
+        if (enemy.combatAnchorReady !== true) {
+          enemy.combatAnchorReady = true;
+          options?.onAnchorReady?.({ beatIndex, enemy, profile, pattern, anchorDistance });
+        }
+        const syncGroupId = String(enemy.combatSyncGroupId || '').trim();
+        if (syncGroupId && pattern.requiresGroupReady === true) {
+          const groupReady = enemies
+            .filter((candidate) => String(candidate?.combatSyncGroupId || '').trim() === syncGroupId)
+            .every((candidate) => Math.hypot(
+              (Number(candidate.combatAnchorX) || 0) - (Number(candidate.wx) || 0),
+              (Number(candidate.combatAnchorY) || 0) - (Number(candidate.wy) || 0),
+            ) <= Math.max(12, Number(pattern.anchorToleranceWorld) || 42));
+          if (!groupReady) {
+            enemy.combatNextAttackBeat = beatIndex + 1;
+            continue;
+          }
+        }
+      }
+
+      const motifSteps = Array.isArray(enemy.combatGroupMotifSteps)
+        ? enemy.combatGroupMotifSteps.map((step) => normalizeBeat(step))
+        : [];
+      const motifLength = Math.max(1, Math.trunc(Number(enemy.combatGroupMotifLength) || 1));
+      const motifEnabled = motifSteps.length > 0;
+      const motifStartBeat = normalizeBeat(enemy.combatGroupMotifStartBeat);
+      if (motifEnabled && beatIndex < motifStartBeat) {
+        enemy.combatNextAttackBeat = motifStartBeat;
+        continue;
+      }
+      const motifStep = motifEnabled
+        ? ((beatIndex - motifStartBeat) % motifLength + motifLength) % motifLength
+        : -1;
+      const motifDue = motifEnabled && motifSteps.includes(motifStep);
+      if (motifEnabled && !motifDue) {
+        enemy.combatNextAttackBeat = beatIndex + 1;
+        continue;
+      }
+
+      if (!Number.isFinite(Number(enemy.combatNextAttackBeat)) || motifEnabled) enemy.combatNextAttackBeat = beatIndex;
+      const burstDue = !motifEnabled && Number(enemy.combatBurstRemaining) > 0
         && Number.isFinite(Number(enemy.combatBurstNextBeat))
         && beatIndex >= normalizeBeat(enemy.combatBurstNextBeat);
-      const attackDue = beatIndex >= normalizeBeat(enemy.combatNextAttackBeat);
+      const attackDue = motifEnabled ? motifDue : beatIndex >= normalizeBeat(enemy.combatNextAttackBeat);
       if (!burstDue && !attackDue) continue;
 
       if (attackDue && !burstDue) {
         enemy.combatNextAttackBeat = beatIndex + Math.max(1, Math.trunc(Number(pattern.cadenceBeats) || 1));
-        const burstCount = Math.max(1, Math.trunc(Number(pattern.burstCount) || 1));
+        const burstCount = motifEnabled ? 1 : Math.max(1, Math.trunc(Number(pattern.burstCount) || 1));
         enemy.combatBurstRemaining = burstCount - 1;
         enemy.combatBurstNextBeat = burstCount > 1
           ? beatIndex + Math.max(1, Math.trunc(Number(pattern.burstSpacingBeats) || 1))

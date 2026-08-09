@@ -1038,7 +1038,10 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       return 1 + (strength * pulseScale);
     };
     if (enemyType === 'spawner') helpers.updateSpawnerEnemyFlash?.(e, state.dt);
-    const isPersistentSpecialEnemy = enemyType === 'spawner' || enemyType === 'drawsnake' || e?.combatCharging === true;
+    const isPersistentSpecialEnemy = enemyType === 'spawner'
+      || enemyType === 'drawsnake'
+      || e?.combatCharging === true
+      || e?.combatPersistentOffscreen === true;
     if (e?.retreating) {
       const away = helpers.normalizeDir?.(
         (Number(e.wx) || 0) - (Number(centerWorld.x) || 0),

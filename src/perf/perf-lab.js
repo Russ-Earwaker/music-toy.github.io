@@ -455,6 +455,9 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
+        ${btn('musicLabRunTrackedLaserMotifsDebug', 'Run Arena-Tracked Laser Motifs (1x75s)', 'primary')}
+        ${btn('musicLabRunSymmetricLaserGroupDebug', 'Run Symmetric Laser Group (1x45s)', 'primary')}
+        ${btn('musicLabRunLaserVariantsDebug', 'Run Laser Variants (1x60s)', 'primary')}
         ${btn('musicLabRunShapeCasterSeekerCombinationDebug', 'Run Shape Caster + Seeker (1x45s)', 'primary')}
         ${btn('musicLabRunShapeCasterGunnerCombinationDebug', 'Run Shape Caster + Gunners (1x45s)', 'primary')}
         ${btn('musicLabRunConductorCombatDebug', 'Run Conductor Profiles (1x60s)', 'primary')}
@@ -1541,6 +1544,18 @@ function ensureUI() {
     }
     if (act === 'musicLabRunShapeCasterSeekerCombinationDebug') {
       await runShapeCasterSeekerCombinationDebug();
+      return;
+    }
+    if (act === 'musicLabRunLaserVariantsDebug') {
+      await runLaserVariantsDebug();
+      return;
+    }
+    if (act === 'musicLabRunSymmetricLaserGroupDebug') {
+      await runSymmetricLaserGroupDebug();
+      return;
+    }
+    if (act === 'musicLabRunTrackedLaserMotifsDebug') {
+      await runTrackedLaserMotifsDebug();
       return;
     }
     if (act === 'musicLabRunBS0S3AccentRewriteDebug') {
@@ -7418,6 +7433,7 @@ async function runLaserSpinnerCombatProfilesDebug() {
       include: [
         'enemy_combat_test_phase',
         'enemy_combat_attack',
+        'enemy_combat_anchor_ready',
         'enemy_laser_activated',
         'enemy_laser_player_contact',
       ],
@@ -7565,6 +7581,148 @@ async function runConductorCombatProfilesDebug() {
       maxLines: 620,
       preferOutputDirectory: true,
       fileNamePrefix: 'resources-debug-conductor-profiles',
+    },
+  });
+}
+
+async function runLaserVariantsDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_laser_variants_1x60s',
+    saveNotes: 'Laser variants: tracking warning then lock, thin cross-arena beam, thick cross-arena beam, then all variants together.',
+    groupedScenarioName: 'beat_swarm_laser_variants_1x60s',
+    groupedRunId: 'musicLab_laser_variants_1x60s_scenario',
+    groupedNotes: 'Focused aiming, anchor movement, charge warning, width, and collision validation.',
+    tagPrefix: 'LaserVariants1x60s',
+    labelPrefix: 'BS0_laser_variants_1x60s',
+    statusPrefix: 'Running laser variants: tracking, thin, thick, combined',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startLaserVariantCombatTest !== 'function') {
+        throw new Error('laser_variant_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startLaserVariantCombatTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 3) {
+        throw new Error('laser_variant_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_LASER_VARIANT_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+        'enemy_combat_anchor_ready',
+        'enemy_laser_activated',
+        'enemy_laser_player_contact',
+      ],
+      maxLines: 720,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-laser-variants',
+    },
+  });
+}
+
+async function runSymmetricLaserGroupDebug() {
+  await runBS0Stage(1, {
+    durationMs: 45000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_symmetric_laser_group_1x45s',
+    saveNotes: 'Four Laser Spinners travel to rotationally symmetric anchors, wait for the full group, then charge offset thin beams on one shared cadence.',
+    groupedScenarioName: 'beat_swarm_symmetric_laser_group_1x45s',
+    groupedRunId: 'musicLab_symmetric_laser_group_1x45s_scenario',
+    groupedNotes: 'First coordinated enemy-group attack using production individual laser hazards.',
+    tagPrefix: 'SymmetricLaserGroup1x45s',
+    labelPrefix: 'BS0_symmetric_laser_group_1x45s',
+    statusPrefix: 'Running symmetric laser formation',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startSymmetricLaserGroupTest !== 'function') {
+        throw new Error('symmetric_laser_group_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startSymmetricLaserGroupTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 4) {
+        throw new Error('symmetric_laser_group_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_SYMMETRIC_LASER_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_group_formation_started',
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+        'enemy_combat_anchor_ready',
+        'enemy_laser_activated',
+        'enemy_laser_player_contact',
+      ],
+      maxLines: 820,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-symmetric-laser-group',
+    },
+  });
+}
+
+async function runTrackedLaserMotifsDebug() {
+  await runBS0Stage(1, {
+    durationMs: 75000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_arena_tracked_laser_motifs_1x75s',
+    saveNotes: 'Four Laser Spinners maintain rotational symmetry around the moving arena, then compare regular unison with stable per-enemy drum and pitched lead assignments.',
+    groupedScenarioName: 'beat_swarm_arena_tracked_laser_motifs_1x75s',
+    groupedRunId: 'musicLab_arena_tracked_laser_motifs_1x75s_scenario',
+    groupedNotes: 'Arena-relative formation tracking and shared looping musical attack schedules.',
+    tagPrefix: 'ArenaTrackedLaserMotifs1x75s',
+    labelPrefix: 'BS0_arena_tracked_laser_motifs_1x75s',
+    statusPrefix: 'Running arena-tracked laser motifs',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startTrackedLaserMotifGroupTest !== 'function') {
+        throw new Error('tracked_laser_motif_group_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startTrackedLaserMotifGroupTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 4) {
+        throw new Error('tracked_laser_motif_group_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_TRACKED_LASER_MOTIF_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_group_formation_started',
+        'enemy_combat_group_motif_assigned',
+        'enemy_combat_group_motif_member_ended',
+        'enemy_combat_test_phase',
+        'enemy_combat_attack',
+        'enemy_combat_anchor_ready',
+        'enemy_laser_activated',
+        'enemy_laser_player_contact',
+      ],
+      maxLines: 1100,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-arena-tracked-laser-motifs',
     },
   });
 }
@@ -12211,6 +12369,8 @@ try {
     runShapeCasterCombatProfilesDebug,
     runChargerCombatProfilesDebug,
     runConductorCombatProfilesDebug,
+    runLaserVariantsDebug,
+    runSymmetricLaserGroupDebug,
     runShapeCasterGunnerCombinationDebug,
     runShapeCasterSeekerCombinationDebug,
     runBS0BehaviorTaxonomyDebug,

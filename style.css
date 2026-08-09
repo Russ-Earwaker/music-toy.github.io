@@ -5135,6 +5135,7 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   position: fixed;
   z-index: 1;
   height: 7px;
+  box-sizing: border-box;
   transform-origin: left center;
   pointer-events: none;
 }
@@ -5145,9 +5146,21 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   box-shadow: 0 0 9px rgba(223, 102, 255, 0.42);
 }
 
+.beat-swarm-hostile-laser.is-warning.is-thick {
+  background: repeating-linear-gradient(90deg, rgba(255, 205, 249, 0.38) 0 20px, rgba(223, 102, 255, 0.1) 20px 34px);
+  border-top: 2px solid rgba(255, 221, 251, 0.52);
+  border-bottom: 2px solid rgba(255, 221, 251, 0.52);
+  box-shadow: 0 0 14px rgba(223, 102, 255, 0.5);
+}
+
 .beat-swarm-hostile-laser.is-active {
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.98), rgba(232, 99, 255, 0.94) 24%, rgba(153, 50, 255, 0.68));
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.88), 0 0 24px rgba(210, 73, 255, 0.86);
+}
+
+.beat-swarm-hostile-laser.is-active.is-thick {
+  background: linear-gradient(180deg, rgba(198, 72, 255, 0.68), #fff 42% 58%, rgba(205, 72, 255, 0.72));
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.94), 0 0 34px rgba(210, 73, 255, 0.9);
 }
 
 .beat-swarm-hostile-shape {

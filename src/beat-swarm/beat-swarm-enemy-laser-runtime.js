@@ -11,6 +11,13 @@ function distanceToSegment(point, start, end) {
   return Math.hypot(point.x - (start.x + (dx * t)), point.y - (start.y + (dy * t)));
 }
 
+function angleToTarget(source, target) {
+  return Math.atan2(
+    (Number(target?.y) || 0) - (Number(source?.wy) || 0),
+    (Number(target?.x) || 0) - (Number(source?.wx) || 0),
+  );
+}
+
 export function createBeatSwarmEnemyLaserRuntime() {
   const hazards = [];
   let hazardId = 1;
@@ -37,6 +44,7 @@ export function createBeatSwarmEnemyLaserRuntime() {
     for (let index = 0; index < beamCount; index += 1) {
       const el = document.createElement('div');
       el.className = 'beat-swarm-hostile-laser is-warning';
+      if (String(pattern.beamStyle || '').trim().toLowerCase() === 'thick') el.classList.add('is-thick');
       layer.appendChild(el);
       beamEls.push(el);
     }
@@ -48,17 +56,35 @@ export function createBeatSwarmEnemyLaserRuntime() {
       patternId: String(pattern.id || '').trim().toLowerCase(),
       beamCount,
       beamEls,
-      angle: Number.isFinite(Number(enemy.combatLaserAngle)) ? Number(enemy.combatLaserAngle) : -Math.PI * 0.5,
+      angle: String(pattern.aimMode || '').trim().toLowerCase() === 'track_then_lock'
+        ? angleToTarget(enemy, options?.target)
+        : Number.isFinite(Number(enemy.combatLaserFormationAngle))
+          ? Number(enemy.combatLaserFormationAngle)
+          : Number.isFinite(Number(enemy.combatLaserAngle)) ? Number(enemy.combatLaserAngle) : -Math.PI * 0.5,
+      aimMode: String(pattern.aimMode || 'rotate').trim().toLowerCase(),
       angularSpeed: Number(pattern.angularSpeed) || 0,
       lengthWorld: Math.max(600, Number(pattern.lengthWorld) || 1600),
-      soundVolume: Math.max(0.01, Math.min(1, Number(pattern.soundVolume) || 0.46)),
+      bidirectional: pattern.bidirectional === true,
+      extendPastViewport: pattern.extendPastViewport === true,
+      collisionRadiusWorld: Math.max(4, Number(pattern.collisionRadiusWorld) || 28),
+      warningWidthPx: Math.max(2, Number(pattern.warningWidthPx) || 2),
+      activeWidthPx: Math.max(4, Number(pattern.activeWidthPx) || 7),
+      soundVolume: Math.max(0.01, Math.min(1,
+        Number.isFinite(Number(enemy.combatLaserSoundVolume))
+          ? Number(enemy.combatLaserSoundVolume)
+          : (Number(pattern.soundVolume) || 0.46)
+      )),
       startBeat,
       activateBeat: startBeat + warningBeats,
       endBeat: startBeat + warningBeats + Math.max(1, Math.trunc(Number(pattern.activeBeats) || 8)),
       activated: false,
       lastContactBeat: -1,
     };
-    enemy.combatLaserAngle = hazard.angle + 0.42;
+    if (hazard.aimMode === 'formation') {
+      enemy.combatLaserFormationAngle = hazard.angle + (Number(pattern.formationAdvanceRadians) || 0);
+    } else {
+      enemy.combatLaserAngle = hazard.angle + 0.42;
+    }
     hazards.push(hazard);
     return hazard;
   }
@@ -79,6 +105,9 @@ export function createBeatSwarmEnemyLaserRuntime() {
         continue;
       }
       const active = beatIndex >= hazard.activateBeat;
+      if (!active && hazard.aimMode === 'track_then_lock') {
+        hazard.angle = angleToTarget(enemy, player);
+      }
       if (active && !hazard.activated) {
         hazard.activated = true;
         for (const el of hazard.beamEls) {
@@ -88,25 +117,42 @@ export function createBeatSwarmEnemyLaserRuntime() {
         options?.onActivate?.({ hazard, enemy, beatIndex });
       }
       const speedScale = active ? 1 : 0.22;
-      hazard.angle += hazard.angularSpeed * dt * speedScale;
+      if (hazard.aimMode !== 'track_then_lock' && hazard.aimMode !== 'formation') {
+        hazard.angle += hazard.angularSpeed * dt * speedScale;
+      }
       let playerContact = false;
       for (let beamIndex = 0; beamIndex < hazard.beamCount; beamIndex += 1) {
         const angle = hazard.angle + ((Math.PI * 2 * beamIndex) / hazard.beamCount);
-        const start = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
-        const end = {
-          x: start.x + (Math.cos(angle) * hazard.lengthWorld),
-          y: start.y + (Math.sin(angle) * hazard.lengthWorld),
+        const source = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+        const start = hazard.bidirectional ? {
+          x: source.x - (Math.cos(angle) * hazard.lengthWorld * 0.5),
+          y: source.y - (Math.sin(angle) * hazard.lengthWorld * 0.5),
+        } : source;
+        const end = hazard.bidirectional ? {
+          x: source.x + (Math.cos(angle) * hazard.lengthWorld * 0.5),
+          y: source.y + (Math.sin(angle) * hazard.lengthWorld * 0.5),
+        } : {
+          x: source.x + (Math.cos(angle) * hazard.lengthWorld),
+          y: source.y + (Math.sin(angle) * hazard.lengthWorld),
         };
         const startScreen = worldToScreen(start);
         const endScreen = worldToScreen(end);
         if (!startScreen || !endScreen) continue;
         const dx = endScreen.x - startScreen.x;
         const dy = endScreen.y - startScreen.y;
-        const length = Math.max(1, Math.hypot(dx, dy));
+        const projectedLength = Math.max(1, Math.hypot(dx, dy));
+        const viewportLength = (typeof window !== 'undefined')
+          ? Math.hypot(Math.max(1, window.innerWidth), Math.max(1, window.innerHeight)) * 2.5
+          : projectedLength;
+        const length = hazard.extendPastViewport ? Math.max(projectedLength, viewportLength) : projectedLength;
+        hazard.lastVisualLengthPx = length;
         const el = hazard.beamEls[beamIndex];
+        const beamWidth = active ? hazard.activeWidthPx : hazard.warningWidthPx;
+        el.style.height = `${beamWidth}px`;
+        el.style.marginTop = `${(-beamWidth * 0.5).toFixed(2)}px`;
         el.style.width = `${length}px`;
         el.style.transform = `translate(${startScreen.x}px, ${startScreen.y}px) rotate(${Math.atan2(dy, dx)}rad)`;
-        if (active && distanceToSegment(player, start, end) <= 28) playerContact = true;
+        if (active && distanceToSegment(player, start, end) <= hazard.collisionRadiusWorld) playerContact = true;
       }
       if (playerContact && hazard.lastContactBeat !== beatIndex) {
         hazard.lastContactBeat = beatIndex;
@@ -124,6 +170,14 @@ export function createBeatSwarmEnemyLaserRuntime() {
       activateBeat: hazard.activateBeat,
       endBeat: hazard.endBeat,
       activated: hazard.activated,
+      aimMode: hazard.aimMode,
+      bidirectional: hazard.bidirectional,
+      extendPastViewport: hazard.extendPastViewport,
+      collisionRadiusWorld: hazard.collisionRadiusWorld,
+      angle: hazard.angle,
+      warningWidthPx: hazard.warningWidthPx,
+      activeWidthPx: hazard.activeWidthPx,
+      visualLengthPx: Number(hazard.lastVisualLengthPx) || 0,
     }));
   }
 
