@@ -5529,6 +5529,10 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   animation: beat-swarm-enemy-hit-flash 130ms ease-out;
 }
 
+.beat-swarm-enemy.is-combat-fire-flash {
+  animation: beat-swarm-enemy-combat-fire-flash 170ms ease-out;
+}
+
 .beat-swarm-enemy.is-dying {
   filter: brightness(0.52) saturate(0.62);
   box-shadow: 0 0 10px rgba(96, 28, 28, 0.32);
@@ -5553,6 +5557,17 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   }
   100% {
     filter: brightness(1);
+  }
+}
+
+@keyframes beat-swarm-enemy-combat-fire-flash {
+  0% {
+    filter: brightness(3.6) saturate(0);
+    border-color: #ffffff;
+    box-shadow: 0 0 34px rgba(255, 255, 255, 1), inset 0 0 18px rgba(255, 255, 255, 0.92);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
   }
 }
 

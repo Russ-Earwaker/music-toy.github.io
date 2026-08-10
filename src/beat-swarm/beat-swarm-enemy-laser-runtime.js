@@ -70,7 +70,7 @@ export function createBeatSwarmEnemyLaserRuntime() {
       warningWidthPx: Math.max(2, Number(pattern.warningWidthPx) || 2),
       activeWidthPx: Math.max(4, Number(pattern.activeWidthPx) || 7),
       soundVolume: Math.max(0.01, Math.min(1,
-        Number.isFinite(Number(enemy.combatLaserSoundVolume))
+        enemy.combatLaserSoundVolume != null && Number.isFinite(Number(enemy.combatLaserSoundVolume))
           ? Number(enemy.combatLaserSoundVolume)
           : (Number(pattern.soundVolume) || 0.46)
       )),

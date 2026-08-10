@@ -1320,6 +1320,16 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         e.wy += e.vy * Math.max(0.016, (Number(state.dt) || 0) * 1.4);
         continue;
       }
+      if (constants.playerEnemyCollisionLethal !== true) {
+        const back = helpers.normalizeDir?.(e.wx - centerWorld.x, e.wy - centerWorld.y, e.vx, e.vy) || { x: 1, y: 0 };
+        const separationWorld = Math.max(2, hitRadiusWorld - d + 2);
+        const bounceSpeed = Math.max(120, Math.hypot(e.vx, e.vy), (Number(constants.enemyMaxSpeed) || 0) * 0.78);
+        e.vx = back.x * bounceSpeed;
+        e.vy = back.y * bounceSpeed;
+        e.wx += back.x * separationWorld;
+        e.wy += back.y * separationWorld;
+        continue;
+      }
       helpers.removeEnemy?.(e, 'killed');
       enemies.splice(i, 1);
       continue;

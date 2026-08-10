@@ -1,7 +1,7 @@
 import {
   getBeatSwarmEnemyAttackPattern,
   getBeatSwarmEnemyCombatProfile,
-} from './beat-swarm-enemy-combat-profiles.js?v=2026-08-09-laser-motifs-v2';
+} from './beat-swarm-enemy-combat-profiles.js?v=2026-08-10-musical-formations-v1';
 
 function normalizeBeat(value) {
   return Math.max(0, Math.trunc(Number(value) || 0));

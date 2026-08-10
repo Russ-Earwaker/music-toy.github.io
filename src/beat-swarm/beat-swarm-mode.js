@@ -13,7 +13,7 @@ import { getAllIds, getIdForDisplayName, getInstrumentEntries, getSampleBehavior
 import { getSoundThemeKey, pickInstrumentForToy, setSoundThemeKey } from '../sound-theme.js';
 import { buildPalette, midiToName } from '../note-helpers.js';
 import { createArtToyAt } from '../art/art-toy-factory.js';
-import { createSwarmDirector } from './swarm-director.js?v=2026-05-28-composition-policy-v1';
+import { createSwarmDirector } from './swarm-director.js?v=2026-08-10-musical-formations-v1';
 import { createPerformedBeatEvent, BEAT_EVENT_ROLES, BEAT_EVENT_THREAT } from './beat-events.js';
 import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from './beat-swarm-action-categories.js';
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
@@ -40,12 +40,12 @@ import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lane
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-07-22-lead-ball-v22';
 import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-08-02-lead-ball-accent-audit-v1';
-import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js?v=2026-08-09-laser-motifs-v4';
+import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js?v=2026-08-10-director-formations-v2';
 import {
   configureBeatSwarmEnemyCombatRuntime,
   createBeatSwarmEnemyCombatRuntime,
   setBeatSwarmEnemyCombatPatternRuntime,
-} from './beat-swarm-enemy-combat-runtime.js?v=2026-08-09-laser-motifs-v2';
+} from './beat-swarm-enemy-combat-runtime.js?v=2026-08-10-musical-formations-v1';
 import { createBeatSwarmEnemyLaserRuntime } from './beat-swarm-enemy-laser-runtime.js?v=2026-08-09-laser-motifs-v2';
 import { createBeatSwarmEnemyShapeRuntime } from './beat-swarm-enemy-shape-runtime.js?v=2026-08-08-shape-caster-v3';
 import { createBeatSwarmEnemyChargeRuntime } from './beat-swarm-enemy-charge-runtime.js?v=2026-08-08-charger-v1';
@@ -14464,6 +14464,15 @@ const enemyCombatLabRuntime = {
   supportEnemyIds: [],
   attackCounts: { straight: 0, spread: 0, burst: 0 },
 };
+const directorMusicalFormationLayerRuntime = {
+  enabled: true,
+  auditionOverride: false,
+  groupSeq: 1,
+  variantIndex: 0,
+  lastBeatIndex: -1,
+  nextSpawnBar: 0,
+  groups: new Map(),
+};
 const introDebugRuntime = {
   enabled: false,
   lastStageSignature: '',
@@ -22572,6 +22581,8 @@ function resetWeaponGateTapOrbOnboardingState() {
   lastSpawnerEnemyStepIndex = null;
 }
 function clearEnemies() {
+  clearEnemyCombatLabFormationPlans();
+  clearDirectorMusicalFormationLayer();
   enemyCombatLabRuntime.active = false;
   enemyCombatLabRuntime.profileId = '';
   enemyCombatLabRuntime.phaseIndex = -1;
@@ -28546,6 +28557,7 @@ function updateEnemies(dt) {
       composerGroupActionPulseScale: COMPOSER_GROUP_ACTION_PULSE_SCALE,
       musicRolePulseSeconds: Number(MUSIC_ROLE_PULSE_POLICY.seconds) || 0.24,
       musicRolePulseScale: Number(MUSIC_ROLE_PULSE_POLICY.softScale) || 0.08,
+      playerEnemyCollisionLethal: false,
     },
     helpers: {
       getViewportCenterWorld,
@@ -28587,11 +28599,61 @@ function getEnemyCombatLabEnemies() {
   const idSet = new Set(enemyCombatLabRuntime.enemyIds);
   return enemies.filter((enemy) => idSet.has(Math.trunc(Number(enemy?.id) || 0)));
 }
+function clearEnemyCombatLabFormationPlans() {
+  if (!swarmDirector) return 0;
+  const groupIds = new Set(getEnemyCombatLabEnemies()
+    .map((enemy) => String(enemy?.combatSyncGroupId || '').trim())
+    .filter(Boolean));
+  for (const groupId of groupIds) swarmDirector.clearMusicalFormationPlan?.(groupId);
+  return groupIds.size;
+}
+function clearDirectorMusicalFormationLayer(options = null) {
+  const retreat = options?.retreat === true;
+  for (const group of directorMusicalFormationLayerRuntime.groups.values()) {
+    ensureSwarmDirector().clearMusicalFormationPlan?.(group.groupId);
+    if (!retreat) continue;
+    for (const enemy of enemies) {
+      if (String(enemy?.combatSyncGroupId || '').trim() !== group.groupId) continue;
+      startMusicalFormationEnemyRetreat(enemy, 'director_formation_clear');
+    }
+  }
+  directorMusicalFormationLayerRuntime.groups.clear();
+  directorMusicalFormationLayerRuntime.lastBeatIndex = -1;
+  directorMusicalFormationLayerRuntime.nextSpawnBar = 0;
+  if (options?.preserveAuditionOverride !== true) {
+    directorMusicalFormationLayerRuntime.auditionOverride = false;
+  }
+}
+function setDirectorMusicalFormationLayerEnabled(enabled = true, options = null) {
+  directorMusicalFormationLayerRuntime.enabled = enabled !== false;
+  directorMusicalFormationLayerRuntime.auditionOverride = options?.auditionOverride === true;
+  if (!directorMusicalFormationLayerRuntime.enabled) {
+    clearDirectorMusicalFormationLayer({ retreat: options?.retreat === true });
+  }
+  return getDirectorMusicalFormationLayerSnapshot();
+}
+function getDirectorMusicalFormationLayerSnapshot() {
+  return {
+    enabled: directorMusicalFormationLayerRuntime.enabled,
+    auditionOverride: directorMusicalFormationLayerRuntime.auditionOverride,
+    nextSpawnBar: directorMusicalFormationLayerRuntime.nextSpawnBar,
+    groups: Array.from(directorMusicalFormationLayerRuntime.groups.values()).map((group) => ({
+      ...group,
+      enemyIds: Array.from(group.enemyIds || []),
+    })),
+  };
+}
 function applyDirectorEnemyCombatGroupMotifPlan(groupId, plan = null, startBeat = currentBeatIndex + 1) {
   const safeGroupId = String(groupId || '').trim();
   if (!safeGroupId) return 0;
-  const motifLength = Math.max(1, Math.trunc(Number(plan?.motifLength) || 1));
-  const memberMotifs = Array.isArray(plan?.memberMotifs) ? plan.memberMotifs : [];
+  const requestedStartBeat = Math.max(0, Math.trunc(Number(startBeat) || 0));
+  const directorPlan = ensureSwarmDirector().registerMusicalFormationPlan?.({
+    ...(plan && typeof plan === 'object' ? plan : {}),
+    groupId: safeGroupId,
+    startBeat: requestedStartBeat,
+  }) || plan;
+  const motifLength = Math.max(1, Math.trunc(Number(directorPlan?.motifLength) || 1));
+  const memberMotifs = Array.isArray(directorPlan?.memberMotifs) ? directorPlan.memberMotifs : [];
   const groupEnemies = enemies
     .filter((enemy) => String(enemy?.combatSyncGroupId || '').trim() === safeGroupId)
     .sort((a, b) => (
@@ -28605,18 +28667,19 @@ function applyDirectorEnemyCombatGroupMotifPlan(groupId, plan = null, startBeat 
       ? assignment.steps.map((step) => Math.max(0, Math.trunc(Number(step) || 0)))
       : [];
     enemy.combatGroupMotifLength = motifLength;
-    enemy.combatGroupMotifStartBeat = Math.max(0, Math.trunc(Number(startBeat) || 0));
+    enemy.combatGroupMotifStartBeat = requestedStartBeat;
     enemy.combatMusicalInstrumentId = String(assignment?.instrumentId || '').trim();
-    enemy.combatMusicalVolume = Math.max(0, Math.min(1, Number(assignment?.musicalVolume) || 0));
-    enemy.combatLaserSoundVolume = Math.max(0.01, Math.min(1, Number(assignment?.laserVolume) || 0.16));
+    enemy.combatMusicalVolume = Math.max(0, Math.min(1, (Number(assignment?.musicalVolume) || 0) * 1.5));
+    enemy.combatAttackSoundVolume = Math.max(0.01, Math.min(1, (Number(assignment?.attackVolume ?? assignment?.laserVolume) || 0.16) * 1.3));
+    enemy.combatLaserSoundVolume = enemy.combatAttackSoundVolume;
     const assignedNote = normalizeSwarmNoteName(assignment?.note);
     if (assignedNote) enemy.soundNote = assignedNote;
   }
   noteMusicSystemEvent('enemy_combat_group_motif_assigned', {
     groupId: safeGroupId,
-    planId: String(plan?.id || '').trim(),
+    planId: String(directorPlan?.id || '').trim(),
     motifLength,
-    startBeat: Math.max(0, Math.trunc(Number(startBeat) || 0)),
+    startBeat: requestedStartBeat,
     members: groupEnemies.map((enemy) => ({
       enemyId: Math.trunc(Number(enemy?.id) || 0),
       memberIndex: Math.trunc(Number(enemy?.combatGroupMemberIndex) || 0),
@@ -28624,7 +28687,7 @@ function applyDirectorEnemyCombatGroupMotifPlan(groupId, plan = null, startBeat 
       note: normalizeSwarmNoteName(enemy?.soundNote) || '',
       instrumentId: String(enemy?.combatMusicalInstrumentId || ''),
     })),
-  }, { beatIndex: Math.max(0, Math.trunc(Number(startBeat) || 0)), stepIndex: 0 });
+  }, { beatIndex: requestedStartBeat, stepIndex: 0 });
   return groupEnemies.length;
 }
 function setEnemyCombatLabPhase(phaseIndex, beatIndex) {
@@ -28649,7 +28712,11 @@ function setEnemyCombatLabPhase(phaseIndex, beatIndex) {
   const activePattern = String(phaseConfiguration?.id || soloPatternIds[safePhase] || 'combined');
   if (phaseConfiguration) {
     const groupId = String(getEnemyCombatLabEnemies()[0]?.combatSyncGroupId || '').trim();
-    applyDirectorEnemyCombatGroupMotifPlan(groupId, phaseConfiguration, beatIndex + 1);
+    const formationStartBeat = Math.max(
+      beatIndex + 1,
+      Math.trunc(Number(phaseConfiguration?.startBeat) || 0)
+    );
+    applyDirectorEnemyCombatGroupMotifPlan(groupId, phaseConfiguration, formationStartBeat);
   }
   for (const enemy of getEnemyCombatLabEnemies()) {
     const patternId = String(enemy?.combatLabPatternId || '').trim().toLowerCase();
@@ -28661,6 +28728,7 @@ function setEnemyCombatLabPhase(phaseIndex, beatIndex) {
       enemy.combatGroupMotifStartBeat = 0;
       enemy.combatMusicalInstrumentId = '';
       enemy.combatMusicalVolume = 0;
+      enemy.combatAttackSoundVolume = null;
       enemy.combatLaserSoundVolume = null;
     }
     if (enemy?.combatLabMovementBehaviorId) {
@@ -28692,6 +28760,37 @@ function setEnemyCombatLabPhase(phaseIndex, beatIndex) {
     enemyIds: Array.from(enemyCombatLabRuntime.enemyIds),
   }, { beatIndex, stepIndex: 0 });
   return true;
+}
+function playEnemyCombatAttackAudio(enemy, fallbackVolume = 0.34) {
+  const enemyEl = enemy?.el;
+  if (enemyEl?.classList) {
+    enemyEl.classList.remove('is-combat-fire-flash');
+    void enemyEl.offsetWidth;
+    enemyEl.classList.add('is-combat-fire-flash');
+    setTimeout(() => {
+      try { enemyEl.classList.remove('is-combat-fire-flash'); } catch {}
+    }, 180);
+  }
+  const attackVolume = enemy?.combatAttackSoundVolume != null && Number.isFinite(Number(enemy.combatAttackSoundVolume))
+    ? Number(enemy.combatAttackSoundVolume)
+    : Number(fallbackVolume) || 0.34;
+  playSwarmSoundEventImmediate('projectile', attackVolume, enemy?.soundNote);
+  const musicalInstrumentId = String(enemy?.combatMusicalInstrumentId || '').trim();
+  const musicalVolume = Math.max(0, Math.min(1, Number(enemy?.combatMusicalVolume) || 0));
+  const musicalNote = normalizeSwarmNoteName(enemy?.soundNote) || 'C4';
+  if (musicalInstrumentId && musicalVolume > 0) {
+    try {
+      triggerBeatSwarmInstrument(
+        musicalInstrumentId,
+        musicalNote,
+        undefined,
+        'master',
+        { source: 'enemy-combat-group-motif', enemyId: Math.trunc(Number(enemy?.id) || 0) },
+        musicalVolume
+      );
+    } catch {}
+  }
+  return { attackVolume, musicalInstrumentId, musicalVolume, musicalNote };
 }
 function updateEnemyCombatRuntime() {
   const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
@@ -28788,7 +28887,7 @@ function updateEnemyCombatRuntime() {
       }
     },
     playAttackSound(enemy, pattern) {
-      playSwarmSoundEventImmediate('projectile', Number(pattern?.soundVolume) || 0.34, enemy?.soundNote);
+      playEnemyCombatAttackAudio(enemy, Number(pattern?.soundVolume) || 0.34);
     },
     onAttack({ enemy, pattern, projectileCount, burstShot }) {
       const patternId = String(pattern?.id || '').trim().toLowerCase();
@@ -28807,6 +28906,9 @@ function updateEnemyCombatRuntime() {
           (Number(combatTarget?.y) || 0) - (Number(enemy?.wy) || 0),
         )),
         burstShot: burstShot === true,
+        musicalInstrumentId: String(enemy?.combatMusicalInstrumentId || ''),
+        musicalNote: normalizeSwarmNoteName(enemy?.soundNote) || '',
+        motifSteps: Array.from(enemy?.combatGroupMotifSteps || []),
         testPhaseIndex: enemyCombatLabRuntime.active ? enemyCombatLabRuntime.phaseIndex : null,
       }, { beatIndex, stepIndex: 0 });
     },
@@ -28829,22 +28931,7 @@ function updateEnemyLaserRuntime(dt) {
     player: getViewportCenterWorld(),
     worldToScreen,
     onActivate({ hazard, enemy }) {
-      playSwarmSoundEventImmediate('projectile', Number(hazard?.soundVolume) || 0.46, enemy?.soundNote);
-      const musicalInstrumentId = String(enemy?.combatMusicalInstrumentId || '').trim();
-      const musicalVolume = Math.max(0, Math.min(1, Number(enemy?.combatMusicalVolume) || 0));
-      if (musicalInstrumentId && musicalVolume > 0) {
-        const musicalNote = normalizeSwarmNoteName(enemy?.soundNote) || 'C4';
-        try {
-          triggerBeatSwarmInstrument(
-            musicalInstrumentId,
-            musicalNote,
-            undefined,
-            'master',
-            { source: 'enemy-combat-group-motif', enemyId: Math.trunc(Number(enemy?.id) || 0) },
-            musicalVolume
-          );
-        } catch {}
-      }
+      const attackAudio = playEnemyCombatAttackAudio(enemy, Number(hazard?.soundVolume) || 0.46);
       noteMusicSystemEvent('enemy_laser_activated', {
         enemyId: Math.trunc(Number(enemy?.id) || 0),
         hazardId: Math.trunc(Number(hazard?.id) || 0),
@@ -28858,9 +28945,9 @@ function updateEnemyLaserRuntime(dt) {
         lengthWorld: Number(hazard?.lengthWorld) || 0,
         visualLengthPx: Number(hazard?.lastVisualLengthPx) || 0,
         angle: Number(hazard?.angle) || 0,
-        musicalInstrumentId,
-        musicalNote: normalizeSwarmNoteName(enemy?.soundNote) || '',
-        musicalVolume,
+        musicalInstrumentId: attackAudio.musicalInstrumentId,
+        musicalNote: attackAudio.musicalNote,
+        musicalVolume: attackAudio.musicalVolume,
       }, { beatIndex, stepIndex: 0 });
     },
     onPlayerContact({ hazard, enemy }) {
@@ -28996,6 +29083,7 @@ function startGunnerCombatTest(options = null) {
 }
 function stopGunnerCombatTest() {
   const wasActive = enemyCombatLabRuntime.active;
+  clearEnemyCombatLabFormationPlans();
   enemyCombatLabRuntime.active = false;
   enemyCombatLabRuntime.profileId = '';
   enemyCombatLabRuntime.phaseIndex = -1;
@@ -29395,6 +29483,504 @@ function startTrackedLaserMotifGroupTest(options = null) {
     enemyIds: Array.from(enemyCombatLabRuntime.enemyIds),
   }, { beatIndex: enemyCombatLabRuntime.startBeat, stepIndex: 0 });
   return getEnemyCombatTestSnapshot();
+}
+function startGunnerPercussionFormationTest(options = null) {
+  clearEnemies();
+  clearProjectiles();
+  enemyCombatRuntime.reset();
+  const centerWorld = arenaCenterWorld || getViewportCenterWorld();
+  const centerScreen = worldToScreen(centerWorld) || {
+    x: Math.max(1, window.innerWidth) * 0.5,
+    y: Math.max(1, window.innerHeight) * 0.5,
+  };
+  const memberCount = 4;
+  const anchorRadius = Math.min(330, Math.max(225, Math.min(window.innerWidth, window.innerHeight) * 0.31));
+  const spawnRadius = anchorRadius + 340;
+  const groupId = `gunner-percussion-${Math.max(0, Math.trunc(Number(currentBeatIndex) || 0))}`;
+  const created = [];
+  for (let index = 0; index < memberCount; index += 1) {
+    const formationAngle = (-Math.PI * 0.25) + ((Math.PI * 2 * index) / memberCount);
+    const anchorScreen = {
+      x: centerScreen.x + (Math.cos(formationAngle) * anchorRadius),
+      y: centerScreen.y + (Math.sin(formationAngle) * anchorRadius),
+    };
+    const spawnScreen = {
+      x: centerScreen.x + (Math.cos(formationAngle) * spawnRadius),
+      y: centerScreen.y + (Math.sin(formationAngle) * spawnRadius),
+    };
+    const anchorWorld = screenToWorld(anchorScreen);
+    const enemy = spawnEnemyAt(spawnScreen.x, spawnScreen.y, {
+      hp: Math.max(1000, Number(options?.enemyHp) || 10000),
+      skipMusicGroupInit: true,
+      role: BEAT_EVENT_ROLES.MOTION,
+      layer: 'support',
+      note: 'C4',
+    });
+    if (!enemy || !anchorWorld) continue;
+    enemy.enemyType = 'gunner';
+    enemy.combatLabPatternId = 'formation_straight';
+    enemy.combatLabMovementBehaviorId = 'hold_position';
+    enemy.combatLabAnchorX = Number(anchorWorld.x) || 0;
+    enemy.combatLabAnchorY = Number(anchorWorld.y) || 0;
+    enemy.combatSyncGroupId = groupId;
+    enemy.combatGroupMemberIndex = index;
+    enemy.combatMusicalPartEndsOnDeath = true;
+    enemy.combatPersistentOffscreen = true;
+    enemy.combatFormationTrackArena = true;
+    enemy.combatFormationAngle = formationAngle;
+    enemy.combatFormationRadiusWorld = Math.hypot(
+      (Number(anchorWorld.x) || 0) - (Number(centerWorld?.x) || 0),
+      (Number(anchorWorld.y) || 0) - (Number(centerWorld?.y) || 0),
+    );
+    enemy.perfRepeatPersistent = true;
+    enemy.el?.classList?.add('is-gunner-enemy', 'is-musical-formation-enemy');
+    configureBeatSwarmEnemyCombatRuntime(enemy, {
+      profileId: 'gunner',
+      patternId: 'formation_straight',
+      movementBehaviorId: 'hold_position',
+      anchorX: anchorWorld.x,
+      anchorY: anchorWorld.y,
+      enabled: false,
+      startBeat: currentBeatIndex + 1,
+    });
+    created.push(enemy);
+  }
+  const startBeat = Math.ceil((Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) + 2) / 16) * 16;
+  const snareInstrumentId = getIdForDisplayName('Drum Snare 1') || '';
+  enemyCombatLabRuntime.active = created.length === memberCount;
+  enemyCombatLabRuntime.profileId = 'gunner_percussion_formation';
+  enemyCombatLabRuntime.startBeat = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
+  enemyCombatLabRuntime.phaseIndex = -1;
+  enemyCombatLabRuntime.phaseBeats = 128;
+  enemyCombatLabRuntime.soloPatternIds = [];
+  enemyCombatLabRuntime.phaseConfigurations = [{
+    id: 'gunner_snare_ensemble',
+    startBeat,
+    motifLength: 16,
+    memberMotifs: [
+      { steps: [0, 8], note: 'C4', instrumentId: snareInstrumentId, musicalVolume: 0.38, attackVolume: 0.11 },
+      { steps: [4, 12], note: 'C4', instrumentId: snareInstrumentId, musicalVolume: 0.38, attackVolume: 0.11 },
+      { steps: [6, 14], note: 'C4', instrumentId: snareInstrumentId, musicalVolume: 0.38, attackVolume: 0.11 },
+      { steps: [0, 10, 14], note: 'C4', instrumentId: snareInstrumentId, musicalVolume: 0.38, attackVolume: 0.11 },
+    ],
+  }];
+  enemyCombatLabRuntime.enemyIds = created.map((enemy) => Math.trunc(Number(enemy.id) || 0));
+  enemyCombatLabRuntime.supportEnemyIds = [];
+  enemyCombatLabRuntime.attackCounts = { formation_straight: 0 };
+  setEnemyCombatLabPhase(0, enemyCombatLabRuntime.startBeat);
+  noteMusicSystemEvent('enemy_combat_group_formation_started', {
+    groupId,
+    formation: 'arena_tracked_gunner_percussion_4',
+    directorPlanId: 'gunner_snare_ensemble',
+    startBeat,
+    trackArena: true,
+    enemyIds: Array.from(enemyCombatLabRuntime.enemyIds),
+  }, { beatIndex: enemyCombatLabRuntime.startBeat, stepIndex: 0 });
+  return getEnemyCombatTestSnapshot();
+}
+function startDualMusicalFormationTest(options = null) {
+  clearEnemies();
+  clearProjectiles();
+  enemyLaserRuntime.clear();
+  enemyCombatRuntime.reset();
+  const centerWorld = arenaCenterWorld || getViewportCenterWorld();
+  const centerScreen = worldToScreen(centerWorld) || {
+    x: Math.max(1, window.innerWidth) * 0.5,
+    y: Math.max(1, window.innerHeight) * 0.5,
+  };
+  const currentBeat = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
+  const groupSpecs = [
+    {
+      groupId: `laser-hihat-${currentBeat}`,
+      count: 4,
+      radiusPx: Math.min(390, Math.max(285, Math.min(window.innerWidth, window.innerHeight) * 0.38)),
+      startAngle: -Math.PI * 0.5,
+      enemyType: 'laser-spinner',
+      profileId: 'laser_spinner',
+      patternId: 'arena_beam_group_pulse',
+      cssClasses: ['is-laser-spinner-enemy', 'is-laser-formation-enemy'],
+      note: 'C4',
+    },
+    {
+      groupId: `gunner-snare-${currentBeat}`,
+      count: 3,
+      radiusPx: Math.min(275, Math.max(195, Math.min(window.innerWidth, window.innerHeight) * 0.235)),
+      startAngle: -Math.PI / 6,
+      enemyType: 'gunner',
+      profileId: 'gunner',
+      patternId: 'formation_straight',
+      cssClasses: ['is-gunner-enemy', 'is-musical-formation-enemy'],
+      note: 'C4',
+    },
+  ];
+  const created = [];
+  for (const groupSpec of groupSpecs) {
+    const spawnRadius = groupSpec.radiusPx + 360;
+    for (let index = 0; index < groupSpec.count; index += 1) {
+      const formationAngle = groupSpec.startAngle + ((Math.PI * 2 * index) / groupSpec.count);
+      const anchorScreen = {
+        x: centerScreen.x + (Math.cos(formationAngle) * groupSpec.radiusPx),
+        y: centerScreen.y + (Math.sin(formationAngle) * groupSpec.radiusPx),
+      };
+      const spawnScreen = {
+        x: centerScreen.x + (Math.cos(formationAngle) * spawnRadius),
+        y: centerScreen.y + (Math.sin(formationAngle) * spawnRadius),
+      };
+      const anchorWorld = screenToWorld(anchorScreen);
+      const enemy = spawnEnemyAt(spawnScreen.x, spawnScreen.y, {
+        hp: Math.max(1000, Number(options?.enemyHp) || 10000),
+        skipMusicGroupInit: true,
+        role: BEAT_EVENT_ROLES.MOTION,
+        layer: 'support',
+        note: groupSpec.note,
+      });
+      if (!enemy || !anchorWorld) continue;
+      enemy.enemyType = groupSpec.enemyType;
+      enemy.combatLabPatternId = groupSpec.patternId;
+      enemy.combatLabMovementBehaviorId = 'hold_position';
+      enemy.combatLabAnchorX = Number(anchorWorld.x) || 0;
+      enemy.combatLabAnchorY = Number(anchorWorld.y) || 0;
+      enemy.combatSyncGroupId = groupSpec.groupId;
+      enemy.combatGroupMemberIndex = index;
+      enemy.combatMusicalPartEndsOnDeath = true;
+      enemy.combatPersistentOffscreen = true;
+      enemy.combatFormationTrackArena = true;
+      enemy.combatFormationAngle = formationAngle;
+      enemy.combatFormationRadiusWorld = Math.hypot(
+        (Number(anchorWorld.x) || 0) - (Number(centerWorld?.x) || 0),
+        (Number(anchorWorld.y) || 0) - (Number(centerWorld?.y) || 0),
+      );
+      if (groupSpec.profileId === 'laser_spinner') {
+        enemy.combatLaserFormationAngle = formationAngle + Math.PI + 0.16;
+      }
+      enemy.perfRepeatPersistent = true;
+      enemy.el?.classList?.add(...groupSpec.cssClasses);
+      configureBeatSwarmEnemyCombatRuntime(enemy, {
+        profileId: groupSpec.profileId,
+        patternId: groupSpec.patternId,
+        movementBehaviorId: 'hold_position',
+        anchorX: anchorWorld.x,
+        anchorY: anchorWorld.y,
+        enabled: false,
+        startBeat: currentBeat + 1,
+      });
+      created.push(enemy);
+    }
+  }
+  const laserGroup = groupSpecs[0];
+  const gunnerGroup = groupSpecs[1];
+  const laserStartBeat = Math.ceil((currentBeat + 2) / 16) * 16;
+  const gunnerStartBeat = laserStartBeat + 4;
+  const hiHatInstrumentId = getIdForDisplayName('Hi-Hat Closed') || '';
+  const snareInstrumentId = getIdForDisplayName('Drum Snare 1') || '';
+  enemyCombatLabRuntime.active = created.length === groupSpecs.reduce((sum, spec) => sum + spec.count, 0);
+  enemyCombatLabRuntime.profileId = 'dual_musical_formation';
+  enemyCombatLabRuntime.startBeat = currentBeat;
+  enemyCombatLabRuntime.phaseIndex = -1;
+  enemyCombatLabRuntime.phaseBeats = 256;
+  enemyCombatLabRuntime.soloPatternIds = [];
+  enemyCombatLabRuntime.phaseConfigurations = [];
+  enemyCombatLabRuntime.enemyIds = created.map((enemy) => Math.trunc(Number(enemy.id) || 0));
+  enemyCombatLabRuntime.supportEnemyIds = [];
+  enemyCombatLabRuntime.attackCounts = { arena_beam_group_pulse: 0, formation_straight: 0 };
+  setEnemyCombatLabPhase(0, currentBeat);
+  applyDirectorEnemyCombatGroupMotifPlan(laserGroup.groupId, {
+    id: 'laser_closed_hihat_rhythm',
+    motifLength: 16,
+    memberMotifs: [
+      { steps: [0, 8], note: 'C4', instrumentId: hiHatInstrumentId, musicalVolume: 0.28, attackVolume: 0.1 },
+      { steps: [3, 11], note: 'C4', instrumentId: hiHatInstrumentId, musicalVolume: 0.28, attackVolume: 0.1 },
+      { steps: [4, 12], note: 'C4', instrumentId: hiHatInstrumentId, musicalVolume: 0.28, attackVolume: 0.1 },
+      { steps: [6, 14], note: 'C4', instrumentId: hiHatInstrumentId, musicalVolume: 0.28, attackVolume: 0.1 },
+    ],
+  }, laserStartBeat);
+  applyDirectorEnemyCombatGroupMotifPlan(gunnerGroup.groupId, {
+    id: 'gunner_snare_rhythm',
+    motifLength: 16,
+    memberMotifs: [
+      { steps: [0, 8], note: 'C4', instrumentId: snareInstrumentId, musicalVolume: 0.36, attackVolume: 0.1 },
+      { steps: [5, 13], note: 'C4', instrumentId: snareInstrumentId, musicalVolume: 0.36, attackVolume: 0.1 },
+      { steps: [0, 10], note: 'C4', instrumentId: snareInstrumentId, musicalVolume: 0.36, attackVolume: 0.1 },
+    ],
+  }, gunnerStartBeat);
+  for (const groupSpec of groupSpecs) {
+    noteMusicSystemEvent('enemy_combat_group_formation_started', {
+      groupId: groupSpec.groupId,
+      formation: groupSpec.profileId === 'laser_spinner'
+        ? 'outer_laser_hihat_4'
+        : 'inner_gunner_snare_3',
+      trackArena: true,
+      enemyIds: created
+        .filter((enemy) => enemy.combatSyncGroupId === groupSpec.groupId)
+        .map((enemy) => Math.trunc(Number(enemy.id) || 0)),
+    }, { beatIndex: currentBeat, stepIndex: 0 });
+  }
+  return getEnemyCombatTestSnapshot();
+}
+function getDirectorMusicalFormationPolicy(energyStateLike = '') {
+  const energyState = String(energyStateLike || '').trim().toLowerCase();
+  if (energyState === 'medium') return { maxGroups: 1, maxMembers: 4, cooldownBars: 4 };
+  if (energyState === 'build') return { maxGroups: 1, maxMembers: 4, cooldownBars: 4 };
+  if (energyState === 'clash') return { maxGroups: 1, maxMembers: 4, cooldownBars: 4 };
+  if (energyState === 'peak') return { maxGroups: 2, maxMembers: 7, cooldownBars: 2 };
+  return { maxGroups: 0, maxMembers: 0, cooldownBars: 4 };
+}
+function startMusicalFormationEnemyRetreat(enemy, reason = 'director_formation_retired') {
+  if (!enemy || enemy.retreating) return false;
+  enemy.retreating = true;
+  enemy.lifecycleState = 'retiring';
+  enemy.combatEnabled = false;
+  enemy.retreatReason = String(reason || 'director_formation_retired');
+  enemy.retreatOrigin = 'director_musical_formation_layer';
+  const center = getViewportCenterWorld();
+  const direction = normalizeDir(
+    (Number(enemy.wx) || 0) - (Number(center?.x) || 0),
+    (Number(enemy.wy) || 0) - (Number(center?.y) || 0),
+    1,
+    0,
+  );
+  enemy.vx = direction.x * ENEMY_MAX_SPEED * 0.9;
+  enemy.vy = direction.y * ENEMY_MAX_SPEED * 0.9;
+  return true;
+}
+function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, variantIndex = 0) {
+  const kind = String(kindLike || '').trim().toLowerCase();
+  const shifted = Math.max(0, Math.trunc(Number(variantIndex) || 0)) % 4;
+  if (kind === 'laser_hihat') {
+    const instrumentId = getIdForDisplayName('Hi-Hat Closed') || '';
+    const baseSteps = [[0, 8], [3, 11], [4, 12], [6, 14]];
+    return {
+      groupId,
+      kind,
+      count: 4,
+      radiusScale: 0.38,
+      minRadiusPx: 285,
+      maxRadiusPx: 390,
+      startAngle: (-Math.PI * 0.5) + (shifted * Math.PI * 0.125),
+      enemyType: 'laser-spinner',
+      profileId: 'laser_spinner',
+      patternId: 'arena_beam_group_pulse',
+      cssClasses: ['is-laser-spinner-enemy', 'is-laser-formation-enemy'],
+      plan: {
+        id: `director-laser-hihat-${groupId}`,
+        motifLength: 16,
+        memberMotifs: baseSteps.map((steps) => ({
+          steps: steps.map((step) => (step + shifted) % 16),
+          note: 'C4',
+          instrumentId,
+          musicalVolume: 0.28,
+          attackVolume: 0.1,
+        })),
+      },
+      startBeat,
+    };
+  }
+  const instrumentId = getIdForDisplayName('Drum Snare 1') || '';
+  const baseSteps = [[0, 8], [5, 13], [0, 10]];
+  return {
+    groupId,
+    kind: 'gunner_snare',
+    count: 3,
+    radiusScale: 0.235,
+    minRadiusPx: 195,
+    maxRadiusPx: 275,
+    startAngle: (-Math.PI / 6) + (shifted * Math.PI * 0.16),
+    enemyType: 'gunner',
+    profileId: 'gunner',
+    patternId: 'formation_straight',
+    cssClasses: ['is-gunner-enemy', 'is-musical-formation-enemy'],
+    plan: {
+      id: `director-gunner-snare-${groupId}`,
+      motifLength: 16,
+      memberMotifs: baseSteps.map((steps) => ({
+        steps: steps.map((step) => (step + shifted) % 16),
+        note: 'C4',
+        instrumentId,
+        musicalVolume: 0.36,
+        attackVolume: 0.1,
+      })),
+    },
+    startBeat,
+  };
+}
+function estimateActivePlayerWeaponDps() {
+  const slotIndex = Math.max(0, Math.min(weaponLoadout.length - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
+  const weapon = weaponLoadout[slotIndex];
+  const stages = sanitizeWeaponStages(weapon?.stages);
+  const tuneChain = getWeaponSlotTuneChain(slotIndex);
+  const beatLen = Math.max(0.05, Number(getGameplayBeatLen()) || (60 / BEAT_SWARM_ENTRY_BPM));
+  const stepLen = beatLen * COMPOSER_BEATS_PER_BAR / Math.max(1, WEAPON_TUNE_STEPS);
+  let totalSteps = 0;
+  let authoredShots = 0;
+  for (const tune of Array.isArray(tuneChain) ? tuneChain : []) {
+    const steps = Math.max(1, Math.trunc(Number(tune?.steps) || WEAPON_TUNE_STEPS));
+    totalSteps += steps;
+    for (let step = 0; step < steps; step += 1) {
+      if (!tune?.active?.[step]) continue;
+      authoredShots += Array.isArray(tune?.list?.[step])
+        ? Math.max(1, tune.list[step].length)
+        : 1;
+    }
+  }
+  if (!(totalSteps > 0)) totalSteps = WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH;
+  if (!(authoredShots > 0)) authoredShots = Math.max(1, Math.ceil(totalSteps * 0.5));
+  const stageCount = Math.max(1, stages.length || equippedWeapons.size || 1);
+  const damageScale = Math.max(0.05, Number(getWeaponTuneDamageScale(slotIndex)) || 1);
+  const estimatedDamagePerStage = Math.max(2, BEAM_DAMAGE_PER_SECOND * beatLen);
+  const loopSeconds = Math.max(beatLen, totalSteps * stepLen);
+  const rawDps = (authoredShots * stageCount * estimatedDamagePerStage * damageScale) / loopSeconds;
+  return Math.max(8, Math.min(80, rawDps));
+}
+function getDirectorMusicalFormationSurvivalHealth(drawgridCount = 8) {
+  const safeDrawgridCount = Math.max(1, Math.trunc(Number(drawgridCount) || 8));
+  const beatLen = Math.max(0.05, Number(getGameplayBeatLen()) || (60 / BEAT_SWARM_ENTRY_BPM));
+  const survivalSeconds = safeDrawgridCount * COMPOSER_BEATS_PER_BAR * beatLen;
+  const estimatedDps = estimateActivePlayerWeaponDps();
+  return Math.ceil(Math.max(
+    80,
+    (Number(currentEnemySpawnMaxHp) || 1) * 12,
+    estimatedDps * survivalSeconds * 1.35,
+  ));
+}
+function spawnDirectorMusicalFormation(kind, startBeat, currentBar) {
+  const sequence = directorMusicalFormationLayerRuntime.groupSeq++;
+  const groupId = `director-${String(kind || 'formation')}-${sequence}`;
+  const variantIndex = directorMusicalFormationLayerRuntime.variantIndex++;
+  const spec = createDirectorMusicalFormationSpec(kind, groupId, startBeat, variantIndex);
+  if (enemies.length + spec.count > Math.max(1, Math.trunc(Number(ENEMY_CAP) || 1))) return null;
+  const centerWorld = arenaCenterWorld || getViewportCenterWorld();
+  const centerScreen = worldToScreen(centerWorld) || {
+    x: Math.max(1, window.innerWidth) * 0.5,
+    y: Math.max(1, window.innerHeight) * 0.5,
+  };
+  const radiusPx = Math.min(
+    spec.maxRadiusPx,
+    Math.max(spec.minRadiusPx, Math.min(window.innerWidth, window.innerHeight) * spec.radiusScale),
+  );
+  const spawnRadius = radiusPx + 360;
+  const survivalHp = getDirectorMusicalFormationSurvivalHealth(8);
+  const created = [];
+  for (let index = 0; index < spec.count; index += 1) {
+    const formationAngle = spec.startAngle + ((Math.PI * 2 * index) / spec.count);
+    const anchorScreen = {
+      x: centerScreen.x + (Math.cos(formationAngle) * radiusPx),
+      y: centerScreen.y + (Math.sin(formationAngle) * radiusPx),
+    };
+    const spawnScreen = {
+      x: centerScreen.x + (Math.cos(formationAngle) * spawnRadius),
+      y: centerScreen.y + (Math.sin(formationAngle) * spawnRadius),
+    };
+    const anchorWorld = screenToWorld(anchorScreen);
+    const enemy = spawnEnemyAt(spawnScreen.x, spawnScreen.y, {
+      hp: survivalHp,
+      skipMusicGroupInit: true,
+      role: BEAT_EVENT_ROLES.MOTION,
+      layer: 'support',
+      note: 'C4',
+    });
+    if (!enemy || !anchorWorld) continue;
+    enemy.enemyType = spec.enemyType;
+    enemy.combatLabPatternId = spec.patternId;
+    enemy.combatLabMovementBehaviorId = 'hold_position';
+    enemy.combatLabAnchorX = Number(anchorWorld.x) || 0;
+    enemy.combatLabAnchorY = Number(anchorWorld.y) || 0;
+    enemy.combatSyncGroupId = groupId;
+    enemy.combatGroupMemberIndex = index;
+    enemy.combatMusicalPartEndsOnDeath = true;
+    enemy.combatPersistentOffscreen = true;
+    enemy.combatFormationTrackArena = true;
+    enemy.combatFormationAngle = formationAngle;
+    enemy.combatFormationRadiusWorld = Math.hypot(
+      (Number(anchorWorld.x) || 0) - (Number(centerWorld?.x) || 0),
+      (Number(anchorWorld.y) || 0) - (Number(centerWorld?.y) || 0),
+    );
+    if (spec.profileId === 'laser_spinner') enemy.combatLaserFormationAngle = formationAngle + Math.PI + 0.16;
+    enemy.el?.classList?.add(...spec.cssClasses);
+    configureBeatSwarmEnemyCombatRuntime(enemy, {
+      profileId: spec.profileId,
+      patternId: spec.patternId,
+      movementBehaviorId: 'hold_position',
+      anchorX: anchorWorld.x,
+      anchorY: anchorWorld.y,
+      enabled: false,
+      startBeat,
+    });
+    created.push(enemy);
+  }
+  if (created.length !== spec.count) {
+    for (const enemy of created) removeEnemy(enemy, 'director_formation_spawn_incomplete');
+    return null;
+  }
+  applyDirectorEnemyCombatGroupMotifPlan(groupId, spec.plan, startBeat);
+  for (const enemy of created) enemy.combatEnabled = true;
+  const group = {
+    groupId,
+    kind: spec.kind,
+    createdBar: currentBar,
+    startBeat,
+    survivalHp,
+    estimatedPlayerDps: Number(estimateActivePlayerWeaponDps().toFixed(3)),
+    targetSurvivalDrawgrids: 8,
+    enemyIds: created.map((enemy) => Math.trunc(Number(enemy.id) || 0)),
+  };
+  directorMusicalFormationLayerRuntime.groups.set(groupId, group);
+  noteMusicSystemEvent('director_musical_formation_spawned', {
+    ...group,
+    enemyIds: Array.from(group.enemyIds),
+  }, { beatIndex: startBeat, stepIndex: 0, barIndex: currentBar });
+  return group;
+}
+function updateDirectorMusicalFormationLayer(weaponGateActive = false) {
+  if (!directorMusicalFormationLayerRuntime.enabled || enemyCombatLabRuntime.active || weaponGateActive) return;
+  const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
+  if (directorMusicalFormationLayerRuntime.lastBeatIndex === beatIndex) return;
+  directorMusicalFormationLayerRuntime.lastBeatIndex = beatIndex;
+  const onboardingPhase = String(beatSwarmOnboardingRuntime.phase || '').trim().toLowerCase();
+  if (!directorMusicalFormationLayerRuntime.auditionOverride && onboardingPhase !== 'complete') return;
+  const barIndex = Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR));
+  const auditionSection = directorMusicalFormationLayerRuntime.auditionOverride
+    ? String(getBeatSwarmMusicIntensityAuditionState(barIndex)?.id || 'intro').trim().toLowerCase()
+    : '';
+  const energyState = directorMusicalFormationLayerRuntime.auditionOverride
+    ? auditionSection
+    : getCurrentSwarmEnergyStateName();
+  const policy = getDirectorMusicalFormationPolicy(energyState);
+  for (const [groupId, group] of directorMusicalFormationLayerRuntime.groups.entries()) {
+    const living = enemies.filter((enemy) => (
+      String(enemy?.combatSyncGroupId || '').trim() === groupId
+      && String(enemy?.lifecycleState || 'active') === 'active'
+      && !enemy?.retreating
+    ));
+    if (!living.length) {
+      ensureSwarmDirector().clearMusicalFormationPlan?.(groupId);
+      directorMusicalFormationLayerRuntime.groups.delete(groupId);
+      noteMusicSystemEvent('director_musical_formation_ended', {
+        groupId,
+        kind: group.kind,
+        reason: 'members_ended',
+      }, { beatIndex, barIndex });
+      continue;
+    }
+  }
+  if (policy.maxGroups <= 0 || (beatIndex % 16) !== 0 || barIndex < directorMusicalFormationLayerRuntime.nextSpawnBar) return;
+  const activeGroups = Array.from(directorMusicalFormationLayerRuntime.groups.values());
+  const activeMembers = activeGroups.reduce((sum, group) => sum + group.enemyIds.length, 0);
+  if (activeGroups.length >= policy.maxGroups) return;
+  const nextKind = activeGroups.some((group) => group.kind === 'laser_hihat') ? 'gunner_snare' : 'laser_hihat';
+  const nextCount = nextKind === 'laser_hihat' ? 4 : 3;
+  if (activeMembers + nextCount > policy.maxMembers) return;
+  const startBeat = beatIndex + 1;
+  const spawned = spawnDirectorMusicalFormation(nextKind, startBeat, barIndex);
+  if (!spawned) return;
+  directorMusicalFormationLayerRuntime.nextSpawnBar = barIndex + policy.cooldownBars;
+  noteMusicSystemEvent('director_musical_formation_policy', {
+    energyState,
+    maxGroups: policy.maxGroups,
+    maxMembers: policy.maxMembers,
+    activeGroups: activeGroups.length + 1,
+    activeMembers: activeMembers + nextCount,
+    nextSpawnBar: directorMusicalFormationLayerRuntime.nextSpawnBar,
+  }, { beatIndex, barIndex });
 }
 function startShapeCasterCombatTest(options = null) {
   clearEnemies();
@@ -32065,6 +32651,7 @@ function tick(nowMs) {
   if (!framePressure.severe || (perfFrameIndex % 2) === 0) {
     withBeatSwarmPerfSample('updateEnemies', () => updateEnemies(dt));
   }
+  withBeatSwarmPerfSample('directorMusicalFormations', () => updateDirectorMusicalFormationLayer(!!weaponGateFrameRuntime));
   withBeatSwarmPerfSample('enemyCombat', () => updateEnemyCombatRuntime());
   withBeatSwarmPerfSample('enemyLasers', () => updateEnemyLaserRuntime(dt));
   withBeatSwarmPerfSample('enemyShapes', () => updateEnemyShapeRuntime());
@@ -32705,7 +33292,12 @@ export const BeatSwarmMode = {
   startLaserVariantCombatTest,
   startSymmetricLaserGroupTest,
   startTrackedLaserMotifGroupTest,
+  startGunnerPercussionFormationTest,
+  startDualMusicalFormationTest,
   applyDirectorEnemyCombatGroupMotifPlan,
+  setDirectorMusicalFormationLayerEnabled,
+  getDirectorMusicalFormationLayerSnapshot,
+  clearDirectorMusicalFormationLayer,
   startShapeCasterCombatTest,
   startChargerCombatTest,
   startConductorCombatTest,
@@ -32717,6 +33309,8 @@ export const BeatSwarmMode = {
   stopLaserVariantCombatTest: stopGunnerCombatTest,
   stopSymmetricLaserGroupTest: stopGunnerCombatTest,
   stopTrackedLaserMotifGroupTest: stopGunnerCombatTest,
+  stopGunnerPercussionFormationTest: stopGunnerCombatTest,
+  stopDualMusicalFormationTest: stopGunnerCombatTest,
   stopShapeCasterCombatTest: stopGunnerCombatTest,
   stopChargerCombatTest: stopGunnerCombatTest,
   stopConductorCombatTest: stopGunnerCombatTest,
@@ -32728,6 +33322,8 @@ export const BeatSwarmMode = {
   getLaserVariantCombatTestSnapshot: getEnemyCombatTestSnapshot,
   getSymmetricLaserGroupTestSnapshot: getEnemyCombatTestSnapshot,
   getTrackedLaserMotifGroupTestSnapshot: getEnemyCombatTestSnapshot,
+  getGunnerPercussionFormationTestSnapshot: getEnemyCombatTestSnapshot,
+  getDualMusicalFormationTestSnapshot: getEnemyCombatTestSnapshot,
   getShapeCasterCombatTestSnapshot: getEnemyCombatTestSnapshot,
   getChargerCombatTestSnapshot: getEnemyCombatTestSnapshot,
   getConductorCombatTestSnapshot: getEnemyCombatTestSnapshot,

@@ -28,6 +28,18 @@ const GUNNER_ATTACK_PATTERNS = Object.freeze({
     burstCount: 3,
     burstSpacingBeats: 1,
   }),
+  formation_straight: Object.freeze({
+    id: 'formation_straight',
+    cadenceBeats: 16,
+    projectileCount: 1,
+    projectileSpeed: 620,
+    spreadRadians: 0,
+    damage: 0.9,
+    soundVolume: 0.14,
+    requiresAnchor: true,
+    requiresGroupReady: true,
+    anchorToleranceWorld: 48,
+  }),
 });
 
 const SEEKER_ATTACK_PATTERNS = Object.freeze({

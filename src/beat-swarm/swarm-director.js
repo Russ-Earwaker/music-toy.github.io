@@ -229,6 +229,7 @@ export function createSwarmDirector(options = null) {
     }),
     eventQueue: [],
     eventSeq: 1,
+    musicalFormationPlans: new Map(),
   };
 
   function resetBeatUsage(beatIndex = null) {
@@ -277,7 +278,33 @@ export function createSwarmDirector(options = null) {
       pressureState: { ...state.pressureState },
       spawnState: state.spawnDirector?.getSnapshot?.() || null,
       queuedEventCount: Math.max(0, Math.trunc(state.eventQueue.length || 0)),
+      musicalFormationPlans: Array.from(state.musicalFormationPlans.values()).map((plan) => JSON.parse(JSON.stringify(plan))),
     };
+  }
+
+  function registerMusicalFormationPlan(plan = null) {
+    if (!plan || typeof plan !== 'object') return null;
+    const groupId = String(plan.groupId || '').trim();
+    if (!groupId) return null;
+    const normalized = JSON.parse(JSON.stringify({
+      ...plan,
+      groupId,
+      id: String(plan.id || `formation-${groupId}`).trim() || `formation-${groupId}`,
+      startBeat: Math.max(0, Math.trunc(Number(plan.startBeat) || 0)),
+      motifLength: Math.max(1, Math.trunc(Number(plan.motifLength) || 1)),
+      memberMotifs: Array.isArray(plan.memberMotifs) ? plan.memberMotifs : [],
+    }));
+    state.musicalFormationPlans.set(groupId, normalized);
+    return JSON.parse(JSON.stringify(normalized));
+  }
+
+  function getMusicalFormationPlan(groupId = '') {
+    const plan = state.musicalFormationPlans.get(String(groupId || '').trim()) || null;
+    return plan ? JSON.parse(JSON.stringify(plan)) : null;
+  }
+
+  function clearMusicalFormationPlan(groupId = '') {
+    return state.musicalFormationPlans.delete(String(groupId || '').trim());
   }
 
   function syncToBeat(beatIndex = 0) {
@@ -539,6 +566,7 @@ export function createSwarmDirector(options = null) {
     } catch {}
     resetBeatUsage(null);
     clearBeatEvents();
+    state.musicalFormationPlans.clear();
   }
 
   return Object.freeze({
@@ -564,6 +592,9 @@ export function createSwarmDirector(options = null) {
     setSpawnBattlefieldState,
     noteSpawn,
     getSpawnState,
+    registerMusicalFormationPlan,
+    getMusicalFormationPlan,
+    clearMusicalFormationPlan,
     reset,
   });
 }

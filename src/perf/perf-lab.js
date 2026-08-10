@@ -455,6 +455,9 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
+        ${btn('musicLabRunDualMusicalFormationDebug', 'Run Laser Hi-Hat + Gunner Snare (1x75s)', 'primary')}
+        ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Director Formation Intensity Flow (1x150s)', 'primary')}
+        ${btn('musicLabRunGunnerPercussionFormationDebug', 'Run Gunner Percussion Formation (1x60s)', 'primary')}
         ${btn('musicLabRunTrackedLaserMotifsDebug', 'Run Arena-Tracked Laser Motifs (1x75s)', 'primary')}
         ${btn('musicLabRunSymmetricLaserGroupDebug', 'Run Symmetric Laser Group (1x45s)', 'primary')}
         ${btn('musicLabRunLaserVariantsDebug', 'Run Laser Variants (1x60s)', 'primary')}
@@ -1556,6 +1559,18 @@ function ensureUI() {
     }
     if (act === 'musicLabRunTrackedLaserMotifsDebug') {
       await runTrackedLaserMotifsDebug();
+      return;
+    }
+    if (act === 'musicLabRunGunnerPercussionFormationDebug') {
+      await runGunnerPercussionFormationDebug();
+      return;
+    }
+    if (act === 'musicLabRunDualMusicalFormationDebug') {
+      await runDualMusicalFormationDebug();
+      return;
+    }
+    if (act === 'musicLabRunDirectorFormationIntensityFlow') {
+      await runDirectorFormationIntensityFlowDebug();
       return;
     }
     if (act === 'musicLabRunBS0S3AccentRewriteDebug') {
@@ -7723,6 +7738,158 @@ async function runTrackedLaserMotifsDebug() {
       maxLines: 1100,
       preferOutputDirectory: true,
       fileNamePrefix: 'resources-debug-arena-tracked-laser-motifs',
+    },
+  });
+}
+
+async function runGunnerPercussionFormationDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_gunner_percussion_formation_1x60s',
+    saveNotes: 'Director-owned four-member Gunner formation. Each living enemy retains fixed solo or paired motif steps and layers Drum Snare 1 over quiet projectile fire.',
+    groupedScenarioName: 'beat_swarm_gunner_percussion_formation_1x60s',
+    groupedRunId: 'musicLab_gunner_percussion_formation_1x60s_scenario',
+    groupedNotes: 'Cross-profile validation of reusable musical formation plans and enemy-owned loop voices.',
+    tagPrefix: 'GunnerPercussionFormation1x60s',
+    labelPrefix: 'BS0_gunner_percussion_formation_1x60s',
+    statusPrefix: 'Running Gunner percussion formation',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startGunnerPercussionFormationTest !== 'function') {
+        throw new Error('gunner_percussion_formation_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startGunnerPercussionFormationTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 4) {
+        throw new Error('gunner_percussion_formation_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_GUNNER_PERCUSSION_FORMATION_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_group_formation_started',
+        'enemy_combat_group_motif_assigned',
+        'enemy_combat_group_motif_member_ended',
+        'enemy_combat_test_phase',
+        'enemy_combat_anchor_ready',
+        'enemy_combat_attack',
+      ],
+      maxLines: 900,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-gunner-percussion-formation',
+    },
+  });
+}
+
+async function runDualMusicalFormationDebug() {
+  await runBS0Stage(1, {
+    durationMs: 75000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    saveRunIdBase: 'musicLab_dual_musical_formation_1x75s',
+    saveNotes: 'Independent musical formations: four outer Laser Spinners play a closed hi-hat rhythm while three inner Gunners play a separate snare rhythm.',
+    groupedScenarioName: 'beat_swarm_dual_musical_formation_1x75s',
+    groupedRunId: 'musicLab_dual_musical_formation_1x75s_scenario',
+    groupedNotes: 'Tests two simultaneous director-owned enemy rhythms as an additive variation layer over the established score.',
+    tagPrefix: 'DualMusicalFormation1x75s',
+    labelPrefix: 'BS0_dual_musical_formation_1x75s',
+    statusPrefix: 'Running dual musical formations',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startDualMusicalFormationTest !== 'function') {
+        throw new Error('dual_musical_formation_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startDualMusicalFormationTest();
+      if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 7) {
+        throw new Error('dual_musical_formation_test_spawn_failed');
+      }
+      try { window.__BEAT_SWARM_DUAL_MUSICAL_FORMATION_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'enemy_combat_group_formation_started',
+        'enemy_combat_group_motif_assigned',
+        'enemy_combat_group_motif_member_ended',
+        'enemy_combat_test_phase',
+        'enemy_combat_anchor_ready',
+        'enemy_combat_attack',
+        'enemy_laser_activated',
+        'enemy_laser_player_contact',
+      ],
+      maxLines: 1500,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-dual-musical-formation',
+    },
+  });
+}
+
+async function runDirectorFormationIntensityFlowDebug() {
+  await runBS0Stage(3, {
+    durationMs: 150000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'ramp_release',
+      },
+    },
+    saveRunIdBase: 'musicLab_director_formation_intensity_flow_1x150s',
+    saveNotes: [
+      'Director musical-formation intensity flow over the established score.',
+      'Expected: no formations in intro/low states, one formation in build/clash, up to two in peak, and no new formations in release/settle.',
+      'Formation voices remain embodied until their enemies die; no routine intensity transition makes them retreat.',
+    ].join(' '),
+    groupedScenarioName: 'beat_swarm_director_formation_intensity_flow_1x150s',
+    groupedRunId: 'musicLab_director_formation_intensity_flow_1x150s_scenario',
+    groupedNotes: 'Validates director-owned additive enemy formations, occupancy limits, phrase-boundary spawning, persistence through intensity changes, and replacement after group death.',
+    tagPrefix: 'DirectorFormationIntensityFlow1x150s',
+    labelPrefix: 'BS0_director_formation_intensity_flow_1x150s',
+    statusPrefix: 'Running director formation intensity flow',
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.setDirectorMusicalFormationLayerEnabled !== 'function') {
+        throw new Error('director_musical_formation_layer_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.setDirectorMusicalFormationLayerEnabled(true, { auditionOverride: true });
+      try { window.__BEAT_SWARM_DIRECTOR_FORMATION_FLOW_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'director_musical_formation_policy',
+        'director_musical_formation_spawned',
+        'director_musical_formation_ended',
+        'enemy_combat_group_motif_assigned',
+        'enemy_combat_group_motif_member_ended',
+        'enemy_combat_attack',
+        'enemy_laser_activated',
+      ],
+      maxLines: 2200,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-director-formation-intensity-flow',
     },
   });
 }
