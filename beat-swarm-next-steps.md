@@ -269,6 +269,9 @@ Release:
 
 Use playtests and Music Lab where useful to answer:
 
+- Do director-owned musical enemy formations remain readable over a complete simulated player score, rather than being judged against sparse test music?
+- Do formation voices add musical variation without masking the weapon, Bass Drive, Accent Rhythm, or Lead Theme motifs beneath them?
+
 - Does the weapon-gate sequence hand off without a visible/audio snap?
 - Does the player weapon motif continue at the correct tempo after the corridor?
 - Does the arena fade in with the player centered?
@@ -277,6 +280,18 @@ Use playtests and Music Lab where useful to answer:
 - Does Tap Orb activation feel quantized and satisfying?
 - Does the foundation loop add exactly one beat hit per activated orb?
 - Do enemies remain readable while the arena is musically inactive?
+
+### To Do - Authoring Events x Director Intensity
+
+Validate the complete handoff from motif-creation gameplay into director intensity control:
+
+- gates, bouncers, missiles, Tap Orbs, and lead interactions must commit through the same registered theme/lane contract
+- a newly authored motif must remain literal and recognizable for its protected introduction window
+- increasing intensity may add density, layers, register, harmonies, and riffs without replacing the motif's identity
+- decreasing intensity may fragment or rest the motif without losing its authored data
+- director requests for more density should spawn an appropriate authoring interaction when player input is required, rather than silently inventing a replacement motif
+- tests must cover authoring before, during, and immediately across intensity transitions
+- production behavior must remain interaction-driven; deterministic motif seeding is permitted only in Music Lab diagnostics
 
 ## Tap Orb V1 Implementation Plan
 

@@ -7857,13 +7857,14 @@ async function runDirectorFormationIntensityFlowDebug() {
     },
     saveRunIdBase: 'musicLab_director_formation_intensity_flow_1x150s',
     saveNotes: [
-      'Director musical-formation intensity flow over the established score.',
+      'Director musical-formation intensity flow over a deterministic simulated player score.',
+      'The prepared weapon is joined by authored-style Bass Drive, Accent Rhythm, and Lead Theme motifs committed through the normal music handoff paths.',
       'Expected: no formations in intro/low states, one formation in build/clash, up to two in peak, and no new formations in release/settle.',
       'Formation voices remain embodied until their enemies die; no routine intensity transition makes them retreat.',
     ].join(' '),
     groupedScenarioName: 'beat_swarm_director_formation_intensity_flow_1x150s',
     groupedRunId: 'musicLab_director_formation_intensity_flow_1x150s_scenario',
-    groupedNotes: 'Validates director-owned additive enemy formations, occupancy limits, phrase-boundary spawning, persistence through intensity changes, and replacement after group death.',
+    groupedNotes: 'Validates director-owned additive enemy formations over simulated player-authored motifs, including occupancy limits, phrase-boundary spawning, persistence through intensity changes, and replacement after group death.',
     tagPrefix: 'DirectorFormationIntensityFlow1x150s',
     labelPrefix: 'BS0_director_formation_intensity_flow_1x150s',
     statusPrefix: 'Running director formation intensity flow',
@@ -7873,8 +7874,15 @@ async function runDirectorFormationIntensityFlowDebug() {
         throw new Error('director_musical_formation_layer_api_unavailable');
       }
       try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      if (typeof modeApi.seedDirectorFormationTestMotifs !== 'function') {
+        throw new Error('director_formation_test_motif_seed_api_unavailable');
+      }
+      const motifs = modeApi.seedDirectorFormationTestMotifs();
+      if (motifs?.foundation?.authored !== true || motifs?.accent?.authored !== true || motifs?.lead?.authored !== true) {
+        throw new Error('director_formation_test_motif_seed_failed');
+      }
       const snapshot = modeApi.setDirectorMusicalFormationLayerEnabled(true, { auditionOverride: true });
-      try { window.__BEAT_SWARM_DIRECTOR_FORMATION_FLOW_TEST = snapshot; } catch {}
+      try { window.__BEAT_SWARM_DIRECTOR_FORMATION_FLOW_TEST = { ...snapshot, motifs }; } catch {}
     },
     traceCapture: {
       enabled: true,
@@ -7882,6 +7890,9 @@ async function runDirectorFormationIntensityFlowDebug() {
         'director_musical_formation_policy',
         'director_musical_formation_spawned',
         'director_musical_formation_ended',
+        'director_formation_test_motifs_seeded',
+        'music_rhythm_rewrite_committed_to_theme',
+        'lead_gate_rewrite_committed_to_theme',
         'enemy_combat_group_motif_assigned',
         'enemy_combat_group_motif_member_ended',
         'enemy_combat_attack',
