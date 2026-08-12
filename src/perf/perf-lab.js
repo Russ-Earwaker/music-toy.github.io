@@ -7853,12 +7853,15 @@ async function runDirectorFormationIntensityFlowDebug() {
       musicIntensityAudition: {
         enabled: true,
         mode: 'ramp_release',
+        introBars: 0,
+        keepAuthoredLeadPresent: true,
       },
     },
     saveRunIdBase: 'musicLab_director_formation_intensity_flow_1x150s',
     saveNotes: [
       'Director musical-formation intensity flow over a deterministic simulated player score.',
       'The prepared weapon is joined by authored-style Bass Drive, Accent Rhythm, and Lead Theme motifs committed through the normal music handoff paths.',
+      'The authored lead is present from the opening Low section and uses an anchor / response / anchor / resolution structure with periodic literal recall.',
       'Expected: no formations in intro/low states, one formation in build/clash, up to two in peak, and no new formations in release/settle.',
       'Formation voices remain embodied until their enemies die; no routine intensity transition makes them retreat.',
     ].join(' '),

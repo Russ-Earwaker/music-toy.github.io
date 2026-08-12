@@ -47,6 +47,7 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   const el = pooledEl instanceof HTMLElement ? pooledEl : document.createElement('div');
   el.className = 'beat-swarm-projectile is-hostile-red';
   if (opts?.homing === true) el.classList.add('is-hostile-homing');
+  if (Number(opts?.visualScale) >= 1.5) el.classList.add('is-musical-formation-projectile');
   enemyLayerEl.appendChild(el);
   const pooledProjectile = pooledHostileRedProjectileStates && pooledHostileRedProjectileStates.length
     ? pooledHostileRedProjectileStates.pop()
@@ -91,6 +92,7 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   projectile.hostileHomingTurnRate = Math.max(0.1, Number(opts?.homingTurnRate) || 1.4);
   projectile.hostileNoteName = hostileNoteName;
   projectile.hostileInstrument = hostileInstrument;
+  projectile.hostileVisualScale = Math.max(1, Number(opts?.visualScale) || 1);
   projectile.el = el;
   projectiles.push(projectile);
 }

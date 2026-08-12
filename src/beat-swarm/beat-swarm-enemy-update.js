@@ -3,6 +3,33 @@ import {
   isBeatSwarmLevel1RoleEligibleForLane,
 } from './beat-swarm-level1-contract.js';
 
+function getEnemyCombatVisualScaleRuntime(enemy) {
+  const nowMs = Number(globalThis.performance?.now?.()) || Date.now();
+  const fireStartedAtRaw = enemy?.combatFireVisualStartedAtMs;
+  const fireStartedAtMs = Number(fireStartedAtRaw);
+  if (fireStartedAtRaw != null && Number.isFinite(fireStartedAtMs)) {
+    const progress = Math.max(0, Math.min(1, (nowMs - fireStartedAtMs) / 420));
+    if (String(enemy?.combatFireVisualKind || '') === 'laser') {
+      if (progress <= 0.1) return 1.28 + ((0.78 - 1.28) * (progress / 0.1));
+      const recovery = (progress - 0.1) / 0.9;
+      return 0.78 + ((1 - 0.78) * (1 - Math.pow(1 - recovery, 3)));
+    }
+    if (progress <= 0.1) return 1 + ((0.8 - 1) * (progress / 0.1));
+    const recovery = (progress - 0.1) / 0.9;
+    return 0.8 + ((1 - 0.8) * (1 - Math.pow(1 - recovery, 3)));
+  }
+  const prepareStartedAtRaw = enemy?.combatPrepareVisualStartedAtMs;
+  const prepareStartedAtMs = Number(prepareStartedAtRaw);
+  const prepareDurationMs = Math.max(1, Number(enemy?.combatPrepareVisualDurationMs) || 0);
+  if (prepareStartedAtRaw == null || !Number.isFinite(prepareStartedAtMs) || !(prepareDurationMs > 0)) return 1;
+  const progress = Math.max(0, Math.min(1, (nowMs - prepareStartedAtMs) / prepareDurationMs));
+  const eased = 1 - Math.pow(1 - progress, 3);
+  const maxChargeTremor = progress > 0.72
+    ? Math.sin(((progress - 0.72) / 0.28) * Math.PI * 7) * 0.018
+    : 0;
+  return 1 + (0.28 * eased) + maxChargeTremor;
+}
+
 function getFormationAnchorWorldRuntime(enemy, helpers) {
   if (String(enemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') return null;
   if (enemy?.retreating) return null;
@@ -1079,7 +1106,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         e.spawnT = Math.min(Number(e.spawnDur) || 0.14, (Number(e.spawnT) || 0) + (Number(state.dt) || 0));
         const spawnScale = enemyType === 'drawsnake' ? 1 : (helpers.getEnemySpawnScale?.(e) || 1);
         const rolePulseScale = resolveRolePulseScale();
-        e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * rolePulseScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})`;
+        const combatVisualScale = getEnemyCombatVisualScaleRuntime(e);
+        e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * rolePulseScale * combatVisualScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})`;
       }
       if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
       if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {
@@ -1462,7 +1490,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       const combatRotation = Number.isFinite(Number(e?.combatFacingAngle))
         ? ` rotate(${Number(e.combatFacingAngle).toFixed(4)}rad)`
         : '';
-      e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})${combatRotation}`;
+      const combatVisualScale = getEnemyCombatVisualScaleRuntime(e);
+      e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * combatVisualScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})${combatRotation}`;
     }
     if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
     if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {
