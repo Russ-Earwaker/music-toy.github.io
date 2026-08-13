@@ -529,7 +529,8 @@ function resolveSingleBehaviorMotionRuntime(enemy, centerWorld, state, constants
     const anchorDy = anchorY - (Number(enemy?.wy) || 0);
     const anchorDist = Math.hypot(anchorDx, anchorDy);
     const maxSpeed = Math.max(40, Number(constants?.enemyMaxSpeed) || 140);
-    const desiredSpeed = Math.min(maxSpeed * 0.82, anchorDist * 2.8);
+    const approachSpeedScale = Math.max(0.25, Math.min(4, Number(enemy?.combatAnchorApproachSpeedScale) || 1));
+    const desiredSpeed = Math.min(maxSpeed * 0.82 * approachSpeedScale, anchorDist * 2.8 * approachSpeedScale);
     return {
       overrideVelocity: true,
       desiredVx: anchorDist > 1 ? (anchorDx / anchorDist) * desiredSpeed : 0,

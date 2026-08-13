@@ -1,0 +1,42 @@
+Beat Swarm Transition Debug
+sessionId=music-lab-2026-08-13T15:08:25.448Z-3
+runId=musicLab_production_onboarding_flow_1x300s
+label=music-lab-session
+leadEntryBar=52
+range=48-60
+
+Per-bar executed audible enemy events:
+bar 48: audibleEnemy=5 playerAudible=4 :: foundation_lane|foundation|call|full:3, secondary_loop_lane|loops|call|full:2
+bar 49: audibleEnemy=1 playerAudible=6 :: foundation_lane|foundation|call|full:1
+bar 50: audibleEnemy=5 playerAudible=4 :: foundation_lane|foundation|call|full:3, secondary_loop_lane|loops|call|full:2
+bar 51: audibleEnemy=1 playerAudible=6 :: foundation_lane|foundation|call|full:1
+bar 52: audibleEnemy=7 playerAudible=4 :: foundation_lane|foundation|call|full:3, secondary_loop_lane|loops|call|full:3, primary_loop_lane|loops|call|quiet:1
+bar 53: audibleEnemy=0 playerAudible=6
+bar 54: audibleEnemy=3 playerAudible=4 :: secondary_loop_lane|loops|call|full:3
+bar 55: audibleEnemy=0 playerAudible=6
+bar 56: audibleEnemy=3 playerAudible=4 :: secondary_loop_lane|loops|call|full:3
+bar 57: audibleEnemy=0 playerAudible=6
+bar 58: audibleEnemy=3 playerAudible=4 :: secondary_loop_lane|loops|call|full:3
+bar 59: audibleEnemy=0 playerAudible=6
+bar 60: audibleEnemy=3 playerAudible=4 :: secondary_loop_lane|loops|call|full:3
+
+Lead / Secondary Render Summary:
+bar 48: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[C4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 49: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 50: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=2/2/2/2/0/0 notes[C4:2] inst[CLICK PERCUSSION SHORT:2]
+bar 51: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 52: lead c/e/a/f/q/t=1/1/1/0/1/0 notes[D#3:1] inst[RETRO SQUARE:1] | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 53: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 54: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 55: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 56: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 57: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 58: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+bar 59: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=0/0/0/0/0/0
+bar 60: lead c/e/a/f/q/t=0/0/0/0/0/0 | secondary c/e/a/f/q/t=3/3/3/3/0/0 notes[C4:3] inst[CLICK PERCUSSION SHORT:3]
+
+Transition snapshots:
+
+Lead suppression events in range:
+
+Response events in range:

@@ -186,6 +186,19 @@ export function createBeatSwarmPacing(options = null) {
     lastBar = bar;
   }
 
+  function resetToMainLow(barIndex = 0) {
+    const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
+    introIndex = INTRO_SEQUENCE.length;
+    loopIndex = 0;
+    inLoop = true;
+    cycle = 0;
+    introResponseCount = 0;
+    responseMode = 'group';
+    const first = LOOP_SEQUENCE[0];
+    applyState(first.id, first.bars, bar);
+    lastBar = bar;
+  }
+
   function advanceOnce() {
     if (!inLoop) {
       introIndex += 1;
@@ -235,6 +248,7 @@ export function createBeatSwarmPacing(options = null) {
     states: PACING_STATES,
     beatsPerBar,
     reset,
+    resetToMainLow,
     updateForBar,
     getSnapshot,
   };

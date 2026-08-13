@@ -5663,6 +5663,17 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   background: #65e780;
 }
 
+/* The gunner silhouette clips children, so keep its health bar inside the hull. */
+.beat-swarm-enemy.is-gunner-enemy .beat-swarm-enemy-hp {
+  top: 6px;
+  width: 30px;
+  height: 4px;
+  z-index: 4;
+  background: rgba(5, 12, 18, 0.9);
+  border-color: rgba(202, 244, 255, 0.72);
+  box-shadow: 0 0 6px rgba(101, 231, 128, 0.5);
+}
+
 .beat-swarm-pickup {
   position: fixed;
   width: 60px;

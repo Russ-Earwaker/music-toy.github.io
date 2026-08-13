@@ -1146,6 +1146,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         const action = String(ev?.actionType || '').trim().toLowerCase();
         const role = String(ev?.role || payload.musicRole || '').trim().toLowerCase();
         const layer = String(payload.musicLayer || '').trim().toLowerCase();
+        if (action === 'player-lead-theme-direct') return true;
         const loopLikeAction = action === 'composer-group-projectile'
           || action === 'composer-group-explosion'
           || action === 'drawsnake-projectile';

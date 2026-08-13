@@ -17,7 +17,7 @@ import { createSwarmDirector } from './swarm-director.js?v=2026-08-10-musical-fo
 import { createPerformedBeatEvent, BEAT_EVENT_ROLES, BEAT_EVENT_THREAT } from './beat-events.js';
 import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from './beat-swarm-action-categories.js';
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
-import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-05-28-composition-policy-v1';
+import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-08-13-production-onboarding-flow-v1';
 import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js?v=2026-08-05-lead-audit-pinning-v2';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
@@ -377,6 +377,7 @@ const leadGateAuthoringRuntime = {
 const leadGateLiteralPlaybackRuntime = {
   active: false,
   startStep: -1,
+  protectedUntilStep: -1,
   source: '',
   selections: [],
 };
@@ -670,6 +671,7 @@ function startMusicContributionSequence(requestsLike = null) {
   clearIncrementalOnboardingThemes();
   leadGateLiteralPlaybackRuntime.active = false;
   leadGateLiteralPlaybackRuntime.startStep = -1;
+  leadGateLiteralPlaybackRuntime.protectedUntilStep = -1;
   leadGateLiteralPlaybackRuntime.source = '';
   leadGateLiteralPlaybackRuntime.selections = [];
   try { ensureSwarmDirector().clearBeatEvents?.(); } catch {}
@@ -753,6 +755,7 @@ function completeCurrentMusicContribution(event = null) {
     musicContributionRuntime.active = false;
     weaponGateMusicRuntime.lowAfterComplete = true;
     setBeatSwarmOnboardingPhase('complete');
+    startArmedDirectorFormationFlowAfterOnboarding();
   }
   return true;
 }
@@ -2769,7 +2772,10 @@ function isLeadGateLiteralPlaybackActive() {
 function isLeadThemeLiteralProtectionActive() {
   if (!isLeadGateLiteralPlaybackActive()) return false;
   if (leadGateLiteralPlaybackRuntime.source !== 'lead_ball') return true;
-  return isMusicContributionLiteralProtected('primary_loop_lane');
+  const currentStep = getCurrentMusicContributionStep();
+  const protectedUntilStep = Math.max(-1, Math.trunc(Number(leadGateLiteralPlaybackRuntime.protectedUntilStep) || -1));
+  return currentStep < protectedUntilStep
+    || isMusicContributionLiteralProtected('primary_loop_lane', currentStep);
 }
 function noteLeadGateDebug(kind = '', payload = null) {
   const enabled = typeof globalThis !== 'undefined' && globalThis.__BEAT_SWARM_LEAD_GATE_DEBUG === true;
@@ -2871,6 +2877,7 @@ function startLeadGateThemeEvent(options = null) {
   clearLeadGateAuthoringRuntime();
   leadGateLiteralPlaybackRuntime.active = false;
   leadGateLiteralPlaybackRuntime.startStep = -1;
+  leadGateLiteralPlaybackRuntime.protectedUntilStep = -1;
   const stepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
   const currentStep = Math.max(0, Math.trunc(Number.isFinite(stepRaw) ? stepRaw : Number(currentBeatIndex) || 0));
   const stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || getLeadGateAuthoringStepCount()));
@@ -3206,8 +3213,11 @@ function startLeadBallThemeEvent(options = null) {
   ensureLeadBallEnemyTargets(Math.max(12, targetHitCount));
   leadBallAuthoringRuntime.handoffPublished = false;
   leadBallAuthoringRuntime.contributionMode = opts.contributionMode === 'extend' ? 'extend' : 'replace';
-  leadGateLiteralPlaybackRuntime.active = false;
-  leadGateLiteralPlaybackRuntime.startStep = -1;
+  if (opts.contributionMode !== 'extend' || !isPlayerMusicThemeAuthored('leadTheme')) {
+    leadGateLiteralPlaybackRuntime.active = false;
+    leadGateLiteralPlaybackRuntime.startStep = -1;
+    leadGateLiteralPlaybackRuntime.protectedUntilStep = -1;
+  }
   setBeatSwarmOnboardingPhase('lead_ball');
   startMusicMotifVisualizer({
     mode: 'lead',
@@ -3295,6 +3305,8 @@ function commitLeadBallSelectionsToTheme(selectionsLike = null, eventId = '') {
     leadGateAuthoringRuntime.playbackStartStep = playbackStartStep;
     leadGateLiteralPlaybackRuntime.active = true;
     leadGateLiteralPlaybackRuntime.startStep = playbackStartStep;
+    leadGateLiteralPlaybackRuntime.protectedUntilStep = playbackStartStep
+      + (Math.max(1, committedSelections.length) * MUSIC_CONTRIBUTION_PROTECTION_LOOPS);
     leadGateLiteralPlaybackRuntime.source = 'lead_ball';
     leadGateLiteralPlaybackRuntime.selections = committedSelections.slice();
     if (!musicContributionRuntime.active) {
@@ -7585,6 +7597,7 @@ function createLeadGateDirectPrimaryLoopEventRuntime(options = null) {
       continuityId,
       ghostPlayback: true,
       sourceSystem: 'music',
+      authoringClass: literalProtectionActive ? 'gameplayAuthored' : 'directorAuthored',
       musicLayer: 'loops',
       musicProminence: 'full',
       musicLaneId: 'primary_loop_lane',
@@ -7602,6 +7615,7 @@ function createLeadGateDirectPrimaryLoopEventRuntime(options = null) {
       preserveRequestedNote: true,
       leadGateDirectFallback: true,
       leadGateLiteralLoop: literalProtectionActive,
+      musicContributionLiteralProtected: literalProtectionActive,
       leadAuthoringLiteralReplay: literalProtectionActive,
       leadAuthoringSource: String(leadGateLiteralPlaybackRuntime.source || 'lead_authoring').trim(),
       audioGain: literalProtectionActive
@@ -11585,6 +11599,31 @@ function getPlayerLeadThemeEchoPolicy(sectionIdLike = '', sectionBarLike = 0, pa
     variationKind: '',
   };
 }
+function getFormationLeadLiteralStatementState(sectionIdLike = '', sectionBarLike = 0, partsLengthLike = 0) {
+  const sectionId = String(sectionIdLike || '').trim().toLowerCase();
+  const sectionBar = Math.max(0, Math.trunc(Number(sectionBarLike) || 0));
+  const partsLength = Math.max(1, Math.trunc(Number(partsLengthLike) || 1));
+  const formationActive = directorMusicalFormationLayerRuntime.enabled
+    && directorMusicalFormationLayerRuntime.groups.size > 0;
+  if (!formationActive) return { active: false, partIndex: 0 };
+  if (sectionId === 'build') {
+    const statementStartBar = 4;
+    const statementBar = sectionBar - statementStartBar;
+    return {
+      active: statementBar >= 0 && statementBar < partsLength,
+      partIndex: Math.max(0, statementBar) % partsLength,
+    };
+  }
+  if (sectionId === 'peak') {
+    const statementCycleBars = Math.max(partsLength * 3, partsLength + 1);
+    const statementBar = sectionBar % statementCycleBars;
+    return {
+      active: statementBar < partsLength,
+      partIndex: statementBar % partsLength,
+    };
+  }
+  return { active: false, partIndex: 0 };
+}
 function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLike = '', options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const bar = Math.max(0, Math.trunc(Number(barIndex) || 0));
@@ -11649,9 +11688,12 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   const echoPolicy = memoryEcho
     ? getPlayerLeadThemeEchoPolicy(sectionId, sectionBar, parts.length, localStep)
     : null;
+  const formationLiteralStatement = getFormationLeadLiteralStatementState(sectionId, sectionBar, parts.length);
   const partIndex = releaseEcho
     ? 0
-    : (settleEcho ? Math.max(0, Math.min(parts.length - 1, Math.trunc(Number(echoPolicy?.partIndex) || 0))) : (bar % parts.length));
+    : (settleEcho
+      ? Math.max(0, Math.min(parts.length - 1, Math.trunc(Number(echoPolicy?.partIndex) || 0)))
+      : (formationLiteralStatement.active ? formationLiteralStatement.partIndex : (bar % parts.length)));
   const part = parts[partIndex] || parts[0];
   const step = ((Math.max(0, Math.trunc(Number(stepIndex) || 0)) % part.steps) + part.steps) % part.steps;
   const rawNote = normalizeSwarmNoteName(part.noteByStep[step]) || '';
@@ -11733,29 +11775,35 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     }
     return '';
   })();
-  const resolvedActiveStep = releaseEcho
+  const resolvedActiveStep = formationLiteralStatement.active
+    ? activeStep
+    : (releaseEcho
     ? (releaseStepAllowed && (activeStep || !!releaseFallbackNote))
     : (settleEcho
       ? (settleStepAllowed && (activeStep || !!releaseFallbackNote))
-      : ((activeStep && buildStepAllowed) || peakPickupActive || buildPickupActive));
+      : ((activeStep && buildStepAllowed) || peakPickupActive || buildPickupActive)));
   const memoryEchoAnchorOffset = memoryEcho
     ? Math.trunc(Number(echoPolicy?.anchorOffset) || 0)
     : 0;
-  const resolvedNoteBase = peakPickupActive
+  const resolvedNoteBase = formationLiteralStatement.active
+    ? directorNote
+    : (peakPickupActive
     ? peakPickupNote
     : (buildPickupActive ? buildPickupNote
     : (memoryEcho && !activeStep
       ? releaseFallbackNote
       : (peakRiff && activeStep
       ? getDirectorPoolNoteAtOffset(directorNote, step >= 4 ? 1 : 0, stepIndex)
-      : directorNote)));
+      : directorNote))));
   const resolvedNote = memoryEcho && resolvedActiveStep && memoryEchoAnchorOffset
     ? getDirectorPoolNoteAtOffset(resolvedNoteBase, memoryEchoAnchorOffset, stepIndex)
     : resolvedNoteBase;
-  const literalStatement = sectionId === 'medium' && bar >= 20 && bar < 36;
-  const interpretationMode = buildAssembly
-    ? 'build_assemble'
-    : (peakRiff ? 'peak_riff' : (literalStatement ? 'literal_statement' : (releaseEcho ? 'release_riff' : (settleEcho ? 'settle_echo' : 'director_riff'))));
+  const literalStatement = formationLiteralStatement.active || (sectionId === 'medium' && bar >= 20 && bar < 36);
+  const interpretationMode = literalStatement
+    ? 'literal_statement'
+    : (buildAssembly
+      ? 'build_assemble'
+      : (peakRiff ? 'peak_riff' : (releaseEcho ? 'release_riff' : (settleEcho ? 'settle_echo' : 'director_riff'))));
   return {
     themeId: 'leadTheme',
     source: 'player_theme',
@@ -11772,6 +11820,7 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     buildPartAllowed,
     buildPickupActive,
     peakPickupActive,
+    formationLiteralStatement: formationLiteralStatement.active,
     echoPolicy,
   };
 }
@@ -13163,7 +13212,8 @@ function getBeatSwarmMusicIntensityAuditionState(barIndexLike = 0) {
   const INTRO_BARS = Number.isFinite(configuredIntroBars)
     ? Math.max(0, Math.min(32, Math.trunc(configuredIntroBars)))
     : 12;
-  const auditionBar = Math.max(-1, Math.trunc(Number(sessionAge.sessionAgeBars) || 0) - INTRO_BARS);
+  const startSessionBar = Math.max(0, Math.trunc(Number(audition.startSessionBar) || 0));
+  const auditionBar = Math.max(-1, Math.trunc(Number(sessionAge.sessionAgeBars) || 0) - startSessionBar - INTRO_BARS);
   if (auditionBar < 0) return null;
   const baseSections = getBeatSwarmMusicIntensityAuditionSections();
   const sections = mode === 'release_transition'
@@ -14568,8 +14618,16 @@ const directorMusicalFormationLayerRuntime = {
   groupSeq: 1,
   variantIndex: 0,
   lastBeatIndex: -1,
+  lastPolicyState: '',
   nextSpawnBar: 0,
   groups: new Map(),
+};
+const directorFormationFlowAfterOnboardingRuntime = {
+  armed: false,
+};
+const directorDensityContributionRuntime = {
+  energyState: '',
+  requestedLaneIds: new Set(),
 };
 const introDebugRuntime = {
   enabled: false,
@@ -22648,6 +22706,7 @@ function resetWeaponGateTapOrbOnboardingState() {
   clearLeadGateAuthoringRuntime();
   leadGateLiteralPlaybackRuntime.active = false;
   leadGateLiteralPlaybackRuntime.startStep = -1;
+  leadGateLiteralPlaybackRuntime.protectedUntilStep = -1;
   leadGateLiteralPlaybackRuntime.source = '';
   leadGateLiteralPlaybackRuntime.selections = [];
   musicMissileAuthoringRuntime.completeOnboardingOnHandoff = false;
@@ -28717,6 +28776,7 @@ function clearDirectorMusicalFormationLayer(options = null) {
   }
   directorMusicalFormationLayerRuntime.groups.clear();
   directorMusicalFormationLayerRuntime.lastBeatIndex = -1;
+  directorMusicalFormationLayerRuntime.lastPolicyState = '';
   directorMusicalFormationLayerRuntime.nextSpawnBar = 0;
   if (options?.preserveAuditionOverride !== true) {
     directorMusicalFormationLayerRuntime.auditionOverride = false;
@@ -28729,6 +28789,39 @@ function setDirectorMusicalFormationLayerEnabled(enabled = true, options = null)
     clearDirectorMusicalFormationLayer({ retreat: options?.retreat === true });
   }
   return getDirectorMusicalFormationLayerSnapshot();
+}
+function armDirectorFormationFlowAfterOnboarding() {
+  directorFormationFlowAfterOnboardingRuntime.armed = true;
+  setDirectorMusicalFormationLayerEnabled(false, { retreat: false });
+  return { armed: true };
+}
+function startArmedDirectorFormationFlowAfterOnboarding() {
+  if (!directorFormationFlowAfterOnboardingRuntime.armed) return false;
+  directorFormationFlowAfterOnboardingRuntime.armed = false;
+  const startBar = getCurrentBeatSwarmBarIndex();
+  const overrides = globalThis.__beatSwarmTestOverrides && typeof globalThis.__beatSwarmTestOverrides === 'object'
+    ? globalThis.__beatSwarmTestOverrides
+    : (globalThis.__beatSwarmTestOverrides = {});
+  if (overrides.musicIntensityAudition && typeof overrides.musicIntensityAudition === 'object') {
+    overrides.musicIntensityAudition.enabled = false;
+  }
+  weaponGateMusicRuntime.lowAfterComplete = false;
+  swarmPacingRuntime.resetToMainLow?.(startBar);
+  resetEnergyStateRuntime(startBar);
+  levelPhaseRuntime.activeLevelPhase = 'groove_establish';
+  levelPhaseRuntime.phaseVariant = 'default';
+  levelPhaseRuntime.phaseEnteredBar = startBar;
+  levelPhaseRuntime.lastEvaluatedBar = -1;
+  directorDensityContributionRuntime.energyState = '';
+  directorDensityContributionRuntime.requestedLaneIds.clear();
+  const snapshot = setDirectorMusicalFormationLayerEnabled(true, { auditionOverride: false });
+  noteMusicSystemEvent('director_formation_flow_started_after_onboarding', {
+    startBar,
+    pacingState: String(swarmPacingRuntime.getSnapshot?.()?.state || '').trim().toLowerCase(),
+    productionPacing: true,
+    completedContributions: musicContributionRuntime.completedIds.slice(),
+  }, { beatIndex: currentBeatIndex, barIndex: startBar });
+  return snapshot;
 }
 function getDirectorMusicalFormationLayerSnapshot() {
   return {
@@ -29628,6 +29721,7 @@ function startTrackedLaserMotifGroupTest(options = null) {
     enemy.combatMusicalPartEndsOnDeath = true;
     enemy.combatPersistentOffscreen = true;
     enemy.combatFormationTrackArena = true;
+    enemy.combatAnchorApproachSpeedScale = 3.5;
     enemy.combatFormationAngle = formationAngle;
     enemy.combatFormationRadiusWorld = formationRadiusWorld;
     enemy.combatLaserFormationAngle = formationAngle + Math.PI + 0.2;
@@ -29933,11 +30027,82 @@ function startDualMusicalFormationTest(options = null) {
 }
 function getDirectorMusicalFormationPolicy(energyStateLike = '') {
   const energyState = String(energyStateLike || '').trim().toLowerCase();
-  if (energyState === 'medium') return { maxGroups: 1, maxMembers: 4, cooldownBars: 4 };
-  if (energyState === 'build') return { maxGroups: 1, maxMembers: 4, cooldownBars: 4 };
-  if (energyState === 'clash') return { maxGroups: 1, maxMembers: 4, cooldownBars: 4 };
-  if (energyState === 'peak') return { maxGroups: 2, maxMembers: 7, cooldownBars: 2 };
-  return { maxGroups: 0, maxMembers: 0, cooldownBars: 4 };
+  if (energyState === 'medium') {
+    return {
+      maxGroups: 1,
+      maxMembers: 3,
+      cooldownBars: 4,
+      preferredKinds: ['gunner_snare'],
+    };
+  }
+  if (energyState === 'build' || energyState === 'clash') {
+    return {
+      maxGroups: 2,
+      maxMembers: 7,
+      cooldownBars: 2,
+      preferredKinds: ['gunner_snare', 'laser_hihat'],
+    };
+  }
+  if (energyState === 'peak') {
+    return {
+      maxGroups: 2,
+      maxMembers: 7,
+      cooldownBars: 2,
+      preferredKinds: ['gunner_snare', 'laser_hihat'],
+    };
+  }
+  return {
+    maxGroups: 0,
+    maxMembers: 0,
+    cooldownBars: 4,
+    preferredKinds: [],
+  };
+}
+function getPlayerThemeAuthoredStepCount(laneIdLike = '') {
+  const laneId = String(laneIdLike || '').trim().toLowerCase();
+  if (laneId === 'primary_loop_lane') {
+    const chain = getPlayerMusicTheme('leadTheme')?.data?.tuneChain;
+    return Array.isArray(chain)
+      ? chain.reduce((sum, tune) => sum + countWeaponTuneActiveEvents(tune), 0)
+      : 0;
+  }
+  const themeId = laneId === 'foundation_lane' ? 'bassDrive' : 'accentRhythm';
+  return getPlayerThemeRhythmSteps(themeId, WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH)
+    .reduce((sum, activeStep) => sum + (activeStep ? 1 : 0), 0);
+}
+function maybeRequestDirectorDensityContribution(energyStateLike = '', barIndexLike = 0) {
+  const energyState = String(energyStateLike || '').trim().toLowerCase();
+  if (directorDensityContributionRuntime.energyState !== energyState) {
+    directorDensityContributionRuntime.energyState = energyState;
+    directorDensityContributionRuntime.requestedLaneIds.clear();
+  }
+  if (energyState !== 'build' && energyState !== 'clash' && energyState !== 'peak') return null;
+  if (musicContributionRuntime.active || musicContributionRuntime.current) return null;
+  const desiredByLane = energyState === 'peak'
+    ? { foundation_lane: 8, secondary_loop_lane: 6, primary_loop_lane: 16 }
+    : { foundation_lane: 6, secondary_loop_lane: 4, primary_loop_lane: 12 };
+  const candidate = Object.entries(desiredByLane)
+    .map(([laneId, desiredSteps]) => {
+      const authoredSteps = getPlayerThemeAuthoredStepCount(laneId);
+      return { laneId, desiredSteps, authoredSteps, deficit: Math.max(0, desiredSteps - authoredSteps) };
+    })
+    .filter((entry) => entry.deficit > 0 && !directorDensityContributionRuntime.requestedLaneIds.has(entry.laneId))
+    .sort((a, b) => (b.deficit / b.desiredSteps) - (a.deficit / a.desiredSteps))[0] || null;
+  if (!candidate) return null;
+  const contribution = requestMusicLaneDensityContribution({
+    laneId: candidate.laneId,
+    id: `director-${energyState}-${candidate.laneId}-${Math.max(0, Math.trunc(Number(barIndexLike) || 0))}`,
+    reason: `director_${energyState}_density_request`,
+  });
+  if (!contribution) return null;
+  directorDensityContributionRuntime.requestedLaneIds.add(candidate.laneId);
+  noteMusicSystemEvent('director_density_contribution_requested', {
+    energyState,
+    ...candidate,
+    interaction: contribution.interaction,
+    contributionId: contribution.id,
+  }, { beatIndex: currentBeatIndex, barIndex: Math.max(0, Math.trunc(Number(barIndexLike) || 0)) });
+  return contribution;
 }
 function startMusicalFormationEnemyRetreat(enemy, reason = 'director_formation_retired') {
   if (!enemy || enemy.retreating) return false;
@@ -29962,7 +30127,7 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
   const shifted = Math.max(0, Math.trunc(Number(variantIndex) || 0)) % 4;
   if (kind === 'laser_hihat') {
     const instrumentId = getIdForDisplayName('Hi-Hat Closed') || '';
-    const baseSteps = [[0, 8], [3, 11], [4, 12], [6, 14]];
+    const baseSteps = [[0, 6, 12], [3, 9, 15], [4, 10, 14], [1, 7, 13]];
     return {
       groupId,
       kind,
@@ -29990,7 +30155,7 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
     };
   }
   const instrumentId = getIdForDisplayName('Drum Snare 1') || '';
-  const baseSteps = [[0, 8], [5, 13], [0, 10]];
+  const baseSteps = [[0, 6, 12], [3, 9, 15], [2, 8, 14]];
   return {
     groupId,
     kind: 'gunner_snare',
@@ -30072,7 +30237,7 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar) {
     Math.max(spec.minRadiusPx, Math.min(window.innerWidth, window.innerHeight) * spec.radiusScale),
   );
   const spawnRadius = radiusPx + 360;
-  const survivalHp = Math.max(1, Math.ceil(getDirectorMusicalFormationSurvivalHealth(8) * 0.5));
+  const survivalHp = Math.max(1, Math.ceil(getDirectorMusicalFormationSurvivalHealth(8) * 0.2));
   const created = [];
   for (let index = 0; index < spec.count; index += 1) {
     const formationAngle = spec.startAngle + ((Math.PI * 2 * index) / spec.count);
@@ -30103,6 +30268,7 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar) {
     enemy.combatMusicalPartEndsOnDeath = true;
     enemy.combatPersistentOffscreen = true;
     enemy.combatFormationTrackArena = true;
+    enemy.combatAnchorApproachSpeedScale = 3.5;
     enemy.combatFormationAngle = formationAngle;
     enemy.combatFormationRadiusWorld = Math.hypot(
       (Number(anchorWorld.x) || 0) - (Number(centerWorld?.x) || 0),
@@ -30134,8 +30300,8 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar) {
     startBeat,
     survivalHp,
     estimatedPlayerDps: Number(estimateActivePlayerWeaponDps().toFixed(3)),
-    targetSurvivalDrawgrids: 4,
-    healthScale: 0.5,
+    targetSurvivalDrawgrids: 1.6,
+    healthScale: 0.2,
     enemyIds: created.map((enemy) => Math.trunc(Number(enemy.id) || 0)),
   };
   directorMusicalFormationLayerRuntime.groups.set(groupId, group);
@@ -30159,6 +30325,7 @@ function updateDirectorMusicalFormationLayer(weaponGateActive = false) {
   const energyState = directorMusicalFormationLayerRuntime.auditionOverride
     ? auditionSection
     : getCurrentSwarmEnergyStateName();
+  maybeRequestDirectorDensityContribution(energyState, barIndex);
   const policy = getDirectorMusicalFormationPolicy(energyState);
   for (const [groupId, group] of directorMusicalFormationLayerRuntime.groups.entries()) {
     const living = enemies.filter((enemy) => (
@@ -30177,11 +30344,28 @@ function updateDirectorMusicalFormationLayer(weaponGateActive = false) {
       continue;
     }
   }
-  if (policy.maxGroups <= 0 || (beatIndex % 16) !== 0 || barIndex < directorMusicalFormationLayerRuntime.nextSpawnBar) return;
   const activeGroups = Array.from(directorMusicalFormationLayerRuntime.groups.values());
   const activeMembers = activeGroups.reduce((sum, group) => sum + group.enemyIds.length, 0);
+  if (directorMusicalFormationLayerRuntime.lastPolicyState !== energyState) {
+    directorMusicalFormationLayerRuntime.lastPolicyState = energyState;
+    noteMusicSystemEvent('director_musical_formation_policy', {
+      action: 'state_entered',
+      energyState,
+      maxGroups: policy.maxGroups,
+      maxMembers: policy.maxMembers,
+      preferredKinds: Array.from(policy.preferredKinds || []),
+      activeGroups: activeGroups.length,
+      activeMembers,
+      nextSpawnBar: directorMusicalFormationLayerRuntime.nextSpawnBar,
+      survivorPolicy: 'remain_until_defeated',
+    }, { beatIndex, barIndex });
+  }
+  if (policy.maxGroups <= 0 || (beatIndex % 16) !== 0 || barIndex < directorMusicalFormationLayerRuntime.nextSpawnBar) return;
   if (activeGroups.length >= policy.maxGroups) return;
-  const nextKind = activeGroups.some((group) => group.kind === 'laser_hihat') ? 'gunner_snare' : 'laser_hihat';
+  const activeKinds = new Set(activeGroups.map((group) => String(group?.kind || '').trim().toLowerCase()));
+  const nextKind = Array.from(policy.preferredKinds || [])
+    .find((kind) => !activeKinds.has(String(kind || '').trim().toLowerCase()));
+  if (!nextKind) return;
   const nextCount = nextKind === 'laser_hihat' ? 4 : 3;
   if (activeMembers + nextCount > policy.maxMembers) return;
   const startBeat = beatIndex + 1;
@@ -30189,9 +30373,12 @@ function updateDirectorMusicalFormationLayer(weaponGateActive = false) {
   if (!spawned) return;
   directorMusicalFormationLayerRuntime.nextSpawnBar = barIndex + policy.cooldownBars;
   noteMusicSystemEvent('director_musical_formation_policy', {
+    action: 'formation_spawned',
     energyState,
     maxGroups: policy.maxGroups,
     maxMembers: policy.maxMembers,
+    preferredKinds: Array.from(policy.preferredKinds || []),
+    spawnedKind: nextKind,
     activeGroups: activeGroups.length + 1,
     activeMembers: activeMembers + nextCount,
     nextSpawnBar: directorMusicalFormationLayerRuntime.nextSpawnBar,
@@ -33313,6 +33500,7 @@ export function exitBeatSwarmMode() {
   clearLeadGateAuthoringRuntime();
   leadGateLiteralPlaybackRuntime.active = false;
   leadGateLiteralPlaybackRuntime.startStep = -1;
+  leadGateLiteralPlaybackRuntime.protectedUntilStep = -1;
   leadGateLiteralPlaybackRuntime.source = '';
   leadGateLiteralPlaybackRuntime.selections = [];
   weaponTunePlaybackRuntime.stepOffset = 0;
@@ -33320,6 +33508,9 @@ export function exitBeatSwarmMode() {
   clearRhythmAuthoringTimeline();
   clearMusicMotifConstellations(true);
   weaponGateOnboardingSequenceMode = 'tap_orbs_missiles';
+  directorFormationFlowAfterOnboardingRuntime.armed = false;
+  directorDensityContributionRuntime.energyState = '';
+  directorDensityContributionRuntime.requestedLaneIds.clear();
   try { setSoundThemeKey(beatSwarmPreviousSoundThemeKey); } catch {}
   beatSwarmPreviousSoundThemeKey = '';
   beatSwarmOnboardingState.reset();
@@ -33502,6 +33693,7 @@ export const BeatSwarmMode = {
   getPlayerMusicThemes,
   setPlayerMusicTheme,
   seedDirectorFormationTestMotifs,
+  armDirectorFormationFlowAfterOnboarding,
   startGunnerCombatTest,
   startSeekerCombatTest,
   startLaserSpinnerCombatTest,

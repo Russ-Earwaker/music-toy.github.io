@@ -456,7 +456,7 @@ function ensureUI() {
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
         ${btn('musicLabRunDualMusicalFormationDebug', 'Run Laser Hi-Hat + Gunner Snare (1x75s)', 'primary')}
-        ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Director Formation Intensity Flow (1x150s)', 'primary')}
+        ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Production Onboarding Flow (1x300s)', 'primary')}
         ${btn('musicLabRunGunnerPercussionFormationDebug', 'Run Gunner Percussion Formation (1x60s)', 'primary')}
         ${btn('musicLabRunTrackedLaserMotifsDebug', 'Run Arena-Tracked Laser Motifs (1x75s)', 'primary')}
         ${btn('musicLabRunSymmetricLaserGroupDebug', 'Run Symmetric Laser Group (1x45s)', 'primary')}
@@ -7840,7 +7840,7 @@ async function runDualMusicalFormationDebug() {
 
 async function runDirectorFormationIntensityFlowDebug() {
   await runBS0Stage(3, {
-    durationMs: 150000,
+    durationMs: 300000,
     repeatCount: 1,
     freshResetEachRun: true,
     restartTransportEachRun: true,
@@ -7849,51 +7849,48 @@ async function runDirectorFormationIntensityFlowDebug() {
     forceCompactSave: true,
     keepMusicLabRealtimeMetrics: true,
     publishPerfArtifacts: false,
-    beatSwarmTestOverrides: {
-      musicIntensityAudition: {
-        enabled: true,
-        mode: 'ramp_release',
-        introBars: 0,
-        keepAuthoredLeadPresent: true,
-      },
-    },
-    saveRunIdBase: 'musicLab_director_formation_intensity_flow_1x150s',
+    saveRunIdBase: 'musicLab_production_onboarding_flow_1x300s',
     saveNotes: [
-      'Director musical-formation intensity flow over a deterministic simulated player score.',
-      'The prepared weapon is joined by authored-style Bass Drive, Accent Rhythm, and Lead Theme motifs committed through the normal music handoff paths.',
-      'The authored lead is present from the opening Low section and uses an anchor / response / anchor / resolution structure with periodic literal recall.',
-      'Expected: no formations in intro/low states, one formation in build/clash, up to two in peak, and no new formations in release/settle.',
-      'Formation voices remain embodied until their enemies die; no routine intensity transition makes them retreat.',
+      'Full first-level music onboarding into the director musical-formation intensity flow.',
+      'The player authors the weapon in the gate corridor, Bass Drive with rocket pickups, Accent Rhythm with bouncers, and Lead Theme with the lead ball.',
+      'Only after every contribution commits does the production pacing loop begin at Low and enable musical enemy formations.',
+      'Build and Peak may request another interaction when a player-authored lane remains below their desired density; motifs are never silently populated.',
+      'Expected: Low has player motifs only; Medium introduces one Gunner/Snare formation; Build adds one Laser/Hi-Hat formation; Peak sustains both.',
+      'Release and Settle spawn no new formations. Surviving groups remain embodied until defeated and are never retired by a routine intensity transition.',
+      'If a requested group is completely defeated while its intensity policy still calls for it, the director may replace it after the normal phrase cooldown.',
     ].join(' '),
-    groupedScenarioName: 'beat_swarm_director_formation_intensity_flow_1x150s',
-    groupedRunId: 'musicLab_director_formation_intensity_flow_1x150s_scenario',
-    groupedNotes: 'Validates director-owned additive enemy formations over simulated player-authored motifs, including occupancy limits, phrase-boundary spawning, persistence through intensity changes, and replacement after group death.',
-    tagPrefix: 'DirectorFormationIntensityFlow1x150s',
-    labelPrefix: 'BS0_director_formation_intensity_flow_1x150s',
-    statusPrefix: 'Running director formation intensity flow',
+    groupedScenarioName: 'beat_swarm_production_onboarding_flow_1x300s',
+    groupedRunId: 'musicLab_production_onboarding_flow_1x300s_scenario',
+    groupedNotes: 'Validates real music onboarding followed by player-only Low, Gunner/Snare Medium, added Laser/Hi-Hat Build, both at Peak, and survivor-only Release/Settle.',
+    tagPrefix: 'ProductionOnboardingFlow1x300s',
+    labelPrefix: 'BS0_production_onboarding_flow_1x300s',
+    statusPrefix: 'Running production onboarding flow',
     async setupAfterPrepare() {
       const modeApi = window.BeatSwarmMode;
-      if (!modeApi || typeof modeApi.setDirectorMusicalFormationLayerEnabled !== 'function') {
+      if (!modeApi || typeof modeApi.armDirectorFormationFlowAfterOnboarding !== 'function') {
         throw new Error('director_musical_formation_layer_api_unavailable');
       }
+      try { modeApi.exit?.(); } catch {}
+      await waitForPerfLabMs(80);
+      try { modeApi.enter?.({ weaponGateIntro: true, weaponGateSequence: 'missiles_bouncers' }); } catch (err) {
+        throw new Error(`formation_onboarding_start_failed:${String(err?.message || err)}`);
+      }
       try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
-      if (typeof modeApi.seedDirectorFormationTestMotifs !== 'function') {
-        throw new Error('director_formation_test_motif_seed_api_unavailable');
-      }
-      const motifs = modeApi.seedDirectorFormationTestMotifs();
-      if (motifs?.foundation?.authored !== true || motifs?.accent?.authored !== true || motifs?.lead?.authored !== true) {
-        throw new Error('director_formation_test_motif_seed_failed');
-      }
-      const snapshot = modeApi.setDirectorMusicalFormationLayerEnabled(true, { auditionOverride: true });
-      try { window.__BEAT_SWARM_DIRECTOR_FORMATION_FLOW_TEST = { ...snapshot, motifs }; } catch {}
+      const snapshot = modeApi.armDirectorFormationFlowAfterOnboarding();
+      try { window.__BEAT_SWARM_DIRECTOR_FORMATION_FLOW_TEST = { ...snapshot, onboarding: true }; } catch {}
     },
     traceCapture: {
       enabled: true,
       include: [
+        'music_level1_arrangement_state',
         'director_musical_formation_policy',
         'director_musical_formation_spawned',
         'director_musical_formation_ended',
-        'director_formation_test_motifs_seeded',
+        'director_formation_flow_started_after_onboarding',
+        'director_density_contribution_requested',
+        'music_density_request_queued_as_contribution',
+        'music_contribution_started',
+        'music_contribution_completed',
         'music_rhythm_rewrite_committed_to_theme',
         'lead_gate_rewrite_committed_to_theme',
         'enemy_combat_group_motif_assigned',
@@ -7901,9 +7898,9 @@ async function runDirectorFormationIntensityFlowDebug() {
         'enemy_combat_attack',
         'enemy_laser_activated',
       ],
-      maxLines: 2200,
+      maxLines: 4000,
       preferOutputDirectory: true,
-      fileNamePrefix: 'resources-debug-director-formation-intensity-flow',
+      fileNamePrefix: 'resources-debug-production-onboarding-flow',
     },
   });
 }
