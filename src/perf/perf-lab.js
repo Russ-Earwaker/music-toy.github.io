@@ -455,7 +455,8 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
-        ${btn('musicLabRunDualMusicalFormationDebug', 'Run Laser Hi-Hat + Gunner Snare (1x75s)', 'primary')}
+        ${btn('musicLabRunDualMusicalFormationDebug', 'Run Laser Clap + Gunner Kick (1x75s)', 'primary')}
+        ${btn('musicLabRunOnboardingCompositionAudit', 'Run Autopilot Composition Audit (1x240s)', 'primary')}
         ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Production Onboarding Flow (1x300s)', 'primary')}
         ${btn('musicLabRunGunnerPercussionFormationDebug', 'Run Gunner Percussion Formation (1x60s)', 'primary')}
         ${btn('musicLabRunTrackedLaserMotifsDebug', 'Run Arena-Tracked Laser Motifs (1x75s)', 'primary')}
@@ -1571,6 +1572,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunDirectorFormationIntensityFlow') {
       await runDirectorFormationIntensityFlowDebug();
+      return;
+    }
+    if (act === 'musicLabRunOnboardingCompositionAudit') {
+      await runOnboardingCompositionAuditDebug();
       return;
     }
     if (act === 'musicLabRunBS0S3AccentRewriteDebug') {
@@ -4932,6 +4937,9 @@ function compactMusicLabPayloadForSave(payload = null) {
     threatBudgetSnapshots: compactThreatBudgetSnapshots,
     threatBudgetSummary,
     metricsHistory: compactMetricsHistory,
+    compositionAudit: src?.compositionAudit && typeof src.compositionAudit === 'object'
+      ? clonePerfJson(src.compositionAudit)
+      : null,
     session: (src.session && typeof src.session === 'object')
       ? {
           ...src.session,
@@ -5041,6 +5049,99 @@ async function saveMusicLabSessionToResourcesGlobal({
       : null;
     if (payload && typeof payload === 'object' && playerMusicThemes && typeof playerMusicThemes === 'object') {
       payload.playerMusicThemes = clonePerfJson(playerMusicThemes);
+    }
+    const compositionAudit = beatSwarmApi && typeof beatSwarmApi.getPerfCompositionAuditSnapshot === 'function'
+      ? beatSwarmApi.getPerfCompositionAuditSnapshot()
+      : null;
+    if (payload && typeof payload === 'object' && compositionAudit && typeof compositionAudit === 'object') {
+      const executedByStep = new Map();
+      const executedByBar = new Map();
+      const laneEventCounts = Object.create(null);
+      let playerWeaponEventCount = 0;
+      let reducedPlayerWeaponEventCount = 0;
+      let minimumPlayerWeaponVolumeMult = 1;
+      const timeline = Array.isArray(payload.eventTimeline) ? payload.eventTimeline : [];
+      for (const event of timeline) {
+        if (String(event?.phase || '').trim().toLowerCase() !== 'executed') continue;
+        const audible = event?.playerAudible === true
+          || event?.enemyAudible === true
+          || event?.audioRequired === true
+          || Number(event?.approxPlaybackVolume) > 0
+          || Number(event?.triggerVolume) > 0;
+        if (!audible) continue;
+        const stepIndex = Math.max(0, Math.trunc(Number(event?.stepIndex) || 0));
+        const barIndex = Math.max(0, Math.trunc(Number(event?.barIndex) || 0));
+        const laneId = String(event?.musicLaneId || event?.payload?.musicLaneId || event?.sourceSystem || 'unassigned').trim().toLowerCase() || 'unassigned';
+        const bucket = executedByStep.get(stepIndex) || {
+          stepIndex,
+          count: 0,
+          lanes: Object.create(null),
+          actions: Object.create(null),
+        };
+        bucket.count += 1;
+        bucket.lanes[laneId] = (bucket.lanes[laneId] || 0) + 1;
+        const actionType = String(event?.actionType || 'unknown').trim().toLowerCase() || 'unknown';
+        if (actionType === 'player-weapon-step') {
+          const volumeMultRaw = Number(event?.payload?.playerSoundVolumeMult);
+          const volumeMult = Number.isFinite(volumeMultRaw) ? volumeMultRaw : 1;
+          playerWeaponEventCount += 1;
+          minimumPlayerWeaponVolumeMult = Math.min(minimumPlayerWeaponVolumeMult, volumeMult);
+          if (volumeMult < 0.999) reducedPlayerWeaponEventCount += 1;
+        }
+        bucket.actions[actionType] = (bucket.actions[actionType] || 0) + 1;
+        executedByStep.set(stepIndex, bucket);
+        laneEventCounts[laneId] = (laneEventCounts[laneId] || 0) + 1;
+        const barBucket = executedByBar.get(barIndex) || {
+          barIndex,
+          eventCount: 0,
+          lanes: Object.create(null),
+          notesByLane: Object.create(null),
+          actionsByLane: Object.create(null),
+        };
+        barBucket.eventCount += 1;
+        barBucket.lanes[laneId] = (barBucket.lanes[laneId] || 0) + 1;
+        const resolvedNote = String(event?.noteResolved || event?.note || '').trim();
+        if (resolvedNote) {
+          const notes = Array.isArray(barBucket.notesByLane[laneId]) ? barBucket.notesByLane[laneId] : [];
+          notes.push(resolvedNote);
+          barBucket.notesByLane[laneId] = notes;
+        }
+        const actions = Array.isArray(barBucket.actionsByLane[laneId]) ? barBucket.actionsByLane[laneId] : [];
+        actions.push(actionType);
+        barBucket.actionsByLane[laneId] = actions;
+        executedByBar.set(barIndex, barBucket);
+      }
+      const concurrencySteps = Array.from(executedByStep.values()).sort((a, b) => a.stepIndex - b.stepIndex);
+      const counts = concurrencySteps.map((entry) => entry.count).sort((a, b) => a - b);
+      compositionAudit.playbackConcurrency = {
+        audibleStepCount: counts.length,
+        averageEventsPerAudibleStep: counts.length ? counts.reduce((sum, count) => sum + count, 0) / counts.length : 0,
+        p90EventsPerAudibleStep: counts.length ? counts[Math.min(counts.length - 1, Math.floor(counts.length * 0.9))] : 0,
+        maxEventsPerAudibleStep: counts.length ? counts[counts.length - 1] : 0,
+        stepsAtLeast3: counts.filter((count) => count >= 3).length,
+        stepsAtLeast4: counts.filter((count) => count >= 4).length,
+        stepsAtLeast5: counts.filter((count) => count >= 5).length,
+        playerWeaponEventCount,
+        reducedPlayerWeaponEventCount,
+        minimumPlayerWeaponVolumeMult: playerWeaponEventCount > 0 ? minimumPlayerWeaponVolumeMult : null,
+        laneEventCounts,
+        busiestSteps: concurrencySteps
+          .slice()
+          .sort((a, b) => b.count - a.count || a.stepIndex - b.stepIndex)
+          .slice(0, 24),
+      };
+      compositionAudit.playbackByBar = (Array.isArray(compositionAudit.bars) ? compositionAudit.bars : [])
+        .map((bar) => {
+          const barIndex = Math.max(0, Math.trunc(Number(bar?.barIndex) || 0));
+          return executedByBar.get(barIndex) || {
+            barIndex,
+            eventCount: 0,
+            lanes: Object.create(null),
+            notesByLane: Object.create(null),
+            actionsByLane: Object.create(null),
+          };
+        });
+      payload.compositionAudit = clonePerfJson(compositionAudit);
     }
   } catch {}
   const payloadDebug = {
@@ -5212,6 +5313,9 @@ async function saveMusicLabSessionToResourcesGlobal({
         bundleBytes,
       },
       sessionSummary,
+      compositionAudit: payloadForSave?.compositionAudit && typeof payloadForSave.compositionAudit === 'object'
+        ? clonePerfJson(payloadForSave.compositionAudit)
+        : null,
       transitionDebug,
     };
     summaryJsonFileName = `resources-debug-${saveInstanceId}-summary.json`;
@@ -7799,7 +7903,7 @@ async function runDualMusicalFormationDebug() {
     resetMusicLabEachRun: true,
     saveMusicLabEachRun: true,
     saveRunIdBase: 'musicLab_dual_musical_formation_1x75s',
-    saveNotes: 'Independent musical formations: four outer Laser Spinners play a closed hi-hat rhythm while three inner Gunners play a separate snare rhythm.',
+    saveNotes: 'Independent musical formations: four outer Laser Spinners play an electro hand-clap rhythm while three inner Gunners play a separate kick-drum rhythm.',
     groupedScenarioName: 'beat_swarm_dual_musical_formation_1x75s',
     groupedRunId: 'musicLab_dual_musical_formation_1x75s_scenario',
     groupedNotes: 'Tests two simultaneous director-owned enemy rhythms as an additive variation layer over the established score.',
@@ -7855,13 +7959,13 @@ async function runDirectorFormationIntensityFlowDebug() {
       'The player authors the weapon in the gate corridor, Bass Drive with rocket pickups, Accent Rhythm with bouncers, and Lead Theme with the lead ball.',
       'Only after every contribution commits does the production pacing loop begin at Low and enable musical enemy formations.',
       'Build and Peak may request another interaction when a player-authored lane remains below their desired density; motifs are never silently populated.',
-      'Expected: Low has player motifs only; Medium introduces one Gunner/Snare formation; Build adds one Laser/Hi-Hat formation; Peak sustains both.',
+      'Expected: Low has player motifs only; Medium introduces one Gunner/Kick formation; Build adds one Laser/Clap formation; Peak sustains both.',
       'Release and Settle spawn no new formations. Surviving groups remain embodied until defeated and are never retired by a routine intensity transition.',
       'If a requested group is completely defeated while its intensity policy still calls for it, the director may replace it after the normal phrase cooldown.',
     ].join(' '),
     groupedScenarioName: 'beat_swarm_production_onboarding_flow_1x300s',
     groupedRunId: 'musicLab_production_onboarding_flow_1x300s_scenario',
-    groupedNotes: 'Validates real music onboarding followed by player-only Low, Gunner/Snare Medium, added Laser/Hi-Hat Build, both at Peak, and survivor-only Release/Settle.',
+    groupedNotes: 'Validates real music onboarding followed by player-only Low, Gunner/Kick Medium, added Laser/Clap Build, both at Peak, and survivor-only Release/Settle.',
     tagPrefix: 'ProductionOnboardingFlow1x300s',
     labelPrefix: 'BS0_production_onboarding_flow_1x300s',
     statusPrefix: 'Running production onboarding flow',
@@ -7901,6 +8005,73 @@ async function runDirectorFormationIntensityFlowDebug() {
       maxLines: 4000,
       preferOutputDirectory: true,
       fileNamePrefix: 'resources-debug-production-onboarding-flow',
+    },
+  });
+}
+
+async function runOnboardingCompositionAuditDebug() {
+  await runBS0Stage(3, {
+    durationMs: 240000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: false,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    saveRunIdBase: 'musicLab_onboarding_composition_audit_1x240s',
+    saveNotes: [
+      'Autopilot composition audit of the production first-level onboarding and director flow.',
+      'The test pulls and releases the corridor launch, steers through weapon gates, and pursues live missile pickups, bouncers, and lead-ball pickups.',
+      'Full Music Lab data is retained to correlate authored motif density, lead polyphony, lane overlap, enemy formation attacks, prominence, and approximate playback volume.',
+    ].join(' '),
+    groupedScenarioName: 'beat_swarm_onboarding_composition_audit_1x240s',
+    groupedRunId: 'musicLab_onboarding_composition_audit_1x240s_scenario',
+    groupedNotes: 'Measures where the production score becomes crowded while deterministic test-only controls complete its music interactions.',
+    tagPrefix: 'OnboardingCompositionAudit1x240s',
+    labelPrefix: 'BS0_onboarding_composition_audit_1x240s',
+    statusPrefix: 'Running onboarding composition audit',
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.setPerfCompositionAuditAutoControl !== 'function') {
+        throw new Error('composition_audit_autopilot_api_unavailable');
+      }
+      try { modeApi.exit?.(); } catch {}
+      await waitForPerfLabMs(80);
+      try { modeApi.enter?.({ weaponGateIntro: true, weaponGateSequence: 'missiles_bouncers' }); } catch (err) {
+        throw new Error(`composition_audit_onboarding_start_failed:${String(err?.message || err)}`);
+      }
+      modeApi.setPerfCompositionAuditAutoControl(true);
+      const snapshot = modeApi.armDirectorFormationFlowAfterOnboarding?.() || null;
+      try { window.__BEAT_SWARM_COMPOSITION_AUDIT = { ...snapshot, autopilot: true }; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'music_composition_audit_bar',
+        'music_player_lead_polyphony_triggered',
+        'music_level1_arrangement_state',
+        'music_player_layer_state',
+        'music_readability_snapshot',
+        'music_primary_lead_request',
+        'music_contribution_started',
+        'music_contribution_completed',
+        'music_contribution_protection_armed',
+        'music_contribution_protection_expired',
+        'music_missile_motif_hit',
+        'pinball_bouncer_motif_hit',
+        'lead_ball_motif_hit',
+        'music_rhythm_rewrite_committed_to_theme',
+        'lead_ball_rewrite_committed_to_theme',
+        'music_authoring_lane_audio_suppressed',
+        'director_musical_formation_spawned',
+        'enemy_combat_group_motif_assigned',
+        'enemy_combat_attack',
+      ],
+      maxLines: 6000,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-onboarding-composition-audit',
     },
   });
 }

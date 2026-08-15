@@ -1917,23 +1917,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       && String(payload.musicProminence || '').trim().toLowerCase() === 'full';
   });
   const crowdedMusicalStep = foundationSelected && primaryLoopForegroundPresent;
-  const shouldEmitPlayerStepFinal = (() => {
-    if (!shouldEmitPlayerStep) return false;
-    if (weaponGatePlaybackActive && playerTuneAuthoredStep) return true;
-    if (!crowdedMusicalStep) return true;
-    if (playerStepDirective.manualOverrideActive === true) return true;
-    if (String(playerStepDirective.presentation || '').trim().toLowerCase() === 'restrained' && !playerTuneAuthoredStep) {
-      return false;
-    }
-    if (playerTuneAuthoredStep) {
-      return (stepIndex % 2) === 0;
-    }
-    return false;
-  })();
-  const playerSectionVolumeMult = Math.max(0.45, Math.min(1, Number(playerStepDirective.volumeMult) || 0.82));
-  const basePlayerSoundVolumeMult = (foundationSelected
-    ? (primaryLoopForegroundPresent ? 0.46 : 0.68)
-    : 1) * playerSectionVolumeMult;
+  // Authored weapon fire is gameplay feedback. Arrangement density may shape
+  // surrounding music, but it must never suppress or attenuate the weapon.
+  const shouldEmitPlayerStepFinal = shouldEmitPlayerStep;
   const stagedSoundCount = emittedEnemyEvents.reduce((sum, ev) => {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     const prominence = String(payload.musicProminence || 'full').trim().toLowerCase();
@@ -2091,7 +2077,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       },
     };
   });
-  const playerSoundVolumeMult = basePlayerSoundVolumeMult * globalStepGainScale;
+  const playerSoundVolumeMult = 1;
   const sparkleStepMod8 = stepIndex % 8;
   const sparkleBarPattern = ((barIndex % 4) + 4) % 4;
   const peakSparkleCompanionCue = currentEnemyMusicActionGateState.stage === 'peak'

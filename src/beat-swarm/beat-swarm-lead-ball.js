@@ -1332,6 +1332,11 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
         && !state.pickup
         && state.balls.length <= 0,
       pickupActive: !!state.pickup,
+      interactionTargets: state.pickup ? [{
+        kind: 'lead_ball_pickup',
+        x: state.pickup.x,
+        y: state.pickup.y,
+      }] : [],
       ballCount: state.balls.length,
       postCompletePlaybackActive: state.postCompleteUntilTick >= 0 && state.postCompleteNotified !== true,
       postCompleteStartTick: state.postCompleteStartTick,

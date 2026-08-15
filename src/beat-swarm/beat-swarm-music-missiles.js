@@ -812,6 +812,12 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       themeId: state.themeId,
       laneId: state.laneId,
       pickupCount: state.pickups.length,
+      interactionTargets: state.pickups.map((pickup) => ({
+        kind: 'music_missile_pickup',
+        id: pickup.id,
+        x: pickup.x,
+        y: pickup.y,
+      })),
       orbitingCount: state.missiles.filter((entry) => entry.state === 'orbit').length,
       seekingCount: state.missiles.filter((entry) => entry.state === 'seek').length,
       pendingDetonationCount: state.pendingDetonations.length,

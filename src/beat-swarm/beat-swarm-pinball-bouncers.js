@@ -597,6 +597,17 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
       themeId: state.themeId,
       laneId: state.laneId,
       bouncerCount: state.bouncers.length,
+      interactionTargets: state.bouncers.map((bouncer) => {
+        const center = point(deps.getArenaCenterWorld?.());
+        const radius = Math.max(120, Number(deps.getArenaRadius?.()) || 900);
+        return {
+          kind: 'pinball_bouncer',
+          id: bouncer.id,
+          x: center.x + Math.cos(bouncer.anchorAngle) * radius * bouncer.anchorRadiusN,
+          y: center.y + Math.sin(bouncer.anchorAngle) * radius * bouncer.anchorRadiusN,
+          active: bouncer.age >= ARRIVAL_SECONDS,
+        };
+      }),
       pendingHitCount: state.pendingHits.length,
       hitCount: state.motifHits.size,
       targetHitCount: state.targetHitCount,
