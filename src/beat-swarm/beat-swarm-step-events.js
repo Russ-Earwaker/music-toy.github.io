@@ -331,6 +331,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         || sourceSystem === 'death'
         || authoringClass === 'gameplayauthored'
         || action === 'player-weapon-step'
+        || action === 'player-lead-theme-direct'
         || action === 'enemy-death-accent'
         || action.includes('chain')
         || action.includes('impact')
@@ -1383,6 +1384,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const directorLane = getDirectorLanePlanForMusicLane(musicLaneId);
     const isPrimaryLoopLaneEvent = musicLaneId === 'primary_loop_lane';
     const isLeadAuthoringLiteralReplay = payload?.leadAuthoringLiteralReplay === true;
+    const isPlayerLeadThemeDirect = String(ev?.actionType || '').trim().toLowerCase() === 'player-lead-theme-direct';
     const continuityId = String(payload.continuityId || '').trim().toLowerCase();
     const noteResolved = String(ev?.noteResolved || ev?.note || payload?.noteResolved || payload?.requestedNoteRaw || '').trim().toLowerCase();
     const identityKey = [
@@ -1423,7 +1425,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     else score += 300;
     if (isFreshEntryAudibility(ev)) score += Math.max(0, Number(constants.entryAudibilityScoreBoost) || 110);
     if (isPrimaryLoopLaneEvent) score += 220;
-    if (isLeadAuthoringLiteralReplay) score += 10000;
+    if (isPlayerLeadThemeDirect) score += isLeadAuthoringLiteralReplay ? 10000 : 4000;
     score += (prominenceRank[safeProminence] || 0) * 40;
     if (safeLayer === 'foundation' && playerLikelyAudible) score += 180;
     if (isCurrentForegroundLoop) score += Math.max(0, Number(constants.currentForegroundScoreBoost) || 120);
@@ -1502,6 +1504,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       isPlayerBassLiteralStatement,
       isPrimaryLoopLaneEvent,
       isLeadAuthoringLiteralReplay,
+      isPlayerLeadThemeDirect,
       callResponseLane,
       musicVoiceKey,
       isProtectedIntroDrum,
@@ -1570,7 +1573,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     const bucket = keptByLayer[item.layer] || [];
     const budget = Math.max(0, Math.trunc(Number(layerBudgets[item.layer]) || 0));
-    if (item.isLeadAuthoringLiteralReplay) {
+    if (item.isPlayerLeadThemeDirect) {
       // Player-authored literal playback is the event output, not optional arrangement texture.
       // It must survive the generic loop budget so rhythm companions can sound beside it.
     } else if (item.isProtectedIntroDrum) {
@@ -1585,7 +1588,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       !groupedComposerBudgetExempt
       &&
       !item.isProtectedIntroDrum
-      && !item.isLeadAuthoringLiteralReplay
+      && !item.isPlayerLeadThemeDirect
       &&
       !item.isReservedPercussionCompanion
       &&
@@ -1597,7 +1600,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     ) {
       continue;
     }
-    if (!groupedComposerBudgetExempt && !item.isProtectedIntroDrum && !item.isLeadAuthoringLiteralReplay && !item.isReservedPercussionCompanion && item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
+    if (!groupedComposerBudgetExempt && !item.isProtectedIntroDrum && !item.isPlayerLeadThemeDirect && !item.isReservedPercussionCompanion && item.melodicCollisionKey && selectedMelodicCollisionKeys.has(item.melodicCollisionKey)) continue;
     bucket.push(item);
     selectedIds.add(item.idx);
     // Percussion companions occupy the rhythm lane, not melodic register space.

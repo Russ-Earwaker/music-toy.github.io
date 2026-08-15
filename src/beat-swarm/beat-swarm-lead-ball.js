@@ -279,6 +279,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     captureStartTick: -1,
     captureEndTick: -1,
     lastClockTick: -1,
+    postCompleteStartTick: -1,
     postCompleteUntilTick: -1,
     postCompleteNotified: false,
     lastNotes: [],
@@ -356,6 +357,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.captureStartTick = -1;
     state.captureEndTick = -1;
     state.lastClockTick = -1;
+    state.postCompleteStartTick = -1;
     state.postCompleteUntilTick = -1;
     state.postCompleteNotified = false;
     state.lastNotes.length = 0;
@@ -655,8 +657,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     for (const entry of state.pendingHits) removeBandMarker(entry?.marker);
     state.pendingHits.length = 0;
     state.pendingEnemyIds.clear();
-    state.postCompleteUntilTick = -1;
-    state.postCompleteNotified = true;
+    const completionTick = getClockTick(deps.getBeatClock?.() || {});
+    state.postCompleteStartTick = completionTick + 1;
+    state.postCompleteUntilTick = state.postCompleteStartTick + (state.stepCount * 4) - 1;
+    state.postCompleteNotified = false;
     deps.onMotifHit?.({
       note: String(final.note || '').trim(),
       stepIndex: Number.isFinite(Number(final.stepIndex)) ? Math.max(0, Math.trunc(Number(final.stepIndex) || 0)) : -1,
@@ -666,12 +670,6 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       hitCount: state.hitSteps.size,
       targetHitCount: state.targetHitCount,
       complete: true,
-      selections: state.selections.slice(),
-    });
-    deps.onPostCompletePlayback?.({
-      eventId: state.eventId,
-      themeId: state.themeId,
-      laneId: state.laneId,
       selections: state.selections.slice(),
     });
     if (!state.completionExplosionsFired) {
@@ -1108,6 +1106,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const clock = deps.getBeatClock?.() || {};
     const tick = getClockTick(clock);
     if (state.postCompleteUntilTick >= 0 && tick > state.postCompleteUntilTick) {
+      state.postCompleteStartTick = -1;
       state.postCompleteUntilTick = -1;
       if (!state.postCompleteNotified) {
         state.postCompleteNotified = true;
@@ -1120,13 +1119,15 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       }
       return;
     }
+    if (tick < state.postCompleteStartTick) return;
     if (tick === state.lastClockTick) return;
     state.lastClockTick = tick;
-    const stepIndex = getClockStep(clock, state.stepCount);
+    const stepIndex = ((tick - state.postCompleteStartTick) % state.stepCount + state.stepCount) % state.stepCount;
     const selection = state.selections[stepIndex];
     if (!selection?.note) return;
     deps.playMotifNote?.({
       note: selection.note,
+      notes: Array.isArray(selection.notes) ? selection.notes.slice() : [selection.note],
       stepIndex,
       themeId: state.themeId,
       laneId: state.laneId,
@@ -1294,10 +1295,25 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.previousPlayer = player;
   }
 
+  function setPostCompleteSelections(selectionsLike = null) {
+    if (!Array.isArray(selectionsLike) || !selectionsLike.length) return false;
+    state.selections = Array.from({ length: state.stepCount }, (_, stepIndex) => {
+      const selection = selectionsLike[stepIndex];
+      if (!selection?.note) return null;
+      const notes = (Array.isArray(selection.notes) ? selection.notes : [selection.note])
+        .map((note) => String(note || '').trim())
+        .filter((note, index, source) => !!note && source.indexOf(note) === index)
+        .slice(0, 3);
+      return notes.length ? { ...selection, note: notes[0], notes, slotIndex: stepIndex } : null;
+    });
+    return true;
+  }
+
   return {
     start,
     stop,
     update,
+    setPostCompleteSelections,
     spawnPickupFromCarrierDeath,
     isActive: () => state.active,
     isPostCompletePlaybackActive: () => state.postCompleteUntilTick >= 0 && state.postCompleteNotified !== true,
@@ -1318,6 +1334,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       pickupActive: !!state.pickup,
       ballCount: state.balls.length,
       postCompletePlaybackActive: state.postCompleteUntilTick >= 0 && state.postCompleteNotified !== true,
+      postCompleteStartTick: state.postCompleteStartTick,
+      postCompleteUntilTick: state.postCompleteUntilTick,
       captureStartTick: state.captureStartTick,
       captureEndTick: state.captureEndTick,
       selections: state.selections.slice(),
