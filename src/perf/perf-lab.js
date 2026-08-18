@@ -5125,10 +5125,12 @@ async function saveMusicLabSessionToResourcesGlobal({
             runLength: 0,
             runStartStep: -1,
             repeatedRuns: [],
+            noteSequence: [],
           };
           const interpretationMode = String(event?.leadThemeInterpretationMode || '').trim().toLowerCase() || 'unclassified';
           const rawLeadNote = String(event?.leadThemeRawNote || '').trim();
           laneMusic.eventCount += 1;
+          laneMusic.noteSequence.push(resolvedNote);
           laneMusic.noteCounts[resolvedNote] = (laneMusic.noteCounts[resolvedNote] || 0) + 1;
           laneMusic.actionCounts[actionType] = (laneMusic.actionCounts[actionType] || 0) + 1;
           laneMusic.interpretationCounts[interpretationMode] = (laneMusic.interpretationCounts[interpretationMode] || 0) + 1;
@@ -5200,6 +5202,15 @@ async function saveMusicLabSessionToResourcesGlobal({
             endStep: lane.previousStep,
           });
         }
+        const periodicMatchRates = Object.create(null);
+        for (const lag of [2, 4, 8]) {
+          let matches = 0;
+          const comparisons = Math.max(0, lane.noteSequence.length - lag);
+          for (let noteIndex = lag; noteIndex < lane.noteSequence.length; noteIndex += 1) {
+            if (lane.noteSequence[noteIndex] === lane.noteSequence[noteIndex - lag]) matches += 1;
+          }
+          periodicMatchRates[lag] = comparisons > 0 ? matches / comparisons : 0;
+        }
         return {
           laneId: lane.laneId,
           eventCount: lane.eventCount,
@@ -5215,6 +5226,7 @@ async function saveMusicLabSessionToResourcesGlobal({
           rawNoteExactMatchRate: lane.rawNoteComparisonCount > 0
             ? lane.rawNoteExactMatchCount / lane.rawNoteComparisonCount
             : null,
+          periodicMatchRates,
           longestRepeatedRuns: lane.repeatedRuns
             .slice()
             .sort((a, b) => b.length - a.length || a.startStep - b.startStep)

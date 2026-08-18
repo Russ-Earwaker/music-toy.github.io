@@ -142,6 +142,10 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const retreatComposerMember = (enemy, reason = 'composer_member_trim') => {
     if (!enemy || enemy.retreating) return;
     const normalizedReason = String(reason || 'composer_member_trim').trim().toLowerCase() || 'composer_member_trim';
+    if (startEnemyRetreat) {
+      startEnemyRetreat(enemy, normalizedReason, 'composer_maintenance');
+      return;
+    }
     if (removeEnemy) {
       try {
         removeEnemy(enemy, normalizedReason, {
@@ -150,20 +154,6 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           retireOrigin: 'composer_maintenance',
         });
       } catch {}
-      enemy.__bsRemoved = true;
-      enemy.__bsHiddenRemoved = true;
-      if (enemy.el instanceof HTMLElement) {
-        try {
-          enemy.el.style.transform = 'translate(-9999px, -9999px) scale(0.001)';
-          enemy.el.style.opacity = '0';
-          enemy.el.style.visibility = 'hidden';
-          enemy.el.style.display = 'none';
-        } catch {}
-      }
-      return;
-    }
-    if (startEnemyRetreat) {
-      startEnemyRetreat(enemy, normalizedReason, 'composer_maintenance');
       return;
     }
     enemy.lifecycleState = 'retiring';
@@ -2949,6 +2939,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       directorLanePlan,
       musicModeRuntime,
       leadAuthorityRuntime,
+      maxLiveComposerGroups: Number.isFinite(Number(state.maxLiveComposerGroups))
+        ? Math.max(0, Math.trunc(Number(state.maxLiveComposerGroups)))
+        : 4,
       motifScopeKey,
       retireGroup,
       getAliveIdsForGroup: (group) => new Set(
@@ -4648,7 +4641,14 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         }
       }
       if (ordinaryGroupedMusicalRole) {
-        const groupedMemberCap = 2;
+        const groupedMemberCap = Math.max(2, Math.min(
+          4,
+          Math.max(
+            Math.trunc(Number(group?.size) || 0),
+            Math.trunc(Number(group?.performers) || 0),
+            aliveMembers.length,
+          ),
+        ));
         group.size = groupedMemberCap;
         group.performers = groupedMemberCap;
         if (aliveMembers.length > groupedMemberCap) {

@@ -406,9 +406,18 @@ Do not actively expand these areas while tuning motif transformation:
 - new enemy families
 - new event sections
 - formation spawning
+- musical enemy-group infrastructure unification:
+  - composer groups are director-owned carriers for the main musical lanes and their continuity
+  - musical formations are optional combat-driven layers added over the established score
+  - they currently use separate group, spawning, scheduling, membership, and lifecycle systems despite sharing similar enemy-group mechanics
+  - low-priority future consideration: extract shared population, formation, membership, lifecycle, and telemetry infrastructure without merging their distinct musical responsibilities
 - HP readability tuning
 - broad conductor scenes
 - sample metadata migration
-- framerate work, unless a new performance issue is reported
+- Beat Swarm optimization pass:
+  - profile update, render, enemy-group, and music-scheduling hotspots after current behavior work stabilizes
+  - prune stale runtime/group records and avoid unnecessary per-frame scans and DOM writes
+  - preserve current visuals and musical timing; framerate is currently acceptable
+  - low priority unless a performance regression appears
 - deeper Power Theme behavior
 - boss/special set-piece variation

@@ -394,9 +394,25 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     return (deps.getEnemies?.() || []).find((enemy) => Math.trunc(Number(enemy?.id) || 0) === Math.trunc(Number(id) || 0)) || null;
   }
 
+  function isEnemyOnscreen(enemy, margin = 56) {
+    if (!enemy) return false;
+    const point = deps.worldToScreen?.({
+      x: Number(enemy.wx) || 0,
+      y: Number(enemy.wy) || 0,
+    });
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
+    const pad = Math.max(0, Number(margin) || 0);
+    return point.x >= pad
+      && point.x <= Math.max(pad, window.innerWidth - pad)
+      && point.y >= pad
+      && point.y <= Math.max(pad, window.innerHeight - pad);
+  }
+
   function getNearestEnemy(x = 0, y = 0, excludedEnemyIds = null) {
-    let best = null;
-    let bestD2 = Infinity;
+    let bestOnscreen = null;
+    let bestOnscreenD2 = Infinity;
+    let bestFallback = null;
+    let bestFallbackD2 = Infinity;
     for (const enemy of deps.getEnemies?.() || []) {
       if (!enemy || enemy.__bsRemoved || Number(enemy.hp) <= 0 || enemy.retreating === true) continue;
       const enemyId = Math.trunc(Number(enemy.id) || 0);
@@ -404,12 +420,17 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       const dx = (Number(enemy.wx) || 0) - x;
       const dy = (Number(enemy.wy) || 0) - y;
       const d2 = dx * dx + dy * dy;
-      if (d2 < bestD2) {
-        bestD2 = d2;
-        best = enemy;
+      if (isEnemyOnscreen(enemy)) {
+        if (d2 < bestOnscreenD2) {
+          bestOnscreenD2 = d2;
+          bestOnscreen = enemy;
+        }
+      } else if (d2 < bestFallbackD2) {
+        bestFallbackD2 = d2;
+        bestFallback = enemy;
       }
     }
-    return best;
+    return bestOnscreen || bestFallback;
   }
 
   function releaseAllMissiles() {
@@ -687,14 +708,15 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
         missile.y = player.y + Math.sin(missile.angle) * MISSILE_ORBIT_RADIUS;
       } else if (missile.state === 'seek') {
         missile.seekSeconds = Math.max(0, Number(missile.seekSeconds) || 0) + dt;
+        const reservedTargets = new Set(
+          state.missiles
+            .filter((entry) => entry !== missile && entry.state === 'seek' && Number(entry.targetEnemyId) > 0)
+            .map((entry) => Math.trunc(Number(entry.targetEnemyId) || 0))
+        );
         let target = findEnemyById(missile.targetEnemyId);
-        if (!target) {
-          const reservedTargets = new Set(
-            state.missiles
-              .filter((entry) => entry !== missile && entry.state === 'seek' && Number(entry.targetEnemyId) > 0)
-              .map((entry) => Math.trunc(Number(entry.targetEnemyId) || 0))
-          );
-          target = getNearestEnemy(missile.x, missile.y, reservedTargets);
+        if (!target || !isEnemyOnscreen(target)) {
+          const preferredTarget = getNearestEnemy(missile.x, missile.y, reservedTargets);
+          if (!target || isEnemyOnscreen(preferredTarget)) target = preferredTarget;
           missile.targetEnemyId = Math.trunc(Number(target?.id) || 0);
         }
         if (target) {

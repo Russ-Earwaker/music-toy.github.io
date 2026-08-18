@@ -1944,6 +1944,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const isPrimaryLoopLaneEvent = String(payload.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane';
     const isFoundationLaneEvent = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase() === 'foundation_lane'
       || musicLayer === 'foundation';
+    const isLeadAuthoringLiteralReplay = payload?.leadAuthoringLiteralReplay === true;
     const callResponseLane = String(payload.callResponseLane || '').trim().toLowerCase();
     const isCurrentForegroundLoop = arbitrationMeta?.isCurrentForegroundLoop === true;
     const isCompetingForegroundLoop = arbitrationMeta?.isCompetingForegroundLoop === true;
@@ -2023,7 +2024,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         || `${musicLayer}:${String(ev?.actionType || '').trim().toLowerCase()}:${Math.max(0, Math.trunc(Number(ev?.actorId) || 0))}`
     ).trim().toLowerCase();
     const previousLineState = lineKey ? gainSmoothingRuntime.byLineKey.get(lineKey) : null;
-    if (lineKey) {
+    if (isLeadAuthoringLiteralReplay) {
+      // A newly authored motif must sound exactly as the player made it before
+      // arrangement density is allowed to reshape its foreground presence.
+      nextAudioGain = clamp01(Number.isFinite(baseAudioGain) ? baseAudioGain : 1);
+    }
+    if (lineKey && !isLeadAuthoringLiteralReplay) {
       const previousGain = clamp01(previousLineState?.gain);
       const isProtectedLaneEvent = isPrimaryLoopLaneEvent || isFoundationLaneEvent;
       const isStableAudibilityLine = isProtectedLaneEvent || isVisibleGameplayCue || entryPhraseAudibilityGrace;
@@ -2078,6 +2084,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     };
   });
   const playerSoundVolumeMult = 1;
+  const literalLeadReplayActive = helpers.isLeadThemeLiteralProtectionActive?.() === true;
   const sparkleStepMod8 = stepIndex % 8;
   const sparkleBarPattern = ((barIndex % 4) + 4) % 4;
   const peakSparkleCompanionCue = currentEnemyMusicActionGateState.stage === 'peak'
@@ -2104,6 +2111,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   );
   const explicitSparkleCompanionEvent = (() => {
     if (suppressDirectorMusic) return null;
+    if (literalLeadReplayActive) return null;
     if (!explicitSparkleCompanionWanted) return null;
     const sparkleActorId = Math.max(
       0,
@@ -2120,16 +2128,22 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (!directOrnamentPreview && !(sparkleActorId > 0 || sparkleGroupId > 0 || primaryLoopLaneActive || secondaryLoopLaneActive)) return null;
     const sparkleNote = sparkleStepMod8 === 6 ? 'A4' : 'D5';
     const sparkleInstrumentId = String(
-      helpers.getIdForDisplayName?.('Digital Synth Lead Short')
+      primaryLoopLaneRuntime?.instrumentId
+        || secondaryLoopLaneRuntime?.instrumentId
+        || helpers.getIdForDisplayName?.('Digital Synth Lead Short')
         || helpers.getIdForDisplayName?.('DIGITAL SYNTH LEAD SHORT')
-        || 'DIGITAL SYNTH LEAD SHORT'
         || helpers.getIdForDisplayName?.('Gaming Note')
         || helpers.getIdForDisplayName?.('Retro Triangle')
         || helpers.getIdForDisplayName?.('Bell')
-        || secondaryLoopLaneRuntime?.instrumentId
-        || primaryLoopLaneRuntime?.instrumentId
         || 'GAMING NOTE'
     ).trim();
+    helpers.noteMusicSystemEvent?.('music_answer_ornament_companion_direct', {
+      note: sparkleNote,
+      instrumentId: sparkleInstrumentId,
+      stage: currentEnemyMusicActionGateState.stage,
+      buildOrnamentPreview: buildSparklePreviewCue,
+      peakDirectAnswer,
+    }, { beatIndex, stepIndex, barIndex });
     const ev = helpers.createLoggedPerformedBeatEvent?.({
       actorId: sparkleActorId,
       beatIndex,
@@ -2289,6 +2303,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const explicitPlayerLeadThemeEvent = (() => {
     if (suppressDirectorMusic) return null;
     if (isLaneSuppressed('primary_loop_lane')) return null;
+    if (typeof helpers.isLeadThemeLiteralProtectionActive === 'function'
+      && helpers.isLeadThemeLiteralProtectionActive()) return null;
     if ((typeof helpers.isBeatSwarmLeadGateAuthoringOnlyTest === 'function'
       && helpers.isBeatSwarmLeadGateAuthoringOnlyTest())
       || (typeof helpers.isLeadGateLiteralPlaybackActive === 'function'
@@ -2345,8 +2361,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
           : localThemeStep === 4))
       : (settleEchoStepAllowed || settleDirectVariationStep)));
     if (!memoryEchoStepAllowed) return null;
+    const leadThemePlaybackStep = typeof helpers.getPlayerLeadThemePlaybackStepIndex === 'function'
+      ? helpers.getPlayerLeadThemePlaybackStepIndex(stepIndex)
+      : stepIndex;
     let leadThemeStep = typeof helpers.getPlayerLeadThemePrimaryStep === 'function'
-      ? helpers.getPlayerLeadThemePrimaryStep(barIndex, stepIndex, stage)
+      ? helpers.getPlayerLeadThemePrimaryStep(barIndex, leadThemePlaybackStep, stage)
       : null;
     if ((buildLeadSupplement || stage === 'release' || stage === 'settle') && (!leadThemeStep || typeof leadThemeStep !== 'object' || leadThemeStep.active !== true || !String(leadThemeStep.note || '').trim())) {
       const stepBase = Math.max(0, Math.trunc(Number(stepIndex) || 0)) - localThemeStep;

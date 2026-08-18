@@ -1113,7 +1113,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       return Math.trunc(Number(a?.stepIndex) || 0) - Math.trunc(Number(b?.stepIndex) || 0);
     });
     for (const entry of due) triggerHit(entry);
-    if (state.active && state.captureEndTick >= 0 && tick > state.captureEndTick && state.pendingHits.length <= 0) {
+    if (state.active && state.captureEndTick >= 0 && tick >= state.captureEndTick && state.pendingHits.length <= 0) {
       completeEvent();
     }
   }
@@ -1141,6 +1141,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     if (tick === state.lastClockTick) return;
     state.lastClockTick = tick;
     const stepIndex = ((tick - state.postCompleteStartTick) % state.stepCount + state.stepCount) % state.stepCount;
+    if (deps.useSharedPostCompletePlayback === true) return;
     const selection = state.selections[stepIndex];
     if (!selection?.note) return;
     deps.playMotifNote?.({

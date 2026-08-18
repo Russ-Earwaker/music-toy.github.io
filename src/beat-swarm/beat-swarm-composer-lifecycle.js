@@ -26,6 +26,9 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const leadAuthorityRuntime = options?.leadAuthorityRuntime && typeof options.leadAuthorityRuntime === 'object'
     ? options.leadAuthorityRuntime
     : null;
+  const maxLiveComposerGroups = Number.isFinite(Number(options?.maxLiveComposerGroups))
+    ? Math.max(0, Math.trunc(Number(options.maxLiveComposerGroups)))
+    : 4;
 
   const getAliveIdsForGroup = typeof options?.getAliveIdsForGroup === 'function' ? options.getAliveIdsForGroup : (() => new Set());
   const getAliveEnemiesByIds = typeof options?.getAliveEnemiesByIds === 'function' ? options.getAliveEnemiesByIds : (() => []);
@@ -750,6 +753,12 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       if (!aliveIds.size) composerEnemyGroups.splice(i, 1);
       continue;
     }
+    if (!aliveIds.size) {
+      g.active = false;
+      g.lifecycleState = 'ended';
+      composerEnemyGroups.splice(i, 1);
+      continue;
+    }
     g.lifecycleState = normalizeLifecycleState(g.lifecycleState, 'active');
     ensureComposerRoleLifecycle(g);
     if (!String(g?.sectionContinuityKey || '').trim()) {
@@ -1239,7 +1248,14 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const introBridgeBlocksGenericSpawn = requiredIntroProfiles.length === 0
     && earlyIntroBridgeActive;
   const genericGroupSpawnBlockedByIntroBridge = introBridgeBlocksGenericSpawn && !reservedLeadSpawnNeeded;
-  const spawnCount = requiredIntroProfiles.length > 0
+  const liveComposerGroupCount = composerEnemyGroups.filter((group) => (
+    group
+    && group.active !== false
+    && group.retiring !== true
+    && getAliveEnemiesByIds(group?.memberIds).length > 0
+  )).length;
+  const availableLiveGroupSlots = Math.max(0, maxLiveComposerGroups - liveComposerGroupCount);
+  const requestedSpawnCount = requiredIntroProfiles.length > 0
     ? Math.max(0, introMissingCount)
     : (
       earlyIntroBridgeActive && reservedCoverageSpawnNeeded
@@ -1249,6 +1265,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
             Math.max(0, desiredGroups - effectiveCurrentSectionCount)
           ))
     );
+  const spawnCount = Math.min(requestedSpawnCount, availableLiveGroupSlots, 1);
   for (let i = 0; i < spawnCount; i++) {
     const forcedIntroProfileSourceType = missingIntroProfiles[i] || '';
     const forcedProfileSourceType = forcedIntroProfileSourceType || (
