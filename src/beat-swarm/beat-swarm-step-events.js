@@ -2738,10 +2738,28 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       return true;
     })
     : stagedEnemyEvents;
+  const leadBallAuthoringForegroundActive = helpers.isLeadBallAuthoringForegroundActive?.() === true;
+  const applyLeadBallAuthoringDuck = (eventLike = null) => {
+    const event = eventLike && typeof eventLike === 'object' ? eventLike : null;
+    if (!event || !leadBallAuthoringForegroundActive) return event;
+    const payload = event.payload && typeof event.payload === 'object' ? event.payload : {};
+    if (String(payload.musicLaneId || '').trim().toLowerCase() !== 'primary_loop_lane') return event;
+    const gainScale = 0.48;
+    const baseAudioGain = Math.max(0, Math.min(1, Number(payload.audioGain == null ? 1 : payload.audioGain)));
+    return {
+      ...event,
+      payload: {
+        ...payload,
+        audioGain: baseAudioGain * gainScale,
+        leadBallAuthoringDuck: true,
+        leadBallAuthoringGainScale: gainScale,
+      },
+    };
+  };
   stepEvents = [
-    ...stagedEventsForFinalPlayback,
+    ...stagedEventsForFinalPlayback.map((event) => applyLeadBallAuthoringDuck(event)),
     explicitPlayerBassDriveEvent,
-    explicitPlayerLeadThemeEvent,
+    applyLeadBallAuthoringDuck(explicitPlayerLeadThemeEvent),
     explicitPlayerAccentRhythmEvent,
     explicitPlayerAccentRhythmRiffEvent,
     explicitSparkleCompanionEvent,

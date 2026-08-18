@@ -23,7 +23,7 @@ import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-08-15-composition-audit-v1';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-08-15-composition-audit-v1';
-import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-15-composition-audit-v1';
+import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-16-musicality-audit-v3';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-08-08-shape-caster-v1';
 import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-08-05-launch-vector-v1';
 import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-08-05-temporal-lines-v1';
@@ -39,7 +39,7 @@ import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRun
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-07-22-lead-ball-v22';
-import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-08-15-composition-hierarchy-v6';
+import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-08-16-musicality-audit-v3';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js?v=2026-08-14-formation-approach-v1';
 import {
   configureBeatSwarmEnemyCombatRuntime,
@@ -301,6 +301,8 @@ const perfLabRuntime = {
   compositionAuditLastBar: -1,
   compositionAuditBars: [],
   compositionAuditPolyphony: [],
+  compositionAuditThemeRevisions: [],
+  compositionAuditLastLeadThemeSignature: '',
 };
 const weaponGateCurrentRuntime = {
   charge: 0,
@@ -3135,6 +3137,11 @@ function completeLeadGateThemeEvent(stepIndex = 0) {
 }
 function isLeadBallThemeEventActive() {
   return leadBallRuntime?.isActive?.() === true;
+}
+function isLeadBallAuthoringForegroundActive() {
+  if (!isLeadBallThemeEventActive()) return false;
+  const snapshot = leadBallRuntime?.getSnapshot?.() || null;
+  return snapshot?.complete !== true && Math.max(0, Math.trunc(Number(snapshot?.ballCount) || 0)) > 0;
 }
 function isLeadBallPostCompletePlaybackActive() {
   return leadBallRuntime?.isPostCompletePlaybackActive?.() === true;
@@ -11776,7 +11783,7 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
   const releasePartIndex = (() => {
     if (!releaseEcho) return 0;
     for (let offset = 0; offset < parts.length; offset += 1) {
-      const candidateIndex = (sectionBar + offset) % parts.length;
+      const candidateIndex = (bar + offset) % parts.length;
       const candidate = parts[candidateIndex];
       const hasAuthoredNote = Array.isArray(candidate?.active)
         && candidate.active.some((isActive, candidateStep) => (
@@ -11870,9 +11877,9 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
       const prevStep = (step - delta + part.steps) % part.steps;
       const nextStep = (step + delta) % part.steps;
       const prevNote = part.active[prevStep] ? normalizeSwarmNoteName(part.noteByStep[prevStep]) : '';
-      if (prevNote) return clampNoteToDirectorPool(prevNote, stepIndex + part.phrasePartIndex);
+      if (prevNote) return prevNote;
       const nextNote = part.active[nextStep] ? normalizeSwarmNoteName(part.noteByStep[nextStep]) : '';
-      if (nextNote) return clampNoteToDirectorPool(nextNote, stepIndex + part.phrasePartIndex);
+      if (nextNote) return nextNote;
     }
     return '';
   })();
@@ -11935,6 +11942,9 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
       : (buildAssembly
       ? 'build_assemble'
       : (peakRiff ? 'peak_riff' : (releaseEcho ? 'release_riff' : (settleEcho ? 'settle_echo' : 'director_riff')))));
+  const motifSourceRawNote = activeStep
+    ? rawNote
+    : (memoryEcho && releaseFallbackNote ? releaseFallbackNote : rawNote);
   return {
     themeId: 'leadTheme',
     source: 'player_theme',
@@ -11944,7 +11954,7 @@ function getPlayerLeadThemePrimaryStep(barIndex = 0, stepIndex = 0, sectionIdLik
     note: resolvedActiveStep ? resolvedNote : '',
     notes: resolvedActiveStep ? [resolvedNote, ...harmonyNotes] : [],
     harmonyNotes,
-    rawNote,
+    rawNote: motifSourceRawNote,
     rowIndex,
     patternKey: part.patternKey,
     contourKey: part.contourKey,
@@ -27807,6 +27817,7 @@ function executePerformedBeatEvent(event) {
       getMusicLabContext,
       getPlayerLeadThemePrimaryStep,
       getPlayerLeadThemeEchoPolicy,
+      isLeadBallAuthoringForegroundActive,
       noteMusicSystemEvent,
       getDirectorLanePlan: () => ensureSwarmDirector().getLanePlan?.() || null,
       getDirectorLanePlanForBar: (barIndexLike = 0) => buildDirectorLanePlanForBar(barIndexLike),
@@ -32914,6 +32925,8 @@ function setPerfCompositionAuditAutoControl(next = true) {
   perfLabRuntime.compositionAuditLastBar = -1;
   perfLabRuntime.compositionAuditBars = [];
   perfLabRuntime.compositionAuditPolyphony = [];
+  perfLabRuntime.compositionAuditThemeRevisions = [];
+  perfLabRuntime.compositionAuditLastLeadThemeSignature = '';
   if (next) perfLabRuntime.autoMoveEnabled = false;
   return { enabled: perfLabRuntime.autoInteractionEnabled };
 }
@@ -32925,6 +32938,10 @@ function getPerfCompositionAuditSnapshot() {
     polyphony: perfLabRuntime.compositionAuditPolyphony.map((entry) => ({
       ...entry,
       harmonyNotes: Array.isArray(entry?.harmonyNotes) ? entry.harmonyNotes.slice() : [],
+    })),
+    themeRevisions: perfLabRuntime.compositionAuditThemeRevisions.map((entry) => ({
+      ...entry,
+      steps: Array.isArray(entry?.steps) ? entry.steps.slice() : [],
     })),
   };
 }
@@ -32940,6 +32957,34 @@ function recordPerfCompositionAuditBar(barIndexLike = 0, stepIndexLike = 0) {
       part?.active?.[stepIndex] ? Math.max(0, Array.isArray(notes) ? notes.length : 0) : 0
     ))
   ));
+  const leadThemeSteps = leadParts.flatMap((part) => (
+    Array.from({ length: Math.max(1, Math.trunc(Number(part?.steps) || WEAPON_TUNE_STEPS)) }, (_, partStep) => {
+      if (part?.active?.[partStep] !== true) return '';
+      const notes = Array.isArray(part?.notesByStep?.[partStep])
+        ? part.notesByStep[partStep]
+        : [part?.noteByStep?.[partStep]];
+      return notes
+        .map((note) => normalizeSwarmNoteName(note || ''))
+        .filter((note, noteIndex, source) => !!note && source.indexOf(note) === noteIndex)
+        .join('+');
+    })
+  ));
+  const leadThemeInstrumentId = getPlayerDrawgridThemeInstrumentId('leadTheme') || '';
+  const leadThemeSignature = `${leadThemeInstrumentId}|${leadThemeSteps.join(',')}`;
+  if (leadThemeSignature !== perfLabRuntime.compositionAuditLastLeadThemeSignature) {
+    perfLabRuntime.compositionAuditLastLeadThemeSignature = leadThemeSignature;
+    perfLabRuntime.compositionAuditThemeRevisions.push({
+      barIndex,
+      stepIndex: Math.max(0, Math.trunc(Number(stepIndexLike) || 0)),
+      signature: leadThemeSignature,
+      instrumentId: leadThemeInstrumentId,
+      steps: leadThemeSteps,
+      activeSteps: leadThemeSteps.filter(Boolean).length,
+      uniqueNotes: Array.from(new Set(
+        leadThemeSteps.flatMap((stepNotes) => String(stepNotes || '').split('+').filter(Boolean))
+      )),
+    });
+  }
   const bassSteps = getPlayerThemeRhythmSteps('bassDrive', WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH);
   const accentSteps = getPlayerThemeRhythmSteps('accentRhythm', WEAPON_TUNE_STEPS * WEAPON_TUNE_CHAIN_LENGTH);
   const contribution = musicContributionRuntime.current || null;

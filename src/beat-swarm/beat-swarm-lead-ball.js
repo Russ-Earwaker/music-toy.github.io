@@ -537,6 +537,12 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const arenaRadius = Math.max(1, Number(deps.getArenaRadius?.()) || 900);
     const currentDir = normalize(Number(ball.vx) || 1, Number(ball.vy) || 0, 1, 0);
     const recent = state.lastNotes.slice(-3);
+    const recentWindow = state.lastNotes.slice(-6);
+    const recentNoteCounts = recentWindow.reduce((counts, note) => {
+      if (note) counts.set(note, (counts.get(note) || 0) + 1);
+      return counts;
+    }, new Map());
+    const lastNote = recentWindow.length ? recentWindow[recentWindow.length - 1] : '';
     const repeatNote = recent.length >= 2 && recent.every((note) => note && note === recent[0]) ? recent[0] : '';
     const avoidNotes = getDestinationNotesForOtherBalls(ballActor);
     const claimedEnemyIds = getClaimedEnemyIds(ballActor);
@@ -557,7 +563,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       const outsidePreferredOctave = Math.max(0, Math.abs((Number(enemy.wy) || 0) - arenaCenter.y) - preferredOctaveHalfHeight);
       const octaveRangePenalty = outsidePreferredOctave * 6.5;
       const note = getEnemyNote(enemy);
-      const repeatPenalty = repeatNote && note === repeatNote ? 1200 : 0;
+      const recentNoteCount = note ? (recentNoteCounts.get(note) || 0) : 0;
+      const repeatPenalty = (note && note === lastNote ? 5200 : 0)
+        + (recentNoteCount * 1800)
+        + (repeatNote && note === repeatNote ? 3600 : 0);
       const otherBallNotePenalty = note && avoidNotes.has(note) ? 3800 : 0;
       const closePenalty = distance < 620
         ? (620 - distance) * 5.2
@@ -1000,6 +1009,12 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const arenaRadius = Math.max(1, Number(deps.getArenaRadius?.()) || 900);
     const enemies = getLiveEnemies();
     const claimedEnemyIds = getClaimedEnemyIds(ballActor);
+    const recentWindow = state.lastNotes.slice(-6);
+    const recentNoteCounts = recentWindow.reduce((counts, note) => {
+      if (note) counts.set(note, (counts.get(note) || 0) + 1);
+      return counts;
+    }, new Map());
+    const lastNote = recentWindow.length ? recentWindow[recentWindow.length - 1] : '';
     let best = null;
     let bestInfo = null;
     let bestScore = Infinity;
@@ -1015,11 +1030,14 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       if (info.t <= 0.08 || info.t >= 0.88) continue;
       if (info.distance > BALL_HOP_PATH_RADIUS) continue;
       const enemyWorld = enemyPoint(enemy);
+      const note = getEnemyNote(enemy);
+      const recentNoteCount = note ? (recentNoteCounts.get(note) || 0) : 0;
+      const noteDiversityPenalty = (note && note === lastNote ? 4200 : 0) + (recentNoteCount * 1400);
       const arenaDistance = Math.hypot(enemyWorld.x - arenaCenter.x, enemyWorld.y - arenaCenter.y);
       const arenaPenalty = Math.max(0, arenaDistance - Math.min(arenaRadius * 0.82, 820)) * 0.95;
       const usefulSideOffset = Math.min(180, info.distance);
       const progressPenalty = Math.abs(info.t - 0.42) * 520;
-      const score = progressPenalty + (info.distance * 1.45) + arenaPenalty - usefulSideOffset * 0.85;
+      const score = progressPenalty + (info.distance * 1.45) + arenaPenalty + noteDiversityPenalty - usefulSideOffset * 0.85;
       if (score < bestScore) {
         bestScore = score;
         best = enemy;

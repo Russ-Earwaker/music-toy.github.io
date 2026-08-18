@@ -5057,6 +5057,8 @@ async function saveMusicLabSessionToResourcesGlobal({
       const executedByStep = new Map();
       const executedByBar = new Map();
       const laneEventCounts = Object.create(null);
+      const musicalityLaneRuntime = new Map();
+      const leadPhraseRuntime = new Map();
       let playerWeaponEventCount = 0;
       let reducedPlayerWeaponEventCount = 0;
       let minimumPlayerWeaponVolumeMult = 1;
@@ -5105,6 +5107,83 @@ async function saveMusicLabSessionToResourcesGlobal({
           const notes = Array.isArray(barBucket.notesByLane[laneId]) ? barBucket.notesByLane[laneId] : [];
           notes.push(resolvedNote);
           barBucket.notesByLane[laneId] = notes;
+
+          const laneMusic = musicalityLaneRuntime.get(laneId) || {
+            laneId,
+            eventCount: 0,
+            noteCounts: Object.create(null),
+            actionCounts: Object.create(null),
+            interpretationCounts: Object.create(null),
+            onsetGapCounts: Object.create(null),
+            sameNoteTransitions: 0,
+            transitionCount: 0,
+            rawNoteComparisonCount: 0,
+            rawNoteExactMatchCount: 0,
+            previousNote: '',
+            previousStep: -1,
+            runNote: '',
+            runLength: 0,
+            runStartStep: -1,
+            repeatedRuns: [],
+          };
+          const interpretationMode = String(event?.leadThemeInterpretationMode || '').trim().toLowerCase() || 'unclassified';
+          const rawLeadNote = String(event?.leadThemeRawNote || '').trim();
+          laneMusic.eventCount += 1;
+          laneMusic.noteCounts[resolvedNote] = (laneMusic.noteCounts[resolvedNote] || 0) + 1;
+          laneMusic.actionCounts[actionType] = (laneMusic.actionCounts[actionType] || 0) + 1;
+          laneMusic.interpretationCounts[interpretationMode] = (laneMusic.interpretationCounts[interpretationMode] || 0) + 1;
+          if (laneMusic.previousNote) {
+            laneMusic.transitionCount += 1;
+            if (laneMusic.previousNote === resolvedNote) laneMusic.sameNoteTransitions += 1;
+          }
+          if (laneMusic.previousStep >= 0) {
+            const onsetGap = Math.max(0, stepIndex - laneMusic.previousStep);
+            laneMusic.onsetGapCounts[onsetGap] = (laneMusic.onsetGapCounts[onsetGap] || 0) + 1;
+          }
+          if (rawLeadNote) {
+            laneMusic.rawNoteComparisonCount += 1;
+            if (rawLeadNote === resolvedNote) laneMusic.rawNoteExactMatchCount += 1;
+          }
+          if (laneMusic.runNote === resolvedNote) {
+            laneMusic.runLength += 1;
+          } else {
+            if (laneMusic.runLength > 1) {
+              laneMusic.repeatedRuns.push({
+                note: laneMusic.runNote,
+                length: laneMusic.runLength,
+                startStep: laneMusic.runStartStep,
+                endStep: laneMusic.previousStep,
+              });
+            }
+            laneMusic.runNote = resolvedNote;
+            laneMusic.runLength = 1;
+            laneMusic.runStartStep = stepIndex;
+          }
+          laneMusic.previousNote = resolvedNote;
+          laneMusic.previousStep = stepIndex;
+          musicalityLaneRuntime.set(laneId, laneMusic);
+
+          if (laneId === 'primary_loop_lane') {
+            const phraseIndex = Math.floor(barIndex / 4);
+            const phrase = leadPhraseRuntime.get(phraseIndex) || {
+              phraseIndex,
+              startBar: phraseIndex * 4,
+              endBar: (phraseIndex * 4) + 3,
+              steps: [],
+              notes: [],
+              rawNotes: [],
+              actions: [],
+              interpretationModes: [],
+              audioGains: [],
+            };
+            phrase.steps.push(stepIndex);
+            phrase.notes.push(resolvedNote);
+            phrase.rawNotes.push(rawLeadNote);
+            phrase.actions.push(actionType);
+            phrase.interpretationModes.push(interpretationMode);
+            phrase.audioGains.push(Number.isFinite(Number(event?.audioGain)) ? Number(event.audioGain) : null);
+            leadPhraseRuntime.set(phraseIndex, phrase);
+          }
         }
         const actions = Array.isArray(barBucket.actionsByLane[laneId]) ? barBucket.actionsByLane[laneId] : [];
         actions.push(actionType);
@@ -5112,6 +5191,53 @@ async function saveMusicLabSessionToResourcesGlobal({
         executedByBar.set(barIndex, barBucket);
       }
       const concurrencySteps = Array.from(executedByStep.values()).sort((a, b) => a.stepIndex - b.stepIndex);
+      const musicalityLanes = Array.from(musicalityLaneRuntime.values()).map((lane) => {
+        if (lane.runLength > 1) {
+          lane.repeatedRuns.push({
+            note: lane.runNote,
+            length: lane.runLength,
+            startStep: lane.runStartStep,
+            endStep: lane.previousStep,
+          });
+        }
+        return {
+          laneId: lane.laneId,
+          eventCount: lane.eventCount,
+          uniqueNoteCount: Object.keys(lane.noteCounts).length,
+          noteCounts: lane.noteCounts,
+          actionCounts: lane.actionCounts,
+          interpretationCounts: lane.interpretationCounts,
+          onsetGapCounts: lane.onsetGapCounts,
+          sameNoteTransitions: lane.sameNoteTransitions,
+          sameNoteTransitionRate: lane.transitionCount > 0 ? lane.sameNoteTransitions / lane.transitionCount : 0,
+          rawNoteComparisonCount: lane.rawNoteComparisonCount,
+          rawNoteExactMatchCount: lane.rawNoteExactMatchCount,
+          rawNoteExactMatchRate: lane.rawNoteComparisonCount > 0
+            ? lane.rawNoteExactMatchCount / lane.rawNoteComparisonCount
+            : null,
+          longestRepeatedRuns: lane.repeatedRuns
+            .slice()
+            .sort((a, b) => b.length - a.length || a.startStep - b.startStep)
+            .slice(0, 12),
+        };
+      });
+      const leadPhrases = Array.from(leadPhraseRuntime.values()).map((phrase) => {
+        let repeatedTransitions = 0;
+        for (let noteIndex = 1; noteIndex < phrase.notes.length; noteIndex += 1) {
+          if (phrase.notes[noteIndex] === phrase.notes[noteIndex - 1]) repeatedTransitions += 1;
+        }
+        return {
+          ...phrase,
+          uniqueNoteCount: Array.from(new Set(phrase.notes)).length,
+          sameNoteTransitionRate: phrase.notes.length > 1
+            ? repeatedTransitions / (phrase.notes.length - 1)
+            : 0,
+        };
+      });
+      compositionAudit.musicality = {
+        lanes: musicalityLanes,
+        leadPhrases,
+      };
       const counts = concurrencySteps.map((entry) => entry.count).sort((a, b) => a - b);
       compositionAudit.playbackConcurrency = {
         audibleStepCount: counts.length,
