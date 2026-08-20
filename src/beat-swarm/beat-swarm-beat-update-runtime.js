@@ -246,6 +246,7 @@ export function handleBeatStepChangeRuntime(options = null) {
           centerWorld,
           suppressPlayerWeapon: state.suppressPlayerWeapon === true,
           weaponGatePlaybackActive: state.weaponGatePlaybackActive === true,
+          literalLeadPlaybackActive: state.literalLeadPlaybackActive === true,
           suppressDirectorMusic: state.suppressDirectorMusic === true,
           preserveAuthoredAccentContinuity: state.preserveAuthoredAccentContinuity === true,
           auditLeadBallAccentContinuity: state.auditLeadBallAccentContinuity === true,

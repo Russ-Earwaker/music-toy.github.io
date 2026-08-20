@@ -455,92 +455,9 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
-        ${btn('musicLabRunDualMusicalFormationDebug', 'Run Laser Clap + Gunner Kick (1x75s)', 'primary')}
         ${btn('musicLabRunOnboardingCompositionAudit', 'Run Autopilot Composition Audit (1x240s)', 'primary')}
-        ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Production Onboarding Flow (1x300s)', 'primary')}
-        ${btn('musicLabRunGunnerPercussionFormationDebug', 'Run Gunner Percussion Formation (1x60s)', 'primary')}
-        ${btn('musicLabRunTrackedLaserMotifsDebug', 'Run Arena-Tracked Laser Motifs (1x75s)', 'primary')}
-        ${btn('musicLabRunSymmetricLaserGroupDebug', 'Run Symmetric Laser Group (1x45s)', 'primary')}
-        ${btn('musicLabRunLaserVariantsDebug', 'Run Laser Variants (1x60s)', 'primary')}
-        ${btn('musicLabRunShapeCasterSeekerCombinationDebug', 'Run Shape Caster + Seeker (1x45s)', 'primary')}
-        ${btn('musicLabRunShapeCasterGunnerCombinationDebug', 'Run Shape Caster + Gunners (1x45s)', 'primary')}
-        ${btn('musicLabRunConductorCombatDebug', 'Run Conductor Profiles (1x60s)', 'primary')}
-        ${btn('musicLabRunChargerCombatDebug', 'Run Charger Profiles (1x60s)', 'primary')}
-        ${btn('musicLabRunShapeCasterCombatDebug', 'Run Shape Caster Profiles (1x60s)', 'primary')}
-        ${btn('musicLabRunLaserSpinnerCombatDebug', 'Run Laser Spinner Profiles (1x60s)', 'primary')}
-        ${btn('musicLabRunSeekerCombatDebug', 'Run Seeker Combat Profiles (1x60s)', 'primary')}
-        ${btn('musicLabRunGunnerCombatDebug', 'Run Gunner Combat Profiles (1x60s)', 'primary')}
-        ${btn('musicLabRunBS0S3GateToLeadGatesDebug', 'Run Gate -> Lead Gates (1x60s)', 'primary')}
-        ${btn('musicLabRunBS0S3GateToLeadBallDebug', 'Run Gate -> Lead Ball (1x60s)', 'primary')}
-        ${btn('musicLabRunBS0S3GateStartTapOrbDebug', 'Run Gate + Incremental Contributions (1x180s)', 'primary')}
-        ${btn('musicLabRunBS0S3MusicMissileBassRewriteDebug', 'Test Reuse Matrix: Missiles/Tap Orbs -> Bass/Accent (1x360s)', 'primary')}
-        ${btn('musicLabRunBS0S3PinballBouncerRewriteDebug', 'Pinball Bouncer Accent Rewrite (1x120s)', 'primary')}
+        ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Autopilot Production Onboarding Flow (1x300s)', 'primary')}
       </div>`,
-      `<details class="perf-lab-music-group">
-        <summary>Component Tests</summary>
-        <div class="perf-lab-music-group-body">
-          ${btn('musicLabRunBS0S3TapOrbFoundationDebug', 'Tap-Orb Foundation Commit (1x75s)', 'primary')}
-          ${btn('musicLabRunBS0S3AccentRewriteDebug', 'Accent Rewrite Tap Orbs (1x90s)', 'primary')}
-          ${btn('musicLabRunBS0S3MusicMissileRewriteDebug', 'Music Missile Accent Rewrite (1x120s)', 'primary')}
-          ${btn('weaponGateBeatSwarmStart', 'Start Beat Swarm Gate Sequence', 'primary')}
-          ${btn('weaponGateLabOpen', 'Open Weapon Gate Prototype', 'primary')}
-        </div>
-      </details>`,
-      `<details class="perf-lab-music-group">
-        <summary>Composition and Pacing</summary>
-        <div class="perf-lab-music-group-body">
-          ${btn('musicLabRunBS0S3Arrangement5m', 'Arrangement Musicality (1x5m)', 'primary')}
-          ${btn('musicLabRunBS0S3CompositionFlow4m', 'Composition Full Flow (1x4m)', 'primary')}
-          ${btn('musicLabRunBS0S3CompositionPacing4m', 'Composition Pacing Flow (1x4m)', 'primary')}
-          ${btn('musicLabRunBS0S3IntensityRamp150s', 'Intensity Ramp (1x150s)', 'primary')}
-          ${btn('musicLabRunBS0S3IntensityRampDebug150s', 'Intensity Ramp Debug (1x150s)', 'primary')}
-        </div>
-      </details>`,
-      `<details class="perf-lab-music-group">
-        <summary>Intensity Listening Tests</summary>
-        <div class="perf-lab-music-group-body">
-          ${btn('musicLabRunBS0S3ListenSilent', 'Silent / Weapon Only (90s)', 'primary')}
-          ${btn('musicLabRunBS0S3ListenLow', 'Low Intensity (90s)', 'primary')}
-          ${btn('musicLabRunBS0S3ListenMedium', 'Medium Intensity (90s)', 'primary')}
-          ${btn('musicLabRunBS0S3ListenBuild', 'Build Intensity (90s)', 'primary')}
-          ${btn('musicLabRunBS0S3ListenPeak', 'Peak Intensity (90s)', 'primary')}
-          ${btn('musicLabRunBS0S3ListenRelease', 'Peak to Release to Settle (60s)', 'primary')}
-          ${btn('musicLabRunBS0S3ListenReleaseOnly', 'Release Only / No Intro (60s)', 'primary')}
-          ${btn('musicLabRunBS0S3ListenSettle', 'Settle Intensity (90s)', 'primary')}
-        </div>
-      </details>`,
-      `<details class="perf-lab-music-group">
-        <summary>Enemy Spawn Diagnostics</summary>
-        <div class="perf-lab-music-group-body">
-          <label class="perf-lab-toggle">Repeat enemy
-            <select class="perf-lab-select" data-music-spawn-type>
-              <option value="drawsnake">DrawSnake</option><option value="spawner">Spawner</option><option value="dumb">Dumb</option>
-              <option value="composer-group-member">Composer Enemy</option><option value="group">Composer Group</option>
-            </select>
-          </label>
-          <label class="perf-lab-toggle">Behavior
-            <select class="perf-lab-select" data-music-spawn-behavior>
-              <option value="none">None</option><option value="beat_bounce_event">Beat Bounce Event</option>
-              <option value="winding_chain">Winding Chain</option><option value="paired_dance">Paired Dance</option><option value="advancing_line">Advancing Line</option>
-            </select>
-          </label>
-          <label class="perf-lab-toggle">Group size
-            <select class="perf-lab-select" data-music-group-count>
-              <option value="4">4</option><option value="6">6</option><option value="8" selected>8</option><option value="10">10</option><option value="12">12</option>
-            </select>
-          </label>
-          <label class="perf-lab-toggle">Speed
-            <select class="perf-lab-select" data-music-speed-scale>
-              <option value="0.8">0.8x</option><option value="1" selected>1.0x</option><option value="1.25">1.25x</option>
-              <option value="1.5">1.5x</option><option value="1.8">1.8x</option><option value="2.2">2.2x</option>
-            </select>
-          </label>
-          <label class="perf-lab-toggle"><input type="checkbox" data-music-repeat-persistent checked /> Repeat enemy stays alive</label>
-          ${btn('musicEnemyRepeatStart', 'Start Repeat Spawn', 'primary')}
-          ${btn('musicEnemyRepeatTimedDebug', 'Timed Debug Run (20s)', 'primary')}
-          ${btn('musicEnemyRepeatStop', 'Stop Repeat Spawn')}
-        </div>
-      </details>`,
       `<details class="perf-lab-music-group">
         <summary>Session and Export</summary>
         <div class="perf-lab-music-group-body">
@@ -8093,7 +8010,7 @@ async function runDirectorFormationIntensityFlowDebug() {
     publishPerfArtifacts: false,
     saveRunIdBase: 'musicLab_production_onboarding_flow_1x300s',
     saveNotes: [
-      'Full first-level music onboarding into the director musical-formation intensity flow.',
+      'Autopilot run of the full first-level music onboarding into the director musical-formation intensity flow.',
       'The player authors the weapon in the gate corridor, Bass Drive with rocket pickups, Accent Rhythm with bouncers, and Lead Theme with the lead ball.',
       'Only after every contribution commits does the production pacing loop begin at Low and enable musical enemy formations.',
       'Build and Peak may request another interaction when a player-authored lane remains below their desired density; motifs are never silently populated.',
@@ -8109,7 +8026,11 @@ async function runDirectorFormationIntensityFlowDebug() {
     statusPrefix: 'Running production onboarding flow',
     async setupAfterPrepare() {
       const modeApi = window.BeatSwarmMode;
-      if (!modeApi || typeof modeApi.armDirectorFormationFlowAfterOnboarding !== 'function') {
+      if (
+        !modeApi
+        || typeof modeApi.armDirectorFormationFlowAfterOnboarding !== 'function'
+        || typeof modeApi.setPerfCompositionAuditAutoControl !== 'function'
+      ) {
         throw new Error('director_musical_formation_layer_api_unavailable');
       }
       try { modeApi.exit?.(); } catch {}
@@ -8117,9 +8038,15 @@ async function runDirectorFormationIntensityFlowDebug() {
       try { modeApi.enter?.({ weaponGateIntro: true, weaponGateSequence: 'missiles_bouncers' }); } catch (err) {
         throw new Error(`formation_onboarding_start_failed:${String(err?.message || err)}`);
       }
-      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      modeApi.setPerfCompositionAuditAutoControl(true);
       const snapshot = modeApi.armDirectorFormationFlowAfterOnboarding();
-      try { window.__BEAT_SWARM_DIRECTOR_FORMATION_FLOW_TEST = { ...snapshot, onboarding: true }; } catch {}
+      try {
+        window.__BEAT_SWARM_DIRECTOR_FORMATION_FLOW_TEST = {
+          ...snapshot,
+          onboarding: true,
+          autopilot: true,
+        };
+      } catch {}
     },
     traceCapture: {
       enabled: true,

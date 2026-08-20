@@ -32,6 +32,10 @@ export function executePerformedBeatEventRuntime(options = null) {
   const beatIndex = Math.max(0, Math.trunc(Number(ev.beatIndex) || 0));
   const stepIndex = Math.max(0, Math.trunc(Number(ev.stepIndex) || 0));
   const barIndex = Math.floor(beatIndex / Math.max(1, Math.trunc(Number(constants.composerBeatsPerBar) || 4)));
+  const eventTargetAudioTime = (() => {
+    const target = Number(helpers.getEventTargetAudioTime?.(beatIndex, stepIndex));
+    return Number.isFinite(target) ? target : undefined;
+  })();
   const playerStepLikelyAudible = helpers.isPlayerWeaponStepLikelyAudible?.(stepIndex) === true;
   const actionClassification = classifyBeatSwarmPerformedAction(ev, ev?.payload || null);
   const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
@@ -820,7 +824,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     if (shouldTriggerGroupAudio) {
       withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.spawner.audioTrigger', () => {
         try {
-          helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume);
+          helpers.triggerInstrument?.(instrumentId, noteName, eventTargetAudioTime, 'master', {}, triggerVolume);
           audioTriggered = true;
           group.lastAudioDedupKey = audioDedupKey;
           if (
@@ -1042,7 +1046,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     });
     if (enemyAudible) {
       withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.audioTrigger', () => {
-        try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
+        try { helpers.triggerInstrument?.(instrumentId, noteName, eventTargetAudioTime, 'master', {}, triggerVolume); } catch {}
       });
     }
     let nodeIndex = 0;
@@ -1095,7 +1099,7 @@ export function executePerformedBeatEventRuntime(options = null) {
         helpers.triggerInstrument?.(
           instrumentId,
           noteName,
-          undefined,
+          eventTargetAudioTime,
           'master',
           { source: settleEcho ? 'beat-swarm-settle-lead-echo' : 'beat-swarm-release-lead-echo', preserveRequestedNote: true, stepIndex },
           triggerVolume
@@ -1161,7 +1165,7 @@ export function executePerformedBeatEventRuntime(options = null) {
         helpers.triggerInstrument?.(
           instrumentId,
           noteName,
-          undefined,
+          eventTargetAudioTime,
           'master',
           {
             source: literalAuthoringReplay
@@ -1461,7 +1465,7 @@ export function executePerformedBeatEventRuntime(options = null) {
       }
     }
     if (enemyAudible) {
-      try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
+      try { helpers.triggerInstrument?.(instrumentId, noteName, eventTargetAudioTime, 'master', {}, triggerVolume); } catch {}
       if (enemy) {
         enemy.lastMusicalActionBeatIndex = beatIndex;
         enemy.lastMusicalActionStepIndex = stepIndex;
@@ -1675,7 +1679,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     noteExecutedInstrumentChange(instrumentId, enemy, group);
     helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
     if (enemyAudible && prominenceGain > 0) {
-      try { helpers.triggerInstrument?.(instrumentId, noteName, undefined, 'master', {}, triggerVolume); } catch {}
+      try { helpers.triggerInstrument?.(instrumentId, noteName, eventTargetAudioTime, 'master', {}, triggerVolume); } catch {}
     }
     logMusicLabExecution({
       sourceSystem: String(ev?.sourceSystem || ev?.payload?.sourceSystem || 'group').trim().toLowerCase() || 'group',

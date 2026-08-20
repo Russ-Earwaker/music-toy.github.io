@@ -47,6 +47,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     : null;
   const suppressDirectorMusic = state.suppressDirectorMusic === true;
   const weaponGatePlaybackActive = state.weaponGatePlaybackActive === true;
+  const literalLeadPlaybackActive = state.literalLeadPlaybackActive === true;
   const preserveAuthoredAccentContinuity = state.preserveAuthoredAccentContinuity === true;
   const auditLeadBallAccentContinuity = state.auditLeadBallAccentContinuity === true;
   const suppressedMusicLaneIds = state.suppressedMusicLaneIds instanceof Set
@@ -1158,8 +1159,6 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       const leadThemeStep = helpers.getPlayerLeadThemePrimaryStep(barIndex, stepIndex, currentEnemyMusicActionGateState.stage);
       if (leadThemeStep && typeof leadThemeStep === 'object') {
         const leadThemeStepActive = leadThemeStep.active === true;
-        const leadThemeLiteralRest = String(leadThemeStep.interpretationMode || '').trim().toLowerCase() === 'literal_statement'
-          && !leadThemeStepActive;
         const isLeadThemePrimaryTarget = (ev) => {
           if (!ev || typeof ev !== 'object') return false;
           const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
@@ -1176,7 +1175,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         };
         effectiveEnemyEvents = effectiveEnemyEvents
           .filter((ev) => {
-            return !(leadThemeLiteralRest && isLeadThemePrimaryTarget(ev));
+            // The player motif owns both its notes and rests. Director-shaped
+            // embellishments must be requested by getPlayerLeadThemePrimaryStep,
+            // rather than filling every empty slot with unrelated group notes.
+            return !(!leadThemeStepActive && isLeadThemePrimaryTarget(ev));
           })
           .map((ev) => {
             const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
@@ -1845,12 +1847,18 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       const role = String(ev?.role || payload.musicRole || '').trim().toLowerCase();
       const isFoundation = layer === 'foundation' || laneId === 'foundation_lane' || role === 'bass';
       const isPrimaryLoop = laneId === 'primary_loop_lane' || role === 'lead';
+      const isProtectedPlayerLead = String(ev?.actionType || '').trim().toLowerCase() === 'player-lead-theme-direct'
+        && (
+          payload?.leadAuthoringLiteralReplay === true
+          || payload?.musicContributionLiteralProtected === true
+          || payload?.leadBallEmbellishmentRamp === true
+        );
       const isSecondaryLoop = laneId === 'secondary_loop_lane'
         || voiceKey === 'percussion_backbeat'
         || voiceKey === 'counter_rhythm'
         || role === 'accent';
       if (!isFoundation) {
-        if (isPrimaryLoop) return false;
+        if (isPrimaryLoop) return isProtectedPlayerLead;
         if (isSecondaryLoop) {
           if (releaseSectionBar === 0) return localReleaseStep === 2 || localReleaseStep === 6;
           if (releaseSectionBar < 3) return localReleaseStep === 4;
@@ -2126,9 +2134,10 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const peakDirectAnswer = currentEnemyMusicActionGateState.stage === 'peak';
     const directOrnamentPreview = peakDirectAnswer || buildSparklePreviewCue;
     if (!directOrnamentPreview && !(sparkleActorId > 0 || sparkleGroupId > 0 || primaryLoopLaneActive || secondaryLoopLaneActive)) return null;
-    const sparkleNote = sparkleStepMod8 === 6 ? 'A4' : 'D5';
+    const sparkleNote = sparkleStepMod8 === 6 ? 'G4' : 'C4';
     const sparkleInstrumentId = String(
-      primaryLoopLaneRuntime?.instrumentId
+      helpers.getPlayerDrawgridThemeInstrumentId?.('leadTheme')
+        || primaryLoopLaneRuntime?.instrumentId
         || secondaryLoopLaneRuntime?.instrumentId
         || helpers.getIdForDisplayName?.('Digital Synth Lead Short')
         || helpers.getIdForDisplayName?.('DIGITAL SYNTH LEAD SHORT')
@@ -2303,6 +2312,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const explicitPlayerLeadThemeEvent = (() => {
     if (suppressDirectorMusic) return null;
     if (isLaneSuppressed('primary_loop_lane')) return null;
+    if (literalLeadPlaybackActive) return null;
     if (typeof helpers.isLeadThemeLiteralProtectionActive === 'function'
       && helpers.isLeadThemeLiteralProtectionActive()) return null;
     if ((typeof helpers.isBeatSwarmLeadGateAuthoringOnlyTest === 'function'

@@ -3899,8 +3899,19 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     });
   });
   withPerfSample('maintainComposerGroups.syncMembers', () => {
+    const syncStride = Math.max(1, Math.trunc(Number(constants.composerBeatsPerBar) || 4));
+    const syncSlot = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)) % syncStride;
+    let activeGroupOrdinal = 0;
     for (const group of composerEnemyGroups) {
       if (!group || group.retiring || group.active === false) continue;
+      const groupMemberCount = group?.memberIds instanceof Set
+        ? group.memberIds.size
+        : (Array.isArray(group?.memberIds) ? group.memberIds.length : 0);
+      const needsImmediateSync = !String(group?.__bsComposerMemberSyncSignature || '')
+        || Math.trunc(Number(group?.__bsComposerMemberSyncCount) || 0) !== Math.max(0, Math.trunc(Number(groupMemberCount) || 0));
+      const scheduledThisBeat = (activeGroupOrdinal % syncStride) === syncSlot;
+      activeGroupOrdinal += 1;
+      if (!needsImmediateSync && !scheduledThisBeat) continue;
       enforceLevel1NoSparkleOnGroup(group);
       const introPercussionCarrier = group?.introPercussionCarrier === true;
       const soloCarrierType = String(group?.soloCarrierType || '').trim().toLowerCase();
@@ -4476,9 +4487,6 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       const effectiveInstrumentId = String(group?.musicLaneInstrumentId || group?.instrumentId || '').trim();
       const effectiveContinuityId = String(group?.musicLaneContinuityId || group?.continuityId || '').trim();
       const effectivePhraseId = String(group?.musicLanePhraseId || group?.motif?.id || '');
-      const groupMemberCount = group?.memberIds instanceof Set
-        ? group.memberIds.size
-        : (Array.isArray(group?.memberIds) ? group.memberIds.length : 0);
       const groupSyncSignature = [
         String(effectiveRole || ''),
         effectiveLayer,
