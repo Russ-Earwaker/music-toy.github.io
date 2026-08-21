@@ -24,7 +24,6 @@ const PERF_LIGHTWEIGHT_SYSTEM_EVENT_DROP_TYPES = new Set([
   'music_primary_lead_snapshot',
   'music_step_arbitration',
   'music_primary_loop_lane_emitted',
-  'music_mode_state',
   'music_intro_debug',
   'music_rhythm_tier_selected',
   'music_composer_execution_stage',
@@ -897,6 +896,7 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     canonicalLeadGroupId: clampInt(payload?.canonicalLeadGroupId, 0, 0),
     canonicalLeadContinuityId: String(payload?.canonicalLeadContinuityId || '').trim(),
     canonicalLeadInstrumentId: String(payload?.canonicalLeadInstrumentId || '').trim(),
+    canonicalPlayerLeadIdentityActive: payload?.canonicalPlayerLeadIdentityActive === true,
     introStage: String(payload?.introStage || '').trim().toLowerCase(),
     targetPressure: Number(payload?.targetPressure) || 0,
     targetAliveMin: clampInt(payload?.targetAliveMin, 0, 0),
@@ -4891,6 +4891,12 @@ function collectMusicalityTargets(session, maxBarIndex) {
       String(e?.eventType || '').trim().toLowerCase() === 'music_mode_state'
       && clampInt(e?.barIndex, 0, 0) <= maxBarIndex
     ));
+  const canonicalPlayerLeadStartIndex = leadAuthorityLogs.findIndex((log) => (
+    log?.canonicalPlayerLeadIdentityActive === true
+  ));
+  const effectiveLeadAuthorityLogs = canonicalPlayerLeadStartIndex >= 0
+    ? leadAuthorityLogs.slice(canonicalPlayerLeadStartIndex)
+    : leadAuthorityLogs;
   let authorityStepsAnalyzed = 0;
   let authorityActiveSteps = 0;
   let authorityGroupSwitches = 0;
@@ -4905,10 +4911,15 @@ function collectMusicalityTargets(session, maxBarIndex) {
   let lastAuthorityGroupId = 0;
   let lastAuthorityContinuityId = '';
   let lastAuthorityInstrumentId = '';
-  for (const log of leadAuthorityLogs) {
+  for (const log of effectiveLeadAuthorityLogs) {
     authorityStepsAnalyzed += 1;
-    const groupId = Math.max(0, clampInt(log?.canonicalLeadGroupId, 0, 0));
-    const continuityId = String(log?.canonicalLeadContinuityId || '').trim();
+    const canonicalPlayerLeadIdentityActive = log?.canonicalPlayerLeadIdentityActive === true;
+    const groupId = canonicalPlayerLeadIdentityActive
+      ? 1
+      : Math.max(0, clampInt(log?.canonicalLeadGroupId, 0, 0));
+    const continuityId = canonicalPlayerLeadIdentityActive
+      ? (String(log?.canonicalLeadContinuityId || '').trim() || 'player-lead-theme-direct')
+      : String(log?.canonicalLeadContinuityId || '').trim();
     const instrumentId = String(log?.canonicalLeadInstrumentId || '').trim();
     const authorityActive = groupId > 0 || !!continuityId || !!instrumentId;
     if (authorityActive) authorityActiveSteps += 1;
@@ -6839,6 +6850,7 @@ export function createBeatSwarmMusicLab(options = null) {
   let sessionSeq = 1;
   let session = null;
   let lastMetricsBar = -1;
+  let lastLightweightMusicModeBeatKey = '';
 
   function ensureSession(context = null) {
     if (session) return session;
@@ -6919,6 +6931,7 @@ export function createBeatSwarmMusicLab(options = null) {
   function resetSession(context = null) {
     session = null;
     lastMetricsBar = -1;
+    lastLightweightMusicModeBeatKey = '';
     return ensureSession(context);
   }
 
@@ -7028,6 +7041,11 @@ export function createBeatSwarmMusicLab(options = null) {
     if (!enabled) return null;
     const type = String(eventType || '').trim().toLowerCase();
     if (lightweightSystemEventsEnabled && PERF_LIGHTWEIGHT_SYSTEM_EVENT_DROP_TYPES.has(type)) return null;
+    if (lightweightSystemEventsEnabled && type === 'music_mode_state') {
+      const beatKey = `${clampInt(context?.barIndex, 0, 0)}:${clampInt(context?.beatIndex, 0, 0)}`;
+      if (beatKey === lastLightweightMusicModeBeatKey) return null;
+      lastLightweightMusicModeBeatKey = beatKey;
+    }
     const s = ensureSession(context);
     const rec = makeSystemEventRecord(type, payload, context || {}, beatsPerBar);
     if (!rec.eventType) return null;
