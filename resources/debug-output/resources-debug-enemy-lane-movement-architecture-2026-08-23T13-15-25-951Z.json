@@ -1,0 +1,213 @@
+{
+  "ok": true,
+  "createdAt": "2026-08-23T13:15:25.937Z",
+  "durationMs": 70000,
+  "initial": {
+    "ok": true,
+    "enabled": true,
+    "enemyType": "group",
+    "behavior": "none",
+    "targetCount": 4,
+    "groupCount": 4,
+    "speedScale": 1.35,
+    "persistent": true,
+    "active": true,
+    "groupId": 1,
+    "enemyIds": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "smallEnemyIds": [
+      1,
+      2,
+      3
+    ],
+    "largeEnemyId": 4,
+    "eliteEnemyIds": [
+      5,
+      6
+    ],
+    "eliteBudgetChecks": {
+      "allowed": {
+        "allowed": true,
+        "energyState": "build",
+        "candidateKind": "gunner_snare",
+        "candidateMembers": 2,
+        "reasons": [],
+        "currentUsage": {
+          "threat": 0,
+          "visual": 0,
+          "additive": 0
+        },
+        "candidateCost": {
+          "threat": 0.185,
+          "visual": 0.19,
+          "additive": 0.19
+        },
+        "projected": {
+          "threat": 0.185,
+          "visual": 0.19,
+          "additive": 0.19,
+          "groups": 1,
+          "members": 2
+        },
+        "limits": {
+          "threat": 0.7919999999999999,
+          "visual": 0.7,
+          "additive": 0.68,
+          "maxGroups": 2
+        }
+      },
+      "blocked": {
+        "allowed": false,
+        "energyState": "medium",
+        "candidateKind": "laser_lead",
+        "candidateMembers": 4,
+        "reasons": [
+          "visual_group_cap",
+          "visual_complexity_budget",
+          "additive_density_budget"
+        ],
+        "currentUsage": {
+          "threat": 0.21,
+          "visual": 0.24000000000000002,
+          "additive": 0.2
+        },
+        "candidateCost": {
+          "threat": 0.28500000000000003,
+          "visual": 0.33,
+          "additive": 0.3
+        },
+        "projected": {
+          "threat": 0.495,
+          "visual": 0.5700000000000001,
+          "additive": 0.5,
+          "groups": 2,
+          "members": 6
+        },
+        "limits": {
+          "threat": 0.528,
+          "visual": 0.46,
+          "additive": 0.42,
+          "maxGroups": 1
+        }
+      }
+    }
+  },
+  "result": {
+    "active": true,
+    "groupId": 1,
+    "largeEnemyId": 4,
+    "eventCount": 80,
+    "largeEventCount": 80,
+    "largeCoverage": 1,
+    "smallEventCounts": {
+      "1": 28,
+      "2": 26,
+      "3": 26
+    },
+    "lastPerformerIds": [
+      4,
+      1
+    ],
+    "movementPhase": 3,
+    "eliteEnemyIds": [
+      5,
+      6
+    ],
+    "eliteAliveEnemyIds": [
+      5,
+      6
+    ],
+    "eliteBudgetChecks": {
+      "allowed": {
+        "allowed": true,
+        "energyState": "build",
+        "candidateKind": "gunner_snare",
+        "candidateMembers": 2,
+        "reasons": [],
+        "currentUsage": {
+          "threat": 0,
+          "visual": 0,
+          "additive": 0
+        },
+        "candidateCost": {
+          "threat": 0.185,
+          "visual": 0.19,
+          "additive": 0.19
+        },
+        "projected": {
+          "threat": 0.185,
+          "visual": 0.19,
+          "additive": 0.19,
+          "groups": 1,
+          "members": 2
+        },
+        "limits": {
+          "threat": 0.7919999999999999,
+          "visual": 0.7,
+          "additive": 0.68,
+          "maxGroups": 2
+        }
+      },
+      "blocked": {
+        "allowed": false,
+        "energyState": "medium",
+        "candidateKind": "laser_lead",
+        "candidateMembers": 4,
+        "reasons": [
+          "visual_group_cap",
+          "visual_complexity_budget",
+          "additive_density_budget"
+        ],
+        "currentUsage": {
+          "threat": 0.21,
+          "visual": 0.24000000000000002,
+          "additive": 0.2
+        },
+        "candidateCost": {
+          "threat": 0.28500000000000003,
+          "visual": 0.33,
+          "additive": 0.3
+        },
+        "projected": {
+          "threat": 0.495,
+          "visual": 0.5700000000000001,
+          "additive": 0.5,
+          "groups": 2,
+          "members": 6
+        },
+        "limits": {
+          "threat": 0.528,
+          "visual": 0.46,
+          "additive": 0.42,
+          "maxGroups": 1
+        }
+      }
+    }
+  },
+  "assertions": {
+    "basicEnemyCount": true,
+    "eliteSpawned": true,
+    "allowedBudgetPassed": true,
+    "blockedBudgetPassed": true,
+    "blockedForDensity": true,
+    "eliteSurvived": true
+  },
+  "assertionsPassed": true,
+  "traceStart": {
+    "ok": true,
+    "started": null
+  },
+  "traceCapture": {
+    "ok": false,
+    "reason": "trace_capture_empty",
+    "fileName": "resources-debug-enemy-lane-movement-architecture.txt",
+    "stopped": {
+      "enabled": false,
+      "count": 0
+    }
+  }
+}

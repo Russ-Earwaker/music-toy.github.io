@@ -81,6 +81,7 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   projectile.orbitRadius = 0;
   projectile.chainWeaponSlotIndex = null;
   projectile.chainStageIndex = null;
+  projectile.chainContext = null;
   projectile.nextStages = Array.isArray(projectile.nextStages) ? projectile.nextStages : [];
   projectile.nextStages.length = 0;
   projectile.nextBeatIndex = null;

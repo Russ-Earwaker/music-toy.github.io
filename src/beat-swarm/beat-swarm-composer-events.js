@@ -1,4 +1,5 @@
 import { normalizeCallResponseLane, chooseResponseNoteFromPool } from './beat-swarm-groups.js';
+import { selectBeatSwarmLaneEventPerformers } from './beat-swarm-enemy-descriptor.js';
 
 function normalizeLifecycleState(value, fallback = 'active') {
   const raw = String(value || '').trim().toLowerCase();
@@ -177,35 +178,6 @@ export function chooseComposerGroupEnemyForNote(options = null) {
   return picked;
 }
 
-function sortComposerGroupCandidatesByVisibilityAndRecency(members = [], isEnemyLikelyOnScreen = null) {
-  const visibleFn = typeof isEnemyLikelyOnScreen === 'function'
-    ? isEnemyLikelyOnScreen
-    : (() => false);
-  return members.slice().sort((a, b) => {
-    const aOn = visibleFn(a) ? 1 : 0;
-    const bOn = visibleFn(b) ? 1 : 0;
-    if (aOn !== bOn) return bOn - aOn;
-    const aPulse = Math.max(
-      0,
-      Number(a?.composerActionPulseT) || 0,
-      Number(a?.musicRolePulseT) || 0,
-    );
-    const bPulse = Math.max(
-      0,
-      Number(b?.composerActionPulseT) || 0,
-      Number(b?.musicRolePulseT) || 0,
-    );
-    if (aPulse !== bPulse) return aPulse - bPulse;
-    const aLastEmit = Math.max(-1000000, Math.trunc(Number(a?.__bsGroupLastEmitSequence) || -1000000));
-    const bLastEmit = Math.max(-1000000, Math.trunc(Number(b?.__bsGroupLastEmitSequence) || -1000000));
-    if (aLastEmit !== bLastEmit) return aLastEmit - bLastEmit;
-    const aIndex = Math.trunc(Number(a?.formationMemberIndex) || 0);
-    const bIndex = Math.trunc(Number(b?.formationMemberIndex) || 0);
-    if (aIndex !== bIndex) return aIndex - bIndex;
-    return Math.trunc(Number(a?.id) || 0) - Math.trunc(Number(b?.id) || 0);
-  });
-}
-
 export function collectComposerGroupStepBeatEvents(options = null) {
   const events = [];
   if (!options?.active || options?.gameplayPaused) return events;
@@ -237,9 +209,6 @@ export function collectComposerGroupStepBeatEvents(options = null) {
   const stepAbs = Math.max(0, stepIndex);
   const stepsPerBar = Math.max(1, Math.trunc(Number(constants.stepsPerBar) || 8));
   const step = ((stepIndex % stepsPerBar) + stepsPerBar) % stepsPerBar;
-  const performersMin = Math.max(1, Math.trunc(Number(constants.performersMin) || 1));
-  const performersMax = Math.max(performersMin, Math.trunc(Number(constants.performersMax) || 2));
-
   const activeGroups = composerEnemyGroups.filter((g) => g && g.active && !g.retiring);
   const activeAnswerOrnamentGroup = activeGroups.find((g) => {
     if (!g) return false;
@@ -642,7 +611,8 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       ? (introSlotProfileSourceType || group?.musicProfileSourceType)
       : group?.musicProfileSourceType) || '';
     const soloRhythmCarrier = soloCarrierType === 'rhythm';
-    const rhythmProfileCarrier = musicProfileSourceType === 'rhythm_lane'
+    const rhythmProfileCarrier = musicProfileSourceType === 'foundation_rhythm'
+      || musicProfileSourceType === 'rhythm_lane'
       || musicProfileSourceType === 'rhythm_lane_backbeat'
       || musicProfileSourceType === 'secondary_bridge_backbeat'
       || musicProfileSourceType === 'spawner_rhythm_pulse'
@@ -1341,18 +1311,6 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       noteResponseDiagnostic('lane_driven_primary_loop');
       continue;
     }
-    const explicitSoloGroup = isForcedSingleEmitterGroup(group, aliveMembers.length);
-    const configuredPerformerCount = Math.max(performersMin, Math.min(performersMax, Math.trunc(Number(group.performers) || 1)));
-    const groupedPerformerFloor = explicitSoloGroup
-      ? 1
-      : Math.min(2, Math.max(1, aliveMembers.length));
-    const performerCount = Math.max(
-      1,
-      Math.min(
-        aliveMembers.length || 1,
-        Math.max(groupedPerformerFloor, configuredPerformerCount)
-      )
-    );
     const foundationLaneSnapshot = getFoundationLaneSnapshot
       ? getFoundationLaneSnapshot(stepAbs, barIndex)
       : null;
@@ -1605,33 +1563,16 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       group.noteCursor = noteIdx + 1;
     }
 
-    const performers = [];
-    const usedEnemyIds = new Set();
-    const primary = chooseEnemyForNote({
-      group,
-      noteName: styledNoteName,
+    const performers = selectBeatSwarmLaneEventPerformers({
       aliveMembers,
-      normalizeNoteName: normalizeSwarmNoteName,
-      getFallbackNote: getRandomSwarmPentatonicNote,
+      chooseRoundRobin: (roundRobinMembers) => chooseEnemyForNote({
+        group,
+        noteName: styledNoteName,
+        aliveMembers: roundRobinMembers,
+        normalizeNoteName: normalizeSwarmNoteName,
+        getFallbackNote: getRandomSwarmPentatonicNote,
+      }),
     });
-    if (primary) {
-      performers.push(primary);
-      const primaryId = Math.trunc(Number(primary.id) || 0);
-      if (primaryId > 0) usedEnemyIds.add(primaryId);
-    }
-    while (performers.length < performerCount) {
-      const remaining = sortComposerGroupCandidatesByVisibilityAndRecency(
-        aliveMembers.filter((e) => !usedEnemyIds.has(Math.trunc(Number(e.id) || 0))),
-        isEnemyLikelyOnScreen,
-      );
-      if (!remaining.length) break;
-      const enemy = remaining[0] || null;
-      if (!enemy) continue;
-      const enemyId = Math.trunc(Number(enemy.id) || 0);
-      if (!(enemyId > 0) || usedEnemyIds.has(enemyId)) continue;
-      usedEnemyIds.add(enemyId);
-      performers.push(enemy);
-    }
     if (!performers.length) continue;
     noteIntroCollectorState('collector_emit_generic', {
       actorId: Math.max(0, Math.trunc(Number(performers[0]?.id) || 0)),

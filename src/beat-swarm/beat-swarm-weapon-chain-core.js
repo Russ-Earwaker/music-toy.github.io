@@ -55,6 +55,7 @@ export function spawnProjectileFromDirectionRuntime(options = null) {
     chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
     chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     chainDamageScale: Math.max(0.05, Number(chainContext?.damageScale) || 1),
+    chainContext: chainContext && typeof chainContext === 'object' ? { ...chainContext } : null,
     nextStages: helpers.sanitizeWeaponStages?.(nextStages) || [],
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
@@ -127,6 +128,7 @@ export function spawnBoomerangProjectileRuntime(options = null) {
     chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
     chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     chainDamageScale: Math.max(0.05, Number(chainContext?.damageScale) || 1),
+    chainContext: chainContext && typeof chainContext === 'object' ? { ...chainContext } : null,
     nextStages: helpers.sanitizeWeaponStages?.(nextStages) || [],
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
@@ -181,6 +183,7 @@ export function spawnHomingMissileRuntime(options = null) {
     chainWeaponSlotIndex: Number.isFinite(chainContext?.weaponSlotIndex) ? Math.trunc(chainContext.weaponSlotIndex) : null,
     chainStageIndex: Number.isFinite(chainContext?.stageIndex) ? Math.trunc(chainContext.stageIndex) : null,
     chainDamageScale: Math.max(0.05, Number(chainContext?.damageScale) || 1),
+    chainContext: chainContext && typeof chainContext === 'object' ? { ...chainContext } : null,
     nextStages: helpers.sanitizeWeaponStages?.(nextStages) || [],
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
@@ -253,7 +256,16 @@ export function queueWeaponChainRuntime(options = null) {
         Math.max(Number(context?.damageScale) || 0, Number(existingExplosionEvent.context?.damageScale) || 0.05)
       ),
       forcedNoteName: helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || existingExplosionEvent.context?.forcedNoteName || null,
+      directSound: context?.directSound === true || existingExplosionEvent.context?.directSound === true,
+      playerSoundVolumeMult: Math.max(0.1, Math.min(1, Number(context?.playerSoundVolumeMult ?? existingExplosionEvent.context?.playerSoundVolumeMult) || 1)),
     };
+    if (!existingExplosionEvent.context.preScheduledSound && existingExplosionEvent.context.directSound) {
+      existingExplosionEvent.context.preScheduledSound = helpers.schedulePendingWeaponChainSound?.({
+        stage: firstStage,
+        beatIndex: resolvedBeatIndex,
+        context: existingExplosionEvent.context,
+      }) || null;
+    }
     if (existingExplosionEvent?.eventId) helpers.removeExplosionPrimeEffectsForEvent?.(existingExplosionEvent.eventId);
     if (impactPoint) {
       const secondsUntilTrigger = helpers.getSecondsUntilQueuedChainBeat?.(resolvedBeatIndex) || 0;
@@ -273,6 +285,30 @@ export function queueWeaponChainRuntime(options = null) {
     return;
   }
   const eventId = Math.max(1, Number(helpers.getNextWeaponChainEventId?.() || 1));
+  const queuedContext = {
+    origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : null,
+    impactPoint,
+    weaponSlotIndex,
+    stageIndex: Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : null,
+    impactEnemyId,
+    sourceEnemyId: Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : null,
+    damageScale: Math.max(0.05, Number(context?.damageScale) || 1),
+    forcedNoteName: helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || null,
+    directSound: context?.directSound === true,
+    playerSoundVolumeMult: Math.max(0.1, Math.min(1, Number(context?.playerSoundVolumeMult) || 1)),
+    debugSource: String(context?.debugSource || ''),
+    debugStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
+    debugBeatIndex: Number.isFinite(context?.debugBeatIndex) ? Math.trunc(context.debugBeatIndex) : null,
+    debugNoteIndex: Number.isFinite(context?.debugNoteIndex) ? Math.trunc(context.debugNoteIndex) : null,
+    preScheduledSound: null,
+  };
+  if (queuedContext.directSound) {
+    queuedContext.preScheduledSound = helpers.schedulePendingWeaponChainSound?.({
+      stage: firstStage,
+      beatIndex: resolvedBeatIndex,
+      context: queuedContext,
+    }) || null;
+  }
   if (firstStage?.archetype === 'aoe' && firstStage?.variant === 'explosion' && impactPoint) {
     const secondsUntilTrigger = helpers.getSecondsUntilQueuedChainBeat?.(resolvedBeatIndex) || 0;
     if (secondsUntilTrigger > 0.02) {
@@ -292,16 +328,7 @@ export function queueWeaponChainRuntime(options = null) {
     eventId,
     beatIndex: resolvedBeatIndex,
     stages,
-    context: {
-      origin: context?.origin ? { x: Number(context.origin.x) || 0, y: Number(context.origin.y) || 0 } : null,
-      impactPoint,
-      weaponSlotIndex,
-      stageIndex: Number.isFinite(context?.stageIndex) ? Math.trunc(context.stageIndex) : null,
-      impactEnemyId,
-      sourceEnemyId: Number.isFinite(context?.sourceEnemyId) ? Math.trunc(context.sourceEnemyId) : null,
-      damageScale: Math.max(0.05, Number(context?.damageScale) || 1),
-      forcedNoteName: helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || null,
-    },
+    context: queuedContext,
   });
   helpers.noteMusicSystemEvent?.('weapon_explosion_queue_created', {
     chainEventId: eventId,
@@ -527,6 +554,9 @@ export function triggerWeaponStageRuntime(options = null) {
   const damageScale = Math.max(0.05, Number(context?.damageScale) || 1);
   const forcedNoteName = helpers.normalizeSwarmNoteName?.(context?.forcedNoteName) || null;
   const directSound = !!context?.directSound;
+  const preScheduledSound = context?.preScheduledSound && typeof context.preScheduledSound === 'object'
+    ? context.preScheduledSound
+    : null;
   const immediateSound = context?.immediateSound === true;
   const soundDelaySeconds = Math.max(0, Number(context?.soundDelaySeconds) || 0);
   const playerSoundVolumeMult = Math.max(0.1, Math.min(1, Number(context?.playerSoundVolumeMult) || 1));
@@ -589,6 +619,7 @@ export function triggerWeaponStageRuntime(options = null) {
               immediate: immediateSound,
               delaySeconds: soundDelaySeconds,
               debugSource: String(context?.debugSource || ''),
+              preScheduledSound,
             }
           );
         } else {
@@ -686,6 +717,7 @@ export function triggerWeaponStageRuntime(options = null) {
                 immediate: immediateSound,
                 delaySeconds: soundDelaySeconds,
                 debugSource: String(context?.debugSource || ''),
+                preScheduledSound,
               }
             );
           } else {
@@ -712,6 +744,7 @@ export function triggerWeaponStageRuntime(options = null) {
           if (continuation.length) {
             withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.chainQueue', () => {
               helpers.queueWeaponChain?.(beatIndex + 1, continuation, {
+                ...nextCtx,
                 origin: originWorld,
                 impactPoint: {
                   x: originWorld.x + (dir.x * 1400),
@@ -738,6 +771,7 @@ export function triggerWeaponStageRuntime(options = null) {
           if (firstNext?.archetype === 'laser' && firstNext?.variant === 'beam') {
             withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.chainTrigger', () => {
               helpers.triggerWeaponStage?.(firstNext, { x: nearest.wx, y: nearest.wy }, beatIndex, restNext, {
+                ...nextCtx,
                 origin: context?.origin || originWorld,
                 impactPoint: { x: nearest.wx, y: nearest.wy },
                 weaponSlotIndex: slotIndex,
@@ -751,6 +785,7 @@ export function triggerWeaponStageRuntime(options = null) {
           } else {
             withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.chainQueue', () => {
               helpers.queueWeaponChain?.(beatIndex + 1, continuation, {
+                ...nextCtx,
                 origin: originWorld,
                 impactPoint: { x: nearest.wx, y: nearest.wy },
                 weaponSlotIndex: slotIndex,
@@ -783,6 +818,7 @@ export function triggerWeaponStageRuntime(options = null) {
               immediate: immediateSound,
               delaySeconds: soundDelaySeconds,
               debugSource: String(context?.debugSource || ''),
+              preScheduledSound,
             }
           );
         } else {
@@ -806,6 +842,7 @@ export function triggerWeaponStageRuntime(options = null) {
         if (continuation.length) {
           withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.chainQueue', () => {
             helpers.queueWeaponChain?.(beatIndex + 1, continuation, {
+              ...nextCtx,
               origin: originWorld,
               impactPoint: to,
               weaponSlotIndex: slotIndex,
@@ -835,6 +872,7 @@ export function triggerWeaponStageRuntime(options = null) {
         if (firstNext?.archetype === 'laser' && firstNext?.variant === 'hitscan') {
           withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.chainTrigger', () => {
             helpers.triggerWeaponStage?.(firstNext, { x: nearest.wx, y: nearest.wy }, beatIndex, restNext, {
+              ...nextCtx,
               origin: context?.origin || originWorld,
               impactPoint: { x: nearest.wx, y: nearest.wy },
               weaponSlotIndex: slotIndex,
@@ -848,6 +886,7 @@ export function triggerWeaponStageRuntime(options = null) {
         } else {
           withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.chainQueue', () => {
             helpers.queueWeaponChain?.(beatIndex + 1, continuation, {
+              ...nextCtx,
               origin: originWorld,
               impactPoint: { x: nearest.wx, y: nearest.wy },
               weaponSlotIndex: slotIndex,
@@ -881,10 +920,11 @@ export function triggerWeaponStageRuntime(options = null) {
               stepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
               sourceSystem: 'player',
               actionType: `${archetype}-${variant}`,
-                authoringClass: 'gameplayauthored',
-                immediate: immediateSound,
-                delaySeconds: soundDelaySeconds,
-                debugSource: String(context?.debugSource || ''),
+              authoringClass: 'gameplayauthored',
+              immediate: immediateSound,
+              delaySeconds: soundDelaySeconds,
+              debugSource: String(context?.debugSource || ''),
+              preScheduledSound,
             }
           );
         } else {
@@ -903,6 +943,7 @@ export function triggerWeaponStageRuntime(options = null) {
           const nextOrigin = aoeHit.firstHitPoint;
           withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.chainTrigger', () => {
             helpers.triggerWeaponStage?.(firstNext, nextOrigin, beatIndex, restNext, {
+              ...nextCtx,
               origin: context?.origin || originWorld,
               impactPoint: nextOrigin,
               weaponSlotIndex: slotIndex,
@@ -916,6 +957,7 @@ export function triggerWeaponStageRuntime(options = null) {
         } else if (variant !== 'explosion') {
           withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.player.fire.tunedStage.chainQueue', () => {
             helpers.queueWeaponChain?.(beatIndex + 1, continuation, {
+              ...nextCtx,
               origin: context?.origin || originWorld,
               impactPoint: originWorld,
               weaponSlotIndex: slotIndex,

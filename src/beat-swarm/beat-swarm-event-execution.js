@@ -1216,7 +1216,9 @@ export function executePerformedBeatEventRuntime(options = null) {
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
     const ghostPlayback = payload?.ghostPlayback === true;
     const payloadGroupId = Math.max(0, Math.trunc(Number(payload?.groupId) || 0));
+    const composerExecutionStageDebugEnabled = globalThis.__BEAT_SWARM_COMPOSER_EXECUTION_DEBUG === true;
     const noteComposerExecutionStage = (stage, extra = null) => {
+      if (!composerExecutionStageDebugEnabled) return;
       try {
         helpers.noteMusicSystemEvent?.('music_composer_execution_stage', {
           stage: String(stage || '').trim().toLowerCase(),
@@ -1533,7 +1535,23 @@ export function executePerformedBeatEventRuntime(options = null) {
     enemy.composerActionPulseDur = Math.max(0.01, Number(enemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);
     enemy.composerActionPulseT = Math.max(0.01, Number(enemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);
     const origin = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
-    if (actionType === 'composer-group-explosion') {
+    const descriptorAbilityTriggered = helpers.triggerComposerGroupEnemyAbility?.({
+      enemy,
+      group,
+      actionType,
+      beatIndex,
+      noteName,
+      instrumentId,
+      aggressionScale,
+    }) === true;
+    if (descriptorAbilityTriggered) {
+      noteComposerExecutionStage('descriptor_ability_triggered', {
+        hasGroup: true,
+        abilityFamily: String(enemy?.abilityFamily || enemy?.gameplayDescriptor?.abilityFamily || '').trim().toLowerCase(),
+        instrumentId: String(instrumentId || '').trim(),
+        note: String(noteName || '').trim(),
+      });
+    } else if (actionType === 'composer-group-explosion') {
       helpers.addHostileRedExplosionEffect?.(origin);
       noteComposerExecutionStage('explosion_triggered', {
         hasGroup: true,

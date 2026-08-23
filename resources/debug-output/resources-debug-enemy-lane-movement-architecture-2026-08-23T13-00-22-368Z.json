@@ -1,0 +1,60 @@
+{
+  "ok": true,
+  "createdAt": "2026-08-23T13:00:22.357Z",
+  "durationMs": 70000,
+  "initial": {
+    "ok": true,
+    "enabled": true,
+    "enemyType": "group",
+    "behavior": "none",
+    "targetCount": 4,
+    "groupCount": 4,
+    "speedScale": 1.35,
+    "persistent": true,
+    "active": true,
+    "groupId": 1,
+    "enemyIds": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "smallEnemyIds": [
+      1,
+      2,
+      3
+    ],
+    "largeEnemyId": 4
+  },
+  "result": {
+    "active": true,
+    "groupId": 1,
+    "largeEnemyId": 4,
+    "eventCount": 80,
+    "largeEventCount": 80,
+    "largeCoverage": 1,
+    "smallEventCounts": {
+      "1": 28,
+      "2": 26,
+      "3": 26
+    },
+    "lastPerformerIds": [
+      4,
+      1
+    ],
+    "movementPhase": 3
+  },
+  "traceStart": {
+    "ok": true,
+    "started": null
+  },
+  "traceCapture": {
+    "ok": false,
+    "reason": "trace_capture_empty",
+    "fileName": "resources-debug-enemy-lane-movement-architecture.txt",
+    "stopped": {
+      "enabled": false,
+      "count": 0
+    }
+  }
+}

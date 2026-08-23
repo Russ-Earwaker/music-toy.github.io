@@ -25,6 +25,20 @@ export const BEAT_SWARM_BEHAVIORAL_FORMATION_ARCHETYPES = Object.freeze({
   }),
 });
 
+const BEAT_SWARM_GROUP_BEHAVIOR_COMPATIBILITY = Object.freeze({
+  none: Object.freeze(['none', 'winding_chain', 'paired_dance', 'advancing_line']),
+  winding_chain: Object.freeze(['none', 'winding_chain']),
+  paired_dance: Object.freeze(['none', 'paired_dance']),
+  advancing_line: Object.freeze(['none', 'advancing_line']),
+});
+
+const BEAT_SWARM_BEHAVIOR_ROLE_ORDER = Object.freeze([
+  'foundation_groove',
+  'counter_rhythm',
+  'lead_phrase',
+  'answer_ornament',
+]);
+
 function normalizeBehaviorId(value = '', fallback = 'none') {
   const id = String(value || '').trim().toLowerCase();
   return id || String(fallback || 'none').trim().toLowerCase() || 'none';
@@ -40,6 +54,71 @@ function normalizeBehaviorWindow(value = '', fallback = 'continuous') {
   const windowId = String(value || '').trim().toLowerCase();
   if (windowId === 'continuous' || windowId === 'persistent' || windowId === 'timed' || windowId === 'section') return windowId;
   return String(fallback || 'continuous').trim().toLowerCase() || 'continuous';
+}
+
+export function areBeatSwarmGroupBehaviorsCompatible(a = 'none', b = 'none') {
+  const first = normalizeBehaviorId(a, 'none');
+  const second = normalizeBehaviorId(b, 'none');
+  if (first === 'none' || second === 'none' || first === second) return true;
+  const compatible = BEAT_SWARM_GROUP_BEHAVIOR_COMPATIBILITY[first];
+  return Array.isArray(compatible) && compatible.includes(second);
+}
+
+export function resolveBeatSwarmPhraseBehaviorAssignments(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const barIndex = Math.max(0, Math.trunc(Number(opts.barIndex) || 0));
+  const phraseBars = Math.max(1, Math.trunc(Number(opts.phraseBars) || 4));
+  const phraseIndex = Math.floor(barIndex / phraseBars);
+  const previous = opts.previous && typeof opts.previous === 'object' ? opts.previous : null;
+  const previousPhraseIndex = Number.isFinite(Number(previous?.phraseIndex))
+    ? Math.trunc(Number(previous.phraseIndex))
+    : -1;
+  if (
+    previous
+    && previousPhraseIndex === phraseIndex
+    && previous.assignmentsByRole
+  ) {
+    return previous;
+  }
+  const candidates = opts.assignmentsByRole && typeof opts.assignmentsByRole === 'object'
+    ? opts.assignmentsByRole
+    : {};
+  const roleOrder = [
+    ...BEAT_SWARM_BEHAVIOR_ROLE_ORDER,
+    ...Object.keys(candidates).filter((role) => !BEAT_SWARM_BEHAVIOR_ROLE_ORDER.includes(role)).sort(),
+  ];
+  const selectedGroupBehaviors = [];
+  const suppressedByRole = {};
+  const assignmentsByRole = {};
+  for (const role of roleOrder) {
+    const candidate = candidates[role] && typeof candidates[role] === 'object'
+      ? candidates[role]
+      : null;
+    if (!candidate) continue;
+    const requestedGroupBehaviorId = normalizeBehaviorId(candidate.groupBehaviorId, 'none');
+    const compatible = selectedGroupBehaviors.every((activeId) => (
+      areBeatSwarmGroupBehaviorsCompatible(activeId, requestedGroupBehaviorId)
+    ));
+    const groupBehaviorId = compatible ? requestedGroupBehaviorId : 'none';
+    if (!compatible) suppressedByRole[role] = requestedGroupBehaviorId;
+    if (groupBehaviorId !== 'none') selectedGroupBehaviors.push(groupBehaviorId);
+    assignmentsByRole[role] = Object.freeze({
+      ...candidate,
+      groupBehaviorId,
+      groupBehaviorWindow: groupBehaviorId === 'none'
+        ? 'continuous'
+        : String(candidate.groupBehaviorWindow || 'persistent').trim().toLowerCase(),
+    });
+  }
+  return Object.freeze({
+    phraseIndex,
+    phraseBars,
+    phraseStartBar: phraseIndex * phraseBars,
+    phraseEndBar: ((phraseIndex + 1) * phraseBars) - 1,
+    assignmentsByRole: Object.freeze(assignmentsByRole),
+    selectedGroupBehaviors: Object.freeze(selectedGroupBehaviors.slice()),
+    suppressedByRole: Object.freeze({ ...suppressedByRole }),
+  });
 }
 
 function resolveBehaviorPriority(singleBehaviorId = 'none', groupBehaviorId = 'none', eventBehaviorId = 'none') {

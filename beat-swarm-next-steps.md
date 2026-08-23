@@ -285,6 +285,8 @@ Use playtests and Music Lab where useful to answer:
 
 Validate the complete handoff from motif-creation gameplay into director intensity control:
 
+- passed: `Run Authoring + Intensity Handoff (1x210s)` completed the production onboarding with empty starting lanes, all five initial commits, literal protection, continued lead playback, persisted motif data, the full Low -> Medium -> Build -> Peak -> Release -> Settle sequence, and interaction-backed density requests; the audit now derives persistence from authoritative commit events when a runtime theme snapshot is unavailable
+
 - gates, bouncers, missiles, Tap Orbs, and lead interactions must commit through the same registered theme/lane contract
 - a newly authored motif must remain literal and recognizable for its protected introduction window
 - increasing intensity may add density, layers, register, harmonies, and riffs without replacing the motif's identity
@@ -394,18 +396,63 @@ Parked standalone lab files:
 - `src/beat-swarm/weapon-gate-lab-ratio.js`
 - `src/beat-swarm/weapon-gate-lab-render.js`
 
+## Active Direction - Enemy Gameplay Architecture
+
+Enemy behavior is organized across independent descriptors rather than one bespoke class per combination:
+
+- tier: `basic`, `elite`, or `boss`
+- scale: `small` or `large`
+- musical ownership: core-lane performer, additive-motif performer, or full-structure performer
+- lane role: foundation, accent, lead, support, sparkle, or another director lane
+- ability family: projectile, laser, local explosion, charge, beam, summoning, support, and later additions
+- movement family: anchored, orbital, lateral, pursuit, formation path, or other phrase-length patterns
+- formation membership: individual, lane group, elite formation, or boss structure
+- lifecycle: spawning, approaching, performing, dying, or explicit board-clear retreat
+
+Core behavior rules:
+
+- The director owns the music; enemies perform it. Enemy death must not break a core lane.
+- Basic small enemies are low-health lane-group members. They take turns performing consecutive events from their lane.
+- Basic large enemies are higher-health singleton performers. They perform every event in their assigned lane.
+- Small and large enemies may coexist in one lane: the large enemy performs the full lane while the small group continues its simple round-robin allocation.
+- Elite enemies may be small or large and always carry an optional additive motif. The director only spawns one when the arrangement and density budgets justify it.
+- Existing snakes, spawners, and musical combat formations become elite enemies.
+- Elite motifs end with their performers. If elites overstay, remove them through visible gameplay resolution rather than ordinary retreat or disappearance.
+- Bosses carry the complete musical structure, may spawn other enemies, and will be designed later without replacing player-authored identity.
+- Movement patterns last long enough to be understood. Direction changes and major formation transitions occur on beat.
+- Different groups may use different movement patterns simultaneously, subject to a compatibility policy that avoids visually conflicting combinations.
+- Constant movement is allowed. Movement need not produce sound, but attacks and significant gameplay actions retain musical feedback.
+- Ability silhouettes must remain readable. Each level limits its active ability-family palette; higher difficulties may expand it.
+- Basic enemies use simple silhouettes and lane coloration. Elites use greater scale/complexity and may use multiple colors. Boss presentation is unrestricted.
+- Visible enemies never silently disappear. Retreat is reserved for explicit arena-clearing transitions such as boss arrival.
+
+Implementation order:
+
+1. Complete: formalize and normalize enemy gameplay descriptors across existing spawn paths.
+2. Complete: make basic small lane groups perform core-lane events in round-robin order.
+3. Complete: make basic large singleton enemies perform every event in their lane, including coexistence with a rotating small group.
+4. Complete: hold director-selected movement patterns for four-bar phrases and suppress incompatible simultaneous group motions.
+5. Complete: classify snakes, spawners, and musical combat formations as additive-motif elites in the shared enemy descriptor.
+6. Complete: the shared elite budget evaluator gates optional additive formations, snakes, and spawners by musical justification, threat, visual complexity, and additive density while leaving required intro and continuity fallbacks intact.
+7. Complete: `Enemy Lane + Movement Lab` covers concurrent small/large lane performers, four-bar movement phrases, a visible budget-approved elite formation, and a deliberately density-blocked elite request with saved assertions.
+8. Complete: basic enemy abilities are constrained by the Level 1 palette, expose stable silhouette identities, and execute projectile, tracking-laser, and local-explosion effects through the production lane-event allocation without changing round-robin or full-lane ownership. Intro carriers remain projectile-only for onboarding clarity.
+9. Complete: snake and spawner types are explicit exported elite classifications, retain additive-motif ownership, and share the same director elite-density budget as formation elites.
+10. Design boss ownership of the full musical structure later.
+
 ## Hold For Later
 
 Do not actively expand these areas while tuning motif transformation:
 
+- arena circle art pass:
+  - replace the temporary thick inner ring and always-visible dotted outer resistance boundary with a cohesive arena treatment
+  - preserve clear communication that the particle-filled outer band pushes the player inward
+  - keep the inner playable boundary, resistance band, and outer limit readable during camera movement and dense combat
 - window-resize visual alignment bug:
   - player ship and starfield stay correctly centered
   - arena ring, enemies, and other projected overlay elements can lag or shift differently while resizing Chrome
   - likely caused by mixed board-transform and DOM-overlay projection refresh paths
   - low priority unless resize behavior becomes important for playtesting or presentation
-- new enemy families
 - new event sections
-- formation spawning
 - musical enemy-group infrastructure unification:
   - composer groups are director-owned carriers for the main musical lanes and their continuity
   - musical formations are optional combat-driven layers added over the established score

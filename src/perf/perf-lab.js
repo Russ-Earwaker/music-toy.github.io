@@ -10,6 +10,7 @@ import { makePanZoomScript, makePanZoomCommitSpamScript, makeOverviewSpamScript,
 import { buildParticleWorstCase } from './StressSceneParticles.js';
 import { buildChainedLoopgridStress } from './StressSceneChains.js';
 import { overviewMode } from '../overview-mode.js';
+import { evaluateAuthoringIntensityHandoffTrace, parseBeatSwarmTraceRecords } from '../beat-swarm/beat-swarm-authoring-intensity-audit.js';
 
 // Global perf toggles consumed by shared particle code.
 // Keep it simple: one object, easy to inspect in console.
@@ -455,8 +456,9 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
+        ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Production Onboarding Flow (1x300s)', 'primary')}
         ${btn('musicLabRunOnboardingCompositionAudit', 'Run Autopilot Composition Audit (1x240s)', 'primary')}
-        ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Autopilot Production Onboarding Flow (1x300s)', 'primary')}
+        ${btn('musicLabRunEnemyArchitectureDebug', 'Run Enemy Lane + Movement Lab (1x70s)', 'primary')}
       </div>`,
       `<details class="perf-lab-music-group">
         <summary>Session and Export</summary>
@@ -1489,6 +1491,14 @@ function ensureUI() {
     }
     if (act === 'musicLabRunDirectorFormationIntensityFlow') {
       await runDirectorFormationIntensityFlowDebug();
+      return;
+    }
+    if (act === 'musicLabRunAuthoringIntensityHandoff') {
+      await runAuthoringIntensityHandoffDebug();
+      return;
+    }
+    if (act === 'musicLabRunEnemyArchitectureDebug') {
+      await runEnemyArchitectureDebug();
       return;
     }
     if (act === 'musicLabRunOnboardingCompositionAudit') {
@@ -5988,7 +5998,8 @@ async function runBS0Stage(stageCount = 1, opts = null) {
   const resetMusicLabEachRun = cfg.resetMusicLabEachRun !== false;
   const saveMusicLabEachRun = cfg.saveMusicLabEachRun === true;
   const deferMusicLabSaveUntilBatchEnd = saveMusicLabEachRun && cfg.deferMusicLabSaveUntilBatchEnd === true;
-  const publishPerfArtifacts = cfg.publishPerfArtifacts === true || !saveMusicLabEachRun;
+  const publishPerfArtifacts = cfg.publishPerfArtifacts === true
+    || (cfg.publishPerfArtifacts !== false && !saveMusicLabEachRun);
   const saveRunIdBase = String(cfg.saveRunIdBase || `musicLab_bs0_s${stageCount}`).trim() || `musicLab_bs0_s${stageCount}`;
   const saveNotes = String(cfg.saveNotes || '').trim();
   const groupedScenarioName = String(cfg.groupedScenarioName || `beat-swarm-s${stageCount}-music-multi-run`).trim() || `beat-swarm-s${stageCount}-music-multi-run`;
@@ -6081,6 +6092,15 @@ async function runBS0Stage(stageCount = 1, opts = null) {
         setStatus(`BS0 S${stageCount} failed (Beat Swarm debug API unavailable)`);
         return { ok: false, reason: 'debug_api_unavailable', stageCount, runIndex, repeatCount, durationMs };
       }
+      if (traceCaptureConfig?.enabled === true && cfg.traceBeforeSetup === true) {
+        try {
+          await startMusicTraceCaptureForPerfRun({
+            include: Array.isArray(traceCaptureConfig.include) ? traceCaptureConfig.include : [],
+            exclude: Array.isArray(traceCaptureConfig.exclude) ? traceCaptureConfig.exclude : [],
+            maxLines: traceCaptureConfig.maxLines,
+          });
+        } catch {}
+      }
       if (typeof cfg.setupAfterPrepare === 'function') {
         try {
           await cfg.setupAfterPrepare({
@@ -6112,7 +6132,7 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           };
         }
       }
-      if (traceCaptureConfig?.enabled === true) {
+      if (traceCaptureConfig?.enabled === true && cfg.traceBeforeSetup !== true) {
         try {
           await startMusicTraceCaptureForPerfRun({
             include: Array.isArray(traceCaptureConfig.include) ? traceCaptureConfig.include : [],
@@ -6128,11 +6148,15 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           null,
           `${statusPrefix}${runHuman}...`,
           {
+            durationMs,
             stopTransportAtEnd: !saveMusicLabEachRun,
             publishResultAtEnd: publishPerfArtifacts,
           }
         );
       } catch (err) {
+        if (typeof cfg.teardownAfterRun === 'function') {
+          try { await cfg.teardownAfterRun({ runIndex, repeatCount, durationMs, stageCount, failed: true }); } catch {}
+        }
         try { delete window.__PERF_LAB_DEFER_DEBUG_POSTS; } catch {}
         try { window.__PERF_ACTIVE_RUN_DEBUG = null; } catch {}
         if (publishPerfArtifacts) {
@@ -6172,6 +6196,9 @@ async function runBS0Stage(stageCount = 1, opts = null) {
           reason: 'run_variant_failed',
           error: String(err && err.message || err || 'unknown_error'),
         };
+      }
+      if (typeof cfg.teardownAfterRun === 'function') {
+        try { await cfg.teardownAfterRun({ runIndex, repeatCount, durationMs, stageCount, failed: false }); } catch {}
       }
       try { stopTransport(); } catch {}
       if (publishPerfArtifacts) {
@@ -6501,6 +6528,10 @@ async function runBS0Stage(stageCount = 1, opts = null) {
         saves: runOutcomes,
         groupedScenario: groupedScenario || null,
       };
+    }
+    if (!suppressCompletionUi) {
+      setStatus(`BS0 S${stageCount} complete (${repeatCount} x ${(durationMs / 1000).toFixed(0)}s)`);
+      setOutput({ ok: true, stageCount, repeatCount, durationMs, totalMinutes, saves: runOutcomes });
     }
     return { ok: true, stageCount, repeatCount, durationMs, totalMinutes, saves: runOutcomes };
   } finally {
@@ -7997,6 +8028,218 @@ async function runDualMusicalFormationDebug() {
   });
 }
 
+async function runEnemyArchitectureDebug() {
+  const durationMs = 70000;
+  const modeApi = window.BeatSwarmMode;
+  if (!modeApi || typeof modeApi.startEnemyArchitectureTest !== 'function') {
+    setStatus('Enemy architecture lab failed: test API unavailable');
+    return { ok: false, reason: 'enemy_architecture_test_api_unavailable' };
+  }
+  const rebuilt = await buildBS0();
+  if (!rebuilt) return { ok: false, reason: 'fresh_reset_failed' };
+  try { stopTransport(); } catch {}
+  await waitForPerfLabMs(120);
+  try { startTransport(); } catch {}
+  await waitForTransportRunning(2200);
+  await waitForPerfLabMs(120);
+  const musicLabApi = getMusicLabApiGlobal();
+  try { musicLabApi?.setEnabled?.(true); } catch {}
+  try { musicLabApi?.setRealtimeMetricsEnabled?.(true); } catch {}
+  try { musicLabApi?.setLightweightSystemEventsEnabled?.(true); } catch {}
+  try { musicLabApi?.reset?.('enemy-architecture-lab'); } catch {}
+  const prepared = await prepareBS0StaticStage(1, 1);
+  if (!prepared) {
+    setStatus('Enemy architecture lab failed: Beat Swarm setup unavailable');
+    return { ok: false, reason: 'debug_api_unavailable' };
+  }
+  try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+  let traceStartResult = null;
+  try {
+    traceStartResult = await startMusicTraceCaptureForPerfRun({
+      include: [
+        'enemy_architecture_test_started',
+        'enemy_architecture_lane_event',
+        'enemy_architecture_movement_phrase',
+        'enemy_architecture_elite_budget',
+        'enemy_architecture_ability_fired',
+        'director_musical_formation_spawned',
+      ],
+      maxLines: 900,
+    });
+  } catch (err) {
+    traceStartResult = { ok: false, reason: String(err?.message || err || 'trace_start_failed') };
+  }
+  const snapshot = modeApi.startEnemyArchitectureTest();
+  if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 4) {
+    try { modeApi.stopEnemyArchitectureTest?.(); } catch {}
+    try { stopTransport(); } catch {}
+    setStatus('Enemy architecture lab failed: enemies did not spawn');
+    return { ok: false, reason: 'enemy_architecture_test_spawn_failed', snapshot };
+  }
+  try { window.__BEAT_SWARM_ENEMY_ARCHITECTURE_TEST = snapshot; } catch {}
+  const deadlineMs = Date.now() + durationMs;
+  try { window.__BEAT_SWARM_ENEMY_ARCHITECTURE_DEADLINE_MS = deadlineMs; } catch {}
+  while (Date.now() < deadlineMs) {
+    const remainingSeconds = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+    setStatus(`Running enemy lane and movement architecture lab (${remainingSeconds}s remaining)`);
+    await waitForPerfLabMs(Math.min(1000, Math.max(1, deadlineMs - Date.now())));
+  }
+  const finalSnapshot = modeApi.getEnemyArchitectureTestSnapshot?.() || null;
+  const assertions = {
+    basicEnemyCount: Array.isArray(snapshot?.enemyIds) && snapshot.enemyIds.length === 4,
+    eliteSpawned: Array.isArray(snapshot?.eliteEnemyIds) && snapshot.eliteEnemyIds.length === 2,
+    allowedBudgetPassed: snapshot?.eliteBudgetChecks?.allowed?.allowed === true,
+    blockedBudgetPassed: snapshot?.eliteBudgetChecks?.blocked?.allowed === false,
+    blockedForDensity: Array.isArray(snapshot?.eliteBudgetChecks?.blocked?.reasons)
+      && snapshot.eliteBudgetChecks.blocked.reasons.includes('additive_density_budget'),
+    eliteSurvived: Array.isArray(finalSnapshot?.eliteAliveEnemyIds) && finalSnapshot.eliteAliveEnemyIds.length === 2,
+    controlledAbilityPalette: Array.isArray(snapshot?.abilityPalette)
+      && ['projectile', 'laser', 'local_explosion'].every((family) => snapshot.abilityPalette.includes(family)),
+    basicAbilityFamiliesConfigured: Array.isArray(snapshot?.basicEnemyDescriptors)
+      && ['projectile', 'laser', 'local_explosion'].every((family) => (
+        snapshot.basicEnemyDescriptors.some((descriptor) => descriptor?.abilityFamily === family)
+      )),
+    abilitySilhouettesConfigured: Array.isArray(snapshot?.basicEnemyDescriptors)
+      && snapshot.basicEnemyDescriptors.length === 4
+      && snapshot.basicEnemyDescriptors.every((descriptor) => String(descriptor?.abilitySilhouette || '').trim().length > 0),
+    mixedAbilitiesExecuted: ['projectile', 'laser', 'local_explosion'].every((family) => (
+      Math.max(0, Math.trunc(Number(finalSnapshot?.abilityEventCounts?.[family]) || 0)) > 0
+    )),
+  };
+  const assertionsPassed = Object.values(assertions).every(Boolean);
+  try { window.__BEAT_SWARM_ENEMY_ARCHITECTURE_TEST_RESULT = finalSnapshot; } catch {}
+  try { modeApi.stopEnemyArchitectureTest?.(); } catch {}
+  try { stopTransport(); } catch {}
+  setStatus('Enemy lane and movement architecture lab complete (70s); saving results');
+  let traceCaptureResult = null;
+  try {
+    traceCaptureResult = await finalizeMusicTraceCaptureForPerfRun({
+      fileName: 'resources-debug-enemy-lane-movement-architecture.txt',
+      preferOutputDirectory: true,
+    });
+  } catch (err) {
+    traceCaptureResult = { ok: false, reason: String(err?.message || err || 'trace_finalize_failed') };
+  }
+  const summary = {
+    ok: true,
+    createdAt: new Date().toISOString(),
+    durationMs,
+    initial: snapshot,
+    result: finalSnapshot,
+    assertions,
+    assertionsPassed,
+    traceStart: traceStartResult,
+    traceCapture: traceCaptureResult,
+  };
+  let summarySaved = false;
+  let summaryFileName = '';
+  try {
+    const cfg = await resolveResultsConfig();
+    const postUrl = resolveDebugOutputPostUrl(cfg);
+    summaryFileName = `resources-debug-enemy-lane-movement-architecture-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    summarySaved = await postDebugOutputFile({
+      fileName: summaryFileName,
+      text: JSON.stringify(summary, null, 2),
+      meta: { source: 'enemy-architecture-focused-lab', durationMs },
+    }, postUrl);
+  } catch {}
+  const output = { ...summary, summarySaved, summaryFileName };
+  try { window.__BEAT_SWARM_ENEMY_ARCHITECTURE_SAVE_RESULT = output; } catch {}
+  setStatus(summarySaved
+    ? `Enemy lane and movement architecture lab complete (70s); ${assertionsPassed ? 'lane, ability, and elite checks passed' : 'architecture checks failed'}; results saved`
+    : 'Enemy lane and movement architecture lab complete (70s); result save failed');
+  setOutput(output);
+  return output;
+}
+
+async function runAuthoringIntensityHandoffDebug() {
+  let handoffAudit = null;
+  const result = await runBS0Stage(3, {
+    durationMs: 210000,
+    repeatCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    suppressCompletionUi: true,
+    traceBeforeSetup: true,
+    saveRunIdBase: 'musicLab_authoring_intensity_handoff_1x210s',
+    saveNotes: 'Autopilot production authoring followed by Low, Medium, Build, Peak, Release, and Settle. Validates empty lanes, commits, literal protection, persistence, and interaction-backed density requests.',
+    groupedScenarioName: 'beat_swarm_authoring_intensity_handoff_1x210s',
+    groupedRunId: 'musicLab_authoring_intensity_handoff_1x210s_scenario',
+    groupedNotes: 'Focused validation of player-authored motif ownership across the complete production intensity sequence.',
+    tagPrefix: 'AuthoringIntensityHandoff1x210s',
+    labelPrefix: 'BS0_authoring_intensity_handoff_1x210s',
+    statusPrefix: 'Running authoring and intensity handoff',
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.armDirectorFormationFlowAfterOnboarding !== 'function') {
+        throw new Error('authoring_intensity_handoff_api_unavailable');
+      }
+      try { modeApi.exit?.(); } catch {}
+      await waitForPerfLabMs(80);
+      modeApi.enter?.({ weaponGateIntro: true, weaponGateSequence: 'missiles_bouncers' });
+      modeApi.setPerfCompositionAuditAutoControl?.(true);
+      modeApi.armDirectorFormationFlowAfterOnboarding();
+    },
+    async teardownAfterRun() {
+      const traceText = String(getMusicTraceCaptureApiGlobal()?.getTraceCaptureText?.() || '');
+      const records = parseBeatSwarmTraceRecords(traceText);
+      const themes = window.BeatSwarmMode?.getPlayerMusicThemes?.() || null;
+      handoffAudit = evaluateAuthoringIntensityHandoffTrace(records, themes);
+      try { window.__BEAT_SWARM_AUTHORING_INTENSITY_HANDOFF = handoffAudit; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'music_contribution_empty_lanes_armed',
+        'music_contribution_started',
+        'music_contribution_completed',
+        'music_contribution_protection_armed',
+        'music_contribution_protection_expired',
+        'music_rhythm_rewrite_committed_to_theme',
+        'lead_ball_rewrite_committed_to_theme',
+        'director_formation_flow_started_after_onboarding',
+        'music_level1_arrangement_state',
+        'music_primary_loop_lane_emitted',
+        'director_density_contribution_requested',
+        'music_density_request_queued_as_contribution',
+      ],
+      maxLines: 5000,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-authoring-intensity-handoff',
+    },
+  });
+  const summary = {
+    ok: result?.ok === true && handoffAudit?.assertionsPassed === true,
+    createdAt: new Date().toISOString(),
+    durationMs: 210000,
+    run: result,
+    audit: handoffAudit,
+  };
+  let summarySaved = false;
+  let summaryFileName = '';
+  try {
+    const cfg = await resolveResultsConfig();
+    const postUrl = resolveDebugOutputPostUrl(cfg);
+    summaryFileName = `resources-debug-authoring-intensity-handoff-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    summarySaved = await postDebugOutputFile({
+      fileName: summaryFileName,
+      text: JSON.stringify(summary, null, 2),
+      meta: { source: 'authoring-intensity-handoff-lab', durationMs: 210000 },
+    }, postUrl);
+  } catch {}
+  const output = { ...summary, summarySaved, summaryFileName };
+  setStatus(summarySaved
+    ? `Authoring and intensity handoff complete; ${summary.ok ? 'checks passed' : 'checks need review'}; results saved`
+    : 'Authoring and intensity handoff complete; result save failed');
+  setOutput(output);
+  return output;
+}
+
 async function runDirectorFormationIntensityFlowDebug() {
   await runBS0Stage(3, {
     durationMs: 300000,
@@ -8066,6 +8309,9 @@ async function runDirectorFormationIntensityFlowDebug() {
         'enemy_combat_group_motif_member_ended',
         'enemy_combat_attack',
         'enemy_laser_activated',
+        'enemy_basic_ability_fired',
+        'enemy_basic_lane_carrier_spawned',
+        'enemy_basic_lane_carrier_status',
       ],
       maxLines: 4000,
       preferOutputDirectory: true,
@@ -9133,9 +9379,11 @@ async function runVariantPlaying(label, step, statusText, options = null) {
     : 120;
   const prof = makeFrameProfiler({ slowMs, maxSamples });
   window.__PerfFrameProf = prof; // so you can dump it from console
-  const durationMs = (typeof window !== 'undefined' && Number.isFinite(window.__PERF_LAB_DURATION_MS))
-    ? Math.max(1000, Number(window.__PERF_LAB_DURATION_MS))
-    : 30000;
+  const durationMs = Number.isFinite(Number(opts.durationMs))
+    ? Math.max(1000, Number(opts.durationMs))
+    : ((typeof window !== 'undefined' && Number.isFinite(window.__PERF_LAB_DURATION_MS))
+      ? Math.max(1000, Number(window.__PERF_LAB_DURATION_MS))
+      : 30000);
   const scriptStep = step;
   const nowMs = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   const raf = (fn) => (window.requestAnimationFrame ? window.requestAnimationFrame(fn) : setTimeout(() => fn(nowMs()), 16));
@@ -9235,23 +9483,42 @@ async function runVariantPlaying(label, step, statusText, options = null) {
     };
     let settled = false;
     let watchdogTimer = 0;
+    let durationTimer = 0;
     const clearWatchdog = () => {
       if (!watchdogTimer) return;
       try { clearTimeout(watchdogTimer); } catch {}
       watchdogTimer = 0;
     };
+    const clearDurationTimer = () => {
+      if (!durationTimer) return;
+      try { clearTimeout(durationTimer); } catch {}
+      durationTimer = 0;
+    };
     const settleResolve = (value) => {
       if (settled) return;
       settled = true;
       clearWatchdog();
+      clearDurationTimer();
       resolve(value);
     };
     const settleReject = (err) => {
       if (settled) return;
       settled = true;
       clearWatchdog();
+      clearDurationTimer();
       reject(err);
     };
+    durationTimer = setTimeout(() => {
+      if (pendingFrame) finalizePendingFrame();
+      const s = statsFromFrameMs(frameMs);
+      settleResolve({
+        label: fullLabel,
+        durationMs,
+        warmupMs,
+        createdAt: new Date().toISOString(),
+        ...s,
+      });
+    }, durationMs);
     watchdogTimer = setTimeout(() => {
       const elapsedMs = Math.max(0, nowMs() - wallStartMs);
       publishRunVariantDebugResultAsync({
@@ -9272,6 +9539,7 @@ async function runVariantPlaying(label, step, statusText, options = null) {
 
       const stepFrame = (ts) => {
         try {
+        if (settled) return;
         if (startMs === null) {
           startMs = ts;
           lastMs = ts;

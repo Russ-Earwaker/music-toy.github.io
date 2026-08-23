@@ -2,6 +2,16 @@ const SURFACE_FIELD_MAX_PARTICLES = 240;
 const SURFACE_FIELD_AMBIENT_TARGET = 92;
 const SURFACE_FIELD_RING_STREAM_TARGET = 76;
 
+export function getBeatSwarmArenaResistanceBandRadii(arenaRadiusLike = 0, resistRangeLike = 0) {
+  const arenaRadius = Math.max(1, Number(arenaRadiusLike) || 1);
+  const resistRange = Math.max(1, Number(resistRangeLike) || arenaRadius * 0.16);
+  const padding = Math.min(18, resistRange * 0.08);
+  return {
+    innerRadius: arenaRadius + padding,
+    outerRadius: Math.max(arenaRadius + padding + 1, arenaRadius + resistRange - padding),
+  };
+}
+
 function isFinitePoint(point) {
   return !!point && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y));
 }
@@ -270,8 +280,9 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
   function resetRingStreamParticle(p, center, arenaRadiusWorld) {
     const angle = Math.random() * Math.PI * 2;
     const resistRange = Math.max(80, Number(constants.swarmArenaResistRangeWorld) || arenaRadiusWorld * 0.16);
-    const outerRadius = arenaRadiusWorld * (0.99 + Math.random() * 0.015);
-    const innerRadius = Math.max(arenaRadiusWorld * 0.72, arenaRadiusWorld - resistRange * (0.92 + Math.random() * 0.08));
+    const band = getBeatSwarmArenaResistanceBandRadii(arenaRadiusWorld, resistRange);
+    const outerRadius = band.outerRadius;
+    const innerRadius = band.innerRadius;
     p.kind = 'ringStream';
     p.angle = angle;
     p.radial = outerRadius;
@@ -336,6 +347,11 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, w, h);
+    const projectionOrigin = worldToScreen({ x: 0, y: 0 });
+    const projectionUnit = worldToScreen({ x: 1, y: 1 });
+    const canProject = isFinitePoint(projectionOrigin) && isFinitePoint(projectionUnit);
+    const projectionScaleX = canProject ? Number(projectionUnit.x) - Number(projectionOrigin.x) : 1;
+    const projectionScaleY = canProject ? Number(projectionUnit.y) - Number(projectionOrigin.y) : 1;
     const safeDt = Math.max(0, Math.min(0.05, Number(dt) || 0));
     const player = playerWorld && typeof playerWorld === 'object' ? playerWorld : null;
     const state = getState() || {};
@@ -400,9 +416,10 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
       p.vy *= Math.pow(p.kind === 'ambient' ? 0.82 : (p.kind === 'shard' ? 0.34 : 0.22), safeDt);
       p.rot = (Number(p.rot) || 0) + (Number(p.vr) || 0) * safeDt;
       p.flash = Math.max(0, (Number(p.flash) || 0) - safeDt * 1.25);
-      const s = worldToScreen({ x: p.x, y: p.y });
-      if (!isFinitePoint(s)) continue;
-      if (s.x < -40 || s.y < -40 || s.x > w + 40 || s.y > h + 40) continue;
+      if (!canProject) continue;
+      const screenX = Number(projectionOrigin.x) + (Number(p.x) || 0) * projectionScaleX;
+      const screenY = Number(projectionOrigin.y) + (Number(p.y) || 0) * projectionScaleY;
+      if (screenX < -40 || screenY < -40 || screenX > w + 40 || screenY > h + 40) continue;
       const life = Math.max(0, Math.min(1, p.ttl / Math.max(0.001, Number(p.maxTtl) || 1)));
       const hue = Math.trunc(Number(p.hue) || 195);
       if (p.kind === 'ambient' || p.kind === 'ringStream') {
@@ -412,13 +429,13 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
         ctx.globalAlpha = Math.max(0, Math.min(1, arenaVisible ? 0.92 : 0));
         ctx.fillStyle = motionGlow > 0.08 ? `hsl(${hue} 100% 86%)` : `hsl(${hue} 96% 66%)`;
         const size = Math.max(1.4, Number(p.size) || 2.2) * (1 + motionGlow * 1.9);
-        ctx.fillRect(s.x - size * 0.5, s.y - size * 0.5, size, size);
+        ctx.fillRect(screenX - size * 0.5, screenY - size * 0.5, size, size);
       } else if (p.kind === 'shard') {
         const size = Math.max(4, Number(p.size) || 10) * (0.74 + life * 0.24);
         const len = size * Math.max(0.25, Number(p.lengthScale) || 1);
         const thick = Math.max(2, size * Math.max(0.1, Number(p.thicknessScale) || 0.3));
         ctx.save();
-        ctx.translate(s.x, s.y);
+        ctx.translate(screenX, screenY);
         ctx.rotate(Number(p.rot) || 0);
         ctx.globalAlpha = Math.min(0.95, life * (0.7 + Math.min(0.35, Number(p.flash) || 0)));
         ctx.fillStyle = `hsl(${hue} 92% 67%)`;
@@ -446,7 +463,7 @@ export function createBeatSwarmSurfaceFieldRuntime(options = null) {
         ctx.globalAlpha = life * 0.68;
         ctx.fillStyle = `hsl(${hue} 100% 76%)`;
         const size = Math.max(1, Number(p.size) || 2) * (0.75 + life * 0.55);
-        ctx.fillRect(s.x - size * 0.5, s.y - size * 0.5, size, size);
+        ctx.fillRect(screenX - size * 0.5, screenY - size * 0.5, size, size);
       }
     }
     ctx.globalAlpha = 1;

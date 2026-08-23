@@ -511,6 +511,12 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     performerEnemyId: clampInt(payload?.performerEnemyId, 0, 0),
     performerGroupId: clampInt(payload?.performerGroupId, 0, 0),
     performerType: String(payload?.performerType || '').trim().toLowerCase(),
+    eventOrdinal: clampInt(payload?.eventOrdinal, 0, 0),
+    expectedLargeEnemyId: clampInt(payload?.expectedLargeEnemyId, 0, 0),
+    selectedSmallEnemyId: clampInt(payload?.selectedSmallEnemyId, 0, 0),
+    largeSelected: payload?.largeSelected === true,
+    largeEventCount: clampInt(payload?.largeEventCount, 0, 0),
+    movementPhase: clampInt(payload?.movementPhase, -1, -1),
     previousContinuityId: String(payload?.previousContinuityId || '').trim(),
     previousInstrumentId: String(payload?.previousInstrumentId || '').trim(),
     continuityClass: String(payload?.continuityClass || '').trim().toLowerCase(),
@@ -4331,15 +4337,31 @@ function collectPlayerWeaponTiming(session, maxBarIndex) {
   let severeCount = 0;
   let absOffsetSum = 0;
   let maxAbsOffsetMs = 0;
+  let lookaheadHandoffCount = 0;
+  let handoffLateCount = 0;
+  let handoffAbsOffsetSum = 0;
+  let maxHandoffAbsOffsetMs = 0;
   for (const ev of events) {
     const offsetMs = Number(ev?.flushOffsetMs);
     if (!Number.isFinite(offsetMs)) continue;
-    const absOffsetMs = Math.abs(offsetMs);
+    const reason = String(ev?.reason || '').trim().toLowerCase();
+    const lookaheadHandoff = reason === 'lookahead_handoff';
+    const handoffAbsOffsetMs = Math.abs(offsetMs);
+    if (lookaheadHandoff) {
+      lookaheadHandoffCount += 1;
+      handoffAbsOffsetSum += handoffAbsOffsetMs;
+      maxHandoffAbsOffsetMs = Math.max(maxHandoffAbsOffsetMs, handoffAbsOffsetMs);
+      if (offsetMs > 0.5) handoffLateCount += 1;
+    }
+    // A lookahead handoff reports when gameplay caught up. Its audio was already
+    // scheduled on the target boundary, so it has no audible scheduling offset.
+    const audibleOffsetMs = lookaheadHandoff ? 0 : offsetMs;
+    const absOffsetMs = Math.abs(audibleOffsetMs);
     count += 1;
     absOffsetSum += absOffsetMs;
     maxAbsOffsetMs = Math.max(maxAbsOffsetMs, absOffsetMs);
-    if (offsetMs > 0.5) lateCount += 1;
-    else if (offsetMs < -0.5) earlyCount += 1;
+    if (audibleOffsetMs > 0.5) lateCount += 1;
+    else if (audibleOffsetMs < -0.5) earlyCount += 1;
     if (absOffsetMs > 20) severeCount += 1;
   }
   return {
@@ -4349,6 +4371,10 @@ function collectPlayerWeaponTiming(session, maxBarIndex) {
     severeCount,
     avgAbsOffsetMs: count > 0 ? (absOffsetSum / count) : 0,
     maxAbsOffsetMs,
+    lookaheadHandoffCount,
+    handoffLateCount,
+    avgHandoffAbsOffsetMs: lookaheadHandoffCount > 0 ? (handoffAbsOffsetSum / lookaheadHandoffCount) : 0,
+    maxHandoffAbsOffsetMs,
   };
 }
 

@@ -29,6 +29,15 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const maxLiveComposerGroups = Number.isFinite(Number(options?.maxLiveComposerGroups))
     ? Math.max(0, Math.trunc(Number(options.maxLiveComposerGroups)))
     : 4;
+  const requiredBasicLaneCarriers = Array.isArray(options?.requiredBasicLaneCarriers)
+    ? options.requiredBasicLaneCarriers
+        .map((entry) => ({
+          laneId: String(entry?.laneId || '').trim().toLowerCase(),
+          profileSourceType: String(entry?.profileSourceType || '').trim().toLowerCase(),
+        }))
+        .filter((entry) => entry.laneId && entry.profileSourceType)
+    : [];
+  const requiredBasicLaneIds = new Set(requiredBasicLaneCarriers.map((entry) => entry.laneId));
 
   const getAliveIdsForGroup = typeof options?.getAliveIdsForGroup === 'function' ? options.getAliveIdsForGroup : (() => new Set());
   const getAliveEnemiesByIds = typeof options?.getAliveEnemiesByIds === 'function' ? options.getAliveEnemiesByIds : (() => []);
@@ -136,6 +145,11 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
         && introStage !== 'ended';
     }
     return false;
+  };
+  const isRequiredBasicLaneCarrier = (groupLike) => {
+    const group = groupLike && typeof groupLike === 'object' ? groupLike : null;
+    if (!group || group?.retiring || group?.active === false) return false;
+    return requiredBasicLaneIds.has(String(group?.musicLaneId || '').trim().toLowerCase());
   };
   const getTargetIntroProfiles = () => {
     if (introStage === 'rhythm_only') return ['spawner_rhythm_pulse'];
@@ -784,6 +798,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     }
     if (g.sectionKey !== sectionKey) {
       const carryAcrossSection = isPrimaryLeadMelodyGroup(g)
+        || isRequiredBasicLaneCarrier(g)
         || hasRecentPrimaryLeadCoverageMemory(g)
         || hasPrimaryLeadPersistence(g)
         || hasProtectedSecondaryLoopContinuity(g)
@@ -1173,9 +1188,46 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     ))
     .length;
   let effectiveCurrentSectionCount = currentSectionCount;
-  const reservedCoverageSpawnNeeded = reservedLeadSpawnNeeded || reservedSecondaryLoopSpawnNeeded;
+  const embodiedBasicLaneIds = new Set(
+    composerEnemyGroups
+      .filter((group) => (
+        group
+        && group.active !== false
+        && group.retiring !== true
+        && getAliveEnemiesByIds(group?.memberIds).length > 0
+      ))
+      .map((group) => String(group?.musicLaneId || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const missingBasicLaneCarriers = requiredBasicLaneCarriers.filter(
+    (entry) => !embodiedBasicLaneIds.has(entry.laneId)
+  );
+  const requiredBasicLaneSpawnNeeded = missingBasicLaneCarriers.length > 0;
+  const reservedCoverageSpawnNeeded = reservedLeadSpawnNeeded
+    || reservedSecondaryLoopSpawnNeeded
+    || requiredBasicLaneSpawnNeeded;
   if (!earlyIntroBridgeActive && reservedCoverageSpawnNeeded && effectiveCurrentSectionCount >= Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0))) {
-    const replaceableGroup = rankedGroups.find((group) => (
+    const liveLaneCounts = new Map();
+    for (const group of rankedGroups) {
+      if (!group || !hasLiveMembers(group)) continue;
+      const laneId = String(group?.musicLaneId || '').trim().toLowerCase();
+      if (!laneId) continue;
+      liveLaneCounts.set(laneId, Math.max(0, Math.trunc(Number(liveLaneCounts.get(laneId)) || 0)) + 1);
+    }
+    const replaceableRequiredLaneGroup = requiredBasicLaneSpawnNeeded
+      ? rankedGroups.find((group) => (
+          group
+          && (
+            !requiredBasicLaneIds.has(String(group?.musicLaneId || '').trim().toLowerCase())
+            || Math.max(0, Math.trunc(Number(liveLaneCounts.get(String(group?.musicLaneId || '').trim().toLowerCase())) || 0)) > 1
+          )
+          && !isPersistentIntroSlotCarrier(group)
+          && !hasPrimaryLeadPersistence(group)
+          && !hasLeadMergeSecondaryBridgePersistence(group)
+          && hasLiveMembers(group)
+        ))
+      : null;
+    const replaceableGroup = replaceableRequiredLaneGroup || rankedGroups.find((group) => (
       group
       && !isPersistentIntroSlotCarrier(group)
       && !hasPrimaryLeadPersistence(group)
@@ -1190,11 +1242,14 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       )
     )) || null;
     if (replaceableGroup) {
-      retireGroup(replaceableGroup, reservedLeadSpawnNeeded ? 'lead_candidate_reserve' : 'secondary_loop_reserve');
+      const reserveReason = requiredBasicLaneSpawnNeeded
+        ? 'required_basic_lane_reserve'
+        : (reservedLeadSpawnNeeded ? 'lead_candidate_reserve' : 'secondary_loop_reserve');
+      retireGroup(replaceableGroup, reserveReason);
       effectiveCurrentSectionCount = Math.max(0, effectiveCurrentSectionCount - 1);
       try {
         noteMusicSystemEvent?.('music_composer_group_state', {
-          phase: reservedLeadSpawnNeeded ? 'lead_candidate_reserve' : 'secondary_loop_reserve',
+          phase: reserveReason,
           groupId: Math.trunc(Number(replaceableGroup?.id) || 0),
           reason: reservedLeadSpawnNeeded
             ? 'retire_bass_for_primary_loop_candidate'
@@ -1255,6 +1310,27 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     && getAliveEnemiesByIds(group?.memberIds).length > 0
   )).length;
   const availableLiveGroupSlots = Math.max(0, maxLiveComposerGroups - liveComposerGroupCount);
+  const requiredLaneStatusSignature = [
+    ...requiredBasicLaneCarriers.map((entry) => entry.laneId),
+    '|',
+    ...missingBasicLaneCarriers.map((entry) => entry.laneId),
+    availableLiveGroupSlots,
+  ].join(':');
+  if (composerRuntime.__bsRequiredBasicLaneStatusSignature !== requiredLaneStatusSignature) {
+    composerRuntime.__bsRequiredBasicLaneStatusSignature = requiredLaneStatusSignature;
+    try {
+      noteMusicSystemEvent?.('enemy_basic_lane_carrier_status', {
+        requiredLaneIds: requiredBasicLaneCarriers.map((entry) => entry.laneId),
+        embodiedLaneIds: Array.from(embodiedBasicLaneIds),
+        missingLaneIds: missingBasicLaneCarriers.map((entry) => entry.laneId),
+        availableLiveGroupSlots,
+        liveComposerGroupCount,
+      }, {
+        beatIndex: Math.max(0, currentBarIndex * 4),
+        barIndex: currentBarIndex,
+      });
+    } catch {}
+  }
   const requestedSpawnCount = requiredIntroProfiles.length > 0
     ? Math.max(0, introMissingCount)
     : (
@@ -1268,10 +1344,11 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const spawnCount = Math.min(requestedSpawnCount, availableLiveGroupSlots, 1);
   for (let i = 0; i < spawnCount; i++) {
     const forcedIntroProfileSourceType = missingIntroProfiles[i] || '';
+    const forcedBasicLaneCarrier = missingBasicLaneCarriers[i] || null;
     const forcedProfileSourceType = forcedIntroProfileSourceType || (
-      reservedLeadSpawnNeeded && i === 0
+      forcedBasicLaneCarrier?.profileSourceType || (reservedLeadSpawnNeeded && i === 0
         ? 'lead_melody'
-        : (reservedSecondaryLoopSpawnNeeded && i === 0 ? level1CounterRhythmFamily : '')
+        : (reservedSecondaryLoopSpawnNeeded && i === 0 ? level1CounterRhythmFamily : ''))
     );
     const groupIndex = sameSection.length + i;
     const template = pickTemplate(groupIndex);
@@ -1315,11 +1392,13 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
           groupIndex,
           reason: forcedProfileSourceType
             ? (
-              forcedProfileSourceType === 'lead_melody'
+              forcedBasicLaneCarrier
+                ? 'required_basic_lane_carrier'
+                : (forcedProfileSourceType === 'lead_melody'
                 ? 'reserved_lead_spawn'
                 : (reservedSecondaryLoopSpawnNeeded && !forcedIntroProfileSourceType
                   ? 'reserved_secondary_support_spawn'
-                  : 'intro_required_profile')
+                  : 'intro_required_profile'))
             )
             : (genericGroupSpawnBlockedByIntroBridge ? 'blocked_generic' : 'generic_group_fill'),
           templateId: String(templateId || '').trim(),
@@ -1329,11 +1408,26 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
           instrumentId: String(group?.instrumentId || group?.instrument || '').trim(),
           note: Array.isArray(group?.notes) && group.notes.length ? String(group.notes[0] || '').trim() : '',
           stage: String(forcedProfileSourceType || group?.introSlotProfileSourceType || group?.musicProfileSourceType || '').trim().toLowerCase(),
+          requiredBasicLaneId: String(forcedBasicLaneCarrier?.laneId || '').trim().toLowerCase(),
         }, {
           beatIndex: Math.max(0, currentBarIndex * 4),
         });
       } catch {}
     }
     spawnComposerGroupOffscreenMembers(group, Math.max(0, Math.trunc(Number(group.size) || 0)));
+    if (forcedBasicLaneCarrier) {
+      try {
+        noteMusicSystemEvent?.('enemy_basic_lane_carrier_spawned', {
+          groupId: Math.trunc(Number(group?.id) || 0),
+          musicLaneId: String(group?.musicLaneId || '').trim().toLowerCase(),
+          requiredMusicLaneId: forcedBasicLaneCarrier.laneId,
+          profileSourceType: forcedBasicLaneCarrier.profileSourceType,
+          memberCount: Math.max(0, Math.trunc(Number(group?.size) || 0)),
+        }, {
+          beatIndex: Math.max(0, currentBarIndex * 4),
+          barIndex: currentBarIndex,
+        });
+      } catch {}
+    }
   }
 }

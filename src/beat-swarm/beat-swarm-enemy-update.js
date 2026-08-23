@@ -426,6 +426,8 @@ function ensurePairedDanceOrbitSeedRuntime(enemy, partner, assignment, cycleInde
 function applyPairedDanceSeparationRuntime(enemy, enemies, state) {
   if (!enemy || String(enemy?.behavioralFormationArchetype || '').trim().toLowerCase() !== 'paired_dance') return;
   if (enemy?.behavioralFormationActive !== true || enemy?.retreating) return;
+  const formationMembers = getBehavioralFormationMembersRuntime(enemy, enemies);
+  if (formationMembers.some((candidate) => isLargeFormationEnemyRuntime(candidate))) return;
   const danceWindow = getPerfBehaviorWindowRuntime(5600, 3600);
   if (!danceWindow.active) return;
   const beatIndex = Math.max(0, Math.trunc(Number(state?.currentBeatIndex) || 0));
@@ -456,11 +458,47 @@ function applyPairedDanceSeparationRuntime(enemy, enemies, state) {
     ny = axisY;
     dist = 0;
   }
-  const push = (minDist - dist) * 0.5;
-  enemy.wx = (Number(enemy?.wx) || 0) + (nx * push);
-  enemy.wy = (Number(enemy?.wy) || 0) + (ny * push);
-  partner.wx = (Number(partner?.wx) || 0) - (nx * push);
-  partner.wy = (Number(partner?.wy) || 0) - (ny * push);
+  const penetration = minDist - dist;
+  const separationSpeed = Math.max(24, Math.min(180, penetration * 4));
+  enemy.vx = (Number(enemy?.vx) || 0) + (nx * separationSpeed);
+  enemy.vy = (Number(enemy?.vy) || 0) + (ny * separationSpeed);
+  partner.vx = (Number(partner?.vx) || 0) - (nx * separationSpeed);
+  partner.vy = (Number(partner?.vy) || 0) - (ny * separationSpeed);
+}
+
+function recordEnemyMovementDiscontinuityRuntime(enemy, state, fromX, fromY, maxPhysicalSpeed) {
+  const toX = Number(enemy?.wx);
+  const toY = Number(enemy?.wy);
+  if (!Number.isFinite(fromX) || !Number.isFinite(fromY) || !Number.isFinite(toX) || !Number.isFinite(toY)) return;
+  const dt = Math.max(0.001, Number(state?.dt) || 0);
+  const distance = Math.hypot(toX - fromX, toY - fromY);
+  const threshold = Math.max(28, (Math.max(40, Number(maxPhysicalSpeed) || 0) * dt * 2.5) + 8);
+  if (!(distance > threshold)) return;
+  const entry = {
+    atMs: Number(globalThis.performance?.now?.()) || Date.now(),
+    frameIndex: Math.max(0, Math.trunc(Number(state?.frameIndex) || 0)),
+    enemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
+    groupId: Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0)),
+    scale: String(enemy?.enemyScale || enemy?.gameplayDescriptor?.scale || '').trim().toLowerCase(),
+    archetype: String(enemy?.behavioralFormationArchetype || '').trim().toLowerCase(),
+    phase: String(enemy?.behavioralFormationRuntime?.archetype || '').trim().toLowerCase(),
+    distance,
+    threshold,
+    fromX,
+    fromY,
+    toX,
+    toY,
+    vx: Number(enemy?.vx) || 0,
+    vy: Number(enemy?.vy) || 0,
+  };
+  const history = Array.isArray(globalThis.__BEAT_SWARM_ENEMY_MOVEMENT_DEBUG)
+    ? globalThis.__BEAT_SWARM_ENEMY_MOVEMENT_DEBUG
+    : (globalThis.__BEAT_SWARM_ENEMY_MOVEMENT_DEBUG = []);
+  history.push(entry);
+  if (history.length > 120) history.splice(0, history.length - 120);
+  if (globalThis.__BEAT_SWARM_ENEMY_MOVEMENT_DEBUG_ENABLED === true) {
+    try { console.warn('[BeatSwarmEnemyMovement] discontinuity', entry); } catch {}
+  }
 }
 
 function resolvePerfRepeatEventMotionRuntime(enemy, state, constants) {
@@ -651,25 +689,59 @@ function resolveSingleBehaviorMotionRuntime(enemy, centerWorld, state, constants
   return null;
 }
 
-function resolveWindingChainLeaderRuntime(enemy, enemies) {
+function isLargeFormationEnemyRuntime(enemy) {
+  return String(enemy?.enemyScale || enemy?.gameplayDescriptor?.scale || '').trim().toLowerCase() === 'large';
+}
+
+function getBehavioralFormationMembersRuntime(enemy, enemies) {
   const groupId = Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0));
-  if (!(groupId > 0)) return null;
+  if (!(groupId > 0)) return [];
   const archetype = String(enemy?.behavioralFormationArchetype || '').trim().toLowerCase();
-  let leader = null;
+  const members = [];
   for (let i = 0; i < enemies.length; i++) {
     const candidate = enemies[i];
-    if (!candidate || candidate === enemy) continue;
+    if (!candidate) continue;
     if (String(candidate?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') continue;
     const candidateGroupId = Math.max(0, Math.trunc(Number(candidate?.composerGroupId || candidate?.musicGroupId) || 0));
     if (candidateGroupId !== groupId) continue;
     if (candidate?.behavioralFormationActive !== true) continue;
     if (String(candidate?.behavioralFormationArchetype || '').trim().toLowerCase() !== archetype) continue;
     if (candidate?.retreating) continue;
-    if (!leader || Math.trunc(Number(candidate?.formationMemberIndex) || 0) < Math.trunc(Number(leader?.formationMemberIndex) || 0)) {
-      leader = candidate;
-    }
+    members.push(candidate);
   }
-  return leader;
+  members.sort((a, b) => {
+    const scaleOrder = Number(isLargeFormationEnemyRuntime(b)) - Number(isLargeFormationEnemyRuntime(a));
+    if (scaleOrder !== 0) return scaleOrder;
+    return Math.trunc(Number(a?.formationMemberIndex) || 0) - Math.trunc(Number(b?.formationMemberIndex) || 0);
+  });
+  return members;
+}
+
+function resolveFormationLeaderRuntime(enemy, enemies) {
+  return getBehavioralFormationMembersRuntime(enemy, enemies)[0] || null;
+}
+
+function getFormationFollowDistanceRuntime(enemy, predecessor, baseDistance, formationMembers = null) {
+  const members = Array.isArray(formationMembers) ? formationMembers : [];
+  const largeClearance = (
+    isLargeFormationEnemyRuntime(enemy)
+    || isLargeFormationEnemyRuntime(predecessor)
+    || members.some((candidate) => isLargeFormationEnemyRuntime(candidate))
+  ) ? 86 : 0;
+  return Math.max(18, Number(baseDistance) || 0) + largeClearance;
+}
+
+export function resolveBeatSwarmOneShotOrbitTiming(startedAtMs, nowMs, durationMs) {
+  const safeNowMs = Number.isFinite(Number(nowMs)) ? Number(nowMs) : 0;
+  const safeDurationMs = Math.max(1, Number(durationMs) || 1);
+  const hasStarted = startedAtMs != null && Number.isFinite(Number(startedAtMs));
+  const safeStartedAtMs = hasStarted ? Number(startedAtMs) : safeNowMs;
+  const progress = Math.max(0, Math.min(1, (safeNowMs - safeStartedAtMs) / safeDurationMs));
+  return {
+    startedAtMs: safeStartedAtMs,
+    progress,
+    completed: progress >= 1,
+  };
 }
 
 function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, state, constants) {
@@ -679,8 +751,16 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
   if (!runtime || runtime.active !== true) return null;
   const enemyMaxSpeed = Math.max(40, Number(constants?.enemyMaxSpeed) || 0);
   const speedMultiplier = Math.max(1, Number(runtime?.speedMultiplier) || 1);
-  const desiredSpeed = enemyMaxSpeed * speedMultiplier;
-  if (runtime.behaviorClass === 'follow_the_leader' && runtime.archetype === 'advancing_line' && (Number(runtime?.leaderBias) || 0) >= 0.999) {
+  const scaleSpeedMultiplier = isLargeFormationEnemyRuntime(enemy) ? 1 : 1.25;
+  const desiredSpeed = enemyMaxSpeed * speedMultiplier * scaleSpeedMultiplier;
+  const formationMembers = getBehavioralFormationMembersRuntime(enemy, enemies);
+  const formationLeader = formationMembers[0] || null;
+  const isFormationLeader = formationLeader === enemy;
+  if (!(runtime.behaviorClass === 'paired_motion' && runtime.archetype === 'paired_dance')) {
+    enemy.behavioralLargeOrbitStartedAtMs = null;
+    enemy.behavioralLargeOrbitCompleted = false;
+  }
+  if (runtime.behaviorClass === 'follow_the_leader' && runtime.archetype === 'advancing_line' && isFormationLeader) {
     const arenaCenter = state?.arenaCenterWorld && typeof state.arenaCenterWorld === 'object'
       ? state.arenaCenterWorld
       : centerWorld;
@@ -728,6 +808,72 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
   }
   if (runtime.behaviorClass === 'paired_motion' && runtime.archetype === 'paired_dance') {
     const danceWindow = getPerfBehaviorWindowRuntime(5600, 3600);
+    if (formationLeader && isLargeFormationEnemyRuntime(formationLeader) && formationMembers.length > 1) {
+      const arenaRadius = Math.max(180, Number(constants?.swarmArenaRadiusWorld) || 0);
+      const nowMs = Number(globalThis.performance?.now?.()) || Date.now();
+      const orbitDurationMs = Math.max(1000, Number(danceWindow.cycleMs) || 5600);
+      const orbitTiming = resolveBeatSwarmOneShotOrbitTiming(
+        enemy?.behavioralLargeOrbitStartedAtMs,
+        nowMs,
+        orbitDurationMs,
+      );
+      enemy.behavioralLargeOrbitStartedAtMs = orbitTiming.startedAtMs;
+      const cycleProgress = orbitTiming.progress;
+      enemy.behavioralLargeOrbitCompleted = orbitTiming.completed;
+      if (orbitTiming.completed) return null;
+      const groupSeed = Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0)) * 0.61;
+      const orbitDirection = (Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0)) % 2) === 0 ? 1 : -1;
+      if (isFormationLeader) {
+        return {
+          overrideVelocity: true,
+          desiredVx: 0,
+          desiredVy: 0,
+          blend: 0.72,
+          debugTrace: { phase: 'large_anchor', leaderId: Math.trunc(Number(formationLeader?.id) || 0) },
+        };
+      }
+      const followers = formationMembers.filter((candidate) => candidate !== formationLeader);
+      const followerIndex = Math.max(0, followers.indexOf(enemy));
+      const followerCount = Math.max(1, followers.length);
+      const orbitRadius = Math.max(95, arenaRadius * 0.29);
+      const targetOrbitAngle = groupSeed
+        + ((Math.PI * 2 * followerIndex) / followerCount)
+        + (cycleProgress * Math.PI * 2 * orbitDirection);
+      const targetX = Number(formationLeader?.wx) + (Math.cos(targetOrbitAngle) * orbitRadius);
+      const targetY = Number(formationLeader?.wy) + (Math.sin(targetOrbitAngle) * orbitRadius);
+      const targetDx = targetX - Number(enemy?.wx);
+      const targetDy = targetY - Number(enemy?.wy);
+      const targetDistance = Math.hypot(targetDx, targetDy);
+      const angularSpeed = ((Math.PI * 2) / (orbitDurationMs / 1000)) * orbitDirection;
+      const targetVx = (Number(formationLeader?.vx) || 0) - (Math.sin(targetOrbitAngle) * orbitRadius * angularSpeed);
+      const targetVy = (Number(formationLeader?.vy) || 0) + (Math.cos(targetOrbitAngle) * orbitRadius * angularSpeed);
+      const arrivalGain = 3.2;
+      const orbitVx = targetVx + (targetDx * arrivalGain);
+      const orbitVy = targetVy + (targetDy * arrivalGain);
+      const orbitSpeed = Math.hypot(orbitVx, orbitVy) || 1;
+      const positioningBoost = Math.max(0, Math.min(1, targetDistance / Math.max(1, orbitRadius * 0.7)));
+      const maxPositioningSpeed = desiredSpeed * (1 + positioningBoost);
+      const orbitSpeedScale = orbitSpeed > maxPositioningSpeed ? (maxPositioningSpeed / orbitSpeed) : 1;
+      return {
+        overrideVelocity: true,
+        desiredVx: orbitVx * orbitSpeedScale,
+        desiredVy: orbitVy * orbitSpeedScale,
+        blend: 0.58,
+        debugTrace: {
+          phase: 'orbit_large_leader',
+          leaderId: Math.trunc(Number(formationLeader?.id) || 0),
+          followerIndex,
+          followerCount,
+          orbitAngle: Math.atan2(Number(enemy?.wy) - Number(formationLeader?.wy), Number(enemy?.wx) - Number(formationLeader?.wx)),
+          targetOrbitAngle,
+          radialDistance: Math.hypot(Number(enemy?.wx) - Number(formationLeader?.wx), Number(enemy?.wy) - Number(formationLeader?.wy)),
+          orbitRadius,
+          orbitDirection,
+          orbitCompleted: orbitTiming.completed,
+          targetDistance,
+        },
+      };
+    }
     if (!danceWindow.active) return null;
     const assignment = getPairedDanceAssignmentRuntime(enemy, enemies, state, danceWindow.cycleIndex);
     if (!assignment) return null;
@@ -844,7 +990,7 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
     };
   }
   if (runtime.behaviorClass !== 'follow_the_leader') return null;
-  if (runtime.archetype === 'winding_chain' && (Number(runtime?.leaderBias) || 0) >= 0.999) {
+  if (runtime.archetype === 'winding_chain' && isFormationLeader) {
     const arenaCenter = state?.arenaCenterWorld && typeof state.arenaCenterWorld === 'object'
       ? state.arenaCenterWorld
       : centerWorld;
@@ -924,22 +1070,8 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
       blend: Math.max(0.12, Math.min(0.45, Number(runtime?.velocityBlend) || 0.34)),
     };
   }
-  const groupId = Math.max(0, Math.trunc(Number(enemy?.composerGroupId || enemy?.musicGroupId) || 0));
-  if (!(groupId > 0)) return null;
-  const members = [];
-  for (let i = 0; i < enemies.length; i++) {
-    const candidate = enemies[i];
-    if (!candidate) continue;
-    const candidateGroupId = Math.max(0, Math.trunc(Number(candidate?.composerGroupId || candidate?.musicGroupId) || 0));
-    if (candidateGroupId !== groupId) continue;
-    if (candidate?.behavioralFormationActive !== true) continue;
-    if (String(candidate?.behavioralFormationArchetype || '').trim().toLowerCase() !== String(runtime?.archetype || '').trim().toLowerCase()) continue;
-    if (candidate?.retreating) continue;
-    members.push(candidate);
-  }
-  members.sort((a, b) => Math.trunc(Number(a?.formationMemberIndex) || 0) - Math.trunc(Number(b?.formationMemberIndex) || 0));
-  const slotIndex = Math.max(0, Math.trunc(Number(runtime?.slotIndex) || 0));
-  const predecessor = slotIndex > 0 ? (members[slotIndex - 1] || resolveWindingChainLeaderRuntime(enemy, enemies)) : null;
+  const slotIndex = formationMembers.indexOf(enemy);
+  const predecessor = slotIndex > 0 ? (formationMembers[slotIndex - 1] || resolveFormationLeaderRuntime(enemy, enemies)) : null;
   if (!predecessor) return null;
   const prevVx = Number(predecessor?.vx) || 0;
   const prevVy = Number(predecessor?.vy) || 0;
@@ -948,27 +1080,29 @@ function resolveBehavioralFormationMotionRuntime(enemy, enemies, centerWorld, st
   const dirY = prevSpeed > 0.0001 ? (prevVy / prevSpeed) : -1;
   const normalX = -dirY;
   const normalY = dirX;
+  const followDistance = getFormationFollowDistanceRuntime(enemy, predecessor, runtime?.followDistanceWorld, formationMembers);
   const targetX = Number(predecessor?.wx)
-    - (dirX * Math.max(12, Number(runtime?.followDistanceWorld) || 0))
+    - (dirX * followDistance)
     + (normalX * (Number(runtime?.lateralOffsetWorld) || 0));
   const targetY = Number(predecessor?.wy)
-    - (dirY * Math.max(12, Number(runtime?.followDistanceWorld) || 0))
+    - (dirY * followDistance)
     + (normalY * (Number(runtime?.lateralOffsetWorld) || 0));
   const followDx = targetX - Number(enemy?.wx);
   const followDy = targetY - Number(enemy?.wy);
   const followLen = Math.hypot(followDx, followDy) || 1;
-  const desiredGap = Math.max(18, Number(runtime?.followDistanceWorld) || 0);
+  const desiredGap = followDistance;
   const gapError = Math.max(-1, Math.min(1, (followLen - desiredGap) / desiredGap));
-  const approachWeight = followLen < desiredGap ? 0.92 : 0.78;
-  const streamWeight = 1 - approachWeight;
-  const desiredDirX = ((followDx / followLen) * approachWeight) + (dirX * streamWeight);
-  const desiredDirY = ((followDy / followLen) * approachWeight) + (dirY * streamWeight);
-  const desiredDirLen = Math.hypot(desiredDirX, desiredDirY) || 1;
-  const slotSpeedScale = Math.max(0.9, 1 - (slotIndex * 0.03)) + (gapError * 0.18);
+  const positioningBoost = Math.max(0, Math.min(1, (followLen - desiredGap) / Math.max(1, desiredGap * 1.5)));
+  const correctionGain = followLen < desiredGap ? 2.1 : 2.8;
+  const followVx = prevVx + (followDx * correctionGain);
+  const followVy = prevVy + (followDy * correctionGain);
+  const followSpeed = Math.hypot(followVx, followVy) || 1;
+  const maxFollowSpeed = desiredSpeed * Math.max(0.82, Math.min(2, 1 + positioningBoost + (gapError * 0.18)));
+  const followSpeedScale = followSpeed > maxFollowSpeed ? (maxFollowSpeed / followSpeed) : 1;
   return {
     overrideVelocity: true,
-    desiredVx: (desiredDirX / desiredDirLen) * desiredSpeed * Math.max(0.82, Math.min(1.12, slotSpeedScale)),
-    desiredVy: (desiredDirY / desiredDirLen) * desiredSpeed * Math.max(0.82, Math.min(1.12, slotSpeedScale)),
+    desiredVx: followVx * followSpeedScale,
+    desiredVy: followVy * followSpeedScale,
     blend: Math.max(0.18, Math.min(0.5, (Number(runtime?.velocityBlend) || 0.34) + 0.08)),
   };
 }
@@ -1014,6 +1148,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       enemies.splice(i, 1);
       continue;
     }
+    const frameStartWx = Number(e?.wx);
+    const frameStartWy = Number(e?.wy);
     const enemyType = String(e?.enemyType || '');
     const lifecycleState = helpers.normalizeMusicLifecycleState?.(e?.lifecycleState || 'active', 'active');
     const eventSectionVisual = getEventSectionVisualRuntime(e, eventSectionRuntime);
@@ -1306,7 +1442,11 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       e.vy *= eventSectionVisual.velocityDamping;
     }
     const speed = Math.hypot(e.vx, e.vy);
-    const maxSpeed = (Number(constants.enemyMaxSpeed) || 0) * speedMult;
+    const formationPositioningSpeedScale = scopedBehaviorMotion?.overrideVelocity === true
+      && !isLargeFormationEnemyRuntime(e)
+      ? 2
+      : 1;
+    const maxSpeed = (Number(constants.enemyMaxSpeed) || 0) * speedMult * formationPositioningSpeedScale;
     if (speed > maxSpeed) {
       const k = maxSpeed / speed;
       e.vx *= k;
@@ -1315,6 +1455,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     e.wx += e.vx * (Number(state.dt) || 0);
     e.wy += e.vy * (Number(state.dt) || 0);
     applyPairedDanceSeparationRuntime(e, enemies, state);
+    recordEnemyMovementDiscontinuityRuntime(e, state, frameStartWx, frameStartWy, maxSpeed);
     if (d <= hitRadiusWorld) {
       const perfProtected = helpers.isPerfRepeatProtectedEnemy?.(e) === true;
       if (lifecycleState === 'retiring') {

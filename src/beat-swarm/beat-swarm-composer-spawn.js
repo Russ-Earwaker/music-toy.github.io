@@ -1,3 +1,8 @@
+import {
+  applyBeatSwarmEnemyDescriptorVisualIdentity,
+  assignBeatSwarmEnemyGameplayDescriptor,
+} from './beat-swarm-enemy-descriptor.js?v=2026-08-23-production-abilities-v2';
+
 export function spawnComposerGroupEnemyAtRuntime(options = null) {
   const group = options?.group || null;
   const clientX = Number(options?.clientX);
@@ -176,6 +181,11 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     callResponseLane: String(group?.callResponseLane || '').trim().toLowerCase(),
     lifecycleState: String(group?.lifecycleState || 'active'),
   };
+  const gameplayDescriptor = assignBeatSwarmEnemyGameplayDescriptor(
+    enemy,
+    options?.gameplayDescriptor,
+  );
+  applyBeatSwarmEnemyDescriptorVisualIdentity(enemy);
   enemies.push(enemy);
   group.memberIds?.add?.(enemy.id);
   return enemy;

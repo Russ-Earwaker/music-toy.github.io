@@ -28,7 +28,7 @@ import { getRect } from './layout-cache.js';
 
 import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
 
-const perfLabVersion = '2026-08-19-production-onboarding-autopilot-v1';
+const perfLabVersion = '2026-08-23-basic-lane-carriers-v2';
 import(`./perf/perf-lab.js?v=${perfLabVersion}`).catch((err) => {
   try { console.warn('[main] perf lab import failed', err); } catch {}
 });
@@ -36,7 +36,7 @@ import './beat-swarm/weapon-gate-lab.js?v=2026-06-18-corridor-curve-v1';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
-import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-08-21-ball-lead-handoff-v19';
+import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-08-23-basic-lane-carriers-v2';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';
@@ -7648,8 +7648,6 @@ function tickAudioScheduler() {
         }
       }
     } catch {}
-    if (window.__PERF_DISABLE_CHAIN_WORK) return;
-
     const info = getLoopInfo();
     if (!info) return;
     const nowMs = performance?.now?.() ?? Date.now();
@@ -7677,6 +7675,13 @@ function tickAudioScheduler() {
 
     const ctx = ensureAudioContext();
     const nowAt = ctx?.currentTime ?? 0;
+    try {
+      BeatSwarmMode?.scheduleAudioLookahead?.({
+        nowAt,
+        lookaheadSec: Math.max(0.1, Number(g_noteSchedCfg?.lookaheadSec) || 0.2),
+      });
+    } catch {}
+    if (window.__PERF_DISABLE_CHAIN_WORK) return;
     try {
       const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
       const justResumed = Number.isFinite(lastResumeAt) && (nowAt - lastResumeAt) < 0.25;

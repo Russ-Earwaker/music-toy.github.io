@@ -20,6 +20,10 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       recordPerfSample?.(name, durationMs);
     }
   };
+  const profileProjectileDetail = globalThis.__BEAT_SWARM_PROJECTILE_DETAIL_PERF === true;
+  const withProjectileDetailPerf = (name, fn) => (
+    profileProjectileDetail ? withPerfSample(name, fn) : fn()
+  );
 
   const pickups = Array.isArray(state.pickups) ? state.pickups : [];
   const projectiles = Array.isArray(state.projectiles) ? state.projectiles : [];
@@ -155,7 +159,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       const isHoming = String(p.kind || 'standard') === 'homing-missile';
       const isHostileHoming = String(p.kind || '') === 'hostile-red' && p.hostileHoming === true;
       const useTtlDespawn = isBoomerang || isHoming || isHostileHoming;
-      withPerfSample('pickupsCombat.projectiles.motion', () => {
+      withProjectileDetailPerf('pickupsCombat.projectiles.motion', () => {
         if (isBoomerang) {
           p.boomTheta = (Number(p.boomTheta) || 0) + ((Number(p.boomOmega) || 0) * dt);
           const c = Math.cos(p.boomTheta || 0);
@@ -282,7 +286,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
         }
       });
       let hit = false;
-      withPerfSample('pickupsCombat.projectiles.collision', () => {
+      withProjectileDetailPerf('pickupsCombat.projectiles.collision', () => {
         if (collisionStride > 1 && (i % collisionStride) !== collisionPhase) return;
         const allowCollision = !(Number(p.collisionGraceT) > 0);
         const collisionRadiusWorld = Math.max(projectileHitRadiusWorld * 3, enemySpatialCellSize);
@@ -315,6 +319,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
                 ? Math.max(Math.trunc(p.nextBeatIndex), Math.max(0, currentBeatIndex) + 1)
                 : (Math.max(0, currentBeatIndex) + 1);
               const chainCtx = {
+                ...(p.chainContext && typeof p.chainContext === 'object' ? p.chainContext : null),
                 origin: { x: p.wx, y: p.wy },
                 impactPoint: hitPoint,
                 weaponSlotIndex: Number.isFinite(p.chainWeaponSlotIndex) ? Math.trunc(p.chainWeaponSlotIndex) : null,
