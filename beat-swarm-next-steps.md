@@ -437,7 +437,20 @@ Implementation order:
 7. Complete: `Enemy Lane + Movement Lab` covers concurrent small/large lane performers, four-bar movement phrases, a visible budget-approved elite formation, and a deliberately density-blocked elite request with saved assertions.
 8. Complete: basic enemy abilities are constrained by the Level 1 palette, expose stable silhouette identities, and execute projectile, tracking-laser, and local-explosion effects through the production lane-event allocation without changing round-robin or full-lane ownership. Intro carriers remain projectile-only for onboarding clarity.
 9. Complete: snake and spawner types are explicit exported elite classifications, retain additive-motif ownership, and share the same director elite-density budget as formation elites.
-10. Design boss ownership of the full musical structure later.
+10. Complete for the first production pass: stage mechanic difficulty through a threat budget rather than immediately filling groups with dangerous abilities:
+   - a newly introduced featured mechanic starts with one carrier in a forgiving group
+   - remaining members use readable short-range blasts or non-damaging radial wind push
+   - later level phases may assign more featured carriers and combine established mechanics
+   - subsequent levels reach mixed-mechanic groups sooner
+   - simpler enemies should populate the field before a new complex mechanic arrives, giving the player space to focus on it
+   - ability identity stays stable for an enemy's lifetime; escalation occurs through subsequent spawns
+   - complete in `Enemy Lane + Movement Lab`: the shared Level 1 schedule now progresses through simple prefill, laser teaching, laser consolidation, local-AOE introduction, projectile introduction, and two-laser combined pressure
+   - complete in the lab: carriers arrive only when their abilities become active; telemetry asserts every phase and visible roster is reached, featured-threat caps are respected, and the elite layer is deferred until combined pressure
+   - complete in production: the enemy director derives the desired lesson from onboarding state, level phase, intensity, pressure, and difficulty, then advances by no more than one phase every four bars
+   - complete in production: learned palettes prevent future mechanics leaking into filler slots, visible-field family caps limit newly spawned featured threats, existing enemy abilities remain stable, and optional elites wait for combined pressure
+   - next validation: run `Production Onboarding Flow` and inspect `music_enemy_threat_lesson_advanced` plus the per-bar threat fields in `music_enemy_director_state`
+11. Later: add level- and difficulty-based enemy health and damage scaling after threat composition and readability are proven.
+12. Design boss ownership of the full musical structure later.
 
 ## Hold For Later
 

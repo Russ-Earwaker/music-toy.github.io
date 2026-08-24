@@ -618,7 +618,8 @@ export function collectComposerGroupStepBeatEvents(options = null) {
       || musicProfileSourceType === 'spawner_rhythm_pulse'
       || musicProfileSourceType === 'spawner_rhythm_backbeat'
       || musicProfileSourceType === 'spawner_rhythm_motion';
-    const rhythmPulseCarrier = musicProfileSourceType === 'spawner_rhythm_pulse';
+    const rhythmPulseCarrier = musicProfileSourceType === 'foundation_rhythm'
+      || musicProfileSourceType === 'spawner_rhythm_pulse';
     const rhythmBackbeatCarrier = musicProfileSourceType === 'spawner_rhythm_backbeat'
       || musicProfileSourceType === 'secondary_bridge_backbeat';
     const rhythmMotionCarrier = musicProfileSourceType === 'spawner_rhythm_motion';

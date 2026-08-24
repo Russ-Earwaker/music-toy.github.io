@@ -52,6 +52,15 @@ test('constrains abilities to a level palette with a stable fallback', () => {
   assert.equal(descriptor.abilitySilhouette, 'forward_cannon');
 });
 
+test('exposes a distinct non-damaging wind-push silhouette', () => {
+  const descriptor = createBeatSwarmEnemyGameplayDescriptor(
+    { enemyType: 'composer-group-member' },
+    { abilityFamily: 'wind_push' },
+  );
+  assert.equal(descriptor.abilityFamily, 'wind_push');
+  assert.equal(descriptor.abilitySilhouette, 'wind_vanes');
+});
+
 test('maps basic large enemies to full-lane playback', () => {
   const descriptor = createBeatSwarmEnemyGameplayDescriptor(
     { enemyType: 'dumb', musicalRole: 'bass' },

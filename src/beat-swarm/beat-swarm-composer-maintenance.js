@@ -2648,6 +2648,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       && !isIntroSlotIdentityActive(group)
       && String(group?.templateId || '').trim() !== 'foundation-buffer'
       && !isActivePrimaryLeadIntentGroup(group)
+      && !requiredBasicLaneCarriers.some((entry) => (
+        entry.laneId === String(group?.musicLaneId || '').trim().toLowerCase()
+      ))
       && !(
         (stableMergeSupportLockActive || fullTextureSupportLockActive)
         && String(group?.musicLaneId || '').trim().toLowerCase() === 'secondary_loop_lane'
@@ -2838,6 +2841,19 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
     refreshPrimaryLeadReservation(embodiedPrimaryLead);
     syncLeadAuthorityFromGroup(embodiedPrimaryLead, 'maintenance_embodied_lead');
   }
+  const maxLiveComposerGroups = Number.isFinite(Number(state.maxLiveComposerGroups))
+    ? Math.max(0, Math.trunc(Number(state.maxLiveComposerGroups)))
+    : 4;
+  const canActivateOrRefillGroup = (group) => {
+    if (getAliveComposerEnemiesByIds(group?.memberIds).length > 0) return true;
+    const liveCount = composerEnemyGroups.filter((candidate) => (
+      candidate
+      && candidate.active !== false
+      && candidate.retiring !== true
+      && getAliveComposerEnemiesByIds(candidate?.memberIds).length > 0
+    )).length;
+    return liveCount < maxLiveComposerGroups;
+  };
   const ensureStrongPrimaryLeadGroup = () => {
     if (!leadEntryMergeActive && !fullTextureActive) return;
     const targetGroup = getActiveEmbodiedPrimaryLeadGroup()
@@ -2859,6 +2875,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         .sort((a, b) => rankPrimaryLeadGroup(b) - rankPrimaryLeadGroup(a))[0]
       || null;
     if (!targetGroup) return;
+    if (!canActivateOrRefillGroup(targetGroup)) return;
     targetGroup.active = true;
     targetGroup.retiring = false;
     targetGroup.lifecycleState = 'active';
@@ -2913,6 +2930,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       ))
       || null;
     if (!targetGroup) return;
+    if (!canActivateOrRefillGroup(targetGroup)) return;
     targetGroup.retiring = false;
     targetGroup.lifecycleState = 'active';
     targetGroup.musicParticipationGain = 1;
@@ -2961,6 +2979,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       && normalizeComposerProfileSourceType(group?.musicProfileSourceType) === 'answer_ornament'
     )) || null;
     if (!targetGroup) return;
+    if (!canActivateOrRefillGroup(targetGroup)) return;
     targetGroup.retiring = false;
     targetGroup.lifecycleState = 'active';
     targetGroup.musicParticipationGain = 1;
@@ -4823,6 +4842,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           groupMusicRole,
         ].join('|');
         if (String(enemy?.__bsComposerSyncSignature || '') === memberSyncSignature) {
+          helpers.syncBasicLaneAbilityIdentity?.(enemy, group, effectiveMemberLaneId);
           enemy.musicState = groupMusicState;
           enemy.combatState = groupCombatState;
           enemy.musicGroupRole = groupMusicRole || enemy.musicGroupRole || '';
@@ -4852,6 +4872,22 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
               enemy.musicLaneInstrumentId = groupInstrument;
             }
           }
+          if (level1ProtectedMemberLane) {
+            helpers.ensureMusicLaneAssignment?.({
+              group,
+              enemy,
+              role: effectiveRole,
+              layer: effectiveLayer,
+              preferredLaneId: effectiveMemberLaneId,
+              instrumentId: effectiveInstrumentId,
+              continuityId: effectiveContinuityId,
+              phraseId: effectivePhraseId,
+              performerEnemyId: Math.trunc(Number(enemy?.id) || 0),
+              performerGroupId: Math.trunc(Number(group?.id) || 0),
+              performerType: 'composer-group-member',
+              lockInstrument: true,
+            });
+          }
           continue;
         }
         helpers.ensureMusicLaneAssignment?.({
@@ -4859,7 +4895,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           enemy,
           role: effectiveRole,
           layer: effectiveLayer,
-          preferredLaneId: soloPreferredLaneId,
+          preferredLaneId: effectiveMemberLaneId || soloPreferredLaneId,
           instrumentId: effectiveInstrumentId,
           continuityId: effectiveContinuityId,
           phraseId: effectivePhraseId,
@@ -4868,6 +4904,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
           performerType: 'composer-group-member',
           lockInstrument: group?.introStageCarrier === true || introSlotIdentityActive || level1ProtectedMemberLane,
         });
+        helpers.syncBasicLaneAbilityIdentity?.(enemy, group, effectiveMemberLaneId);
         applyLevel1StableEnemyInstrument(
           enemy,
           effectiveMemberLaneId,

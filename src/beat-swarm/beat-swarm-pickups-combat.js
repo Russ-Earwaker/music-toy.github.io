@@ -509,6 +509,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           const basePxRadius = Math.max(18, (Number(fx.radiusWorld) || Number(constants.explosionRadiusWorld) || 0) * Math.max(0.001, scale || 1));
           let radiusScale = 1;
           let opacity = Math.max(0, Math.min(1, fx.ttl / (Number(constants.explosionTtl) || 1)));
+          let brightness = 1;
           if (fx.kind === 'pinball-shockwave') {
             const center = {
               x: Number(fx.at?.x) || 0,
@@ -705,8 +706,13 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
             const eased = 1 - ((1 - elapsedN) * (1 - elapsedN));
             radiusScale = 0.04 + (((Number(constants.explosionPrimeMaxScale) || 1) - 0.04) * eased);
             opacity = 0.22 + (0.34 * eased);
-          } else if (fx.kind === 'hostile-explosion') {
-            opacity = Math.max(0, Math.min(1, fx.ttl / Math.max(0.01, Number(constants.composerGroupExplosionTtl) || 0.01)));
+          } else if (fx.kind === 'explosion' || fx.kind === 'hostile-explosion') {
+            const total = Math.max(0.05, Number(fx.duration) || helpers.getGameplayBeatLen?.() || 0.5);
+            const elapsedN = Math.max(0, Math.min(1, 1 - (fx.ttl / total)));
+            const flashN = Math.max(0, 1 - (elapsedN / 0.16));
+            radiusScale = 0.72 + (0.28 * (1 - Math.pow(1 - elapsedN, 3)));
+            opacity = Math.max(0, Math.pow(1 - elapsedN, 0.62));
+            brightness = 1 + (flashN * 1.5);
           } else if (fx.kind === 'music-explosion') {
             const total = Math.max(0.1, Number(fx.duration) || Number(constants.explosionTtl) || 0.72);
             const elapsedN = Math.max(0, Math.min(1, 1 - (fx.ttl / total)));
@@ -714,6 +720,12 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
             const decayN = Math.max(0, (elapsedN - 0.08) / 0.92);
             radiusScale = 0.18 + (0.82 * (1 - ((1 - attackN) * (1 - attackN)))) + (0.12 * decayN);
             opacity = elapsedN <= 0.08 ? 1 : Math.pow(1 - decayN, 0.72);
+          } else if (fx.kind === 'wind-push') {
+            const total = Math.max(0.1, Number(fx.duration) || 0.72);
+            const elapsedN = Math.max(0, Math.min(1, 1 - (fx.ttl / total)));
+            const eased = 1 - Math.pow(1 - elapsedN, 3);
+            radiusScale = 0.12 + (0.88 * eased);
+            opacity = Math.max(0, Math.pow(1 - elapsedN, 0.7));
           } else if (fx.kind === 'pinball-shockwave-hit') {
             if (Number(fx.startDelay) > 0) {
               fx.startDelay = Math.max(0, (Number(fx.startDelay) || 0) - dt);
@@ -758,6 +770,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           fx.el.style.marginTop = `${-pxRadius}px`;
           fx.el.style.transform = `translate(${c.x}px, ${c.y}px)`;
           fx.el.style.opacity = `${opacity}`;
+          fx.el.style.filter = `brightness(${brightness.toFixed(3)})`;
         });
         if (removedDuringExplosionUpdate) continue;
       }

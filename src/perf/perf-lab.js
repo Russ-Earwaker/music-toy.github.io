@@ -4280,6 +4280,13 @@ function compactMusicLabPayloadForSave(payload = null) {
         targetCarrierCounts: payload.targetCarrierCounts && typeof payload.targetCarrierCounts === 'object'
           ? { ...payload.targetCarrierCounts }
           : {},
+        threatLessonPhaseIndex: Math.max(0, Math.trunc(Number(payload.threatLessonPhaseIndex) || 0)),
+        threatLessonPhaseId: String(payload.threatLessonPhaseId || '').trim().toLowerCase(),
+        threatLessonDesiredPhaseIndex: Math.max(0, Math.trunc(Number(payload.threatLessonDesiredPhaseIndex) || 0)),
+        threatAbilityPalette: Array.isArray(payload.threatAbilityPalette)
+          ? payload.threatAbilityPalette.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+          : [],
+        maxFeaturedThreats: Math.max(0, Math.trunc(Number(payload.maxFeaturedThreats) || 0)),
         totalAlive: Number(payload.totalAlive) || 0,
       });
       continue;
@@ -8062,6 +8069,8 @@ async function runEnemyArchitectureDebug() {
         'enemy_architecture_movement_phrase',
         'enemy_architecture_elite_budget',
         'enemy_architecture_ability_fired',
+        'enemy_architecture_carrier_arrived',
+        'enemy_architecture_threat_phase',
         'director_musical_formation_spawned',
       ],
       maxLines: 900,
@@ -8070,7 +8079,7 @@ async function runEnemyArchitectureDebug() {
     traceStartResult = { ok: false, reason: String(err?.message || err || 'trace_start_failed') };
   }
   const snapshot = modeApi.startEnemyArchitectureTest();
-  if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 4) {
+  if (snapshot?.active !== true || !Array.isArray(snapshot?.enemyIds) || snapshot.enemyIds.length !== 2) {
     try { modeApi.stopEnemyArchitectureTest?.(); } catch {}
     try { stopTransport(); } catch {}
     setStatus('Enemy architecture lab failed: enemies did not spawn');
@@ -8086,25 +8095,48 @@ async function runEnemyArchitectureDebug() {
   }
   const finalSnapshot = modeApi.getEnemyArchitectureTestSnapshot?.() || null;
   const assertions = {
-    basicEnemyCount: Array.isArray(snapshot?.enemyIds) && snapshot.enemyIds.length === 4,
-    eliteSpawned: Array.isArray(snapshot?.eliteEnemyIds) && snapshot.eliteEnemyIds.length === 2,
+    simplePrefillCount: Array.isArray(snapshot?.enemyIds) && snapshot.enemyIds.length === 2,
+    simplePrefillUsesOnlyWind: Array.isArray(snapshot?.basicEnemyDescriptors)
+      && snapshot.basicEnemyDescriptors.length === 2
+      && snapshot.basicEnemyDescriptors.every((descriptor) => descriptor?.abilityFamily === 'wind_push'),
+    eliteDeferredDuringTeaching: Array.isArray(snapshot?.eliteEnemyIds) && snapshot.eliteEnemyIds.length === 0,
+    eliteSpawnedForCombinedPressure: Array.isArray(finalSnapshot?.eliteEnemyIds) && finalSnapshot.eliteEnemyIds.length === 2,
     allowedBudgetPassed: snapshot?.eliteBudgetChecks?.allowed?.allowed === true,
     blockedBudgetPassed: snapshot?.eliteBudgetChecks?.blocked?.allowed === false,
     blockedForDensity: Array.isArray(snapshot?.eliteBudgetChecks?.blocked?.reasons)
       && snapshot.eliteBudgetChecks.blocked.reasons.includes('additive_density_budget'),
     eliteSurvived: Array.isArray(finalSnapshot?.eliteAliveEnemyIds) && finalSnapshot.eliteAliveEnemyIds.length === 2,
     controlledAbilityPalette: Array.isArray(snapshot?.abilityPalette)
-      && ['projectile', 'laser', 'local_explosion'].every((family) => snapshot.abilityPalette.includes(family)),
-    basicAbilityFamiliesConfigured: Array.isArray(snapshot?.basicEnemyDescriptors)
-      && ['projectile', 'laser', 'local_explosion'].every((family) => (
-        snapshot.basicEnemyDescriptors.some((descriptor) => descriptor?.abilityFamily === family)
+      && ['projectile', 'laser', 'local_explosion', 'wind_push'].every((family) => snapshot.abilityPalette.includes(family)),
+    basicAbilityFamiliesConfigured: Array.isArray(finalSnapshot?.basicEnemyDescriptors)
+      && ['projectile', 'laser', 'local_explosion', 'wind_push'].every((family) => (
+        finalSnapshot.basicEnemyDescriptors.some((descriptor) => descriptor?.abilityFamily === family)
       )),
-    abilitySilhouettesConfigured: Array.isArray(snapshot?.basicEnemyDescriptors)
-      && snapshot.basicEnemyDescriptors.length === 4
-      && snapshot.basicEnemyDescriptors.every((descriptor) => String(descriptor?.abilitySilhouette || '').trim().length > 0),
-    mixedAbilitiesExecuted: ['projectile', 'laser', 'local_explosion'].every((family) => (
+    finalBasicEnemyCount: Array.isArray(finalSnapshot?.basicEnemyDescriptors)
+      && finalSnapshot.basicEnemyDescriptors.length === 6,
+    abilitySilhouettesConfigured: Array.isArray(finalSnapshot?.basicEnemyDescriptors)
+      && finalSnapshot.basicEnemyDescriptors.length === 6
+      && finalSnapshot.basicEnemyDescriptors.every((descriptor) => String(descriptor?.abilitySilhouette || '').trim().length > 0),
+    mixedAbilitiesExecuted: ['projectile', 'laser', 'local_explosion', 'wind_push'].every((family) => (
       Math.max(0, Math.trunc(Number(finalSnapshot?.abilityEventCounts?.[family]) || 0)) > 0
     )),
+    allThreatPhasesReached: Array.isArray(finalSnapshot?.threatPhaseHistory)
+      && ['simple_prefill', 'laser_teach', 'laser_consolidate', 'local_aoe_introduction', 'projectile_introduction', 'combined_pressure']
+        .every((phaseId) => finalSnapshot.threatPhaseHistory.some((phase) => phase?.phaseId === phaseId)),
+    visibleRosterArrivedByPhase: [2, 3, 3, 4, 5, 6].every((expectedCount, phaseIndex) => {
+      const phase = finalSnapshot?.threatPhaseHistory?.find((entry) => entry?.phaseIndex === phaseIndex);
+      const visibleCount = Object.values(phase?.activeAbilityCounts || {}).reduce((sum, count) => (
+        sum + Math.max(0, Math.trunc(Number(count) || 0))
+      ), 0);
+      return visibleCount === expectedCount;
+    }),
+    threatCapsRespected: Math.max(0, Math.trunc(Number(finalSnapshot?.threatViolationCount) || 0)) === 0
+      && Array.isArray(finalSnapshot?.threatPhaseHistory)
+      && finalSnapshot.threatPhaseHistory.every((phase) => (
+        Math.max(0, Math.trunc(Number(phase?.activeFeaturedThreats) || 0))
+          <= Math.max(0, Math.trunc(Number(phase?.maxFeaturedThreats) || 0))
+      )),
+    featuredThreatEscalatedToTwo: Math.max(0, Math.trunc(Number(finalSnapshot?.maxObservedFeaturedThreats) || 0)) === 2,
   };
   const assertionsPassed = Object.values(assertions).every(Boolean);
   try { window.__BEAT_SWARM_ENEMY_ARCHITECTURE_TEST_RESULT = finalSnapshot; } catch {}
@@ -8260,6 +8292,7 @@ async function runDirectorFormationIntensityFlowDebug() {
       'Expected: Low has player motifs only; Medium introduces one Gunner/Kick formation; Build adds one Laser/Clap formation; Peak sustains both.',
       'Release and Settle spawn no new formations. Surviving groups remain embodied until defeated and are never retired by a routine intensity transition.',
       'If a requested group is completely defeated while its intensity policy still calls for it, the director may replace it after the normal phrase cooldown.',
+      'The production threat lesson begins with non-damaging wind carriers, introduces one complex mechanic at a time at four-bar boundaries, preserves each enemy ability for its lifetime, and defers optional elites until combined pressure.',
     ].join(' '),
     groupedScenarioName: 'beat_swarm_production_onboarding_flow_1x300s',
     groupedRunId: 'musicLab_production_onboarding_flow_1x300s_scenario',
@@ -8268,6 +8301,7 @@ async function runDirectorFormationIntensityFlowDebug() {
     labelPrefix: 'BS0_production_onboarding_flow_1x300s',
     statusPrefix: 'Running production onboarding flow',
     async setupAfterPrepare() {
+      window.__BEAT_SWARM_COMPOSER_EXECUTION_DEBUG = true;
       const modeApi = window.BeatSwarmMode;
       if (
         !modeApi
@@ -8291,10 +8325,15 @@ async function runDirectorFormationIntensityFlowDebug() {
         };
       } catch {}
     },
+    async teardownAfterRun() {
+      window.__BEAT_SWARM_COMPOSER_EXECUTION_DEBUG = false;
+    },
     traceCapture: {
       enabled: true,
       include: [
         'music_level1_arrangement_state',
+        'music_enemy_director_state',
+        'music_enemy_threat_lesson_advanced',
         'director_musical_formation_policy',
         'director_musical_formation_spawned',
         'director_musical_formation_ended',
@@ -8312,6 +8351,7 @@ async function runDirectorFormationIntensityFlowDebug() {
         'enemy_basic_ability_fired',
         'enemy_basic_lane_carrier_spawned',
         'enemy_basic_lane_carrier_status',
+        'music_composer_execution_stage',
       ],
       maxLines: 4000,
       preferOutputDirectory: true,

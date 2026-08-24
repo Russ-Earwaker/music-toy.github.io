@@ -1178,6 +1178,17 @@ export function executePerformedBeatEventRuntime(options = null) {
           triggerVolume
         );
       } catch {}
+      const carrierEnemy = helpers.getSwarmEnemyById?.(ev.actorId) || null;
+      if (carrierEnemy) {
+        helpers.triggerComposerGroupEnemyAbility?.({
+          enemy: carrierEnemy,
+          group: null,
+          event: ev,
+          beatIndex,
+          stepIndex,
+          noteName,
+        });
+      }
       try {
         helpers.noteMusicSystemEvent?.('music_player_lead_theme_direct_triggered', {
           instrumentId,

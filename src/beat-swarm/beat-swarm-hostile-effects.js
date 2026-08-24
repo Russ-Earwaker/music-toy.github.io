@@ -114,6 +114,7 @@ export function addHostileRedExplosionEffectRuntime(options = null) {
   effects.push({
     kind: 'hostile-explosion',
     ttl: Math.max(0.01, Number(ttlOverride) || Number(constants.composerGroupExplosionTtl) || 0.1),
+    duration: Math.max(0.01, Number(ttlOverride) || Number(constants.composerGroupExplosionTtl) || 0.1),
     at: { ...centerW },
     radiusWorld: Math.max(10, Number(radiusWorld) || Number(constants.composerGroupExplosionRadiusWorld) || 10),
     weaponSlotIndex: null,

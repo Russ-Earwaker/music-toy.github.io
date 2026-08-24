@@ -1,7 +1,7 @@
 import {
   applyBeatSwarmEnemyDescriptorVisualIdentity,
   assignBeatSwarmEnemyGameplayDescriptor,
-} from './beat-swarm-enemy-descriptor.js?v=2026-08-23-production-abilities-v2';
+} from './beat-swarm-enemy-descriptor.js?v=2026-08-24-threat-ramp-v1';
 
 export function spawnComposerGroupEnemyAtRuntime(options = null) {
   const group = options?.group || null;
