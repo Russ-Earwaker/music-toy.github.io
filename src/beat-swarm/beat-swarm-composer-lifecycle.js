@@ -46,6 +46,12 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const getComposerMotif = typeof options?.getComposerMotif === 'function' ? options.getComposerMotif : ((_scope, _id, factory) => (typeof factory === 'function' ? factory() : null));
   const createComposerEnemyGroupProfile = typeof options?.createComposerEnemyGroupProfile === 'function' ? options.createComposerEnemyGroupProfile : (() => ({}));
   const createGroupFromMotif = typeof options?.createGroupFromMotif === 'function' ? options.createGroupFromMotif : (() => null);
+  const getBasicLaneCarrierBodyPlan = typeof options?.getBasicLaneCarrierBodyPlan === 'function'
+    ? options.getBasicLaneCarrierBodyPlan
+    : (() => ({}));
+  const isMusicLaneAvailableForEnemy = typeof options?.isMusicLaneAvailableForEnemy === 'function'
+    ? options.isMusicLaneAvailableForEnemy
+    : (() => true);
   const hasPendingSecondaryLoopReservation = typeof options?.hasPendingSecondaryLoopReservation === 'function'
     ? options.hasPendingSecondaryLoopReservation
     : (() => false);
@@ -1369,6 +1375,19 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       forcedProfileSourceType,
     });
     if (!group) continue;
+    if (!isMusicLaneAvailableForEnemy(String(group?.musicLaneId || '').trim().toLowerCase())) continue;
+    if (forcedBasicLaneCarrier) {
+      const bodyPlan = getBasicLaneCarrierBodyPlan({
+        laneId: forcedBasicLaneCarrier.laneId,
+        requestedMemberCount: Math.max(1, Math.trunc(Number(group?.size) || 1)),
+      }) || {};
+      const useLargeCarrier = String(bodyPlan?.scale || '').trim().toLowerCase() === 'large';
+      const plannedMemberCount = Math.max(1, Math.trunc(Number(bodyPlan?.memberCount) || (useLargeCarrier ? 1 : group.size) || 1));
+      group.basicLargeLaneCarrier = useLargeCarrier;
+      group.size = plannedMemberCount;
+      group.performers = Math.min(plannedMemberCount, Math.max(1, Math.trunc(Number(group?.performers) || plannedMemberCount)));
+      group.assignedMusicLaneId = String(group?.musicLaneId || forcedBasicLaneCarrier.laneId || '').trim().toLowerCase();
+    }
     group.lifecycleState = normalizeLifecycleState(group.lifecycleState, 'active');
     group.sectionContinuityKey = sectionContinuityKey;
     ensureComposerRoleLifecycle(group);
@@ -1423,6 +1442,11 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
           requiredMusicLaneId: forcedBasicLaneCarrier.laneId,
           profileSourceType: forcedBasicLaneCarrier.profileSourceType,
           memberCount: Math.max(0, Math.trunc(Number(group?.size) || 0)),
+          largeFullLaneMemberCount: group?.basicLargeLaneCarrier === true ? 1 : 0,
+          smallRoundRobinMemberCount: Math.max(
+            0,
+            Math.trunc(Number(group?.size) || 0) - (group?.basicLargeLaneCarrier === true ? 1 : 0),
+          ),
         }, {
           beatIndex: Math.max(0, currentBarIndex * 4),
           barIndex: currentBarIndex,

@@ -87,7 +87,7 @@ test('maps composer members to basic lane groups', () => {
 });
 
 test('applies the same ability silhouette identity to ordinary basic enemies', () => {
-  const classes = new Set(['beat-swarm-enemy']);
+  const classes = new Set(['beat-swarm-enemy', 'is-shape-square']);
   const enemy = {
     enemyType: 'dumb',
     el: {
@@ -102,7 +102,9 @@ test('applies the same ability silhouette identity to ordinary basic enemies', (
   applyBeatSwarmEnemyDescriptorVisualIdentity(enemy);
 
   assert.equal(classes.has('is-basic-ability-carrier'), true);
+  assert.equal(classes.has('is-basic-small-carrier'), true);
   assert.equal(classes.has('is-ability-laser'), true);
+  assert.equal(classes.has('is-shape-square'), false);
   assert.equal(enemy.el.dataset.enemyAbilityFamily, 'laser');
   assert.equal(enemy.el.dataset.enemyAbilitySilhouette, 'beam_prism');
 });

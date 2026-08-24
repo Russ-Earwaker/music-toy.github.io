@@ -449,8 +449,16 @@ Implementation order:
    - complete in production: the enemy director derives the desired lesson from onboarding state, level phase, intensity, pressure, and difficulty, then advances by no more than one phase every four bars
    - complete in production: learned palettes prevent future mechanics leaking into filler slots, visible-field family caps limit newly spawned featured threats, existing enemy abilities remain stable, and optional elites wait for combined pressure
    - next validation: run `Production Onboarding Flow` and inspect `music_enemy_threat_lesson_advanced` plus the per-bar threat fields in `music_enemy_director_state`
-11. Later: add level- and difficulty-based enemy health and damage scaling after threat composition and readability are proven.
-12. Design boss ownership of the full musical structure later.
+11. Later: replace the current partial/count-based limits with a unified adaptive enemy-cost budget:
+   - retain separate readable constraints for live enemy count, featured mechanics, elite musical density, and visual complexity
+   - calculate comparable threat cost from scale, health, damage, fire cadence, projectile/beam coverage, ability danger, mobility, formation support, and enemy tier
+   - budget both the total live battlefield cost and the rate at which new cost may enter
+   - account for the player's effective weapon power and upgrades so challenge does not collapse as damage output rises
+   - apply explicit difficulty profiles to starting budget, refill/ramp speed, ability palette, reaction windows, health, and damage
+   - avoid merely scaling health: preserve readable introductions and use composition, combinations, and tempo before resorting to stat inflation
+   - expose telemetry explaining each enemy's estimated cost and every spawn approval/rejection
+12. Later: add level- and difficulty-based enemy health and damage scaling as one input to the adaptive cost budget after threat composition and readability are proven.
+13. Design boss ownership of the full musical structure later.
 
 ## Hold For Later
 

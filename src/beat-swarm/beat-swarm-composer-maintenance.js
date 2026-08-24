@@ -179,6 +179,9 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const primaryLoopLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.primary_loop : null;
   const foundationLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.foundation : null;
   const secondaryLoopLanePlan = directorLanePlan && typeof directorLanePlan === 'object' ? directorLanePlan.secondary_loop : null;
+  const hasPlayableMusicLaneNotes = typeof helpers.hasPlayableMusicLaneNotes === 'function'
+    ? helpers.hasPlayableMusicLaneNotes
+    : (() => false);
   const directorSecondaryLoopRequested = (
     Math.max(0, Math.trunc(Number(enemyDirectorRuntime?.targetCarrierCounts?.secondary_loop_rhythm) || 0)) > 0
     || (
@@ -199,18 +202,21 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const activeBasicLaneCarrierCandidates = introWindowActive
     ? []
     : [
-        foundationLanePlan?.active === true
+        foundationLanePlan?.active === true && hasPlayableMusicLaneNotes('foundation_lane')
           ? { laneId: 'foundation_lane', profileSourceType: 'foundation_rhythm' }
           : null,
         (
-          secondaryLoopLanePlan?.active === true
-          || supportLaneActive
-          || answerCarrierActive
-          || directorSecondaryLoopRequested
+          (
+            secondaryLoopLanePlan?.active === true
+            || supportLaneActive
+            || answerCarrierActive
+            || directorSecondaryLoopRequested
+          )
+          && hasPlayableMusicLaneNotes('secondary_loop_lane')
         )
           ? { laneId: 'secondary_loop_lane', profileSourceType: 'secondary_bridge_backbeat' }
           : null,
-        primaryLoopLaneActive
+        primaryLoopLaneActive && hasPlayableMusicLaneNotes('primary_loop_lane')
           ? { laneId: 'primary_loop_lane', profileSourceType: 'lead_melody' }
           : null,
       ].filter(Boolean);
@@ -3029,6 +3035,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       currentBarIndex,
       directorLanePlan,
       requiredBasicLaneCarriers,
+      isMusicLaneAvailableForEnemy: hasPlayableMusicLaneNotes,
       musicModeRuntime,
       leadAuthorityRuntime,
       maxLiveComposerGroups: Number.isFinite(Number(state.maxLiveComposerGroups))
@@ -3098,6 +3105,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       },
       getComposerMotif: helpers.getComposerMotif,
       createComposerEnemyGroupProfile: helpers.createComposerEnemyGroupProfile,
+      getBasicLaneCarrierBodyPlan: helpers.getBasicLaneCarrierBodyPlan,
       hasPendingSecondaryLoopReservation,
       noteMusicSystemEvent,
       createGroupFromMotif: ({ groupIndex, sectionKey, composer: composerDirective, templateId, motif, pacingCaps: caps, forcedProfileSourceType = '' }) => {

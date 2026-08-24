@@ -108,6 +108,7 @@ export function createBeatSwarmEnemyLaserRuntime() {
       if (!active && hazard.aimMode === 'track_then_lock') {
         hazard.angle = angleToTarget(enemy, player);
       }
+      enemy.combatFacingAngle = hazard.angle;
       if (active && !hazard.activated) {
         hazard.activated = true;
         for (const el of hazard.beamEls) {
@@ -123,7 +124,11 @@ export function createBeatSwarmEnemyLaserRuntime() {
       let playerContact = false;
       for (let beamIndex = 0; beamIndex < hazard.beamCount; beamIndex += 1) {
         const angle = hazard.angle + ((Math.PI * 2 * beamIndex) / hazard.beamCount);
-        const source = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+        const muzzleOffsetWorld = Math.max(0, Number(enemy?.combatMuzzleOffsetWorld) || 0);
+        const source = {
+          x: (Number(enemy.wx) || 0) + (Math.cos(angle) * muzzleOffsetWorld),
+          y: (Number(enemy.wy) || 0) + (Math.sin(angle) * muzzleOffsetWorld),
+        };
         const start = hazard.bidirectional ? {
           x: source.x - (Math.cos(angle) * hazard.lengthWorld * 0.5),
           y: source.y - (Math.sin(angle) * hazard.lengthWorld * 0.5),

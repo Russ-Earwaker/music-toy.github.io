@@ -30,6 +30,12 @@ function getEnemyCombatVisualScaleRuntime(enemy) {
   return 1 + (0.28 * eased) + maxChargeTremor;
 }
 
+export function getEnemyCombatVisualRotationRuntime(enemy) {
+  const angle = Number(enemy?.combatFacingAngle);
+  if (!Number.isFinite(angle)) return null;
+  return angle;
+}
+
 function getFormationAnchorWorldRuntime(enemy, helpers) {
   if (String(enemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') return null;
   if (enemy?.retreating) return null;
@@ -1629,8 +1635,9 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
           e.soloPulseDebugLastLoggedT = 0;
         }
       }
-      const combatRotation = Number.isFinite(Number(e?.combatFacingAngle))
-        ? ` rotate(${Number(e.combatFacingAngle).toFixed(4)}rad)`
+      const combatVisualRotation = getEnemyCombatVisualRotationRuntime(e);
+      const combatRotation = Number.isFinite(combatVisualRotation)
+        ? ` rotate(${combatVisualRotation.toFixed(4)}rad)`
         : '';
       const combatVisualScale = getEnemyCombatVisualScaleRuntime(e);
       e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * combatVisualScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})${combatRotation}`;

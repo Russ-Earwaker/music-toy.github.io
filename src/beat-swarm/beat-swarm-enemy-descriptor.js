@@ -290,9 +290,20 @@ export function applyBeatSwarmEnemyDescriptorVisualIdentity(enemyLike = null) {
     'is-ability-summoning',
     'is-ability-support',
   ];
-  el.classList.remove('is-basic-ability-carrier', ...abilityClasses);
+  el.classList.remove(
+    'is-basic-ability-carrier',
+    'is-basic-large-carrier',
+    'is-basic-small-carrier',
+    ...abilityClasses,
+  );
   if (descriptor.tier === BEAT_SWARM_ENEMY_TIERS.BASIC) {
+    // Ability owns a basic enemy's outer silhouette. Legacy composer shapes
+    // would otherwise override it and make identical abilities look unrelated.
+    el.classList.remove('is-shape-circle', 'is-shape-square', 'is-shape-diamond');
     el.classList.add('is-basic-ability-carrier');
+    el.classList.add(descriptor.scale === BEAT_SWARM_ENEMY_SCALES.LARGE
+      ? 'is-basic-large-carrier'
+      : 'is-basic-small-carrier');
     el.classList.add(`is-ability-${String(descriptor.abilityFamily || 'projectile').replace(/_/g, '-')}`);
   }
   if (el.dataset) {
