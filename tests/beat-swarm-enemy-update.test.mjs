@@ -99,3 +99,18 @@ test('player-targeting enemies track the player while static formation lasers re
   assert.equal(updateEnemyMovementFacingRuntime(staticLaser, 1, { x: 10, y: 110 }), false);
   assert.equal(staticLaser.combatFacingAngle, 0.75);
 });
+
+test('draw snakes retain trail-defined orientation instead of tracking the player', () => {
+  const snake = {
+    enemyType: 'drawsnake',
+    wx: 10,
+    wy: 10,
+    vx: 100,
+    vy: 0,
+    combatFacingAngle: 0.75,
+    gameplayDescriptor: { abilityFamily: 'projectile', abilitySilhouette: 'forward_cannon' },
+  };
+  assert.equal(updateEnemyMovementFacingRuntime(snake, 1, { x: 10, y: 110 }), false);
+  assert.equal(Object.hasOwn(snake, 'combatFacingAngle'), false);
+  assert.equal(getEnemyCombatVisualRotationRuntime(snake), null);
+});

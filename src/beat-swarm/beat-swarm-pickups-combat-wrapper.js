@@ -51,6 +51,7 @@ export function updatePickupsAndCombatRuntimeWrapper(options = null) {
       updateEnergyGravityRuntime: helpers.updateEnergyGravityRuntime,
       updateBeatWeapons: helpers.updateBeatWeapons,
       flushSwarmSoundEventsForBeat: helpers.flushSwarmSoundEventsForBeat,
+      applyPlayerHit: helpers.applyPlayerHit,
     },
     state: {
       dt,

@@ -38,6 +38,12 @@ export function getEnemyCombatVisualRotationRuntime(enemy) {
 
 export function updateEnemyMovementFacingRuntime(enemy, dt = 0, playerWorld = null) {
   if (!enemy || enemy?.retreating === true) return false;
+  if (String(enemy?.enemyType || '').trim().toLowerCase() === 'drawsnake') {
+    // The segmented trail defines the snake's orientation. Rotating its root
+    // toward the player twists the complete path instead of aiming a body.
+    delete enemy.combatFacingAngle;
+    return false;
+  }
   const descriptor = enemy?.gameplayDescriptor || {};
   const silhouette = String(descriptor?.abilitySilhouette || enemy?.abilitySilhouette || '').trim().toLowerCase();
   const abilityFamily = String(descriptor?.abilityFamily || enemy?.abilityFamily || '').trim().toLowerCase();
@@ -1218,6 +1224,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     }
     const frameStartWx = Number(e?.wx);
     const frameStartWy = Number(e?.wy);
+    const nowMs = Number(globalThis.performance?.now?.()) || Date.now();
+    const hitStopActive = nowMs < (Number(e?.damageHitStopUntilMs) || 0);
     const enemyType = String(e?.enemyType || '');
     const lifecycleState = helpers.normalizeMusicLifecycleState?.(e?.lifecycleState || 'active', 'active');
     const eventSectionVisual = getEventSectionVisualRuntime(e, eventSectionRuntime);
@@ -1517,31 +1525,49 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         ay *= 0.2;
       }
     }
-    e.vx += ax * (Number(state.dt) || 0);
-    e.vy += ay * (Number(state.dt) || 0);
-    if ((Number(eventSectionVisual.velocityDamping) || 1) < 0.999) {
-      e.vx *= eventSectionVisual.velocityDamping;
-      e.vy *= eventSectionVisual.velocityDamping;
+    if (hitStopActive) {
+      e.vx = Number(e?.damageHitStopVelocityX) || 0;
+      e.vy = Number(e?.damageHitStopVelocityY) || 0;
+    } else {
+      e.vx += ax * (Number(state.dt) || 0);
+      e.vy += ay * (Number(state.dt) || 0);
+      if ((Number(eventSectionVisual.velocityDamping) || 1) < 0.999) {
+        e.vx *= eventSectionVisual.velocityDamping;
+        e.vy *= eventSectionVisual.velocityDamping;
+      }
+      preserveOnboardingAsteroidDriftRuntime(e);
     }
-    preserveOnboardingAsteroidDriftRuntime(e);
     const speed = Math.hypot(e.vx, e.vy);
     const formationPositioningSpeedScale = scopedBehaviorMotion?.overrideVelocity === true
       && !isLargeFormationEnemyRuntime(e)
       ? 2
       : 1;
     const maxSpeed = (Number(constants.enemyMaxSpeed) || 0) * speedMult * formationPositioningSpeedScale;
-    if (speed > maxSpeed) {
+    if (!hitStopActive && speed > maxSpeed) {
       const k = maxSpeed / speed;
       e.vx *= k;
       e.vy *= k;
     }
-    updateEnemyMovementFacingRuntime(e, state.dt, centerWorld);
-    e.wx += e.vx * (Number(state.dt) || 0);
-    e.wy += e.vy * (Number(state.dt) || 0);
-    applyPairedDanceSeparationRuntime(e, enemies, state);
+    if (!hitStopActive) {
+      updateEnemyMovementFacingRuntime(e, state.dt, centerWorld);
+      e.wx += e.vx * (Number(state.dt) || 0);
+      e.wy += e.vy * (Number(state.dt) || 0);
+      applyPairedDanceSeparationRuntime(e, enemies, state);
+    }
     recordEnemyMovementDiscontinuityRuntime(e, state, frameStartWx, frameStartWy, maxSpeed);
     if (d <= hitRadiusWorld) {
       const perfProtected = helpers.isPerfRepeatProtectedEnemy?.(e) === true;
+      if ((nowMs - (Number(e?.lastPlayerCollisionHitAtMs) || 0)) >= 180) {
+        e.lastPlayerCollisionHitAtMs = nowMs;
+        helpers.applyPlayerHit?.({
+          sourceType: 'collision',
+          sourcePosition: { x: Number(e.wx) || 0, y: Number(e.wy) || 0 },
+          playerPosition: centerWorld,
+          damage: 1,
+          knockbackStrength: 820,
+          sourceEnemyId: Math.trunc(Number(e?.id) || 0),
+        });
+      }
       if (lifecycleState === 'retiring') {
         const back = helpers.normalizeDir?.(e.wx - centerWorld.x, e.wy - centerWorld.y, e.vx, e.vy) || { x: 0, y: 0 };
         const repulseSpeed = Math.max(80, (Number(constants.enemyMaxSpeed) || 0) * Math.max(0.4, Number(aggressionScale) || 0));

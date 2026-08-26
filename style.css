@@ -4396,6 +4396,7 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
 }
 
 .beat-swarm-ship {
+  position: relative;
   width: 28px;
   height: 28px;
   background: linear-gradient(180deg, #d7f3ff 0%, #89d6ff 100%);
@@ -4405,6 +4406,41 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
 
 .beat-swarm-ship.is-note-flash {
   animation: beatSwarmShipNoteFlash 170ms ease-out;
+}
+
+.beat-swarm-ship::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #ff203b;
+  clip-path: inherit;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.beat-swarm-ship.is-damage-hit {
+  background: #ff203b !important;
+  filter: drop-shadow(0 0 10px rgba(255, 28, 55, 1)) drop-shadow(0 0 24px rgba(255, 16, 45, 0.9)) !important;
+}
+
+.beat-swarm-ship.is-damage-hit::after {
+  animation: beatSwarmShipDamageOverlay 360ms cubic-bezier(0.16, 0.82, 0.22, 1) both;
+}
+
+.beat-swarm-ship-wrap::after {
+  content: '';
+  position: absolute;
+  inset: -13px;
+  border: 2px solid rgba(255, 45, 67, 0.72);
+  border-radius: 50%;
+  box-shadow: 0 0 14px rgba(255, 30, 55, 0.66), inset 0 0 9px rgba(255, 48, 70, 0.42);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.beat-swarm-ship-wrap.is-damage-hit::after {
+  animation: beatSwarmShipDamageRing 360ms ease-out both;
 }
 
 @keyframes beatSwarmShipNoteFlash {
@@ -4443,6 +4479,18 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
       url("./src/art/BeatSwarm/Starfield.png") center center / cover no-repeat,
     #000;
   z-index: 0;
+}
+
+@keyframes beatSwarmShipDamageOverlay {
+  0%, 22% { opacity: 1; filter: brightness(1.45); }
+  58% { opacity: 0.7; filter: brightness(1.15); }
+  100% { opacity: 0; filter: brightness(1); }
+}
+
+@keyframes beatSwarmShipDamageRing {
+  0% { opacity: 1; transform: scale(0.72); }
+  45% { opacity: 0.82; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.18); }
 }
 
 .beat-swarm-space-backdrop {
@@ -5769,8 +5817,8 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   }
 }
 
-.beat-swarm-enemy.is-hit-flash {
-  animation: beat-swarm-enemy-hit-flash 130ms ease-out;
+.beat-swarm-enemy.is-hit-flash:not(.is-combat-preparing-fire):not(.is-combat-fire-flash):not(.is-combat-laser-fire-flash) {
+  animation: beat-swarm-enemy-hit-flash 220ms cubic-bezier(0.12, 0.82, 0.2, 1);
 }
 
 .beat-swarm-enemy.is-combat-preparing-fire {
@@ -5819,13 +5867,16 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
 }
 
 @keyframes beat-swarm-enemy-hit-flash {
-  0% {
-    filter: brightness(1);
+  0%, 18% {
+    filter: brightness(3.8) saturate(0);
     background: #ffffff;
-    box-shadow: 0 0 24px rgba(255, 255, 255, 0.95);
+    border-color: #ffffff;
+    box-shadow: 0 0 34px rgba(255, 255, 255, 1), inset 0 0 16px rgba(255, 255, 255, 0.96);
   }
   100% {
-    filter: brightness(1);
+    filter: brightness(1) saturate(1);
+    border-color: var(--bs-role-border-color, rgba(255, 228, 214, 0.7));
+    box-shadow: 0 0 18px var(--bs-role-glow-color, rgba(223, 95, 73, 0.45));
   }
 }
 

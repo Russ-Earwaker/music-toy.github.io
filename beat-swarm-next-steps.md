@@ -65,6 +65,45 @@ The director controls:
 
 The player should recognize their authored material inside the score, but the runtime is allowed to simplify, fragment, harmonize, echo, intensify, or riff around it when the musical state requires that.
 
+Exception:
+
+- the authored weapon riff is immutable gameplay feedback
+- its timing, pitch, instrument, damage slots, and actual firing sounds must not be transformed
+- arrangement voices may reinforce, harmonize around, echo, or fill gaps around the weapon without changing it
+
+## Active Direction - Player Composition, Enemy Arrangement
+
+Use this ownership model:
+
+> The player creates the composition. Enemies provide the arrangement.
+
+Persistent player-authored core:
+
+- weapon riff: immutable gameplay pulse authored by the corridor
+- Foundation Rhythm: kick/percussion rhythm authored by rocket interactions; persisted internally as `bassDrive` / `foundation_lane` for compatibility
+- Accent Rhythm: syncopated percussion authored by bouncers
+- Lead Theme: melodic phrase authored by lead interactions
+- Power Theme: later special-state melodic identity
+
+Temporary director-owned arrangement:
+
+- tonal bass support
+- harmony, pads, chords, or arpeggios
+- countermelody
+- rhythmic reinforcement
+- call/response
+- sparkle, ornaments, fills, and risers
+
+Formation generation should select the complementary musical role first, then select enemies, abilities, instruments, and derived notes that can perform it. Supporting material should derive from player motifs, weapon gaps, harmonic centre, contour, and current intensity rather than merely choosing unrelated scale-safe notes.
+
+Enemy death rules:
+
+- a core player lane never depends on enemy survival
+- a temporary formation arrangement may end when its performers die
+- arrangement removal should be quantized and released cleanly instead of cutting a sustained voice mid-note
+
+Intensity primarily changes the sophistication and density of relationships around the core composition. It must not rewrite the weapon or progressively replace player-authored identity.
+
 ## Theme Slots
 
 Current player music theme slots:
@@ -72,7 +111,7 @@ Current player music theme slots:
 | Slot | Toy Type | Motif Length | Lane Role | Runtime Purpose |
 | --- | --- | --- | --- | --- |
 | Lead Theme | Drawgrid | 4 toys | Lead / Main Hook | main identity, call/response, peak hook, release memory |
-| Bass Drive | Simple Rhythm | 2 toys | Foundation / Bass Rhythm | pumping foundation groove and rhythmic engine |
+| Foundation Rhythm (`bassDrive`) | Simple Rhythm | 2 toys | Foundation / Kick Percussion | player-authored rhythmic foundation; tonal bass belongs to temporary arrangement |
 | Accent Rhythm | Simple Rhythm | 2 toys | Accent / Percussion / Stabs | secondary rhythm, attack accents, phrase punctuation |
 | Power Theme | Drawgrid | 2 toys | Powered-Up Lead | later powered-up/special-state identity |
 
@@ -142,7 +181,7 @@ These modes should select:
 | Intensity | Motif Treatment | Goal |
 | --- | --- | --- |
 | Silent | weapon only, no background motif after intro | prove silence is available as a musical tool |
-| Low | foundation identity only, very sparse motif references | establish pulse without clutter |
+| Low | exposed player-authored core with few/no supporting voices | establish composition without arrangement clutter |
 | Medium | bass foundation plus recognizable lead/accent identity | introduce player material clearly |
 | Build | partial motifs, pickups, more cadence pressure | imply the player theme is assembling |
 | Peak | full motif ownership plus riffing/doubling | make the player's theme take over the battlefield |
@@ -262,6 +301,8 @@ Release:
 - Player and enemy weapon sounds are gameplay feedback and should remain reliable at standard volume.
 - Visible toy data should behave like normal Rhythmake toys.
 - Beat Swarm should not secretly alter the player's saved toy data.
+- Never transform the actual weapon riff; it is immutable gameplay feedback.
+- Keep the rocket-authored foundation percussive. Tonal bass is a temporary supporting arrangement role.
 - Scale correction, harmonization, riffing, and motif transformation belong to runtime interpretation.
 - Occasionally expose raw authored material so player agency is audible.
 
@@ -448,8 +489,9 @@ Implementation order:
    - complete in the lab: carriers arrive only when their abilities become active; telemetry asserts every phase and visible roster is reached, featured-threat caps are respected, and the elite layer is deferred until combined pressure
    - complete in production: the enemy director derives the desired lesson from onboarding state, level phase, intensity, pressure, and difficulty, then advances by no more than one phase every four bars
    - complete in production: learned palettes prevent future mechanics leaking into filler slots, visible-field family caps limit newly spawned featured threats, existing enemy abilities remain stable, and optional elites wait for combined pressure
-   - next validation: run `Production Onboarding Flow` and inspect `music_enemy_threat_lesson_advanced` plus the per-bar threat fields in `music_enemy_director_state`
-11. Later: replace the current partial/count-based limits with a unified adaptive enemy-cost budget:
+   - production validation complete: `Production Onboarding Flow` reached every lesson in order, respected the four-bar introduction window, leaked no future abilities, and kept the featured-mechanic cap
+   - validation exposed a body-count mismatch: required lane groups routinely exceeded the old `targetAliveMax`, so body targets now include a structural floor rather than pretending one lane equals one enemy
+11. First adaptive-cost pass complete; continue tuning it from production traces:
    - retain separate readable constraints for live enemy count, featured mechanics, elite musical density, and visual complexity
    - calculate comparable threat cost from scale, health, damage, fire cadence, projectile/beam coverage, ability danger, mobility, formation support, and enemy tier
    - budget both the total live battlefield cost and the rate at which new cost may enter
@@ -457,13 +499,36 @@ Implementation order:
    - apply explicit difficulty profiles to starting budget, refill/ramp speed, ability palette, reaction windows, health, and damage
    - avoid merely scaling health: preserve readable introductions and use composition, combinations, and tempo before resorting to stat inflation
    - expose telemetry explaining each enemy's estimated cost and every spawn approval/rejection
-12. Later: add level- and difficulty-based enemy health and damage scaling as one input to the adaptive cost budget after threat composition and readability are proven.
-13. Design boss ownership of the full musical structure later.
+   - implemented: pure threat estimation separates required core-lane cost from optional/elite cost and accounts for tier, scale, durability, ability danger, movement, and formation support
+   - implemented: live and four-bar entry budgets scale with energy, pressure, difficulty ramp, measured weapon DPS, and a temporary simulated player-power curve
+   - implemented: required lane bodies are never rejected by the optional budget; formations, snakes, and spawners share cost admission in addition to their readability and musical-density constraints
+   - implemented: core lane bodies above each lane's required performer quota are discretionary; the shared spawn funnel meters them against both adaptive threat cost and a separate live-body readability ceiling
+   - implemented: discretionary core duplicates use a tighter body ceiling, reserving the outer live-body headroom for musically justified elite formations
+   - implemented: harmless ambient targets retain their low threat cost and separate population controls but no longer consume hostile formation body slots
+   - implemented: optional admissions reserve space for temporarily missing mandatory lane performers, preventing later continuity refills from creating avoidable body-budget overshoot
+   - implemented: lead-ball onboarding now uses the shared offscreen inert-target reserve instead of spawning an unbudgeted fallback combat wave
+   - implemented: routine population pressure now holds optional admissions and preserves visible enemies instead of making them retreat
+   - telemetry: `music_enemy_director_state` reports cost, structural body floor, power simulation, and budget limits; `director_threat_admission` explains optional approvals/rejections
+   - production validation passed: lead-ball targets remain ambient, no hard live-body overages occurred, and five budget-approved formations entered across the complete onboarding run
+12. Active semantic migration: formalize player composition versus enemy arrangement ownership:
+   - implemented: shared contracts classify player core, temporary arrangement, and immutable gameplay feedback
+   - implemented: the weapon event path exposes immutable ownership metadata
+   - implemented: new/default `bassDrive` data is labelled Foundation Rhythm and uses kick percussion while retaining compatibility IDs
+   - implemented: current formations expose intended arrangement roles and source lanes; their existing independent motif generation is explicitly marked pending derivation
+   - next: derive formation rhythms and pitches from the current player composition, beginning with rhythmic reinforcement and lead countermelody
+13. Later: add level- and difficulty-based enemy health and damage scaling as one input to the adaptive cost budget after threat composition and readability are proven.
+14. Design boss ownership of the full musical structure later.
 
 ## Hold For Later
 
 Do not actively expand these areas while tuning motif transformation:
 
+- cross-lane intensity-transition consistency pass:
+  - retain the lead lane's recognizable literal-to-embellished identity progression
+  - give foundation/bass and accent lanes phrase-boundary ramps instead of abrupt density or gating changes
+  - phase additive enemy formations through member count, cadence, and motif density over successive loops instead of introducing full pressure in one step
+  - preserve each lane's anchor events while adding or removing no more than a small amount of material per loop
+  - expose transition telemetry so perceived intensity changes can be compared across all lanes
 - arena circle art pass:
   - replace the temporary thick inner ring and always-visible dotted outer resistance boundary with a cohesive arena treatment
   - preserve clear communication that the particle-filled outer band pushes the player inward

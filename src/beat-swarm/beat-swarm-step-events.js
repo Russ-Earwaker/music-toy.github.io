@@ -2320,9 +2320,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const instrumentId = String(
       helpers.getPlayerSimpleRhythmThemeInstrumentId?.('bassDrive')
         || foundationLaneRuntime?.instrumentId
-        || 'BASS TONE 3'
+        || 'DRUM KICK'
     ).trim();
-    const noteName = String(helpers.getPlayerSimpleRhythmThemeNote?.('bassDrive') || 'C3').trim() || 'C3';
+    const noteName = String(helpers.getPlayerSimpleRhythmThemeNote?.('bassDrive') || 'C4').trim() || 'C4';
     const actorId = Math.max(0, Math.trunc(Number(foundationLaneRuntime?.performerEnemyId) || 0));
     const groupId = Math.max(0, Math.trunc(Number(foundationLaneRuntime?.performerGroupId) || 0));
     notePlayerBassMotifTrack('literal_emitted', {

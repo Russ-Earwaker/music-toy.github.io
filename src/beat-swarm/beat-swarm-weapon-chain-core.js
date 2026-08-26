@@ -1,3 +1,5 @@
+import { getBeatSwarmWeaponEventOwnershipPayload } from './beat-swarm-music-ownership.js?v=2026-08-26-player-composition-v1';
+
 function safeInt(value, fallback = 0) {
   return Number.isFinite(value) ? Math.trunc(value) : fallback;
 }
@@ -526,6 +528,7 @@ export function triggerWeaponStageRuntime(options = null) {
   const state = options?.state && typeof options.state === 'object' ? options.state : {};
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
+  const weaponMusicOwnership = getBeatSwarmWeaponEventOwnershipPayload();
   const getPerfNow = typeof helpers.getPerfNow === 'function'
     ? helpers.getPerfNow
     : (() => (globalThis.performance?.now?.() ?? Date.now()));
@@ -616,6 +619,7 @@ export function triggerWeaponStageRuntime(options = null) {
               sourceSystem: 'player',
               actionType: `${archetype}-${variant}`,
               authoringClass: 'gameplayauthored',
+              ...weaponMusicOwnership,
               immediate: immediateSound,
               delaySeconds: soundDelaySeconds,
               debugSource: String(context?.debugSource || ''),
@@ -625,6 +629,7 @@ export function triggerWeaponStageRuntime(options = null) {
         } else {
           helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName, {
             authoringClass: 'gameplayauthored',
+            ...weaponMusicOwnership,
             sourceSystem: 'player',
             actionType: `${archetype}-${variant}`,
             scheduledStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
@@ -714,6 +719,7 @@ export function triggerWeaponStageRuntime(options = null) {
                 sourceSystem: 'player',
                 actionType: `${archetype}-${variant}`,
                 authoringClass: 'gameplayauthored',
+                ...weaponMusicOwnership,
                 immediate: immediateSound,
                 delaySeconds: soundDelaySeconds,
                 debugSource: String(context?.debugSource || ''),
@@ -723,6 +729,7 @@ export function triggerWeaponStageRuntime(options = null) {
           } else {
             helpers.noteSwarmSoundEvent?.(weaponSoundKey, beamVol, beatIndex, noteName, {
               authoringClass: 'gameplayauthored',
+              ...weaponMusicOwnership,
               sourceSystem: 'player',
               actionType: `${archetype}-${variant}`,
               scheduledStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
@@ -815,6 +822,7 @@ export function triggerWeaponStageRuntime(options = null) {
               sourceSystem: 'player',
               actionType: `${archetype}-${variant}`,
               authoringClass: 'gameplayauthored',
+              ...weaponMusicOwnership,
               immediate: immediateSound,
               delaySeconds: soundDelaySeconds,
               debugSource: String(context?.debugSource || ''),
@@ -824,6 +832,7 @@ export function triggerWeaponStageRuntime(options = null) {
         } else {
           helpers.noteSwarmSoundEvent?.(weaponSoundKey, gameplayWeaponSoundVolume, beatIndex, noteName, {
             authoringClass: 'gameplayauthored',
+            ...weaponMusicOwnership,
             sourceSystem: 'player',
             actionType: `${archetype}-${variant}`,
             scheduledStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,
@@ -921,6 +930,7 @@ export function triggerWeaponStageRuntime(options = null) {
               sourceSystem: 'player',
               actionType: `${archetype}-${variant}`,
               authoringClass: 'gameplayauthored',
+              ...weaponMusicOwnership,
               immediate: immediateSound,
               delaySeconds: soundDelaySeconds,
               debugSource: String(context?.debugSource || ''),
@@ -930,6 +940,7 @@ export function triggerWeaponStageRuntime(options = null) {
         } else {
           helpers.noteSwarmSoundEvent?.(explosionSoundKey, gameplayWeaponSoundVolume, beatIndex, defaultExplosionNote, {
             authoringClass: 'gameplayauthored',
+            ...weaponMusicOwnership,
             sourceSystem: 'player',
             actionType: `${archetype}-${variant}`,
             scheduledStepIndex: Number.isFinite(context?.debugStepIndex) ? Math.trunc(context.debugStepIndex) : null,

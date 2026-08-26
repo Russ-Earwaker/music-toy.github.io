@@ -286,6 +286,22 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
         }
       });
       let hit = false;
+      if (String(p?.kind || '') === 'hostile-red' && p?.hostileToEnemies === false) {
+        const playerDx = (Number(centerWorld.x) || 0) - (Number(p.wx) || 0);
+        const playerDy = (Number(centerWorld.y) || 0) - (Number(p.wy) || 0);
+        const hostileHitRadius = projectileHitRadiusWorld * Math.max(1.25, Number(p?.hostileVisualScale) || 1);
+        if ((playerDx * playerDx) + (playerDy * playerDy) <= (hostileHitRadius * hostileHitRadius)) {
+          helpers.applyPlayerHit?.({
+            sourceType: 'projectile',
+            travelDirection: { x: Number(p.vx) || 0, y: Number(p.vy) || 0 },
+            sourcePosition: { x: Number(p.wx) || 0, y: Number(p.wy) || 0 },
+            playerPosition: centerWorld,
+            damage: Math.max(0.1, Number(p.damage) || 1),
+            knockbackStrength: 800,
+          });
+          hit = true;
+        }
+      }
       withProjectileDetailPerf('pickupsCombat.projectiles.collision', () => {
         if (collisionStride > 1 && (i % collisionStride) !== collisionPhase) return;
         const allowCollision = !(Number(p.collisionGraceT) > 0);

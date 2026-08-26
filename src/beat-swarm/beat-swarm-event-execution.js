@@ -459,6 +459,10 @@ export function executePerformedBeatEventRuntime(options = null) {
     const requestedInstrumentId = String(requestedInstrumentLike || '').trim();
     const fallbackInstrumentId = String(fallbackInstrumentLike || '').trim();
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const foundationInstrumentId = String(payload?.foundationInstrumentId || '').trim();
+    if (payload?.foundationInstrumentLock === true && foundationInstrumentId) {
+      return foundationInstrumentId;
+    }
     const identityChangeReason = String(
       payload?.identityChangeReason
         || group?.musicLaneIdentityChangeReason

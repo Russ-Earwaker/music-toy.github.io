@@ -451,6 +451,58 @@ function ensureUI() {
     ]),
   };
 
+  const ENEMY_SANDBOX = {
+    title: 'Enemy Sandbox',
+    controls: `<div class="perf-lab-enemy-sandbox-controls is-pinned">
+          <select class="perf-lab-select" data-enemy-sandbox-kind aria-label="Enemy class">
+            <option value="basic_small">Basic small</option>
+            <option value="basic_large">Basic large</option>
+            <option value="elite_formation">Elite formation</option>
+            <option value="rock">Rock (native)</option>
+            <option value="spawner">Spawner (native)</option>
+            <option value="drawsnake">Snake (native, 1 max)</option>
+          </select>
+          <select class="perf-lab-select" data-enemy-sandbox-ability aria-label="Enemy ability">
+            <optgroup label="Projectile">
+              <option value="projectile_straight">Straight projectile</option>
+              <option value="projectile_spread">Spread projectile</option>
+              <option value="projectile_burst">Burst projectile</option>
+              <option value="homing_single">Homing projectile</option>
+              <option value="homing_swarm">Homing swarm</option>
+            </optgroup>
+            <optgroup label="Laser">
+              <option value="laser_sweep">Sweep laser</option>
+              <option value="laser_radial">Radial laser</option>
+              <option value="laser_tracking">Tracking laser</option>
+              <option value="laser_beam_thin">Arena beam thin</option>
+              <option value="laser_beam_thick">Arena beam thick</option>
+            </optgroup>
+            <optgroup label="Area and movement">
+              <option value="local_explosion">Local explosion</option>
+              <option value="wind_push">Wind push</option>
+              <option value="arena_safe_circle">Safe circle</option>
+              <option value="arena_danger_hex">Danger hex</option>
+              <option value="charge_direct">Direct charge</option>
+              <option value="charge_intercept">Intercept charge</option>
+            </optgroup>
+            <optgroup label="Support">
+              <option value="support_shield_pair">Shield pair</option>
+              <option value="support_shield_field">Shield field</option>
+            </optgroup>
+          </select>
+          <select class="perf-lab-select" data-enemy-sandbox-count aria-label="Enemy count">
+            <option value="1">1 enemy</option>
+            <option value="2">2 enemies</option>
+            <option value="3" selected>3 enemies</option>
+            <option value="4">4 enemies</option>
+            <option value="6">6 enemies</option>
+            <option value="8">8 enemies</option>
+          </select>
+          ${btn('enemySandboxSpawn', 'Spawn / Replace', 'primary')}
+          ${btn('enemySandboxClear', 'Clear / Exit Sandbox')}
+        </div>`,
+  };
+
   const MUSIC_LAB = {
     title: 'Music Lab - Beat Swarm Diagnostics',
     controls: [
@@ -494,7 +546,10 @@ function ensureUI() {
     section(BS0.title, `${BS0.build}${BS0.runs.map(r => btn(r.act, r.label)).join('')}`),
     toolsHtml,
   ].join('');
-  const musicHtml = section(MUSIC_LAB.title, MUSIC_LAB.controls);
+  const musicHtml = [
+    section(ENEMY_SANDBOX.title, ENEMY_SANDBOX.controls),
+    section(MUSIC_LAB.title, MUSIC_LAB.controls),
+  ].join('');
 
   ov.innerHTML = `
     <div class="perf-lab-panel">
@@ -771,6 +826,30 @@ function ensureUI() {
         border:1px solid rgba(126,205,255,0.34);
         border-radius:6px;
         background:rgba(86,155,208,0.1);
+      }
+      .perf-lab-enemy-sandbox-controls{
+        display:grid;
+        grid-template-columns:minmax(120px,1fr) minmax(160px,1.4fr) minmax(90px,.7fr);
+        gap:8px;
+        width:100%;
+        margin:0;
+      }
+      .perf-lab-enemy-sandbox-controls.is-pinned{
+        padding:10px;
+        border:1px solid rgba(255,255,255,0.12);
+        background:rgba(255,255,255,0.035);
+      }
+      .perf-lab-enemy-sandbox-controls .perf-lab-select{
+        min-width:0;
+        width:100%;
+      }
+      .perf-lab-enemy-sandbox-controls .perf-lab-btn{
+        margin:0;
+      }
+      @media (max-width:720px){
+        .perf-lab-enemy-sandbox-controls{
+          grid-template-columns:minmax(0,1fr);
+        }
       }
       .perf-lab-music-group{
         border-top:1px solid rgba(255,255,255,0.1);
@@ -1246,6 +1325,47 @@ function ensureUI() {
     try { e.stopPropagation(); } catch {}
     const act = btn.getAttribute('data-act');
     if (act === 'close') hide();
+
+    if (act === 'enemySandboxSpawn') {
+      const kind = String(ov.querySelector('[data-enemy-sandbox-kind]')?.value || 'basic_small').trim().toLowerCase();
+      const abilityId = String(ov.querySelector('[data-enemy-sandbox-ability]')?.value || 'projectile_straight').trim().toLowerCase();
+      const count = Math.max(1, Math.min(8, Math.trunc(Number(ov.querySelector('[data-enemy-sandbox-count]')?.value) || 1)));
+      let modeApi = window.BeatSwarmMode;
+      if (!modeApi?.isActive?.()) {
+        const rebuilt = await buildBS0();
+        if (!rebuilt) {
+          setStatus('Enemy sandbox failed: Beat Swarm setup unavailable');
+          return;
+        }
+        try { stopTransport(); } catch {}
+        await waitForPerfLabMs(120);
+        try { startTransport(); } catch {}
+        await waitForTransportRunning(2200);
+        await prepareBS0StaticStage(1, 1);
+        modeApi = window.BeatSwarmMode;
+      } else if (!isRunning()) {
+        try { startTransport(); } catch {}
+        await waitForTransportRunning(2200);
+      }
+      if (typeof modeApi?.startEnemySandboxTest !== 'function') {
+        setStatus('Enemy sandbox failed: refresh required');
+        return;
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      try { modeApi.setPlayerInfiniteHealth?.(true); } catch {}
+      const result = modeApi.startEnemySandboxTest({ kind, abilityId, count });
+      setStatus(result?.active
+        ? `Enemy sandbox: ${kind}, ${result.abilityId || abilityId}, ${result.aliveEnemyIds?.length || 0} active`
+        : 'Enemy sandbox failed to spawn');
+      setOutput(result);
+      return;
+    }
+    if (act === 'enemySandboxClear') {
+      const result = window.BeatSwarmMode?.stopEnemySandboxTest?.() || { active: false };
+      setStatus('Enemy sandbox cleared; normal spawning restored');
+      setOutput(result);
+      return;
+    }
 
     if (act === 'musicEnemyRepeatStart') {
       const typeEl = ov.querySelector('[data-music-spawn-type]');
@@ -8292,7 +8412,7 @@ async function runDirectorFormationIntensityFlowDebug() {
       'Expected: Low has player motifs only; Medium introduces one Gunner/Kick formation; Build adds one Laser/Clap formation; Peak sustains both.',
       'Release and Settle spawn no new formations. Surviving groups remain embodied until defeated and are never retired by a routine intensity transition.',
       'If a requested group is completely defeated while its intensity policy still calls for it, the director may replace it after the normal phrase cooldown.',
-      'The production threat lesson begins with non-damaging wind carriers, introduces one complex mechanic at a time at four-bar boundaries, preserves each enemy ability for its lifetime, and defers optional elites until combined pressure.',
+      'The production threat lesson begins with non-damaging wind carriers and preserves each enemy ability for its lifetime. After onboarding, this budget-focused lab explicitly marks the lesson complete so Medium, Build, and Peak can validate optional elite admission without changing production progression.',
     ].join(' '),
     groupedScenarioName: 'beat_swarm_production_onboarding_flow_1x300s',
     groupedRunId: 'musicLab_production_onboarding_flow_1x300s_scenario',
@@ -8301,7 +8421,11 @@ async function runDirectorFormationIntensityFlowDebug() {
     labelPrefix: 'BS0_production_onboarding_flow_1x300s',
     statusPrefix: 'Running production onboarding flow',
     async setupAfterPrepare() {
-      window.__BEAT_SWARM_COMPOSER_EXECUTION_DEBUG = true;
+      window.__BEAT_SWARM_COMPOSER_EXECUTION_DEBUG = false;
+      const testOverrides = window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object'
+        ? window.__beatSwarmTestOverrides
+        : (window.__beatSwarmTestOverrides = {});
+      testOverrides.productionOnboardingFormationBudgetReady = true;
       const modeApi = window.BeatSwarmMode;
       if (
         !modeApi
@@ -8327,6 +8451,9 @@ async function runDirectorFormationIntensityFlowDebug() {
     },
     async teardownAfterRun() {
       window.__BEAT_SWARM_COMPOSER_EXECUTION_DEBUG = false;
+      if (window.__beatSwarmTestOverrides && typeof window.__beatSwarmTestOverrides === 'object') {
+        delete window.__beatSwarmTestOverrides.productionOnboardingFormationBudgetReady;
+      }
     },
     traceCapture: {
       enabled: true,
@@ -8334,6 +8461,10 @@ async function runDirectorFormationIntensityFlowDebug() {
         'music_level1_arrangement_state',
         'music_enemy_director_state',
         'music_enemy_threat_lesson_advanced',
+        'music_enemy_threat_lesson_test_override',
+        'director_threat_admission',
+        'director_elite_spawn_blocked',
+        'music_enemy_director_cleanup',
         'director_musical_formation_policy',
         'director_musical_formation_spawned',
         'director_musical_formation_ended',
@@ -8351,7 +8482,6 @@ async function runDirectorFormationIntensityFlowDebug() {
         'enemy_basic_ability_fired',
         'enemy_basic_lane_carrier_spawned',
         'enemy_basic_lane_carrier_status',
-        'music_composer_execution_stage',
       ],
       maxLines: 4000,
       preferOutputDirectory: true,

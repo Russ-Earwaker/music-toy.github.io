@@ -1348,7 +1348,10 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
             Math.max(0, desiredGroups - effectiveCurrentSectionCount)
           ))
     );
-  const spawnCount = Math.min(requestedSpawnCount, availableLiveGroupSlots, 1);
+  const threatAdmissionRetryBar = Math.max(-1, Math.trunc(Number(composerRuntime.__bsThreatAdmissionRetryBar) || -1));
+  const spawnCount = currentBarIndex < threatAdmissionRetryBar
+    ? 0
+    : Math.min(requestedSpawnCount, availableLiveGroupSlots, 1);
   for (let i = 0; i < spawnCount; i++) {
     const forcedIntroProfileSourceType = missingIntroProfiles[i] || '';
     const forcedBasicLaneCarrier = missingBasicLaneCarriers[i] || null;
@@ -1403,6 +1406,23 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     ) {
       group.__bsLeadMergeSecondaryPersistUntilBar = currentBarIndex + 4;
     }
+    const admittedMemberCount = Math.max(
+      0,
+      Math.trunc(Number(spawnComposerGroupOffscreenMembers(
+        group,
+        Math.max(0, Math.trunc(Number(group.size) || 0)),
+      )) || 0),
+    );
+    if (admittedMemberCount <= 0) {
+      composerRuntime.__bsThreatAdmissionRetryBar = currentBarIndex + 1;
+      continue;
+    }
+    composerRuntime.__bsThreatAdmissionRetryBar = -1;
+    group.size = admittedMemberCount;
+    group.performers = Math.min(
+      admittedMemberCount,
+      Math.max(1, Math.trunc(Number(group?.performers) || admittedMemberCount)),
+    );
     composerEnemyGroups.push(group);
     if (noteMusicSystemEvent && currentBarIndex < 24) {
       try {
@@ -1439,7 +1459,6 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
         });
       } catch {}
     }
-    spawnComposerGroupOffscreenMembers(group, Math.max(0, Math.trunc(Number(group.size) || 0)));
     if (forcedBasicLaneCarrier) {
       try {
         noteMusicSystemEvent?.('enemy_basic_lane_carrier_spawned', {
