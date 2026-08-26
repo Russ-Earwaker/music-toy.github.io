@@ -4774,6 +4774,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       const nonSoloGroupedTemplate = String(group?.templateId || '').trim().toLowerCase();
       const ordinaryGroupedMusicalRole = (
         !effectiveGroupSoloCarrierType
+        && group?.basicLargeLaneCarrier !== true
         && String(group?.introCarrierBodyType || '').trim().toLowerCase() !== 'solo'
         && !nonSoloGroupedTemplate.startsWith('solo-')
         && nonSoloGroupedTemplate !== 'foundation-buffer'

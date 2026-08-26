@@ -48,6 +48,10 @@ function isForcedSingleEmitterGroup(group, aliveMemberCount = 0) {
   const introSlotProfileSourceType = normalizeComposerProfileSourceType(group?.introSlotProfileSourceType || group?.musicProfileSourceType);
   const multiMemberIntroGroup = Math.max(0, Math.trunc(Number(aliveMemberCount) || 0)) > 1
     && ((group?.introStageCarrier === true) || isIntroSlotIdentityProfile(introSlotProfileSourceType));
+  // Basic lane handoff groups use every small body as a round-robin performer.
+  // Legacy `callResponseLane: solo` metadata describes the lane phrase, not its
+  // physical carrier architecture.
+  if (group?.basicLaneCarrierHandoff === true && group?.basicLargeLaneCarrier !== true) return false;
   if (multiMemberIntroGroup) return false;
   return soloCarrierType === 'rhythm'
     || callResponseLane === 'solo'

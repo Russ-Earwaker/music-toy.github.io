@@ -36,6 +36,68 @@ export function getEnemyCombatVisualRotationRuntime(enemy) {
   return angle;
 }
 
+export function updateEnemyMovementFacingRuntime(enemy, dt = 0, playerWorld = null) {
+  if (!enemy || enemy?.retreating === true) return false;
+  const descriptor = enemy?.gameplayDescriptor || {};
+  const silhouette = String(descriptor?.abilitySilhouette || enemy?.abilitySilhouette || '').trim().toLowerCase();
+  const abilityFamily = String(descriptor?.abilityFamily || enemy?.abilityFamily || '').trim().toLowerCase();
+  const profileId = String(enemy?.combatProfileId || '').trim().toLowerCase();
+  const patternId = String(enemy?.combatPatternId || '').trim().toLowerCase();
+  const directional = silhouette.includes('forward')
+    || silhouette.includes('cannon')
+    || silhouette.includes('beam')
+    || silhouette.includes('charge')
+    || abilityFamily === 'projectile'
+    || abilityFamily === 'laser'
+    || abilityFamily === 'charge'
+    || profileId === 'gunner'
+    || profileId === 'laser_spinner';
+  if (!directional) return false;
+  const fixedFormationAim = profileId === 'laser_spinner' && patternId !== 'tracking_laser';
+  if (fixedFormationAim) return false;
+  const tracksPlayer = profileId === 'gunner'
+    || profileId === 'seeker'
+    || (profileId === 'laser_spinner' && patternId === 'tracking_laser')
+    || (profileId === '' && (abilityFamily === 'projectile' || abilityFamily === 'laser'));
+  if (!tracksPlayer && (
+    enemy?.combatPrepareVisualStartedAtMs != null
+    || enemy?.combatFireVisualStartedAtMs != null
+    || enemy?.combatCharging === true
+  )) return false;
+  const vx = Number(enemy?.vx) || 0;
+  const vy = Number(enemy?.vy) || 0;
+  const playerDx = (Number(playerWorld?.x) || 0) - (Number(enemy?.wx) || 0);
+  const playerDy = (Number(playerWorld?.y) || 0) - (Number(enemy?.wy) || 0);
+  if (tracksPlayer && Math.hypot(playerDx, playerDy) < 0.001) return false;
+  if (!tracksPlayer && Math.hypot(vx, vy) < 8) return false;
+  const targetAngle = tracksPlayer ? Math.atan2(playerDy, playerDx) : Math.atan2(vy, vx);
+  const currentAngle = Number(enemy?.combatFacingAngle);
+  if (!Number.isFinite(currentAngle)) {
+    enemy.combatFacingAngle = targetAngle;
+    return true;
+  }
+  const delta = Math.atan2(Math.sin(targetAngle - currentAngle), Math.cos(targetAngle - currentAngle));
+  const maxTurn = Math.max(0.08, Math.min(Math.PI, Math.max(0, Number(dt) || 0) * 9));
+  enemy.combatFacingAngle = currentAngle + Math.max(-maxTurn, Math.min(maxTurn, delta));
+  return true;
+}
+
+export function preserveOnboardingAsteroidDriftRuntime(enemy) {
+  if (!enemy || (
+    enemy?.onboardingAsteroid !== true
+    && String(enemy?.enemyType || '').trim().toLowerCase() !== 'onboarding-asteroid'
+  )) return false;
+  if (!Number.isFinite(Number(enemy.onboardingAsteroidDriftVx))) {
+    enemy.onboardingAsteroidDriftVx = Number(enemy.vx) || 0;
+  }
+  if (!Number.isFinite(Number(enemy.onboardingAsteroidDriftVy))) {
+    enemy.onboardingAsteroidDriftVy = Number(enemy.vy) || 0;
+  }
+  enemy.vx = Number(enemy.onboardingAsteroidDriftVx) || 0;
+  enemy.vy = Number(enemy.onboardingAsteroidDriftVy) || 0;
+  return true;
+}
+
 function getFormationAnchorWorldRuntime(enemy, helpers) {
   if (String(enemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') return null;
   if (enemy?.retreating) return null;
@@ -1261,6 +1323,20 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     const dx = centerWorld.x - e.wx;
     const dy = centerWorld.y - e.wy;
     const d = Math.hypot(dx, dy) || 0.0001;
+    if (e?.basicLaneEntryBoostActive === true) {
+      const entryScreen = helpers.worldToScreen?.({ x: e.wx, y: e.wy });
+      const enteredViewport = entryScreen
+        && Number.isFinite(entryScreen.x)
+        && Number.isFinite(entryScreen.y)
+        && entryScreen.x >= 24
+        && entryScreen.y >= 24
+        && entryScreen.x <= globalThis.window.innerWidth - 24
+        && entryScreen.y <= globalThis.window.innerHeight - 24;
+      if (enteredViewport) {
+        e.basicLaneEntryBoostActive = false;
+        e.enemySpeedMultiplier = Math.max(0.35, Number(e?.basicLaneCruiseSpeedMultiplier) || 1);
+      }
+    }
     const typeSpeedMult = String(e?.enemyType || '') === 'spawner' ? (Number(constants.spawnerEnemySpeedMultiplier) || 1) : 1;
     const enemySpeedScale = Math.max(0.35, Number(e?.enemySpeedMultiplier) || 1);
     const speedMult = Math.max(0.05, Number(state?.difficultyConfig?.enemySpeedMultiplier) || 1)
@@ -1447,6 +1523,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       e.vx *= eventSectionVisual.velocityDamping;
       e.vy *= eventSectionVisual.velocityDamping;
     }
+    preserveOnboardingAsteroidDriftRuntime(e);
     const speed = Math.hypot(e.vx, e.vy);
     const formationPositioningSpeedScale = scopedBehaviorMotion?.overrideVelocity === true
       && !isLargeFormationEnemyRuntime(e)
@@ -1458,6 +1535,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       e.vx *= k;
       e.vy *= k;
     }
+    updateEnemyMovementFacingRuntime(e, state.dt, centerWorld);
     e.wx += e.vx * (Number(state.dt) || 0);
     e.wy += e.vy * (Number(state.dt) || 0);
     applyPairedDanceSeparationRuntime(e, enemies, state);

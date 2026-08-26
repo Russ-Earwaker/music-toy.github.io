@@ -30,6 +30,7 @@ test('uses the supplied body plan when creating a missing basic lane carrier', (
   assert.equal(bodyPlanCalls, 1);
   assert.equal(groups.length, 1);
   assert.equal(groups[0].basicLargeLaneCarrier, true);
+  assert.equal(groups[0].basicLaneCarrierHandoff, true);
   assert.equal(groups[0].size, 1);
 });
 

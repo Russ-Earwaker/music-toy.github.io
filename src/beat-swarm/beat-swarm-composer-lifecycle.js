@@ -826,6 +826,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     const normalizedTemplateId = String(g?.templateId || '').trim().toLowerCase();
     const ordinaryGroupedMusicalRole = (
       !introGroupBodyLocked
+      && g?.basicLargeLaneCarrier !== true
       && !isFoundationBufferGroup(g)
       && !String(g?.soloCarrierType || '').trim()
       && String(g?.introCarrierBodyType || '').trim().toLowerCase() !== 'solo'
@@ -1376,6 +1377,10 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     });
     if (!group) continue;
     if (!isMusicLaneAvailableForEnemy(String(group?.musicLaneId || '').trim().toLowerCase())) continue;
+    const genericCoreLaneSingleton = Math.max(1, Math.trunc(Number(group?.size) || 1)) === 1
+      && String(group?.musicLaneId || '').trim().toLowerCase().endsWith('_lane')
+      && String(group?.soloCarrierType || '').trim().toLowerCase() === '';
+    if (genericCoreLaneSingleton) group.basicLargeLaneCarrier = true;
     if (forcedBasicLaneCarrier) {
       const bodyPlan = getBasicLaneCarrierBodyPlan({
         laneId: forcedBasicLaneCarrier.laneId,
@@ -1384,6 +1389,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       const useLargeCarrier = String(bodyPlan?.scale || '').trim().toLowerCase() === 'large';
       const plannedMemberCount = Math.max(1, Math.trunc(Number(bodyPlan?.memberCount) || (useLargeCarrier ? 1 : group.size) || 1));
       group.basicLargeLaneCarrier = useLargeCarrier;
+      group.basicLaneCarrierHandoff = true;
       group.size = plannedMemberCount;
       group.performers = Math.min(plannedMemberCount, Math.max(1, Math.trunc(Number(group?.performers) || plannedMemberCount)));
       group.assignedMusicLaneId = String(group?.musicLaneId || forcedBasicLaneCarrier.laneId || '').trim().toLowerCase();

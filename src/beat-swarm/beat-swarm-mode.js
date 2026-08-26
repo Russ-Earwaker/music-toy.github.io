@@ -32,15 +32,15 @@ import { applyWeaponGateSelection, createSeededRng, createWeaponGateRatioState, 
 import { createBeatSwarmTapOrbRuntime } from './beat-swarm-tap-orbs.js?v=2026-06-22-quantized-bridge-v5';
 import { normalizeCallResponseLane, pickComposerGroupTemplate, chooseResponseNoteFromPool, } from './beat-swarm-groups.js';
 import { createComposerEnemyGroupProfile as buildComposerEnemyGroupProfile, pickComposerGroupShape, pickComposerGroupColor, } from './beat-swarm-composer-groups.js';
-import { maintainComposerEnemyGroupsLifecycle } from './beat-swarm-composer-lifecycle.js?v=2026-08-24-onboarding-handoff-v3';
-import { chooseComposerGroupEnemyForNote as pickComposerEnemyForNote, collectComposerGroupStepBeatEvents as collectComposerGroupStepEvents, } from './beat-swarm-composer-events.js?v=2026-08-24-basic-lane-carriers-v3';
+import { maintainComposerEnemyGroupsLifecycle } from './beat-swarm-composer-lifecycle.js?v=2026-08-26-onboarding-handoff-v4';
+import { chooseComposerGroupEnemyForNote as pickComposerEnemyForNote, collectComposerGroupStepBeatEvents as collectComposerGroupStepEvents, } from './beat-swarm-composer-events.js?v=2026-08-26-basic-lane-carriers-v4';
 import { collectDrawSnakeStepBeatEvents as collectDrawSnakeStepEvents, collectSpawnerStepBeatEvents as collectSpawnerStepEvents, } from './beat-swarm-singleton-events.js';
 import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRuntime, } from './beat-swarm-composer-spawn.js?v=2026-08-24-enemy-identity-v1';
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-08-23-production-abilities-v2';
 import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-08-21-ball-lead-handoff-v12';
-import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js?v=2026-08-24-enemy-facing-v2';
+import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js?v=2026-08-26-enemy-facing-v7';
 import {
   applyBeatSwarmEnemyDescriptorVisualIdentity,
   assignBeatSwarmEnemyGameplayDescriptor,
@@ -190,7 +190,7 @@ import { applyAoeAtRuntime, applyLingeringAoeBeatRuntime, clearBeamEffectsForWea
 import { handleBeatPreludeRuntime, handleBeatStepChangeRuntime, handleBeatTailRuntime, handleTransportStoppedBeatUpdateRuntime, updateMusicLabSignaturesRuntime, } from './beat-swarm-beat-update-runtime.js?v=2026-08-19-timing-pass-v1';
 import { configureInitialSpawnerEnablementRuntime, getEnemySpawnScaleRuntime, getRandomOffscreenSpawnPointRuntime, keepDrawSnakeEnemyOnscreenRuntimeWrapper, spawnFallbackEnemyOffscreenRuntime, } from './beat-swarm-spawn-utils.js';
 import { addHostileRedExplosionEffectRuntime, getAliveEnemiesByIdsRuntime, spawnHostileRedProjectileAtRuntime, triggerCosmeticSyncAtRuntime, triggerLowThreatBurstAtRuntime, } from './beat-swarm-hostile-effects.js?v=2026-08-24-threat-ramp-v2';
-import { maintainComposerEnemyGroupsRuntime } from './beat-swarm-composer-maintenance.js?v=2026-08-24-enemy-identity-v3';
+import { maintainComposerEnemyGroupsRuntime } from './beat-swarm-composer-maintenance.js?v=2026-08-26-enemy-identity-v4';
 import { updatePickupsAndCombatRuntimeWrapper } from './beat-swarm-pickups-combat-wrapper.js';
 import { getReactiveReleaseImpulseRuntime, pulsePlayerShipNoteFlashRuntime, pulseReactiveArrowChargeRuntime, setJoystickCenterRuntime, setJoystickKnobRuntime, setJoystickVisibleRuntime, setReactiveArrowVisualRuntime, setResistanceVisualRuntime, setThrustFxVisualRuntime, updateArenaVisualRuntime, } from './beat-swarm-visual-controls.js';
 import { getInputVectorRuntime, updateShipFacingRuntime } from './beat-swarm-input-controls.js';
@@ -383,6 +383,10 @@ const musicContributionRuntime = {
 const onboardingAsteroidRuntime = {
   spawned: false,
   enemyIds: [],
+};
+const musicEventTargetReserveRuntime = {
+  lastSpawnMs: -100000,
+  spawnIndex: 0,
 };
 const directorFormationFlowAfterOnboardingRuntime = {
   armed: false,
@@ -4470,17 +4474,47 @@ function getBasicLaneCarrierBodyPlan(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const laneId = String(opts?.laneId || '').trim().toLowerCase();
   const requestedMemberCount = Math.max(1, Math.trunc(Number(opts?.requestedMemberCount) || 1));
+  const activeCombatBodyCount = enemies.filter((enemy) => (
+    enemy
+    && enemy.onboardingAsteroid !== true
+    && enemy.retreating !== true
+    && enemy.__bsRemoved !== true
+    && Number(enemy?.hp) > 0
+  )).length;
+  const activeLaneBodyCount = enemies.filter((enemy) => (
+    enemy
+    && enemy.onboardingAsteroid !== true
+    && enemy.retreating !== true
+    && enemy.__bsRemoved !== true
+    && Number(enemy?.hp) > 0
+    && String(enemy?.assignedMusicLaneId || enemy?.musicLaneId || '').trim().toLowerCase() === laneId
+  )).length;
+  const targetAliveMin = Math.max(1, Math.trunc(Number(enemyDirectorRuntime?.targetAliveMin) || 1));
   const targetAliveMax = Math.max(1, Math.trunc(Number(enemyDirectorRuntime?.targetAliveMax) || 1));
-  const totalAlive = Math.max(0, Math.trunc(Number(enemyDirectorRuntime?.totalAlive) || 0));
-  const availableBodies = Math.max(1, targetAliveMax - totalAlive);
+  // Onboarding asteroids are scenery/targets, not lane performers. Counting them
+  // here left the authored-lane handoff with only one incoming enemy.
+  const onboardingLanePresentationMinimum = weaponGateOnboardingSequenceMode === 'missiles_bouncers'
+    ? (laneId === 'foundation_lane' ? 3 : 2)
+    : 1;
+  const availableBodies = Math.max(
+    1,
+    targetAliveMax - activeCombatBodyCount,
+    activeCombatBodyCount === 0 ? onboardingLanePresentationMinimum : 0,
+  );
+  const requiredBodies = Math.max(1, onboardingLanePresentationMinimum - activeLaneBodyCount);
   const targetPressure = Math.max(0, Math.min(1, Number(enemyDirectorRuntime?.targetPressure) || 0));
   const phaseIndex = Math.max(0, Math.trunc(Number(enemyDirectorRuntime?.threatLessonPhaseIndex) || 0));
   const laneSeed = Array.from(laneId).reduce((total, char) => total + char.charCodeAt(0), 0);
-  const useLargeCarrier = availableBodies <= 1
-    || (targetPressure >= 0.34 && ((laneSeed + phaseIndex) % 3) === 0);
+  const useLargeCarrier = requiredBodies <= 1 && (
+    availableBodies <= 1
+    || (targetPressure >= 0.34 && ((laneSeed + phaseIndex) % 3) === 0)
+  );
   return useLargeCarrier
     ? { scale: 'large', memberCount: 1 }
-    : { scale: 'small', memberCount: Math.max(2, Math.min(requestedMemberCount, availableBodies, 4)) };
+    : {
+        scale: 'small',
+        memberCount: Math.max(2, Math.min(Math.max(requestedMemberCount, requiredBodies), availableBodies, 4)),
+      };
 }
 function isMusicLaneCarrierEnemyActive(enemyLike = null) {
   const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : null;
@@ -23811,6 +23845,61 @@ function spawnOnboardingAsteroidWave() {
   }
   return created.length > 0;
 }
+function isMusicCreationTargetReserveActive() {
+  const onboardingPhase = String(beatSwarmOnboardingRuntime.phase || '').trim().toLowerCase();
+  const onboardingAssembly = weaponGateOnboardingSequenceMode === 'missiles_bouncers'
+    && onboardingPhase !== 'idle'
+    && onboardingPhase !== 'weapon_gate'
+    && onboardingPhase !== 'complete';
+  return onboardingAssembly
+    || musicContributionRuntime.active === true
+    || !!musicContributionRuntime.current
+    || musicMissileRuntime.isActive?.() === true
+    || pinballBouncerRuntime?.isActive?.() === true
+    || leadBallRuntime.isActive?.() === true;
+}
+function spawnMusicCreationTargetRock() {
+  if (!enemyLayerEl) return false;
+  const center = arenaCenterWorld || getViewportCenterWorld();
+  const spawnIndex = Math.max(0, Math.trunc(Number(musicEventTargetReserveRuntime.spawnIndex) || 0));
+  const point = getRandomOffscreenSpawnPointRuntime({
+    constants: { enemyFallbackSpawnMarginPx: ENEMY_FALLBACK_SPAWN_MARGIN_PX },
+    helpers: { randRange },
+    memberIndex: spawnIndex % 8,
+    memberCount: 8,
+    group: {
+      id: Math.max(1, Math.trunc(Number(currentBeatIndex) || 0)) + spawnIndex,
+      formationSpawnRegion: spawnIndex % 2 === 0 ? 'side_diagonal' : 'mid_side',
+      formationArchetype: 'ambient_target_rocks',
+    },
+  }) || getRandomOffscreenSpawnPoint();
+  if (!point) return false;
+  const enemy = spawnEnemyAt(point.x, point.y, {
+    hp: 6,
+    role: BEAT_EVENT_ROLES.MOTION,
+    layer: 'support',
+    skipMusicGroupInit: true,
+    onboardingAsteroid: true,
+  });
+  if (!enemy) return false;
+  configureOnboardingAsteroidEnemy(enemy, spawnIndex);
+  const inward = normalizeDir(
+    (Number(center?.x) || 0) - (Number(enemy?.wx) || 0),
+    (Number(center?.y) || 0) - (Number(enemy?.wy) || 0),
+    1,
+    0,
+  );
+  const driftSpeed = 26 + ((spawnIndex % 3) * 4);
+  enemy.vx = inward.x * driftSpeed;
+  enemy.vy = inward.y * driftSpeed;
+  onboardingAsteroidRuntime.enemyIds.push(Math.max(0, Math.trunc(Number(enemy.id) || 0)));
+  musicEventTargetReserveRuntime.spawnIndex = spawnIndex + 1;
+  noteMusicSystemEvent('music_creation_target_reserve_spawned', {
+    enemyId: Math.max(0, Math.trunc(Number(enemy.id) || 0)),
+    visibleTargetFloor: 8,
+  }, { beatIndex: currentBeatIndex });
+  return true;
+}
 function updateOnboardingAsteroidWave() {
   if (!onboardingAsteroidRuntime.spawned) return false;
   const foundationComplete = musicContributionRuntime.completedIds.includes('foundation-rockets-1')
@@ -24068,6 +24157,8 @@ function resetWeaponGateTapOrbOnboardingState() {
   resetMusicContributionRuntime('onboarding_reset');
   onboardingAsteroidRuntime.spawned = false;
   onboardingAsteroidRuntime.enemyIds = [];
+  musicEventTargetReserveRuntime.lastSpawnMs = -100000;
+  musicEventTargetReserveRuntime.spawnIndex = 0;
   beatSwarmOnboardingState.reset();
   beatSwarmMusicEventRuntime.reset();
   try { musicMissileRuntime.stop(); } catch {}
@@ -31318,6 +31409,9 @@ function updateEnemyCombatRuntime() {
         x: (Number(enemy?.wx) || 0) + (Math.cos(Number.isFinite(projectileAngle) ? projectileAngle : 0) * muzzleOffsetWorld),
         y: (Number(enemy?.wy) || 0) + (Math.sin(Number.isFinite(projectileAngle) ? projectileAngle : 0) * muzzleOffsetWorld),
       };
+      enemy.lastCombatProjectileAngle = Number.isFinite(projectileAngle) ? projectileAngle : null;
+      enemy.lastCombatProjectileOriginX = projectileOrigin.x;
+      enemy.lastCombatProjectileOriginY = projectileOrigin.y;
       spawnHostileRedProjectileAt(projectileOrigin, {
         angle: projectileOptions.angle,
         speed: projectileOptions.speed,
@@ -31412,6 +31506,19 @@ function updateEnemyCombatRuntime() {
         motifStep,
         motifScheduled,
         quantizedBeat: attackBeatIndex,
+        combatFacingAngle: Number.isFinite(Number(enemy?.combatFacingAngle))
+          ? Number(enemy.combatFacingAngle)
+          : null,
+        projectileAngle: Number.isFinite(Number(enemy?.lastCombatProjectileAngle))
+          ? Number(enemy.lastCombatProjectileAngle)
+          : null,
+        projectileOrigin: (
+          Number.isFinite(Number(enemy?.lastCombatProjectileOriginX))
+          && Number.isFinite(Number(enemy?.lastCombatProjectileOriginY))
+        ) ? {
+            x: Math.round(Number(enemy.lastCombatProjectileOriginX)),
+            y: Math.round(Number(enemy.lastCombatProjectileOriginY)),
+          } : null,
         audioCallLateMs: enemy?.lastCombatAudioBeatTiming?.audioCallLateMs ?? null,
         directorFormation: String(enemy?.combatSyncGroupId || '').startsWith('director-'),
         testPhaseIndex: enemyCombatLabRuntime.active ? enemyCombatLabRuntime.phaseIndex : null,
@@ -33117,7 +33224,8 @@ function spawnComposerGroupEnemyAt(clientX, clientY, group, memberIndex = 0, mem
     abilityPalette,
     currentCounts: getVisibleBasicEnemyAbilityCounts(),
   });
-  const isLargeLaneCarrier = group?.basicLargeLaneCarrier === true && memberIndex === 0;
+  const isLargeLaneCarrier = memberIndex === 0
+    && group?.basicLargeLaneCarrier === true;
   const created = spawnComposerGroupEnemyAtRuntime({
     clientX,
     clientY,
@@ -33164,6 +33272,14 @@ function spawnComposerGroupEnemyAt(clientX, clientY, group, memberIndex = 0, mem
   if (created) {
     created.isLargeEnemy = isLargeLaneCarrier;
     created.assignedMusicLaneId = String(group?.assignedMusicLaneId || group?.musicLaneId || '').trim().toLowerCase();
+    if (
+      weaponGateOnboardingSequenceMode === 'missiles_bouncers'
+      && group?.basicLaneCarrierHandoff === true
+    ) {
+      created.basicLaneEntryBoostActive = true;
+      created.basicLaneCruiseSpeedMultiplier = Math.max(0.35, Number(created.enemySpeedMultiplier) || 1);
+      created.enemySpeedMultiplier = Math.max(2.25, created.basicLaneCruiseSpeedMultiplier);
+    }
     created.basicAbilityRosterFamily = memberAbilityFamily;
     created.basicAbilityThreatLessonPhase = Math.max(0, Math.trunc(Number(enemyDirectorRuntime.threatLessonPhaseIndex) || 0));
     applyMusicalIdentityVisualToEnemy(created, group);
@@ -34817,8 +34933,36 @@ function maintainComposerEnemyGroups() {
   });
 }
 function maintainEnemyPopulation() {
-  // Section 1: fallback generic enemies are intentionally disabled.
-  // Musical participation should come from explicit enemy groups/systems only.
+  // Generic musical enemies remain director-owned. This reserve contains only
+  // inert destructible targets so creation mechanics always have something to hit.
+  const creationActive = isMusicCreationTargetReserveActive();
+  const liveTargets = enemies.filter((enemy) => (
+    enemy
+    && enemy.__bsRemoved !== true
+    && enemy.__bsPendingDeath !== true
+    && enemy.retreating !== true
+    && Number(enemy?.hp) > 0
+  ));
+  const visibleTargets = liveTargets.filter((enemy) => {
+    const screen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
+    return screen
+      && Number.isFinite(screen.x)
+      && Number.isFinite(screen.y)
+      && screen.x >= 24
+      && screen.y >= 24
+      && screen.x <= window.innerWidth - 24
+      && screen.y <= window.innerHeight - 24;
+  });
+  const liveRocks = liveTargets.filter((enemy) => enemy?.onboardingAsteroid === true);
+  const visibleRocks = visibleTargets.filter((enemy) => enemy?.onboardingAsteroid === true);
+  if (creationActive) {
+    if (visibleTargets.length >= 8 || liveTargets.length >= 12) return;
+  } else if (visibleRocks.length >= 3 || liveRocks.length >= 5) {
+    return;
+  }
+  const nowMs = getBeatSwarmPerfNow();
+  if ((nowMs - Number(musicEventTargetReserveRuntime.lastSpawnMs || 0)) < 260) return;
+  if (spawnMusicCreationTargetRock()) musicEventTargetReserveRuntime.lastSpawnMs = nowMs;
 }
 function updatePickupsAndCombat(dt, options = null) {
   const opts = options && typeof options === 'object' ? options : {};
@@ -34920,6 +35064,12 @@ function triggerBasicEnemyWindPushAt(originLike = null, sourceEnemy = null, beat
   const origin = originLike && typeof originLike === 'object' ? originLike : null;
   if (!origin || !Number.isFinite(Number(origin.x)) || !Number.isFinite(Number(origin.y))) return false;
   const center = { x: Number(origin.x) || 0, y: Number(origin.y) || 0 };
+  if (sourceEnemy) {
+    sourceEnemy.composerActionPulseT = Math.max(
+      0.28,
+      Number(sourceEnemy?.composerActionPulseDur) || 0,
+    );
+  }
   triggerEnemyCombatFiredVisual(sourceEnemy, 'wind');
   const radiusWorld = 430;
   const pushPower = 1250;
