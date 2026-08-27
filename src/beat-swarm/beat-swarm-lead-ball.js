@@ -13,9 +13,26 @@ const BALL_BUMP_RADIUS = 94;
 const BALL_PICKUP_RADIUS = 74;
 const BALL_PICKUP_TRAVEL_SPEED = 620;
 const BALL_COUNT = 2;
-const BALL_CONTACT_COOLDOWN = 0.3;
+const BALL_CONTACT_COOLDOWN = 0.48;
 const DEFAULT_STEP_COUNT = 32;
-const DEFAULT_TARGET_HITS = 18;
+const DEFAULT_TARGET_HITS = 11;
+
+export function getLeadBallCaptureAllowance(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || DEFAULT_STEP_COUNT));
+  const targetHitCount = Math.max(1, Math.min(stepCount, Math.trunc(Number(opts.targetHitCount) || DEFAULT_TARGET_HITS)));
+  const captureStartTick = Math.trunc(Number(opts.captureStartTick));
+  const currentTick = Math.max(0, Math.trunc(Number(opts.currentTick) || 0));
+  if (!Number.isFinite(captureStartTick) || captureStartTick < 0) return 1;
+  const relativeStep = Math.max(0, Math.min(stepCount - 1, currentTick - captureStartTick));
+  if (stepCount <= 1 || targetHitCount <= 1) return targetHitCount;
+  const captureWindowEnd = Math.max(1, Math.min(stepCount - 1, Math.floor(stepCount * 0.85)));
+  const pacedStep = Math.min(captureWindowEnd, relativeStep);
+  return Math.min(
+    targetHitCount,
+    1 + Math.floor((pacedStep * (targetHitCount - 1)) / captureWindowEnd),
+  );
+}
 
 function point(value = null) {
   return {
@@ -278,6 +295,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     completionExplosionsFired: false,
     captureStartTick: -1,
     captureEndTick: -1,
+    captureDeadlineTick: -1,
     lastClockTick: -1,
     postCompleteStartTick: -1,
     postCompleteUntilTick: -1,
@@ -356,6 +374,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.completionExplosionsFired = false;
     state.captureStartTick = -1;
     state.captureEndTick = -1;
+    state.captureDeadlineTick = -1;
     state.lastClockTick = -1;
     state.postCompleteStartTick = -1;
     state.postCompleteUntilTick = -1;
@@ -435,6 +454,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
         ricochetEnemyId: 0,
         lastContactEnemyId: 0,
         contactCooldown: 0,
+        captureOpenLast: false,
         el: createBallEl(),
       };
     });
@@ -546,6 +566,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const repeatNote = recent.length >= 2 && recent.every((note) => note && note === recent[0]) ? recent[0] : '';
     const avoidNotes = getDestinationNotesForOtherBalls(ballActor);
     const claimedEnemyIds = getClaimedEnemyIds(ballActor);
+    const urgent = opts.urgent === true;
     let best = null;
     let bestScore = Infinity;
     for (const enemy of enemies) {
@@ -564,20 +585,25 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       const octaveRangePenalty = outsidePreferredOctave * 6.5;
       const note = getEnemyNote(enemy);
       const recentNoteCount = note ? (recentNoteCounts.get(note) || 0) : 0;
-      const repeatPenalty = (note && note === lastNote ? 5200 : 0)
+      const repeatPenaltyRaw = (note && note === lastNote ? 5200 : 0)
         + (recentNoteCount * 1800)
         + (repeatNote && note === repeatNote ? 3600 : 0);
+      const repeatPenalty = repeatPenaltyRaw * (urgent ? 0.28 : 1);
       const otherBallNotePenalty = note && avoidNotes.has(note) ? 3800 : 0;
-      const closePenalty = distance < 620
-        ? (620 - distance) * 5.2
-        : (distance < 860 ? (860 - distance) * 1.15 : 0);
+      const closePenalty = urgent
+        ? (distance < 220 ? (220 - distance) * 1.2 : 0)
+        : (distance < 620
+          ? (620 - distance) * 5.2
+          : (distance < 860 ? (860 - distance) * 1.15 : 0));
       const verticalTravel = Math.abs(dy);
       const flatRoutePenalty = verticalTravel < 280 ? (280 - verticalTravel) * 1.65 : 0;
       const verticalTravelBonus = verticalTravel >= 420 ? Math.min(860, verticalTravel * 0.78) : 0;
       const dir = normalize(dx, dy, currentDir.x, currentDir.y);
       const alignment = Math.max(-1, Math.min(1, (dir.x * currentDir.x) + (dir.y * currentDir.y)));
       const straightRouteBonus = distance > 520 ? alignment * Math.min(1180, distance * 0.72) : alignment * 40;
-      const preferredDistanceBonus = distance >= 860 && distance <= 1650 ? 420 : 0;
+      const preferredDistanceBonus = urgent
+        ? (distance >= 260 && distance <= 900 ? 820 : 0)
+        : (distance >= 860 && distance <= 1650 ? 420 : 0);
       const destinationDistanceBonus = opts.distant === true && distance >= 1150 ? Math.min(1300, distance * 0.62) : 0;
       const score = distance + closePenalty + flatRoutePenalty + arenaProximityPenalty + octaveRangePenalty + repeatPenalty + otherBallNotePenalty - straightRouteBonus - preferredDistanceBonus - verticalTravelBonus - destinationDistanceBonus - arenaCoreBonus;
       if (score < bestScore) {
@@ -598,13 +624,83 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const current = getEnemyById(ballActor?.targetEnemyId);
     const currentId = Math.trunc(Number(current?.id) || 0);
     if (current && !state.pendingEnemyIds.has(currentId) && !state.hitEnemyIds.has(currentId) && isWorldPointOnscreen(enemyPoint(current))) return current;
-    const next = chooseTargetEnemy(ballActor, { distant: true });
+    const pacing = getCapturePacing();
+    const next = chooseTargetEnemy(ballActor, {
+      distant: !pacing.captureOpen,
+      urgent: pacing.captureOpen,
+    });
     if (ballActor) ballActor.targetEnemyId = Math.trunc(Number(next?.id) || 0);
     return next;
   }
 
+  function getCapturePacing() {
+    const currentTick = getClockTick(deps.getBeatClock?.() || {});
+    const reservedCount = state.hitSteps.size + state.pendingHits.length;
+    const allowance = getLeadBallCaptureAllowance({
+      stepCount: state.stepCount,
+      targetHitCount: state.targetHitCount,
+      captureStartTick: state.captureStartTick,
+      currentTick,
+    });
+    const relativeStep = state.captureStartTick >= 0
+      ? Math.max(0, currentTick - state.captureStartTick)
+      : 0;
+    const reservedTicks = [
+      ...state.hitHistory.map((entry) => Math.max(0, Math.trunc(Number(entry?.tick) || 0))),
+      ...state.pendingHits.map((entry) => Math.max(0, Math.trunc(Number(entry?.triggerTick) || 0))),
+    ];
+    const lastReservedTick = reservedTicks.length ? Math.max(...reservedTicks) : -1;
+    const spacingReady = lastReservedTick < 0 || currentTick - lastReservedTick >= 2;
+    return {
+      currentTick,
+      relativeStep,
+      reservedCount,
+      allowance,
+      deficit: Math.max(0, allowance - reservedCount),
+      targetReached: reservedCount >= state.targetHitCount,
+      spacingReady,
+      captureOpen: spacingReady && reservedCount < allowance && reservedCount < state.targetHitCount,
+    };
+  }
+
+  function steerBallAlongHoldingRoute(ball = null, dt = 0) {
+    if (!ball) return;
+    const center = point(deps.getArenaCenterWorld?.() || deps.getPlayerWorld?.());
+    const arenaRadius = Math.max(240, Number(deps.getArenaRadius?.()) || 900);
+    const dx = ball.x - center.x;
+    const dy = ball.y - center.y;
+    const distance = Math.max(0.001, Math.hypot(dx, dy));
+    const radial = normalize(dx, dy, 1, 0);
+    const orbitDirection = (Math.max(1, Math.trunc(Number(ball.id) || 1)) % 2 === 0) ? -1 : 1;
+    const tangent = { x: -radial.y * orbitDirection, y: radial.x * orbitDirection };
+    const targetRadius = arenaRadius * 0.68;
+    const radialCorrection = Math.max(-1.2, Math.min(1.8, (distance - targetRadius) / targetRadius));
+    const desired = normalize(
+      tangent.x - radial.x * radialCorrection * 2.2,
+      tangent.y - radial.y * radialCorrection * 2.2,
+      tangent.x,
+      tangent.y,
+    );
+    const current = normalize(ball.vx, ball.vy, desired.x, desired.y);
+    const blend = Math.max(0, Math.min(1, BALL_HOP_TURN_RATE * Math.max(0, Number(dt) || 0)));
+    const direction = normalize(
+      current.x + (desired.x - current.x) * blend,
+      current.y + (desired.y - current.y) * blend,
+      desired.x,
+      desired.y,
+    );
+    ball.vx = direction.x * BALL_SPEED;
+    ball.vy = direction.y * BALL_SPEED;
+    ball.targetEnemyId = 0;
+    ball.ricochetEnemyId = 0;
+  }
+
   function getCurrentRicochetEnemy(ballActor = null, destinationEnemy = null) {
     if (!ballActor || !destinationEnemy) return null;
+    if (getCapturePacing().deficit < 2) {
+      ballActor.ricochetEnemyId = 0;
+      return null;
+    }
     const current = getEnemyById(ballActor.ricochetEnemyId);
     const currentId = Math.trunc(Number(current?.id) || 0);
     const destinationId = Math.trunc(Number(destinationEnemy?.id) || 0);
@@ -634,17 +730,21 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     if (state.captureStartTick < 0) {
       state.captureStartTick = triggerTick;
       state.captureEndTick = state.captureStartTick + state.stepCount - 1;
+      state.captureDeadlineTick = state.captureStartTick + (state.stepCount * 2) - 1;
     }
     if (triggerTick < state.captureStartTick) triggerTick = state.captureStartTick;
-    if (state.captureEndTick >= 0 && triggerTick > state.captureEndTick) return null;
+    if (state.captureDeadlineTick >= 0 && triggerTick > state.captureDeadlineTick) return null;
     const reserved = new Set(state.hitSteps);
     state.pendingHits.forEach((entry) => reserved.add(Math.max(0, Math.trunc(Number(entry.stepIndex) || 0))));
     const relative = Math.max(0, Math.trunc(triggerTick - state.captureStartTick));
-    for (let stepIndex = relative; stepIndex < state.stepCount; stepIndex += 1) {
+    for (let offset = 0; offset < state.stepCount; offset += 1) {
+      const stepIndex = (relative + offset) % state.stepCount;
       if (reserved.has(stepIndex)) continue;
+      const scheduledTick = triggerTick + offset;
+      if (state.captureDeadlineTick >= 0 && scheduledTick > state.captureDeadlineTick) break;
       return {
         stepIndex,
-        triggerTick: state.captureStartTick + stepIndex,
+        triggerTick: scheduledTick,
       };
     }
     return null;
@@ -835,6 +935,9 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const opts = options && typeof options === 'object' ? options : {};
     if (!enemy) return rejectHit('missing_enemy', enemy, at);
     if (state.committed) return rejectHit('event_committed', enemy, at);
+    if (state.hitSteps.size + state.pendingHits.length >= state.targetHitCount) {
+      return rejectHit('density_target_reached', enemy, at);
+    }
     if (state.hitSteps.size >= state.stepCount) return rejectHit('step_capacity_reached', enemy, at);
     if (state.hitSteps.size + state.pendingHits.length >= state.stepCount) {
       return rejectHit('step_capacity_reserved', enemy, at);
@@ -979,6 +1082,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
   }
 
   function findCollisionEnemy(ballActor = null, fromLike = null, toLike = null) {
+    const pacing = getCapturePacing();
+    if (!pacing.captureOpen) return null;
     const enemies = getLiveEnemies();
     let best = null;
     let bestInfo = null;
@@ -991,7 +1096,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
         && Number(ballActor?.contactCooldown) > 0
       ) continue;
       const info = getSegmentDistanceInfo(enemyPoint(enemy), fromLike, toLike);
-      if (info.distance > BALL_INCIDENTAL_HIT_RADIUS) continue;
+      const hitRadius = pacing.deficit >= 2 ? BALL_INCIDENTAL_HIT_RADIUS : Math.max(BALL_HIT_RADIUS, 118);
+      if (info.distance > hitRadius) continue;
       if (!bestInfo || info.t < bestInfo.t) {
         best = enemy;
         bestInfo = info;
@@ -1113,7 +1219,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       return Math.trunc(Number(a?.stepIndex) || 0) - Math.trunc(Number(b?.stepIndex) || 0);
     });
     for (const entry of due) triggerHit(entry);
-    if (state.active && state.captureEndTick >= 0 && tick >= state.captureEndTick && state.pendingHits.length <= 0) {
+    const baseWindowComplete = state.captureEndTick >= 0 && tick >= state.captureEndTick;
+    const densityComplete = state.hitSteps.size >= state.targetHitCount;
+    const deadlineComplete = state.captureDeadlineTick >= 0 && tick >= state.captureDeadlineTick;
+    if (state.active && baseWindowComplete && (densityComplete || deadlineComplete) && state.pendingHits.length <= 0) {
       completeEvent();
     }
   }
@@ -1205,12 +1314,20 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
   function updateBall(ball, dt) {
     if (!state.active || !ball) return;
     ball.contactCooldown = Math.max(0, (Number(ball.contactCooldown) || 0) - dt);
-    const destination = getCurrentTargetEnemy(ball);
+    const pacing = getCapturePacing();
+    if (pacing.captureOpen && ball.captureOpenLast !== true) {
+      ball.targetEnemyId = 0;
+      ball.ricochetEnemyId = 0;
+    }
+    ball.captureOpenLast = pacing.captureOpen;
+    const destination = pacing.captureOpen ? getCurrentTargetEnemy(ball) : null;
     const aim = destination ? (getCurrentRicochetEnemy(ball, destination) || destination) : null;
     if (aim) {
       const desired = normalize((Number(aim.wx) || 0) - ball.x, (Number(aim.wy) || 0) - ball.y, ball.vx, ball.vy);
       const current = normalize(ball.vx, ball.vy, desired.x, desired.y);
-      const turnRate = Math.trunc(Number(ball.ricochetEnemyId) || 0) ? BALL_HOP_TURN_RATE : BALL_TURN_RATE;
+      const turnRate = pacing.captureOpen
+        ? 28
+        : (Math.trunc(Number(ball.ricochetEnemyId) || 0) ? BALL_HOP_TURN_RATE : BALL_TURN_RATE);
       const blend = Math.max(0, Math.min(1, turnRate * dt));
       const dir = normalize(
         current.x + (desired.x - current.x) * blend,
@@ -1220,6 +1337,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       );
       ball.vx = dir.x * BALL_SPEED;
       ball.vy = dir.y * BALL_SPEED;
+    } else if (!pacing.targetReached) {
+      steerBallAlongHoldingRoute(ball, dt);
     }
     const previousBall = { x: ball.x, y: ball.y };
     ball.x += ball.vx * dt;
@@ -1346,6 +1465,9 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       pendingHitCount: state.pendingHits.length,
       complete: state.committed,
       densityTargetReached: state.hitSteps.size >= state.targetHitCount,
+      captureAllowance: getCapturePacing().allowance,
+      captureDeficit: getCapturePacing().deficit,
+      captureSpacingReady: getCapturePacing().spacingReady,
       awaitingCarrier: state.active
         && state.deferPickupUntilCarrierDeath === true
         && !state.pickup
@@ -1362,6 +1484,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       postCompleteUntilTick: state.postCompleteUntilTick,
       captureStartTick: state.captureStartTick,
       captureEndTick: state.captureEndTick,
+      captureDeadlineTick: state.captureDeadlineTick,
       selections: state.selections.slice(),
       hitHistory: state.hitHistory.slice(),
       hitEnemyCount: state.hitEnemyIds.size,

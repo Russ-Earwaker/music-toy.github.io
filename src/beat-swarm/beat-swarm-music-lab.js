@@ -480,6 +480,7 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     sourceEnemyType: String(payload?.sourceEnemyType || '').trim().toLowerCase(),
     sourceGroupId: clampInt(payload?.sourceGroupId, 0, 0),
     groupId: clampInt(payload?.groupId, 0, 0),
+    formationGroupId: String(payload?.groupId || '').trim(),
     templateId: String(payload?.templateId || '').trim(),
     targetEnemyId: clampInt(payload?.targetEnemyId, 0, 0),
     targetEnemyType: String(payload?.targetEnemyType || '').trim().toLowerCase(),
@@ -493,6 +494,38 @@ function makeSystemEventRecord(eventType, payloadLike, context, beatsPerBar) {
     role: String(payload?.role || '').trim().toLowerCase(),
     actionType: String(payload?.actionType || '').trim().toLowerCase(),
     instrumentId: String(payload?.instrumentId || '').trim(),
+    musicOwnership: String(payload?.musicOwnership || '').trim().toLowerCase(),
+    arrangementRole: String(payload?.arrangementRole || '').trim().toLowerCase(),
+    derivationMode: String(payload?.derivationMode || '').trim().toLowerCase(),
+    sourceLaneId: String(payload?.sourceLaneId || '').trim().toLowerCase(),
+    sourceSubdivisionCount: clampInt(payload?.sourceSubdivisionCount, 0, 0),
+    sourceBeatLength: clampInt(payload?.sourceBeatLength, 0, 0),
+    sourceHitCount: clampInt(payload?.sourceHitCount, 0, 0),
+    motifHitCount: clampInt(payload?.motifHitCount, 0, 0),
+    selectedCount: clampInt(payload?.selectedCount, 0, 0),
+    incomingSelectedCount: clampInt(payload?.incomingSelectedCount, 0, 0),
+    motifStepCount: clampInt(payload?.motifStepCount, 0, 0),
+    motifDensity: Number.isFinite(Number(payload?.motifDensity)) ? Number(payload.motifDensity) : null,
+    densityBand: String(payload?.densityBand || '').trim().toLowerCase(),
+    responseDelayBeats: clampInt(payload?.responseDelayBeats, 0, 0),
+    pitchOffset: clampInt(payload?.pitchOffset, 0, -24),
+    sourceEventStride: clampInt(payload?.sourceEventStride, 1, 1),
+    motifLength: clampInt(payload?.motifLength, 0, 0),
+    motifStartBeat: clampInt(payload?.startBeat, 0, 0),
+    motifMemberAssignments: Array.isArray(payload?.members)
+      ? payload.members.map((member) => ({
+          enemyId: clampInt(member?.enemyId, 0, 0),
+          memberIndex: clampInt(member?.memberIndex, 0, 0),
+          steps: Array.isArray(member?.steps)
+            ? member.steps.map((step) => clampInt(step, 0, 0))
+            : [],
+          noteByStep: member?.noteByStep && typeof member.noteByStep === 'object'
+            ? { ...member.noteByStep }
+            : {},
+          note: String(member?.note || '').trim(),
+          instrumentId: String(member?.instrumentId || '').trim(),
+        }))
+      : [],
     stage: String(payload?.stage || '').trim().toLowerCase(),
     allowed: payload?.allowed === true,
     rhythmFamily: String(payload?.rhythmFamily || '').trim().toLowerCase(),
@@ -7184,6 +7217,11 @@ export function createBeatSwarmMusicLab(options = null) {
         || text.includes('lead_ball')
         || text.includes('lead-ball');
     };
+    const isPinnedFormationArrangementEvent = (ev) => {
+      const type = String(ev?.eventType || ev?.type || '').trim().toLowerCase();
+      return type === 'enemy_combat_group_motif_assigned'
+        || type === 'director_musical_formation_spawned';
+    };
     const mergeCompactPinned = (pinned, tail, limit) => {
       const rows = [];
       const seen = new Set();
@@ -7222,7 +7260,11 @@ export function createBeatSwarmMusicLab(options = null) {
     const compactSystemEvents = Array.isArray(sourceSystemEvents)
       ? (compact
         ? mergeCompactPinned(
-            Array.isArray(s.systemEvents) ? s.systemEvents.filter(isPinnedAccentRhythmEvent).slice(-256) : [],
+            Array.isArray(s.systemEvents)
+              ? s.systemEvents.filter((event) => (
+                  isPinnedAccentRhythmEvent(event) || isPinnedFormationArrangementEvent(event)
+                )).slice(-320)
+              : [],
             sourceSystemEvents.slice(-300),
             500
           )

@@ -132,6 +132,10 @@ export function createBeatSwarmEnemyCombatRuntime() {
         enemy.combatNextAttackBeat = beatIndex + 1;
         continue;
       }
+      if (motifDue && enemy.combatGroupMotifNoteByStep && typeof enemy.combatGroupMotifNoteByStep === 'object') {
+        const stepNote = String(enemy.combatGroupMotifNoteByStep[motifStep] || '').trim();
+        if (stepNote) enemy.soundNote = stepNote;
+      }
 
       if (!Number.isFinite(Number(enemy.combatNextAttackBeat)) || motifEnabled) enemy.combatNextAttackBeat = beatIndex;
       const burstDue = !motifEnabled && Number(enemy.combatBurstRemaining) > 0

@@ -18,12 +18,12 @@ import { createPerformedBeatEvent, BEAT_EVENT_ROLES, BEAT_EVENT_THREAT } from '.
 import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from './beat-swarm-action-categories.js';
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-08-13-production-onboarding-flow-v1';
-import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js?v=2026-08-21-perf-timing-cleanup-v1';
+import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js?v=2026-08-27-formation-arrangement-diagnostics-v1';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-08-18-visible-enemies-v1';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-08-15-composition-audit-v1';
-import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-18-formation-balance-v1';
+import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-27-lead-density-v5';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-08-22-arena-field-v1';
 import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-08-05-launch-vector-v1';
 import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-08-05-temporal-lines-v1';
@@ -69,7 +69,7 @@ import {
   configureBeatSwarmEnemyCombatRuntime,
   createBeatSwarmEnemyCombatRuntime,
   setBeatSwarmEnemyCombatPatternRuntime,
-} from './beat-swarm-enemy-combat-runtime.js?v=2026-08-10-musical-formations-v1';
+} from './beat-swarm-enemy-combat-runtime.js?v=2026-08-27-player-arrangement-v1';
 import { createBeatSwarmEnemyLaserRuntime } from './beat-swarm-enemy-laser-runtime.js?v=2026-08-24-enemy-facing-v3';
 import { createBeatSwarmEnemyShapeRuntime } from './beat-swarm-enemy-shape-runtime.js?v=2026-08-08-shape-caster-v3';
 import { createBeatSwarmEnemyChargeRuntime } from './beat-swarm-enemy-charge-runtime.js?v=2026-08-08-charger-v1';
@@ -89,7 +89,10 @@ import {
   getBeatSwarmFormationArrangementContract,
   getBeatSwarmPlayerMusicContract,
 } from './beat-swarm-music-ownership.js?v=2026-08-26-player-composition-v1';
-import { deriveRhythmicFormationMotifs } from './beat-swarm-formation-arrangement.js?v=2026-08-26-player-composition-v1';
+import {
+  deriveMelodicFormationMotifs,
+  deriveRhythmicFormationMotifs,
+} from './beat-swarm-formation-arrangement.js?v=2026-08-27-player-arrangement-v3';
 
 let beatSwarmExecutionTriggerEvent = null;
 
@@ -3351,7 +3354,7 @@ function isLeadBallAuthoringForegroundActive() {
 function isLeadBallPostCompletePlaybackActive() {
   return leadBallRuntime?.isPostCompletePlaybackActive?.() === true;
 }
-function ensureLeadBallEnemyTargets(targetCount = 10) {
+function ensureLeadBallEnemyTargets(targetCount = 14) {
   if (!enemyLayerEl) return 0;
   const liveEnemies = enemies.filter((enemy) => enemy && enemy.__bsRemoved !== true && enemy.__bsPendingDeath !== true && Number(enemy.hp) > 0);
   const viewportWidth = Math.max(1, Number(window?.innerWidth) || 1);
@@ -3369,17 +3372,20 @@ function ensureLeadBallEnemyTargets(targetCount = 10) {
   });
   // Lead authoring needs visible targets, not an unbudgeted combat wave. The
   // shared inert-rock reserve replenishes these as the balls consume them.
-  const target = Math.min(12, Math.max(0, Math.trunc(Number(targetCount) || 0)));
-  const populationLimit = 12;
-  const needed = Math.min(
-    Math.max(0, target - visibleOrIncoming.length),
-    Math.max(0, populationLimit - liveEnemies.length)
-  );
+  const target = Math.min(18, Math.max(14, Math.trunc(Number(targetCount) || 0)));
+  const needed = Math.max(0, target - visibleOrIncoming.length);
   if (needed <= 0) return 0;
   let spawned = 0;
   for (let i = 0; i < needed; i += 1) {
-    if (spawnMusicCreationTargetRock()) spawned += 1;
+    if (spawnMusicCreationTargetRock({ leadBallReserve: true })) spawned += 1;
   }
+  noteMusicSystemEvent('lead_ball_target_reserve_checked', {
+    target,
+    liveEnemyCount: liveEnemies.length,
+    visibleOrIncomingCount: visibleOrIncoming.length,
+    requestedSpawnCount: needed,
+    spawnedCount: spawned,
+  }, { beatIndex: currentBeatIndex });
   return spawned;
 }
 
@@ -3394,7 +3400,7 @@ function startLeadBallThemeEvent(options = null) {
   const currentStep = Math.max(0, Math.trunc(Number.isFinite(stepRaw) ? stepRaw : Number(currentBeatIndex) || 0));
   const eventId = String(opts.eventId || `lead-ball-${Date.now().toString(36)}`).trim();
   const stepCount = Math.max(1, Math.trunc(Number(opts.stepCount) || getLeadGateAuthoringStepCount()));
-  const targetHitCount = Math.max(1, Math.min(stepCount, Math.trunc(Number(opts.targetHitCount) || 18)));
+  const targetHitCount = Math.max(1, Math.min(stepCount, Math.trunc(Number(opts.targetHitCount) || 11)));
   const contributionMode = opts.contributionMode === 'extend' ? 'extend' : 'replace';
   const accentSteps = getPlayerThemeRhythmSteps(
     'accentRhythm',
@@ -3417,7 +3423,7 @@ function startLeadBallThemeEvent(options = null) {
     beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
     stepIndex: currentStep,
   });
-  ensureLeadBallEnemyTargets(Math.max(12, targetHitCount));
+  ensureLeadBallEnemyTargets(Math.max(16, targetHitCount));
   leadBallAuthoringRuntime.handoffPublished = false;
   leadBallAuthoringRuntime.contributionMode = contributionMode;
   if (opts.contributionMode !== 'extend' || !isPlayerMusicThemeAuthored('leadTheme')) {
@@ -3468,7 +3474,7 @@ function startLeadBallThemeEvent(options = null) {
 function maintainLeadBallEnemyTargets() {
   if (!isLeadBallThemeEventActive()) return;
   const snap = leadBallRuntime.getSnapshot?.() || {};
-  const targetCount = Math.max(10, Math.trunc(Number(snap.targetHitCount) || 18));
+  const targetCount = Math.max(16, Math.trunc(Number(snap.targetHitCount) || 18));
   ensureLeadBallEnemyTargets(targetCount);
 }
 function commitLeadBallSelectionsToTheme(selectionsLike = null, eventId = '') {
@@ -3486,12 +3492,19 @@ function commitLeadBallSelectionsToTheme(selectionsLike = null, eventId = '') {
   const selectedCount = committedSelections
     ? committedSelections.filter((sel) => sel?.note).length
     : 0;
+  const incomingSelectedCount = incomingSelections.filter((selection) => selection?.note).length;
+  const motifStepCount = Math.max(1, committedSelections?.length || incomingSelections.length || 32);
+  const motifDensity = selectedCount / motifStepCount;
   try {
     noteMusicSystemEvent('lead_ball_rewrite_committed_to_theme', {
       eventId: String(eventId || '').trim(),
       themeId: 'leadTheme',
       laneId: 'primary_loop_lane',
       selectedCount,
+      incomingSelectedCount,
+      motifStepCount,
+      motifDensity: Number(motifDensity.toFixed(4)),
+      densityBand: selectedCount < 8 ? 'sparse' : (selectedCount <= 12 ? 'target' : 'dense'),
       activeSteps: Array.isArray(committedSelections)
         ? committedSelections.map((sel, idx) => sel?.note ? idx : -1).filter((idx) => idx >= 0)
         : [],
@@ -4272,7 +4285,7 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
         stepIndex: Math.max(0, Math.trunc(Number(event.stepIndex) || 0)),
         eventId: String(event.eventId || '').trim(),
         harmonyVoiceIndex: noteIndex,
-      }, loopPlayback ? (noteIndex === 0 ? 0.82 : 0.62) : (noteIndex === 0 ? 0.92 : 0.68));
+      }, loopPlayback ? (noteIndex === 0 ? 0.76 : 0.54) : (noteIndex === 0 ? 0.84 : 0.58));
     });
     try { pulseMusicMotifConstellation('primary_loop_lane', event.stepIndex, loopPlayback ? 0.22 : 0.34); } catch {}
     try { pulsePlayerShipNoteFlash(); } catch {}
@@ -8126,6 +8139,12 @@ function createLeadGateDirectPrimaryLoopEventRuntime(options = null) {
     && !onboardingAuthoredLeadPlayback
     && !canonicalBallLeadPlayback) return null;
   const latestBallMotif = leadBallAuthoringRuntime.motifHistory[leadBallAuthoringRuntime.motifHistory.length - 1] || null;
+  const latestBallActiveStepCount = Array.isArray(latestBallMotif?.selections)
+    ? latestBallMotif.selections.reduce((sum, selection) => sum + (normalizeSwarmNoteName(selection?.note || '') ? 1 : 0), 0)
+    : 0;
+  const leadBallDensityGain = latestBallActiveStepCount > 12
+    ? Math.max(0.68, Math.sqrt(12 / latestBallActiveStepCount))
+    : 1;
   const startStep = Math.max(0, Math.trunc(Number(
     canonicalBallLeadPlayback
       ? latestBallMotif?.playbackStartStep
@@ -8322,8 +8341,12 @@ function createLeadGateDirectPrimaryLoopEventRuntime(options = null) {
       audioGain: isLeadBallThemeEventActive()
         ? 0.48
         : (literalProtectionActive
-          ? (String(leadGateLiteralPlaybackRuntime.source || '').trim() === 'lead_ball' ? 1 : 0.94)
-          : ((embellishmentRampActive || leadBallRecallStatement || leadBallMotifDerived) ? 0.92 : 0.82)),
+          ? (String(leadGateLiteralPlaybackRuntime.source || '').trim() === 'lead_ball'
+            ? 0.88 * leadBallDensityGain
+            : 0.94)
+          : ((embellishmentRampActive || leadBallRecallStatement || leadBallMotifDerived)
+            ? 0.86 * leadBallDensityGain
+            : 0.82)),
       leadGateRelativeStep: relativeStepIndex,
       leadGateMotifSlot,
       nodeStepIndex: leadGateMotifSlot,
@@ -24042,7 +24065,7 @@ function isMusicCreationTargetReserveActive() {
     || pinballBouncerRuntime?.isActive?.() === true
     || leadBallRuntime.isActive?.() === true;
 }
-function spawnMusicCreationTargetRock() {
+function spawnMusicCreationTargetRock(options = null) {
   if (!enemyLayerEl) return false;
   const center = arenaCenterWorld || getViewportCenterWorld();
   const spawnIndex = Math.max(0, Math.trunc(Number(musicEventTargetReserveRuntime.spawnIndex) || 0));
@@ -24073,14 +24096,16 @@ function spawnMusicCreationTargetRock() {
     1,
     0,
   );
-  const driftSpeed = 26 + ((spawnIndex % 3) * 4);
+  const leadBallReserve = options?.leadBallReserve === true;
+  const driftSpeed = (leadBallReserve ? 78 : 26) + ((spawnIndex % 3) * (leadBallReserve ? 8 : 4));
   enemy.vx = inward.x * driftSpeed;
   enemy.vy = inward.y * driftSpeed;
   onboardingAsteroidRuntime.enemyIds.push(Math.max(0, Math.trunc(Number(enemy.id) || 0)));
   musicEventTargetReserveRuntime.spawnIndex = spawnIndex + 1;
   noteMusicSystemEvent('music_creation_target_reserve_spawned', {
     enemyId: Math.max(0, Math.trunc(Number(enemy.id) || 0)),
-    visibleTargetFloor: 8,
+    visibleTargetFloor: leadBallReserve ? 14 : 8,
+    leadBallReserve,
   }, { beatIndex: currentBeatIndex });
   return true;
 }
@@ -31425,6 +31450,11 @@ function applyDirectorEnemyCombatGroupMotifPlan(groupId, plan = null, startBeat 
     enemy.combatGroupMotifSteps = Array.isArray(assignment?.steps)
       ? assignment.steps.map((step) => Math.max(0, Math.trunc(Number(step) || 0)))
       : [];
+    enemy.combatGroupMotifNoteByStep = assignment?.noteByStep && typeof assignment.noteByStep === 'object'
+      ? Object.fromEntries(Object.entries(assignment.noteByStep).map(([step, note]) => (
+          [Math.max(0, Math.trunc(Number(step) || 0)), normalizeSwarmNoteName(note) || '']
+        )))
+      : {};
     enemy.combatGroupMotifLength = motifLength;
     enemy.combatGroupMotifStartBeat = requestedStartBeat;
     enemy.combatMusicalInstrumentId = String(assignment?.instrumentId || '').trim();
@@ -31447,10 +31477,14 @@ function applyDirectorEnemyCombatGroupMotifPlan(groupId, plan = null, startBeat 
     sourceBeatLength: Math.max(0, Math.trunc(Number(directorPlan?.sourceBeatLength) || 0)),
     sourceHitCount: Math.max(0, Math.trunc(Number(directorPlan?.sourceHitCount) || 0)),
     motifHitCount: Math.max(0, Math.trunc(Number(directorPlan?.motifHitCount) || 0)),
+    responseDelayBeats: Math.max(0, Math.trunc(Number(directorPlan?.responseDelayBeats) || 0)),
+    pitchOffset: Math.trunc(Number(directorPlan?.pitchOffset) || 0),
+    sourceEventStride: Math.max(1, Math.trunc(Number(directorPlan?.sourceEventStride) || 1)),
     members: groupEnemies.map((enemy) => ({
       enemyId: Math.trunc(Number(enemy?.id) || 0),
       memberIndex: Math.trunc(Number(enemy?.combatGroupMemberIndex) || 0),
       steps: Array.from(enemy.combatGroupMotifSteps || []),
+      noteByStep: { ...(enemy.combatGroupMotifNoteByStep || {}) },
       note: normalizeSwarmNoteName(enemy?.soundNote) || '',
       instrumentId: String(enemy?.combatMusicalInstrumentId || ''),
     })),
@@ -33133,6 +33167,34 @@ function deriveDirectorRhythmicFormationPlan(arrangementContract, motifLength, m
     subdivisionsPerBeat: Math.max(1, WEAPON_TUNE_STEPS / COMPOSER_BEATS_PER_BAR),
   });
 }
+function deriveDirectorMelodicFormationPlan(motifLength, memberCount, startBeat) {
+  const motifParts = getPlayerLeadThemeMotifParts();
+  const sourceNoteSteps = Array.from(
+    { length: Math.max(1, getPlayerMusicThemeDef('leadTheme')?.motifLength || 4) * WEAPON_TUNE_STEPS },
+    () => '',
+  );
+  for (const part of motifParts) {
+    const partIndex = Math.max(0, Math.trunc(Number(part?.phrasePartIndex) || 0));
+    for (let step = 0; step < WEAPON_TUNE_STEPS; step += 1) {
+      sourceNoteSteps[(partIndex * WEAPON_TUNE_STEPS) + step] = normalizeSwarmNoteName(part?.noteByStep?.[step]) || '';
+    }
+  }
+  const pitchPalette = DRAWGRID_TOY_PENTATONIC_ROWS
+    .map((row) => normalizeSwarmNoteName(DRAWGRID_TOY_ROW_NOTE_PALETTE[row]) || '')
+    .filter(Boolean);
+  return deriveMelodicFormationMotifs({
+    sourceLaneId: 'primary_loop_lane',
+    sourceNoteSteps,
+    pitchPalette,
+    pitchOffset: null,
+    responseDelayBeats: 1,
+    sourceEventStride: sourceNoteSteps.filter(Boolean).length > 12 ? 3 : 2,
+    motifLength,
+    memberCount,
+    startBeat,
+    subdivisionsPerBeat: Math.max(1, WEAPON_TUNE_STEPS / COMPOSER_BEATS_PER_BAR),
+  });
+}
 function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, variantIndex = 0, memberCountLike = 0) {
   const kind = String(kindLike || '').trim().toLowerCase();
   const shifted = Math.max(0, Math.trunc(Number(variantIndex) || 0)) % 4;
@@ -33153,10 +33215,41 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
     const count = Math.max(2, Math.min(4, Math.trunc(Number(memberCountLike) || 3)));
     const noteByMember = ['C4', 'D#4', 'F4', 'G4'];
     const stepsByMember = [[0, 16], [3, 20], [7, 23], [12, 29]];
+    const derivation = deriveDirectorMelodicFormationPlan(32, count, startBeat);
+    const derivationMetadata = {
+      derivationMode: derivation.derivationMode,
+      sourceLaneId: derivation.sourceLaneId,
+      sourceSubdivisionCount: derivation.sourceSubdivisionCount,
+      sourceBeatLength: derivation.sourceBeatLength,
+      sourceHitCount: derivation.sourceHitCount,
+      motifHitCount: derivation.motifHitCount,
+      responseDelayBeats: derivation.responseDelayBeats,
+      pitchOffset: derivation.pitchOffset,
+      sourceEventStride: derivation.sourceEventStride,
+    };
+    const memberMotifs = derivation.derived
+      ? derivation.members.map((member, memberIndex) => ({
+          steps: member.steps,
+          noteByStep: member.noteByStep,
+          note: normalizeSwarmNoteName(Object.values(member.noteByStep || {})[0])
+            || noteByMember[memberIndex % noteByMember.length],
+          instrumentId,
+          musicalVolume: 0.2,
+          attackVolume: 0.08,
+        }))
+      : Array.from({ length: count }, (_, memberIndex) => ({
+          steps: stepsByMember[memberIndex % stepsByMember.length]
+            .map((step) => (step + (shifted * 2)) % 32),
+          note: noteByMember[memberIndex % noteByMember.length],
+          instrumentId,
+          musicalVolume: 0.2,
+          attackVolume: 0.08,
+        }));
     return {
       groupId,
       kind,
       ...arrangementMetadata,
+      ...derivationMetadata,
       count,
       radiusScale: 0.34,
       minRadiusPx: 245,
@@ -33169,15 +33262,9 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
       plan: {
         id: `director-laser-lead-${groupId}`,
         ...arrangementMetadata,
+        ...derivationMetadata,
         motifLength: 32,
-        memberMotifs: Array.from({ length: count }, (_, memberIndex) => ({
-          steps: stepsByMember[memberIndex % stepsByMember.length]
-            .map((step) => (step + (shifted * 2)) % 32),
-          note: noteByMember[memberIndex % noteByMember.length],
-          instrumentId,
-          musicalVolume: 0.38,
-          attackVolume: 0.08,
-        })),
+        memberMotifs,
       },
       startBeat,
     };
@@ -33402,6 +33489,9 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar, memberCount 
     sourceLaneId: String(spec.sourceLaneId || '').trim().toLowerCase(),
     sourceHitCount: Math.max(0, Math.trunc(Number(spec.sourceHitCount) || 0)),
     motifHitCount: Math.max(0, Math.trunc(Number(spec.motifHitCount) || 0)),
+    responseDelayBeats: Math.max(0, Math.trunc(Number(spec.responseDelayBeats) || 0)),
+    pitchOffset: Math.trunc(Number(spec.pitchOffset) || 0),
+    sourceEventStride: Math.max(1, Math.trunc(Number(spec.sourceEventStride) || 1)),
     enemyIds: created.map((enemy) => Math.trunc(Number(enemy.id) || 0)),
   };
   directorMusicalFormationLayerRuntime.groups.set(groupId, group);

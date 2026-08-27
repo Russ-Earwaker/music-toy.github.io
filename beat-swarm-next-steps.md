@@ -515,7 +515,12 @@ Implementation order:
    - implemented: the weapon event path exposes immutable ownership metadata
    - implemented: new/default `bassDrive` data is labelled Foundation Rhythm and uses kick percussion while retaining compatibility IDs
    - implemented: current formations expose intended arrangement roles and source lanes; their existing independent motif generation is explicitly marked pending derivation
-   - next: derive formation rhythms and pitches from the current player composition, beginning with rhythmic reinforcement and lead countermelody
+   - implemented: rhythmic gunner and laser formations now derive their attack cadence from the first playable player-composition source in their arrangement contract; gunner formations prioritize Foundation Rhythm, while laser percussion formations prioritize Accent Rhythm
+   - implemented: derived formation attacks retain the source motif's global loop phase, distribute authored hit positions across group members, preserve their independent arrangement instruments, and expose derivation source/mode/hit telemetry
+   - implemented: formations retain the legacy independent cadence only when none of their declared player sources contains playable material
+   - current limitation: formation combat attacks are scheduled on beat boundaries, while player rhythm toys support eighth-note subdivisions; the first pass explicitly projects authored subdivisions onto beat cadence rather than claiming exact offbeat reinforcement
+   - implemented: lead formations now derive a one-beat delayed response from the current Lead Theme, preserve its contour, shift it by one pentatonic scale step for separation, and support a distinct assigned note at every formation motif step
+   - next: production-listen to the derived lead response, then decide whether formation attacks need subdivision scheduling for exact Accent offbeats
 13. Later: add level- and difficulty-based enemy health and damage scaling as one input to the adaptive cost budget after threat composition and readability are proven.
 14. Design boss ownership of the full musical structure later.
 
