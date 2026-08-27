@@ -538,11 +538,17 @@ Do not actively expand these areas while tuning motif transformation:
   - replace the temporary thick inner ring and always-visible dotted outer resistance boundary with a cohesive arena treatment
   - preserve clear communication that the particle-filled outer band pushes the player inward
   - keep the inner playable boundary, resistance band, and outer limit readable during camera movement and dense combat
-- window-resize visual alignment bug:
-  - player ship and starfield stay correctly centered
-  - arena ring, enemies, and other projected overlay elements can lag or shift differently while resizing Chrome
-  - likely caused by mixed board-transform and DOM-overlay projection refresh paths
-  - low priority unless resize behavior becomes important for playtesting or presentation
+- cross-project responsive viewport and browser-scaling pass:
+  - treat this as a Rhythmake-wide architecture investigation rather than a local Beat Swarm CSS fix; changes may affect the main board, toys, sub-boards, overlays, input mapping, camera projection, audio-linked visuals, and every embedded game
+  - first document the coordinate systems and resize ownership used by board transforms, world/camera projection, DOM overlays, canvases, pointer/touch input, and viewport-relative gameplay queries
+  - fix the known live-resize mismatch where the player ship and starfield remain centered while the arena ring, enemies, and projected overlays lag or shift differently
+  - ensure smaller desktop/laptop displays retain the complete usable interface without clipping, overlap, unintended scrollbars, or reduced access to gameplay targets
+  - decouple gameplay reliability from physical viewport size: target reserves, spawn eligibility, camera framing, and event completion must remain valid at every supported aspect ratio
+  - define supported minimum viewport dimensions and verify common 16:9, 16:10, ultrawide, narrow-window, and browser-zoom configurations before changing shared transforms
+  - preserve stable world positions and input correspondence while resizing; no entity jumps, camera snaps, projectile offsets, or changes to quantized musical timing
+  - follow with a separate mobile feasibility phase covering touch-safe controls, portrait/landscape policy, performance budgets, safe areas, and denser UI redesign rather than merely shrinking the desktop interface
+  - add automated resize/projection assertions and visual browser checks once the coordinate-system contract is explicit
+  - currently backlog priority: important for accessibility and future reach, but high blast radius, so undertake as a planned subsystem pass rather than opportunistic fixes
 - new event sections
 - musical enemy-group infrastructure unification:
   - composer groups are director-owned carriers for the main musical lanes and their continuity

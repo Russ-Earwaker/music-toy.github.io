@@ -23,7 +23,7 @@ import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-08-18-visible-enemies-v1';
 import { createBeatSwarmPinballBouncerRuntime } from './beat-swarm-pinball-bouncers.js?v=2026-08-15-composition-audit-v1';
-import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-27-lead-density-v5';
+import { createBeatSwarmLeadBallRuntime } from './beat-swarm-lead-ball.js?v=2026-08-27-lead-density-v13';
 import { createBeatSwarmSurfaceFieldRuntime } from './beat-swarm-surface-field.js?v=2026-08-22-arena-field-v1';
 import { createBeatSwarmWeaponGateIntroRuntime } from './beat-swarm-weapon-gate-intro.js?v=2026-08-05-launch-vector-v1';
 import { ensureWeaponGateIntroStyle } from './beat-swarm-weapon-gate-render.js?v=2026-08-05-temporal-lines-v1';
@@ -40,7 +40,7 @@ import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lane
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-08-26-player-composition-v3';
 import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-08-21-ball-lead-handoff-v12';
-import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js?v=2026-08-26-enemy-facing-v9';
+import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js?v=2026-08-27-lead-density-v23';
 import {
   applyBeatSwarmEnemyDescriptorVisualIdentity,
   assignBeatSwarmEnemyGameplayDescriptor,
@@ -3357,6 +3357,7 @@ function isLeadBallPostCompletePlaybackActive() {
 function ensureLeadBallEnemyTargets(targetCount = 14) {
   if (!enemyLayerEl) return 0;
   const liveEnemies = enemies.filter((enemy) => enemy && enemy.__bsRemoved !== true && enemy.__bsPendingDeath !== true && Number(enemy.hp) > 0);
+  const incomingLeadReserves = liveEnemies.filter((enemy) => enemy?.leadBallReserve === true);
   const viewportWidth = Math.max(1, Number(window?.innerWidth) || 1);
   const viewportHeight = Math.max(1, Number(window?.innerHeight) || 1);
   const incomingPad = 360;
@@ -3370,19 +3371,54 @@ function ensureLeadBallEnemyTargets(targetCount = 14) {
       && screen.x <= viewportWidth + incomingPad
       && screen.y <= viewportHeight + incomingPad;
   });
+  const sectorCount = 8;
+  const occupiedSectors = new Set();
+  for (const enemy of liveEnemies) {
+    const screen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
+    if (
+      !screen
+      || !Number.isFinite(screen.x)
+      || !Number.isFinite(screen.y)
+      || screen.x < 0
+      || screen.y < 0
+      || screen.x > viewportWidth
+      || screen.y > viewportHeight
+    ) continue;
+    const angle = Math.atan2(screen.y - viewportHeight * 0.5, screen.x - viewportWidth * 0.5);
+    const normalizedAngle = ((angle + Math.PI * 0.5) % (Math.PI * 2) + (Math.PI * 2)) % (Math.PI * 2);
+    occupiedSectors.add(Math.min(sectorCount - 1, Math.floor((normalizedAngle / (Math.PI * 2)) * sectorCount)));
+  }
+  const missingSectors = Array.from({ length: sectorCount }, (_, index) => index)
+    .filter((index) => !occupiedSectors.has(index));
   // Lead authoring needs visible targets, not an unbudgeted combat wave. The
-  // shared inert-rock reserve replenishes these as the balls consume them.
+  // shared inert-rock reserve replenishes these as the balls consume them and
+  // fills empty screen sectors so a high raw count cannot hide a target clump.
   const target = Math.min(18, Math.max(14, Math.trunc(Number(targetCount) || 0)));
-  const needed = Math.max(0, target - visibleOrIncoming.length);
+  const countDeficit = Math.max(0, target - visibleOrIncoming.length);
+  const distributionDeficit = Math.max(0, Math.min(6, sectorCount) - occupiedSectors.size);
+  // Lead targets are a temporary, non-combat reserve. Do not let unrelated
+  // offscreen combat bodies consume their entry headroom; bound the reserve
+  // independently so ordinary enemy budgets remain unchanged.
+  const reserveHeadroom = Math.max(0, 18 - incomingLeadReserves.length);
+  const needed = Math.min(reserveHeadroom, Math.max(countDeficit, distributionDeficit));
   if (needed <= 0) return 0;
   let spawned = 0;
   for (let i = 0; i < needed; i += 1) {
-    if (spawnMusicCreationTargetRock({ leadBallReserve: true })) spawned += 1;
+    const missingSector = missingSectors.length ? missingSectors[i % missingSectors.length] : null;
+    const anchorSlot = missingSector == null
+      ? undefined
+      : (missingSector * 2) + ((musicEventTargetReserveRuntime.spawnIndex + i) % 2);
+    if (spawnMusicCreationTargetRock({ leadBallReserve: true, anchorSlot })) spawned += 1;
   }
   noteMusicSystemEvent('lead_ball_target_reserve_checked', {
     target,
     liveEnemyCount: liveEnemies.length,
+    incomingLeadReserveCount: incomingLeadReserves.length,
     visibleOrIncomingCount: visibleOrIncoming.length,
+    occupiedSectorCount: occupiedSectors.size,
+    missingSectors,
+    distributionDeficit,
+    reserveHeadroom,
     requestedSpawnCount: needed,
     spawnedCount: spawned,
   }, { beatIndex: currentBeatIndex });
@@ -3472,9 +3508,26 @@ function startLeadBallThemeEvent(options = null) {
   return started;
 }
 function maintainLeadBallEnemyTargets() {
-  if (!isLeadBallThemeEventActive()) return;
-  const snap = leadBallRuntime.getSnapshot?.() || {};
-  const targetCount = Math.max(16, Math.trunc(Number(snap.targetHitCount) || 18));
+  const leadBallActive = isLeadBallThemeEventActive();
+  const nextContribution = musicContributionRuntime.queue[0] || null;
+  const prestageForQueuedLead = musicContributionRuntime.current?.interaction === 'pinball_bouncer'
+    && nextContribution?.interaction === 'lead_ball';
+  if (!leadBallActive && !prestageForQueuedLead) return;
+  const snap = leadBallActive ? (leadBallRuntime.getSnapshot?.() || {}) : {};
+  if (leadBallActive && snap.complete === true) {
+    enemies.forEach((enemy) => {
+      if (enemy?.leadBallReserve !== true) return;
+      enemy.leadBallReserve = false;
+      enemy.combatPersistentOffscreen = false;
+      delete enemy.leadBallReserveLastCenterX;
+      delete enemy.leadBallReserveLastCenterY;
+    });
+    return;
+  }
+  const requestedHitCount = leadBallActive
+    ? Math.trunc(Number(snap.targetHitCount) || 18)
+    : Math.trunc(Number(nextContribution?.amount) || 8);
+  const targetCount = Math.max(16, requestedHitCount);
   ensureLeadBallEnemyTargets(targetCount);
 }
 function commitLeadBallSelectionsToTheme(selectionsLike = null, eventId = '') {
@@ -4223,6 +4276,7 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
   getPlayerWorld: () => getViewportCenterWorld(),
   getEnemies: () => enemies,
   worldToScreen,
+  screenToWorld,
   getBeatClock: () => {
     const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
     const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
@@ -4326,6 +4380,17 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
   },
   onLaunched(event = {}) {
     try { noteMusicSystemEvent('lead_ball_launched', event, { beatIndex: currentBeatIndex }); } catch {}
+  },
+  onRouteSample(event = {}) {
+    try {
+      noteMusicSystemEvent('lead_ball_route_sample', event, {
+        beatIndex: currentBeatIndex,
+        stepIndex: Math.max(0, Math.trunc(Number(event.tickIndex) || 0)),
+      });
+    } catch {}
+  },
+  onViewportBounce(event = {}) {
+    try { noteMusicSystemEvent('lead_ball_viewport_bounce', event, { beatIndex: currentBeatIndex }); } catch {}
   },
   onPlayerBounced(event = {}) {
     const normal = event?.normalWorld && typeof event.normalWorld === 'object' ? event.normalWorld : {};
@@ -24065,11 +24130,71 @@ function isMusicCreationTargetReserveActive() {
     || pinballBouncerRuntime?.isActive?.() === true
     || leadBallRuntime.isActive?.() === true;
 }
+function getMusicCreationTargetAnchor(spawnIndex = 0) {
+  const viewportWidth = Math.max(320, Number(window?.innerWidth) || 0);
+  const viewportHeight = Math.max(240, Number(window?.innerHeight) || 0);
+  const slotCount = 16;
+  const slot = ((Math.trunc(Number(spawnIndex) || 0) % slotCount) + slotCount) % slotCount;
+  const angle = (-Math.PI * 0.5) + ((slot / slotCount) * Math.PI * 2);
+  const radiusScale = slot % 2 === 0 ? 0.94 : 0.74;
+  const anchorScreen = {
+    x: (viewportWidth * 0.5) + (Math.cos(angle) * viewportWidth * 0.36 * radiusScale),
+    y: (viewportHeight * 0.5) + (Math.sin(angle) * viewportHeight * 0.32 * radiusScale),
+  };
+  const anchorWorld = screenToWorld(anchorScreen);
+  return {
+    slot,
+    screen: anchorScreen,
+    world: anchorWorld && Number.isFinite(anchorWorld.x) && Number.isFinite(anchorWorld.y)
+      ? anchorWorld
+      : (arenaCenterWorld || getViewportCenterWorld()),
+  };
+}
+function getLeadBallReserveSpawnScreen(anchor = null) {
+  const viewportWidth = Math.max(320, Number(window?.innerWidth) || 0);
+  const viewportHeight = Math.max(240, Number(window?.innerHeight) || 0);
+  const anchorScreen = anchor?.screen || { x: viewportWidth * 0.5, y: viewportHeight * 0.5 };
+  const outward = normalizeDir(
+    anchorScreen.x - viewportWidth * 0.5,
+    anchorScreen.y - viewportHeight * 0.5,
+    1,
+    0,
+  );
+  const tangentSign = Math.max(0, Math.trunc(Number(anchor?.slot) || 0)) % 2 === 0 ? 1 : -1;
+  const tangent = { x: -outward.y * tangentSign, y: outward.x * tangentSign };
+  const travel = normalizeDir(
+    (-outward.x * 0.72) + (tangent.x * 0.7),
+    (-outward.y * 0.72) + (tangent.y * 0.7),
+    -outward.x,
+    -outward.y,
+  );
+  const backward = { x: -travel.x, y: -travel.y };
+  const distances = [];
+  if (Math.abs(backward.x) > 0.0001) {
+    const edgeX = backward.x > 0 ? viewportWidth : 0;
+    const distanceX = (edgeX - anchorScreen.x) / backward.x;
+    if (distanceX > 0) distances.push(distanceX);
+  }
+  if (Math.abs(backward.y) > 0.0001) {
+    const edgeY = backward.y > 0 ? viewportHeight : 0;
+    const distanceY = (edgeY - anchorScreen.y) / backward.y;
+    if (distanceY > 0) distances.push(distanceY);
+  }
+  const edgeDistance = distances.length ? Math.min(...distances) : Math.max(viewportWidth, viewportHeight) * 0.5;
+  return {
+    x: anchorScreen.x + backward.x * (edgeDistance + 90),
+    y: anchorScreen.y + backward.y * (edgeDistance + 90),
+  };
+}
 function spawnMusicCreationTargetRock(options = null) {
   if (!enemyLayerEl) return false;
-  const center = arenaCenterWorld || getViewportCenterWorld();
   const spawnIndex = Math.max(0, Math.trunc(Number(musicEventTargetReserveRuntime.spawnIndex) || 0));
-  const point = getRandomOffscreenSpawnPointRuntime({
+  const leadBallReserve = options?.leadBallReserve === true;
+  const anchorIndex = Number.isFinite(Number(options?.anchorSlot))
+    ? Math.max(0, Math.trunc(Number(options.anchorSlot) || 0))
+    : spawnIndex;
+  const distributedAnchor = getMusicCreationTargetAnchor(anchorIndex);
+  const point = (leadBallReserve ? getLeadBallReserveSpawnScreen(distributedAnchor) : null) || getRandomOffscreenSpawnPointRuntime({
     constants: { enemyFallbackSpawnMarginPx: ENEMY_FALLBACK_SPAWN_MARGIN_PX },
     helpers: { randRange },
     memberIndex: spawnIndex % 8,
@@ -24090,16 +24215,27 @@ function spawnMusicCreationTargetRock(options = null) {
   });
   if (!enemy) return false;
   configureOnboardingAsteroidEnemy(enemy, spawnIndex);
-  const inward = normalizeDir(
-    (Number(center?.x) || 0) - (Number(enemy?.wx) || 0),
-    (Number(center?.y) || 0) - (Number(enemy?.wy) || 0),
+  if (leadBallReserve) {
+    const center = getViewportCenterWorld();
+    enemy.leadBallReserve = true;
+    enemy.leadBallReserveAnchorOffsetX = (Number(distributedAnchor?.world?.x) || 0) - (Number(center?.x) || 0);
+    enemy.leadBallReserveAnchorOffsetY = (Number(distributedAnchor?.world?.y) || 0) - (Number(center?.y) || 0);
+    enemy.leadBallReserveAnchorScreenXRatio = (Number(distributedAnchor?.screen?.x) || 0) / Math.max(1, Number(window?.innerWidth) || 1);
+    enemy.leadBallReserveAnchorScreenYRatio = (Number(distributedAnchor?.screen?.y) || 0) / Math.max(1, Number(window?.innerHeight) || 1);
+    enemy.leadBallReserveSettled = false;
+    enemy.combatPersistentOffscreen = true;
+  }
+  const approach = normalizeDir(
+    (Number(distributedAnchor?.world?.x) || 0) - (Number(enemy?.wx) || 0),
+    (Number(distributedAnchor?.world?.y) || 0) - (Number(enemy?.wy) || 0),
     1,
     0,
   );
-  const leadBallReserve = options?.leadBallReserve === true;
-  const driftSpeed = (leadBallReserve ? 78 : 26) + ((spawnIndex % 3) * (leadBallReserve ? 8 : 4));
-  enemy.vx = inward.x * driftSpeed;
-  enemy.vy = inward.y * driftSpeed;
+  const driftSpeed = (leadBallReserve ? 620 : 26) + ((spawnIndex % 3) * (leadBallReserve ? 35 : 4));
+  enemy.vx = approach.x * driftSpeed;
+  enemy.vy = approach.y * driftSpeed;
+  enemy.onboardingAsteroidDriftVx = enemy.vx;
+  enemy.onboardingAsteroidDriftVy = enemy.vy;
   onboardingAsteroidRuntime.enemyIds.push(Math.max(0, Math.trunc(Number(enemy.id) || 0)));
   musicEventTargetReserveRuntime.spawnIndex = spawnIndex + 1;
   noteMusicSystemEvent('music_creation_target_reserve_spawned', {
@@ -35873,7 +36009,10 @@ function maintainEnemyPopulation() {
   const liveRocks = liveTargets.filter((enemy) => enemy?.onboardingAsteroid === true);
   const visibleRocks = visibleTargets.filter((enemy) => enemy?.onboardingAsteroid === true);
   if (creationActive) {
-    if (visibleTargets.length >= 8 || liveTargets.length >= 12) return;
+    const leadBallActive = leadBallRuntime.isActive?.() === true;
+    const visibleFloor = leadBallActive ? 12 : 8;
+    const liveCeiling = leadBallActive ? 18 : 12;
+    if (visibleTargets.length >= visibleFloor || liveTargets.length >= liveCeiling) return;
   } else if (visibleRocks.length >= 3 || liveRocks.length >= 5) {
     return;
   }

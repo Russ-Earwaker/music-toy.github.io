@@ -306,6 +306,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     trails: [],
     elapsed: 0,
     lastArenaCenter: null,
+    lastRouteSampleTick: -1,
   };
 
   function ensureRoot() {
@@ -386,6 +387,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     state.bandMarkers.length = 0;
     state.elapsed = 0;
     state.lastArenaCenter = null;
+    state.lastRouteSampleTick = -1;
   }
 
   function start(options = null) {
@@ -458,6 +460,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
         el: createBallEl(),
       };
     });
+    const launchTick = getClockTick(deps.getBeatClock?.() || {}) + 1;
+    state.captureStartTick = launchTick;
+    state.captureEndTick = launchTick + state.stepCount - 1;
+    state.captureDeadlineTick = state.captureEndTick;
     if (state.pickupEl instanceof HTMLElement) {
       state.pickupEl.style.opacity = '0';
       state.pickupEl.style.transform = 'translate(-9999px, -9999px)';
@@ -514,6 +520,81 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const width = Math.max(1, Number(viewport?.innerWidth) || 1);
     const height = Math.max(1, Number(viewport?.innerHeight) || 1);
     return screen.x >= 0 && screen.x <= width && screen.y >= 0 && screen.y <= height;
+  }
+
+  function keepBallInsideViewport(ball = null) {
+    if (!ball || typeof deps.screenToWorld !== 'function') return false;
+    const screen = deps.worldToScreen?.(point(ball));
+    if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return false;
+    const viewport = typeof window !== 'undefined' ? window : null;
+    const width = Math.max(1, Number(viewport?.innerWidth) || 1);
+    const height = Math.max(1, Number(viewport?.innerHeight) || 1);
+    const margin = Math.max(34, BALL_RADIUS * 1.15);
+    const clampedX = Math.max(margin, Math.min(width - margin, screen.x));
+    const clampedY = Math.max(margin, Math.min(height - margin, screen.y));
+    const hitX = Math.abs(clampedX - screen.x) > 0.001;
+    const hitY = Math.abs(clampedY - screen.y) > 0.001;
+    if (!hitX && !hitY) return false;
+    const world = deps.screenToWorld({ x: clampedX, y: clampedY });
+    if (world && Number.isFinite(world.x) && Number.isFinite(world.y)) {
+      ball.x = world.x;
+      ball.y = world.y;
+    }
+    if (hitX) ball.vx = -Number(ball.vx || 0);
+    if (hitY) ball.vy = -Number(ball.vy || 0);
+    ball.targetEnemyId = 0;
+    ball.ricochetEnemyId = 0;
+    deps.onViewportBounce?.({
+      eventId: state.eventId,
+      ballId: Math.max(0, Math.trunc(Number(ball.id) || 0)),
+      hitX,
+      hitY,
+      screenX: clampedX,
+      screenY: clampedY,
+    });
+    return true;
+  }
+
+  function emitRouteSample() {
+    if (!state.active || !state.balls.length || typeof deps.onRouteSample !== 'function') return;
+    const tick = getClockTick(deps.getBeatClock?.() || {});
+    if (tick === state.lastRouteSampleTick) return;
+    state.lastRouteSampleTick = tick;
+    const liveEnemies = getLiveEnemies();
+    const selectableEnemyCount = liveEnemies.filter((enemy) => isEnemySelectable(enemy)).length;
+    const pacing = getCapturePacing();
+    deps.onRouteSample({
+      eventId: state.eventId,
+      tickIndex: tick,
+      relativeStep: state.captureStartTick >= 0 ? tick - state.captureStartTick : -1,
+      captureStartTick: state.captureStartTick,
+      captureEndTick: state.captureEndTick,
+      hitCount: state.hitSteps.size,
+      pendingHitCount: state.pendingHits.length,
+      targetHitCount: state.targetHitCount,
+      captureOpen: pacing.captureOpen,
+      captureAllowance: pacing.allowance,
+      captureDeficit: pacing.deficit,
+      nextCaptureInTicks: pacing.nextCaptureInTicks,
+      liveEnemyCount: liveEnemies.length,
+      selectableEnemyCount,
+      balls: state.balls.map((ball) => {
+        const screen = deps.worldToScreen?.(point(ball)) || null;
+        const target = getEnemyById(ball.targetEnemyId);
+        const targetScreen = target ? deps.worldToScreen?.(enemyPoint(target)) : null;
+        return {
+          ballId: Math.max(0, Math.trunc(Number(ball.id) || 0)),
+          screenX: Number(screen?.x),
+          screenY: Number(screen?.y),
+          velocityX: Number(ball.vx) || 0,
+          velocityY: Number(ball.vy) || 0,
+          targetEnemyId: Math.max(0, Math.trunc(Number(target?.id) || 0)),
+          targetDistance: target ? Math.hypot((Number(target.wx) || 0) - ball.x, (Number(target.wy) || 0) - ball.y) : -1,
+          targetScreenX: Number(targetScreen?.x),
+          targetScreenY: Number(targetScreen?.y),
+        };
+      }),
+    });
   }
 
   function isEnemySelectable(enemy = null) {
@@ -601,11 +682,14 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       const dir = normalize(dx, dy, currentDir.x, currentDir.y);
       const alignment = Math.max(-1, Math.min(1, (dir.x * currentDir.x) + (dir.y * currentDir.y)));
       const straightRouteBonus = distance > 520 ? alignment * Math.min(1180, distance * 0.72) : alignment * 40;
+      const reversalPenalty = alignment < -0.12
+        ? (-alignment - 0.12) * (urgent ? 5200 : 3200)
+        : 0;
       const preferredDistanceBonus = urgent
         ? (distance >= 260 && distance <= 900 ? 820 : 0)
         : (distance >= 860 && distance <= 1650 ? 420 : 0);
       const destinationDistanceBonus = opts.distant === true && distance >= 1150 ? Math.min(1300, distance * 0.62) : 0;
-      const score = distance + closePenalty + flatRoutePenalty + arenaProximityPenalty + octaveRangePenalty + repeatPenalty + otherBallNotePenalty - straightRouteBonus - preferredDistanceBonus - verticalTravelBonus - destinationDistanceBonus - arenaCoreBonus;
+      const score = distance + closePenalty + flatRoutePenalty + arenaProximityPenalty + octaveRangePenalty + repeatPenalty + otherBallNotePenalty + reversalPenalty - straightRouteBonus - preferredDistanceBonus - verticalTravelBonus - destinationDistanceBonus - arenaCoreBonus;
       if (score < bestScore) {
         bestScore = score;
         best = enemy;
@@ -620,14 +704,16 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     return getLiveEnemies().find((enemy) => Math.trunc(Number(enemy?.id) || 0) === enemyId) || null;
   }
 
-  function getCurrentTargetEnemy(ballActor = null) {
+  function getCurrentTargetEnemy(ballActor = null, options = null) {
+    const opts = options && typeof options === 'object' ? options : {};
     const current = getEnemyById(ballActor?.targetEnemyId);
     const currentId = Math.trunc(Number(current?.id) || 0);
     if (current && !state.pendingEnemyIds.has(currentId) && !state.hitEnemyIds.has(currentId) && isWorldPointOnscreen(enemyPoint(current))) return current;
     const pacing = getCapturePacing();
+    const urgent = opts.urgent === true || pacing.captureOpen;
     const next = chooseTargetEnemy(ballActor, {
-      distant: !pacing.captureOpen,
-      urgent: pacing.captureOpen,
+      distant: !urgent,
+      urgent,
     });
     if (ballActor) ballActor.targetEnemyId = Math.trunc(Number(next?.id) || 0);
     return next;
@@ -651,6 +737,24 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     ];
     const lastReservedTick = reservedTicks.length ? Math.max(...reservedTicks) : -1;
     const spacingReady = lastReservedTick < 0 || currentTick - lastReservedTick >= 2;
+    let nextCaptureInTicks = 0;
+    if (reservedCount < state.targetHitCount && !(spacingReady && reservedCount < allowance)) {
+      nextCaptureInTicks = state.stepCount;
+      for (let offset = 1; offset <= state.stepCount; offset += 1) {
+        const futureTick = currentTick + offset;
+        const futureAllowance = getLeadBallCaptureAllowance({
+          stepCount: state.stepCount,
+          targetHitCount: state.targetHitCount,
+          captureStartTick: state.captureStartTick,
+          currentTick: futureTick,
+        });
+        const futureSpacingReady = lastReservedTick < 0 || futureTick - lastReservedTick >= 2;
+        if (futureSpacingReady && reservedCount < futureAllowance) {
+          nextCaptureInTicks = offset;
+          break;
+        }
+      }
+    }
     return {
       currentTick,
       relativeStep,
@@ -659,6 +763,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       deficit: Math.max(0, allowance - reservedCount),
       targetReached: reservedCount >= state.targetHitCount,
       spacingReady,
+      nextCaptureInTicks,
       captureOpen: spacingReady && reservedCount < allowance && reservedCount < state.targetHitCount,
     };
   }
@@ -730,7 +835,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     if (state.captureStartTick < 0) {
       state.captureStartTick = triggerTick;
       state.captureEndTick = state.captureStartTick + state.stepCount - 1;
-      state.captureDeadlineTick = state.captureStartTick + (state.stepCount * 2) - 1;
+      state.captureDeadlineTick = state.captureEndTick;
     }
     if (triggerTick < state.captureStartTick) triggerTick = state.captureStartTick;
     if (state.captureDeadlineTick >= 0 && triggerTick > state.captureDeadlineTick) return null;
@@ -948,7 +1053,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       return rejectHit('enemy_already_used', enemy, at);
     }
     const clock = deps.getBeatClock?.() || {};
-    const baseTriggerTick = getClockTick(clock) + 1;
+    const requestedTriggerTick = Number.isFinite(Number(opts.triggerTick))
+      ? Math.max(0, Math.trunc(Number(opts.triggerTick) || 0))
+      : 0;
+    const baseTriggerTick = Math.max(getClockTick(clock) + 1, requestedTriggerTick);
     const slot = findFreeCaptureSlot(baseTriggerTick);
     if (!slot) return rejectHit('no_free_capture_slot', enemy, at);
     const world = point(at || enemyPoint(enemy));
@@ -1083,7 +1191,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
 
   function findCollisionEnemy(ballActor = null, fromLike = null, toLike = null) {
     const pacing = getCapturePacing();
-    if (!pacing.captureOpen) return null;
+    const preparingCapture = !pacing.captureOpen
+      && !pacing.targetReached
+      && pacing.nextCaptureInTicks <= 3;
+    if (!pacing.captureOpen && !preparingCapture) return null;
     const enemies = getLiveEnemies();
     let best = null;
     let bestInfo = null;
@@ -1169,10 +1280,15 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const enemyId = Math.trunc(Number(enemy?.id) || 0);
     ball.lastContactEnemyId = enemyId;
     ball.contactCooldown = BALL_CONTACT_COOLDOWN;
+    const pacing = getCapturePacing();
+    const preparedTriggerTick = pacing.captureOpen
+      ? 0
+      : pacing.currentTick + Math.max(1, pacing.nextCaptureInTicks);
     const queued = queueHit(enemy, point(ball), {
       ball,
       keepDestination: targetId > 0 && enemyId !== targetId,
       allowRepeatEnemy: false,
+      triggerTick: preparedTriggerTick,
     });
     if (enemyId === ricochetId) ball.ricochetEnemyId = 0;
     if (enemyId === targetId || !getEnemyById(targetId)) {
@@ -1320,12 +1436,17 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       ball.ricochetEnemyId = 0;
     }
     ball.captureOpenLast = pacing.captureOpen;
-    const destination = pacing.captureOpen ? getCurrentTargetEnemy(ball) : null;
+    const preparingCapture = !pacing.captureOpen
+      && !pacing.targetReached
+      && pacing.nextCaptureInTicks <= 3;
+    const destination = (pacing.captureOpen || preparingCapture)
+      ? getCurrentTargetEnemy(ball, { urgent: true })
+      : null;
     const aim = destination ? (getCurrentRicochetEnemy(ball, destination) || destination) : null;
     if (aim) {
       const desired = normalize((Number(aim.wx) || 0) - ball.x, (Number(aim.wy) || 0) - ball.y, ball.vx, ball.vy);
       const current = normalize(ball.vx, ball.vy, desired.x, desired.y);
-      const turnRate = pacing.captureOpen
+      const turnRate = (pacing.captureOpen || preparingCapture)
         ? 28
         : (Math.trunc(Number(ball.ricochetEnemyId) || 0) ? BALL_HOP_TURN_RATE : BALL_TURN_RATE);
       const blend = Math.max(0, Math.min(1, turnRate * dt));
@@ -1343,6 +1464,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const previousBall = { x: ball.x, y: ball.y };
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
+    keepBallInsideViewport(ball);
     const collision = findCollisionEnemy(ball, previousBall, ball);
     if (collision) {
       handleEnemyCollision(ball, collision.enemy);
@@ -1410,6 +1532,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const player = point(deps.getPlayerWorld?.());
     updatePickup(player, safeDt);
     for (const ball of state.balls) updateBall(ball, safeDt);
+    emitRouteSample();
     updatePendingHits();
     updateMotifLoop();
     updateVisualLists(safeDt);
@@ -1468,6 +1591,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       captureAllowance: getCapturePacing().allowance,
       captureDeficit: getCapturePacing().deficit,
       captureSpacingReady: getCapturePacing().spacingReady,
+      nextCaptureInTicks: getCapturePacing().nextCaptureInTicks,
       awaitingCarrier: state.active
         && state.deferPickupUntilCarrierDeath === true
         && !state.pickup

@@ -88,11 +88,38 @@ export function updateEnemyMovementFacingRuntime(enemy, dt = 0, playerWorld = nu
   return true;
 }
 
-export function preserveOnboardingAsteroidDriftRuntime(enemy) {
+export function preserveOnboardingAsteroidDriftRuntime(enemy, centerWorld = null, screenToWorld = null, dt = 1 / 60) {
   if (!enemy || (
     enemy?.onboardingAsteroid !== true
     && String(enemy?.enemyType || '').trim().toLowerCase() !== 'onboarding-asteroid'
   )) return false;
+  if (enemy?.leadBallReserve === true) {
+    const center = centerWorld && typeof centerWorld === 'object' ? centerWorld : { x: 0, y: 0 };
+    const centerX = Number(center.x) || 0;
+    const centerY = Number(center.y) || 0;
+    const targetX = centerX + (Number(enemy.leadBallReserveAnchorOffsetX) || 0);
+    const targetY = centerY + (Number(enemy.leadBallReserveAnchorOffsetY) || 0);
+    const dx = targetX - (Number(enemy.wx) || 0);
+    const dy = targetY - (Number(enemy.wy) || 0);
+    const distance = Math.hypot(dx, dy);
+    if (distance <= 18) {
+      enemy.vx = 0;
+      enemy.vy = 0;
+      enemy.onboardingAsteroidDriftVx = 0;
+      enemy.onboardingAsteroidDriftVy = 0;
+      enemy.leadBallReserveSettled = true;
+      enemy.combatPersistentOffscreen = false;
+      return true;
+    }
+    const speed = Math.min(720, Math.max(120, distance * 2.8));
+    enemy.vx = (dx / distance) * speed;
+    enemy.vy = (dy / distance) * speed;
+    enemy.onboardingAsteroidDriftVx = enemy.vx;
+    enemy.onboardingAsteroidDriftVy = enemy.vy;
+    enemy.leadBallReserveSettled = false;
+    enemy.combatPersistentOffscreen = true;
+    return true;
+  }
   if (!Number.isFinite(Number(enemy.onboardingAsteroidDriftVx))) {
     enemy.onboardingAsteroidDriftVx = Number(enemy.vx) || 0;
   }
@@ -1535,14 +1562,15 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         e.vx *= eventSectionVisual.velocityDamping;
         e.vy *= eventSectionVisual.velocityDamping;
       }
-      preserveOnboardingAsteroidDriftRuntime(e);
+      preserveOnboardingAsteroidDriftRuntime(e, centerWorld, state.screenToWorld, state.dt);
     }
     const speed = Math.hypot(e.vx, e.vy);
     const formationPositioningSpeedScale = scopedBehaviorMotion?.overrideVelocity === true
       && !isLargeFormationEnemyRuntime(e)
       ? 2
       : 1;
-    const maxSpeed = (Number(constants.enemyMaxSpeed) || 0) * speedMult * formationPositioningSpeedScale;
+    const reserveApproachScale = e?.leadBallReserve === true && e?.leadBallReserveSettled !== true ? 6 : 1;
+    const maxSpeed = (Number(constants.enemyMaxSpeed) || 0) * speedMult * formationPositioningSpeedScale * reserveApproachScale;
     if (!hitStopActive && speed > maxSpeed) {
       const k = maxSpeed / speed;
       e.vx *= k;
