@@ -520,7 +520,8 @@ Implementation order:
    - implemented: formations retain the legacy independent cadence only when none of their declared player sources contains playable material
    - current limitation: formation combat attacks are scheduled on beat boundaries, while player rhythm toys support eighth-note subdivisions; the first pass explicitly projects authored subdivisions onto beat cadence rather than claiming exact offbeat reinforcement
    - implemented: lead formations now derive a one-beat delayed response from the current Lead Theme, preserve its contour, shift it by one pentatonic scale step for separation, and support a distinct assigned note at every formation motif step
-   - next: production-listen to the derived lead response, then decide whether formation attacks need subdivision scheduling for exact Accent offbeats
+   - implemented: a focused 60-second Lead Response Formation lab seeds the established player score and exercises the production one-beat-delayed, pentatonic-shifted lead derivation without threat-budget variance
+   - next: listen to and validate the focused derived lead response, then decide whether formation attacks need subdivision scheduling for exact Accent offbeats
 13. Later: add level- and difficulty-based enemy health and damage scaling as one input to the adaptive cost budget after threat composition and readability are proven.
 14. Design boss ownership of the full musical structure later.
 

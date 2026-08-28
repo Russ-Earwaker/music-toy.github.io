@@ -508,6 +508,7 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
+        ${btn('musicLabRunLeadResponseFormationDebug', 'Run Lead Response Formation (1x60s)', 'primary')}
         ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Production Onboarding Flow (1x300s)', 'primary')}
         ${btn('musicLabRunOnboardingCompositionAudit', 'Run Autopilot Composition Audit (1x240s)', 'primary')}
         ${btn('musicLabRunEnemyArchitectureDebug', 'Run Enemy Lane + Movement Lab (1x70s)', 'primary')}
@@ -1607,6 +1608,10 @@ function ensureUI() {
     }
     if (act === 'musicLabRunDualMusicalFormationDebug') {
       await runDualMusicalFormationDebug();
+      return;
+    }
+    if (act === 'musicLabRunLeadResponseFormationDebug') {
+      await runLeadResponseFormationDebug();
       return;
     }
     if (act === 'musicLabRunDirectorFormationIntensityFlow') {
@@ -8151,6 +8156,58 @@ async function runDualMusicalFormationDebug() {
       maxLines: 1500,
       preferOutputDirectory: true,
       fileNamePrefix: 'resources-debug-dual-musical-formation',
+    },
+  });
+}
+
+async function runLeadResponseFormationDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    saveRunIdBase: 'musicLab_lead_response_formation_1x60s',
+    saveNotes: 'Focused production derivation test: a seeded player Lead Theme plays with one laser formation carrying a one-beat-delayed, pentatonic-shifted contour response.',
+    groupedScenarioName: 'beat_swarm_lead_response_formation_1x60s',
+    groupedRunId: 'musicLab_lead_response_formation_1x60s_scenario',
+    groupedNotes: 'Validates recognizable player lead identity, response separation, assigned pitches, and exact beat scheduling without production threat-budget variance.',
+    tagPrefix: 'LeadResponseFormation1x60s',
+    labelPrefix: 'BS0_lead_response_formation_1x60s',
+    statusPrefix: 'Running lead response formation',
+    keepMusicLabRealtimeMetrics: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startLeadResponseFormationTest !== 'function') {
+        throw new Error('lead_response_formation_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startLeadResponseFormationTest({ memberCount: 4 });
+      if (snapshot?.active !== true || snapshot?.enemyIds?.length !== 4) {
+        throw new Error(`lead_response_formation_test_spawn_failed:${String(snapshot?.reason || 'unknown')}`);
+      }
+      try { window.__BEAT_SWARM_LEAD_RESPONSE_FORMATION_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'lead_response_formation_test_started',
+        'director_musical_formation_spawned',
+        'lead_ball_rewrite_committed_to_theme',
+        'lead_ball_literal_loop_timing',
+        'music_primary_loop_lane_emitted',
+        'enemy_combat_group_motif_assigned',
+        'enemy_combat_group_motif_member_ended',
+        'enemy_combat_anchor_ready',
+        'enemy_combat_attack',
+        'enemy_laser_activated',
+      ],
+      maxLines: 1200,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-lead-response-formation',
     },
   });
 }
