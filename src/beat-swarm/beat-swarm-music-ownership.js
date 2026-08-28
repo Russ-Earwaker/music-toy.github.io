@@ -71,8 +71,9 @@ const PLAYER_CONTRACT_BY_LANE = new Map(
 export const BEAT_SWARM_FORMATION_ARRANGEMENT_CONTRACTS = Object.freeze({
   gunner_snare: Object.freeze({
     ownership: BEAT_SWARM_MUSIC_OWNERSHIP.TEMPORARY_ARRANGEMENT,
-    arrangementRole: 'rhythmic_reinforcement',
-    derivedFromLaneIds: Object.freeze(['foundation_lane', 'secondary_loop_lane']),
+    arrangementRole: 'tonal_bass_support',
+    outputLaneId: 'tonal_bass_lane',
+    derivedFromLaneIds: Object.freeze(['foundation_lane']),
   }),
   laser_hihat: Object.freeze({
     ownership: BEAT_SWARM_MUSIC_OWNERSHIP.TEMPORARY_ARRANGEMENT,

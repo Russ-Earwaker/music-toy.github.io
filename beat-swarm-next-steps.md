@@ -312,6 +312,9 @@ Use playtests and Music Lab where useful to answer:
 
 - Do director-owned musical enemy formations remain readable over a complete simulated player score, rather than being judged against sparse test music?
 - Do formation voices add musical variation without masking the weapon, Bass Drive, Accent Rhythm, or Lead Theme motifs beneath them?
+- validated: `Run Full Score + Arrangements (1x75s)` kept the complete seeded player score recognizable beneath production-derived Foundation reinforcement, exact-subdivision Accent reinforcement, and delayed pentatonic Lead response at fixed Peak intensity; the trace recorded no unscheduled formation attacks or core Lead interruption
+- validated: `Run Arrangement Intensity Ramp (1x115s)` preserved the core score while admitting Foundation reinforcement at Medium bar 8, Accent reinforcement at Build bar 16, and a delayed pentatonic Lead response at Peak bar 28; a fourth Peak group was correctly rejected by visual/live-threat limits, Release and Settle admitted no new formations, and every audible formation attack used its assigned motif phase
+- production validation: onboarding completed every authored Foundation, Accent, and Lead interaction before enabling arrangements; two later Build/Peak cycles spawned six correctly derived formations with no unscheduled attacks, but the first Medium arrangement was silently excluded because the shared group cap counted all three required core-lane groups against the same three slots; shared capacity now reserves core-lane groups separately from intensity-policy arrangement slots and traces any future shared-cap block
 
 - Does the weapon-gate sequence hand off without a visible/audio snap?
 - Does the player weapon motif continue at the correct tempo after the corridor?
@@ -518,10 +521,18 @@ Implementation order:
    - implemented: rhythmic gunner and laser formations now derive their attack cadence from the first playable player-composition source in their arrangement contract; gunner formations prioritize Foundation Rhythm, while laser percussion formations prioritize Accent Rhythm
    - implemented: derived formation attacks retain the source motif's global loop phase, distribute authored hit positions across group members, preserve their independent arrangement instruments, and expose derivation source/mode/hit telemetry
    - implemented: formations retain the legacy independent cadence only when none of their declared player sources contains playable material
-   - current limitation: formation combat attacks are scheduled on beat boundaries, while player rhythm toys support eighth-note subdivisions; the first pass explicitly projects authored subdivisions onto beat cadence rather than claiming exact offbeat reinforcement
+   - implemented: rhythmic formations can now preserve authored eighth-note positions instead of projecting every source hit onto a whole-beat attack; subdivision scheduling is opt-in so legacy beat-based enemies retain their established cadence
+   - implemented: formation assignment carries exact global start-step phase into individual enemies, attack dispatch, audio scheduling, and laser warnings/activation
+   - implemented: focused unit coverage confirms authored offbeats, global source phase, legacy beat behavior, and offbeat laser activation
    - implemented: lead formations now derive a one-beat delayed response from the current Lead Theme, preserve its contour, shift it by one pentatonic scale step for separation, and support a distinct assigned note at every formation motif step
    - implemented: a focused 60-second Lead Response Formation lab seeds the established player score and exercises the production one-beat-delayed, pentatonic-shifted lead derivation without threat-budget variance
-   - next: listen to and validate the focused derived lead response, then decide whether formation attacks need subdivision scheduling for exact Accent offbeats
+   - validated: the focused derived lead response audibly follows the seeded player lead and the trace confirms its delayed pentatonic response
+   - implemented: a focused 60-second Accent Offbeat Formation lab seeds the established player score and exercises production subdivision-preserving laser formation scheduling with exact-step telemetry
+   - validated: the Accent offbeat formation preserved source phases `2, 6, 9, 13, 15` across both halves of its 32-step motif, distributed all ten hits across four members, began laser warnings one beat early, and activated every beam/audio event on the exact authored phase with no extra positions
+   - validated: current-step formation audio scheduling reduced the stale-anchor error from roughly 1.7 seconds to normal callback latency (about 39 ms average in the focused run)
+   - next: treat the player-composition/enemy-arrangement ownership migration as established architecture and return to production-flow musical validation when the next arrangement feature requires it
+   - validated: the focused Full Score + Arrangements lab exercised all three established arrangement roles together over recognizable player-owned motifs; the mix remained readable, all 252 formation attacks were motif-scheduled, and the player Lead emitted continuously throughout the run
+   - current validation: the shorter Arrangement Intensity Ramp now exercises production formation selection and density across every intensity without paying the time cost of replaying onboarding
 13. Later: add level- and difficulty-based enemy health and damage scaling as one input to the adaptive cost budget after threat composition and readability are proven.
 14. Design boss ownership of the full musical structure later.
 

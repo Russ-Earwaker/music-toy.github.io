@@ -49,7 +49,13 @@ export function createBeatSwarmEnemyLaserRuntime() {
       beamEls.push(el);
     }
     const startBeat = normalizeBeat(options?.beatIndex);
+    const subdivisionsPerBeat = Math.max(1, Math.trunc(Number(options?.subdivisionsPerBeat) || 1));
+    const startStep = Number.isFinite(Number(options?.stepIndex))
+      ? normalizeBeat(options.stepIndex)
+      : startBeat * subdivisionsPerBeat;
     const warningBeats = Math.max(1, Math.trunc(Number(pattern.warningBeats) || 1));
+    const warningSteps = warningBeats * subdivisionsPerBeat;
+    const activeBeats = Math.max(1, Math.trunc(Number(pattern.activeBeats) || 8));
     const hazard = {
       id: hazardId++,
       sourceEnemyId: Math.trunc(Number(enemy.id) || 0),
@@ -75,10 +81,15 @@ export function createBeatSwarmEnemyLaserRuntime() {
           : (Number(pattern.soundVolume) || 0.46)
       )),
       startBeat,
+      startStep,
+      subdivisionsPerBeat,
       activateBeat: startBeat + warningBeats,
-      endBeat: startBeat + warningBeats + Math.max(1, Math.trunc(Number(pattern.activeBeats) || 8)),
+      activateStep: startStep + warningSteps,
+      endBeat: startBeat + warningBeats + activeBeats,
+      endStep: startStep + warningSteps + (activeBeats * subdivisionsPerBeat),
       activated: false,
       lastContactBeat: -1,
+      lastContactStep: -1,
     };
     if (hazard.aimMode === 'formation') {
       enemy.combatLaserFormationAngle = hazard.angle + (Number(pattern.formationAdvanceRadians) || 0);
@@ -92,6 +103,9 @@ export function createBeatSwarmEnemyLaserRuntime() {
   function update(options = null) {
     const dt = Math.max(0, Number(options?.dt) || 0);
     const beatIndex = normalizeBeat(options?.beatIndex);
+    const stepIndex = Number.isFinite(Number(options?.stepIndex))
+      ? normalizeBeat(options.stepIndex)
+      : null;
     const enemies = Array.isArray(options?.enemies) ? options.enemies : [];
     const enemyById = new Map(enemies.map((enemy) => [Math.trunc(Number(enemy?.id) || 0), enemy]));
     const player = options?.player || { x: 0, y: 0 };
@@ -100,11 +114,15 @@ export function createBeatSwarmEnemyLaserRuntime() {
     for (let index = hazards.length - 1; index >= 0; index -= 1) {
       const hazard = hazards[index];
       const enemy = enemyById.get(hazard.sourceEnemyId) || null;
-      if (!enemy || beatIndex >= hazard.endBeat) {
+      const stepScheduled = Math.max(1, Math.trunc(Number(hazard.subdivisionsPerBeat) || 1)) > 1
+        && stepIndex != null;
+      const timelineIndex = stepScheduled ? stepIndex : beatIndex;
+      const endIndex = stepScheduled ? hazard.endStep : hazard.endBeat;
+      if (!enemy || timelineIndex >= endIndex) {
         removeHazard(hazard);
         continue;
       }
-      const active = beatIndex >= hazard.activateBeat;
+      const active = timelineIndex >= (stepScheduled ? hazard.activateStep : hazard.activateBeat);
       if (!active && hazard.aimMode === 'track_then_lock') {
         hazard.angle = angleToTarget(enemy, player);
       }
@@ -115,7 +133,7 @@ export function createBeatSwarmEnemyLaserRuntime() {
           el.classList.remove('is-warning');
           el.classList.add('is-active');
         }
-        options?.onActivate?.({ hazard, enemy, beatIndex });
+        options?.onActivate?.({ hazard, enemy, beatIndex, stepIndex });
       }
       const speedScale = active ? 1 : 0.22;
       if (hazard.aimMode !== 'track_then_lock' && hazard.aimMode !== 'formation') {
@@ -159,9 +177,12 @@ export function createBeatSwarmEnemyLaserRuntime() {
         el.style.transform = `translate(${startScreen.x}px, ${startScreen.y}px) rotate(${Math.atan2(dy, dx)}rad)`;
         if (active && distanceToSegment(player, start, end) <= hazard.collisionRadiusWorld) playerContact = true;
       }
-      if (playerContact && hazard.lastContactBeat !== beatIndex) {
-        hazard.lastContactBeat = beatIndex;
-        options?.onPlayerContact?.({ hazard, enemy, beatIndex });
+      const contactIndex = stepScheduled ? stepIndex : beatIndex;
+      const lastContactIndex = stepScheduled ? hazard.lastContactStep : hazard.lastContactBeat;
+      if (playerContact && lastContactIndex !== contactIndex) {
+        if (stepScheduled) hazard.lastContactStep = stepIndex;
+        else hazard.lastContactBeat = beatIndex;
+        options?.onPlayerContact?.({ hazard, enemy, beatIndex, stepIndex });
       }
     }
   }
@@ -173,7 +194,10 @@ export function createBeatSwarmEnemyLaserRuntime() {
       patternId: hazard.patternId,
       beamCount: hazard.beamCount,
       activateBeat: hazard.activateBeat,
+      activateStep: hazard.activateStep,
       endBeat: hazard.endBeat,
+      endStep: hazard.endStep,
+      subdivisionsPerBeat: hazard.subdivisionsPerBeat,
       activated: hazard.activated,
       aimMode: hazard.aimMode,
       bidirectional: hazard.bidirectional,

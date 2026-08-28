@@ -28,6 +28,7 @@ export function deriveRhythmicFormationMotifs(options = null) {
   const memberCount = Math.max(1, Math.trunc(Number(opts.memberCount) || 1));
   const startBeat = Math.max(0, Math.trunc(Number(opts.startBeat) || 0));
   const subdivisionsPerBeat = Math.max(1, Math.trunc(Number(opts.subdivisionsPerBeat) || 2));
+  const preserveSubdivisions = opts.preserveSubdivisions === true && subdivisionsPerBeat > 1;
 
   let sourceLaneId = '';
   let sourceSubdivisionSteps = [];
@@ -51,7 +52,34 @@ export function deriveRhythmicFormationMotifs(options = null) {
       sourceBeatLength: 0,
       sourceHitCount: 0,
       motifHitCount: 0,
+      motifLength: preserveSubdivisions ? motifLength * subdivisionsPerBeat : motifLength,
+      subdivisionsPerBeat: preserveSubdivisions ? subdivisionsPerBeat : 1,
       memberSteps: [],
+    };
+  }
+
+  if (preserveSubdivisions) {
+    const subdivisionMotifLength = motifLength * subdivisionsPerBeat;
+    const startSubdivision = startBeat * subdivisionsPerBeat;
+    const motifSteps = Array.from({ length: subdivisionMotifLength }, (_, relativeStep) => relativeStep)
+      .filter((relativeStep) => sourceSubdivisionSteps[
+        (startSubdivision + relativeStep) % sourceSubdivisionSteps.length
+      ]);
+    const memberSteps = Array.from({ length: memberCount }, () => []);
+    motifSteps.forEach((step, hitIndex) => {
+      memberSteps[hitIndex % memberCount].push(step);
+    });
+    return {
+      derived: true,
+      derivationMode: 'player_rhythm_subdivision_preserved',
+      sourceLaneId,
+      sourceSubdivisionCount: sourceSubdivisionSteps.length,
+      sourceBeatLength: Math.max(1, Math.ceil(sourceSubdivisionSteps.length / subdivisionsPerBeat)),
+      sourceHitCount: sourceSubdivisionSteps.reduce((sum, active) => sum + (active ? 1 : 0), 0),
+      motifHitCount: motifSteps.length,
+      motifLength: subdivisionMotifLength,
+      subdivisionsPerBeat,
+      memberSteps,
     };
   }
 
@@ -71,7 +99,88 @@ export function deriveRhythmicFormationMotifs(options = null) {
     sourceBeatLength,
     sourceHitCount: sourceBeatSteps.reduce((sum, active) => sum + (active ? 1 : 0), 0),
     motifHitCount: motifSteps.length,
+    motifLength,
+    subdivisionsPerBeat: 1,
     memberSteps,
+  };
+}
+
+export function deriveTonalBassFormationMotifs(options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const sourceLaneId = normalizeLaneId(opts.sourceLaneId || 'foundation_lane');
+  const sourceSteps = normalizeSteps(opts.sourceSteps);
+  const subdivisionsPerBeat = Math.max(1, Math.trunc(Number(opts.subdivisionsPerBeat) || 2));
+  const sourceBeatSteps = projectRhythmSubdivisionsToBeats(sourceSteps, subdivisionsPerBeat);
+  const motifLength = Math.max(1, Math.trunc(Number(opts.motifLength) || 16));
+  const memberCount = Math.max(1, Math.trunc(Number(opts.memberCount) || 1));
+  const startBeat = Math.max(0, Math.trunc(Number(opts.startBeat) || 0));
+  const energyState = normalizeLaneId(opts.energyState || 'medium');
+  const notePalette = [opts.rootNote, opts.fifthNote, opts.octaveRootNote]
+    .map((note) => String(note || '').trim())
+    .filter(Boolean);
+  const eventStride = energyState === 'peak' || energyState === 'clash'
+    ? 1
+    : (energyState === 'build' ? 2 : 3);
+
+  if (!sourceBeatSteps.some(Boolean) || notePalette.length < 2) {
+    return {
+      derived: false,
+      derivationMode: 'tonal_bass_unavailable',
+      sourceLaneId,
+      outputLaneId: 'tonal_bass_lane',
+      sourceSubdivisionCount: sourceSteps.length,
+      sourceBeatLength: sourceBeatSteps.length,
+      sourceHitCount: sourceBeatSteps.reduce((sum, active) => sum + (active ? 1 : 0), 0),
+      motifHitCount: 0,
+      motifLength,
+      subdivisionsPerBeat: 1,
+      eventStride,
+      members: [],
+    };
+  }
+
+  const sourceEventOrdinalByBeat = new Map();
+  let sourceEventOrdinal = 0;
+  sourceBeatSteps.forEach((active, beat) => {
+    if (!active) return;
+    sourceEventOrdinalByBeat.set(beat, sourceEventOrdinal);
+    sourceEventOrdinal += 1;
+  });
+  const events = [];
+  for (let relativeBeat = 0; relativeBeat < motifLength; relativeBeat += 1) {
+    const sourceBeat = (startBeat + relativeBeat) % sourceBeatSteps.length;
+    if (!sourceBeatSteps[sourceBeat]) continue;
+    const sourceOrdinal = sourceEventOrdinalByBeat.get(sourceBeat) || 0;
+    if ((sourceOrdinal % eventStride) !== 0) continue;
+    const selectedOrdinal = Math.floor(sourceOrdinal / eventStride);
+    const useOctave = notePalette.length > 2
+      && (energyState === 'peak' || energyState === 'clash')
+      && selectedOrdinal > 0
+      && (selectedOrdinal % 4) === 3;
+    events.push({
+      step: relativeBeat,
+      note: useOctave ? notePalette[2] : notePalette[selectedOrdinal % 2],
+    });
+  }
+  const members = Array.from({ length: memberCount }, () => ({ steps: [], noteByStep: {} }));
+  events.forEach((event, eventIndex) => {
+    const member = members[eventIndex % memberCount];
+    member.steps.push(event.step);
+    member.noteByStep[event.step] = event.note;
+  });
+  return {
+    derived: true,
+    derivationMode: `foundation_tonal_bass_${energyState}`,
+    sourceLaneId,
+    outputLaneId: 'tonal_bass_lane',
+    sourceSubdivisionCount: sourceSteps.length,
+    sourceBeatLength: sourceBeatSteps.length,
+    sourceHitCount: sourceEventOrdinal,
+    motifHitCount: events.length,
+    motifLength,
+    subdivisionsPerBeat: 1,
+    eventStride,
+    members,
   };
 }
 

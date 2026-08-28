@@ -10,6 +10,7 @@ const DIRECTOR_LANE_IDS = Object.freeze([
   'foundation',
   'secondary_loop',
   'primary_loop',
+  'tonal_bass',
   'sparkle',
   'support',
   'answer',
@@ -106,6 +107,14 @@ function createDefaultLanePlan() {
       protected: true,
       continuityBias: 'blend',
       intensity: 0.35,
+    },
+    tonal_bass: {
+      active: false,
+      targetCount: 0,
+      preferredCarrier: 'group',
+      protected: false,
+      continuityBias: 'follow',
+      intensity: 0.2,
     },
     sparkle: {
       active: false,

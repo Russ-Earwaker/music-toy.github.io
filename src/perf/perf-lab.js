@@ -508,7 +508,8 @@ function ensureUI() {
     controls: [
       `<div class="perf-lab-music-current">
         <div class="perf-lab-controlsTitle">Current Work</div>
-        ${btn('musicLabRunLeadResponseFormationDebug', 'Run Lead Response Formation (1x60s)', 'primary')}
+        ${btn('musicLabRunArrangementIntensityRampDebug', 'Run Arrangement Intensity Ramp (1x115s)', 'primary')}
+        ${btn('musicLabRunFullScoreArrangementDebug', 'Run Full Score + Arrangements (1x75s)', 'primary')}
         ${btn('musicLabRunDirectorFormationIntensityFlow', 'Run Production Onboarding Flow (1x300s)', 'primary')}
         ${btn('musicLabRunOnboardingCompositionAudit', 'Run Autopilot Composition Audit (1x240s)', 'primary')}
         ${btn('musicLabRunEnemyArchitectureDebug', 'Run Enemy Lane + Movement Lab (1x70s)', 'primary')}
@@ -1612,6 +1613,18 @@ function ensureUI() {
     }
     if (act === 'musicLabRunLeadResponseFormationDebug') {
       await runLeadResponseFormationDebug();
+      return;
+    }
+    if (act === 'musicLabRunAccentSubdivisionFormationDebug') {
+      await runAccentSubdivisionFormationDebug();
+      return;
+    }
+    if (act === 'musicLabRunFullScoreArrangementDebug') {
+      await runFullScoreArrangementDebug();
+      return;
+    }
+    if (act === 'musicLabRunArrangementIntensityRampDebug') {
+      await runArrangementIntensityRampDebug();
       return;
     }
     if (act === 'musicLabRunDirectorFormationIntensityFlow') {
@@ -8208,6 +8221,191 @@ async function runLeadResponseFormationDebug() {
       maxLines: 1200,
       preferOutputDirectory: true,
       fileNamePrefix: 'resources-debug-lead-response-formation',
+    },
+  });
+}
+
+async function runAccentSubdivisionFormationDebug() {
+  await runBS0Stage(1, {
+    durationMs: 60000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    saveRunIdBase: 'musicLab_accent_subdivision_formation_1x60s',
+    saveNotes: 'Focused subdivision test: the authored Accent Rhythm plays while a laser formation preserves and reinforces its exact eighth-note positions.',
+    groupedScenarioName: 'beat_swarm_accent_subdivision_formation_1x60s',
+    groupedRunId: 'musicLab_accent_subdivision_formation_1x60s_scenario',
+    groupedNotes: 'Validates exact Accent offbeats, global loop phase, member allocation, laser warning timing, and quantized activation.',
+    tagPrefix: 'AccentSubdivisionFormation1x60s',
+    labelPrefix: 'BS0_accent_subdivision_formation_1x60s',
+    statusPrefix: 'Running Accent offbeat formation',
+    keepMusicLabRealtimeMetrics: true,
+    traceBeforeSetup: true,
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startAccentSubdivisionFormationTest !== 'function') {
+        throw new Error('accent_subdivision_formation_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startAccentSubdivisionFormationTest({ memberCount: 4 });
+      if (snapshot?.active !== true || snapshot?.enemyIds?.length !== 4) {
+        throw new Error(`accent_subdivision_formation_test_spawn_failed:${String(snapshot?.reason || 'unknown')}`);
+      }
+      try { window.__BEAT_SWARM_ACCENT_SUBDIVISION_FORMATION_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'accent_subdivision_formation_test_started',
+        'director_musical_formation_spawned',
+        'enemy_combat_group_motif_assigned',
+        'enemy_combat_anchor_ready',
+        'enemy_combat_attack',
+        'enemy_laser_activated',
+      ],
+      maxLines: 1400,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-accent-subdivision-formation',
+    },
+  });
+}
+
+async function runFullScoreArrangementDebug() {
+  await runBS0Stage(3, {
+    durationMs: 75000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    traceBeforeSetup: true,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'fixed_section',
+        fixedSection: 'peak',
+        introBars: 0,
+        keepAuthoredLeadPresent: true,
+      },
+    },
+    saveRunIdBase: 'musicLab_full_score_arrangements_1x75s',
+    saveNotes: [
+      'Focused full-score arrangement mix test at fixed Peak intensity.',
+      'Seeds recognizable Foundation Rhythm, Accent Rhythm, and ball-authored Lead Theme material, while retaining the prepared player weapon.',
+      'Runs production-derived Gunner/Foundation reinforcement, Laser/Accent reinforcement, and delayed pentatonic Lead response together.',
+      'Assess whether the arrangement adds energy and variation without masking or replacing any player-owned core motif.',
+    ].join(' '),
+    groupedScenarioName: 'beat_swarm_full_score_arrangements_1x75s',
+    groupedRunId: 'musicLab_full_score_arrangements_1x75s_scenario',
+    groupedNotes: 'Combined production arrangement roles over a complete seeded player score at fixed Peak intensity.',
+    tagPrefix: 'FullScoreArrangements1x75s',
+    labelPrefix: 'BS0_full_score_arrangements_1x75s',
+    statusPrefix: 'Running full score and arrangements',
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startFullScoreArrangementTest !== 'function') {
+        throw new Error('full_score_arrangement_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startFullScoreArrangementTest();
+      if (snapshot?.active !== true || snapshot?.groups?.length !== 3) {
+        throw new Error(`full_score_arrangement_test_spawn_failed:${String(snapshot?.reason || 'unknown')}`);
+      }
+      try { window.__BEAT_SWARM_FULL_SCORE_ARRANGEMENT_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'full_score_arrangement_test_started',
+        'music_level1_arrangement_state',
+        'music_primary_loop_lane_emitted',
+        'director_musical_formation_spawned',
+        'enemy_combat_group_motif_assigned',
+        'enemy_combat_group_motif_member_ended',
+        'enemy_combat_anchor_ready',
+        'enemy_combat_attack',
+        'enemy_laser_activated',
+      ],
+      maxLines: 2200,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-full-score-arrangements',
+    },
+  });
+}
+
+async function runArrangementIntensityRampDebug() {
+  await runBS0Stage(3, {
+    durationMs: 115000,
+    repeatCount: 1,
+    enemyCount: 1,
+    freshResetEachRun: true,
+    restartTransportEachRun: true,
+    resetMusicLabEachRun: true,
+    saveMusicLabEachRun: true,
+    forceCompactSave: true,
+    keepMusicLabRealtimeMetrics: true,
+    publishPerfArtifacts: false,
+    traceBeforeSetup: true,
+    beatSwarmTestOverrides: {
+      musicIntensityAudition: {
+        enabled: true,
+        mode: 'ramp_release',
+        introBars: 0,
+        keepAuthoredLeadPresent: true,
+      },
+    },
+    saveRunIdBase: 'musicLab_arrangement_intensity_ramp_1x115s',
+    saveNotes: [
+      'Seeded full player score through the standard Low, Medium, Build, Peak, Release, and Settle intensity audition.',
+      'The production arrangement policy should keep Low player-owned, introduce Foundation reinforcement at Medium, add Accent reinforcement during Build, and permit Lead response at Peak.',
+      'Release and Settle should add no new formations. Existing embodied arrangements may remain until gameplay resolves them.',
+      'Assess progressive density, motif recognition, transition smoothness, and whether temporary arrangement voices ever mask the immutable weapon or player-owned core lanes.',
+    ].join(' '),
+    groupedScenarioName: 'beat_swarm_arrangement_intensity_ramp_1x115s',
+    groupedRunId: 'musicLab_arrangement_intensity_ramp_1x115s_scenario',
+    groupedNotes: 'Focused production arrangement-policy ramp over a complete seeded player score, without onboarding setup time.',
+    tagPrefix: 'ArrangementIntensityRamp1x115s',
+    labelPrefix: 'BS0_arrangement_intensity_ramp_1x115s',
+    statusPrefix: 'Running arrangement intensity ramp',
+    async setupAfterPrepare() {
+      const modeApi = window.BeatSwarmMode;
+      if (!modeApi || typeof modeApi.startSeededArrangementIntensityFlowTest !== 'function') {
+        throw new Error('arrangement_intensity_flow_test_api_unavailable');
+      }
+      try { window.__beatSwarmDebug?.setPerfAutoMove?.(false); } catch {}
+      const snapshot = modeApi.startSeededArrangementIntensityFlowTest();
+      if (snapshot?.active !== true) {
+        throw new Error('arrangement_intensity_flow_test_start_failed');
+      }
+      try { window.__BEAT_SWARM_ARRANGEMENT_INTENSITY_FLOW_TEST = snapshot; } catch {}
+    },
+    traceCapture: {
+      enabled: true,
+      include: [
+        'seeded_arrangement_intensity_flow_test_started',
+        'music_level1_arrangement_state',
+        'music_primary_loop_lane_emitted',
+        'director_musical_formation_policy',
+        'director_musical_formation_spawned',
+        'director_musical_formation_ended',
+        'director_elite_spawn_blocked',
+        'director_threat_admission',
+        'enemy_combat_group_motif_assigned',
+        'enemy_combat_group_motif_member_ended',
+        'enemy_combat_attack',
+        'enemy_laser_activated',
+      ],
+      maxLines: 3600,
+      preferOutputDirectory: true,
+      fileNamePrefix: 'resources-debug-arrangement-intensity-ramp',
     },
   });
 }

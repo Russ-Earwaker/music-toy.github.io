@@ -39,6 +39,7 @@ export function configureBeatSwarmEnemyCombatRuntime(enemy, options = null) {
   enemy.combatBurstRemaining = 0;
   enemy.combatBurstNextBeat = null;
   enemy.combatLastProcessedBeat = null;
+  enemy.combatLastProcessedStep = null;
   enemy.singleBehaviorId = String(options?.movementBehaviorId || profile.movementBehaviorId || '').trim().toLowerCase();
   enemy.combatAnchorX = Number.isFinite(Number(options?.anchorX)) ? Number(options.anchorX) : Number(enemy.wx) || 0;
   enemy.combatAnchorY = Number.isFinite(Number(options?.anchorY)) ? Number(options.anchorY) : Number(enemy.wy) || 0;
@@ -60,15 +61,23 @@ export function setBeatSwarmEnemyCombatPatternRuntime(enemy, patternId, startBea
 
 export function createBeatSwarmEnemyCombatRuntime() {
   let lastGlobalBeat = null;
+  let lastGlobalStep = null;
 
   function reset() {
     lastGlobalBeat = null;
+    lastGlobalStep = null;
   }
 
   function update(options = null) {
     const beatIndex = normalizeBeat(options?.beatIndex);
-    if (lastGlobalBeat === beatIndex) return 0;
+    const stepIndex = Number.isFinite(Number(options?.stepIndex))
+      ? normalizeBeat(options.stepIndex)
+      : null;
+    const beatChanged = lastGlobalBeat !== beatIndex;
+    const stepChanged = stepIndex != null && lastGlobalStep !== stepIndex;
+    if (!beatChanged && !stepChanged) return 0;
     lastGlobalBeat = beatIndex;
+    if (stepIndex != null) lastGlobalStep = stepIndex;
     const enemies = Array.isArray(options?.enemies) ? options.enemies : [];
     const target = options?.target || null;
     const spawnProjectile = options?.spawnProjectile;
@@ -82,8 +91,21 @@ export function createBeatSwarmEnemyCombatRuntime() {
       if (!enemy || enemy.combatEnabled !== true || enemy.retreating || String(enemy.lifecycleState || 'active') !== 'active') continue;
       const profile = getBeatSwarmEnemyCombatProfile(enemy.combatProfileId);
       const pattern = getBeatSwarmEnemyAttackPattern(profile?.id, enemy.combatPatternId);
-      if (!profile || !pattern || enemy.combatLastProcessedBeat === beatIndex) continue;
-      enemy.combatLastProcessedBeat = beatIndex;
+      if (!profile || !pattern) continue;
+      const motifSteps = Array.isArray(enemy.combatGroupMotifSteps)
+        ? enemy.combatGroupMotifSteps.map((step) => normalizeBeat(step))
+        : [];
+      const motifLength = Math.max(1, Math.trunc(Number(enemy.combatGroupMotifLength) || 1));
+      const motifEnabled = motifSteps.length > 0;
+      const subdivisionsPerBeat = Math.max(1, Math.trunc(Number(enemy.combatGroupMotifSubdivisionsPerBeat) || 1));
+      const subdivisionScheduled = motifEnabled && subdivisionsPerBeat > 1 && stepIndex != null;
+      if (subdivisionScheduled) {
+        if (!stepChanged || enemy.combatLastProcessedStep === stepIndex) continue;
+        enemy.combatLastProcessedStep = stepIndex;
+      } else {
+        if (!beatChanged || enemy.combatLastProcessedBeat === beatIndex) continue;
+        enemy.combatLastProcessedBeat = beatIndex;
+      }
 
       if (pattern.requiresAnchor === true) {
         const anchorDistance = Math.hypot(
@@ -114,18 +136,27 @@ export function createBeatSwarmEnemyCombatRuntime() {
         }
       }
 
-      const motifSteps = Array.isArray(enemy.combatGroupMotifSteps)
-        ? enemy.combatGroupMotifSteps.map((step) => normalizeBeat(step))
-        : [];
-      const motifLength = Math.max(1, Math.trunc(Number(enemy.combatGroupMotifLength) || 1));
-      const motifEnabled = motifSteps.length > 0;
       const motifStartBeat = normalizeBeat(enemy.combatGroupMotifStartBeat);
-      if (motifEnabled && beatIndex < motifStartBeat) {
+      const motifStartStep = Number.isFinite(Number(enemy.combatGroupMotifStartStep))
+        ? normalizeBeat(enemy.combatGroupMotifStartStep)
+        : motifStartBeat * subdivisionsPerBeat;
+      const timelineIndex = subdivisionScheduled ? stepIndex : beatIndex;
+      const motifStartIndex = subdivisionScheduled ? motifStartStep : motifStartBeat;
+      const warningLeadSteps = motifEnabled && pattern.deferSoundToActivation === true
+        ? Math.max(0, Math.trunc(Number(pattern.warningBeats) || 0))
+          * (subdivisionScheduled ? subdivisionsPerBeat : 1)
+        : 0;
+      if (motifEnabled && timelineIndex < motifStartIndex - warningLeadSteps) {
         enemy.combatNextAttackBeat = motifStartBeat;
         continue;
       }
+      const warningMotifStep = motifEnabled
+        ? ((timelineIndex - motifStartIndex) % motifLength + motifLength) % motifLength
+        : -1;
+      // Deferred hazards treat authored motif positions as the audible/active
+      // moment. Begin their warning early enough for activation to land there.
       const motifStep = motifEnabled
-        ? ((beatIndex - motifStartBeat) % motifLength + motifLength) % motifLength
+        ? (warningMotifStep + warningLeadSteps) % motifLength
         : -1;
       const motifDue = motifEnabled && motifSteps.includes(motifStep);
       if (motifEnabled && !motifDue) {
@@ -163,7 +194,12 @@ export function createBeatSwarmEnemyCombatRuntime() {
       const isHazard = attackKind !== 'projectile';
       const angles = isHazard ? [] : getProjectileAngles(baseAngle, pattern.projectileCount, pattern.spreadRadians);
       if (isHazard) {
-        if (typeof spawnHazard === 'function') spawnHazard(enemy, pattern, beatIndex);
+        if (typeof spawnHazard === 'function') {
+          spawnHazard(enemy, pattern, beatIndex, {
+            stepIndex,
+            subdivisionsPerBeat: subdivisionScheduled ? subdivisionsPerBeat : 1,
+          });
+        }
       } else {
         for (const angle of angles) {
           spawnProjectile(enemy, {
@@ -178,13 +214,20 @@ export function createBeatSwarmEnemyCombatRuntime() {
           });
         }
       }
-      if (pattern.deferSoundToActivation !== true && typeof playAttackSound === 'function') playAttackSound(enemy, pattern);
+      if (pattern.deferSoundToActivation !== true && typeof playAttackSound === 'function') {
+        playAttackSound(enemy, pattern, { beatIndex, stepIndex });
+      }
       enemy.composerActionPulseT = Math.max(Number(enemy.composerActionPulseT) || 0, 0.24);
       enemy.composerActionPulseDur = Math.max(Number(enemy.composerActionPulseDur) || 0, 0.24);
       attackCount += 1;
       if (typeof onAttack === 'function') {
         onAttack({
           beatIndex,
+          stepIndex,
+          motifStep,
+          warningMotifStep,
+          warningLeadSteps,
+          subdivisionsPerBeat: subdivisionScheduled ? subdivisionsPerBeat : 1,
           enemy,
           profile,
           pattern,

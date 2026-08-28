@@ -87,9 +87,13 @@ test('compatibility bassDrive id represents player-owned foundation percussion',
 });
 
 test('formation contracts are temporary arrangements with composition sources', () => {
+  const bass = getBeatSwarmFormationArrangementContract('gunner_snare');
   const rhythm = getBeatSwarmFormationArrangementContract('laser_hihat');
   const lead = getBeatSwarmFormationArrangementContract('laser_lead');
   assert.equal(rhythm.ownership, BEAT_SWARM_MUSIC_OWNERSHIP.TEMPORARY_ARRANGEMENT);
+  assert.equal(bass.arrangementRole, 'tonal_bass_support');
+  assert.equal(bass.outputLaneId, 'tonal_bass_lane');
+  assert.deepEqual(bass.derivedFromLaneIds, ['foundation_lane']);
   assert.equal(rhythm.arrangementRole, 'rhythmic_reinforcement');
   assert.ok(rhythm.derivedFromLaneIds.includes('secondary_loop_lane'));
   assert.equal(lead.arrangementRole, 'countermelody');
