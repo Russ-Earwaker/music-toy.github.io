@@ -98,6 +98,35 @@ test('does not repeat legacy beat motifs on the second subdivision', () => {
   assert.equal(attackCount, 1);
 });
 
+test('does not fall back to default attacks while a group motif is explicitly muted', () => {
+  const enemy = {
+    wx: 10,
+    wy: 20,
+    lifecycleState: 'active',
+    combatGroupMotifMuted: true,
+    combatGroupMotifSteps: [],
+  };
+  configureBeatSwarmEnemyCombatRuntime(enemy, {
+    profileId: 'gunner',
+    patternId: 'formation_straight',
+    movementBehaviorId: 'hold_position',
+    anchorX: 10,
+    anchorY: 20,
+    startBeat: 0,
+  });
+  const runtime = createBeatSwarmEnemyCombatRuntime();
+  let attackCount = 0;
+  for (let beatIndex = 0; beatIndex < 20; beatIndex += 1) {
+    runtime.update({
+      beatIndex,
+      enemies: [enemy],
+      target: { x: 100, y: 20 },
+      spawnProjectile: () => { attackCount += 1; },
+    });
+  }
+  assert.equal(attackCount, 0);
+});
+
 test('starts deferred hazard warnings early so activation lands on the authored offbeat', () => {
   const enemy = {
     wx: 10,

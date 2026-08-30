@@ -6,6 +6,63 @@ function normalizeSteps(stepsLike = null) {
   return Array.isArray(stepsLike) ? stepsLike.map(Boolean) : [];
 }
 
+export function getFormationIntensityRecipe(kindLike = '', energyStateLike = '') {
+  const kind = normalizeLaneId(kindLike);
+  const energyState = normalizeLaneId(energyStateLike);
+  if (kind === 'laser_hihat') {
+    const active = ['medium', 'build', 'clash', 'peak'].includes(energyState);
+    return {
+      active,
+      eventStride: energyState === 'peak' || energyState === 'clash'
+        ? 1
+        : (energyState === 'build' ? 2 : 3),
+      musicalVolume: energyState === 'peak' || energyState === 'clash'
+        ? 0.3
+        : (energyState === 'build' ? 0.24 : 0.18),
+      responseDelayBeats: 0,
+    };
+  }
+  if (kind === 'laser_lead') {
+    const active = ['medium', 'build', 'clash', 'peak', 'release', 'settle'].includes(energyState);
+    const peakLike = energyState === 'peak' || energyState === 'clash';
+    return {
+      active,
+      eventStride: peakLike
+        ? 2
+        : (energyState === 'build' ? 3 : (energyState === 'settle' ? 5 : 4)),
+      musicalVolume: peakLike
+        ? 0.2
+        : (energyState === 'build' ? 0.16 : (energyState === 'medium' ? 0.14 : (energyState === 'release' ? 0.14 : 0.12))),
+      responseDelayBeats: energyState === 'release' || energyState === 'settle' ? 2 : 1,
+    };
+  }
+  const active = ['medium', 'build', 'clash', 'peak'].includes(energyState);
+  return {
+    active,
+    eventStride: energyState === 'peak' || energyState === 'clash'
+      ? 1
+      : (energyState === 'build' ? 2 : 3),
+    musicalVolume: 0.3,
+    responseDelayBeats: 0,
+  };
+}
+
+export function thinFormationMemberSteps(memberStepsLike = null, eventStrideLike = 1) {
+  const memberSteps = Array.isArray(memberStepsLike)
+    ? memberStepsLike.map((steps) => (Array.isArray(steps) ? steps.map((step) => Math.max(0, Math.trunc(Number(step) || 0))) : []))
+    : [];
+  const eventStride = Math.max(1, Math.trunc(Number(eventStrideLike) || 1));
+  if (eventStride === 1) return memberSteps;
+  const kept = memberSteps.map(() => []);
+  memberSteps
+    .flatMap((steps, memberIndex) => steps.map((step) => ({ step, memberIndex })))
+    .sort((a, b) => (a.step - b.step) || (a.memberIndex - b.memberIndex))
+    .forEach((event, eventIndex) => {
+      if ((eventIndex % eventStride) === 0) kept[event.memberIndex].push(event.step);
+    });
+  return kept;
+}
+
 export function projectRhythmSubdivisionsToBeats(stepsLike = null, subdivisionsPerBeatLike = 2) {
   const steps = normalizeSteps(stepsLike);
   const subdivisionsPerBeat = Math.max(1, Math.trunc(Number(subdivisionsPerBeatLike) || 2));

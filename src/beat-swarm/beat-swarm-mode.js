@@ -13,12 +13,12 @@ import { getAllIds, getIdForDisplayName, getInstrumentEntries, getSampleBehavior
 import { getSoundThemeKey, pickInstrumentForToy, setSoundThemeKey } from '../sound-theme.js';
 import { buildPalette, midiToName } from '../note-helpers.js';
 import { createArtToyAt } from '../art/art-toy-factory.js';
-import { createSwarmDirector } from './swarm-director.js?v=2026-08-10-musical-formations-v1';
+import { createSwarmDirector } from './swarm-director.js?v=2026-08-28-tonal-bass-v1';
 import { createPerformedBeatEvent, BEAT_EVENT_ROLES, BEAT_EVENT_THREAT } from './beat-events.js';
 import { classifyBeatSwarmEventSection, classifyBeatSwarmPerformedAction } from './beat-swarm-action-categories.js';
 import { createBeatSwarmPaletteRuntime } from './beat-swarm-palette.js';
 import { createBeatSwarmPacing } from './beat-swarm-pacing.js?v=2026-08-13-production-onboarding-flow-v1';
-import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js?v=2026-08-27-formation-arrangement-diagnostics-v1';
+import { createBeatSwarmMusicLab } from './beat-swarm-music-lab.js?v=2026-08-29-tonal-bass-v1';
 import { createBeatSwarmOnboardingState } from './beat-swarm-onboarding-state.js?v=2026-06-17-onboarding-state-v1';
 import { createBeatSwarmMusicEventRuntime } from './beat-swarm-music-event-runtime.js?v=2026-06-21-player-completion-v2';
 import { createBeatSwarmMusicMissileRuntime } from './beat-swarm-music-missiles.js?v=2026-08-18-visible-enemies-v1';
@@ -69,7 +69,7 @@ import {
   configureBeatSwarmEnemyCombatRuntime,
   createBeatSwarmEnemyCombatRuntime,
   setBeatSwarmEnemyCombatPatternRuntime,
-} from './beat-swarm-enemy-combat-runtime.js?v=2026-08-28-arrangement-intensity-v1';
+} from './beat-swarm-enemy-combat-runtime.js?v=2026-08-29-formation-interpretation-v1';
 import { createBeatSwarmEnemyLaserRuntime } from './beat-swarm-enemy-laser-runtime.js?v=2026-08-28-arrangement-intensity-v1';
 import { createBeatSwarmEnemyShapeRuntime } from './beat-swarm-enemy-shape-runtime.js?v=2026-08-08-shape-caster-v3';
 import { createBeatSwarmEnemyChargeRuntime } from './beat-swarm-enemy-charge-runtime.js?v=2026-08-08-charger-v1';
@@ -93,7 +93,9 @@ import {
   deriveMelodicFormationMotifs,
   deriveRhythmicFormationMotifs,
   deriveTonalBassFormationMotifs,
-} from './beat-swarm-formation-arrangement.js?v=2026-08-28-arrangement-intensity-v1';
+  getFormationIntensityRecipe,
+  thinFormationMemberSteps,
+} from './beat-swarm-formation-arrangement.js?v=2026-08-29-formation-interpretation-v1';
 
 let beatSwarmExecutionTriggerEvent = null;
 
@@ -4728,6 +4730,7 @@ function resolveDirectorLanePlanKeyForMusicLaneId(laneId = '') {
   if (key === 'foundation_lane') return 'foundation';
   if (key === 'primary_loop_lane') return 'primary_loop';
   if (key === 'secondary_loop_lane') return 'secondary_loop';
+  if (key === 'tonal_bass_lane') return 'tonal_bass';
   if (key === 'sparkle_lane') return 'sparkle';
   return '';
 }
@@ -14433,6 +14436,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     if (laneKey === 'foundation') plan.__level1Contract.contractFoundationActive = true;
     else if (laneKey === 'secondary_loop') plan.__level1Contract.contractSecondaryLoopActive = true;
     else if (laneKey === 'primary_loop') plan.__level1Contract.contractPrimaryLoopActive = true;
+    else if (laneKey === 'tonal_bass') plan.__level1Contract.contractTonalBassActive = true;
     else if (laneKey === 'support') plan.__level1Contract.contractSupportActive = true;
     else if (laneKey === 'sparkle') plan.__level1Contract.contractSparkleActive = true;
     else if (laneKey === 'answer') plan.__level1Contract.contractAnswerActive = true;
@@ -14446,6 +14450,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     if (laneKey === 'foundation') plan.__level1Contract.contractFoundationActive = false;
     else if (laneKey === 'secondary_loop') plan.__level1Contract.contractSecondaryLoopActive = false;
     else if (laneKey === 'primary_loop') plan.__level1Contract.contractPrimaryLoopActive = false;
+    else if (laneKey === 'tonal_bass') plan.__level1Contract.contractTonalBassActive = false;
     else if (laneKey === 'support') plan.__level1Contract.contractSupportActive = false;
     else if (laneKey === 'sparkle') plan.__level1Contract.contractSparkleActive = false;
     else if (laneKey === 'answer') plan.__level1Contract.contractAnswerActive = false;
@@ -14454,6 +14459,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     quiet('foundation');
     quiet('secondary_loop');
     quiet('primary_loop');
+    quiet('tonal_bass');
     quiet('support');
     quiet('sparkle');
     quiet('answer');
@@ -14463,6 +14469,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     else activate('secondary_loop', 0.18, 1);
     if ((weaponGateMusicRuntime.lowAfterComplete || keepAuthoredLeadPresent) && isPlayerMusicThemeAuthored('leadTheme')) activate('primary_loop', 0.34, 1);
     else quiet('primary_loop');
+    quiet('tonal_bass');
     quiet('support');
     quiet('sparkle');
     quiet('answer');
@@ -14470,6 +14477,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     activate('foundation', 0.72, 1);
     activate('secondary_loop', 0.38, 1);
     activate('primary_loop', 0.4, 1);
+    activate('tonal_bass', 0.28, 1);
     quiet('support');
     quiet('sparkle');
     quiet('answer');
@@ -14480,6 +14488,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     activate('foundation', buildEarly ? 0.76 : (buildMid ? 0.82 : 0.87), 1);
     activate('secondary_loop', buildEarly ? 0.46 : (buildMid ? 0.66 : 0.82), buildEarly ? 1 : 2);
     activate('primary_loop', buildEarly ? 0.54 : (buildMid ? 0.78 : 0.94), buildEarly ? 1 : (buildMid ? 2 : 3));
+    activate('tonal_bass', buildEarly ? 0.34 : (buildMid ? 0.44 : 0.52), 1);
     activate('support', buildEarly ? 0.14 : (buildMid ? 0.26 : 0.38), 1);
     if (buildEarly || buildMid) {
       quiet('sparkle');
@@ -14496,6 +14505,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     activate('foundation', 0.88, 1);
     activate('secondary_loop', 0.86, 2);
     activate('primary_loop', 0.96, 3);
+    activate('tonal_bass', 0.62, 1);
     activate('support', 0.38, 1);
     activate('sparkle', 0.32, 1);
     activate('answer', 0.22, 1);
@@ -14511,6 +14521,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     quiet('secondary_loop');
     if (releaseEchoActive) activate('primary_loop', releaseSectionBar === 0 ? 0.58 : (releaseTail ? (releaseSectionBar < 3 ? 0.42 : 0.3) : 0.24), 1);
     else quiet('primary_loop');
+    quiet('tonal_bass');
     quiet('support');
     quiet('sparkle');
     quiet('answer');
@@ -14518,6 +14529,7 @@ function applyBeatSwarmMusicIntensityAuditionLanePlan(plan = null, arrangementSt
     activate('foundation', 0.44, 1);
     activate('secondary_loop', 0.34, 1);
     activate('primary_loop', 0.34, 1);
+    quiet('tonal_bass');
     quiet('support');
     quiet('sparkle');
     quiet('answer');
@@ -14962,6 +14974,7 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
       contractFoundationActive: true,
       contractSecondaryLoopActive: secondaryLoopActive === true,
       contractPrimaryLoopActive: primaryLoopActive === true,
+      contractTonalBassActive: ['medium', 'build', 'clash', 'peak'].includes(energyState),
       contractSparkleActive: sparkleActive === true,
       contractSupportActive: simplifiedFullTextureArrangement ? false : supportActive === true,
       contractAnswerActive: answerActive === true,
@@ -31651,10 +31664,11 @@ function applyDirectorEnemyCombatGroupMotifPlan(groupId, plan = null, startBeat 
     .sort((a, b) => (
       Math.trunc(Number(a?.combatGroupMemberIndex) || 0)
       - Math.trunc(Number(b?.combatGroupMemberIndex) || 0)
-    ));
+  ));
   for (let memberIndex = 0; memberIndex < groupEnemies.length; memberIndex += 1) {
     const enemy = groupEnemies[memberIndex];
-    const assignment = memberMotifs[memberIndex] || null;
+    const originalMemberIndex = Math.max(0, Math.trunc(Number(enemy?.combatGroupMemberIndex) || 0));
+    const assignment = memberMotifs[originalMemberIndex] || null;
     enemy.combatGroupMotifSteps = Array.isArray(assignment?.steps)
       ? assignment.steps.map((step) => Math.max(0, Math.trunc(Number(step) || 0)))
       : [];
@@ -31667,6 +31681,8 @@ function applyDirectorEnemyCombatGroupMotifPlan(groupId, plan = null, startBeat 
     enemy.combatGroupMotifStartBeat = requestedStartBeat;
     enemy.combatGroupMotifStartStep = requestedStartStep;
     enemy.combatGroupMotifSubdivisionsPerBeat = subdivisionsPerBeat;
+    enemy.combatGroupMotifMuted = directorPlan?.muted === true;
+    enemy.combatMusicOutputLaneId = String(directorPlan?.outputLaneId || '').trim().toLowerCase();
     enemy.combatMusicalInstrumentId = String(assignment?.instrumentId || '').trim();
     enemy.combatMusicalVolume = Math.max(0, Math.min(1, (Number(assignment?.musicalVolume) || 0) * 1.15));
     enemy.combatAttackSoundVolume = Math.max(0.01, Math.min(1, Number(assignment?.attackVolume ?? assignment?.laserVolume) || 0.16));
@@ -31685,13 +31701,15 @@ function applyDirectorEnemyCombatGroupMotifPlan(groupId, plan = null, startBeat 
     arrangementRole: String(directorPlan?.arrangementRole || '').trim().toLowerCase(),
     derivationMode: String(directorPlan?.derivationMode || '').trim().toLowerCase(),
     sourceLaneId: String(directorPlan?.sourceLaneId || '').trim().toLowerCase(),
+    outputLaneId: String(directorPlan?.outputLaneId || '').trim().toLowerCase(),
     sourceSubdivisionCount: Math.max(0, Math.trunc(Number(directorPlan?.sourceSubdivisionCount) || 0)),
     sourceBeatLength: Math.max(0, Math.trunc(Number(directorPlan?.sourceBeatLength) || 0)),
     sourceHitCount: Math.max(0, Math.trunc(Number(directorPlan?.sourceHitCount) || 0)),
     motifHitCount: Math.max(0, Math.trunc(Number(directorPlan?.motifHitCount) || 0)),
     responseDelayBeats: Math.max(0, Math.trunc(Number(directorPlan?.responseDelayBeats) || 0)),
     pitchOffset: Math.trunc(Number(directorPlan?.pitchOffset) || 0),
-    sourceEventStride: Math.max(1, Math.trunc(Number(directorPlan?.sourceEventStride) || 1)),
+      sourceEventStride: Math.max(1, Math.trunc(Number(directorPlan?.sourceEventStride) || 1)),
+    muted: directorPlan?.muted === true,
     members: groupEnemies.map((enemy) => ({
       enemyId: Math.trunc(Number(enemy?.id) || 0),
       memberIndex: Math.trunc(Number(enemy?.combatGroupMemberIndex) || 0),
@@ -31737,6 +31755,7 @@ function setEnemyCombatLabPhase(phaseIndex, beatIndex) {
     enemy.combatEnabled = enabled;
     if (!phaseConfiguration) {
       enemy.combatGroupMotifSteps = [];
+      enemy.combatGroupMotifMuted = false;
       enemy.combatGroupMotifLength = 0;
       enemy.combatGroupMotifStartBeat = 0;
       enemy.combatMusicalInstrumentId = '';
@@ -33414,14 +33433,14 @@ function getDirectorFormationArrangementSourceSteps(laneIdLike = '') {
   }
   return [];
 }
-function deriveDirectorRhythmicFormationPlan(arrangementContract, motifLength, memberCount, startBeat) {
+function deriveDirectorRhythmicFormationPlan(arrangementContract, motifLength, memberCount, startBeat, recipe = null, energyState = '') {
   const sourceLaneIds = Array.isArray(arrangementContract?.derivedFromLaneIds)
     ? arrangementContract.derivedFromLaneIds
     : [];
   const laneStepsById = Object.fromEntries(sourceLaneIds.map((laneId) => (
     [String(laneId || '').trim().toLowerCase(), getDirectorFormationArrangementSourceSteps(laneId)]
   )));
-  return deriveRhythmicFormationMotifs({
+  const derivation = deriveRhythmicFormationMotifs({
     sourceLaneIds,
     laneStepsById,
     motifLength,
@@ -33430,8 +33449,18 @@ function deriveDirectorRhythmicFormationPlan(arrangementContract, motifLength, m
     subdivisionsPerBeat: Math.max(1, WEAPON_TUNE_STEPS / COMPOSER_BEATS_PER_BAR),
     preserveSubdivisions: true,
   });
+  if (!derivation.derived) return derivation;
+  const sourceEventStride = Math.max(1, Math.trunc(Number(recipe?.eventStride) || 1));
+  const memberSteps = thinFormationMemberSteps(derivation.memberSteps, sourceEventStride);
+  return {
+    ...derivation,
+    derivationMode: `${derivation.derivationMode}_${String(energyState || 'default').trim().toLowerCase()}`,
+    motifHitCount: memberSteps.reduce((sum, steps) => sum + steps.length, 0),
+    sourceEventStride,
+    memberSteps,
+  };
 }
-function deriveDirectorMelodicFormationPlan(motifLength, memberCount, startBeat) {
+function deriveDirectorMelodicFormationPlan(motifLength, memberCount, startBeat, recipe = null) {
   const motifParts = getPlayerLeadThemeMotifParts();
   const sourceNoteSteps = Array.from(
     { length: Math.max(1, getPlayerMusicThemeDef('leadTheme')?.motifLength || 4) * WEAPON_TUNE_STEPS },
@@ -33451,16 +33480,19 @@ function deriveDirectorMelodicFormationPlan(motifLength, memberCount, startBeat)
     sourceNoteSteps,
     pitchPalette,
     pitchOffset: null,
-    responseDelayBeats: 1,
-    sourceEventStride: sourceNoteSteps.filter(Boolean).length > 12 ? 3 : 2,
+    responseDelayBeats: Math.max(1, Math.trunc(Number(recipe?.responseDelayBeats) || 1)),
+    sourceEventStride: Math.max(1, Math.trunc(Number(recipe?.eventStride) || 2)),
     motifLength,
     memberCount,
     startBeat,
     subdivisionsPerBeat: Math.max(1, WEAPON_TUNE_STEPS / COMPOSER_BEATS_PER_BAR),
   });
 }
-function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, variantIndex = 0, memberCountLike = 0) {
+function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, variantIndex = 0, memberCountLike = 0, energyStateLike = '') {
   const kind = String(kindLike || '').trim().toLowerCase();
+  const defaultEnergyState = kind === 'laser_lead' ? 'peak' : (kind === 'laser_hihat' ? 'build' : 'medium');
+  const energyState = String(energyStateLike || defaultEnergyState).trim().toLowerCase();
+  const interpretationRecipe = getFormationIntensityRecipe(kind, energyState);
   const shifted = Math.max(0, Math.trunc(Number(variantIndex) || 0)) % 4;
   const arrangementContract = getBeatSwarmFormationArrangementContract(kind)
     || getBeatSwarmFormationArrangementContract('gunner_snare');
@@ -33480,7 +33512,7 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
     const count = Math.max(2, Math.min(4, Math.trunc(Number(memberCountLike) || 3)));
     const noteByMember = ['C4', 'D#4', 'F4', 'G4'];
     const stepsByMember = [[0, 16], [3, 20], [7, 23], [12, 29]];
-    const derivation = deriveDirectorMelodicFormationPlan(32, count, startBeat);
+    const derivation = deriveDirectorMelodicFormationPlan(32, count, startBeat, interpretationRecipe);
     const derivationMetadata = {
       derivationMode: derivation.derivationMode,
       sourceLaneId: derivation.sourceLaneId,
@@ -33500,7 +33532,7 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
           note: normalizeSwarmNoteName(Object.values(member.noteByStep || {})[0])
             || noteByMember[memberIndex % noteByMember.length],
           instrumentId,
-          musicalVolume: 0.2,
+          musicalVolume: interpretationRecipe.musicalVolume,
           attackVolume: 0.08,
         }))
       : Array.from({ length: count }, (_, memberIndex) => ({
@@ -33508,7 +33540,7 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
             .map((step) => (step + (shifted * 2)) % 32),
           note: noteByMember[memberIndex % noteByMember.length],
           instrumentId,
-          musicalVolume: 0.2,
+          musicalVolume: interpretationRecipe.musicalVolume,
           attackVolume: 0.08,
         }));
     return {
@@ -33516,6 +33548,8 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
       kind,
       ...arrangementMetadata,
       ...derivationMetadata,
+      energyState,
+      interpretationActive: interpretationRecipe.active,
       count,
       radiusScale: 0.34,
       minRadiusPx: 245,
@@ -33539,7 +33573,14 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
     const instrumentId = getIdForDisplayName('Hand clap (electro)') || '';
     const baseSteps = [[0, 6, 12], [3, 9, 15], [4, 10, 14], [1, 7, 13]];
     const count = Math.max(2, Math.min(5, Math.trunc(Number(memberCountLike) || 4)));
-    const derivation = deriveDirectorRhythmicFormationPlan(arrangementContract, 16, count, startBeat);
+    const derivation = deriveDirectorRhythmicFormationPlan(
+      arrangementContract,
+      16,
+      count,
+      startBeat,
+      interpretationRecipe,
+      energyState,
+    );
     const memberSteps = derivation.derived
       ? derivation.memberSteps
       : Array.from({ length: count }, (_, memberIndex) => baseSteps[memberIndex % baseSteps.length])
@@ -33552,12 +33593,15 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
       sourceHitCount: derivation.sourceHitCount,
       motifHitCount: derivation.motifHitCount,
       subdivisionsPerBeat: derivation.derived ? derivation.subdivisionsPerBeat : 1,
+      sourceEventStride: Math.max(1, Math.trunc(Number(derivation.sourceEventStride) || interpretationRecipe.eventStride || 1)),
     };
     return {
       groupId,
       kind,
       ...arrangementMetadata,
       ...derivationMetadata,
+      energyState,
+      interpretationActive: interpretationRecipe.active,
       count,
       radiusScale: 0.38,
       minRadiusPx: 285,
@@ -33578,7 +33622,7 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
           steps,
           note: 'C4',
           instrumentId,
-          musicalVolume: 0.28,
+          musicalVolume: interpretationRecipe.musicalVolume,
           attackVolume: 0.1,
         })),
       },
@@ -33588,7 +33632,6 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
   const instrumentId = getIdForDisplayName('Bass Tone 3') || 'BASS TONE 3';
   const baseSteps = [[0, 6, 12], [3, 9, 15], [2, 8, 14], [1, 7, 11]];
   const count = Math.max(2, Math.min(5, Math.trunc(Number(memberCountLike) || 3)));
-  const energyState = String(arguments[5] || getCurrentSwarmEnergyStateName() || 'medium').trim().toLowerCase();
   const sourceSteps = getDirectorFormationArrangementSourceSteps('foundation_lane');
   let rootMidi = noteNameToMidiRuntime(harmonyRuntime.rootNote || harmonyRuntime.tonicRootNote || 'C4');
   if (!Number.isFinite(rootMidi)) rootMidi = 36;
@@ -33625,7 +33668,7 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
     sourceHitCount: derivation.sourceHitCount,
     motifHitCount: derivation.motifHitCount,
     subdivisionsPerBeat: 1,
-    eventStride: Math.max(1, Math.trunc(Number(derivation.eventStride) || 1)),
+    sourceEventStride: Math.max(1, Math.trunc(Number(derivation.eventStride) || 1)),
     energyState,
   };
   return {
@@ -33643,7 +33686,7 @@ function createDirectorMusicalFormationSpec(kindLike, groupId, startBeat, varian
     patternId: 'formation_straight',
     cssClasses: ['is-gunner-enemy', 'is-musical-formation-enemy'],
     plan: {
-      id: `director-gunner-snare-${groupId}`,
+      id: `director-tonal-bass-${groupId}`,
       ...arrangementMetadata,
       ...derivationMetadata,
       motifLength: derivation.derived ? derivation.motifLength : 16,
@@ -33787,6 +33830,8 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar, memberCount 
     derivationMode: String(spec.derivationMode || '').trim().toLowerCase(),
     sourceLaneId: String(spec.sourceLaneId || '').trim().toLowerCase(),
     outputLaneId: String(spec.outputLaneId || '').trim().toLowerCase(),
+    sourceSubdivisionCount: Math.max(0, Math.trunc(Number(spec.sourceSubdivisionCount) || 0)),
+    sourceBeatLength: Math.max(0, Math.trunc(Number(spec.sourceBeatLength) || 0)),
     sourceHitCount: Math.max(0, Math.trunc(Number(spec.sourceHitCount) || 0)),
     motifHitCount: Math.max(0, Math.trunc(Number(spec.motifHitCount) || 0)),
     motifLength: Math.max(1, Math.trunc(Number(spec.plan?.motifLength) || 1)),
@@ -33797,6 +33842,9 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar, memberCount 
     responseDelayBeats: Math.max(0, Math.trunc(Number(spec.responseDelayBeats) || 0)),
     pitchOffset: Math.trunc(Number(spec.pitchOffset) || 0),
     sourceEventStride: Math.max(1, Math.trunc(Number(spec.sourceEventStride) || 1)),
+    appliedEnergyState: String(energyState || '').trim().toLowerCase(),
+    arrangementAudible: spec.interpretationActive !== false,
+    tonalBassAudible: String(spec.outputLaneId || '').trim().toLowerCase() === 'tonal_bass_lane',
     enemyIds: created.map((enemy) => Math.trunc(Number(enemy.id) || 0)),
   };
   directorMusicalFormationLayerRuntime.groups.set(groupId, group);
@@ -33805,6 +33853,106 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar, memberCount 
     enemyIds: Array.from(group.enemyIds),
   }, { beatIndex: startBeat, stepIndex: 0, barIndex: currentBar });
   return group;
+}
+
+function syncDirectorMusicalFormationPlans(energyStateLike = '', beatIndexLike = 0, barIndexLike = 0) {
+  const energyState = String(energyStateLike || '').trim().toLowerCase();
+  const beatIndex = Math.max(0, Math.trunc(Number(beatIndexLike) || 0));
+  const barIndex = Math.max(0, Math.trunc(Number(barIndexLike) || 0));
+  const startBeat = beatIndex + 1;
+  for (const group of directorMusicalFormationLayerRuntime.groups.values()) {
+    if (String(group?.appliedEnergyState || '').trim().toLowerCase() === energyState) continue;
+    const kind = String(group?.kind || '').trim().toLowerCase();
+    const recipe = getFormationIntensityRecipe(kind, energyState);
+    const living = enemies.filter((enemy) => (
+      String(enemy?.combatSyncGroupId || '').trim() === String(group.groupId || '').trim()
+      && String(enemy?.lifecycleState || 'active') === 'active'
+      && !enemy?.retreating
+    ));
+    if (!living.length) continue;
+
+    if (!recipe.active) {
+      if (group.arrangementAudible !== false) {
+        const subdivisionsPerBeat = Math.max(1, Math.trunc(Number(group.subdivisionsPerBeat) || 1));
+        applyDirectorEnemyCombatGroupMotifPlan(group.groupId, {
+          id: `director-formation-muted-${group.groupId}-${energyState}`,
+          musicOwnership: 'temporary_arrangement',
+          arrangementRole: String(group.arrangementRole || '').trim().toLowerCase(),
+          derivationMode: `${kind || 'formation'}_muted_${energyState || 'inactive'}`,
+          sourceLaneId: String(group.sourceLaneId || '').trim().toLowerCase(),
+          outputLaneId: String(group.outputLaneId || '').trim().toLowerCase(),
+          muted: true,
+          sourceSubdivisionCount: Math.max(0, Math.trunc(Number(group.sourceSubdivisionCount) || 0)),
+          sourceBeatLength: Math.max(0, Math.trunc(Number(group.sourceBeatLength) || 0)),
+          sourceHitCount: Math.max(0, Math.trunc(Number(group.sourceHitCount) || 0)),
+          motifHitCount: 0,
+          sourceEventStride: Math.max(1, Math.trunc(Number(group.sourceEventStride) || 1)),
+          motifLength: Math.max(1, Math.trunc(Number(group.motifLength) || 16)),
+          subdivisionsPerBeat,
+          startStep: startBeat * subdivisionsPerBeat,
+          memberMotifs: living.map((enemy) => ({
+            steps: [],
+            noteByStep: {},
+            note: normalizeSwarmNoteName(enemy?.soundNote) || 'C4',
+            instrumentId: String(enemy?.combatMusicalInstrumentId || '').trim(),
+            musicalVolume: 0,
+            attackVolume: Math.max(0.01, Number(enemy?.combatAttackSoundVolume) || 0.1),
+          })),
+        }, startBeat);
+        group.arrangementAudible = false;
+        if (kind === 'gunner_snare') group.tonalBassAudible = false;
+        group.motifHitCount = 0;
+      }
+      group.appliedEnergyState = energyState;
+      noteMusicSystemEvent('director_musical_formation_policy', {
+        action: kind === 'gunner_snare' ? 'tonal_bass_muted' : 'formation_muted',
+        energyState,
+        groupId: group.groupId,
+        kind,
+        arrangementRole: String(group.arrangementRole || '').trim().toLowerCase(),
+        outputLaneId: String(group.outputLaneId || '').trim().toLowerCase(),
+      }, { beatIndex, barIndex });
+      continue;
+    }
+
+    const spec = createDirectorMusicalFormationSpec(
+      group.kind,
+      group.groupId,
+      startBeat,
+      0,
+      Math.max(living.length, Array.isArray(group.enemyIds) ? group.enemyIds.length : 0),
+      energyState,
+    );
+    applyDirectorEnemyCombatGroupMotifPlan(group.groupId, spec.plan, startBeat);
+    group.derivationMode = String(spec.derivationMode || '').trim().toLowerCase();
+    group.sourceHitCount = Math.max(0, Math.trunc(Number(spec.sourceHitCount) || 0));
+    group.motifHitCount = Math.max(0, Math.trunc(Number(spec.motifHitCount) || 0));
+    group.motifLength = Math.max(1, Math.trunc(Number(spec.plan?.motifLength) || 16));
+    group.subdivisionsPerBeat = Math.max(1, Math.trunc(Number(spec.plan?.subdivisionsPerBeat) || 1));
+    group.startBeat = startBeat;
+    group.startStep = Number.isFinite(Number(spec.plan?.startStep))
+      ? Math.max(0, Math.trunc(Number(spec.plan.startStep) || 0))
+      : startBeat;
+    group.sourceEventStride = Math.max(1, Math.trunc(Number(spec.sourceEventStride) || 1));
+    group.responseDelayBeats = Math.max(0, Math.trunc(Number(spec.responseDelayBeats) || 0));
+    group.pitchOffset = Math.trunc(Number(spec.pitchOffset) || 0);
+    group.appliedEnergyState = energyState;
+    group.arrangementAudible = true;
+    if (kind === 'gunner_snare') group.tonalBassAudible = true;
+    noteMusicSystemEvent('director_musical_formation_policy', {
+      action: kind === 'gunner_snare' ? 'tonal_bass_reauthored' : 'formation_reauthored',
+      energyState,
+      groupId: group.groupId,
+      kind,
+      arrangementRole: String(group.arrangementRole || '').trim().toLowerCase(),
+      outputLaneId: String(group.outputLaneId || '').trim().toLowerCase(),
+      derivationMode: group.derivationMode,
+      motifHitCount: group.motifHitCount,
+      sourceEventStride: group.sourceEventStride,
+      responseDelayBeats: group.responseDelayBeats,
+      startBeat,
+    }, { beatIndex, barIndex });
+  }
 }
 function startLeadResponseFormationTest(options = null) {
   clearEnemies();
@@ -33956,6 +34104,7 @@ function startFullScoreArrangementTest(options = null) {
       kind: group.kind,
       arrangementRole: group.arrangementRole,
       sourceLaneId: group.sourceLaneId,
+      outputLaneId: group.outputLaneId,
       derivationMode: group.derivationMode,
       motifLength: group.motifLength,
       subdivisionsPerBeat: group.subdivisionsPerBeat,
@@ -34047,6 +34196,10 @@ function updateDirectorMusicalFormationLayer(weaponGateActive = false) {
       continue;
     }
   }
+  const policyStateChanged = directorMusicalFormationLayerRuntime.lastPolicyState !== energyState;
+  if (policyStateChanged) {
+    syncDirectorMusicalFormationPlans(energyState, beatIndex, barIndex);
+  }
   const activeGroups = Array.from(directorMusicalFormationLayerRuntime.groups.values());
   const activeMembers = activeGroups.reduce((sum, group) => sum + group.enemyIds.length, 0);
   const activeComposerGroups = countLiveComposerEnemyGroups();
@@ -34072,7 +34225,7 @@ function updateDirectorMusicalFormationLayer(weaponGateActive = false) {
       policy.minGroups + Math.floor(stateAgeBars / Math.max(1, Math.trunc(Number(policy.growthBars) || 1))),
     ),
   );
-  if (directorMusicalFormationLayerRuntime.lastPolicyState !== energyState) {
+  if (policyStateChanged) {
     directorMusicalFormationLayerRuntime.lastPolicyState = energyState;
     noteMusicSystemEvent('director_musical_formation_policy', {
       action: 'state_entered',

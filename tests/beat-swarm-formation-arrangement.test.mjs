@@ -5,8 +5,10 @@ import {
   deriveMelodicFormationMotifs,
   deriveRhythmicFormationMotifs,
   deriveTonalBassFormationMotifs,
+  getFormationIntensityRecipe,
   projectMelodySubdivisionsToBeats,
   projectRhythmSubdivisionsToBeats,
+  thinFormationMemberSteps,
 } from '../src/beat-swarm/beat-swarm-formation-arrangement.js';
 
 const TONAL_BASS_SOURCE = [
@@ -54,6 +56,23 @@ test('keeps tonal bass cadence aligned to the global Foundation phase', () => {
   const shifted = deriveTonalBass('peak', 1);
   const activeSteps = shifted.members.flatMap((member) => member.steps).sort((a, b) => a - b);
   assert.deepEqual(activeSteps.slice(0, 3), [1, 2, 3]);
+});
+
+test('defines intensity recipes for accent and lead arrangement formations', () => {
+  assert.equal(getFormationIntensityRecipe('laser_hihat', 'build').eventStride, 2);
+  assert.equal(getFormationIntensityRecipe('laser_hihat', 'peak').eventStride, 1);
+  assert.equal(getFormationIntensityRecipe('laser_hihat', 'release').active, false);
+  assert.equal(getFormationIntensityRecipe('laser_lead', 'peak').eventStride, 2);
+  assert.equal(getFormationIntensityRecipe('laser_lead', 'release').active, true);
+  assert.equal(getFormationIntensityRecipe('laser_lead', 'release').responseDelayBeats, 2);
+  assert.equal(getFormationIntensityRecipe('laser_lead', 'settle').eventStride, 5);
+});
+
+test('thins a distributed formation motif in global chronological order', () => {
+  assert.deepEqual(
+    thinFormationMemberSteps([[0, 6, 12], [3, 9, 15]], 2),
+    [[0, 6, 12], []],
+  );
 });
 
 test('projects eighth-note rhythm activity onto attack beat boundaries', () => {

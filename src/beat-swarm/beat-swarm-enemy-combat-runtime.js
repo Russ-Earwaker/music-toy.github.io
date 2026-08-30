@@ -89,6 +89,7 @@ export function createBeatSwarmEnemyCombatRuntime() {
 
     for (const enemy of enemies) {
       if (!enemy || enemy.combatEnabled !== true || enemy.retreating || String(enemy.lifecycleState || 'active') !== 'active') continue;
+      if (enemy.combatGroupMotifMuted === true) continue;
       const profile = getBeatSwarmEnemyCombatProfile(enemy.combatProfileId);
       const pattern = getBeatSwarmEnemyAttackPattern(profile?.id, enemy.combatPatternId);
       if (!profile || !pattern) continue;

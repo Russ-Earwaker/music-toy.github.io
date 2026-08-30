@@ -1,0 +1,1992 @@
+{
+  "kind": "music-lab-summary",
+  "runId": "musicLab_arrangement_intensity_ramp_1x115s",
+  "label": "music-lab-session",
+  "scenarioName": "beat_swarm_arrangement_intensity_ramp_1x115s",
+  "sessionId": "music-lab-2026-08-29T21:36:19.889Z-2",
+  "saveTimestampIso": "2026-08-29T21:38:17.755Z",
+  "saveInstanceId": "musicLab_arrangement_intensity_ramp_1x115s__music-lab-2026-08-29T21:36:19.889Z-2__2026-08-29T21-38-17.755Z",
+  "compactedSave": true,
+  "compactedSaveDetail": "focused_musicality_targets_and_recent_tail",
+  "payloadDebug": {
+    "sessionId": "music-lab-2026-08-29T21:36:19.889Z-2",
+    "eventTimelineCount": 2961,
+    "executedEventCount": 0,
+    "createdEventCount": 0,
+    "spawnerPipelineEventCount": 0,
+    "metricsHistoryCount": 17,
+    "beatSwarmPerfBucketCount": 48,
+    "beatSwarmStepEventsPerfBucketCount": 47,
+    "preflightBundleBytes": 0,
+    "bundleBytes": 1316975
+  },
+  "sessionSummary": {
+    "sessionId": "music-lab-2026-08-29T21:36:19.889Z-2",
+    "startedAtIso": "2026-08-29T21:36:19.889Z",
+    "endedAtIso": "2026-08-29T21:38:17.718Z",
+    "eventCount": 2961,
+    "paletteChangeCount": 1,
+    "pacingChangeCount": 9,
+    "metrics": {
+      "notePoolCompliance": 1,
+      "intervalSmoothShare": 1,
+      "motifReuseRate": 1,
+      "responseRate": 0.17039106145251395,
+      "paletteContinuityScore": 1,
+      "playerMaskingRate": 0,
+      "enemyExecutedToCreatedRate": 1,
+      "spawnerExecutedToCreatedRate": 1,
+      "bassExecutedToCreatedRate": 1,
+      "skippedCreatedEvents": 0,
+      "spawnerSkippedCreatedEvents": 0,
+      "bassSkippedCreatedEvents": 0,
+      "maxEnemyStepsWithoutBass": 2,
+      "visualRoleThreeRoleReadableShare": 0,
+      "visualRoleFullTextureThreeRoleReadableShare": 0,
+      "visualRoleSupportCollapsedDuringLeadShare": 0,
+      "visualRoleFullTextureLeadWithSupportVisibleShare": 0,
+      "visualRoleAvgDistinctReadableRoleCount": 1,
+      "visualRoleAvgSupportVisualWeight": 0,
+      "formationRoleFullTextureThreeRoleReadableShare": 0,
+      "formationRoleFullTextureLeadWithSupportVisibleShare": 0,
+      "formationRoleSupportCollapsedDuringLeadShare": 0,
+      "formationRoleAvgDistinctReadableRoleCount": 1,
+      "laneContinuityAssertionPassed": true,
+      "laneContinuityBreaks": 0,
+      "laneResetHandoffs": 0,
+      "laneCarrierTransferred": 17,
+      "laneCarrierUnbound": 15,
+      "laneSystemVoiceFallbacks": 0,
+      "laneVacantFallbacks": 0,
+      "protectedLaneVacantFallbacks": 0,
+      "level1ContractCompliancePassed": false,
+      "level1ContractMusicalEventCount": 499,
+      "level1ContractViolationCount": 141,
+      "level1ContractViolationRate": 0.28256513026052105,
+      "level1ContractRoleViolationCount": 132,
+      "level1ContractSparkleViolationCount": 9,
+      "level1ContractAnswerViolationCount": 0,
+      "level1ArrangementMusicalityPassed": true,
+      "level1ArrangementMusicalityFailureCount": 0,
+      "level1ArrangementTraceCount": 68,
+      "level1ArrangementIntroSetPieceViolationCount": 68,
+      "level1ArrangementPostIntroCount": 0,
+      "arrangementSupportCount": 261,
+      "musicIntensityAuditionDetected": true,
+      "musicIntensityAuditionPassed": false,
+      "musicIntensityAuditionFailureCount": 1
+    },
+    "laneContinuityAssertion": {
+      "passed": true,
+      "ownerChanges": 20,
+      "preservedHandoffs": 0,
+      "resetHandoffs": 0,
+      "continuityBreaks": 0,
+      "carrierTransferred": 17,
+      "carrierUnbound": 15,
+      "systemVoiceFallbacks": 0,
+      "vacantFallbacks": 0,
+      "protectedLaneCarrierUnbound": 14,
+      "protectedLaneVacantFallbacks": 0,
+      "sameContinuityInstrumentDrift": 0,
+      "sameContinuityPhraseDrift": 0,
+      "sameContinuityPatternDrift": 0
+    },
+    "level1ArrangementMusicality": {
+      "passed": true,
+      "status": "skipped_intensity_audition",
+      "skipped": true,
+      "reason": "Intensity audition uses a forced lane/layer stack and is validated by musicIntensityAudition instead of the normal arrangement musicality contract."
+    },
+    "musicIntensityAudition": {
+      "passed": false,
+      "status": "failed",
+      "failureCount": 1,
+      "failures": [
+        {
+          "id": "low_stage_lead_should_be_absent",
+          "primaryLoopCount": 9
+        }
+      ],
+      "stageCounts": {
+        "low": 11,
+        "medium": 8,
+        "build": 12,
+        "peak": 12,
+        "release": 8,
+        "settle": 17
+      },
+      "lanePresence": {
+        "low": {
+          "count": 11,
+          "foundation": 11,
+          "secondary_loop": 11,
+          "primary_loop": 9,
+          "support": 0,
+          "sparkle": 0,
+          "answer": 0,
+          "maxActiveLaneCount": 3
+        },
+        "medium": {
+          "count": 8,
+          "foundation": 8,
+          "secondary_loop": 8,
+          "primary_loop": 8,
+          "support": 0,
+          "sparkle": 0,
+          "answer": 0,
+          "maxActiveLaneCount": 3
+        },
+        "build": {
+          "count": 12,
+          "foundation": 12,
+          "secondary_loop": 12,
+          "primary_loop": 12,
+          "support": 12,
+          "sparkle": 5,
+          "answer": 5,
+          "maxActiveLaneCount": 6
+        },
+        "peak": {
+          "count": 12,
+          "foundation": 12,
+          "secondary_loop": 12,
+          "primary_loop": 12,
+          "support": 12,
+          "sparkle": 12,
+          "answer": 12,
+          "maxActiveLaneCount": 6
+        },
+        "release": {
+          "count": 8,
+          "foundation": 8,
+          "secondary_loop": 0,
+          "primary_loop": 8,
+          "support": 0,
+          "sparkle": 0,
+          "answer": 0,
+          "maxActiveLaneCount": 2
+        },
+        "settle": {
+          "count": 17,
+          "foundation": 17,
+          "secondary_loop": 17,
+          "primary_loop": 17,
+          "support": 0,
+          "sparkle": 0,
+          "answer": 0,
+          "maxActiveLaneCount": 3
+        }
+      },
+      "energyRange": 0.8,
+      "layeringRange": 0.76,
+      "thresholds": {
+        "stageTraceMin": 2,
+        "energyRangeMin": 0.6,
+        "layeringRangeMin": 0.55,
+        "peakActiveLaneCountMin": 5,
+        "releaseActiveLaneCountMax": 2
+      }
+    },
+    "visualRoleReadability": {
+      "count": 63,
+      "fullTextureCount": 0,
+      "threeRoleReadableShare": 0,
+      "fullTextureThreeRoleReadableShare": 0,
+      "supportCollapsedDuringLeadShare": 0,
+      "leadWithSupportVisibleShare": 0,
+      "fullTextureLeadWithSupportVisibleShare": 0,
+      "avgDistinctReadableRoleCount": 1,
+      "avgSupportVisualWeight": 0,
+      "formationFullTextureThreeRoleReadableShare": 0,
+      "formationFullTextureLeadWithSupportVisibleShare": 0,
+      "formationSupportCollapsedDuringLeadShare": 0,
+      "formationAvgDistinctReadableRoleCount": 1,
+      "byFormationReadableRoleSet": {
+        "foundation_groove": 63
+      },
+      "byFormationArchetypeRole": {
+        "foundation_groove:foundation_anchor_line": 63
+      },
+      "readableRoleShares": {
+        "foundation_groove": 1,
+        "counter_rhythm": 0,
+        "lead_phrase": 0,
+        "answer_ornament": 0
+      },
+      "byReadableRoleSet": {
+        "foundation_groove": 63
+      },
+      "byEnemyHealthSection": {}
+    },
+    "systemEventSummary": {
+      "totalCount": 0,
+      "countsByType": {},
+      "countsByReason": {},
+      "countsByVisualFailureReason": {},
+      "uniqueSectionIds": []
+    }
+  },
+  "compositionAudit": {
+    "enabled": false,
+    "bars": [],
+    "polyphony": [],
+    "literalLeadPipeline": [],
+    "leadAuthority": [],
+    "literalLeadValidation": {
+      "createdCount": 0,
+      "executedCount": 0,
+      "exactMatch": false,
+      "mismatches": []
+    },
+    "themeRevisions": [],
+    "musicality": {
+      "lanes": [
+        {
+          "laneId": "primary_loop_lane",
+          "eventCount": 132,
+          "uniqueNoteCount": 10,
+          "noteCounts": {
+            "C3": 19,
+            "D#3": 21,
+            "G3": 17,
+            "F3": 10,
+            "A#3": 9,
+            "D#4": 11,
+            "F4": 20,
+            "A#4": 10,
+            "G4": 13,
+            "C5": 2
+          },
+          "actionCounts": {
+            "player-lead-theme-direct": 132
+          },
+          "interpretationCounts": {
+            "lead_authoring_literal_loop": 32,
+            "player_ball_motif_handoff_ramp": 14,
+            "build_assemble": 15,
+            "player_ball_motif_intensity_recall": 21,
+            "literal_statement": 2,
+            "peak_riff": 22,
+            "player_ball_motif_literal_recall": 16,
+            "release_riff": 3,
+            "settle_echo": 7
+          },
+          "onsetGapCounts": {
+            "1": 22,
+            "2": 19,
+            "3": 32,
+            "4": 28,
+            "5": 8,
+            "6": 9,
+            "7": 1,
+            "8": 5,
+            "9": 2,
+            "13": 1,
+            "15": 1,
+            "19": 1,
+            "21": 1,
+            "24": 1
+          },
+          "sameNoteTransitions": 14,
+          "sameNoteTransitionRate": 0.10687022900763359,
+          "rawNoteComparisonCount": 111,
+          "rawNoteExactMatchCount": 76,
+          "rawNoteExactMatchRate": 0.6846846846846847,
+          "periodicMatchRates": {
+            "2": 0.07692307692307693,
+            "4": 0.1015625,
+            "8": 0.3387096774193548
+          },
+          "longestRepeatedRuns": [
+            {
+              "note": "C3",
+              "length": 2,
+              "startStep": 31,
+              "endStep": 34
+            },
+            {
+              "note": "C3",
+              "length": 2,
+              "startStep": 63,
+              "endStep": 66
+            },
+            {
+              "note": "C3",
+              "length": 2,
+              "startStep": 95,
+              "endStep": 98
+            },
+            {
+              "note": "C3",
+              "length": 2,
+              "startStep": 127,
+              "endStep": 130
+            },
+            {
+              "note": "C3",
+              "length": 2,
+              "startStep": 159,
+              "endStep": 162
+            },
+            {
+              "note": "D#4",
+              "length": 2,
+              "startStep": 194,
+              "endStep": 196
+            },
+            {
+              "note": "F4",
+              "length": 2,
+              "startStep": 197,
+              "endStep": 200
+            },
+            {
+              "note": "F4",
+              "length": 2,
+              "startStep": 216,
+              "endStep": 220
+            },
+            {
+              "note": "F4",
+              "length": 2,
+              "startStep": 266,
+              "endStep": 268
+            },
+            {
+              "note": "G4",
+              "length": 2,
+              "startStep": 270,
+              "endStep": 272
+            },
+            {
+              "note": "F4",
+              "length": 2,
+              "startStep": 282,
+              "endStep": 284
+            },
+            {
+              "note": "G4",
+              "length": 2,
+              "startStep": 325,
+              "endStep": 326
+            }
+          ]
+        },
+        {
+          "laneId": "secondary_loop_lane",
+          "eventCount": 163,
+          "uniqueNoteCount": 1,
+          "noteCounts": {
+            "C4": 163
+          },
+          "actionCounts": {
+            "composer-group-projectile": 163
+          },
+          "interpretationCounts": {
+            "unclassified": 163
+          },
+          "onsetGapCounts": {
+            "2": 32,
+            "3": 65,
+            "4": 65
+          },
+          "sameNoteTransitions": 162,
+          "sameNoteTransitionRate": 1,
+          "rawNoteComparisonCount": 0,
+          "rawNoteExactMatchCount": 0,
+          "rawNoteExactMatchRate": null,
+          "periodicMatchRates": {
+            "2": 1,
+            "4": 1,
+            "8": 1
+          },
+          "longestRepeatedRuns": [
+            {
+              "note": "C4",
+              "length": 163,
+              "startStep": 2,
+              "endStep": 521
+            }
+          ]
+        },
+        {
+          "laneId": "foundation_lane",
+          "eventCount": 195,
+          "uniqueNoteCount": 1,
+          "noteCounts": {
+            "C3": 195
+          },
+          "actionCounts": {
+            "composer-group-projectile": 195
+          },
+          "interpretationCounts": {
+            "unclassified": 195
+          },
+          "onsetGapCounts": {
+            "2": 64,
+            "3": 129,
+            "4": 1
+          },
+          "sameNoteTransitions": 194,
+          "sameNoteTransitionRate": 1,
+          "rawNoteComparisonCount": 0,
+          "rawNoteExactMatchCount": 0,
+          "rawNoteExactMatchRate": null,
+          "periodicMatchRates": {
+            "2": 1,
+            "4": 1,
+            "8": 1
+          },
+          "longestRepeatedRuns": [
+            {
+              "note": "C3",
+              "length": 195,
+              "startStep": 3,
+              "endStep": 522
+            }
+          ]
+        },
+        {
+          "laneId": "answer_lane",
+          "eventCount": 9,
+          "uniqueNoteCount": 1,
+          "noteCounts": {
+            "D#4": 9
+          },
+          "actionCounts": {
+            "composer-group-projectile": 9
+          },
+          "interpretationCounts": {
+            "unclassified": 9
+          },
+          "onsetGapCounts": {
+            "4": 4,
+            "8": 1,
+            "24": 1,
+            "32": 2
+          },
+          "sameNoteTransitions": 8,
+          "sameNoteTransitionRate": 1,
+          "rawNoteComparisonCount": 0,
+          "rawNoteExactMatchCount": 0,
+          "rawNoteExactMatchRate": null,
+          "periodicMatchRates": {
+            "2": 1,
+            "4": 1,
+            "8": 1
+          },
+          "longestRepeatedRuns": [
+            {
+              "note": "D#4",
+              "length": 9,
+              "startStep": 207,
+              "endStep": 319
+            }
+          ]
+        }
+      ],
+      "leadPhrases": [
+        {
+          "phraseIndex": 0,
+          "startBar": 0,
+          "endBar": 3,
+          "steps": [
+            2,
+            5,
+            9,
+            13,
+            19,
+            23,
+            28,
+            31
+          ],
+          "notes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "rawNotes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop"
+          ],
+          "audioGains": [
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88
+          ],
+          "uniqueNoteCount": 5,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 1,
+          "startBar": 4,
+          "endBar": 7,
+          "steps": [
+            34,
+            37,
+            41,
+            45,
+            51,
+            55,
+            60,
+            63
+          ],
+          "notes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "rawNotes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop"
+          ],
+          "audioGains": [
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88
+          ],
+          "uniqueNoteCount": 5,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 2,
+          "startBar": 8,
+          "endBar": 11,
+          "steps": [
+            66,
+            69,
+            73,
+            77,
+            83,
+            87,
+            92,
+            95
+          ],
+          "notes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "rawNotes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop"
+          ],
+          "audioGains": [
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88
+          ],
+          "uniqueNoteCount": 5,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 3,
+          "startBar": 12,
+          "endBar": 15,
+          "steps": [
+            98,
+            101,
+            105,
+            109,
+            115,
+            119,
+            124,
+            127
+          ],
+          "notes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "rawNotes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop",
+            "lead_authoring_literal_loop"
+          ],
+          "audioGains": [
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88,
+            0.88
+          ],
+          "uniqueNoteCount": 5,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 4,
+          "startBar": 16,
+          "endBar": 19,
+          "steps": [
+            130,
+            133,
+            137,
+            141,
+            147,
+            151,
+            156,
+            159
+          ],
+          "notes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "rawNotes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 5,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 5,
+          "startBar": 20,
+          "endBar": 23,
+          "steps": [
+            162,
+            165,
+            173,
+            179,
+            188,
+            191
+          ],
+          "notes": [
+            "C3",
+            "D#3",
+            "F3",
+            "A#3",
+            "D#3",
+            "C3"
+          ],
+          "rawNotes": [
+            "C3",
+            "D#3",
+            "F3",
+            "A#3",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp",
+            "player_ball_motif_handoff_ramp"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 4,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 6,
+          "startBar": 24,
+          "endBar": 27,
+          "steps": [
+            194,
+            196,
+            197,
+            200,
+            201,
+            204,
+            205,
+            208,
+            211,
+            212,
+            215,
+            216,
+            220,
+            223
+          ],
+          "notes": [
+            "D#4",
+            "D#4",
+            "F4",
+            "F4",
+            "A#4",
+            "D#4",
+            "G4",
+            "F4",
+            "A#4",
+            "D#4",
+            "A#4",
+            "F4",
+            "F4",
+            "D#4"
+          ],
+          "rawNotes": [
+            "C3",
+            "",
+            "D#3",
+            "",
+            "G3",
+            "",
+            "F3",
+            "",
+            "A#3",
+            "",
+            "G3",
+            "",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble",
+            "build_assemble"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 4,
+          "sameNoteTransitionRate": 0.23076923076923078
+        },
+        {
+          "phraseIndex": 7,
+          "startBar": 28,
+          "endBar": 31,
+          "steps": [
+            224,
+            226,
+            228,
+            229,
+            233,
+            235,
+            237,
+            239,
+            243,
+            245,
+            247,
+            249,
+            252,
+            254,
+            255
+          ],
+          "notes": [
+            "F4",
+            "C3",
+            "D#4",
+            "D#3",
+            "G3",
+            "A#4",
+            "F3",
+            "A#4",
+            "A#3",
+            "F4",
+            "G3",
+            "F4",
+            "D#3",
+            "D#4",
+            "C3"
+          ],
+          "rawNotes": [
+            "",
+            "C3",
+            "C3",
+            "D#3",
+            "G3",
+            "G3",
+            "F3",
+            "F3",
+            "A#3",
+            "A#3",
+            "G3",
+            "G3",
+            "D#3",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "build_assemble",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 8,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 8,
+          "startBar": 32,
+          "endBar": 35,
+          "steps": [
+            256,
+            260,
+            263,
+            264,
+            265,
+            266,
+            268,
+            269,
+            270,
+            272,
+            274,
+            275,
+            276,
+            278,
+            279,
+            280,
+            282,
+            284,
+            286,
+            287
+          ],
+          "notes": [
+            "G4",
+            "F4",
+            "D#4",
+            "G4",
+            "A#4",
+            "F4",
+            "F4",
+            "A#4",
+            "G4",
+            "G4",
+            "F4",
+            "A#4",
+            "F4",
+            "G4",
+            "D#4",
+            "G4",
+            "F4",
+            "F4",
+            "G4",
+            "F4"
+          ],
+          "rawNotes": [
+            "C3",
+            "D#3",
+            "C3",
+            "",
+            "G3",
+            "",
+            "",
+            "F3",
+            "",
+            "",
+            "",
+            "A#3",
+            "",
+            "",
+            "G3",
+            "",
+            "",
+            "D#3",
+            "",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "player_ball_motif_intensity_recall",
+            "literal_statement",
+            "literal_statement",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 4,
+          "sameNoteTransitionRate": 0.15789473684210525
+        },
+        {
+          "phraseIndex": 9,
+          "startBar": 36,
+          "endBar": 39,
+          "steps": [
+            288,
+            290,
+            293,
+            297,
+            301,
+            307,
+            311,
+            316,
+            319
+          ],
+          "notes": [
+            "G4",
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "rawNotes": [
+            "",
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "peak_riff",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 6,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 10,
+          "startBar": 40,
+          "endBar": 43,
+          "steps": [
+            322,
+            324,
+            325,
+            326,
+            329,
+            333
+          ],
+          "notes": [
+            "D#4",
+            "F4",
+            "G4",
+            "G4",
+            "A#4",
+            "G4"
+          ],
+          "rawNotes": [
+            "C3",
+            "",
+            "D#3",
+            "",
+            "G3",
+            "F3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "peak_riff",
+            "release_riff",
+            "release_riff"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 4,
+          "sameNoteTransitionRate": 0.2
+        },
+        {
+          "phraseIndex": 11,
+          "startBar": 44,
+          "endBar": 47,
+          "steps": [
+            354,
+            361,
+            380
+          ],
+          "notes": [
+            "C3",
+            "G3",
+            "D#3"
+          ],
+          "rawNotes": [
+            "C3",
+            "G3",
+            "D#3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 3,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 12,
+          "startBar": 48,
+          "endBar": 51,
+          "steps": [
+            389,
+            397,
+            401,
+            405,
+            413
+          ],
+          "notes": [
+            "F4",
+            "F4",
+            "C5",
+            "C5",
+            "G4"
+          ],
+          "rawNotes": [
+            "D#3",
+            "D#3",
+            "G3",
+            "F3",
+            "D#3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "release_riff",
+            "settle_echo",
+            "settle_echo",
+            "settle_echo",
+            "settle_echo"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 3,
+          "sameNoteTransitionRate": 0.5
+        },
+        {
+          "phraseIndex": 13,
+          "startBar": 52,
+          "endBar": 55,
+          "steps": [
+            418,
+            421,
+            425,
+            429,
+            435,
+            439,
+            444,
+            447
+          ],
+          "notes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "rawNotes": [
+            "C3",
+            "D#3",
+            "G3",
+            "F3",
+            "A#3",
+            "G3",
+            "D#3",
+            "C3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall",
+            "player_ball_motif_literal_recall"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 5,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 14,
+          "startBar": 56,
+          "endBar": 59,
+          "steps": [
+            453,
+            477
+          ],
+          "notes": [
+            "D#4",
+            "F4"
+          ],
+          "rawNotes": [
+            "D#3",
+            "D#3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "settle_echo",
+            "settle_echo"
+          ],
+          "audioGains": [
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 2,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 15,
+          "startBar": 60,
+          "endBar": 63,
+          "steps": [
+            485,
+            493,
+            508
+          ],
+          "notes": [
+            "D#3",
+            "F3",
+            "D#3"
+          ],
+          "rawNotes": [
+            "D#3",
+            "F3",
+            "D#3"
+          ],
+          "actions": [
+            "player-lead-theme-direct",
+            "player-lead-theme-direct",
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall",
+            "player_ball_motif_intensity_recall"
+          ],
+          "audioGains": [
+            0.86,
+            0.86,
+            0.86
+          ],
+          "uniqueNoteCount": 2,
+          "sameNoteTransitionRate": 0
+        },
+        {
+          "phraseIndex": 16,
+          "startBar": 64,
+          "endBar": 67,
+          "steps": [
+            521
+          ],
+          "notes": [
+            "A#4"
+          ],
+          "rawNotes": [
+            "G3"
+          ],
+          "actions": [
+            "player-lead-theme-direct"
+          ],
+          "interpretationModes": [
+            "settle_echo"
+          ],
+          "audioGains": [
+            0.86
+          ],
+          "uniqueNoteCount": 1,
+          "sameNoteTransitionRate": 0
+        }
+      ]
+    },
+    "playbackConcurrency": {
+      "audibleStepCount": 490,
+      "averageEventsPerAudibleStep": 2.0142857142857142,
+      "p90EventsPerAudibleStep": 3,
+      "maxEventsPerAudibleStep": 4,
+      "stepsAtLeast3": 129,
+      "stepsAtLeast4": 22,
+      "stepsAtLeast5": 0,
+      "playerWeaponEventCount": 488,
+      "reducedPlayerWeaponEventCount": 0,
+      "minimumPlayerWeaponVolumeMult": 1,
+      "laneEventCounts": {
+        "player": 488,
+        "primary_loop_lane": 132,
+        "secondary_loop_lane": 163,
+        "foundation_lane": 195,
+        "answer_lane": 9
+      },
+      "busiestSteps": [
+        {
+          "stepIndex": 13,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 45,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 77,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 109,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 141,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 173,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 205,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 223,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "secondary_loop_lane": 1,
+            "answer_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 237,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 255,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "secondary_loop_lane": 1,
+            "answer_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 269,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 278,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 287,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "secondary_loop_lane": 1,
+            "answer_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 301,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 319,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "secondary_loop_lane": 1,
+            "answer_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 326,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 333,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 397,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 413,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 429,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 477,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 493,
+          "count": 4,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 2,
+          "count": 3,
+          "lanes": {
+            "primary_loop_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "player-lead-theme-direct": 1,
+            "composer-group-projectile": 1,
+            "player-weapon-step": 1
+          }
+        },
+        {
+          "stepIndex": 6,
+          "count": 3,
+          "lanes": {
+            "foundation_lane": 1,
+            "secondary_loop_lane": 1,
+            "player": 1
+          },
+          "actions": {
+            "composer-group-projectile": 2,
+            "player-weapon-step": 1
+          }
+        }
+      ]
+    },
+    "playbackByBar": []
+  },
+  "transitionDebug": {
+    "ok": true,
+    "fileName": "musicLab_arrangement_intensity_ramp_1x115s__transition-debug__music-lab-2026-08-29T21-36-19.889Z-2.txt",
+    "postUrl": "http://localhost:5174/debug-output"
+  }
+}

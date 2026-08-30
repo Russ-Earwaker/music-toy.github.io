@@ -4241,13 +4241,20 @@ function collectMusicIntensityAuditionAssertion(metrics) {
   const build = lanePresence.build || {};
   const peak = lanePresence.peak || {};
   const release = lanePresence.release || {};
+  const settle = lanePresence.settle || {};
   assertPass(Math.max(0, clampInt(low?.primary_loop, 0, 0)) === 0, 'low_stage_lead_should_be_absent', { primaryLoopCount: Math.max(0, clampInt(low?.primary_loop, 0, 0)) });
+  assertPass(Math.max(0, clampInt(low?.tonal_bass, 0, 0)) === 0, 'low_stage_tonal_bass_should_be_absent', { tonalBassCount: Math.max(0, clampInt(low?.tonal_bass, 0, 0)) });
   assertPass(Math.max(0, clampInt(medium?.primary_loop, 0, 0)) > 0, 'medium_stage_lead_missing', { primaryLoopCount: Math.max(0, clampInt(medium?.primary_loop, 0, 0)) });
+  assertPass(Math.max(0, clampInt(medium?.tonal_bass, 0, 0)) > 0, 'medium_stage_tonal_bass_missing', { tonalBassCount: Math.max(0, clampInt(medium?.tonal_bass, 0, 0)) });
   assertPass(Math.max(0, clampInt(build?.support, 0, 0)) > 0, 'build_stage_support_missing', { supportCount: Math.max(0, clampInt(build?.support, 0, 0)) });
+  assertPass(Math.max(0, clampInt(build?.tonal_bass, 0, 0)) > 0, 'build_stage_tonal_bass_missing', { tonalBassCount: Math.max(0, clampInt(build?.tonal_bass, 0, 0)) });
   assertPass(Math.max(0, clampInt(peak?.maxActiveLaneCount, 0, 0)) >= 5, 'peak_stage_layer_stack_too_thin', { maxActiveLaneCount: Math.max(0, clampInt(peak?.maxActiveLaneCount, 0, 0)), minimum: 5 });
+  assertPass(Math.max(0, clampInt(peak?.tonal_bass, 0, 0)) > 0, 'peak_stage_tonal_bass_missing', { tonalBassCount: Math.max(0, clampInt(peak?.tonal_bass, 0, 0)) });
   assertPass(Math.max(0, clampInt(peak?.sparkle, 0, 0)) > 0, 'peak_stage_sparkle_missing', { sparkleCount: Math.max(0, clampInt(peak?.sparkle, 0, 0)) });
   assertPass(Math.max(0, clampInt(peak?.answer, 0, 0)) > 0, 'peak_stage_answer_missing', { answerCount: Math.max(0, clampInt(peak?.answer, 0, 0)) });
   assertPass(Math.max(0, clampInt(release?.maxActiveLaneCount, 0, 0)) <= 2, 'release_stage_not_stripped_back', { maxActiveLaneCount: Math.max(0, clampInt(release?.maxActiveLaneCount, 0, 0)), maximum: 2 });
+  assertPass(Math.max(0, clampInt(release?.tonal_bass, 0, 0)) === 0, 'release_stage_tonal_bass_should_be_absent', { tonalBassCount: Math.max(0, clampInt(release?.tonal_bass, 0, 0)) });
+  assertPass(Math.max(0, clampInt(settle?.tonal_bass, 0, 0)) === 0, 'settle_stage_tonal_bass_should_be_absent', { tonalBassCount: Math.max(0, clampInt(settle?.tonal_bass, 0, 0)) });
   assertPass(metrics?.laneContinuityAssertionPassed === true && Math.max(0, clampInt(metrics?.laneContinuityBreaks, 0, 0)) === 0, 'lane_continuity_failed', {
     laneContinuityBreaks: Math.max(0, clampInt(metrics?.laneContinuityBreaks, 0, 0)),
   });
@@ -5243,6 +5250,7 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
       if (ev?.contractFoundationActive === true) activeLanes.push('foundation');
       if (ev?.contractSecondaryLoopActive === true) activeLanes.push('secondary_loop');
       if (ev?.contractPrimaryLoopActive === true) activeLanes.push('primary_loop');
+      if (ev?.contractTonalBassActive === true) activeLanes.push('tonal_bass');
       if (ev?.contractSupportActive === true) activeLanes.push('support');
       if (ev?.contractSparkleActive === true) activeLanes.push('sparkle');
       if (ev?.contractAnswerActive === true) activeLanes.push('answer');
@@ -5253,6 +5261,7 @@ function collectLevel1ContractTrace(session, maxBarIndex) {
           foundation: 0,
           secondary_loop: 0,
           primary_loop: 0,
+          tonal_bass: 0,
           support: 0,
           sparkle: 0,
           answer: 0,
@@ -7220,7 +7229,8 @@ export function createBeatSwarmMusicLab(options = null) {
     const isPinnedFormationArrangementEvent = (ev) => {
       const type = String(ev?.eventType || ev?.type || '').trim().toLowerCase();
       return type === 'enemy_combat_group_motif_assigned'
-        || type === 'director_musical_formation_spawned';
+        || type === 'director_musical_formation_spawned'
+        || type === 'director_musical_formation_policy';
     };
     const mergeCompactPinned = (pinned, tail, limit) => {
       const rows = [];
