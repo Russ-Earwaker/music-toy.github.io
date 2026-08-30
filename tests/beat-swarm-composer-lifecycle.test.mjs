@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { maintainComposerEnemyGroupsLifecycle } from '../src/beat-swarm/beat-swarm-composer-lifecycle.js';
+import {
+  getComposerLifecycleAvailableSpawnSlots,
+  maintainComposerEnemyGroupsLifecycle,
+} from '../src/beat-swarm/beat-swarm-composer-lifecycle.js';
 
 test('uses the supplied body plan when creating a missing basic lane carrier', () => {
   const groups = [];
@@ -112,4 +115,54 @@ test('does not create a group for an onboarding lane that is still locked', () =
 
   assert.equal(groups.length, 0);
   assert.equal(spawnedMembers, 0);
+});
+
+test('reserves one temporary spawn slot for a missing playable core lane', () => {
+  assert.equal(getComposerLifecycleAvailableSpawnSlots({
+    maxLiveGroups: 3,
+    liveGroupCount: 3,
+    missingRequiredCarrierCount: 1,
+  }), 1);
+  assert.equal(getComposerLifecycleAvailableSpawnSlots({
+    maxLiveGroups: 3,
+    liveGroupCount: 3,
+    missingRequiredCarrierCount: 0,
+  }), 0);
+});
+
+test('forces a required carrier onto its requested lane before availability validation', () => {
+  const groups = [];
+  const checkedLaneIds = [];
+
+  maintainComposerEnemyGroupsLifecycle({
+    enabled: true,
+    composerEnemyGroups: groups,
+    pacingCaps: { desiredGroups: 1 },
+    composer: { sectionId: 'test' },
+    requiredBasicLaneCarriers: [{
+      laneId: 'primary_loop_lane',
+      profileSourceType: 'lead_melody',
+    }],
+    pickTemplate: () => ({ id: 'generic-foundation-template' }),
+    createComposerEnemyGroupProfile: () => ({}),
+    createGroupFromMotif: () => ({
+      id: 4,
+      size: 1,
+      performers: 1,
+      musicLaneId: 'foundation_lane',
+      musicProfileSourceType: 'foundation_rhythm',
+    }),
+    getBasicLaneCarrierBodyPlan: () => ({ scale: 'large', memberCount: 1 }),
+    isMusicLaneAvailableForEnemy: (laneId) => {
+      checkedLaneIds.push(laneId);
+      return laneId === 'primary_loop_lane';
+    },
+    spawnComposerGroupOffscreenMembers: (_group, count) => count,
+  });
+
+  assert.deepEqual(checkedLaneIds, ['primary_loop_lane']);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].musicLaneId, 'primary_loop_lane');
+  assert.equal(groups[0].assignedMusicLaneId, 'primary_loop_lane');
+  assert.equal(groups[0].musicProfileSourceType, 'lead_melody');
 });

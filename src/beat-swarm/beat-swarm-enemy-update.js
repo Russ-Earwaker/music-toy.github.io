@@ -5,10 +5,35 @@ import {
 
 function getEnemyCombatVisualScaleRuntime(enemy) {
   const nowMs = Number(globalThis.performance?.now?.()) || Date.now();
+  const fireStartedAtMs = Number(enemy?.combatFireVisualStartedAtMs);
+  const fireExpired = enemy?.combatFireVisualStartedAtMs != null
+    && Number.isFinite(fireStartedAtMs)
+    && (nowMs - fireStartedAtMs) > 620;
+  const prepareStartedAtMs = Number(enemy?.combatPrepareVisualStartedAtMs);
+  const prepareDurationMs = Math.max(1, Number(enemy?.combatPrepareVisualDurationMs) || 0);
+  const prepareExpired = enemy?.combatPrepareVisualStartedAtMs != null
+    && Number.isFinite(prepareStartedAtMs)
+    && (nowMs - prepareStartedAtMs) > (prepareDurationMs + 180);
+  if (fireExpired || (enemy?.combatFireVisualStartedAtMs == null && enemy?.combatFireVisualKind)) {
+    enemy.combatFireVisualStartedAtMs = null;
+    enemy.combatFireVisualKind = '';
+    enemy?.el?.classList?.remove(
+      'is-combat-fire-flash',
+      'is-combat-laser-fire-flash',
+      'is-combat-projectile-fire-flash',
+      'is-combat-wind-fire-flash',
+    );
+  }
+  if (prepareExpired) {
+    enemy.combatPrepareVisualStartedAtMs = null;
+    enemy.combatPrepareVisualDurationMs = 0;
+    enemy?.el?.classList?.remove('is-combat-preparing-fire');
+    enemy?.el?.style?.removeProperty('--bs-combat-prepare-duration');
+  }
   const fireStartedAtRaw = enemy?.combatFireVisualStartedAtMs;
-  const fireStartedAtMs = Number(fireStartedAtRaw);
-  if (fireStartedAtRaw != null && Number.isFinite(fireStartedAtMs)) {
-    const progress = Math.max(0, Math.min(1, (nowMs - fireStartedAtMs) / 420));
+  const activeFireStartedAtMs = Number(fireStartedAtRaw);
+  if (fireStartedAtRaw != null && Number.isFinite(activeFireStartedAtMs)) {
+    const progress = Math.max(0, Math.min(1, (nowMs - activeFireStartedAtMs) / 420));
     if (String(enemy?.combatFireVisualKind || '') === 'laser') {
       if (progress <= 0.1) return 1.28 + ((0.78 - 1.28) * (progress / 0.1));
       const recovery = (progress - 0.1) / 0.9;
@@ -19,10 +44,10 @@ function getEnemyCombatVisualScaleRuntime(enemy) {
     return 0.8 + ((1 - 0.8) * (1 - Math.pow(1 - recovery, 3)));
   }
   const prepareStartedAtRaw = enemy?.combatPrepareVisualStartedAtMs;
-  const prepareStartedAtMs = Number(prepareStartedAtRaw);
-  const prepareDurationMs = Math.max(1, Number(enemy?.combatPrepareVisualDurationMs) || 0);
-  if (prepareStartedAtRaw == null || !Number.isFinite(prepareStartedAtMs) || !(prepareDurationMs > 0)) return 1;
-  const progress = Math.max(0, Math.min(1, (nowMs - prepareStartedAtMs) / prepareDurationMs));
+  const activePrepareStartedAtMs = Number(prepareStartedAtRaw);
+  const activePrepareDurationMs = Math.max(1, Number(enemy?.combatPrepareVisualDurationMs) || 0);
+  if (prepareStartedAtRaw == null || !Number.isFinite(activePrepareStartedAtMs) || !(activePrepareDurationMs > 0)) return 1;
+  const progress = Math.max(0, Math.min(1, (nowMs - activePrepareStartedAtMs) / activePrepareDurationMs));
   const eased = 1 - Math.pow(1 - progress, 3);
   const maxChargeTremor = progress > 0.72
     ? Math.sin(((progress - 0.72) / 0.28) * Math.PI * 7) * 0.018
@@ -93,33 +118,6 @@ export function preserveOnboardingAsteroidDriftRuntime(enemy, centerWorld = null
     enemy?.onboardingAsteroid !== true
     && String(enemy?.enemyType || '').trim().toLowerCase() !== 'onboarding-asteroid'
   )) return false;
-  if (enemy?.leadBallReserve === true) {
-    const center = centerWorld && typeof centerWorld === 'object' ? centerWorld : { x: 0, y: 0 };
-    const centerX = Number(center.x) || 0;
-    const centerY = Number(center.y) || 0;
-    const targetX = centerX + (Number(enemy.leadBallReserveAnchorOffsetX) || 0);
-    const targetY = centerY + (Number(enemy.leadBallReserveAnchorOffsetY) || 0);
-    const dx = targetX - (Number(enemy.wx) || 0);
-    const dy = targetY - (Number(enemy.wy) || 0);
-    const distance = Math.hypot(dx, dy);
-    if (distance <= 18) {
-      enemy.vx = 0;
-      enemy.vy = 0;
-      enemy.onboardingAsteroidDriftVx = 0;
-      enemy.onboardingAsteroidDriftVy = 0;
-      enemy.leadBallReserveSettled = true;
-      enemy.combatPersistentOffscreen = false;
-      return true;
-    }
-    const speed = Math.min(720, Math.max(120, distance * 2.8));
-    enemy.vx = (dx / distance) * speed;
-    enemy.vy = (dy / distance) * speed;
-    enemy.onboardingAsteroidDriftVx = enemy.vx;
-    enemy.onboardingAsteroidDriftVy = enemy.vy;
-    enemy.leadBallReserveSettled = false;
-    enemy.combatPersistentOffscreen = true;
-    return true;
-  }
   if (!Number.isFinite(Number(enemy.onboardingAsteroidDriftVx))) {
     enemy.onboardingAsteroidDriftVx = Number(enemy.vx) || 0;
   }
@@ -1687,12 +1685,14 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         if (e.el instanceof HTMLElement) {
           if (actionPulseStrength > 0.0001) {
             const borderWidthPx = 1 + (actionPulseStrength * 3.2);
-            const innerTintPct = Math.max(6, 18 - (actionPulseStrength * 10));
             const glowPx = 8 + (actionPulseStrength * 14);
             try {
               e.el.style.borderWidth = `${borderWidthPx.toFixed(2)}px`;
               e.el.style.borderColor = 'var(--bs-role-color-bright)';
-              e.el.style.background = `radial-gradient(circle at center, color-mix(in srgb, var(--bs-role-color-bright) ${Math.max(4, 10 - (actionPulseStrength * 5)).toFixed(2)}%, black ${(100 - Math.max(4, 10 - (actionPulseStrength * 5))).toFixed(2)}%), color-mix(in srgb, var(--bs-role-color-deep) ${innerTintPct.toFixed(2)}%, black ${(100 - innerTintPct).toFixed(2)}%))`;
+              // The combat activation class exclusively owns the black flash.
+              // Keeping this pulse coloured avoids rapid lane notes pinning an
+              // enemy under a repeatedly restarted black inline material.
+              e.el.style.background = '';
               e.el.style.boxShadow = `0 0 ${glowPx.toFixed(2)}px var(--bs-role-glow-color)`;
             } catch {}
           } else {

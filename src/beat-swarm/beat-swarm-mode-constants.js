@@ -442,10 +442,10 @@ export const FOUNDATION_LANE_PHRASE_LIBRARY = Object.freeze([
   Object.freeze({ id: 'foundation_arcade_j', family: 'arcade_offbeat', steps: Object.freeze([true, false, true, false, false, true, false, true]) }),
 ]);
 export const ROLE_COLOR_HUE_BY_LANE = Object.freeze({
-  bass: 22,
+  bass: 42,
   lead: 196,
-  accent: 338,
-  motion: 138,
+  accent: 310,
+  motion: 116,
 });
 export const MUSIC_ROLE_PULSE_POLICY = Object.freeze({
   seconds: 0.24,

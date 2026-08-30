@@ -22,49 +22,40 @@ test('onboarding rocks retain their initial ballistic drift', () => {
   assert.equal(preserveOnboardingAsteroidDriftRuntime({ enemyType: 'composer' }), false);
 });
 
-test('lead-ball reserve rocks stage at an arena-relative anchor', () => {
+test('lead-ball reserve rocks retain ballistic drift instead of following the arena', () => {
   const rock = {
     enemyType: 'onboarding-asteroid',
     leadBallReserve: true,
-    leadBallReserveAnchorOffsetX: 300,
-    leadBallReserveAnchorOffsetY: -120,
     wx: 0,
     wy: 0,
-    vx: 0,
-    vy: 0,
+    vx: -84,
+    vy: 27,
   };
   assert.equal(preserveOnboardingAsteroidDriftRuntime(rock, { x: 100, y: 200 }), true);
-  assert.equal(rock.leadBallReserveSettled, false);
-  assert.equal(rock.combatPersistentOffscreen, true);
-  assert.ok(rock.vx > 0);
-  assert.ok(rock.vy > 0);
-
-  rock.wx = 396;
-  rock.wy = 84;
-  assert.equal(preserveOnboardingAsteroidDriftRuntime(rock, { x: 100, y: 200 }), true);
-  assert.equal(rock.leadBallReserveSettled, true);
-  assert.equal(rock.leadBallReserve, true);
-  assert.equal(rock.combatPersistentOffscreen, false);
-  assert.equal(rock.vx, 0);
-  assert.equal(rock.vy, 0);
+  rock.vx = 320;
+  rock.vy = -250;
+  assert.equal(preserveOnboardingAsteroidDriftRuntime(rock, { x: 1200, y: -900 }), true);
+  assert.equal(rock.vx, -84);
+  assert.equal(rock.vy, 27);
 });
 
-test('lead-ball reserve rocks remain world-space while approaching their anchor', () => {
+test('lead-ball reserve rocks ignore screen conversion and arena displacement', () => {
   const rock = {
     enemyType: 'onboarding-asteroid',
     leadBallReserve: true,
-    leadBallReserveAnchorOffsetX: 300,
-    leadBallReserveAnchorOffsetY: -120,
     wx: 0,
     wy: 0,
-    vx: 0,
-    vy: 0,
+    vx: 76,
+    vy: -31,
   };
   preserveOnboardingAsteroidDriftRuntime(rock, { x: 0, y: 0 }, () => ({ x: 9999, y: 9999 }), 0.1);
   assert.equal(rock.wx, 0);
   assert.equal(rock.wy, 0);
-  assert.ok(rock.vx > 0);
-  assert.ok(rock.vy < 0);
+  assert.equal(rock.vx, 76);
+  assert.equal(rock.vy, -31);
+  preserveOnboardingAsteroidDriftRuntime(rock, { x: -5000, y: 4000 }, () => ({ x: -9999, y: -9999 }), 0.1);
+  assert.equal(rock.vx, 76);
+  assert.equal(rock.vy, -31);
 });
 
 test('uses the actual combat angle for rightward-authored projectile art', () => {

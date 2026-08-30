@@ -111,7 +111,7 @@ export function addHostileRedExplosionEffectRuntime(options = null) {
   el.className = 'beat-swarm-fx-explosion is-hostile-red';
   el.style.transform = 'translate(-9999px, -9999px)';
   enemyLayerEl.appendChild(el);
-  effects.push({
+  const effect = {
     kind: 'hostile-explosion',
     ttl: Math.max(0.01, Number(ttlOverride) || Number(constants.composerGroupExplosionTtl) || 0.1),
     duration: Math.max(0.01, Number(ttlOverride) || Number(constants.composerGroupExplosionTtl) || 0.1),
@@ -119,7 +119,9 @@ export function addHostileRedExplosionEffectRuntime(options = null) {
     radiusWorld: Math.max(10, Number(radiusWorld) || Number(constants.composerGroupExplosionRadiusWorld) || 10),
     weaponSlotIndex: null,
     el,
-  });
+  };
+  effects.push(effect);
+  return effect;
 }
 
 export function triggerCosmeticSyncAtRuntime(options = null) {

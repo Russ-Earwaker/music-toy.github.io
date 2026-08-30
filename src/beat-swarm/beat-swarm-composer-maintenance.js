@@ -182,6 +182,10 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const hasPlayableMusicLaneNotes = typeof helpers.hasPlayableMusicLaneNotes === 'function'
     ? helpers.hasPlayableMusicLaneNotes
     : (() => false);
+  const directorFoundationRequested = Math.max(
+    0,
+    Math.trunc(Number(enemyDirectorRuntime?.targetCarrierCounts?.foundation) || 0),
+  ) > 0;
   const directorSecondaryLoopRequested = (
     Math.max(0, Math.trunc(Number(enemyDirectorRuntime?.targetCarrierCounts?.secondary_loop_rhythm) || 0)) > 0
     || (
@@ -189,11 +193,15 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
       && enemyDirectorRuntime.desiredLaneRoles.map((role) => String(role || '').trim().toLowerCase()).includes('secondary_loop_rhythm')
     )
   );
-  const supportLaneActive = supportLanePlan?.active === true;
-  const answerLaneActive = answerLanePlan?.active === true;
+  const directorPrimaryLoopRequested = Math.max(
+    0,
+    Math.trunc(Number(enemyDirectorRuntime?.targetCarrierCounts?.primary_loop_lead) || 0),
+  ) > 0;
+  const supportLaneActive = supportLanePlan?.active === true && supportLanePlan?.gameplayFocused !== false;
+  const answerLaneActive = answerLanePlan?.active === true && answerLanePlan?.gameplayFocused !== false;
   const answerLaneDirectOnly = answerLanePlan?.directOnly === true;
   const answerCarrierActive = answerLaneActive && !answerLaneDirectOnly;
-  const primaryLoopLaneActive = primaryLoopLanePlan?.active === true;
+  const primaryLoopLaneActive = primaryLoopLanePlan?.active === true && directorPrimaryLoopRequested;
   const pacingState = String(helpers.getCurrentPacingStateName?.() || '').trim().toLowerCase();
   const introWindowActive = introStage !== 'none';
   const introComposerLockActive = introStage === 'player_only';
@@ -202,7 +210,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const activeBasicLaneCarrierCandidates = introWindowActive
     ? []
     : [
-        foundationLanePlan?.active === true && hasPlayableMusicLaneNotes('foundation_lane')
+        directorFoundationRequested && foundationLanePlan?.active === true && hasPlayableMusicLaneNotes('foundation_lane')
           ? { laneId: 'foundation_lane', profileSourceType: 'foundation_rhythm' }
           : null,
         (
@@ -216,7 +224,7 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
         )
           ? { laneId: 'secondary_loop_lane', profileSourceType: 'secondary_bridge_backbeat' }
           : null,
-        primaryLoopLaneActive && hasPlayableMusicLaneNotes('primary_loop_lane')
+        directorPrimaryLoopRequested && hasPlayableMusicLaneNotes('primary_loop_lane')
           ? { laneId: 'primary_loop_lane', profileSourceType: 'lead_melody' }
           : null,
       ].filter(Boolean);
@@ -230,6 +238,11 @@ export function maintainComposerEnemyGroupsRuntime(options = null) {
   const requiredBasicLaneCarriers = introWindowActive
     ? []
     : ['foundation_lane', 'secondary_loop_lane', 'primary_loop_lane']
+        .filter((laneId) => (
+          (laneId === 'foundation_lane' && directorFoundationRequested)
+          || (laneId === 'secondary_loop_lane' && directorSecondaryLoopRequested)
+          || (laneId === 'primary_loop_lane' && directorPrimaryLoopRequested)
+        ))
         .filter((laneId) => String(latchedBasicLaneCarrierProfiles[laneId] || '').trim())
         .map((laneId) => ({
           laneId,

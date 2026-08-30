@@ -320,6 +320,8 @@ Use playtests and Music Lab where useful to answer:
 - implemented: one shared intensity synchronizer now re-authors every surviving musical formation at state boundaries; Accent reinforcement progresses from sparse Medium through partial Build to full Peak before muting in Release/Settle, while Lead response becomes a full Peak countermelody followed by lower-volume delayed Release/Settle echoes
 - implemented: intensity reassignment preserves each enemy's original formation-member index, so killing a musical enemy permanently removes its assigned motif part instead of transferring that part to another survivor at the next state boundary
 - validated: the arrangement intensity trace preserved dead-member gaps through Build, Peak, Release, and Settle; Accent expanded from its surviving partial Build pattern to the surviving Peak pattern before muting, Lead retained only living members' delayed echoes, and every emitted formation attack remained motif-scheduled
+- implemented: muted director formations now enter a visible arena-relative outer orbit instead of idling or retreating; re-authoring recalls them inward, while two unused motif loops produce an accelerating red beat pulse followed by a quantized large overload explosion
+- implemented: each director formation now locks its group, source/output lane identity, instrument, and lane-derived colour at spawn; intensity interpretation may alter cadence and density but cannot silently reassign that identity, and members with no assigned motif steps cannot fall back to silent default attacks
 
 - Does the weapon-gate sequence hand off without a visible/audio snap?
 - Does the player weapon motif continue at the correct tempo after the corridor?

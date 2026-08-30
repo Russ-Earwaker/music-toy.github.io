@@ -4,6 +4,20 @@ import {
   inferBeatSwarmLevel1RoleForCarrier,
 } from './beat-swarm-level1-contract.js';
 
+export function getComposerLifecycleAvailableSpawnSlots({
+  maxLiveGroups = 0,
+  liveGroupCount = 0,
+  missingRequiredCarrierCount = 0,
+} = {}) {
+  const availableSlots = Math.max(
+    0,
+    Math.trunc(Number(maxLiveGroups) || 0) - Math.trunc(Number(liveGroupCount) || 0),
+  );
+  return Math.max(0, Math.trunc(Number(missingRequiredCarrierCount) || 0)) > 0
+    ? Math.max(1, availableSlots)
+    : availableSlots;
+}
+
 export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const enabled = !!options?.enabled;
   if (!enabled) return;
@@ -229,7 +243,9 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const primaryLoopReserveWindowActive = currentBarIndex >= 12;
   const explicitNoLeadSection = false;
   const persistentLeadCoverageRequested = primaryLoopReserveWindowActive && !explicitNoLeadSection;
-  const primaryLoopNeedsGroupCoverage = responseAllowsGroups && persistentLeadCoverageRequested;
+  const primaryLoopNeedsGroupCoverage = responseAllowsGroups
+    && primaryLoopPlan?.gameplayFocused !== false
+    && persistentLeadCoverageRequested;
   const earlyBackbeatRecoveryWindowActive = sessionAgeBars <= 10;
   const introForcedDesiredGroups = introStage === 'rhythm_only'
     ? 1
@@ -1317,6 +1333,14 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     && getAliveEnemiesByIds(group?.memberIds).length > 0
   )).length;
   const availableLiveGroupSlots = Math.max(0, maxLiveComposerGroups - liveComposerGroupCount);
+  // A playable core lane must have a visible carrier. Allow one temporary
+  // over-cap admission when protected/non-core groups occupy every slot; the
+  // normal lifecycle pass can retire excess groups after coverage exists.
+  const availableRequiredCarrierSlots = getComposerLifecycleAvailableSpawnSlots({
+    maxLiveGroups: maxLiveComposerGroups,
+    liveGroupCount: liveComposerGroupCount,
+    missingRequiredCarrierCount: missingBasicLaneCarriers.length,
+  });
   const requiredLaneStatusSignature = [
     ...requiredBasicLaneCarriers.map((entry) => entry.laneId),
     '|',
@@ -1351,7 +1375,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const threatAdmissionRetryBar = Math.max(-1, Math.trunc(Number(composerRuntime.__bsThreatAdmissionRetryBar) || -1));
   const spawnCount = currentBarIndex < threatAdmissionRetryBar
     ? 0
-    : Math.min(requestedSpawnCount, availableLiveGroupSlots, 1);
+    : Math.min(requestedSpawnCount, availableRequiredCarrierSlots, 1);
   for (let i = 0; i < spawnCount; i++) {
     const forcedIntroProfileSourceType = missingIntroProfiles[i] || '';
     const forcedBasicLaneCarrier = missingBasicLaneCarriers[i] || null;
@@ -1379,6 +1403,11 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       forcedProfileSourceType,
     });
     if (!group) continue;
+    if (forcedBasicLaneCarrier) {
+      group.musicLaneId = forcedBasicLaneCarrier.laneId;
+      group.assignedMusicLaneId = forcedBasicLaneCarrier.laneId;
+      group.musicProfileSourceType = forcedBasicLaneCarrier.profileSourceType;
+    }
     if (!isMusicLaneAvailableForEnemy(String(group?.musicLaneId || '').trim().toLowerCase())) continue;
     const genericCoreLaneSingleton = Math.max(1, Math.trunc(Number(group?.size) || 1)) === 1
       && String(group?.musicLaneId || '').trim().toLowerCase().endsWith('_lane')
@@ -1395,7 +1424,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       group.basicLaneCarrierHandoff = true;
       group.size = plannedMemberCount;
       group.performers = Math.min(plannedMemberCount, Math.max(1, Math.trunc(Number(group?.performers) || plannedMemberCount)));
-      group.assignedMusicLaneId = String(group?.musicLaneId || forcedBasicLaneCarrier.laneId || '').trim().toLowerCase();
+      group.assignedMusicLaneId = forcedBasicLaneCarrier.laneId;
     }
     group.lifecycleState = normalizeLifecycleState(group.lifecycleState, 'active');
     group.sectionContinuityKey = sectionContinuityKey;
