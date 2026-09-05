@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   applyBeatSwarmLaneFocusToCarrierCounts,
   createBeatSwarmLaneFocusRuntime,
+  evaluateBeatSwarmLaneFocusPresentation,
   resolveBeatSwarmLaneFocusBudget,
 } from '../src/beat-swarm/beat-swarm-lane-focus.js';
 
@@ -13,6 +14,23 @@ test('focus budget grows with intensity and difficulty', () => {
   assert.deepEqual(resolveBeatSwarmLaneFocusBudget('peak', 2), {
     stage: 'peak', difficulty: 2, primary: 2, supporting: 4,
   });
+});
+
+test('presentation audit distinguishes visible, entering, and missing focus lanes', () => {
+  const result = evaluateBeatSwarmLaneFocusPresentation({
+    primaryLaneIds: ['primary_loop_lane', 'foundation_lane'],
+    supportingLaneIds: ['secondary_loop_lane'],
+  }, {
+    primary_loop_lane: { visibleCount: 1, candidateCount: 2, selectedEnemyId: 8 },
+    foundation_lane: { visibleCount: 0, candidateCount: 1, selectedEnemyId: 9, guidanceActive: true },
+    secondary_loop_lane: { visibleCount: 0, candidateCount: 0 },
+  });
+  assert.equal(result.ready, false);
+  assert.deepEqual(result.visibleLaneIds, ['primary_loop_lane']);
+  assert.deepEqual(result.enteringLaneIds, ['foundation_lane']);
+  assert.deepEqual(result.missingLaneIds, ['secondary_loop_lane']);
+  assert.deepEqual(result.pendingPrimaryLaneIds, ['foundation_lane']);
+  assert.deepEqual(result.missingPrimaryLaneIds, []);
 });
 
 test('focus rotates underexposed lanes at phrase boundaries', () => {

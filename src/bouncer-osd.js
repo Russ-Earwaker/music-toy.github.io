@@ -1,5 +1,7 @@
 /* src/bouncer-osd.js — tiny debug overlay for Bouncer */
+import { getToyLifecycle } from './baseMusicToy/toyLifecycle.js';
 export function installBouncerOSD(panel, sizing, getSpeed, getBall, getLaunchDiag){
+  const lifecycle = getToyLifecycle(panel);
   const osd = document.createElement('div');
   osd.style.position='absolute';
   osd.style.right='8px';
@@ -25,8 +27,8 @@ export function installBouncerOSD(panel, sizing, getSpeed, getBall, getLaunchDia
         osd.textContent = `scale=${(sizing?.scale||1).toFixed(3)} speed=${sp.toFixed(2)} v=${vmag.toFixed(1)} baseDiag=${(d?.baseDiag||0).toFixed(1)} ppfOv=${(d?.ppfOverride||0).toFixed(3)}`;
       }catch{}
     }
-    requestAnimationFrame(tick);
+    lifecycle.requestFrame(tick);
   }
-  requestAnimationFrame(tick);
+  lifecycle.requestFrame(tick);
   return osd;
 }

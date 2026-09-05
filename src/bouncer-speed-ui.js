@@ -1,6 +1,8 @@
 /* Speed control UI — mounts in header, Advanced only */
+import { getToyLifecycle } from './baseMusicToy/toyLifecycle.js';
 export function installSpeedUI(panel, sizing, initial=1.00){
   // Force default to 100%. If a control already exists, reuse it (avoid duplicates).
+  const lifecycle = getToyLifecycle(panel);
   let speedFactor = 1.00;
 
   // Build compact header control
@@ -86,8 +88,9 @@ export function installSpeedUI(panel, sizing, initial=1.00){
   updateSpeedVisibility();
 
   // React to Advanced toggles
-  panel.addEventListener('toy-zoom', ()=>{ updateSpeedVisibility(); });
+  lifecycle.listen(panel, 'toy-zoom', ()=>{ updateSpeedVisibility(); });
   const __obs = new MutationObserver(()=> updateSpeedVisibility());
+  lifecycle.addCleanup(() => __obs.disconnect());
   try{ __obs.observe(panel, { attributes:true, attributeFilter:['class'] }); }catch{}
 
   // Fallback watcher in case external UI swaps DOM around
@@ -99,9 +102,9 @@ export function installSpeedUI(panel, sizing, initial=1.00){
       updateSpeedVisibility();
       __lastAdv = adv;
     }
-    requestAnimationFrame(__tick);
+    lifecycle.requestFrame(__tick);
   }
-  requestAnimationFrame(__tick);
+  lifecycle.requestFrame(__tick);
 
   return ()=> speedFactor; // getter for main
 }

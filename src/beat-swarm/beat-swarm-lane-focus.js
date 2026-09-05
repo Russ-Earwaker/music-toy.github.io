@@ -74,6 +74,51 @@ export function applyBeatSwarmLaneFocusToCarrierCounts(countsLike = null, snapsh
   return result;
 }
 
+export function evaluateBeatSwarmLaneFocusPresentation(snapshotLike = null, statusByLaneLike = null) {
+  const snapshot = snapshotLike && typeof snapshotLike === 'object' ? snapshotLike : {};
+  const statusByLane = statusByLaneLike && typeof statusByLaneLike === 'object' ? statusByLaneLike : {};
+  const primaryLaneIds = normalizeLaneIds(snapshot.primaryLaneIds);
+  const supportingLaneIds = normalizeLaneIds(snapshot.supportingLaneIds);
+  const focusedLaneIds = normalizeLaneIds([...primaryLaneIds, ...supportingLaneIds]);
+  const laneStates = {};
+  const visibleLaneIds = [];
+  const enteringLaneIds = [];
+  const missingLaneIds = [];
+  for (const laneId of focusedLaneIds) {
+    const status = statusByLane[laneId] && typeof statusByLane[laneId] === 'object'
+      ? statusByLane[laneId]
+      : {};
+    const visibleCount = Math.max(0, Math.trunc(Number(status.visibleCount) || 0));
+    const candidateCount = Math.max(0, Math.trunc(Number(status.candidateCount) || 0));
+    const state = visibleCount > 0 ? 'visible' : (candidateCount > 0 ? 'entering' : 'missing');
+    laneStates[laneId] = {
+      state,
+      visibleCount,
+      candidateCount,
+      selectedEnemyId: Math.max(0, Math.trunc(Number(status.selectedEnemyId) || 0)),
+      guidanceActive: status.guidanceActive === true,
+    };
+    if (state === 'visible') visibleLaneIds.push(laneId);
+    else if (state === 'entering') enteringLaneIds.push(laneId);
+    else missingLaneIds.push(laneId);
+  }
+  const missingPrimaryLaneIds = primaryLaneIds.filter((laneId) => laneStates[laneId]?.state === 'missing');
+  const pendingPrimaryLaneIds = primaryLaneIds.filter((laneId) => laneStates[laneId]?.state === 'entering');
+  return {
+    ready: focusedLaneIds.length === 0 || (missingPrimaryLaneIds.length === 0 && pendingPrimaryLaneIds.length === 0),
+    primaryReady: missingPrimaryLaneIds.length === 0 && pendingPrimaryLaneIds.length === 0,
+    focusedLaneIds,
+    primaryLaneIds,
+    supportingLaneIds,
+    visibleLaneIds,
+    enteringLaneIds,
+    missingLaneIds,
+    missingPrimaryLaneIds,
+    pendingPrimaryLaneIds,
+    laneStates,
+  };
+}
+
 export function createBeatSwarmLaneFocusRuntime(options = null) {
   const opts = options && typeof options === 'object' ? options : {};
   const config = opts.config && typeof opts.config === 'object' ? opts.config : BEAT_SWARM_LANE_FOCUS_CONFIG;

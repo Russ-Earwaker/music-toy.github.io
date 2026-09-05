@@ -446,6 +446,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (!group || !isMusicRoleActive(group)) return false;
     if (activeMusicMode !== 'full_texture') return false;
     if (isPersistentIntroSlotCarrier(group) || isFoundationBufferGroup(group)) return false;
+    if (isRequiredBasicLaneCarrier(group)) return false;
     const role = String(group?.roleLifecycle?.role || group?.musicRole || inferComposerMusicRole(group)).trim().toLowerCase();
     if (!isRefreshableMusicRole(role)) return false;
     const policy = group.roleLifecycle && typeof group.roleLifecycle === 'object'
@@ -492,6 +493,8 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (isFoundationBufferGroup(group)) return false;
     if (isPersistentIntroSlotCarrier(group)) return false;
     if (String(group?.soloCarrierType || '').trim()) return false;
+    const lockedLaneId = String(group?.assignedMusicLaneId || group?.musicLaneId || '').trim().toLowerCase();
+    if (lockedLaneId && lockedLaneId !== 'primary_loop_lane') return false;
     const normalizedProfileSourceType = normalizeComposerProfileSourceType(group?.musicProfileSourceType);
     const introProfileSourceType = getIntroSlotProfileSourceType(group);
     if (
@@ -922,6 +925,7 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     if (promotableLeadCandidate) {
       promotableLeadCandidate.role = 'lead';
       promotableLeadCandidate.musicLaneId = 'primary_loop_lane';
+      promotableLeadCandidate.assignedMusicLaneId = 'primary_loop_lane';
       promotableLeadCandidate.musicLaneLayer = 'loops';
       promotableLeadCandidate.callResponseLane = 'call';
       promotableLeadCandidate.musicProfileSourceType = 'lead_melody';
@@ -1217,7 +1221,12 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
         group
         && group.active !== false
         && group.retiring !== true
-        && getAliveEnemiesByIds(group?.memberIds).length > 0
+        && normalizeMusicState(group.musicState, 'active') === 'active'
+        && getAliveEnemiesByIds(group?.memberIds).some((enemy) => (
+          enemy
+          && enemy.retreating !== true
+          && normalizeMusicState(enemy.musicState, group.musicState) === 'active'
+        ))
       ))
       .map((group) => String(group?.musicLaneId || '').trim().toLowerCase())
       .filter(Boolean)
@@ -1229,7 +1238,12 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   const reservedCoverageSpawnNeeded = reservedLeadSpawnNeeded
     || reservedSecondaryLoopSpawnNeeded
     || requiredBasicLaneSpawnNeeded;
-  if (!earlyIntroBridgeActive && reservedCoverageSpawnNeeded && effectiveCurrentSectionCount >= Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0))) {
+  if (
+    !earlyIntroBridgeActive
+    && reservedCoverageSpawnNeeded
+    && !requiredBasicLaneSpawnNeeded
+    && effectiveCurrentSectionCount >= Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0))
+  ) {
     const liveLaneCounts = new Map();
     for (const group of rankedGroups) {
       if (!group || !hasLiveMembers(group)) continue;
@@ -1366,16 +1380,20 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     ? Math.max(0, introMissingCount)
     : (
       earlyIntroBridgeActive && reservedCoverageSpawnNeeded
-        ? 1
+        ? Math.max(1, missingBasicLaneCarriers.length)
         : (genericGroupSpawnBlockedByIntroBridge ? 0 : Math.max(
-            reservedCoverageSpawnNeeded ? 1 : 0,
+            reservedCoverageSpawnNeeded ? Math.max(1, missingBasicLaneCarriers.length) : 0,
             Math.max(0, desiredGroups - effectiveCurrentSectionCount)
           ))
     );
   const threatAdmissionRetryBar = Math.max(-1, Math.trunc(Number(composerRuntime.__bsThreatAdmissionRetryBar) || -1));
   const spawnCount = currentBarIndex < threatAdmissionRetryBar
     ? 0
-    : Math.min(requestedSpawnCount, availableRequiredCarrierSlots, 1);
+    : Math.min(
+        requestedSpawnCount,
+        availableRequiredCarrierSlots,
+        missingBasicLaneCarriers.length > 0 ? Math.min(2, missingBasicLaneCarriers.length) : 1,
+      );
   for (let i = 0; i < spawnCount; i++) {
     const forcedIntroProfileSourceType = missingIntroProfiles[i] || '';
     const forcedBasicLaneCarrier = missingBasicLaneCarriers[i] || null;

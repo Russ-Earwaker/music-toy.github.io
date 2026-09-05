@@ -1,5 +1,6 @@
 // src/ripplesynth-scheduler.js
 // Step scheduler for Rippler. Behavior identical to in-core version.
+import { rippleNoteTime } from './ripplesynth-audio.js';
 
 export function createScheduler(cfg){
   const {
@@ -27,8 +28,7 @@ export function createScheduler(cfg){
       __scheduledThisBar.clear();
       const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
       const div = (typeof getQuantDiv === 'function') ? Number(getQuantDiv()) : NaN;
-      const beatLen = li?.beatLen || 0;
-      const grid = (Number.isFinite(div) && div>0 && beatLen>0) ? (beatLen/div) : 0;
+      const beatLen = li?.beatLen || (barSec() / 4);
       // If we've already prescheduled for this barStartAT, skip
       if (__lastPrescheduledAt === state.barStartAT) return;
       __lastPrescheduledAt = state.barStartAT;
@@ -41,14 +41,7 @@ export function createScheduler(cfg){
           const offRaw = (patternOffsets && patternOffsets[s] && patternOffsets[s].get(i));
           const hasOff = typeof offRaw === 'number' && isFinite(offRaw);
           const baseRel = hasOff ? offRaw : (s * stepSeconds());
-          let tFire;
-          // Apply quantization whenever enabled; otherwise preserve exact relative timing
-          if (grid > 0) {
-            const k = Math.ceil((baseRel + 1e-6) / grid);
-            tFire = state.barStartAT + k * grid + 0.0004;
-          } else {
-            tFire = state.barStartAT + baseRel + 0.0005;
-          }
+          const tFire = rippleNoteTime(state.barStartAT, baseRel, beatLen, div);
           const k = __keyFor(s,i);
           if (!__scheduledThisBar.has(k)){
             __scheduledThisBar.add(k);

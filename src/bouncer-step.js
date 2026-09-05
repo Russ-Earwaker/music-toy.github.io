@@ -59,9 +59,10 @@ export function stepBouncer(S, nowAT){
       if (!div || div <= 0) return at + 0.0005; // no quantization
       // Use beat length so 1/1 = every beat, 1/2 = half-beat, etc.
       const grid = (li.beatLen || (li.barLen/4)) / div;
-      const rel  = Math.max(0, at - li.loopStartTime);
+      const anchor = Number.isFinite(S.visQ?.loopRec?.anchorStartTime) ? S.visQ.loopRec.anchorStartTime : li.loopStartTime;
+      const rel  = Math.max(0, at - anchor);
       const k    = Math.ceil((rel + 1e-6) / grid);
-      return li.loopStartTime + k * grid;
+      return anchor + k * grid;
     }
     return at + 0.0005;
   }
@@ -117,7 +118,7 @@ export function stepBouncer(S, nowAT){
     if (S.ball.flightEnd != null && now >= S.ball.flightEnd) {
       // The ball's life is over. Signal the chain to advance to the next toy.
       if (S.panel) {
-        S.panel.dispatchEvent(new CustomEvent('chain:next', { bubbles: true }));
+        S.panel.dispatchEvent(new CustomEvent('chain:next', { bubbles: true, detail: { completedAt: S.ball.flightEnd } }));
       }
       S.ball = null; // End of life for the current ball
     } else if (!S.ball.isGhost) {

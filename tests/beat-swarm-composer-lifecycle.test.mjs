@@ -166,3 +166,174 @@ test('forces a required carrier onto its requested lane before availability vali
   assert.equal(groups[0].assignedMusicLaneId, 'primary_loop_lane');
   assert.equal(groups[0].musicProfileSourceType, 'lead_melody');
 });
+
+test('released lane bodies do not block an active focused carrier replacement', () => {
+  const releasedEnemy = {
+    id: 11,
+    hp: 10,
+    musicState: 'released',
+    retreating: false,
+  };
+  const secondaryGroup = {
+    id: 5,
+    active: true,
+    retiring: false,
+    lifecycleState: 'active',
+    musicState: 'released',
+    musicLaneId: 'secondary_loop_lane',
+    memberIds: new Set([releasedEnemy.id]),
+    size: 1,
+    performers: 1,
+  };
+  const groups = [secondaryGroup];
+
+  maintainComposerEnemyGroupsLifecycle({
+    enabled: true,
+    composerEnemyGroups: groups,
+    currentBarIndex: 24,
+    pacingCaps: { desiredGroups: 1, maxComposerGroups: 3 },
+    composer: { sectionId: 'test' },
+    requiredBasicLaneCarriers: [{
+      laneId: 'secondary_loop_lane',
+      profileSourceType: 'secondary_bridge_backbeat',
+    }],
+    getAliveEnemiesByIds: (ids) => ids?.has?.(releasedEnemy.id) ? [releasedEnemy] : [],
+    pickTemplate: () => ({ id: 'replacement-test' }),
+    createComposerEnemyGroupProfile: () => ({}),
+    createGroupFromMotif: () => ({ id: 6, size: 2, performers: 2 }),
+    getBasicLaneCarrierBodyPlan: () => ({ scale: 'small', memberCount: 2 }),
+    isMusicLaneAvailableForEnemy: () => true,
+    spawnComposerGroupOffscreenMembers: (_group, count) => count,
+  });
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].id, 6);
+  assert.equal(groups[0].musicLaneId, 'secondary_loop_lane');
+  assert.equal(groups[0].musicState, 'active');
+});
+
+test('recovers two simultaneously missing required lanes in one lifecycle pass', () => {
+  const groups = [];
+  let nextId = 20;
+
+  maintainComposerEnemyGroupsLifecycle({
+    enabled: true,
+    composerEnemyGroups: groups,
+    currentBarIndex: 32,
+    pacingCaps: { desiredGroups: 2, maxComposerGroups: 3 },
+    composer: { sectionId: 'test' },
+    requiredBasicLaneCarriers: [
+      { laneId: 'secondary_loop_lane', profileSourceType: 'secondary_bridge_backbeat' },
+      { laneId: 'primary_loop_lane', profileSourceType: 'lead_melody' },
+    ],
+    getAliveEnemiesByIds: () => [],
+    pickTemplate: () => ({ id: 'required-recovery-test' }),
+    createComposerEnemyGroupProfile: () => ({}),
+    createGroupFromMotif: () => ({ id: nextId++, size: 1, performers: 1 }),
+    getBasicLaneCarrierBodyPlan: () => ({ scale: 'large', memberCount: 1 }),
+    isMusicLaneAvailableForEnemy: () => true,
+    spawnComposerGroupOffscreenMembers: (_group, count) => count,
+  });
+
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map((group) => group.musicLaneId), [
+    'secondary_loop_lane',
+    'primary_loop_lane',
+  ]);
+});
+
+test('does not promote a lane-locked rhythm carrier into the lead lane', () => {
+  const secondaryEnemy = {
+    id: 31,
+    hp: 10,
+    musicState: 'active',
+    retreating: false,
+  };
+  const secondaryGroup = {
+    id: 30,
+    active: true,
+    retiring: false,
+    lifecycleState: 'active',
+    musicState: 'active',
+    role: 'support',
+    assignedMusicLaneId: 'secondary_loop_lane',
+    musicLaneId: 'secondary_loop_lane',
+    musicProfileSourceType: 'secondary_bridge_backbeat',
+    sectionKey: 'test:0:default',
+    sectionContinuityKey: 'test:0',
+    memberIds: new Set([secondaryEnemy.id]),
+    size: 1,
+    performers: 1,
+  };
+  const groups = [secondaryGroup];
+
+  maintainComposerEnemyGroupsLifecycle({
+    enabled: true,
+    composerEnemyGroups: groups,
+    currentBarIndex: 20,
+    sessionAgeBars: 20,
+    pacingCaps: { desiredGroups: 2, maxComposerGroups: 3, responseMode: 'group' },
+    composer: { sectionId: 'test', cycle: 0, intensity: 0.6 },
+    musicModeRuntime: { activeMusicMode: 'full_texture' },
+    directorLanePlan: { primary_loop: { active: true, gameplayFocused: true } },
+    requiredBasicLaneCarriers: [
+      { laneId: 'secondary_loop_lane', profileSourceType: 'secondary_bridge_backbeat' },
+      { laneId: 'primary_loop_lane', profileSourceType: 'lead_melody' },
+    ],
+    getAliveEnemiesByIds: (ids) => ids?.has?.(secondaryEnemy.id) ? [secondaryEnemy] : [],
+    pickTemplate: () => ({ id: 'lead-replacement-test' }),
+    createComposerEnemyGroupProfile: () => ({}),
+    createGroupFromMotif: () => ({ id: 32, size: 1, performers: 1 }),
+    getBasicLaneCarrierBodyPlan: () => ({ scale: 'large', memberCount: 1 }),
+    isMusicLaneAvailableForEnemy: () => true,
+    spawnComposerGroupOffscreenMembers: (_group, count) => count,
+  });
+
+  const leadGroup = groups.find((group) => group.musicLaneId === 'primary_loop_lane');
+  assert.equal(secondaryGroup.musicLaneId, 'secondary_loop_lane');
+  assert.equal(secondaryGroup.assignedMusicLaneId, 'secondary_loop_lane');
+  assert.equal(leadGroup?.musicLaneId, 'primary_loop_lane');
+  assert.equal(leadGroup?.assignedMusicLaneId, 'primary_loop_lane');
+});
+
+test('does not release a currently required lane carrier for role refresh', () => {
+  const enemies = [41, 42].map((id) => ({ id, hp: 10, musicState: 'active', retreating: false }));
+  const groups = enemies.map((enemy, index) => ({
+    id: 40 + index,
+    active: true,
+    retiring: false,
+    lifecycleState: 'active',
+    musicState: 'active',
+    musicRole: 'counter_rhythm',
+    roleLifecycleStartedBar: 0,
+    roleLifecycle: { role: 'counter_rhythm', minReadableBars: 1, maxRoleBars: 4 },
+    assignedMusicLaneId: 'secondary_loop_lane',
+    musicLaneId: 'secondary_loop_lane',
+    musicProfileSourceType: 'secondary_bridge_backbeat',
+    sectionKey: 'test:0:default',
+    sectionContinuityKey: 'test:0',
+    memberIds: new Set([enemy.id]),
+    size: 1,
+    performers: 1,
+  }));
+
+  maintainComposerEnemyGroupsLifecycle({
+    enabled: true,
+    composerEnemyGroups: groups,
+    currentBarIndex: 20,
+    sessionAgeBars: 20,
+    pacingCaps: { desiredGroups: 2, maxComposerGroups: 3, responseMode: 'group' },
+    composer: { sectionId: 'test', cycle: 0, intensity: 0.6 },
+    musicModeRuntime: { activeMusicMode: 'full_texture' },
+    requiredBasicLaneCarriers: [{
+      laneId: 'secondary_loop_lane',
+      profileSourceType: 'secondary_bridge_backbeat',
+    }],
+    getAliveIdsForGroup: (group) => new Set(group.memberIds),
+    getAliveEnemiesByIds: (ids) => enemies.filter((enemy) => ids?.has?.(enemy.id)),
+    isMusicLaneAvailableForEnemy: () => true,
+  });
+
+  assert.deepEqual(groups.map((group) => group.musicState), ['active', 'active']);
+  assert.deepEqual(enemies.map((enemy) => enemy.musicState), ['active', 'active']);
+});

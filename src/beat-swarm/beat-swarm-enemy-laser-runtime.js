@@ -22,12 +22,24 @@ export function createBeatSwarmEnemyLaserRuntime() {
   const hazards = [];
   let hazardId = 1;
 
+  function syncEnemyLaserPhase(enemy) {
+    if (!enemy) return;
+    const enemyHazards = hazards.filter((hazard) => hazard.sourceEnemyId === Math.trunc(Number(enemy.id) || 0));
+    const phase = enemyHazards.some((hazard) => hazard.activated)
+      ? 'active'
+      : (enemyHazards.some((hazard) => hazard.locked) ? 'locked' : (enemyHazards.length ? 'aiming' : ''));
+    enemy.combatLaserPhase = phase;
+    enemy.el?.classList?.toggle?.('is-laser-aiming', phase === 'aiming');
+    enemy.el?.classList?.toggle?.('is-laser-locked', phase === 'locked');
+  }
+
   function removeHazard(hazard) {
     for (const el of hazard?.beamEls || []) {
       try { el?.remove?.(); } catch {}
     }
     const index = hazards.indexOf(hazard);
     if (index >= 0) hazards.splice(index, 1);
+    syncEnemyLaserPhase(hazard?.enemy);
   }
 
   function clear() {
@@ -43,7 +55,7 @@ export function createBeatSwarmEnemyLaserRuntime() {
     const beamEls = [];
     for (let index = 0; index < beamCount; index += 1) {
       const el = document.createElement('div');
-      el.className = 'beat-swarm-hostile-laser is-warning';
+      el.className = 'beat-swarm-hostile-laser is-warning is-aiming';
       if (String(pattern.beamStyle || '').trim().toLowerCase() === 'thick') el.classList.add('is-thick');
       layer.appendChild(el);
       beamEls.push(el);
@@ -53,12 +65,15 @@ export function createBeatSwarmEnemyLaserRuntime() {
     const startStep = Number.isFinite(Number(options?.stepIndex))
       ? normalizeBeat(options.stepIndex)
       : startBeat * subdivisionsPerBeat;
-    const warningBeats = Math.max(1, Math.trunc(Number(pattern.warningBeats) || 1));
+    const phaseBeats = Math.max(1, Math.trunc(Number(pattern.phaseBeats) || Math.ceil((Number(pattern.warningBeats) || 2) * 0.5)));
+    const warningBeats = phaseBeats * 2;
     const warningSteps = warningBeats * subdivisionsPerBeat;
     const activeBeats = Math.max(1, Math.trunc(Number(pattern.activeBeats) || 8));
     const hazard = {
       id: hazardId++,
       sourceEnemyId: Math.trunc(Number(enemy.id) || 0),
+      enemy,
+      enemyEl: enemy.el || null,
       patternId: String(pattern.id || '').trim().toLowerCase(),
       beamCount,
       beamEls,
@@ -83,11 +98,16 @@ export function createBeatSwarmEnemyLaserRuntime() {
       startBeat,
       startStep,
       subdivisionsPerBeat,
+      phaseBeats,
+      phaseSteps: phaseBeats * subdivisionsPerBeat,
+      lockBeat: startBeat + phaseBeats,
+      lockStep: startStep + (phaseBeats * subdivisionsPerBeat),
       activateBeat: startBeat + warningBeats,
       activateStep: startStep + warningSteps,
       endBeat: startBeat + warningBeats + activeBeats,
       endStep: startStep + warningSteps + (activeBeats * subdivisionsPerBeat),
       activated: false,
+      locked: false,
       lastContactBeat: -1,
       lastContactStep: -1,
     };
@@ -97,6 +117,7 @@ export function createBeatSwarmEnemyLaserRuntime() {
       enemy.combatLaserAngle = hazard.angle + 0.42;
     }
     hazards.push(hazard);
+    syncEnemyLaserPhase(enemy);
     return hazard;
   }
 
@@ -123,18 +144,28 @@ export function createBeatSwarmEnemyLaserRuntime() {
         continue;
       }
       const active = timelineIndex >= (stepScheduled ? hazard.activateStep : hazard.activateBeat);
-      if (!active && hazard.aimMode === 'track_then_lock') {
+      const locked = !active && timelineIndex >= (stepScheduled ? hazard.lockStep : hazard.lockBeat);
+      if (!active && !locked && hazard.aimMode === 'track_then_lock') {
         hazard.angle = angleToTarget(enemy, player);
+      }
+      if (locked && !hazard.locked) {
+        hazard.locked = true;
+        for (const el of hazard.beamEls) {
+          el.classList.remove('is-aiming');
+          el.classList.add('is-locked');
+        }
+        options?.onLock?.({ hazard, enemy, beatIndex, stepIndex });
       }
       enemy.combatFacingAngle = hazard.angle;
       if (active && !hazard.activated) {
         hazard.activated = true;
         for (const el of hazard.beamEls) {
-          el.classList.remove('is-warning');
+          el.classList.remove('is-warning', 'is-aiming', 'is-locked');
           el.classList.add('is-active');
         }
         options?.onActivate?.({ hazard, enemy, beatIndex, stepIndex });
       }
+      syncEnemyLaserPhase(enemy);
       const speedScale = active ? 1 : 0.22;
       if (hazard.aimMode !== 'track_then_lock' && hazard.aimMode !== 'formation') {
         hazard.angle += hazard.angularSpeed * dt * speedScale;
@@ -195,6 +226,9 @@ export function createBeatSwarmEnemyLaserRuntime() {
       beamCount: hazard.beamCount,
       activateBeat: hazard.activateBeat,
       activateStep: hazard.activateStep,
+      lockBeat: hazard.lockBeat,
+      lockStep: hazard.lockStep,
+      phaseBeats: hazard.phaseBeats,
       endBeat: hazard.endBeat,
       endStep: hazard.endStep,
       subdivisionsPerBeat: hazard.subdivisionsPerBeat,

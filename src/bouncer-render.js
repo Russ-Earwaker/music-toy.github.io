@@ -3,6 +3,7 @@ const __DBG = (globalThis.BOUNCER_DBG_LEVEL|0)||0; const __d=(lvl,...a)=>{ if(__
 // Encapsulates the Bouncer draw loop to keep bouncer.main.js concise.
 import { drawBlock } from './toyhelpers.js';
 import { isRunning } from './audio-core.js';
+import { getToyLifecycle } from './baseMusicToy/toyLifecycle.js';
 import { startSection } from './perf-meter.js';
 import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
@@ -20,6 +21,7 @@ export function createBouncerDraw(env){
     BOUNCER_BARS_PER_LIFE, setBallOut, setNextLaunchAt
   } = env;
 
+  const lifecycle = getToyLifecycle(panel);
   let lastCssW = 0, lastCssH = 0;
   const ballTrail = []; let lastBallPos = null; let teleportGuard = false;
   const sparks = [];
@@ -36,6 +38,7 @@ export function createBouncerDraw(env){
   let __bouncerFrame = 0;
 
   function draw(){
+    if (lifecycle.disposed) return;
     __bouncerFrame = (__bouncerFrame | 0) + 1;
 
     // --- Toy performance contract (scene-level gating) ------------------
@@ -56,11 +59,11 @@ export function createBouncerDraw(env){
 
       if (!__mustDraw) {
         if (__dec && __dec.mode === 'frozen' && !__dec.focused && !__dec.visible) {
-          requestAnimationFrame(draw);
+          lifecycle.requestFrame(draw);
           return;
         }
         if (__mod > 1 && ((__bouncerFrame | 0) % __mod) !== 0) {
-          requestAnimationFrame(draw);
+          lifecycle.requestFrame(draw);
           return;
         }
       }
@@ -448,16 +451,12 @@ export function createBouncerDraw(env){
         // AND the global transport is playing.
         const isActiveInChain = panel.dataset.chainActive === 'true';
         const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
-        // Physics should run if active in chain, OR if standalone, OR if it has a ghost ball
-        // that needs to expire, OR if it has a real ball that needs to finish its life.
-        const currentBall = getBall ? getBall() : env.ball;
-        const hasActiveGhostBall = currentBall?.isGhost === true;
-        const hasRealBall = !!currentBall && !currentBall.isGhost;
-        const shouldRunPhysics = (isActiveInChain || !isChained || hasActiveGhostBall || hasRealBall) && isRunning();
+        // Only the active chain link may run or schedule notes.
+        const shouldRunPhysics = (isActiveInChain || !isChained) && isRunning();
 
         // Run the physics step *before* chain activation logic. This ensures that if a ghost
         // ball expires, it is nulled out before the next toy in the chain checks for a ball.
-        if (shouldRunPhysics) stepBouncer(S);
+        if (shouldRunPhysics && (!isChained || wasActiveInChain)) stepBouncer(S);
         applyFromStep(S); // Apply state changes from physics immediately.
 
         // Handle timed unmute for smooth transitions when interrupting a replay.
@@ -473,7 +472,7 @@ export function createBouncerDraw(env){
         try {
             if (S && typeof S.getLoopInfo === 'function' && S.visQ && S.visQ.loopRec && typeof S.onNewBar === 'function') {
                 const li = S.getLoopInfo();
-                const anchor = (S.visQ.loopRec && S.visQ.loopRec.anchorStartTime) ? S.visQ.loopRec.anchorStartTime : li.loopStartTime;
+                const anchor = Number.isFinite(S.visQ.loopRec?.anchorStartTime) ? S.visQ.loopRec.anchorStartTime : li.loopStartTime;
                 const k = Math.floor(Math.max(0, (li.now - anchor) / li.barLen));
                 if (S.visQ.loopRec.lastBarIndex !== k) {
                     S.onNewBar(li, k);
@@ -498,6 +497,8 @@ export function createBouncerDraw(env){
 
         // When a bouncer becomes active in a chain, spawn a ball if it doesn't have one.
         if (isActiveInChain && !wasActiveInChain) {
+            const startAt = panel.__chainStartAt;
+            delete panel.__chainStartAt;
             const b = getBall ? getBall() : null;
             if (!b) { // Only do something if there's no ball.
                 const isChainHead = !panel.dataset.prevToyId;
@@ -508,7 +509,7 @@ export function createBouncerDraw(env){
                     // User has placed a spawner, so launch a ball from it.
                     const vx = handle.vx || 0;
                     const vy = handle.vy || -7.68; // Default upwards
-                    const newBall = spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() });
+                    const newBall = spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() }, { startAt });
                     setBallOut(newBall);
                 } else if (hasHistory) {
                     // No user placement, but has history. Let stepBouncer handle the respawn.
@@ -516,11 +517,11 @@ export function createBouncerDraw(env){
                 } else {
                     // This is an empty, untouched bouncer.
                     const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
-                    if (isChained) {
+                    if (isChained && (!isChainHead || Number.isFinite(startAt))) {
                         // If it's part of a chain, it should get a ghost ball to act as a "rest" for one bar.
                         // This applies to both head and follower bouncers.
                         const ac = ensureAudioContext();
-                        const now = ac ? ac.currentTime : 0;
+                        const now = Number.isFinite(startAt) ? startAt : (ac ? ac.currentTime : 0);
                         const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
                         let life = 2.0;
                         if (li && Number.isFinite(li.barLen) && li.barLen > 0) {
@@ -544,12 +545,12 @@ export function createBouncerDraw(env){
         // is responsible for playing back the recorded pattern of notes.
         try {
             const lr = S.visQ && S.visQ.loopRec;
-            if (shouldRunPhysics && lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo === 'function') {
+            if (shouldRunPhysics && (!isChained || panel.dataset.chainActive === 'true') && lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo === 'function') {
                 const li = S.getLoopInfo();
                 const nowT = li.now;
-                // The playback anchor is the start of the current GLOBAL bar.
-                const k_global = Math.floor(Math.max(0, (nowT - li.loopStartTime) / li.barLen));
-                const playback_base = li.loopStartTime + k_global * li.barLen;
+                const anchor = Number.isFinite(lr.anchorStartTime) ? lr.anchorStartTime : li.loopStartTime;
+                const k_global = Math.floor(Math.max(0, (nowT - anchor) / li.barLen));
+                const playback_base = anchor + k_global * li.barLen;
 
                 if (Array.isArray(lr.pattern) && lr.pattern.length > 0) {
                     // Use global bar index to reset scheduled keys.
@@ -618,19 +619,13 @@ export function createBouncerDraw(env){
 
     } finally {
       endPerf();
-      requestAnimationFrame(draw);
+      lifecycle.requestFrame(draw);
     }
   }
 
   // Kick off the self-perpetuating draw loop.
-  requestAnimationFrame(draw);
+  lifecycle.requestFrame(draw);
 
   return draw;
 }
-
-
-
-
-
-
 

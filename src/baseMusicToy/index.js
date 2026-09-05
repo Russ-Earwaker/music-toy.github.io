@@ -1,5 +1,7 @@
 // src/baseMusicToy/index.js
 export { syncCanvasCssSize } from './canvasCss.js';
+export { getToyLifecycle } from './toyLifecycle.js';
+export { mountToySurface } from './toySurface.js';
 export { applyCanvasBackingSize } from './canvasBackingStore.js';
 export { clampDprForBackingStore } from './dprPolicy.js';
 export { createOverlayResizeGate, quantizePx } from './overlayResizeGate.js';

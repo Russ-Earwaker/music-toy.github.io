@@ -84,6 +84,7 @@ export function createBeatSwarmEnemyCombatRuntime() {
     const spawnHazard = options?.spawnHazard;
     const playAttackSound = options?.playAttackSound;
     const onAttack = options?.onAttack;
+    const resolvePattern = options?.resolvePattern;
     if (!target || (typeof spawnProjectile !== 'function' && typeof spawnHazard !== 'function')) return 0;
     let attackCount = 0;
 
@@ -91,7 +92,10 @@ export function createBeatSwarmEnemyCombatRuntime() {
       if (!enemy || enemy.combatEnabled !== true || enemy.retreating || String(enemy.lifecycleState || 'active') !== 'active') continue;
       if (enemy.combatGroupMotifMuted === true) continue;
       const profile = getBeatSwarmEnemyCombatProfile(enemy.combatProfileId);
-      const pattern = getBeatSwarmEnemyAttackPattern(profile?.id, enemy.combatPatternId);
+      const basePattern = getBeatSwarmEnemyAttackPattern(profile?.id, enemy.combatPatternId);
+      const pattern = typeof resolvePattern === 'function'
+        ? (resolvePattern(enemy, basePattern, profile) || basePattern)
+        : basePattern;
       if (!profile || !pattern) continue;
       const motifSteps = Array.isArray(enemy.combatGroupMotifSteps)
         ? enemy.combatGroupMotifSteps.map((step) => normalizeBeat(step))

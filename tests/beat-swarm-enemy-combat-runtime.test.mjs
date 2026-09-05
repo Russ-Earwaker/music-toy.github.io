@@ -170,3 +170,38 @@ test('starts deferred hazard warnings early so activation lands on the authored 
     { stepIndex: 7, motifStep: 5, warningMotifStep: 3 },
   ]);
 });
+
+test('uses the resolved laser warning duration when scheduling an authored motif note', () => {
+  const enemy = {
+    wx: 10,
+    wy: 20,
+    lifecycleState: 'active',
+    soundNote: 'C4',
+    combatGroupMotifLength: 16,
+    combatGroupMotifStartBeat: 0,
+    combatGroupMotifSteps: [8],
+  };
+  configureBeatSwarmEnemyCombatRuntime(enemy, {
+    profileId: 'laser_spinner',
+    patternId: 'arena_beam_group_pulse',
+    movementBehaviorId: 'hold_position',
+    anchorX: 10,
+    anchorY: 20,
+    startBeat: 0,
+  });
+  const runtime = createBeatSwarmEnemyCombatRuntime();
+  const warnings = [];
+  for (let beatIndex = 0; beatIndex <= 8; beatIndex += 1) {
+    runtime.update({
+      beatIndex,
+      enemies: [enemy],
+      target: { x: 100, y: 20 },
+      resolvePattern: (_enemy, pattern) => ({ ...pattern, phaseBeats: 2, warningBeats: 4 }),
+      spawnHazard: (_enemy, pattern, warningBeat) => warnings.push({
+        warningBeat,
+        warningBeats: pattern.warningBeats,
+      }),
+    });
+  }
+  assert.deepEqual(warnings, [{ warningBeat: 4, warningBeats: 4 }]);
+});

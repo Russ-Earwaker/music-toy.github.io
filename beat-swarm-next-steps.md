@@ -542,6 +542,13 @@ Implementation order:
    - current validation: the shorter Arrangement Intensity Ramp now exercises production formation selection and density across every intensity without paying the time cost of replaying onboarding
 13. Later: add level- and difficulty-based enemy health and damage scaling as one input to the adaptive cost budget after threat composition and readability are proven.
 14. Design boss ownership of the full musical structure later.
+15. Active validation: make musical-lane focus an explicit presentation contract:
+   - the director controls how many primary and supporting lanes are visually emphasized as intensity and difficulty rise
+   - every primary focus lane must have a visible performer or a clearly tracked performer entering from offscreen
+   - newly authored player lanes temporarily override normal rotation so their gameplay consequence is immediately readable
+   - the lane HUD distinguishes visible, entering, and missing focused performers
+   - `music_lane_focus_changed`, `music_lane_focus_presentation`, and director-state telemetry expose focus rotation, carrier visibility, and population failures in the shorter arrangement-intensity lab
+   - next validation: confirm no primary lane remains missing or offscreen across its focus phrase, while non-focused lanes remain present only as intentional background complexity
 
 ## Hold For Later
 

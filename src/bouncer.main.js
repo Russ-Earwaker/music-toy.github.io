@@ -1,8 +1,8 @@
 // c:\Users\Russ_\Desktop\music-toy\music-toy.github.io\src\bouncer.main.js
-import './bouncer-square-fit.js';
+import { getToyLifecycle, mountToySurface } from './baseMusicToy/index.js';
 import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
 import { stepBouncer } from './bouncer-step.js';
-import { noteList, resizeCanvasForDPR } from './utils.js';
+import { noteList } from './utils.js';
 import { ensureAudioContext, getLoopInfo, setToyMuted, isRunning } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
@@ -36,11 +36,12 @@ export function createBouncer(selector){
   const panel = shell.closest('.toy-panel') || shell;
   // Prevent double-initialization, which can cause duplicate draw loops and event listeners.
   if (panel.__bouncer_main_instance) return panel.__bouncer_main_instance;
+  const lifecycle = getToyLifecycle(panel);
   // Prevent double-initialization, which can cause duplicate draw loops and event listeners.
   // Enable OSD + quant debug by default (can be turned off later)
   try{ if (!panel.dataset.debug) panel.dataset.debug = '1'; }catch{}
   try{ window.BOUNCER_QUANT_DBG = true; }catch{}
-  let instrument = (panel.dataset.instrument || 'retro_square'); panel.addEventListener('toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
+  let instrument = (panel.dataset.instrument || 'retro_square'); lifecycle.listen(panel, 'toy-instrument', (e)=>{ instrument = (e?.detail?.value)||instrument; });
   let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
   const toyId = panel.id || panel.dataset.toyid || `bouncer-${Math.random().toString(36).slice(2, 8)}`;
   try { panel.dataset.toyid = toyId; } catch {}
@@ -177,12 +178,11 @@ export function createBouncer(selector){
     }
   }catch{}
 
-  const host = panel.querySelector('.toy-body') || panel;
   const canvas = document.createElement('canvas');
-  canvas.style.width = '100%';
-  canvas.style.display = 'block';
-  canvas.style.height = '100%';
-  host.appendChild(canvas);
+  canvas.className = 'bouncer-canvas';
+  const surface = mountToySurface(panel, canvas);
+  const host = surface.host;
+  const resizeCanvasForDPR = (_canvas, ctx) => surface.resize(ctx);
 
   if (host && getComputedStyle(host).position === 'static') {
     host.style.position = 'relative';
@@ -231,6 +231,7 @@ export function createBouncer(selector){
       const ro = new ResizeObserver(() => applySwipePrompt());
       ro.observe(host);
       host.__bouncerPromptRO = ro;
+      lifecycle.addCleanup(() => { ro.disconnect(); delete host.__bouncerPromptRO; });
     } catch {}
   }
 
@@ -240,8 +241,8 @@ export function createBouncer(selector){
       host.dataset.bouncerPromptDismissed = '1';
       swipeLabel.style.opacity = '0';
     };
-    canvas.addEventListener('pointerdown', dismiss);
-    canvas.addEventListener('pointermove', dismiss);
+    lifecycle.listen(canvas, 'pointerdown', dismiss);
+    lifecycle.listen(canvas, 'pointermove', dismiss);
     canvas.__bouncerPromptHooked = true;
   }
 
@@ -322,9 +323,9 @@ export function createBouncer(selector){
         }
       }
     } catch {}
-    requestAnimationFrame(__tickOSD);
+    lifecycle.requestFrame(__tickOSD);
   }
-  requestAnimationFrame(__tickOSD); /*OSD_DEBUG*/
+  lifecycle.requestFrame(__tickOSD); /*OSD_DEBUG*/
 
   const __getSpeed = installSpeedUI(panel, sizing, parseFloat((panel?.dataset?.speed)||'1.60'));
   // Default quant to 1/2 (div=2) if not provided
@@ -332,11 +333,11 @@ export function createBouncer(selector){
   const __getQuantDiv = installQuantUI(panel, parseFloat(panel?.dataset?.quantDiv||panel?.dataset?.quant||'2'));
   // apply speed changes to queued launch
   let __speedCache = (__getSpeed?__getSpeed():1);
-  panel.addEventListener('toy-speed', (e)=>{ const ns = (e && e.detail && Number(e.detail.value)) ? e.detail.value : (__getSpeed?__getSpeed():1); const os = __speedCache || 1; const ratio = os ? (ns/os) : 1; __speedCache = ns; try{ if (lastLaunch && Number.isFinite(ratio) && ratio>0){ lastLaunch.vx *= ratio; lastLaunch.vy *= ratio; } }catch{} });
+  lifecycle.listen(panel, 'toy-speed', (e)=>{ const ns = (e && e.detail && Number(e.detail.value)) ? e.detail.value : (__getSpeed?__getSpeed():1); const os = __speedCache || 1; const ratio = os ? (ns/os) : 1; __speedCache = ns; try{ if (lastLaunch && Number.isFinite(ratio) && ratio>0){ lastLaunch.vx *= ratio; lastLaunch.vy *= ratio; } }catch{} });
 
   // When quantization changes, reset the loop to start a new recording.
   // This prevents the old pattern from replaying with mismatched timing.
-  panel.addEventListener('bouncer:quant', () => {
+  lifecycle.listen(panel, 'bouncer:quant', () => {
     if (loopRec) {
       // Immediately clear the old pattern and switch to record mode.
       // This prevents the old notes from replaying with the new timing.
@@ -746,15 +747,18 @@ export function createBouncer(selector){
     // the user's deliberate placement of the spawner handle.
     ball = null;
     lastLaunch = null;
+    nextLaunchAt = null;
+    visQ.loopRec.pattern.length = 0;
+    visQ.loopRec.mode = 'record';
   }
 
-  panel.addEventListener('toy-random', doRandom);
-  panel.addEventListener('toy-random-cubes', doRandomCubes);
-  panel.addEventListener('toy-random-notes', doRandomNotes);
-  panel.addEventListener('toy-reset', doReset);
-  panel.addEventListener('toy-clear', doReset);
-  panel.addEventListener('chain:stop', doSoftReset);
-  panel.addEventListener('toy-zoom', (e)=>{ try{ sizing.setZoom && sizing.setZoom(!!(e?.detail?.zoomed)); updateSpeedVisibility && updateSpeedVisibility(); }catch{} });
+  lifecycle.listen(panel, 'toy-random', doRandom);
+  lifecycle.listen(panel, 'toy-random-cubes', doRandomCubes);
+  lifecycle.listen(panel, 'toy-random-notes', doRandomNotes);
+  lifecycle.listen(panel, 'toy-reset', doReset);
+  lifecycle.listen(panel, 'toy-clear', doReset);
+  lifecycle.listen(panel, 'chain:stop', doSoftReset);
+  lifecycle.listen(panel, 'toy-zoom', (e)=>{ try{ sizing.setZoom && sizing.setZoom(!!(e?.detail?.zoomed)); updateSpeedVisibility && updateSpeedVisibility(); }catch{} });
 
   
 // Recompute from normalized anchors; ignore incremental multipliers
@@ -796,41 +800,20 @@ export function createBouncer(selector){
     const loopRec = visQ.loopRec; // Always use the instance-specific loopRec
     const isRespawn = !!opts.isRespawn;
     const ac = (typeof ensureAudioContext === 'function') ? ensureAudioContext() : null;
-    const nowT = ac ? ac.currentTime : 0;
+    const nowT = Number.isFinite(opts.startAt) ? opts.startAt : (ac ? ac.currentTime : 0);
     if (DBG_RESPAWN()) console.log(`[BNC_DBG] spawnBallFrom (isRespawn: ${isRespawn}) at ${nowT.toFixed(3)}`);
 
-    // Any new ball, whether a user launch or a respawn, starts a new recording sequence.
-    // This prevents a respawned ball from becoming a "ghost" during a replay.
-    // A new user-initiated launch always starts a new recording.
-    if (!isRespawn) {
-        // If a user launches a new ball on a toy that's part of a chain,
-        // reset all subsequent toys in that chain without breaking the chain.
-        let nextId = panel.dataset.nextToyId;
-        let currentPanel = panel;
-        while (nextId) {
-            const nextPanel = document.getElementById(nextId);
-            if (!nextPanel) break;
-
-            // Dispatching 'chain:stop' will call the doSoftReset() function for that toy,
-            // which sets its ball and lastLaunch to null, effectively stopping it,
-            // while preserving the user's spawner placement.
-            nextPanel.dispatchEvent(new CustomEvent('chain:stop', { bubbles: true }));
-            currentPanel = nextPanel;
-            nextId = currentPanel.dataset.nextToyId;
-            }
+    // User launches start a fresh recording; automatic respawns keep replaying it.
+    if (!isRespawn && !Number.isFinite(opts.startAt) && !panel.dataset.prevToyId && panel.dataset.nextToyId) {
+        panel.dispatchEvent(new CustomEvent('chain:restart', { bubbles: true }));
     }
     if (!isRespawn) {
         if (DBG_RESPAWN()) console.log(`[BNC_DBG] Resetting loop recorder due to new ball (isRespawn: ${isRespawn})`);
 
-        if (loopRec && loopRec.mode === 'replay') {
-            // When a new ball starts, we must invalidate the old recording to prevent
-            // the scheduler from playing stale notes. Muting the toy is too broad
-            // and can cause issues in chains. Invalidating the pattern is sufficient.
-            loopRec.isInvalid = true;
-        }
-
-        // Reset the existing loopRec object, don't create a new one.
-        Object.assign(loopRec, { signature: '', mode: 'record', pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set() });
+        // Clear the old pattern and scheduling state together, retaining the shared
+        // recorder object. Record mode suppresses replay while the new shot is
+        // captured; a stale invalid flag must not silence its later repetitions.
+        Object.assign(loopRec, { signature: '', mode: 'record', isInvalid: false, pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, scheduledKeys: new Set(), seen: new Set() });
         try {
             loopRec.signature = stateSignature();
             // Record relative to the local spawn time to ensure the full bar is captured.
@@ -859,7 +842,7 @@ export function createBouncer(selector){
         try {
           const li = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
           const ac = (typeof ensureAudioContext==='function') ? ensureAudioContext() : null;
-          const now = ac ? ac.currentTime : 0;
+          const now = nowT;
           let life = 2.0; // Default lifetime of 2 seconds as a fallback.
           if (li && Number.isFinite(li.barLen) && li.barLen > 0){
             life = li.barLen * BOUNCER_BARS_PER_LIFE;
@@ -909,7 +892,7 @@ let __justSpawnedUntil = 0;
   }
 
   const installInteractions = () => {
-    installBouncerInteractions({
+    const interactions = installBouncerInteractions({
       panel,
       setAim: __setAim,
       canvas,
@@ -941,6 +924,7 @@ let __justSpawnedUntil = 0;
         updateLastLaunch: updateLastLaunch,
       },
     });
+    lifecycle.addCleanup(() => interactions.dispose());
     };
 
   lockPhysWorld();
@@ -958,7 +942,7 @@ let __justSpawnedUntil = 0;
         const nowT = li ? li.now : (t||0);
         const barLen = li ? li.barLen : 1;
         const beatDur = barLen/4;
-        const anchor = (visQ && visQ.loopRec && visQ.loopRec.anchorStartTime) ? visQ.loopRec.anchorStartTime : (li ? li.loopStartTime : 0);
+        const anchor = Number.isFinite(loopRec?.anchorStartTime) ? loopRec.anchorStartTime : (li ? li.loopStartTime : 0);
         const k = Math.floor(Math.max(0, (nowT - anchor) / barLen));
 
         // During replay, all sound comes from the scheduler. The live ball is silent.
@@ -973,11 +957,8 @@ let __justSpawnedUntil = 0;
             triggerInstrument(i||instrument, n, scheduledT, toyId);
           } catch(e){}
           const at = (typeof t==='number' ? t : nowT);
-          // To align with the global beat, calculate offset relative to the start of the global bar
-          // that was active at the time of the hit.
-          const globalBarIndex = Math.floor(Math.max(0, (at - li.loopStartTime) / barLen));
-          const globalBarStart = li.loopStartTime + globalBarIndex * barLen;
-          const offBeats = (at - globalBarStart) / beatDur;
+          const localBarIndex = Math.floor(Math.max(0, (at - anchor) / barLen));
+          const offBeats = (at - (anchor + localBarIndex * barLen)) / beatDur;
           // Store the raw, unquantized offset. Quantization will be applied on replay.
           const off = offBeats;
           if (loopRec && Array.isArray(loopRec.pattern)){
@@ -1100,7 +1081,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
 
 
   function onLoop(_loopStart){} // no-op
-  const instanceApi = { onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
+  const instanceApi = { dispose: lifecycle.dispose, onLoop, reset: doReset, setInstrument: (n)=>{ instrument = n || instrument; }, element: canvas };
 
   // Apply any pending snapshot provided before init
   try{
@@ -1116,12 +1097,6 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   panel.__bouncer_main_instance = instanceApi;
   return instanceApi;
 }
-
-
-
-
-
-
 
 
 

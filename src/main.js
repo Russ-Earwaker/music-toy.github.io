@@ -28,7 +28,7 @@ import { getRect } from './layout-cache.js';
 
 import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
 
-const perfLabVersion = '2026-08-30-lane-focus-v7';
+const perfLabVersion = '2026-09-05-laser-lock-trace-v1';
 import(`./perf/perf-lab.js?v=${perfLabVersion}`).catch((err) => {
   try { console.warn('[main] perf lab import failed', err); } catch {}
 });
@@ -36,7 +36,7 @@ import './beat-swarm/weapon-gate-lab.js?v=2026-06-18-corridor-curve-v1';
 import './toy-layout-manager.js';
 import './zoom-overlay.js';
 import './toy-spawner.js';
-import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-08-30-lane-focus-v7';
+import { BeatSwarmMode } from './beat-swarm/beat-swarm-mode.js?v=2026-09-05-laser-lock-trace-v1';
 import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';
@@ -2084,6 +2084,7 @@ const toyInitializers = {
 
 const EXPERIMENTAL_TOYS = ['bouncer', 'rippler', 'loopgrid-drum', 'chordwheel'];
 const EXPERIMENTAL_PREF_KEY = 'prefs:enable-experimental-toys';
+const UNFINISHED_TOY_LOCK_ENABLED = false;
 
 const toyCatalog = [
     { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 800, height: 760 } },
@@ -2095,6 +2096,7 @@ const toyCatalog = [
 ];
 
 function isExperimentalEnabled() {
+    if (!UNFINISHED_TOY_LOCK_ENABLED) return true;
     try {
         return localStorage.getItem(EXPERIMENTAL_PREF_KEY) === '1';
     } catch (err) {
@@ -5297,7 +5299,7 @@ function startToyAndDescendants(panelEl, visited = new Set()) {
     }
 }
 
-function advanceChain(headId) {
+function advanceChain(headId, startAt) {
     const activeToyId = g_chainState.get(headId);
     if (!activeToyId) {
         g_chainState.set(headId, headId);
@@ -5330,6 +5332,14 @@ function advanceChain(headId) {
         nextActiveId = headId; // Loop back to head
         if (shouldPulse) triggerConnectorPulse(activeToyId, headId);
         g_chainState.set(headId, headId);
+    }
+
+    // Self-timed toys pass their exact completion time, not the observing frame.
+    const nextPanel = document.getElementById(nextActiveId);
+    if (nextPanel) nextPanel.__chainStartAt = Number.isFinite(startAt) ? startAt : undefined;
+    if (nextPanel && nextPanel !== activeToy) {
+      activeToy.dataset.chainActive = 'false';
+      nextPanel.dataset.chainActive = 'true';
     }
 
     // Only reset/cancel scheduling if we actually moved to a DIFFERENT toy.
@@ -7697,7 +7707,10 @@ function tickAudioScheduler() {
         g_lastAudioPhase01 = phase01;
         if (wrapped && g_chainState && g_chainState.size) {
           for (const headId of g_chainState.keys()) {
-            try { advanceChain(headId); } catch {}
+            const activeToy = document.getElementById(g_chainState.get(headId));
+            if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
+              try { advanceChain(headId); } catch {}
+            }
           }
         }
       }
@@ -8755,7 +8768,28 @@ async function boot(){
 
     // Only advance if the event is from the currently active toy in the chain
     if (activeToyId !== panel.id) return;
-    advanceChain(headId);
+    advanceChain(headId, e.detail?.completedAt);
+  });
+
+  // A new head gesture replaces the entire current turn, including queued audio.
+  document.addEventListener('chain:restart', (e) => {
+    const head = e.target.closest('.toy-panel');
+    if (!head || head.dataset.prevToyId || !head.dataset.nextToyId) return;
+    const seen = new Set();
+    let toy = head;
+    while (toy && !seen.has(toy.id)) {
+      seen.add(toy.id);
+      toy.dispatchEvent(new CustomEvent('chain:stop', { bubbles: false }));
+      const audioId = toy.dataset.audiotoyid || toy.__audioToyId || toy.id;
+      cancelScheduledToySources(audioId);
+      if (audioId !== toy.id) cancelScheduledToySources(toy.id);
+      bumpToyAudioGen(audioId, 'chain-restart');
+      toy.__forceSchedulerReset = true;
+      delete toy.__chainStartAt;
+      toy.dataset.chainActive = toy === head ? 'true' : 'false';
+      toy = document.getElementById(toy.dataset.nextToyId);
+    }
+    g_chainState.set(head.id, head.id);
   });
 
   // Add event listener for toys to request becoming the active link in a chain.

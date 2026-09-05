@@ -2,8 +2,10 @@
 export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSeconds, scale=1){
   if (!ripples) return;
   ctx.save();
-  const cssW = ctx.canvas.clientWidth || ctx.canvas.width;
-  const cssH = ctx.canvas.clientHeight || ctx.canvas.height;
+  ctx.strokeStyle = '#ffffff';
+  // The generator and ripple radii use backing pixels, including on high-DPR screens.
+  const cssW = ctx.canvas.width;
+  const cssH = ctx.canvas.height;
   for (let i = ripples.length - 1; i >= 0; i--) {
     const canvasW = ctx.canvas.width || (ctx.canvas.clientWidth || 0);
     const canvasH = ctx.canvas.height || (ctx.canvas.clientHeight || 0);
@@ -172,8 +174,8 @@ const r1 = Math.max(0, r);
     strokeRing(r1, lw, a);
   }
 })();
-  ctx.restore();
 }
+  ctx.restore();
 }
 
 export function drawGenerator(ctx, gx, gy, r, now, ripples, NUM_STEPS, stepSeconds, scale=1){

@@ -55,6 +55,23 @@ function getEnemyCombatVisualScaleRuntime(enemy) {
   return 1 + (0.28 * eased) + maxChargeTremor;
 }
 
+function getEnemyFormationOverloadVisualScaleRuntime(enemy) {
+  const startedAtMs = Number(enemy?.formationOverloadVisualStartedAtMs);
+  const durationMs = Math.max(1, Number(enemy?.formationOverloadVisualDurationMs) || 0);
+  if (enemy?.formationOverloadVisualStartedAtMs == null || !Number.isFinite(startedAtMs) || !(durationMs > 1)) return 1;
+  const nowMs = Number(globalThis.performance?.now?.()) || Date.now();
+  const phase = Math.max(0, Math.min(1, (nowMs - startedAtMs) / durationMs));
+  if (phase >= 1) {
+    enemy.formationOverloadVisualStartedAtMs = null;
+    enemy.formationOverloadVisualDurationMs = 0;
+    return 1;
+  }
+  const strength = phase < 0.18
+    ? 1 - Math.pow(1 - (phase / 0.18), 3)
+    : Math.max(0, 1 - ((phase - 0.18) / 0.82));
+  return 1 + (strength * 0.24);
+}
+
 export function getEnemyCombatVisualRotationRuntime(enemy) {
   const angle = Number(enemy?.combatFacingAngle);
   if (!Number.isFinite(angle)) return null;
@@ -1345,7 +1362,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         const spawnScale = enemyType === 'drawsnake' ? 1 : (helpers.getEnemySpawnScale?.(e) || 1);
         const rolePulseScale = resolveRolePulseScale();
         const combatVisualScale = getEnemyCombatVisualScaleRuntime(e);
-        e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * rolePulseScale * combatVisualScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})`;
+        const overloadVisualScale = getEnemyFormationOverloadVisualScaleRuntime(e);
+        e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * rolePulseScale * combatVisualScale * overloadVisualScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})`;
       }
       if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
       if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {
@@ -1554,8 +1572,28 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       e.vx = Number(e?.damageHitStopVelocityX) || 0;
       e.vy = Number(e?.damageHitStopVelocityY) || 0;
     } else {
-      e.vx += ax * (Number(state.dt) || 0);
-      e.vy += ay * (Number(state.dt) || 0);
+      if (e?.laneFocusEntryPriority === true) {
+        const entryTargetX = Number.isFinite(Number(e?.laneFocusEntryTargetX))
+          ? Number(e.laneFocusEntryTargetX)
+          : (Number(centerWorld?.x) || 0);
+        const entryTargetY = Number.isFinite(Number(e?.laneFocusEntryTargetY))
+          ? Number(e.laneFocusEntryTargetY)
+          : (Number(centerWorld?.y) || 0);
+        const entryDx = entryTargetX - (Number(e.wx) || 0);
+        const entryDy = entryTargetY - (Number(e.wy) || 0);
+        const entryDistance = Math.hypot(entryDx, entryDy);
+        if (entryDistance > 0.001) {
+          const entrySpeed = Math.max(620, Math.min(920, Math.hypot(Number(e.vx) || 0, Number(e.vy) || 0) * 1.8));
+          const entryBlend = 1 - Math.exp(-12 * Math.max(0.001, Number(state.dt) || (1 / 60)));
+          const entryVx = (entryDx / entryDistance) * entrySpeed;
+          const entryVy = (entryDy / entryDistance) * entrySpeed;
+          e.vx += (entryVx - (Number(e.vx) || 0)) * entryBlend;
+          e.vy += (entryVy - (Number(e.vy) || 0)) * entryBlend;
+        }
+      } else {
+        e.vx += ax * (Number(state.dt) || 0);
+        e.vy += ay * (Number(state.dt) || 0);
+      }
       if ((Number(eventSectionVisual.velocityDamping) || 1) < 0.999) {
         e.vx *= eventSectionVisual.velocityDamping;
         e.vy *= eventSectionVisual.velocityDamping;
@@ -1567,8 +1605,13 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       && !isLargeFormationEnemyRuntime(e)
       ? 2
       : 1;
+    const laneFocusEntrySpeedScale = e?.laneFocusEntryPriority === true ? 3.5 : 1;
     const reserveApproachScale = e?.leadBallReserve === true && e?.leadBallReserveSettled !== true ? 6 : 1;
-    const maxSpeed = (Number(constants.enemyMaxSpeed) || 0) * speedMult * formationPositioningSpeedScale * reserveApproachScale;
+    const maxSpeed = (Number(constants.enemyMaxSpeed) || 0)
+      * speedMult
+      * formationPositioningSpeedScale
+      * laneFocusEntrySpeedScale
+      * reserveApproachScale;
     if (!hitStopActive && speed > maxSpeed) {
       const k = maxSpeed / speed;
       e.vx *= k;
@@ -1772,7 +1815,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         ? ` rotate(${combatVisualRotation.toFixed(4)}rad)`
         : '';
       const combatVisualScale = getEnemyCombatVisualScaleRuntime(e);
-      e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * combatVisualScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})${combatRotation}`;
+      const overloadVisualScale = getEnemyFormationOverloadVisualScaleRuntime(e);
+      e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * combatVisualScale * overloadVisualScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})${combatRotation}`;
     }
     if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
     if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {

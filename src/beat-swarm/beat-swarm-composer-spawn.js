@@ -208,7 +208,11 @@ export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
   const screenToWorld = typeof options?.screenToWorld === 'function' ? options.screenToWorld : (() => null);
   const worldToScreen = typeof options?.worldToScreen === 'function' ? options.worldToScreen : (() => null);
   const behavioralFormationArchetype = String(group?.behavioralFormationArchetype || '').trim().toLowerCase();
-  const useSharedBatchEntryPoint = group?.behavioralFormationActive === true && behavioralFormationArchetype === 'advancing_line';
+  // Required lane carriers enter from independently balanced quadrants, then
+  // assemble into their authored movement pattern once they are visible.
+  const useSharedBatchEntryPoint = group?.basicLaneCarrierHandoff !== true
+    && group?.behavioralFormationActive === true
+    && behavioralFormationArchetype === 'advancing_line';
   let sharedEntryPoint = null;
   if (useSharedBatchEntryPoint) {
     const freshEntryPoint = getRandomOffscreenSpawnPoint({
