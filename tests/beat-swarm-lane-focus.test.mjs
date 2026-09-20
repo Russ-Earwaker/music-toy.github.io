@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyBeatSwarmLaneFocusToCarrierCounts,
+  createBeatSwarmProductionHeroMixConfig,
   createBeatSwarmLaneFocusRuntime,
   evaluateBeatSwarmLaneFocusPresentation,
   resolveBeatSwarmLaneFocusBudget,
+  resolveBeatSwarmProductionHeroLane,
 } from '../src/beat-swarm/beat-swarm-lane-focus.js';
 
 test('focus budget grows with intensity and difficulty', () => {
@@ -13,6 +15,62 @@ test('focus budget grows with intensity and difficulty', () => {
   });
   assert.deepEqual(resolveBeatSwarmLaneFocusBudget('peak', 2), {
     stage: 'peak', difficulty: 2, primary: 2, supporting: 4,
+  });
+});
+
+test('production Hero prefers a forced main lane and holds it for the phrase', () => {
+  const first = resolveBeatSwarmProductionHeroLane({
+    phraseIndex: 5,
+    availableLaneIds: ['foundation_lane', 'primary_loop_lane'],
+    forcedLaneIds: ['primary_loop_lane'],
+    primaryLaneIds: ['foundation_lane'],
+  });
+  assert.equal(first.heroLaneId, 'primary_loop_lane');
+  const held = resolveBeatSwarmProductionHeroLane({
+    phraseIndex: 5,
+    availableLaneIds: ['foundation_lane', 'primary_loop_lane', 'secondary_loop_lane'],
+    forcedLaneIds: ['secondary_loop_lane'],
+    primaryLaneIds: ['secondary_loop_lane'],
+  }, first);
+  assert.equal(held.heroLaneId, 'primary_loop_lane');
+  const nextPhrase = resolveBeatSwarmProductionHeroLane({
+    phraseIndex: 6,
+    availableLaneIds: ['foundation_lane', 'secondary_loop_lane'],
+    forcedLaneIds: ['secondary_loop_lane'],
+    primaryLaneIds: ['foundation_lane'],
+  }, held);
+  assert.equal(nextPhrase.heroLaneId, 'secondary_loop_lane');
+});
+
+test('production Hero mix maps focused main lanes to support and unfocused lanes to background', () => {
+  assert.deepEqual(createBeatSwarmProductionHeroMixConfig({
+    heroLaneId: 'foundation_lane',
+    focusedLaneIds: ['foundation_lane', 'secondary_loop_lane', 'sparkle_lane'],
+  }), {
+    heroLane: 'foundation_lane',
+    roles: {
+      foundation_lane: 'hero',
+      primary_loop_lane: 'background',
+      secondary_loop_lane: 'support',
+    },
+  });
+});
+
+test('peak carrier counts retain Hero density and cap other main lanes to one', () => {
+  assert.deepEqual(applyBeatSwarmLaneFocusToCarrierCounts({
+    foundation: 3,
+    secondary_loop_rhythm: 2,
+    primary_loop_lead: 3,
+    ornament: 1,
+  }, {
+    stage: 'peak',
+    heroLaneId: 'primary_loop_lane',
+    focusedLaneIds: ['foundation_lane', 'secondary_loop_lane', 'primary_loop_lane', 'sparkle_lane'],
+  }), {
+    foundation: 1,
+    secondary_loop_rhythm: 1,
+    primary_loop_lead: 3,
+    ornament: 1,
   });
 });
 
@@ -73,6 +131,52 @@ test('newly authored lane immediately becomes primary focus', () => {
   });
   assert.deepEqual(protectedFocus.primaryLaneIds, ['primary_loop_lane']);
   assert.equal(protectedFocus.reason, 'player_authored_override');
+});
+
+test('held Hero remains first Primary when focus rebuilds inside its phrase', () => {
+  const runtime = createBeatSwarmLaneFocusRuntime();
+  const lanes = ['foundation_lane', 'secondary_loop_lane', 'primary_loop_lane', 'sparkle_lane'];
+  const initial = runtime.update({
+    barIndex: 80,
+    intensityStage: 'build',
+    availableLaneIds: lanes,
+    forcedLaneIds: ['secondary_loop_lane'],
+  });
+  assert.equal(initial.heroLaneId, 'secondary_loop_lane');
+  assert.equal(initial.primaryLaneIds[0], 'secondary_loop_lane');
+
+  const rebuilt = runtime.update({
+    barIndex: 82,
+    intensityStage: 'build',
+    availableLaneIds: lanes,
+    forcedLaneIds: ['foundation_lane'],
+  });
+  assert.equal(rebuilt.heroPhraseIndex, initial.heroPhraseIndex);
+  assert.equal(rebuilt.heroLaneId, 'secondary_loop_lane');
+  assert.deepEqual(rebuilt.primaryLaneIds, ['secondary_loop_lane']);
+  assert.equal(rebuilt.supportingLaneIds.length, 2);
+  assert.equal(rebuilt.supportingLaneIds[0], 'foundation_lane');
+});
+
+test('Hero pin preserves peak Primary and Supporting budgets', () => {
+  const runtime = createBeatSwarmLaneFocusRuntime();
+  const lanes = ['foundation_lane', 'secondary_loop_lane', 'primary_loop_lane', 'sparkle_lane'];
+  const initial = runtime.update({
+    barIndex: 88,
+    intensityStage: 'build',
+    availableLaneIds: lanes,
+    forcedLaneIds: ['foundation_lane'],
+  });
+  const peak = runtime.update({
+    barIndex: 90,
+    intensityStage: 'peak',
+    availableLaneIds: lanes,
+  });
+  assert.equal(peak.heroLaneId, initial.heroLaneId);
+  assert.equal(peak.primaryLaneIds[0], 'foundation_lane');
+  assert.equal(peak.primaryLaneIds.length, 2);
+  assert.equal(peak.supportingLaneIds.length, 2);
+  assert.equal(new Set(peak.focusedLaneIds).size, 4);
 });
 
 test('carrier recruitment follows focus without mutating source counts', () => {

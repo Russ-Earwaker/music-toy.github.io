@@ -38,8 +38,16 @@ import { collectDrawSnakeStepBeatEvents as collectDrawSnakeStepEvents, collectSp
 import { spawnComposerGroupEnemyAtRuntime, spawnComposerGroupOffscreenMembersRuntime, } from './beat-swarm-composer-spawn.js?v=2026-08-24-enemy-identity-v1';
 import { createBeatSwarmInstrumentLaneTools } from './beat-swarm-instrument-lanes.js';
 import { getBeatSwarmStyleProfile } from './beat-swarm-style-profile.js';
+import { createBeatSwarmMusicMixDebugRecord } from './beat-swarm-mix-debug.js?v=2026-09-20-final-role-v2';
+import {
+  isBeatSwarmLeadHarmonyDisabled,
+} from './beat-swarm-readability-debug.js?v=2026-09-20-v1';
 import { executePerformedBeatEventRuntime } from './beat-swarm-event-execution.js?v=2026-08-26-player-composition-v3';
-import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-08-21-ball-lead-handoff-v12';
+import { processBeatSwarmStepEventsRuntime } from './beat-swarm-step-events.js?v=2026-09-20-final-hero-mix-v2';
+import {
+  getBeatSwarmHeroLaneMixForLane,
+  resolveBeatSwarmHeroLaneMixConfig,
+} from './beat-swarm-hero-lane-mix.js?v=2026-09-20-final-role-v3';
 import { keepDrawSnakeEnemyOnscreenRuntime, updateBeatSwarmEnemiesRuntime } from './beat-swarm-enemy-update.js?v=2026-08-31-lane-focus-v12';
 import {
   applyBeatSwarmEnemyDescriptorVisualIdentity,
@@ -103,9 +111,10 @@ import {
 import {
   BEAT_SWARM_LANE_FOCUS_ORDER,
   applyBeatSwarmLaneFocusToCarrierCounts,
+  createBeatSwarmProductionHeroMixConfig,
   createBeatSwarmLaneFocusRuntime,
   evaluateBeatSwarmLaneFocusPresentation,
-} from './beat-swarm-lane-focus.js?v=2026-09-01-lane-focus-v2';
+} from './beat-swarm-lane-focus.js?v=2026-09-20-production-hero-v3';
 
 let beatSwarmExecutionTriggerEvent = null;
 
@@ -208,7 +217,61 @@ function triggerBeatSwarmInstrument(instrument, noteName, when, destOrId, option
     when,
     color: String(options?.musicRoleColor || options?.debugColor || '').trim(),
   });
-  return triggerInstrument(instrument, resolvedNote, when, destOrId, options, triggerVelocity);
+  const finalSource = String(options?.source || beatSwarmExecutionTriggerEvent?.sourceSystem || '').trim().toLowerCase();
+  const finalActionType = String(options?.eventType || beatSwarmExecutionTriggerEvent?.actionType || '').trim().toLowerCase();
+  const finalPlayerWeapon = finalSource.includes('weapon')
+    || finalSource === 'beat-swarm-lookahead'
+    || finalActionType.includes('player-weapon')
+    || finalActionType.includes('weapon-step');
+  const finalLaneId = finalPlayerWeapon
+    ? 'player_weapon'
+    : String(options?.musicLaneId || triggerPayload?.musicLaneId || triggerPayload?.foundationLaneId || '').trim().toLowerCase();
+  const finalLaneMix = !finalPlayerWeapon
+    ? getBeatSwarmHeroLaneMixForLane(finalLaneId, getCurrentBeatSwarmHeroMixConfig())
+    : { applied: false, role: '', multiplier: 1 };
+  const preRoleFinalGain = Number.isFinite(Number(triggerVelocity)) ? Number(triggerVelocity) : 0;
+  const roleMultiplier = finalLaneMix.applied ? finalLaneMix.multiplier : 1;
+  const postRoleFinalGain = finalLaneMix.applied
+    ? Math.max(0, Math.min(1, preRoleFinalGain * roleMultiplier))
+    : triggerVelocity;
+  try {
+    const source = finalSource;
+    const actionType = finalActionType;
+    const playerWeapon = finalPlayerWeapon;
+    const laneId = finalLaneId;
+    const musicalEvent = playerWeapon || !!laneId;
+    if (musicalEvent) {
+      const beatIndex = Math.max(0, Math.trunc(Number(
+        options?.beatIndex ?? beatSwarmExecutionTriggerEvent?.beatIndex ?? currentBeatIndex
+      ) || 0));
+      const stepIndex = Math.max(0, Math.trunc(Number(
+        options?.stepIndex ?? beatSwarmExecutionTriggerEvent?.stepIndex ?? ensureSwarmDirector().getSnapshot?.()?.stepIndex
+      ) || 0));
+      const authoredGain = Number(options?.authoredGain ?? triggerPayload?.mixDebugAuthoredGain ?? triggerPayload?.audioGain ?? triggerVelocity);
+      const postHierarchyGain = Number(options?.postHierarchyGain ?? triggerPayload?.mixDebugPostHierarchyGain ?? authoredGain);
+      const postHeroGain = Number(options?.postHeroGain ?? triggerPayload?.mixDebugPostHeroGain ?? postHierarchyGain);
+      noteMusicSystemEvent('music_mix_debug', createBeatSwarmMusicMixDebugRecord({
+        beatsPerBar: COMPOSER_BEATS_PER_BAR,
+        beatIndex,
+        stepIndex,
+        lane: laneId,
+        source: playerWeapon ? 'player_weapon' : (source || 'performed_event'),
+        eventType: playerWeapon ? 'player_weapon' : (actionType || source || 'musical_event'),
+        instrument: instrumentId,
+        notes: [String(resolvedNote || '').trim()].filter(Boolean),
+        role: playerWeapon ? 'independent' : (finalLaneMix.applied ? finalLaneMix.role : 'unassigned'),
+        authoredGain: Number.isFinite(authoredGain) ? authoredGain : null,
+        postHierarchyGain: Number.isFinite(postHierarchyGain) ? postHierarchyGain : null,
+        postHeroGain: Number.isFinite(postHeroGain) ? postHeroGain : null,
+        preRoleFinalGain,
+        roleMultiplier,
+        postRoleFinalGain,
+        finalExecutionGain: postRoleFinalGain,
+        prominence: String(options?.musicProminence || triggerPayload?.musicProminence || '').trim().toLowerCase(),
+      }), { beatIndex, stepIndex });
+    }
+  } catch {}
+  return triggerInstrument(instrument, resolvedNote, when, destOrId, options, postRoleFinalGain);
 }
 import { getOutwardOnlyInputRuntime, getShipFacingFromReleaseAimRuntime, shouldSuppressSteeringForReleaseRuntime, } from './beat-swarm-release-input.js';
 import { classifyEnemyDeathFamily, normalizeEnemyDeathFamily, normalizeInstrumentIdToken, normalizeSwarmNoteName, transposeSwarmNoteName, } from './beat-swarm-music-utils.js';
@@ -5989,7 +6052,7 @@ function updateMusicLaneFocusRuntime(force = false) {
   });
   musicLaneFocusRuntime.snapshot = snapshot;
   const signature = snapshot
-    ? `${snapshot.stage}|${snapshot.primaryLaneIds.join(',')}|${snapshot.supportingLaneIds.join(',')}|${snapshot.reason}`
+    ? `${snapshot.stage}|${snapshot.primaryLaneIds.join(',')}|${snapshot.supportingLaneIds.join(',')}|${snapshot.heroLaneId || ''}|${snapshot.reason}`
     : '';
   if (signature !== musicLaneFocusRuntime.lastSignature) {
     musicLaneFocusRuntime.lastSignature = signature;
@@ -6003,6 +6066,17 @@ function updateMusicLaneFocusRuntime(force = false) {
   }
   refreshMusicLaneDebugColors(true);
   return snapshot;
+}
+
+function getCurrentBeatSwarmHeroMixConfig() {
+  return resolveBeatSwarmHeroLaneMixConfig(
+    globalThis?.__beatSwarmHeroLaneMix,
+    createBeatSwarmProductionHeroMixConfig(musicLaneFocusRuntime.snapshot)
+  );
+}
+
+function getCurrentBeatSwarmHeroMixRole(laneId = '') {
+  return getBeatSwarmHeroLaneMixForLane(laneId, getCurrentBeatSwarmHeroMixConfig()).role || 'background';
 }
 
 function isMusicLaneGameplayFocused(laneIdLike = '', sourceLike = null) {
@@ -6542,7 +6616,17 @@ function directTriggerComposerCarrier(options = null) {
     ? Math.max(0.08, Math.min(0.4, (Number(SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME) || 0.24) * Math.max(0.6, audioGain)))
     : Math.max(0.18, Math.min(0.7, audioGain * (musicProminence === 'full' ? 0.62 : 0.5)));
   if (!visualOnly && instrumentId && note) {
-    try { triggerBeatSwarmInstrument(instrumentId, note, undefined, 'master', {}, triggerVolume); } catch {}
+    try {
+      triggerBeatSwarmInstrument(instrumentId, note, undefined, 'master', {
+        source: 'direct-composer-carrier',
+        eventType: soloCarrierType ? `${soloCarrierType}_carrier_note` : 'composer_carrier_note',
+        musicLaneId: String(input?.musicLaneId || enemy?.musicLaneId || '').trim().toLowerCase(),
+        authoredGain: audioGain,
+        postHierarchyGain: audioGain,
+        postHeroGain: audioGain,
+        musicProminence,
+      }, triggerVolume);
+    } catch {}
   }
   pulseEnemyMusicalRoleVisual(enemy, musicProminence === 'full' ? 'strong' : 'soft');
   pulseSoloCarrierActivationVisual(enemy);
@@ -8644,7 +8728,10 @@ function getLeadBallIntensityRecallStep(
   if (!baseStep) return baseStep;
   const sectionId = String(sectionIdLike || '').trim().toLowerCase();
   const sectionBar = Math.max(0, Math.trunc(Number(sectionBarLike) || 0));
-  const embellishmentLevel = sectionId === 'peak' ? 2 : (sectionId === 'build' ? 1 : 0);
+  const primaryLoopPeakRole = getCurrentBeatSwarmHeroMixRole('primary_loop_lane');
+  const embellishmentLevel = sectionId === 'peak'
+    ? (primaryLoopPeakRole === 'hero' ? 2 : (primaryLoopPeakRole === 'support' ? 1 : 0))
+    : (sectionId === 'build' ? 1 : 0);
   if (!leadBallAuthoringRuntime.motifHistory.length) return baseStep;
   const latestMotif = leadBallAuthoringRuntime.motifHistory[leadBallAuthoringRuntime.motifHistory.length - 1] || null;
   const selections = Array.isArray(latestMotif?.selections) ? latestMotif.selections : [];
@@ -8902,11 +8989,15 @@ function createLeadGateDirectPrimaryLoopEventRuntime(options = null) {
   });
   const carrierEnemy = carrierPerformers[0] || null;
   const carrierEnemyId = Math.max(0, Math.trunc(Number(carrierEnemy?.id) || 0));
-  const sectionId = String(
+  const rawSectionId = String(
     musicModeRuntime?.level1ArrangementState?.intensityAuditionSection
     || getCurrentSwarmEnergyStateName()
     || ''
   ).trim().toLowerCase();
+  const primaryPeakRole = getCurrentBeatSwarmHeroMixRole('primary_loop_lane');
+  const sectionId = rawSectionId === 'peak' && primaryPeakRole !== 'hero'
+    ? (primaryPeakRole === 'support' ? 'build' : 'low')
+    : rawSectionId;
   const sectionBar = Math.max(0, Math.trunc(Number(
     musicModeRuntime?.level1ArrangementState?.intensityAuditionSectionBar
   ) || 0));
@@ -15578,6 +15669,8 @@ function buildDirectorLanePlanForBar(barIndex = 0) {
     difficulty: focusSnapshot.difficulty,
     primaryLaneIds: focusSnapshot.primaryLaneIds.slice(),
     supportingLaneIds: focusSnapshot.supportingLaneIds.slice(),
+    heroLaneId: String(focusSnapshot.heroLaneId || '').trim().toLowerCase(),
+    heroPhraseIndex: Math.max(0, Math.trunc(Number(focusSnapshot.heroPhraseIndex) || 0)),
   } : null;
   return focusedPlan;
 }
@@ -20376,7 +20469,12 @@ function scheduleBeatSwarmAudioLookahead({ nowAt = null, lookaheadSec = 0.2 } = 
     const volume = gameplayVolume * 0.58;
     const instrument = resolveSwarmSoundInstrumentId(eventKey);
     try {
-      triggerBeatSwarmInstrument(instrument, noteName, targetAudioTime, 'master', { source: 'beat-swarm-lookahead' }, volume);
+      triggerBeatSwarmInstrument(instrument, noteName, targetAudioTime, 'master', {
+        source: 'beat-swarm-lookahead',
+        eventType: 'player_weapon',
+        stepIndex,
+        authoredGain: volume,
+      }, volume);
       beatSwarmAudioLookaheadRuntime.scheduledPlayerSteps.set(key, {
         stepIndex,
         eventKey,
@@ -30981,7 +31079,9 @@ function shapePrimaryLoopEventWithPlayerLeadThemeAtExecution(eventLike = null) {
   };
   if (sectionId === 'peak') {
     nextPayload.musicProminence = 'full';
-    nextPayload.audioGain = Math.max(0.82, Number(payload.audioGain) || 0);
+    if (getCurrentBeatSwarmHeroMixRole('primary_loop_lane') === 'hero') {
+      nextPayload.audioGain = Math.max(0.82, Number(payload.audioGain) || 0);
+    }
   }
   if (sectionId === 'settle') {
     if (!leadThemeStepActive) return null;
@@ -31149,7 +31249,8 @@ function executePerformedBeatEvent(event) {
         .map((note) => normalizeSwarmNoteName(note || ''))
         .filter((note, index, notes) => !!note && note !== primaryNote && notes.indexOf(note) === index)
         .slice(0, 2);
-      if (harmonyNotes.length) {
+      const leadHarmonyDisabled = isBeatSwarmLeadHarmonyDisabled();
+      if (harmonyNotes.length && !leadHarmonyDisabled) {
         if (perfLabRuntime.autoInteractionEnabled) {
           perfLabRuntime.compositionAuditPolyphony.push({
             barIndex: Math.max(0, Math.trunc(Number(executionEvent.barIndex) || 0)),
@@ -31173,7 +31274,18 @@ function executePerformedBeatEvent(event) {
           barIndex: Math.max(0, Math.trunc(Number(executionEvent.barIndex) || 0)),
         });
       }
-      harmonyNotes.forEach((harmonyNote, harmonyIndex) => {
+      if (harmonyNotes.length && leadHarmonyDisabled) {
+        noteMusicSystemEvent('music_player_lead_polyphony_suppressed', {
+          primaryNote,
+          harmonyNotes,
+          reason: 'debug_disable_lead_harmony',
+        }, {
+          beatIndex: Math.max(0, Math.trunc(Number(executionEvent.beatIndex) || 0)),
+          stepIndex: Math.max(0, Math.trunc(Number(executionEvent.stepIndex) || 0)),
+          barIndex: Math.max(0, Math.trunc(Number(executionEvent.barIndex) || 0)),
+        });
+      }
+      if (!leadHarmonyDisabled) harmonyNotes.forEach((harmonyNote, harmonyIndex) => {
         triggerBeatSwarmInstrument(
           executionEvent.instrumentId,
           harmonyNote,
@@ -31188,6 +31300,7 @@ function executePerformedBeatEvent(event) {
             stepIndex: Math.max(0, Math.trunc(Number(executionEvent.stepIndex) || 0)),
             eventId: Math.max(0, Math.trunc(Number(executionEvent.id) || 0)),
             harmonyVoiceIndex: harmonyIndex + 1,
+            authoredGain: harmonyIndex === 0 ? 0.64 : 0.52,
           },
           harmonyIndex === 0 ? 0.64 : 0.52
         );
@@ -32018,6 +32131,9 @@ function updateBeatWeapons(centerWorld) {
     loopAdmissionRuntime,
     musicModeRuntime: activeMusicModeRuntime,
     enemyDirectorRuntime: activeEnemyDirectorRuntime,
+    heroLaneMixConfig: createBeatSwarmProductionHeroMixConfig(
+      musicLaneFocusRuntime.snapshot || updateMusicLaneFocusRuntime(true)
+    ),
   };
   let stepUpdate = null;
   withBeatSwarmPerfSample('pickupsCombat.weaponRuntime.stepChange', () => {
@@ -32666,45 +32782,8 @@ function playEnemyCombatAttackAudio(
 ) {
   const timing = getEnemyCombatAudioBeatTiming(beatIndexLike, stepIndexLike);
   triggerEnemyCombatFiredVisual(enemy, visualKind);
-  const attackVolume = enemy?.combatAttackSoundVolume != null && Number.isFinite(Number(enemy.combatAttackSoundVolume))
-    ? Number(enemy.combatAttackSoundVolume)
-    : Number(fallbackVolume) || 0.34;
-  // Projectile enemies retain their authored musical layer, but omit the generic
-  // shot SFX because the themed projectile sample is also used by the player.
-  if (visualKind !== 'projectile') {
-    playSwarmSoundEventScheduled('projectile', attackVolume, beatIndexLike, enemy?.soundNote, {
-      debugSource: 'enemy-combat-group-motif',
-      stepIndex: timing.stepIndex,
-    });
-  }
-  const musicalInstrumentId = String(enemy?.combatMusicalInstrumentId || '').trim();
-  const musicalVolume = Math.max(0, Math.min(1, Number(enemy?.combatMusicalVolume) || 0));
-  const musicalNote = normalizeSwarmNoteName(enemy?.soundNote) || 'C4';
-  if (musicalInstrumentId && musicalVolume > 0) {
-    try {
-      triggerBeatSwarmInstrument(
-        musicalInstrumentId,
-        musicalNote,
-        Number.isFinite(timing.targetAudioTime) ? timing.targetAudioTime : undefined,
-        'master',
-        {
-          source: 'enemy-combat-group-motif',
-          enemyId: Math.trunc(Number(enemy?.id) || 0),
-          musicLaneId: String(enemy?.combatMusicOutputLaneId || enemy?.musicLaneId || '').trim().toLowerCase(),
-          musicRoleColor: String(enemy?.musicRoleColor || '').trim(),
-        },
-        musicalVolume
-      );
-    } catch {}
-  }
   enemy.lastCombatAudioBeatTiming = timing;
-  return {
-    attackVolume: visualKind === 'projectile' ? 0 : attackVolume,
-    musicalInstrumentId,
-    musicalVolume,
-    musicalNote,
-    timing,
-  };
+  return { timing };
 }
 function updateEnemyCombatRuntime(dt = 0) {
   const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
@@ -33008,9 +33087,6 @@ function updateEnemyLaserRuntime(dt) {
         lengthWorld: Number(hazard?.lengthWorld) || 0,
         visualLengthPx: Number(hazard?.lastVisualLengthPx) || 0,
         angle: Number(hazard?.angle) || 0,
-        musicalInstrumentId: attackAudio.musicalInstrumentId,
-        musicalNote: attackAudio.musicalNote,
-        musicalVolume: attackAudio.musicalVolume,
         scheduledAttackBeat: Math.max(0, Math.trunc(Number(hazard?.startBeat) || 0)),
         activationBeat: activationBeatIndex,
         activationStep: Number.isFinite(Number(activationStepIndex))
@@ -37158,6 +37234,7 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
           ? laneFocusSnapshot.supportingLaneIds.slice()
           : [],
         laneFocusReason: String(laneFocusSnapshot?.reason || '').trim().toLowerCase(),
+        heroLaneId: String(laneFocusSnapshot?.heroLaneId || '').trim().toLowerCase(),
         laneFocusVisibleCarrierCounts: { ...(musicLaneFocusRuntime.visibleCarrierCounts || {}) },
         laneFocusPresentationStatusByLane: { ...(musicLaneFocusRuntime.presentationStatusByLane || {}) },
         laneFocusPresentationReady: musicLaneFocusRuntime.presentationAudit?.ready === true,

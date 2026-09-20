@@ -7,6 +7,12 @@ export const BEAT_SWARM_LANE_FOCUS_ORDER = Object.freeze([
   'answer_lane',
 ]);
 
+export const BEAT_SWARM_HERO_LANE_IDS = Object.freeze([
+  'foundation_lane',
+  'primary_loop_lane',
+  'secondary_loop_lane',
+]);
+
 export const BEAT_SWARM_LANE_FOCUS_CONFIG = Object.freeze({
   phraseBars: 4,
   minimumPrimaryPhrases: 1,
@@ -71,7 +77,44 @@ export function applyBeatSwarmLaneFocusToCarrierCounts(countsLike = null, snapsh
   result.ornament = (focused.has('sparkle_lane') || focused.has('answer_lane'))
     ? Math.max(1, Math.trunc(Number(result.ornament) || 0))
     : 0;
+  if (String(snapshotLike?.stage || '').trim().toLowerCase() === 'peak') {
+    const heroLaneId = String(snapshotLike?.heroLaneId || '').trim().toLowerCase();
+    if (heroLaneId !== 'foundation_lane') result.foundation = Math.min(1, result.foundation);
+    if (heroLaneId !== 'secondary_loop_lane') result.secondary_loop_rhythm = Math.min(1, result.secondary_loop_rhythm);
+    if (heroLaneId !== 'primary_loop_lane') result.primary_loop_lead = Math.min(1, result.primary_loop_lead);
+  }
   return result;
+}
+
+export function resolveBeatSwarmProductionHeroLane(snapshotLike = null, previousLike = null) {
+  const snapshot = snapshotLike && typeof snapshotLike === 'object' ? snapshotLike : {};
+  const previous = previousLike && typeof previousLike === 'object' ? previousLike : {};
+  const phraseIndex = Math.max(0, Math.trunc(Number(snapshot.phraseIndex) || 0));
+  const available = normalizeLaneIds(snapshot.availableLaneIds).filter((laneId) => BEAT_SWARM_HERO_LANE_IDS.includes(laneId));
+  const previousHero = String(previous.heroLaneId || '').trim().toLowerCase();
+  const previousPhraseIndex = Math.max(-1, Math.trunc(Number(previous.heroPhraseIndex) || -1));
+  if (previousPhraseIndex === phraseIndex && available.includes(previousHero)) {
+    return { heroLaneId: previousHero, heroPhraseIndex: phraseIndex };
+  }
+  const forced = normalizeLaneIds(snapshot.forcedLaneIds).find((laneId) => available.includes(laneId));
+  const primary = normalizeLaneIds(snapshot.primaryLaneIds).find((laneId) => available.includes(laneId));
+  const heroLaneId = forced || primary || available[0]
+    || (BEAT_SWARM_HERO_LANE_IDS.includes(previousHero) ? previousHero : 'foundation_lane');
+  return { heroLaneId, heroPhraseIndex: phraseIndex };
+}
+
+export function createBeatSwarmProductionHeroMixConfig(snapshotLike = null) {
+  const snapshot = snapshotLike && typeof snapshotLike === 'object' ? snapshotLike : {};
+  const heroLaneId = String(snapshot.heroLaneId || '').trim().toLowerCase();
+  if (!BEAT_SWARM_HERO_LANE_IDS.includes(heroLaneId)) return { heroLane: 'none' };
+  const focused = new Set(normalizeLaneIds(snapshot.focusedLaneIds));
+  return {
+    heroLane: heroLaneId,
+    roles: Object.fromEntries(BEAT_SWARM_HERO_LANE_IDS.map((laneId) => [
+      laneId,
+      laneId === heroLaneId ? 'hero' : (focused.has(laneId) ? 'support' : 'background'),
+    ])),
+  };
 }
 
 export function evaluateBeatSwarmLaneFocusPresentation(snapshotLike = null, statusByLaneLike = null) {
@@ -175,8 +218,22 @@ export function createBeatSwarmLaneFocusRuntime(options = null) {
     });
     const primaryCount = Math.min(availableLaneIds.length, Math.max(forcedLaneIds.length, budget.primary));
     const totalCount = Math.min(availableLaneIds.length, Math.max(primaryCount, primaryCount + budget.supporting));
-    const primaryLaneIds = ranked.slice(0, primaryCount);
-    const supportingLaneIds = ranked.slice(primaryCount, totalCount);
+    let primaryLaneIds = ranked.slice(0, primaryCount);
+    let supportingLaneIds = ranked.slice(primaryCount, totalCount);
+    const hero = resolveBeatSwarmProductionHeroLane({
+      phraseIndex,
+      availableLaneIds,
+      forcedLaneIds,
+      primaryLaneIds,
+    }, state);
+    if (primaryCount > 0 && availableLaneIds.includes(hero.heroLaneId)) {
+      const displacedPrimaryLaneIds = primaryLaneIds.filter((laneId) => laneId !== hero.heroLaneId);
+      primaryLaneIds = [hero.heroLaneId, ...displacedPrimaryLaneIds].slice(0, primaryCount);
+      supportingLaneIds = normalizeLaneIds([
+        ...displacedPrimaryLaneIds.slice(Math.max(0, primaryCount - 1)),
+        ...supportingLaneIds.filter((laneId) => laneId !== hero.heroLaneId),
+      ]).slice(0, Math.max(0, totalCount - primaryCount));
+    }
     const focusedLaneIds = [...primaryLaneIds, ...supportingLaneIds];
     for (const laneId of primaryLaneIds) exposureByLane.set(laneId, (exposureByLane.get(laneId) || 0) + 2);
     for (const laneId of supportingLaneIds) exposureByLane.set(laneId, (exposureByLane.get(laneId) || 0) + 1);
@@ -193,6 +250,7 @@ export function createBeatSwarmLaneFocusRuntime(options = null) {
       focusedLaneIds,
       forcedLaneIds,
       availableLaneIds,
+      ...hero,
       forcedSignature,
       availableSignature,
       reason: forcedLaneIds.length ? 'player_authored_override' : 'phrase_rotation',

@@ -1,3 +1,9 @@
+import {
+  getBeatSwarmHeroLaneMixForLane,
+  getBeatSwarmPeakRoleAllowedSteps,
+  resolveBeatSwarmHeroLaneMixConfig,
+} from './beat-swarm-hero-lane-mix.js?v=2026-09-20-final-role-v3';
+
 export function processBeatSwarmStepEventsRuntime(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
   const helpers = options?.helpers && typeof options.helpers === 'object' ? options.helpers : {};
@@ -45,6 +51,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const musicModeRuntime = state.musicModeRuntime && typeof state.musicModeRuntime === 'object'
     ? state.musicModeRuntime
     : null;
+  const heroLaneMixConfig = resolveBeatSwarmHeroLaneMixConfig(
+    typeof globalThis !== 'undefined' ? globalThis.__beatSwarmHeroLaneMix : null,
+    state.heroLaneMixConfig
+  );
+  const getHeroMixRole = (laneId = '') => getBeatSwarmHeroLaneMixForLane(laneId, heroLaneMixConfig).role || 'background';
   const suppressDirectorMusic = state.suppressDirectorMusic === true;
   const weaponGatePlaybackActive = state.weaponGatePlaybackActive === true;
   const literalLeadPlaybackActive = state.literalLeadPlaybackActive === true;
@@ -198,6 +209,16 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (layer === 'loops') return 'support';
     return 'other';
   };
+  const getEnemyMusicActionGateLaneId = (ev) => {
+    const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+    const explicit = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
+    if (explicit) return explicit;
+    const lane = getEnemyMusicActionGateLane(ev);
+    if (lane === 'foundation') return 'foundation_lane';
+    if (lane === 'secondary') return 'secondary_loop_lane';
+    if (lane === 'lead') return 'primary_loop_lane';
+    return '';
+  };
   const isContractBlockedOrnamentEvent = (ev) => {
     if (!ev || typeof ev !== 'object') return false;
     const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
@@ -307,6 +328,9 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     }
     return [0, 2, 4, 6];
   };
+  const getPeakRoleAllowedSteps = (lane, role, gateState = null) => {
+    return getBeatSwarmPeakRoleAllowedSteps(lane, role, barIndex);
+  };
   const applyEnemyMusicActionGate = (eventsLike = []) => {
     const events = Array.isArray(eventsLike) ? eventsLike : [];
     if (!events.length) return events;
@@ -314,6 +338,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const kept = [];
     let allowedCount = 0;
     let blockedCount = 0;
+    const heroLaneId = String(heroLaneMixConfig?.heroLane || '').trim().toLowerCase();
+    const heroActiveOnSubdivision = events.some((candidate) => (
+      getEnemyMusicActionGateLaneId(candidate) === heroLaneId
+      && getEnemyMusicActionGateLane(candidate) !== 'ornament'
+    ));
     for (const ev of events) {
       const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
       const action = String(ev?.actionType || '').trim().toLowerCase();
@@ -349,6 +378,8 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
           || payload?.introPrimaryLoopBlendWindow === true
         ));
       const lane = getEnemyMusicActionGateLane(ev);
+      const laneId = getEnemyMusicActionGateLaneId(ev);
+      const peakRole = getHeroMixRole(laneId);
       const directorLaneBlocked = (() => {
         if (gateProtected) return false;
         if (lane !== 'ornament') return false;
@@ -360,8 +391,14 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
           || gateState.contractAllowsSparkle !== true
           || gateState.contractAllowsAnswer !== true;
       })();
-      const allowedSteps = gateProtected ? null : getEnemyMusicActionGateAllowedSteps(gateState.stage, lane, gateState);
-      const allowed = !directorLaneBlocked && (!Array.isArray(allowedSteps) || allowedSteps.includes(gateState.stepInBar));
+      const allowedSteps = gateProtected
+        ? null
+        : (gateState.stage === 'peak' && laneId
+          ? getPeakRoleAllowedSteps(lane, peakRole, gateState)
+          : getEnemyMusicActionGateAllowedSteps(gateState.stage, lane, gateState));
+      const ornamentOverHero = gateState.stage === 'peak' && lane === 'ornament' && heroActiveOnSubdivision;
+      const allowed = !directorLaneBlocked && !ornamentOverHero
+        && (!Array.isArray(allowedSteps) || allowedSteps.includes(gateState.stepInBar));
       if (allowed) {
         allowedCount += 1;
         kept.push({
@@ -371,6 +408,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
             enemyMusicActionGateStage: gateState.stage,
             enemyMusicActionGateRhythmFamily: gateState.rhythmFamily,
             enemyMusicActionGateLane: lane,
+            heroLaneMixRole: peakRole,
           },
         });
       } else {
@@ -1716,8 +1754,11 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     const freshEntryAudibility = isFreshEntryAudibility(item?.ev);
     const entryPhraseAudibility = isEntryPhraseAudibility(item?.ev);
     const finalProminence = (() => {
+      const selectedLaneId = String(item?.payload?.musicLaneId || item?.payload?.foundationLaneId || '').trim().toLowerCase();
+      const selectedPeakRole = getHeroMixRole(selectedLaneId);
       if (selectedIds.has(item.idx)) {
         if (item.layer === 'foundation') {
+          if (currentEnemyMusicActionGateState.stage === 'peak' && selectedPeakRole !== 'hero') return 'quiet';
           if (item.isPlayerBassFoundation) return 'full';
           if (item.isFoundationStructuralStep) return 'full';
           if (!playerLikelyAudible && !primaryLoopForegroundProtected) return 'full';
@@ -1726,7 +1767,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         if (item.layer === 'loops') {
           if (item.isProtectedIntroDrum) return 'quiet';
           if (item.isPrimaryLoopLaneEvent) {
-            if (currentEnemyMusicActionGateState.stage === 'peak') return 'full';
+            if (currentEnemyMusicActionGateState.stage === 'peak') return selectedPeakRole === 'hero' ? 'full' : 'quiet';
             if (primaryLoopForegroundProtected) {
               return 'full';
             }
@@ -1737,6 +1778,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
             if (playerLikelyAudible) return item.isEstablishingForegroundLoop ? 'full' : 'quiet';
             return 'full';
           }
+          if (currentEnemyMusicActionGateState.stage === 'peak' && selectedPeakRole === 'background') return 'quiet';
           if (
             (item.callResponseLane === 'response' || item.callResponseLane === 'call')
             && currentForegroundIdentityLayer === 'loops'
@@ -2122,6 +2164,12 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
       // arrangement density is allowed to reshape its foreground presence.
       nextAudioGain = clamp01(Number.isFinite(baseAudioGain) ? baseAudioGain : 1);
     }
+    const postHierarchyAudioGain = nextAudioGain;
+    const stagedLaneId = String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase();
+    // The audible role hierarchy is applied once at the final instrument
+    // boundary. Staging only carries the resolved role into diagnostics.
+    const heroLaneMix = getBeatSwarmHeroLaneMixForLane(stagedLaneId, heroLaneMixConfig);
+    const postHeroAudioGain = nextAudioGain;
     if (lineKey && !isLeadAuthoringLiteralReplay) {
       const previousGain = clamp01(previousLineState?.gain);
       const isProtectedLaneEvent = isPrimaryLoopLaneEvent || isFoundationLaneEvent;
@@ -2161,16 +2209,22 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
         lastSeenStep: stepIndex,
       });
     }
-    if (nextAudioGain === baseAudioGain) return ev;
     return {
       ...ev,
       payload: {
         ...payload,
         audioGain: nextAudioGain,
+        mixDebugAuthoredGain: Number.isFinite(baseAudioGain) ? baseAudioGain : 1,
+        mixDebugPostHierarchyGain: postHierarchyAudioGain,
+        mixDebugPostHeroGain: postHeroAudioGain,
         globalStepGainScale,
         hierarchyGainScale,
         stagedSoundCount,
         gainSmoothingApplied: lineKey ? true : false,
+        ...(heroLaneMix.applied ? {
+          heroLaneMixRole: heroLaneMix.role,
+          heroLaneMixMultiplier: heroLaneMix.multiplier,
+        } : {}),
         visibleCueAudibilityFloor: isVisibleGameplayCue,
         entryPhraseAudibilityGrace,
       },
@@ -2180,6 +2234,33 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
   const playerSoundVolumeMult = 1;
   const literalLeadReplayActive = helpers.isLeadThemeLiteralProtectionActive?.() === true;
   const sparkleStepMod8 = stepIndex % 8;
+  const heroLaneIdForStep = String(heroLaneMixConfig?.heroLane || '').trim().toLowerCase();
+  const stagedHeroEventActive = stagedEnemyEvents.some((event) => {
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : {};
+    return String(payload.musicLaneId || payload.foundationLaneId || '').trim().toLowerCase() === heroLaneIdForStep
+      && String(payload.musicProminence || 'full').trim().toLowerCase() !== 'suppressed';
+  });
+  const authoredHeroStepActive = (() => {
+    if (heroLaneIdForStep === 'primary_loop_lane') {
+      const playbackStep = helpers.getPlayerLeadThemePlaybackStepIndex?.(stepIndex) ?? stepIndex;
+      return helpers.getPlayerLeadThemePrimaryStep?.(
+        barIndex,
+        playbackStep,
+        currentEnemyMusicActionGateState.stage,
+        { bypassIntro: true }
+      )?.active === true;
+    }
+    if (heroLaneIdForStep === 'secondary_loop_lane') {
+      return helpers.getPlayerSimpleRhythmThemePlaybackStep?.('accentRhythm', stepIndex)?.active === true;
+    }
+    if (heroLaneIdForStep === 'foundation_lane') {
+      const snapshot = helpers.getFoundationLaneSnapshot?.(stepIndex, barIndex) || null;
+      const steps = Array.isArray(snapshot?.steps) ? snapshot.steps : [];
+      return steps.length > 0 && !!steps[((stepIndex % steps.length) + steps.length) % steps.length];
+    }
+    return false;
+  })();
+  const heroHasRestOnSubdivision = !stagedHeroEventActive && !authoredHeroStepActive;
   const sparkleBarPattern = ((barIndex % 4) + 4) % 4;
   const peakSparkleCompanionCue = currentEnemyMusicActionGateState.stage === 'peak'
     && currentEnemyMusicActionGateState.contractAllowsAnswer === true
@@ -2207,6 +2288,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (suppressDirectorMusic) return null;
     if (literalLeadReplayActive) return null;
     if (!explicitSparkleCompanionWanted) return null;
+    if (currentEnemyMusicActionGateState.stage === 'peak' && !heroHasRestOnSubdivision) return null;
     const sparkleActorId = Math.max(
       0,
       Math.trunc(Number(secondaryLoopLaneRuntime?.performerEnemyId) || 0)
@@ -2576,10 +2658,14 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (!authoredAccentMusicAllowed) return null;
     if (isLaneSuppressed('secondary_loop_lane')) return null;
     const motifBedState = getDirectorMotifBedStageState();
-    const stage = preserveAuthoredAccentContinuity
+    const rawStage = preserveAuthoredAccentContinuity
       && !['low', 'medium', 'build', 'peak'].includes(String(motifBedState.stage || '').trim().toLowerCase())
       ? 'low'
       : motifBedState.stage;
+    const secondaryPeakRole = getHeroMixRole('secondary_loop_lane');
+    const stage = rawStage === 'peak' && secondaryPeakRole !== 'hero'
+      ? (secondaryPeakRole === 'support' ? 'build' : 'low')
+      : rawStage;
     const sectionBar = motifBedState.sectionBar;
     const authoredContinuity = helpers.isPlayerMusicThemeAuthored?.('accentRhythm') === true;
     if (stage !== 'low' && stage !== 'medium' && stage !== 'build' && stage !== 'peak') return null;
@@ -2707,6 +2793,7 @@ export function processBeatSwarmStepEventsRuntime(options = null) {
     if (isLaneSuppressed('secondary_loop_lane')) return null;
     const { stage, sectionBar } = getDirectorMotifBedStageState();
     if (stage !== 'peak') return null;
+    if (getHeroMixRole('secondary_loop_lane') !== 'hero') return null;
     if (sectionBar < 16) return null;
     const phrase = helpers.getPlayerAccentRhythmMotionPhrase?.(barIndex, 'intensity_peak', {
       sectionRelative: true,
