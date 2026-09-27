@@ -3956,7 +3956,7 @@ function startMusicTraceCaptureForPerfRun(config = null) {
     const result = api.startTraceCapture({
       include,
       exclude,
-      maxLines: Math.max(50, Math.min(5000, Math.trunc(Number(cfg.maxLines) || 300))),
+      maxLines: Math.max(50, Math.min(20000, Math.trunc(Number(cfg.maxLines) || 300))),
     });
     return {
       ok: true,
@@ -8737,6 +8737,13 @@ async function runDirectorFormationIntensityFlowDebug() {
         'music_lane_focus_changed',
         'music_lane_focus_presentation',
         'music_mix_debug',
+        'music_hero_visual_representation',
+        'music_hero_visual_readability',
+        'music_hero_carrier_lifecycle',
+        'music_lane_carrier_trigger_timing',
+        'enemy_wind_push_visual_status',
+        'enemy_wind_push_triggered',
+        'enemy_basic_lane_carrier_lifecycle',
         'music_enemy_threat_lesson_advanced',
         'music_enemy_threat_lesson_test_override',
         'director_threat_admission',
@@ -8777,7 +8784,7 @@ async function runDirectorFormationIntensityFlowDebug() {
         'enemy_basic_lane_carrier_spawned',
         'enemy_basic_lane_carrier_status',
       ],
-      maxLines: 5000,
+      maxLines: 15000,
       preferOutputDirectory: true,
       fileNamePrefix: 'resources-debug-production-onboarding-flow',
     },

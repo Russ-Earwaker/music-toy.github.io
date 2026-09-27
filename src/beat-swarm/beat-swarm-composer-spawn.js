@@ -69,11 +69,6 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
   }
   if (behavioralFormationClass && behavioralFormationClass !== 'none') el.dataset.behavioralFormationClass = behavioralFormationClass;
   if (behavioralFormationActivationMode && behavioralFormationActivationMode !== 'inactive') el.dataset.behavioralFormationActivationMode = behavioralFormationActivationMode;
-  const hpWrap = document.createElement('div');
-  hpWrap.className = 'beat-swarm-enemy-hp';
-  const hpFill = document.createElement('div');
-  hpFill.className = 'beat-swarm-enemy-hp-fill';
-  hpWrap.appendChild(hpFill);
   if (isSoloCarrier) {
     const soloPulse = document.createElement('div');
     soloPulse.className = 'beat-swarm-solo-pulse';
@@ -82,7 +77,6 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     soloBadge.className = `beat-swarm-solo-badge beat-swarm-solo-badge-${soloCarrierFlavor}`;
     el.appendChild(soloBadge);
   }
-  el.appendChild(hpWrap);
   options.enemyLayerEl.appendChild(el);
 
   const s0 = worldToScreen({ x: w.x, y: w.y });
@@ -107,7 +101,7 @@ export function spawnComposerGroupEnemyAtRuntime(options = null) {
     el,
     hp: spawnMaxHp * (isSoloCarrier ? 10 : 2),
     maxHp: spawnMaxHp * (isSoloCarrier ? 10 : 2),
-    hpFillEl: hpFill,
+    hpFillEl: null,
     spawnT: 0,
     spawnDur: spawnDuration,
     enemyType: 'composer-group-member',

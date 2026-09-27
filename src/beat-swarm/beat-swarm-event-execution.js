@@ -787,7 +787,6 @@ export function executePerformedBeatEventRuntime(options = null) {
         enemy.continuityId = String(group.continuityId);
       }
       noteExecutedInstrumentChange(instrumentId, enemy, group);
-      helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
     });
     let visualTriggered = false;
     let audioTriggered = false;
@@ -830,6 +829,11 @@ export function executePerformedBeatEventRuntime(options = null) {
         try {
           helpers.triggerInstrument?.(instrumentId, noteName, eventTargetAudioTime, 'master', {}, triggerVolume);
           audioTriggered = true;
+          helpers.notifyEnemyMusicalTrigger?.(enemy, {
+            laneId: ev?.payload?.musicLaneId || group?.musicLaneId || enemy?.musicLaneId,
+            source: 'spawner_performed_event',
+            strength: enemyAudible ? 'strong' : 'soft',
+          });
           group.lastAudioDedupKey = audioDedupKey;
           if (
             slotOwnedSpawner
@@ -1046,11 +1050,15 @@ export function executePerformedBeatEventRuntime(options = null) {
         enemy.continuityId = String(group.continuityId);
       }
       noteExecutedInstrumentChange(instrumentId, enemy, group);
-      helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
     });
     if (enemyAudible) {
       withPerfSample('pickupsCombat.weaponRuntime.stepChange.processEvents.execute.drawsnake.audioTrigger', () => {
         try { helpers.triggerInstrument?.(instrumentId, noteName, eventTargetAudioTime, 'master', {}, triggerVolume); } catch {}
+        helpers.notifyEnemyMusicalTrigger?.(enemy, {
+          laneId: ev?.payload?.musicLaneId || group?.musicLaneId || enemy?.musicLaneId,
+          source: 'drawsnake_performed_event',
+          strength: 'strong',
+        });
       });
     }
     let nodeIndex = 0;
@@ -1109,6 +1117,11 @@ export function executePerformedBeatEventRuntime(options = null) {
           triggerVolume
         );
       } catch {}
+      helpers.notifyEnemyMusicalTrigger?.(helpers.getSwarmEnemyById?.(ev.actorId) || null, {
+        laneId: 'primary_loop_lane',
+        source: settleEcho ? 'primary_settle_echo_direct' : 'primary_release_echo_direct',
+        strength: 'soft',
+      });
       try {
         helpers.noteMusicSystemEvent?.(settleEcho ? 'music_settle_lead_echo_triggered' : 'music_release_lead_echo_triggered', {
           instrumentId,
@@ -1183,14 +1196,37 @@ export function executePerformedBeatEventRuntime(options = null) {
         );
       } catch {}
       const carrierEnemy = helpers.getSwarmEnemyById?.(ev.actorId) || null;
+      const primaryTriggerSource = payload?.leadBallMotifDerived === true ? 'primary_lead_ball_direct' : 'primary_lead_theme_direct';
+      let primaryPerformerNotified = false;
       if (carrierEnemy) {
-        helpers.triggerComposerGroupEnemyAbility?.({
+        const primaryAbilityTriggered = helpers.triggerComposerGroupEnemyAbility?.({
           enemy: carrierEnemy,
           group: null,
           event: ev,
           beatIndex,
           stepIndex,
           noteName,
+          onPerformer(performer) {
+            helpers.notifyEnemyMusicalTrigger?.(performer, {
+              laneId: 'primary_loop_lane',
+              source: primaryTriggerSource,
+              strength: 'strong',
+            });
+            primaryPerformerNotified = true;
+          },
+        });
+        if (primaryAbilityTriggered !== true || !primaryPerformerNotified) {
+          helpers.notifyEnemyMusicalTrigger?.(carrierEnemy, {
+            laneId: 'primary_loop_lane',
+            source: primaryTriggerSource,
+            strength: 'strong',
+          });
+        }
+      } else {
+        helpers.notifyEnemyMusicalTrigger?.(null, {
+          laneId: 'primary_loop_lane',
+          source: primaryTriggerSource,
+          strength: 'strong',
         });
       }
       try {
@@ -1458,29 +1494,8 @@ export function executePerformedBeatEventRuntime(options = null) {
       * (0.72 + ((Number(aggressionScale) || 0) * 0.28));
     if (enemy) helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
     noteExecutedInstrumentChange(instrumentId, enemy || null, group);
-    if (enemy) helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
-    const isGroupedPrimaryLead = String(group?.musicLaneId || ev?.payload?.musicLaneId || '').trim().toLowerCase() === 'primary_loop_lane'
-      && String(group?.musicProfileSourceType || '').trim().toLowerCase() === 'lead_melody'
-      && String(group?.callResponseLane || '').trim().toLowerCase() !== 'solo'
-      && execSoloType !== 'rhythm';
-    if (isGroupedPrimaryLead && group?.memberIds && typeof helpers.getSwarmEnemyById === 'function') {
-      const memberIds = group.memberIds instanceof Set
-        ? Array.from(group.memberIds)
-        : (Array.isArray(group.memberIds) ? group.memberIds : []);
-      for (let i = 0; i < memberIds.length; i++) {
-        const memberId = Math.max(0, Math.trunc(Number(memberIds[i]) || 0));
-        if (!(memberId > 0) || memberId === Math.max(0, Math.trunc(Number(enemy?.id) || 0))) continue;
-        const memberEnemy = helpers.getSwarmEnemyById(memberId);
-        if (!memberEnemy || memberEnemy?.retreating || String(memberEnemy?.enemyType || '').trim().toLowerCase() !== 'composer-group-member') continue;
-        const companionPulseDur = Math.max(
-          0.01,
-          (Number(memberEnemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0.24) * 0.72,
-        );
-        memberEnemy.composerActionPulseDur = companionPulseDur;
-        memberEnemy.composerActionPulseT = Math.max(Number(memberEnemy?.composerActionPulseT) || 0, companionPulseDur);
-        helpers.pulseEnemyMusicalRoleVisual?.(memberEnemy, 'soft');
-      }
-    }
+    const groupEventSource = String(ev?.payload?.groupEventSource || '').trim().toLowerCase();
+    const musicalTriggerSource = groupEventSource ? `composer_group_${groupEventSource}` : 'composer_group_performed_event';
     if (enemyAudible) {
       try { helpers.triggerInstrument?.(instrumentId, noteName, eventTargetAudioTime, 'master', {}, triggerVolume); } catch {}
       if (enemy) {
@@ -1504,6 +1519,13 @@ export function executePerformedBeatEventRuntime(options = null) {
       });
     }
     if (ghostPlayback) {
+      if (enemyAudible) {
+        helpers.notifyEnemyMusicalTrigger?.(enemy || null, {
+          laneId: executionLaneId,
+          source: musicalTriggerSource,
+          strength: 'strong',
+        });
+      }
       logMusicLabExecution({
         sourceSystem: 'group',
         requestedNote,
@@ -1550,6 +1572,7 @@ export function executePerformedBeatEventRuntime(options = null) {
     enemy.composerActionPulseDur = Math.max(0.01, Number(enemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);
     enemy.composerActionPulseT = Math.max(0.01, Number(enemy?.composerActionPulseDur) || Number(constants.composerGroupActionPulseSeconds) || 0);
     const origin = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+    let descriptorPerformerNotified = false;
     const descriptorAbilityTriggered = helpers.triggerComposerGroupEnemyAbility?.({
       enemy,
       group,
@@ -1558,7 +1581,22 @@ export function executePerformedBeatEventRuntime(options = null) {
       noteName,
       instrumentId,
       aggressionScale,
+      onPerformer(performer) {
+        helpers.notifyEnemyMusicalTrigger?.(performer, {
+          laneId: executionLaneId,
+          source: musicalTriggerSource,
+          strength: 'strong',
+        });
+        descriptorPerformerNotified = true;
+      },
     }) === true;
+    if ((!descriptorAbilityTriggered || !descriptorPerformerNotified) && enemyAudible) {
+      helpers.notifyEnemyMusicalTrigger?.(enemy || null, {
+        laneId: executionLaneId,
+        source: musicalTriggerSource,
+        strength: 'strong',
+      });
+    }
     if (descriptorAbilityTriggered) {
       noteComposerExecutionStage('descriptor_ability_triggered', {
         hasGroup: true,
@@ -1710,9 +1748,13 @@ export function executePerformedBeatEventRuntime(options = null) {
       helpers.syncSingletonEnemyStateFromMusicGroup?.(enemy, group);
     }
     noteExecutedInstrumentChange(instrumentId, enemy, group);
-    helpers.pulseEnemyMusicalRoleVisual?.(enemy, enemyAudible ? 'strong' : 'soft');
     if (enemyAudible && prominenceGain > 0) {
       try { helpers.triggerInstrument?.(instrumentId, noteName, eventTargetAudioTime, 'master', {}, triggerVolume); } catch {}
+      helpers.notifyEnemyMusicalTrigger?.(enemy, {
+        laneId: ev?.payload?.musicLaneId || group?.musicLaneId || enemy?.musicLaneId,
+        source: 'projectile_performed_event',
+        strength: 'strong',
+      });
     }
     logMusicLabExecution({
       sourceSystem: String(ev?.sourceSystem || ev?.payload?.sourceSystem || 'group').trim().toLowerCase() || 'group',

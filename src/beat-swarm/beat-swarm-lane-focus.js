@@ -86,6 +86,45 @@ export function applyBeatSwarmLaneFocusToCarrierCounts(countsLike = null, snapsh
   return result;
 }
 
+export function allocateBeatSwarmHeroVisualBodyTargets(countsLike = null, snapshotLike = null, options = null) {
+  const counts = countsLike && typeof countsLike === 'object' ? countsLike : {};
+  const snapshot = snapshotLike && typeof snapshotLike === 'object' ? snapshotLike : {};
+  const opts = options && typeof options === 'object' ? options : {};
+  const foundationBodies = Math.max(1, Math.trunc(Number(opts.foundationBodies) || 2));
+  const bodiesByLane = {
+    foundation_lane: Math.max(0, Math.trunc(Number(counts.foundation) || 0)) * foundationBodies,
+    secondary_loop_lane: Math.max(0, Math.trunc(Number(counts.secondary_loop_rhythm) || 0)) * 2,
+    primary_loop_lane: Math.max(0, Math.trunc(Number(counts.primary_loop_lead) || 0)) * 2,
+  };
+  const available = normalizeLaneIds(snapshot.availableLaneIds).filter((laneId) => BEAT_SWARM_HERO_LANE_IDS.includes(laneId));
+  const heroLaneId = String(snapshot.heroLaneId || '').trim().toLowerCase();
+  const focused = new Set(normalizeLaneIds(snapshot.focusedLaneIds));
+  const supportLaneIds = available.filter((laneId) => laneId !== heroLaneId && focused.has(laneId));
+  let remaining = Object.values(bodiesByLane).reduce((sum, count) => sum + count, 0)
+    + Math.max(0, Math.trunc(Number(opts.extraBodyBudget) || 0));
+  const result = Object.fromEntries(BEAT_SWARM_HERO_LANE_IDS.map((laneId) => [laneId, 0]));
+  if (!BEAT_SWARM_HERO_LANE_IDS.includes(heroLaneId) || remaining <= 0) return Object.freeze(result);
+  const multipleMainLanesActive = available.length > 1;
+  const heroClaim = multipleMainLanesActive ? Math.max(2, Math.min(3, remaining)) : Math.min(3, remaining);
+  result[heroLaneId] = Math.min(3, remaining, heroClaim);
+  remaining -= result[heroLaneId];
+  for (const laneId of supportLaneIds) {
+    if (remaining <= 0) break;
+    result[laneId] = 1;
+    remaining -= 1;
+  }
+  return Object.freeze(result);
+}
+
+export function getBeatSwarmHeroVisualPresentationTarget(roleLike = '', candidateCountLike = 0) {
+  const role = String(roleLike || '').trim().toLowerCase();
+  const candidateCount = Math.max(0, Math.trunc(Number(candidateCountLike) || 0));
+  if (role === 'hero') return Math.min(3, candidateCount);
+  if (role === 'support') return Math.min(1, candidateCount);
+  if (role === 'background') return 0;
+  return Math.min(1, candidateCount);
+}
+
 export function resolveBeatSwarmProductionHeroLane(snapshotLike = null, previousLike = null) {
   const snapshot = snapshotLike && typeof snapshotLike === 'object' ? snapshotLike : {};
   const previous = previousLike && typeof previousLike === 'object' ? previousLike : {};

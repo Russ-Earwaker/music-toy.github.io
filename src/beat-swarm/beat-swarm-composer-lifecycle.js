@@ -872,7 +872,21 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     }
     const need = Math.max(0, Math.trunc(Number(g.size) || 0) - aliveIds.size);
     if (need > 0) {
-      spawnComposerGroupOffscreenMembers(g, need);
+      const refillLaneId = String(g?.musicLaneId || '').trim().toLowerCase();
+      const requiredLaneRefill = requiredBasicLaneIds.has(refillLaneId);
+      const admittedRefillCount = Math.max(0, Math.trunc(Number(spawnComposerGroupOffscreenMembers(g, need)) || 0));
+      if (requiredLaneRefill) {
+        try {
+          noteMusicSystemEvent?.('enemy_basic_lane_carrier_lifecycle', {
+            phase: admittedRefillCount > 0 ? 'refill_admitted_offscreen' : 'refill_denied',
+            groupId: Math.trunc(Number(g?.id) || 0),
+            laneId: refillLaneId,
+            requestedMemberCount: need,
+            admittedMemberCount: admittedRefillCount,
+            aliveMemberCountBeforeRefill: aliveIds.size,
+          }, { beatIndex: Math.max(0, currentBarIndex * 4), barIndex: currentBarIndex });
+        } catch {}
+      }
     }
   }
 
@@ -1241,7 +1255,6 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
   if (
     !earlyIntroBridgeActive
     && reservedCoverageSpawnNeeded
-    && !requiredBasicLaneSpawnNeeded
     && effectiveCurrentSectionCount >= Math.max(0, Math.trunc(Number(pacingCaps.maxComposerGroups) || 0))
   ) {
     const liveLaneCounts = new Map();
@@ -1283,6 +1296,15 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
         ? 'required_basic_lane_reserve'
         : (reservedLeadSpawnNeeded ? 'lead_candidate_reserve' : 'secondary_loop_reserve');
       retireGroup(replaceableGroup, reserveReason);
+      try {
+        noteMusicSystemEvent?.('enemy_basic_lane_carrier_lifecycle', {
+          phase: 'replacement_retired',
+          missingLaneIds: missingBasicLaneCarriers.map((entry) => entry.laneId),
+          retiredGroupId: Math.trunc(Number(replaceableGroup?.id) || 0),
+          retiredLaneId: String(replaceableGroup?.musicLaneId || '').trim().toLowerCase(),
+          reason: reserveReason,
+        }, { beatIndex: Math.max(0, currentBarIndex * 4), barIndex: currentBarIndex });
+      } catch {}
       effectiveCurrentSectionCount = Math.max(0, effectiveCurrentSectionCount - 1);
       try {
         noteMusicSystemEvent?.('music_composer_group_state', {
@@ -1290,7 +1312,9 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
           groupId: Math.trunc(Number(replaceableGroup?.id) || 0),
           reason: reservedLeadSpawnNeeded
             ? 'retire_bass_for_primary_loop_candidate'
-            : 'retire_group_for_secondary_loop_bridge',
+            : (requiredBasicLaneSpawnNeeded
+              ? 'retire_surplus_group_for_required_basic_lane'
+              : 'retire_group_for_secondary_loop_bridge'),
           primaryLoopNeedsGroupCoverage,
           secondaryLoopCoverageRequested,
           currentSectionCount,
@@ -1394,6 +1418,26 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
         availableRequiredCarrierSlots,
         missingBasicLaneCarriers.length > 0 ? Math.min(2, missingBasicLaneCarriers.length) : 1,
       );
+  if (missingBasicLaneCarriers.length > 0) {
+    try {
+      noteMusicSystemEvent?.('enemy_basic_lane_carrier_lifecycle', {
+        phase: 'replacement_request',
+        requiredLaneIds: requiredBasicLaneCarriers.map((entry) => entry.laneId),
+        embodiedLaneIds: Array.from(embodiedBasicLaneIds),
+        missingLaneIds: missingBasicLaneCarriers.map((entry) => entry.laneId),
+        liveComposerGroupCount,
+        maxLiveComposerGroups,
+        availableLiveGroupSlots,
+        availableRequiredCarrierSlots,
+        requestedSpawnCount,
+        spawnCount,
+        threatAdmissionRetryBar,
+        blockedReason: currentBarIndex < threatAdmissionRetryBar
+          ? 'threat_admission_retry_wait'
+          : (spawnCount <= 0 ? 'no_spawn_slot' : ''),
+      }, { beatIndex: Math.max(0, currentBarIndex * 4), barIndex: currentBarIndex });
+    } catch {}
+  }
   for (let i = 0; i < spawnCount; i++) {
     const forcedIntroProfileSourceType = missingIntroProfiles[i] || '';
     const forcedBasicLaneCarrier = missingBasicLaneCarriers[i] || null;
@@ -1453,6 +1497,15 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
     ) {
       group.__bsLeadMergeSecondaryPersistUntilBar = currentBarIndex + 4;
     }
+    try {
+      noteMusicSystemEvent?.('enemy_basic_lane_carrier_lifecycle', {
+        phase: 'admission_attempted',
+        groupId: Math.trunc(Number(group?.id) || 0),
+        laneId: String(forcedBasicLaneCarrier?.laneId || group?.musicLaneId || '').trim().toLowerCase(),
+        requestedMemberCount: Math.max(0, Math.trunc(Number(group.size) || 0)),
+        forcedRequiredCarrier: !!forcedBasicLaneCarrier,
+      }, { beatIndex: Math.max(0, currentBarIndex * 4), barIndex: currentBarIndex });
+    } catch {}
     const admittedMemberCount = Math.max(
       0,
       Math.trunc(Number(spawnComposerGroupOffscreenMembers(
@@ -1461,6 +1514,15 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       )) || 0),
     );
     if (admittedMemberCount <= 0) {
+      try {
+        noteMusicSystemEvent?.('enemy_basic_lane_carrier_lifecycle', {
+          phase: 'admission_denied',
+          groupId: Math.trunc(Number(group?.id) || 0),
+          laneId: String(forcedBasicLaneCarrier?.laneId || group?.musicLaneId || '').trim().toLowerCase(),
+          requestedMemberCount: Math.max(0, Math.trunc(Number(group.size) || 0)),
+          forcedRequiredCarrier: !!forcedBasicLaneCarrier,
+        }, { beatIndex: Math.max(0, currentBarIndex * 4), barIndex: currentBarIndex });
+      } catch {}
       composerRuntime.__bsThreatAdmissionRetryBar = currentBarIndex + 1;
       continue;
     }
@@ -1471,6 +1533,15 @@ export function maintainComposerEnemyGroupsLifecycle(options = null) {
       Math.max(1, Math.trunc(Number(group?.performers) || admittedMemberCount)),
     );
     composerEnemyGroups.push(group);
+    try {
+      noteMusicSystemEvent?.('enemy_basic_lane_carrier_lifecycle', {
+        phase: 'admitted_offscreen',
+        groupId: Math.trunc(Number(group?.id) || 0),
+        laneId: String(forcedBasicLaneCarrier?.laneId || group?.musicLaneId || '').trim().toLowerCase(),
+        admittedMemberCount,
+        forcedRequiredCarrier: !!forcedBasicLaneCarrier,
+      }, { beatIndex: Math.max(0, currentBarIndex * 4), barIndex: currentBarIndex });
+    } catch {}
     if (noteMusicSystemEvent && currentBarIndex < 24) {
       try {
         noteMusicSystemEvent('music_composer_group_state', {

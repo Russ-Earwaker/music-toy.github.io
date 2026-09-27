@@ -130,6 +130,75 @@ test('reserves one temporary spawn slot for a missing playable core lane', () =>
   }), 0);
 });
 
+test('retires a surplus group to admit a missing required Hero-lane carrier at the group cap', () => {
+  const existingEnemy = { id: 90, hp: 10, musicState: 'active', retreating: false };
+  const existingGroup = {
+    id: 89,
+    active: true,
+    retiring: false,
+    lifecycleState: 'active',
+    musicState: 'active',
+    role: 'support',
+    musicRole: 'support',
+    roleLifecycleStartedBar: 12,
+    roleLifecycle: { role: 'support', minReadableBars: 4, maxRoleBars: 16 },
+    musicLaneId: 'answer_lane',
+    assignedMusicLaneId: 'answer_lane',
+    sectionKey: 'test:0:default',
+    sectionContinuityKey: 'test:0',
+    memberIds: new Set([existingEnemy.id]),
+    size: 1,
+    performers: 1,
+  };
+  const groups = [existingGroup];
+  const retired = [];
+  const lifecyclePhases = [];
+
+  maintainComposerEnemyGroupsLifecycle({
+    enabled: true,
+    composerEnemyGroups: groups,
+    currentBarIndex: 12,
+    sessionAgeBars: 12,
+    pacingCaps: { desiredGroups: 1, maxComposerGroups: 1 },
+    composer: { sectionId: 'test', cycle: 0 },
+    requiredBasicLaneCarriers: [{
+      laneId: 'secondary_loop_lane',
+      profileSourceType: 'secondary_bridge_backbeat',
+    }],
+    getAliveIdsForGroup: (group) => new Set(group.memberIds),
+    getAliveEnemiesByIds: (ids) => ids?.has?.(existingEnemy.id) ? [existingEnemy] : [],
+    retireGroup: (group, reason) => {
+      retired.push({ group, reason });
+      group.retiring = true;
+    },
+    noteMusicSystemEvent: (type, payload) => {
+      if (type === 'enemy_basic_lane_carrier_lifecycle') lifecyclePhases.push(payload.phase);
+    },
+    pickTemplate: () => ({ id: 'hero-replacement-test' }),
+    createComposerEnemyGroupProfile: () => ({}),
+    createGroupFromMotif: () => ({ id: 91, size: 1, performers: 1 }),
+    getBasicLaneCarrierBodyPlan: () => ({ scale: 'large', memberCount: 1 }),
+    isMusicLaneAvailableForEnemy: () => true,
+    spawnComposerGroupOffscreenMembers: (_group, count) => count,
+  });
+
+  assert.equal(retired.length, 1);
+  assert.equal(retired[0].group, existingGroup);
+  assert.equal(retired[0].reason, 'required_basic_lane_reserve');
+  assert.equal(groups.some((group) => group.musicLaneId === 'secondary_loop_lane' && group.retiring !== true), true);
+  assert.deepEqual(lifecyclePhases.filter((phase) => [
+    'replacement_retired',
+    'replacement_request',
+    'admission_attempted',
+    'admitted_offscreen',
+  ].includes(phase)), [
+    'replacement_retired',
+    'replacement_request',
+    'admission_attempted',
+    'admitted_offscreen',
+  ]);
+});
+
 test('forces a required carrier onto its requested lane before availability validation', () => {
   const groups = [];
   const checkedLaneIds = [];

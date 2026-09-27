@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  allocateBeatSwarmHeroVisualBodyTargets,
   applyBeatSwarmLaneFocusToCarrierCounts,
   createBeatSwarmProductionHeroMixConfig,
   createBeatSwarmLaneFocusRuntime,
   evaluateBeatSwarmLaneFocusPresentation,
+  getBeatSwarmHeroVisualPresentationTarget,
   resolveBeatSwarmLaneFocusBudget,
   resolveBeatSwarmProductionHeroLane,
 } from '../src/beat-swarm/beat-swarm-lane-focus.js';
@@ -72,6 +74,77 @@ test('peak carrier counts retain Hero density and cap other main lanes to one', 
     primary_loop_lead: 3,
     ornament: 1,
   });
+});
+
+test('Hero visual bodies take first claim without increasing the existing body pool', () => {
+  const counts = { foundation: 1, secondary_loop_rhythm: 1, primary_loop_lead: 1 };
+  const targets = allocateBeatSwarmHeroVisualBodyTargets(counts, {
+    heroLaneId: 'primary_loop_lane',
+    availableLaneIds: ['foundation_lane', 'secondary_loop_lane', 'primary_loop_lane'],
+    focusedLaneIds: ['foundation_lane', 'secondary_loop_lane', 'primary_loop_lane'],
+  }, { foundationBodies: 3 });
+  assert.deepEqual(targets, {
+    foundation_lane: 1,
+    primary_loop_lane: 3,
+    secondary_loop_lane: 1,
+  });
+  assert.ok(targets.primary_loop_lane > targets.foundation_lane);
+  assert.ok(targets.primary_loop_lane > targets.secondary_loop_lane);
+  assert.ok(Object.values(targets).reduce((sum, count) => sum + count, 0) <= 7);
+});
+
+test('Background lane can receive zero visual bodies', () => {
+  const targets = allocateBeatSwarmHeroVisualBodyTargets({
+    foundation: 1,
+    primary_loop_lead: 1,
+  }, {
+    heroLaneId: 'foundation_lane',
+    availableLaneIds: ['foundation_lane', 'secondary_loop_lane', 'primary_loop_lane'],
+    focusedLaneIds: ['foundation_lane', 'primary_loop_lane'],
+  }, { foundationBodies: 2 });
+  assert.deepEqual(targets, {
+    foundation_lane: 3,
+    primary_loop_lane: 1,
+    secondary_loop_lane: 0,
+  });
+});
+
+test('Hero visual allocation is declarative and does not mutate carrier targets', () => {
+  const counts = { foundation: 1, secondary_loop_rhythm: 1, primary_loop_lead: 0 };
+  const before = { ...counts };
+  allocateBeatSwarmHeroVisualBodyTargets(counts, {
+    heroLaneId: 'secondary_loop_lane',
+    availableLaneIds: ['foundation_lane', 'secondary_loop_lane'],
+    focusedLaneIds: ['foundation_lane', 'secondary_loop_lane'],
+  });
+  assert.deepEqual(counts, before);
+});
+
+test('ornament structural budget is reallocated to Hero without increasing total bodies', () => {
+  const targets = allocateBeatSwarmHeroVisualBodyTargets({
+    foundation: 1,
+    secondary_loop_rhythm: 1,
+    primary_loop_lead: 0,
+  }, {
+    heroLaneId: 'secondary_loop_lane',
+    availableLaneIds: ['foundation_lane', 'secondary_loop_lane'],
+    focusedLaneIds: ['foundation_lane', 'secondary_loop_lane'],
+  }, { foundationBodies: 2, extraBodyBudget: 2 });
+  assert.deepEqual(targets, {
+    foundation_lane: 1,
+    primary_loop_lane: 0,
+    secondary_loop_lane: 3,
+  });
+  assert.ok(targets.secondary_loop_lane >= Object.values(targets).reduce((sum, count) => sum + count, 0) / 2);
+  assert.ok(Object.values(targets).reduce((sum, count) => sum + count, 0) <= 6);
+});
+
+test('visual presentation caps Hero, Support, and Background without inventing carriers', () => {
+  assert.equal(getBeatSwarmHeroVisualPresentationTarget('hero', 5), 3);
+  assert.equal(getBeatSwarmHeroVisualPresentationTarget('hero', 2), 2);
+  assert.equal(getBeatSwarmHeroVisualPresentationTarget('support', 5), 1);
+  assert.equal(getBeatSwarmHeroVisualPresentationTarget('background', 5), 0);
+  assert.equal(getBeatSwarmHeroVisualPresentationTarget('hero', 0), 0);
 });
 
 test('presentation audit distinguishes visible, entering, and missing focus lanes', () => {

@@ -3214,7 +3214,6 @@ body.internal-board-active #board-main {
 .beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-fx-laser,
 .beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-spawner-link,
 .beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-solo-pulse,
-.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-enemy-hp,
 .beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-enemy-spawner-grid {
   display: none !important;
 }
@@ -4584,6 +4583,23 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   mix-blend-mode: screen;
 }
 
+.beat-swarm-overlay.is-readability-background .beat-swarm-starfield-layer {
+  background: #000 !important;
+}
+
+.beat-swarm-overlay.is-readability-background .beat-swarm-space-backdrop,
+.beat-swarm-overlay.is-readability-background .beat-swarm-star,
+.beat-swarm-overlay.is-readability-background .beat-swarm-parallax-pixel-star,
+.beat-swarm-overlay.is-readability-background .beat-swarm-nebula-cloud,
+.beat-swarm-overlay.is-readability-background .beat-swarm-gas-cloud,
+.beat-swarm-overlay.is-readability-background .beat-swarm-surface-field,
+.beat-swarm-overlay.is-readability-background .beat-swarm-arena-ring,
+.beat-swarm-overlay.is-readability-background .beat-swarm-arena-core,
+.beat-swarm-overlay.is-readability-background .beat-swarm-arena-limit-ring {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
 .beat-swarm-nebula-cloud {
   position: absolute;
   left: 0;
@@ -5050,6 +5066,120 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
   filter: brightness(calc(1 + (var(--bs-role-pulse) * 0.32))) saturate(calc(1 + (var(--bs-role-pulse) * 0.24)));
   transform: translate(-9999px, -9999px);
   transition: filter 80ms linear, box-shadow 80ms linear;
+}
+
+.beat-swarm-enemy-lane-marker {
+  display: none;
+  position: absolute;
+  inset: calc(-1 * var(--bs-lane-marker-inset, 6px));
+  z-index: 0;
+  border: var(--bs-lane-outline-width, 1px) solid var(--bs-role-color-bright, #fff);
+  border-radius: inherit;
+  box-shadow:
+    0 0 var(--bs-lane-glow-near, 7px) var(--bs-role-color, #fff),
+    0 0 var(--bs-lane-glow-far, 13px) var(--bs-role-glow-color, rgba(255,255,255,.3));
+  opacity: var(--bs-lane-marker-opacity, .48);
+  pointer-events: none;
+}
+
+.beat-swarm-enemy.is-main-musical-enemy .beat-swarm-enemy-lane-marker {
+  display: block;
+}
+
+.beat-swarm-enemy.is-hero-musical-enemy .beat-swarm-enemy-lane-marker {
+  opacity: var(--bs-lane-marker-opacity, 1);
+  box-shadow:
+    0 0 var(--bs-lane-glow-near, 18px) var(--bs-role-color, #fff),
+    0 0 var(--bs-lane-glow-far, 38px) var(--bs-role-glow-color, rgba(255,255,255,.65)),
+    inset 0 0 10px var(--bs-role-glow-color, rgba(255,255,255,.28));
+  animation: beat-swarm-hero-aura 1.8s ease-in-out infinite;
+}
+
+.beat-swarm-enemy.is-support-musical-enemy .beat-swarm-enemy-lane-marker {
+  opacity: var(--bs-lane-marker-opacity, .72);
+}
+
+.beat-swarm-enemy.is-background-musical-enemy {
+  filter: brightness(calc(.9 + (var(--bs-role-pulse) * .16))) saturate(.95);
+}
+
+.beat-swarm-enemy.is-background-musical-enemy .beat-swarm-enemy-lane-marker {
+  opacity: var(--bs-lane-marker-opacity, .48);
+}
+
+.beat-swarm-enemy.is-hero-musical-trigger .beat-swarm-enemy-lane-marker {
+  animation: beat-swarm-hero-trigger-flash 300ms ease-out;
+}
+
+.beat-swarm-enemy.is-support-musical-trigger .beat-swarm-enemy-lane-marker {
+  animation: beat-swarm-support-trigger-flash 260ms ease-out;
+}
+
+.beat-swarm-enemy.is-background-musical-trigger .beat-swarm-enemy-lane-marker {
+  animation: beat-swarm-background-trigger-flash 240ms ease-out;
+}
+
+.beat-swarm-enemy-role-label {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 7px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: var(--bs-role-color-bright, #fff);
+  font: 700 9px/1.1 monospace;
+  letter-spacing: .04em;
+  text-shadow: 0 1px 3px #000, 0 0 5px #000;
+}
+
+.beat-swarm-overlay.is-enemy-role-overlay .beat-swarm-enemy-role-label {
+  display: block;
+}
+
+@keyframes beat-swarm-hero-aura {
+  0%, 100% { transform: scale(.99); opacity: .78; }
+  50% { transform: scale(1.02); opacity: 1; }
+}
+
+@keyframes beat-swarm-hero-trigger-flash {
+  0% { transform: scale(.96); opacity: 1; box-shadow: 0 0 42px 15px var(--bs-role-color), 0 0 68px var(--bs-role-glow-color); }
+  100% { transform: scale(var(--bs-trigger-flash-scale, 1.22)); opacity: .68; box-shadow: 0 0 12px var(--bs-role-color); }
+}
+
+@keyframes beat-swarm-support-trigger-flash {
+  0% { transform: scale(.97); opacity: .9; box-shadow: 0 0 25px 8px var(--bs-role-color); }
+  100% { transform: scale(var(--bs-trigger-flash-scale, 1.1)); opacity: .5; box-shadow: 0 0 8px var(--bs-role-glow-color); }
+}
+
+@keyframes beat-swarm-background-trigger-flash {
+  0% { transform: scale(.98); opacity: .7; box-shadow: 0 0 14px 4px var(--bs-role-color); }
+  100% { transform: scale(var(--bs-trigger-flash-scale, 1.05)); opacity: .36; box-shadow: 0 0 5px var(--bs-role-glow-color); }
+}
+
+/* Musical role triggers reuse the combat black-body material treatment while
+   retaining the lane-coloured marker as the visible edge and halo. */
+.beat-swarm-overlay .beat-swarm-enemy.is-hero-musical-trigger {
+  background: #000 !important;
+  border-color: var(--bs-role-color-bright, #fff) !important;
+  box-shadow: inset 0 0 0 100px #000, 0 0 30px var(--bs-role-color, #fff) !important;
+}
+
+.beat-swarm-overlay .beat-swarm-enemy.is-support-musical-trigger {
+  background: color-mix(in srgb, var(--bs-role-color, #df5f49) 14%, #000) !important;
+  border-color: var(--bs-role-color-bright, #fff) !important;
+}
+
+.beat-swarm-overlay .beat-swarm-enemy.is-background-musical-trigger {
+  background: color-mix(in srgb, var(--bs-role-color, #df5f49) 32%, #000) !important;
+  border-color: var(--bs-role-color, #df5f49) !important;
+}
+
+.beat-swarm-overlay .beat-swarm-enemy.is-hero-musical-trigger::before,
+.beat-swarm-overlay .beat-swarm-enemy.is-hero-musical-trigger::after,
+.beat-swarm-overlay .beat-swarm-enemy.is-hero-musical-trigger .beat-swarm-enemy-spawner-grid,
+.beat-swarm-overlay .beat-swarm-enemy.is-hero-musical-trigger .beat-swarm-drawsnake-segments,
+.beat-swarm-overlay .beat-swarm-enemy.is-hero-musical-trigger .beat-swarm-drawsnake-nodes {
+  filter: brightness(0) saturate(0) !important;
 }
 
 .beat-swarm-enemy-combat-flash-overlay {
@@ -5619,28 +5749,29 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
 .beat-swarm-fx-wind-push {
   position: absolute;
   z-index: 22;
-  border: 5px dotted rgba(175, 246, 255, 0.9);
+  border: 2px solid color-mix(in srgb, var(--bs-wind-color, #86eaff) 84%, white);
   border-radius: 50%;
   box-sizing: border-box;
   box-shadow:
-    0 0 12px rgba(86, 225, 255, 0.88),
-    inset 0 0 18px rgba(86, 225, 255, 0.42);
+    0 0 8px color-mix(in srgb, var(--bs-wind-color, #86eaff) 56%, transparent),
+    inset 0 0 14px color-mix(in srgb, var(--bs-wind-color, #86eaff) 22%, transparent);
+  background: color-mix(in srgb, var(--bs-wind-color, #86eaff) 11%, transparent);
   pointer-events: none;
 }
 
-.beat-swarm-fx-wind-push::before,
-.beat-swarm-fx-wind-push::after {
+.beat-swarm-fx-wind-push::before {
   content: '';
   position: absolute;
-  inset: 12%;
-  border: 3px dashed rgba(225, 253, 255, 0.72);
+  inset: -2px;
   border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--bs-wind-color, #86eaff) 10%, transparent) 0 58%, transparent 72%);
+  animation: beat-swarm-wind-push-fill-fade 720ms ease-out both;
 }
 
-.beat-swarm-fx-wind-push::after {
-  inset: 28%;
-  border-width: 2px;
-  opacity: 0.7;
+@keyframes beat-swarm-wind-push-fill-fade {
+  0% { opacity: .72; }
+  45% { opacity: .18; }
+  100% { opacity: 0; }
 }
 
 .beat-swarm-enemy.is-composer-group.is-solo-carrier {
@@ -6194,38 +6325,6 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
     transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(0.92);
     opacity: 0;
   }
-}
-
-.beat-swarm-enemy-hp {
-  position: absolute;
-  left: 50%;
-  top: -10px;
-  width: 32px;
-  height: 5px;
-  transform: translateX(-50%);
-  border-radius: 6px;
-  background: rgba(22, 22, 30, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  overflow: hidden;
-}
-
-.beat-swarm-enemy-hp-fill {
-  width: 100%;
-  height: 100%;
-  transform-origin: left center;
-  transform: scaleX(1);
-  background: #65e780;
-}
-
-/* The gunner silhouette clips children, so keep its health bar inside the hull. */
-.beat-swarm-enemy.is-gunner-enemy .beat-swarm-enemy-hp {
-  top: 6px;
-  width: 30px;
-  height: 4px;
-  z-index: 4;
-  background: rgba(5, 12, 18, 0.9);
-  border-color: rgba(202, 244, 255, 0.72);
-  box-shadow: 0 0 6px rgba(101, 231, 128, 0.5);
 }
 
 .beat-swarm-pickup {
@@ -9645,5 +9744,3 @@ body.intro-open .topbar-menu-wrap {
 body.beat-swarm-active #internal-board-overlay {
   z-index: 1000 !important;
 }
-
-

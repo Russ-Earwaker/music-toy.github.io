@@ -412,6 +412,16 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       const dropCount = effects.length - maxEffectCount;
       const droppedEffects = effects.splice(0, dropCount);
       for (let i = 0; i < droppedEffects.length; i++) {
+        const droppedFx = droppedEffects[i];
+        if (droppedFx?.kind === 'wind-push') {
+          helpers.noteMusicSystemEvent?.('enemy_wind_push_visual_status', {
+            phase: 'removed_before_completion',
+            enemyId: Math.max(0, Math.trunc(Number(droppedFx.sourceEnemyId) || 0)),
+            removalReason: 'shared_effect_cap',
+            visualFrameCount: Math.max(0, Math.trunc(Number(droppedFx.visualFrameCount) || 0)),
+            onscreenVisualFrameCount: Math.max(0, Math.trunc(Number(droppedFx.onscreenVisualFrameCount) || 0)),
+          }, { beatIndex: currentBeatIndex, stepIndex: 0 });
+        }
         try { droppedEffects[i]?.el?.remove?.(); } catch {}
       }
     }
@@ -450,6 +460,16 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       }
     }
       if (fx.ttl <= 0) {
+        if (fx.kind === 'wind-push') {
+          helpers.noteMusicSystemEvent?.('enemy_wind_push_visual_status', {
+            phase: 'completed',
+            enemyId: Math.max(0, Math.trunc(Number(fx.sourceEnemyId) || 0)),
+            removalReason: 'ttl_complete',
+            visualFrameCount: Math.max(0, Math.trunc(Number(fx.visualFrameCount) || 0)),
+            onscreenVisualFrameCount: Math.max(0, Math.trunc(Number(fx.onscreenVisualFrameCount) || 0)),
+            everIntersectedViewport: Number(fx.onscreenVisualFrameCount) > 0,
+          }, { beatIndex: currentBeatIndex, stepIndex: 0 });
+        }
         try { fx.el?.remove?.(); } catch {}
         effects.splice(i, 1);
         continue;
@@ -777,9 +797,53 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
             opacity = Math.max(0.18, Math.pow(1 - elapsedN, 0.34));
           }
           const c = helpers.worldToScreen?.({ x: Number(fx.at?.x) || 0, y: Number(fx.at?.y) || 0 });
-          if (!c) return;
+          if (!c) {
+            if (fx.kind === 'wind-push' && fx.visualStatusReported !== true) {
+              fx.visualStatusReported = true;
+              helpers.noteMusicSystemEvent?.('enemy_wind_push_visual_status', {
+                phase: 'display_failed',
+                enemyId: Math.max(0, Math.trunc(Number(fx.sourceEnemyId) || 0)),
+                visualElementCreated: !!fx.el,
+                visualAttached: fx.el?.isConnected === true,
+                effectRegistered: true,
+                sourceEnemyAlive: !!getEnemyById(fx.sourceEnemyId),
+                failureReason: 'world_to_screen_failed',
+              }, { beatIndex: currentBeatIndex, stepIndex: 0 });
+            }
+            return;
+          }
+          if (fx.kind === 'wind-push' && !fx.el) {
+            if (fx.visualStatusReported !== true) {
+              fx.visualStatusReported = true;
+              helpers.noteMusicSystemEvent?.('enemy_wind_push_visual_status', {
+                phase: 'display_failed',
+                enemyId: Math.max(0, Math.trunc(Number(fx.sourceEnemyId) || 0)),
+                visualElementCreated: false,
+                visualAttached: false,
+                effectRegistered: true,
+                sourceEnemyAlive: !!getEnemyById(fx.sourceEnemyId),
+                failureReason: 'visual_dom_missing',
+              }, { beatIndex: currentBeatIndex, stepIndex: 0 });
+            }
+            return;
+          }
           const pxRadius = basePxRadius * radiusScale;
           const pxSize = pxRadius * 2;
+          const viewportWidth = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
+          const viewportHeight = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
+          const centerOnscreen = c.x >= 0 && c.x <= viewportWidth && c.y >= 0 && c.y <= viewportHeight;
+          const waveIntersectsViewport = (
+            c.x + pxRadius >= 0
+            && c.x - pxRadius <= viewportWidth
+            && c.y + pxRadius >= 0
+            && c.y - pxRadius <= viewportHeight
+          );
+          if (fx.kind === 'wind-push') {
+            fx.visualFrameCount = Math.max(0, Math.trunc(Number(fx.visualFrameCount) || 0)) + 1;
+            if (waveIntersectsViewport) {
+              fx.onscreenVisualFrameCount = Math.max(0, Math.trunc(Number(fx.onscreenVisualFrameCount) || 0)) + 1;
+            }
+          }
           fx.el.style.width = `${pxSize}px`;
           fx.el.style.height = `${pxSize}px`;
           fx.el.style.marginLeft = `${-pxRadius}px`;
@@ -787,6 +851,25 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           fx.el.style.transform = `translate(${c.x}px, ${c.y}px)`;
           fx.el.style.opacity = `${opacity}`;
           fx.el.style.filter = `brightness(${brightness.toFixed(3)})`;
+          if (fx.kind === 'wind-push' && fx.visualStatusReported !== true) {
+            fx.visualStatusReported = true;
+            const visualAttached = fx.el?.isConnected === true || !!fx.el?.parentNode;
+            helpers.noteMusicSystemEvent?.('enemy_wind_push_visual_status', {
+              phase: visualAttached ? 'first_displayed_frame' : 'display_failed',
+              enemyId: Math.max(0, Math.trunc(Number(fx.sourceEnemyId) || 0)),
+              visualElementCreated: true,
+              visualAttached,
+              effectRegistered: true,
+              sourceEnemyAlive: !!getEnemyById(fx.sourceEnemyId),
+              failureReason: visualAttached ? '' : 'visual_dom_detached_before_display',
+              radiusPx: Number(pxRadius.toFixed(2)),
+              opacity: Number(opacity.toFixed(3)),
+              centerX: Number(c.x.toFixed(2)),
+              centerY: Number(c.y.toFixed(2)),
+              centerOnscreen,
+              waveIntersectsViewport,
+            }, { beatIndex: currentBeatIndex, stepIndex: 0 });
+          }
         });
         if (removedDuringExplosionUpdate) continue;
       }
