@@ -9,6 +9,7 @@ import { makeGetBlockRects } from '../src/ripplesynth-rects.js';
 import { createScheduler } from '../src/ripplesynth-scheduler.js';
 import { handleBlockTap } from '../src/ripplesynth-zoomtap.js';
 import { rippleNoteTime } from '../src/ripplesynth-audio.js';
+import { createRipplerViewportSpace, doesRippleIntersectBlock } from '../src/rippler-viewport-space.js';
 
 const source = readFileSync(new URL('../src/ripplesynth-core.js', import.meta.url), 'utf8');
 // Run the production render path through the generator, before chain scheduling.
@@ -35,6 +36,8 @@ function fixture(placed) {
     __schedState: {}, rippleNoteTime, generator: { placed, nx: 0.5, ny: 0.5, r: 10 },
     ripples: placed ? [{ x: 210, y: 210, startAT: 1, startTime: 1, speed: 200 }] : [],
     canvas: ctx.canvas, ctx, W: () => 420, H: () => 420,
+    surfaceManager: { getCssW: () => 420, getCssH: () => 420, getDpr: () => 1 },
+    createRipplerViewportSpace, doesRippleIntersectBlock,
     resizeCanvasForDPR() {}, didLayout: true, layoutBlocks() {},
     particlesInit: false, EDGE: 4,
     initParticles() { calls.init++; }, setParticleBounds() {},

@@ -35,9 +35,9 @@ export function getRandomOffscreenSpawnPointRuntime(options = null) {
   const group = options?.group && typeof options.group === 'object' ? options.group : null;
   const memberIndex = Math.max(0, Math.trunc(Number(options?.memberIndex) || 0));
   const memberCount = Math.max(1, Math.trunc(Number(options?.memberCount) || 1));
-  const w = Math.max(1, Number(window.innerWidth) || 0);
-  const h = Math.max(1, Number(window.innerHeight) || 0);
-  const m = Math.max(8, Number(constants.enemyFallbackSpawnMarginPx) || 42);
+  const w = Math.max(1, Number(constants.logicalWidth) || 1600);
+  const h = Math.max(1, Number(constants.logicalHeight) || 900);
+  const m = Math.max(8, Number(constants.enemyFallbackSpawnMarginLogical) || Number(constants.enemyFallbackSpawnMarginPx) || 42);
   const formationSpawnRegion = String(group?.formationSpawnRegion || '').trim().toLowerCase();
   const formationArchetype = String(group?.formationArchetype || '').trim().toLowerCase();
   const behavioralFormationArchetype = String(group?.behavioralFormationArchetype || '').trim().toLowerCase();
@@ -130,12 +130,14 @@ export function keepDrawSnakeEnemyOnscreenRuntimeWrapper(options = null) {
     enemy,
     dt,
     constants: {
-      drawSnakeScreenMarginPx: Number(constants.drawSnakeScreenMarginPx) || 0,
+      drawSnakeMarginLogical: Number(constants.drawSnakeMarginLogical ?? constants.drawSnakeScreenMarginPx) || 0,
       drawSnakeEdgePullRate: Number(constants.drawSnakeEdgePullRate) || 0,
     },
     helpers: {
       worldToScreen: helpers.worldToScreen,
       screenToWorld: helpers.screenToWorld,
+      worldToLogical: helpers.worldToLogical,
+      logicalToWorld: helpers.logicalToWorld,
     },
   });
 }

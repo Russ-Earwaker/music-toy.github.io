@@ -75,6 +75,7 @@ export function createBeatSwarmEnemyChargeRuntime() {
     const enemyIds = new Set(enemies.map((enemy) => Math.trunc(Number(enemy?.id) || 0)));
     const player = options?.player || { x: 0, y: 0 };
     const worldToScreen = options?.worldToScreen;
+    const presentationScale = Math.max(0.001, Number(options?.presentationScale) || 1);
     if (typeof worldToScreen !== 'function') return;
     for (let index = charges.length - 1; index >= 0; index -= 1) {
       const charge = charges[index];
@@ -102,6 +103,7 @@ export function createBeatSwarmEnemyChargeRuntime() {
         const dx = endScreen.x - startScreen.x;
         const dy = endScreen.y - startScreen.y;
         charge.telegraphEl.style.width = `${Math.max(1, Math.hypot(dx, dy))}px`;
+        charge.telegraphEl.style.height = `${Math.max(1, 6 * presentationScale)}px`;
         charge.telegraphEl.style.transform = `translate(${startScreen.x}px, ${startScreen.y}px) rotate(${Math.atan2(dy, dx)}rad)`;
       }
       if (!active) continue;

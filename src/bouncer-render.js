@@ -124,8 +124,7 @@ export function createBouncerDraw(env){
     }
 
     const rs = renderScale();
-    try{ ctx.scale((rs.sx||1), (rs.sy||1)); }catch{}
-    try{ ctx.translate(rs.tx||0, rs.ty||0); }catch{}
+    try{ ctx.setTransform((rs.sx||1), 0, 0, (rs.sy||1), (rs.tx||0), (rs.ty||0)); }catch{}
 
     const w = physW(), h = physH();
     // On-beat pulse (quarter notes)
@@ -628,4 +627,3 @@ export function createBouncerDraw(env){
 
   return draw;
 }
-

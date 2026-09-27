@@ -67,7 +67,6 @@ export function createDgResnap({ state, deps } = {}) {
       s.__dgStableFramesAfterCommit = 0;
 
       if (hasStrokes) {
-        try { d.reprojectNormalizedStrokesIfNeeded?.('resnap'); } catch {}
         if (typeof d.clearAndRedrawFromStrokes === 'function') {
           try { d.clearAndRedrawFromStrokes(null, 'resnap-redraw'); } catch {}
         } else {

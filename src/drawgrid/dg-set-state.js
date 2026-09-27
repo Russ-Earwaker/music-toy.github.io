@@ -1,6 +1,8 @@
 // src/drawgrid/dg-set-state.js
 // External state application for DrawGrid.
 
+import { upgradeDrawGridStrokes } from './drawgrid-stroke-persistence.js';
+
 export function createDgSetState({ state, deps } = {}) {
   const s = state || {};
   const d = deps || {};
@@ -80,34 +82,7 @@ export function createDgSetState({ state, deps } = {}) {
             : null;
           const strokeSource = (incomingStrokes && incomingStrokes.length > 0) ? incomingStrokes : fallbackStrokes;
           if (strokeSource) {
-            s.strokes = [];
-            for (const stroke of strokeSource) {
-              let pts = [];
-              if (Array.isArray(stroke?.ptsN)) {
-                const gh = Math.max(1, s.gridArea.h - s.topPad);
-                const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-                pts = stroke.ptsN.map((np) => ({
-                  x: s.gridArea.x + clamp(Number(np?.nx) || 0, 0, 1) * s.gridArea.w,
-                  y: (s.gridArea.y + s.topPad) + clamp(Number(np?.ny) || 0, 0, 1) * gh,
-                }));
-              } else if (Array.isArray(stroke?.pts)) {
-                // Legacy raw points fallback
-                pts = stroke.pts.map((p) => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 }));
-              }
-              const ptsN = Array.isArray(stroke?.ptsN) ? stroke.ptsN.map((np) => ({
-                nx: Math.max(0, Math.min(1, Number(np?.nx) || 0)),
-                ny: Math.max(0, Math.min(1, Number(np?.ny) || 0)),
-              })) : null;
-              const nextStroke = {
-                pts,
-                __ptsN: ptsN,
-                color: stroke?.color || s.STROKE_COLORS?.[0],
-                isSpecial: !!stroke?.isSpecial,
-                generatorId: (typeof stroke?.generatorId === 'number') ? stroke.generatorId : undefined,
-                overlayColorize: !!stroke?.overlayColorize,
-              };
-              s.strokes.push(nextStroke);
-            }
+            s.strokes = upgradeDrawGridStrokes(strokeSource, { fallbackColor: s.STROKE_COLORS?.[0] });
             if (preserveNodesOverStrokes) s.__dgSkipMapRegenOnce = true;
             d.clearAndRedrawFromStrokes?.(null, 'setState-strokes');
           } else if (hasIncomingStrokes && Array.isArray(st.strokes)) {
@@ -176,12 +151,8 @@ export function createDgSetState({ state, deps } = {}) {
           d.HY?.scheduleHydrationLayoutRetry?.(s.panel, () => d.layout?.(true));
           setTimeout(() => { s.__hydrationJustApplied = false; }, 32);
 
-          // IMPORTANT:
-          // Chained toys typically apply their saved content via setState() (not restoreFromState()).
-          // During refresh/boot, zoom/overview settling can briefly report a scaled DOM rect.
-          // If we miss a guaranteed composite+swap after applying state, the user can see an
-          // empty body (no grid) and/or strokes appear incorrectly scaled until interaction.
-          // Mirror the restoreFromState post-hydration forcing here.
+          // Chained toys usually hydrate through setState(). Guarantee one
+          // complete presentation redraw/composite for the new vector state.
           try {
             d.markStaticDirty?.('set-state');
           } catch {}
@@ -198,8 +169,6 @@ export function createDgSetState({ state, deps } = {}) {
               d.requestFrontSwap(d.useFrontBuffers);
             }
           } catch {}
-          // Chained toys restore via setState() -- stabilize the same way as restoreFromState().
-          try { d.schedulePostRestoreStabilize?.('setState'); } catch {}
         } catch (e) { }
         s.isRestoring = false;
         // Re-check after hydration completes

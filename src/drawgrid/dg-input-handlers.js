@@ -34,20 +34,17 @@ export function createDgInputHandlers({ state, deps } = {}) {
       // If another toy is focused, request focus here but still allow drawing.
       try { window.requestToyFocus?.(s.panel, { center: false }); } catch {}
     }
-    // When the user starts manual drawing, the ghost guide particles must disappear (not freeze).
-    // immediate:true forces a visual clear so we don't leave a "stuck" ghost frame on screen.
-    d.stopAutoGhostGuide({ immediate: true, reason: 'pointerdown:manual-draw' });
-    d.markUserChange('pointerdown');
-    d.FD.flowLog('pointer:down', {});
     const p = d.pointerToPaintLogical(e);
+    const logicalInputPoint = d.pointerToDrawGridStrokeLogical(e);
     d.dgPointerTrace.onPointerDown(e, p);
 
     // Check for node hit first using full grid cell bounds (bigger tap area)
     for (const node of s.nodeCoordsForHitTest) {
-      const cellX = s.gridArea.x + node.col * s.cw;
-      const cellY = s.gridArea.y + s.topPad + node.row * s.ch;
-      if (p.x >= cellX && p.x <= cellX + s.cw && p.y >= cellY && p.y <= cellY + s.ch) {
-        s.pendingNodeTap = { col: node.col, row: node.row, x: p.x, y: p.y, group: node.group ?? null };
+      if (logicalInputPoint && d.hitTestLogicalCell(s.logicalGeometry, logicalInputPoint, node.col, node.row)) {
+        d.stopAutoGhostGuide({ immediate: true, reason: 'pointerdown:manual-draw' });
+        d.markUserChange('pointerdown');
+        d.FD.flowLog('pointer:down', {});
+        s.pendingNodeTap = { col: node.col, row: node.row, x: logicalInputPoint.x, y: logicalInputPoint.y, group: node.group ?? null };
         d.setDragScaleHighlight?.(node.col);
         d.markStaticDirty?.('node-grab:start');
         d.ensureRenderLoopRunning?.();
@@ -59,6 +56,12 @@ export function createDgInputHandlers({ state, deps } = {}) {
     }
 
     // Manual drawing should temporarily hide tutorial highlights (ghost finger particles).
+    const logicalPaintStart = logicalInputPoint;
+    if (!logicalPaintStart) return;
+    // When a real drawing gesture starts, remove the guide rather than freezing it.
+    d.stopAutoGhostGuide({ immediate: true, reason: 'pointerdown:manual-draw' });
+    d.markUserChange('pointerdown');
+    d.FD.flowLog('pointer:down', {});
     d.pauseTutorialHighlightForDraw();
 
     d.setDrawingState(true);
@@ -108,7 +111,7 @@ export function createDgInputHandlers({ state, deps } = {}) {
         }
       }
     } catch {}
-    const paintStart = p;
+    const paintStart = logicalPaintStart;
     const { x: x0, y: y0 } = paintStart;
     // Particle push on gesture start — snowplow a full-width band even before movement.
     try {
@@ -123,12 +126,13 @@ export function createDgInputHandlers({ state, deps } = {}) {
     } catch {}
     s.cur = {
       pts: [paintStart],
+      coordinateSpace: d.DRAWGRID_STROKE_SPACE_LOGICAL,
       color: s.STROKE_COLORS[s.colorIndex++ % s.STROKE_COLORS.length]
     };
     try {
       d.knockLettersAt(
-        p.x - (s.gridArea?.x || 0),
-        p.y - (s.gridArea?.y || 0),
+        paintStart.x - (s.gridArea?.x || 0),
+        paintStart.y - (s.gridArea?.y || 0),
         { radius: 100, strength: 14, source: 'line' }
       );
     } catch {}
@@ -153,6 +157,7 @@ export function createDgInputHandlers({ state, deps } = {}) {
     const s = state;
     const d = deps;
     const p = d.pointerToPaintLogical(e);
+    const logicalInputPoint = d.pointerToDrawGridStrokeLogical(e);
     d.dgPointerTrace.onPointerMove(e, p);
     d.dgInputTrace('paint:move:handle', {
       pointerId: e.pointerId,
@@ -173,18 +178,17 @@ export function createDgInputHandlers({ state, deps } = {}) {
     if (!s.draggedNode) {
       let onNode = false;
       for (const node of s.nodeCoordsForHitTest) {
-        const cellX = s.gridArea.x + node.col * s.cw;
-        const cellY = s.gridArea.y + s.topPad + node.row * s.ch;
-        if (p.x >= cellX && p.x <= cellX + s.cw && p.y >= cellY && p.y <= cellY + s.ch) { onNode = true; break; }
+        if (logicalInputPoint && d.hitTestLogicalCell(s.logicalGeometry, logicalInputPoint, node.col, node.row)) { onNode = true; break; }
       }
       s.paint.style.cursor = onNode ? 'grab' : 'default';
     }
 
     // Promote pending tap to drag if moved sufficiently
     if (s.pendingNodeTap && s.drawing && !s.draggedNode) {
-      const dx = p.x - s.pendingNodeTap.x;
-      const dy = p.y - s.pendingNodeTap.y;
-      if (Math.hypot(dx, dy) > 6) {
+      if (!logicalInputPoint) return;
+      const dx = logicalInputPoint.x - s.pendingNodeTap.x;
+      const dy = logicalInputPoint.y - s.pendingNodeTap.y;
+      if (Math.hypot(dx, dy) > s.logicalGeometry.nodeDragThreshold) {
         s.draggedNode = {
           col: s.pendingNodeTap.col,
           row: s.pendingNodeTap.row,
@@ -199,8 +203,8 @@ export function createDgInputHandlers({ state, deps } = {}) {
     }
 
     if (s.draggedNode && s.drawing) {
-      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-      const newRow = clamp(Math.round((p.y - (s.gridArea.y + s.topPad)) / s.ch), 0, s.rows - 1);
+      if (!logicalInputPoint) return;
+      const newRow = d.logicalRowFromPoint(s.logicalGeometry, logicalInputPoint);
 
       if (newRow !== s.draggedNode.row && s.currentMap) {
         const col = s.draggedNode.col;
@@ -255,9 +259,11 @@ export function createDgInputHandlers({ state, deps } = {}) {
     if (!s.drawing) return; // Guard for drawing logic below
 
     if (s.cur) {
+      const logicalPaintPoint = logicalInputPoint;
+      if (!logicalPaintPoint) return;
       s.pctx = d.getActivePaintCtx();
       d.resetPaintBlend(s.pctx);
-      const paintPt = p;
+      const paintPt = logicalPaintPoint;
       try {
         if (!s.previewGid && s.pctx) {
           const sz = Math.max(1, Math.floor(d.R.getLineWidth() / 6));
@@ -326,13 +332,18 @@ export function createDgInputHandlers({ state, deps } = {}) {
         const hasSpecialLine = s.strokes.some(st => st.isSpecial || st.generatorId);
         const wantsSpecialLive = !isAdvanced && !hasSpecialLine;
         const liveStrokeMeta = { ...s.cur, isSpecial: wantsSpecialLive, liveAlphaOverride: 1 };
-        d.R.drawLiveStrokePoint(s.pctx, lastPt, prevPt, liveStrokeMeta);
+        d.R.drawLiveStrokePoint(
+          s.pctx,
+          lastPt,
+          prevPt,
+          liveStrokeMeta,
+        );
 
         s.__dgNeedsUIRefresh = false; // don't trigger overlay clears during draw
       }
       try {
         const lastIdx = s.cur.pts.length - 1;
-        const lastPt = s.cur.pts[lastIdx];
+        const lastPt = logicalPaintPoint;
         if (lastPt) {
           const area = (s.gridArea && s.gridArea.w > 0 && s.gridArea.h > 0)
             ? s.gridArea
@@ -379,6 +390,7 @@ export function createDgInputHandlers({ state, deps } = {}) {
   function onPointerUp(e) {
     const s = state;
     const d = deps;
+    const logicalInputPoint = d.pointerToDrawGridStrokeLogical(e);
     d.dgInputTrace('paint:up', { pointerId: e.pointerId, buttons: e.buttons, drawing: s.drawing, pendingNodeTap: !!s.pendingNodeTap, draggedNode: !!s.draggedNode, hasCur: !!s.cur, usingBackBuffers: s.usingBackBuffers, pendingPaintSwap: s.pendingPaintSwap });
     d.dgPointerTrace.onPointerUp(e, d.pointerToPaintLogical(e));
     d.dgPaintTrace('pointer:up', { pointerId: e.pointerId, buttons: e.buttons, isPrimary: e.isPrimary, zoomMode: s.zoomMode, zoomGestureActive: s.zoomGestureActive });
@@ -428,6 +440,13 @@ export function createDgInputHandlers({ state, deps } = {}) {
 
     // Tap on a node toggles column active state
     if (s.pendingNodeTap) {
+      if (!logicalInputPoint) {
+        s.pendingNodeTap = null;
+        d.setDragScaleHighlight(null);
+        d.setDrawingState(false);
+        s.paint.style.cursor = 'default';
+        return;
+      }
       const col = s.pendingNodeTap.col;
       const row = s.pendingNodeTap.row;
       if (!s.currentMap) {

@@ -26,16 +26,39 @@ export function onTransportResumeRuntimeWrapper(deps = {}) {
   return true;
 }
 
+export function isBeatSwarmEditableKeyTarget(target = null) {
+  if (!target || typeof target !== 'object') return false;
+  if (target.isContentEditable === true) return true;
+  const tagName = String(target.tagName || '').toLowerCase();
+  if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return true;
+  try {
+    return !!target.closest?.('[contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]');
+  } catch {
+    return false;
+  }
+}
+
 export function onKeyDownRuntimeWrapper(deps = {}) {
   const ev = deps.ev;
   const state = deps.state && typeof deps.state === 'object' ? deps.state : {};
   const constants = deps.constants && typeof deps.constants === 'object' ? deps.constants : {};
   const helpers = deps.helpers && typeof deps.helpers === 'object' ? deps.helpers : {};
   const setActiveWeaponSlot = typeof helpers.setActiveWeaponSlot === 'function' ? helpers.setActiveWeaponSlot : () => false;
+  const toggleSilentPause = typeof helpers.toggleSilentPause === 'function' ? helpers.toggleSilentPause : () => false;
 
   const maxWeaponSlots = Math.max(1, Math.trunc(Number(constants.maxWeaponSlots) || 1));
-  if (!state.active || state.gameplayPaused) return false;
+  if (!state.active) return false;
   const code = String(ev?.code || '');
+  if (code === 'KeyP') {
+    if (ev?.repeat || isBeatSwarmEditableKeyTarget(ev?.target)) return false;
+    if (toggleSilentPause()) {
+      try { ev?.preventDefault?.(); } catch {}
+      try { ev?.stopPropagation?.(); } catch {}
+      return true;
+    }
+    return false;
+  }
+  if (state.gameplayPaused) return false;
   if (code === 'Digit1') {
     if (setActiveWeaponSlot(0)) {
       try { ev?.preventDefault?.(); } catch {}

@@ -7,120 +7,10 @@ import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
 import { attachGridSquareAndDrum } from './grid-square-drum.js';
 import { midiToName, buildPalette } from './note-helpers.js';
 import { gateTriggerForToy } from './toy-audio.js';
-
-/**
- * A self-contained particle system for the drum pad.
- * - Particles are distributed across the entire container.
- * - They bounce off the walls, lighting up as they do.
- * - On bounce, they get a velocity nudge back towards their home position, with some randomness.
- * - The "gravity" that pulls them home is removed for a more floaty, chaotic feel.
- */
-function createDrumParticles({ getW, getH, count = 150 } = {}) {
-  const P = [];
-  const W = () => Math.max(1, Math.floor(getW() || 0));
-  const H = () => Math.max(1, Math.floor(getH() || 0));
-  let lastW = 0, lastH = 0; // Track size to detect resizes
-
-  function init() {
-    const w = W();
-    const h = H();
-    // Only initialize if we have a valid size and the size has changed, or if it's the first run.
-    if (w > 1 && h > 1 && (P.length === 0 || w !== lastW || h !== lastH)) {
-      P.length = 0; // Clear to re-create
-      for (let i = 0; i < count; i++) {
-        const homeX = Math.random() * w;
-        const homeY = Math.random() * h;
-        P.push({ x: homeX, y: homeY, vx: 0, vy: 0, homeX, homeY, flash: 0 });
-      }
-      lastW = w;
-      lastH = h;
-    }
-  }
-
-  function step() {
-    init(); // This will now handle initial creation and re-distribution on resize.
-    const w = W();
-    const h = H();
-    for (const p of P) {
-      p.x += p.vx; p.y += p.vy;
-      p.vx *= 0.97; p.vy *= 0.97; // Damping
-      p.flash = Math.max(0, p.flash - 0.05); // Flash decay
-
-      let bounced = false;
-      if (p.x < 0) { p.x = 0; p.vx *= -0.8; bounced = true; }
-      if (p.x > w) { p.x = w; p.vx *= -0.8; bounced = true; }
-      if (p.y < 0) { p.y = 0; p.vy *= -0.8; bounced = true; }
-      if (p.y > h) { p.y = h; p.vy *= -0.8; bounced = true; }
-
-      if (bounced) {
-        p.flash = 1.0; // Light up on bounce.
-        const dx = p.homeX - p.x;
-        const dy = p.homeY - p.y;
-        const dist = Math.hypot(dx, dy) || 1;
-        p.vx += (dx / dist) * 0.1 + (Math.random() - 0.5) * 0.2;
-        p.vy += (dy / dist) * 0.1 + (Math.random() - 0.5) * 0.2;
-      }
-    }
-  }
-
-  function draw(ctx) {
-    if (!ctx) return;
-    ctx.save();
-    for (const p of P) {
-      // 1. Brightness: Use a brighter color and a stronger alpha pop.
-      const alpha = 0.4 + 1.5 * p.flash; // Increased base and multiplier
-      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-      ctx.fillStyle = '#c8d8ff'; // Brighter, whiter-blue
-
-      // 2. Scaling: Use the flash property to scale the particle size.
-      // It will be largest when flash is 1.0 and smallest when flash is 0.
-      const baseSize = 1.5;
-      const scale = 1.0 + p.flash * 2.0; // Scale up to 3x when fully flashed
-      const size = baseSize * scale;
-      const x = (p.x | 0) - size / 2; // Center the scaled particle
-      const y = (p.y | 0) - size / 2;
-
-      ctx.fillRect(x, y, size, size);
-    }
-    ctx.restore();
-  }
-
-  function disturb() {
-    // General disturbance
-    for (const p of P) {
-      p.vx += (Math.random() - 0.5) * 2.5;
-      p.vy += (Math.random() - 0.5) * 2.5;
-      p.flash = Math.max(p.flash, 0.8);
-    }
-
-    // Repulsion from the drum pad center
-    const w = W();
-    const h = H();
-    const centerX = w / 2;
-    const centerY = h / 2;
-    // The drum pad is 55% width and 65% max-height of its container.
-    // Its aspect-ratio is 1/1, so its diameter is the smaller of the two.
-    // Extend the radius to make the repulsion effect more obvious.
-    const radius = (Math.min(w * 0.55, h * 0.65) / 2) * 1.5;
-    const radiusSq = radius * radius;
-
-    for (const p of P) {
-      const dx = p.x - centerX;
-      const dy = p.y - centerY;
-      const distSq = dx * dx + dy * dy;
-
-      if (distSq < radiusSq) {
-        const dist = Math.sqrt(distSq) || 1;
-        // Push particle away from the center, stronger when closer.
-        const kick = 4.0 * (1 - dist / radius); // Tuned kick strength
-        p.vx += (dx / dist) * kick;
-        p.vy += (dy / dist) * kick;
-      }
-    }
-  }
-
-  return { step, draw, disturb };
-}
+import { getToyLifecycle } from './baseMusicToy/index.js';
+import { createToySurfaceManager } from './toy-surface-manager.js';
+import { createDrumPadParticles } from './drum-pad-particles.js';
+import { createDrumParticleViewportSpace, DRUM_PARTICLE_LOGICAL_HEIGHT, DRUM_PARTICLE_LOGICAL_WIDTH } from './drum-particle-viewport-space.js';
 
 export function markPlayingColumn(panel, colIndex){
   try{ panel.dispatchEvent(new CustomEvent('loopgrid:playcol', { detail:{ col: colIndex }, bubbles:true })); }catch{}
@@ -321,45 +211,52 @@ export function buildDrumGrid(panel, numSteps = 8){
 
   // --- Particle System ---
   if (particleCanvas) {
-    // Keep the particle canvas bitmap size in sync with its element size.
-    const particleObserver = new ResizeObserver(entries => {
-      const rect = entries[0]?.contentRect;
-      if (rect) {
-        particleCanvas.width = rect.width;
-        particleCanvas.height = rect.height;
-      }
+    const lifecycle = getToyLifecycle(panel);
+    const particleSurface = createToySurfaceManager({
+      panel,
+      body: padWrap,
+      getBoardScale: () => window.__boardScale || 1,
+      tag: 'drum-pad-particles',
     });
-    particleObserver.observe(padWrap);
-
+    particleSurface.registerCanvas('drum-pad-particles', particleCanvas, { policy: 'managed' });
+    particleSurface.syncNow('drum-particles-init');
+    lifecycle.addCleanup(() => particleSurface.destroy());
     const particleCtx = particleCanvas.getContext('2d');
-    const particles = createDrumParticles({
-      getW: () => particleCanvas.width,
-      getH: () => particleCanvas.height,
-    });
+    const particles = createDrumPadParticles();
     panel.__particles = particles;
-    function renderParticles() {
-      if (!panel.isConnected) return; // Stop rendering if panel is removed
-      particles.step();
-      // Clear with a much darker background color.
+    let lastParticleFrame = performance.now();
+    function renderParticles(now) {
+      const dt = Math.min(0.05, Math.max(0, (now - lastParticleFrame) / 1000)) || (1 / 60);
+      lastParticleFrame = now;
+      particles.step(dt);
+      const cssWidth = Math.max(1, particleSurface.getCssW() || particleCanvas.clientWidth || DRUM_PARTICLE_LOGICAL_WIDTH);
+      const cssHeight = Math.max(1, particleSurface.getCssH() || particleCanvas.clientHeight || DRUM_PARTICLE_LOGICAL_HEIGHT);
+      const dpr = Math.max(0.25, particleSurface.getDpr() || 1);
+      const viewport = createDrumParticleViewportSpace({ width: cssWidth, height: cssHeight, backingScale: dpr });
+      particleCtx.setTransform(1, 0, 0, 1, 0, 0);
       particleCtx.fillStyle = '#06080b';
       particleCtx.fillRect(0, 0, particleCanvas.width, particleCanvas.height);
+      particleCtx.setTransform(
+        dpr * viewport.presentationScale, 0,
+        0, dpr * viewport.presentationScale,
+        dpr * viewport.contentRect.left,
+        dpr * viewport.contentRect.top,
+      );
 
-      // Background flash on drum hit, rendered on the particle canvas.
       const st = panel.__drumVisualState;
       if (st && st.bgFlash > 0) {
         particleCtx.save();
-        // A darker shade of the purple from the drum pad tap animation
         particleCtx.fillStyle = '#6030c0';
-        particleCtx.globalAlpha = st.bgFlash * 0.4; // Make it more impactful
-        particleCtx.fillRect(0, 0, particleCanvas.width, particleCanvas.height);
+        particleCtx.globalAlpha = st.bgFlash * 0.4;
+        particleCtx.fillRect(0, 0, DRUM_PARTICLE_LOGICAL_WIDTH, DRUM_PARTICLE_LOGICAL_HEIGHT);
         particleCtx.restore();
-        st.bgFlash = Math.max(0, st.bgFlash - 0.05); // Decay
+        st.bgFlash = Math.max(0, st.bgFlash - 3 * dt);
       }
 
       particles.draw(particleCtx);
-      requestAnimationFrame(renderParticles);
+      lifecycle.requestFrame(renderParticles);
     }
-    renderParticles();
+    lifecycle.requestFrame(renderParticles);
   }
   // ---
 

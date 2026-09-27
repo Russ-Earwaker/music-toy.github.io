@@ -13,6 +13,8 @@ test('performed composer abilities suppress combat body treatment but retain abi
   assert.match(composerAbility, /triggerEnemyCombatFiredVisual\(enemy, 'projectile', \{ roleStyledMusicalTrigger: true \}\)/);
   assert.match(composerAbility, /triggerBasicEnemyWindPushAt\(origin, enemy, beatIndex, \{ roleStyledMusicalTrigger: true \}\)/);
   assert.match(composerAbility, /nextCombatActivationRoleStyledMusical = true/);
+  assert.match(composerAbility, /const performerScreen = performerVisibility\?\.screen \|\| null;/);
+  assert.match(composerAbility, /performerScreenX: Number\.isFinite\(Number\(performerScreen\?\.x\)\)/);
   const firedVisual = mode.match(/function triggerEnemyCombatFiredVisual[\s\S]*?\n}\nfunction playEnemyCombatAttackAudio/)?.[0] || '';
   assert.match(firedVisual, /if \(!roleStyledMusicalTrigger\) enemyEl\.classList\.add/);
   assert.match(firedVisual, /combatBodyTreatmentSuppressed: roleStyledMusicalTrigger/);

@@ -1,4 +1,5 @@
 import { updateMusicObjectAutoActivation } from './beat-swarm-music-object-auto-activation.js?v=2026-08-08-auto-activation-v2';
+import { reflectBeatSwarmLogicalMotion } from './beat-swarm-logical-movement.js';
 
 const STYLE_ID = 'beat-swarm-lead-ball-style';
 const BALL_RADIUS = 42;
@@ -513,35 +514,28 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     return String(note || '').trim();
   }
 
-  function isWorldPointOnscreen(world = null) {
-    const screen = deps.worldToScreen?.(world);
-    if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return false;
-    const viewport = typeof window !== 'undefined' ? window : null;
-    const width = Math.max(1, Number(viewport?.innerWidth) || 1);
-    const height = Math.max(1, Number(viewport?.innerHeight) || 1);
-    return screen.x >= 0 && screen.x <= width && screen.y >= 0 && screen.y <= height;
+  function isWorldPointInsideGameplay(world = null) {
+    if (typeof deps.isWorldPointInsideGameplay === 'function') {
+      return deps.isWorldPointInsideGameplay(world, 0) === true;
+    }
+    return false;
   }
 
   function keepBallInsideViewport(ball = null) {
-    if (!ball || typeof deps.screenToWorld !== 'function') return false;
-    const screen = deps.worldToScreen?.(point(ball));
-    if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return false;
-    const viewport = typeof window !== 'undefined' ? window : null;
-    const width = Math.max(1, Number(viewport?.innerWidth) || 1);
-    const height = Math.max(1, Number(viewport?.innerHeight) || 1);
+    if (!ball || typeof deps.worldToLogical !== 'function' || typeof deps.logicalToWorld !== 'function') return false;
+    const logical = deps.worldToLogical(point(ball));
+    if (!logical || !Number.isFinite(logical.x) || !Number.isFinite(logical.y)) return false;
     const margin = Math.max(34, BALL_RADIUS * 1.15);
-    const clampedX = Math.max(margin, Math.min(width - margin, screen.x));
-    const clampedY = Math.max(margin, Math.min(height - margin, screen.y));
-    const hitX = Math.abs(clampedX - screen.x) > 0.001;
-    const hitY = Math.abs(clampedY - screen.y) > 0.001;
+    const reflected = reflectBeatSwarmLogicalMotion(logical, { x: ball.vx, y: ball.vy }, margin);
+    const { hitX, hitY } = reflected || {};
     if (!hitX && !hitY) return false;
-    const world = deps.screenToWorld({ x: clampedX, y: clampedY });
+    const world = deps.logicalToWorld(reflected.position);
     if (world && Number.isFinite(world.x) && Number.isFinite(world.y)) {
       ball.x = world.x;
       ball.y = world.y;
     }
-    if (hitX) ball.vx = -Number(ball.vx || 0);
-    if (hitY) ball.vy = -Number(ball.vy || 0);
+    ball.vx = reflected.velocity.x;
+    ball.vy = reflected.velocity.y;
     ball.targetEnemyId = 0;
     ball.ricochetEnemyId = 0;
     deps.onViewportBounce?.({
@@ -549,8 +543,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       ballId: Math.max(0, Math.trunc(Number(ball.id) || 0)),
       hitX,
       hitY,
-      screenX: clampedX,
-      screenY: clampedY,
+      logicalX: reflected.position.x,
+      logicalY: reflected.position.y,
     });
     return true;
   }
@@ -603,7 +597,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     if (enemyId && enemyId === state.lastTargetEnemyId && getLiveEnemies().length > 1) return false;
     if (enemyId && state.pendingEnemyIds.has(enemyId)) return false;
     if (enemyId && state.hitEnemyIds.has(enemyId)) return false;
-    return isWorldPointOnscreen(enemyPoint(enemy));
+    return isWorldPointInsideGameplay(enemyPoint(enemy));
   }
 
   function getDestinationNotesForOtherBalls(ballActor = null) {
@@ -708,7 +702,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const opts = options && typeof options === 'object' ? options : {};
     const current = getEnemyById(ballActor?.targetEnemyId);
     const currentId = Math.trunc(Number(current?.id) || 0);
-    if (current && !state.pendingEnemyIds.has(currentId) && !state.hitEnemyIds.has(currentId) && isWorldPointOnscreen(enemyPoint(current))) return current;
+    if (current && !state.pendingEnemyIds.has(currentId) && !state.hitEnemyIds.has(currentId) && isWorldPointInsideGameplay(enemyPoint(current))) return current;
     const pacing = getCapturePacing();
     const urgent = opts.urgent === true || pacing.captureOpen;
     const next = chooseTargetEnemy(ballActor, {
@@ -814,7 +808,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       && currentId !== destinationId
       && !state.pendingEnemyIds.has(currentId)
       && !state.hitEnemyIds.has(currentId)
-      && isWorldPointOnscreen(enemyPoint(current))
+      && isWorldPointInsideGameplay(enemyPoint(current))
     ) return current;
     const next = findHopEnemyOnDestinationPath(ballActor, destinationEnemy);
     ballActor.ricochetEnemyId = Math.trunc(Number(next?.enemy?.id) || 0);
@@ -905,7 +899,8 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
   function renderAt(el, world, angleRad = 0) {
     const screen = deps.worldToScreen?.(world);
     if (!el || !screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return;
-    const transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px) rotate(${(angleRad * 180 / Math.PI).toFixed(2)}deg)`;
+    const presentationScale = Math.max(0.001, Number(deps.getPresentationScale?.()) || 1);
+    const transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px) rotate(${(angleRad * 180 / Math.PI).toFixed(2)}deg) scale(${presentationScale})`;
     el.style.setProperty('--bs-lead-ball-transform', transform);
     el.style.transform = transform;
   }
@@ -916,7 +911,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return;
     const el = document.createElement('div');
     el.className = 'beat-swarm-lead-ball-trail';
-    el.style.transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px)`;
+    el.style.transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px) scale(${Math.max(0.001, Number(deps.getPresentationScale?.()) || 1)})`;
     state.rootEl.appendChild(el);
     state.trails.push({ el, age: 0, ttl: 0.42 });
   }
@@ -927,7 +922,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return;
     const el = document.createElement('div');
     el.className = 'beat-swarm-lead-ball-impact is-live';
-    const transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px)`;
+    const transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px) scale(${Math.max(0.001, Number(deps.getPresentationScale?.()) || 1)})`;
     el.style.setProperty('--bs-lead-impact-transform', transform);
     el.style.transform = `${transform} scale(.34)`;
     state.rootEl.appendChild(el);
@@ -981,13 +976,14 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
     const bottomScreen = Number.isFinite(bandBottom)
       ? deps.worldToScreen?.({ x: marker.world.x, y: bandBottom })
       : null;
+    const presentationScale = Math.max(0.001, Number(deps.getPresentationScale?.()) || 1);
     const markerHeight = Math.max(
       28,
       Math.abs((Number(bottomScreen?.y) || centerScreen.y + 36) - (Number(topScreen?.y) || centerScreen.y - 36))
     );
     marker.el.style.height = `${markerHeight.toFixed(1)}px`;
     marker.el.style.marginTop = `${(-markerHeight * 0.5).toFixed(1)}px`;
-    marker.el.style.transform = `translate(${centerScreen.x.toFixed(2)}px, ${centerScreen.y.toFixed(2)}px)`;
+    marker.el.style.transform = `translate(${centerScreen.x.toFixed(2)}px, ${centerScreen.y.toFixed(2)}px) scale(${presentationScale})`;
     if (marker.nodeEl instanceof HTMLElement && impactScreen && Number.isFinite(impactScreen.y)) {
       marker.nodeEl.style.top = `${(impactScreen.y - centerScreen.y + markerHeight * 0.5).toFixed(1)}px`;
     }
@@ -1171,9 +1167,10 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
   }
 
   function getSegmentDistanceInfo(pointLike = null, fromLike = null, toLike = null) {
-    const p = point(pointLike);
-    const from = point(fromLike);
-    const to = point(toLike);
+    const toLogical = (value) => deps.worldToLogical?.(point(value)) || point(value);
+    const p = toLogical(pointLike);
+    const from = toLogical(fromLike);
+    const to = toLogical(toLike);
     const sx = to.x - from.x;
     const sy = to.y - from.y;
     const lenSq = (sx * sx) + (sy * sy);
@@ -1240,7 +1237,7 @@ export function createBeatSwarmLeadBallRuntime(deps = {}) {
       if (!enemyId || enemyId === destinationId) continue;
       if (state.pendingEnemyIds.has(enemyId) || state.hitEnemyIds.has(enemyId)) continue;
       if (claimedEnemyIds.has(enemyId)) continue;
-      if (!isWorldPointOnscreen(enemyPoint(enemy))) continue;
+      if (!isWorldPointInsideGameplay(enemyPoint(enemy))) continue;
       const info = getSegmentDistanceInfo(enemyPoint(enemy), from, to);
       const distanceFromBall = Math.hypot((Number(enemy.wx) || 0) - from.x, (Number(enemy.wy) || 0) - from.y);
       if (distanceFromBall < BALL_HOP_MIN_TRAVEL) continue;

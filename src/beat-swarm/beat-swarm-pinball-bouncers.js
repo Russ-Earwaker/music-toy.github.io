@@ -405,7 +405,8 @@ export function createBeatSwarmPinballBouncerRuntime(deps = {}) {
     const rotate = Number(bouncer.rotationDeg) || 0;
     el.style.opacity = opacity.toFixed(3);
     el.style.filter = `brightness(${(1 + warningN * 0.9 + impactN * 1.15).toFixed(3)})`;
-    el.style.transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px) rotate(${rotate.toFixed(2)}deg) scale(${scale.toFixed(3)})`;
+    const presentationScale = Math.max(0.001, Number(deps.getPresentationScale?.()) || 1);
+    el.style.transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px) rotate(${rotate.toFixed(2)}deg) scale(${(scale * presentationScale).toFixed(3)})`;
     el.classList.toggle('is-arrived', arriveN >= 1);
     el.classList.toggle('is-activating', activeBounceN > 0 && arriveN >= 1 && impactN <= 0);
     el.classList.toggle('is-impacting', impactN > 0);

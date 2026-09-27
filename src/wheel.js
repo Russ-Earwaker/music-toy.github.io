@@ -1,13 +1,24 @@
 // src/wheel.js — 16‑spoke on/off wheel with Grid-style cubes
-import { resizeCanvasForDPR } from './utils.js';
 import { initToyUI } from './toyui.js';
+import { createToySurfaceManager } from './toy-surface-manager.js';
 import { ensureAudioContext, getLoopInfo } from './audio-core.js';
 import { randomizeWheel } from './wheel-random.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
 import { cubeGapPx, handleMaxRadius, spokePointAt, semiToRadius, radiusToSemi, handlePos, hitHandle } from './wheel-handles.js';
+import {
+  WHEEL_LOGICAL_HEIGHT,
+  WHEEL_LOGICAL_WIDTH,
+  WHEEL_STEPS,
+  createWheelViewportSpace,
+  getWheelGeometry,
+  hitWheelSpokeButton,
+  wheelClientToLogical,
+  wheelSpokeAngle,
+  wheelSpokeEnd,
+} from './wheel-viewport-space.js';
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const STEPS = 16;
+const STEPS = WHEEL_STEPS;
 function midiName(m){ const n=((m%12)+12)%12, o=Math.floor(m/12)-1; return NOTE_NAMES[n]+o; }
 
 export function buildWheel(selector, opts = {}){
@@ -32,9 +43,20 @@ export function buildWheel(selector, opts = {}){
   const canvas = document.createElement('canvas');
   canvas.className = 'wheel-canvas';
   canvas.style.display = 'block';
-  try { canvas.style.setProperty('width','100%','important'); canvas.style.setProperty('height','100%','important'); } catch {}
-  (panel.querySelector?.('.toy-body') || panel).appendChild(canvas);
+  const surfaceHost = panel.querySelector?.('.toy-body') || panel;
+  surfaceHost.appendChild(canvas);
   const ctx = canvas.getContext('2d');
+
+  // Wheel owns logical geometry; the shared manager is the sole owner of CSS,
+  // backing-store and effective-DPR sizing.
+  const surfaceManager = createToySurfaceManager({
+    panel,
+    body: surfaceHost,
+    getBoardScale: () => window.__boardScale || 1,
+    tag: 'wheel',
+  });
+  surfaceManager.registerCanvas('main', canvas, { policy: 'managed' });
+  surfaceManager.syncNow('wheel-init');
 
   // The legacy sizing helper has been removed. The new toy-layout-manager.js
   // handles canvas sizing automatically. This dummy object prevents runtime
@@ -108,36 +130,12 @@ export function buildWheel(selector, opts = {}){
   }
 
   const EDGE_WHEEL = 10;
-  const worldW = ()=> canvas.width|0;
-  const worldH = ()=> canvas.height|0;
-  const spokeAngle = (i)=> (-Math.PI/2 + (i/STEPS)*Math.PI*2);
-  function radii(){
-    const W = worldW(), H = worldH();
-    const s = Math.min(W, H);
-    const Rmin = s*0.22, Rout = s*0.42, Rbtn = Math.max(10, s*0.045);
-    const cx = W/2, cy = H/2;
-    return { cx, cy, Rmin, Rout, Rbtn };
-  }
-  function spokeEnd(i){
-    const { cx, cy, Rout } = radii(); const a = spokeAngle(i);
-    return { x: cx + Math.cos(a)*Rout, y: cy + Math.sin(a)*Rout };
-  }
-  function local(ev){
-    const r = canvas.getBoundingClientRect();
-    const sx = (r.width ? canvas.width/r.width : 1);
-    const sy = (r.height? canvas.height/r.height: 1);
-    return { x: (ev.clientX - r.left)*sx, y: (ev.clientY - r.top)*sy };
-  }
-  function hitSpokeButton(x,y){
-    const { Rbtn } = radii();
-    let best=-1, bestD=Rbtn*1.3;
-    for (let i=0;i<STEPS;i++){
-      const p = spokeEnd(i);
-      const d = Math.hypot(x-p.x, y-p.y);
-      if (d < bestD){ best=i; bestD=d; }
-    }
-    return best;
-  }
+  const worldW = () => WHEEL_LOGICAL_WIDTH;
+  const worldH = () => WHEEL_LOGICAL_HEIGHT;
+  const spokeAngle = (i) => wheelSpokeAngle(i, STEPS);
+  const radii = () => getWheelGeometry();
+  const spokeEnd = (i) => wheelSpokeEnd(i, radii(), STEPS);
+  const local = (ev) => wheelClientToLogical(canvas, ev);
 
   canvas.addEventListener('pointermove', (e)=>{
     if (!dragActive) return;
@@ -165,7 +163,7 @@ if (isAdvanced){
       }
     }
 const p = local(e);
-    const i = hitSpokeButton(p.x, p.y);
+    const i = hitWheelSpokeButton(p, radii(), STEPS);
     if (i >= 0){
       active[i] = !active[i];
       if (active[i] && !semiOffsets[i]){ semiOffsets[i] = (semiOffsets[(i+STEPS-1)%STEPS]||0); }
@@ -175,15 +173,23 @@ const p = local(e);
 
   let lastTime = performance.now(), lastStep = -1, step = 0;
   function draw(){
-    
-    const cs = resizeCanvasForDPR(canvas, ctx);
-    const W = cs.width, H = cs.height;
+    const cssW = Math.max(1, surfaceManager.getCssW() || canvas.clientWidth || WHEEL_LOGICAL_WIDTH);
+    const cssH = Math.max(1, surfaceManager.getCssH() || canvas.clientHeight || WHEEL_LOGICAL_HEIGHT);
+    const dpr = Math.max(0.25, surfaceManager.getDpr() || 1);
+    const viewport = createWheelViewportSpace({ width: cssW, height: cssH, backingScale: dpr });
+    const W = WHEEL_LOGICAL_WIDTH, H = WHEEL_LOGICAL_HEIGHT;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(
+      dpr * viewport.presentationScale, 0,
+      0, dpr * viewport.presentationScale,
+      dpr * viewport.contentRect.left,
+      dpr * viewport.contentRect.top,
+    );
     const rad = radii(); const { cx, cy, Rmin, Rout, Rbtn } = rad;
     const Rinner = Math.max(0, Rmin * 0.7);
     const radInner = { ...rad, Rmin: Rinner };
-    ctx.clearRect(0,0,W,H);
-    ctx.fillStyle = '#0d1117'; ctx.fillRect(0,0,W,H);
-
     const { stepIdx, phase01 } = currentStepFromLoop();
     const blocks = [];
     const TARGET_S = Math.round(42 * (sizing?.scale || 1));
@@ -322,7 +328,14 @@ const p = local(e);
     get instrument(){ return ui.instrument; },
     reset: doReset,
     onLoop: ()=>{ lastStep = -1; step = 0; },
-    setPlaying, getState, setState
+    setPlaying, getState, setState,
+    get viewportSpace(){
+      return createWheelViewportSpace({
+        width: Math.max(1, surfaceManager.getCssW() || canvas.clientWidth || WHEEL_LOGICAL_WIDTH),
+        height: Math.max(1, surfaceManager.getCssH() || canvas.clientHeight || WHEEL_LOGICAL_HEIGHT),
+        backingScale: surfaceManager.getDpr(),
+      });
+    },
   };
   try{ panel.__wheelInst = api; }catch{}
   return api;

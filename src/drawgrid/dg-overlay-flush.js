@@ -25,89 +25,9 @@ export function createDgOverlayFlush({ state, deps } = {}) {
       usingBackBuffers: s.usingBackBuffers,
     });
 
-    // Legacy pin→restore flush (disabled by default; see DG_WRAP_SIZE_FLUSH).
-    if (s.DG_WRAP_SIZE_FLUSH && s.pendingWrapSize) {
-      try {
-        s.wrap.style.width = `${s.pendingWrapSize.width}px`;
-        s.wrap.style.height = `${s.pendingWrapSize.height}px`;
-      } catch {}
-      s.pendingWrapSize = null;
-      requestAnimationFrame(() => {
-        try {
-          s.wrap.style.width = '100%';
-          s.wrap.style.height = '100%';
-        } catch {}
-      });
-    }
-    // IMPORTANT:
-    // Setting canvas.width/height clears its backing store. During gesture settle / commit we
-    // may call this even when the size hasn't changed, which would incorrectly wipe overlays
-    // like the ghost trail. Only resize when needed.
-    //
-    // Additionally, if the ghost layer is non-empty and we *must* resize, preserve pixels
-    // across the resize so the trail does not "cut out".
-    const __ghostNonEmpty = !!(s.panel && s.panel.__dgGhostLayerEmpty === false);
-    const __dgResizeCanvasIfNeeded = (c, ww, hh, label, preservePixels = false) => {
-      if (!c) return false;
-      const curW = c.width || 0;
-      const curH = c.height || 0;
-      if (curW === ww && curH === hh) return false;
-
-      let snap = null;
-      if (preservePixels && curW > 0 && curH > 0) {
-        try {
-          snap = document.createElement('canvas');
-          snap.width = curW;
-          snap.height = curH;
-          const sctx = snap.getContext('2d');
-          if (sctx) sctx.drawImage(c, 0, 0);
-        } catch {
-          snap = null;
-        }
-      }
-
-      // Resize (this clears).
-      c.width = ww;
-      c.height = hh;
-
-      // Restore snapshot scaled into the new backing store.
-      if (snap) {
-        try {
-          const ctx = c.getContext('2d');
-          if (ctx) ctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, ww, hh);
-        } catch {}
-      }
-
-      if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
-        try {
-          d.dgGhostTrace('canvas:resize', {
-            label,
-            fromW: curW, fromH: curH,
-            toW: ww, toH: hh,
-            ghostNonEmpty: __ghostNonEmpty,
-            preserved: !!snap,
-          });
-        } catch {}
-      }
-      return true;
-    };
-
-    __dgResizeCanvasIfNeeded(s.grid,           w, h, 'grid:front',      false);
-    __dgResizeCanvasIfNeeded(s.nodesCanvas,    w, h, 'nodes:front',     false);
-    __dgResizeCanvasIfNeeded(s.flashCanvas,    w, h, 'flash:front',     false);
-    __dgResizeCanvasIfNeeded(s.ghostCanvas,    w, h, 'ghost:front',     __ghostNonEmpty);
-    __dgResizeCanvasIfNeeded(s.tutorialCanvas, w, h, 'tutorial:front',  false);
-
-    // Keep back-buffer backing stores in sync too.
-    // If back canvases keep stale backing sizes after refresh, overlays can appear
-    // to "scale wrong" on subsequent sweeps (e.g. ghost second pass).
-    if (s.gridBackCanvas) { __dgResizeCanvasIfNeeded(s.gridBackCanvas, w, h, 'grid:back', false); }
-    if (s.nodesBackCanvas) { __dgResizeCanvasIfNeeded(s.nodesBackCanvas, w, h, 'nodes:back', false); }
-    if (s.flashBackCanvas) { __dgResizeCanvasIfNeeded(s.flashBackCanvas, w, h, 'flash:back', false); }
-    if (s.ghostBackCanvas) { __dgResizeCanvasIfNeeded(s.ghostBackCanvas, w, h, 'ghost:back', __ghostNonEmpty); }
-    if (s.tutorialBackCanvas) { __dgResizeCanvasIfNeeded(s.tutorialBackCanvas, w, h, 'tutorial:back', false); }
-
-    if (s.debugCanvas) { __dgResizeCanvasIfNeeded(s.debugCanvas, w, h, 'debug', false); }
+    // Sizing is deliberately absent here. Visible canvases are managed by the
+    // toy surface manager and offscreen canvases mirror its snapshot during the
+    // resize transaction. Flush only copies already-sized presentation data.
 
     // Only flush back→front when back buffers are active.
     // When usingBackBuffers is false, the front canvases are the source of truth; flushing would

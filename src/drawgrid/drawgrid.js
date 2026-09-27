@@ -5,7 +5,26 @@ import { buildPalette, midiToName } from '../note-helpers.js';
 import { drawBlock } from '../toyhelpers.js';
 import { getLoopInfo, isRunning } from '../audio-core.js';
 import { onZoomChange, getZoomState, getFrameStartState, onFrameStart, namedZoomListener } from '../zoom/ZoomCoordinator.js';
-import { createParticleViewport, createField, getParticleBudget, getAdaptiveFrameBudget, getParticleCap, createToyVisibilityObserver, createToyVisibleCounter } from '../baseMusicToy/index.js';
+import { createGenericParticleField, getParticleBudget, getAdaptiveFrameBudget, getParticleCap, createToyVisibilityObserver, createToyVisibleCounter } from '../baseMusicToy/index.js';
+import {
+  DRAWGRID_PARTICLE_BOUNDS,
+  createDrawGridParticleViewportSpace,
+} from './drawgrid-particle-viewport-space.js';
+import {
+  DRAWGRID_STROKE_SPACE_LOGICAL,
+  DRAWGRID_LOGICAL_HEIGHT,
+  DRAWGRID_LOGICAL_WIDTH,
+  createDrawGridLogicalGeometry,
+  drawGridLogicalRowFromPoint,
+  createDrawGridViewportDebugSnapshot,
+  createDrawGridViewportSpace,
+  drawGridClientToLogical,
+  drawGridClientToStrokeLogical,
+  drawGridLogicalPointToNormalized,
+  drawGridLogicalToDisplay,
+  isDrawGridLogicalStroke,
+  hitTestDrawGridLogicalCell,
+} from './drawgrid-viewport-space.js';
 import { overviewMode } from '../overview-mode.js';
 import { boardScale as boardScaleHelper } from '../board-scale-helpers.js';
 import { beginFrameLayoutCache, getRect } from '../layout-cache.js';
@@ -68,7 +87,6 @@ import { createDgMapRegen } from './dg-map-regen.js';
 import { computeGhostSweepLR } from './dg-ghost-path.js';
 import { createDgGhostLayer } from './dg-ghost-layer.js';
 import { createDgGhostGuide } from './dg-ghost-guide.js';
-import { createDgPaintSnapshot } from './dg-paint-snapshot.js';
 import { createDgTutorialHighlight } from './dg-tutorial-highlight.js';
 import { createDgResnap } from './dg-resnap.js';
 import { createDgClear } from './dg-clear.js';
@@ -105,6 +123,7 @@ import {
 import { requestPanelPulse } from '../pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from '../dom-commit.js';
 import { createToySurfaceManager } from '../toy-surface-manager.js';
+import { resizeDrawGridOffscreenBuffers } from './dg-offscreen-backing.js';
 import {
   __dgComputeVisualBackingMul,
   __dgComputeGestureBackingMul,
@@ -294,6 +313,9 @@ function __dgWithLogicalSpaceDpr(R, ctx, dpr, fn) {
   //
   // Instead, apply the DPR as a local transform directly on this context.
   if (!ctx) return fn();
+  if (R && typeof R.withLogicalSpaceDpr === 'function') {
+    return R.withLogicalSpaceDpr(ctx, dpr, fn);
+  }
 
   // Guard against accidental nesting.
   if (ctx.__dgLogicalSpaceActive) {
@@ -315,8 +337,6 @@ function __dgWithLogicalSpaceDpr(R, ctx, dpr, fn) {
 
 // One-shot dumper (manual, not spammy) is installed per-instance inside createDrawGrid()
 // so it can see the actual canvases. (Module-scope can't see per-instance locals.)
-
-const gridAreaLogical = { w: 0, h: 0 };
 
 // Lightweight profiling for drawGrid; flip to true when testing.
 const DG_PROFILE = false;
@@ -380,13 +400,6 @@ if (typeof window !== 'undefined' && typeof window.DG_ZOOM_AUDIT === 'undefined'
   window.DG_ZOOM_AUDIT = false;
 }
 
-// === DRAWGRID TUNING (single source of truth) ===
-const {
-  ghostRadiusToy,
-  headerRadiusToy,
-  DG_KNOCK,
-} = createDGTuning(gridAreaLogical);
-
 const { dgGridAlphaLog, dgDumpCanvasMetrics, emitDG } = createDGDebugHelpers({
   boardScaleHelper,
   getPanel: () => {
@@ -447,26 +460,6 @@ function getPathAlpha({ isOverlay, wantsSpecial, isVisualOnly, generatorId }) {
 }
 
 let colorIndex = 0;
-
-function createViewportBridgeDG(hostEl) {
-  return {
-    getZoom: () => {
-      try {
-        const raw = boardScaleHelper(hostEl);
-        const value = Number(raw);
-        if (Number.isFinite(value) && value > 0) return value;
-      } catch {}
-      return 1;
-    },
-    isOverview: () => {
-      try {
-        return !!overviewMode?.isActive?.();
-      } catch {
-        return false;
-      }
-    },
-  };
-}
 
 // NOTE: DrawGrid has to be multi-instance safe. Do NOT store per-toy sizing state at module scope.
 // These are now declared per-instance inside createDrawGrid().
@@ -538,7 +531,18 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     Math.max(1, Math.min((typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1, 3)),
     null
   );
-  let cssW = 0, cssH = 0, cw = 0, ch = 0, topPad = 0;
+  const gridAreaLogical = Object.freeze({ w: DRAWGRID_LOGICAL_WIDTH, h: DRAWGRID_LOGICAL_HEIGHT });
+  let logicalGeometry = createDrawGridLogicalGeometry({ cols: initialCols, rows });
+  let gridArea = { ...logicalGeometry.gridRect };
+  let cssW = 0, cssH = 0;
+  let cw = logicalGeometry.cellWidth;
+  let ch = logicalGeometry.cellHeight;
+  let topPad = logicalGeometry.topPad;
+  const {
+    ghostRadiusToy,
+    headerRadiusToy,
+    DG_KNOCK,
+  } = createDGTuning(gridAreaLogical);
   let layoutSizeDirty = true;
   // Cached layout size to avoid forced reflow from offsetWidth/clientWidth during rAF.
   // Updated by ResizeObserver; used by measureCSSSize(wrap).
@@ -573,8 +577,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let applyInstrumentFromState = () => false;
   let captureState = () => ({ steps: cols | 0, autotune: !!autoTune });
   let restoreFromState = () => {};
-  let cancelPostRestoreStabilize = () => {};
-  let schedulePostRestoreStabilize = () => {};
   let setState = () => {};
   let clearAndRedrawFromStrokes = () => {};
   let drawIntoBackOnly = () => {};
@@ -632,8 +634,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let getGhostGuideAnimFrame = () => 0;
   let currentCols = 0;
   let nodeCoordsForHitTest = [];        // For draggable nodes (hit tests, drags)
-  let dgViewport = null;
-  let dgMap = null;
   let dgField = null;
   let backCtx = null;
   let headerSweepDirX = 1;
@@ -730,7 +730,16 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     ctx.save();
     // Reset to a known transform; callers typically called R.resetCtx(ctx) already.
     // setTransform avoids compounding transforms if something slipped through.
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const viewport = createDrawGridViewportSpace({ width: cssW || 1, height: cssH || 1, backingScale: dpr });
+    const renderScale = dpr * viewport.presentationScale;
+    ctx.setTransform(
+      renderScale,
+      0,
+      0,
+      renderScale,
+      dpr * viewport.contentRect.left,
+      dpr * viewport.contentRect.top,
+    );
     try {
       fn();
     } finally {
@@ -1004,7 +1013,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   particleCanvas.className = 'toy-particles';
   particleCanvas.setAttribute('data-role', 'drawgrid-particles');
   try { particleCanvas.dataset.skipAutoDpr = '1'; } catch {}
-  try { dgSurfaces?.registerCanvas?.('particles', particleCanvas, { policy: 'css' }); } catch {}
+  try { dgSurfaces?.registerCanvas?.('particles', particleCanvas, { policy: 'managed' }); } catch {}
   const grid = document.createElement('canvas');
   grid.classList.add('toy-canvas');
   grid.setAttribute('data-role','drawgrid-grid');
@@ -1394,16 +1403,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       let gridAreaValue = null;
       let gridAreaLogicalValue = null;
       let isPanelVisibleValue = true;
-      let dgViewportValue = null;
       try { gridAreaValue = gridArea; } catch {}
       try { gridAreaLogicalValue = gridAreaLogical; } catch {}
       try { isPanelVisibleValue = isPanelVisible; } catch {}
-      try { dgViewportValue = dgViewport; } catch {}
       return {
         gridArea: gridAreaValue,
         gridAreaLogical: gridAreaLogicalValue,
         isPanelVisible: isPanelVisibleValue,
-        dgViewport: dgViewportValue,
+        zoomScale: boardScaleHelper(panel) || 1,
       };
     },
     // Mount under overlaysRoot so the label is a true overlay (never a layout participant)
@@ -1426,13 +1433,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   });
   try { if (typeof window !== 'undefined') window.__DG_COMPUTE_GHOST_SWEEP_LR = __dgComputeGhostSweepLR; } catch {}
 
-  function getToyLogicalSize() {
-    // IMPORTANT: avoid clientWidth/clientHeight reads in hot/boot paths; they can
-    // reflect transient zoom/transform states right after refresh.
-    const s = __dgGetStableWrapSize();
-    return { w: s.w, h: s.h };
-  }
-
   function getToyCssSizeForParticles() {
     // Keep particles on the same size basis as everything else.
     const s = __dgGetStableWrapSize();
@@ -1447,9 +1447,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const clientH = wrap?.clientHeight || 0;
 
       const zoomState = (typeof getZoomState === 'function') ? getZoomState() : null;
-      const zoomScale = Number.isFinite(dgViewport?.getZoom?.())
-        ? dgViewport.getZoom()
-        : (Number.isFinite(zoomState?.scale) ? zoomState.scale : 1);
+      const zoomScale = Number.isFinite(zoomState?.scale) ? zoomState.scale : (boardScaleHelper(panel) || 1);
 
       // --- Common area basis (logical toy size) ---
       const areaW = Number.isFinite(gridAreaLogical?.w) && gridAreaLogical.w > 0
@@ -1516,21 +1514,38 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
   }
 
-  // --- Particle viewport / field init after wrap is ready ---
-  const pausedRef = () => !!panel?.dataset?.paused;
-  const viewportBridge = createViewportBridgeDG(panel);
-
-  // IMPORTANT:
-  // Use the logical toy size for the particle viewport so that:
-  // - grid, ghost path, and particles all share the same world-space basis, and
-  // - camera zoom (board scale) just scales the whole toy visually.
-  dgViewport = createParticleViewport(() => {
-    return getToyLogicalSize();
-  });
-  Object.assign(dgViewport, viewportBridge);
-  dgMap = dgViewport.map;
   const panelSeed = panel?.dataset?.toyid || panel?.id || 'drawgrid';
-  let gridArea = { x: 0, y: 0, w: 0, h: 0 };
+  // The fixed drawing space is authoritative. DOM measurement below supplies
+  // presentation placement only and never changes drawing state.
+  const getDrawGridViewportSpace = () => {
+    const rect = paint?.getBoundingClientRect?.();
+    return createDrawGridViewportSpace({
+      left: rect?.left || 0,
+      top: rect?.top || 0,
+      width: rect?.width || cssW || 1,
+      height: rect?.height || cssH || 1,
+      backingScale: paintDpr,
+    });
+  };
+  const getDrawGridViewportDebugSnapshot = (sampleClientPoint = null) => (
+    createDrawGridViewportDebugSnapshot(getDrawGridViewportSpace(), sampleClientPoint)
+  );
+  const pointerToDrawGridStrokeLogical = (event) => drawGridClientToStrokeLogical(
+    getDrawGridViewportSpace(),
+    { x: event?.clientX ?? event?.x ?? 0, y: event?.clientY ?? event?.y ?? 0 },
+  );
+  const drawGridViewportDebugApi = Object.freeze({
+    get snapshot() { return getDrawGridViewportDebugSnapshot(); },
+    clientToLogical(point) { return drawGridClientToLogical(getDrawGridViewportSpace(), point); },
+    logicalToDisplay(point) { return drawGridLogicalToDisplay(getDrawGridViewportSpace(), point); },
+  });
+  try { Object.defineProperty(panel, '__drawGridViewportSpace', { configurable: true, value: drawGridViewportDebugApi }); } catch {}
+  try {
+    Object.defineProperty(globalThis, '__DRAWGRID_VIEWPORT_SPACE', {
+      configurable: true,
+      get: () => getDrawGridViewportDebugSnapshot(),
+    });
+  } catch {}
   // Last-known-good grid sizing. Used to avoid "not ready" churn during transient layout hiccups.
   // This is NOT a startup hack; it only kicks in when we previously had a valid grid and then
   // briefly measure invalid sizes (0/1px, etc.) mid-run.
@@ -1548,6 +1563,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     backCtx,
     DG_SINGLE_CANVAS,
     gridArea,
+    drawingViewportSpace: createDrawGridViewportSpace({ width: cssW || 1, height: cssH || 1, backingScale: paintDpr }),
     __dgDrawingActive,
     isVisualOnlyStroke,
     getPathAlpha,
@@ -1660,7 +1676,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     panel,
     R,
     dgField,
-    dgMap,
     gridArea,
     gridAreaLogical,
     cssW,
@@ -1687,10 +1702,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     panel,
     wrap,
     particleCanvas,
-    dgViewport,
     particleState,
     panelSeed,
-    getToyLogicalSize,
     gridAreaLogical,
     drawgridLog,
     __auditZoomSizes,
@@ -1699,10 +1712,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     getParticleCap,
     getAdaptiveFrameBudget,
     getQualityProfile: (opts = {}) => dgQuality.getProfile(opts),
-    createField,
-    pausedRef,
-    __lastZoomMotionTs,
-    ZOOM_STALL_MS,
+    createGenericParticleField,
+    dgSurfaces,
+    particleBounds: DRAWGRID_PARTICLE_BOUNDS,
+    createParticleViewportSpace: createDrawGridParticleViewportSpace,
   });
   const P = createDgParticles(getParticleState);
 
@@ -2133,13 +2146,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     }
     return out;
   };
+  const __dgListOffscreenBackingEls = () => ([
+    gridBackCanvas,
+    backCanvas,
+    nodesBackCanvas,
+    flashBackCanvas,
+    ghostBackCanvas,
+    tutorialBackCanvas,
+  ].filter(Boolean));
   const __dgListManagedBackingEls = () => {
     const out = [];
     const seen = new Set();
     for (const ref of __dgListAllLayerRefs()) {
       const el = __dgGetCanvasEl(ref);
       if (!el || !el.style) continue;
-      if (el === particleCanvas) continue; // field-generic owns its backing store
       if (seen.has(el)) continue;
       seen.add(el);
       out.push(el);
@@ -2171,7 +2191,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       const styleHpx = styleH.endsWith('px') ? parseFloat(styleH) : null;
       const cachedW = Number.isFinite(el.__dgCssW) ? el.__dgCssW : null;
       const cachedH = Number.isFinite(el.__dgCssH) ? el.__dgCssH : null;
-      const wantsBacking = (el !== particleCanvas);
+      const wantsBacking = true;
       const bw = Number.isFinite(el.width) ? el.width : null;
       const bh = Number.isFinite(el.height) ? el.height : null;
       const cssWNow = cachedW ?? styleWpx;
@@ -2202,27 +2222,20 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     if (!snap) return null;
     const { expected, rows } = snap;
     let changed = false;
-    const cssWpx = `${expected.cssW}px`;
-    const cssHpx = `${expected.cssH}px`;
-    for (const el of __dgListAllLayerEls()) {
-      if (!el.style) continue;
-      if (force || el.__dgCssW !== expected.cssW || el.__dgCssH !== expected.cssH ||
-          el.style.width !== cssWpx || el.style.height !== cssHpx) {
-        el.__dgCssW = expected.cssW;
-        el.__dgCssH = expected.cssH;
-        el.style.width = cssWpx;
-        el.style.height = cssHpx;
-        changed = true;
-      }
-    }
-    for (const el of __dgListManagedBackingEls()) {
-      if (!el) continue;
-      if (force || el.width !== expected.pxW || el.height !== expected.pxH) {
-        el.width = expected.pxW;
-        el.height = expected.pxH;
-        changed = true;
-      }
-    }
+    // Visible surfaces have exactly one owner. Applying the explicit snapshot is
+    // idempotent and lets createToySurfaceManager own both CSS and backing size.
+    const before = dgSurfaces?.getSnapshot?.();
+    dgSurfaces?.applyExplicit?.(expected.cssW, expected.cssH, expected.dpr);
+    const managed = dgSurfaces?.getSnapshot?.();
+    changed = !!before && !!managed && (
+      before.cssWidth !== managed.cssWidth ||
+      before.cssHeight !== managed.cssHeight ||
+      before.backingWidth !== managed.backingWidth ||
+      before.backingHeight !== managed.backingHeight
+    );
+    // Offscreen buffers explicitly mirror that managed snapshot. They never
+    // measure DOM geometry or choose a separate DPR.
+    changed = resizeDrawGridOffscreenBuffers(__dgListOffscreenBackingEls(), managed) || changed;
     if (log || (typeof window !== 'undefined' && window.__DG_LAYER_SIZE_TRACE)) {
       const mismatches = rows.filter(r => r.cssMismatch || r.backingMismatch);
       if (mismatches.length || log) {
@@ -2349,6 +2362,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     cssW,
     cssH,
     paintDpr,
+    surfaceSnapshot: dgSurfaces?.getSnapshot?.(),
     zoomGestureActive,
 
     // Required callbacks / debug
@@ -2398,84 +2412,11 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const updatePaintBackingStores = dgPaintBuffers.updatePaintBackingStores;
   const swapBackToFront = dgPaintBuffers.swapBackToFront;
   let __dgPostCommitRaf = 0;
-  let __dgPostCommitTries = 0;
-  function __dgReprojectNormalizedStrokesIfNeeded(tag = 'reproject') {
-    try {
-      if (!strokes || strokes.length === 0) return false;
-      if (!gridArea || !Number.isFinite(gridArea.x) || !Number.isFinite(gridArea.w) || !Number.isFinite(gridArea.h)) return false;
-
-      const gh = Math.max(1, (gridArea.h - (topPad || 0)));
-      let changed = 0;
-
-      const looksCollapsed = (pts) => {
-        try {
-          if (!Array.isArray(pts) || pts.length < 2) return true;
-          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-          for (const p of pts) {
-            const x = Number(p?.x);
-            const y = Number(p?.y);
-            if (!Number.isFinite(x) || !Number.isFinite(y)) return true;
-            if (x < minX) minX = x;
-            if (y < minY) minY = y;
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
-          }
-          // If the stroke bbox is ~a point, but the grid is meaningfully sized, it was likely projected during a 0-size layout.
-          const bboxW = maxX - minX;
-          const bboxH = maxY - minY;
-          if ((bboxW < 1 && bboxH < 1) && (gridArea.w > 20 && gridArea.h > 20)) return true;
-          // Also treat "stuck near (0,0)" as collapsed when the grid is not at origin.
-          if (maxX < 2 && maxY < 2 && (gridArea.x > 2 || gridArea.y > 2)) return true;
-          return false;
-        } catch {
-          return true;
-        }
-      };
-
-      const reprojectList = (list) => {
-        if (!Array.isArray(list) || list.length === 0) return;
-        for (const s of list) {
-          if (!s || !Array.isArray(s.__ptsN) || s.__ptsN.length === 0) continue;
-          const needsPts = (!Array.isArray(s.pts) || s.pts.length === 0);
-          const shouldReproject = needsPts || looksCollapsed(s.pts);
-          if (!shouldReproject) continue;
-          s.pts = s.__ptsN.map(np => ({
-            x: gridArea.x + (Number(np?.nx) || 0) * gridArea.w,
-            y: (gridArea.y + (topPad || 0)) + (Number(np?.ny) || 0) * gh,
-          }));
-          changed++;
-        }
-      };
-
-      reprojectList(strokes);
-      if (changed && DG_LAYOUT_DEBUG) {
-        try {
-          dgLogLine?.('reproject-normalized-strokes', {
-            panelId: panel?.id || null,
-            tag,
-            changed,
-            strokes: Array.isArray(strokes) ? strokes.length : 0,
-          });
-        } catch {}
-      }
-
-      return changed > 0;
-    } catch {}
-    return false;
-  }
-
   function ensurePostCommitRedraw(reason = 'post-commit') {
     if (__dgPostCommitRaf) return;
-    const tick = () => {
+    __dgPostCommitRaf = requestAnimationFrame(() => {
       __dgPostCommitRaf = 0;
-      dgPaintTrace('postCommit:tick', { tries: __dgPostCommitTries, inCommit: (() => { try { return !!window.__ZOOM_COMMIT_PHASE; } catch {} return false; })() });
-      const inCommit = (() => { try { return !!window.__ZOOM_COMMIT_PHASE; } catch {} return false; })();
-      if (inCommit && __dgPostCommitTries < 20) {
-        __dgPostCommitTries++;
-        __dgPostCommitRaf = requestAnimationFrame(tick);
-        return;
-      }
-      __dgPostCommitTries = 0;
+      dgPaintTrace('postCommit:tick', { reason });
       try { useFrontBuffers(); } catch {}
       try {
         __dgSuppressPostCommitOnPaintResize = true;
@@ -2486,10 +2427,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
       const hasStrokes = Array.isArray(strokes) && strokes.length > 0;
       if (hasStrokes) {
-        // IMPORTANT: if we're about to redraw from strokes, make sure normalized strokes
-        // have been reprojected into live `pts` first. Otherwise this path can clear
-        // the paint canvas and draw nothing (line "vanishes" until next interaction).
-        try { __dgReprojectNormalizedStrokesIfNeeded(`post-commit:${reason}`); } catch {}
         dgPaintTrace('postCommit:redraw-from-strokes:begin', { strokes: strokes?.length || 0 });
         try { clearAndRedrawFromStrokes(DG_SINGLE_CANVAS ? backCtx : frontCtx, `post-commit:${reason}`); } catch {}
         dgPaintTrace('postCommit:redraw-from-strokes:end', { strokes: strokes?.length || 0 });
@@ -2511,9 +2448,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
           }
         } catch {}
       } else {
-        // No strokes: we still need a deterministic post-commit refresh on refresh/boot.
-        // Otherwise a transient scaled DOM rect during zoom settle can leave the user
-        // seeing an empty body (grid hidden) until the next interaction.
+        // No strokes still requires a deterministic presentation refresh so
+        // grid/guide layers are ready before the next frame is displayed.
         try { markLayoutSizeDirty(); } catch {}
         try { ensureSizeReady({ force: false }); } catch {}
         try { panel.__dgSingleCompositeDirty = true; } catch {}
@@ -2527,8 +2463,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       if (DG_LAYOUT_DEBUG) {
         dgLogLine('post-commit-redraw', { panelId: panel?.id || null, reason });
       }
-    };
-    __dgPostCommitRaf = requestAnimationFrame(tick);
+    });
   }
 
   // === Active canvas helpers (front/back safe) ===
@@ -2561,11 +2496,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   let __forceSwipeVisible = null; // null=auto, true/false=forced by tutorial
   let pendingSwap = false;
-  let pendingWrapSize = null;
-  const DG_WRAP_SIZE_FLUSH = (() => {
-    try { return !!window.__DG_WRAP_SIZE_FLUSH; } catch {}
-    return false;
-  })();
   let __swapRAF = null;
   let __dgSkipSwapsDuringDrag = false;
 
@@ -2590,28 +2520,16 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       });
       dgPaintTrace('requestFrontSwap:raf-begin', { pendingPaintSwap, pendingSwap, zoomCommitPhase, zoomGestureActive });
       if (DG_SWAP_DEBUG) console.time(mark);
-      // SWAP GUARD:
-      // On refresh/hydrate we sometimes see the front canvas temporarily sized to the *scaled* DOM rect
-      // (e.g. 479x359 when the backing store should be 798x599). That resize clears the canvas and
-      // can make strokes "disappear" until a later interaction triggers a redraw.
+      // Ownership guard: repair through the surface owner; never write a visible
+      // canvas backing store from the swap path.
       try {
         const expW = (__dgLastResizeTargetW || (cssW ? Math.max(1, Math.round(cssW * paintDpr)) : 0));
         const expH = (__dgLastResizeTargetH || (cssH ? Math.max(1, Math.round(cssH * paintDpr)) : 0));
         if (frontCanvas && expW && expH) {
-          const rect = getRect(frontCanvas);
-          const rectW = Math.max(1, Math.round(rect?.width || 0));
-          const rectH = Math.max(1, Math.round(rect?.height || 0));
-          const looksLikeScaledRect = (frontCanvas.width === rectW && frontCanvas.height === rectH && (rectW !== expW || rectH !== expH));
           const wrongBackingStore = (frontCanvas.width !== expW || frontCanvas.height !== expH);
-          if (wrongBackingStore && looksLikeScaledRect) {
-            dgPaintTrace('swapGuard:frontBackingStoreWrong', { expW, expH, rectW, rectH, frontW: frontCanvas.width, frontH: frontCanvas.height });
-            if (DG_SWAP_DEBUG || DG_DEBUG) {
-              console.warn('[DG][swapGuard] front canvas backing store was scaled-rect sized; restoring + redrawing', { expW, expH, rectW, rectH, frontW: frontCanvas.width, frontH: frontCanvas.height });
-              console.trace('[DG][swapGuard] stack (who resized front canvas?)');
-            }
-            // Restore the correct backing store size (clears, so immediately redraw strokes).
-            frontCanvas.width = expW;
-            frontCanvas.height = expH;
+          if (wrongBackingStore) {
+            dgPaintTrace('swapGuard:surfaceOwnerRepair', { expW, expH, frontW: frontCanvas.width, frontH: frontCanvas.height });
+            resizeSurfacesFor(cssW, cssH, paintDpr, 'swap-guard:surface-owner');
             if (Array.isArray(strokes) && strokes.length > 0) {
               try { clearAndRedrawFromStrokes(DG_SINGLE_CANVAS ? backCtx : frontCtx, 'swap-guard'); } catch {}
             }
@@ -2647,7 +2565,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     });
   }
   let isRestoring = false;
-  let __dgPostRestoreStabilizeRAF = 0;
   const handleInstrumentPersist = () => {
     if (isRestoring) return;
     schedulePersistState({ source: 'instrument-change', bypassGuard: true });
@@ -2766,7 +2683,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   let __dgLastToyZoomCommitTs = 0;
   P.initDrawgridParticles();
   dgField = particleState.field;
-  P.installParticleResizeObserver();
   // Suppress header sweep pushes while zoom/pan gestures are active.
   let suppressHeaderPushUntil = 0;
   const HEADER_PUSH_SUPPRESS_MS = 180; // cooldown after zoom motion/commit
@@ -2887,7 +2803,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       });
     });
     zoomMode = zoomPayload?.mode && zoomPayload.mode !== 'gesturing' ? zoomPayload.mode : 'idle';
-    try { dgViewport?.setNonReactive?.(null); } catch {}
     resetZoomFreezeTracking();
     __dgFrontSwapNextDraw = true;
     if (refreshLayout) {
@@ -2909,7 +2824,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         cssH = Math.max(1, layoutSize.h);
         progressMeasureW = cssW;
         progressMeasureH = cssH;
-        try { dgViewport?.refreshSize?.({ snap: true }); } catch {}
         // IMPORTANT: zoom-commit refreshLayout must also respect size-based DPR caps.
         // Otherwise a commit can allocate huge backing stores and spike compositor time.
         const deviceDpr = Math.max(
@@ -2972,7 +2886,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     if ((nowMs() - anchor) < ZOOM_STALL_MS) return;
     forceReleaseZoomFreeze('stall');
   }
-  try { dgViewport?.setNonReactive?.(zoomFreezeActive() ? true : null); } catch {}
   if (initialZoomState) {
     const initialScale =
       initialZoomState.currentScale ?? initialZoomState.targetScale;
@@ -3009,7 +2922,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       set __dgLayoutObs(v) { __dgLayoutObs = v; },
       get __dgLayoutObserverInstalled() { return __dgLayoutObserverInstalled; },
       set __dgLayoutObserverInstalled(v) { __dgLayoutObserverInstalled = v; },
-      get dgViewport() { return dgViewport; },
       get cssW() { return cssW; },
       set cssW(v) { cssW = v; },
       get cssH() { return cssH; },
@@ -3093,6 +3005,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       __dgPaintDebugLog,
       __dgEnsureLayerSizes,
       __dgListAllLayerRefs,
+      resizeOffscreenBuffers: (snapshot) => resizeDrawGridOffscreenBuffers(__dgListOffscreenBackingEls(), snapshot),
       dglog,
       traceCanvasResize,
       zoomFreezeActive,
@@ -3160,7 +3073,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       set __overviewActive(v) { __overviewActive = v; },
     },
     deps: {
-      dgViewport,
       dgField,
       zoomFreezeActive,
       markLayoutSizeDirty,
@@ -3290,6 +3202,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     get rows() { return rows; },
     get gridArea() { return gridArea; },
     get gridAreaLogical() { return gridAreaLogical; },
+    get logicalGeometry() { return logicalGeometry; },
     get cw() { return cw; },
     get ch() { return ch; },
     get topPad() { return topPad; },
@@ -3338,36 +3251,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     },
   }));
 
-  const dgPaintSnapshotState = {
-    get panel() { return panel; },
-    get DG_SINGLE_CANVAS() { return DG_SINGLE_CANVAS; },
-    get backCanvas() { return backCanvas; },
-    get paint() { return paint; },
-    get paintDpr() { return paintDpr; },
-    get usingBackBuffers() { return usingBackBuffers; },
-    get cssW() { return cssW; },
-    get cssH() { return cssH; },
-    get strokes() { return strokes; },
-    get pctx() { return pctx; },
-    set pctx(value) { pctx = value; },
-  };
-
-  const dgPaintSnapshotDeps = {
-    updatePaintBackingStores,
-    getActivePaintCtx,
-    getActivePaintCanvas,
-    resetPaintBlend,
-    R,
-    emitDG,
-    markPaintDirty,
-    clearAndRedrawFromStrokes,
-  };
-
-  const { capturePaintSnapshot, restorePaintSnapshot } = createDgPaintSnapshot({
-    state: dgPaintSnapshotState,
-    deps: dgPaintSnapshotDeps,
-  });
-
   ({ scheduleZoomRecompute } = createDgZoomRecompute({
     state: {
       get zoomRAF() { return zoomRAF; },
@@ -3392,8 +3275,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       __dgComputeSmallPanelBackingMul,
       resizeSurfacesFor,
       dgRefreshTrace,
-      capturePaintSnapshot,
-      restorePaintSnapshot,
       useBackBuffers,
       updatePaintBackingStores,
       getGhostGuideAutoActive,
@@ -3423,7 +3304,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       set __zoomActive(v) { __zoomActive = v; },
       get zoomGestureActive() { return zoomGestureActive; },
       set zoomGestureActive(v) { zoomGestureActive = v; },
-      get dgViewport() { return dgViewport; },
       get suppressHeaderPushUntil() { return suppressHeaderPushUntil; },
       set suppressHeaderPushUntil(v) { suppressHeaderPushUntil = v; },
       get HEADER_PUSH_SUPPRESS_MS() { return HEADER_PUSH_SUPPRESS_MS; },
@@ -4030,14 +3910,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       set cssW(v) { cssW = v; },
       get cssH() { return cssH; },
       set cssH(v) { cssH = v; },
-      get DG_WRAP_SIZE_FLUSH() { return DG_WRAP_SIZE_FLUSH; },
       get usingBackBuffers() { return usingBackBuffers; },
-      get pendingWrapSize() { return pendingWrapSize; },
-      set pendingWrapSize(v) { pendingWrapSize = v; },
       get zoomGestureActive() { return zoomGestureActive; },
       get zoomMode() { return zoomMode; },
       get __overviewActive() { return __overviewActive; },
-      get dgViewport() { return dgViewport; },
       get paintDpr() { return paintDpr; },
       get __dgForceFullDrawNext() { return __dgForceFullDrawNext; },
       set __dgForceFullDrawNext(v) { __dgForceFullDrawNext = v; },
@@ -4050,6 +3926,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       get isRestoring() { return isRestoring; },
       get __zoomActive() { return __zoomActive; },
       get gridAreaLogical() { return gridAreaLogical; },
+      get logicalGeometry() { return logicalGeometry; },
+      set logicalGeometry(v) { logicalGeometry = v; },
       get SAFE_AREA_FRACTION() { return SAFE_AREA_FRACTION; },
       get gridArea() { return gridArea; },
       set gridArea(v) { gridArea = v; },
@@ -4111,6 +3989,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       DG_HYDRATE,
       dgNow,
       __dgGridReady,
+      createLogicalGeometry: createDrawGridLogicalGeometry,
       resetGridCache: () => { try { resetGridCache?.(); } catch {} },
       resetNodesCache: () => { try { resetNodesCache?.(); } catch {} },
       resetBlocksCache: () => { try { resetBlocksCache?.(); } catch {} },
@@ -4188,9 +4067,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     get DG_SINGLE_CANVAS_OVERLAYS() { return DG_SINGLE_CANVAS_OVERLAYS; },
     get usingBackBuffers() { return usingBackBuffers; },
     get wrap() { return wrap; },
-    get pendingWrapSize() { return pendingWrapSize; },
-    set pendingWrapSize(v) { pendingWrapSize = v; },
-    get DG_WRAP_SIZE_FLUSH() { return DG_WRAP_SIZE_FLUSH; },
     get grid() { return grid; },
     get nodesCanvas() { return nodesCanvas; },
     get flashCanvas() { return flashCanvas; },
@@ -4512,27 +4388,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
   const dgSnapState = {
     get cols() { return cols; },
-    get rows() { return rows; },
-    get gridArea() { return gridArea; },
-    get cw() { return cw; },
-    get ch() { return ch; },
-    get topPad() { return topPad; },
-    get paintDpr() { return paintDpr; },
-    get paint() { return paint; },
-    get pctx() { return pctx; },
+    get logicalGeometry() { return logicalGeometry; },
     get autoTune() { return autoTune; },
     get chromaticPalette() { return chromaticPalette; },
     get pentatonicPalette() { return pentatonicPalette; },
   };
 
-  const dgSnapDeps = {
-    drawFullStroke,
-  };
-
-  const { snapToGrid, snapToGridFromStroke } = createDgSnap({
-    state: dgSnapState,
-    deps: dgSnapDeps,
-  });
+  const { snapToGridFromStroke } = createDgSnap({ state: dgSnapState });
 
   const dgResnapState = {
     get panel() { return panel; },
@@ -4580,7 +4442,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     getGhostGuideAutoActive,
     runAutoGhostGuideSweep,
     clearAndRedrawFromStrokes,
-    reprojectNormalizedStrokesIfNeeded: (tag) => __dgReprojectNormalizedStrokesIfNeeded(tag),
   };
 
   resnapHelper = createDgResnap({
@@ -4673,9 +4534,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     setDrawingState(false);
     if (cur) {
       try {
-        const finalPaintPt = pointerToPaintLogical(e);
+        const finalPaintPt = pointerToDrawGridStrokeLogical(e);
         const lastPt = cur.pts[cur.pts.length - 1];
-        if (!lastPt || Math.hypot((lastPt.x ?? 0) - finalPaintPt.x, (lastPt.y ?? 0) - finalPaintPt.y) > 0.25) {
+        if (finalPaintPt && (!lastPt || Math.hypot((lastPt.x ?? 0) - finalPaintPt.x, (lastPt.y ?? 0) - finalPaintPt.y) > 0.25)) {
           cur.pts.push(finalPaintPt);
         }
       } catch {}
@@ -4751,6 +4612,9 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     const isSpecial = !!shouldGenerateNodes;
     strokeToProcess.isSpecial = isSpecial;
     strokeToProcess.justCreated = true;
+    if (isDrawGridLogicalStroke(strokeToProcess)) {
+      strokeToProcess.__ptsN = strokeToProcess.pts.map(drawGridLogicalPointToNormalized);
+    }
 
     if (isSpecial) {
       strokeToProcess.generatorId = generatorId || 1;
@@ -4847,6 +4711,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     get paintDpr() { return paintDpr; },
     get gridArea() { return gridArea; },
     get gridAreaLogical() { return gridAreaLogical; },
+    get logicalGeometry() { return logicalGeometry; },
     get drawing() { return drawing; },
     set drawing(v) { drawing = v; },
     get pendingNodeTap() { return pendingNodeTap; },
@@ -4911,6 +4776,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     stopAutoGhostGuide,
     markUserChange,
     pointerToPaintLogical,
+    pointerToDrawGridStrokeLogical,
+    DRAWGRID_STROKE_SPACE_LOGICAL,
+    hitTestLogicalCell: hitTestDrawGridLogicalCell,
+    logicalRowFromPoint: drawGridLogicalRowFromPoint,
     dgPointerTrace,
     setDrawingState,
     pauseTutorialHighlightForDraw,
@@ -5436,7 +5305,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
             ? (Number.isFinite(pfState?.lodScale) && pfState.lodScale < 0.75 ? 'med' : 'high')
             : 'low';
           entries.push({
-            text: `  state: target=${Number.isFinite(pfState?.targetDesired) ? pfState.targetDesired.toFixed(0) : '--'} lod=${Number.isFinite(pfState?.lodScale) ? pfState.lodScale.toFixed(3) : '--'} tickMod=${Number.isFinite(pfCfg?.tickModulo) ? pfCfg.tickModulo : '--'}`,
+            text: `  state: target=${Number.isFinite(pfState?.targetDesired) ? pfState.targetDesired.toFixed(0) : '--'} lod=${Number.isFinite(pfState?.lodScale) ? pfState.lodScale.toFixed(3) : '--'} tickMod=${Number.isFinite(pfState?.tickModulo) ? pfState.tickModulo : '--'}`,
             tier: targetTier,
           });
           if (pfState) {
@@ -6056,27 +5925,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
         try { window.__PerfFrameProf?.mark?.('drawgrid.render.particles', performance.now() - __particlePrepStart); } catch {}
       }
 
-      if (dgField) {
-        if (!disableParticles && cssW > 0 && cssH > 0) {
-          const x = 0;
-          const y = 0;
-          const clipW = (particleCanvas && Number.isFinite(particleCanvas.clientWidth) && particleCanvas.clientWidth > 0)
-            ? particleCanvas.clientWidth
-            : cssW;
-          const clipH = (particleCanvas && Number.isFinite(particleCanvas.clientHeight) && particleCanvas.clientHeight > 0)
-            ? particleCanvas.clientHeight
-            : cssH;
-          const w = Math.max(0, clipW);
-          const h = Math.max(0, clipH);
-          const key = `${Math.round(w)}|${Math.round(h)}`;
-          if (panel.__dgParticleClipKey !== key) {
-            panel.__dgParticleClipKey = key;
-            try { dgField.setClipRect({ x, y, w, h }); } catch {}
-          }
-        } else if (panel.__dgParticleClipKey) {
-          panel.__dgParticleClipKey = '';
-          try { dgField.setClipRect(null); } catch {}
-        }
+      const particleClipKey = `${DRAWGRID_PARTICLE_BOUNDS.width}|${DRAWGRID_PARTICLE_BOUNDS.height}`;
+      if (dgField && panel.__dgParticleClipKey !== particleClipKey) {
+        panel.__dgParticleClipKey = particleClipKey;
+        try { dgField.setClipRect({ x: 0, y: 0, w: DRAWGRID_PARTICLE_BOUNDS.width, h: DRAWGRID_PARTICLE_BOUNDS.height }); } catch {}
       }
 
       // If we're offscreen and nothing is pending (no swaps or deferred clears),
@@ -6290,7 +6142,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
 
           // Only tick the particle sim when it's actually doing meaningful work.
           if (!__dgParticlesEffectivelyOff) {
-            dgField?.tick?.(dt);
+            dgField?.step?.(dt);
+            P.renderDrawgridParticles();
           } else if (__dgHardEmergencyOffNow && !panel.__dgParticlesOff) {
             // Flip off immediately (don't wait for adaptive), and force a quick fade-out budget.
             panel.__dgParticlesOff = true;
@@ -6329,7 +6182,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 targetDesired: Number.isFinite(__pfDbgState?.targetDesired) ? __pfDbgState.targetDesired : null,
                 capScale: Number.isFinite(__pfDbgState?.capScale) ? __pfDbgState.capScale : null,
                 lodScale: Number.isFinite(__pfDbgState?.lodScale) ? __pfDbgState.lodScale : null,
-                tickModulo: Number.isFinite(__pfDbgConfig?.tickModulo) ? __pfDbgConfig.tickModulo : null,
+                tickModulo: Number.isFinite(__pfDbgState?.tickModulo) ? __pfDbgState.tickModulo : null,
               };
             } catch {}
           }
@@ -6818,7 +6671,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
                 const __previewStart = (__perfOn && typeof performance !== 'undefined' && performance.now && window.__PerfFrameProf)
                   ? performance.now()
                   : 0;
-                const preview = { pts: cur.pts, isSpecial: true, generatorId: previewGid };
+                const preview = { pts: cur.pts, coordinateSpace: cur.coordinateSpace, isSpecial: true, generatorId: previewGid };
                 drawFullStroke(fctx, preview, { skipReset: true, skipTransform: true });
                 if (__previewStart) {
                   try { window.__PerfFrameProf?.mark?.('drawgrid.overlay.strokes.preview', performance.now() - __previewStart); } catch {}
@@ -6990,8 +6843,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     applyInstrumentFromState,
     captureState,
     restoreFromState,
-    cancelPostRestoreStabilize,
-    schedulePostRestoreStabilize,
   } = createDgStateIo({
     state: {
       get panel() { return panel; },
@@ -7032,8 +6883,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       get pctx() { return pctx; },
       get nctx() { return nctx; },
       get fctx() { return fctx; },
-      get __dgPostRestoreStabilizeRAF() { return __dgPostRestoreStabilizeRAF; },
-      set __dgPostRestoreStabilizeRAF(v) { __dgPostRestoreStabilizeRAF = v; },
     },
     deps: {
       computeSerializedNodeStats,
@@ -7140,7 +6989,14 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     state: {
       get panel() { return panel; },
       get cols() { return cols; },
-      set cols(v) { cols = v; },
+      set cols(v) {
+        cols = v;
+        logicalGeometry = createDrawGridLogicalGeometry({ cols, rows });
+        gridArea = { ...logicalGeometry.gridRect };
+        cw = logicalGeometry.cellWidth;
+        ch = logicalGeometry.cellHeight;
+        topPad = logicalGeometry.topPad;
+      },
       get currentCols() { return currentCols; },
       set currentCols(v) { currentCols = v; },
       get flashes() { return flashes; },
@@ -7194,7 +7050,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       ensurePostCommitRedraw,
       requestFrontSwap,
       useFrontBuffers,
-      schedulePostRestoreStabilize,
       scheduleGhostIfEmpty,
       captureState,
       inboundWasNonEmpty,
@@ -7539,99 +7394,12 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     return false;
   }
 
-  function __dgHeadlessEnsureReasonablePaintCanvases() {
-    // When a DrawGrid panel is stashed (art-internal-host), its canvases can still be 1x1.
-    // The randomize-notes stroke path depends on real pixel area; 1x1 produces "one note",
-    // then later entering/layout produces a *different* full pattern (feels like tune changed).
-    //
-    // Fix: if canvases are tiny, force them to a reasonable persisted size WITHOUT running layout.
-    try {
-      const guessFromState = () => {
-        try {
-          // persistedState is declared later in this module; safe to access at runtime after init.
-          const ps = persistedState?.paintSize;
-          const w = Number(ps?.w);
-          const h = Number(ps?.h);
-          if (Number.isFinite(w) && Number.isFinite(h) && w > 32 && h > 32) return { w, h };
-        } catch {}
-        try {
-          const st = panel.__drawToy?.getState?.();
-          const ps = st?.paintSize;
-          const w = Number(ps?.w);
-          const h = Number(ps?.h);
-          if (Number.isFinite(w) && Number.isFinite(h) && w > 32 && h > 32) return { w, h };
-        } catch {}
-        return { w: 800, h: 600 };
-      };
-
-      const { w, h } = guessFromState();
-
-      const paint = panel.querySelector?.('canvas[data-role="drawgrid-paint"]');
-      const back  = panel.querySelector?.('canvas[data-role="drawgrid-paint-back"]');
-
-      // If roles changed or canvases not found, bail safely.
-      if (!paint || !back) return;
-
-      const tooSmall = (c) => (c.width | 0) < 8 || (c.height | 0) < 8;
-      if (!tooSmall(paint) && !tooSmall(back)) return;
-
-      // Force sane internal pixel sizes.
-      try { paint.width  = w; paint.height = h; } catch {}
-      try { back.width   = w; back.height  = h; } catch {}
-
-      // Remember for future headless calls (optional, harmless).
-      try { panel.__dgHeadlessPaintSize = { w, h }; } catch {}
-    } catch {}
-  }
-
   function __dgHeadlessRandomizeLikeMainRandom() {
     // IMPORTANT: do NOT call ensureSizeReady/layout/__dgEnsureLayerSizes here.
     // This must be safe even if the panel is hidden/offscreen.
 
-    // When a DrawGrid panel is spawned into a hidden host (art-internal-host), the paint canvases
-    // can still be 1x1. The note-randomiser's stroke path depends on non-trivial pixel area; a
-    // tiny canvas often yields "one note" or an empty model, and then entering internal/layout
-    // produces a different full pattern (feels like the tune changed).
-    //
-    // Fix: if canvases are tiny, force them to a reasonable persisted size WITHOUT running layout.
-    try {
-      const pickSize = () => {
-        // persistedState is declared later in this module; safe to access at runtime.
-        try {
-          const ps = persistedState?.paintSize;
-          const w = Number(ps?.w);
-          const h = Number(ps?.h);
-          if (Number.isFinite(w) && Number.isFinite(h) && w > 32 && h > 32) return { w, h };
-        } catch {}
-        try {
-          const st = panel.__drawToy?.getState?.();
-          const ps = st?.paintSize;
-          const w = Number(ps?.w);
-          const h = Number(ps?.h);
-          if (Number.isFinite(w) && Number.isFinite(h) && w > 32 && h > 32) return { w, h };
-        } catch {}
-        return { w: 800, h: 600 };
-      };
-
-      const ensureCanvasSize = (canvas) => {
-        if (!canvas) return;
-        const cw = Number(canvas.width);
-        const ch = Number(canvas.height);
-        if (Number.isFinite(cw) && Number.isFinite(ch) && cw > 32 && ch > 32) return;
-        const { w, h } = pickSize();
-        try { canvas.width = w; } catch {}
-        try { canvas.height = h; } catch {}
-        // Keep style in sync so any CSS-size reads used by randomizers are stable.
-        try { canvas.style.width = `${w}px`; } catch {}
-        try { canvas.style.height = `${h}px`; } catch {}
-      };
-
-      // Prefer the known drawgrid canvases by role.
-      ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-paint"]'));
-      ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-paint-back"]'));
-      ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-flash"]'));
-      ensureCanvasSize(panel.querySelector?.('canvas[data-role="drawgrid-flash-back"]'));
-    } catch {}
+    // Headless musical generation is logical and does not require presentation
+    // canvases to have been allocated yet.
 
     // Match visible DrawGrid "Random" semantics (line + notes + rests).
     try { RNG?.handleRandomizeLine?.(); } catch {}

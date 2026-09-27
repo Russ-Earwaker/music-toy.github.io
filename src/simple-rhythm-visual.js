@@ -4,7 +4,7 @@ import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { boardScale } from './board-scale-helpers.js';
 import { midiToName } from './note-helpers.js';
 import { isRunning, getLoopInfo } from './audio-core.js';
-import { createField, createParticleViewport, getParticleBudget, getAdaptiveFrameBudget } from './baseMusicToy/index.js';
+import { createGenericParticleField, getParticleBudget, getAdaptiveFrameBudget } from './baseMusicToy/index.js';
 import {
   waitForStableBox,
   createToyCanvasRig,
@@ -12,9 +12,22 @@ import {
   createGlobalPanelScheduler,
   createToyDirtyFlags,
 } from './baseMusicToy/index.js';
+import { createToySurfaceManager } from './toy-surface-manager.js';
+import {
+  SIMPLE_RHYTHM_PARTICLE_BOUNDS,
+  SIMPLE_RHYTHM_PARTICLE_LOGICAL_HEIGHT,
+  SIMPLE_RHYTHM_PARTICLE_LOGICAL_WIDTH,
+  createSimpleRhythmParticleViewportSpace,
+} from './simple-rhythm-particle-viewport-space.js';
+import {
+  SIMPLE_RHYTHM_GRID_GEOMETRY,
+  createSimpleRhythmGridViewportSpace,
+  getSimpleRhythmCubeRect,
+  hitSimpleRhythmCube,
+  simpleRhythmGridClientToLogical,
+} from './simple-rhythm-grid-viewport-space.js';
 import { getLoopgridTierParams } from './loopgrid/loopgrid-quality.js';
 import { overviewMode } from './overview-mode.js';
-import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
 import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
 
@@ -216,60 +229,6 @@ const __LG = createGlobalPanelScheduler({
   },
 });
 
-const GAP = 4; // A few pixels of space between each cube
-const BORDER_MARGIN = 4;
-
-// Simple Rhythm visual tuning: bump cube size slightly so it matches
-// Bouncer / Rippler visually. You can tweak this if needed.
-
-
-// The canvas covers the whole field; CSS defines the geometry via custom properties.
-// We read those so JS and CSS share a single source of truth.
-function getLoopgridLayout(cssW, cssH, isZoomed, hostEl, st) {
-  const NUM_CUBES = NUM_CUBES_GLOBAL || 8;
-
-  if (!st._layoutCssCache) {
-    const styles = hostEl ? getComputedStyle(hostEl) : null;
-    st._layoutCssCache = {
-      cubeSizeCss      : styles ? parseFloat(styles.getPropertyValue('--loopgrid-cube-size'))      : NaN,
-      gapCss           : styles ? parseFloat(styles.getPropertyValue('--loopgrid-gap'))            : NaN,
-      borderUnitsCss   : styles ? parseFloat(styles.getPropertyValue('--loopgrid-border-units'))   : NaN,
-      verticalFactorCss: styles ? parseFloat(styles.getPropertyValue('--loopgrid-vertical-factor')): NaN,
-    };
-  }
-
-  const { cubeSizeCss, gapCss, borderUnitsCss, verticalFactorCss } = st._layoutCssCache;
-
-  const baseCubeSize   = Number.isFinite(cubeSizeCss)      ? cubeSizeCss      : 44;
-  const baseGap        = Number.isFinite(gapCss)           ? gapCss           : 4;
-  const borderUnits    = Number.isFinite(borderUnitsCss)   ? borderUnitsCss   : 1;
-  const verticalFactor = Number.isFinite(verticalFactorCss)? verticalFactorCss: 3;
-
-  // Let CSS fully control cube size so borders line up exactly.
-  const cubeSize = baseCubeSize;
-
-  // Slightly tighter gaps when zoomed to avoid visual crowding.
-  const localGap       = isZoomed ? Math.max(1, baseGap * 0.5) : baseGap;
-  const totalGapWidth  = localGap * (NUM_CUBES - 1);
-  const blockWidthWithGap = cubeSize + localGap;
-
-  // horizontal border in “cube units”
-  const xOffset = borderUnits * cubeSize;
-
-  // top + row + bottom = verticalFactor cubes
-  const totalHeight = verticalFactor * cubeSize;
-  const yOffset     = (totalHeight - cubeSize) / 2;
-
-  return {
-    cubeSize,
-    localGap,
-    totalGapWidth,
-    blockWidthWithGap,
-    xOffset,
-    yOffset,
-  };
-}
-
 function ensureTapLetters(label) {
   if (!label) return [];
   let spans = Array.from(label.querySelectorAll('.loopgrid-tap-letter-char'));
@@ -449,7 +408,6 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   panel.__simpleRhythmVisualAttached = true;
 
   const sequencerWrap = panel.querySelector('.sequencer-wrap');
-  let pv = null;
   let canvas = sequencerWrap
     ? (sequencerWrap.querySelector('.grid-canvas')
        || sequencerWrap.querySelector('canvas:not(.toy-particles)'))
@@ -468,7 +426,6 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       sequencerWrap,
     particleCanvas: null, // Will be set later
     particleField: null,
-    particleObserver: null,
     lastParticleTick: performance.now(),
     fieldWidth: 0,
     fieldHeight: 0,
@@ -488,7 +445,6 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     tapPromptVisible: false,
     tapLoopIndex: 0,
     _lastOverviewParticlesHidden: null,
-    _layoutCssCache: null,
     _resizer: null,
     _debugBurstSettings: null,
     _debugBurstLine: null,
@@ -497,7 +453,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     _playheadSpriteCache: null,
     _particleFieldBox: null,
     _rig: null,
-    _particleRig: null,
+    _particleSurface: null,
+    _gridViewport: null,
     _relayoutFromRig: null,
     burstConfig: {
       particleCount: 16,
@@ -514,18 +471,13 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       const cssW = w;
       const cssH = h;
 
-      const isZoomed = panel.classList.contains('toy-zoomed');
-
-      // Cube size is derived purely from the local canvas size.
-      // Zoom is applied globally via board-viewport, not here.
-      const layout = getLoopgridLayout(cssW, cssH, isZoomed, sequencerWrap || panel, st);
-      const { cubeSize, xOffset, yOffset, blockWidthWithGap, localGap } = layout;
-
-      st._cubeSize = cubeSize;
-      st._xOffset = xOffset;
-      st._yOffset = yOffset;
-      st._blockWidthWithGap = blockWidthWithGap;
-      st._localGap = localGap;
+      // Fixed authored geometry; resizing changes projection only.
+      st._gridViewport = createSimpleRhythmGridViewportSpace({ width: cssW, height: cssH });
+      st._cubeSize = SIMPLE_RHYTHM_GRID_GEOMETRY.cubeSize;
+      st._xOffset = SIMPLE_RHYTHM_GRID_GEOMETRY.originX;
+      st._yOffset = SIMPLE_RHYTHM_GRID_GEOMETRY.originY;
+      st._blockWidthWithGap = SIMPLE_RHYTHM_GRID_GEOMETRY.stride;
+      st._localGap = SIMPLE_RHYTHM_GRID_GEOMETRY.gap;
       try { st._burstSpriteCache?.clear?.(); } catch {}
       try { st._playheadSpriteCache?.clear?.(); } catch {}
       const fieldWidth = Math.max(1, Math.round(cssW));
@@ -544,10 +496,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
         st.particleCanvas.style.bottom = 'auto';
         st.particleCanvas.style.left = `${fieldLeft}px`;
         st.particleCanvas.style.top = `${fieldTop}px`;
-        // Particle sizing is owned by the particle rig (sync path).
-        try { st._particleRig?.ensureSizedNow?.(fieldWidth, clampedHeight); } catch {}
-        try { pv?.refreshSize?.({ snap: true }); } catch {}
-        try { st.particleField?.resize?.(); } catch {}
+        // Particle backing and DPR are owned by the shared surface manager.
+        try { st._particleSurface?.requestSync?.('loopgrid-layout'); } catch {}
       }
 
     },
@@ -609,7 +559,6 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       const w = (st._rig.st.cssW | 0);
       const h = (st._rig.st.cssH | 0);
       if (w > 0 && h > 0) {
-        st._layoutCssCache = null;
         st.computeLayout(w, h);
         st._lastLayoutW = w;
         st._lastLayoutH = h;
@@ -690,31 +639,22 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   }
   st.particleCanvas = particleCanvas; // Assign to st
   if (particleCanvas) {
-    // Particle canvas rig: sized from the layout-computed field box (sync path used in computeLayout).
-    // This keeps particle canvas backing-store consistent with the main toy canvas tier/DPR policy.
-    st._particleRig = createToyCanvasRig({
-      canvas: particleCanvas,
-      ctx: null,
-      getContainerEl: () => particleCanvas,
-      getSizeOverride: () => {
-        const b = st._particleFieldBox;
-        if (b && Number.isFinite(b.width) && Number.isFinite(b.height)) {
-          const w = Math.round(b.width) | 0;
-          const h = Math.round(b.height) | 0;
-          return (w > 0 && h > 0) ? { w, h } : null;
-        }
-        const w = Math.round(particleCanvas?.clientWidth || 0);
-        const h = Math.round(particleCanvas?.clientHeight || 0);
-        return (w > 0 && h > 0) ? { w, h } : null;
-      },
-      computeResizeOpts: () => {
-        const tier = getLoopgridTierParams(panel, st) || null;
-        const maxDprMul = (tier && Number.isFinite(tier.maxDprMul) && tier.maxDprMul > 0) ? tier.maxDprMul : null;
-        const resScale = (tier && Number.isFinite(tier.resScale) && tier.resScale > 0) ? tier.resScale : 1;
-        const deviceDpr = (Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0) ? window.devicePixelRatio : 1;
-        return { rawDpr: deviceDpr * resScale, maxDprMul, cachePrefix: '__bm' };
-      },
+    st._particleSurface = createToySurfaceManager({
+      panel,
+      body: sequencerWrap,
+      getBoardScale: () => boardScale(sequencerWrap || panel),
+      tag: 'simple-rhythm-particles',
     });
+    st._particleSurface.setDprPolicy(({ boardScale: scale }) => {
+      const tier = getLoopgridTierParams(panel, st) || null;
+      const deviceDpr = Math.max(1, Number(window.devicePixelRatio) || 1);
+      const resolutionScale = Number.isFinite(tier?.resScale) ? tier.resScale : 1;
+      const maximumScale = Number.isFinite(tier?.maxDprMul) ? tier.maxDprMul : 1;
+      const zoomScale = Number.isFinite(scale) && scale < 0.6 ? Math.max(0.6, scale / 0.6) : 1;
+      return Math.max(0.5, Math.min(deviceDpr, deviceDpr * resolutionScale * maximumScale * zoomScale));
+    });
+    st._particleSurface.registerCanvas('field', particleCanvas, { policy: 'managed' });
+    st._particleSurface.syncNow('init');
   }
   if (particleCanvas && st._particleFieldBox) {
     const box = st._particleFieldBox;
@@ -727,51 +667,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   }
 
   let particleField = null;
-  let particleObserver = null;
-  let overviewHandler = null;
-  let zoomUnsubscribe = null;
-  pv = createParticleViewport(() => {
-    // Prefer rig-truth sizing if available (avoids clip-box mismatches).
-    const rw = (st && st._particleRig && st._particleRig.st) ? (st._particleRig.st.cssW | 0) : 0;
-    const rh = (st && st._particleRig && st._particleRig.st) ? (st._particleRig.st.cssH | 0) : 0;
-    if (rw > 0 && rh > 0) return { w: rw, h: rh };
-
-    const b = st && st._particleFieldBox;
-    if (b && Number.isFinite(b.width) && Number.isFinite(b.height)) {
-      const w = Math.max(1, Math.round(b.width));
-      const h = Math.max(1, Math.round(b.height));
-      return { w, h };
-    }
-
-    const host = st?.particleCanvas || sequencerWrap || panel;
-    // Match DrawGrid behavior: use unscaled logical size (client box), not zoomed rect.
-    const w = Math.max(1, Math.round(host?.clientWidth || 1));
-    const h = Math.max(1, Math.round(host?.clientHeight || 1));
-    return { w, h };
-  });
-  // Make the Simple Rhythm particle viewport zoom-aware, like DrawGrid's.
-  Object.assign(pv, {
-    getZoom: () => {
-      try {
-        const host = sequencerWrap || panel;
-        const raw = boardScale(host);
-        const value = Number(raw);
-        return Number.isFinite(value) && value > 0 ? value : 1;
-      } catch {
-        return 1;
-      }
-    },
-    isOverview: () => {
-      try {
-        return !!overviewMode?.isActive?.();
-      } catch {
-        return false;
-      }
-    },
-  });
   if (particleCanvas) {
     try {
-      const pausedRef = () => !isRunning();
       const panelSeed = panel?.dataset?.toyid || panel?.id || 'loopgrid';
 
       // Ask the shared particle quality system how aggressive we can be.
@@ -788,8 +685,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 
       // Match DrawGrid's particle density, but scale by the local field area.
       const baseDensity = 2200 / (420 * 420);
-      const sizeNow = pv.map?.size?.() || { w: 1, h: 1 };
-      const area = Math.max(1, (sizeNow.w || 1) * (sizeNow.h || 1));
+      const area = SIMPLE_RHYTHM_PARTICLE_LOGICAL_WIDTH * SIMPLE_RHYTHM_PARTICLE_LOGICAL_HEIGHT;
       const baseCap = Math.round(baseDensity * area);
       const capScale = Math.max(0.15, (budget.maxCountScale ?? 1) * (budget.capScale ?? 1));
       const cap = Math.max(140, Math.min(2200, Math.floor(baseCap * capScale)));
@@ -801,13 +697,9 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       // Keep trails a touch longer, but let cap handle the real cost.
       const returnSeconds = 2.4;
 
-      particleField = createField(
+      particleField = createGenericParticleField(
         {
-          canvas: particleCanvas,
-          viewport: pv,
-          pausedRef,
-          debugLabel: 'simple-rhythm-particles',
-          isFocusedRef: () => !!panel?.classList?.contains('toy-focused'),
+          bounds: SIMPLE_RHYTHM_PARTICLE_BOUNDS,
         },
         {
           seed: panelSeed,
@@ -824,19 +716,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
           // IMPORTANT: let particles actually respond to pushes
           staticMode: false,
 
-          // LoopGrid tier -> particle DPR control (live, responds to Quality Lab forcing).
-          // This feeds into field-generic's DPR math (visualMul + hard clamp).
-          visualMulMul: () => {
-            const tier = getLoopgridTierParams(panel, st) || null;
-            return (tier && Number.isFinite(tier.resScale) && tier.resScale > 0) ? tier.resScale : 1;
-          },
-          maxDprMul: () => {
-            const tier = getLoopgridTierParams(panel, st) || null;
-            return (tier && Number.isFinite(tier.maxDprMul) && tier.maxDprMul > 0) ? tier.maxDprMul : 1;
-          },
         }
       );
-      particleField.resize();
       try {
         if (budget && typeof particleField.applyBudget === 'function') {
           particleField.applyBudget({
@@ -847,51 +728,12 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
           });
         }
       } catch {}
-      // Keep fields visible; rely on budget scaling instead of hiding.
-      // ... ResizeObserver / overview handler follows as before
-      if (typeof ResizeObserver !== 'undefined') {
-        particleObserver = new ResizeObserver(() => {
-          pv.refreshSize({ snap: true });
-          particleField.resize();
-        });
-        particleObserver.observe(particleCanvas || sequencerWrap || panel);
-      }
-      overviewHandler = () => {
-        pv.setNonReactive?.(true);
-        pv.refreshSize({ snap: true });
-        particleField.resize();
-        pv.setNonReactive?.(false);
-      };
-      window.addEventListener('overview:transition', overviewHandler);
-
-      // NEW: keep the particle viewport in sync with board zoom commits
-      if (typeof onZoomChange === 'function') {
-        const zoomHandler = (z = {}) => {
-          const phase = z.phase;
-          const mode = z.mode;
-          const gesturing = mode === 'gesturing';
-
-          // Don't thrash during the live gesture; just react when it settles.
-          if (!gesturing && (phase === 'commit' || phase === 'idle' || phase === 'done')) {
-            try {
-              pv.refreshSize?.({ snap: true });
-              particleField.resize?.();
-            } catch {
-              // ignore
-            }
-          }
-        };
-        zoomHandler.__zcName = 'simple-rhythm-visual';
-        zoomUnsubscribe = onZoomChange(namedZoomListener('simple-rhythm-visual', zoomHandler));
-      }
     } catch (err) {
       console.warn('[loopgrid] particle field init failed', err);
       particleField = null;
-      particleObserver = null;
     }
   }
   st.particleField = particleField; // Assign to st
-  st.particleObserver = particleObserver; // Assign to st
 
   // Expose a helper so grid-core can trigger a vertical-scale burst
   // when a cube plays.
@@ -907,10 +749,6 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       lineDash: Array.isArray(burstDebugEnv.lineDash) ? burstDebugEnv.lineDash : [],
     };
 
-    const cssW = st._cssW || (sequencerWrap?.clientWidth || canvas.clientWidth || 0);
-    const cssH = st._cssH || (sequencerWrap?.clientHeight || canvas.clientHeight || 0);
-    if (!cssW || !cssH) return;
-
     const cubeSize = st._cubeSize;
     const xOffset = st._xOffset;
     const yOffset = st._yOffset;
@@ -920,10 +758,10 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     const numCubes = NUM_CUBES_GLOBAL || NUM_CUBES || 8;
     const col = Math.max(0, Math.min(numCubes - 1, (colIndex | 0)));
 
-    const cubeXCss = xOffset + col * blockWidthWithGap;
-    const cubeYCss = yOffset;
-    const cubeCenterCssX = cubeXCss + cubeSize * 0.5;
-    const cubeCenterCssY = cubeYCss + cubeSize * 0.5;
+    const cubeX = xOffset + col * blockWidthWithGap;
+    const cubeY = yOffset;
+    const cubeCenterX = cubeX + cubeSize * 0.5;
+    const cubeCenterY = cubeY + cubeSize * 0.5;
 
     const cfg = st.burstConfig || {};
     const count       = cfg.particleCount || 20;
@@ -939,8 +777,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
       const t = count <= 1 ? 0.5 : i / (count - 1);
 
       // Centered along a horizontal line across the cube
-      const x = cubeCenterCssX + (t - 0.5) * cubeSize;
-      const y = cubeCenterCssY;
+      const x = cubeCenterX + (t - 0.5) * cubeSize;
+      const y = cubeCenterY;
 
       // Arrow shape: middle "bar" scales most, edges least (purely deterministic)
       const centerDist = Math.abs(i - midIndex) / (midIndex || 1); // 0 at center, 1 at ends
@@ -952,7 +790,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
         y,
         life: 1,
         lifeSeconds,
-        size: pixelSize, // base radius in CSS units
+        size: pixelSize, // base diameter in logical units
         color,
         amp,             // vertical scale amplitude
         born: now,
@@ -962,8 +800,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     if (debug?.logPush) {
       console.debug('[loopgrid] particle burst', {
         col,
-        cubeCenterCssX,
-        cubeCenterCssY,
+        cubeCenterX,
+        cubeCenterY,
         count,
         lifeSeconds,
         ampScalar,
@@ -973,8 +811,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     if (debug?.showIndicator) {
       const duration = Number.isFinite(debug.lineDuration) ? debug.lineDuration : 300;
       st._debugBurstLine = {
-        x: cubeXCss,
-        y: cubeYCss,
+        x: cubeX,
+        y: cubeY,
         size: cubeSize,
         expire: now + duration,
       };
@@ -1003,10 +841,8 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
   st.tapLetters = ensureTapLetters(tapLabel); // Assign to st
 
   const teardownParticles = () => {
-    try { window.removeEventListener('overview:transition', overviewHandler); } catch {}
-    try { zoomUnsubscribe?.(); } catch {}       // NEW: stop listening to zoom events
-    try { st.particleObserver?.disconnect?.(); } catch {} // Use st.particleObserver
     try { st.particleField?.destroy?.(); } catch {} // Use st.particleField
+    try { st._particleSurface?.destroy?.(); } catch {}
     st._resizer?.disconnect?.(); // Disconnect the main resizer
     try { __LG.panels.delete(panel); } catch {}
   };
@@ -1017,67 +853,21 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
     const st = panel.__simpleRhythmVisualState;
     if (!st) return;
 
-    const rawRect = canvas.getBoundingClientRect();
-    const rawW = Math.max(1, rawRect.width);
-    const rawH = Math.max(1, rawRect.height);
-
-    // Use the same CSS-space dimensions that render/computeLayout use
-    const cssW = Math.max(1, st._cssW || Math.round(rawW));
-    const cssH = Math.max(1, st._cssH || Math.round(rawH));
-    if (!cssW || !cssH) return;
-
-    const pointer = {
-      x: e.clientX - rawRect.left,
-      y: e.clientY - rawRect.top,
-    };
-
-    // Layout values as computed by computeLayout / getLoopgridLayout
-    const cubeSize        = st._cubeSize;
-    const xOffset         = st._xOffset;
-    const yOffset         = st._yOffset;
-    const blockWidthWithGap = st._blockWidthWithGap;
-
-    if (!Number.isFinite(cubeSize) || !Number.isFinite(blockWidthWithGap) || !Number.isFinite(xOffset)) {
-      return;
-    }
-    if (blockWidthWithGap <= 0 || cubeSize <= 0) return;
-
-    // Convert pointer.x from canvas pixel space into the same CSS-space
-    // used for layout (they should usually match, but guard against drift).
-    const scaleX = cssW / rawW;
-    const gridX = pointer.x * scaleX;
-
-    // Remove the left border (1 cube of safe-zone)
-    const relX = gridX - xOffset;
-    if (relX < 0) return;
-
-    const clickedIndex = Math.floor(relX / blockWidthWithGap);
-    if (clickedIndex < 0 || clickedIndex >= NUM_CUBES) return;
-
-    const xInBlock = relX - clickedIndex * blockWidthWithGap;
-
-    // Ignore clicks that land in the gap rather than inside the cube.
-    if (xInBlock < 0 || xInBlock >= cubeSize) return;
+    const pointer = simpleRhythmGridClientToLogical(canvas, { x: e.clientX, y: e.clientY });
+    if (!pointer) return; // reject letterbox/contain-fit margins
+    const clickedIndex = hitSimpleRhythmCube(pointer);
+    if (clickedIndex < 0) return;
 
     const state = panel.__gridState;
     if (!state?.noteIndices || !state?.steps) return;
 
-    // Build cube rect in CSS-space (not pixels), to match layout.
-    const cubeRectCss = {
-      x: xOffset + clickedIndex * blockWidthWithGap,
-      y: yOffset,
-      w: cubeSize,
-      h: cubeSize,
-    };
-
-    // For whichThirdRect we still feed pointer.y in canvas space, but that
-    // only cares about vertical thirds and we kept the same yOffset logic.
+    const cube = getSimpleRhythmCubeRect(clickedIndex);
     const third = whichThirdRect(
       {
-        x: cubeRectCss.x,
-        y: cubeRectCss.y,
-        w: cubeRectCss.w,
-        h: cubeRectCss.h,
+        x: cube.x,
+        y: cube.y,
+        w: cube.width,
+        h: cube.height,
       },
       pointer.y
     );
@@ -1502,7 +1292,25 @@ function render(panel, opts = {}) {
             if (!Number.isFinite(st.lastParticleTick)) st.lastParticleTick = renderTime;
             const dt = Math.min(0.05, Math.max(0, (renderTime - st.lastParticleTick) / 1000));
             st.lastParticleTick = renderTime;
-            try { particleField.tick(dt || (1 / 60)); } catch {}
+            try {
+              particleField.step(dt || (1 / 60));
+              const surface = st._particleSurface;
+              surface?.syncNow?.('loopgrid-render');
+              const displayWidth = Math.max(1, surface?.getCssW?.() || particleCanvas.clientWidth || 1);
+              const displayHeight = Math.max(1, surface?.getCssH?.() || particleCanvas.clientHeight || 1);
+              const dpr = Math.max(0.25, surface?.getDpr?.() || 1);
+              const particleCtx = particleCanvas.getContext('2d', { alpha: true });
+              const viewport = createSimpleRhythmParticleViewportSpace({
+                width: displayWidth,
+                height: displayHeight,
+                backingScale: dpr,
+              });
+              particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+              particleCtx.clearRect(0, 0, displayWidth, displayHeight);
+              particleCtx.translate(viewport.contentRect.left, viewport.contentRect.top);
+              particleCtx.scale(viewport.presentationScale, viewport.presentationScale);
+              particleField.render(particleCtx);
+            } catch {}
           } else {
             st.lastParticleTick = renderTime;
           }
@@ -1522,18 +1330,26 @@ function render(panel, opts = {}) {
   }
   
   if (__perfOn) p.mark('layout_update_start');
-  const scaleX = cssW ? (w / cssW) : 1;
-  const scaleY = cssH ? (h / cssH) : 1;
-  const pxX = (value) => value * scaleX;
-  const pxY = (value) => value * scaleY;
+  const backingScaleX = cssW ? (w / cssW) : 1;
+  const backingScaleY = cssH ? (h / cssH) : 1;
+  const gridViewport = st._gridViewport = createSimpleRhythmGridViewportSpace({
+    width: cssW,
+    height: cssH,
+    backingScale: Math.min(backingScaleX, backingScaleY),
+  });
+  const pxX = (logicalX) => (
+    gridViewport.contentRect.left + logicalX * gridViewport.presentationScale
+  ) * backingScaleX;
+  const pxY = (logicalY) => (
+    gridViewport.contentRect.top + logicalY * gridViewport.presentationScale
+  ) * backingScaleY;
+  const pxLength = (logicalLength) => logicalLength
+    * gridViewport.presentationScale
+    * Math.min(backingScaleX, backingScaleY);
 
   if (!st._loggedScaleOnce) {
     st._loggedScaleOnce = true;
   }
-
-  // Use a uniform pixel size for cubes so they stay visually square,
-  // even if scaleX and scaleY differ slightly.
-  const cubePixelSize = Math.round(st._cubeSize * scaleX);
 
   const fieldHost = sequencerWrap || particleCanvas || canvas;
   if (st._particleFieldBox) {
@@ -1547,20 +1363,11 @@ function render(panel, opts = {}) {
     st.fieldHeight = cssH;
   }
 
-  /* Map for cubes uses the grid canvas size */
-  const map = {
-    n2x: (n) => n * w,
-    n2y: (n) => n * h,
-    scale: () => Math.min(w, h) / 420,
-  };
-
   const steps = state.steps || [];
   const noteIndices = state.noteIndices || [];
   const notePalette = state.notePalette || [];
   const isZoomed = panel.classList.contains('toy-zoomed');
 
-  const particleFieldW = st.fieldWidth || cssW;
-  const particleFieldH = st.fieldHeight || cssH;
   if (__perfOn) p.mark('layout_update_end');
 
   if (__perfOn) p.mark('dom_update_start');
@@ -1763,19 +1570,8 @@ function render(panel, opts = {}) {
   st.localLastPhase = loopInfo ? loopInfo.phase01 : 0;
   const probablyStale = isActiveInChain && phaseJustWrapped;
 
-  // --- Cube pixel sizing (make them square on screen) ----------------------
-  // Convert 1 "cubeSize" CSS unit into pixels along X and Y.
-  // Using the smaller of the two guarantees a square in screen space even
-  // if the canvas has non-uniform scaling.
-  const sizePxX = pxX(cubeSize);
-  const sizePxY = pxY(cubeSize);
-
-  // Base square size in pixels from layout: use the smaller axis so cubes stay square
-  // and always fit inside their logical CSS cell.
-  const rawBlockPx = Math.max(1, Math.min(sizePxX, sizePxY));
-  const blockSizePx = Math.round(rawBlockPx);
-
-  // Vertical position: use the CSS-space yOffset (1 cube of buffer) in pixels.
+  // Logical geometry is uniformly projected, so cube bodies remain square.
+  const blockSizePx = Math.max(1, Math.round(pxLength(cubeSize)));
   const rowY = Math.round(pxY(yOffset));
   if (__perfOn) p.mark('layout_update_end_2');
   if (__perfOn) p._mark('loopgrid.layout+rects');
@@ -1824,14 +1620,14 @@ function render(panel, opts = {}) {
       cacheCtx.clearRect(0, 0, w, h);
       for (let i = 0; i < NUM_CUBES; i++) {
         const isEnabled = !!steps[i];
-        const cubeRectCss = {
+        const cubeRectLogical = {
           x: xOffset + i * blockWidthWithGap,
           y: yOffset,
           w: cubeSize,
           h: cubeSize,
         };
         const cubeRect = {
-          x: Math.round(pxX(cubeRectCss.x)),
+          x: Math.round(pxX(cubeRectLogical.x)),
           y: rowY,
           w: blockSizePx,
           h: blockSizePx,
@@ -1907,19 +1703,19 @@ function render(panel, opts = {}) {
   // Draw playhead highlight
   if (playheadActive) {
     const i = playheadCol;
-    const cubeRectCss = {
+    const cubeRectLogical = {
       x: xOffset + i * blockWidthWithGap,
       y: yOffset,
       w: cubeSize,
       h: cubeSize,
     };
     const cubeRect = {
-      x: Math.round(pxX(cubeRectCss.x)),
+      x: Math.round(pxX(cubeRectLogical.x)),
       y: rowY,
       w: blockSizePx,
       h: blockSizePx,
     };
-    const borderSize = 4;
+    const borderSize = Math.max(1, Math.round(pxLength(4)));
     const playheadSprite = getPlayheadSprite(st, blockSizePx, borderSize, 'rgba(255, 255, 255, 0.4)');
     if (playheadSprite?.canvas) {
       ctx.drawImage(
@@ -1940,10 +1736,16 @@ function render(panel, opts = {}) {
     if (showTapPrompt && fieldRectData && Number.isFinite(fieldRectData.left) && fieldRectData.width > 0 && Array.isArray(st.tapLetterBounds)) {
       const gridRect = st.canvas.getBoundingClientRect();
       if (gridRect.width > 0) {
-      const cubeCenterCssX = cubeRectCss.x + cubeRectCss.w / 2;
-      const cubeCenterCssY = cubeRectCss.y + cubeRectCss.h / 2;
-      const columnCenterPx = gridRect.left + (cubeCenterCssX / cssW) * gridRect.width;
-      const columnCenterPy = gridRect.top + (cubeCenterCssY / cssH) * gridRect.height;
+      const cubeCenterX = cubeRectLogical.x + cubeRectLogical.w / 2;
+      const cubeCenterY = cubeRectLogical.y + cubeRectLogical.h / 2;
+      const clientViewport = createSimpleRhythmGridViewportSpace({
+        left: gridRect.left,
+        top: gridRect.top,
+        width: gridRect.width,
+        height: gridRect.height,
+      });
+      const columnCenterPx = clientViewport.contentRect.left + cubeCenterX * clientViewport.presentationScale;
+      const columnCenterPy = clientViewport.contentRect.top + cubeCenterY * clientViewport.presentationScale;
       const centerNorm = (columnCenterPx - fieldRectData.left) / fieldRectData.width;
       if (Number.isFinite(centerNorm)) {
         const clamped = Math.max(0, Math.min(1, centerNorm));
@@ -1972,11 +1774,10 @@ function render(panel, opts = {}) {
       ctx.save();
       for (const p of remaining) {
         const alpha = Math.max(0, Math.min(1, p.life));
-        const cx = p.x * scaleX;
-        const cy = p.y * scaleY;
+        const cx = pxX(p.x);
+        const cy = pxY(p.y);
 
-        // Base radius in pixels from CSS-space size
-        const baseR = (p.size * 0.5) * ((scaleX + scaleY) * 0.5 || 1);
+        const baseR = pxLength(p.size * 0.5);
 
         // Time progress 0..1 (0 at spawn, 1 at end)
         const tNorm = 1 - p.life;
@@ -2010,14 +1811,14 @@ function render(panel, opts = {}) {
   for (let i = 0; i < NUM_CUBES; i++) {
     const flash = st.flash[i] || 0;
     if (flash <= 0) continue;
-    const cubeRectCss = {
+    const cubeRectLogical = {
       x: xOffset + i * blockWidthWithGap,
       y: yOffset,
       w: cubeSize,
       h: cubeSize,
     };
     const cubeRect = {
-      x: Math.round(pxX(cubeRectCss.x)),
+      x: Math.round(pxX(cubeRectLogical.x)),
       y: rowY,
       w: blockSizePx,
       h: blockSizePx,
@@ -2039,10 +1840,10 @@ function render(panel, opts = {}) {
   }
 
   if (debugActive && debugLine && ctx) {
-    const rectX = debugLine.x * scaleX;
-    const rectY = debugLine.y * scaleY;
-    const rectW = debugLine.size * scaleX;
-    const rectH = debugLine.size * scaleY;
+    const rectX = pxX(debugLine.x);
+    const rectY = pxY(debugLine.y);
+    const rectW = pxLength(debugLine.size);
+    const rectH = pxLength(debugLine.size);
     ctx.save();
     ctx.strokeStyle = debugSettings.lineColor;
     ctx.lineWidth = Math.max(1, debugSettings.lineWidth);

@@ -91,6 +91,10 @@ function getPickupRocketAngle(pickup = null, rocketIndex = 0) {
   return base + spin;
 }
 
+export function getMusicPickupPresentationScale(presentationScale = 1, pulseScale = 1) {
+  return Math.max(0.001, Number(presentationScale) || 1) * Math.max(0.001, Number(pulseScale) || 1);
+}
+
 function installStyles() {
   if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
   const style = document.createElement('style');
@@ -394,18 +398,14 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     return (deps.getEnemies?.() || []).find((enemy) => Math.trunc(Number(enemy?.id) || 0) === Math.trunc(Number(id) || 0)) || null;
   }
 
-  function isEnemyOnscreen(enemy, margin = 56) {
+  function isEnemyInsideGameplay(enemy, margin = 56) {
     if (!enemy) return false;
-    const point = deps.worldToScreen?.({
+    const point = {
       x: Number(enemy.wx) || 0,
       y: Number(enemy.wy) || 0,
-    });
-    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
+    };
     const pad = Math.max(0, Number(margin) || 0);
-    return point.x >= pad
-      && point.x <= Math.max(pad, window.innerWidth - pad)
-      && point.y >= pad
-      && point.y <= Math.max(pad, window.innerHeight - pad);
+    return deps.isWorldPointInsideGameplay?.(point, -pad) === true;
   }
 
   function getNearestEnemy(x = 0, y = 0, excludedEnemyIds = null) {
@@ -420,7 +420,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       const dx = (Number(enemy.wx) || 0) - x;
       const dy = (Number(enemy.wy) || 0) - y;
       const d2 = dx * dx + dy * dy;
-      if (isEnemyOnscreen(enemy)) {
+      if (isEnemyInsideGameplay(enemy)) {
         if (d2 < bestOnscreenD2) {
           bestOnscreenD2 = d2;
           bestOnscreen = enemy;
@@ -543,11 +543,12 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
     return Array.from({ length: state.stepCount }, (_, index) => state.motifHits.has(index));
   }
 
-  function renderAt(el, world, angleRad = null) {
+  function renderAt(el, world, angleRad = null, localScale = 1) {
     const screen = deps.worldToScreen?.(world);
     if (!el || !screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return;
     const rotation = Number.isFinite(Number(angleRad)) ? ` rotate(${(Number(angleRad) * 180 / Math.PI).toFixed(2)}deg)` : '';
-    el.style.transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px)${rotation}`;
+    const scale = getMusicPickupPresentationScale(deps.getPresentationScale?.(), localScale);
+    el.style.transform = `translate(${screen.x.toFixed(2)}px, ${screen.y.toFixed(2)}px)${rotation} scale(${scale.toFixed(3)})`;
   }
 
   function renderPickupRockets(pickup = null) {
@@ -608,7 +609,7 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
       const lifeN = clamp01(trail.ttl / TRAIL_LIFETIME_SECONDS);
       trail.el.style.width = `${length.toFixed(2)}px`;
       trail.el.style.opacity = `${(lifeN * lifeN).toFixed(3)}`;
-      trail.el.style.height = `${(1.5 + (3.5 * lifeN)).toFixed(2)}px`;
+      trail.el.style.height = `${((1.5 + (3.5 * lifeN)) * Math.max(0.001, Number(deps.getPresentationScale?.()) || 1)).toFixed(2)}px`;
       trail.el.style.transform = `translate(${from.x.toFixed(2)}px, ${from.y.toFixed(2)}px) rotate(${angle.toFixed(2)}deg)`;
     }
   }
@@ -686,12 +687,11 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
         autoActivation = updateMusicObjectAutoActivation(pickup, deps.getBeatClock?.());
         if (autoActivation.pulse) pickup.autoPulseT = 0.34;
       }
-      renderAt(pickup.el, pickup);
+      const pulseN = Math.max(0, Math.min(1, pickup.autoPulseT / 0.34));
+      const pulseScale = 1 + Math.sin(pulseN * Math.PI) * 0.22;
+      renderAt(pickup.el, pickup, null, pulseScale);
       if (pickup.el instanceof HTMLElement) {
-        const pulseN = Math.max(0, Math.min(1, pickup.autoPulseT / 0.34));
-        const pulseScale = 1 + Math.sin(pulseN * Math.PI) * 0.22;
         pickup.el.style.removeProperty('scale');
-        pickup.el.style.transform += ` scale(${pulseScale.toFixed(3)})`;
         pickup.el.style.filter = `brightness(${(1 + pulseN * 0.9).toFixed(3)})`;
       }
       renderPickupRockets(pickup);
@@ -714,9 +714,9 @@ export function createBeatSwarmMusicMissileRuntime(deps = {}) {
             .map((entry) => Math.trunc(Number(entry.targetEnemyId) || 0))
         );
         let target = findEnemyById(missile.targetEnemyId);
-        if (!target || !isEnemyOnscreen(target)) {
+        if (!target || !isEnemyInsideGameplay(target)) {
           const preferredTarget = getNearestEnemy(missile.x, missile.y, reservedTargets);
-          if (!target || isEnemyOnscreen(preferredTarget)) target = preferredTarget;
+          if (!target || isEnemyInsideGameplay(preferredTarget)) target = preferredTarget;
           missile.targetEnemyId = Math.trunc(Number(target?.id) || 0);
         }
         if (target) {

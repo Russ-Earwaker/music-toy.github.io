@@ -87,6 +87,7 @@ export function spawnHostileRedProjectileAtRuntime(options = null) {
   projectile.nextBeatIndex = null;
   projectile.ignoreEnemyId = null;
   projectile.hasEnteredScreen = false;
+  projectile.enteredGameplay = false;
   projectile.hostileToEnemies = false;
   projectile.hostileHoming = opts?.homing === true;
   projectile.hostileHomingSpeed = Math.max(120, Number(opts?.speed) || speed);

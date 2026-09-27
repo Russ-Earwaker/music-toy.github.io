@@ -1,6 +1,7 @@
 // grid-square-drum.js
-import { isRunning, getLoopInfo } from './audio-core.js';
+import { getLoopInfo } from './audio-core.js';
 import { isHelpActive } from './help-overlay.js';
+import { getToyLifecycle } from './baseMusicToy/toyLifecycle.js';
 
 const DEBUG = false; // disable debug logs for grid-square-drum overlay
 const LOG = () => {};
@@ -11,12 +12,6 @@ function addDrumPad(panel, padWrap, toyId) {
     pad = document.createElement('div');
     pad.className = 'grid-drum-pad';
     padWrap.appendChild(pad);
-  }
-
-  if (!pad.querySelector('.drum-particles')) {
-    const c = document.createElement('canvas');
-    c.className = 'drum-particles';
-    pad.prepend(c);
   }
 
   let flash = pad.querySelector('.drum-pad-flash');
@@ -37,7 +32,9 @@ function addDrumPad(panel, padWrap, toyId) {
         left: '50%',
         transform: 'translate(-50%, -50%)',
         fontWeight: '700',
-        fontSize: '48px',
+        // Container-relative presentation sizing. Board zoom and --toy-scale
+        // transform the complete shell; no inverse scale compensation is needed.
+        fontSize: 'max(24px, 39cqi)',
         letterSpacing: '0.1em',
         opacity: '0',
         color: 'rgb(80,120,180)',
@@ -48,6 +45,8 @@ function addDrumPad(panel, padWrap, toyId) {
     });
     padWrap.appendChild(label);
   }
+  padWrap.style.containerType = 'inline-size';
+  label.style.fontSize = 'max(24px, 39cqi)';
 
   if (pad.__drumPadWired) return;
   pad.__drumPadWired = true;
@@ -61,8 +60,8 @@ function addDrumPad(panel, padWrap, toyId) {
     }
     if (panel.__drumVisualState) {
       panel.__drumVisualState.bgFlash = 1.0;
-      updatePadFlash(panel);
     }
+    triggerPadFlash(panel);
 
     const loopInfo = getLoopInfo();
     const playheadCol = loopInfo ? Math.floor(loopInfo.phase01 * 8) : -1;
@@ -97,67 +96,22 @@ function updateLabelVisibility(panel) {
     }
 }
 
-function updatePadFlash(panel) {
+function triggerPadFlash(panel) {
     const pad = panel.querySelector('.grid-drum-pad');
     if (!pad) return;
     const flash = pad.querySelector('.drum-pad-flash');
     if (!flash) return;
 
-    const st = panel.__drumVisualState;
-    const raw = (typeof (st?.bgFlash) === 'number') ? st.bgFlash : 0;
-    const value = Number.isFinite(raw) ? raw : 0;
-    if (value <= 0.001) {
-      if (flash.style.opacity !== '0') flash.style.opacity = '0';
-      return;
-    }
-
-    const clamped = Math.max(0, Math.min(1, value));
-    flash.style.opacity = clamped.toFixed(3);
-}
-
-function layout(panel){
-    const pad = panel.querySelector('.grid-drum-pad');
-    if (!pad) return;
-    const r = pad.parentElement.getBoundingClientRect();
-
-    // Compensate for board zoom so TAP stays the same relative size to the toy
-    let scale = 1;
     try {
-      const board = document.getElementById('board');
-      if (board) {
-        const tf = (getComputedStyle(board).transform || getComputedStyle(board).webkitTransform || '');
-        if (tf && tf !== 'none') {
-          const m = tf.match(/matrix\(([^)]+)\)/);
-          if (m) {
-            const parts = m[1].split(',');
-            if (parts.length >= 2) {
-              const a = parseFloat(parts[0]);
-              const b = parseFloat(parts[1]);
-              const s = Math.sqrt(a * a + b * b);
-              if (Number.isFinite(s) && s > 0) scale = s;
-            }
-          }
-        }
-      }
-    } catch {}
-
-    const unscaledMin = Math.min(r.width, r.height) / (scale || 1);
-    const size = Math.floor(unscaledMin * 0.3);
-    const label = panel.querySelector('.drum-tap-label');
-    if(label){
-      label.style.fontSize = `${Math.max(24, size * 1.3)}px`;
+      flash.getAnimations?.().forEach((animation) => animation.cancel());
+      flash.animate(
+        [{ opacity: 0.75 }, { opacity: 0 }],
+        { duration: 340, easing: 'ease-out' },
+      );
+    } catch {
+      flash.style.opacity = '0.75';
+      setTimeout(() => { flash.style.opacity = '0'; }, 340);
     }
-}
-
-function sizeParticlesCanvas(panel){
-  const pad = panel.querySelector('.grid-drum-pad');
-  const p = pad?.querySelector('.drum-particles');
-  if (!p || !pad) return;
-  const dpr = window.devicePixelRatio || 1;
-  // compute the CSS size the element currently has
-  const rect = p.getBoundingClientRect();
-  p.width  = Math.max(1, Math.floor(rect.width  * dpr));
-  p.height = Math.max(1, Math.floor(rect.height * dpr));
 }
 
 export function attachGridSquareAndDrum(panel) {
@@ -168,31 +122,17 @@ export function attachGridSquareAndDrum(panel) {
     return;
   }
 
+  const lifecycle = getToyLifecycle(panel);
   addDrumPad(panel, padWrap, toyId);
-  layout(panel);
   updateLabelVisibility(panel);
-  updatePadFlash(panel);
-  panel.addEventListener('loopgrid:update', () => {
+  lifecycle.listen(panel, 'loopgrid:update', () => {
     updateLabelVisibility(panel);
-    updatePadFlash(panel);
   });
-
-  if (!panel.__drumVisibilityLoop) {
-      panel.__drumVisibilityLoop = true;
-      const checkRunningState = () => {
-          if (!panel.isConnected) return;
-          updateLabelVisibility(panel);
-          updatePadFlash(panel);
-          requestAnimationFrame(checkRunningState);
-      }
-      checkRunningState();
-  }
-
-  if (!panel.__drumResizeHandler) {
-    panel.__drumResizeHandler = () => sizeParticlesCanvas(panel);
-    window.addEventListener('resize', panel.__drumResizeHandler);
-    requestAnimationFrame(panel.__drumResizeHandler);
-  }
+  lifecycle.listen(window, 'help:toggle', () => updateLabelVisibility(panel));
+  lifecycle.listen(panel, 'loopgrid:playcol', (event) => {
+    const column = Number(event?.detail?.col);
+    if (Number.isInteger(column) && panel.__gridState?.steps?.[column]) triggerPadFlash(panel);
+  });
 
   LOG('attached', { toyId });
 }

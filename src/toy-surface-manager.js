@@ -224,6 +224,16 @@ export function createToySurfaceManager({ panel, body, getBoardScale = null, tag
     };
   }
 
+  function getSnapshot() {
+    return Object.freeze({
+      cssWidth: cssW,
+      cssHeight: cssH,
+      backingWidth: targetW,
+      backingHeight: targetH,
+      effectiveDpr: dpr,
+    });
+  }
+
   // Install a ResizeObserver on the body. We coalesce work to rAF.
   let ro = null;
   try {
@@ -253,6 +263,7 @@ export function createToySurfaceManager({ panel, body, getBoardScale = null, tag
     requestSync,
     syncNow,
     applyExplicit,
+    getSnapshot,
     debugDump,
     destroy,
     // Expose current sizing for callers that still compute geometry elsewhere

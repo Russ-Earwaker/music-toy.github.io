@@ -32,19 +32,35 @@ export function createDgRenderUtils(getState) {
   }
 
   // Draw in logical (CSS) space; use for stroke/path operations.
-  function withLogicalSpace(ctx, fn) {
+  function withLogicalSpaceDpr(ctx, dprOverride, fn) {
     if (!ctx || typeof fn !== 'function') return;
     if (ctx.__dgLogicalSpaceActive) return fn();
-    const scale = getCanvasDpr(ctx);
+    const dpr = Number.isFinite(dprOverride) && dprOverride > 0 ? dprOverride : getCanvasDpr(ctx);
+    const S = getState();
+    const viewport = S.drawingViewportSpace;
+    const presentationScale = Math.max(0.0001, Number(viewport?.presentationScale) || 1);
+    const offsetX = Number(viewport?.contentRect?.left) || 0;
+    const offsetY = Number(viewport?.contentRect?.top) || 0;
     try { ctx.__dgLogicalSpaceActive = true; } catch {}
     ctx.save();
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.setTransform(
+      dpr * presentationScale,
+      0,
+      0,
+      dpr * presentationScale,
+      dpr * offsetX,
+      dpr * offsetY,
+    );
     try {
       fn();
     } finally {
       ctx.restore();
       try { ctx.__dgLogicalSpaceActive = false; } catch {}
     }
+  }
+
+  function withLogicalSpace(ctx, fn) {
+    return withLogicalSpaceDpr(ctx, null, fn);
   }
 
   // Draw in raw device pixels without additional scaling; ideal for blits / drawImage.
@@ -89,11 +105,8 @@ export function createDgRenderUtils(getState) {
       return;
     }
     const surface = ctx.canvas;
-    const scale = (Number.isFinite(S.paintDpr) && S.paintDpr > 0) ? S.paintDpr : 1;
-    const width = S.cssW || (surface?.width ?? 0) / scale;
-    const height = S.cssH || (surface?.height ?? 0) / scale;
     resetCtx(ctx);
-    withLogicalSpace(ctx, () => ctx.clearRect(0, 0, width, height));
+    withIdentity(ctx, () => ctx.clearRect(0, 0, surface.width, surface.height));
     if (isPaintSurface) {
       S.__dgMarkSingleCanvasDirty(ctx?.canvas?.__dgPanel);
     }
@@ -304,6 +317,7 @@ export function createDgRenderUtils(getState) {
   return {
     withIdentity,
     withLogicalSpace,
+    withLogicalSpaceDpr,
     withDeviceSpace,
     resetCtx,
     clearCanvas,

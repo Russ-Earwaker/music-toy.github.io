@@ -4,7 +4,7 @@ const ORB_TRAVEL_SPEED_WORLD = 620;
 const ORB_SETTLE_SECONDS = 0.28;
 const ORB_TRIGGER_SECONDS = 0.34;
 const ORB_RING_SLOT_COUNT = 8;
-const ORB_COLLISION_RADIUS_PX = 94;
+const ORB_COLLISION_RADIUS_LOGICAL = 94;
 const ORB_READY_HOLD_SECONDS = 2.0;
 const ORB_APPROACH_ACCEL_WORLD = 24;
 const ORB_APPROACH_MAX_SPEED_WORLD = 92;
@@ -604,16 +604,14 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
   function handlePlayerCollision(playerWorld = null) {
     if (!state.active || !playerWorld) return false;
     const player = normalizePoint(playerWorld);
-    const playerScreen = deps.worldToScreen?.(player) || null;
-    if (!playerScreen || !Number.isFinite(playerScreen.x) || !Number.isFinite(playerScreen.y)) return false;
+    const playerLogical = deps.worldToLogical?.(player) || player;
     for (const orb of state.orbs) {
       if (!orb || (orb.status !== 'ready' && orb.status !== 'settling')) continue;
-      const orbScreen = deps.worldToScreen?.({ x: orb.x, y: orb.y }) || null;
-      if (!orbScreen || !Number.isFinite(orbScreen.x) || !Number.isFinite(orbScreen.y)) continue;
-      const dx = playerScreen.x - orbScreen.x;
-      const dy = playerScreen.y - orbScreen.y;
+      const orbLogical = deps.worldToLogical?.({ x: orb.x, y: orb.y }) || { x: orb.x, y: orb.y };
+      const dx = playerLogical.x - orbLogical.x;
+      const dy = playerLogical.y - orbLogical.y;
       const dist = Math.hypot(dx, dy);
-      if (dist > ORB_COLLISION_RADIUS_PX) continue;
+      if (dist > ORB_COLLISION_RADIUS_LOGICAL) continue;
       if (orb.collisionLatched === true) return true;
       orb.collisionLatched = true;
       if (orb.status === 'settling') {
@@ -662,7 +660,10 @@ export function createBeatSwarmTapOrbRuntime(deps = {}) {
       : 1;
     orb.el.style.setProperty('--tap-orb-x', `${screen.x.toFixed(2)}px`);
     orb.el.style.setProperty('--tap-orb-y', `${screen.y.toFixed(2)}px`);
-    if (orb.status !== 'triggered') orb.el.style.setProperty('--tap-orb-scale', pulse.toFixed(3));
+    if (orb.status !== 'triggered') {
+      const presentationScale = Math.max(0.001, Number(deps.getPresentationScale?.()) || 1);
+      orb.el.style.setProperty('--tap-orb-scale', (pulse * presentationScale).toFixed(3));
+    }
   }
 
   function update(dt = 0, context = {}) {

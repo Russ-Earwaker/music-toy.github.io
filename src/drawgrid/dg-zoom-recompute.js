@@ -34,12 +34,6 @@ export function createDgZoomRecompute({ state, deps } = {}) {
       }
       s.pendingZoomResnap = false;
 
-      // IMPORTANT:
-      // Zoom recompute can rebuild/resize backing stores (and resnap can clear paint if it
-      // thinks there's "no content"). In DrawGrid, the paint canvas may be the source of truth,
-      // so we must preserve it across this path.
-      const snap = d.capturePaintSnapshot?.();
-      const hadInk = !!snap;
       const hadStrokes = Array.isArray(s.strokes) && s.strokes.length > 0;
       const hadNodes =
         s.currentMap &&
@@ -54,13 +48,11 @@ export function createDgZoomRecompute({ state, deps } = {}) {
       // the "resnap-empty -> clear" path, which would cut the trail.
       const __ghostNonEmpty = s.panel && s.panel.__dgGhostLayerEmpty === false;
       const __preserveBlankDuringZoom =
-        (hadInk && !hadStrokes && !hadNodes) ||
         (!hadStrokes && !hadNodes && (d.getGhostGuideAutoActive?.() || __ghostNonEmpty));
 
       if (typeof window !== 'undefined' && window.__DG_GHOST_TRACE) {
         d.dgGhostTrace?.('zoom:recompute:resnap', {
           preserveBlankDuringZoom: __preserveBlankDuringZoom,
-          hadInk,
           hadStrokes,
           hadNodes,
           ghostNonEmpty: __ghostNonEmpty,
@@ -71,10 +63,6 @@ export function createDgZoomRecompute({ state, deps } = {}) {
 
       d.resnapAndRedraw?.(true, { preservePaintIfNoStrokes: __preserveBlankDuringZoom });
 
-      // After backing-store churn, restore paint if it was our only source of truth.
-      if (hadInk && !hadStrokes && !hadNodes) {
-        d.restorePaintSnapshot?.(snap);
-      }
       d.drawIntoBackOnly?.();
       s.pendingSwap = true;
     });

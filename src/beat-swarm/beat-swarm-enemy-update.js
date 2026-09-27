@@ -1,7 +1,13 @@
 import { buildBeatSwarmBehavioralFormationEnemyRuntime } from './beat-swarm-behavioral-runtime.js';
+import { createWorldLogicalCollision } from './beat-swarm-logical-collision.js';
 import {
   isBeatSwarmLevel1RoleEligibleForLane,
 } from './beat-swarm-level1-contract.js';
+import {
+  clampBeatSwarmLogicalPoint,
+  clampBeatSwarmPairCenterLogical,
+  getBeatSwarmFormationAnchorLogical,
+} from './beat-swarm-logical-movement.js';
 
 function getEnemyCombatVisualScaleRuntime(enemy) {
   const nowMs = Number(globalThis.performance?.now?.()) || Date.now();
@@ -154,46 +160,10 @@ function getFormationAnchorWorldRuntime(enemy, helpers) {
   if (!formationArchetype && !formationSpawnRegion) return null;
   const introOrMergeProtected = enemy?.introStageCarrier === true || enemy?.formationMergeProtectionActive === true;
   if (!introOrMergeProtected) return null;
-  const screenToWorld = typeof helpers?.screenToWorld === 'function' ? helpers.screenToWorld : null;
-  if (!screenToWorld) return null;
-
-  const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-  const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
-  const memberIndex = Math.max(0, Math.trunc(Number(enemy?.formationMemberIndex) || 0));
-  const memberCount = Math.max(1, Math.trunc(Number(enemy?.formationMemberCount) || 1));
-  const centeredIndex = memberIndex - ((memberCount - 1) * 0.5);
-  const xStep = Math.max(18, Math.round(screenW * 0.055));
-  const yStep = Math.max(14, Math.round(screenH * 0.05));
-  let targetX = screenW * 0.5;
-  let targetY = screenH * 0.5;
-
-  if (formationSpawnRegion === 'lower_outer' || formationArchetype === 'foundation_anchor_line') {
-    const laneSide = memberCount <= 1 ? 0 : (centeredIndex < 0 ? -1 : 1);
-    targetX = screenW * (laneSide < 0 ? 0.28 : (laneSide > 0 ? 0.72 : 0.5)) + (centeredIndex * (xStep * 0.45));
-    targetY = (screenH * 0.78) - (Math.abs(centeredIndex) * (yStep * 0.2));
-  } else if (formationSpawnRegion === 'mid_side' || formationArchetype === 'backbeat_pair') {
-    const laneSide = memberCount <= 1 ? 0 : (centeredIndex < 0 ? -1 : 1);
-    targetX = screenW * (laneSide < 0 ? 0.24 : (laneSide > 0 ? 0.76 : 0.5));
-    targetY = (screenH * 0.5) + (centeredIndex * (yStep * 0.65));
-  } else if (formationSpawnRegion === 'side_diagonal' || formationArchetype === 'syncopation_stair') {
-    const laneSide = memberCount <= 1 ? 0 : (centeredIndex < 0 ? -1 : 1);
-    targetX = screenW * (laneSide < 0 ? 0.2 : (laneSide > 0 ? 0.8 : 0.5));
-    targetY = (screenH * 0.34) + (memberIndex * (yStep * 0.9));
-  } else if (formationSpawnRegion === 'upper_mid' || formationArchetype === 'lead_arc') {
-    targetX = (screenW * 0.5) + (centeredIndex * xStep);
-    targetY = (screenH * 0.22) + (Math.abs(centeredIndex) * (yStep * 0.18));
-  } else if (formationSpawnRegion === 'lead_reply_edge' || formationArchetype === 'answer_echo') {
-    const laneSide = memberCount <= 1 ? 1 : (centeredIndex <= 0 ? -1 : 1);
-    targetX = screenW * (laneSide < 0 ? 0.22 : 0.78);
-    targetY = (screenH * 0.28) + (centeredIndex * (yStep * 0.5));
-  } else {
-    return null;
-  }
-
-  return screenToWorld({
-    x: Math.max(24, Math.min(screenW - 24, targetX)),
-    y: Math.max(24, Math.min(screenH - 24, targetY)),
-  });
+  const logicalToWorld = typeof helpers?.logicalToWorld === 'function' ? helpers.logicalToWorld : null;
+  if (!logicalToWorld) return null;
+  const targetLogical = getBeatSwarmFormationAnchorLogical(enemy);
+  return targetLogical ? logicalToWorld(targetLogical) : null;
 }
 
 function getEventSectionVisualRuntime(enemy, eventSectionRuntime = null) {
@@ -292,10 +262,8 @@ function getPairedDanceAssignmentRuntime(enemy, enemies, state, cycleIndex = 0) 
     const used = new Set();
     const assignments = Object.create(null);
     const centers = [];
-    const worldToScreen = typeof state?.worldToScreen === 'function' ? state.worldToScreen : null;
-    const screenToWorld = typeof state?.screenToWorld === 'function' ? state.screenToWorld : null;
-    const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-    const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
+    const worldToLogical = typeof state?.worldToLogical === 'function' ? state.worldToLogical : null;
+    const logicalToWorld = typeof state?.logicalToWorld === 'function' ? state.logicalToWorld : null;
     const minCenterDistance = 150;
     members.sort((a, b) => (Number(a?.wx) || 0) - (Number(b?.wx) || 0));
     for (let i = 0; i < members.length; i++) {
@@ -326,13 +294,10 @@ function getPairedDanceAssignmentRuntime(enemy, enemies, state, cycleIndex = 0) 
           }
         : { x: Number(a?.wx) || 0, y: Number(a?.wy) || 0 };
       let pairCenter = midpoint;
-      const midpointScreen = worldToScreen ? worldToScreen(midpoint) : null;
-      const midpointOnScreen = !!(midpointScreen && Number.isFinite(midpointScreen.x) && Number.isFinite(midpointScreen.y) && midpointScreen.x >= 0 && midpointScreen.x <= screenW && midpointScreen.y >= 0 && midpointScreen.y <= screenH);
-      if (!midpointOnScreen && screenToWorld) {
-        const safeWorld = screenToWorld({
-          x: Math.max(screenW * 0.2, Math.min(screenW * 0.8, Number(midpointScreen?.x) || (screenW * 0.5))),
-          y: Math.max(screenH * 0.2, Math.min(screenH * 0.8, Number(midpointScreen?.y) || (screenH * 0.5))),
-        });
+      const midpointLogical = worldToLogical ? worldToLogical(midpoint) : null;
+      const midpointInsideGameplay = !!(midpointLogical && midpointLogical.x >= 0 && midpointLogical.x <= 1600 && midpointLogical.y >= 0 && midpointLogical.y <= 900);
+      if (!midpointInsideGameplay && logicalToWorld) {
+        const safeWorld = logicalToWorld(clampBeatSwarmPairCenterLogical(midpointLogical));
         if (safeWorld && Number.isFinite(safeWorld.x) && Number.isFinite(safeWorld.y)) {
           pairCenter = { x: Number(safeWorld.x) || midpoint.x, y: Number(safeWorld.y) || midpoint.y };
         }
@@ -1234,7 +1199,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
   const centerWorld = helpers.getViewportCenterWorld?.() || { x: 0, y: 0 };
   const z = helpers.getZoomState?.();
   const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
-  const hitRadiusWorld = (Number(constants.enemyHitRadius) || 0) / Math.max(0.001, scale || 1);
+  const hitRadiusLogical = Math.max(0, Number(constants.enemyHitRadiusLogical) || 0);
+  const collision = createWorldLogicalCollision(helpers.worldToLogical);
   const offscreenRemovePad = 80;
   const offscreenGraceSeconds = 2.4;
   const frameIndex = Math.max(0, Math.trunc(Number(state.frameIndex) || 0));
@@ -1243,6 +1209,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     : null;
   state.worldToScreen = typeof helpers.worldToScreen === 'function' ? helpers.worldToScreen : null;
   state.screenToWorld = typeof helpers.screenToWorld === 'function' ? helpers.screenToWorld : null;
+  state.worldToLogical = typeof helpers.worldToLogical === 'function' ? helpers.worldToLogical : null;
+  state.logicalToWorld = typeof helpers.logicalToWorld === 'function' ? helpers.logicalToWorld : null;
   const projectileCount = Math.max(0, Math.trunc(Number(state.projectileCount) || 0));
   const effectCount = Math.max(0, Math.trunc(Number(state.effectCount) || 0));
   const liveObjectPressure = enemies.length + projectileCount + effectCount;
@@ -1341,7 +1309,8 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       }
       e.wx += (Number(e.vx) || 0) * (Number(state.dt) || 0);
       e.wy += (Number(e.vy) || 0) * (Number(state.dt) || 0);
-      const s = helpers.worldToScreen?.({ x: e.wx, y: e.wy });
+      const worldPoint = { x: e.wx, y: e.wy };
+      const s = helpers.worldToScreen?.(worldPoint);
       if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) {
         helpers.removeEnemy?.(e, e.retreatReason || 'retreated', {
           retireOrigin: String(e?.retreatOrigin || '').trim().toLowerCase(),
@@ -1350,7 +1319,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         continue;
       }
       const outPad = 120;
-      if (s.x < -outPad || s.y < -outPad || s.x > globalThis.window.innerWidth + outPad || s.y > globalThis.window.innerHeight + outPad) {
+      if (helpers.isWorldPointInsideGameplay?.(worldPoint, outPad) === false) {
         helpers.removeEnemy?.(e, e.retreatReason || 'retreated', {
           retireOrigin: String(e?.retreatOrigin || '').trim().toLowerCase(),
         });
@@ -1363,7 +1332,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         const rolePulseScale = resolveRolePulseScale();
         const combatVisualScale = getEnemyCombatVisualScaleRuntime(e);
         const overloadVisualScale = getEnemyFormationOverloadVisualScaleRuntime(e);
-        e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * rolePulseScale * combatVisualScale * overloadVisualScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})`;
+        e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * rolePulseScale * combatVisualScale * overloadVisualScale * (Number(eventSectionVisual.scaleBias) || 1) * Math.max(0.001, Number(constants.presentationScale) || 1)).toFixed(3)})`;
       }
       if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
       if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {
@@ -1375,14 +1344,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
     const dy = centerWorld.y - e.wy;
     const d = Math.hypot(dx, dy) || 0.0001;
     if (e?.basicLaneEntryBoostActive === true) {
-      const entryScreen = helpers.worldToScreen?.({ x: e.wx, y: e.wy });
-      const enteredViewport = entryScreen
-        && Number.isFinite(entryScreen.x)
-        && Number.isFinite(entryScreen.y)
-        && entryScreen.x >= 24
-        && entryScreen.y >= 24
-        && entryScreen.x <= globalThis.window.innerWidth - 24
-        && entryScreen.y <= globalThis.window.innerHeight - 24;
+      const enteredViewport = helpers.isWorldPointInsideGameplay?.({ x: e.wx, y: e.wy }, -24) === true;
       if (enteredViewport) {
         e.basicLaneEntryBoostActive = false;
         e.enemySpeedMultiplier = Math.max(0.35, Number(e?.basicLaneCruiseSpeedMultiplier) || 1);
@@ -1624,7 +1586,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       applyPairedDanceSeparationRuntime(e, enemies, state);
     }
     recordEnemyMovementDiscontinuityRuntime(e, state, frameStartWx, frameStartWy, maxSpeed);
-    if (d <= hitRadiusWorld) {
+    if (collision.pointWithinRadius(e, centerWorld, hitRadiusLogical)) {
       const perfProtected = helpers.isPerfRepeatProtectedEnemy?.(e) === true;
       if ((nowMs - (Number(e?.lastPlayerCollisionHitAtMs) || 0)) >= 180) {
         e.lastPlayerCollisionHitAtMs = nowMs;
@@ -1671,7 +1633,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       }
       if (constants.playerEnemyCollisionLethal !== true) {
         const back = helpers.normalizeDir?.(e.wx - centerWorld.x, e.wy - centerWorld.y, e.vx, e.vy) || { x: 1, y: 0 };
-        const separationWorld = Math.max(2, hitRadiusWorld - d + 2);
+        const separationWorld = Math.max(2, hitRadiusLogical - d + 2);
         const bounceSpeed = Math.max(120, Math.hypot(e.vx, e.vy), (Number(constants.enemyMaxSpeed) || 0) * 0.78);
         e.vx = back.x * bounceSpeed;
         e.vy = back.y * bounceSpeed;
@@ -1693,10 +1655,9 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
       enemies.splice(i, 1);
       continue;
     }
-    const isOffscreenBeyondGracePad = s.x < -offscreenRemovePad
-      || s.y < -offscreenRemovePad
-      || s.x > globalThis.window.innerWidth + offscreenRemovePad
-      || s.y > globalThis.window.innerHeight + offscreenRemovePad;
+    const isOffscreenBeyondGracePad = helpers.isWorldPointInsideGameplay?.(
+      { x: e.wx, y: e.wy }, offscreenRemovePad,
+    ) === false;
     if (isOffscreenBeyondGracePad) {
       e.offscreenGraceT = e?.combatCharging === true
         ? 0
@@ -1816,7 +1777,7 @@ export function updateBeatSwarmEnemiesRuntime(options = null) {
         : '';
       const combatVisualScale = getEnemyCombatVisualScaleRuntime(e);
       const overloadVisualScale = getEnemyFormationOverloadVisualScaleRuntime(e);
-      e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * combatVisualScale * overloadVisualScale * (Number(eventSectionVisual.scaleBias) || 1)).toFixed(3)})${combatRotation}`;
+      e.el.style.transform = `translate(${s.x}px, ${(s.y + (Number(eventSectionVisual.offsetYPx) || 0)).toFixed(3)}px) scale(${(spawnScale * actionScale * rolePulseScale * combatVisualScale * overloadVisualScale * (Number(eventSectionVisual.scaleBias) || 1) * Math.max(0.001, Number(constants.presentationScale) || 1)).toFixed(3)})${combatRotation}`;
     }
     if (enemyType === 'dumb' && Number.isFinite(e?.linkedSpawnerId)) helpers.updateSpawnerLinkedEnemyLine?.(e);
     if (enemyType === 'drawsnake' && ((frameIndex + Math.max(0, Math.trunc(Number(e?.id) || 0))) % drawSnakeVisualStride) === 0) {
@@ -1831,21 +1792,20 @@ export function keepDrawSnakeEnemyOnscreenRuntime(options = null) {
   const enemy = options?.enemy;
   const dt = Number(options?.dt) || 0;
   if (String(enemy?.enemyType || '') !== 'drawsnake') return null;
-  const s = helpers.worldToScreen?.({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
-  const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-  const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
-  const pad = Math.max(40, Number(constants.drawSnakeScreenMarginPx) || 140);
-  if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) return s;
-  const isOffscreen = s.x < -pad || s.y < -pad || s.x > (screenW + pad) || s.y > (screenH + pad);
+  const logical = helpers.worldToLogical?.({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
+  const pad = Math.max(40, Number(constants.drawSnakeMarginLogical) || 140);
+  if (!logical || !Number.isFinite(logical.x) || !Number.isFinite(logical.y)) return null;
+  const isOffscreen = logical.x < -pad || logical.y < -pad || logical.x > (1600 + pad) || logical.y > (900 + pad);
   if (!enemy.drawsnakeHasEnteredScreen) {
-    if (isOffscreen) return s;
+    if (isOffscreen) return helpers.worldToScreen?.({ x: enemy.wx, y: enemy.wy }) || null;
     enemy.drawsnakeHasEnteredScreen = true;
   }
-  const clampedX = Math.max(pad, Math.min(screenW - pad, s.x));
-  const clampedY = Math.max(pad, Math.min(screenH - pad, s.y));
-  if (Math.abs(clampedX - s.x) < 0.001 && Math.abs(clampedY - s.y) < 0.001) return s;
-  const pulled = helpers.screenToWorld?.({ x: clampedX, y: clampedY });
-  if (!pulled || !Number.isFinite(pulled.x) || !Number.isFinite(pulled.y)) return s;
+  const clamped = clampBeatSwarmLogicalPoint(logical, pad);
+  if (Math.abs(clamped.x - logical.x) < 0.001 && Math.abs(clamped.y - logical.y) < 0.001) {
+    return helpers.worldToScreen?.({ x: enemy.wx, y: enemy.wy }) || null;
+  }
+  const pulled = helpers.logicalToWorld?.(clamped);
+  if (!pulled || !Number.isFinite(pulled.x) || !Number.isFinite(pulled.y)) return null;
   const pullRate = Math.max(0.5, Number(constants.drawSnakeEdgePullRate) || 8);
   const t = Math.max(0, Math.min(1, dt * pullRate));
   const pullAngle = Math.atan2((pulled.y - enemy.wy), (pulled.x - enemy.wx));

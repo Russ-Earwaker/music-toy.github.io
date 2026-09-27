@@ -1,5 +1,5 @@
 import { WEAPON_GATE_NOTE_POOL, WEAPON_GATE_TOTAL_SLOTS } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
-import { getWeaponGateNoteStarPosition, getWeaponGateShipScreenPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
+import { getWeaponGateNoteStarPosition, getWeaponGateShipLogicalPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
 
 export function tickWeaponGateTransientEffects(state, dt = 0) {
   if (!state) return;
@@ -27,9 +27,16 @@ export function tickWeaponGateTransientEffects(state, dt = 0) {
 
 export function spawnWeaponGateShot(state, note = 'C4') {
   if (!state) return null;
-  const { x: shipX, y: shipY } = getWeaponGateShipScreenPoint();
+  const { x: shipX, y: shipY } = getWeaponGateShipLogicalPoint();
   const target = { x: shipX + 250, y: shipY, ttl: 0.95, hit: false };
-  const shot = { x: shipX + 26, y: shipY, vx: 780, note, ttl: 0.95, target };
+  const shot = {
+    x: shipX + 26,
+    y: shipY,
+    vx: 780,
+    note,
+    ttl: 0.95,
+    target,
+  };
   state.targets.push(target);
   state.shots.push(shot);
   return shot;
@@ -93,7 +100,7 @@ export function pulseWeaponGateGhost(state, slotIndex = 0) {
   ));
   const selection = state.selections?.[slot] || null;
   if (!gate || String(selection?.kind || '') !== 'note' || Number(gate.heroTtl) > 0) return false;
-  const ship = getWeaponGateShipScreenPoint();
+  const ship = getWeaponGateShipLogicalPoint();
   // Keep the replay flash inside one 1/16-note slot so interleaved old/new
   // gates read as a single ordered sequence instead of overlapping.
   const duration = 0.18;

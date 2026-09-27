@@ -164,20 +164,9 @@ export function createDgGridRender({ state, deps } = {}) {
           ch: s.ch,
         });
       } else {
-        // If we don't have a last-known-good grid yet (e.g. brand new panel), still try a safe fallback
-        // based on CSS size so we avoid repeated "skip-not-ready" churn.
-        if (s.cssW >= 2 && s.cssH >= 2) {
-          s.gridArea = { x: 0, y: 0, w: s.cssW, h: s.cssH };
-          s.cw = s.gridArea.w / s.cols;
-          s.ch = (s.gridArea.h - s.topPad) / s.rows;
-          d.dgSizeTrace('drawGrid:fallback-not-ready', {
-            cssW: s.cssW,
-            cssH: s.cssH,
-            gridArea: { ...s.gridArea },
-            cw: s.cw,
-            ch: s.ch,
-          });
-        } else {
+        // Grid geometry is fixed logical state. A transient DOM measurement
+        // must never manufacture CSS-sized gameplay geometry.
+        {
           // De-spam: only log skip-not-ready once per panel instance.
           if (!s.panel.__dgLoggedSkipNotReady) {
             s.panel.__dgLoggedSkipNotReady = true;

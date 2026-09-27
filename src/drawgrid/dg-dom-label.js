@@ -266,7 +266,7 @@ export function createDrawLabelOverlay(panel, getState, opts = {}) {
 
   function knockLettersAt(localX, localY, { radius = 72, strength = 10, source = 'unknown' } = {}) {
     const panelState = state.getState?.() || {};
-    const z = Math.max(0.1, panelState?.dgViewport?.getZoom?.() || 1);
+    const z = Math.max(0.1, Number(panelState?.zoomScale) || 1);
     const scaledRadius = radius * z;
     if (!state.drawLabel || !state.drawLabelLetters.length) return;
     const rect = state.drawLabel?.getBoundingClientRect?.();

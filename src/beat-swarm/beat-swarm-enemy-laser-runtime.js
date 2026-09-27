@@ -2,14 +2,7 @@ function normalizeBeat(value) {
   return Math.max(0, Math.trunc(Number(value) || 0));
 }
 
-function distanceToSegment(point, start, end) {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const lengthSquared = (dx * dx) + (dy * dy);
-  if (lengthSquared <= 0.0001) return Math.hypot(point.x - start.x, point.y - start.y);
-  const t = Math.max(0, Math.min(1, (((point.x - start.x) * dx) + ((point.y - start.y) * dy)) / lengthSquared));
-  return Math.hypot(point.x - (start.x + (dx * t)), point.y - (start.y + (dy * t)));
-}
+import { createWorldLogicalCollision } from './beat-swarm-logical-collision.js';
 
 function angleToTarget(source, target) {
   return Math.atan2(
@@ -87,7 +80,7 @@ export function createBeatSwarmEnemyLaserRuntime() {
       lengthWorld: Math.max(600, Number(pattern.lengthWorld) || 1600),
       bidirectional: pattern.bidirectional === true,
       extendPastViewport: pattern.extendPastViewport === true,
-      collisionRadiusWorld: Math.max(4, Number(pattern.collisionRadiusWorld) || 28),
+      collisionRadiusLogical: Math.max(4, Number(pattern.collisionRadiusLogical ?? pattern.collisionRadiusWorld) || 28),
       warningWidthPx: Math.max(2, Number(pattern.warningWidthPx) || 2),
       activeWidthPx: Math.max(4, Number(pattern.activeWidthPx) || 7),
       soundVolume: Math.max(0.01, Math.min(1,
@@ -131,6 +124,8 @@ export function createBeatSwarmEnemyLaserRuntime() {
     const enemyById = new Map(enemies.map((enemy) => [Math.trunc(Number(enemy?.id) || 0), enemy]));
     const player = options?.player || { x: 0, y: 0 };
     const worldToScreen = options?.worldToScreen;
+    const presentationScale = Math.max(0.001, Number(options?.presentationScale) || 1);
+    const collision = createWorldLogicalCollision(options?.worldToLogical);
     if (typeof worldToScreen !== 'function') return;
     for (let index = hazards.length - 1; index >= 0; index -= 1) {
       const hazard = hazards[index];
@@ -201,12 +196,12 @@ export function createBeatSwarmEnemyLaserRuntime() {
         const length = hazard.extendPastViewport ? Math.max(projectedLength, viewportLength) : projectedLength;
         hazard.lastVisualLengthPx = length;
         const el = hazard.beamEls[beamIndex];
-        const beamWidth = active ? hazard.activeWidthPx : hazard.warningWidthPx;
+        const beamWidth = (active ? hazard.activeWidthPx : hazard.warningWidthPx) * presentationScale;
         el.style.height = `${beamWidth}px`;
         el.style.marginTop = `${(-beamWidth * 0.5).toFixed(2)}px`;
         el.style.width = `${length}px`;
         el.style.transform = `translate(${startScreen.x}px, ${startScreen.y}px) rotate(${Math.atan2(dy, dx)}rad)`;
-        if (active && distanceToSegment(player, start, end) <= hazard.collisionRadiusWorld) playerContact = true;
+        if (active && collision.pointWithinSegment(player, start, end, hazard.collisionRadiusLogical)) playerContact = true;
       }
       const contactIndex = stepScheduled ? stepIndex : beatIndex;
       const lastContactIndex = stepScheduled ? hazard.lastContactStep : hazard.lastContactBeat;
@@ -236,7 +231,7 @@ export function createBeatSwarmEnemyLaserRuntime() {
       aimMode: hazard.aimMode,
       bidirectional: hazard.bidirectional,
       extendPastViewport: hazard.extendPastViewport,
-      collisionRadiusWorld: hazard.collisionRadiusWorld,
+      collisionRadiusLogical: hazard.collisionRadiusLogical,
       angle: hazard.angle,
       warningWidthPx: hazard.warningWidthPx,
       activeWidthPx: hazard.activeWidthPx,

@@ -23,7 +23,6 @@ export function setJoystickKnobRuntime(options = null) {
 }
 
 export function updateArenaVisualRuntime(options = null) {
-  const scale = Number(options?.scale) || 1;
   const showLimit = !!options?.showLimit;
   const state = options?.state && typeof options.state === 'object' ? options.state : {};
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
@@ -42,7 +41,7 @@ export function updateArenaVisualRuntime(options = null) {
   }
   const arenaRadiusWorld = Number(constants.swarmArenaRadiusWorld) || 0;
   const arenaResistRangeWorld = Number(constants.swarmArenaResistRangeWorld) || 0;
-  const rPx = Math.max(140, arenaRadiusWorld * Math.max(0.001, scale || 1));
+  const rPx = Math.max(1, Number(helpers.worldLengthToScreen?.(arenaRadiusWorld)) || 0);
   const dPx = rPx * 2;
   arenaRingEl.style.opacity = '1';
   arenaRingEl.style.width = `${dPx}px`;
@@ -51,9 +50,10 @@ export function updateArenaVisualRuntime(options = null) {
   arenaRingEl.style.marginTop = `${-rPx}px`;
   arenaRingEl.style.transform = `translate(${s.x}px, ${s.y}px)`;
   arenaCoreEl.style.opacity = '1';
-  arenaCoreEl.style.transform = `translate(${s.x}px, ${s.y}px)`;
+  const presentationScale = Math.max(0.001, Number(helpers.getPresentationScale?.()) || 1);
+  arenaCoreEl.style.transform = `translate(${s.x}px, ${s.y}px) scale(${presentationScale})`;
   if (arenaLimitEl) {
-    const rLimitPx = Math.max(150, (arenaRadiusWorld + arenaResistRangeWorld) * Math.max(0.001, scale || 1));
+    const rLimitPx = Math.max(1, Number(helpers.worldLengthToScreen?.(arenaRadiusWorld + arenaResistRangeWorld)) || 0);
     const dLimitPx = rLimitPx * 2;
     arenaLimitEl.style.opacity = showLimit ? '1' : '0';
     arenaLimitEl.style.width = `${dLimitPx}px`;

@@ -1,9 +1,22 @@
-import { getWeaponGateCorridorScreenBoundsAtX, getWeaponGateEndProgress, getWeaponGateLogicalBounds, getWeaponGateShipScreenPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
+import { WEAPON_GATE_LOGICAL_CENTER, WEAPON_GATE_LOGICAL_HEIGHT, WEAPON_GATE_LOGICAL_WIDTH, getWeaponGateCorridorLogicalBoundsAtX, getWeaponGateEndProgress, getWeaponGateLogicalBounds, getWeaponGateShipLogicalPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
 
 const WEAPON_GATE_INTRO_STYLE_VERSION = '2026-07-26-weapon-gate-ghosts-v3';
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, Number(v) || 0));
+}
+
+export function isWeaponGateLogicalXVisible(x, beforeMargin = 100, afterMargin = 140) {
+  const value = Number(x);
+  return Number.isFinite(value)
+    && value >= -Math.max(0, Number(beforeMargin) || 0)
+    && value <= WEAPON_GATE_LOGICAL_WIDTH + Math.max(0, Number(afterMargin) || 0);
+}
+
+export function getWeaponGateGameplayPresentationTransform(viewportSpace = null) {
+  const contentRect = viewportSpace?.contentRect || { left: 0, top: 0 };
+  const presentationScale = Math.max(0.001, Number(viewportSpace?.presentationScale) || 1);
+  return `translate(${Number(contentRect.left) || 0}px, ${Number(contentRect.top) || 0}px) scale(${presentationScale})`;
 }
 
 export function ensureWeaponGateIntroStyle() {
@@ -17,6 +30,7 @@ export function ensureWeaponGateIntroStyle() {
   style.dataset.beatSwarmVersion = WEAPON_GATE_INTRO_STYLE_VERSION;
   style.textContent = `
     .beat-swarm-weapon-gate-intro{position:fixed;inset:0;z-index:3;pointer-events:none;overflow:hidden}
+    .beat-swarm-weapon-gate-gameplay{position:absolute;left:0;top:0;width:${WEAPON_GATE_LOGICAL_WIDTH}px;height:${WEAPON_GATE_LOGICAL_HEIGHT}px;transform-origin:0 0;overflow:visible}
     .beat-swarm-weapon-gate-corridor{position:absolute;inset:0;overflow:visible}
     .beat-swarm-weapon-gate-corridor-fill{fill:rgba(10,29,43,.36);filter:drop-shadow(0 0 18px rgba(76,205,255,.12))}
     .beat-swarm-weapon-gate-corridor-edge{fill:none;stroke:rgba(100,216,255,.8);stroke-width:4;filter:drop-shadow(0 0 8px rgba(76,205,255,.2))}
@@ -61,16 +75,19 @@ export function renderWeaponGateIntro(state, options = {}) {
   const h = bottom - top;
   const outroT = state.phase === 'outro' ? Math.max(0, state.outroDuration - state.completeDelay) : 0;
   const outroN = state.phase === 'outro' ? clamp(outroT / Math.max(0.001, state.outroDuration), 0, 1) : 0;
-  const corridorX = state.phase === 'outro' ? -Math.min(window.innerWidth + 180, outroN * (window.innerWidth + 180)) : 0;
+  const corridorX = state.phase === 'outro' ? -Math.min(WEAPON_GATE_LOGICAL_WIDTH + 180, outroN * (WEAPON_GATE_LOGICAL_WIDTH + 180)) : 0;
   const corridorOpacity = state.phase === 'outro' ? Math.max(0, 1 - Math.max(0, outroN - 0.42) / 0.58) : 1;
   const gateHtml = state.gates.map((gate) => renderGate(state, gate, gate.x - state.progress)).join('');
   const targetHtml = state.targets.map((target) => `<div class="beat-swarm-weapon-gate-target${target.hit ? ' is-hit' : ''}" style="left:${target.x}px;top:${target.y}px;opacity:${Math.min(1, target.ttl * 2).toFixed(2)}"></div>`).join('');
   const shotHtml = state.shots.map((shot) => `<div class="beat-swarm-weapon-gate-shot" style="left:${shot.x}px;top:${shot.y}px"></div>`).join('');
   const impactClass = state.feedbackKind === 'damage' ? ' is-damage' : '';
+  const gameplayTransform = getWeaponGateGameplayPresentationTransform(options.viewportSpace);
   state.layer.innerHTML = `
-    ${renderCorridorBand(state, corridorX, corridorOpacity)}
-    ${renderCorridorFlowParticles(state, corridorX, corridorOpacity)}
-    ${renderNoteMap(state, notePool, totalSlots)}${renderGhostGates(state)}${gateHtml}${renderDashPickup(state)}${targetHtml}${shotHtml}
+    <div class="beat-swarm-weapon-gate-gameplay" style="transform:${gameplayTransform}">
+      ${renderCorridorBand(state, corridorX, corridorOpacity)}
+      ${renderCorridorFlowParticles(state, corridorX, corridorOpacity)}
+      ${renderNoteMap(state, notePool, totalSlots)}${renderGhostGates(state)}${gateHtml}${renderDashPickup(state)}${targetHtml}${shotHtml}
+    </div>
     <div class="beat-swarm-weapon-gate-hud">Gate ${Math.min(state.nextGateIndex + 1, totalSlots)}/${totalSlots}<br>Notes ${state.ratioState.selectedNotes}/${state.ratioState.targetNotes} Silence ${state.ratioState.selectedSilences}/${state.ratioState.targetSilences}<br>${state.summary.join(' ')}</div>
     ${state.feedbackTtl > 0 ? `<div class="beat-swarm-weapon-gate-impact${impactClass}">${state.feedbackText}</div>` : ''}
   `;
@@ -79,10 +96,10 @@ export function renderWeaponGateIntro(state, options = {}) {
 function renderCorridorFlowParticles(state, corridorX = 0, opacity = 1) {
   const laneOffsets = [-0.94, -0.78, -0.62, -0.46, -0.3, -0.14, 0.02, 0.18, 0.34, 0.5, 0.66, 0.82, 0.96];
   const spacing = 150;
-  const width = Math.max(1, window.innerWidth);
+  const width = WEAPON_GATE_LOGICAL_WIDTH;
   const progress = Number(state?.progress) || 0;
   const flowDistance = progress + (Math.max(0, Number(state?.flowTime) || 0) * 510);
-  const ship = getWeaponGateShipScreenPoint();
+  const ship = getWeaponGateShipLogicalPoint();
   const shipX = Number(ship?.x) || 0;
   const shipY = Number(ship?.y) || 0;
   const items = [];
@@ -93,8 +110,8 @@ function renderCorridorFlowParticles(state, corridorX = 0, opacity = 1) {
       const x = (i * laneSpacing) + phase - laneSpacing + corridorX;
       if (x < -110 || x > width + 120) continue;
       const localX = x - corridorX;
-      const bounds = getWeaponGateCorridorScreenBoundsAtX(state, localX);
-      const next = getWeaponGateCorridorScreenBoundsAtX(state, localX + 72);
+      const bounds = getWeaponGateCorridorLogicalBoundsAtX(state, localX);
+      const next = getWeaponGateCorridorLogicalBoundsAtX(state, localX + 72);
       const angle = Math.atan2(next.center - bounds.center, 72) * 180 / Math.PI;
       const jitter = Math.sin((i * 12.9898) + (laneIndex * 78.233)) * 0.08;
       let y = bounds.center + ((offset + jitter) * bounds.halfHeight * 0.82);
@@ -122,7 +139,7 @@ function renderDashPickup(state) {
   const p = state.dashPickup;
   if (!p) return '';
   const sx = p.x - state.progress;
-  const sy = p.y + ((window.innerHeight * 0.5) - state.y);
+  const sy = p.y + (WEAPON_GATE_LOGICAL_CENTER.y - state.y);
   return `<div class="beat-swarm-weapon-dash-pickup" style="left:${sx.toFixed(1)}px;top:${sy.toFixed(1)}px"></div>`;
 }
 
@@ -135,7 +152,7 @@ function renderNoteMap(state, notePool, totalSlots) {
   if (!stars.length) return '';
   const endProgress = getWeaponGateEndProgress(totalSlots);
   const completion = Math.max(0, Math.min(1, (state.progress + 520) / Math.max(1, endProgress + 520)));
-  const ox = window.innerWidth * 0.24 * (1 - completion);
+  const ox = WEAPON_GATE_LOGICAL_WIDTH * 0.24 * (1 - completion);
   const oy = 0;
   const pulse = Math.max(0, Math.min(1, (Number(state.noteStarPulseT) || 0) / 0.18));
   const lines = stars.slice(1).map((star, i) => {
@@ -192,8 +209,8 @@ function renderGhostGates(state) {
     const gate = pulse.gate;
     if (!gate) return '';
     const x = (Number(pulse.corridorX) || 0) - (Number(state.progress) || 0);
-    if (x < -100 || x > window.innerWidth + 140) return '';
-    const bounds = getWeaponGateCorridorScreenBoundsAtX(state, x);
+    if (!isWeaponGateLogicalXVisible(x)) return '';
+    const bounds = getWeaponGateCorridorLogicalBoundsAtX(state, x);
     const h = Math.max(1, bounds.bottom - bounds.top);
     const sectionH = h / Math.max(1, gate.sections.length);
     const duration = Math.max(0.01, Number(pulse.duration) || 0.48);
@@ -211,13 +228,13 @@ function renderGhostGates(state) {
 function renderCorridorBand(state, corridorX = 0, opacity = 1) {
   const step = 96;
   const startX = -180;
-  const endX = window.innerWidth + 220;
+  const endX = WEAPON_GATE_LOGICAL_WIDTH + 220;
   const samples = [];
   for (let x = startX; x <= endX; x += step) {
-    samples.push({ x, bounds: getWeaponGateCorridorScreenBoundsAtX(state, x) });
+    samples.push({ x, bounds: getWeaponGateCorridorLogicalBoundsAtX(state, x) });
   }
   if (!samples.length || samples[samples.length - 1].x < endX) {
-    samples.push({ x: endX, bounds: getWeaponGateCorridorScreenBoundsAtX(state, endX) });
+    samples.push({ x: endX, bounds: getWeaponGateCorridorLogicalBoundsAtX(state, endX) });
   }
   const topPath = samples.map((sample, idx) => `${idx === 0 ? 'M' : 'L'} ${(sample.x + corridorX).toFixed(1)} ${sample.bounds.top.toFixed(1)}`).join(' ');
   const bottomPath = samples.map((sample, idx) => `${idx === 0 ? 'M' : 'L'} ${(sample.x + corridorX).toFixed(1)} ${sample.bounds.bottom.toFixed(1)}`).join(' ');
@@ -226,8 +243,8 @@ function renderCorridorBand(state, corridorX = 0, opacity = 1) {
 }
 
 function renderGate(state, gate, x) {
-  if (x < -100 || x > window.innerWidth + 140) return '';
-  const bounds = getWeaponGateCorridorScreenBoundsAtX(state, x);
+  if (!isWeaponGateLogicalXVisible(x)) return '';
+  const bounds = getWeaponGateCorridorLogicalBoundsAtX(state, x);
   const top = bounds.top;
   const h = Math.max(1, bounds.bottom - bounds.top);
   const sectionH = h / gate.sections.length;

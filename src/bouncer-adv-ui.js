@@ -5,7 +5,7 @@
 // Keep this file lean (<300 lines). No duplicate imports.
 
 export function installAdvancedCubeUI(panel, canvas, {
-  isAdvanced, toWorld, getBlocks, noteList: notes, onChange, hitTest
+  isAdvanced, toWorld, clientToLogical, getBlocks, noteList: notes, onChange, hitTest
 }){
   // Small in-canvas editor for a selected floating cube.
   const wrap = document.createElement('div');
@@ -79,10 +79,14 @@ export function installAdvancedCubeUI(panel, canvas, {
   canvas.addEventListener('pointerdown', (e)=>{
     if (!isAdvanced || !isAdvanced()) return;
     if (!e.altKey) return;
-    const r = canvas.getBoundingClientRect();
-    const x = (e.clientX - r.left) * ((canvas.width||1) / Math.max(1, r.width));
-    const y = (e.clientY - r.top)  * ((canvas.height||1) / Math.max(1, r.height));
-    const p = toWorld({ x, y });
+    const p = typeof clientToLogical === 'function'
+      ? clientToLogical({ x: e.clientX, y: e.clientY })
+      : (() => {
+          const r = canvas.getBoundingClientRect();
+          const x = (e.clientX - r.left) * ((canvas.width||1) / Math.max(1, r.width));
+          const y = (e.clientY - r.top) * ((canvas.height||1) / Math.max(1, r.height));
+          return toWorld({ x, y });
+        })();
     const idx = typeof hitTest === 'function' ? hitTest(p.x, p.y) : -1;
     if (idx >= 0){
       e.preventDefault(); e.stopPropagation();

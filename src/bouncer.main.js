@@ -16,14 +16,17 @@ import { installBouncerInteractions } from './bouncer-interactions.js';
 import { createBouncerParticles } from './bouncer-particles.js';
 import { getPoliteDensityForToy } from './polite-random.js';
 import { buildPentatonicPalette, processVisQ as processVisQBouncer } from './bouncer-actions.js';
-import { computeLaunchVelocity, updateLaunchBaseline, setSpawnSpeedFromBallSpeed , getLaunchDiag} from './bouncer-geom.js';
-import { localPoint as __localPoint } from './bouncer-pointer.js';
+import { updateLaunchBaseline, getLaunchDiag } from './bouncer-geom.js';
 import { installSpeedUI } from './bouncer-speed-ui.js';
 import { installQuantUI } from './bouncer-quant-ui.js';
 import { installBouncerOSD } from './bouncer-osd.js';
-import { initBouncerPhysWorld } from './bouncer-physworld.js';
-import './bouncer-scale.js';
 import { circleRectHit } from './bouncer-helpers.js';
+import {
+  BOUNCER_LOGICAL_HEIGHT,
+  BOUNCER_LOGICAL_WIDTH,
+  bouncerClientToLogical,
+  getBouncerRenderTransform,
+} from './bouncer-viewport-space.js';
 const noteValue = (list, idx)=> list[Math.max(0, Math.min(list.length-1, (idx|0)))];
 const BOUNCER_BARS_PER_LIFE = 1;
 const MAX_SPEED = 700, LAUNCH_K = 0.9;
@@ -104,7 +107,7 @@ export function createBouncer(selector){
           dst.w = Math.round(src.w||dst.w); dst.h = Math.round(src.h||dst.h);
           dst.active = !!src.active; dst.noteIndex = (src.noteIndex|0);
         }
-        try{ window.syncAnchorsFromBlocks && window.syncAnchorsFromBlocks(); }catch{}
+        try{ syncBlockAnchors(); }catch{}
       }
       // Edge controllers
       try{ ensureEdgeControllers(physW(), physH()); }catch{}
@@ -259,25 +262,26 @@ export function createBouncer(selector){
   // errors from any remaining legacy debug code that might reference it.
   const sizing = { scale: 1, setZoom: () => {} };
 
-  // Physics world scaffold (dynamic = no behaviour change)
-  const __phys = initBouncerPhysWorld(panel, canvas, sizing, { mode: 'dynamic' });
-  
-  try{ __phys.setMode && __phys.setMode('fixed'); }catch{}
-// Fixed-physics world: capture once and keep constant across modes
-  let PHYS_W = 0, PHYS_H = 0;
-  const physW = ()=> (PHYS_W || worldW());
-  function lockPhysWorld(){ if (!PHYS_W || !PHYS_H){ PHYS_W = worldW(); PHYS_H = worldH(); } }
-  const physH = ()=> (PHYS_H || worldH());
+  // Simulation is permanently authored in a 300x300 toy-local space.
+  // Panel size, board transforms, and DPR affect presentation only.
+  const physW = () => BOUNCER_LOGICAL_WIDTH;
+  const physH = () => BOUNCER_LOGICAL_HEIGHT;
+  function lockPhysWorld() {}
   
   function renderScale(){
-    const CW = canvas.width || 1;
-    const CH = canvas.height || 1;
-    return { sx: (CW/physW()), sy: (CH/physH()), tx: 0, ty: 0 };
+    const transform = getBouncerRenderTransform({
+      displayWidth: canvas.clientWidth || BOUNCER_LOGICAL_WIDTH,
+      displayHeight: canvas.clientHeight || BOUNCER_LOGICAL_HEIGHT,
+      backingWidth: canvas.width || canvas.clientWidth || BOUNCER_LOGICAL_WIDTH,
+      backingHeight: canvas.height || canvas.clientHeight || BOUNCER_LOGICAL_HEIGHT,
+    });
+    return { sx: transform.scaleX, sy: transform.scaleY, tx: transform.offsetX, ty: transform.offsetY };
   }
   function toWorld(pt){
-    const { sx, sy } = renderScale();
-    return { x: pt.x / (sx || 1), y: pt.y / (sy || 1) };
+    const { sx, sy, tx, ty } = renderScale();
+    return { x: (pt.x - tx) / (sx || 1), y: (pt.y - ty) / (sy || 1) };
   }
+  const clientToLogical = (point) => bouncerClientToLogical(canvas, point);
 // On-screen debug (set panel.dataset.debug='1' to enable)
   const __osd = document.createElement('div');
   __osd.style.cssText='position:absolute;left:6px;top:6px;padding:0;background:transparent;color:#fff;font:12px/1.3 monospace;z-index:10;border-radius:4px;display:none;pointer-events:none';
@@ -348,20 +352,10 @@ export function createBouncer(selector){
     }
   });
 
-  const worldW = ()=> Math.max(1, Math.floor(canvas.clientWidth||0));
-  const worldH = ()=> Math.max(1, Math.floor(canvas.clientHeight||0));
-  // board zoom scaling based on visual width ratio (like Rippler)
-  const __BASELINE_ATTR_W = 300;
-  function rectScale(){
-    const w = canvas.clientWidth || canvas.width || __BASELINE_ATTR_W;
-    // clamp very small/large to avoid extreme tiny/huge artefacts
-    const s = w / __BASELINE_ATTR_W;
-    return Math.max(0.5, Math.min(2.25, s));
-  }
-  const worldScaleForSize = ()=> ((PHYS_W && PHYS_H) ? 1 : rectScale());
-  const blockSize = ()=> Math.round(BASE_BLOCK_SIZE * worldScaleForSize());
-  const cannonR  = ()=> Math.round(BASE_CANNON_R  * worldScaleForSize());
-  const ballR    = ()=> Math.round(BASE_BALL_R    * worldScaleForSize());
+  const worldW = physW;
+  const worldH = physH;
+  const blockSize = () => BASE_BLOCK_SIZE;
+  const ballR = () => BASE_BALL_R;
   // background particles (polite density)
   const particles = createBouncerParticles(physW, physH, { count: getPoliteDensityForToy(panel, 240, 640) });
 
@@ -441,6 +435,15 @@ export function createBouncer(selector){
   // blocks
   const N_BLOCKS = 4;
   let blocks = Array.from({length:N_BLOCKS}, ()=>({ x:EDGE, y:EDGE, w:blockSize(), h:blockSize(), noteIndex:0, active:true, flash:0, lastHitAT:0 }));
+  function syncBlockAnchors(targetBlocks = blocks) {
+    for (const block of targetBlocks) {
+      if (!block) continue;
+      block._fx = block.x / BOUNCER_LOGICAL_WIDTH;
+      block._fy = block.y / BOUNCER_LOGICAL_HEIGHT;
+      block._fw = block.w / BOUNCER_LOGICAL_WIDTH;
+      block._fh = block.h / BOUNCER_LOGICAL_HEIGHT;
+    }
+  }
 
   let previewState = null;
   function cloneBlock(src) { return src ? { ...src } : null; }
@@ -526,7 +529,7 @@ export function createBouncer(selector){
       };
     }
     clearPreviewState();
-    try { window.syncAnchorsFromBlocks?.(); } catch {}
+    try { syncBlockAnchors(); } catch {}
   }
 
   function isBouncerChained() {
@@ -550,7 +553,7 @@ export function createBouncer(selector){
     return -1;
   }
   const advUI = installAdvancedCubeUI(panel, canvas, {
-    isAdvanced, toWorld, getBlocks: ()=> blocks, noteList, onChange: ()=>{}, hitTest
+    isAdvanced, toWorld, clientToLogical, getBlocks: ()=> blocks, noteList, onChange: ()=>{}, hitTest
   });
 
   // visQ is a carrier for the loop recorder state, passed to the physics/render steps.
@@ -567,7 +570,7 @@ export function createBouncer(selector){
     const pal = buildPentatonicPalette(noteList, 'C4', 'minor', 1);
     for (let i=0;i<blocks.length;i++) blocks[i].noteIndex = pal[i % pal.length];
     randomizeRects(blocks, {x:bx,y:by,w:bw,h:bh}, EDGE);
-    try{window.syncAnchorsFromBlocks();}catch{}
+    try{ syncBlockAnchors(); }catch{}
   })();
 
   function ensureEdgeControllers(w,h){
@@ -686,7 +689,7 @@ export function createBouncer(selector){
 
     randomizeRects(targetBlocks, { x: bx, y: by, w: bw, h: bh }, EDGE);
     if (!skipAnchorSync) {
-      try { window.syncAnchorsFromBlocks(); } catch {}
+      try { syncBlockAnchors(targetBlocks); } catch {}
     }
 
     let picks = [];
@@ -761,8 +764,8 @@ export function createBouncer(selector){
   lifecycle.listen(panel, 'toy-zoom', (e)=>{ try{ sizing.setZoom && sizing.setZoom(!!(e?.detail?.zoomed)); updateSpeedVisibility && updateSpeedVisibility(); }catch{} });
 
   
-// Recompute from normalized anchors; ignore incremental multipliers
-  window.syncBlocksFromAnchors({ blocks, physW, physH });
+  // Block geometry is already expressed in the fixed logical surface. Resize
+  // changes projection only, so it must not reconstruct physics geometry.
   // Handle position from anchors
   try{
     const w = physW(), h = physH();
@@ -898,6 +901,7 @@ let __justSpawnedUntil = 0;
       canvas,
       sizing,
       toWorld,
+      clientToLogical,
       EDGE,
       physW,
       physH,
@@ -913,6 +917,7 @@ let __justSpawnedUntil = 0;
       toyId,
       noteList,
       velFrom,
+      syncBlockAnchors,
       isAdvanced: () => panel.classList.contains('toy-zoomed'),
       preview: {
         shouldDefer: shouldDeferChanges,
@@ -1063,9 +1068,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   stepBouncer,
   spawnBallFrom,
   getBall: ()=>ball,
-  rescale: ()=>{ try{ window.rescaleBouncer({ blocks, handle, edgeControllers, physW, physH, EDGE, blockSize, ballRef: ball,
-        getBall: ()=>ball, ballR, ensureEdgeControllers });
-    }catch{} },
+  rescale: () => {},
   updateLaunchBaseline,
   buildStateForStep, installInteractions, getLastLaunch: ()=>lastLaunch,
   applyFromStep,
@@ -1097,10 +1100,6 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   panel.__bouncer_main_instance = instanceApi;
   return instanceApi;
 }
-
-
-
-
 
 
 

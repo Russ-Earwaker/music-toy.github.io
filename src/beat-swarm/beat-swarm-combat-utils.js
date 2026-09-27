@@ -51,12 +51,9 @@ export function getShipFacingDirWorldRuntime(options = null) {
 }
 
 export function getProjectileChainSpawnOffsetWorldRuntime(options = null) {
-  const z = options?.zoomState || null;
-  const projectileHitRadiusPx = Number(options?.projectileHitRadiusPx) || 0;
+  const projectileHitRadiusLogical = Number(options?.projectileHitRadiusLogical) || 0;
   const projectileChainSpawnOffsetWorld = Number(options?.projectileChainSpawnOffsetWorld) || 0;
-  const s = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
-  const hitRadiusWorld = projectileHitRadiusPx / Math.max(0.001, s || 1);
-  return Math.max(projectileChainSpawnOffsetWorld, hitRadiusWorld + 8);
+  return Math.max(projectileChainSpawnOffsetWorld, projectileHitRadiusLogical + 8);
 }
 
 export function countOrbitingHomingMissilesRuntime(options = null) {

@@ -13,6 +13,11 @@ import { installVolumeUI } from '../baseToy/volume-ui.js';
 import { createArtLineThicknessControl } from './art-line-thickness-control.js';
 import { createArtHueSatPicker } from './art-hue-sat-picker.js';
 import { createArtDrawingState } from './art-drawing-state.js';
+import {
+  createArtToyViewportSpace,
+  createArtToyViewportController,
+  getArtToyAuthoredSpace,
+} from './art-toy-viewport-space.js';
 
 const ART_TYPES = Object.freeze({
   FLASH_CIRCLE: 'flashCircle',
@@ -78,6 +83,7 @@ function attachSlotHandleDrag({
   onDragStateChange,
   onCommit,
   onTap,
+  clientToLogical = null,
 } = {}) {
   if (!handleBtn || !layer || typeof getStartPos !== 'function' || typeof setPos !== 'function') return;
   let dragActive = false;
@@ -86,6 +92,7 @@ function attachSlotHandleDrag({
   let startClientY = 0;
   let startX = 0;
   let startY = 0;
+  let startPointerLogical = null;
   let moved = false;
 
   handleBtn.addEventListener('pointerdown', (ev) => {
@@ -99,6 +106,9 @@ function attachSlotHandleDrag({
     startClientY = ev.clientY;
     startX = Number(start.x) || 0;
     startY = Number(start.y) || 0;
+    startPointerLogical = typeof clientToLogical === 'function'
+      ? clientToLogical({ x: ev.clientX, y: ev.clientY })
+      : null;
     moved = false;
     try { onDragStateChange?.(true); } catch {}
     try { handleBtn.setPointerCapture(ev.pointerId); } catch {}
@@ -109,10 +119,19 @@ function attachSlotHandleDrag({
     if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
     ev.preventDefault();
     ev.stopPropagation();
-    const rect = layer.getBoundingClientRect();
-    if (!rect || rect.width < 1 || rect.height < 1) return;
-    const dx = ((ev.clientX - startClientX) / rect.width) * panelPx;
-    const dy = ((ev.clientY - startClientY) / rect.height) * panelPx;
+    let dx;
+    let dy;
+    if (typeof clientToLogical === 'function' && startPointerLogical) {
+      const current = clientToLogical({ x: ev.clientX, y: ev.clientY });
+      if (!current) return;
+      dx = current.x - startPointerLogical.x;
+      dy = current.y - startPointerLogical.y;
+    } else {
+      const rect = layer.getBoundingClientRect();
+      if (!rect || rect.width < 1 || rect.height < 1) return;
+      dx = ((ev.clientX - startClientX) / rect.width) * panelPx;
+      dy = ((ev.clientY - startClientY) / rect.height) * panelPx;
+    }
     const nx = typeof clampX === 'function' ? clampX(startX + dx) : (startX + dx);
     const ny = typeof clampY === 'function' ? clampY(startY + dy) : (startY + dy);
     moved = moved || Math.abs(nx - startX) > 0.0001 || Math.abs(ny - startY) > 0.0001;
@@ -126,6 +145,7 @@ function attachSlotHandleDrag({
     ev.stopPropagation();
     dragActive = false;
     dragPointerId = null;
+    startPointerLogical = null;
     try { onDragStateChange?.(false); } catch {}
     try { handleBtn.releasePointerCapture(ev.pointerId); } catch {}
     if (moved) {
@@ -348,28 +368,67 @@ function setupFlashCircle(panel) {
 function setupFireworks(panel) {
   panel.classList.add('art-toy-fireworks');
 
+  const authoredViewport = getArtToyAuthoredSpace(ART_TYPES.FIREWORKS);
+  const viewportController = panel.__artToyViewportSpace;
+  const viewportRoot = document.createElement('div');
+  viewportRoot.className = 'art-fireworks-viewport';
+  Object.assign(viewportRoot.style, {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: `${authoredViewport?.logicalWidth || 220}px`,
+    height: `${authoredViewport?.logicalHeight || 220}px`,
+    transformOrigin: '0 0',
+    overflow: 'visible',
+  });
+  panel.appendChild(viewportRoot);
+
+  // Fireworks is a DOM/Web Animations toy, so project its entire authored
+  // surface as one unit. Child positions, sizes, and animation distances stay
+  // in authored logical units and cannot acquire independent X/Y scaling.
+  const syncViewportProjection = () => {
+    const logicalWidth = authoredViewport?.logicalWidth || 220;
+    const logicalHeight = authoredViewport?.logicalHeight || 220;
+    const displayWidth = Math.max(1, panel.clientWidth || panel.offsetWidth || logicalWidth);
+    const displayHeight = Math.max(1, panel.clientHeight || panel.offsetHeight || logicalHeight);
+    const viewport = createArtToyViewportSpace({
+      ...authoredViewport,
+      displayRect: { left: 0, top: 0, width: displayWidth, height: displayHeight },
+    });
+    viewportRoot.style.transform = `translate(${viewport.contentRect.left}px, ${viewport.contentRect.top}px) scale(${viewport.presentationScale})`;
+  };
+  syncViewportProjection();
+  let viewportResizeObserver = null;
+  if (typeof ResizeObserver === 'function') {
+    viewportResizeObserver = new ResizeObserver(syncViewportProjection);
+    viewportResizeObserver.observe(panel);
+  }
+  panel.addEventListener('toy:remove', () => viewportResizeObserver?.disconnect(), { once: true });
+
+  const classifyFireworksClientPoint = (point) => viewportController?.classifyClientPoint(point) || null;
+  const clientToFireworksLogical = (point) => classifyFireworksClientPoint(point)?.logicalPoint || null;
+
   const layer = document.createElement('div');
   layer.className = 'art-fireworks-layer';
-  panel.appendChild(layer);
+  viewportRoot.appendChild(layer);
 
   const activeGlowLayer = document.createElement('div');
   activeGlowLayer.className = 'art-fireworks-active-glows';
-  panel.appendChild(activeGlowLayer);
+  viewportRoot.appendChild(activeGlowLayer);
 
   const dragAreaEl = document.createElement('div');
   dragAreaEl.className = 'art-fireworks-drag-area';
-  panel.appendChild(dragAreaEl);
+  viewportRoot.appendChild(dragAreaEl);
 
   const handlesLayer = document.createElement('div');
   handlesLayer.className = 'art-fireworks-handles';
-  panel.appendChild(handlesLayer);
+  viewportRoot.appendChild(handlesLayer);
 
   const anchors = Array.from({ length: ART_SLOT_COUNT }, () => ({ x: 110, y: 110 }));
   const palette = ['#ff6b6b', '#ffd166', '#06d6a0', '#4cc9f0', '#f72585', '#ff9f1c', '#9b5de5', '#80ed99'];
   const FIREWORK_EFFECT_SCALE = 2;
   const HANDLE_SIZE_PX = 62;
   const ROTATE_HANDLE_MIN_SEPARATION_PX = 16;
-  const PANEL_PX = 220;
   const ACTIVE_GLOW_SIZE_PX = 180;
   const AREA_MIN_X = -142; // align with left edge of the large drag button
   const AREA_MIN_Y = 74;   // keep below top button row
@@ -1080,7 +1139,6 @@ function setupFireworks(panel) {
     attachSlotHandleDrag({
       handleBtn,
       layer,
-      panelPx: PANEL_PX,
       getStartPos: () => ({ x: anchors[i].x, y: anchors[i].y }),
       setPos: (x, y) => {
         anchors[i].x = x;
@@ -1098,6 +1156,7 @@ function setupFireworks(panel) {
       onTap: () => {
         selectLineForCustomise(i, { openMenu: true });
       },
+      clientToLogical: clientToFireworksLogical,
     });
 
     handlesLayer.appendChild(handleBtn);
@@ -1492,15 +1551,13 @@ function setupFireworks(panel) {
     // When no active fireworks are present, the drag area should not capture
     // outside taps (it is visually hidden and effectively inactive).
     if (activeSlots.size === 0 && !dragAreaEl.classList.contains('is-dragging')) return false;
-    const rect = panel.getBoundingClientRect();
-    if (!rect || rect.width < 1 || rect.height < 1) return false;
-    const scaleX = rect.width / PANEL_PX;
-    const scaleY = rect.height / PANEL_PX;
-    const left = rect.left + dragArea.x * scaleX;
-    const top = rect.top + dragArea.y * scaleY;
-    const right = left + dragArea.w * scaleX;
-    const bottom = top + dragArea.h * scaleY;
-    return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
+    const mapped = classifyFireworksClientPoint({ x: clientX, y: clientY });
+    if (!mapped?.insideExtendedWorkspace) return false;
+    const { x, y } = mapped.logicalPoint;
+    return x >= dragArea.x
+      && x <= dragArea.x + dragArea.w
+      && y >= dragArea.y
+      && y <= dragArea.y + dragArea.h;
   };
 
   let outsideTapCandidate = false;
@@ -2025,17 +2082,54 @@ function setupLaserTrails(panel) {
 
   // Defensive cleanup in case this setup runs more than once on the same panel.
   try {
-    panel.querySelectorAll('.art-laser-layer, .art-lasers-drag-area, .art-lasers-handles').forEach((el) => {
+    panel.querySelectorAll('.art-laser-viewport, .art-laser-layer, .art-lasers-drag-area, .art-lasers-handles').forEach((el) => {
       try { el.remove(); } catch {}
     });
   } catch {}
+
+  const authoredViewport = getArtToyAuthoredSpace(ART_TYPES.LASER_TRAILS);
+  const viewportController = panel.__artToyViewportSpace;
+  const viewportRoot = document.createElement('div');
+  viewportRoot.className = 'art-laser-viewport';
+  Object.assign(viewportRoot.style, {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: `${authoredViewport?.logicalWidth || 220}px`,
+    height: `${authoredViewport?.logicalHeight || 220}px`,
+    transformOrigin: '0 0',
+    overflow: 'visible',
+  });
+  panel.appendChild(viewportRoot);
+
+  const syncViewportProjection = () => {
+    const logicalWidth = authoredViewport?.logicalWidth || 220;
+    const logicalHeight = authoredViewport?.logicalHeight || 220;
+    const displayWidth = Math.max(1, panel.clientWidth || panel.offsetWidth || logicalWidth);
+    const displayHeight = Math.max(1, panel.clientHeight || panel.offsetHeight || logicalHeight);
+    const viewport = createArtToyViewportSpace({
+      ...authoredViewport,
+      displayRect: { left: 0, top: 0, width: displayWidth, height: displayHeight },
+    });
+    viewportRoot.style.transform = `translate(${viewport.contentRect.left}px, ${viewport.contentRect.top}px) scale(${viewport.presentationScale})`;
+  };
+  syncViewportProjection();
+  let viewportResizeObserver = null;
+  if (typeof ResizeObserver === 'function') {
+    viewportResizeObserver = new ResizeObserver(syncViewportProjection);
+    viewportResizeObserver.observe(panel);
+  }
+  panel.addEventListener('toy:remove', () => viewportResizeObserver?.disconnect(), { once: true });
+
+  const classifyLaserClientPoint = (point) => viewportController?.classifyClientPoint(point) || null;
+  const clientToLaserLogical = (point) => classifyLaserClientPoint(point)?.logicalPoint || null;
 
   const svgNS = 'http://www.w3.org/2000/svg';
   const layer = document.createElementNS(svgNS, 'svg');
   layer.setAttribute('class', 'art-laser-layer');
   layer.setAttribute('viewBox', '0 0 220 220');
-  layer.setAttribute('preserveAspectRatio', 'none');
-  panel.appendChild(layer);
+  layer.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  viewportRoot.appendChild(layer);
   const guidesLayer = document.createElementNS(svgNS, 'g');
   guidesLayer.setAttribute('class', 'art-laser-guides');
   layer.appendChild(guidesLayer);
@@ -2052,11 +2146,11 @@ function setupLaserTrails(panel) {
 
   const dragAreaEl = document.createElement('div');
   dragAreaEl.className = 'art-lasers-drag-area';
-  panel.appendChild(dragAreaEl);
+  viewportRoot.appendChild(dragAreaEl);
 
   const handlesLayer = document.createElement('div');
   handlesLayer.className = 'art-lasers-handles';
-  panel.appendChild(handlesLayer);
+  viewportRoot.appendChild(handlesLayer);
 
   const emitters = [
     { x: 20, y: 28 },
@@ -2099,7 +2193,6 @@ function setupLaserTrails(panel) {
   }));
   const slotAwaitingBoardDraw = new Set();
   const activeSlots = new Set();
-  const PANEL_PX = 220;
   const HANDLE_SIZE_PX = 62;
   const ROTATE_HANDLE_MIN_SEPARATION_PX = 16;
   // Global laser stroke thickness multiplier. Tweak this to scale all laser effects.
@@ -2261,14 +2354,9 @@ function setupLaserTrails(panel) {
     }
     points.push({ x: px, y: py });
   };
-  const clientToPanelPoint = (clientX, clientY) => {
-    const rect = layer.getBoundingClientRect();
-    if (!rect || rect.width < 1 || rect.height < 1) return null;
-    return {
-      x: ((clientX - rect.left) / rect.width) * PANEL_PX,
-      y: ((clientY - rect.top) / rect.height) * PANEL_PX,
-    };
-  };
+  const clientToPanelPoint = (clientX, clientY) => (
+    clientToLaserLogical({ x: clientX, y: clientY })
+  );
   const rotateSlotPath = (slot, deltaRad, basePoints = null) => {
     const i = normalizeSlot(slot);
     const source = emitters[i];
@@ -2459,9 +2547,7 @@ function setupLaserTrails(panel) {
     try {
       const fxId = clampFxId(panel?.dataset?.laserFx);
       const widthWorld = Math.max(1.2, getLaserBaseWidth(fxId) * laserStrokeMultiplier);
-      const panelRect = panel.getBoundingClientRect?.();
-      const panelScreenW = Math.max(1, Number(panelRect?.width) || 1);
-      const worldToScreen = panelScreenW / 220;
+      const worldToScreen = viewportController?.snapshot?.().presentationScale || 1;
       const widthScreen = widthWorld * worldToScreen;
       const slots = Array.from(activeSlots.values()).map((s) => normalizeSlot(s)).sort((a, b) => a - b);
       let totalLen = 0;
@@ -2777,7 +2863,6 @@ function setupLaserTrails(panel) {
     attachSlotHandleDrag({
       handleBtn,
       layer,
-      panelPx: PANEL_PX,
       getStartPos: () => ({ x: pos[slot].x, y: pos[slot].y }),
       setPos: (x, y) => {
         if (kind === 'source') {
@@ -2835,6 +2920,7 @@ function setupLaserTrails(panel) {
         if (kind !== 'source') return;
         selectLineForCustomise(slot, { openMenu: true });
       },
+      clientToLogical: clientToLaserLogical,
     });
 
     handlesLayer.appendChild(handleBtn);
@@ -3655,20 +3741,15 @@ function setupLaserTrails(panel) {
   const isClientPointInsideDragArea = (clientX, clientY) => {
     // When no active lasers are present, the drag area should not capture outside taps.
     if (activeSlots.size === 0 && !dragAreaEl.classList.contains('is-dragging')) return false;
-    const rect = panel.getBoundingClientRect();
-    if (!rect || rect.width < 1 || rect.height < 1) return false;
-    const scaleX = rect.width / PANEL_PX;
-    const scaleY = rect.height / PANEL_PX;
+    const mapped = classifyLaserClientPoint({ x: clientX, y: clientY });
+    if (!mapped?.insideExtendedWorkspace) return false;
     const armed = isBoardDrawArmed();
     const areaX = armed ? AREA_MIN_X : dragArea.x;
     const areaY = armed ? AREA_MIN_Y : dragArea.y;
     const areaW = armed ? TOTAL_LIMIT_W : dragArea.w;
     const areaH = armed ? TOTAL_LIMIT_H : dragArea.h;
-    const left = rect.left + areaX * scaleX;
-    const top = rect.top + areaY * scaleY;
-    const right = left + areaW * scaleX;
-    const bottom = top + areaH * scaleY;
-    return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
+    const { x, y } = mapped.logicalPoint;
+    return x >= areaX && x <= areaX + areaW && y >= areaY && y <= areaY + areaH;
   };
 
   let outsideTapCandidate = false;
@@ -4096,30 +4177,68 @@ function setupLaserTrails(panel) {
 function setupSticker(panel) {
   panel.classList.add('art-toy-sticker');
   try {
-    panel.querySelectorAll('.art-sticker-layer, .art-sticker-hit-layer, .art-sticker-draw-area').forEach((el) => {
+    panel.querySelectorAll('.art-sticker-viewport, .art-sticker-layer, .art-sticker-hit-layer, .art-sticker-draw-area').forEach((el) => {
       try { el.remove(); } catch {}
     });
   } catch {}
 
+  const authoredViewport = getArtToyAuthoredSpace(ART_TYPES.STICKER);
+  const viewportController = panel.__artToyViewportSpace;
+  const viewportRoot = document.createElement('div');
+  viewportRoot.className = 'art-sticker-viewport';
+  Object.assign(viewportRoot.style, {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: `${authoredViewport?.logicalWidth || 220}px`,
+    height: `${authoredViewport?.logicalHeight || 220}px`,
+    transformOrigin: '0 0',
+    overflow: 'visible',
+  });
+  panel.appendChild(viewportRoot);
+
+  const syncViewportProjection = () => {
+    const logicalWidth = authoredViewport?.logicalWidth || 220;
+    const logicalHeight = authoredViewport?.logicalHeight || 220;
+    const displayWidth = Math.max(1, panel.clientWidth || panel.offsetWidth || logicalWidth);
+    const displayHeight = Math.max(1, panel.clientHeight || panel.offsetHeight || logicalHeight);
+    const viewport = createArtToyViewportSpace({
+      ...authoredViewport,
+      displayRect: { left: 0, top: 0, width: displayWidth, height: displayHeight },
+    });
+    viewportRoot.style.transform = `translate(${viewport.contentRect.left}px, ${viewport.contentRect.top}px) scale(${viewport.presentationScale})`;
+  };
+  syncViewportProjection();
+  let viewportResizeObserver = null;
+  if (typeof ResizeObserver === 'function') {
+    viewportResizeObserver = new ResizeObserver(syncViewportProjection);
+    viewportResizeObserver.observe(panel);
+  }
+  panel.addEventListener('toy:remove', () => viewportResizeObserver?.disconnect(), { once: true });
+
+  const classifyStickerClientPoint = (point) => viewportController?.classifyClientPoint(point) || null;
+  const clientToStickerLogical = (point) => classifyStickerClientPoint(point)?.logicalPoint || null;
+  const clientToPanelPoint = (clientX, clientY) => clientToStickerLogical({ x: clientX, y: clientY });
+
   const layer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   layer.setAttribute('class', 'art-sticker-layer');
   layer.setAttribute('viewBox', '0 0 220 220');
-  layer.setAttribute('preserveAspectRatio', 'none');
-  panel.appendChild(layer);
+  layer.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  viewportRoot.appendChild(layer);
 
   const hitLayer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   hitLayer.setAttribute('class', 'art-sticker-hit-layer');
   hitLayer.setAttribute('viewBox', '0 0 220 220');
-  hitLayer.setAttribute('preserveAspectRatio', 'none');
-  panel.appendChild(hitLayer);
+  hitLayer.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  viewportRoot.appendChild(hitLayer);
 
   const burstLayer = document.createElement('div');
   burstLayer.className = 'art-fireworks-layer art-sticker-burst-layer';
-  panel.appendChild(burstLayer);
+  viewportRoot.appendChild(burstLayer);
 
   const burstGlowLayer = document.createElement('div');
   burstGlowLayer.className = 'art-fireworks-active-glows art-sticker-burst-glows';
-  panel.appendChild(burstGlowLayer);
+  viewportRoot.appendChild(burstGlowLayer);
 
   const AREA_MIN_X = -94;
   const AREA_MIN_Y = 74;
@@ -4150,10 +4269,10 @@ function setupSticker(panel) {
   drawAreaEl.style.top = `${dragArea.y}px`;
   drawAreaEl.style.width = `${dragArea.w}px`;
   drawAreaEl.style.height = `${dragArea.h}px`;
-  panel.appendChild(drawAreaEl);
+  viewportRoot.appendChild(drawAreaEl);
   const handlesLayer = document.createElement('div');
   handlesLayer.className = 'art-fireworks-handles art-sticker-handles';
-  panel.appendChild(handlesLayer);
+  viewportRoot.appendChild(handlesLayer);
 
   const palette = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#007aff', '#5856d6', '#ffffff', '#000000'];
   const drawingState = createArtDrawingState({ slotCount: ART_SLOT_COUNT });
@@ -5361,12 +5480,18 @@ function setupSticker(panel) {
   trashBtn.innerHTML = BUTTON_ICON_HTML;
   const trashCore = trashBtn.querySelector('.c-btn-core');
   if (trashCore) trashCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonTrash.png')");
-  panel.appendChild(trashBtn);
+  viewportRoot.appendChild(trashBtn);
 
   const isClientPointInsideStickerTrash = (clientX, clientY) => {
-    const rect = trashBtn.getBoundingClientRect();
-    if (!rect || rect.width < 1 || rect.height < 1) return false;
-    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+    const mapped = classifyStickerClientPoint({ x: clientX, y: clientY });
+    // The authored trash affordance intentionally sits just above the editing
+    // workspace, but its hit geometry still belongs to this logical surface.
+    if (!mapped) return false;
+    const size = 124;
+    const left = AREA_MIN_X + TOTAL_LIMIT_W - 188;
+    const top = AREA_MIN_Y - (size * 0.65);
+    const { x, y } = mapped.logicalPoint;
+    return x >= left && x <= left + size && y >= top && y <= top + size;
   };
 
   const setStickerTrashArmed = (armed) => {
@@ -6154,26 +6279,9 @@ function setupSticker(panel) {
     }
   };
 
-  const getDrawAreaRect = () => {
-    const rect = drawAreaEl.getBoundingClientRect();
-    if (!rect || rect.width < 1 || rect.height < 1) return null;
-    return rect;
-  };
-
   const isClientPointInsideDrawArea = (clientX, clientY) => {
-    const rect = getDrawAreaRect();
-    if (!rect) return false;
-    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
-  };
-
-  const clientToPanelPoint = (clientX, clientY) => {
-    const rect = getDrawAreaRect();
-    if (!rect) return null;
-    const rx = (clientX - rect.left) / rect.width;
-    const ry = (clientY - rect.top) / rect.height;
-    const x = clampX(AREA_MIN_X + rx * TOTAL_LIMIT_W);
-    const y = clampY(AREA_MIN_Y + ry * TOTAL_LIMIT_H);
-    return { x, y };
+    const mapped = classifyStickerClientPoint({ x: clientX, y: clientY });
+    return !!mapped?.insideExtendedWorkspace;
   };
 
   const appendStrokePoint = (arr, x, y, minDist = 1.5) => {
@@ -6280,7 +6388,6 @@ function setupSticker(panel) {
     }
   };
 
-  const PANEL_PX = 220;
   const currentDropArea = {
     x: AREA_MIN_X,
     y: AREA_MIN_Y,
@@ -6315,15 +6422,13 @@ function setupSticker(panel) {
     }
   };
   panel.isArtMusicDropPoint = (clientX, clientY) => {
-    const panelRect = panel.getBoundingClientRect?.();
-    if (!panelRect || panelRect.width < 1 || panelRect.height < 1) return false;
-    const scaleX = panelRect.width / PANEL_PX;
-    const scaleY = panelRect.height / PANEL_PX;
-    const left = panelRect.left + currentDropArea.x * scaleX;
-    const top = panelRect.top + currentDropArea.y * scaleY;
-    const right = left + currentDropArea.w * scaleX;
-    const bottom = top + currentDropArea.h * scaleY;
-    return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
+    const mapped = classifyStickerClientPoint({ x: clientX, y: clientY });
+    if (!mapped?.insideExtendedWorkspace) return false;
+    const { x, y } = mapped.logicalPoint;
+    return x >= currentDropArea.x
+      && x <= currentDropArea.x + currentDropArea.w
+      && y >= currentDropArea.y
+      && y <= currentDropArea.y + currentDropArea.h;
   };
   panel.onArtMusicDropHover = ({ active = false, valid = true } = {}) => {
     const isActive = !!active;
@@ -6511,19 +6616,19 @@ function setupSticker(panel) {
   });
   canvasEmptyActions.appendChild(emptyEnterBtn);
   canvasEmptyPrompt.appendChild(canvasEmptyActions);
-  panel.appendChild(canvasEmptyPrompt);
+  viewportRoot.appendChild(canvasEmptyPrompt);
   const canvasDrawPrompt = document.createElement('div');
   canvasDrawPrompt.className = 'art-sticker-draw-prompt';
   canvasDrawPrompt.style.left = `${(AREA_MIN_X + 10).toFixed(2)}px`;
   canvasDrawPrompt.style.top = `${(AREA_MIN_Y + 10).toFixed(2)}px`;
   canvasDrawPrompt.textContent = 'Draw';
   canvasDrawPrompt.hidden = true;
-  panel.appendChild(canvasDrawPrompt);
+  viewportRoot.appendChild(canvasDrawPrompt);
   collapsedHintEl = document.createElement('div');
   collapsedHintEl.className = 'art-sticker-collapsed-hint';
   collapsedHintEl.textContent = 'Give me music';
   collapsedHintEl.hidden = true;
-  panel.appendChild(collapsedHintEl);
+  viewportRoot.appendChild(collapsedHintEl);
 
   const lineButtonsTitle = document.createElement('div');
   lineButtonsTitle.className = 'art-line-style-subhead art-line-style-subhead-active-lines';
@@ -8430,6 +8535,26 @@ function setupVisualForType(panel, type) {
   setupFlashCircle(panel);
 }
 
+function installArtToyViewportDebug(panel, type) {
+  const authoredSpace = getArtToyAuthoredSpace(type);
+  if (!panel || !authoredSpace) return;
+  const controller = createArtToyViewportController({ element: panel, authoredSpace });
+  try {
+    Object.defineProperty(panel, '__artToyViewportSpace', {
+      value: controller,
+      configurable: true,
+      enumerable: false,
+      writable: false,
+    });
+    Object.defineProperty(panel, 'getArtToyViewportDebugSnapshot', {
+      value: () => controller.snapshot(),
+      configurable: true,
+      enumerable: false,
+      writable: false,
+    });
+  } catch {}
+}
+
 export function getArtCatalog() {
   return [
     {
@@ -8461,6 +8586,7 @@ export function createArtToyAt(artType, opts = {}) {
   const panel = makePanelBase(type, opts);
   if (!panel) return null;
 
+  installArtToyViewportDebug(panel, type);
   setupVisualForType(panel, type);
   return panel;
 }

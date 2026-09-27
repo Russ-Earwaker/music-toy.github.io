@@ -14,7 +14,6 @@ export function createDgOverviewTransitions({ state, deps } = {}) {
     const onCommit = () => {
       const t0 = performance?.now?.() ?? Date.now();
       try {
-        try { d.dgViewport?.setNonReactive?.(d.zoomFreezeActive() ? true : null); } catch {}
         s.__dgDeferUntilTs = 0;
         s.__dgStableFramesAfterCommit = 0;
         s.__dgNeedsUIRefresh = true;
@@ -80,8 +79,6 @@ export function createDgOverviewTransitions({ state, deps } = {}) {
       s.__dgStableFramesAfterCommit = 0;
       s.__dgNeedsUIRefresh = true;
       d.dglog('overview:transition', { active });
-      try { d.dgViewport?.setNonReactive?.(d.zoomFreezeActive() ? true : null); } catch {}
-      try { d.dgViewport?.refreshSize?.({ snap: true }); } catch {}
       try { d.dgField?.resize?.(); } catch {}
       try {
         // Ensure all layers are visible & transparent

@@ -1,3 +1,5 @@
+import { createWorldLogicalCollision } from './beat-swarm-logical-collision.js';
+
 export function getHelperKeyRuntime(options = null) {
   const slotIndex = options?.slotIndex;
   const stageIndex = options?.stageIndex;
@@ -101,10 +103,11 @@ export function updateHelpersRuntime(options = null) {
   const helpers = Array.isArray(state.helpers) ? state.helpers : null;
   const enemies = Array.isArray(state.enemies) ? state.enemies : [];
   const currentBeatIndex = Math.trunc(Number(state.currentBeatIndex) || 0);
+  const presentationScale = Math.max(0.001, Number(helperFns.getPresentationScale?.()) || 1);
   if (!helpers) return;
 
-  const impactRadiusWorld = (Number(constants.helperImpactRadiusPx) || 18) / scale;
-  const ir2 = impactRadiusWorld * impactRadiusWorld;
+  const impactRadiusLogical = Math.max(0, Number(constants.helperImpactRadiusLogical) || 18);
+  const collision = createWorldLogicalCollision(helperFns.worldToLogical);
   for (let i = helpers.length - 1; i >= 0; i--) {
     const h = helpers[i];
     if ((Number(h.untilBeat) || 0) < currentBeatIndex) {
@@ -138,14 +141,12 @@ export function updateHelpersRuntime(options = null) {
       for (const p of points) {
         for (let j = enemies.length - 1; j >= 0; j--) {
           const e = enemies[j];
-          const dx = e.wx - p.x;
-          const dy = e.wy - p.y;
-          if ((dx * dx + dy * dy) <= ir2) {
+          if (collision.pointWithinRadius(e, p, impactRadiusLogical)) {
             helperFns.damageEnemy?.(e, (Number(constants.helperImpactDamage) || 0.5) * dt * 8 * Math.max(0.05, Number(h.damageScale) || 1));
           }
         }
         const s = helperFns.worldToScreen?.({ x: p.x, y: p.y });
-        if (p.el && s && Number.isFinite(s.x) && Number.isFinite(s.y)) p.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+        if (p.el && s && Number.isFinite(s.x) && Number.isFinite(s.y)) p.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${presentationScale})`;
       }
     } else {
       for (let j = enemies.length - 1; j >= 0; j--) {
@@ -157,7 +158,7 @@ export function updateHelpersRuntime(options = null) {
         }
       }
       const s = helperFns.worldToScreen?.({ x: h.anchorX, y: h.anchorY });
-      if (h.el && s && Number.isFinite(s.x) && Number.isFinite(s.y)) h.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+      if (h.el && s && Number.isFinite(s.x) && Number.isFinite(s.y)) h.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${presentationScale})`;
     }
   }
 }

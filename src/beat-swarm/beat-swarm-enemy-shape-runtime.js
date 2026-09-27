@@ -89,6 +89,7 @@ export function createBeatSwarmEnemyShapeRuntime() {
     const enemyIds = new Set(enemies.map((enemy) => Math.trunc(Number(enemy?.id) || 0)));
     const player = options?.player || { x: 0, y: 0 };
     const worldToScreen = options?.worldToScreen;
+    const presentationScale = Math.max(0.001, Number(options?.presentationScale) || 1);
     if (typeof worldToScreen !== 'function') return;
     for (let index = hazards.length - 1; index >= 0; index -= 1) {
       const hazard = hazards[index];
@@ -106,7 +107,7 @@ export function createBeatSwarmEnemyShapeRuntime() {
       const centerScreen = worldToScreen(hazard.center);
       const edgeScreen = worldToScreen({ x: hazard.center.x + hazard.radiusWorld, y: hazard.center.y });
       if (centerScreen && edgeScreen) {
-        const radiusPx = Math.max(12, Math.abs(edgeScreen.x - centerScreen.x));
+        const radiusPx = Math.max(12, Math.abs(edgeScreen.x - centerScreen.x)) * presentationScale;
         hazard.el.style.width = `${radiusPx * 2}px`;
         hazard.el.style.height = `${radiusPx * 2}px`;
         hazard.el.style.transform = `translate(${centerScreen.x - radiusPx}px, ${centerScreen.y - radiusPx}px)`;

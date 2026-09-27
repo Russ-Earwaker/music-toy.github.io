@@ -129,6 +129,7 @@ export function createBeatSwarmWeaponGateIntroRuntime(deps = {}) {
       corridorBounds: getCorridorBounds(),
       notePool: WEAPON_GATE_NOTE_POOL,
       totalSlots: WEAPON_GATE_TOTAL_SLOTS,
+      viewportSpace: deps.getViewportSpace?.() || null,
     });
   }
 

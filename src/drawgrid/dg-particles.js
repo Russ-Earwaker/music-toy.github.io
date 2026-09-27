@@ -22,7 +22,6 @@ export function createDgParticles(getState) {
     } catch {}
     try {
       S.particleState.field?.destroy?.();
-      S.dgViewport?.refreshSize?.({ snap: true });
 
       // Read the global particle budget (FPS & device driven).
       const budget = (() => {
@@ -51,11 +50,9 @@ export function createDgParticles(getState) {
       const baseSize = 1.4;
       const sizePx = baseSize * (0.8 + 0.4 * (budget.spawnScale ?? 1));
 
-      S.particleState.field = S.createField(
+      S.particleState.field = S.createGenericParticleField(
         {
-          canvas: S.particleCanvas,
-          viewport: S.dgViewport,
-          pausedRef: S.pausedRef,
+          bounds: S.particleBounds,
         },
         {
           debugLabel: 'drawgrid-particles',
@@ -75,18 +72,6 @@ export function createDgParticles(getState) {
           minAlpha: 0.25,
           maxAlpha: 0.85,
 
-          // Avoid "stuck" feeling when only a couple DrawGrid panels exist.
-          // We only freeze unfocused panels during gestures when the scene is busy.
-          isFocusedRef: () => !!S.panel?.classList?.contains('toy-focused'),
-          freezeUnfocusedDuringGestureRef: () => {
-            return false;
-          },
-          gestureThrottleRef: () => {
-            const visiblePanels = Math.max(0, Number(S.globalDrawgridState?.visibleCount) || 0);
-            const now = performance?.now?.() ?? Date.now();
-            const moving = !!(S.__lastZoomMotionTs && (now - S.__lastZoomMotionTs) < S.ZOOM_STALL_MS);
-            return moving && visiblePanels >= 4;
-          },
         }
       );
       window.__dgField = S.particleState.field;
@@ -96,8 +81,6 @@ export function createDgParticles(getState) {
         cap,
         sizePx,
       });
-      S.dgViewport?.refreshSize?.({ snap: true });
-      S.particleState.field?.resize?.();
       try {
         const seeded = S.particleState.field?.forceSeed?.();
         bootLog('init:seed', { panelId: S.panel?.id || null, seeded });
@@ -107,7 +90,7 @@ export function createDgParticles(getState) {
         const pb = adaptive?.particleBudget;
         if (pb && typeof S.particleState.field.applyBudget === 'function') {
           // IMPORTANT: allow budgets to reach 0 so the main drawgrid loop can
-          // ramp particles down smoothly and then fully bypass dgField.tick().
+          // ramp particles down smoothly and then fully bypass field stepping.
           let maxCountScale = Math.max(0.0, (pb.maxCountScale ?? 1) * (pb.capScale ?? 1));
           let sizeScale = pb.sizeScale ?? 1;
           let spawnScale = pb.spawnScale ?? 1;
@@ -133,17 +116,6 @@ export function createDgParticles(getState) {
           });
         }
       } catch {}
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        try {
-          S.dgViewport?.refreshSize?.({ snap: true });
-          S.particleState.field?.resize?.();
-          const seeded = S.particleState.field?.forceSeed?.();
-          bootLog('init:seed-raf', { panelId: S.panel?.id || null, seeded });
-        } catch {}
-      }));
-      const logicalSize = S.getToyLogicalSize();
-      S.gridAreaLogical.w = logicalSize.w;
-      S.gridAreaLogical.h = logicalSize.h;
       S.__auditZoomSizes('init-field');
       S.panel.__drawParticles = S.particleState.field;
       bootLog('init:done', { panelId: S.panel?.id || null });
@@ -153,17 +125,22 @@ export function createDgParticles(getState) {
     }
   }
 
-  function installParticleResizeObserver() {
+  function renderDrawgridParticles() {
     const S = getState();
-    if (typeof ResizeObserver !== 'undefined') {
-      const particleResizeObserver = new ResizeObserver(() => {
-        try { S.dgViewport?.refreshSize?.({ snap: true }); } catch {}
-        try { S.particleState.field?.resize?.(); } catch {}
-      });
-      particleResizeObserver.observe(S.wrap);
-      S.panel.addEventListener('toy:remove', () => particleResizeObserver.disconnect(), { once: true });
-    }
+    const field = S.particleState.field;
+    if (!field || !S.particleCanvas) return;
+    const displayWidth = Math.max(1, S.dgSurfaces?.getCssW?.() || S.particleCanvas.clientWidth || 1);
+    const displayHeight = Math.max(1, S.dgSurfaces?.getCssH?.() || S.particleCanvas.clientHeight || 1);
+    const dpr = Math.max(0.25, S.dgSurfaces?.getDpr?.() || 1);
+    const viewport = S.createParticleViewportSpace({ width: displayWidth, height: displayHeight, backingScale: dpr });
+    const ctx = S.particleCanvas.getContext('2d', { alpha: true });
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, displayWidth, displayHeight);
+    ctx.translate(viewport.contentRect.left, viewport.contentRect.top);
+    ctx.scale(viewport.presentationScale, viewport.presentationScale);
+    field.render(ctx);
   }
 
-  return { initDrawgridParticles, installParticleResizeObserver };
+  return { initDrawgridParticles, renderDrawgridParticles };
 }

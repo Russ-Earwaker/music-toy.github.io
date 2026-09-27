@@ -1192,18 +1192,6 @@ select.toy-instrument {
 /* Let things bleed outside the pad visually */
 .toy-panel[data-toy="loopgrid-drum"] .drum-pad-wrap { overflow: visible; }
 
-/* Particles live behind the cubes/pad visuals */
-.toy-panel[data-toy="loopgrid-drum"] .drum-particles {
-  position: absolute;
-  z-index: 0;
-  /* double-height field centered on the pad */
-  height: 200%;
-  width: calc(100% + var(--edge-buffer)*2); /* give some horizontal buffer */
-  left: calc(var(--edge-buffer) * -1);
-  top: -50%;
-  pointer-events: none;
-}
-
 /* Make sure visible pad/cubes render above particles */
 .toy-panel[data-toy="loopgrid-drum"] .grid-drum-pad { z-index: 1; }
 
@@ -3210,7 +3198,6 @@ body.internal-board-active #board-main {
   animation: none !important;
 }
 
-.beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-fx-explosion,
 .beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-fx-laser,
 .beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-spawner-link,
 .beat-swarm-overlay.is-frame-pressure-severe .beat-swarm-solo-pulse,
@@ -3239,7 +3226,7 @@ body.internal-board-active #board-main {
   top: 50%;
   width: 38px;
   height: 38px;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--bs-gameplay-presentation-scale, 1));
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -6207,8 +6194,9 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
 .beat-swarm-enemy.beat-swarm-enemy-deathfx {
   --bs-death-x: -9999px;
   --bs-death-y: -9999px;
+  --bs-death-presentation-scale: 1;
   pointer-events: none;
-  transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(1);
+  transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(var(--bs-death-presentation-scale));
 }
 
 .beat-swarm-enemy.is-death-pop {
@@ -6310,19 +6298,19 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
 
 @keyframes beat-swarm-enemy-death-pop {
   0% {
-    transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(1);
+    transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(var(--bs-death-presentation-scale));
     background: #a34c3d;
     box-shadow: 0 0 12px rgba(140, 48, 48, 0.45);
     opacity: 1;
   }
   55% {
-    transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(1.22);
+    transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(calc(var(--bs-death-presentation-scale) * 1.22));
     background: #ff2f2f;
     box-shadow: 0 0 28px rgba(255, 62, 62, 0.95);
     opacity: 1;
   }
   100% {
-    transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(0.92);
+    transform: translate(var(--bs-death-x), var(--bs-death-y)) scale(calc(var(--bs-death-presentation-scale) * 0.92));
     opacity: 0;
   }
 }
@@ -8468,8 +8456,7 @@ body.beat-swarm-active.internal-board-active .app-topbar {
 .overview-mode .toy-panel[data-toy="loopgrid"] .toy-particles,
 .overview-mode .toy-panel[data-toy="loopgrid"] .particle-canvas,
 .overview-mode .toy-panel[data-toy="loopgrid-drum"] .toy-particles,
-.overview-mode .toy-panel[data-toy="loopgrid-drum"] .particle-canvas,
-.overview-mode .toy-panel[data-toy="loopgrid-drum"] .drum-particles {
+.overview-mode .toy-panel[data-toy="loopgrid-drum"] .particle-canvas {
   opacity: 0 !important;
   visibility: hidden !important;
 }

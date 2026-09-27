@@ -1,5 +1,15 @@
 import { getZoomState } from '../zoom/ZoomCoordinator.js';
 import { screenToWorld, worldToScreen } from '../board-viewport.js';
+import { createDomViewportSpace } from '../coordinates/dom-viewport-space.js';
+import {
+  BEAT_SWARM_LOGICAL_SIZE,
+  BEAT_SWARM_LOGICAL_CENTER,
+  createBeatSwarmPlayerAnchorSnapshot,
+  createBeatSwarmProjectionBridge,
+  createBeatSwarmWorldLogicalProjection,
+  createBeatSwarmViewportDebugSnapshot,
+} from './beat-swarm-viewport-space.js';
+import { createBeatSwarmGameplayPresentationSpace, createBeatSwarmPresentationDebugEntry, getBeatSwarmPresentationScale, getBeatSwarmRawPresentationScale } from './beat-swarm-presentation.js';
 import { createBeatSwarmSpawnerRuntime, registerLoopgridSpawnerType } from './spawner-runtime.js';
 import {
   getBeatSwarmLevel1EpochId,
@@ -88,7 +98,7 @@ import { createBeatSwarmEnemyLaserRuntime } from './beat-swarm-enemy-laser-runti
 import { createBeatSwarmEnemyShapeRuntime } from './beat-swarm-enemy-shape-runtime.js?v=2026-08-08-shape-caster-v3';
 import { createBeatSwarmEnemyChargeRuntime } from './beat-swarm-enemy-charge-runtime.js?v=2026-08-08-charger-v1';
 import { createBeatSwarmEnemyConductorRuntime } from './beat-swarm-enemy-conductor-runtime.js?v=2026-08-08-conductor-v2';
-import { updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js?v=2026-08-26-hit-response-v1';
+import { createBeatSwarmProjectileRemovalDiagnostic, updateBeatSwarmPickupsAndCombatRuntime } from './beat-swarm-pickups-combat.js?v=2026-08-26-hit-response-v1';
 import { createBeatSwarmPlayerInstrumentRuntime } from './beat-swarm-player-instrument.js';
 import {
   createBeatSwarmPlayerHealthRuntime,
@@ -309,6 +319,7 @@ import { applyTickMovementAndArenaClampRuntimeWrapper, applyTickSteeringAndResis
 import { updatePausedTickFrameRuntimeWrapper } from './beat-swarm-tick-paused-wrapper.js';
 import { onPointerDownRuntimeWrapper, onPointerMoveRuntimeWrapper, onPointerUpRuntimeWrapper, } from './beat-swarm-pointer-input-wrapper.js';
 import { onKeyDownRuntimeWrapper, onTransportPauseRuntimeWrapper, onTransportResumeRuntimeWrapper, onWheelRuntimeWrapper, } from './beat-swarm-input-events-wrapper.js';
+import { resolveBeatSwarmPauseState } from './beat-swarm-pause-state.js';
 import { bindBeatSwarmInputRuntimeWrapper, unbindBeatSwarmInputRuntimeWrapper, } from './beat-swarm-input-binding-wrapper.js';
 import { applyEnterSceneBootstrapRuntimeWrapper } from './beat-swarm-enter-wrapper.js';
 import { finalizeEnterBeatSwarmRuntimeWrapper } from './beat-swarm-enter-finalize-wrapper.js';
@@ -317,6 +328,10 @@ import { installBeatSwarmPersistenceRuntime } from './beat-swarm-persistence-run
 import { createBeatSwarmPerfDebugToolsRuntime, createBeatSwarmDebugApiRuntime, createBeatSwarmMusicLabApiRuntime, getBeatSwarmStabilitySmokeChecksRuntime, installBeatSwarmDebugGlobalRuntime, installBeatSwarmModeGlobalRuntime, installBeatSwarmMusicLabGlobalRuntime, } from './beat-swarm-debug-runtime.js';
 import { ensurePauseWeaponUiRuntime, renderPauseWeaponUiRuntime } from './beat-swarm-pause-weapon-ui-runtime.js';
 import { SWARM_MAX_SPEED, SWARM_ACCEL, SWARM_DECEL, SWARM_TURN_WEIGHT, SWARM_JOYSTICK_RADIUS, SWARM_STOP_EPS, SWARM_CAMERA_TARGET_SCALE, SWARM_ARENA_RADIUS_WORLD, SWARM_ARENA_RESIST_RANGE_WORLD, SWARM_ARENA_INWARD_ACCEL_WORLD, SWARM_ARENA_OUTWARD_BRAKE_WORLD, SWARM_ARENA_OUTWARD_CANCEL_WORLD, SWARM_ARENA_EDGE_BRAKE_WORLD, SWARM_ARENA_OUTER_SOFT_BUFFER_WORLD, SWARM_ARENA_RUBBER_K_WORLD, SWARM_ARENA_RUBBER_DAMP_LINEAR, SWARM_ARENA_RUBBER_DAMP_QUAD, SWARM_ARENA_SLINGSHOT_IMPULSE, SWARM_RELEASE_POST_FIRE_BORDER_SCALE, SWARM_RELEASE_POST_FIRE_DURATION, SWARM_RELEASE_BEAT_LEVEL_MAX, SWARM_RELEASE_MULTIPLIER_BASE, SWARM_RELEASE_MULTIPLIER_AT_MAX, SWARM_RELEASE_POST_FIRE_SPEED_SCALE, SWARM_RELEASE_BOUNCE_RESTITUTION, SWARM_RELEASE_BOUNCE_MIN_SPEED, SWARM_ARENA_PATH_SPEED_WORLD, SWARM_ARENA_PATH_MAX_TURN_RATE_RAD, SWARM_ARENA_PATH_TURN_SMOOTH, SWARM_ARENA_PATH_RETARGET_MIN, SWARM_ARENA_PATH_RETARGET_MAX, SWARM_STARFIELD_COUNT, SWARM_STARFIELD_PARALLAX_MIN, SWARM_STARFIELD_PARALLAX_MAX, SWARM_STARFIELD_PARALLAX_SHIFT_SCALE, BEAT_SWARM_SECTION_HEADING_COOLDOWN_MS, BEAT_SWARM_SECTION_HEADING_DURATION_MS, BEAT_SWARM_SECTION_HEADING_MIN_SECTION_BARS, SECTION_HEADING_TRANSITION_POLICY, BEAT_SWARM_FLAVOR_NAMING, beamSoundGateSlotKeys, beamSustainStateBySlot, SECTION_PRESENTATION_PROFILE_BY_ID, ENEMY_CAP, ENEMY_ACCEL, ENEMY_MAX_SPEED, ENEMY_HIT_RADIUS, ENEMY_SPAWN_START_SCALE, ENEMY_SPAWN_DURATION, ENEMY_TARGET_ACTIVE_COUNT, ENEMY_MANAGER_MAX_FALLBACK_PER_TICK, ENEMY_FALLBACK_SPAWN_MARGIN_PX, SPAWNER_ENEMY_ENABLED, SPAWNER_ENEMY_TARGET_COUNT, SPAWNER_ENEMY_HEALTH_MULTIPLIER, SPAWNER_ENEMY_TRIGGER_SOUND_VOLUME, SPAWNER_ENEMY_GRID_WORLD_OFFSET, SPAWNER_ENEMY_SPEED_MULTIPLIER, SPAWNER_ENEMY_BURST_MIN_PX, SPAWNER_ENEMY_BURST_MAX_PX, SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX, SPAWNER_SCHEDULING_ROTATION_BARS, SPAWNER_LINKED_ATTACK_SPEED, DRAW_SNAKE_ENEMY_ENABLED, DRAW_SNAKE_ENEMY_TARGET_COUNT, DRAW_SNAKE_ENEMY_HEALTH_MULTIPLIER, DRAW_SNAKE_SEGMENT_COUNT, DRAW_SNAKE_SEGMENT_SPACING_WORLD, DRAW_SNAKE_TRIGGER_SOUND_VOLUME, PLAYER_MASK_DUCK_ENEMY_VOLUME_MULT, PLAYER_MASK_DUCK_KEEP_CHANCE_BY_CHANNEL, PLAYER_MASK_STEP_EVENT_KEEP_CHANCE, PLAYER_MASK_MAX_ENEMY_EVENTS_PER_STEP, MUSIC_LAYER_POLICY, LOOP_ADMISSION_POLICY, REGISTRATION_GATE_POLICY, ROLE_COLOR_HUE_BY_LANE, MUSIC_ROLE_PULSE_POLICY, ONBOARDING_PHASE_FLOW, DRAW_SNAKE_PROJECTILE_SPEED, DRAW_SNAKE_PROJECTILE_DAMAGE, RETIRING_RETREAT_DELAY_SEC, DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK, DRAW_SNAKE_VISUAL_SCALE, DRAW_SNAKE_WIND_ACCEL, DRAW_SNAKE_WIND_FREQ_HZ, DRAW_SNAKE_SCREEN_MARGIN_PX, DRAW_SNAKE_EDGE_PULL_RATE, DRAW_SNAKE_NODE_SIZE_SCALE, DRAW_SNAKE_TURN_INTERVAL_MIN, DRAW_SNAKE_TURN_INTERVAL_MAX, DRAW_SNAKE_TURN_RATE_MIN, DRAW_SNAKE_TURN_RATE_MAX, DRAW_SNAKE_ARENA_BIAS_RADIUS_SCALE, DRAW_SNAKE_ARENA_BIAS_STRENGTH, COMPOSER_ENABLED, BEAT_SWARM_STYLE_ID, COMPOSER_BEATS_PER_BAR, COMPOSER_SECTIONS, COMPOSER_GROUPS_ENABLED, COMPOSER_GROUP_SIZE_MIN, COMPOSER_GROUP_SIZE_MAX, COMPOSER_GROUP_NOTES_MIN, COMPOSER_GROUP_NOTES_MAX, COMPOSER_GROUP_ACTIONS, COMPOSER_GROUP_PERFORMERS_MIN, COMPOSER_GROUP_PERFORMERS_MAX, COMPOSER_GROUP_PROJECTILE_SPEED, COMPOSER_GROUP_EXPLOSION_RADIUS_WORLD, COMPOSER_GROUP_EXPLOSION_TTL, LOW_THREAT_BURST_RADIUS_WORLD, LOW_THREAT_BURST_TTL, COMPOSER_GROUP_ACTION_PULSE_SECONDS, COMPOSER_GROUP_ACTION_PULSE_SCALE, COMPOSER_GROUP_LOOP_HITS_MIN, COMPOSER_GROUP_LOOP_HITS_MAX, COMPOSER_GROUP_SEPARATION_RADIUS_WORLD, COMPOSER_GROUP_SEPARATION_FORCE, COMPOSER_GROUP_COLORS, COMPOSER_GROUP_SHAPES, COMPOSER_GROUP_TEMPLATE_LIBRARY, DIRECTOR_ENERGY_STATE_SEQUENCE, DIRECTOR_ENERGY_STATE_CONFIG, DIRECTOR_ENERGY_STATE_ALIAS, DIRECTOR_STATE_THEME_CONFIG, DIRECTOR_CALL_RESPONSE_STATE_CONFIG, DIRECTOR_CALL_RESPONSE_PACING_CONFIG, DIRECTOR_STRUCTURE_INTENT_CONFIG, DIRECTOR_PRE_DROP_CONFIG, DIRECTOR_HARMONY_CONFIG, DIRECTOR_MOTIF_RETURN_CONFIG, PACING_ARRANGEMENT_INTENSITY_MULT, ENERGY_GRAVITY_CONFIG, SECTION_PACING_POLICY, COMPOSER_MOTIF_EPOCH_BARS, COMPOSER_MOTIF_LOCK_BARS, THEME_PERSISTENCE_POLICY, DRAW_SNAKE_NODE_PULSE_SECONDS, DRAW_SNAKE_NODE_PULSE_SCALE, SPAWNER_PERCUSSION_LAYER_LOCK_BARS, composerRuntime, callResponseRuntime, energyStateRuntime, structureIntentRuntime, harmonyRuntime, percussionGrooveRuntime, energyGravityRuntime, musicLayerRuntime, musicLaneRuntime, bassFoundationOwnerRuntime, bassKeepaliveRuntime, loopAdmissionRuntime, musicIdentityVisualRuntime, onboardingRuntime, sectionPresentationRuntime, starfieldSectionRuntime, readabilityMetricsRuntime, LOOPGRID_FALLBACK_NOTE_PALETTE, SPAWNER_ENEMY_GRID_STEP_TO_CELL, BEAM_SOURCE_DEATH_GRACE_SECONDS, ENEMY_DEATH_POP_FALLBACK_SECONDS, ENEMY_HEALTH_RAMP_PER_SECOND, PICKUP_COLLECT_RADIUS_PX, PROJECTILE_SPEED, PROJECTILE_HIT_RADIUS_PX, PROJECTILE_LIFETIME, PROJECTILE_SPLIT_ANGLE_RAD, PROJECTILE_BOOMERANG_RADIUS_WORLD, PROJECTILE_BOOMERANG_LOOP_SECONDS, PROJECTILE_BOOMERANG_SPIN_MULT, PROJECTILE_HOMING_ACQUIRE_RANGE_WORLD, PROJECTILE_HOMING_SPEED, PROJECTILE_HOMING_TURN_RATE, PROJECTILE_HOMING_ORBIT_RADIUS_WORLD, PROJECTILE_HOMING_ORBIT_ANG_VEL, PROJECTILE_HOMING_ORBIT_CHASE_SPEED, PROJECTILE_HOMING_ORBIT_TURN_RATE, PROJECTILE_HOMING_MAX_ORBITING, PROJECTILE_HOMING_RETURN_SNAP_DIST_WORLD, PROJECTILE_DESPAWN_OFFSCREEN_PAD_PX, PROJECTILE_COLLISION_GRACE_SECONDS, PROJECTILE_CHAIN_SPAWN_OFFSET_WORLD, HELPER_LIFETIME_BEATS, HELPER_ORBIT_RADIUS_WORLD, HELPER_ORBIT_ANG_VEL, HELPER_IMPACT_RADIUS_PX, HELPER_IMPACT_DAMAGE, HELPER_TURRET_SPAWN_OFFSET_WORLD, LASER_TTL, EXPLOSION_TTL, EXPLOSION_RADIUS_WORLD, EXPLOSION_PRIME_MAX_SCALE, BEAM_DAMAGE_PER_SECOND, PREVIEW_PROJECTILE_SPEED, PREVIEW_PROJECTILE_LIFETIME, PREVIEW_PROJECTILE_HIT_RADIUS, PREVIEW_PROJECTILE_SPLIT_ANGLE_RAD, PREVIEW_PROJECTILE_BOOMERANG_RADIUS, PREVIEW_PROJECTILE_BOOMERANG_LOOP_SECONDS, PREVIEW_PROJECTILE_HOMING_ACQUIRE_RANGE, PREVIEW_PROJECTILE_HOMING_SPEED, PREVIEW_PROJECTILE_HOMING_TURN_RATE, PREVIEW_PROJECTILE_HOMING_ORBIT_RADIUS, PREVIEW_PROJECTILE_HOMING_ORBIT_ANG_VEL, PREVIEW_PROJECTILE_HOMING_ORBIT_CHASE_SPEED, PREVIEW_PROJECTILE_HOMING_ORBIT_TURN_RATE, PREVIEW_PROJECTILE_HOMING_MAX_ORBITING, PREVIEW_PROJECTILE_HOMING_RETURN_SNAP_DIST, PREVIEW_PROJECTILE_CHAIN_SPAWN_OFFSET, PREVIEW_HELPER_LIFETIME_BEATS, PREVIEW_HELPER_ORBIT_RADIUS, PREVIEW_HELPER_ORBIT_ANG_VEL, PREVIEW_HELPER_IMPACT_RADIUS, PREVIEW_HELPER_IMPACT_DAMAGE, PREVIEW_HELPER_TURRET_SPAWN_OFFSET, PREVIEW_LASER_TTL, PREVIEW_EXPLOSION_TTL, PREVIEW_EXPLOSION_RADIUS, PREVIEW_BEAM_DAMAGE_PER_SECOND, PREVIEW_ENEMY_COUNT, PREVIEW_ENEMY_HP, PREVIEW_BEAT_LEN_FALLBACK, SWARM_PENTATONIC_NOTES_ONE_OCTAVE, SWARM_SOURCE_MUSIC_IDENTITY_BY_TYPE, FOUNDATION_LANE_PHRASE_LIBRARY, } from './beat-swarm-mode-constants.js?v=2026-06-26-ship-response-v3';
+const PICKUP_COLLECT_RADIUS_LOGICAL = PICKUP_COLLECT_RADIUS_PX;
+const PROJECTILE_HIT_RADIUS_LOGICAL = PROJECTILE_HIT_RADIUS_PX;
+const HELPER_IMPACT_RADIUS_LOGICAL = HELPER_IMPACT_RADIUS_PX;
+const SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_LOGICAL = SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX;
 const OVERLAY_ID = 'beat-swarm-overlay';
 const BEAT_SWARM_STATE_KEY = 'mt.beatSwarm.state.v1';
 const BEAT_SWARM_THEME_ID = 'beat-swarm-shmup';
@@ -388,6 +403,9 @@ let starfieldVisualPhase = 0;
 let spaceBackdropMotionEntries = [];
 let borderForceEnabled = true;
 let gameplayPaused = false;
+let pauseUiVisible = false;
+let pauseSource = 'none';
+let beatSwarmPauseDebugSnapshot = Object.freeze({ paused: false, pauseUiVisible: false, pauseSource: 'none' });
 let activeDamageSoundStageIndex = null;
 let beamSoundGateBeatIndex = -1;
 let dragPointerId = null;
@@ -423,7 +441,7 @@ const surfaceFieldRuntime = createBeatSwarmSurfaceFieldRuntime({
     };
   },
   helpers: {
-    worldToScreen,
+    worldToScreen: projectBeatSwarmWorldToScreen,
     screenToWorld,
   },
 });
@@ -2422,6 +2440,7 @@ const playerInstrumentRuntime = createBeatSwarmPlayerInstrumentRuntime({
 const PLAYER_WEAPON_SOUND_MIX_MULT = 0.62;
 const weaponGateIntroRuntime = createBeatSwarmWeaponGateIntroRuntime({
   getOverlayEl: () => overlayEl,
+  getViewportSpace: () => beatSwarmGameplayPresentationSpaceSnapshot || beatSwarmViewportSpaceSnapshot,
   warmWeaponSound() {
     const idx = Math.max(0, Math.min(MAX_WEAPON_SLOTS - 1, Math.trunc(Number(activeWeaponSlotIndex) || 0)));
     const stages = sanitizeWeaponStages(weaponLoadout[idx]?.stages);
@@ -3264,7 +3283,7 @@ function getLeadGateSectionSelectionForPlayer(sectionsLike = null, playerWorldLi
 }
 function createLeadGateVisualizerNode(slotIndex = 0, noteName = '') {
   const centerWorld = getLeadGateArenaCenterWorld();
-  const center = worldToScreen(centerWorld) || getViewportCenterClient();
+  const center = projectBeatSwarmWorldToScreen(centerWorld) || getViewportCenterClient();
   const notes = getLeadGateNoteOptions();
   const note = normalizeSwarmNoteName(noteName) || 'C4';
   const noteIndex = Math.max(0, notes.findIndex((candidate) => normalizeSwarmNoteName(candidate) === note));
@@ -3528,33 +3547,19 @@ function ensureLeadBallEnemyTargets(targetCount = 14) {
   if (!enemyLayerEl) return 0;
   const liveEnemies = enemies.filter((enemy) => enemy && enemy.__bsRemoved !== true && enemy.__bsPendingDeath !== true && Number(enemy.hp) > 0);
   const incomingLeadReserves = liveEnemies.filter((enemy) => enemy?.leadBallReserve === true);
-  const viewportWidth = Math.max(1, Number(window?.innerWidth) || 1);
-  const viewportHeight = Math.max(1, Number(window?.innerHeight) || 1);
   const incomingPad = 360;
   const visibleOrIncoming = liveEnemies.filter((enemy) => {
-    const screen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
-    return screen
-      && Number.isFinite(screen.x)
-      && Number.isFinite(screen.y)
-      && screen.x >= -incomingPad
-      && screen.y >= -incomingPad
-      && screen.x <= viewportWidth + incomingPad
-      && screen.y <= viewportHeight + incomingPad;
+    return beatSwarmViewportProjection?.isWorldPointLikelyVisible?.(
+      { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 },
+      incomingPad,
+    ) === true;
   });
   const sectorCount = 8;
   const occupiedSectors = new Set();
   for (const enemy of liveEnemies) {
-    const screen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
-    if (
-      !screen
-      || !Number.isFinite(screen.x)
-      || !Number.isFinite(screen.y)
-      || screen.x < 0
-      || screen.y < 0
-      || screen.x > viewportWidth
-      || screen.y > viewportHeight
-    ) continue;
-    const angle = Math.atan2(screen.y - viewportHeight * 0.5, screen.x - viewportWidth * 0.5);
+    const logical = beatSwarmViewportProjection?.worldToLogical?.({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
+    if (!beatSwarmViewportProjection?.isLogicalPointInsideGameplay?.(logical)) continue;
+    const angle = Math.atan2(logical.y - 450, logical.x - 800);
     const normalizedAngle = ((angle + Math.PI * 0.5) % (Math.PI * 2) + (Math.PI * 2)) % (Math.PI * 2);
     occupiedSectors.add(Math.min(sectorCount - 1, Math.floor((normalizedAngle / (Math.PI * 2)) * sectorCount)));
   }
@@ -3859,7 +3864,7 @@ function updateLeadGateThemeEvent(dt = 0, stepIndexLike = null) {
     }
   }
   const centerWorld = getLeadGateArenaCenterWorld();
-  const center = worldToScreen(centerWorld) || getViewportCenterClient();
+  const center = projectBeatSwarmWorldToScreen(centerWorld) || getViewportCenterClient();
   const arenaRadiusPx = SWARM_ARENA_RADIUS_WORLD * getBeatSwarmCameraScale();
   const stepDurationMs = Math.max(80, getLeadGateAuthoringStepSeconds() * 1000);
   const currentStepFloat = Math.max(Number(leadGateAuthoringRuntime.elapsedStepFloat) || 0, eventStep);
@@ -3961,7 +3966,9 @@ const tapOrbRuntime = createBeatSwarmTapOrbRuntime({
       barIndex: Math.max(0, Math.floor(beatIndex / Math.max(1, COMPOSER_BEATS_PER_BAR))),
     };
   },
-  worldToScreen,
+  worldToScreen: projectBeatSwarmWorldToScreen,
+  worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
+  getPresentationScale: getCurrentBeatSwarmPresentationScale,
   playFoundationBeat(event = {}) {
     const stepIndex = Math.max(0, Math.trunc(Number(event?.stepIndex) || 0));
     const triggerIndex = Math.max(0, Math.trunc(Number(event?.triggerIndex) || 0));
@@ -4200,7 +4207,9 @@ const musicMissileRuntime = createBeatSwarmMusicMissileRuntime({
   getPlayerWorld: () => getViewportCenterWorld(),
   getEnemies: () => enemies,
   isInputHeld: () => dragPointerId !== null,
-  worldToScreen,
+  worldToScreen: projectBeatSwarmWorldToScreen,
+  getPresentationScale: getCurrentBeatSwarmPresentationScale,
+  isWorldPointInsideGameplay: (point, marginLogical = 0) => beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(point, marginLogical) === true,
   getBeatClock: () => {
     const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
     const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
@@ -4332,7 +4341,8 @@ const pinballBouncerRuntime = createBeatSwarmPinballBouncerRuntime({
   getArenaCenterWorld: () => arenaCenterWorld || getViewportCenterWorld(),
   getArenaRadius: () => SWARM_ARENA_RADIUS_WORLD,
   getPlayerWorld: () => getViewportCenterWorld(),
-  worldToScreen,
+  worldToScreen: projectBeatSwarmWorldToScreen,
+  getPresentationScale: getCurrentBeatSwarmPresentationScale,
   getBeatClock: () => {
     const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
     const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
@@ -4459,8 +4469,12 @@ const leadBallRuntime = createBeatSwarmLeadBallRuntime({
   getArenaRadius: () => SWARM_ARENA_RADIUS_WORLD,
   getPlayerWorld: () => getViewportCenterWorld(),
   getEnemies: () => enemies,
-  worldToScreen,
+  worldToScreen: projectBeatSwarmWorldToScreen,
   screenToWorld,
+  getPresentationScale: getCurrentBeatSwarmPresentationScale,
+  worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
+  logicalToWorld: (point) => beatSwarmViewportProjection?.logicalToWorld?.(point),
+  isWorldPointInsideGameplay: (point, marginLogical = 0) => beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(point, marginLogical) === true,
   getBeatClock: () => {
     const beatIndex = Math.max(0, Math.trunc(Number(currentBeatIndex) || 0));
     const directorStepRaw = Number(ensureSwarmDirector().getSnapshot()?.stepIndex);
@@ -6107,10 +6121,10 @@ const HERO_VISUAL_MAIN_LANE_IDS = Object.freeze(['foundation_lane', 'primary_loo
 
 function isBeatSwarmEnemyVisible(enemy = null) {
   if (!enemy || enemy.retreating === true || enemy.__bsRemoved === true || !(Number(enemy.hp) > 0)) return false;
-  const screen = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
-  const width = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-  const height = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
-  return !!screen && screen.x >= 24 && screen.x <= width - 24 && screen.y >= 24 && screen.y <= height - 24;
+  return beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(
+    { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 },
+    -24,
+  ) === true;
 }
 
 function getEnemyHeroVisualRole(enemy = null) {
@@ -6397,30 +6411,14 @@ function maintainPrimaryFocusLaneVisibility(dtLike = 1 / 60) {
     );
     return;
   }
-  const screenWidth = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-  const screenHeight = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
   const center = getViewportCenterWorld();
-  const isVisible = (enemy) => {
-    const screen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
-    return !!screen
-      && Number.isFinite(screen.x)
-      && Number.isFinite(screen.y)
-      && screen.x >= 24
-      && screen.x <= screenWidth - 24
-      && screen.y >= 24
-      && screen.y <= screenHeight - 24;
-  };
-  const isComfortablyVisible = (enemy) => {
-    const screen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
-    const margin = Math.max(72, Math.min(128, Math.min(screenWidth, screenHeight) * 0.1));
-    return !!screen
-      && Number.isFinite(screen.x)
-      && Number.isFinite(screen.y)
-      && screen.x >= margin
-      && screen.x <= screenWidth - margin
-      && screen.y >= margin
-      && screen.y <= screenHeight - margin;
-  };
+  const isVisible = (enemy) => beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(
+    { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 }, -24,
+  ) === true;
+  const comfortableInsetLogical = 90;
+  const isComfortablyVisible = (enemy) => beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(
+    { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 }, -comfortableInsetLogical,
+  ) === true;
   for (const laneId of focusedLaneIds) {
     const laneEnemies = enemies.filter((enemy) => (
       enemy
@@ -6460,11 +6458,11 @@ function maintainPrimaryFocusLaneVisibility(dtLike = 1 / 60) {
     }
     const rankedCandidates = candidates
       .map((enemy) => {
-        const screen = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
-        const screenX = Number(screen?.x) || 0;
-        const screenY = Number(screen?.y) || 0;
-        const dx = Math.max(0, -screenX, screenX - screenWidth);
-        const dy = Math.max(0, -screenY, screenY - screenHeight);
+        const logical = beatSwarmViewportProjection?.worldToLogical?.({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
+        const logicalX = Number(logical?.x) || 0;
+        const logicalY = Number(logical?.y) || 0;
+        const dx = Math.max(0, -logicalX, logicalX - 1600);
+        const dy = Math.max(0, -logicalY, logicalY - 900);
         return { enemy, visible: isVisible(enemy), distance: Math.hypot(dx, dy) };
       })
       .sort((a, b) => (Number(b.visible) - Number(a.visible)) || (a.distance - b.distance))
@@ -6494,10 +6492,10 @@ function maintainPrimaryFocusLaneVisibility(dtLike = 1 / 60) {
       const quadrantDirection = [
         { x: 1, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
       ][quadrant] || { x: 1, y: -1 };
-      const targetScreenRadius = Math.min(screenWidth, screenHeight) * 0.2;
-      const targetWorld = screenToWorld({
-        x: (screenWidth * 0.5) + (quadrantDirection.x * targetScreenRadius * Math.SQRT1_2),
-        y: (screenHeight * 0.5) + (quadrantDirection.y * targetScreenRadius * Math.SQRT1_2),
+      const targetLogicalRadius = 180;
+      const targetWorld = beatSwarmViewportProjection?.logicalToWorld?.({
+        x: 800 + (quadrantDirection.x * targetLogicalRadius * Math.SQRT1_2),
+        y: 450 + (quadrantDirection.y * targetLogicalRadius * Math.SQRT1_2),
       });
       const targetX = Number(targetWorld?.x) || Number(arenaCenterWorld?.x) || Number(center?.x) || 0;
       const targetY = Number(targetWorld?.y) || Number(arenaCenterWorld?.y) || Number(center?.y) || 0;
@@ -7665,7 +7663,7 @@ function spawnComposerGroupHandoffReceiver(sourceEnemy = null, sourceGroup = nul
   const fallbackPoint = getRandomOffscreenSpawnPoint();
   if (fallbackPoint && Number.isFinite(fallbackPoint.x) && Number.isFinite(fallbackPoint.y)) {
     try {
-      const directSpawned = spawnComposerGroupEnemyAt(fallbackPoint.x, fallbackPoint.y, handoffGroup);
+      const directSpawned = spawnComposerGroupEnemyAtLogical(fallbackPoint.x, fallbackPoint.y, handoffGroup);
       if (directSpawned && !directSpawned?.retreating) return directSpawned;
     } catch {}
   }
@@ -9667,15 +9665,10 @@ function createPrimaryLoopLaneEventRuntime(options = null) {
     }
     const preferredId = Math.max(0, Math.trunc(Number(preferredEnemyId) || 0));
     const visibleMembers = aliveMembers.filter((enemy) => {
-      const screenPoint = typeof worldToScreen === 'function'
-        ? worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 })
-        : null;
-      if (!screenPoint || !Number.isFinite(screenPoint.x) || !Number.isFinite(screenPoint.y)) return false;
       const pad = 48;
-      return screenPoint.x >= -pad
-        && screenPoint.y >= -pad
-        && screenPoint.x <= ((Number(globalThis?.window?.innerWidth) || 0) + pad)
-        && screenPoint.y <= ((Number(globalThis?.window?.innerHeight) || 0) + pad);
+      return beatSwarmViewportProjection?.isWorldPointLikelyVisible?.(
+        { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 }, pad,
+      ) === true;
     });
     const pool = visibleMembers.length ? visibleMembers : aliveMembers;
     const sortedPool = pool.slice().sort((a, b) => {
@@ -12126,14 +12119,14 @@ function tryHandoffSingletonMusicGroup(sourceEnemy, reason = 'unknown', context 
             motifScopeKey: String(source?.motifScopeKey || '').trim(),
           }) || null;
         }
-        const point = getRandomOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
+        const point = getRandomOffscreenSpawnLogicalPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
         const emergencyDirectorSpawnId = (preferredReceiverSlot === 'large' && emergencyRhythmLargeReceiver)
           ? 'solo_rhythm_basic'
           : 'composer_basic';
         const emergencyLayer = laneId === 'foundation_lane'
           ? 'foundation'
           : (laneId === 'primary_loop_lane' ? 'loops' : 'sparkle');
-        return spawnEnemyAt(point.x, point.y, {
+        return spawnEnemyAtLogical(point, {
           role: sourceRole || BEAT_EVENT_ROLES.ACCENT,
           layer: emergencyLayer,
           note: sourceGroup.note,
@@ -18052,6 +18045,8 @@ function restoreBeatSwarmState(state) {
       chainContext: p.chainContext && typeof p.chainContext === 'object' ? { ...p.chainContext } : null,
       nextStages: sanitizeWeaponStages(p.nextStages),
       nextBeatIndex: Number.isFinite(p.nextBeatIndex) ? Math.max(0, Math.trunc(p.nextBeatIndex)) : null,
+      enteredGameplay: p.enteredGameplay === true || p.hasEnteredScreen === true,
+      hasEnteredScreen: p.enteredGameplay === true || p.hasEnteredScreen === true,
       el,
     });
   }
@@ -21046,9 +21041,9 @@ function ensureUi() {
   if (!spawnerRuntime) {
     spawnerRuntime = createBeatSwarmSpawnerRuntime({
       getLayerEl: () => spawnerLayerEl,
-      onSpawn: ({ point }) => {
-        if (!point) return;
-        spawnEnemyAt(point.x, point.y);
+      onSpawn: ({ col }) => {
+        const column = Math.max(0, Math.min(7, Math.trunc(Number(col) || 0)));
+        spawnEnemyAtLogical({ x: ((column + 0.5) / 8) * 1600, y: 450 });
       },
     });
     registerLoopgridSpawnerType(spawnerRuntime);
@@ -21083,8 +21078,34 @@ function ensureUi() {
   }
   updateBeatSwarmSubBoardPlayButton();
 }
-function setGameplayPaused(next) {
-  gameplayPaused = !!next;
+function publishBeatSwarmPauseDebugState() {
+  if (typeof globalThis === 'undefined') return;
+  try {
+    beatSwarmPauseDebugSnapshot = Object.freeze({
+      paused: !!gameplayPaused,
+      pauseUiVisible: !!pauseUiVisible,
+      pauseSource: String(pauseSource || 'none'),
+    });
+    Object.defineProperty(globalThis, '__BEAT_SWARM_PAUSE_STATE', {
+      configurable: true,
+      enumerable: false,
+      get: () => beatSwarmPauseDebugSnapshot,
+    });
+  } catch {}
+}
+function setGameplayPaused(next, options = null) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const resolved = resolveBeatSwarmPauseState(
+    { paused: gameplayPaused, pauseUiVisible, pauseSource },
+    {
+      paused: !!next,
+      pauseUiVisible: opts.pauseUiVisible,
+      pauseSource: opts.pauseSource || (next ? 'normal' : 'none'),
+    },
+  );
+  gameplayPaused = resolved.paused;
+  pauseUiVisible = resolved.pauseUiVisible;
+  pauseSource = resolved.pauseSource;
   if (!gameplayPaused && pauseScreenEl?.contains?.(document.activeElement)) {
     try { document.activeElement?.blur?.(); } catch {}
   }
@@ -21110,21 +21131,21 @@ function setGameplayPaused(next) {
     outerForceContinuousSeconds = 0;
     releaseForcePrimed = false;
   }
-  pauseLabelEl?.classList?.toggle?.('is-visible', gameplayPaused);
-  pauseScreenEl?.classList?.toggle?.('is-visible', gameplayPaused);
+  pauseLabelEl?.classList?.toggle?.('is-visible', pauseUiVisible);
+  pauseScreenEl?.classList?.toggle?.('is-visible', pauseUiVisible);
   if (pauseScreenEl) {
-    pauseScreenEl.setAttribute('aria-hidden', gameplayPaused ? 'false' : 'true');
-    if (gameplayPaused) {
+    pauseScreenEl.setAttribute('aria-hidden', pauseUiVisible ? 'false' : 'true');
+    if (pauseUiVisible) {
       pauseScreenEl.removeAttribute('inert');
     } else {
       pauseScreenEl.setAttribute('inert', '');
     }
   }
-  if (gameplayPaused) {
+  if (pauseUiVisible) {
     resetPausePreviewState();
     renderPauseWeaponUi();
     if (weaponSubBoardState.open) setPauseScreenSubBoardHidden(true);
-  } else {
+  } else if (!gameplayPaused) {
     teardownWeaponTuneToyEditor();
     stagePickerState.open = false;
     stagePickerState.slotIndex = -1;
@@ -21136,6 +21157,16 @@ function setGameplayPaused(next) {
     closeMusicThemeSubBoardEditor({ keepUi: true });
     stopComponentLivePreviews();
   }
+  publishBeatSwarmPauseDebugState();
+}
+function toggleSilentGameplayPause() {
+  if (!active) return false;
+  if (gameplayPaused) {
+    setGameplayPaused(false, { pauseSource: 'none', pauseUiVisible: false });
+  } else {
+    setGameplayPaused(true, { pauseSource: 'silent-debug', pauseUiVisible: false });
+  }
+  return true;
 }
 function playSwarmSoundEventImmediate(eventKey, volume = 1, noteName = null) {
   const key = String(eventKey || '').trim();
@@ -21391,14 +21422,16 @@ function updateHelpers(dt, centerWorld, scale) {
     },
     constants: {
       helperImpactDamage: HELPER_IMPACT_DAMAGE,
-      helperImpactRadiusPx: HELPER_IMPACT_RADIUS_PX,
+      helperImpactRadiusLogical: HELPER_IMPACT_RADIUS_LOGICAL,
       helperOrbitAngVel: HELPER_ORBIT_ANG_VEL,
       helperOrbitRadiusWorld: HELPER_ORBIT_RADIUS_WORLD,
     },
     helpers: {
       damageEnemy,
       getEnemyById: ({ enemyId: id }) => getEnemyById(id),
-      worldToScreen,
+      worldToScreen: projectBeatSwarmWorldToScreen,
+      worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
+      getPresentationScale: getCurrentBeatSwarmPresentationScale,
     },
   });
 }
@@ -23967,24 +24000,173 @@ function getBoardStageElement() {
   }
 }
 function getViewportCenterClient() {
-  const shipWrap = overlayEl?.querySelector?.('.beat-swarm-ship-wrap') || null;
-  if (shipWrap?.getBoundingClientRect) {
-    const rect = shipWrap.getBoundingClientRect();
-    if (rect && Number.isFinite(rect.left) && Number.isFinite(rect.width) && rect.width > 0 && rect.height > 0) {
-      return { x: rect.left + rect.width * 0.5, y: rect.top + rect.height * 0.5 };
-    }
-  }
+  const projected = beatSwarmViewportProjection?.logicalToScreen?.(BEAT_SWARM_LOGICAL_CENTER);
+  if (projected && Number.isFinite(projected.x) && Number.isFinite(projected.y)) return projected;
   return { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 };
 }
+function projectBeatSwarmLogicalSpawnPoint(point = null) {
+  const projected = beatSwarmViewportProjection?.logicalToScreen?.(point);
+  return projected && Number.isFinite(projected.x) && Number.isFinite(projected.y) ? projected : null;
+}
+function projectBeatSwarmLogicalSpawnLength(length = 0) {
+  return Number(beatSwarmViewportProjection?.logicalLengthToScreen?.(length)) || 0;
+}
+function spawnEnemyAtLogical(point = null, options = null) {
+  const screen = projectBeatSwarmLogicalSpawnPoint(point);
+  return screen ? spawnEnemyAt(screen.x, screen.y, { ...(options || {}), spawnLogicalPoint: point }) : null;
+}
+function spawnSpawnerEnemyAtLogical(point = null, options = null) {
+  const screen = projectBeatSwarmLogicalSpawnPoint(point);
+  return screen ? spawnSpawnerEnemyAt(screen.x, screen.y, { ...(options || {}), spawnLogicalPoint: point }) : null;
+}
+function spawnDrawSnakeEnemyAtLogical(point = null, options = null) {
+  const screen = projectBeatSwarmLogicalSpawnPoint(point);
+  return screen ? spawnDrawSnakeEnemyAt(screen.x, screen.y, { ...(options || {}), spawnLogicalPoint: point }) : null;
+}
+let beatSwarmPlayerWorldPosition = null;
 function getViewportCenterWorld() {
+  if (
+    beatSwarmResizeAnchorLocked
+    && beatSwarmPlayerWorldPosition
+    && Number.isFinite(beatSwarmPlayerWorldPosition.x)
+    && Number.isFinite(beatSwarmPlayerWorldPosition.y)
+  ) {
+    return { x: beatSwarmPlayerWorldPosition.x, y: beatSwarmPlayerWorldPosition.y };
+  }
   const c = getViewportCenterClient();
   const w = screenToWorld({ x: c.x, y: c.y });
-  return (w && Number.isFinite(w.x) && Number.isFinite(w.y)) ? w : { x: 0, y: 0 };
+  if (w && Number.isFinite(w.x) && Number.isFinite(w.y)) {
+    beatSwarmPlayerWorldPosition = { x: Number(w.x), y: Number(w.y) };
+    return { x: beatSwarmPlayerWorldPosition.x, y: beatSwarmPlayerWorldPosition.y };
+  }
+  return beatSwarmPlayerWorldPosition
+    ? { x: beatSwarmPlayerWorldPosition.x, y: beatSwarmPlayerWorldPosition.y }
+    : { x: 0, y: 0 };
 }
 let beatSwarmResizeAnchorWorld = null;
 let beatSwarmResizeRaf = 0;
 let beatSwarmResizeHandlerBound = false;
 let beatSwarmResizeAnchorLocked = false;
+let beatSwarmViewportSpaceController = null;
+let beatSwarmViewportSpaceSnapshot = null;
+let beatSwarmGameplayPresentationSpaceSnapshot = null;
+let beatSwarmViewportProjection = null;
+let beatSwarmWorldLogicalProjection = null;
+let beatSwarmViewportDebugSnapshot = null;
+let beatSwarmViewportSpaceDebugInstalled = false;
+
+function getCurrentBeatSwarmPresentationScale() {
+  return getBeatSwarmPresentationScale(beatSwarmGameplayPresentationSpaceSnapshot || beatSwarmViewportSpaceSnapshot);
+}
+
+function projectBeatSwarmWorldToLogical(point = null) {
+  return beatSwarmWorldLogicalProjection?.worldToLogical?.(point) || null;
+}
+
+function projectBeatSwarmLogicalToWorld(point = null) {
+  return beatSwarmWorldLogicalProjection?.logicalToWorld?.(point) || null;
+}
+
+function projectBeatSwarmWorldToScreen(point = null) {
+  const logical = beatSwarmViewportProjection?.worldToLogical?.(point) || projectBeatSwarmWorldToLogical(point);
+  return logical ? beatSwarmViewportProjection?.logicalToScreen?.(logical) || null : null;
+}
+
+function projectBeatSwarmWorldLengthToScreen(length = 0) {
+  const logicalLength = beatSwarmWorldLogicalProjection?.worldLengthToLogical?.(length) || 0;
+  return Number(beatSwarmViewportProjection?.logicalLengthToScreen?.(logicalLength)) || 0;
+}
+
+function getBeatSwarmPresentationDebugSnapshot() {
+  const presentationScale = getCurrentBeatSwarmPresentationScale();
+  const rawPresentationScale = getBeatSwarmRawPresentationScale(beatSwarmViewportSpaceSnapshot);
+  const makeEnemyEntry = (kind, enemy, logicalSize) => {
+    if (!enemy) return null;
+    const world = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+    return createBeatSwarmPresentationDebugEntry({
+      kind,
+      logicalPosition: beatSwarmViewportProjection?.worldToLogical?.(world),
+      screenPosition: projectBeatSwarmWorldToScreen(world),
+      logicalSize,
+      presentationScale,
+    });
+  };
+  const smallEnemy = enemies.find((enemy) => String(enemy?.enemyScale || enemy?.scale || '').toLowerCase() !== 'large') || null;
+  const largeEnemy = enemies.find((enemy) => String(enemy?.enemyScale || enemy?.scale || '').toLowerCase() === 'large') || null;
+  const projectile = projectiles[0] || null;
+  const projectileWorld = projectile ? { x: Number(projectile.wx) || 0, y: Number(projectile.wy) || 0 } : null;
+  return Object.freeze({
+    rawPresentationScale,
+    gameplayBodyPresentationScale: presentationScale,
+    presentationScale,
+    contentRect: beatSwarmViewportSpaceSnapshot?.contentRect || null,
+    player: createBeatSwarmPresentationDebugEntry({ kind: 'player', logicalPosition: BEAT_SWARM_LOGICAL_CENTER, screenPosition: getViewportCenterClient(), logicalSize: 28, presentationScale }),
+    smallEnemy: makeEnemyEntry('small-enemy', smallEnemy, 42),
+    largeEnemy: makeEnemyEntry('large-enemy', largeEnemy, 86),
+    projectile: projectileWorld ? createBeatSwarmPresentationDebugEntry({ kind: 'projectile', logicalPosition: beatSwarmViewportProjection?.worldToLogical?.(projectileWorld), screenPosition: projectBeatSwarmWorldToScreen(projectileWorld), logicalSize: 12, presentationScale }) : null,
+  });
+}
+
+function bindBeatSwarmViewportSpaceProjection() {
+  if (beatSwarmViewportSpaceController) return;
+  beatSwarmViewportSpaceController = createDomViewportSpace({
+    element: overlayEl,
+    logicalSize: BEAT_SWARM_LOGICAL_SIZE,
+  });
+  beatSwarmViewportSpaceController.subscribe((snapshot) => {
+    beatSwarmViewportSpaceSnapshot = snapshot;
+    beatSwarmGameplayPresentationSpaceSnapshot = createBeatSwarmGameplayPresentationSpace(snapshot);
+    beatSwarmViewportDebugSnapshot = createBeatSwarmViewportDebugSnapshot(snapshot);
+    try { overlayEl?.style?.setProperty?.('--bs-gameplay-presentation-scale', String(getBeatSwarmPresentationScale(snapshot))); } catch {}
+  });
+  beatSwarmWorldLogicalProjection = createBeatSwarmWorldLogicalProjection({
+    getPlayerWorld: () => beatSwarmPlayerWorldPosition || beatSwarmResizeAnchorWorld || { x: 0, y: 0 },
+    getWorldScale: getBeatSwarmCameraScale,
+  });
+  beatSwarmViewportProjection = createBeatSwarmProjectionBridge({
+    getViewportSpace: () => beatSwarmGameplayPresentationSpaceSnapshot,
+    boardWorldToScreen: worldToScreen,
+    boardScreenToWorld: screenToWorld,
+    worldToLogicalMap: projectBeatSwarmWorldToLogical,
+    logicalToWorldMap: projectBeatSwarmLogicalToWorld,
+  });
+  beatSwarmViewportSpaceController.start();
+  if (!beatSwarmViewportSpaceDebugInstalled) {
+    try {
+      Object.defineProperty(globalThis, '__BEAT_SWARM_VIEWPORT_SPACE', {
+        configurable: true,
+        enumerable: false,
+        get: () => beatSwarmViewportDebugSnapshot,
+      });
+      Object.defineProperty(globalThis, '__BEAT_SWARM_VIEWPORT_PROJECTION', {
+        configurable: true,
+        enumerable: false,
+        get: () => beatSwarmViewportProjection,
+      });
+      Object.defineProperty(globalThis, '__BEAT_SWARM_PLAYER_ANCHOR', {
+        configurable: true,
+        enumerable: false,
+        get: () => beatSwarmViewportSpaceSnapshot
+          ? createBeatSwarmPlayerAnchorSnapshot(beatSwarmViewportSpaceSnapshot, beatSwarmPlayerWorldPosition)
+          : null,
+      });
+      Object.defineProperty(globalThis, '__BEAT_SWARM_PRESENTATION', {
+        configurable: true,
+        enumerable: false,
+        get: getBeatSwarmPresentationDebugSnapshot,
+      });
+      beatSwarmViewportSpaceDebugInstalled = true;
+    } catch {}
+  }
+}
+
+function unbindBeatSwarmViewportSpaceProjection() {
+  beatSwarmViewportSpaceController?.stop?.();
+  beatSwarmViewportSpaceController = null;
+  beatSwarmGameplayPresentationSpaceSnapshot = null;
+  beatSwarmViewportProjection = null;
+  beatSwarmWorldLogicalProjection = null;
+}
 function getBeatSwarmCameraScale() {
   const z = getZoomState();
   const s = Number.isFinite(z?.targetScale)
@@ -23998,6 +24180,7 @@ function updateBeatSwarmResizeAnchor(worldPoint = null, force = false) {
     ? worldPoint
     : getViewportCenterWorld();
   beatSwarmResizeAnchorWorld = { x: Number(w.x) || 0, y: Number(w.y) || 0 };
+  beatSwarmPlayerWorldPosition = { x: beatSwarmResizeAnchorWorld.x, y: beatSwarmResizeAnchorWorld.y };
 }
 function refreshBeatSwarmProjectedVisualsForResize() {
   const scale = getBeatSwarmCameraScale();
@@ -24008,8 +24191,10 @@ function refreshBeatSwarmProjectedVisualsForResize() {
 }
 function onBeatSwarmWindowResize() {
   if (!active) return;
-  const anchor = beatSwarmResizeAnchorWorld && Number.isFinite(beatSwarmResizeAnchorWorld.x) && Number.isFinite(beatSwarmResizeAnchorWorld.y)
-    ? { x: beatSwarmResizeAnchorWorld.x, y: beatSwarmResizeAnchorWorld.y }
+  const anchor = beatSwarmPlayerWorldPosition && Number.isFinite(beatSwarmPlayerWorldPosition.x) && Number.isFinite(beatSwarmPlayerWorldPosition.y)
+    ? { x: beatSwarmPlayerWorldPosition.x, y: beatSwarmPlayerWorldPosition.y }
+    : beatSwarmResizeAnchorWorld && Number.isFinite(beatSwarmResizeAnchorWorld.x) && Number.isFinite(beatSwarmResizeAnchorWorld.y)
+      ? { x: beatSwarmResizeAnchorWorld.x, y: beatSwarmResizeAnchorWorld.y }
     : getViewportCenterWorld();
   if (beatSwarmResizeRaf) {
     try { cancelAnimationFrame(beatSwarmResizeRaf); } catch {}
@@ -24022,7 +24207,9 @@ function onBeatSwarmWindowResize() {
       beatSwarmResizeAnchorLocked = false;
       return;
     }
+    beatSwarmViewportSpaceController?.update?.();
     snapCameraToWorld(anchor, getBeatSwarmCameraScale());
+    beatSwarmPlayerWorldPosition = { x: anchor.x, y: anchor.y };
     beatSwarmResizeAnchorLocked = false;
     updateBeatSwarmResizeAnchor(anchor, true);
     refreshBeatSwarmProjectedVisualsForResize();
@@ -24485,8 +24672,8 @@ function updateSpawnerLinkedEnemyLine(enemy) {
   }
   const fromWorld = getSpawnerNodeCellWorld(spawner, nodeStep);
   const toWorld = { x: Number(linkedEnemy.wx) || 0, y: Number(linkedEnemy.wy) || 0 };
-  const from = fromWorld ? worldToScreen(fromWorld) : null;
-  const to = worldToScreen(toWorld);
+  const from = fromWorld ? projectBeatSwarmWorldToScreen(fromWorld) : null;
+  const to = projectBeatSwarmWorldToScreen(toWorld);
   if (!from || !to || !Number.isFinite(from.x) || !Number.isFinite(from.y) || !Number.isFinite(to.x) || !Number.isFinite(to.y)) {
     if (linkedEnemy.linkedSpawnerLineVisible !== false) {
       line.style.opacity = '0';
@@ -24994,10 +25181,11 @@ function processPendingEnemyDeaths(nowTs = performance.now(), beatIndex = curren
       }
       continue;
     }
-    const s = worldToScreen({ x: Number(d.wx) || 0, y: Number(d.wy) || 0 });
+    const s = projectBeatSwarmWorldToScreen({ x: Number(d.wx) || 0, y: Number(d.wy) || 0 });
     if (s && Number.isFinite(s.x) && Number.isFinite(s.y)) {
       el.style.setProperty('--bs-death-x', `${s.x}px`);
       el.style.setProperty('--bs-death-y', `${s.y}px`);
+      el.style.setProperty('--bs-death-presentation-scale', `${getCurrentBeatSwarmPresentationScale()}`);
     }
     if (!d.popped && (beat >= (Number(d.popBeat) || 0) || now >= (Number(d.fallbackPopAt) || 0))) {
       finalizePendingEnemyDeath(d, beat);
@@ -25109,7 +25297,7 @@ function damageEnemy(enemy, amount = 1, options = null) {
       const y = Number(m[2]);
       return (Number.isFinite(x) && Number.isFinite(y)) ? { x, y } : null;
     })();
-    const s0 = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 }) || screenFromTransform || {
+    const s0 = projectBeatSwarmWorldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 }) || screenFromTransform || {
       x: window.innerWidth * 0.5,
       y: window.innerHeight * 0.5,
     };
@@ -25131,6 +25319,7 @@ function damageEnemy(enemy, amount = 1, options = null) {
           if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)) {
             el.style.setProperty('--bs-death-x', `${s0.x}px`);
             el.style.setProperty('--bs-death-y', `${s0.y}px`);
+            el.style.setProperty('--bs-death-presentation-scale', `${getCurrentBeatSwarmPresentationScale()}`);
           } else {
             el.style.setProperty('--bs-death-x', '-9999px');
             el.style.setProperty('--bs-death-y', '-9999px');
@@ -25268,7 +25457,7 @@ function spawnOnboardingAsteroidWave() {
       },
     }) || getRandomOffscreenSpawnPoint();
     if (!point) continue;
-    const enemy = spawnEnemyAt(point.x, point.y, {
+    const enemy = spawnEnemyAtLogical(point, {
       hp: 4,
       role: BEAT_EVENT_ROLES.MOTION,
       layer: 'support',
@@ -25317,32 +25506,32 @@ function isMusicCreationTargetReserveActive() {
     || leadBallRuntime.isActive?.() === true;
 }
 function getMusicCreationTargetAnchor(spawnIndex = 0) {
-  const viewportWidth = Math.max(320, Number(window?.innerWidth) || 0);
-  const viewportHeight = Math.max(240, Number(window?.innerHeight) || 0);
+  const viewportWidth = 1600;
+  const viewportHeight = 900;
   const slotCount = 16;
   const slot = ((Math.trunc(Number(spawnIndex) || 0) % slotCount) + slotCount) % slotCount;
   const angle = (-Math.PI * 0.5) + ((slot / slotCount) * Math.PI * 2);
   const radiusScale = slot % 2 === 0 ? 0.94 : 0.74;
-  const anchorScreen = {
+  const anchorLogical = {
     x: (viewportWidth * 0.5) + (Math.cos(angle) * viewportWidth * 0.36 * radiusScale),
     y: (viewportHeight * 0.5) + (Math.sin(angle) * viewportHeight * 0.32 * radiusScale),
   };
-  const anchorWorld = screenToWorld(anchorScreen);
+  const anchorWorld = beatSwarmViewportProjection?.logicalToWorld?.(anchorLogical);
   return {
     slot,
-    screen: anchorScreen,
+    logical: anchorLogical,
     world: anchorWorld && Number.isFinite(anchorWorld.x) && Number.isFinite(anchorWorld.y)
       ? anchorWorld
       : (arenaCenterWorld || getViewportCenterWorld()),
   };
 }
-function getLeadBallReserveSpawnScreen(anchor = null) {
-  const viewportWidth = Math.max(320, Number(window?.innerWidth) || 0);
-  const viewportHeight = Math.max(240, Number(window?.innerHeight) || 0);
-  const anchorScreen = anchor?.screen || { x: viewportWidth * 0.5, y: viewportHeight * 0.5 };
+function getLeadBallReserveSpawnLogical(anchor = null) {
+  const viewportWidth = 1600;
+  const viewportHeight = 900;
+  const anchorLogical = anchor?.logical || { x: viewportWidth * 0.5, y: viewportHeight * 0.5 };
   const outward = normalizeDir(
-    anchorScreen.x - viewportWidth * 0.5,
-    anchorScreen.y - viewportHeight * 0.5,
+    anchorLogical.x - viewportWidth * 0.5,
+    anchorLogical.y - viewportHeight * 0.5,
     1,
     0,
   );
@@ -25358,18 +25547,18 @@ function getLeadBallReserveSpawnScreen(anchor = null) {
   const distances = [];
   if (Math.abs(backward.x) > 0.0001) {
     const edgeX = backward.x > 0 ? viewportWidth : 0;
-    const distanceX = (edgeX - anchorScreen.x) / backward.x;
+    const distanceX = (edgeX - anchorLogical.x) / backward.x;
     if (distanceX > 0) distances.push(distanceX);
   }
   if (Math.abs(backward.y) > 0.0001) {
     const edgeY = backward.y > 0 ? viewportHeight : 0;
-    const distanceY = (edgeY - anchorScreen.y) / backward.y;
+    const distanceY = (edgeY - anchorLogical.y) / backward.y;
     if (distanceY > 0) distances.push(distanceY);
   }
   const edgeDistance = distances.length ? Math.min(...distances) : Math.max(viewportWidth, viewportHeight) * 0.5;
   return {
-    x: anchorScreen.x + backward.x * (edgeDistance + 90),
-    y: anchorScreen.y + backward.y * (edgeDistance + 90),
+    x: anchorLogical.x + backward.x * (edgeDistance + 90),
+    y: anchorLogical.y + backward.y * (edgeDistance + 90),
   };
 }
 function spawnMusicCreationTargetRock(options = null) {
@@ -25380,7 +25569,7 @@ function spawnMusicCreationTargetRock(options = null) {
     ? Math.max(0, Math.trunc(Number(options.anchorSlot) || 0))
     : spawnIndex;
   const distributedAnchor = getMusicCreationTargetAnchor(anchorIndex);
-  const point = (leadBallReserve ? getLeadBallReserveSpawnScreen(distributedAnchor) : null) || getRandomOffscreenSpawnPointRuntime({
+  const point = (leadBallReserve ? getLeadBallReserveSpawnLogical(distributedAnchor) : null) || getRandomOffscreenSpawnPointRuntime({
     constants: { enemyFallbackSpawnMarginPx: ENEMY_FALLBACK_SPAWN_MARGIN_PX },
     helpers: { randRange },
     memberIndex: spawnIndex % 8,
@@ -25392,7 +25581,7 @@ function spawnMusicCreationTargetRock(options = null) {
     },
   }) || getRandomOffscreenSpawnPoint();
   if (!point) return false;
-  const enemy = spawnEnemyAt(point.x, point.y, {
+  const enemy = spawnEnemyAtLogical(point, {
     hp: 6,
     role: BEAT_EVENT_ROLES.MOTION,
     layer: 'support',
@@ -25406,8 +25595,8 @@ function spawnMusicCreationTargetRock(options = null) {
     enemy.leadBallReserve = true;
     enemy.leadBallReserveAnchorOffsetX = (Number(distributedAnchor?.world?.x) || 0) - (Number(center?.x) || 0);
     enemy.leadBallReserveAnchorOffsetY = (Number(distributedAnchor?.world?.y) || 0) - (Number(center?.y) || 0);
-    enemy.leadBallReserveAnchorScreenXRatio = (Number(distributedAnchor?.screen?.x) || 0) / Math.max(1, Number(window?.innerWidth) || 1);
-    enemy.leadBallReserveAnchorScreenYRatio = (Number(distributedAnchor?.screen?.y) || 0) / Math.max(1, Number(window?.innerHeight) || 1);
+    enemy.leadBallReserveAnchorScreenXRatio = (Number(distributedAnchor?.logical?.x) || 0) / 1600;
+    enemy.leadBallReserveAnchorScreenYRatio = (Number(distributedAnchor?.logical?.y) || 0) / 900;
     enemy.leadBallReserveSettled = false;
     enemy.combatPersistentOffscreen = false;
   }
@@ -25479,10 +25668,8 @@ function findEligibleMusicContributionCarrier(centerWorld = null, options = null
       const bPreferred = (preferredId > 0 && Math.trunc(Number(b.id) || 0) === preferredId)
         || (preferredType && String(b.enemyType || '').trim().toLowerCase() === preferredType) ? 1 : 0;
       if (aPreferred !== bPreferred) return bPreferred - aPreferred;
-      const aScreen = worldToScreen({ x: Number(a.wx) || 0, y: Number(a.wy) || 0 });
-      const bScreen = worldToScreen({ x: Number(b.wx) || 0, y: Number(b.wy) || 0 });
-      const aVisible = aScreen && aScreen.x >= 0 && aScreen.x <= window.innerWidth && aScreen.y >= 0 && aScreen.y <= window.innerHeight ? 1 : 0;
-      const bVisible = bScreen && bScreen.x >= 0 && bScreen.x <= window.innerWidth && bScreen.y >= 0 && bScreen.y <= window.innerHeight ? 1 : 0;
+      const aVisible = beatSwarmViewportProjection?.isWorldPointInsideGameplay?.({ x: Number(a.wx) || 0, y: Number(a.wy) || 0 }) === true ? 1 : 0;
+      const bVisible = beatSwarmViewportProjection?.isWorldPointInsideGameplay?.({ x: Number(b.wx) || 0, y: Number(b.wy) || 0 }) === true ? 1 : 0;
       if (aVisible !== bVisible) return bVisible - aVisible;
       const ad = Math.hypot((Number(a.wx) || 0) - Number(center.x), (Number(a.wy) || 0) - Number(center.y));
       const bd = Math.hypot((Number(b.wx) || 0) - Number(center.x), (Number(b.wy) || 0) - Number(center.y));
@@ -25539,7 +25726,7 @@ function spawnMusicMissileCarrierEnemy(centerWorld = null) {
   const spawnAsOnboardingAsteroid = foundationTarget
     && weaponGateOnboardingSequenceMode === 'missiles_bouncers'
     && !isMusicLaneUnlockedForEnemies('foundation_lane');
-  const enemy = spawnEnemyAt(point.x, point.y, {
+  const enemy = spawnEnemyAtLogical(point, {
     hp: 4,
     role: missileTarget.role === 'bass' || foundationTarget ? BEAT_EVENT_ROLES.BASS : BEAT_EVENT_ROLES.ACCENT,
     instrumentId: '',
@@ -25594,7 +25781,7 @@ function maintainLeadBallContributionCarrier(centerWorld = null) {
       },
     }) || getRandomOffscreenSpawnPoint();
     if (point) {
-      carrier = spawnEnemyAt(point.x, point.y, {
+      carrier = spawnEnemyAtLogical(point, {
         hp: 4,
         role: BEAT_EVENT_ROLES.LEAD,
         layer: 'lead',
@@ -25657,7 +25844,7 @@ function spawnTapOrbFoundationCarrierWave(centerWorld = null, options = null) {
       },
     }) || getRandomOffscreenSpawnPoint();
     if (!point) continue;
-    const enemy = spawnEnemyAt(point.x, point.y, {
+    const enemy = spawnEnemyAtLogical(point, {
       hp: spec.carrier ? 3 : 1,
       role: spec.carrier
         ? (authoringTarget.role === 'bass' ? BEAT_EVENT_ROLES.BASS : BEAT_EVENT_ROLES.ACCENT)
@@ -25804,9 +25991,31 @@ function clearPickups() {
     try { p?.el?.remove?.(); } catch {}
   }
 }
-function clearProjectiles() {
+function recordBeatSwarmProjectileRemovalDiagnostic(projectile, reason = 'unknown') {
+  try {
+    const world = { x: Number(projectile?.wx) || 0, y: Number(projectile?.wy) || 0 };
+    const entry = createBeatSwarmProjectileRemovalDiagnostic({
+      projectile,
+      reason,
+      logicalPosition: beatSwarmViewportProjection?.worldToLogical?.(world),
+      screenPosition: projectBeatSwarmWorldToScreen(world),
+      logicalBounds: beatSwarmViewportProjection?.getLogicalBounds?.() || null,
+      lifetimeMarginLogical: PROJECTILE_DESPAWN_OFFSCREEN_PAD_PX,
+      presentationScale: getCurrentBeatSwarmPresentationScale(),
+    });
+    const history = Array.isArray(globalThis.__BEAT_SWARM_PROJECTILE_REMOVALS)
+      ? globalThis.__BEAT_SWARM_PROJECTILE_REMOVALS
+      : [];
+    history.push(entry);
+    if (history.length > 32) history.splice(0, history.length - 32);
+    globalThis.__BEAT_SWARM_PROJECTILE_REMOVALS = history;
+    globalThis.__LAST_BEAT_SWARM_PROJECTILE_REMOVAL = entry;
+  } catch {}
+}
+function clearProjectiles(reason = 'bulk_clear') {
   while (projectiles.length) {
     const p = projectiles.pop();
+    recordBeatSwarmProjectileRemovalDiagnostic(p, reason);
     try { p?.el?.remove?.(); } catch {}
   }
 }
@@ -25831,16 +26040,9 @@ function getEnemyPressureCullPriority(enemy) {
   if (enemy.retreating || lifecycle === 'retiring') return 0;
   if (type === 'dumb' && Math.trunc(Number(enemy?.linkedSpawnerId) || 0) > 0) return 1;
   if (type === 'dumb') return 2;
-  const screen = (() => {
-    try { return worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 }); } catch { return null; }
-  })();
-  const offscreen = !screen
-    || !Number.isFinite(screen.x)
-    || !Number.isFinite(screen.y)
-    || screen.x < -160
-    || screen.y < -160
-    || screen.x > ((Number(window.innerWidth) || 0) + 160)
-    || screen.y > ((Number(window.innerHeight) || 0) + 160);
+  const offscreen = beatSwarmViewportProjection?.isWorldPointLikelyVisible?.(
+    { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 }, 160,
+  ) !== true;
   if (offscreen) return 3;
   if (type === 'composer-group-member') {
     const lane = String(enemy?.musicLaneId || '').trim().toLowerCase();
@@ -25879,6 +26081,7 @@ function clearRuntimeForWeaponSlot(slotIndex) {
     const p = projectiles[i];
     const v = Number(p?.chainWeaponSlotIndex);
     if ((Number.isFinite(v) ? Math.trunc(v) : -1) !== idx) continue;
+    recordBeatSwarmProjectileRemovalDiagnostic(p, 'weapon_slot_runtime_clear');
     try { p?.el?.remove?.(); } catch {}
     projectiles.splice(i, 1);
   }
@@ -25923,6 +26126,7 @@ function clearHomingMissiles() {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const p = projectiles[i];
     if (String(p?.kind || '') !== 'homing-missile') continue;
+    recordBeatSwarmProjectileRemovalDiagnostic(p, 'homing_runtime_clear');
     try { p?.el?.remove?.(); } catch {}
     projectiles.splice(i, 1);
   }
@@ -25963,7 +26167,7 @@ function spawnEnemyAt(clientX, clientY, options = null) {
   }
   const el = pooled?.el instanceof HTMLElement ? pooled.el : document.createElement('div');
   el.className = 'beat-swarm-enemy';
-  const s0 = worldToScreen({ x: w.x, y: w.y });
+  const s0 = projectBeatSwarmWorldToScreen({ x: w.x, y: w.y });
   if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)) {
     el.style.transform = `translate(${s0.x}px, ${s0.y}px) scale(${ENEMY_SPAWN_START_SCALE})`;
   } else {
@@ -25997,6 +26201,8 @@ function spawnEnemyAt(clientX, clientY, options = null) {
     id: enemyIdSeq++,
     wx: w.x,
     wy: w.y,
+    spawnLogicalX: Number.isFinite(Number(options?.spawnLogicalPoint?.x)) ? Number(options.spawnLogicalPoint.x) : null,
+    spawnLogicalY: Number.isFinite(Number(options?.spawnLogicalPoint?.y)) ? Number(options.spawnLogicalPoint.y) : null,
     vx: 0,
     vy: 0,
     soundNote: getRandomSwarmPentatonicNote(),
@@ -26009,7 +26215,7 @@ function spawnEnemyAt(clientX, clientY, options = null) {
     enemyType: 'dumb',
     musicalRole: BEAT_EVENT_ROLES.ACCENT,
     composerRole: BEAT_EVENT_ROLES.ACCENT,
-    projectileHitRadiusPx: 0,
+    projectileHitRadiusLogical: 0,
     linkedSpawnerId,
     linkedSpawnerStepIndex,
     linkedSpawnerLineEl,
@@ -27598,7 +27804,7 @@ function spawnSpawnerEnemyAt(clientX, clientY, options = null) {
   }
   el.appendChild(grid);
   enemyLayerEl.appendChild(el);
-  const s0 = worldToScreen({ x: w.x, y: w.y });
+  const s0 = projectBeatSwarmWorldToScreen({ x: w.x, y: w.y });
   if (s0 && Number.isFinite(s0.x) && Number.isFinite(s0.y)) {
     el.style.transform = `translate(${s0.x}px, ${s0.y}px) scale(${ENEMY_SPAWN_START_SCALE})`;
   } else {
@@ -27613,6 +27819,8 @@ function spawnSpawnerEnemyAt(clientX, clientY, options = null) {
     id: enemyIdSeq++,
     wx: w.x,
     wy: w.y,
+    spawnLogicalX: Number.isFinite(Number(options?.spawnLogicalPoint?.x)) ? Number(options.spawnLogicalPoint.x) : null,
+    spawnLogicalY: Number.isFinite(Number(options?.spawnLogicalPoint?.y)) ? Number(options.spawnLogicalPoint.y) : null,
     vx: 0,
     vy: 0,
     soundNote: getRandomSwarmPentatonicNote(),
@@ -27623,7 +27831,7 @@ function spawnSpawnerEnemyAt(clientX, clientY, options = null) {
     spawnT: 0,
     spawnDur: ENEMY_SPAWN_DURATION,
     enemyType: 'spawner',
-    projectileHitRadiusPx: SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_PX,
+    projectileHitRadiusLogical: SPAWNER_ENEMY_PROJECTILE_HIT_RADIUS_LOGICAL,
     spawnerSteps: profile.steps.slice(0, 8),
     spawnerNoteIndices: profile.noteIndices.slice(0, 8),
     spawnerNotePalette: Array.isArray(profile.notePalette) ? profile.notePalette.slice() : Array.from(LOOPGRID_FALLBACK_NOTE_PALETTE),
@@ -27720,8 +27928,8 @@ function spawnSpawnerEnemyOffscreen(options = null) {
     });
   }
   if (currentBarIndex < 4) return null;
-  const point = getQuadrantAwareOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
-  return spawnSpawnerEnemyAt(point.x, point.y, options);
+  const point = getQuadrantAwareOffscreenSpawnLogicalPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
+  return spawnSpawnerEnemyAtLogical(point, options);
 }
 function maintainSpawnerEnemyPopulation() {
   if (!SPAWNER_ENEMY_ENABLED) return;
@@ -28449,13 +28657,11 @@ function flashDrawSnakeNode(enemy, nodeIndex) {
   node.style.setProperty('--bs-drawsnake-node-pulse', '1');
   if (!node.classList.contains('is-spawn')) node.classList.add('is-spawn');
 }
-function getOffscreenSeedDirection(clientX, clientY) {
-  const screenW = Math.max(1, Number(window.innerWidth) || 0);
-  const screenH = Math.max(1, Number(window.innerHeight) || 0);
-  const leftOver = Math.max(0, -Number(clientX));
-  const rightOver = Math.max(0, Number(clientX) - screenW);
-  const topOver = Math.max(0, -Number(clientY));
-  const bottomOver = Math.max(0, Number(clientY) - screenH);
+function getOffscreenSeedDirection(logicalX, logicalY) {
+  const leftOver = Math.max(0, -Number(logicalX));
+  const rightOver = Math.max(0, Number(logicalX) - 1600);
+  const topOver = Math.max(0, -Number(logicalY));
+  const bottomOver = Math.max(0, Number(logicalY) - 900);
   let dirX = 0;
   let dirY = 0;
   if (leftOver > 0) dirX += 1;
@@ -28470,19 +28676,13 @@ function getArenaDiagonalQuadrantOccupancy(options = null) {
   const includeIncoming = options?.includeIncoming !== false;
   const center = arenaCenterWorld || getViewportCenterWorld();
   const counts = [0, 0, 0, 0];
-  const screenW = Math.max(1, Number(window.innerWidth) || 0);
-  const screenH = Math.max(1, Number(window.innerHeight) || 0);
-  const incomingPad = Math.max(120, Math.min(screenW, screenH) * 0.32);
+  const incomingPadLogical = 288;
   for (const enemy of enemies) {
     if (!enemy || enemy.__bsRemoved === true || enemy.retreating === true || !(Number(enemy.hp) > 0)) continue;
-    const screen = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
-    if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) continue;
-    const visible = screen.x >= 0 && screen.x <= screenW && screen.y >= 0 && screen.y <= screenH;
+    const point = { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 };
+    const visible = beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(point) === true;
     const incoming = includeIncoming
-      && screen.x >= -incomingPad
-      && screen.x <= screenW + incomingPad
-      && screen.y >= -incomingPad
-      && screen.y <= screenH + incomingPad;
+      && beatSwarmViewportProjection?.isWorldPointLikelyVisible?.(point, incomingPadLogical) === true;
     if (!visible && !incoming) continue;
     const dx = (Number(enemy.wx) || 0) - (Number(center?.x) || 0);
     const dy = (Number(enemy.wy) || 0) - (Number(center?.y) || 0);
@@ -28497,10 +28697,10 @@ function getLeastOccupiedArenaDiagonalQuadrant(countsLike = null) {
   const candidates = [0, 1, 2, 3].filter((index) => (Number(counts[index]) || 0) === minimum);
   return candidates[Math.floor(Math.random() * Math.max(1, candidates.length))] ?? 0;
 }
-function getQuadrantAwareOffscreenSpawnClientPoint(marginPx = ENEMY_FALLBACK_SPAWN_MARGIN_PX) {
-  const screenW = Math.max(1, Number(window.innerWidth) || 0);
-  const screenH = Math.max(1, Number(window.innerHeight) || 0);
-  const margin = Math.max(8, Number(marginPx) || 42);
+function getQuadrantAwareOffscreenSpawnLogicalPoint(marginLogical = ENEMY_FALLBACK_SPAWN_MARGIN_PX) {
+  const screenW = 1600;
+  const screenH = 900;
+  const margin = Math.max(8, Number(marginLogical) || 42);
   const quadrant = getLeastOccupiedArenaDiagonalQuadrant(getArenaDiagonalQuadrantOccupancy({ includeIncoming: true }));
   const right = quadrant === 0 || quadrant === 1;
   const bottom = quadrant === 1 || quadrant === 2;
@@ -28517,8 +28717,8 @@ function getQuadrantAwareOffscreenSpawnClientPoint(marginPx = ENEMY_FALLBACK_SPA
     arenaQuadrant: quadrant,
   };
 }
-function getRandomOffscreenSpawnClientPoint(marginPx = ENEMY_FALLBACK_SPAWN_MARGIN_PX) {
-  return getQuadrantAwareOffscreenSpawnClientPoint(marginPx);
+function getRandomOffscreenSpawnLogicalPoint(marginLogical = ENEMY_FALLBACK_SPAWN_MARGIN_PX) {
+  return getQuadrantAwareOffscreenSpawnLogicalPoint(marginLogical);
 }
 function getPerfEnemyRepeatTargetCount(enemyType = '', requestedCount = null) {
   const type = String(enemyType || '').trim().toLowerCase();
@@ -28869,20 +29069,21 @@ function triggerSingleComposerGroupEnemyAbility(options = null) {
     if (Number.isFinite(targetAngle)) enemy.combatFacingAngle = targetAngle;
   };
   const noteAbilityEvent = (result = 'triggered') => {
-    const performerScreen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
-    const viewportWidth = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-    const viewportHeight = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
-    const performerVisibleAtDispatch = !!performerScreen
-      && performerScreen.x >= 0
-      && performerScreen.x <= viewportWidth
-      && performerScreen.y >= 0
-      && performerScreen.y <= viewportHeight;
+    const performerVisibility = beatSwarmViewportProjection?.classifyWorldPoint?.({
+      x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0,
+    }) || null;
+    const performerScreen = performerVisibility?.screen || null;
+    const performerVisibleAtDispatch = performerVisibility?.insideGameplay === true;
     noteMusicSystemEvent('enemy_basic_ability_fired', {
       enemyId: Math.max(0, Math.trunc(Number(enemy?.id) || 0)),
       groupId,
       laneId: String(enemy?.musicLaneId || options?.group?.musicLaneId || '').trim().toLowerCase(),
       scale: String(enemy?.enemyScale || enemy?.gameplayDescriptor?.scale || '').trim().toLowerCase(),
       laneEventMode: String(enemy?.laneEventMode || enemy?.gameplayDescriptor?.laneEventMode || '').trim().toLowerCase(),
+      performerLogicalX: Number(performerVisibility?.logical?.x),
+      performerLogicalY: Number(performerVisibility?.logical?.y),
+      performerGameplayVisibleAtDispatch: performerVisibleAtDispatch,
+      performerPresentationVisibleAtDispatch: performerVisibility?.insidePresentation === true,
       liveGroupMemberCount: group ? getAliveEnemiesByIds(group?.memberIds).length : 0,
       abilityFamily,
       abilitySilhouette: String(enemy?.gameplayDescriptor?.abilitySilhouette || '').trim().toLowerCase(),
@@ -29070,11 +29271,10 @@ function triggerPerfRepeatRhythmPulse(enemiesLike, beatIndex = currentBeatIndex,
     const bi = Math.trunc(Number(b?.formationMemberIndex) || 0);
     return ai - bi;
   });
-  const screenW = Math.max(1, Number(window.innerWidth) || 0);
-  const screenH = Math.max(1, Number(window.innerHeight) || 0);
   const onScreen = (enemy) => {
-    const s = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
-    return !!(s && Number.isFinite(s.x) && Number.isFinite(s.y) && s.x >= 0 && s.x <= screenW && s.y >= 0 && s.y <= screenH);
+    return beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(
+      { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 }, 0,
+    ) === true;
   };
   const preferred = sorted.slice().sort((a, b) => {
     const aOn = onScreen(a) ? 1 : 0;
@@ -29620,9 +29820,9 @@ function maintainPerfEnemyRepeatMode() {
     }
     if (perfEnemyRepeatRuntime.behavior === 'advancing_line' && aliveMembers.length && perfEnemyRepeatRuntime.enemyArchitectureTest !== true) {
       const leader = aliveMembers.slice().sort((a, b) => Math.trunc(Number(a?.formationMemberIndex) || 0) - Math.trunc(Number(b?.formationMemberIndex) || 0))[0] || null;
-      const leaderScreen = leader ? worldToScreen({ x: Number(leader.wx) || 0, y: Number(leader.wy) || 0 }) : null;
+      const leaderLogical = leader ? beatSwarmViewportProjection?.worldToLogical?.({ x: Number(leader.wx) || 0, y: Number(leader.wy) || 0 }) : null;
       const movingRight = Number(leader?.behavioralFormationPathDirX || group?.behavioralFormationPathDirX || 1) >= 0;
-      const exitedFarSide = !!(leaderScreen && Number.isFinite(leaderScreen.x) && (movingRight ? leaderScreen.x > (window.innerWidth + 56) : leaderScreen.x < -56));
+      const exitedFarSide = !!(leaderLogical && Number.isFinite(leaderLogical.x) && (movingRight ? leaderLogical.x > 1656 : leaderLogical.x < -56));
       if (exitedFarSide) {
         for (const enemy of aliveMembers) {
           if (!enemy) continue;
@@ -29713,7 +29913,11 @@ function spawnDrawSnakeEnemyAt(clientX, clientY, options = null) {
   const mappedRole = normalizeSwarmRole(role || 'lead', BEAT_EVENT_ROLES.LEAD);
   const existingSnakeCount = enemies.filter((e) => String(e?.enemyType || '') === 'drawsnake').length;
   const callResponseLane = normalizeCallResponseLane(options?.callResponseLane, (existingSnakeCount % 2) === 0 ? 'call' : 'response');
-  const offscreenSeedDir = getOffscreenSeedDirection(clientX, clientY);
+  const spawnLogicalPoint = options?.spawnLogicalPoint;
+  const offscreenSeedDir = getOffscreenSeedDirection(
+    Number.isFinite(Number(spawnLogicalPoint?.x)) ? Number(spawnLogicalPoint.x) : 800,
+    Number.isFinite(Number(spawnLogicalPoint?.y)) ? Number(spawnLogicalPoint.y) : 450,
+  );
   const seedAng = Math.random() * Math.PI * 2;
   const seedDirX = Number(offscreenSeedDir?.x) || Math.cos(seedAng);
   const seedDirY = Number(offscreenSeedDir?.y) || Math.sin(seedAng);
@@ -29725,6 +29929,8 @@ function spawnDrawSnakeEnemyAt(clientX, clientY, options = null) {
     id: enemyIdSeq++,
     wx: w.x,
     wy: w.y,
+    spawnLogicalX: Number.isFinite(Number(options?.spawnLogicalPoint?.x)) ? Number(options.spawnLogicalPoint.x) : null,
+    spawnLogicalY: Number.isFinite(Number(options?.spawnLogicalPoint?.y)) ? Number(options.spawnLogicalPoint.y) : null,
     vx: 0,
     vy: 0,
     soundNote: getRandomSwarmPentatonicNote(),
@@ -29735,7 +29941,7 @@ function spawnDrawSnakeEnemyAt(clientX, clientY, options = null) {
     spawnT: 0,
     spawnDur: ENEMY_SPAWN_DURATION,
     enemyType: 'drawsnake',
-    projectileHitRadiusPx: 296,
+    projectileHitRadiusLogical: 296,
     drawsnakeSteps: profile.steps.slice(0, WEAPON_TUNE_STEPS),
     drawsnakeRows: profile.rows.slice(0, WEAPON_TUNE_STEPS),
     drawsnakeInstrument: profile.instrument,
@@ -29875,8 +30081,8 @@ function spawnDrawSnakeEnemyOffscreen(options = null) {
   }
   if (currentBarIndex < 20) return null;
   if (currentBarIndex < 32 && liveSnakeCount >= 1) return null;
-  const point = getRandomOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
-  return spawnDrawSnakeEnemyAt(point.x, point.y, options);
+  const point = getRandomOffscreenSpawnLogicalPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
+  return spawnDrawSnakeEnemyAtLogical(point, options);
 }
 function spawnPerfEnemyType(enemyType = 'drawsnake', behaviorId = 'none') {
   if (!active) return null;
@@ -29892,8 +30098,8 @@ function spawnPerfEnemyType(enemyType = 'drawsnake', behaviorId = 'none') {
     return enemy;
   }
   if (type === 'dumb') {
-    const point = getRandomOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
-    const enemy = spawnEnemyAt(point.x, point.y) || null;
+    const point = getRandomOffscreenSpawnLogicalPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
+    const enemy = spawnEnemyAtLogical(point) || null;
     if (enemy) applyPerfRepeatBehaviorToEnemy(enemy, behaviorId);
     return enemy;
   }
@@ -30349,36 +30555,23 @@ function getClosestPointOnSegment2D(px, py, ax, ay, bx, by) {
   const dy = py - cy;
   return { x: cx, y: cy, d2: (dx * dx) + (dy * dy) };
 }
-function getDrawSnakeProjectileImpactPoint(enemy, projectile, baseProjectileRadiusWorld, scale) {
+function getDrawSnakeProjectileImpactPoint(enemy, projectile, baseProjectileRadiusLogical) {
   const nodes = Array.isArray(enemy?.drawsnakeNodeWorld) ? enemy.drawsnakeNodeWorld : [];
   if (nodes.length < 2) return null;
-  const px = Number(projectile?.wx) || 0;
-  const py = Number(projectile?.wy) || 0;
-  const lineWidthPx = Math.max(2, Number(enemy?.drawsnakeLineWidthPx) || DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK) * DRAW_SNAKE_VISUAL_SCALE;
-  const snakeRadiusWorld = (lineWidthPx * 0.5) / Math.max(0.001, Number(scale) || 1);
-  const hitRadiusWorld = Math.max(baseProjectileRadiusWorld, snakeRadiusWorld + (baseProjectileRadiusWorld * 0.65));
-  const hitRadius2 = hitRadiusWorld * hitRadiusWorld;
-  const bounds = enemy?.drawsnakeBoundsWorld && typeof enemy.drawsnakeBoundsWorld === 'object'
-    ? enemy.drawsnakeBoundsWorld
-    : null;
-  if (bounds) {
-    if (
-      px < ((Number(bounds.minX) || 0) - hitRadiusWorld)
-      || px > ((Number(bounds.maxX) || 0) + hitRadiusWorld)
-      || py < ((Number(bounds.minY) || 0) - hitRadiusWorld)
-      || py > ((Number(bounds.maxY) || 0) + hitRadiusWorld)
-    ) {
-      return null;
-    }
-  }
+  const projectileLogical = beatSwarmViewportProjection?.worldToLogical?.({ x: Number(projectile?.wx) || 0, y: Number(projectile?.wy) || 0 });
+  if (!projectileLogical) return null;
+  const lineWidthLogical = Math.max(2, Number(enemy?.drawsnakeLineWidthLogical ?? enemy?.drawsnakeLineWidthPx) || DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK) * DRAW_SNAKE_VISUAL_SCALE;
+  const snakeRadiusLogical = lineWidthLogical * 0.5;
+  const hitRadiusLogical = Math.max(baseProjectileRadiusLogical, snakeRadiusLogical + (baseProjectileRadiusLogical * 0.65));
+  const hitRadius2 = hitRadiusLogical * hitRadiusLogical;
   let best = null;
   for (let i = 0; i < nodes.length - 1; i++) {
-    const a = nodes[i];
-    const b = nodes[i + 1];
+    const a = beatSwarmViewportProjection?.worldToLogical?.(nodes[i]);
+    const b = beatSwarmViewportProjection?.worldToLogical?.(nodes[i + 1]);
     if (!a || !b) continue;
     const cp = getClosestPointOnSegment2D(
-      px,
-      py,
+      projectileLogical.x,
+      projectileLogical.y,
       Number(a.x) || 0,
       Number(a.y) || 0,
       Number(b.x) || 0,
@@ -30388,7 +30581,7 @@ function getDrawSnakeProjectileImpactPoint(enemy, projectile, baseProjectileRadi
     if (!best || cp.d2 < best.d2) best = cp;
   }
   if (!best) return null;
-  return { x: best.x, y: best.y };
+  return beatSwarmViewportProjection?.logicalToWorld?.({ x: best.x, y: best.y }) || null;
 }
 function updateDrawSnakeTrail(enemy) {
   const trail = Array.isArray(enemy?.drawsnakeTrail) ? enemy.drawsnakeTrail : (enemy.drawsnakeTrail = []);
@@ -30430,7 +30623,7 @@ function updateDrawSnakeTrail(enemy) {
 }
 function updateDrawSnakeVisual(enemy, scale, dt = 0) {
   if (String(enemy?.enemyType || '') !== 'drawsnake') return;
-  const originScreen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
+  const originScreen = projectBeatSwarmWorldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
   if (!originScreen || !Number.isFinite(originScreen.x) || !Number.isFinite(originScreen.y)) return;
   const trail = updateDrawSnakeTrail(enemy);
   const nodes = [];
@@ -30468,15 +30661,17 @@ function updateDrawSnakeVisual(enemy, scale, dt = 0) {
     linePulseStrength = Math.sin(t * Math.PI);
     enemy.drawsnakeLinePulseT = Math.max(0, linePulseRem - frameDt);
   }
+  const presentationScale = getCurrentBeatSwarmPresentationScale();
   const lineWidthPx = Math.max(2, Number(enemy?.drawsnakeLineWidthPx) || DRAW_SNAKE_LINE_WIDTH_PX_FALLBACK)
     * DRAW_SNAKE_VISUAL_SCALE
-    * (1 + (linePulseStrength * linePulseScale));
+    * (1 + (linePulseStrength * linePulseScale))
+    * presentationScale;
   const jointSizePx = Math.max(7, lineWidthPx * 1.7 * DRAW_SNAKE_NODE_SIZE_SCALE);
   for (let i = 0; i < segEls.length; i++) {
     const a = nodes[i];
     const b = nodes[Math.min(nodes.length - 1, i + 1)];
-    const sa = worldToScreen(a);
-    const sb = worldToScreen(b);
+    const sa = projectBeatSwarmWorldToScreen(a);
+    const sb = projectBeatSwarmWorldToScreen(b);
     const seg = segEls[i];
     if (!seg || !sa || !sb || !Number.isFinite(sa.x) || !Number.isFinite(sa.y) || !Number.isFinite(sb.x) || !Number.isFinite(sb.y)) {
       try { if (seg) seg.style.opacity = '0'; } catch {}
@@ -30494,7 +30689,7 @@ function updateDrawSnakeVisual(enemy, scale, dt = 0) {
   }
   for (let i = 0; i < nodeEls.length; i++) {
     const node = nodeEls[i];
-    const s = worldToScreen(nodes[i]);
+    const s = projectBeatSwarmWorldToScreen(nodes[i]);
     if (!node || !s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) {
       try { if (node) node.style.opacity = '0'; } catch {}
       continue;
@@ -30560,7 +30755,7 @@ function getSwarmEnemyById(enemyId) {
 }
 function isEnemyLikelyVisibleForAudio(enemy, marginPx = 96) {
   if (!enemy || typeof enemy !== 'object') return false;
-  const s = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
+  const s = projectBeatSwarmWorldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
   if (!s || typeof s !== 'object') return false;
   const margin = Math.max(0, Number(marginPx) || 0);
   const w = Math.max(1, Number(window.innerWidth) || 0);
@@ -31575,7 +31770,7 @@ function executePerformedBeatEvent(event) {
       getEventTargetAudioTime: getSwarmSoundEventTargetAudioTime,
       flashSpawnerEnemyCell,
       getSpawnerNodeCellWorld,
-      worldToScreen,
+      worldToScreen: projectBeatSwarmWorldToScreen,
       spawnEnemyAt,
       updateSpawnerLinkedEnemyLine,
       getViewportCenterWorld,
@@ -31986,8 +32181,7 @@ function getShipFacingDirWorld() {
 }
 function getProjectileChainSpawnOffsetWorld() {
   return getProjectileChainSpawnOffsetWorldRuntime({
-    zoomState: getZoomState?.(),
-    projectileHitRadiusPx: PROJECTILE_HIT_RADIUS_PX,
+    projectileHitRadiusLogical: PROJECTILE_HIT_RADIUS_LOGICAL,
     projectileChainSpawnOffsetWorld: PROJECTILE_CHAIN_SPAWN_OFFSET_WORLD,
   });
 }
@@ -32090,7 +32284,7 @@ function queueWeaponChain(beatIndex, nextStages, context) {
       pendingWeaponChainEvents,
     },
     constants: {
-      explosionRadiusWorld: EXPLOSION_RADIUS_WORLD,
+      explosionRadiusLogical: EXPLOSION_RADIUS_WORLD,
     },
     helpers: {
       addExplosionPrimeEffect,
@@ -32150,6 +32344,7 @@ function getApplyAoeAtRuntimeShared() {
       damageEnemy,
       getLoopInfo,
       withDamageSoundStage,
+      worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
     },
   };
   return applyAoeAtRuntimeShared;
@@ -32281,11 +32476,12 @@ function applyLingeringAoeBeat(beatIndex) {
       lingeringAoeZones,
     },
     constants: {
-      explosionRadiusWorld: EXPLOSION_RADIUS_WORLD,
+      explosionRadiusLogical: EXPLOSION_RADIUS_WORLD,
     },
     helpers: {
       damageEnemy,
       withDamageSoundStage,
+      worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
     },
   });
 }
@@ -32666,13 +32862,15 @@ function keepDrawSnakeEnemyOnscreen(enemy, dt) {
     enemy,
     dt,
     constants: {
-      drawSnakeScreenMarginPx: DRAW_SNAKE_SCREEN_MARGIN_PX,
+      drawSnakeMarginLogical: DRAW_SNAKE_SCREEN_MARGIN_PX,
       drawSnakeEdgePullRate: DRAW_SNAKE_EDGE_PULL_RATE,
     },
     helpers: {
       keepDrawSnakeEnemyOnscreenRuntime,
-      worldToScreen,
+      worldToScreen: projectBeatSwarmWorldToScreen,
       screenToWorld,
+      worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
+      logicalToWorld: (point) => beatSwarmViewportProjection?.logicalToWorld?.(point),
     },
   });
 }
@@ -32685,7 +32883,7 @@ function updateEnemies(dt) {
   const activeEventSectionRuntime = evaluateBeatSwarmEventSectionRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
   updateBeatSwarmEnemiesRuntime({
     constants: {
-      enemyHitRadius: ENEMY_HIT_RADIUS,
+      enemyHitRadiusLogical: ENEMY_HIT_RADIUS,
       retiringRetreatDelaySec: RETIRING_RETREAT_DELAY_SEC,
       enemyMaxSpeed: ENEMY_MAX_SPEED,
       spawnerEnemySpeedMultiplier: SPAWNER_ENEMY_SPEED_MULTIPLIER,
@@ -32705,10 +32903,12 @@ function updateEnemies(dt) {
       musicRolePulseSeconds: Number(MUSIC_ROLE_PULSE_POLICY.seconds) || 0.24,
       musicRolePulseScale: Number(MUSIC_ROLE_PULSE_POLICY.softScale) || 0.08,
       playerEnemyCollisionLethal: false,
+      presentationScale: getCurrentBeatSwarmPresentationScale(),
     },
     helpers: {
       getViewportCenterWorld,
       getZoomState,
+      getPresentationScale: getCurrentBeatSwarmPresentationScale,
       normalizeMusicLifecycleState,
       getLifecycleAggressionScale,
       isPerfRepeatProtectedEnemy,
@@ -32717,8 +32917,11 @@ function updateEnemies(dt) {
       updateSpawnerEnemyFlash,
       startEnemyRetreat,
       normalizeDir,
-      worldToScreen,
+      worldToScreen: projectBeatSwarmWorldToScreen,
       screenToWorld,
+      worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
+      logicalToWorld: (point) => beatSwarmViewportProjection?.logicalToWorld?.(point),
+      isWorldPointInsideGameplay: (point, marginLogical = 0) => beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(point, marginLogical) === true,
       removeEnemy,
       getEnemySpawnScale,
       updateSpawnerLinkedEnemyLine,
@@ -33450,7 +33653,10 @@ function updateEnemyLaserRuntime(dt) {
     stepIndex,
     enemies,
     player: getViewportCenterWorld(),
-    worldToScreen,
+    worldToScreen: projectBeatSwarmWorldToScreen,
+    presentationScale: getCurrentBeatSwarmPresentationScale(),
+    worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
+    presentationScale: getCurrentBeatSwarmPresentationScale(),
     onLock({ hazard, enemy, beatIndex: lockBeatIndex, stepIndex: lockStepIndex }) {
       noteMusicSystemEvent('enemy_laser_locked', {
         enemyId: Math.trunc(Number(enemy?.id) || 0),
@@ -33475,7 +33681,7 @@ function updateEnemyLaserRuntime(dt) {
         beamCount: Math.max(1, Math.trunc(Number(hazard?.beamCount) || 1)),
         aimMode: String(hazard?.aimMode || '').trim().toLowerCase(),
         bidirectional: hazard?.bidirectional === true,
-        collisionRadiusWorld: Number(hazard?.collisionRadiusWorld) || 0,
+        collisionRadiusLogical: Number(hazard?.collisionRadiusLogical) || 0,
         warningWidthPx: Number(hazard?.warningWidthPx) || 0,
         activeWidthPx: Number(hazard?.activeWidthPx) || 0,
         lengthWorld: Number(hazard?.lengthWorld) || 0,
@@ -33522,7 +33728,8 @@ function updateEnemyShapeRuntime() {
     beatIndex,
     enemies,
     player: getViewportCenterWorld(),
-    worldToScreen,
+    worldToScreen: projectBeatSwarmWorldToScreen,
+    presentationScale: getCurrentBeatSwarmPresentationScale(),
     onActivate({ hazard }) {
       const sourceEnemy = enemies.find((enemy) => Math.trunc(Number(enemy?.id) || 0) === Math.trunc(Number(hazard?.sourceEnemyId) || 0));
       triggerEnemyCombatFiredVisual(sourceEnemy, 'projectile');
@@ -33568,7 +33775,7 @@ function updateEnemyChargeRuntime(dt) {
     beatIndex,
     enemies,
     player: getViewportCenterWorld(),
-    worldToScreen,
+    worldToScreen: projectBeatSwarmWorldToScreen,
     onActivate({ charge, enemy }) {
       triggerEnemyCombatFiredVisual(enemy, 'projectile');
       playSwarmSoundEventImmediate('projectile', Number(charge?.soundVolume) || 0.5, enemy?.soundNote || 'A#4');
@@ -33603,7 +33810,8 @@ function updateEnemyConductorRuntime() {
     beatIndex: Math.max(0, Math.trunc(Number(currentBeatIndex) || 0)),
     enemies,
     layer: enemyLayerEl,
-    worldToScreen,
+    worldToScreen: projectBeatSwarmWorldToScreen,
+    presentationScale: getCurrentBeatSwarmPresentationScale(),
   });
 }
 function getEnemySandboxSnapshot() {
@@ -33663,7 +33871,7 @@ function startEnemySandboxTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const radiusPx = Math.min(330, Math.max(190, Math.min(window.innerWidth, window.innerHeight) * 0.31));
+  const radiusPx = projectBeatSwarmLogicalSpawnLength(279);
   const eliteGroupId = `enemy-sandbox-${abilityId}-${Math.max(0, Math.trunc(Number(currentBeatIndex) || 0))}`;
   const created = [];
   for (let index = 0; index < count; index += 1) {
@@ -33794,8 +34002,8 @@ function startGunnerCombatTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const horizontalOffset = Math.min(340, Math.max(220, window.innerWidth * 0.27));
-  const verticalOffset = Math.min(210, Math.max(130, window.innerHeight * 0.22));
+  const horizontalOffset = projectBeatSwarmLogicalSpawnLength(340);
+  const verticalOffset = projectBeatSwarmLogicalSpawnLength(198);
   const specs = [
     { patternId: 'straight', x: centerScreen.x + horizontalOffset, y: centerScreen.y - verticalOffset },
     { patternId: 'spread', x: centerScreen.x + horizontalOffset + 24, y: centerScreen.y },
@@ -33883,8 +34091,8 @@ function startSeekerCombatTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const horizontalOffset = Math.min(360, Math.max(240, window.innerWidth * 0.29));
-  const verticalOffset = Math.min(190, Math.max(120, window.innerHeight * 0.2));
+  const horizontalOffset = projectBeatSwarmLogicalSpawnLength(360);
+  const verticalOffset = projectBeatSwarmLogicalSpawnLength(180);
   const specs = [
     { patternId: 'homing', movementBehaviorId: 'pursue_player', x: centerScreen.x + horizontalOffset, y: centerScreen.y - verticalOffset },
     { patternId: 'homing_swarm', movementBehaviorId: 'intercept_player', x: centerScreen.x + horizontalOffset, y: centerScreen.y + verticalOffset },
@@ -33932,8 +34140,8 @@ function startLaserSpinnerCombatTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const horizontalOffset = Math.min(320, Math.max(220, window.innerWidth * 0.25));
-  const verticalOffset = Math.min(180, Math.max(115, window.innerHeight * 0.19));
+  const horizontalOffset = projectBeatSwarmLogicalSpawnLength(320);
+  const verticalOffset = projectBeatSwarmLogicalSpawnLength(171);
   const specs = [
     { patternId: 'sweep_laser', x: centerScreen.x + horizontalOffset, y: centerScreen.y - verticalOffset },
     { patternId: 'radial_laser', x: centerScreen.x - horizontalOffset, y: centerScreen.y + verticalOffset },
@@ -33979,8 +34187,8 @@ function startLaserVariantCombatTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const horizontalOffset = Math.min(360, Math.max(250, window.innerWidth * 0.28));
-  const verticalOffset = Math.min(205, Math.max(130, window.innerHeight * 0.21));
+  const horizontalOffset = projectBeatSwarmLogicalSpawnLength(360);
+  const verticalOffset = projectBeatSwarmLogicalSpawnLength(189);
   const specs = [
     {
       patternId: 'tracking_laser',
@@ -33993,7 +34201,7 @@ function startLaserVariantCombatTest(options = null) {
     {
       patternId: 'arena_beam_thin',
       movementBehaviorId: 'hold_position',
-      spawnX: centerScreen.x + horizontalOffset + Math.min(250, Math.max(170, window.innerWidth * 0.12)),
+      spawnX: centerScreen.x + horizontalOffset + projectBeatSwarmLogicalSpawnLength(192),
       spawnY: centerScreen.y - verticalOffset,
       anchorX: centerScreen.x + horizontalOffset,
       anchorY: centerScreen.y - verticalOffset,
@@ -34002,7 +34210,7 @@ function startLaserVariantCombatTest(options = null) {
     {
       patternId: 'arena_beam_thick',
       movementBehaviorId: 'hold_position',
-      spawnX: centerScreen.x + horizontalOffset + Math.min(280, Math.max(200, window.innerWidth * 0.14)),
+      spawnX: centerScreen.x + horizontalOffset + projectBeatSwarmLogicalSpawnLength(224),
       spawnY: centerScreen.y + verticalOffset,
       anchorX: centerScreen.x + horizontalOffset,
       anchorY: centerScreen.y + verticalOffset,
@@ -34061,7 +34269,7 @@ function startSymmetricLaserGroupTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const anchorRadius = Math.min(350, Math.max(245, Math.min(window.innerWidth, window.innerHeight) * 0.34));
+  const anchorRadius = projectBeatSwarmLogicalSpawnLength(306);
   const spawnRadius = anchorRadius + 360;
   const groupId = `laser-symmetry-${Math.max(0, Math.trunc(Number(currentBeatIndex) || 0))}`;
   const created = [];
@@ -34130,7 +34338,7 @@ function startTrackedLaserMotifGroupTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const anchorRadius = Math.min(350, Math.max(245, Math.min(window.innerWidth, window.innerHeight) * 0.34));
+  const anchorRadius = projectBeatSwarmLogicalSpawnLength(306);
   const spawnRadius = anchorRadius + 360;
   const groupId = `laser-arena-motif-${Math.max(0, Math.trunc(Number(currentBeatIndex) || 0))}`;
   const created = [];
@@ -34248,7 +34456,7 @@ function startGunnerPercussionFormationTest(options = null) {
     y: Math.max(1, window.innerHeight) * 0.5,
   };
   const memberCount = 4;
-  const anchorRadius = Math.min(330, Math.max(225, Math.min(window.innerWidth, window.innerHeight) * 0.31));
+  const anchorRadius = projectBeatSwarmLogicalSpawnLength(279);
   const spawnRadius = anchorRadius + 340;
   const groupId = `gunner-percussion-${Math.max(0, Math.trunc(Number(currentBeatIndex) || 0))}`;
   const created = [];
@@ -34349,7 +34557,7 @@ function startDualMusicalFormationTest(options = null) {
     {
       groupId: `laser-hihat-${currentBeat}`,
       count: 4,
-      radiusPx: Math.min(390, Math.max(285, Math.min(window.innerWidth, window.innerHeight) * 0.38)),
+      radiusPx: projectBeatSwarmLogicalSpawnLength(342),
       startAngle: -Math.PI * 0.5,
       enemyType: 'laser-spinner',
       profileId: 'laser_spinner',
@@ -34360,7 +34568,7 @@ function startDualMusicalFormationTest(options = null) {
     {
       groupId: `gunner-snare-${currentBeat}`,
       count: 3,
-      radiusPx: Math.min(275, Math.max(195, Math.min(window.innerWidth, window.innerHeight) * 0.235)),
+      radiusPx: projectBeatSwarmLogicalSpawnLength(211.5),
       startAngle: -Math.PI / 6,
       enemyType: 'gunner',
       profileId: 'gunner',
@@ -35042,11 +35250,12 @@ function spawnDirectorMusicalFormation(kind, startBeat, currentBar, memberCount 
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const radiusPx = Math.min(
+  const radiusLogical = Math.min(
     spec.maxRadiusPx,
-    Math.max(spec.minRadiusPx, Math.min(window.innerWidth, window.innerHeight) * spec.radiusScale),
+    Math.max(spec.minRadiusPx, 900 * spec.radiusScale),
   );
-  const spawnRadius = radiusPx + 360;
+  const radiusPx = projectBeatSwarmLogicalSpawnLength(radiusLogical);
+  const spawnRadius = radiusPx + projectBeatSwarmLogicalSpawnLength(360);
   const survivalHp = Math.max(1, Math.ceil(getDirectorMusicalFormationSurvivalHealth(8) * 0.2));
   const created = [];
   for (let index = 0; index < spec.count; index += 1) {
@@ -35918,8 +36127,8 @@ function startShapeCasterCombatTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const horizontalOffset = Math.min(350, Math.max(240, window.innerWidth * 0.28));
-  const verticalOffset = Math.min(170, Math.max(110, window.innerHeight * 0.18));
+  const horizontalOffset = projectBeatSwarmLogicalSpawnLength(350);
+  const verticalOffset = projectBeatSwarmLogicalSpawnLength(162);
   const specs = [
     { patternId: 'safe_inside_circle', x: centerScreen.x + horizontalOffset, y: centerScreen.y - verticalOffset },
     { patternId: 'safe_outside_hex', x: centerScreen.x - horizontalOffset, y: centerScreen.y + verticalOffset },
@@ -35965,8 +36174,8 @@ function startChargerCombatTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const horizontalOffset = Math.min(390, Math.max(270, window.innerWidth * 0.3));
-  const verticalOffset = Math.min(190, Math.max(120, window.innerHeight * 0.2));
+  const horizontalOffset = projectBeatSwarmLogicalSpawnLength(390);
+  const verticalOffset = projectBeatSwarmLogicalSpawnLength(180);
   const specs = [
     { patternId: 'direct_charge', x: centerScreen.x + horizontalOffset, y: centerScreen.y - verticalOffset },
     { patternId: 'intercept_charge', x: centerScreen.x - horizontalOffset, y: centerScreen.y + verticalOffset },
@@ -36012,17 +36221,17 @@ function startConductorCombatTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const horizontalOffset = Math.min(360, Math.max(250, window.innerWidth * 0.28));
-  const verticalOffset = Math.min(190, Math.max(120, window.innerHeight * 0.2));
+  const horizontalOffset = projectBeatSwarmLogicalSpawnLength(360);
+  const verticalOffset = projectBeatSwarmLogicalSpawnLength(180);
   const conductorSpecs = [
     { patternId: 'shield_pair', x: centerScreen.x - horizontalOffset, y: centerScreen.y - verticalOffset },
     { patternId: 'shield_field', x: centerScreen.x + horizontalOffset, y: centerScreen.y + verticalOffset },
   ];
   const threatSpecs = [
-    { patternId: 'straight', x: centerScreen.x - 110, y: centerScreen.y - verticalOffset - 45 },
-    { patternId: 'spread', x: centerScreen.x + 110, y: centerScreen.y - verticalOffset + 45 },
-    { patternId: 'straight', x: centerScreen.x - 120, y: centerScreen.y + verticalOffset - 40 },
-    { patternId: 'spread', x: centerScreen.x + 120, y: centerScreen.y + verticalOffset + 40 },
+    { patternId: 'straight', x: centerScreen.x - projectBeatSwarmLogicalSpawnLength(110), y: centerScreen.y - verticalOffset - projectBeatSwarmLogicalSpawnLength(45) },
+    { patternId: 'spread', x: centerScreen.x + projectBeatSwarmLogicalSpawnLength(110), y: centerScreen.y - verticalOffset + projectBeatSwarmLogicalSpawnLength(45) },
+    { patternId: 'straight', x: centerScreen.x - projectBeatSwarmLogicalSpawnLength(120), y: centerScreen.y + verticalOffset - projectBeatSwarmLogicalSpawnLength(40) },
+    { patternId: 'spread', x: centerScreen.x + projectBeatSwarmLogicalSpawnLength(120), y: centerScreen.y + verticalOffset + projectBeatSwarmLogicalSpawnLength(40) },
   ];
   const conductors = [];
   for (const spec of conductorSpecs) {
@@ -36087,8 +36296,8 @@ function startShapeCasterGunnerCombinationTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const horizontalOffset = Math.min(390, Math.max(270, window.innerWidth * 0.3));
-  const verticalOffset = Math.min(210, Math.max(135, window.innerHeight * 0.22));
+  const horizontalOffset = projectBeatSwarmLogicalSpawnLength(390);
+  const verticalOffset = projectBeatSwarmLogicalSpawnLength(198);
   const specs = [
     {
       profileId: 'shape_caster',
@@ -36164,8 +36373,8 @@ function startShapeCasterSeekerCombinationTest(options = null) {
     x: Math.max(1, window.innerWidth) * 0.5,
     y: Math.max(1, window.innerHeight) * 0.5,
   };
-  const horizontalOffset = Math.min(390, Math.max(270, window.innerWidth * 0.3));
-  const verticalOffset = Math.min(180, Math.max(115, window.innerHeight * 0.19));
+  const horizontalOffset = projectBeatSwarmLogicalSpawnLength(390);
+  const verticalOffset = projectBeatSwarmLogicalSpawnLength(171);
   const specs = [
     {
       profileId: 'shape_caster',
@@ -36233,23 +36442,25 @@ function spawnFallbackEnemyOffscreen() {
     },
     helpers: {
       getRandomOffscreenSpawnPoint: (runtimeOptions = null) => getRandomOffscreenSpawnPoint(runtimeOptions),
-      spawnEnemyAt,
+      spawnEnemyAt: (logicalX, logicalY) => spawnEnemyAtLogical({ x: logicalX, y: logicalY }),
     },
   });
 }
 function getRandomOffscreenSpawnPoint(options = null) {
   const group = options?.group && typeof options.group === 'object' ? options.group : null;
   if (group?.basicLaneCarrierHandoff === true) {
-    return getQuadrantAwareOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
+    return getQuadrantAwareOffscreenSpawnLogicalPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
   }
   const hasAuthoredFormationEntry = !!String(group?.formationSpawnRegion || group?.formationArchetype || '').trim();
   if (!hasAuthoredFormationEntry) {
-    return getQuadrantAwareOffscreenSpawnClientPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
+    return getQuadrantAwareOffscreenSpawnLogicalPoint(ENEMY_FALLBACK_SPAWN_MARGIN_PX);
   }
   return getRandomOffscreenSpawnPointRuntime({
     ...options,
     constants: {
       enemyFallbackSpawnMarginPx: ENEMY_FALLBACK_SPAWN_MARGIN_PX,
+      logicalWidth: 1600,
+      logicalHeight: 900,
     },
     helpers: { randRange },
   });
@@ -36352,6 +36563,10 @@ function spawnComposerGroupEnemyAt(clientX, clientY, group, memberIndex = 0, mem
     applyMusicalIdentityVisualToEnemy(created, group);
   }
   return created;
+}
+function spawnComposerGroupEnemyAtLogical(logicalX, logicalY, group, memberIndex = 0, memberCount = 1) {
+  const screen = projectBeatSwarmLogicalSpawnPoint({ x: logicalX, y: logicalY });
+  return screen ? spawnComposerGroupEnemyAt(screen.x, screen.y, group, memberIndex, memberCount) : null;
 }
 function spawnComposerGroupOffscreenMembers(group, count = 1, options = null) {
   const opts = options && typeof options === 'object' ? options : {};
@@ -36494,9 +36709,9 @@ function spawnComposerGroupOffscreenMembers(group, count = 1, options = null) {
     group,
     count: admittedCount,
     getRandomOffscreenSpawnPoint,
-    spawnComposerGroupEnemyAt,
-    screenToWorld,
-    worldToScreen,
+    spawnComposerGroupEnemyAt: spawnComposerGroupEnemyAtLogical,
+    logicalToWorld: (point) => beatSwarmViewportProjection?.logicalToWorld?.(point),
+    worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
   });
   return admittedCount;
 }
@@ -37603,8 +37818,6 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
       && String(enemy.musicState || 'active').trim().toLowerCase() === 'active'
       && String(enemy.assignedMusicLaneId || enemy.musicLaneId || '').trim().toLowerCase() === laneId
     )).length]));
-    const viewportWidth = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-    const viewportHeight = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
     const visibleBodiesByLane = Object.fromEntries(mainLaneIds.map((laneId) => [laneId, enemies.filter((enemy) => {
       if (
         !enemy
@@ -37615,8 +37828,9 @@ function evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage =
         || String(enemy.musicState || 'active').trim().toLowerCase() !== 'active'
         || String(enemy.assignedMusicLaneId || enemy.musicLaneId || '').trim().toLowerCase() !== laneId
       ) return false;
-      const screen = worldToScreen({ x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 });
-      return !!screen && screen.x >= 24 && screen.x <= viewportWidth - 24 && screen.y >= 24 && screen.y <= viewportHeight - 24;
+      return beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(
+        { x: Number(enemy.wx) || 0, y: Number(enemy.wy) || 0 }, -24,
+      ) === true;
     }).length]));
     const heroMixConfig = createBeatSwarmProductionHeroMixConfig(laneFocusSnapshot);
     try {
@@ -38012,11 +38226,10 @@ function collectComposerGroupStepBeatEvents(stepIndex, beatIndex) {
   const activeLevelPhaseRuntime = evaluateBeatSwarmLevelPhaseRuntime(barIndex, beatIndex, introStage);
   const activeMusicModeRuntime = evaluateBeatSwarmMusicModeRuntime(barIndex, beatIndex, introStage, activeLevelPhaseRuntime);
   const activeEnemyDirectorRuntime = evaluateBeatSwarmEnemyDirectorRuntime(barIndex, beatIndex, introStage, activeMusicModeRuntime, activeLevelPhaseRuntime);
-  const screenW = Math.max(1, Number(window.innerWidth) || 0);
-  const screenH = Math.max(1, Number(window.innerHeight) || 0);
   const isEnemyLikelyOnScreen = (enemy) => {
-    const s = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
-    return !!(s && Number.isFinite(s.x) && Number.isFinite(s.y) && s.x >= 0 && s.x <= screenW && s.y >= 0 && s.y <= screenH);
+    return beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(
+      { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 }, 0,
+    ) === true;
   };
   return collectComposerGroupStepEvents({
     active,
@@ -38229,14 +38442,9 @@ function maintainEnemyPopulation() {
     && Number(enemy?.hp) > 0
   ));
   const visibleTargets = liveTargets.filter((enemy) => {
-    const screen = worldToScreen({ x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 });
-    return screen
-      && Number.isFinite(screen.x)
-      && Number.isFinite(screen.y)
-      && screen.x >= 24
-      && screen.y >= 24
-      && screen.x <= window.innerWidth - 24
-      && screen.y <= window.innerHeight - 24;
+    return beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(
+      { x: Number(enemy?.wx) || 0, y: Number(enemy?.wy) || 0 }, -24,
+    ) === true;
   });
   const liveRocks = liveTargets.filter((enemy) => enemy?.onboardingAsteroid === true);
   const visibleRocks = visibleTargets.filter((enemy) => enemy?.onboardingAsteroid === true);
@@ -38260,8 +38468,8 @@ function updatePickupsAndCombat(dt, options = null) {
       suppressWeaponRuntime: opts.suppressWeaponRuntime === true,
     },
     constants: {
-      pickupCollectRadiusPx: PICKUP_COLLECT_RADIUS_PX,
-      projectileHitRadiusPx: PROJECTILE_HIT_RADIUS_PX,
+      pickupCollectRadiusLogical: PICKUP_COLLECT_RADIUS_LOGICAL,
+      projectileHitRadiusLogical: PROJECTILE_HIT_RADIUS_LOGICAL,
       projectileDespawnOffscreenPadPx: PROJECTILE_DESPAWN_OFFSCREEN_PAD_PX,
       projectileBoomerangRadiusWorld: PROJECTILE_BOOMERANG_RADIUS_WORLD,
       projectileHomingOrbitRadiusWorld: PROJECTILE_HOMING_ORBIT_RADIUS_WORLD,
@@ -38286,9 +38494,24 @@ function updatePickupsAndCombat(dt, options = null) {
       updateBeatSwarmPickupsAndCombatRuntime,
       getViewportCenterWorld,
       getZoomState,
+      getPresentationScale: getCurrentBeatSwarmPresentationScale,
       updateHelpers,
       ensureDefaultWeaponFromLegacy,
-      worldToScreen,
+      worldToScreen: projectBeatSwarmWorldToScreen,
+      worldToLogical: (point) => beatSwarmViewportProjection?.worldToLogical?.(point),
+      getLogicalGameplayBounds: () => beatSwarmViewportProjection?.getLogicalBounds?.() || null,
+      isWorldPointInsideGameplay: (point, marginLogical = 0) => beatSwarmViewportProjection?.isWorldPointInsideGameplay?.(point, marginLogical) === true,
+      recordProjectileRemovalDiagnostic: (entry) => {
+        try {
+          const history = Array.isArray(globalThis.__BEAT_SWARM_PROJECTILE_REMOVALS)
+            ? globalThis.__BEAT_SWARM_PROJECTILE_REMOVALS
+            : [];
+          history.push(entry);
+          if (history.length > 32) history.splice(0, history.length - 32);
+          globalThis.__BEAT_SWARM_PROJECTILE_REMOVALS = history;
+          globalThis.__LAST_BEAT_SWARM_PROJECTILE_REMOVAL = entry;
+        } catch {}
+      },
       getNearestEnemy,
       normalizeDir,
       getDrawSnakeProjectileImpactPoint,
@@ -38346,7 +38569,11 @@ function updateArenaVisual(scale = 1) {
       swarmArenaRadiusWorld: SWARM_ARENA_RADIUS_WORLD,
       swarmArenaResistRangeWorld: SWARM_ARENA_RESIST_RANGE_WORLD,
     },
-    helpers: { worldToScreen },
+    helpers: {
+      worldToScreen: projectBeatSwarmWorldToScreen,
+      worldLengthToScreen: projectBeatSwarmWorldLengthToScreen,
+      getPresentationScale: getCurrentBeatSwarmPresentationScale,
+    },
   });
 }
 function triggerBasicEnemyWindPushAt(originLike = null, sourceEnemy = null, beatIndex = currentBeatIndex, options = null) {
@@ -38367,8 +38594,10 @@ function triggerBasicEnemyWindPushAt(originLike = null, sourceEnemy = null, beat
   const pushPower = 1250;
   const pushEntry = (entry, powerScale = 1, moveScale = 0) => {
     if (!entry || entry === sourceEnemy) return;
-    const dx = (Number(entry.wx) || 0) - center.x;
-    const dy = (Number(entry.wy) || 0) - center.y;
+    const entryLogical = beatSwarmViewportProjection?.worldToLogical?.(entry) || entry;
+    const centerLogical = beatSwarmViewportProjection?.worldToLogical?.(center) || center;
+    const dx = (Number(entryLogical.x) || 0) - centerLogical.x;
+    const dy = (Number(entryLogical.y) || 0) - centerLogical.y;
     const distance = Math.hypot(dx, dy);
     if (!(distance > 0.001 && distance < radiusWorld)) return;
     const strength = 1 - (distance / radiusWorld);
@@ -38386,8 +38615,10 @@ function triggerBasicEnemyWindPushAt(originLike = null, sourceEnemy = null, beat
   projectiles.forEach((projectile) => pushEntry(projectile, 1.15));
   pickups.forEach((pickup) => pushEntry(pickup, 0.55, 180));
   const player = getViewportCenterWorld();
-  const playerDx = (Number(player?.x) || 0) - center.x;
-  const playerDy = (Number(player?.y) || 0) - center.y;
+  const playerLogical = beatSwarmViewportProjection?.worldToLogical?.(player) || player;
+  const centerLogical = beatSwarmViewportProjection?.worldToLogical?.(center) || center;
+  const playerDx = (Number(playerLogical?.x) || 0) - centerLogical.x;
+  const playerDy = (Number(playerLogical?.y) || 0) - centerLogical.y;
   const playerDistance = Math.hypot(playerDx, playerDy);
   const playerAffected = playerDistance > 0.001 && playerDistance < radiusWorld;
   if (playerAffected) {
@@ -39510,20 +39741,30 @@ function onWheel(ev) {
   onWheelRuntimeWrapper({ ev, state: { active } });
 }
 function onTransportPause() {
-  onTransportPauseRuntimeWrapper({ state: { active }, helpers: { setGameplayPaused } });
+  onTransportPauseRuntimeWrapper({
+    state: { active },
+    helpers: { setGameplayPaused: (next) => setGameplayPaused(next, { pauseSource: 'transport', pauseUiVisible: true }) },
+  });
 }
 function onTransportResume() {
   onTransportResumeRuntimeWrapper({ state: { active, weaponSubBoardOpen: isBeatSwarmSubBoardOpen() }, helpers: { setGameplayPaused } });
 }
 function onKeyDown(ev) {
-  onKeyDownRuntimeWrapper({ ev, state: { active, gameplayPaused, activeWeaponSlotIndex }, constants: { maxWeaponSlots: MAX_WEAPON_SLOTS }, helpers: { setActiveWeaponSlot } });
+  onKeyDownRuntimeWrapper({
+    ev,
+    state: { active, gameplayPaused, activeWeaponSlotIndex },
+    constants: { maxWeaponSlots: MAX_WEAPON_SLOTS },
+    helpers: { setActiveWeaponSlot, toggleSilentPause: toggleSilentGameplayPause },
+  });
 }
 function bindInput() {
+  bindBeatSwarmViewportSpaceProjection();
   bindBeatSwarmInputRuntimeWrapper({ targets: { overlayEl, document, window }, handlers: { onPointerDown, onPointerMove, onPointerUp, onKeyDown, onWheel, onTransportPause, onTransportResume, onMusicSystemEvent: handleBeatSwarmMusicSystemEvent } });
   updateBeatSwarmResizeAnchor();
   bindBeatSwarmResizeHandler();
 }
 function unbindInput() {
+  unbindBeatSwarmViewportSpaceProjection();
   unbindBeatSwarmResizeHandler();
   unbindBeatSwarmInputRuntimeWrapper({
     targets: {
@@ -39561,7 +39802,7 @@ export function enterBeatSwarmMode(options = null) {
       resetWeaponGateTapOrbOnboardingState();
       clearEnemies();
       clearPickups();
-      clearProjectiles();
+      clearProjectiles('weapon_gate_reset');
       clearEffects();
       clearHelpers();
       clearSurfaceReactiveField();

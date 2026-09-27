@@ -16,11 +16,11 @@ function fireNote(inst, name, toyId){
 }
 
 export function installBouncerInteractions({
-  panel, canvas, sizing, toWorld, EDGE, physW, physH, ballR, __getSpeed,
+  panel, canvas, sizing, toWorld, clientToLogical, EDGE, physW, physH, ballR, __getSpeed,
   blocks, edgeControllers, handle,
   spawnBallFrom, setNextLaunchAt, setBallOut,
   instrument, toyId, noteList, velFrom,
-  setAim, isAdvanced, preview
+  setAim, isAdvanced, preview, syncBlockAnchors
 }) {
   const previewApi = preview || {};
   const shouldDefer = () => (previewApi.shouldDefer ? previewApi.shouldDefer() : false);
@@ -44,6 +44,9 @@ export function installBouncerInteractions({
   let aimCurr = null;
 
   function localPoint(evt) {
+    if (typeof clientToLogical === 'function') {
+      return clientToLogical({ x: evt.clientX, y: evt.clientY });
+    }
     const r = canvas.getBoundingClientRect();
     const x = (evt.clientX - r.left) * ((canvas.width || 1) / Math.max(1, r.width));
     const y = (evt.clientY - r.top)  * ((canvas.height||1) / Math.max(1, r.height));
@@ -114,7 +117,7 @@ export function installBouncerInteractions({
         previewApi.clear && previewApi.clear();
       }
     }
-    const p = toWorld(localPoint(e));
+    const p = localPoint(e);
     const hitEdge = edgeControllers.find(c => p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h);
     const hitBlock = blocks.find((b, idx) => !b.fixed && p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
 
@@ -198,7 +201,7 @@ export function installBouncerInteractions({
   }
 
   function onPointerMove(e){
-    const p = toWorld(localPoint(e));
+    const p = localPoint(e);
 
     if (dragBlockRef && !draggingBlock) {
       const dx = p.x - (tapStart ? tapStart.x : p.x);
@@ -215,6 +218,7 @@ export function installBouncerInteractions({
       } else {
         dragBlockRef.x = Math.round(p.x - dragOffset.dx);
         dragBlockRef.y = Math.round(p.y - dragOffset.dy);
+        try { syncBlockAnchors?.(); } catch {}
       }
       tapMoved = true;
       return;
@@ -234,7 +238,7 @@ export function installBouncerInteractions({
   }
 
   function onPointerUp(e){
-    const p = toWorld(localPoint(e));
+    const p = localPoint(e);
 
     if (dragBlockRef) {
       const deferringBlock = draggingBlockPreview && dragBlockIndex >= 0;

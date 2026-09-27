@@ -109,6 +109,7 @@ export function createBeatSwarmEnemyConductorRuntime() {
     const enemies = Array.isArray(options?.enemies) ? options.enemies : [];
     const beatIndex = Math.max(0, Math.trunc(Number(options?.beatIndex) || 0));
     const worldToScreen = options?.worldToScreen;
+    const presentationScale = Math.max(0.001, Number(options?.presentationScale) || 1);
     const byId = new Map(enemies.map((enemy) => [enemyId(enemy), enemy]));
     const protectedIds = new Set();
     for (const enemy of enemies) {
@@ -138,6 +139,7 @@ export function createBeatSwarmEnemyConductorRuntime() {
       const dy = to.y - from.y;
       link.el.style.transform = `translate(${from.x.toFixed(2)}px, ${from.y.toFixed(2)}px) rotate(${Math.atan2(dy, dx)}rad)`;
       link.el.style.width = `${Math.hypot(dx, dy).toFixed(2)}px`;
+      link.el.style.height = `${Math.max(1, 4 * presentationScale).toFixed(2)}px`;
     }
     for (const [targetId, shield] of shields) {
       if (protectedIds.has(targetId)) continue;
@@ -149,7 +151,7 @@ export function createBeatSwarmEnemyConductorRuntime() {
       const point = worldToScreen({ x: Number(target.wx) || 0, y: Number(target.wy) || 0 });
       if (!point) continue;
       const shield = ensureShield(target, options?.layer);
-      shield.style.transform = `translate(${point.x.toFixed(2)}px, ${point.y.toFixed(2)}px)`;
+      shield.style.transform = `translate(${point.x.toFixed(2)}px, ${point.y.toFixed(2)}px) scale(${presentationScale})`;
       shield.style.setProperty('--bs-conductor-shield-strength', `${(1 - (Number(target.conductorDamageMultiplier) || 1)).toFixed(3)}`);
     }
     return links.length;

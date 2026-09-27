@@ -1,6 +1,20 @@
 // src/drawgrid/dg-field-forces.js
 
+import {
+  drawGridParticleSourceLengthToLogical,
+  drawGridParticleSourceToLogical,
+} from './drawgrid-particle-viewport-space.js';
+
 export function createDgFieldForces(getState) {
+  function particleSourceSize(state) {
+    const logical = state?.gridAreaLogical;
+    const area = state?.gridArea;
+    return {
+      width: Math.max(1, Number(logical?.w) || Number(area?.w) || Number(state?.cssW) || 800),
+      height: Math.max(1, Number(logical?.h) || Number(area?.h) || Number(state?.cssH) || 600),
+    };
+  }
+
   function pokeFieldToy(source, xToy, yToy, radiusToy, strength, extra = {}) {
     try {
       const S = getState();
@@ -66,7 +80,6 @@ export function createDgFieldForces(getState) {
 
         const camSnapshot = S.getOverlayZoomSnapshot();
         const auditZoom = camSnapshot?.scale || 1;
-        const view = S.dgMap?.size ? S.dgMap.size() : null;
         /*console.log('[DG][POKE]', {
           source,
           zoomScale: auditZoom,
@@ -79,12 +92,14 @@ export function createDgFieldForces(getState) {
           strengthToy,
           gridArea: S.gridArea && { ...S.gridArea },
           gridAreaLogical: { ...S.gridAreaLogical },
-          viewportSize: view,
         });*/
       }
 
-      S.dgField?.poke?.(xToy, yToy, {
-        radius,
+      const sourceSize = particleSourceSize(S);
+      const logicalPoint = drawGridParticleSourceToLogical({ x: xToy, y: yToy }, sourceSize);
+      const logicalRadius = drawGridParticleSourceLengthToLogical(radius, sourceSize);
+      S.dgField?.poke?.(logicalPoint.x, logicalPoint.y, {
+        radius: logicalRadius,
         strength: strengthToy,
         ...extra,
       });
@@ -120,8 +135,16 @@ export function createDgFieldForces(getState) {
       dirX = 1;
       dirY = 0;
     }
+    const S = getState();
+    const sourceSize = particleSourceSize(S);
+    const logicalRadius = drawGridParticleSourceLengthToLogical(radius, sourceSize);
+    const logicalDirectionStart = drawGridParticleSourceToLogical({ x: 0, y: 0 }, sourceSize);
+    const logicalDirectionEnd = drawGridParticleSourceToLogical({ x: dirX, y: dirY }, sourceSize);
+    const logicalDirectionX = logicalDirectionEnd.x - logicalDirectionStart.x;
+    const logicalDirectionY = logicalDirectionEnd.y - logicalDirectionStart.y;
+    const logicalDirectionLength = Math.hypot(logicalDirectionX, logicalDirectionY) || 1;
     const payload = {
-      radius,
+      radius: logicalRadius,
       strength: Number.isFinite(opts.strength) ? opts.strength : 1200,
       falloff: typeof opts.falloff === 'string' ? opts.falloff : 'gaussian',
       forceMul: opts.forceMul,
@@ -134,7 +157,14 @@ export function createDgFieldForces(getState) {
       const t = steps === 0 ? 0 : i / steps;
       const sx = ax + dx * t;
       const sy = ay + dy * t;
-      field.pushDirectional(sx, sy, dirX, dirY, payload);
+      const logicalPoint = drawGridParticleSourceToLogical({ x: sx, y: sy }, sourceSize);
+      field.pushDirectional(
+        logicalPoint.x,
+        logicalPoint.y,
+        logicalDirectionX / logicalDirectionLength,
+        logicalDirectionY / logicalDirectionLength,
+        payload,
+      );
     }
   }
 

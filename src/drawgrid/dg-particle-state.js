@@ -368,30 +368,6 @@ export function createDgParticleState({ state, deps } = {}) {
           warmStart: __dgWarm,
         });
 
-        // -------------------------------------------------------------------
-        // IMPORTANT: Some particle-field builds may ignore applyBudget() fields
-        // like maxCountScale/tickModulo. To keep the Quality Lab reliable,
-        // clamp the internal desired count/config directly as a backstop.
-        // (This should preserve the same "fade toward target" behaviour as
-        // natural FPS pressure, but ensures the target actually changes.)
-        // -------------------------------------------------------------------
-        try {
-          const st = s.dgField?._state || null;
-          const cfg = s.dgField?._config || null;
-          // Capture a stable "base" count once, so scaling is consistent.
-          if (!Number.isFinite(s.panel.__dgParticlesBaseCount) || s.panel.__dgParticlesBaseCount <= 0) {
-            const curCount = Array.isArray(st?.particles) ? st.particles.length : 0;
-            const cfgMax =
-              Number.isFinite(cfg?.maxCount) ? cfg.maxCount :
-              (Number.isFinite(cfg?.maxParticles) ? cfg.maxParticles : 0);
-            s.panel.__dgParticlesBaseCount = Math.max(600, cfgMax || curCount || 1200);
-          }
-          const base = Number(s.panel.__dgParticlesBaseCount) || 1200;
-          const minCount = __dgWarm ? 600 : (__dgTestMode ? 120 : (perfPanic ? 0 : 50));
-          const desired = Math.max(0, Math.round(Math.max(minCount, base * Math.max(0, maxCountScale))));
-          if (st && Number.isFinite(desired)) st.targetDesired = desired;
-          if (cfg && Number.isFinite(tickModulo)) cfg.tickModulo = tickModulo;
-        } catch {}
       }
     }
 

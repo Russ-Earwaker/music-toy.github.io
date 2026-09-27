@@ -199,8 +199,8 @@ export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
     : requestedCount;
   const getRandomOffscreenSpawnPoint = typeof options?.getRandomOffscreenSpawnPoint === 'function' ? options.getRandomOffscreenSpawnPoint : (() => ({ x: 0, y: 0 }));
   const spawnComposerGroupEnemyAt = typeof options?.spawnComposerGroupEnemyAt === 'function' ? options.spawnComposerGroupEnemyAt : (() => null);
-  const screenToWorld = typeof options?.screenToWorld === 'function' ? options.screenToWorld : (() => null);
-  const worldToScreen = typeof options?.worldToScreen === 'function' ? options.worldToScreen : (() => null);
+  const logicalToWorld = typeof options?.logicalToWorld === 'function' ? options.logicalToWorld : (() => null);
+  const worldToLogical = typeof options?.worldToLogical === 'function' ? options.worldToLogical : (() => null);
   const behavioralFormationArchetype = String(group?.behavioralFormationArchetype || '').trim().toLowerCase();
   // Required lane carriers enter from independently balanced quadrants, then
   // assemble into their authored movement pattern once they are visible.
@@ -214,7 +214,7 @@ export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
       memberIndex: 0,
       memberCount: count,
     }) || { x: 0, y: 0 };
-    const freshWorld = screenToWorld(freshEntryPoint);
+    const freshWorld = logicalToWorld(freshEntryPoint);
     const storedOriginWorld = (
       Number.isFinite(Number(group?.behavioralFormationPathOriginWorldX))
       && Number.isFinite(Number(group?.behavioralFormationPathOriginWorldY))
@@ -236,9 +236,9 @@ export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
         group.behavioralFormationPathCrossOffsetWorld = 0;
       }
       let spawnWorld = { x: Number(storedOriginWorld.x) || 0, y: Number(storedOriginWorld.y) || 0 };
-      let projected = worldToScreen(spawnWorld);
-      const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-      const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
+      let projected = worldToLogical(spawnWorld);
+      const logicalWidth = 1600;
+      const logicalHeight = 900;
       const offscreenPad = 56;
       let guard = 0;
       while (
@@ -246,16 +246,16 @@ export function spawnComposerGroupOffscreenMembersRuntime(options = null) {
         && Number.isFinite(projected.x)
         && Number.isFinite(projected.y)
         && projected.x >= -offscreenPad
-        && projected.x <= (screenW + offscreenPad)
+        && projected.x <= (logicalWidth + offscreenPad)
         && projected.y >= -offscreenPad
-        && projected.y <= (screenH + offscreenPad)
+        && projected.y <= (logicalHeight + offscreenPad)
         && guard < 32
       ) {
         spawnWorld = {
           x: Number(spawnWorld.x) - (pathDirX * 96),
           y: Number(spawnWorld.y) - (pathDirY * 96),
         };
-        projected = worldToScreen(spawnWorld);
+        projected = worldToLogical(spawnWorld);
         guard += 1;
       }
       group.behavioralFormationPathOriginWorldX = Number(spawnWorld.x) || 0;

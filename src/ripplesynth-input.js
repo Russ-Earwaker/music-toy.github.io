@@ -36,7 +36,10 @@ export function makePointerHandlers(cfg) {
 
   const _getPos = (typeof getCanvasPos === 'function')
     ? (e)=> getCanvasPos(canvas, e)
-    : (e)=>{ const r = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1; return { x:(e.clientX - r.left)*dpr, y:(e.clientY - r.top)*dpr }; };
+    : (e)=>{ const r = canvas.getBoundingClientRect(); return {
+      x: (e.clientX - r.left) * ((typeof vw === 'function' ? vw() : r.width) / Math.max(1, r.width)),
+      y: (e.clientY - r.top) * ((typeof vh === 'function' ? vh() : r.height) / Math.max(1, r.height)),
+    }; };
   function posFromEvent(e){ return _getPos(e); }
 
   function nearGenerator(p){

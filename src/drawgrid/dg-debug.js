@@ -118,7 +118,7 @@ export const DG_DEBUG = __dgFlag('core');
 export const DG_FRAME_DEBUG = __dgFlag('frame');
 
 // Feature flag: per-panel particle field (ghost / background particles).
-// Flip to false to test performance without dgField.tick().
+// Flip to false to test performance without particle field stepping.
 export const DRAWGRID_ENABLE_PARTICLE_FIELD = true;
 export const DG_SWAP_DEBUG = __dgFlag('swap');      // swap spam;
 

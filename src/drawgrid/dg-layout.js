@@ -46,13 +46,6 @@ export function createDgLayout({ state, deps } = {}) {
         baseW = bodyW;
         baseH = bodyH;
       }
-      // Back-buffer paths sometimes need a stable "last known" size for a commit flush.
-      // Use the transform-immune base size (RO/body fallback), not a forced wrap px size.
-      if (s.DG_WRAP_SIZE_FLUSH && s.usingBackBuffers) {
-        s.pendingWrapSize = { width: baseW, height: baseH };
-      } else {
-        s.pendingWrapSize = null;
-      }
       const { x: zoomX, y: zoomY } = d.getZoomScale(s.panel); // tracking only for logs/debug
       // IMPORTANT: During refresh/boot the RO-backed size can legitimately be 0 for a frame.
       // Do NOT clamp to 1 before checking; that would force a 1px backing-store resize and
@@ -132,27 +125,10 @@ export function createDgLayout({ state, deps } = {}) {
           zoomGestureActive: s.zoomGestureActive,
           overview: !!s.__overviewActive,
         });
-        // Snapshot current paint to preserve drawn content across resize.
-        // IMPORTANT: snapshot the ACTIVE paint surface (front/back), not just `paint`,
-        // otherwise wheel-zoom / overview can wipe the user's line.
-        let paintSnapshot = null;
-        let paintSnapshotDpr = null;
-        try {
-          const snapSrc = (typeof d.getActivePaintCanvas === 'function' ? d.getActivePaintCanvas() : null) || s.paint;
-          if (snapSrc && snapSrc.width > 0 && snapSrc.height > 0) {
-            paintSnapshot = document.createElement('canvas');
-            paintSnapshot.width = snapSrc.width;
-            paintSnapshot.height = snapSrc.height;
-            paintSnapshot.getContext('2d')?.drawImage(snapSrc, 0, 0);
-            paintSnapshotDpr = (Number.isFinite(s.paintDpr) && s.paintDpr > 0) ? s.paintDpr : null;
-          }
-        } catch {}
-
         s.cssW = newW;
         s.cssH = newH;
         s.progressMeasureW = s.cssW;
         s.progressMeasureH = s.cssH;
-        if (s.dgViewport?.refreshSize) s.dgViewport.refreshSize({ snap: true });
         // IMPORTANT:
         // Do NOT use __dgAdaptivePaintDpr as a "fallback" during generic layout sizing.
         // That causes delayed backing-store DPR changes (RO/ensureSize/layout) which show up
@@ -174,60 +150,20 @@ export function createDgLayout({ state, deps } = {}) {
         s.lastZoomX = zoomX;
         s.lastZoomY = zoomY;
 
-        // Scale stroke geometry ONLY when this is a "real" panel resize.
-        // During zoom/overview transitions we must NOT mutate stroke points,
-        // or lines will drift/vanish permanently.
         const recentlyHydrated =
           s.__hydrationJustApplied ||
           (d.DG_HYDRATE.hydratedAt && (d.dgNow() - d.DG_HYDRATE.hydratedAt < 1200));
-        const okToScaleStrokeGeometry =
-          !s.zoomGestureActive &&
-          s.zoomMode !== 'gesturing' &&
-          !s.__zoomActive &&
-          !s.__overviewActive &&
-          !recentlyHydrated;
+        // Stroke coordinates are authoritative logical state. A presentation
+        // resize must never scale or reproject them.
 
-        if (okToScaleStrokeGeometry && s.strokes.length > 0 && oldW > 4 && oldH > 4 && !s.isRestoring) {
-          const scaleX = s.cssW / oldW;
-          const scaleY = s.cssH / oldH;
-          if (scaleX !== 1 || scaleY !== 1) {
-            for (const st of s.strokes) {
-              if (Array.isArray(st?.__ptsN)) continue;
-              st.pts = st.pts.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
-            }
-          }
-        } else if (!okToScaleStrokeGeometry && s.strokes.length > 0 && oldW > 0 && oldH > 0) {
-          // Optional debug:
-          // dgTraceLog?.('[DG][layout] skip stroke scaling (zoom/overview)', { zoomGestureActive, zoomMode, __zoomActive, __overviewActive, oldW, oldH, cssW, cssH });
-        }
-
-        const { w: logicalW, h: logicalH } = d.__dgGetStableWrapSize();
-        s.gridAreaLogical.w = logicalW;
-        s.gridAreaLogical.h = logicalH;
-
-        const minGridArea = 20; // px floor so it never fully collapses
-        // Compute proportional margin in *logical* CSS px.
-        // IMPORTANT: this must NOT depend on board zoom / transforms. If we use any
-        // zoom-derived value here (e.g. a map scale), the gridArea changes during
-        // zoom/refresh boot and strokes will appear to "re-scale" incorrectly.
-        const safeScale = Math.min(logicalW, logicalH);
-        const dynamicSafeArea = Math.max(
-          12,                               // lower bound so lines don't hug edges on tiny panels
-          Math.round(s.SAFE_AREA_FRACTION * safeScale)
-        );
-
-        s.gridArea = {
-          x: dynamicSafeArea,
-          y: dynamicSafeArea,
-          w: Math.max(minGridArea, logicalW - 2 * dynamicSafeArea),
-          h: Math.max(minGridArea, logicalH - 2 * dynamicSafeArea),
-        };
-
-        // All calculations are now relative to the gridArea
-        // Remove the top cube row; use a minimal padding
-        s.topPad = 0;
-        s.cw = s.gridArea.w / s.cols;
-        s.ch = (s.gridArea.h - s.topPad) / s.rows;
+        // Drawing geometry is fixed in the authored 800x600 logical surface.
+        // Layout changes presentation/backing only; they never rebuild the grid.
+        const geometry = d.createLogicalGeometry({ cols: s.cols, rows: s.rows });
+        s.logicalGeometry = geometry;
+        s.gridArea = { ...geometry.gridRect };
+        s.topPad = geometry.topPad;
+        s.cw = geometry.cellWidth;
+        s.ch = geometry.cellHeight;
         // Record last-known-good sizing so transient "not ready" moments don't nuke the grid.
         if (d.__dgGridReady()) {
           s.__dgLastGoodGridArea = { ...s.gridArea };
@@ -268,134 +204,15 @@ export function createDgLayout({ state, deps } = {}) {
             } catch {}
           }
         }
-        // Reproject strokes from normalized coords once layout is stable.
-        if (s.strokes.length > 0) {
-          const gh = Math.max(1, s.gridArea.h - s.topPad);
-          let reprojected = false;
-          for (const st of s.strokes) {
-            if (!Array.isArray(st?.__ptsN)) continue;
-            reprojected = true;
-            st.pts = st.__ptsN.map(np => ({
-              x: s.gridArea.x + (Number(np?.nx) || 0) * s.gridArea.w,
-              y: (s.gridArea.y + s.topPad) + (Number(np?.ny) || 0) * gh,
-            }));
-          }
-          if (reprojected) {
-            if (d.DG_LAYOUT_DEBUG) {
-              try {
-                d.dgLogLine('layout-reproject', {
-                  panelId: s.panel.id || null,
-                  layoutKey,
-                });
-                d.dgDumpCanvasMetrics(s.panel, 'layout-reproject', s.frontCanvas, s.wrap, s.body);
-              } catch {}
-            }
-            try { d.clearAndRedrawFromStrokes(null, 'layout-reproject'); } catch {}
-          }
-          s.__dgHydrationPendingRedraw = false;
-          s.hydrationState.retryCount = 0;
-        }
+        s.__dgHydrationPendingRedraw = false;
+        s.hydrationState.retryCount = 0;
 
         // === DRAW label responsive sizing tied to toy, not viewport ===
         d.updateDrawLabelLayout(s.drawLabelState, { gridAreaLogical: s.gridAreaLogical, wrap: s.wrap });
 
         d.drawGrid();
-        // Restore paint snapshot scaled to new size (preserves erasures) -- but never during an active stroke
-        // Skip snapshot restore when hydrated strokes are present; redraw from data instead.
-        const hasHydratedStroke = s.strokes.some(st => Array.isArray(st?.__ptsN));
-        if (paintSnapshot && !hasHydratedStroke && s.zoomCommitPhase !== 'recompute') {
-          try {
-            if (!s.drawing) {
-              // When using back buffers, keep BOTH in sync so front/back swaps don't "lose" the line.
-              d.updatePaintBackingStores({ target: s.usingBackBuffers ? 'both' : 'both' });
-              const dprMismatch =
-                Number.isFinite(paintSnapshotDpr) &&
-                Number.isFinite(s.paintDpr) &&
-                Math.abs(paintSnapshotDpr - s.paintDpr) > 1e-3;
-              const hasStrokeData = Array.isArray(s.strokes) && s.strokes.length > 0;
-              const skipByCount = s.__dgSkipPaintSnapshotCount > 0 && hasStrokeData;
-              // If we have stroke data, prefer deterministic redraw from strokes.
-              // Restoring cached pixels here can resurrect stale/collapsed paint (dot-at-origin).
-              const preferStrokeRedraw = hasStrokeData;
-              const skipSnapshot = preferStrokeRedraw || skipByCount || (dprMismatch && hasStrokeData);
-              if (skipByCount) s.__dgSkipPaintSnapshotCount = Math.max(0, (s.__dgSkipPaintSnapshotCount || 0) - 1);
-              if (skipSnapshot) {
-                // Avoid scaling old pixels across DPR changes; redraw from strokes for correct scale.
-                try {
-                  if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
-                    const payload = {
-                      panelId: s.panel?.id || null,
-                      source: 'layout',
-                      preferStrokeRedraw,
-                      skipByCount,
-                      dprMismatch,
-                      paintSnapshotDpr,
-                      paintDpr: s.paintDpr,
-                    };
-                    console.log('[DG][paint] snapshot-skip', JSON.stringify(payload));
-                  }
-                } catch {}
-                d.__dgPaintDebugLog('snapshot-skip', {
-                  source: 'layout',
-                  preferStrokeRedraw,
-                  skipByCount,
-                  dprMismatch,
-                  paintSnapshotDpr,
-                });
-                try { d.clearAndRedrawFromStrokes(null, 'paintSnapshot-skip:dpr'); } catch {}
-              } else {
-                const ctx = (typeof d.getActivePaintCtx === 'function' ? d.getActivePaintCtx() : null) || s.pctx;
-                if (ctx) {
-                  d.resetPaintBlend?.(ctx);
-                  d.R.resetCtx(ctx);
-                  d.R.withLogicalSpace(ctx, () => {
-                    ctx.clearRect(0, 0, s.cssW, s.cssH);
-                    ctx.drawImage(
-                      paintSnapshot,
-                      0, 0, paintSnapshot.width, paintSnapshot.height,
-                      0, 0, s.cssW, s.cssH
-                    );
-                  });
-                  try {
-                    if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
-                      const payload = {
-                        panelId: s.panel?.id || null,
-                        source: 'layout',
-                        paintSnapshotDpr,
-                        paintDpr: s.paintDpr,
-                      };
-                      console.log('[DG][paint] snapshot-restore', JSON.stringify(payload));
-                    }
-                  } catch {}
-                  d.__dgPaintDebugLog('snapshot-restore', {
-                    source: 'layout',
-                    paintSnapshotDpr,
-                  });
-                }
-              }
-              // If we have explicit front/back contexts, mirror the snapshot into both.
-              try {
-                if (s.usingBackBuffers && typeof d.getPaintCtxFront === 'function' && typeof d.getPaintCtxBack === 'function') {
-                  const f = d.getPaintCtxFront();
-                  const b = d.getPaintCtxBack();
-                  for (const c of [f, b]) {
-                    if (!c) continue;
-                    if (skipSnapshot) continue;
-                    d.resetPaintBlend?.(c);
-                    d.R.resetCtx(c);
-                    d.R.withLogicalSpace(c, () => {
-                      c.clearRect(0, 0, s.cssW, s.cssH);
-                      c.drawImage(
-                        paintSnapshot,
-                        0, 0, paintSnapshot.width, paintSnapshot.height,
-                        0, 0, s.cssW, s.cssH
-                      );
-                    });
-                  }
-                }
-              } catch {}
-            }
-          } catch {}
+        if (!s.drawing && Array.isArray(s.strokes) && s.strokes.length > 0) {
+          try { d.clearAndRedrawFromStrokes(null, 'layout:vector-redraw'); } catch {}
         }
         if (s.DG_SINGLE_CANVAS) {
           d.__dgMarkSingleCanvasDirty(s.panel);

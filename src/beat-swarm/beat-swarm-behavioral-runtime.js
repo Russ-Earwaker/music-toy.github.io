@@ -14,6 +14,23 @@ function normalizeActivationMode(value = '') {
   return String(value || '').trim().toLowerCase();
 }
 
+const LOGICAL_WIDTH = 1600;
+const LOGICAL_HEIGHT = 900;
+const LOGICAL_INSET = 24;
+
+function logicalPointToWorld(helpers, point) {
+  const logicalToWorld = typeof helpers?.logicalToWorld === 'function' ? helpers.logicalToWorld : null;
+  if (!logicalToWorld) return null;
+  const world = logicalToWorld(point);
+  return world && Number.isFinite(world.x) && Number.isFinite(world.y) ? world : null;
+}
+
+function logicalLengthToWorld(helpers, length) {
+  const start = logicalPointToWorld(helpers, { x: 0, y: 0 });
+  const end = logicalPointToWorld(helpers, { x: Number(length) || 0, y: 0 });
+  return start && end ? Math.hypot(end.x - start.x, end.y - start.y) : Number(length) || 0;
+}
+
 function buildInactiveRuntime(enemyLike = null) {
   const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : {};
   return Object.freeze({
@@ -46,17 +63,12 @@ function buildWindingChainRuntime(enemyLike = null, helpers = null) {
   const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : {};
   const slotIndex = Math.max(0, Math.trunc(Number(enemy?.formationMemberIndex) || 0));
   const slotCount = Math.max(1, Math.trunc(Number(enemy?.formationMemberCount) || 1));
-  const screenToWorld = typeof helpers?.screenToWorld === 'function' ? helpers.screenToWorld : null;
-  const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-  const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
   const centeredIndex = slotIndex - ((slotCount - 1) * 0.5);
   const laneSide = centeredIndex === 0 ? 0 : (centeredIndex < 0 ? -1 : 1);
-  const targetWorld = screenToWorld
-    ? screenToWorld({
-        x: Math.max(24, Math.min(screenW - 24, (screenW * 0.5) + (centeredIndex * (screenW * 0.045)))),
-        y: Math.max(24, Math.min(screenH - 24, (screenH * 0.22) + (Math.abs(centeredIndex) * (screenH * 0.035)))),
-      })
-    : null;
+  const targetWorld = logicalPointToWorld(helpers, {
+    x: Math.max(LOGICAL_INSET, Math.min(LOGICAL_WIDTH - LOGICAL_INSET, (LOGICAL_WIDTH * 0.5) + (centeredIndex * (LOGICAL_WIDTH * 0.045)))),
+    y: Math.max(LOGICAL_INSET, Math.min(LOGICAL_HEIGHT - LOGICAL_INSET, (LOGICAL_HEIGHT * 0.22) + (Math.abs(centeredIndex) * (LOGICAL_HEIGHT * 0.035)))),
+  });
   return Object.freeze({
     archetype: 'winding_chain',
     behaviorClass: 'follow_the_leader',
@@ -76,8 +88,8 @@ function buildWindingChainRuntime(enemyLike = null, helpers = null) {
     slotCount,
     leaderEnemyId: slotIndex === 0 ? Math.max(0, Math.trunc(Number(enemy?.id) || 0)) : 0,
     leaderBias: slotIndex === 0 ? 1 : 0,
-    followDistanceWorld: Math.max(44, Math.round((screenW || 1280) * 0.032)),
-    lateralOffsetWorld: laneSide * Math.max(12, Math.round((screenW || 1280) * 0.008)),
+    followDistanceWorld: logicalLengthToWorld(helpers, Math.max(44, Math.round(LOGICAL_WIDTH * 0.032))),
+    lateralOffsetWorld: laneSide * logicalLengthToWorld(helpers, Math.max(12, Math.round(LOGICAL_WIDTH * 0.008))),
     curvatureBias: centeredIndex * 0.18,
     speedMultiplier: enemy?.behavioralFormationActive === true ? 1.75 : 1,
     pathOscillationAmplitude: Math.max(0.18, Math.min(0.72, 0.3 + (clamp01(enemy?.behavioralFormationIntensity || 0.55) * 0.45))),
@@ -93,17 +105,12 @@ function buildAdvancingLineRuntime(enemyLike = null, helpers = null) {
   const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : {};
   const slotIndex = Math.max(0, Math.trunc(Number(enemy?.formationMemberIndex) || 0));
   const slotCount = Math.max(1, Math.trunc(Number(enemy?.formationMemberCount) || 1));
-  const screenToWorld = typeof helpers?.screenToWorld === 'function' ? helpers.screenToWorld : null;
-  const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-  const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
   const centeredIndex = slotIndex - ((slotCount - 1) * 0.5);
   const laneSide = centeredIndex === 0 ? 0 : (centeredIndex < 0 ? -1 : 1);
-  const targetWorld = screenToWorld
-    ? screenToWorld({
-        x: Math.max(24, Math.min(screenW - 24, (screenW * 0.5) + (centeredIndex * (screenW * 0.055)))),
-        y: Math.max(24, Math.min(screenH - 24, screenH * 0.5)),
-      })
-    : null;
+  const targetWorld = logicalPointToWorld(helpers, {
+    x: Math.max(LOGICAL_INSET, Math.min(LOGICAL_WIDTH - LOGICAL_INSET, (LOGICAL_WIDTH * 0.5) + (centeredIndex * (LOGICAL_WIDTH * 0.055)))),
+    y: LOGICAL_HEIGHT * 0.5,
+  });
   return Object.freeze({
     archetype: 'advancing_line',
     behaviorClass: 'follow_the_leader',
@@ -123,8 +130,8 @@ function buildAdvancingLineRuntime(enemyLike = null, helpers = null) {
     slotCount,
     leaderEnemyId: slotIndex === 0 ? Math.max(0, Math.trunc(Number(enemy?.id) || 0)) : 0,
     leaderBias: slotIndex === 0 ? 1 : 0,
-    followDistanceWorld: Math.max(44, Math.round((screenW || 1280) * 0.03)),
-    lateralOffsetWorld: laneSide * Math.max(4, Math.round((screenH || 720) * 0.01)),
+    followDistanceWorld: logicalLengthToWorld(helpers, Math.max(44, Math.round(LOGICAL_WIDTH * 0.03))),
+    lateralOffsetWorld: laneSide * logicalLengthToWorld(helpers, Math.max(4, Math.round(LOGICAL_HEIGHT * 0.01))),
     curvatureBias: centeredIndex * 0.04,
     speedMultiplier: enemy?.behavioralFormationActive === true ? 1.58 : 1,
     pathOscillationAmplitude: Math.max(0.24, Math.min(0.95, 0.34 + (clamp01(enemy?.behavioralFormationIntensity || 0.6) * 0.42))),
@@ -140,16 +147,11 @@ function buildPairedDanceRuntime(enemyLike = null, helpers = null) {
   const enemy = enemyLike && typeof enemyLike === 'object' ? enemyLike : {};
   const slotIndex = Math.max(0, Math.trunc(Number(enemy?.formationMemberIndex) || 0));
   const slotCount = Math.max(1, Math.trunc(Number(enemy?.formationMemberCount) || 1));
-  const screenToWorld = typeof helpers?.screenToWorld === 'function' ? helpers.screenToWorld : null;
-  const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-  const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
   const centeredIndex = slotIndex - ((slotCount - 1) * 0.5);
-  const targetWorld = screenToWorld
-    ? screenToWorld({
-        x: Math.max(24, Math.min(screenW - 24, (screenW * 0.5) + (centeredIndex * (screenW * 0.05)))),
-        y: Math.max(24, Math.min(screenH - 24, (screenH * 0.54) + ((slotIndex % 2 === 0 ? -1 : 1) * (screenH * 0.03)))),
-      })
-    : null;
+  const targetWorld = logicalPointToWorld(helpers, {
+    x: Math.max(LOGICAL_INSET, Math.min(LOGICAL_WIDTH - LOGICAL_INSET, (LOGICAL_WIDTH * 0.5) + (centeredIndex * (LOGICAL_WIDTH * 0.05)))),
+    y: Math.max(LOGICAL_INSET, Math.min(LOGICAL_HEIGHT - LOGICAL_INSET, (LOGICAL_HEIGHT * 0.54) + ((slotIndex % 2 === 0 ? -1 : 1) * (LOGICAL_HEIGHT * 0.03)))),
+  });
   return Object.freeze({
     archetype: 'paired_dance',
     behaviorClass: 'paired_motion',

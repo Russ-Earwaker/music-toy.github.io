@@ -235,30 +235,10 @@ export function createDgLayoutSizing({ state, deps } = {}) {
         forceResize,
       });
       __dgLastEnsureSizeAtMs = nowTs;
-      // Snapshot current paint to preserve drawn lines across resize.
-      let paintSnapshot = null;
-      let paintSnapshotDpr = null;
-      try {
-        // IMPORTANT: only use back buffers when they are actually enabled.
-        // Using backCanvas/backCtx while usingBackBuffers===false causes the paint layer
-        // (flat colour line) to desync scale vs the animated overlay line after zoom.
-        const snapSrc = (s.usingBackBuffers && s.backCanvas)
-          ? s.backCanvas
-          : ((typeof d.getActivePaintCanvas === 'function' ? d.getActivePaintCanvas() : s.paint) || s.paint);
-        if (snapSrc && snapSrc.width > 0 && snapSrc.height > 0) {
-          paintSnapshot = document.createElement('canvas');
-          paintSnapshot.width = snapSrc.width;
-          paintSnapshot.height = snapSrc.height;
-          paintSnapshot.getContext('2d')?.drawImage(snapSrc, 0, 0);
-          paintSnapshotDpr = (Number.isFinite(s.paintDpr) && s.paintDpr > 0) ? s.paintDpr : null;
-        }
-      } catch {}
-
       s.cssW = w; s.cssH = h;
       __dgLastSizeCommitMs = nowTs;
       s.progressMeasureW = s.cssW; s.progressMeasureH = s.cssH;
 
-      try { s.dgViewport?.refreshSize?.({ snap: true }); } catch {}
 
       // If ensureSize changes canvas dimensions frequently, this can cause huge nonScript stalls.
       d.traceCanvasResize(s.frontCanvas || s.paint || s.backCanvas, 'drawgrid.ensureSize');
@@ -271,71 +251,10 @@ export function createDgLayoutSizing({ state, deps } = {}) {
           : (Number.isFinite(window?.devicePixelRatio) ? window.devicePixelRatio : 1);
       resizeSurfacesFor(s.cssW, s.cssH, __ensureDpr, 'ensureSizeReady:paintDpr');
       try { d.markStaticDirty('ensure-size'); } catch {}
-      if (paintSnapshot) {
-        try {
-          const ctx = (s.usingBackBuffers && s.backCtx)
-            ? s.backCtx
-            : ((typeof d.getActivePaintCtx === 'function' ? d.getActivePaintCtx() : s.pctx) || s.pctx);
-          if (ctx) {
-            const dprMismatch =
-              Number.isFinite(paintSnapshotDpr) &&
-              Number.isFinite(s.paintDpr) &&
-              Math.abs(paintSnapshotDpr - s.paintDpr) > 1e-3;
-            const hasStrokeData = Array.isArray(s.strokes) && s.strokes.length > 0;
-            const skipByCount = s.__dgSkipPaintSnapshotCount > 0 && hasStrokeData;
-            const skipSnapshot = skipByCount || (dprMismatch && hasStrokeData);
-            if (skipByCount) s.__dgSkipPaintSnapshotCount = Math.max(0, (s.__dgSkipPaintSnapshotCount || 0) - 1);
-            if (skipSnapshot) {
-              // Avoid scaling old pixels across DPR changes; redraw from strokes for correct scale.
-              try {
-                if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
-                  const payload = {
-                    panelId: s.panel?.id || null,
-                    source: 'ensureSizeReady',
-                    skipByCount,
-                    dprMismatch,
-                    paintSnapshotDpr,
-                    paintDpr: s.paintDpr,
-                  };
-                  console.log('[DG][paint] snapshot-skip', JSON.stringify(payload));
-                }
-              } catch {}
-              d.__dgPaintDebugLog('snapshot-skip', {
-                source: 'ensureSizeReady',
-                skipByCount,
-                dprMismatch,
-                paintSnapshotDpr,
-              });
-              try { d.clearAndRedrawFromStrokes(null, 'paintSnapshot-skip:dpr'); } catch {}
-            } else {
-              d.resetPaintBlend?.(ctx);
-              d.R.resetCtx(ctx);
-              d.R.withLogicalSpace(ctx, () => {
-                ctx.clearRect(0, 0, s.cssW, s.cssH);
-                ctx.drawImage(
-                  paintSnapshot,
-                  0, 0, paintSnapshot.width, paintSnapshot.height,
-                  0, 0, s.cssW, s.cssH
-                );
-              });
-              try {
-                if (typeof window !== 'undefined' && window.__DG_ZOOM_COMMIT_TRACE) {
-                  const payload = {
-                    panelId: s.panel?.id || null,
-                    source: 'ensureSizeReady',
-                    paintSnapshotDpr,
-                    paintDpr: s.paintDpr,
-                  };
-                  console.log('[DG][paint] snapshot-restore', JSON.stringify(payload));
-                }
-              } catch {}
-              d.__dgPaintDebugLog('snapshot-restore', {
-                source: 'ensureSizeReady',
-                paintSnapshotDpr,
-              });
-            }
-          }
-        } catch {}
+      // Backing resize clears pixels. Authoritative vector strokes reconstruct
+      // paint deterministically; presentation resize never mutates model state.
+      if (Array.isArray(s.strokes) && s.strokes.length > 0) {
+        try { d.clearAndRedrawFromStrokes(null, 'ensure-size:vector-redraw'); } catch {}
       }
     }
 
@@ -472,72 +391,23 @@ export function createDgLayoutSizing({ state, deps } = {}) {
       // - backing-store sizes for managed canvases
       // - ctx.setTransform(dpr,0,0,dpr,0,0) for managed canvases
       //
-      // Particles are registered as policy:'css' (field-generic owns backing store),
-      // so they'll only get CSS sizing here.
-      const setCssSize = (canvasEl) => {
-        if (!canvasEl) return;
-        // Accept either a canvas element or a 2D context (ctx.canvas).
-        const el = (canvasEl && canvasEl.canvas) ? canvasEl.canvas : canvasEl;
-        if (!el || !el.style) return;
-        // Avoid repeated style writes inside RAF; these can be surprisingly expensive at scale.
-        if (el.__dgCssW === nextCssW && el.__dgCssH === nextCssH) return;
-        el.__dgCssW = nextCssW;
-        el.__dgCssH = nextCssH;
-        el.style.width = `${nextCssW}px`;
-        el.style.height = `${nextCssH}px`;
-      };
-
+      // The particle canvas is managed alongside the other front surfaces;
+      // its logical field remains independent of this backing-store sizing.
       try {
         if (s.dgSurfaces && typeof s.dgSurfaces.applyExplicit === 'function') {
           // Keep local state in sync with the manager-applied state.
           s.cssW = nextCssW;
           s.cssH = nextCssH;
           s.dgSurfaces.applyExplicit(nextCssW, nextCssH, s.paintDpr);
-          d.__dgListAllLayerRefs().forEach(setCssSize);
-          const resizeBack = (canvas) => {
-            if (!canvas) return;
-            if (canvas.width === targetW && canvas.height === targetH) return;
-            canvas.width = targetW;
-            canvas.height = targetH;
-          };
-          resizeBack(s.gridBackCanvas);
-          resizeBack(s.nodesBackCanvas);
-          resizeBack(s.flashBackCanvas);
-          resizeBack(s.ghostBackCanvas);
-          resizeBack(s.tutorialBackCanvas);
-          resizeBack(s.backCanvas);
+          d.resizeOffscreenBuffers(s.dgSurfaces.getSnapshot?.());
           d.dgSizeTrace('resizeSurfacesFor(surfaceMgr)', { reason, nextCssW, nextCssH, paintDpr: s.paintDpr, targetW, targetH });
-          try { d.__dgEnsureLayerSizes('resizeSurfacesFor(surfaceMgr)'); } catch {}
-          return;
+        } else {
+          throw new Error('DrawGrid requires createToySurfaceManager');
         }
       } catch (e) {
-        try { console.warn('[DG] surfaceMgr applyExplicit failed, falling back', e); } catch {}
+        try { console.warn('[DG] surface manager sizing failed', e); } catch {}
+        return;
       }
-      // Keep *all* drawgrid canvases pinned to the same CSS size as the panel.
-      // Otherwise, when paintDpr/backing-store sizes are reduced (< 1) for perf while zoomed out,
-      // some overlays (nodes/connectors/labels) can end up with a smaller intrinsic CSS size and appear scaled down.
-      d.__dgListAllLayerRefs().forEach(setCssSize);
-      const resize = (canvas) => {
-        if (!canvas) return;
-        if (canvas.width === targetW && canvas.height === targetH) return;
-        canvas.width = targetW;
-        canvas.height = targetH;
-      };
-      resize(s.gridFrontCtx?.canvas);
-      resize(s.gridBackCanvas);
-      // particleCanvas sizing is managed by field-generic (it owns DPR/size)
-      resize(s.nodesFrontCtx?.canvas);
-      resize(s.nodesBackCanvas);
-      resize(s.flashFrontCtx?.canvas);
-      resize(s.flashBackCanvas);
-      resize(s.ghostFrontCtx?.canvas);
-      resize(s.ghostBackCanvas);
-      resize(s.tutorialFrontCtx?.canvas);
-      resize(s.tutorialBackCanvas);
-      resize(s.playheadCanvas);
-      resize(s.frontCanvas);
-      resize(s.backCanvas);
-      try { d.__dgEnsureLayerSizes('resizeSurfacesFor'); } catch {}
       try {
         if (s.playheadFrontCtx?.canvas) {
           d.R.resetCtx(s.playheadFrontCtx);

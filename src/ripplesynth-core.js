@@ -1,5 +1,6 @@
-import { getToyLifecycle, mountToySurface } from './baseMusicToy/index.js';
+import { getToyLifecycle } from './baseMusicToy/index.js';
 import { initToyUI } from './toyui.js';
+import { createToySurfaceManager } from './toy-surface-manager.js';
 const RIPPLER_BOOT_DEBUG = false;
 if (RIPPLER_BOOT_DEBUG) {
   console.log('[Rippler] Core module loaded (v-preview-gen)');
@@ -8,7 +9,6 @@ import { randomizeAllImpl } from './ripplesynth-random.js';
 import { randomizeRects } from './toyhelpers.js';
 import { noteList } from './utils.js';
 import { PENTATONIC_OFFSETS } from './ripplesynth-scale.js';
-import { boardScale } from './board-scale-helpers.js';
 import { ensureAudioContext, barSeconds as audioBarSeconds, getLoopInfo, isRunning, getToyGain, getToyVolume, resumeAudioContextIfNeeded } from './audio-core.js';
 import { installQuantUI } from './bouncer-quant-ui.js';
 import { triggerInstrument as __rawTrig } from './audio-samples.js';
@@ -25,6 +25,17 @@ import { circleRectHit } from './bouncer-helpers.js';
 import { drawBlock } from './toyhelpers.js';
 import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, queueDatasetSet, markPanelForDomCommit } from './dom-commit.js';
+import {
+  RIPPLER_BLOCK_SIZE,
+  RIPPLER_EDGE,
+  RIPPLER_LOGICAL_HEIGHT,
+  RIPPLER_LOGICAL_WIDTH,
+  createRipplerViewportSpace,
+  doesRippleIntersectBlock,
+  ripplerClientToLogical,
+  ripplerLogicalToNormalized,
+  ripplerNormalizedToLogical,
+} from './rippler-viewport-space.js';
 
 export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
@@ -42,20 +53,32 @@ export function createRippleSynth(selector){
   const triggerInstrument = (inst, name, when)=> __rawTrig(inst, name, when, toyId);
 
   const canvas = document.createElement('canvas');
-  let __baseAttrW = 0;
-  function rectScale(){
-    const w = canvas.width || 0;
-    if (!__baseAttrW && w>0) __baseAttrW = w;
-    return (__baseAttrW>0 && w>0) ? (w/__baseAttrW) : 1;
-  }
 
   try{ if (typeof window!=='undefined' && typeof window.__ripplerUserArmed==='undefined'){ window.__ripplerUserArmed=false; } }catch{}
   try{ lifecycle.listen(canvas, 'pointerdown', ()=>{ try{ window.__ripplerUserArmed=true; }catch{} }); }catch{}
   canvas.className = 'rippler-canvas';
   const ui = initToyUI(panel, { toyName: 'Rippler' });
-  const surface = mountToySurface(panel, canvas);
-  const resizeCanvasForDPR = (_canvas, ctx) => surface.resize(ctx);
+  const body = panel.querySelector(':scope > .toy-body');
+  if (!body) throw new Error('Initialize toy UI before mounting Rippler surface');
+  panel.dataset.toyLayout = 'square';
+  canvas.classList.add('toy-surface-canvas');
+  let surfaceHost = body.querySelector(':scope > .toy-surface');
+  if (!surfaceHost) {
+    surfaceHost = document.createElement('div');
+    surfaceHost.className = 'toy-surface';
+    body.appendChild(surfaceHost);
+  }
+  surfaceHost.appendChild(canvas);
   const ctx = canvas.getContext('2d');
+  const surfaceManager = createToySurfaceManager({
+    panel,
+    body: surfaceHost,
+    getBoardScale: () => window.__boardScale || 1,
+    tag: 'rippler',
+  });
+  surfaceManager.registerCanvas('main', canvas, { policy: 'managed' });
+  surfaceManager.syncNow('rippler-init');
+  lifecycle.addCleanup?.(() => surfaceManager.destroy());
   // Install quantization UI (shared with Bouncer), default to 1/2
   try{ if (!panel.dataset.quantDiv && !panel.dataset.quant) panel.dataset.quantDiv = '2'; }catch{}
   // Keep a getter to read current quant divisor reliably (like Bouncer)
@@ -72,7 +95,7 @@ export function createRippleSynth(selector){
   const isZoomed = ()=> panel.classList.contains('toy-zoomed');
   // Sizing object passed to shared renderers; include isZoomed so they can show arrows/labels in Advanced view
   const sizing = { scale: 1, isZoomed };
-  lifecycle.listen(panel, 'toy-zoom', ()=>{ try { setParticleBounds(canvas.width|0, canvas.height|0); } catch {} });
+  lifecycle.listen(panel, 'toy-zoom', ()=>{ try { surfaceManager.requestSync('toy-zoom'); } catch {} });
   // Debug helper
   const __dbg = (...args)=>{ try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', ...args); }catch{} };
 
@@ -114,20 +137,19 @@ export function createRippleSynth(selector){
     lifecycle.requestFrame(tickDot);
   }catch{}
 
-  const EDGE=4;
-  const W = ()=> (canvas.width|0);
-  const H = ()=> (canvas.height|0);
+  const EDGE = RIPPLER_EDGE;
+  const W = () => RIPPLER_LOGICAL_WIDTH;
+  const H = () => RIPPLER_LOGICAL_HEIGHT;
   const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
 
-  const n2x = (nx)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return offX + nx*side; };
-  const n2y = (ny)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return offY + ny*side; };
-  const x2n = (x)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (W()-2*EDGE); const offX = z? Math.max(EDGE, (W()-side)/2): EDGE; return Math.min(1, Math.max(0, (x-offX)/side)); };
-  const y2n = (y)=>{ const z=isZoomed(); const side=z? Math.max(0, Math.min(W(),H())-2*EDGE) : (H()-2*EDGE); const offY = z? Math.max(EDGE, (H()-side)/2): EDGE; return Math.min(1, Math.max(0, (y-offY)/side)); };
+  const n2x = (nx) => ripplerNormalizedToLogical({ nx, ny: 0 }).x;
+  const n2y = (ny) => ripplerNormalizedToLogical({ nx: 0, ny }).y;
+  const x2n = (x) => ripplerLogicalToNormalized({ x, y: EDGE }).nx;
+  const y2n = (y) => ripplerLogicalToNormalized({ x: EDGE, y }).ny;
 
-  const getCanvasPos = (el, e)=>{ const r = el.getBoundingClientRect(); const sx = r.width? (el.width / r.width) : 1; const sy = r.height? (el.height / r.height) : 1; return { x: (e.clientX - r.left)*sx, y: (e.clientY - r.top)*sy }; };
+  const getCanvasPos = (el, e) => ripplerClientToLogical(el, e);
 
-  const CUBES = 8, BASE = 56 * 0.75;
-  const __baseSpanW = Math.max(1, Math.abs(n2x(1) - n2x(0)));
+  const CUBES = 8, BASE = RIPPLER_BLOCK_SIZE;
   const blocks = Array.from({length:CUBES}, (_,i)=>({
     nx:0.5, ny:0.5, nx0:0.5, ny0:0.5,
     vx:0, vy:0,
@@ -144,7 +166,7 @@ export function createRippleSynth(selector){
   let didLayout=false;
   function layoutBlocks(){
     if (didLayout || !W() || !H()) return;
-    const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+    const size = Math.round(BASE*(sizing.scale||1));
     const bounds = { x: EDGE, y: EDGE, w: Math.max(1, W()-EDGE*2), h: Math.max(1, H()-EDGE*2) };
     const rects = Array.from({length:CUBES}, ()=>({
       x: Math.round(bounds.x + Math.random()*(bounds.w - size)),
@@ -330,7 +352,7 @@ export function createRippleSynth(selector){
             previewBlocks[i].noteIndex = baseIx + off;
         }
         // Randomize positions for the preview blocks
-        const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+        const size = Math.round(BASE*(sizing.scale||1));
         const bounds = { x: EDGE, y: EDGE, w: Math.max(1, W()-EDGE*2), h: Math.max(1, H()-EDGE*2) };
         const rects = Array.from({length:CUBES}, ()=>({ w: size, h: size }));
         try { randomizeRects(rects, bounds, 6); } catch {}
@@ -490,7 +512,7 @@ export function createRippleSynth(selector){
       get r(){ return generator.r || 12; }
     }, canvas, vw:W, vh:H, EDGE, blocks:[], ripples, getBlockRects, isZoomed, clamp, getCanvasPos,
     onBlockTap: (idx, p)=>{
-      const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)*rectScale()));
+      const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)));
       const b = blocks[idx];
       const rect = { x:n2x(b.nx)-size2/2, y:n2y(b.ny)-size2/2, w:size2, h:size2 };
       handleBlockTap(blocks, idx, p, rect, { noteList, ac, pattern, trigger: triggerInstrument, instrument: currentInstrument, __schedState });
@@ -526,7 +548,7 @@ export function createRippleSynth(selector){
       } catch {}
     },
     onBlockDrag: (idx, newX, newY)=>{
-      const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)*rectScale()));
+      const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)));
       const cx = newX + size2/2, cy = newY + size2/2;
       const nx = x2n(cx), ny = y2n(cy);
       const b = blocks[idx]; if (!b) return;
@@ -622,13 +644,11 @@ export function createRippleSynth(selector){
     const rMain = ripples[ripples.length-1]; rMain.hit = rMain.hit || new Set();
     const R = Math.max(0, (nowAT - (rMain.startAT||nowAT)) * (rMain.speed||RING_SPEED()));
     const band = 9; const gx = n2x(generator.nx), gy = n2y(generator.ny);
-    const size2 = Math.max(20, Math.round(BASE*(sizing.scale||1)*rectScale()));
+    const hitRects = getBlockRects();
     for (let i=0;i<blocks.length;i++){
       const b = blocks[i]; if (!b.active || rMain.hit.has(i)) continue;
       const cx = n2x(b.nx), cy = n2y(b.ny);
-      const dx = Math.max(Math.abs(cx - gx) - size2/2, 0), dy = Math.max(Math.abs(cy - gy) - size2/2, 0);
-      const dEdge = Math.hypot(dx,dy);
-      if (Math.abs(dEdge - R) <= band){
+      if (doesRippleIntersectBlock({ source: { x: gx, y: gy }, radius: R, blockRect: hitRects[i], band })){
         rMain.hit.add(i);
         const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1); b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
         const whenAT = ac.currentTime, slotLen = stepSeconds();
@@ -751,17 +771,26 @@ export function createRippleSynth(selector){
       } else if (panel.__pulseHighlightFired) {
         panel.__pulseHighlightFired = false;
       }
-      resizeCanvasForDPR(canvas, ctx);
+      const cssW = Math.max(1, surfaceManager.getCssW() || canvas.clientWidth || W());
+      const cssH = Math.max(1, surfaceManager.getCssH() || canvas.clientHeight || H());
+      const dpr = Math.max(0.25, surfaceManager.getDpr() || 1);
+      const viewport = createRipplerViewportSpace({ width: cssW, height: cssH, backingScale: dpr });
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0b0f16';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(
+        dpr * viewport.presentationScale, 0,
+        0, dpr * viewport.presentationScale,
+        dpr * viewport.contentRect.left,
+        dpr * viewport.contentRect.top,
+      );
       if (!didLayout) layoutBlocks();
-      ctx.clearRect(0,0,W(),H());
       if (!(W() && H())){
         if (!window.__ripplerZeroWarned){ window.__ripplerZeroWarned = true; }
         return;
       }
-      ctx.fillStyle = '#0b0f16';
-      ctx.fillRect(0,0,W(),H());
-
-      const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+      const size = Math.round(BASE*(sizing.scale||1));
       for (const b of blocks) {
         if (b.pulse) b.pulse = Math.max(0, b.pulse * 0.90 - 0.03);
         if (b.cflash) b.cflash = Math.max(0, b.cflash * 0.94 - 0.02);
@@ -785,7 +814,7 @@ export function createRippleSynth(selector){
       const center = { x: n2x(generator.nx), y: n2y(generator.ny) };
       drawParticles(ctx, tView, ripples, generator.placed ? center : null, blockRects);
       if (generator.placed) {
-        drawWaves(ctx, center.x, center.y, tView, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, sizing.scale || 1);
+        drawWaves(ctx, center.x, center.y, tView, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, sizing.scale || 1, W(), H());
       }
 
       if (!_loggedCubeOnce && blockRects.length > 0) {
@@ -810,9 +839,7 @@ export function createRippleSynth(selector){
       // Draw preview blocks if they exist
       if (hasPreviewState && previewBlocks.length > 0) {
           const previewBlockRects = previewBlocks.map(pb => {
-              const __spanW = Math.max(1, Math.abs(n2x(1) - n2x(0)));
-              const __rectScale = __spanW / __baseSpanW;
-              const size = Math.max(20, Math.round(BASE * (sizing.scale||1) * __rectScale));
+              const size = Math.max(20, Math.round(BASE * (sizing.scale||1)));
               const cx = n2x(pb.nx);
               const cy = n2y(pb.ny);
               return { x: cx - size/2, y: cy - size/2, w: size, h: size, active: pb.active };
@@ -1055,7 +1082,7 @@ export function createRippleSynth(selector){
   function randomizeBlockPositions(){
     try {
       try { ensureAudioContext(); } catch {}
-      const size = Math.round(BASE*(sizing.scale||1)*boardScale(canvas));
+      const size = Math.round(BASE*(sizing.scale||1));
       const bounds = { x: EDGE, y: EDGE, w: Math.max(1, W()-EDGE*2), h: Math.max(1, H()-EDGE*2) };
       const rects = Array.from({length:CUBES}, ()=>({ w:size, h:size }));
       try { randomizeRects(rects, bounds, 6); } catch {}

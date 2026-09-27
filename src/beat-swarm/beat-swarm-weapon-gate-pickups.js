@@ -1,17 +1,17 @@
-import { getWeaponGateShipScreenPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
+import { WEAPON_GATE_LOGICAL_CENTER, WEAPON_GATE_LOGICAL_WIDTH, getWeaponGateShipLogicalPoint } from './beat-swarm-weapon-gate-geometry.js?v=2026-06-18-corridor-curve-v1';
 
 export function updateWeaponGateDashPickup(state, dt = 0, input = null) {
   if (!state || state.phase !== 'gate') return null;
   const safeDt = Math.max(0, Number(dt) || 0);
   state.dashPickupCooldown = Math.max(0, (Number(state.dashPickupCooldown) || 0) - safeDt);
   if (!state.dashPickup && state.dashPickupCooldown <= 0) {
-    state.dashPickup = { x: state.progress + window.innerWidth + 180, y: state.y };
+    state.dashPickup = { x: state.progress + WEAPON_GATE_LOGICAL_WIDTH + 180, y: state.y };
   }
   const p = state.dashPickup;
   if (!p) return null;
   const sx = p.x - state.progress;
-  const sy = p.y + ((window.innerHeight * 0.5) - state.y);
-  const { x: shipX, y: shipY } = getWeaponGateShipScreenPoint();
+  const sy = p.y + (WEAPON_GATE_LOGICAL_CENTER.y - state.y);
+  const { x: shipX, y: shipY } = getWeaponGateShipLogicalPoint();
   if (sx < -40) {
     state.dashPickup = null;
     state.dashPickupCooldown = 1.25;

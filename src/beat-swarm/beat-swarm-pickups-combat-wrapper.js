@@ -6,8 +6,8 @@ export function updatePickupsAndCombatRuntimeWrapper(options = null) {
   const flags = options?.flags && typeof options.flags === 'object' ? options.flags : {};
   helpers.updateBeatSwarmPickupsAndCombatRuntime?.({
     constants: {
-      pickupCollectRadiusPx: Number(constants.pickupCollectRadiusPx) || 0,
-      projectileHitRadiusPx: Number(constants.projectileHitRadiusPx) || 0,
+      pickupCollectRadiusLogical: Number(constants.pickupCollectRadiusLogical) || 0,
+      projectileHitRadiusLogical: Number(constants.projectileHitRadiusLogical) || 0,
       projectileDespawnOffscreenPadPx: Number(constants.projectileDespawnOffscreenPadPx) || 0,
       projectileBoomerangRadiusWorld: Number(constants.projectileBoomerangRadiusWorld) || 0,
       projectileHomingOrbitRadiusWorld: Number(constants.projectileHomingOrbitRadiusWorld) || 0,
@@ -28,9 +28,12 @@ export function updatePickupsAndCombatRuntimeWrapper(options = null) {
     helpers: {
       getViewportCenterWorld: helpers.getViewportCenterWorld,
       getZoomState: helpers.getZoomState,
+      getPresentationScale: helpers.getPresentationScale,
       updateHelpers: helpers.updateHelpers,
       ensureDefaultWeaponFromLegacy: helpers.ensureDefaultWeaponFromLegacy,
       worldToScreen: helpers.worldToScreen,
+      worldToLogical: helpers.worldToLogical,
+      isWorldPointInsideGameplay: helpers.isWorldPointInsideGameplay,
       getNearestEnemy: helpers.getNearestEnemy,
       normalizeDir: helpers.normalizeDir,
       getDrawSnakeProjectileImpactPoint: helpers.getDrawSnakeProjectileImpactPoint,

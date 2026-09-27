@@ -1,7 +1,21 @@
 // src/chordwheel.js — chord wheel with 16-step radial ring (per active segment)
 import { initToyUI } from './toyui.js';
 import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain, isRunning, registerActiveNode } from './audio-core.js';
-import { createBouncerParticles } from './bouncer-particles.js';
+import { createChordWheelStrumParticles } from './chordwheel-strum-particles.js';
+import {
+  CHORDWHEEL_STRUM_LOGICAL_WIDTH,
+  chordWheelStrumClientToLogical,
+  createChordWheelStrumViewportSpace,
+} from './chordwheel-strum-viewport-space.js';
+import {
+  CHORDWHEEL_MAIN_LOGICAL_HEIGHT,
+  CHORDWHEEL_MAIN_LOGICAL_WIDTH,
+  chordWheelMainClientToLogical,
+  createChordWheelMainViewportSpace,
+  getChordWheelCubeGeometry,
+  hitTestChordWheelCubes,
+} from './chordwheel-main-viewport-space.js';
+import { createToySurfaceManager } from './toy-surface-manager.js';
 import { triggerNoteForToy } from './audio-trigger.js';
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { requestPanelPulse } from './pulse-border.js';
@@ -208,65 +222,17 @@ export function createChordWheel(panel){
   strumCanvas.addEventListener('pointerdown', dismissStrumPrompt);
   strumCanvas.addEventListener('pointermove', dismissStrumPrompt);
 
-  const logSize = (label, w, h) => {
-    try { console.debug?.(`[chordwheel] ${toyId} ${label} -> ${Math.round(w)}x${Math.round(h)}`); } catch {}
-  };
-
-  let strumSize = { width: 0, height: 0 };
-  let strumSizeDirty = true;
-  let currentStrumWidth = 1;
-  let currentStrumHeight = 1;
-
-  let wheelSize = { width: 0, height: 0 };
-  let wheelSizeDirty = true;
-  let currentWheelWidth = 1;
-  let currentWheelHeight = 1;
-
-  const markSizeDirty = (reason = 'unknown') => {
-    const wasStrumDirty = strumSizeDirty;
-    const wasWheelDirty = wheelSizeDirty;
-    strumSizeDirty = true;
-    wheelSizeDirty = true;
-    try {
-      if (!wasStrumDirty || !wasWheelDirty) {
-        console.debug?.(`[chordwheel] ${toyId} markSizeDirty (${reason})`);
-      }
-    } catch {}
-  };
-  const sanitizeDimensions = (width, height, label) => {
-    let w = Number.isFinite(width) ? width : 0;
-    let h = Number.isFinite(height) ? height : 0;
-    let clamped = false;
-    if (w <= 0) {
-      w = (label === 'strumWrap' ? (strumSize.width || 1) : (wheelSize.width || 1));
-      clamped = true;
-    }
-    if (h <= 0) {
-      h = w;
-      clamped = true;
-    }
-    const maxRatio = 3;
-    if (h > w * maxRatio || h < w / maxRatio) {
-      h = w;
-      clamped = true;
-    }
-    if (w > h * maxRatio || w < h / maxRatio) {
-      w = h;
-      clamped = true;
-    }
-    if (clamped) {
-      try { console.warn(`[chordwheel] ${toyId} sanitize ${label}: ${width}x${height} -> ${w}x${h}`); } catch {}
-    }
-    return { width: w, height: h };
-  };
-
-
   // Particle field for strum area
-  const particles = createBouncerParticles(
-    () => Math.max(1, currentStrumWidth),
-    () => Math.max(1, currentStrumHeight),
-    { count: 0, biasXCenter: false, biasYCenter: false, knockbackScale: 1.0, returnToHome: true, lockXToCenter: true, bounceOnWalls: true, homePull: 0.0065 }
-  );
+  const particles = createChordWheelStrumParticles();
+  const strumSurface = createToySurfaceManager({
+    panel,
+    body: strumWrap,
+    getBoardScale: () => window.__boardScale || 1,
+    tag: 'chordwheel-strum',
+  });
+  strumSurface.registerCanvas('particles', particleCanvas, { policy: 'managed' });
+  strumSurface.registerCanvas('gesture', strumCanvas, { policy: 'managed' });
+  strumSurface.syncNow('init');
 
   // Wrapper for wheel and cubes
   const wheelWrap = el('div', 'cw-wheel-wrap');
@@ -290,47 +256,24 @@ export function createChordWheel(panel){
   // The SVG is for display and segment clicks only. It sits behind the canvas.
   Object.assign(wheel.svg.style, { pointerEvents: 'none', width: '100%', height: '100%', display: 'block' });
   wheelWrap.append(wheel.svg, canvas);
-
-  let resizeObserver = null;
-  try {
-    resizeObserver = new ResizeObserver((entries) => {
-      entries.forEach((entry) => {
-        const rect = entry.contentRect || {};
-        const target = entry.target === strumWrap ? 'strumWrap' : 'wheelWrap';
-        const { width, height } = sanitizeDimensions(rect.width, rect.height, target);
-        if (target === 'strumWrap') {
-          if (width !== strumSize.width || height !== strumSize.height) {
-            strumSize.width = width;
-            strumSize.height = height;
-            strumSizeDirty = true;
-          }
-        } else {
-          if (width !== wheelSize.width || height !== wheelSize.height) {
-            wheelSize.width = width;
-            wheelSize.height = height;
-            wheelSizeDirty = true;
-          }
-        }
-      });
-    });
-    resizeObserver.observe(strumWrap);
-    resizeObserver.observe(wheelWrap);
-  } catch (err) {
-    console.warn('[chordwheel] ResizeObserver unavailable', err);
-  }
+  const mainSurface = createToySurfaceManager({
+    panel,
+    body: wheelWrap,
+    getBoardScale: () => window.__boardScale || 1,
+    tag: 'chordwheel-main',
+  });
+  mainSurface.registerCanvas('wheel-cubes', canvas, { policy: 'managed' });
+  mainSurface.syncNow('init');
   let cleanupRan = false;
-  const onWindowResize = () => markSizeDirty('window-resize');
   const cleanup = () => {
     if (cleanupRan) return;
     cleanupRan = true;
     try { console.debug?.(`[chordwheel] ${toyId} cleanup`); } catch {}
-    window.removeEventListener('resize', onWindowResize);
-    try { resizeObserver && resizeObserver.disconnect(); } catch {}
+    try { mainSurface.destroy(); } catch {}
+    try { strumSurface.destroy(); } catch {}
   };
-  window.addEventListener('resize', onWindowResize);
   panel.addEventListener('toy-remove', cleanup, { once: true });
   panel.__chordwheelCleanup = cleanup;
-  markSizeDirty('init');
 
   // --- Steps Dropdown (Advanced Mode) ---
   const header = panel.querySelector('.toy-header');
@@ -357,12 +300,10 @@ export function createChordWheel(panel){
     // Update progression and labels
     progression = Array(numSteps).fill(1);
     updateLabels();
-    markSizeDirty('steps-change');
   });
 
   // Keep header height stable and refresh labels on zoom
   panel.addEventListener('toy-zoom', () => {
-    markSizeDirty('zoom');
     try { stepsSelect.style.display = 'none'; } catch {}
     try { updateLabels(); } catch {}
   });
@@ -440,20 +381,7 @@ export function createChordWheel(panel){
   // --- Canvas Click Handler ---
   canvas.addEventListener('pointerdown', (e) => {
     const r = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const boardScale = window.__boardScale || 1;
-
-    // Robustly scale pointer coordinates to match the canvas's internal resolution.
-    // This avoids using potentially stale `canvas.width` or a global `__boardScale`.
-    const currentBitmapWidth = Math.round(canvas.clientWidth * dpr);
-    const currentBitmapHeight = Math.round(canvas.clientHeight * dpr);
-
-    // r.width is the visual size on screen. currentBitmapWidth is the backing store size.
-    // The ratio scales the click on the visual element to the backing store coordinate.
-    const p = {
-      x: (e.clientX - r.left) * (currentBitmapWidth / r.width),
-      y: (e.clientY - r.top) * (currentBitmapHeight / r.height)
-    };
+    const p = chordWheelMainClientToLogical({ x: e.clientX, y: e.clientY }, r);
 
     lastClickDebug = { p, t: Date.now() }; // Store for debug drawing
 
@@ -461,10 +389,11 @@ export function createChordWheel(panel){
 
     if (isZoomed) {
       // In zoomed mode, interact with the inner chord-selection cubes.
-      const { cubes: innerCubes } = getInnerCubeGeometry(currentBitmapWidth, currentBitmapHeight, 190, NUM_SLICES);
-      for (let i = 0; i < innerCubes.length; i++) {
+      const { cubes: innerCubes } = getChordWheelCubeGeometry({ count: NUM_SLICES, inner: true });
+      const innerIndex = hitTestChordWheelCubes(innerCubes, p);
+      if (innerIndex >= 0) {
+          const i = innerIndex;
           const c = innerCubes[i];
-          if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
               const third = whichThirdRect(c, p.y);
               if (third === 'toggle') return; // Ignore middle clicks
 
@@ -501,31 +430,28 @@ export function createChordWheel(panel){
                   else { progression[baseDegreeIndex] = newDegree; }
                   updateLabels();
               }
-              return; // Click was handled, stop processing.
-          }
+          return; // Click was handled, stop processing.
       }
     }
     // Always allow outer cube interaction (strum direction)
     {
-      const { cubes } = getCubeGeometry(currentBitmapWidth, currentBitmapHeight, 190, numSteps);
-      for (let i = 0; i < cubes.length; i++) {
-        const c = cubes[i];
-        if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
+      const { cubes } = getChordWheelCubeGeometry({ count: numSteps });
+      const cubeIndex = hitTestChordWheelCubes(cubes, p);
+      if (cubeIndex >= 0) {
+          const i = cubeIndex;
           // Cycle through states: -1 (off) -> 1 (up) -> 2 (down) -> -1
           const current = stepStates[i];
           if (current === -1) stepStates[i] = 1;
           else if (current === 1) stepStates[i] = 2;
           else stepStates[i] = -1;
           return; // Click handled
-        }
       }
     }
   });
 
   // --- Strum Interaction ---
   let isStrumming = false;
-  let lastStrumX = 0;
-  let strumMidX = 0;
+  let lastStrumLogicalX = 0;
   let lastBeat = -1;
 
   function performStrum(direction) {
@@ -546,24 +472,24 @@ export function createChordWheel(panel){
   strumCanvas.addEventListener('pointerdown', e => {
     strumCanvas.setPointerCapture(e.pointerId);
     isStrumming = true;
-    const rect = strumCanvas.getBoundingClientRect();
-    strumMidX = rect.left + rect.width / 2;
-    lastStrumX = e.clientX;
+    const point = chordWheelStrumClientToLogical({ x: e.clientX, y: e.clientY }, strumCanvas.getBoundingClientRect());
+    lastStrumLogicalX = point.x;
   });
 
   strumCanvas.addEventListener('pointermove', e => {
     if (!isStrumming) return;
 
-    const currentX = e.clientX;
+    const logicalX = chordWheelStrumClientToLogical({ x: e.clientX, y: e.clientY }, strumCanvas.getBoundingClientRect()).x;
+    const strumMidX = CHORDWHEEL_STRUM_LOGICAL_WIDTH / 2;
     
     // Check for crossing the midline to trigger a strum
-    if (lastStrumX < strumMidX && currentX >= strumMidX) {
+    if (lastStrumLogicalX < strumMidX && logicalX >= strumMidX) {
         performStrum('down'); // Crossing from left to right
-    } else if (lastStrumX > strumMidX && currentX <= strumMidX) {
+    } else if (lastStrumLogicalX > strumMidX && logicalX <= strumMidX) {
         performStrum('up'); // Crossing from right to left
     }
 
-    lastStrumX = currentX;
+    lastStrumLogicalX = logicalX;
   });
 
   const onPointerUp = e => {
@@ -575,7 +501,8 @@ export function createChordWheel(panel){
   strumCanvas.addEventListener('pointercancel', onPointerUp);
 
   // --- Main Render Loop ---
-  function draw() {
+  let lastParticleFrameTime = null;
+  function draw(frameTime) {
     if (!panel.isConnected) {
       cleanup();
       return;
@@ -668,68 +595,49 @@ export function createChordWheel(panel){
     // --- Visual Rendering ---
     // Size and draw particle + strum canvases
     if (strumCanvas && particleCanvas) {
-      if (strumSizeDirty) {
-        if (!strumSize.width || !strumSize.height) { // Use clientWidth/clientHeight which are not affected by CSS transforms (board zoom)
-          const rect = sanitizeDimensions(strumWrap.clientWidth, strumWrap.clientHeight, 'strumWrap');
-          strumSize.width = rect.width;
-          strumSize.height = rect.height;
-        }
-        currentStrumWidth = Math.max(1, Math.floor(strumSize.width));
-        currentStrumHeight = Math.max(1, Math.floor(strumSize.height));
-        strumSizeDirty = false;
-        logSize('strumWrap', currentStrumWidth, currentStrumHeight);
-      }
-      const cw = currentStrumWidth;
-      const ch = currentStrumHeight;
-      const dpr = window.devicePixelRatio || 1;
-      if (particleCanvas.width !== cw * dpr || particleCanvas.height !== ch * dpr) {
-        particleCanvas.width = cw * dpr;
-        particleCanvas.height = ch * dpr;
-        particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      }
-      if (strumCanvas.width !== cw * dpr || strumCanvas.height !== ch * dpr) {
-        strumCanvas.width = cw * dpr;
-        strumCanvas.height = ch * dpr;
-        strumCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      }
+      strumSurface.syncNow('draw');
+      const cw = Math.max(1, strumSurface.getCssW());
+      const ch = Math.max(1, strumSurface.getCssH());
+      const viewport = createChordWheelStrumViewportSpace({ width: cw, height: ch, backingScale: strumSurface.getDpr() });
+      const dt = lastParticleFrameTime == null || !Number.isFinite(frameTime)
+        ? 1 / 60
+        : Math.min(0.05, Math.max(0, (frameTime - lastParticleFrameTime) / 1000));
+      lastParticleFrameTime = Number.isFinite(frameTime) ? frameTime : lastParticleFrameTime;
       try{ if (!draw.__pbg) draw.__pbg = '#0b1116'; }catch{}
-      try{ particles && particles.step(1/60); }catch{}
-      try{ particleCtx.fillStyle = draw.__pbg; particleCtx.fillRect(0,0, cw, ch); particles && particles.draw(particleCtx); }catch{}
+      try{ particles.step(dt); }catch{}
+      try{
+        const dpr = strumSurface.getDpr();
+        particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        particleCtx.fillStyle = draw.__pbg; particleCtx.fillRect(0,0, cw,ch);
+        particleCtx.translate(viewport.contentRect.left, viewport.contentRect.top);
+        particleCtx.scale(viewport.presentationScale, viewport.presentationScale);
+        particles.draw(particleCtx);
+      }catch{}
       drawStrumArea(strumCtx, cw, ch);
     }
 
-    // Robust canvas sizing to fix hit detection.
-    // This ensures the canvas's internal resolution is always in sync with its
-    // CSS display size, which is the root cause of the coordinate mismatch.
-    if (canvas) {
-        if (wheelSizeDirty) {
-            if (!wheelSize.width || !wheelSize.height) {
-                const rect = sanitizeDimensions(wheelWrap.getBoundingClientRect().width, wheelWrap.getBoundingClientRect().height, 'wheelWrap');
-                wheelSize.width = rect.width;
-                wheelSize.height = rect.height;
-            }
-            currentWheelWidth = Math.max(1, Math.floor(wheelSize.width));
-            currentWheelHeight = Math.max(1, Math.floor(wheelSize.height));
-            wheelSizeDirty = false;
-            logSize('wheelWrap', currentWheelWidth, currentWheelHeight);
-        }
-        const dpr = window.devicePixelRatio || 1;
-        const targetWidth = Math.round(currentWheelWidth * dpr);
-        const targetHeight = Math.round(currentWheelHeight * dpr);
-        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-        }
-    }
-    const w = canvas.width, h = canvas.height;
+    mainSurface.syncNow('draw');
+    const displayWidth = Math.max(1, mainSurface.getCssW());
+    const displayHeight = Math.max(1, mainSurface.getCssH());
+    const dpr = Math.max(0.25, mainSurface.getDpr());
+    const mainViewport = createChordWheelMainViewportSpace({
+      width: displayWidth,
+      height: displayHeight,
+      backingScale: dpr,
+    });
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, displayWidth, displayHeight);
+    ctx.translate(mainViewport.contentRect.left, mainViewport.contentRect.top);
+    ctx.scale(mainViewport.presentationScale, mainViewport.presentationScale);
+    const w = CHORDWHEEL_MAIN_LOGICAL_WIDTH;
+    const h = CHORDWHEEL_MAIN_LOGICAL_HEIGHT;
     // Ensure wheel labels reflect current progression in all views
     try{
       const arr = (numSteps === 16) ? progression.filter((_, i)=> i%2===0) : progression;
       const labels = arr.map(st => degreeToChordName(st||1));
       wheel.setLabels(labels);
     }catch{}
-    ctx.clearRect(0, 0, w, h);
-    const { cubes } = getCubeGeometry(w, h, 190, numSteps);
+    const { cubes } = getChordWheelCubeGeometry({ count: numSteps });
 
     // Draw inner chord-name cubes only in Advanced view
     if (panel.classList.contains('toy-zoomed')){
@@ -941,8 +849,7 @@ export function createChordWheel(panel){
         triggerNoteForToy(toyId, midiToName(midiOut), vel, { when, env: { decaySec, releaseSec, sustainLevel } });
         // Spawn particles along the string's vertical line; faster near vertical center
         try{
-          const w = (strumWrap.clientWidth)|0; // Use clientWidth which is not affected by CSS transforms (board zoom)
-          const x = (w * 0.5); // Use clientWidth which is not affected by CSS transforms (board zoom)
+          const x = CHORDWHEEL_STRUM_LOGICAL_WIDTH * 0.5;
           const burstCount = 180;
           const baseSpeed = 4.6; // increase top speed
           const speedMul = 1.8;  // stronger overall scaling
@@ -1043,25 +950,8 @@ export function createChordWheel(panel){
   // --- Helper Functions ---
   function buildChord(state){ return maybeAddSeventh(buildChordFromState(state)); }
 
-  function getInnerCubeGeometry(width, height, radius, numCubes) {
-    const outerPad = 70, size = radius * 2 + outerPad * 2;
-    const scale = Math.min(width, height) / size;
-    const cx = width / 2, cy = height / 2;
-    const r = radius * scale;
-    const ringR = r * 0.58;
-    const cubeSize = Math.max(20, 60 * scale);
-    const cubes = [];
-    for (let ix = 0; ix < numCubes; ix++) {
-        const a = ((ix + 0.5) / numCubes) * Math.PI * 2 - Math.PI / 2;
-        const x = cx + ringR * Math.cos(a);
-        const y = cy + ringR * Math.sin(a);
-        cubes.push({ x: x - cubeSize / 2, y: y - cubeSize / 2, w: cubeSize, h: cubeSize });
-    }
-    return { cubes, cubeSize };
-  }
-
   function drawInnerCubes(ctx, w, h) {
-      const { cubes: innerCubes } = getInnerCubeGeometry(w, h, 190, NUM_SLICES);
+      const { cubes: innerCubes } = getChordWheelCubeGeometry({ count: NUM_SLICES, inner: true });
       for (let i = 0; i < innerCubes.length; i++) {
           const cube = innerCubes[i];
           // Use the correct index to read the progression, especially for 16-step mode.
@@ -1077,23 +967,6 @@ export function createChordWheel(panel){
   }
 
   // Removed zoom-forced panel sizing to keep frame width stable across zoom
-}
-
-function getCubeGeometry(width, height, radius, numCubes = 16) {
-  const outerPad = 70, size = radius * 2 + outerPad * 2;
-  const scale = Math.min(width, height) / size;
-  const cx = width / 2, cy = height / 2;
-  const r = radius * scale;
-  const ringR = (r + 45 * scale);
-  const cubeSize = Math.max(12, 48 * scale);
-  const cubes = [];
-  for (let ix = 0; ix < numCubes; ix++) {
-    const a = (ix / numCubes) * Math.PI * 2 - Math.PI / 2;
-    const x = cx + ringR * Math.cos(a);
-    const y = cy + ringR * Math.sin(a);
-    cubes.push({ x: x - cubeSize / 2, y: y - cubeSize / 2, w: cubeSize, h: cubeSize });
-  }
-  return { cubes, cubeSize };
 }
 
 function buildWheelWithRing(radius, numSlices, api){

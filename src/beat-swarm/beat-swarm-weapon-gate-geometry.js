@@ -7,21 +7,21 @@ import {
   WEAPON_GATE_START_X,
 } from './beat-swarm-weapon-gate-config.js?v=2026-06-18-corridor-curve-v1';
 
+export const WEAPON_GATE_LOGICAL_WIDTH = 1600;
+export const WEAPON_GATE_LOGICAL_HEIGHT = 900;
+export const WEAPON_GATE_LOGICAL_CENTER = Object.freeze({ x: 800, y: 450 });
+
 export function clampWeaponGateValue(v, min, max) {
   return Math.max(min, Math.min(max, Number(v) || 0));
 }
 
-export function getWeaponGateShipScreenPoint(viewportWidth = window.innerWidth, viewportHeight = window.innerHeight) {
-  return {
-    x: Number(viewportWidth) * 0.5,
-    y: Number(viewportHeight) * 0.5,
-  };
+export function getWeaponGateShipLogicalPoint() {
+  return WEAPON_GATE_LOGICAL_CENTER;
 }
 
-export function getWeaponGateLogicalBounds(viewportHeight = window.innerHeight) {
-  const h = Math.max(1, Number(viewportHeight) || 1);
-  const center = h * 0.5;
-  const halfHeight = h / 6;
+export function getWeaponGateLogicalBounds() {
+  const center = WEAPON_GATE_LOGICAL_CENTER.y;
+  const halfHeight = WEAPON_GATE_LOGICAL_HEIGHT / 6;
   return {
     top: center - halfHeight,
     bottom: center + halfHeight,
@@ -45,8 +45,8 @@ export function getWeaponGateCurveOffsetAtWorldX(state, worldX = 0) {
   return shaped * amp;
 }
 
-export function getWeaponGateCorridorWorldBounds(state, worldX = 0, viewportHeight = window.innerHeight) {
-  const base = getWeaponGateLogicalBounds(viewportHeight);
+export function getWeaponGateCorridorWorldBounds(state, worldX = 0) {
+  const base = getWeaponGateLogicalBounds();
   const center = ((base.top + base.bottom) * 0.5) + getWeaponGateCurveOffsetAtWorldX(state, worldX);
   const halfHeight = Math.max(1, (base.bottom - base.top) * 0.5);
   return {
@@ -57,20 +57,18 @@ export function getWeaponGateCorridorWorldBounds(state, worldX = 0, viewportHeig
   };
 }
 
-export function getWeaponGateShipWorldX(state, viewportWidth = window.innerWidth) {
-  const ship = getWeaponGateShipScreenPoint(viewportWidth, window.innerHeight);
-  return (Number(state?.progress) || 0) + ship.x;
+export function getWeaponGateShipWorldX(state) {
+  return (Number(state?.progress) || 0) + WEAPON_GATE_LOGICAL_CENTER.x;
 }
 
-export function getWeaponGateCameraYOffset(state, viewportHeight = window.innerHeight) {
-  const ship = getWeaponGateShipScreenPoint(window.innerWidth, viewportHeight);
-  return ship.y - (Number(state?.y) || ship.y);
+export function getWeaponGateCameraYOffset(state) {
+  return WEAPON_GATE_LOGICAL_CENTER.y - (Number(state?.y) || WEAPON_GATE_LOGICAL_CENTER.y);
 }
 
-export function getWeaponGateCorridorBounds(state, viewportHeight = window.innerHeight) {
-  const worldX = getWeaponGateShipWorldX(state, window.innerWidth);
-  const bounds = getWeaponGateCorridorWorldBounds(state, worldX, viewportHeight);
-  const offset = getWeaponGateCameraYOffset(state, viewportHeight);
+export function getWeaponGateCorridorBounds(state) {
+  const worldX = getWeaponGateShipWorldX(state);
+  const bounds = getWeaponGateCorridorWorldBounds(state, worldX);
+  const offset = getWeaponGateCameraYOffset(state);
   return {
     top: bounds.top + offset,
     bottom: bounds.bottom + offset,
@@ -79,10 +77,10 @@ export function getWeaponGateCorridorBounds(state, viewportHeight = window.inner
   };
 }
 
-export function getWeaponGateCorridorScreenBoundsAtX(state, screenX = 0, viewportHeight = window.innerHeight) {
-  const worldX = (Number(state?.progress) || 0) + (Number(screenX) || 0);
-  const bounds = getWeaponGateCorridorWorldBounds(state, worldX, viewportHeight);
-  const offset = getWeaponGateCameraYOffset(state, viewportHeight);
+export function getWeaponGateCorridorLogicalBoundsAtX(state, logicalX = 0) {
+  const worldX = (Number(state?.progress) || 0) + (Number(logicalX) || 0);
+  const bounds = getWeaponGateCorridorWorldBounds(state, worldX);
+  const offset = getWeaponGateCameraYOffset(state);
   return {
     top: bounds.top + offset,
     bottom: bounds.bottom + offset,
@@ -96,21 +94,19 @@ export function getWeaponGateNoteStarPosition({
   note = '',
   notePool = [],
   totalSlots = 1,
-  viewportWidth = window.innerWidth,
-  viewportHeight = window.innerHeight,
 } = {}) {
   const safeTotalSlots = Math.max(1, Math.trunc(Number(totalSlots) || 1));
   const safeNotePool = Array.isArray(notePool) && notePool.length ? notePool : ['C4'];
   const slot = Math.max(0, Math.min(safeTotalSlots - 1, Math.trunc(Number(slotIndex) || 0)));
   const noteIndex = Math.max(0, safeNotePool.indexOf(note || safeNotePool[0]));
   return {
-    x: Number(viewportWidth) * (0.14 + (slot / Math.max(1, safeTotalSlots - 1)) * 0.72),
-    y: Number(viewportHeight) * (0.075 + ((safeNotePool.length - 1 - noteIndex) / Math.max(1, safeNotePool.length - 1)) * 0.14),
+    x: WEAPON_GATE_LOGICAL_WIDTH * (0.14 + (slot / Math.max(1, safeTotalSlots - 1)) * 0.72),
+    y: WEAPON_GATE_LOGICAL_HEIGHT * (0.075 + ((safeNotePool.length - 1 - noteIndex) / Math.max(1, safeNotePool.length - 1)) * 0.14),
     slot,
   };
 }
 
-export function getWeaponGateEndProgress(totalSlots = 1, viewportWidth = window.innerWidth) {
+export function getWeaponGateEndProgress(totalSlots = 1) {
   const safeTotalSlots = Math.max(1, Math.trunc(Number(totalSlots) || 1));
-  return WEAPON_GATE_START_X + ((safeTotalSlots - 1) * WEAPON_GATE_SPACING) - (Number(viewportWidth) * 0.5);
+  return WEAPON_GATE_START_X + ((safeTotalSlots - 1) * WEAPON_GATE_SPACING) - WEAPON_GATE_LOGICAL_CENTER.x;
 }

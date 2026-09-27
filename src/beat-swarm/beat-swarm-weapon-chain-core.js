@@ -1,4 +1,5 @@
 import { getBeatSwarmWeaponEventOwnershipPayload } from './beat-swarm-music-ownership.js?v=2026-08-26-player-composition-v1';
+import { createWorldLogicalCollision, logicalDistanceSquared } from './beat-swarm-logical-collision.js';
 
 function safeInt(value, fallback = 0) {
   return Number.isFinite(value) ? Math.trunc(value) : fallback;
@@ -62,6 +63,7 @@ export function spawnProjectileFromDirectionRuntime(options = null) {
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
     hasEnteredScreen: false,
+    enteredGameplay: false,
     collisionGraceT: Number(constants.projectileCollisionGraceSeconds) || 0,
     el,
   });
@@ -135,6 +137,7 @@ export function spawnBoomerangProjectileRuntime(options = null) {
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
     hasEnteredScreen: false,
+    enteredGameplay: false,
     collisionGraceT: Number(constants.projectileCollisionGraceSeconds) || 0,
     el,
   });
@@ -190,6 +193,7 @@ export function spawnHomingMissileRuntime(options = null) {
     nextBeatIndex: Number.isFinite(nextBeatIndex) ? Math.max(0, Math.trunc(nextBeatIndex)) : null,
     ignoreEnemyId: Number.isFinite(chainContext?.sourceEnemyId) ? Math.trunc(chainContext.sourceEnemyId) : null,
     hasEnteredScreen: false,
+    enteredGameplay: false,
     collisionGraceT: Number(constants.projectileCollisionGraceSeconds) || 0,
     el,
   });
@@ -417,12 +421,12 @@ export function applyAoeAtRuntime(options = null) {
   const enemies = Array.isArray(state.enemies) ? state.enemies : [];
   const lingeringAoeZones = Array.isArray(state.lingeringAoeZones) ? state.lingeringAoeZones : null;
   if (!point || !lingeringAoeZones) return;
-  const radius = Math.max(1, Number(constants.explosionRadiusWorld) || 1);
+  const radius = Math.max(1, Number(constants.explosionRadiusLogical) || 1);
+  const collision = createWorldLogicalCollision(helpers.worldToLogical);
   const info = helpers.getLoopInfo?.();
   const beatLen = Math.max(0.05, Number(info?.beatLen) || 0.5);
   const dmgScale = Math.max(0.05, Number.isFinite(damageScale) ? damageScale : 1);
   helpers.addExplosionEffect?.(point, radius, variant === 'dot-area' ? (beatLen * 2) : null, weaponSlotIndex);
-  const r2 = radius * radius;
   const isDot = variant === 'dot-area';
   const hitDamage = (isDot ? 0.5 : 1) * dmgScale;
   const avoidId = Number.isFinite(avoidEnemyId) ? Math.trunc(avoidEnemyId) : null;
@@ -431,10 +435,10 @@ export function applyAoeAtRuntime(options = null) {
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
     if (!e) continue;
-    const dx = (Number(e.wx) || 0) - (Number(point.x) || 0);
-    const dy = (Number(e.wy) || 0) - (Number(point.y) || 0);
-    const d2 = (dx * dx) + (dy * dy);
-    if (d2 > r2) continue;
+    const enemyLogical = helpers.worldToLogical?.(e) || e;
+    const pointLogical = helpers.worldToLogical?.(point) || point;
+    const d2 = logicalDistanceSquared(enemyLogical, pointLogical);
+    if (!collision.pointWithinRadius(e, point, radius)) continue;
     helpers.withDamageSoundStage?.(stageIndex, () => helpers.damageEnemy?.(e, hitDamage));
     const candidate = {
       enemyId: Number.isFinite(e?.id) ? Math.trunc(e.id) : null,
@@ -505,14 +509,13 @@ export function applyLingeringAoeBeatRuntime(options = null) {
       lingeringAoeZones.splice(i, 1);
       continue;
     }
-    const r2 = (Number(z?.radius) || Number(constants.explosionRadiusWorld) || 1) ** 2;
+    const radiusLogical = Number(z?.radius) || Number(constants.explosionRadiusLogical) || 1;
+    const collision = createWorldLogicalCollision(helpers.worldToLogical);
     const dmg = Math.max(0, Number(z?.damagePerBeat) || 0);
     const stageIndex = Number.isFinite(z?.stageIndex) ? Math.trunc(z.stageIndex) : null;
     for (let j = enemies.length - 1; j >= 0; j--) {
       const e = enemies[j];
-      const dx = (Number(e?.wx) || 0) - (Number(z?.x) || 0);
-      const dy = (Number(e?.wy) || 0) - (Number(z?.y) || 0);
-      if ((dx * dx + dy * dy) <= r2) {
+      if (collision.pointWithinRadius(e, z, radiusLogical)) {
         helpers.withDamageSoundStage?.(stageIndex, () => helpers.damageEnemy?.(e, dmg));
       }
     }

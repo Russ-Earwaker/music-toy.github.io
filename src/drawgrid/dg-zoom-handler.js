@@ -64,7 +64,6 @@ export function createDgZoomHandler({ state, deps } = {}) {
       s.__zoomActive = true;
       d.markZoomActive?.();
       s.zoomGestureActive = true;
-      try { s.dgViewport?.setNonReactive?.(true); } catch {}
     } else if (!currentlyGesturing && !phase && s.__zoomActive && s.zoomMode === 'idle') {
       s.suppressHeaderPushUntil = d.nowMs() + s.HEADER_PUSH_SUPPRESS_MS;
       d.releaseZoomFreeze?.({ reason: 'mode-idle', zoomPayload: z });
@@ -78,7 +77,6 @@ export function createDgZoomHandler({ state, deps } = {}) {
         s.zoomGestureActive = true;
         d.markZoomActive?.();
       }
-      try { s.dgViewport?.setNonReactive?.(true); } catch {}
       const beginScale = Number.isFinite(z?.currentScale) ? z.currentScale : (Number.isFinite(z?.targetScale) ? z.targetScale : null);
       d.dglog?.('zoom:begin', { scale: beginScale });
       s.suppressHeaderPushUntil = d.nowMs() + s.HEADER_PUSH_SUPPRESS_MS;

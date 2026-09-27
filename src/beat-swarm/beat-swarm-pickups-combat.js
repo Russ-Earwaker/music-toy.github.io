@@ -1,4 +1,41 @@
+import { createWorldLogicalCollision } from './beat-swarm-logical-collision.js';
+
 let projectileCollisionFrameCursor = 0;
+
+export function createBeatSwarmProjectileRemovalDiagnostic({
+  projectile = null,
+  reason = 'unknown',
+  logicalPosition = null,
+  screenPosition = null,
+  logicalBounds = null,
+  lifetimeMarginLogical = 0,
+  presentationScale = 1,
+} = {}) {
+  return Object.freeze({
+    removalReason: String(reason || 'unknown'),
+    kind: String(projectile?.kind || 'standard'),
+    logicalPosition: logicalPosition ? Object.freeze({ x: Number(logicalPosition.x) || 0, y: Number(logicalPosition.y) || 0 }) : null,
+    worldPosition: Object.freeze({ x: Number(projectile?.wx) || 0, y: Number(projectile?.wy) || 0 }),
+    projectedScreenPosition: screenPosition ? Object.freeze({ x: Number(screenPosition.x) || 0, y: Number(screenPosition.y) || 0 }) : null,
+    logicalGameplayBounds: logicalBounds || null,
+    activeLifetimeMarginLogical: Math.max(0, Number(lifetimeMarginLogical) || 0),
+    enteredGameplay: projectile?.enteredGameplay === true || projectile?.hasEnteredScreen === true,
+    presentationScale: Math.max(0.001, Number(presentationScale) || 1),
+    ttl: Number(projectile?.ttl) || 0,
+  });
+}
+
+export function getBeatSwarmProjectileViewportRemovalReason({
+  usesTtlDespawn = false,
+  isOutsideLifetimeBounds = false,
+  enteredGameplay = false,
+  ttl = 0,
+} = {}) {
+  if (usesTtlDespawn) return Number(ttl) <= 0 ? 'ttl_complete' : null;
+  return isOutsideLifetimeBounds && (enteredGameplay || Number(ttl) <= 0)
+    ? 'logical_viewport_retirement'
+    : null;
+}
 
 export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   const constants = options?.constants && typeof options.constants === 'object' ? options.constants : {};
@@ -107,15 +144,25 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   const centerWorld = helpers.getViewportCenterWorld?.() || { x: 0, y: 0 };
   const z = helpers.getZoomState?.();
   const scale = Number.isFinite(z?.targetScale) ? z.targetScale : (Number.isFinite(z?.currentScale) ? z.currentScale : 1);
-  const collectRadiusWorld = (Number(constants.pickupCollectRadiusPx) || 0) / Math.max(0.001, scale || 1);
-  const projectileHitRadiusWorld = (Number(constants.projectileHitRadiusPx) || 0) / Math.max(0.001, scale || 1);
+  const presentationScale = Math.max(0.001, Number(helpers.getPresentationScale?.()) || 1);
+  const collectRadiusLogical = Math.max(0, Number(constants.pickupCollectRadiusLogical) || 0);
+  const projectileHitRadiusLogical = Math.max(0, Number(constants.projectileHitRadiusLogical) || 0);
+  const collision = createWorldLogicalCollision(helpers.worldToLogical);
   const projectileOffscreenPad = Math.max(16, Number(constants.projectileDespawnOffscreenPadPx) || 72);
   const maxProjectileCount = Math.max(32, Math.trunc(Number(constants.maxProjectileCount) || 128));
   const maxProjectileCollisionsPerFrame = Math.max(16, Math.trunc(Number(constants.maxProjectileCollisionsPerFrame) || 96));
   const maxEffectCount = Math.max(32, Math.trunc(Number(constants.maxEffectCount) || 160));
-  const screenW = Math.max(1, Number(globalThis.window?.innerWidth) || 0);
-  const screenH = Math.max(1, Number(globalThis.window?.innerHeight) || 0);
-  const cr2 = collectRadiusWorld * collectRadiusWorld;
+  const recordProjectileRemoval = (projectile, reason) => {
+    helpers.recordProjectileRemovalDiagnostic?.(createBeatSwarmProjectileRemovalDiagnostic({
+      projectile,
+      reason,
+      logicalPosition: helpers.worldToLogical?.({ x: Number(projectile?.wx) || 0, y: Number(projectile?.wy) || 0 }),
+      screenPosition: helpers.worldToScreen?.({ x: Number(projectile?.wx) || 0, y: Number(projectile?.wy) || 0 }),
+      logicalBounds: helpers.getLogicalGameplayBounds?.() || null,
+      lifetimeMarginLogical: projectileOffscreenPad,
+      presentationScale,
+    }));
+  };
 
   withPerfSample('pickupsCombat.updateHelpers', () => {
     helpers.updateHelpers?.(dt, centerWorld, scale);
@@ -124,9 +171,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
   withPerfSample('pickupsCombat.pickups', () => {
     for (let i = pickups.length - 1; i >= 0; i--) {
       const p = pickups[i];
-      const dx = p.wx - centerWorld.x;
-      const dy = p.wy - centerWorld.y;
-      if ((dx * dx + dy * dy) <= cr2) {
+      if (collision.pointWithinRadius(p, centerWorld, collectRadiusLogical)) {
         equippedWeapons.add(p.weaponId);
         helpers.ensureDefaultWeaponFromLegacy?.(p.weaponId);
         try { p.el?.remove?.(); } catch {}
@@ -135,7 +180,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       }
       const s = helpers.worldToScreen?.({ x: p.wx, y: p.wy });
       if (!s || !Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
-      p.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+      p.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${presentationScale})`;
     }
   });
 
@@ -144,6 +189,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       const dropCount = projectiles.length - maxProjectileCount;
       const droppedProjectiles = projectiles.splice(0, dropCount);
       for (let i = 0; i < droppedProjectiles.length; i++) {
+        recordProjectileRemoval(droppedProjectiles[i], 'projectile_cap');
         try { droppedProjectiles[i]?.el?.remove?.(); } catch {}
       }
     }
@@ -287,10 +333,8 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       });
       let hit = false;
       if (String(p?.kind || '') === 'hostile-red' && p?.hostileToEnemies === false) {
-        const playerDx = (Number(centerWorld.x) || 0) - (Number(p.wx) || 0);
-        const playerDy = (Number(centerWorld.y) || 0) - (Number(p.wy) || 0);
-        const hostileHitRadius = projectileHitRadiusWorld * Math.max(1.25, Number(p?.hostileVisualScale) || 1);
-        if ((playerDx * playerDx) + (playerDy * playerDy) <= (hostileHitRadius * hostileHitRadius)) {
+        const hostileHitRadius = projectileHitRadiusLogical * Math.max(1.25, Number(p?.hostileVisualScale) || 1);
+        if (collision.pointWithinRadius(p, centerWorld, hostileHitRadius)) {
           helpers.applyPlayerHit?.({
             sourceType: 'projectile',
             travelDirection: { x: Number(p.vx) || 0, y: Number(p.vy) || 0 },
@@ -305,7 +349,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       withProjectileDetailPerf('pickupsCombat.projectiles.collision', () => {
         if (collisionStride > 1 && (i % collisionStride) !== collisionPhase) return;
         const allowCollision = !(Number(p.collisionGraceT) > 0);
-        const collisionRadiusWorld = Math.max(projectileHitRadiusWorld * 3, enemySpatialCellSize);
+        const collisionRadiusWorld = Math.max(projectileHitRadiusLogical * 3, enemySpatialCellSize);
         forEachNearbyEnemy(p.wx, p.wy, collisionRadiusWorld, (e) => {
           if (!allowCollision) return true;
           if (p?.hostileToEnemies === false) return false;
@@ -314,13 +358,11 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           const enemyType = String(e?.enemyType || '');
           let hitPoint = null;
           if (enemyType === 'drawsnake') {
-            hitPoint = helpers.getDrawSnakeProjectileImpactPoint?.(e, p, projectileHitRadiusWorld, scale);
+            hitPoint = helpers.getDrawSnakeProjectileImpactPoint?.(e, p, projectileHitRadiusLogical);
           } else {
-            const dx = e.wx - p.wx;
-            const dy = e.wy - p.wy;
-            const enemyExtraRadiusWorld = Math.max(0, Number(e?.projectileHitRadiusPx) || 0) / Math.max(0.001, scale || 1);
-            const effR = projectileHitRadiusWorld + enemyExtraRadiusWorld;
-            if ((dx * dx + dy * dy) <= (effR * effR)) hitPoint = { x: e.wx, y: e.wy };
+            const enemyExtraRadiusLogical = Math.max(0, Number(e?.projectileHitRadiusLogical) || 0);
+            const effR = projectileHitRadiusLogical + enemyExtraRadiusLogical;
+            if (collision.pointWithinRadius(e, p, effR)) hitPoint = { x: e.wx, y: e.wy };
           }
           if (hitPoint) {
             if (isBoomerang) {
@@ -354,7 +396,11 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           return false;
         });
       });
-      if (hit || (useTtlDespawn && p.ttl <= 0)) {
+      const preProjectionRemovalReason = hit
+        ? 'collision'
+        : getBeatSwarmProjectileViewportRemovalReason({ usesTtlDespawn: useTtlDespawn, ttl: p.ttl });
+      if (preProjectionRemovalReason) {
+        recordProjectileRemoval(p, preProjectionRemovalReason);
         if (String(p?.kind || '') === 'hostile-red' && Array.isArray(state.pooledHostileRedProjectiles) && p?.el instanceof HTMLElement) {
           try { p.el.remove(); } catch {}
           p.el.style.transform = 'translate(-9999px, -9999px)';
@@ -375,12 +421,22 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
         if (p?.el) p.el.style.transform = 'translate(-9999px, -9999px)';
         continue;
       }
-      if (s.x >= 0 && s.y >= 0 && s.x <= screenW && s.y <= screenH) p.hasEnteredScreen = true;
-      const isOffscreen = s.x < -projectileOffscreenPad
-        || s.y < -projectileOffscreenPad
-        || s.x > (screenW + projectileOffscreenPad)
-        || s.y > (screenH + projectileOffscreenPad);
-      if (!useTtlDespawn && isOffscreen && (p.hasEnteredScreen || p.ttl <= 0)) {
+      const projectileWorld = { x: Number(p.wx) || 0, y: Number(p.wy) || 0 };
+      if (helpers.isWorldPointInsideGameplay?.(projectileWorld, 0) === true) {
+        p.enteredGameplay = true;
+        p.hasEnteredScreen = true;
+      }
+      const isOffscreen = helpers.isWorldPointInsideGameplay?.(
+        projectileWorld, projectileOffscreenPad,
+      ) === false;
+      const viewportRemovalReason = getBeatSwarmProjectileViewportRemovalReason({
+        usesTtlDespawn: useTtlDespawn,
+        isOutsideLifetimeBounds: isOffscreen,
+        enteredGameplay: p.enteredGameplay === true || p.hasEnteredScreen === true,
+        ttl: p.ttl,
+      });
+      if (viewportRemovalReason) {
+        recordProjectileRemoval(p, viewportRemovalReason);
         if (String(p?.kind || '') === 'hostile-red' && Array.isArray(state.pooledHostileRedProjectiles) && p?.el instanceof HTMLElement) {
           try { p.el.remove(); } catch {}
           p.el.style.transform = 'translate(-9999px, -9999px)';
@@ -399,9 +455,9 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       withPerfSample('pickupsCombat.projectiles.dom', () => {
         if (isBoomerang) {
           const deg = ((Number(p.boomTheta) || 0) * (180 / Math.PI) * (Number(constants.projectileBoomerangSpinMult) || 1)) + 180;
-          p.el.style.transform = `translate(${s.x}px, ${s.y}px) rotate(${deg.toFixed(2)}deg)`;
+          p.el.style.transform = `translate(${s.x}px, ${s.y}px) rotate(${deg.toFixed(2)}deg) scale(${presentationScale})`;
         } else {
-          p.el.style.transform = `translate(${s.x}px, ${s.y}px)`;
+          p.el.style.transform = `translate(${s.x}px, ${s.y}px) scale(${presentationScale})`;
         }
       });
     }
@@ -531,6 +587,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
           const len = Math.max(1, Math.hypot(dx, dy));
           const ang = Math.atan2(dy, dx) * (180 / Math.PI);
           fx.el.style.width = `${len}px`;
+          fx.el.style.height = `${Math.max(1, 5 * presentationScale).toFixed(2)}px`;
           fx.el.style.transform = `translate(${a.x}px, ${a.y}px) rotate(${ang}deg)`;
           if (fx.kind === 'beam') {
             fx.el.style.opacity = '1';
@@ -542,7 +599,7 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
       } else {
         let removedDuringExplosionUpdate = false;
         withPerfSample('pickupsCombat.effects.explosions', () => {
-          const basePxRadius = Math.max(18, (Number(fx.radiusWorld) || Number(constants.explosionRadiusWorld) || 0) * Math.max(0.001, scale || 1));
+          const basePxRadius = Math.max(18 * presentationScale, (Number(fx.radiusWorld) || Number(constants.explosionRadiusWorld) || 0) * Math.max(0.001, scale || 1) * presentationScale);
           let radiusScale = 1;
           let opacity = Math.max(0, Math.min(1, fx.ttl / (Number(constants.explosionTtl) || 1)));
           let brightness = 1;
@@ -617,8 +674,10 @@ export function updateBeatSwarmPickupsAndCombatRuntime(options = null) {
               consideredEnemies += 1;
               const enemyId = Math.trunc(Number(enemy.id) || 0);
               if (enemyId > 0 && fx.hitEnemyIds.has(enemyId)) continue;
-              const dx = (Number(enemy.wx) || 0) - center.x;
-              const dy = (Number(enemy.wy) || 0) - center.y;
+              const enemyLogical = helpers.worldToLogical?.(enemy) || enemy;
+              const centerLogical = helpers.worldToLogical?.(center) || center;
+              const dx = (Number(enemyLogical.x) || 0) - centerLogical.x;
+              const dy = (Number(enemyLogical.y) || 0) - centerLogical.y;
               const dist = Math.hypot(dx, dy);
               closestEnemyDistanceToRing = Math.min(closestEnemyDistanceToRing, Math.abs(dist - currentRadius));
               // Once the expanding wave has reached an enemy, register the hit.

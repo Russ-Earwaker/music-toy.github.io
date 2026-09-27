@@ -1,15 +1,11 @@
 // src/ripplesynth-waves.js
-export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSeconds, scale=1){
+export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSeconds, scale=1, surfaceWidth=300, surfaceHeight=300){
   if (!ripples) return;
   ctx.save();
   ctx.strokeStyle = '#ffffff';
-  // The generator and ripple radii use backing pixels, including on high-DPR screens.
-  const cssW = ctx.canvas.width;
-  const cssH = ctx.canvas.height;
+  const cssW = surfaceWidth;
+  const cssH = surfaceHeight;
   for (let i = ripples.length - 1; i >= 0; i--) {
-    const canvasW = ctx.canvas.width || (ctx.canvas.clientWidth || 0);
-    const canvasH = ctx.canvas.height || (ctx.canvas.clientHeight || 0);
-
     const rp = ripples[i];
     const r = Math.max(0, (now - (rp.startAT ?? rp.startTime)) * speed);
 

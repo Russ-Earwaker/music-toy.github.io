@@ -1,6 +1,6 @@
 import { createSeededRng, createWeaponGateRatioState, decideGateType } from './beat-swarm-weapon-gate-ratio.js';
 import { createWeaponGate } from './beat-swarm-weapon-gate-core.js';
-import { getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
+import { WEAPON_GATE_LOGICAL_CENTER, getWeaponGateCorridorWorldBounds, getWeaponGateShipWorldX } from './beat-swarm-weapon-gate-geometry.js?v=2026-07-26-weapon-gate-ghosts-v1';
 import {
   hashWeaponGateSeed,
   WEAPON_GATE_CURVE_AMPLITUDE,
@@ -58,7 +58,7 @@ export function createWeaponGateIntroState(layer, options = {}) {
     launchClockTime: Number.NaN,
     progress: -1120,
     speed: 0,
-    y: window.innerHeight * 0.5,
+    y: WEAPON_GATE_LOGICAL_CENTER.y,
     vy: 0,
     shots: [],
     targets: [],
@@ -117,7 +117,7 @@ export function appendNextWeaponGate(state) {
   );
   gate.x = (Number(state.launchProgress) || 0)
     + getWeaponGateTravelDistance(targetSeconds)
-    + (window.innerWidth * 0.5);
+    + WEAPON_GATE_LOGICAL_CENTER.x;
   state.gates.push(gate);
   return gate;
 }

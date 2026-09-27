@@ -19,8 +19,14 @@ export { createToyVisibleCounter } from './toyVisibleCounter.js';
 export { createToyDirtyFlags } from './toyDirtyFlags.js';
 
 // --- Particles (shared infra; toys should not reach into baseMusicToy/particles/* directly)
-export { createParticleViewport } from './particles/particle-viewport.js';
-export { createField } from './particles/field-generic.js';
+export { createGenericParticleField, collectParticleLinks } from './particles/field-generic.js';
+export {
+  applyParticleDamping,
+  bounceParticleInBounds,
+  createParticleRuntime,
+  integrateParticleVelocity,
+  renderParticles2D,
+} from './particles/particle-runtime.js';
 export {
   getParticleBudget,
   getAdaptiveFrameBudget,
