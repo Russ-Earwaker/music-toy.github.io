@@ -572,6 +572,15 @@ body.internal-board-active #internal-board-viewport.board-viewport {
   pointer-events: none !important;
 }
 /* Keep the chain add button clickable even when panel is unfocused */
+.toy-chain-btn {
+  --c-btn-size: 65px;
+  position: absolute;
+  left: 100%;
+  right: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10050;
+}
 /* Only clickable when unfocused IF the toy has no child AND the button is not disabled */
 .toy-panel.toy-unfocused:not([data-chain-has-child="1"]) .toy-chain-btn:not(.toy-chain-btn-disabled) {
   pointer-events: auto !important;

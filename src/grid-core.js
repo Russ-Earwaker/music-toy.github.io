@@ -1,11 +1,18 @@
 // src/grid-core.js — grid core + instrument sync (<=300 lines)
 import { triggerInstrument } from './audio-samples.js';
-import { ensureAudioContext, resumeAudioContextIfNeeded, isRunning } from './audio-core.js';
+import { ensureAudioContext, resumeAudioContextIfNeeded, isRunning, getTransportState, TICKS_PER_BAR } from './audio-core.js';
 import { setToyInstrument } from './instrument-map.js';
 import { initToyUI } from './toyui.js';
 import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
 import { midiToName, buildPalette } from './note-helpers.js';
-import { gateTriggerForToy } from './toy-audio.js';
+import { gateTriggerForToy, bumpToyAudioGen } from './toy-audio.js';
+import {
+  activatePlaybackInstance,
+  deactivatePlaybackInstance,
+  ensurePlaybackInstance,
+  getPlaybackInstance,
+  removePlaybackInstance,
+} from './playback-instances.js';
 
 const NUM_CUBES = 8;
 
@@ -89,6 +96,19 @@ export function buildGrid(panel, numSteps = 8){
   if (!panel || !(panel instanceof Element) || panel.__gridBuilt) return null;
   panel.__gridBuilt = true;
   panel.dataset.toy = panel.dataset.toy || 'loopgrid';
+  const initialTransport = getTransportState();
+  if (isRunning()) {
+    activatePlaybackInstance(panel.id, initialTransport.currentTick, {
+      loopLengthTicks: TICKS_PER_BAR,
+      quantize: true,
+    });
+  } else {
+    ensurePlaybackInstance(panel.id, {
+      active: true,
+      startTick: initialTransport.currentTick,
+      loopLengthTicks: TICKS_PER_BAR,
+    });
+  }
   initToyUI(panel, { toyName: 'Loop Grid', defaultInstrument: 'Bass Tone 4' });
 
   // Use a full chromatic scale instead of the default pentatonic scale.
@@ -235,6 +255,39 @@ export function buildGrid(panel, numSteps = 8){
 
   // Create gated trigger for audio generation guard
   const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument);
+
+  const activateAtTransport = ({ retrigger = false } = {}) => {
+    const transport = getTransportState();
+    const existing = getPlaybackInstance(panel.id);
+    const instance = activatePlaybackInstance(panel.id, transport.currentTick, {
+      loopLengthTicks: TICKS_PER_BAR,
+      quantize: transport.state === 'playing',
+      retrigger,
+    });
+    if (instance !== existing) {
+      bumpToyAudioGen(panel.__audioToyId, retrigger ? 'loopgrid-retrigger' : 'loopgrid-activate');
+      panel.__forceSchedulerReset = true;
+    }
+    return instance;
+  };
+  panel.__loopGridPlayback = {
+    get instance(){ return getPlaybackInstance(panel.id); },
+    activate: () => activateAtTransport({ retrigger: false }),
+    retrigger: () => activateAtTransport({ retrigger: true }),
+    deactivate: () => {
+      const instance = deactivatePlaybackInstance(panel.id);
+      bumpToyAudioGen(panel.__audioToyId, 'loopgrid-deactivate');
+      panel.__forceSchedulerReset = true;
+      return instance;
+    },
+  };
+  panel.addEventListener('toy:start', () => panel.__loopGridPlayback.activate());
+  panel.addEventListener('toy:retrigger', () => panel.__loopGridPlayback.retrigger());
+  panel.addEventListener('toy:deactivate', () => panel.__loopGridPlayback.deactivate());
+  panel.addEventListener('toy-remove', () => {
+    deactivatePlaybackInstance(panel.id);
+    removePlaybackInstance(panel.id);
+  }, { once: true });
 
   try {
     if (panel.dataset.instrument) setToyInstrument(panel.__audioToyId, panel.dataset.instrument);

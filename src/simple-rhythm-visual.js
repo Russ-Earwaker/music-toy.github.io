@@ -3,7 +3,9 @@
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { boardScale } from './board-scale-helpers.js';
 import { midiToName } from './note-helpers.js';
-import { isRunning, getLoopInfo } from './audio-core.js';
+import { isRunning, getLoopInfo, getTransportState } from './audio-core.js';
+import { getPlaybackInstance } from './playback-instances.js';
+import { resolveSimpleRhythmPlayheadColumn } from './simple-rhythm-timing.js';
 import { createGenericParticleField, getParticleBudget, getAdaptiveFrameBudget } from './baseMusicToy/index.js';
 import {
   waitForStableBox,
@@ -1041,7 +1043,14 @@ function render(panel, opts = {}) {
     && localSubBoardStep >= 0;
   const playheadCol = useLocalSubBoardStep
     ? (Math.trunc(localSubBoardStep) % NUM_CUBES)
-    : (loopInfo ? Math.floor(loopInfo.phase01 * NUM_CUBES) : -1);
+    : (() => {
+        return resolveSimpleRhythmPlayheadColumn({
+          running: transportRunning,
+          instance: getPlaybackInstance(panel.id),
+          transportTick: getTransportState().currentTick,
+          steps: NUM_CUBES,
+        });
+      })();
   // Chain state can force a clear when this toy hands off to another.
   const isActiveInChain = panel.dataset.chainActive === 'true';
   const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);

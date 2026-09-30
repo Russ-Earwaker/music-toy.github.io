@@ -22,6 +22,9 @@ export function installBouncerInteractions({
   instrument, toyId, noteList, velFrom,
   setAim, isAdvanced, preview, syncBlockAnchors
 }) {
+  if (typeof clientToLogical !== 'function') {
+    throw new TypeError('Bouncer interactions require clientToLogical');
+  }
   const previewApi = preview || {};
   const shouldDefer = () => (previewApi.shouldDefer ? previewApi.shouldDefer() : false);
   const noteListSafe = Array.isArray(noteList) ? noteList : [];
@@ -44,13 +47,7 @@ export function installBouncerInteractions({
   let aimCurr = null;
 
   function localPoint(evt) {
-    if (typeof clientToLogical === 'function') {
-      return clientToLogical({ x: evt.clientX, y: evt.clientY });
-    }
-    const r = canvas.getBoundingClientRect();
-    const x = (evt.clientX - r.left) * ((canvas.width || 1) / Math.max(1, r.width));
-    const y = (evt.clientY - r.top)  * ((canvas.height||1) / Math.max(1, r.height));
-    return { x, y };
+    return clientToLogical({ x: evt.clientX, y: evt.clientY });
   }
 
   function getPreviewState() {

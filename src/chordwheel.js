@@ -1,6 +1,6 @@
 // src/chordwheel.js — chord wheel with 16-step radial ring (per active segment)
 import { initToyUI } from './toyui.js';
-import { NUM_STEPS, getLoopInfo, ensureAudioContext, getToyGain, isRunning, registerActiveNode } from './audio-core.js';
+import { NUM_STEPS, TICKS_PER_BAR, getLoopInfo, getTransportState, ensureAudioContext, getToyGain, isRunning, registerActiveNode } from './audio-core.js';
 import { createChordWheelStrumParticles } from './chordwheel-strum-particles.js';
 import {
   CHORDWHEEL_STRUM_LOGICAL_WIDTH,
@@ -20,6 +20,17 @@ import { triggerNoteForToy } from './audio-trigger.js';
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
+import { createChordWheelStrumTimes } from './chordwheel-timing.js';
+import { bumpToyAudioGen } from './toy-audio.js';
+import {
+  activatePlaybackInstance,
+  deactivatePlaybackInstance,
+  ensurePlaybackInstance,
+  getPlaybackInstance,
+  getPlaybackLocalTick,
+  getPlaybackStepEvents,
+  removePlaybackInstance,
+} from './playback-instances.js';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 function degreeToChordName(deg) {
@@ -132,7 +143,14 @@ function chainHasSequencedNotes(head) {
 export function createChordWheel(panel){
   initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'Acoustic Guitar' });
   const toyId = panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;
+  panel.__audioToyId = toyId;
   const audioCtx = ensureAudioContext();
+  const initialTransport = getTransportState();
+  if (isRunning()) {
+    activatePlaybackInstance(panel.id, initialTransport.currentTick, { loopLengthTicks: TICKS_PER_BAR, quantize: true });
+  } else {
+    ensurePlaybackInstance(panel.id, { active: true, startTick: 0, loopLengthTicks: TICKS_PER_BAR });
+  }
 
 
 
@@ -245,6 +263,53 @@ export function createChordWheel(panel){
   panel.__chordwheelStepStates = stepStates;
   panel.__chordwheelHasActive = false;
   let progression = Array(numSteps).fill(1);
+  panel.__seqRev = panel.__seqRev || 0;
+
+  const rebuildSeqPattern = () => {
+    panel.__seqPattern = {
+      numSteps,
+      stepStates: Array.from(stepStates),
+      progression: Array.from(progression),
+      instrument: panel.dataset.instrument || 'acoustic_guitar',
+      chordOct: Number(panel.dataset.chordOct || 0),
+      chordOctPreview: panel.dataset.chordOctPreview || '',
+    };
+  };
+  const touchDefinition = () => {
+    panel.__seqRev += 1;
+    rebuildSeqPattern();
+  };
+  rebuildSeqPattern();
+
+  const activateAtTransport = ({ retrigger = false } = {}) => {
+    const transport = getTransportState();
+    const existing = getPlaybackInstance(panel.id);
+    const instance = activatePlaybackInstance(panel.id, transport.currentTick, {
+      loopLengthTicks: TICKS_PER_BAR,
+      quantize: transport.state === 'playing',
+      retrigger,
+    });
+    if (instance !== existing) {
+      bumpToyAudioGen(toyId, retrigger ? 'chordwheel-retrigger' : 'chordwheel-activate');
+      panel.__forceSchedulerReset = true;
+    }
+    return instance;
+  };
+  panel.__chordWheelPlayback = {
+    get instance(){ return getPlaybackInstance(panel.id); },
+    activate: () => activateAtTransport({ retrigger: false }),
+    retrigger: () => activateAtTransport({ retrigger: true }),
+    deactivate: () => {
+      const instance = deactivatePlaybackInstance(panel.id);
+      bumpToyAudioGen(toyId, 'chordwheel-deactivate');
+      panel.__forceSchedulerReset = true;
+      return instance;
+    },
+  };
+  panel.addEventListener('toy:start', () => panel.__chordWheelPlayback.activate());
+  panel.addEventListener('toy:retrigger', () => panel.__chordWheelPlayback.retrigger());
+  panel.addEventListener('toy:deactivate', () => panel.__chordWheelPlayback.deactivate());
+  panel.addEventListener('toy-instrument', touchDefinition);
 
   // --- Create Canvas for Cubes ---
   const canvas = el('canvas', 'cw-cubes');
@@ -271,6 +336,8 @@ export function createChordWheel(panel){
     try { console.debug?.(`[chordwheel] ${toyId} cleanup`); } catch {}
     try { mainSurface.destroy(); } catch {}
     try { strumSurface.destroy(); } catch {}
+    try { deactivatePlaybackInstance(panel.id); } catch {}
+    try { removePlaybackInstance(panel.id); } catch {}
   };
   panel.addEventListener('toy-remove', cleanup, { once: true });
   panel.__chordwheelCleanup = cleanup;
@@ -300,6 +367,7 @@ export function createChordWheel(panel){
     // Update progression and labels
     progression = Array(numSteps).fill(1);
     updateLabels();
+    touchDefinition();
   });
 
   // Keep header height stable and refresh labels on zoom
@@ -361,18 +429,16 @@ export function createChordWheel(panel){
       occupy(foundIndex);
       placedCount++;
     }
-    // Reset audio state to ensure the next step re-evaluates against the new pattern.
-    lastAudioStep = -1;
+    touchDefinition();
   }
 
   panel.addEventListener('toy-random', () => performRandomize('toy-random'));
-  panel.addEventListener('toy-clear',()=>{ stepStates.fill(-1); });
+  panel.addEventListener('toy-clear',()=>{ stepStates.fill(-1); touchDefinition(); });
   // When a preceding toy in a chain is reset, this toy should also reset its pattern
   // to avoid playing an old pattern against a new one.
   // This is no longer needed as the global "randomize all" has been disabled.
   // panel.addEventListener('chain:stop', () => performRandomize('chain:stop'));
 
-  let lastAudioStep = -1;
   let playheadIx = -1;
   let flashes = new Float32Array(numSteps);
 
@@ -429,6 +495,7 @@ export function createChordWheel(panel){
                   if (numSteps === 16) { progression[baseDegreeIndex] = newDegree; progression[baseDegreeIndex + 1] = newDegree; }
                   else { progression[baseDegreeIndex] = newDegree; }
                   updateLabels();
+                  touchDefinition();
               }
           return; // Click was handled, stop processing.
       }
@@ -444,6 +511,7 @@ export function createChordWheel(panel){
           if (current === -1) stepStates[i] = 1;
           else if (current === 1) stepStates[i] = 2;
           else stepStates[i] = -1;
+          touchDefinition();
           return; // Click handled
       }
     }
@@ -466,6 +534,7 @@ export function createChordWheel(panel){
     // Set the arpeggio state of the currently highlighted cube
     if (playheadIx >= 0 && playheadIx < numSteps) {
         stepStates[playheadIx] = (direction === 'down') ? 2 : 1; // 2 for down, 1 for up
+        touchDefinition();
     }
   }
 
@@ -568,23 +637,25 @@ export function createChordWheel(panel){
       }
     }
 
-    // Freeze playhead when transport is paused or not active in chain
-    if (shouldRun) {
-      const totalPhase = info.phase01 * numSteps;
-      const currentStep = Math.floor(totalPhase);
-      playheadIx = currentStep;
-    } else if (running && !shouldRun) {
+    // Visual phase reads the same playback instance as the audio scheduler.
+    const playbackInstance = getPlaybackInstance(panel.id);
+    const transportTick = Number(info?.currentTick) || 0;
+    const localTick = getPlaybackLocalTick(playbackInstance, transportTick);
+    if (localTick != null && (isActiveInChain || !isChained)) {
+      playheadIx = Math.floor((localTick * numSteps) / playbackInstance.loopLengthTicks) % numSteps;
+    } else if (running) {
       playheadIx = -1;
     }
 
     // The hand should rotate over 8 visual segments, in sync with the 16 steps.
     // Freeze the wheel hand when paused
     try{
-      const totalPhase8 = info.phase01 * NUM_SLICES;
+      const visualPhase = localTick == null ? 0 : localTick / playbackInstance.loopLengthTicks;
+      const totalPhase8 = visualPhase * NUM_SLICES;
       const handSegment = Math.floor(totalPhase8);
       const phaseInHandSegment = totalPhase8 - handSegment;
       let use;
-      if (shouldRun) {
+      if (localTick != null && (isActiveInChain || !isChained)) {
         use = { seg: handSegment, phase: phaseInHandSegment };
       } else {
         use = { seg: 0, phase: 0 }; // Default to straight up when not playing
@@ -684,26 +755,6 @@ export function createChordWheel(panel){
 
     // Debug visuals removed
 
-    // --- Audio Logic ---
-    if (shouldRun) {
-        const audioStep = (playheadIx >= 0) ? playheadIx : 0;
-        if (audioStep !== lastAudioStep) {
-          lastAudioStep = audioStep;
-    
-          const state = stepStates[audioStep];
-          if (state !== -1) {
-            flashes[audioStep] = 1.0;
-            const chord = buildChord(progression[audioStep] || 1);
-            const chordName = degreeToChordName(progression[audioStep] || 1);
-            // Map state -> strum direction: 1 = up, 2 = down
-            const direction = (state === 1) ? 'up' : 'down';
-            scheduleStrum({ notes: chord, direction, chordName });
-          }
-        }
-    } else {
-        lastAudioStep = -1;
-    }
-
     // Decay pulse for next frame
     strumBgPulse *= PULSE_DECAY;
   }
@@ -768,11 +819,12 @@ export function createChordWheel(panel){
     return [null,null,null, t[0]||55, t[1]||59, t[2]||64];
   }
 
-  function scheduleStrum({ notes, direction = 'down', chordName }) {
+  function scheduleStrum({ notes, direction = 'down', chordName, when: authoritativeTime, definition = null }) {
     panel.__pulseHighlight = 1.0;
     panel.__pulseRearm = true;
-    const currentInstrument = (panel.dataset.instrument || 'acoustic_guitar').toLowerCase().replace(/[\s-]+/g, '_');
-    const chordOct = Number(panel.dataset.chordOct || 1);
+    const instrument = definition?.instrument || panel.dataset.instrument || 'acoustic_guitar';
+    const currentInstrument = instrument.toLowerCase().replace(/[\s-]+/g, '_');
+    const chordOct = Number(definition?.chordOct ?? panel.dataset.chordOct ?? 1);
 
     if (false && currentInstrument === 'acoustic_guitar_chords') {
       const mapping = CHORD_SAMPLE_MAP[chordName] || CHORD_SAMPLE_MAP[chordName.replace('°', '')];
@@ -790,9 +842,9 @@ export function createChordWheel(panel){
     try {
       const testFlag = String(panel.dataset.chordTestEe || '').toLowerCase();
       if (testFlag === '1' || testFlag === 'true'){
-        const time = audioCtx.currentTime;
+        const time = Number.isFinite(authoritativeTime) ? authoritativeTime : audioCtx.currentTime;
         // Playback-only octave preview support, same as strum path
-        const __octPrevFlag = String(panel.dataset.chordOctPreview||'').toLowerCase();
+        const __octPrevFlag = String(definition?.chordOctPreview ?? panel.dataset.chordOctPreview ?? '').toLowerCase();
         const __octPreview = (__octPrevFlag==='1' || __octPrevFlag==='true') ? 12 : 0;
         // If instrument metadata declares a baseNote that's an octave low (e.g., C3),
         // the sample path will align. Our E/E test uses MIDI names through triggerNoteForToy,
@@ -810,15 +862,16 @@ export function createChordWheel(panel){
     // --- Guitar-style voicing and strum ---
     {
       const sweep = 0.065; // 65ms natural sweep for realistic strum
-      const time = audioCtx.currentTime;
+      const time = Number.isFinite(authoritativeTime) ? authoritativeTime : audioCtx.currentTime;
       let strings = __cwVoicingForName(chordName, notes);
-      const oct = Number(panel.dataset.chordOct||0);
+      const oct = Number(definition?.chordOct ?? panel.dataset.chordOct ?? 0);
       if (Number.isFinite(oct) && oct !== 0){ strings = strings.map(m=> m==null? null : m + 12*oct); }
       // Playback-only octave preview: shift output by +12 when chordOctPreview is truthy ("1"/"true")
-      const __octPrevFlag = String(panel.dataset.chordOctPreview||'').toLowerCase();
+      const __octPrevFlag = String(definition?.chordOctPreview ?? panel.dataset.chordOctPreview ?? '').toLowerCase();
       const __octPreview = (__octPrevFlag==='1' || __octPrevFlag==='true') ? 12 : 0;
       const order = (direction === 'up') ? [5,4,3,2,1,0] : [0,1,2,3,4,5];
-      const N = order.length; const step = sweep / (N-1 || 1);
+      const N = order.length;
+      const strumTimes = createChordWheelStrumTimes(time, N, { sweep });
       // Per-string emphasis (6..1): tuck lows, let highs speak
       const mul = [0.58, 0.72, 0.85, 0.94, 1.00, 1.00];
       // Direction-aware base dynamics with gentle spread
@@ -834,7 +887,7 @@ export function createChordWheel(panel){
 
       for (let k=0; k<N; k++){
         const si = order[k]; const midi = strings[si]; if (midi==null) continue;
-        const when = time + (k*step) + (Math.random()*0.006 - 0.003);
+        const when = strumTimes[k];
         const v0 = baseVel(k);
         const vm = mul[si] ?? 0.9;
         const vel  = Math.max(0.05, Math.min(1, v0 * vm));
@@ -846,7 +899,7 @@ export function createChordWheel(panel){
         const decaySec = Math.min(12.0, Math.max(2.8, __stepDur * decayMul));
         const releaseSec = (si <= 1) ? 0.6 : (si <= 3 ? 0.9 : 1.2);
         const sustainLevel = 0.24; // keep a modest level before release
-        triggerNoteForToy(toyId, midiToName(midiOut), vel, { when, env: { decaySec, releaseSec, sustainLevel } });
+        triggerNoteForToy(toyId, midiToName(midiOut), vel, { when, instrument, env: { decaySec, releaseSec, sustainLevel } });
         // Spawn particles along the string's vertical line; faster near vertical center
         try{
           const x = CHORDWHEEL_STRUM_LOGICAL_WIDTH * 0.5;
@@ -880,9 +933,29 @@ export function createChordWheel(panel){
   }
   draw();
 
-  // This toy manages its own timing via requestAnimationFrame. By setting
-  // __sequencerStep to a dummy function, we ensure it's included in the chain
-  // scheduler for `data-chain-active` updates, but its audio is driven by its own RAF loop.
+  panel.__sequencerEventsInWindow = (fromTick, toTick, instance) => (
+    getPlaybackStepEvents(instance, fromTick, toTick, panel.__seqPattern?.numSteps || numSteps)
+      .filter(event => (panel.__seqPattern?.stepStates?.[event.step] ?? -1) !== -1)
+      .map(event => ({ ...event, eventKey: `chord:${event.step}` }))
+  );
+  panel.__sequencerScheduleEvent = (event, audioTime) => {
+    const definition = panel.__seqPatternActive || panel.__seqPattern;
+    const step = event?.step;
+    const state = definition?.stepStates?.[step] ?? -1;
+    if (state === -1) return;
+    flashes[step] = 1.0;
+    const degree = definition?.progression?.[step] || 1;
+    scheduleStrum({
+      notes: buildChord(degree),
+      direction: state === 1 ? 'up' : 'down',
+      chordName: degreeToChordName(degree),
+      when: audioTime,
+      definition,
+    });
+  };
+
+  // Retained only so existing chain discovery includes Chord Wheel. Audio is
+  // provided to the shared lookahead scheduler by the event-provider methods.
   panel.__sequencerStep = () => {};
 
   // Always-on: Press 'C' to play reference C4 tone (debug/tuning aid)

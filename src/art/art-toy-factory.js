@@ -74,8 +74,6 @@ function resolveSpawnPlacement(board, centerX, centerY, size) {
 
 function attachSlotHandleDrag({
   handleBtn,
-  layer,
-  panelPx = 220,
   getStartPos,
   setPos,
   clampX,
@@ -85,11 +83,10 @@ function attachSlotHandleDrag({
   onTap,
   clientToLogical = null,
 } = {}) {
-  if (!handleBtn || !layer || typeof getStartPos !== 'function' || typeof setPos !== 'function') return;
+  if (!handleBtn || typeof getStartPos !== 'function' || typeof setPos !== 'function') return;
+  if (typeof clientToLogical !== 'function') throw new TypeError('attachSlotHandleDrag requires clientToLogical');
   let dragActive = false;
   let dragPointerId = null;
-  let startClientX = 0;
-  let startClientY = 0;
   let startX = 0;
   let startY = 0;
   let startPointerLogical = null;
@@ -102,13 +99,9 @@ function attachSlotHandleDrag({
     const start = getStartPos() || { x: 0, y: 0 };
     dragActive = true;
     dragPointerId = ev.pointerId;
-    startClientX = ev.clientX;
-    startClientY = ev.clientY;
     startX = Number(start.x) || 0;
     startY = Number(start.y) || 0;
-    startPointerLogical = typeof clientToLogical === 'function'
-      ? clientToLogical({ x: ev.clientX, y: ev.clientY })
-      : null;
+    startPointerLogical = clientToLogical({ x: ev.clientX, y: ev.clientY });
     moved = false;
     try { onDragStateChange?.(true); } catch {}
     try { handleBtn.setPointerCapture(ev.pointerId); } catch {}
@@ -119,19 +112,11 @@ function attachSlotHandleDrag({
     if (dragPointerId != null && ev.pointerId !== dragPointerId) return;
     ev.preventDefault();
     ev.stopPropagation();
-    let dx;
-    let dy;
-    if (typeof clientToLogical === 'function' && startPointerLogical) {
-      const current = clientToLogical({ x: ev.clientX, y: ev.clientY });
-      if (!current) return;
-      dx = current.x - startPointerLogical.x;
-      dy = current.y - startPointerLogical.y;
-    } else {
-      const rect = layer.getBoundingClientRect();
-      if (!rect || rect.width < 1 || rect.height < 1) return;
-      dx = ((ev.clientX - startClientX) / rect.width) * panelPx;
-      dy = ((ev.clientY - startClientY) / rect.height) * panelPx;
-    }
+    if (!startPointerLogical) return;
+    const current = clientToLogical({ x: ev.clientX, y: ev.clientY });
+    if (!current) return;
+    const dx = current.x - startPointerLogical.x;
+    const dy = current.y - startPointerLogical.y;
     const nx = typeof clampX === 'function' ? clampX(startX + dx) : (startX + dx);
     const ny = typeof clampY === 'function' ? clampY(startY + dy) : (startY + dy);
     moved = moved || Math.abs(nx - startX) > 0.0001 || Math.abs(ny - startY) > 0.0001;
@@ -1138,7 +1123,6 @@ function setupFireworks(panel) {
 
     attachSlotHandleDrag({
       handleBtn,
-      layer,
       getStartPos: () => ({ x: anchors[i].x, y: anchors[i].y }),
       setPos: (x, y) => {
         anchors[i].x = x;
@@ -2862,7 +2846,6 @@ function setupLaserTrails(panel) {
     const pos = kind === 'target' ? targets : emitters;
     attachSlotHandleDrag({
       handleBtn,
-      layer,
       getStartPos: () => ({ x: pos[slot].x, y: pos[slot].y }),
       setPos: (x, y) => {
         if (kind === 'source') {

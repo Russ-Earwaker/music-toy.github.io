@@ -1,5 +1,43 @@
 // src/drawgrid/dg-randomizers.js
 
+let randomLineColorIndex = 0;
+
+export function createRandomLineStroke(S, random = Math.random) {
+    const STROKE_COLORS = [
+      'rgba(95,179,255,0.95)', 'rgba(255,95,179,0.95)',
+      'rgba(95,255,179,0.95)', 'rgba(255,220,95,0.95)',
+    ];
+    const leftX = S.gridArea.x;
+    const rightX = S.gridArea.x + S.gridArea.w;
+    const minY = S.gridArea.y + S.topPad + S.ch;
+    const maxY = S.gridArea.y + S.topPad + (S.rows - 1) * S.ch;
+    const K = Math.max(6, Math.round(S.gridArea.w / Math.max(1, S.cw * 0.9)));
+    const cps = [];
+    for (let i = 0; i < K; i++) {
+      const t = i / (K - 1);
+      cps.push({ x: leftX + (rightX - leftX) * t, y: minY + random() * (maxY - minY) });
+    }
+    const cr = (p0, p1, p2, p3, t) => {
+      const t2 = t * t, t3 = t2 * t;
+      return ((-t3 + 2*t2 - t)*p0 + (3*t3 - 5*t2 + 2)*p1 + (-3*t3 + 4*t2 + t)*p2 + (t3 - t2)*p3) / 2;
+    };
+    const pts = [];
+    const samplesPerSeg = Math.max(8, Math.round(S.cw / 3));
+    for (let i = 0; i < cps.length - 1; i++) {
+      const p0=cps[Math.max(0,i-1)], p1=cps[i], p2=cps[i+1], p3=cps[Math.min(cps.length-1,i+2)];
+      for (let j=0; j<=samplesPerSeg; j++) {
+        const t=j/samplesPerSeg;
+        pts.push({ x:cr(p0.x,p1.x,p2.x,p3.x,t), y:Math.max(minY,Math.min(maxY,cr(p0.y,p1.y,p2.y,p3.y,t))) });
+      }
+    }
+    const gh = Math.max(1, S.gridArea.h - (S.topPad || 0));
+    return {
+      pts,
+      __ptsN: pts.map(p => ({ nx:(p.x-S.gridArea.x)/Math.max(1,S.gridArea.w), ny:(p.y-(S.gridArea.y+(S.topPad||0)))/gh })),
+      coordinateSpace: 'drawgrid-logical-v1', color: STROKE_COLORS[(randomLineColorIndex++) % STROKE_COLORS.length], isSpecial:true, generatorId:1,
+    };
+}
+
 export function createDgRandomizers(getState) {
   // Keep this palette in sync with drawgrid.js STROKE_COLORS.
   // (We keep it local here so randomizers don't depend on drawgrid module internals.)
@@ -12,7 +50,7 @@ export function createDgRandomizers(getState) {
 
   let __dgRandomColorIndex = 0;
 
-  function createRandomLineStroke(S) {
+  function createRandomLineStrokeLegacy(S) {
     const leftX = S.gridArea.x;
     const rightX = S.gridArea.x + S.gridArea.w;
     const minY = S.gridArea.y + S.topPad + S.ch; // Inset by one full row from the top
@@ -51,7 +89,7 @@ export function createDgRandomizers(getState) {
       nx: (p.x - S.gridArea.x) / Math.max(1, S.gridArea.w),
       ny: (p.y - (S.gridArea.y + (S.topPad || 0))) / gh,
     }));
-    return { pts, __ptsN: ptsN, color, isSpecial: true, generatorId: 1 };
+    return { pts, __ptsN: ptsN, coordinateSpace: 'drawgrid-logical-v1', color, isSpecial: true, generatorId: 1 };
   }
 
   function handleRandomizeLine() {

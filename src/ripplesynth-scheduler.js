@@ -1,7 +1,6 @@
 // src/ripplesynth-scheduler.js
 // Step scheduler for Rippler. Behavior identical to in-core version.
 import { rippleNoteTime } from './ripplesynth-audio.js';
-
 export function createScheduler(cfg){
   const {
     panel, ac, NUM_STEPS, barSec, stepSeconds,
@@ -9,8 +8,8 @@ export function createScheduler(cfg){
     triggerInstrument, getInstrument, applyPreviewState,
     generator, RING_SPEED, spawnRipple,
     state, isPlaybackMuted,
-    getLoopInfo,
-    getQuantDiv
+    getLoopInfo, getPositionAtAudioTime,
+    getQuantDiv, sharedReplay = false
   } = cfg;
 
   // One-shot summary for the first replay after a recording bar
@@ -24,34 +23,33 @@ export function createScheduler(cfg){
   // Avoid duplicate preschedules; compare against last barStart anchor
   let __lastPrescheduledAt = -1;
   function prescheduleBar(){
-    try{
+    if (sharedReplay) {
       __scheduledThisBar.clear();
-      const li = (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
-      const div = (typeof getQuantDiv === 'function') ? Number(getQuantDiv()) : NaN;
+      __lastPrescheduledAt = state.barStartAT;
+      return;
+    }
+    try {
+      __scheduledThisBar.clear();
+      const li = typeof getLoopInfo === 'function' ? getLoopInfo() : null;
+      const div = typeof getQuantDiv === 'function' ? Number(getQuantDiv()) : NaN;
       const beatLen = li?.beatLen || (barSec() / 4);
-      // If we've already prescheduled for this barStartAT, skip
       if (__lastPrescheduledAt === state.barStartAT) return;
       __lastPrescheduledAt = state.barStartAT;
-
-      for (let s=0; s<NUM_STEPS; s++){
-        const set = pattern[s]; if (!set || !set.size) continue;
-        for (const i of set){
-          const b = blocks[i]; if (!b || !b.active) continue;
-          const name = noteList[b.noteIndex] || 'C4';
-          const offRaw = (patternOffsets && patternOffsets[s] && patternOffsets[s].get(i));
-          const hasOff = typeof offRaw === 'number' && isFinite(offRaw);
-          const baseRel = hasOff ? offRaw : (s * stepSeconds());
-          const tFire = rippleNoteTime(state.barStartAT, baseRel, beatLen, div);
-          const k = __keyFor(s,i);
-          if (!__scheduledThisBar.has(k)){
-            __scheduledThisBar.add(k);
-            try{ triggerInstrument(getInstrument(), name, tFire); }catch{}
-            // Defer visual flash to the actual scheduled time
-            try{ if (b) b._visFlashAt = Math.max((b._visFlashAt||0), tFire); }catch{}
-          }
+      for (let s = 0; s < NUM_STEPS; s += 1) {
+        for (const i of pattern[s] || []) {
+          const block = blocks[i];
+          if (!block?.active) continue;
+          const raw = patternOffsets?.[s]?.get?.(i);
+          const relative = Number.isFinite(raw) ? raw : s * stepSeconds();
+          const fireAt = rippleNoteTime(state.barStartAT, relative, beatLen, div);
+          const key = __keyFor(s, i);
+          if (sharedReplay || __scheduledThisBar.has(key)) continue;
+          __scheduledThisBar.add(key);
+          try { triggerInstrument(getInstrument(), noteList[block.noteIndex] || 'C4', fireAt); } catch {}
+          block._visFlashAt = Math.max(block._visFlashAt || 0, fireAt);
         }
       }
-    }catch{}
+    } catch {}
   }
 
   function tick(){
@@ -73,6 +71,12 @@ export function createScheduler(cfg){
         spawnRipple(true);
       }
       state.recording = false;
+      if (justRecorded) {
+        // The shared scheduler must include the first replay boundary; recording
+        // windows deliberately did not advance its cursor.
+        panel.__sequencerWindowStartTick = Math.max(0, Math.round(getPositionAtAudioTime?.(state.barStartAT) || 0));
+        panel.__forceSchedulerReset = true;
+      }
       // Arm summary mode only for the very next bar after recording
       if (justRecorded){ __summaryMode = true; __printedSummaries.clear(); }
 

@@ -3,7 +3,7 @@ import { getToyLifecycle, mountToySurface } from './baseMusicToy/index.js';
 import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
 import { stepBouncer } from './bouncer-step.js';
 import { noteList } from './utils.js';
-import { ensureAudioContext, getLoopInfo, setToyMuted, isRunning } from './audio-core.js';
+import { TICKS_PER_BAR, TICKS_PER_BEAT, audioTimeToTick, ensureAudioContext, getLoopInfo, getTransportState, setToyMuted, isRunning, tickToAudioTime } from './audio-core.js';
 import { triggerInstrument } from './audio-samples.js';
 import { randomizeRects, EDGE_PAD as EDGE, hitRect, whichThirdRect, drawThirdsGuides } from './toyhelpers.js';
 import { drawBlocksSection } from './ripplesynth-blocks.js';
@@ -21,6 +21,10 @@ import { installSpeedUI } from './bouncer-speed-ui.js';
 import { installQuantUI } from './bouncer-quant-ui.js';
 import { installBouncerOSD } from './bouncer-osd.js';
 import { circleRectHit } from './bouncer-helpers.js';
+import { activatePlaybackInstance, deactivatePlaybackInstance, ensurePlaybackInstance, getPlaybackInstance, getPlaybackLocalTick, removePlaybackInstance } from './playback-instances.js';
+import { bouncerEventsInWindow, bouncerVisualEventTick, getBouncerReplayCompletionTick, interpolateBouncerTrajectory, nextBouncerRecordingStartTick, normalizeBouncerPattern, normalizeBouncerTrajectory, quantizeBouncerOffsetTick, recordBouncerTrajectorySample } from './bouncer-transport.js';
+import { bumpToyAudioGen } from './toy-audio.js';
+import { createBouncerVisualEventQueue } from './bouncer-visual-events.js';
 import {
   BOUNCER_LOGICAL_HEIGHT,
   BOUNCER_LOGICAL_WIDTH,
@@ -48,6 +52,10 @@ export function createBouncer(selector){
   let speedFactor = parseFloat((panel?.dataset?.speed)||'1.60'); // +60% faster default // 0.60 = calmer default
   const toyId = panel.id || panel.dataset.toyid || `bouncer-${Math.random().toString(36).slice(2, 8)}`;
   try { panel.dataset.toyid = toyId; } catch {}
+  panel.__audioToyId = toyId;
+  const initialTransport = getTransportState();
+  if (isRunning()) activatePlaybackInstance(panel.id, initialTransport.currentTick, { loopLengthTicks: TICKS_PER_BAR, quantize: true });
+  else ensurePlaybackInstance(panel.id, { active: true, startTick: 0, loopLengthTicks: TICKS_PER_BAR });
 
   // --- Persistence hooks ---
   // Define these early so they are available for pending state application.
@@ -71,7 +79,8 @@ export function createBouncer(selector){
       });
       const loopRecSnap = {
         mode: loopRec.mode,
-        pattern: loopRec.pattern,
+        pattern: normalizeBouncerPattern(loopRec.pattern),
+        trajectory: normalizeBouncerTrajectory(loopRec.trajectory),
         signature: loopRec.signature,
       };
       if (DBG_RESPAWN()) console.log('[BNC_DBG] getSnapshot: Saving loopRec', { mode: loopRecSnap.mode, patternLen: loopRecSnap.pattern.length, signature: loopRecSnap.signature?.slice(0,30) });
@@ -140,7 +149,12 @@ export function createBouncer(selector){
         if (st.loopRec && typeof st.loopRec === 'object') {
           if (DBG_RESPAWN()) console.log('[BNC_DBG] applySnapshot: Restoring loopRec', { mode: st.loopRec.mode, patternLen: st.loopRec.pattern?.length, signature: st.loopRec.signature?.slice(0,30) });
           if (st.loopRec.mode) loopRec.mode = st.loopRec.mode;
-          if (Array.isArray(st.loopRec.pattern)) loopRec.pattern = st.loopRec.pattern;
+          if (Array.isArray(st.loopRec.pattern)) loopRec.pattern = normalizeBouncerPattern(st.loopRec.pattern);
+          if (Array.isArray(st.loopRec.trajectory)) loopRec.trajectory = normalizeBouncerTrajectory(st.loopRec.trajectory);
+          if (loopRec.mode === 'replay' && loopRec.trajectory.length < 2) {
+            loopRec.mode = 'record';
+            loopRec.signature = '';
+          }
           loopRec.signature = st.loopRec.signature || '';
           // Reset runtime-only state that shouldn't be persisted
           loopRec.lastBarIndex = -1; loopRec.scheduledBarIndex = -999; loopRec.seen = new Set();
@@ -347,8 +361,12 @@ export function createBouncer(selector){
       // This prevents the old notes from replaying with the new timing.
       // The signature is also invalidated to ensure a clean slate on the next bar.
       loopRec.pattern.length = 0;
+      loopRec.trajectory.length = 0;
       loopRec.mode = 'record';
       loopRec.signature = ''; // Guarantees onNewBar will confirm the reset.
+      loopRec.pendingRecordTick = nextBouncerRecordingStartTick(getTransportState().currentTick, TICKS_PER_BAR);
+      panel.__seqRev = (panel.__seqRev || 0) + 1;
+      panel.__forceSchedulerReset = true;
     }
   });
 
@@ -381,6 +399,12 @@ export function createBouncer(selector){
           parts.push(i, Math.round(b.x), Math.round(b.y), Math.round(b.w||b.size||36), Math.round(b.h||b.size||36), b.active?1:0, b.noteIndex|0);
         }
       }
+      if (Array.isArray(edgeControllers)) {
+        for (let i = 0; i < edgeControllers.length; i += 1) {
+          const c = edgeControllers[i]; if (!c) continue;
+          parts.push('edge', i, c.edge, Math.round(c.x), Math.round(c.y), c.active ? 1 : 0, c.noteIndex | 0);
+        }
+      }
       // launch vector/pos
       const L = lastLaunch || {};
       parts.push('launch', Math.round(L.x||0), Math.round(L.y||0), Math.round((L.vx||0)*100), Math.round((L.vy||0)*100));
@@ -400,13 +424,34 @@ export function createBouncer(selector){
       loopRec.mode = 'record';
          if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop reset: state changed; recording new bar');
       loopRec.pattern.length = 0;
+      loopRec.trajectory.length = 0;
+      loopRec.recordingStartTick = nextBouncerRecordingStartTick(getTransportState().currentTick, TICKS_PER_BAR);
+      const instance = activatePlaybackInstance(panel.id, loopRec.recordingStartTick, { loopLengthTicks: TICKS_PER_BAR, quantize: false, retrigger: true });
+      loopRec.recordingStartTick = instance.startTick;
+      // The learned physics body is deliberately not reused. Re-arm the authored
+      // launch at the new recording boundary so the replacement pass is complete.
+      ball = null;
+      nextLaunchAt = lastLaunch ? tickToAudioTime(instance.startTick) : null;
+      panel.__seqRev = (panel.__seqRev || 0) + 1;
+      panel.__forceSchedulerReset = true;
     } else {
       // If the state hasn't changed, we're done recording. Switch to replay mode
       // if we aren't already in it.
-      if (loopRec.mode !== 'replay') {
+      if (loopRec.mode !== 'replay' && k > 0) {
         // Only switch to replay if a pattern was actually recorded.
-        if (loopRec.pattern.length > 0) {
+        if (loopRec.pattern.length > 0 || loopRec.trajectory.length > 1) {
           loopRec.mode = 'replay';
+          // The physics learning pass is this chain link's first turn. Hand off
+          // now; the learned pattern/trajectory replays when the chain returns.
+          // Standalone Bouncers simply continue into replay on the same timeline.
+          if ((panel.dataset.prevToyId || panel.dataset.nextToyId) && panel.dataset.chainActive === 'true') {
+            const completedTick = loopRec.recordingStartTick + TICKS_PER_BAR;
+            panel.dispatchEvent(new CustomEvent('chain:next', {
+              bubbles: true,
+              detail: { completedAt: tickToAudioTime(completedTick) },
+            }));
+          }
+          panel.__forceSchedulerReset = true;
           if ((globalThis.BOUNCER_DBG_LEVEL|0)>=1) console.log('[bouncer-rec] loop recorded — switching to replay (events:', loopRec.pattern.length, ')');
         }
       }
@@ -558,8 +603,9 @@ export function createBouncer(selector){
 
   // visQ is a carrier for the loop recorder state, passed to the physics/render steps.
   // It must be a new object for each toy instance to prevent state bleeding.
-  let visQ = { loopRec: { mode: 'record', pattern: [], signature: '', lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set() } };
+  let visQ = { loopRec: { mode: 'record', pattern: [], trajectory: [], signature: '', recordingStartTick: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set() } };
   const fx = createImpactFX();
+  const replayVisualEvents = createBouncerVisualEventQueue();
 
 // --- anchor-based sizing for blocks & handle (fractions of world size) ---
 
@@ -722,6 +768,10 @@ export function createBouncer(selector){
   
   function doReset(){
     ball = null; lastLaunch = null;
+    visQ.loopRec.pattern.length = 0;
+    visQ.loopRec.trajectory.length = 0;
+    visQ.loopRec.mode = 'record';
+    visQ.loopRec.signature = '';
     handle.userPlaced = false;
     handle.vx = 0; handle.vy = 0;
     try { for (const b of blocks){ b.flash = 0; } } catch {}
@@ -752,6 +802,7 @@ export function createBouncer(selector){
     lastLaunch = null;
     nextLaunchAt = null;
     visQ.loopRec.pattern.length = 0;
+    visQ.loopRec.trajectory.length = 0;
     visQ.loopRec.mode = 'record';
   }
 
@@ -804,6 +855,12 @@ export function createBouncer(selector){
     const isRespawn = !!opts.isRespawn;
     const ac = (typeof ensureAudioContext === 'function') ? ensureAudioContext() : null;
     const nowT = Number.isFinite(opts.startAt) ? opts.startAt : (ac ? ac.currentTime : 0);
+    if (!isRespawn) {
+      // The authored launch is definition state and must be visible to the
+      // signature captured below. Capturing before this assignment makes the
+      // next render frame falsely invalidate the recording.
+      lastLaunch = { vx: L.vx, vy: L.vy, x: L.x, y: L.y };
+    }
     if (DBG_RESPAWN()) console.log(`[BNC_DBG] spawnBallFrom (isRespawn: ${isRespawn}) at ${nowT.toFixed(3)}`);
 
     // User launches start a fresh recording; automatic respawns keep replaying it.
@@ -816,7 +873,14 @@ export function createBouncer(selector){
         // Clear the old pattern and scheduling state together, retaining the shared
         // recorder object. Record mode suppresses replay while the new shot is
         // captured; a stale invalid flag must not silence its later repetitions.
-        Object.assign(loopRec, { signature: '', mode: 'record', isInvalid: false, pattern: [], anchorStartTime: 0, lastBarIndex: -1, scheduledBarIndex: -999, scheduledKeys: new Set(), seen: new Set() });
+        // AudioContext time keeps advancing before the transport has ever
+        // played. A stopped/paused launch belongs at the retained transport
+        // position, not at an extrapolated audio-context tick.
+        const launchTick = getTransportState().currentTick;
+        const instance = activatePlaybackInstance(panel.id, launchTick, { loopLengthTicks: TICKS_PER_BAR, quantize: false, retrigger: true });
+        Object.assign(loopRec, { signature: '', mode: 'record', isInvalid: false, pattern: [], trajectory: [], recordingStartTick: instance.startTick, anchorStartTime: nowT, lastBarIndex: -1, scheduledBarIndex: -999, scheduledKeys: new Set(), seen: new Set() });
+        panel.__seqRev = (panel.__seqRev || 0) + 1;
+        panel.__forceSchedulerReset = true;
         try {
             loopRec.signature = stateSignature();
             // Record relative to the local spawn time to ensure the full bar is captured.
@@ -826,15 +890,23 @@ export function createBouncer(selector){
 
     const o = { x:L.x, y:L.y, vx:L.vx, vy:L.vy, r: ballR() };
 
+    // The replay trajectory needs an authored seam at local tick zero. Waiting
+    // for the first render/physics frame leaves its first sample several ticks
+    // late, so interpolation can wrap from the end of the recording to a
+    // different starting position (or appear to pause at the seam).
+    if (loopRec.mode === 'record' && Array.isArray(loopRec.trajectory) && loopRec.trajectory.length === 0) {
+      const spawnTick = getTransportState().currentTick;
+      const offsetTick = Math.round(spawnTick - Number(loopRec.recordingStartTick || 0));
+      if (offsetTick >= 0 && offsetTick < TICKS_PER_BAR) {
+        loopRec.trajectory.push({ offsetTick, x: o.x, y: o.y, r: o.r });
+      }
+    }
+
     // If not called from within the physics step (i.e., no state object is passed),
     // this is a manual launch. We must update the module-scoped `ball` variable
     // directly so it appears immediately.
     if (!S_ref) {
         ball = o;
-    }
-
-    if (!isRespawn) {
-        lastLaunch = { vx: L.vx, vy: L.vy, x: L.x, y: L.y };
     }
 
     // If paused, defer setting flight time until the first physics step.
@@ -962,21 +1034,23 @@ let __justSpawnedUntil = 0;
             triggerInstrument(i||instrument, n, scheduledT, toyId);
           } catch(e){}
           const at = (typeof t==='number' ? t : nowT);
-          const localBarIndex = Math.floor(Math.max(0, (at - anchor) / barLen));
-          const offBeats = (at - (anchor + localBarIndex * barLen)) / beatDur;
-          // Store the raw, unquantized offset. Quantization will be applied on replay.
-          const off = offBeats;
+          const hitTick = audioTimeToTick(at);
+          const recordingStartTick = Number.isFinite(loopRec.recordingStartTick) ? loopRec.recordingStartTick : getPlaybackInstance(panel.id)?.startTick || 0;
+          if (hitTick < recordingStartTick) return;
+          const offsetTick = quantizeBouncerOffsetTick(hitTick, recordingStartTick, __getQuantDiv(), { ticksPerBeat: TICKS_PER_BEAT, loopLengthTicks: TICKS_PER_BAR });
+          const impactTick = audioTimeToTick(Number.isFinite(Number(meta?.impactAudioTime)) ? meta.impactAudioTime : at);
+          const visualOffsetTick = Math.max(0, Math.min(TICKS_PER_BAR - 1, impactTick - recordingStartTick));
           if (loopRec && Array.isArray(loopRec.pattern)){
             // De-dupe notes recorded in the same bar to prevent runaway pattern growth.
-            // Key by note and quantized 16th-note time.
-            const key = `${n}@${Math.round(off * 4)}`;
+            const key = `${n}@${offsetTick}`;
             if (loopRec.seen && !loopRec.seen.has(key)) {
               loopRec.seen.add(key);
-              const event = { note: n, offset: off };
+              const event = { note: n, offsetTick, visualOffsetTick };
               if (meta && meta.blockIndex != null) event.blockIndex = meta.blockIndex;
               if (meta && meta.edgeControllerIndex != null) event.edgeControllerIndex = meta.edgeControllerIndex;
               if (meta && meta.edgeName != null) event.edgeName = meta.edgeName;
               loopRec.pattern.push(event);
+              panel.__seqRev = (panel.__seqRev || 0) + 1;
             }
           }
           return;
@@ -1002,6 +1076,7 @@ let __justSpawnedUntil = 0;
       noteList,
       noteValue,
       getLoopInfo,
+      getTransportState,
       ballR,
       handle,
       toyId,
@@ -1057,6 +1132,42 @@ let __justSpawnedUntil = 0;
     }
   };
 
+  const captureTrajectorySample = () => {
+    const loopRec = visQ.loopRec;
+    if (loopRec.mode !== 'record') return false;
+    return recordBouncerTrajectorySample(loopRec.trajectory, ball, getTransportState().currentTick, loopRec.recordingStartTick, TICKS_PER_BAR);
+  };
+  const getDisplayBall = () => {
+    const loopRec = visQ.loopRec;
+    if (loopRec.mode !== 'replay') return ball;
+    const instance = getPlaybackInstance(panel.id);
+    const localTick = getPlaybackLocalTick(instance, getTransportState().currentTick);
+    if (localTick == null) return null;
+    const replayBall = interpolateBouncerTrajectory(loopRec.trajectory, localTick, TICKS_PER_BAR);
+    return replayBall ? { ...replayBall, r: replayBall.r || ballR(), active: true } : null;
+  };
+  let replayCompletionInstanceId = null;
+  const advanceReplayLifecycle = (transportTick = getTransportState().currentTick) => {
+    const instance = getPlaybackInstance(panel.id);
+    const completionTick = getBouncerReplayCompletionTick({
+      recorder: visQ.loopRec,
+      instance,
+      currentTick: transportTick,
+      isChained: !!(panel.dataset.prevToyId || panel.dataset.nextToyId),
+      isChainActive: panel.dataset.chainActive === 'true',
+      completedInstanceId: replayCompletionInstanceId,
+    });
+    if (completionTick == null) return false;
+    replayCompletionInstanceId = instance.id;
+    panel.dispatchEvent(new CustomEvent('chain:next', {
+      bubbles: true,
+      detail: { completedAt: tickToAudioTime(completionTick) },
+    }));
+    return true;
+  };
+  panel.__advanceBouncerReplayLifecycle = advanceReplayLifecycle;
+  lifecycle.addCleanup(() => { delete panel.__advanceBouncerReplayLifecycle; });
+
   // draw loop moved to bouncer-render.js
 const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld, 
   panel, canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
@@ -1067,7 +1178,13 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   applyPreviewState,
   stepBouncer,
   spawnBallFrom,
-  getBall: ()=>ball,
+  getBall: getDisplayBall,
+  captureTrajectorySample,
+  advanceReplayLifecycle,
+  drainScheduledReplayVisuals: (audioTime) => replayVisualEvents.drain(
+    audioTime,
+    getPlaybackInstance(panel.id)?.id || null,
+  ),
   rescale: () => {},
   updateLaunchBaseline,
   buildStateForStep, installInteractions, getLastLaunch: ()=>lastLaunch,
@@ -1097,23 +1214,52 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   // The bouncer's render loop now drives its own physics when active.
   // The main scheduler's step is only for grid-based toys.
   panel.__sequencerStep = () => {};
+  panel.__sequencerEventsInWindow = (fromTick, toTick, instance) => {
+    const loopRec = visQ.loopRec;
+    // null means the learning pass is not schedulable yet. Returning [] here
+    // would consume the window and make the first replay omit its early notes.
+    if (loopRec.mode !== 'replay' || loopRec.isInvalid) {
+      return null;
+    }
+    return bouncerEventsInWindow({ instance, pattern: loopRec.pattern, blocks, edgeControllers, fromTick, toTick });
+  };
+  panel.__sequencerScheduleEvent = (event, audioTime, metadata = {}) => {
+    if (!event?.note) return;
+    triggerInstrument(instrument, event.note, audioTime, toyId);
+    const instance = getPlaybackInstance(panel.id);
+    const visualTick = bouncerVisualEventTick(instance, event);
+    const visualAudioTime = visualTick == null ? audioTime : tickToAudioTime(visualTick);
+    let edgeControllerIndex = event.edgeControllerIndex;
+    if (edgeControllerIndex == null && event.edgeName != null) {
+      const edge = { L: 'left', R: 'right', T: 'top', B: 'bot' }[event.edgeName] || event.edgeName;
+      edgeControllerIndex = edgeControllers.findIndex(item => item?.edge === edge);
+      if (edgeControllerIndex < 0) edgeControllerIndex = null;
+    }
+    replayVisualEvents.enqueue({
+      audioTime: visualAudioTime,
+      playbackInstanceId: metadata.playbackInstanceId || null,
+      blockIndex: event.blockIndex,
+      edgeControllerIndex,
+    });
+  };
+  const activateAtTransport = ({ retrigger = false } = {}) => {
+    const state = getTransportState();
+    const previous = getPlaybackInstance(panel.id);
+    const instance = activatePlaybackInstance(panel.id, state.currentTick, { loopLengthTicks: TICKS_PER_BAR, quantize: state.state === 'playing', retrigger });
+    if (instance !== previous) { bumpToyAudioGen(toyId, retrigger ? 'bouncer-retrigger' : 'bouncer-activate'); panel.__forceSchedulerReset = true; }
+    return instance;
+  };
+  panel.__bouncerPlayback = {
+    get instance(){ return getPlaybackInstance(panel.id); },
+    activate: () => activateAtTransport(),
+    retrigger: () => activateAtTransport({ retrigger: true }),
+    deactivate: () => { replayVisualEvents.clear(); const instance = deactivatePlaybackInstance(panel.id); bumpToyAudioGen(toyId, 'bouncer-deactivate'); panel.__forceSchedulerReset = true; return instance; },
+  };
+  panel.__bouncerPlaybackState = () => visQ.loopRec;
+  lifecycle.listen(panel, 'toy:start', () => panel.__bouncerPlayback.activate());
+  lifecycle.listen(panel, 'toy:retrigger', () => panel.__bouncerPlayback.retrigger());
+  lifecycle.listen(panel, 'toy:deactivate', () => panel.__bouncerPlayback.deactivate());
+  lifecycle.addCleanup(() => { replayVisualEvents.clear(); deactivatePlaybackInstance(panel.id); removePlaybackInstance(panel.id); });
   panel.__bouncer_main_instance = instanceApi;
   return instanceApi;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

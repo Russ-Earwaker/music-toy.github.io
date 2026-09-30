@@ -10,8 +10,16 @@ import {
   onZoomChange,
   namedZoomListener,
   getTransformOrder,
+  setResponsiveBoardPresentation,
 } from './zoom/ZoomCoordinator.js';
 import { WheelZoomLerper } from './zoom/WheelZoomLerper.js';
+import {
+  BOARD_REFERENCE_WIDTH,
+  BOARD_REFERENCE_HEIGHT,
+  computeResponsiveBaseScale,
+  composeEffectiveBoardScale,
+  preserveWorldPointAtViewportCenter,
+} from './board-responsive-scale.js';
 
 const viewportLog = makeDebugLogger('mt_debug_logs');
 const OV_LOG = (typeof window !== 'undefined' && window.__BV_OV_DBG === true);
@@ -56,7 +64,14 @@ let __stageRectCache = null;
 let __stageRectCacheTs = 0;
 let __bvLastPersistTs = 0;
 
-let __liveViewportTransform = { scale: 1, tx: 0, ty: 0 };
+let __liveViewportTransform = {
+  scale: 1,
+  effectiveScale: 1,
+  userBoardZoom: 1,
+  responsiveBaseScale: 1,
+  tx: 0,
+  ty: 0,
+};
 export function getViewportTransform() {
   return { ...__liveViewportTransform };
 }
@@ -179,6 +194,40 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   let scale = 1;
   let x = 0;
   let y = 0;
+  let responsiveBaseScale = 1;
+  let lastViewportMetrics = null;
+
+  function effectiveScaleFor(userZoom = scale) {
+    return composeEffectiveBoardScale(userZoom, responsiveBaseScale);
+  }
+
+  function measureViewportMetrics() {
+    const viewport = getViewportElement();
+    const rect = viewport?.getBoundingClientRect?.();
+    const width = Math.max(1, viewport?.clientWidth || rect?.width || window.innerWidth || 1);
+    const height = Math.max(1, viewport?.clientHeight || rect?.height || window.innerHeight || 1);
+    const left = Number.isFinite(rect?.left) ? rect.left : 0;
+    const top = Number.isFinite(rect?.top) ? rect.top : 0;
+    return {
+      width,
+      height,
+      center: { x: left + width * 0.5, y: top + height * 0.5 },
+    };
+  }
+
+  function publishBoardScaleState(metrics = lastViewportMetrics) {
+    const snapshot = Object.freeze({
+      responsiveBaseScale,
+      userBoardZoom: scale,
+      effectiveBoardScale: effectiveScaleFor(scale),
+      viewportWidth: metrics?.width || 0,
+      viewportHeight: metrics?.height || 0,
+      referenceWidth: BOARD_REFERENCE_WIDTH,
+      referenceHeight: BOARD_REFERENCE_HEIGHT,
+    });
+    try { globalThis.__BOARD_SCALE_STATE = snapshot; } catch {}
+    return snapshot;
+  }
 
   // Prevent re-entrant zooms while our pan+zoom tween is running
   let camTweenLock = false;
@@ -248,29 +297,45 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     console.error('[board-viewport] failed to load viewport', e);
   }
 
+  lastViewportMetrics = measureViewportMetrics();
+  responsiveBaseScale = computeResponsiveBaseScale(lastViewportMetrics.width, lastViewportMetrics.height);
+  setResponsiveBoardPresentation({ baseScale: responsiveBaseScale, x, y });
+
   function syncViewportSnapshot({
     scale: nextScale = scale,
     x: nextX = x,
     y: nextY = y,
   } = {}) {
     const safeScale = Number.isFinite(nextScale) ? nextScale : 1;
+    const effectiveScale = effectiveScaleFor(safeScale);
     const safeX = Number.isFinite(nextX) ? nextX : 0;
   const safeY = Number.isFinite(nextY) ? nextY : 0;
-  __liveViewportTransform = { scale: safeScale, tx: safeX, ty: safeY };
+  __liveViewportTransform = {
+    scale: effectiveScale,
+    effectiveScale,
+    userBoardZoom: safeScale,
+    responsiveBaseScale,
+    tx: safeX,
+    ty: safeY,
+  };
   window.__boardScale = safeScale;
+  window.__userBoardZoom = safeScale;
+  window.__responsiveBoardScale = responsiveBaseScale;
+  window.__effectiveBoardScale = effectiveScale;
   window.__boardX = safeX;
   window.__boardY = safeY;
   try {
-    stage?.style?.setProperty('--bv-scale', String(safeScale));
+    stage?.style?.setProperty('--bv-scale', String(effectiveScale));
     stage?.style?.setProperty('--bv-tx', `${safeX}px`);
     stage?.style?.setProperty('--bv-ty', `${safeY}px`);
     const viewportEl = getViewportElement?.();
     if (viewportEl) {
-      viewportEl.style.setProperty('--bv-scale', String(safeScale));
+      viewportEl.style.setProperty('--bv-scale', String(effectiveScale));
       viewportEl.style.setProperty('--bv-tx', `${safeX}px`);
       viewportEl.style.setProperty('--bv-ty', `${safeY}px`);
     }
   } catch {}
+  publishBoardScaleState();
 }
 
   syncViewportSnapshot();
@@ -343,7 +408,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       const viewH = container.clientHeight || window.innerHeight;
       const viewCx = viewW * 0.5;
       const viewCy = viewH * 0.5;
-      const { scale: s, x: tx, y: ty } = getActiveTransform();
+      const { scale: userZoom, x: tx, y: ty } = getActiveTransform();
+      const s = effectiveScaleFor(userZoom);
       if (!Number.isFinite(s) || Math.abs(s) < 1e-6) return null;
       return {
         x: (viewCx - layoutLeft - tx) / s,
@@ -379,6 +445,66 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     if (commit) {
       commitGesture({ scale, x, y }, { delayMs });
     }
+  }
+
+  let responsiveResizeRaf = 0;
+  function updateResponsiveBoardScale() {
+    responsiveResizeRaf = 0;
+    const nextMetrics = measureViewportMetrics();
+    const nextBaseScale = computeResponsiveBaseScale(nextMetrics.width, nextMetrics.height);
+    const oldMetrics = lastViewportMetrics || nextMetrics;
+    const oldEffectiveScale = effectiveScaleFor(scale);
+    const nextEffectiveScale = composeEffectiveBoardScale(scale, nextBaseScale);
+
+    if (
+      Math.abs(nextBaseScale - responsiveBaseScale) <= 1e-6 &&
+      Math.abs(nextMetrics.width - oldMetrics.width) <= 0.5 &&
+      Math.abs(nextMetrics.height - oldMetrics.height) <= 0.5
+    ) {
+      lastViewportMetrics = nextMetrics;
+      publishBoardScaleState(nextMetrics);
+      return;
+    }
+
+    const stageRect = getRect(stage);
+    const layoutOffset = {
+      x: (Number(stageRect?.left) || 0) - x,
+      y: (Number(stageRect?.top) || 0) - y,
+    };
+    const preserved = preserveWorldPointAtViewportCenter({
+      oldCenter: oldMetrics.center,
+      newCenter: nextMetrics.center,
+      layoutOffset,
+      translation: { x, y },
+      oldEffectiveScale,
+      newEffectiveScale: nextEffectiveScale,
+    });
+
+    responsiveBaseScale = nextBaseScale;
+    x = preserved.translation.x;
+    y = preserved.translation.y;
+    lastViewportMetrics = nextMetrics;
+    stageRectCache = null;
+    stageRectCacheTs = 0;
+    setResponsiveBoardPresentation({ baseScale: responsiveBaseScale, x, y });
+    syncViewportSnapshot({ scale, x, y });
+    try {
+      window.dispatchEvent(new CustomEvent('board:responsive-scale', {
+        detail: publishBoardScaleState(nextMetrics),
+      }));
+    } catch {}
+  }
+
+  function queueResponsiveBoardScaleUpdate() {
+    if (responsiveResizeRaf) return;
+    responsiveResizeRaf = requestAnimationFrame(updateResponsiveBoardScale);
+  }
+
+  window.addEventListener('resize', queueResponsiveBoardScaleUpdate, { passive: true });
+  window.visualViewport?.addEventListener?.('resize', queueResponsiveBoardScaleUpdate, { passive: true });
+  if (typeof ResizeObserver === 'function') {
+    const responsiveObserver = new ResizeObserver(queueResponsiveBoardScaleUpdate);
+    responsiveObserver.observe(getViewportElement());
   }
 
   const zoomListeners = new Set();
@@ -528,7 +654,10 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     const currentY = z.currentY ?? y;
 
     // Keep the cheap updates on every phase so dependents stay in sync without layout reads.
-    try { stage.style.setProperty('--bv-scale', String(currentScale)); } catch {}
+    const effectiveScale = Number.isFinite(z.effectiveScale)
+      ? z.effectiveScale
+      : effectiveScaleFor(currentScale);
+    try { stage.style.setProperty('--bv-scale', String(effectiveScale)); } catch {}
     syncViewportSnapshot({ scale: currentScale, x: currentX, y: currentY });
 
     if (Math.abs(currentScale - lastNotifiedScale) > SCALE_EVENT_EPSILON) {
@@ -868,7 +997,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     }
     const screenCx = (elRect.left - boardRect.left) + (elRect.width * 0.5);
     const screenCy = (elRect.top - boardRect.top) + (elRect.height * 0.5);
-    const worldVec = screenToWorld(screenCx, screenCy, s, tx, ty);
+    const worldVec = screenToWorld(screenCx, screenCy, effectiveScaleFor(s), tx, ty);
     const wx = worldVec.x;
     const wy = worldVec.y;
     if (!Number.isFinite(wx) || !Number.isFinite(wy)) {
@@ -903,7 +1032,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
 
   function measureScreenFromWorld(xWorld, yWorld, s = scale, tx = x, ty = y) {
     const { layoutLeft, layoutTop } = getLayoutOffset();
-    const res = worldToScreen(xWorld, yWorld, s, tx, ty);
+    const res = worldToScreen(xWorld, yWorld, effectiveScaleFor(s), tx, ty);
     return { px: res.x + layoutLeft, py: res.y + layoutTop };
   }
 
@@ -962,8 +1091,9 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     const viewCy = viewH * (Number.isFinite(centerFracY) ? centerFracY : 0.5);
 
     // The final translation we want to achieve
-    const tX = viewCx - layoutLeft - xWorld * s1;
-    const tY = viewCy - layoutTop  - yWorld * s1;
+    const effectiveTargetScale = effectiveScaleFor(s1);
+    const tX = viewCx - layoutLeft - xWorld * effectiveTargetScale;
+    const tY = viewCy - layoutTop  - yWorld * effectiveTargetScale;
     // --- End Target Calculation ---
 
     cancelWheelCommit();
@@ -1052,8 +1182,9 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
     const elCyWorld = worldCenter.y ?? 0;
 
     const { layoutLeft, layoutTop } = getLayoutOffset();
-    const nextX = viewCx - layoutLeft - elCxWorld * targetScale;
-    const nextY = viewCy - layoutTop - elCyWorld * targetScale;
+    const effectiveTargetScale = effectiveScaleFor(targetScale);
+    const nextX = viewCx - layoutLeft - elCxWorld * effectiveTargetScale;
+    const nextY = viewCy - layoutTop - elCyWorld * effectiveTargetScale;
 
     if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {
       console.warn('[centerBoardOnElement] bad coords; falling back to no-op', {
@@ -1138,7 +1269,7 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
       const tx = z.currentX ?? z.targetX ?? x;
       const ty = z.currentY ?? z.targetY ?? y;
       const { layoutLeft, layoutTop } = getLayoutOffset();
-      const proj = worldToScreen(crosshairState.x, crosshairState.y, s, tx, ty);
+      const proj = worldToScreen(crosshairState.x, crosshairState.y, effectiveScaleFor(s), tx, ty);
       el.style.left = Math.round(proj.x + layoutLeft - 5) + 'px';
       el.style.top = Math.round(proj.y + layoutTop - 5) + 'px';
     } catch {}

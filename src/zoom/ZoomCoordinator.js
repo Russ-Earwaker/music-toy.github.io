@@ -112,6 +112,7 @@ function zcPayloadSnapshot(payload) {
   const y = Number.isFinite(payload.currentY) ? payload.currentY : payload.targetY;
   return {
     scale,
+    effectiveScale: payload.effectiveScale,
     x,
     y,
     mode: payload.mode,
@@ -133,6 +134,9 @@ function zcHasMeaningfulChange(next, prev) {
   const y0 = Number.isFinite(prev.y) ? prev.y : null;
   const y1 = Number.isFinite(next.y) ? next.y : null;
   if (s0 != null && s1 != null && Math.abs(s1 - s0) > ZC_NOOP_EPS_SCALE) return true;
+  const es0 = Number.isFinite(prev.effectiveScale) ? prev.effectiveScale : null;
+  const es1 = Number.isFinite(next.effectiveScale) ? next.effectiveScale : null;
+  if (es0 != null && es1 != null && Math.abs(es1 - es0) > ZC_NOOP_EPS_SCALE) return true;
   if (x0 != null && x1 != null && Math.abs(x1 - x0) > ZC_NOOP_EPS_XY) return true;
   if (y0 != null && y1 != null && Math.abs(y1 - y0) > ZC_NOOP_EPS_XY) return true;
   return false;
@@ -140,6 +144,13 @@ function zcHasMeaningfulChange(next, prev) {
 
 function emitZoom(payload) {
   if (!payload) return;
+  payload = {
+    ...payload,
+    userBoardZoom: Number.isFinite(payload.currentScale) ? payload.currentScale : state.currentScale,
+    responsiveBaseScale,
+    effectiveScale: (Number.isFinite(payload.currentScale) ? payload.currentScale : state.currentScale) * responsiveBaseScale,
+    targetEffectiveScale: (Number.isFinite(payload.targetScale) ? payload.targetScale : state.targetScale) * responsiveBaseScale,
+  };
   const isProgressLike = !payload.phase || payload.phase === 'progress';
   if (isProgressLike) {
     const next = zcPayloadSnapshot(payload);
@@ -260,6 +271,7 @@ function publishGestureFlag(reason = '') {
 let rafId = 0;
 let worldEl = null;
 const TRANSFORM_ORDER = 'T_S'; // translate then scale
+let responsiveBaseScale = 1;
 let progressRaf = 0;
 let lastProgressTs = 0;
 let progressHz = 30; // ~30fps progress callbacks while pinching/wheeling
@@ -293,11 +305,17 @@ function emitFrameStart(snapshot) {
 }
 
 export function getCommittedState() {
-  return normalizeSnapshot({
+  const snapshot = normalizeSnapshot({
     scale: state.currentScale,
     x: state.currentX,
     y: state.currentY,
   });
+  return {
+    ...snapshot,
+    userBoardZoom: snapshot.scale,
+    responsiveBaseScale,
+    effectiveScale: snapshot.scale * responsiveBaseScale,
+  };
 }
 
 export function setFrameStartState(snapshot) {
@@ -326,7 +344,7 @@ function roundPx(v) {
 
 function applyTransform() {
   if (!worldEl) return;
-  const s = Math.fround(state.currentScale);
+  const s = Math.fround(state.currentScale * responsiveBaseScale);
   const x = roundPx(state.currentX);
   const y = roundPx(state.currentY);
   if (s === lastApplied.s && x === lastApplied.x && y === lastApplied.y) return;
@@ -348,6 +366,18 @@ function applyTransform() {
       }
     } catch {}
   }
+}
+
+// Responsive presentation is deliberately separate from the persisted/user
+// zoom stored in `state.currentScale`. Translation remains in screen pixels.
+export function setResponsiveBoardPresentation({ baseScale, x, y } = {}) {
+  const nextBase = Number(baseScale);
+  if (Number.isFinite(nextBase) && nextBase > 0) responsiveBaseScale = nextBase;
+  if (Number.isFinite(x)) state.currentX = state.targetX = x;
+  if (Number.isFinite(y)) state.currentY = state.targetY = y;
+  state.isDirty = true;
+  cameraDirty = true;
+  schedule();
 }
 
 function tick() {
@@ -527,7 +557,13 @@ export function zcIsCommitPhase(p) {
 }
 
 export function getZoomState() {
-  return { ...state };
+  return {
+    ...state,
+    userBoardZoom: state.currentScale,
+    responsiveBaseScale,
+    effectiveScale: state.currentScale * responsiveBaseScale,
+    targetEffectiveScale: state.targetScale * responsiveBaseScale,
+  };
 }
 
 export function getTransformOrder() {

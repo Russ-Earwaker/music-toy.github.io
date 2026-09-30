@@ -1,12 +1,19 @@
 // src/drum-core.js — drum grid core + instrument sync (<=300 lines)
 import { triggerInstrument } from './audio-samples.js';
-import { ensureAudioContext, resumeAudioContextIfNeeded } from './audio-core.js';
+import { ensureAudioContext, resumeAudioContextIfNeeded, getTransportState, isRunning, TICKS_PER_BAR } from './audio-core.js';
 import { setToyInstrument } from './instrument-map.js';
 import { initToyUI } from './toyui.js';
 import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
 import { attachGridSquareAndDrum } from './grid-square-drum.js';
 import { midiToName, buildPalette } from './note-helpers.js';
-import { gateTriggerForToy } from './toy-audio.js';
+import { gateTriggerForToy, bumpToyAudioGen } from './toy-audio.js';
+import {
+  activatePlaybackInstance,
+  deactivatePlaybackInstance,
+  ensurePlaybackInstance,
+  getPlaybackInstance,
+  removePlaybackInstance,
+} from './playback-instances.js';
 import { getToyLifecycle } from './baseMusicToy/index.js';
 import { createToySurfaceManager } from './toy-surface-manager.js';
 import { createDrumPadParticles } from './drum-pad-particles.js';
@@ -21,6 +28,15 @@ export function buildDrumGrid(panel, numSteps = 8){
   if (!panel || !(panel instanceof Element) || panel.__gridBuilt) return null;
   panel.__gridBuilt = true;
   panel.dataset.toy = panel.dataset.toy || 'loopgrid-drum';
+  const initialTransport = getTransportState();
+  if (isRunning()) {
+    activatePlaybackInstance(panel.id, initialTransport.currentTick, {
+      loopLengthTicks: TICKS_PER_BAR,
+      quantize: true,
+    });
+  } else {
+    ensurePlaybackInstance(panel.id, { active: true, startTick: 0, loopLengthTicks: TICKS_PER_BAR });
+  }
   initToyUI(panel, { toyName: 'Drum Kit', defaultInstrument: 'Djimbe' });
 
   // Use a full chromatic scale instead of the default pentatonic scale.
@@ -55,6 +71,16 @@ export function buildDrumGrid(panel, numSteps = 8){
     if (Array.isArray(state.notePalette)) detail.notePalette = Array.from(state.notePalette);
     try { panel.dispatchEvent(new CustomEvent('loopgrid:update', { detail })); } catch {}
   };
+
+  panel.addEventListener('loopgrid:update', (e) => {
+    const detail = e?.detail || {};
+    if (Array.isArray(detail.steps)) panel.__gridState.steps = Array.from(detail.steps).map(Boolean);
+    if (Array.isArray(detail.noteIndices)) panel.__gridState.noteIndices = Array.from(detail.noteIndices).map(x => x | 0);
+    if (detail.reason && detail.reason !== 'noop') {
+      panel.__seqRev++;
+      rebuildSeqPattern();
+    }
+  });
 
   // If persistence provided a pending state before this toy initialized, apply it now.
   try{
@@ -115,6 +141,39 @@ export function buildDrumGrid(panel, numSteps = 8){
   // Create gated trigger for audio generation guard
   const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument);
 
+  const activateAtTransport = ({ retrigger = false } = {}) => {
+    const transport = getTransportState();
+    const existing = getPlaybackInstance(panel.id);
+    const instance = activatePlaybackInstance(panel.id, transport.currentTick, {
+      loopLengthTicks: TICKS_PER_BAR,
+      quantize: transport.state === 'playing',
+      retrigger,
+    });
+    if (instance !== existing) {
+      bumpToyAudioGen(panel.__audioToyId, retrigger ? 'drumgrid-retrigger' : 'drumgrid-activate');
+      panel.__forceSchedulerReset = true;
+    }
+    return instance;
+  };
+  panel.__drumGridPlayback = {
+    get instance(){ return getPlaybackInstance(panel.id); },
+    activate: () => activateAtTransport({ retrigger: false }),
+    retrigger: () => activateAtTransport({ retrigger: true }),
+    deactivate: () => {
+      const instance = deactivatePlaybackInstance(panel.id);
+      bumpToyAudioGen(panel.__audioToyId, 'drumgrid-deactivate');
+      panel.__forceSchedulerReset = true;
+      return instance;
+    },
+  };
+  panel.addEventListener('toy:start', () => panel.__drumGridPlayback.activate());
+  panel.addEventListener('toy:retrigger', () => panel.__drumGridPlayback.retrigger());
+  panel.addEventListener('toy:deactivate', () => panel.__drumGridPlayback.deactivate());
+  panel.addEventListener('toy-remove', () => {
+    deactivatePlaybackInstance(panel.id);
+    removePlaybackInstance(panel.id);
+  }, { once: true });
+
   try {
     if (panel.dataset.instrument) setToyInstrument(panel.__audioToyId, panel.dataset.instrument);
   } catch {}
@@ -172,8 +231,6 @@ export function buildDrumGrid(panel, numSteps = 8){
       panel.__gridState.steps[i] = Math.random() < 0.5;
     }
     emitLoopgridUpdate({ reason: 'random' });
-    panel.__seqRev++;
-    rebuildSeqPattern();
   });
   panel.addEventListener('toy-clear', () => {
     if (!panel.__gridState?.steps) return;
@@ -181,8 +238,6 @@ export function buildDrumGrid(panel, numSteps = 8){
     // Also reset the notes for each step back to the default (C4).
     if (panel.__gridState.noteIndices) panel.__gridState.noteIndices.fill(12);
     emitLoopgridUpdate({ reason: 'clear' });
-    panel.__seqRev++;
-    rebuildSeqPattern();
   });
   panel.addEventListener('toy-random-notes', () => {
     if (!panel.__gridState?.noteIndices || !panel.__gridState?.notePalette) return;
@@ -205,8 +260,6 @@ export function buildDrumGrid(panel, numSteps = 8){
       }
     }
     emitLoopgridUpdate({ reason: 'random-notes' });
-    panel.__seqRev++;
-    rebuildSeqPattern();
   });
 
   // --- Particle System ---

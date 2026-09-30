@@ -18,6 +18,10 @@ test('mixed toy chains carry completion timestamps forward, including loop back 
       addEventListener: (name, fn) => listeners.set(name, fn),
     },
     findChainHead: () => panels.head, triggerConnectorPulse() {},
+    ensureAudioContext: () => ({ currentTime: 0 }),
+    getPositionAtAudioTime: time => time * 192,
+    audioTimeToTick: time => Math.round(time * 192),
+    TICKS_PER_BAR: 384,
   });
   const a = source.indexOf('function advanceChain(');
   const b = source.indexOf('    // Only reset/cancel scheduling', a);

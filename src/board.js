@@ -193,7 +193,7 @@ export function initDragBoard(boardSel = '#board') {
   }
   function onPointerMove(e){
     if (!drag) return;
-    const sc = (window.__boardScale||1);
+    const sc = (window.__effectiveBoardScale || window.__boardScale || 1);
     const nx = ox + (e.clientX - sx) / sc;
     const ny = oy + (e.clientY - sy) / sc;
     drag.style.position='absolute';

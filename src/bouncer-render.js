@@ -18,7 +18,8 @@ export function createBouncerDraw(env){
     stepBouncer, buildStateForStep, applyFromStep, installInteractions,
     getBall, lockPhysWorld, getAim, spawnBallFrom, getLastLaunch,
     velFrom, ballR, updateLaunchBaseline,
-    BOUNCER_BARS_PER_LIFE, setBallOut, setNextLaunchAt
+    BOUNCER_BARS_PER_LIFE, setBallOut, setNextLaunchAt, captureTrajectorySample, advanceReplayLifecycle,
+    drainScheduledReplayVisuals
   } = env;
 
   const lifecycle = getToyLifecycle(panel);
@@ -167,6 +168,14 @@ export function createBouncerDraw(env){
 
     // Draw blocks + edge controllers
     try{
+      // Audio is scheduled ahead; release replay flashes only when AudioContext
+      // reaches the event time so visuals align with the heard note and ball.
+      const dueReplayVisuals = drainScheduledReplayVisuals?.(ensureAudioContext()?.currentTime ?? 0) || [];
+      for (const event of dueReplayVisuals) {
+        if (event.blockIndex != null && blocks?.[event.blockIndex]) blockFlashes[event.blockIndex] = 1;
+        if (event.edgeControllerIndex != null && edgeControllers?.[event.edgeControllerIndex]) edgeFlashes[event.edgeControllerIndex] = 1;
+        panel.__pulseHighlight = 1;
+      }
       // Decay local flash values for animation. The physics step sets flash to 1.0 on hit.
       for (let i = 0; i < (blocks?.length || 0); i++) { blockFlashes[i] = Math.max(0, (blockFlashes[i] || 0) - 0.08); }
       for (let i = 0; i < (edgeControllers?.length || 0); i++) { edgeFlashes[i] = Math.max(0, (edgeFlashes[i] || 0) - 0.08); }
@@ -455,8 +464,15 @@ export function createBouncerDraw(env){
 
         // Run the physics step *before* chain activation logic. This ensures that if a ghost
         // ball expires, it is nulled out before the next toy in the chain checks for a ball.
-        if (shouldRunPhysics && (!isChained || wasActiveInChain)) stepBouncer(S);
-        applyFromStep(S); // Apply state changes from physics immediately.
+        const replaying = S.visQ?.loopRec?.mode === 'replay';
+        if (shouldRunPhysics && !replaying && (!isChained || wasActiveInChain)) {
+            stepBouncer(S);
+            applyFromStep(S);
+            captureTrajectorySample?.();
+        } else {
+            applyFromStep(S);
+        }
+        if (replaying) advanceReplayLifecycle?.();
 
         // Handle timed unmute for smooth transitions when interrupting a replay.
         if (S.__unmuteAt > 0 && now >= S.__unmuteAt) {
@@ -469,10 +485,13 @@ export function createBouncerDraw(env){
 
         // Loop recorder: detect new bar and let main decide record/replay
         try {
-            if (S && typeof S.getLoopInfo === 'function' && S.visQ && S.visQ.loopRec && typeof S.onNewBar === 'function') {
+            if (isRunning() && S && typeof S.getLoopInfo === 'function' && S.visQ && S.visQ.loopRec && typeof S.onNewBar === 'function') {
                 const li = S.getLoopInfo();
-                const anchor = Number.isFinite(S.visQ.loopRec?.anchorStartTime) ? S.visQ.loopRec.anchorStartTime : li.loopStartTime;
-                const k = Math.floor(Math.max(0, (li.now - anchor) / li.barLen));
+                const transportTick = S.getTransportState?.().currentTick;
+                const recordingStartTick = Number(S.visQ.loopRec?.recordingStartTick);
+                const k = Number.isFinite(transportTick) && Number.isFinite(recordingStartTick)
+                    ? Math.floor(Math.max(0, transportTick - recordingStartTick) / 384)
+                    : Math.floor(Math.max(0, (li.now - (S.visQ.loopRec?.anchorStartTime || li.loopStartTime)) / li.barLen));
                 if (S.visQ.loopRec.lastBarIndex !== k) {
                     S.onNewBar(li, k);
                 }
@@ -540,60 +559,8 @@ export function createBouncerDraw(env){
         }
         wasActiveInChain = isActiveInChain;
 
-        // After the first bar, the bouncer switches to 'replay' mode. This scheduler
-        // is responsible for playing back the recorded pattern of notes.
-        try {
-            const lr = S.visQ && S.visQ.loopRec;
-            if (shouldRunPhysics && (!isChained || panel.dataset.chainActive === 'true') && lr && !lr.isInvalid && lr.mode === 'replay' && typeof S.getLoopInfo === 'function') {
-                const li = S.getLoopInfo();
-                const nowT = li.now;
-                const anchor = Number.isFinite(lr.anchorStartTime) ? lr.anchorStartTime : li.loopStartTime;
-                const k_global = Math.floor(Math.max(0, (nowT - anchor) / li.barLen));
-                const playback_base = anchor + k_global * li.barLen;
-
-                if (Array.isArray(lr.pattern) && lr.pattern.length > 0) {
-                    // Use global bar index to reset scheduled keys.
-                    if (lr.scheduledBarIndex !== k_global) {
-                        lr.scheduledBarIndex = k_global;
-                        if (!lr.scheduledKeys || typeof lr.scheduledKeys.clear !== 'function') lr.scheduledKeys = new Set();
-                        else lr.scheduledKeys.clear();
-                    }
-
-                    const LOOKAHEAD = 0.1; // 100ms lookahead for scheduling
-                    const base = playback_base;
-                    const baseNext = base + li.barLen;
-                    const beatDur = li.barLen / 4;
-
-                    const __seen = new Set();
-                    const __evs = (Array.isArray(lr.pattern) ? lr.pattern : []).filter(ev => {
-                        const keySeen = ev && ev.note ? (ev.note + '@' + (Math.round(((ev.offset || 0)) * 16) / 16)) : '';
-                        if (__seen.has(keySeen)) return false; __seen.add(keySeen); return true;
-                    });
-
-                    for (const ev of __evs) {
-                        if (!ev || !ev.note) continue;
-
-                        let isSourceActive = true;
-                        if (ev.blockIndex != null) { const block = S.blocks?.[ev.blockIndex]; if (block && block.active === false) isSourceActive = false; }
-                        else if (ev.edgeControllerIndex != null) { const controller = S.edgeControllers?.[ev.edgeControllerIndex]; if (controller && controller.active === false) isSourceActive = false; }
-                        else if (ev.edgeName != null) { const m = S.mapControllersByEdge ? S.mapControllersByEdge(S.edgeControllers) : null; const edgeMap = { 'L': 'left', 'R': 'right', 'T': 'top', 'B': 'bot' }; const controllerKey = edgeMap[ev.edgeName]; const c = m?.[controllerKey]; if (c && c.active === false) isSourceActive = false; }
-                        if (!isSourceActive) continue;
-
-                        const rawOffBeats = Math.max(0, ev.offset || 0);
-                        let quantizedOffBeats = rawOffBeats;
-                        try { const vq = (S.getQuantDiv && S.getQuantDiv()); if (Number.isFinite(vq) && vq > 0) { quantizedOffBeats = Math.round(rawOffBeats * vq) / vq; } } catch {}
-                        let when = base + quantizedOffBeats * beatDur;
-                        if (when < nowT - 0.01) when = baseNext + quantizedOffBeats * beatDur;
-
-                        const key = k_global + '|' + ev.note + '|' + (Math.round(rawOffBeats * 16) / 16);
-                        if (when >= nowT && when < nowT + LOOKAHEAD && !lr.scheduledKeys.has(key)) {
-                            try { S.triggerInstrumentRaw(S.instrument, ev.note, when); } catch (e) { /* fail silently */ }
-                            lr.scheduledKeys.add(key);
-                        }
-                    }
-                }
-            }
-        } catch (e) { /* fail silently */ }
+        // Recorded notes replay through the shared absolute-tick scheduler. Physics
+        // continues for visuals, but triggerPhysAware keeps it silent in replay mode.
 
         // After the physics step, capture any flash events it generated and store
         // them in our local animation state arrays.

@@ -207,7 +207,7 @@ export function stepBouncer(S, nowAT){
                 // Global coalescing disabled: do not suppress other sources in this tick
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&b.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
                 // Pass block index for replay logic
-                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { blockIndex: bestIdx });
+                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { blockIndex: bestIdx, impactAudioTime: now });
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
                 if (S.panel) S.panel.__pulseHighlight = 1.0;
                 dbgMarkFire('block', t);
@@ -227,7 +227,7 @@ export function stepBouncer(S, nowAT){
                 const t = qSixteenth();
                 // Global coalescing disabled: do not suppress other sources in this tick
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&c.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {} // Pass edge controller index for replay logic
-                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeControllerIndex: ei });
+                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeControllerIndex: ei, impactAudioTime: now });
                 if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
                 if (S.panel) S.panel.__pulseHighlight = 1.0;
                 dbgMarkFire('edge-controller', t);
@@ -252,7 +252,7 @@ export function stepBouncer(S, nowAT){
                 if (tick16 != null && lastEdgeTick === tick16) { /* already fired this edge this tick */ return; }
                 // Global coalescing disabled: do not suppress other sources in this tick
                 if (S.__lastTickByEdge && S.__lastTickByEdge.set) S.__lastTickByEdge.set(edgeKey, tick16);
-                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeName: edgeKey });
+                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeName: edgeKey, impactAudioTime: now });
                 if (typeof S.flashEdge==='function') S.flashEdge((best.nx>0)?'left':(best.nx<0)?'right':(best.ny>0)?'top':'bot');
                 if (S.panel) S.panel.__pulseHighlight = 1.0;
                 dbgMarkFire('border', t);

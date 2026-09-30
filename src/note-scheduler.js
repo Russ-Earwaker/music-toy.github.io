@@ -1,378 +1,236 @@
-// src/note-scheduler.js
-// Central scheduler for grid-based toys: schedules audio ahead of time so playback stays correct at low FPS.
-// 
-// DEBUG FLAG: Set window.__CHAIN_NOTE_SCHEDULER_DEBUG = true to enable detailed logging
+// Absolute-tick lookahead scheduler for legacy grid sequencers.
+// Toys keep receiving __sequencerSchedule(column, audioTime); tick metadata is
+// supplied as an optional third argument until playback instances are migrated.
+import { getPlaybackInstance, updatePlaybackInstanceProgress } from './playback-instances.js';
 
-import { ensureAudioContext } from './audio-core.js';
-import { bumpToyAudioGen } from './toy-audio.js';
+const DEFAULT_TICKS_PER_BAR = 384;
+const intTick = (value, fallback = 0) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : fallback;
+};
 
-// --- GLOBAL scheduler state ---
-// If we accidentally create multiple scheduler instances (rebuilds / double-start),
-// local state won't de-dupe across them, causing doubled notes.
-// We intentionally share state across instances to hard-prevent duplicate scheduling.
-const __GLOBAL_SCHED_STATE = new Map(); // toyId -> per-toy state
-let __SCHED_INSTANCE_SEQ = 1;
-const __RESUME_LOG_STATE = new Map(); // toyId -> lastResumeAt logged
+export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, lateGraceTicks = 0 } = {}) {
+  const loopTicks = Math.max(1, intTick(ticksPerBar, DEFAULT_TICKS_PER_BAR));
+  const graceTicks = Math.max(0, intTick(lateGraceTicks));
+  const states = new Map();
+  let resetSerial = 0;
+  let pendingReset = null;
 
-// When the transport pauses, wipe scheduler de-dupe state so a new run starts clean.
-// (Prevents leftover scheduled keys from affecting the first couple beats after resume.)
-try {
-  if (!window.__NOTE_SCHED_PAUSE_CLEAR_INSTALLED) {
-    window.__NOTE_SCHED_PAUSE_CLEAR_INSTALLED = true;
-    document.addEventListener('transport:pause', () => {
-      try { __GLOBAL_SCHED_STATE.clear(); } catch {}
-    });
-  }
-} catch {}
-
-// Default scheduler debug OFF (enable in DevTools: window.__CHAIN_NOTE_SCHEDULER_DEBUG = true)
-try {
-  if (window.__CHAIN_NOTE_SCHEDULER_DEBUG === undefined) window.__CHAIN_NOTE_SCHEDULER_DEBUG = false;
-} catch {}
-
-// Debug helper that can be enabled at runtime
-function isDebugEnabled() {
-  try {
-    return !!(window.__CHAIN_NOTE_SCHEDULER_DEBUG || window.__CHAIN_DEBUG_FIRST_STEP);
-  } catch { return false; }
-}
-
-export function createSequencerScheduler({ lookaheadSec = 0.2, leadSec = 0.01, lateGraceSec = 0.04 } = {}) {
-  const __schedId = __SCHED_INSTANCE_SEQ++;
-  const state = __GLOBAL_SCHED_STATE; // shared across instances on purpose
-  const col0GraceSec = Math.min(0.06, Math.max(0.01, leadSec));
-  let probeLastTs = 0;
-  const effectiveLateGraceSec = Number.isFinite(lateGraceSec) ? lateGraceSec : 0.04;
-  let lastPhase = null;
-  let lastWrapAt = 0;
-
-  function getState(key) {
-    if (!state.has(key)) {
-      state.set(key, {
-        lastBarStart: -1,
-        scheduled: new Set(),
-        preScheduledCol0At: null,
-        lastProbeBarIndex: null,
-        lastScheduledByCol: new Map(),
-        scheduledCol0InCurrentBar: false,
-        scheduledCol7InCurrentBar: false,
-
-        // Deterministic pattern cache (only changes when user edits toy)
-        seqRevSeen: -1,
-        seqPattern: null,
-      });
+  const makeState = (cursorTick) => ({
+    scheduledUntilTick: intTick(cursorTick), identities: new Set(),
+    definitionRevision: null, generation: null, resetSerial,
+  });
+  function getState(toyId, cursorTick) {
+    let state = states.get(toyId);
+    if (!state) { state = makeState(cursorTick); states.set(toyId, state); }
+    if (state.resetSerial !== resetSerial && pendingReset) {
+      state.scheduledUntilTick = pendingReset.cursorTick;
+      state.identities.clear();
+      state.resetSerial = resetSerial;
     }
-    return state.get(key);
+    return state;
+  }
+  function resetTimeline(tick, { includeBoundary = true, clearIdentities = true } = {}) {
+    const cursorTick = intTick(tick) + (includeBoundary ? 0 : 1);
+    resetSerial += 1;
+    pendingReset = { cursorTick };
+    for (const state of states.values()) {
+      state.scheduledUntilTick = cursorTick;
+      if (clearIdentities) state.identities.clear();
+      state.resetSerial = resetSerial;
+    }
+  }
+  function clearToy(toyId) { if (toyId) states.delete(toyId); }
+  function resolveGeneration(toy, toyId) {
+    const audioId = toy?.__audioToyId || toy?.dataset?.audiotoyid || toy?.dataset?.toyid || toyId;
+    try { return Number(window.__TOY_AUDIO_GEN?.[audioId]) || 0; } catch { return 0; }
+  }
+  function resolveStartTick(toy, audioTimeToTick) {
+    const override = Number(toy?.__loopStartOverrideSec);
+    return Number.isFinite(override) && typeof audioTimeToTick === 'function'
+      ? intTick(audioTimeToTick(override)) : 0;
   }
 
-  // --- Deterministic pattern helpers ---
-  function getToySeqRev(toy) {
-    try {
-      const v = toy?.__seqRev;
-      return Number.isFinite(v) ? v : 0;
-    } catch { return 0; }
-  }
+  function tick({ activeToyIds, getToy, currentTick, lookaheadEndTick, tickToAudioTime, audioTimeToTick } = {}) {
+    if (!activeToyIds?.size || typeof tickToAudioTime !== 'function') return { scheduled: 0, events: [] };
+    const nowTick = intTick(currentTick);
+    const endTick = Math.max(nowTick, intTick(lookaheadEndTick, nowTick));
+    if (endTick <= nowTick) return { scheduled: 0, events: [] };
+    const events = [];
 
-  function getToySeqPattern(toy) {
-    try {
-      // Deterministic contract: scheduler never builds. Toys build snapshots on user edits.
-      return toy.__seqPattern || null;
-    } catch { return null; }
-  }
+    for (const toyId of activeToyIds) {
+      const toy = getToy ? getToy(toyId) : document.getElementById(toyId);
+      if (!toy) continue;
+      const usesEventProvider = typeof toy.__sequencerEventsInWindow === 'function'
+        && typeof toy.__sequencerScheduleEvent === 'function';
+      if (!usesEventProvider && typeof toy.__sequencerSchedule !== 'function') continue;
+      const steps = Math.max(1, Math.trunc(Number(toy.dataset?.steps) || 8));
+      const migratedGrid = ['loopgrid', 'loopgrid-drum', 'drawgrid'].includes(toy.dataset?.toy);
+      const usesPlaybackInstance = migratedGrid || usesEventProvider;
+      const playbackInstance = usesPlaybackInstance ? getPlaybackInstance(toyId) : null;
+      if (usesPlaybackInstance && (!playbackInstance || !playbackInstance.active)) continue;
+      const toyLoopTicks = usesPlaybackInstance
+        ? Math.max(1, intTick(playbackInstance.loopLengthTicks, loopTicks))
+        : loopTicks;
+      const revision = Number.isFinite(Number(toy.__seqRev)) ? Number(toy.__seqRev) : 0;
+      const generation = resolveGeneration(toy, toyId);
+      const state = getState(toyId, nowTick);
+      const chainTurnEndTick = Number(toy.__chainTurnEndTick);
+      const scheduleEndTick = Number.isFinite(chainTurnEndTick)
+        ? Math.min(endTick, intTick(chainTurnEndTick))
+        : endTick;
 
-  function tick({ activeToyIds, getToy, loopInfo, nowAt } = {}) {
-    try {
-      if (!activeToyIds || !activeToyIds.size || !loopInfo) return;
-      const barLen = Number(loopInfo.barLen) || 0;
-      if (!Number.isFinite(barLen) || barLen <= 0) return;
-      const loopStart = Number(loopInfo.loopStartTime) || 0;
-      const now = Number.isFinite(nowAt) ? nowAt : (ensureAudioContext()?.currentTime ?? 0);
-      if (!Number.isFinite(now)) return;
-      const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
-      const justResumed = Number.isFinite(lastResumeAt) && (now - lastResumeAt) < 0.25;
-
-      const baseWindowStart = (now + Math.max(0, leadSec)) - Math.max(0, effectiveLateGraceSec);
-      const windowStart = Math.max(now - 0.1, baseWindowStart);
-      const windowEnd = now + Math.max(0.05, lookaheadSec);
-      const phase = Number(loopInfo.phase01);
-      if (Number.isFinite(phase)) {
-        if (Number.isFinite(lastPhase) && phase < lastPhase) {
-          lastWrapAt = now;
-        }
-        lastPhase = phase;
+      const chainTurnStartTick = Number(toy.__chainTurnStartTick);
+      const providerWindowStartTick = Number(toy.__sequencerWindowStartTick);
+      const playbackStartTick = Number(playbackInstance?.startTick);
+      const firstStepTicks = Math.max(1, Math.ceil(toyLoopTicks / steps));
+      const freshPlaybackStartTick = usesPlaybackInstance
+        && playbackInstance.definitionRevisionSeen < 0
+        && Number.isFinite(playbackStartTick)
+        && nowTick >= playbackStartTick
+        && (nowTick - playbackStartTick) < firstStepTicks
+          ? playbackStartTick
+          : NaN;
+      const explicitStartTick = toy.__chainJustActivated && Number.isFinite(chainTurnStartTick)
+        ? chainTurnStartTick
+        : (Number.isFinite(providerWindowStartTick) ? providerWindowStartTick : freshPlaybackStartTick);
+      const hasExplicitStart = Number.isFinite(explicitStartTick);
+      if (toy.__forceSchedulerReset || toy.__chainJustActivated || hasExplicitStart) {
+        state.scheduledUntilTick = hasExplicitStart ? intTick(explicitStartTick) : nowTick;
+        state.identities.clear();
+        try { toy.__forceSchedulerReset = false; } catch {}
       }
-      // NOTE: barStart is computed per-toy below (to support per-toy restarts).
-      const barStartDebug = loopStart + Math.floor((now - loopStart) / barLen) * barLen;
-      const barIndex = Math.floor((now - loopStart) / barLen);
-      const barStart = loopStart + barIndex * barLen;
-
-      // Detect if a chained toy just activated (for suppress logic)
-      let chainActivatedToyId = null;
-      let chainActivatedParent = null;
-      for (const id of activeToyIds) {
-        const t = getToy ? getToy(id) : document.getElementById(id);
-        if (!t || !t.__chainJustActivated) continue;
-        const isCh = !!(t.dataset?.prevToyId || t.dataset?.nextToyId || t.dataset?.chainParent);
-        if (!isCh) continue;
-        chainActivatedToyId = id;
-        chainActivatedParent = t.dataset?.chainParent || null;
-        break;
+      if (state.definitionRevision !== revision) {
+        state.definitionRevision = revision;
       }
-
-      if (window.__AUDIO_TIMING_PROBE) {
-        const ts = performance?.now?.() ?? Date.now();
-        if (!probeLastTs || (ts - probeLastTs) > 1000) {
-          probeLastTs = ts;
-          console.log('[note-scheduler][probe]', {
-            schedId: __schedId,
-            active: activeToyIds.size,
-            now,
-            windowStart,
-            windowEnd,
-            barStart: barStartDebug,
-            phase,
-          });
-        }
+      if (state.generation !== generation) {
+        state.generation = generation;
+        state.identities.clear();
       }
 
-      activeToyIds.forEach((toyId) => {
-        const toy = getToy ? getToy(toyId) : document.getElementById(toyId);
-        if (!toy || typeof toy.__sequencerSchedule !== 'function') return;
+      // Schedule [fromTick, endTick). Delayed polls recover only the explicit
+      // grace range; older events are skipped and are never moved to a new tick.
+      const fromTick = hasExplicitStart
+        ? state.scheduledUntilTick
+        : Math.max(state.scheduledUntilTick, Math.max(0, nowTick - graceTicks));
+      if (fromTick >= scheduleEndTick) {
+        state.scheduledUntilTick = Math.max(state.scheduledUntilTick, scheduleEndTick);
+        continue;
+      }
 
-        const steps = parseInt(toy.dataset.steps, 10) || 8;
-        if (!Number.isFinite(steps) || steps <= 0) return;
-        const stepLen = barLen / steps;
-        if (!Number.isFinite(stepLen) || stepLen <= 0) return;
-
-        const toyState = getState(toyId);
-
-        // If the host code requested a hard reset, clear any pending scheduled state.
-        if (toy.__forceSchedulerReset) {
+      if (usesEventProvider) {
+        // Event-provider toys can contain several irregular events near their
+        // local start. A late chain handoff must not backfill every event from
+        // the exact turn boundary: AudioContext will clamp those past times to
+        // "now" and audibly reorder/compress the learned pattern. Recover only
+        // the configured grace window; older events remain missed.
+        const providerFromTick = Math.max(fromTick, Math.max(0, nowTick - graceTicks));
+        let providedEvents = null;
+        try {
+          providedEvents = toy.__sequencerEventsInWindow(providerFromTick, scheduleEndTick, playbackInstance);
+        } catch {}
+        // null means the provider is temporarily unavailable (for example while
+        // physics is learning a pattern). Do not consume its musical window.
+        if (providedEvents == null) continue;
+        if (!Array.isArray(providedEvents)) providedEvents = [];
+        for (const event of providedEvents) {
+          const eventTick = intTick(event?.eventTick, -1);
+          if (eventTick < providerFromTick || eventTick >= scheduleEndTick) continue;
+          const eventKey = String(event?.eventKey || `event:${event?.step ?? 0}`);
+          const identity = `${toyId}|${playbackInstance.id}|${eventTick}|${eventKey}|r${revision}|g${playbackInstance.generation}`;
+          if (state.identities.has(identity)) continue;
+          state.identities.add(identity);
+          const metadata = {
+            toyId: String(toyId), playbackInstanceId: playbackInstance.id,
+            eventTick, eventKey, definitionRevision: revision,
+            generation: playbackInstance.generation, audioGeneration: generation,
+            late: eventTick < nowTick, identity,
+          };
           try {
-            toyState.lastBarStart = -1;
-            toyState.scheduled?.clear?.();
-            toyState.preScheduledCol0At = null;
-            toyState.lastScheduledByCol?.clear?.();
+            toy.__seqPatternActive = toy.__seqPattern || null;
+            toy.__seqRevActive = revision;
+            toy.__sequencerScheduleEvent(event, tickToAudioTime(eventTick), metadata);
+            events.push(metadata);
           } catch {}
-          try { toy.__forceSchedulerReset = false; } catch {}
         }
-
-        // Support per-toy restarts: override the loopStart for this toy only.
-        let toyLoopStart = loopStart;
-        try {
-          const ovr = Number(toy.__loopStartOverrideSec);
-          if (Number.isFinite(ovr)) toyLoopStart = ovr;
-        } catch {}
-
-        const toyBarIndex = Math.floor((now - toyLoopStart) / barLen);
-        const toyBarStart = toyLoopStart + toyBarIndex * barLen;
-        // Check if this toy is part of a chain
-        const isChained = !!(toy.dataset?.prevToyId || toy.dataset?.nextToyId || toy.dataset?.chainParent);
-        const thisChainParent = toy.dataset?.chainParent || null;
-
-        // --- Deterministic pattern snapshot (locks notes until user edits toy) ---
-        const seqRev = getToySeqRev(toy);
-        if (toyState.seqRevSeen !== seqRev || !toyState.seqPattern) {
-          toyState.seqRevSeen = seqRev;
-          toyState.seqPattern = getToySeqPattern(toy);
+        state.scheduledUntilTick = scheduleEndTick;
+        updatePlaybackInstanceProgress(toyId, {
+          scheduledUntilTick: scheduleEndTick,
+          definitionRevisionSeen: revision,
+        });
+        try { toy.__chainJustActivated = false; } catch {}
+        try { delete toy.__chainTurnStartTick; } catch {}
+        try { delete toy.__sequencerWindowStartTick; } catch {}
+        const pruneBefore = Math.max(0, nowTick - (loopTicks * 2));
+        for (const identity of state.identities) {
+          const identityTick = Number(identity.split('|')[2]);
+          if (Number.isFinite(identityTick) && identityTick < pruneBefore) state.identities.delete(identity);
         }
+        continue;
+      }
 
-        // If some chained toy just activated, do not allow adjacent toys
-        // in the same chain to schedule during this tick.
-        if (chainActivatedToyId && toyId !== chainActivatedToyId && isChained) {
-          const sameParent = chainActivatedParent && thisChainParent === chainActivatedParent;
-          const directlyAdjacent =
-            toy.dataset?.nextToyId === chainActivatedToyId ||
-            toy.dataset?.prevToyId === chainActivatedToyId;
-
-          if (sameParent || directlyAdjacent) {
-            toyState.scheduledCol0InCurrentBar = false;
-            return;
-          }
-        }
-
-        // Use per-toy bar start from override (if any)
-        const barStart = toyBarStart;
-        if (toyState.lastBarStart !== barStart) {
-          toyState.lastBarStart = barStart;
-          toyState.scheduledCol7InCurrentBar = false;
-          toyState.scheduledCol0InCurrentBar = false;
-          toyState.preScheduledCol0At = null;
-        }
-
-        // Prune old scheduled entries
-        let scheduledAny = false;
-
-        // IMPORTANT:
-        // We must not early-return for chained toys immediately after wrap.
-        // That creates a silent gap at bar start, then col0 gets scheduled late,
-        // bunching it closer to col1 ("fast first 2 notes").
-        // We rely on per-column guards (justWrappedByScheduler + minColGapSec) instead.
-        const justWrapped = Number.isFinite(lastWrapAt) && (now - lastWrapAt) < 0.08;
-        if (isChained && justWrapped && isDebugEnabled()) {
-          console.log('[note-scheduler] wrap tick (chained) — no skip', { toyId, now, barStart });
-        }
-        const justActivated = !!toy.__chainJustActivated;
-        if (justActivated && isChained) {
-          const audioId = toy.__audioToyId || toy.dataset?.toyid || toyId;
-          // On resume, avoid bumping gen repeatedly; it can drop the just-scheduled notes.
-          if (!justResumed) {
-            try { bumpToyAudioGen(audioId, 'chain-activate'); } catch {}
-          } else {
-            try { toy.__chainJustActivated = false; } catch {}
-          }
-          if (isDebugEnabled()) {
-            console.log('[note-scheduler] chain activate -> bumped new toy only', { toyId, audioId });
-          }
-
-          // IMPORTANT: do NOT bump prev toy here.
-          // The previous toy may already have valid notes scheduled for this bar.
-          // Bumping its gen causes the audio gate to drop those scheduled notes (gen mismatch),
-          // which looks like "notes skipping" immediately after adding a chained toy.
-        }
-        const windowStartToy = windowStart;
-        const isFirstScheduleForChainedToy = justActivated && isChained;
-        // For the first schedule cycle of a newly activated chained toy, extend the window
-        // to include columns 0 and 1 (which are closer together), ensuring they get scheduled
-        const scheduleNextBarCol0 = justActivated && isChained && Number.isFinite(phase) && phase > 0.9;
-        const windowEndToy = isFirstScheduleForChainedToy || scheduleNextBarCol0
-          ? Math.max(windowEnd, barStart + barLen, barStart + stepLen)
-          : windowEnd;
-
-        const barsToSchedule = isChained ? 1 : 2;
-        const minColGapSec = Math.max(0.05, stepLen * 0.5);
-        // Prune old scheduled keys so the per-toy set stays bounded.
-        // Keys are numeric: key = whenMs*32 + col. Drop anything older than ~2 bars.
-        try {
-          const pruneBeforeMs = Math.round((now - Math.max(0.001, barLen * 2)) * 1000);
-          if (Number.isFinite(pruneBeforeMs) && toyState.scheduled && toyState.scheduled.size) {
-            for (const k of Array.from(toyState.scheduled)) {
-              const tMs = Math.floor(Number(k) / 32);
-              if (Number.isFinite(tMs) && tMs < pruneBeforeMs) toyState.scheduled.delete(k);
-            }
-          }
-        } catch {}
-        for (let b = 0; b < barsToSchedule; b++) {
-          const base = barStart + b * barLen;
-          for (let col = 0; col < steps; col++) {
-            const when = base + col * stepLen;
-            // Late scheduling grace: chain activation can cause a small hitch at bar start.
-            // Allow late scheduling for the first few columns *only* on the first schedule cycle
-            // after a chained toy activation.
-            const lateBaseWindow = Math.max(col0GraceSec, 0.2);
-            const lateWindow = isFirstScheduleForChainedToy ? Math.max(lateBaseWindow, stepLen * 1.25) : lateBaseWindow;
-
-            // Allow late schedule for col0 always (existing behavior), and for col1/col2 only
-            // right after chain activation (prevents "skipped" early notes due to DOM hitch).
-            const allowLateEarlyCols =
-              (col === 0) ||
-              (isFirstScheduleForChainedToy && (col === 1 || col === 2));
-
-            const isAllowedLateRaw = allowLateEarlyCols && (when < windowStartToy) && (when >= (now - lateWindow));
-
-            // After a pause/resume, do NOT "backfill" early-bar notes.
-            // Only allow late scheduling for chain activation hitch, not for transport resume.
-            // After a pause/resume, do NOT backfill early-bar notes.
-            // BUT: always allow col0 to be late-scheduled within the grace window,
-            // otherwise the very first downbeat can be lost on the first playthrough.
-            const isAllowedLate = isAllowedLateRaw && (!justResumed || isFirstScheduleForChainedToy || col === 0);
-            // Skip column 0 if already scheduled in this bar
-            if (col === 0 && toyState.scheduledCol0InCurrentBar) {
-              continue;
-            }
-            const whenMs = Math.round(when * 1000);
-            const key = (whenMs * 32) + col; // numeric key: time+col
-            const lastColTime = toyState.lastScheduledByCol.get(col);
-            // Calculate bar indices first
-            const currentColBarIndex = Math.floor((when - loopStart) / barLen);
-            const lastColBarIndex = Number.isFinite(lastColTime) ? Math.floor((lastColTime - loopStart) / barLen) : currentColBarIndex;
-            const inSameBar = lastColBarIndex === currentColBarIndex;
-            // Gap check: ensure minimum time between notes (prevents notes bunching up)
-            if (Number.isFinite(lastColTime) && (when - lastColTime) < minColGapSec) {
-              continue;
-            }
-            // Check if this column is within the scheduling window
-            const isInWindow = when >= windowStartToy && when <= windowEndToy;
-            if (!isInWindow && !isAllowedLate) {
-              continue;
-            }
-            if (isDebugEnabled() && isAllowedLate) {
-              console.log('[note-scheduler] late-allowed', { toyId, col, now, when });
-            }
-            // De-dupe: tick() runs repeatedly inside lookahead; without this we double-schedule.
-            if (toyState.scheduled.has(key)) {
-              if (isDebugEnabled()) {
-                try { console.log('[note-scheduler][skip dup]', { schedId: __schedId, toyId, col, whenMs, key }); } catch {}
-              }
-              continue;
-            }
-            // Schedule the note
-            toyState.scheduled.add(key);
-            toyState.lastScheduledByCol.set(col, when);
-            scheduledAny = true;
-            // Mark that column 0 was scheduled in this bar
-            if (col === 0) {
-              toyState.scheduledCol0InCurrentBar = true;
-            }
-            // Mark that column 7 was scheduled in this bar (for chaining pre-schedule)
-            if (col === steps - 1) {
-              toyState.scheduledCol7InCurrentBar = true;
-            }
+      const startTick = migratedGrid ? playbackInstance.startTick : resolveStartTick(toy, audioTimeToTick);
+      let stepNumber = Math.ceil(((fromTick - startTick) * steps) / toyLoopTicks);
+      while (startTick + Math.round((stepNumber * toyLoopTicks) / steps) < fromTick) stepNumber += 1;
+      for (;;) {
+        const eventTick = startTick + Math.round((stepNumber * toyLoopTicks) / steps);
+        if (eventTick >= scheduleEndTick) break;
+        if (eventTick >= fromTick && eventTick >= 0) {
+          const column = ((stepNumber % steps) + steps) % steps;
+          const playbackInstanceId = migratedGrid
+            ? playbackInstance.id
+            : String(toy.dataset?.playbackInstanceId || `legacy:${toyId}`);
+          const eventKey = `column:${column}`;
+          const identityGeneration = migratedGrid ? playbackInstance.generation : generation;
+          const identity = `${toyId}|${playbackInstanceId}|${eventTick}|${eventKey}|r${revision}|g${identityGeneration}`;
+          if (!state.identities.has(identity)) {
+            state.identities.add(identity);
+            const metadata = {
+              toyId: String(toyId), playbackInstanceId, eventTick, eventKey,
+              definitionRevision: revision,
+              generation: identityGeneration,
+              audioGeneration: generation,
+              late: eventTick < nowTick,
+              identity,
+            };
             try {
-              // Provide deterministic snapshot to toy implementation
-              try { toy.__seqPatternActive = toyState.seqPattern; } catch {}
-              try { toy.__seqRevActive = toyState.seqRevSeen; } catch {}
-              if (isDebugEnabled()) {
-                try {
-                  console.log('[note-scheduler][schedule]', { schedId: __schedId, toyId, col, whenMs, key });
-                } catch {}
-              }
-              toy.__sequencerSchedule(col, when);
+              toy.__seqPatternActive = toy.__seqPattern || null;
+              toy.__seqRevActive = revision;
+              toy.__sequencerSchedule(column, tickToAudioTime(eventTick), metadata);
+              events.push(metadata);
             } catch {}
           }
         }
-        // NOTE: We no longer pre-schedule next-bar col0. It caused doubled notes at chain handoff.
-        if (justActivated && scheduledAny) {
-          try { toy.__chainJustActivated = false; } catch {}
-        }
+        stepNumber += 1;
+      }
+      state.scheduledUntilTick = scheduleEndTick;
+      if (migratedGrid) {
+        updatePlaybackInstanceProgress(toyId, {
+          scheduledUntilTick: scheduleEndTick,
+          definitionRevisionSeen: revision,
+        });
+      }
+      try { toy.__chainJustActivated = false; } catch {}
+      try { delete toy.__chainTurnStartTick; } catch {}
+      try { delete toy.__sequencerWindowStartTick; } catch {}
 
-        // Debug: log resume scheduling summary once per toy per resume.
-        try {
-          if (window.__SCHED_MISMATCH_DEBUG && justResumed) {
-            const prev = __RESUME_LOG_STATE.get(toyId);
-            if (prev !== lastResumeAt) {
-              __RESUME_LOG_STATE.set(toyId, lastResumeAt);
-              const payload = {
-                toyId,
-                scheduledAny,
-                steps,
-                stepLen,
-                barStart,
-                toyLoopStart,
-                windowStart: windowStartToy,
-                windowEnd: windowEndToy,
-                now,
-                isChained,
-                justActivated,
-                scheduledCol0InCurrentBar: toyState.scheduledCol0InCurrentBar,
-                justResumed,
-              };
-              console.log('[note-scheduler][resume] ' + JSON.stringify(payload));
-            }
-          }
-        } catch {}
-      });
-    } catch (e) {
-      try {
-        console.warn('[note-scheduler][tick error]', e);
-      } catch {}
+      const pruneBefore = Math.max(0, nowTick - (loopTicks * 2));
+      for (const identity of state.identities) {
+        const eventTick = Number(identity.split('|')[2]);
+        if (Number.isFinite(eventTick) && eventTick < pruneBefore) state.identities.delete(identity);
+      }
     }
+    return { scheduled: events.length, events };
   }
 
-  function clearToy(toyId) {
-    if (!toyId) return;
-    state.delete(toyId);
+  function getDebugState(toyId) {
+    const state = states.get(toyId);
+    return state ? {
+      scheduledUntilTick: state.scheduledUntilTick,
+      identities: new Set(state.identities),
+      definitionRevision: state.definitionRevision,
+      generation: state.generation,
+    } : null;
   }
-
-  return { tick, clearToy };
+  return { tick, clearToy, resetTimeline, getDebugState };
 }

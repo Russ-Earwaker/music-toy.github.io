@@ -24,6 +24,10 @@ import { createChordWheel } from './chordwheel.js';
 import { createRippleSynth } from './ripplesynth.js';
 import { applyStackingOrder } from './stacking-manager.js';
 import { getViewportTransform, getViewportElement, screenToWorld } from './board-viewport.js';
+import {
+  applyToySideButtonPosition,
+  measureToySideAnchor,
+} from './toy-side-button-position.js';
 import { getRect } from './layout-cache.js';
 
 import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
@@ -48,9 +52,10 @@ import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from '
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
 import { debugEnabled, makeDebugLogger } from './debug-flags.js';
-import { DEFAULT_BPM, NUM_STEPS, ensureAudioContext, resumeAudioContextIfNeeded, getLoopInfo, setBpm, start, stop, isRunning, getToyGain } from './audio-core.js';
+import { DEFAULT_BPM, NUM_STEPS, TICKS_PER_BAR, ensureAudioContext, resumeAudioContextIfNeeded, getLoopInfo, getPositionAtAudioTime, tickToAudioTime, audioTimeToTick, setBpm, start, stop, isRunning, getToyGain } from './audio-core.js';
 import { autoQualityOnFrame } from './perf/AutoQualityController.js';
 import { createSequencerScheduler } from './note-scheduler.js';
+import { activatePlaybackInstanceForChainTurn, deactivatePlaybackInstance, ensurePlaybackInstance, getPlaybackColumnWithinTurn, getPlaybackInstance } from './playback-instances.js';
 import { drawBlocksSection as drawOrangeTiles } from './ui-tiles.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
@@ -1665,7 +1670,6 @@ function bootTopbar(){
     try { bumpAllToyAudioGen(); } catch {}
 
     start();
-    try { document.dispatchEvent(new Event('transport:play')); } catch {}
     try {
       const panels = Array.from(document.querySelectorAll('.toy-panel[id]'));
       const roots = panels.filter(el => !el.dataset.chainParent);
@@ -1679,8 +1683,6 @@ function bootTopbar(){
     }
   });
   stopBtn?.addEventListener('click', ()=>{
-    try { document.dispatchEvent(new Event('transport:pause')); } catch {}
-
     // Invalidate any deferred scheduled triggers + pending sources first
     try { bumpAllToyAudioGen(); } catch {}
 
@@ -4851,7 +4853,6 @@ function randomizeInternalToysForArtToy(artToyId, mode, opts = {}) {
       // Cancel anything pending from a prior run (deferred setTimeout gates + scheduled sources)
       try { bumpAllToyAudioGen?.(); } catch {}
       try { start?.(); } catch {}
-      try { document.dispatchEvent(new Event('transport:play')); } catch {}
     }
   } catch {}
 
@@ -5209,6 +5210,13 @@ function panelHasAnyNotes(panel) {
     return Array.isArray(s) && s.some(v => v !== -1);
   }
 
+  if (type === 'rippler') return !!panel.__ripplerHasRecordedEvents;
+
+  if (type === 'bouncer') {
+    const recorder = panel.__bouncerPlaybackState?.();
+    return recorder?.mode === 'replay' && Array.isArray(recorder.pattern) && recorder.pattern.length > 0;
+  }
+
     return false;
 }
 
@@ -5220,6 +5228,21 @@ function startToy(panelEl) {
       audioState: (window.__audioContext?.state || 'unknown')
     });
     try {
+        if (['loopgrid', 'loopgrid-drum', 'drawgrid', 'chordwheel', 'rippler'].includes(panelEl.dataset?.toy)) {
+            // Initial Play and resume only ensure the existing grid playback instance
+            // remains active. Explicit retriggering uses the toy-specific API.
+            const playback = panelEl.__loopGridPlayback
+              || panelEl.__drumGridPlayback
+              || panelEl.__drawGridPlayback;
+            const resolvedPlayback = playback || panelEl.__chordWheelPlayback || panelEl.__ripplerPlayback;
+            if (resolvedPlayback?.activate) resolvedPlayback.activate();
+            else ensurePlaybackInstance(panelEl.id, {
+                active: true,
+                startTick: 0,
+                loopLengthTicks: TICKS_PER_BAR,
+            });
+            return;
+        }
         // Always restart toys from their start when (re)started.
         // This keeps pause/resume deterministic and prevents mid-bar resumes.
         try {
@@ -5334,7 +5357,12 @@ function advanceChain(headId, startAt) {
         g_chainState.set(headId, headId);
     }
 
-    // Self-timed toys pass their exact completion time, not the observing frame.
+    // Self-timed toys pass their exact completion time. Bar-driven chains use
+    // the authoritative boundary of the bar that has just begun.
+    const observedTick = getPositionAtAudioTime(ensureAudioContext()?.currentTime || 0);
+    const handoffTick = Number.isFinite(startAt)
+      ? audioTimeToTick(startAt)
+      : Math.floor(observedTick / TICKS_PER_BAR) * TICKS_PER_BAR;
     const nextPanel = document.getElementById(nextActiveId);
     if (nextPanel) nextPanel.__chainStartAt = Number.isFinite(startAt) ? startAt : undefined;
     if (nextPanel && nextPanel !== activeToy) {
@@ -5346,6 +5374,14 @@ function advanceChain(headId, startAt) {
     // In a 1-toy chain, activeToyId === headId every bar; resetting here wipes de-dupe state
     // and causes the scheduler to re-schedule the same notes -> doubled playback.
     if (nextActiveId && nextActiveId !== activeToyId) {
+      try {
+        deactivatePlaybackInstance(activeToyId);
+        activatePlaybackInstanceForChainTurn(nextActiveId, handoffTick, { loopLengthTicks: TICKS_PER_BAR });
+        if (nextPanel) {
+          nextPanel.__chainTurnStartTick = handoffTick;
+          nextPanel.__chainTurnEndTick = handoffTick + TICKS_PER_BAR;
+        }
+      } catch {}
       // Mark newly active toy before the scheduler runs so it can safely bump once
       // without invalidating already-scheduled notes mid-bar.
       try {
@@ -5889,31 +5925,17 @@ function initToyChaining(panel) {
         extendBtn = document.createElement('button');
         extendBtn.className = 'c-btn toy-chain-btn';
         extendBtn.title = 'Extend with a new toy';
-        extendBtn.style.setProperty('--c-btn-size', '65px');
         extendBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>`;
     }
-    // Force stable positioning regardless of overview layout changes
-    // Alignment requirement: left edge of button touches right edge of the toy
-    extendBtn.style.position = 'absolute';
-    extendBtn.style.left = '100%';
-    extendBtn.style.right = 'auto';
-    extendBtn.style.zIndex = '10050';  // must be above ov-shield / drag surfaces
     
     const core = extendBtn.querySelector('.c-btn-core');
     if (core) {
         core.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonExtend.png')`);
     }
-    // Ensure the button is vertically centered on the toy body, not the whole panel
+    // All toy types share one side-button anchor. The helper uses transformed
+    // rects when possible and falls back to panel centre while a body is settling.
     const updateChainBtnPos = () => {
-      try {
-        const body = panel.querySelector('.toy-body');
-        if (!body) return;
-        // Position via absolute top in panel coords so it matches the connector Y
-        const targetTop = (body.offsetTop || 0) + (body.offsetHeight || 0) / 2;
-        extendBtn.style.top = `${targetTop}px`;
-        // No X translation: left edge touches panel edge; only center vertically.
-        extendBtn.style.transform = 'translateY(-50%)';
-      } catch {}
+      try { applyToySideButtonPosition(panel, extendBtn); } catch {}
     };
     // Run on attach + whenever layout/size changes
     const ro = new ResizeObserver(updateChainBtnPos);
@@ -5931,7 +5953,13 @@ function initToyChaining(panel) {
       });
     }
     panel.appendChild(extendBtn);
+    updateChainBtnPos();
     panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
+    panel.addEventListener('toy-remove', () => {
+      try { ro.disconnect(); } catch {}
+      window.removeEventListener('overview:transition', updateChainBtnPos);
+      window.removeEventListener('resize', updateChainBtnPos);
+    }, { once: true });
 
     // Hover fallback: in some focus-edit/unfocused states CSS :hover can be suppressed by pointer-event guards.
     // We mirror the hover state with a class so the button still highlights reliably.
@@ -6076,7 +6104,7 @@ function initToyChaining(panel) {
         }
 
         const board = document.getElementById('board');
-        const boardScale = window.__boardScale || 1;
+        const boardScale = window.__effectiveBoardScale || window.__boardScale || 1;
         let sourceWidth = sourcePanel.offsetWidth || (getRect(sourcePanel).width / boardScale);
         let sourceHeight = sourcePanel.offsetHeight || (getRect(sourcePanel).height / boardScale);
 
@@ -6111,7 +6139,7 @@ function initToyChaining(panel) {
             // Fallback: derive from rects (best-effort)
             const sourceRect = getRect(sourcePanel);
             const boardRect = getRect(board);
-            const boardScale = window.__boardScale || 1;
+            const boardScale = window.__effectiveBoardScale || window.__boardScale || 1;
             if (boardRect) {
               srcLeft = (sourceRect.left - boardRect.left) / boardScale;
               srcTop  = (sourceRect.top - boardRect.top) / boardScale;
@@ -6910,12 +6938,6 @@ try {
     console.warn('[MusicToyFactory] registration failed', err);
 }
 
-const chainBtnStyle = document.createElement('style');
-chainBtnStyle.textContent = `
-    .toy-chain-btn { position: absolute; right: -65px; transform: translateY(-50%); z-index: 52; }
-`;
-document.head.appendChild(chainBtnStyle);
-
 function getChainAnchor(panel, side = 'right') {
   // Internal board: panels live inside a different viewport/world that is transformed
   // independently. Using style.left/top math here can drift/offset under pan+zoom.
@@ -6926,15 +6948,7 @@ function getChainAnchor(panel, side = 'right') {
     if (inInternal) {
       const pr = panel.getBoundingClientRect();
 
-      // Anchor vertically at the toy body center if available (matches main-board behaviour).
-      let clientY = pr.top + pr.height * 0.5;
-      const body = panel.querySelector?.('.toy-body');
-      if (body) {
-        const br = body.getBoundingClientRect();
-        if (br && Number.isFinite(br.top) && Number.isFinite(br.height)) {
-          clientY = br.top + br.height * 0.5;
-        }
-      }
+      const clientY = measureToySideAnchor(panel).clientY;
 
       const clientX = (side === 'left') ? pr.left : pr.right;
 
@@ -6975,13 +6989,7 @@ function getChainAnchor(panel, side = 'right') {
   const halfW = (panelW * 0.5) * scale;
   const halfH = (panelH * 0.5) * scale;
 
-  const body = panel.querySelector('.toy-body');
-  let bodyOffsetY = 0;
-  if (body) {
-    const bodyTop = body.offsetTop || 0;
-    const bodyH   = body.offsetHeight || panelH || 0;
-    bodyOffsetY = (bodyTop + bodyH * 0.5) - (panelH * 0.5);
-  }
+  const bodyOffsetY = measureToySideAnchor(panel).localY - panelH * 0.5;
 
   const x = side === 'left' ? (cx - halfW) : (cx + halfW);
   const y = cy + bodyOffsetY * scale;
@@ -7572,10 +7580,10 @@ function restoreChainStateAfterResume(){
       g_chainState.set(headId, headId);
       const headEl = document.getElementById(headId);
       if (headEl) {
-        if (Number.isFinite(now)) headEl.__loopStartOverrideSec = now;
+        const migratedTickToy = ['loopgrid', 'loopgrid-drum', 'drawgrid', 'chordwheel', 'rippler'].includes(headEl.dataset?.toy);
+        if (!migratedTickToy && Number.isFinite(now)) headEl.__loopStartOverrideSec = now;
         try {
-          // Refresh deterministic pattern snapshots on resume (drawgrid relies on these).
-          if (typeof headEl.__seqTouch === 'function') headEl.__seqTouch('resume');
+          if (!migratedTickToy && typeof headEl.__seqTouch === 'function') headEl.__seqTouch('resume');
         } catch {}
         headEl.__chainJustActivated = true;
         headEl.__forceSchedulerReset = true;
@@ -7603,8 +7611,6 @@ try{
 let g_sequencerScheduler = null;
 let audioSchedIntervalId = null;
 let g_noteSchedCfg = null;
-let g_noteSchedRebuildPending = null;
-let g_lastCfgCheckAt = 0;
 let g_audioTickBusy = false;
 let g_lastAudioPhase01 = null;
 let g_audioPostResumeLogUntil = 0;
@@ -7625,15 +7631,51 @@ function ensureSequencerScheduler() {
     const lateGraceSec = Math.min(0.08, cfg.stepSec * 0.5);
     g_noteSchedCfg = cfg;
     g_sequencerScheduler = createSequencerScheduler({
-      lookaheadSec: cfg.lookaheadSec,
-      leadSec: cfg.leadSec,
-      lateGraceSec,
+      ticksPerBar: TICKS_PER_BAR,
+      lateGraceTicks: Math.ceil((lateGraceSec / cfg.barSec) * TICKS_PER_BAR),
     });
     window.__mtNoteSchedConfig = cfg;
     try { window.__NOTE_SCHEDULER_ENABLED = true; } catch {}
   }
   return g_sequencerScheduler;
 }
+
+try {
+  if (!window.__TICK_NOTE_SCHED_TRANSPORT_BOUND) {
+    window.__TICK_NOTE_SCHED_TRANSPORT_BOUND = true;
+    document.addEventListener('transport:change', (event) => {
+      const detail = event?.detail || {};
+      const tick = Number(detail.positionTick ?? detail.toTick ?? detail.tick) || 0;
+      if (detail.type === 'seek') {
+        try { bumpAllToyAudioGen(); } catch {}
+        ensureSequencerScheduler().resetTimeline(tick, { includeBoundary: true });
+      } else if (detail.type === 'play') {
+        ensureSequencerScheduler().resetTimeline(tick, {
+          includeBoundary: detail.fromState !== 'paused',
+        });
+        if (detail.fromState !== 'paused') {
+          try {
+            for (const [headId, activeId] of g_chainState.entries()) {
+              const head = document.getElementById(headId);
+              const active = document.getElementById(activeId);
+              if (!head || !active) continue;
+              if (!head.dataset.nextToyId) continue; // standalone playback keeps its existing instance
+              if (active !== head) active.dataset.chainActive = 'false';
+              head.dataset.chainActive = 'true';
+              g_chainState.set(headId, headId);
+              deactivatePlaybackInstance(activeId);
+              activatePlaybackInstanceForChainTurn(headId, tick, { loopLengthTicks: TICKS_PER_BAR });
+              head.__chainTurnStartTick = tick;
+              head.__chainTurnEndTick = tick + TICKS_PER_BAR;
+              head.__chainJustActivated = true;
+              head.__forceSchedulerReset = true;
+            }
+          } catch {}
+        }
+      }
+    });
+  }
+} catch {}
 
 function tickAudioScheduler() {
   if (g_audioTickBusy) return;
@@ -7660,31 +7702,12 @@ function tickAudioScheduler() {
     } catch {}
     const info = getLoopInfo();
     if (!info) return;
-    const nowMs = performance?.now?.() ?? Date.now();
-    if (!g_lastCfgCheckAt || (nowMs - g_lastCfgCheckAt) > 500) {
-      g_lastCfgCheckAt = nowMs;
-      const nextCfg = computeNoteSchedTiming();
-      const curCfg = g_noteSchedCfg;
-      if (curCfg?.stepSec && nextCfg?.stepSec) {
-        const delta = Math.abs(nextCfg.stepSec - curCfg.stepSec) / curCfg.stepSec;
-        if (delta > 0.15) g_noteSchedRebuildPending = nextCfg;
-      }
-    }
-
-    if (g_noteSchedRebuildPending && info.col === 0) {
-      // IMPORTANT:
-      // We are about to rebuild the scheduler at bar start. The old scheduler may have already
-      // scheduled future AudioBufferSourceNodes (lookahead). If we rebuild without cancelling,
-      // we will schedule the same notes again -> doubled notes starting on bar 2.
-      try { bumpAllToyAudioGen(); } catch {}
-
-      g_sequencerScheduler = null;
-      g_noteSchedRebuildPending = null;
-      ensureSequencerScheduler();
-    }
-
     const ctx = ensureAudioContext();
     const nowAt = ctx?.currentTime ?? 0;
+    const currentTransportTick = getPositionAtAudioTime(nowAt);
+    const lookaheadEndTick = getPositionAtAudioTime(
+      nowAt + Math.max(0.05, Number(g_noteSchedCfg?.lookaheadSec) || 0.2)
+    );
     try {
       BeatSwarmMode?.scheduleAudioLookahead?.({
         nowAt,
@@ -7739,6 +7762,14 @@ function tickAudioScheduler() {
       for (const toyId of activeToyIds) {
         const toy = document.getElementById(toyId);
         if (!toy) continue;
+        // Bouncer chain completion is transport lifecycle, not rendering. The
+        // render loop also calls this as a fallback, with the playback-instance
+        // guard ensuring that exactly one handoff is emitted per turn.
+        if (toy.dataset?.toy === 'bouncer') {
+          try {
+            if (toy.__advanceBouncerReplayLifecycle?.(currentTransportTick)) continue;
+          } catch {}
+        }
         const hasNotes = panelHasAnyNotes(toy);
         try {
           if (window.__SCHED_MISMATCH_DEBUG && nowAt < g_audioPostResumeLogUntil) {
@@ -7783,10 +7814,10 @@ function tickAudioScheduler() {
           const prevKey = window.__mtActiveToyIdsKey || '';
           const changed = key !== prevKey;
           window.__mtActiveToyIdsKey = key;
-          if (info?.col === 0 || changed) {
+          if (info?.tickInBar === 0 || changed) {
             console.log(changed ? '[sched][tick][active-changed]' : '[sched][tick]', {
-              tick: window.__mtSchedTick,
-              col: info?.col,
+              schedulerPoll: window.__mtSchedTick,
+              transportTick: info?.currentTick,
               phase01: info?.phase01,
               nowAt,
               activeToyIds: window.__mtActiveToyIds,
@@ -7801,8 +7832,10 @@ function tickAudioScheduler() {
       sequencerScheduler.tick({
         activeToyIds: activeAudioToyIds,
         getToy: (id) => document.getElementById(id),
-        loopInfo: info,
-        nowAt,
+        currentTick: currentTransportTick,
+        lookaheadEndTick,
+        tickToAudioTime,
+        audioTimeToTick,
       });
     } catch {}
   } finally {
@@ -7879,6 +7912,13 @@ function updateChains() {
       if (toy.dataset.prevToyId) {
         const parent = document.getElementById(toy.dataset.prevToyId);
         if (parent && !parent.dataset.nextToyId) parent.dataset.nextToyId = toy.id;
+      }
+    } catch {}
+
+    try {
+      if (!toy.dataset.prevToyId && !toy.dataset.nextToyId) {
+        delete toy.__chainTurnStartTick;
+        delete toy.__chainTurnEndTick;
       }
     } catch {}
 
@@ -7991,7 +8031,7 @@ try {
 
     // also piggyback on the main rAF loop to catch any scale changes
   window.__updateOutlineScaleIfNeeded = function(){
-    const scale = window.__boardScale || 1;
+    const scale = window.__effectiveBoardScale || window.__boardScale || 1;
     if (scale !== lastScale){
       lastScale = scale;
       updateOutlineVars(scale);
@@ -8241,7 +8281,19 @@ function scheduler(){
           if (toy && typeof toy.__sequencerStep === 'function') {
             if (!shouldRenderToyVisuals(toy)) continue;
             const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
-            const col = Math.floor(info.phase01 * steps) % steps;
+            let col = Math.floor(info.phase01 * steps) % steps;
+            if (['loopgrid', 'loopgrid-drum', 'drawgrid'].includes(toy.dataset?.toy)) {
+              const instance = getPlaybackInstance(toy.id);
+              const transportTick = Number(info?.currentTick) || 0;
+              const playbackCol = getPlaybackColumnWithinTurn(
+                instance,
+                transportTick,
+                steps,
+                toy.__chainTurnEndTick,
+              );
+              if (playbackCol == null) continue;
+              col = playbackCol;
+            }
             if (col !== lastCol.get(toy.id)) {
               const isFirstStep = !lastCol.has(toy.id);
               lastCol.set(toy.id, col);
@@ -8786,10 +8838,20 @@ async function boot(){
       bumpToyAudioGen(audioId, 'chain-restart');
       toy.__forceSchedulerReset = true;
       delete toy.__chainStartAt;
+      delete toy.__chainTurnStartTick;
+      delete toy.__chainTurnEndTick;
       toy.dataset.chainActive = toy === head ? 'true' : 'false';
       toy = document.getElementById(toy.dataset.nextToyId);
     }
     g_chainState.set(head.id, head.id);
+    try {
+      const turnTick = getPositionAtAudioTime(ensureAudioContext()?.currentTime || 0);
+      activatePlaybackInstanceForChainTurn(head.id, turnTick, { loopLengthTicks: TICKS_PER_BAR });
+      head.__chainTurnStartTick = turnTick;
+      head.__chainTurnEndTick = turnTick + TICKS_PER_BAR;
+      head.__chainJustActivated = true;
+      head.__forceSchedulerReset = true;
+    } catch {}
   });
 
   // Add event listener for toys to request becoming the active link in a chain.
@@ -8801,6 +8863,14 @@ async function boot(){
     if (!head) return;
 
     g_chainState.set(head.id, panel.id);
+    try {
+      const turnTick = getPositionAtAudioTime(ensureAudioContext()?.currentTime || 0);
+      activatePlaybackInstanceForChainTurn(panel.id, turnTick, { loopLengthTicks: TICKS_PER_BAR });
+      panel.__chainTurnStartTick = turnTick;
+      panel.__chainTurnEndTick = turnTick + TICKS_PER_BAR;
+      panel.__chainJustActivated = true;
+      panel.__forceSchedulerReset = true;
+    } catch {}
   });
 
   // Add event listener for instrument propagation down chains
@@ -8881,7 +8951,7 @@ async function boot(){
     const st = g_overviewPanelDrag;
     if (!st) return;
     if (st.pointerId != null && typeof e.pointerId === 'number' && e.pointerId !== st.pointerId) return;
-    const scale = window.__boardScale || 1;
+    const scale = window.__effectiveBoardScale || window.__boardScale || 1;
     const dx = e.clientX - st.startX;
     const dy = e.clientY - st.startY;
     const nx = st.startLeft + dx / Math.max(scale, 0.0001);

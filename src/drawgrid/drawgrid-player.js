@@ -1,9 +1,16 @@
 // src/drawgrid-player.js
 import { triggerInstrument } from '../audio-samples.js';
-import { gateTriggerForToy, getToyAudioGen } from '../toy-audio.js';
+import { gateTriggerForToy, getToyAudioGen, bumpToyAudioGen } from '../toy-audio.js';
 import { buildPalette, midiToName } from '../note-helpers.js';
-import { resumeAudioContextIfNeeded, isRunning as isTransportRunning, ensureAudioContext } from '../audio-core.js';
+import { resumeAudioContextIfNeeded, isRunning as isTransportRunning, ensureAudioContext, getTransportState, TICKS_PER_BAR } from '../audio-core.js';
 import { requestPanelPulse } from '../pulse-border.js';
+import {
+  activatePlaybackInstance,
+  deactivatePlaybackInstance,
+  ensurePlaybackInstance,
+  getPlaybackInstance,
+  removePlaybackInstance,
+} from '../playback-instances.js';
 
 // IMPORTANT:
 // data-toyid may represent chain/group identity and can be shared across panels.
@@ -41,6 +48,15 @@ export function connectDrawGridToPlayer(panel) {
 
   const toyId = getAudioToyId(panel) || 'drawgrid';
   panel.__audioToyId = toyId;
+  const initialTransport = getTransportState();
+  if (isTransportRunning()) {
+    activatePlaybackInstance(panel.id, initialTransport.currentTick, {
+      loopLengthTicks: TICKS_PER_BAR,
+      quantize: true,
+    });
+  } else {
+    ensurePlaybackInstance(panel.id, { active: true, startTick: initialTransport.currentTick, loopLengthTicks: TICKS_PER_BAR });
+  }
   let instrument = panel.dataset.instrument || 'acoustic_guitar';
 
   const initialSteps = parseInt(panel.dataset.steps, 10) || 8;
@@ -89,6 +105,39 @@ export function connectDrawGridToPlayer(panel) {
 
   // The gated trigger respects the toy's volume/mute settings.
   const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument);
+
+  const activateAtTransport = ({ retrigger = false } = {}) => {
+    const transport = getTransportState();
+    const existing = getPlaybackInstance(panel.id);
+    const instance = activatePlaybackInstance(panel.id, transport.currentTick, {
+      loopLengthTicks: TICKS_PER_BAR,
+      quantize: transport.state === 'playing',
+      retrigger,
+    });
+    if (instance !== existing) {
+      bumpToyAudioGen(panel.__audioToyId, retrigger ? 'drawgrid-retrigger' : 'drawgrid-activate');
+      panel.__forceSchedulerReset = true;
+    }
+    return instance;
+  };
+  panel.__drawGridPlayback = {
+    get instance(){ return getPlaybackInstance(panel.id); },
+    activate: () => activateAtTransport({ retrigger: false }),
+    retrigger: () => activateAtTransport({ retrigger: true }),
+    deactivate: () => {
+      const instance = deactivatePlaybackInstance(panel.id);
+      bumpToyAudioGen(panel.__audioToyId, 'drawgrid-deactivate');
+      panel.__forceSchedulerReset = true;
+      return instance;
+    },
+  };
+  panel.addEventListener('toy:start', () => panel.__drawGridPlayback.activate());
+  panel.addEventListener('toy:retrigger', () => panel.__drawGridPlayback.retrigger());
+  panel.addEventListener('toy:deactivate', () => panel.__drawGridPlayback.deactivate());
+  panel.addEventListener('toy-remove', () => {
+    deactivatePlaybackInstance(panel.id);
+    removePlaybackInstance(panel.id);
+  }, { once: true });
 
   // Helper to trigger visual effects when scheduler fires a note.
   // Calls playColumn with audio:false to avoid double-playing.

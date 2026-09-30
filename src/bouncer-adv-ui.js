@@ -1,6 +1,6 @@
 // src/bouncer-adv-ui.js
 // Advanced-mode micro editor (ALT+click a cube).
-// Interactions are in bouncer-interactions.js; rescale helpers in bouncer-scale.js.
+// Interactions and logical-coordinate mapping are owned by bouncer-interactions.js.
 
 // Keep this file lean (<300 lines). No duplicate imports.
 

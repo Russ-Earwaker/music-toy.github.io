@@ -2,6 +2,11 @@
 export const DEFAULT_BPM = 120;
 export const NUM_STEPS = 8;
 export const BEATS_PER_BAR = 4;
+export const TICKS_PER_BEAT = 96;
+export const TICKS_PER_BAR = TICKS_PER_BEAT * BEATS_PER_BAR;
+export const ticksPerBeat = TICKS_PER_BEAT;
+export const beatsPerBar = BEATS_PER_BAR;
+export const ticksPerBar = TICKS_PER_BAR;
 export const MIN_BPM = 30;
 export const MAX_BPM = 200;
 
@@ -13,6 +18,89 @@ const LS_MASTER_MUTE_KEY = 'rhythmake_master_mute_v1';
 let __ctx;
 export let bpm = DEFAULT_BPM;
 const __activeNodes = new Set();
+
+export let transportState = 'stopped';
+export let positionTick = 0;
+export let currentTick = 0;
+export let currentBeat = 0;
+export let currentBar = 0;
+let __mapping = { originTick: 0, originAudioTime: 0, bpm: DEFAULT_BPM };
+let __playPromise = null;
+
+function clampTick(value){
+  const n = Number(value);
+  return Math.max(0, Number.isFinite(n) ? Math.round(n) : 0);
+}
+function ticksPerSecond(atBpm = bpm){
+  return (TICKS_PER_BEAT * Math.max(MIN_BPM, Math.min(MAX_BPM, Number(atBpm) || DEFAULT_BPM))) / 60;
+}
+export function audioTimeToTick(audioTime){
+  const time = Number(audioTime);
+  if (!Number.isFinite(time)) return clampTick(positionTick);
+  return clampTick(__mapping.originTick + ((time - __mapping.originAudioTime) * ticksPerSecond(__mapping.bpm)));
+}
+export function tickToAudioTime(tick){
+  const target = clampTick(tick);
+  return __mapping.originAudioTime + ((target - __mapping.originTick) / ticksPerSecond(__mapping.bpm));
+}
+export function getPositionAtAudioTime(audioTime){ return audioTimeToTick(audioTime); }
+export function nextBeatTick(tick = currentTick, { strict = true } = {}){
+  const value = clampTick(tick);
+  const beat = Math.floor(value / TICKS_PER_BEAT);
+  if (!strict && value % TICKS_PER_BEAT === 0) return value;
+  return (beat + 1) * TICKS_PER_BEAT;
+}
+function refreshPosition(audioTime = null){
+  const now = Number.isFinite(Number(audioTime)) ? Number(audioTime) : Number(__ctx?.currentTime);
+  if (transportState === 'playing' && Number.isFinite(now)) positionTick = audioTimeToTick(now);
+  currentTick = clampTick(positionTick);
+  currentBeat = Math.floor(currentTick / TICKS_PER_BEAT);
+  currentBar = Math.floor(currentTick / TICKS_PER_BAR);
+  return currentTick;
+}
+function rebaseMapping(tick, audioTime, atBpm = bpm){
+  __mapping = {
+    originTick: clampTick(tick),
+    originAudioTime: Number.isFinite(Number(audioTime)) ? Number(audioTime) : 0,
+    bpm: Math.max(MIN_BPM, Math.min(MAX_BPM, Number(atBpm) || DEFAULT_BPM)),
+  };
+}
+function emitTransportChange(detail){
+  const payload = Object.freeze({ ...detail });
+  try { document.dispatchEvent(new CustomEvent('transport:change', { detail: payload })); } catch {}
+  return payload;
+}
+function emitLegacyEvent(name, detail){
+  try { document.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+}
+export function getTransportState(){
+  refreshPosition(__ctx?.currentTime);
+  return {
+    state: transportState, positionTick: currentTick, currentTick, currentBeat, currentBar, bpm,
+    ticksPerBeat: TICKS_PER_BEAT, beatsPerBar: BEATS_PER_BAR, ticksPerBar: TICKS_PER_BAR,
+    mapping: { ...__mapping },
+  };
+}
+export const transport = Object.freeze({
+  get state(){ return transportState; },
+  get positionTick(){ return getTransportState().positionTick; },
+  get currentTick(){ return getTransportState().currentTick; },
+  get currentBeat(){ return getTransportState().currentBeat; },
+  get currentBar(){ return getTransportState().currentBar; },
+  get bpm(){ return bpm; },
+  ticksPerBeat: TICKS_PER_BEAT,
+  beatsPerBar: BEATS_PER_BAR,
+  ticksPerBar: TICKS_PER_BAR,
+  play: (...args) => play(...args),
+  pause: (...args) => pause(...args),
+  seekTick: (...args) => seekTick(...args),
+  returnToStart: (...args) => returnToStart(...args),
+  getPositionAtAudioTime,
+  tickToAudioTime,
+  audioTimeToTick,
+  nextBeatTick,
+  getState: getTransportState,
+});
 
 export function ensureAudioContext(){
   if (__ctx) return __ctx;
@@ -29,45 +117,39 @@ export function peekAudioContext(){
 export function setBpm(v){
   const next = Math.max(MIN_BPM, Math.min(MAX_BPM, Number(v)||DEFAULT_BPM));
   if (next === bpm) return;
-
-  // Preserve musical phase when changing tempo while running:
-  // The bar length changes with BPM, so adjust the epoch so (now-epoch) maps
-  // to the same phase within the new bar length (i.e. speed changes, position doesn't jump).
-  try{
-    if (__started && __epochStart){
-      const ctx = __ctx || null;
-      const now = ctx?.currentTime ?? 0;
-      const oldBarLen = (60 / bpm) * BEATS_PER_BAR;
-      if (Number.isFinite(now) && Number.isFinite(oldBarLen) && oldBarLen > 0){
-        const phase01 = ((now - __epochStart) % oldBarLen + oldBarLen) % oldBarLen / oldBarLen;
-        bpm = next;
-        const newBarLen = (60 / bpm) * BEATS_PER_BAR;
-        if (Number.isFinite(newBarLen) && newBarLen > 0){
-          __epochStart = now - phase01 * newBarLen;
-          return;
-        }
-      }
-    }
-  }catch{}
-
+  const oldBpm = bpm;
+  const now = Number(__ctx?.currentTime) || 0;
+  const tick = refreshPosition(now);
   bpm = next;
+  rebaseMapping(tick, now, bpm);
+  emitTransportChange({ type: 'tempo', tick, oldBpm, bpm, audioTime: now });
 }
 
 export function beatSeconds(){ return 60 / bpm; }
 export function barSeconds(){ return beatSeconds() * BEATS_PER_BAR; }
 export function stepSeconds(){ return barSeconds() / NUM_STEPS; }
 
-// Simple epoch-based loop info
-let __epochStart = 0;
-let __barIndex = 0;
-
 export function getLoopInfo(){
   const ctx = ensureAudioContext();
   const now = ctx.currentTime;
   const bl = barSeconds();
-  if (!__epochStart) __epochStart = now;
-  const phase01 = ((now - __epochStart) % bl + bl) % bl / bl;
-  return { loopStartTime: __epochStart, barLen: bl, beatLen: beatSeconds(), phase01, now, barIndex: __barIndex };
+  const tick = refreshPosition(now);
+  const tickInBar = tick % TICKS_PER_BAR;
+  return {
+    loopStartTime: tickToAudioTime(0),
+    barLen: bl,
+    barSec: bl,
+    beatLen: beatSeconds(),
+    phase01: tickInBar / TICKS_PER_BAR,
+    now,
+    tick,
+    currentTick: tick,
+    tickInBar,
+    beatIndex: currentBeat,
+    beatInBar: Math.floor(tickInBar / TICKS_PER_BEAT),
+    barIndex: currentBar,
+    state: transportState,
+  };
 }
 
 // Per‑toy gain routing
@@ -206,62 +288,81 @@ export function stopAllActiveNodes(){
 }
 
 // Transport helpers
-let __started = false;
-export function start(){
+export function play(){
   const ctx = ensureAudioContext();
+  if (transportState === 'playing') return Promise.resolve(false);
+  if (__playPromise) return __playPromise;
+  const fromState = transportState;
+  const retainedTick = clampTick(positionTick);
   const resumePromise = (ctx.state === 'suspended') ? ctx.resume() : Promise.resolve();
 
-  // IMPORTANT (new behavior):
-  // “Play” is treated as “restart from bar start”, even after a pause.
-  // So we always reset the epoch to *now* once the AudioContext is actually running.
-  resumePromise.then(() => {
-    __started = true;
-    __epochStart = ctx.currentTime;
-    __barIndex = 0;
+  // Audio time may stop while paused, so every play establishes a fresh mapping
+  // from the retained musical tick after the context is running.
+  __playPromise = resumePromise.then(() => {
+    const now = ctx.currentTime;
+    rebaseMapping(retainedTick, now, bpm);
+    positionTick = retainedTick;
+    transportState = 'playing';
+    refreshPosition(now);
     try{ window.__ripplerUserArmed = true; }catch{}
 
-    // Let schedulers know a fresh run started “now”.
-    try { window.__NOTE_SCHED_LAST_RESUME_AT = ctx.currentTime; } catch {}
-    try{
-      if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:restart');
-      document.dispatchEvent(new CustomEvent('transport:resume', { detail:{ now: ctx.currentTime }}));
-    }catch{}
-    try { document.dispatchEvent(new Event('transport:play')); } catch {}
-  }).catch(() => {});
+    // Let compatibility schedulers know audio can be scheduled from `now`.
+    try { window.__NOTE_SCHED_LAST_RESUME_AT = now; } catch {}
+    const detail = { type: 'play', positionTick: currentTick, audioTime: now, fromState };
+    emitTransportChange(detail);
+    emitLegacyEvent('transport:play', detail);
+    emitLegacyEvent('transport:resume', detail);
+    return true;
+  }).catch(() => false).finally(() => { __playPromise = null; });
+  return __playPromise;
 }
-export function stop(){
-  __started = false;
+export function start(){ return play(); }
+export function pause(){
+  if (transportState !== 'playing') return false;
+  const ctx = ensureAudioContext();
+  const now = ctx.currentTime;
+  const tick = refreshPosition(now);
+  positionTick = tick;
+  transportState = 'paused';
 
-  // IMPORTANT (new behavior):
-  // “Pause” stops audio and also clears epoch so the next Play restarts at bar start.
+  // Cancel queued sources, but retain the captured musical position.
   try{ stopAllActiveNodes(); }catch{}
-  try{ const ctx = ensureAudioContext(); ctx && ctx.suspend && ctx.suspend(); }catch{}
-  __epochStart = 0;
-  __barIndex = 0;
+  try{ ctx && ctx.suspend && ctx.suspend(); }catch{}
   try { window.__NOTE_SCHED_LAST_RESUME_AT = NaN; } catch {}
-  try{
-    if (localStorage.getItem('mt_audio_dbg')==='1') console.log('[audio] transport:pause');
-    const ctx = __ctx || null;
-    document.dispatchEvent(new CustomEvent('transport:pause', { detail:{ now: ctx?.currentTime || 0 }}));
-  }catch{}
-  try { document.dispatchEvent(new Event('transport:pause')); } catch {}
+  const detail = { type: 'pause', positionTick: tick, audioTime: now };
+  emitTransportChange(detail);
+  emitLegacyEvent('transport:pause', detail);
+  return true;
 }
+export function stop(){ return pause(); }
+
+export function seekTick(tick, reason = 'seek'){
+  const now = Number(__ctx?.currentTime) || 0;
+  const fromTick = refreshPosition(now);
+  const toTick = clampTick(tick);
+  positionTick = toTick;
+  rebaseMapping(toTick, now, bpm);
+  currentTick = toTick;
+  currentBeat = Math.floor(toTick / TICKS_PER_BEAT);
+  currentBar = Math.floor(toTick / TICKS_PER_BAR);
+  try { stopAllActiveNodes(); } catch {}
+  const detail = { type: 'seek', fromTick, toTick, positionTick: toTick, audioTime: now, reason };
+  emitTransportChange(detail);
+  emitLegacyEvent('transport:seek', detail);
+  return toTick;
+}
+
+export function returnToStart(){ return seekTick(0, 'return-to-start'); }
 
 export function hardStop(){
-  __started = false;
-  __epochStart = 0;
-  __barIndex = 0;
+  if (transportState === 'playing') pause();
+  transportState = 'stopped';
   try{ stopAllActiveNodes(); }catch{}
   try{ const ctx = ensureAudioContext(); ctx && ctx.suspend && ctx.suspend(); }catch{}
   try { window.__NOTE_SCHED_LAST_RESUME_AT = NaN; } catch {}
-  try{
-    const ctx = __ctx || null;
-    document.dispatchEvent(new CustomEvent('transport:pause', { detail:{ now: ctx?.currentTime || 0 }}));
-  }catch{}
-  try { document.dispatchEvent(new Event('transport:pause')); } catch {}
 }
 
-export function isRunning(){ return __started; }
+export function isRunning(){ return transportState === 'playing'; }
 
 export function getToyVolume(id='master'){
   const key = String(id||'master').toLowerCase();

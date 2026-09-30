@@ -9,6 +9,9 @@ if (RIPPLER_BOOT_DEBUG) {
 
 export function makePointerHandlers(cfg) {
   const { canvas, vw, vh, EDGE, blocks = [], ripples, generatorRef, clamp, getCanvasPos } = cfg;
+  if (typeof getCanvasPos !== 'function') {
+    throw new TypeError('Rippler pointer handlers require getCanvasPos');
+  }
   const _clamp = (typeof clamp === 'function') ? clamp : ((v,min,max)=> Math.max(min, Math.min(max, v)));
   const getRects = typeof cfg.getBlockRects === 'function' ? cfg.getBlockRects : (() => blocks);
   const onBlockDrag = typeof cfg.onBlockDrag === 'function' ? cfg.onBlockDrag : (() => {});
@@ -34,12 +37,7 @@ export function makePointerHandlers(cfg) {
 
   const HANDLE_HIT_PAD = 18; // slightly tighter to avoid stealing block clicks
 
-  const _getPos = (typeof getCanvasPos === 'function')
-    ? (e)=> getCanvasPos(canvas, e)
-    : (e)=>{ const r = canvas.getBoundingClientRect(); return {
-      x: (e.clientX - r.left) * ((typeof vw === 'function' ? vw() : r.width) / Math.max(1, r.width)),
-      y: (e.clientY - r.top) * ((typeof vh === 'function' ? vh() : r.height) / Math.max(1, r.height)),
-    }; };
+  const _getPos = (e) => getCanvasPos(canvas, e);
   function posFromEvent(e){ return _getPos(e); }
 
   function nearGenerator(p){
