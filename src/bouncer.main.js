@@ -433,12 +433,15 @@ export function createBouncer(selector){
       loopRec.pattern.length = 0;
       loopRec.trajectory.length = 0;
       loopRec.recordingStartTick = nextBouncerRecordingStartTick(getTransportState().currentTick, TICKS_PER_BAR);
+      if (panel.__sequenceDefinitionId) {
+        loopRec.recordingStartTick = panel.__getSequenceNextTurn?.(getTransportState().currentTick)?.startTick ?? loopRec.recordingStartTick;
+      }
       const instance = activatePlaybackInstance(panel.id, loopRec.recordingStartTick, { loopLengthTicks: TICKS_PER_BAR, quantize: false, retrigger: true });
-      loopRec.recordingStartTick = instance.startTick;
+      if (!panel.__sequenceDefinitionId) loopRec.recordingStartTick = instance.startTick;
       // The learned physics body is deliberately not reused. Re-arm the authored
       // launch at the new recording boundary so the replacement pass is complete.
       ball = null;
-      nextLaunchAt = lastLaunch ? tickToAudioTime(instance.startTick) : null;
+      nextLaunchAt = lastLaunch ? tickToAudioTime(loopRec.recordingStartTick) : null;
       panel.__seqRev = (panel.__seqRev || 0) + 1;
       panel.__forceSchedulerReset = true;
     } else {
@@ -451,7 +454,7 @@ export function createBouncer(selector){
           // The physics learning pass is this chain link's first turn. Hand off
           // now; the learned pattern/trajectory replays when the chain returns.
           // Standalone Bouncers simply continue into replay on the same timeline.
-          if ((panel.dataset.prevToyId || panel.dataset.nextToyId) && panel.dataset.chainActive === 'true') {
+          if (!panel.__sequenceDefinitionId && (panel.dataset.prevToyId || panel.dataset.nextToyId) && panel.dataset.chainActive === 'true') {
             const completedTick = loopRec.recordingStartTick + TICKS_PER_BAR;
             panel.dispatchEvent(new CustomEvent('chain:next', {
               bubbles: true,
@@ -1063,6 +1066,7 @@ let __justSpawnedUntil = 0;
           const impactAudioTime = Number.isFinite(Number(meta?.impactAudioTime)) ? Number(meta.impactAudioTime)
             : ((typeof t === 'number') ? t : (ac?.currentTime || 0));
           const impactTick = audioTimeToTick(impactAudioTime);
+          if (panel.__sequenceDefinitionId && (panel.dataset.chainActive !== 'true' || impactTick >= panel.__chainTurnEndTick)) return false;
           const recordingStartTick = Number.isFinite(loopRec.recordingStartTick)
             ? loopRec.recordingStartTick : getPlaybackInstance(panel.id)?.startTick || 0;
           if (impactTick < recordingStartTick) return false;
@@ -1179,6 +1183,7 @@ let __justSpawnedUntil = 0;
   };
   let replayCompletionInstanceId = null;
   const advanceReplayLifecycle = (transportTick = getTransportState().currentTick) => {
+    if (panel.__sequenceDefinitionId) return false;
     const instance = getPlaybackInstance(panel.id);
     const completionTick = getBouncerReplayCompletionTick({
       recorder: visQ.loopRec,
@@ -1197,6 +1202,13 @@ let __justSpawnedUntil = 0;
     return true;
   };
   panel.__advanceBouncerReplayLifecycle = advanceReplayLifecycle;
+  panel.__sequenceTurnEnded = () => {
+    const recorder = visQ.loopRec;
+    if (recorder.mode === 'record' && !recorder.isInvalid && (recorder.pattern.length || recorder.trajectory.length > 1)) {
+      recorder.mode = 'replay';
+    }
+  };
+  lifecycle.addCleanup(() => { delete panel.__sequenceTurnEnded; });
   lifecycle.addCleanup(() => { delete panel.__advanceBouncerReplayLifecycle; });
 
   // draw loop moved to bouncer-render.js
@@ -1214,7 +1226,9 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   advanceReplayLifecycle,
   drainScheduledReplayVisuals: (audioTime) => {
     const instance = getPlaybackInstance(panel.id);
-    const due = replayVisualEvents.drain(audioTime, instance?.active ? instance.id : '__inactive__');
+    const due = replayVisualEvents.drain(audioTime, instance?.active ? instance.id : '__inactive__', {
+      isUpcomingInstance: id => panel.__isSequencePlaybackInstanceUpcoming?.(id, getTransportState().currentTick) || false,
+    });
     for (const event of due) {
       const source = resolveImpactSource(event);
       if (event.kind === 'impact') acceptBouncerPendingHit(source, event);

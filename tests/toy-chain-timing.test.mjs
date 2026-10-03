@@ -2,88 +2,74 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createChainSequenceAdapter } from '../src/chain-sequence.js';
+import { clearPlaybackInstancesForTests, ensurePlaybackInstance } from '../src/playback-instances.js';
 
 const source = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
-test('mixed toy chains carry completion timestamps forward, including loop back to the head', () => {
+
+function harness() {
+  clearPlaybackInstancesForTests();
   const panels = {
     head: { id: 'head', dataset: { toy: 'bouncer', nextToyId: 'tail' } },
     tail: { id: 'tail', dataset: { toy: 'rippler', prevToyId: 'head' } },
   };
-  for (const panel of Object.values(panels)) panel.closest = () => panel;
-  const listeners = new Map();
-  const context = vm.createContext({
-    g_chainState: new Map([['head', 'head']]),
-    document: {
-      getElementById: id => panels[id],
-      addEventListener: (name, fn) => listeners.set(name, fn),
-    },
-    findChainHead: () => panels.head, triggerConnectorPulse() {},
-    ensureAudioContext: () => ({ currentTime: 0 }),
-    getPositionAtAudioTime: time => time * 192,
-    audioTimeToTick: time => Math.round(time * 192),
-    TICKS_PER_BAR: 384,
-  });
-  const a = source.indexOf('function advanceChain(');
-  const b = source.indexOf('    // Only reset/cancel scheduling', a);
-  const c = source.indexOf("  document.addEventListener('chain:next'");
-  const d = source.indexOf('  // Add event listener for toys to request', c);
-  assert.ok(a >= 0 && b > a && c >= 0 && d > c);
-  vm.runInContext(source.slice(a, b) + '\n}\n' + source.slice(c, d), context);
-  const next = listeners.get('chain:next');
-  next({ target: panels.head, detail: { completedAt: 2.173 } });
-  assert.equal(context.g_chainState.get('head'), 'tail');
-  assert.equal(panels.tail.__chainStartAt, 2.173);
-  next({ target: panels.head, detail: { completedAt: 99 } });
-  assert.equal(panels.tail.__chainStartAt, 2.173, 'ignore completion from an inactive toy');
-  next({ target: panels.tail, detail: { completedAt: 4.173 } });
-  assert.equal(context.g_chainState.get('head'), 'head');
-  assert.equal(panels.head.__chainStartAt, 4.173);
-});
-
-test('global bar wraps leave self-timed turns alone, including empty Ripplers', () => {
-  const panels = {
-    b: { dataset: { toy: 'bouncer' } },
-    r: { dataset: { toy: 'rippler' } },
-    grid: { dataset: { toy: 'loopgrid' } },
-  };
-  const advanced = [];
-  const context = vm.createContext({
-    info: { phase01: 0.01 }, g_lastAudioPhase01: 0.99,
-    g_chainState: new Map([['b', 'b'], ['r', 'r'], ['grid', 'grid']]),
-    document: { getElementById: id => panels[id] },
-    advanceChain: id => advanced.push(id),
-  });
-  const a = source.indexOf('    // Advance chains on bar wrap inside the audio tick');
-  const b = source.indexOf('    // Active toys are', a);
-  vm.runInContext(source.slice(a, b), context);
-  assert.deepEqual(advanced, ['grid']);
-});
-
-test('restarting the head stops every turn and cancels audio before resuming the head', () => {
-  const stopped = [], cancelled = [], listeners = new Map();
-  const panels = {
-    head: { id: 'head', dataset: { nextToyId: 'tail', chainActive: 'false' } },
-    tail: { id: 'tail', dataset: { prevToyId: 'head', chainActive: 'true' } },
-  };
   for (const panel of Object.values(panels)) {
     panel.closest = () => panel;
-    panel.__chainStartAt = 12;
-    panel.dispatchEvent = e => stopped.push([panel.id, e.type]);
+    ensurePlaybackInstance(panel.id);
   }
+  const chainState = new Map();
+  const cancelled = [];
+  const adapter = createChainSequenceAdapter({ getToy: id => panels[id], chainState, cancelToy: id => cancelled.push(id) });
+  adapter.sync(Object.values(panels), { currentTick: 0, state: 'stopped' });
+  const listeners = new Map();
   const context = vm.createContext({
-    document: { getElementById: id => panels[id], addEventListener: (name, fn) => listeners.set(name, fn) },
-    CustomEvent: class { constructor(type) { this.type = type; } },
-    g_chainState: new Map([['head', 'tail']]),
-    cancelScheduledToySources: id => cancelled.push(id), bumpToyAudioGen() {},
+    document: { addEventListener: (name, fn) => listeners.set(name, fn) },
+    g_sequenceChains: adapter, MAIN_TRANSPORT_ID: 'main-heartbeat',
+    transportRegistry: { get: () => ({ getState: () => ({ currentTick: 1450, state: 'playing' }) }) },
+    updateChains: () => adapter.sync(Object.values(panels), { currentTick: 1450, state: 'playing' }),
   });
-  const a = source.indexOf("  document.addEventListener('chain:restart'");
-  const b = source.indexOf('  // Add event listener for toys to request', a);
+  const a = source.indexOf('  // Legacy completion events');
+  const b = source.indexOf('  // Add event listener for instrument propagation', a);
+  assert.ok(a >= 0 && b > a);
   vm.runInContext(source.slice(a, b), context);
-  listeners.get('chain:restart')({ target: panels.head });
-  assert.deepEqual(stopped, [['head', 'chain:stop'], ['tail', 'chain:stop']]);
-  assert.deepEqual(cancelled, ['head', 'tail']);
-  assert.equal(context.g_chainState.get('head'), 'head');
-  assert.equal(panels.head.dataset.chainActive, 'true');
-  assert.equal(panels.tail.dataset.chainActive, 'false');
-  assert.equal(panels.tail.__chainStartAt, undefined);
+  return { panels, adapter, listeners, chainState, cancelled };
+}
+
+test('legacy chain:next notifications cannot activate a second child or duplicate a timeline handoff', () => {
+  const h = harness();
+  h.adapter.updateCurrent(384);
+  const instance = h.adapter.runtime.getInstance('sequence:head');
+  for (const panel of Object.values(h.panels)) {
+    h.listeners.get('chain:next')({ target: panel, detail: { completedAt: 999 } });
+    h.listeners.get('chain:next')({ target: panel, detail: { completedAt: 999 } });
+  }
+  assert.equal(h.chainState.get('head'), 'tail');
+  assert.strictEqual(h.adapter.runtime.getInstance('sequence:head'), instance);
+  h.adapter.updateCurrent(768);
+  assert.equal(h.chainState.get('head'), 'head');
+});
+
+test('head restart creates one strict-next-beat Sequence performance; set-active edit requests leave its anchor fixed', () => {
+  const h = harness();
+  const before = h.adapter.runtime.getInstance('sequence:head');
+  h.listeners.get('chain:restart')({ target: h.panels.head });
+  const next = h.adapter.runtime.getInstance('sequence:head');
+  assert.notEqual(next.id, before.id);
+  assert.equal(next.startTick, 1536);
+  assert.equal(next.generation, before.generation + 1);
+  assert.equal(h.chainState.get('head'), null);
+  h.listeners.get('chain:set-active')({ target: h.panels.tail });
+  assert.strictEqual(h.adapter.runtime.getInstance('sequence:head'), next);
+  assert.equal(next.startTick, 1536);
+});
+
+test('production resume and scheduler use the parent timeline, with no global-bar or child-completion authority', () => {
+  assert.doesNotMatch(source, /advanceChain\(|CHAIN_PRE_ADVANCE/);
+  assert.match(source, /g_sequenceChains\.turnsForLookahead\(currentTransportTick, lookaheadEndTick\)/);
+  assert.match(source, /playbackTurns: playbackTurns\.filter/);
+  const a = source.indexOf('function restoreChainStateAfterResume');
+  const b = source.indexOf('// Install listeners once', a);
+  const resume = source.slice(a, b);
+  assert.doesNotMatch(resume, /retrigger|g_chainState\.set\(headId, headId\)|seekTick|returnToStart/);
+  assert.match(resume, /g_sequenceChains\.updateCurrent/);
 });

@@ -40,7 +40,10 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       state.resetSerial = resetSerial;
     }
   }
-  function clearToy(toyId) { if (toyId) states.delete(toyId); }
+  function clearToy(toyId) {
+    if (!toyId) return;
+    for (const key of states.keys()) if (key === toyId || key.startsWith(`${toyId}|`)) states.delete(key);
+  }
   function resolveGeneration(toy, toyId) {
     const audioId = toy?.__audioToyId || toy?.dataset?.audiotoyid || toy?.dataset?.toyid || toyId;
     try { return Number(window.__TOY_AUDIO_GEN?.[audioId]) || 0; } catch { return 0; }
@@ -51,14 +54,17 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       ? intTick(audioTimeToTick(override)) : 0;
   }
 
-  function tick({ activeToyIds, getToy, currentTick, lookaheadEndTick, tickToAudioTime, audioTimeToTick } = {}) {
-    if (!activeToyIds?.size || typeof tickToAudioTime !== 'function') return { scheduled: 0, events: [] };
+  function tick({ activeToyIds, playbackTurns = [], getToy, currentTick, lookaheadEndTick, tickToAudioTime, audioTimeToTick } = {}) {
+    if ((!activeToyIds?.size && !playbackTurns.length) || typeof tickToAudioTime !== 'function') return { scheduled: 0, events: [] };
     const nowTick = intTick(currentTick);
     const endTick = Math.max(nowTick, intTick(lookaheadEndTick, nowTick));
     if (endTick <= nowTick) return { scheduled: 0, events: [] };
     const events = [];
 
-    for (const toyId of activeToyIds) {
+    const work = [...(activeToyIds || [])].map(toyId => ({ toyId }));
+    work.push(...playbackTurns);
+    for (const turn of work) {
+      const { toyId } = turn;
       const toy = getToy ? getToy(toyId) : document.getElementById(toyId);
       if (!toy) continue;
       const usesEventProvider = typeof toy.__sequencerEventsInWindow === 'function'
@@ -66,16 +72,18 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       if (!usesEventProvider && typeof toy.__sequencerSchedule !== 'function') continue;
       const steps = Math.max(1, Math.trunc(Number(toy.dataset?.steps) || 8));
       const migratedGrid = ['loopgrid', 'loopgrid-drum', 'drawgrid'].includes(toy.dataset?.toy);
-      const usesPlaybackInstance = migratedGrid || usesEventProvider;
-      const playbackInstance = usesPlaybackInstance ? getPlaybackInstance(toyId) : null;
+      const structureTurn = !!turn.playbackInstance;
+      const usesPlaybackInstance = structureTurn || migratedGrid || usesEventProvider;
+      const playbackInstance = turn.playbackInstance || (usesPlaybackInstance ? getPlaybackInstance(toyId) : null);
       if (usesPlaybackInstance && (!playbackInstance || !playbackInstance.active)) continue;
       const toyLoopTicks = usesPlaybackInstance
         ? Math.max(1, intTick(playbackInstance.loopLengthTicks, loopTicks))
         : loopTicks;
       const revision = Number.isFinite(Number(toy.__seqRev)) ? Number(toy.__seqRev) : 0;
       const generation = resolveGeneration(toy, toyId);
-      const state = getState(toyId, nowTick);
-      const chainTurnEndTick = Number(toy.__chainTurnEndTick);
+      const stateKey = structureTurn ? `${toyId}|${playbackInstance.id}` : toyId;
+      const state = getState(stateKey, structureTurn ? Math.max(nowTick, turn.startTick) : nowTick);
+      const chainTurnEndTick = Number(structureTurn ? turn.endTick : toy.__chainTurnEndTick);
       const scheduleEndTick = Number.isFinite(chainTurnEndTick)
         ? Math.min(endTick, intTick(chainTurnEndTick))
         : endTick;
@@ -91,11 +99,11 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
         && (nowTick - playbackStartTick) < firstStepTicks
           ? playbackStartTick
           : NaN;
-      const explicitStartTick = toy.__chainJustActivated && Number.isFinite(chainTurnStartTick)
+      const explicitStartTick = structureTurn ? NaN : toy.__chainJustActivated && Number.isFinite(chainTurnStartTick)
         ? chainTurnStartTick
         : (Number.isFinite(providerWindowStartTick) ? providerWindowStartTick : freshPlaybackStartTick);
       const hasExplicitStart = Number.isFinite(explicitStartTick);
-      if (toy.__forceSchedulerReset || toy.__chainJustActivated || hasExplicitStart) {
+      if (!structureTurn && (toy.__forceSchedulerReset || toy.__chainJustActivated || hasExplicitStart)) {
         state.scheduledUntilTick = hasExplicitStart ? intTick(explicitStartTick) : nowTick;
         state.identities.clear();
         try { toy.__forceSchedulerReset = false; } catch {}
@@ -110,7 +118,9 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
 
       // Schedule [fromTick, endTick). Delayed polls recover only the explicit
       // grace range; older events are skipped and are never moved to a new tick.
-      const fromTick = hasExplicitStart
+      const fromTick = structureTurn
+        ? Math.max(state.scheduledUntilTick, turn.startTick, Math.max(0, nowTick - graceTicks))
+        : hasExplicitStart
         ? state.scheduledUntilTick
         : Math.max(state.scheduledUntilTick, Math.max(0, nowTick - graceTicks));
       if (fromTick >= scheduleEndTick) {
@@ -154,10 +164,12 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
           } catch {}
         }
         state.scheduledUntilTick = scheduleEndTick;
-        updatePlaybackInstanceProgress(toyId, {
+        const progress = {
           scheduledUntilTick: scheduleEndTick,
           definitionRevisionSeen: revision,
-        });
+        };
+        if (structureTurn) Object.assign(playbackInstance, progress);
+        else updatePlaybackInstanceProgress(toyId, progress);
         try { toy.__chainJustActivated = false; } catch {}
         try { delete toy.__chainTurnStartTick; } catch {}
         try { delete toy.__sequencerWindowStartTick; } catch {}
@@ -169,7 +181,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
         continue;
       }
 
-      const startTick = migratedGrid ? playbackInstance.startTick : resolveStartTick(toy, audioTimeToTick);
+      const startTick = usesPlaybackInstance ? playbackInstance.startTick : resolveStartTick(toy, audioTimeToTick);
       let stepNumber = Math.ceil(((fromTick - startTick) * steps) / toyLoopTicks);
       while (startTick + Math.round((stepNumber * toyLoopTicks) / steps) < fromTick) stepNumber += 1;
       for (;;) {
@@ -177,11 +189,11 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
         if (eventTick >= scheduleEndTick) break;
         if (eventTick >= fromTick && eventTick >= 0) {
           const column = ((stepNumber % steps) + steps) % steps;
-          const playbackInstanceId = migratedGrid
+          const playbackInstanceId = usesPlaybackInstance
             ? playbackInstance.id
             : String(toy.dataset?.playbackInstanceId || `legacy:${toyId}`);
           const eventKey = `column:${column}`;
-          const identityGeneration = migratedGrid ? playbackInstance.generation : generation;
+          const identityGeneration = usesPlaybackInstance ? playbackInstance.generation : generation;
           const identity = `${toyId}|${playbackInstanceId}|${eventTick}|${eventKey}|r${revision}|g${identityGeneration}`;
           if (!state.identities.has(identity)) {
             state.identities.add(identity);
@@ -204,11 +216,13 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
         stepNumber += 1;
       }
       state.scheduledUntilTick = scheduleEndTick;
-      if (migratedGrid) {
-        updatePlaybackInstanceProgress(toyId, {
+      if (usesPlaybackInstance) {
+        const progress = {
           scheduledUntilTick: scheduleEndTick,
           definitionRevisionSeen: revision,
-        });
+        };
+        if (structureTurn) Object.assign(playbackInstance, progress);
+        else updatePlaybackInstanceProgress(toyId, progress);
       }
       try { toy.__chainJustActivated = false; } catch {}
       try { delete toy.__chainTurnStartTick; } catch {}
@@ -219,6 +233,10 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
         const eventTick = Number(identity.split('|')[2]);
         if (Number.isFinite(eventTick) && eventTick < pruneBefore) state.identities.delete(identity);
       }
+    }
+    // Occurrence scheduler state is bounded even after thousands of loops.
+    for (const [key, state] of states) {
+      if (key.includes('|') && state.scheduledUntilTick < nowTick - loopTicks * 2) states.delete(key);
     }
     return { scheduled: events.length, events };
   }
@@ -232,5 +250,6 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       generation: state.generation,
     } : null;
   }
-  return { tick, clearToy, resetTimeline, getDebugState };
+  return { tick, clearToy, resetTimeline, getDebugState,
+    reset() { states.clear(); pendingReset = null; resetSerial++; } };
 }

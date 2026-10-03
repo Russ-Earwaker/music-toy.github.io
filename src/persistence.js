@@ -5,6 +5,9 @@ import { bpm, setBpm, stop as stopTransport, setToyVolume, setToyMuted, getToyVo
 import { setGestureTransform as zcSetGestureTransform, commitGesture as zcCommitGesture, getZoomState as zcGetZoomState } from './zoom/ZoomCoordinator.js';
 import { getActiveThemeKey, setActiveThemeKey } from './theme-manager.js';
 import { syncVolumeUI } from './baseToy/volume-ui.js';
+import { connectionModel } from './connections.js';
+import { structureToyModel } from './structure-toys.js';
+import { applyToyInstrument } from './instrument-state.js';
 
 // ---- Persistence diagnostics ----
 const PERSIST_DIAG = (typeof window !== 'undefined') ? (window.__PERSIST_DIAG = window.__PERSIST_DIAG || {}) : {};
@@ -345,6 +348,7 @@ function readUI(panel){
     top: cs.top || panel.style.top || '0px',
     width: cs.width || panel.style.width || '',
     height: shouldSkipHeight ? '' : (cs.height || panel.style.height || ''),
+    positionSource: panel.dataset.positionSource || 'manual',
     z: readNumber(panel.style.zIndex, undefined)
   };
 }
@@ -380,6 +384,7 @@ function readOwnedToyUI(panel){
 
 function applyUI(panel, ui){
   if (!ui) return;
+  panel.dataset.positionSource=ui.positionSource==='auto'?'auto':'manual';
    const toy = panel?.dataset?.toy;
   panel.style.position = 'absolute';
   if (ui.left) panel.style.left = String(ui.left);
@@ -538,6 +543,7 @@ function snapRippler(panel){
   return { instrument: panel.dataset.instrument || undefined, ...snapInstrumentPitch(panel) };
 }
 function applyRippler(panel, state){
+  applyInstrumentPitch(panel, state);
   try{
     if (typeof panel.__applyRipplerSnapshot === 'function'){ panel.__applyRipplerSnapshot(state||{}); return; }
     // Not initialized yet; stash and set minimal hints.
@@ -802,6 +808,7 @@ const ToySnapshotters = {
             delete panel.dataset.instrumentPersisted;
           }
           applyInstrumentPitch(panel, state);
+          if (state?.instrument) applyToyInstrument(panel, state.instrument);
         if (typeof state?.steps === 'number'){ try{ panel.dataset.steps = String(state.steps); }catch{} }
       }catch(e){ console.warn('[persistence] applyChordwheel failed', e); }
     }
@@ -894,6 +901,8 @@ export function getSnapshot(){
     artToys,
     toys,
     chains,
+    connections: connectionModel.list(),
+    structureToys: structureToyModel.list(),
     camera,
   };
 }
@@ -905,6 +914,7 @@ export function applySnapshot(snap){
 
 export function applySceneSnapshot(snap){
   if (!snap || typeof snap !== 'object') return false;
+  window.beginCreationGraphRestore?.();
   try{
     // Always pause transport when applying a scene so it doesn't auto-play after load.
     try { if (typeof stopTransport === 'function') stopTransport(); } catch {}
@@ -1030,6 +1040,8 @@ export function applySceneSnapshot(snap){
           if (Number.isFinite(left) && Number.isFinite(width)) opts.centerX = left + width / 2;
           if (Number.isFinite(top) && Number.isFinite(height)) opts.centerY = top + height / 2;
           if (t.state && typeof t.state === 'object' && t.state.instrument) opts.instrument = t.state.instrument;
+          // Seed the entire sound definition before deferred toy initialization.
+          opts.soundState = t.state || {};
           if (t.ownerArtToyId) {
             opts.artOwnerId = String(t.ownerArtToyId);
             opts.containerEl = internalHost;
@@ -1117,6 +1129,7 @@ export function applySceneSnapshot(snap){
         }
       }
       try { applyToyAudio(panel, t, t.id); } catch {}
+      applyInstrumentPitch(panel, t.state || {});
       appliedCount++;
     }
     // --- Re-link chain edges AFTER all toys exist ---
@@ -1167,7 +1180,10 @@ export function applySceneSnapshot(snap){
       try {
         const raf = window.requestAnimationFrame?.bind(window) ?? (fn => setTimeout(fn, 16));
         raf(() => {
-          try { window.updateChains?.(); } catch {}
+          try {
+            window.restoreConnections?.(snap.connections, snap.structureToys || []);
+            window.updateChains?.();
+          } catch {} finally {window.endCreationGraphRestore?.();}
           try { window.updateAllChainUIs?.(); } catch {}
           // Optional: log graph for diagnostics
           try {
@@ -1219,7 +1235,7 @@ export function applySceneSnapshot(snap){
     try { window.dispatchEvent(new CustomEvent('scene:load')); } catch {}
     // try{ persistTraceLog('[persistence] applySnapshot end', { applied: appliedCount }); }catch{}
     return true;
-  }catch(e){ console.warn('[persistence] applySnapshot failed', e); return false; }
+  }catch(e){ window.endCreationGraphRestore?.();console.warn('[persistence] applySnapshot failed', e); return false; }
 }
 
 // Apply a scene from a given slotId.

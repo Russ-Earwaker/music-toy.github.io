@@ -1,4 +1,5 @@
 // src/ensure-advanced.js — Advanced opener + instrument select (CSV display_name only)
+import { applyToyInstrument } from './instrument-state.js';
 let __advPreventUntil = 0;
 function msNow(){ return Date.now ? Date.now() : (new Date()).getTime(); }
 
@@ -99,10 +100,7 @@ function buildInstrumentSelect(panel){
 
   sel.addEventListener('change', ()=>{
     const value = sel.value;
-    panel.dataset.instrument = value;
-    panel.dataset.instrumentPersisted = '1';
-    try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value }, bubbles:true })); }catch{}
-    try{ panel.dispatchEvent(new CustomEvent('toy:instrument',  { detail:{ name:value, value }, bubbles:true })); }catch{}
+    applyToyInstrument(panel, value);
   });
 
   if (!panel.__selRefreshed){

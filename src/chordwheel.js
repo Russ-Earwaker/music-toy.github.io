@@ -17,6 +17,7 @@ import {
 } from './chordwheel-main-viewport-space.js';
 import { createToySurfaceManager } from './toy-surface-manager.js';
 import { triggerNoteForToy } from './audio-trigger.js';
+import { trackScheduledToySource } from './audio-samples.js';
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
 import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
@@ -788,7 +789,7 @@ export function createChordWheel(panel){
       noise.connect(bp).connect(g).connect(toyGain);
       noise.start(time);
       noise.stop(time + dur + 0.01);
-      try{ registerActiveNode(noise); }catch{}
+      try{ registerActiveNode(noise); trackScheduledToySource(toyId, noise, time); }catch{}
     } catch (e) { console.warn('[chordwheel] Strum noise failed', e); }
   }
 

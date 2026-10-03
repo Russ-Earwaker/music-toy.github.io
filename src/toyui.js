@@ -3,7 +3,8 @@ import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 import { getInstrumentNames } from './audio-samples.js';
 import { installVolumeUI } from './baseToy/volume-ui.js';
 import { getIdForDisplayName, getDisplayNameForId, getAllIds } from './instrument-catalog.js';
-import { openInstrumentPicker } from './instrument-picker.js';
+import { installInstrumentSelection } from './instrument-selection.js';
+import { applyToyInstrument, supportsToyInstrument } from './instrument-state.js';
 import { refreshHelpOverlay } from './help-overlay.js';
 import { overviewMode } from './overview-mode.js';
 
@@ -94,10 +95,7 @@ function buildInstrumentSelect(panel){
     sel.__wired = true;
     sel.addEventListener('change', ()=>{
       const value = sel.value;
-      panel.dataset.instrument = value;
-      panel.dataset.instrumentPersisted = '1';
-      try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value }, bubbles:true })); }catch{}
-      try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name:value, value }, bubbles:true })); }catch{}
+      applyToyInstrument(panel, value);
     });
   }
   return sel;
@@ -692,72 +690,16 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     panel.addEventListener('toy-zoom', moveBouncerControls);
   }
 
-  if (!isTutorialContext) {
-    // Instrument select (header, hidden in standard)
+  if (!isTutorialContext && supportsToyInstrument(toyKind)) {
+    // Legacy select stays synchronized; the shared picker is the visible UI.
     sel = buildInstrumentSelect(panel);
-    // Remove any old instrument button to prevent duplicates
-    let oldInstBtn = right.querySelector('.toy-inst-btn');
-    if (oldInstBtn) oldInstBtn.remove();
-    let oldExtInstBtn = panel.querySelector(':scope > .toy-inst-btn');
-    if (oldExtInstBtn) oldExtInstBtn.remove();
-
-    const instBtn = document.createElement('button');
-    instBtn.className = 'c-btn toy-inst-btn';
-    instBtn.title = 'Choose Instrument';
-    instBtn.dataset.action = 'instrument';
-    instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonInstruments.png');"></div>`;
-    markHelp(instBtn, 'Choose instrument', 'bottom');
-
-    if (toyKind === 'loopgrid' || toyKind === 'loopgrid-drum' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
-      // For loopgrid, bouncer, rippler, chordwheel, and drawgrid, put a large instrument button inside the header.
-      instBtn.style.setProperty('--c-btn-size', '65px');
-      right.appendChild(instBtn);
-    } else {
-      // All other toys get a small instrument button inside the header on the far right.
-      instBtn.style.setProperty('--c-btn-size', '38px');
-      right.appendChild(instBtn);
-    }
-
-    instBtn.addEventListener('click', async ()=>{
-      try{
-        const chosen = await openInstrumentPicker({ panel, toyId: (panel.dataset.toyid || panel.dataset.toy || panel.id || 'master') });
-        if (!chosen){
-          try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-accept'); h.classList.add('pulse-cancel'); setTimeout(()=> h.classList.remove('pulse-cancel'), 650); } }catch{}
-          return; // cancelled
-        }
-        const val = String((typeof chosen === 'string' ? chosen : chosen?.value) || '');
-        const chosenNote = (typeof chosen === 'object' && chosen) ? chosen.note : null;
-        const chosenOctave = (typeof chosen === 'object' && chosen) ? chosen.octave : null;
-        const chosenPitchShift = (typeof chosen === 'object' && chosen) ? chosen.pitchShift : null;
-        // Update UI select to contain and select it
-        let has = Array.from(sel.options).some(o=> o.value === val);
-        if (!has){ const o=document.createElement('option'); o.value=val; o.textContent=val.replace(/[_-]/g,' ').replace(/\w\S*/g, t=> t[0].toUpperCase()+t.slice(1).toLowerCase()); sel.appendChild(o); }
-        sel.value = val;
-        // Apply to toy
-        panel.dataset.instrument = val;
-        panel.dataset.instrumentPersisted = '1';
-        if (chosenOctave !== null && chosenOctave !== undefined) {
-          panel.dataset.instrumentOctave = String(chosenOctave);
-        }
-        if (chosenPitchShift !== null && chosenPitchShift !== undefined) {
-          panel.dataset.instrumentPitchShift = chosenPitchShift ? '1' : '0';
-        }
-        if (chosenNote) {
-          panel.dataset.instrumentNote = String(chosenNote);
-        } else {
-          delete panel.dataset.instrumentNote;
-        }
-        try{ panel.dispatchEvent(new CustomEvent('toy-instrument', { detail:{ value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift }, bubbles:true })); }catch{}
-        try{ panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: val, value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift }, bubbles:true })); }catch{}
-        try{ const h = panel.querySelector('.toy-header'); if (h){ h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(()=> h.classList.remove('pulse-accept'), 650); } }catch{}
-      }catch{}
-    });
+    installInstrumentSelection(panel, right);
   }
 
   // Keep select in sync when instrument changes elsewhere
   panel.addEventListener('toy-instrument', (e) => {
     const instrumentName = (e?.detail?.value || '');
-    if (!instrumentName) return;
+    if (!instrumentName || !sel) return;
     // Ensure option exists
     const has = Array.from(sel.options).some(o=> o.value === instrumentName);
     if (!has){
@@ -770,7 +712,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   });
   panel.addEventListener('toy:instrument', (e) => {
     const instrumentName = ((e?.detail?.name || e?.detail?.value) || '');
-    if (!instrumentName) return;
+    if (!instrumentName || !sel) return;
     const has = Array.from(sel.options).some(o=> o.value === instrumentName);
     if (!has){
       const opt = document.createElement('option');
@@ -813,7 +755,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // SAFER initial instrument resolution:
   // Prefer existing dataset (e.g., theme), then explicit default, and only then current select value.
-  let initialInstrument = 'TONE';
+  let initialInstrument = panel.dataset.instrument || 'TONE';
   try {
     const fromTheme = panel.dataset.instrument;
     const fromDefault = defaultInstrument;

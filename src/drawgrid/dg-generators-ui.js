@@ -1,3 +1,4 @@
+import { installInstrumentSelection } from '../instrument-selection.js';
 export function installGeneratorButtons(panel, apiHooks = {}, opts = {}) {
   const {
     getNextDrawTarget,
@@ -142,89 +143,7 @@ export function installGeneratorButtons(panel, apiHooks = {}, opts = {}) {
     });
   }
 
-  // Instrument button (for tutorial unlock and general use)
-  if (!right.querySelector('[data-action="instrument"]')) {
-    const instBtn = document.createElement('button');
-    instBtn.className = 'c-btn toy-inst-btn';
-    instBtn.title = 'Choose Instrument';
-    instBtn.dataset.action = 'instrument';
-    instBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonInstruments.png');"></div>`;
-    instBtn.style.setProperty('--c-btn-size', '65px');
-    right.appendChild(instBtn);
-
-    let sel = panel.querySelector('select.toy-instrument');
-    if (!sel) {
-      sel = document.createElement('select');
-      sel.className = 'toy-instrument';
-      sel.style.display = 'none';
-      right.appendChild(sel);
-    }
-
-    const DBG = localStorage.getItem('mt_dbg_header') === '1';
-    instBtn.addEventListener('pointerdown', (e) => {
-      if (!DBG) return;
-      try {
-        console.info('[DG][instBtn][DBG] pointerdown', {
-          panelId: panel.id || null,
-          toyId: panel.dataset?.toyid || panel.dataset?.toy || null,
-          defaultPrevented: !!e.defaultPrevented,
-          cancelBubble: !!e.cancelBubble,
-          pointerType: e.pointerType,
-        });
-      } catch {}
-    }, true);
-
-    instBtn.addEventListener('click', async (e) => {
-      if (DBG) {
-        try {
-          console.info('[DG][instBtn][DBG] click', {
-            panelId: panel.id || null,
-            toyId: panel.dataset?.toyid || panel.dataset?.toy || null,
-            defaultPrevented_before: !!e.defaultPrevented,
-            cancelBubble_before: !!e.cancelBubble,
-          });
-        } catch {}
-      }
-      try {
-        const { openInstrumentPicker } = await import('./instrument-picker.js');
-        const { getDisplayNameForId } = await import('./instrument-catalog.js');
-        const chosen = await openInstrumentPicker({ panel, toyId: (panel.dataset.toyid || panel.dataset.toy || panel.id || 'master') });
-        if (!chosen) {
-          try { const h = panel.querySelector('.toy-header'); if (h) { h.classList.remove('pulse-accept'); h.classList.add('pulse-cancel'); setTimeout(() => h.classList.remove('pulse-cancel'), 650); } } catch { }
-          return;
-        }
-        const val = String((typeof chosen === 'string' ? chosen : chosen?.value) || '');
-        const chosenNote = (typeof chosen === 'object' && chosen) ? chosen.note : null;
-        const chosenOctave = (typeof chosen === 'object' && chosen) ? chosen.octave : null;
-        const chosenPitchShift = (typeof chosen === 'object' && chosen) ? chosen.pitchShift : null;
-        let has = Array.from(sel.options).some(o => o.value === val);
-        if (!has) {
-          const o = document.createElement('option');
-          o.value = val;
-          o.textContent = getDisplayNameForId(val) || val.replace(/[_-]/g, ' ').replace(/\w\S*/g, t => t[0].toUpperCase() + t.slice(1).toLowerCase());
-          sel.appendChild(o);
-        }
-        sel.value = val;
-        panel.dataset.instrument = val;
-        panel.dataset.instrumentPersisted = '1';
-        if (chosenOctave !== null && chosenOctave !== undefined) {
-          panel.dataset.instrumentOctave = String(chosenOctave);
-        }
-        if (chosenPitchShift !== null && chosenPitchShift !== undefined) {
-          panel.dataset.instrumentPitchShift = chosenPitchShift ? '1' : '0';
-        }
-        if (chosenNote) {
-          panel.dataset.instrumentNote = String(chosenNote);
-        } else {
-          delete panel.dataset.instrumentNote;
-        }
-        panel.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift }, bubbles: true }));
-        panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: val, value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift }, bubbles: true }));
-        try { const h = panel.querySelector('.toy-header'); if (h) { h.classList.remove('pulse-cancel'); h.classList.add('pulse-accept'); setTimeout(() => h.classList.remove('pulse-accept'), 650); } } catch { }
-      } catch (e) {
-      }
-    });
-  }
+  installInstrumentSelection(panel, right);
 
   try { panel.__dgUpdateButtons = updateGeneratorButtons; } catch {}
   return { updateGeneratorButtons };

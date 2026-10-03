@@ -504,7 +504,7 @@ export function createBouncerDraw(env){
 
         // Loop recorder: detect new bar and let main decide record/replay
         try {
-            if (isRunning() && S && typeof S.getLoopInfo === 'function' && S.visQ && S.visQ.loopRec && typeof S.onNewBar === 'function') {
+            if (isRunning() && S && typeof S.getLoopInfo === 'function' && S.visQ && S.visQ.loopRec && typeof S.onNewBar === 'function' && (!panel.__sequenceDefinitionId || shouldRunPhysics || wasActiveInChain)) {
                 const li = S.getLoopInfo();
                 const transportTick = S.getTransportState?.().currentTick;
                 const recordingStartTick = Number(S.visQ.loopRec?.recordingStartTick);
@@ -537,7 +537,7 @@ export function createBouncerDraw(env){
             const startAt = panel.__chainStartAt;
             delete panel.__chainStartAt;
             const b = getBall ? getBall() : null;
-            if (!b) { // Only do something if there's no ball.
+            if (!b && (!panel.__sequenceDefinitionId || !replaying)) { // Learned Sequence turns reuse replay.
                 const isChainHead = !panel.dataset.prevToyId;
                 const hasHistory = !!(getLastLaunch ? getLastLaunch() : null);
                 const userHasPlacedHandle = !!handle.userPlaced;

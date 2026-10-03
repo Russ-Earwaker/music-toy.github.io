@@ -265,8 +265,18 @@ export function setToyMuted(id='master', muted=false, rampTime = 0){
   }
 }
 
+let activeNodeCollector = null;
+// Synchronous synth construction can associate its registered voices with a
+// toy's cancellable lookahead, without changing clocks or sound envelopes.
+export function withActiveNodeCollector(onNode, createNodes) {
+  const previous = activeNodeCollector;
+  activeNodeCollector = onNode;
+  try { return createNodes(); } finally { activeNodeCollector = previous; }
+}
+
 export function registerActiveNode(node){
   if (!node) return;
+  try { activeNodeCollector?.(node); } catch {}
   __activeNodes.add(node);
   const cleanup = ()=>{ __activeNodes.delete(node); };
   try{ node.addEventListener?.('ended', cleanup); }catch{}

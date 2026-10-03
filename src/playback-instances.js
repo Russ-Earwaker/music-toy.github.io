@@ -1,4 +1,5 @@
 import { TICKS_PER_BAR, nextBeatTick } from './audio-core.js';
+import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 
 const instancesByToyId = new Map();
 let instanceSequence = 1;
@@ -6,10 +7,11 @@ let instanceSequence = 1;
 const cleanTick = value => Math.max(0, Math.round(Number(value) || 0));
 const cleanLoop = value => Math.max(1, Math.round(Number(value) || TICKS_PER_BAR));
 
-function makeInstance(toyId, { startTick = 0, loopLengthTicks = TICKS_PER_BAR, active = true, generation = 0 } = {}) {
+function makeInstance(toyId, { startTick = 0, loopLengthTicks = TICKS_PER_BAR, active = true, generation = 0 } = {}, transportId = MAIN_TRANSPORT_ID) {
   return {
     id: `playback:${String(toyId)}:${instanceSequence++}`,
     toyId: String(toyId),
+    transportId,
     active: !!active,
     startTick: cleanTick(startTick),
     loopLengthTicks: cleanLoop(loopLengthTicks),
@@ -42,10 +44,14 @@ export function activatePlaybackInstance(toyId, requestedTick, {
 } = {}) {
   const key = String(toyId);
   const existing = instancesByToyId.get(key) || null;
+  // Structure-owned turns are placed by their parent timeline. Toy edits and
+  // internal relearning may not rebase them; deliberate retriggers go via it.
+  if (existing?.structureInstanceId) return existing;
   if (existing?.active && !retrigger) return existing;
   const startTick = quantize ? nextBeatTick(requestedTick, { strict: true }) : cleanTick(requestedTick);
   const generation = (existing?.generation || 0) + (existing ? 1 : 0);
-  const instance = makeInstance(key, { startTick, loopLengthTicks, active: true, generation });
+  // Replacement instances inherit ownership, including retriggers and chain turns.
+  const instance = makeInstance(key, { startTick, loopLengthTicks, active: true, generation }, existing?.transportId ?? MAIN_TRANSPORT_ID);
   instancesByToyId.set(key, instance);
   return instance;
 }
@@ -67,6 +73,18 @@ export function deactivatePlaybackInstance(toyId) {
   if (!instance) return null;
   instance.active = false;
   instance.generation += 1;
+  return instance;
+}
+
+// Prepare future turns without replacing a toy's currently visible occurrence.
+export function createPlaybackInstanceForStructureTurn(turn) {
+  return { ...makeInstance(turn.toyId, { startTick: turn.startTick,
+    loopLengthTicks: turn.durationTicks }, turn.transportId),
+    structureInstanceId: turn.structureInstanceId, structureTurnId: turn.id };
+}
+
+export function adoptPlaybackInstance(instance) {
+  instancesByToyId.set(instance.toyId, instance);
   return instance;
 }
 
@@ -127,6 +145,11 @@ export function getPlaybackStepEvents(instance, fromTick, toTick, steps = 8) {
 
 export function removePlaybackInstance(toyId) {
   return instancesByToyId.delete(String(toyId));
+}
+
+export function clearPlaybackInstances() {
+  for (const instance of instancesByToyId.values()) { instance.active = false; instance.generation++; }
+  instancesByToyId.clear();
 }
 
 export function clearPlaybackInstancesForTests() {

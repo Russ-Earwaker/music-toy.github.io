@@ -25,7 +25,6 @@ import { createRippleSynth } from './ripplesynth.js';
 import { applyStackingOrder } from './stacking-manager.js';
 import { getViewportTransform, getViewportElement, screenToWorld } from './board-viewport.js';
 import {
-  applyToySideButtonPosition,
   measureToySideAnchor,
 } from './toy-side-button-position.js';
 import { getRect } from './layout-cache.js';
@@ -47,7 +46,9 @@ import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';
 import './board-tap-dots.js';
 import { initAudioAssets, cancelScheduledToySources, triggerInstrument } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog, getInstrumentEntries as getInstrumentCatalogEntries } from './instrument-catalog.js';
-import { openInstrumentPicker } from './instrument-picker.js';
+import { closeInstrumentPicker } from './instrument-picker.js';
+import { chooseToyInstrument } from './instrument-selection.js';
+import { readToySoundState, restoreToySoundState } from './instrument-state.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
@@ -55,12 +56,25 @@ import { debugEnabled, makeDebugLogger } from './debug-flags.js';
 import { DEFAULT_BPM, NUM_STEPS, TICKS_PER_BAR, ensureAudioContext, resumeAudioContextIfNeeded, getLoopInfo, getPositionAtAudioTime, tickToAudioTime, audioTimeToTick, setBpm, start, stop, isRunning, getToyGain } from './audio-core.js';
 import { autoQualityOnFrame } from './perf/AutoQualityController.js';
 import { createSequencerScheduler } from './note-scheduler.js';
-import { activatePlaybackInstanceForChainTurn, deactivatePlaybackInstance, ensurePlaybackInstance, getPlaybackColumnWithinTurn, getPlaybackInstance } from './playback-instances.js';
+import { createChainSequenceAdapter } from './chain-sequence.js';
+import { createConnectionQuickAdd } from './connection-quick-add.js';
+import { createGraphBranchDrag } from './graph-branch-drag.js';
+import { createGraphLayoutAnimation } from './graph-layout-animation.js';
+import { createGraphPlacement, HEARTBEAT_OUTPUT_OFFSET } from './graph-placement.js';
+import { clearCreationGraph } from './creation-graph.js';
+import { isObjectMusicallyActive } from './graph-playback-state.js';
+import { connectionModel } from './connections.js';
+import { createConnectionAdapter } from './connection-adapter.js';
+import { createConnectionView } from './connection-view.js';
+import { structureToyModel, structurePortPoint, structureToyWidth, structureToyHeight } from './structure-toys.js';
+import { getHeartbeatVisualPhase } from './heartbeat-visuals.js';
+import { MAIN_TRANSPORT_ID, transportRegistry } from './transport-registry.js';
+import { ensurePlaybackInstance, getPlaybackColumnWithinTurn, getPlaybackInstance } from './playback-instances.js';
 import { drawBlocksSection as drawOrangeTiles } from './ui-tiles.js';
 import { buildGrid } from './grid-core.js';
 import { buildDrumGrid } from './drum-core.js';
 import { tryRestoreOnBoot, startAutosave } from './persistence.js';
-import { initBoardAnchor, tickBoardAnchor } from './board-anchor.js';
+import { initBoardAnchor, tickBoardAnchor, getAnchorWorld } from './board-anchor.js';
 
 const mainLog = makeDebugLogger('mt_debug_logs', 'log');
 
@@ -2058,6 +2072,12 @@ function bootDrawGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
   panels.forEach(p => initDrawGrid(p));
 }
+function getConnectionPanels() {
+  return [...document.querySelectorAll('.toy-panel[id][data-toy]')].filter(panel =>
+    panel.dataset.tutorial !== 'true' && !panel.classList.contains('tutorial-panel')
+    && panel.dataset.beatSwarmSubboard !== '1');
+}
+
 function getSequencedToys() {
   // Find all panels that have been initialized with a step function.
   return Array.from(document.querySelectorAll('.toy-panel')).filter(p => {
@@ -2131,10 +2151,14 @@ function getToyCatalog() {
 }
 
 function doesChainHaveActiveNotes(headId) {
-    let current = document.getElementById(headId);
-    if (!current) return false;
-    let sanity = 100;
-    do {
+    const queue = [headId], visited = new Set();
+    while (queue.length) {
+        const id = queue.pop();
+        if (visited.has(id)) continue;
+        visited.add(id);
+        for (const edge of connectionModel.list('sequence')) if (edge.from.objectId === id) queue.push(edge.to.objectId);
+        const current = document.getElementById(id);
+        if (!current) continue;
         if (current.dataset.toy === 'loopgrid' || current.dataset.toy === 'loopgrid-drum') {
             const state = current.__gridState;
             if (state && state.steps && state.steps.some(s => s)) {
@@ -2159,10 +2183,7 @@ function doesChainHaveActiveNotes(headId) {
                 return true;
             }
         }
-        const nextId = current.dataset.nextToyId;
-        if (!nextId) break;
-        current = document.getElementById(nextId);
-    } while (current && current.id !== headId && sanity-- > 0);
+    }
     return false;
 }
 
@@ -3015,6 +3036,7 @@ function ensureInternalBoardOverlay() {
     const out = [];
     world.querySelectorAll(':scope > .toy-panel').forEach((other) => {
       if (other === panel) return;
+      if(window.__graphIsDragDescendant?.(panel.id,other.id))return;
       if (other.classList.contains('toy-zoomed')) return;
       const owner = String(other.dataset?.artOwnerId || '');
       if (activeOwner && owner && owner !== activeOwner) return;
@@ -3087,8 +3109,10 @@ function ensureInternalBoardOverlay() {
       const eased = 1 - Math.pow(1 - t, 3);
       const x = from.x + (to.x - from.x) * eased;
       const y = from.y + (to.y - from.y) * eased;
+      const dx=x-(parseFloat(panel.style.left)||0),dy=y-(parseFloat(panel.style.top)||0);
       panel.style.left = `${x}px`;
       panel.style.top = `${y}px`;
+      window.__graphTranslateDragDescendants?.(panel.id,dx,dy);
       if (shouldNotifyChain) notifyChainMove(panel);
       if (t < 1) {
         requestAnimationFrame(tick);
@@ -3153,6 +3177,7 @@ function ensureInternalBoardOverlay() {
     const ny = dragState.startTop + dyWorld;
     dragState.panel.style.left = `${nx}px`;
     dragState.panel.style.top = `${ny}px`;
+    g_branchDrag.sync();
     const rect = getPanelRectForOverlap(dragState.panel, nx, ny);
     const overlap = overlapsAnyForDrag(rect, collectOtherRectsForDrag(dragState.panel));
     dragState.overlapping = overlap;
@@ -3737,9 +3762,6 @@ function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
     const picked = pickInstrumentForToy(kind, { theme, usedIds: used, preferPriority: true });
     seedInstrument = String(picked || '').trim();
   }
-  const seedInstrumentNote = seedPanel?.dataset?.instrumentNote;
-  const seedInstrumentOctave = seedPanel?.dataset?.instrumentOctave;
-  const seedInstrumentPitchShift = seedPanel?.dataset?.instrumentPitchShift;
   const needed = Math.max(0, wanted - panels.length);
   if (needed > 0) {
     try { artPanel.dataset.internalBootstrapped = '1'; } catch {}
@@ -3766,6 +3788,7 @@ function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
           centerX: startX + index * stepX,
           centerY,
           instrument: seedInstrument || undefined,
+          soundState: readToySoundState(seedPanel),
           autoCenter: false,
           allowOffscreen: true,
           skipSpawnPlacement: false,
@@ -3811,44 +3834,7 @@ function ensureDefaultInternalToyChainExistsInHost(artToyId, count = 4) {
     cur.dataset.prevToyId = prev.id;
   }
 
-  // Force a consistent instrument across the whole chain.
-  if (seedInstrument) {
-    for (const p of ordered) {
-      try {
-        p.dataset.instrument = seedInstrument;
-        p.dataset.instrumentPersisted = '1';
-        if (seedInstrumentOctave != null && seedInstrumentOctave !== '') p.dataset.instrumentOctave = String(seedInstrumentOctave);
-        if (seedInstrumentPitchShift != null && seedInstrumentPitchShift !== '') p.dataset.instrumentPitchShift = String(seedInstrumentPitchShift);
-        if (seedInstrumentNote != null && seedInstrumentNote !== '') p.dataset.instrumentNote = String(seedInstrumentNote);
-        else delete p.dataset.instrumentNote;
-      } catch {}
-      try {
-        p.dispatchEvent(new CustomEvent('toy-instrument', {
-          detail: {
-            value: seedInstrument,
-            note: seedInstrumentNote,
-            octave: seedInstrumentOctave,
-            pitchShift: seedInstrumentPitchShift === '1' || seedInstrumentPitchShift === true,
-          },
-          bubbles: true,
-          composed: true,
-        }));
-      } catch {}
-      try {
-        p.dispatchEvent(new CustomEvent('toy:instrument', {
-          detail: {
-            name: seedInstrument,
-            value: seedInstrument,
-            note: seedInstrumentNote,
-            octave: seedInstrumentOctave,
-            pitchShift: seedInstrumentPitchShift === '1' || seedInstrumentPitchShift === true,
-          },
-          bubbles: true,
-          composed: true,
-        }));
-      } catch {}
-    }
-  }
+  // Existing children retain their own sound when an internal chain is rebuilt.
 
   try { updateChains(); } catch {}
   try { updateAllChainUIs(); } catch {}
@@ -5222,6 +5208,7 @@ function panelHasAnyNotes(panel) {
 
 function startToy(panelEl) {
     if (!panelEl) return;
+    if (g_sequenceChains.isManaged(panelEl.id)) return;
     __artRandLog('startToy:begin', {
       panelId: panelEl?.id,
       toyType: panelEl?.dataset?.toy,
@@ -5319,109 +5306,6 @@ function startToyAndDescendants(panelEl, visited = new Set()) {
     const kids = getChildrenOf(panelEl.id);
     for (const child of kids) {
         startToyAndDescendants(child, visited);
-    }
-}
-
-function advanceChain(headId, startAt) {
-    const activeToyId = g_chainState.get(headId);
-    if (!activeToyId) {
-        g_chainState.set(headId, headId);
-        return;
-    }
-    const activeToy = document.getElementById(activeToyId);
-    if (!activeToy) {
-        g_chainState.set(headId, headId);
-        return;
-    }
-
-      let shouldPulse = true;
-      const toyType = activeToy.dataset.toy;
-      if (toyType === 'loopgrid' || toyType === 'loopgrid-drum' || toyType === 'drawgrid' || toyType === 'chordwheel') {
-        // For step-driven toys, only pulse if the chain has notes or this toy is connected.
-        const isChained = !!(activeToy.dataset.prevToyId || activeToy.dataset.nextToyId || activeToy.dataset.chainHasChild === '1');
-        shouldPulse = isChained || doesChainHaveActiveNotes(headId);
-      }
-
-    const nextToyId = activeToy.dataset.nextToyId;
-    const nextToy = nextToyId ? document.getElementById(nextToyId) : null;
-
-    let nextActiveId = null;
-
-    if (nextToy) {
-        nextActiveId = nextToyId;
-        if (shouldPulse) triggerConnectorPulse(activeToyId, nextToyId);
-        g_chainState.set(headId, nextToyId);
-    } else {
-        nextActiveId = headId; // Loop back to head
-        if (shouldPulse) triggerConnectorPulse(activeToyId, headId);
-        g_chainState.set(headId, headId);
-    }
-
-    // Self-timed toys pass their exact completion time. Bar-driven chains use
-    // the authoritative boundary of the bar that has just begun.
-    const observedTick = getPositionAtAudioTime(ensureAudioContext()?.currentTime || 0);
-    const handoffTick = Number.isFinite(startAt)
-      ? audioTimeToTick(startAt)
-      : Math.floor(observedTick / TICKS_PER_BAR) * TICKS_PER_BAR;
-    const nextPanel = document.getElementById(nextActiveId);
-    if (nextPanel) nextPanel.__chainStartAt = Number.isFinite(startAt) ? startAt : undefined;
-    if (nextPanel && nextPanel !== activeToy) {
-      activeToy.dataset.chainActive = 'false';
-      nextPanel.dataset.chainActive = 'true';
-    }
-
-    // Only reset/cancel scheduling if we actually moved to a DIFFERENT toy.
-    // In a 1-toy chain, activeToyId === headId every bar; resetting here wipes de-dupe state
-    // and causes the scheduler to re-schedule the same notes -> doubled playback.
-    if (nextActiveId && nextActiveId !== activeToyId) {
-      try {
-        deactivatePlaybackInstance(activeToyId);
-        activatePlaybackInstanceForChainTurn(nextActiveId, handoffTick, { loopLengthTicks: TICKS_PER_BAR });
-        if (nextPanel) {
-          nextPanel.__chainTurnStartTick = handoffTick;
-          nextPanel.__chainTurnEndTick = handoffTick + TICKS_PER_BAR;
-        }
-      } catch {}
-      // Mark newly active toy before the scheduler runs so it can safely bump once
-      // without invalidating already-scheduled notes mid-bar.
-      try {
-        if (nextToy) {
-          nextToy.__chainJustActivated = true;
-        } else {
-          const headEl = document.getElementById(headId);
-          if (headEl) headEl.__chainJustActivated = true;
-        }
-      } catch {}
-
-      // IMPORTANT:
-      // Chain handoff can happen *before* the bar ends (pre-advance). In that case, the outgoing toy
-      // may already have future AudioBufferSourceNodes scheduled for later columns in the current bar.
-      // Those will otherwise keep playing "over" the newly-active toy.
-      //
-      // We cancel any remaining scheduled audio for BOTH the outgoing and the newly-active toy,
-      // and request a scheduler reset so the next tick re-schedules cleanly from the active set.
-      try {
-        const outAudioId =
-          activeToy?.dataset?.audiotoyid ||
-          activeToy?.__audioToyId ||
-          activeToyId;
-        try { cancelScheduledToySources(outAudioId); } catch {}
-        try { if (outAudioId !== activeToyId) cancelScheduledToySources(activeToyId); } catch {}
-        bumpToyAudioGen(outAudioId, 'chain-advance-out');
-        activeToy.__forceSchedulerReset = true;
-      } catch {}
-      try {
-        const inAudioId =
-          nextToy?.dataset?.audiotoyid ||
-          nextToy?.__audioToyId ||
-          nextActiveId;
-        try { cancelScheduledToySources(inAudioId); } catch {}
-        try { if (inAudioId !== nextActiveId) cancelScheduledToySources(nextActiveId); } catch {}
-        bumpToyAudioGen(inAudioId, 'chain-advance-in');
-        if (nextToy) nextToy.__forceSchedulerReset = true;
-      } catch {}
-
-      try { g_sequencerScheduler?.clearToy?.(activeToyId); } catch {}
     }
 }
 
@@ -5601,8 +5485,7 @@ function updateAllChainUIs({ force = false } = {}) {
     allToys.forEach(toy => {
         const instBtn = toy.querySelector('.toy-inst-btn');
         if (instBtn) {
-            const isChild = !!toy.dataset.prevToyId;
-            instBtn.style.display = isChild ? 'none' : '';
+            instBtn.style.display = '';
         }
         const chainBtn = toy.querySelector('.toy-chain-btn');
         if (chainBtn) {
@@ -5819,7 +5702,7 @@ function queuePulseClassAdd(panel) {
     g_pulseAddTimer = 0;
     for (const p of g_pulseAddQueue) {
       try {
-        if (!p || !p.isConnected) continue;
+        if (!p || !p.isConnected || !isRunning() || !isObjectMusicallyActive(connectionModel, p.id)) continue;
         if (!p.classList.contains('toy-playing')) {
           if (window.__PERF_TRACE_DOM_WRITES) traceDomWrite('pulseToyBorder: classList.add toy-playing');
           p.classList.add('toy-playing');
@@ -5854,6 +5737,7 @@ function queueBodyOutlineSync(panel) {
 
 function pulseToyBorder(panel, durationMs = 320) {
   if (!panel || !panel.isConnected) return;
+  if (!isRunning() || !isObjectMusicallyActive(connectionModel, panel.id)) return;
   if (window.__PERF_DISABLE_PULSES) return;
   if (!shouldRenderToyVisuals(panel)) return;
 
@@ -5899,533 +5783,9 @@ function serviceToyPulses(nowMs) {
 
 function initToyChaining(panel) {
     if (!panel || !panel.isConnected) return;
-    if (panel.dataset.tutorial === "true" || panel.classList?.contains("tutorial-panel")) {
-        return;
-    }
-    // Guard: prevent duplicate chain buttons/listeners on the same panel.
-    if (panel.dataset.chainInit === '1') return;
+    // Ports and drag behavior belong to the shared connector view.
+    panel.querySelectorAll('.toy-chain-btn').forEach(button => button.remove());
     panel.dataset.chainInit = '1';
-    // Idempotency + dedupe: init can run more than once (refresh/restore/overview refreshDecorations).
-    // We must never leave duplicate buttons behind.
-    const existingBtns = Array.from(panel.querySelectorAll('.toy-chain-btn'));
-    let extendBtn = existingBtns[0] || null;
-    if (existingBtns.length > 1) {
-        // Keep the first, remove the rest
-        for (let i = 1; i < existingBtns.length; i++) {
-            try { existingBtns[i].remove(); } catch {}
-        }
-    }
-    // If a chained toy was cloned with a fixed height, clear it so focus changes
-    // can collapse header/footer space correctly.
-    if (panel.dataset.chainParent && panel.style.height) {
-        panel.style.height = '';
-    }
-
-    if (!extendBtn) {
-        extendBtn = document.createElement('button');
-        extendBtn.className = 'c-btn toy-chain-btn';
-        extendBtn.title = 'Extend with a new toy';
-        extendBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>`;
-    }
-    
-    const core = extendBtn.querySelector('.c-btn-core');
-    if (core) {
-        core.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonExtend.png')`);
-    }
-    // All toy types share one side-button anchor. The helper uses transformed
-    // rects when possible and falls back to panel centre while a body is settling.
-    const updateChainBtnPos = () => {
-      try { applyToySideButtonPosition(panel, extendBtn); } catch {}
-    };
-    // Run on attach + whenever layout/size changes
-    const ro = new ResizeObserver(updateChainBtnPos);
-    ro.observe(panel);
-    if (panel.querySelector('.toy-body')) ro.observe(panel.querySelector('.toy-body'));
-    window.addEventListener('overview:transition', updateChainBtnPos, { passive: true });
-    window.addEventListener('resize', updateChainBtnPos, { passive: true });
-    requestAnimationFrame(updateChainBtnPos);
-
-    if (CHAIN_DEBUG && window.__CHAIN_DEBUG) {
-      console.log('[chain][initToyChaining] attach', {
-        panel: panel.id,
-        hasExisting: !!panel.querySelector(':scope > .toy-chain-btn'),
-        chainInitFlag: panel.dataset.chainInit
-      });
-    }
-    panel.appendChild(extendBtn);
-    updateChainBtnPos();
-    panel.style.overflow = 'visible'; // Ensure the button is not clipped by the panel's bounds.
-    panel.addEventListener('toy-remove', () => {
-      try { ro.disconnect(); } catch {}
-      window.removeEventListener('overview:transition', updateChainBtnPos);
-      window.removeEventListener('resize', updateChainBtnPos);
-    }, { once: true });
-
-    // Hover fallback: in some focus-edit/unfocused states CSS :hover can be suppressed by pointer-event guards.
-    // We mirror the hover state with a class so the button still highlights reliably.
-    if (!extendBtn.__hoverWired) {
-      extendBtn.__hoverWired = true;
-
-      extendBtn.addEventListener('pointerenter', () => {
-        if (extendBtn.getAttribute('data-chaindisabled') === '1' || extendBtn.classList.contains('toy-chain-btn-disabled')) return;
-        extendBtn.classList.add('is-hover');
-      }, { passive: true });
-
-      extendBtn.addEventListener('pointerleave', () => {
-        extendBtn.classList.remove('is-hover');
-      }, { passive: true });
-
-      // Safety: clear if capture ends oddly.
-      extendBtn.addEventListener('pointerup', () => {
-        extendBtn.classList.remove('is-hover');
-      }, { passive: true });
-
-      extendBtn.addEventListener('pointercancel', () => {
-        extendBtn.classList.remove('is-hover');
-      }, { passive: true });
-    }
-
-    // Ensure the initial icon/disable state is correct even before the global sync runs.
-    const syncChainBtnImmediate = () => {
-        const btn = extendBtn;
-        const hasChild = !!panel.dataset.nextToyId ||
-            panel.dataset.chainHasChild === '1' ||
-            Array.from(document.querySelectorAll('.toy-panel[id]')).some(el => (el.dataset.prevToyId || el.dataset.chainParent) === panel.id);
-        const coreEl = btn.querySelector('.c-btn-core');
-        if (coreEl) {
-            const icon = hasChild ? 'T_ButtonEmpty.png' : 'T_ButtonExtend.png';
-            coreEl.style.setProperty('--c-btn-icon-url', `url('./assets/UI/${icon}')`);
-        }
-        if (hasChild) {
-            btn.setAttribute('data-chaindisabled', '1');
-            btn.style.pointerEvents = 'none';
-        } else {
-            btn.removeAttribute('data-chaindisabled');
-            btn.style.pointerEvents = 'auto';
-        }
-    };
-    syncChainBtnImmediate();
-    requestAnimationFrame(syncChainBtnImmediate);
-
-    // Sync initial icon/enable state with existing chain status.
-    try { updateAllChainUIs(); } catch {}
-
-    extendBtn.addEventListener('pointerdown', (e) => {
-        if (typeof e.button === 'number' && e.button !== 0) return;
-        // Chain button must win the interaction on first click.
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation?.();
-        try { e.target?.releasePointerCapture?.(e.pointerId); } catch {}
-
-        try {
-          if (CHAIN_OV_DBG) {
-            const board = document.getElementById('board');
-            const overviewActive =
-              !!(window.__overviewMode?.isActive?.() ||
-                 board?.classList?.contains('board-overview') ||
-                 document.body?.classList?.contains('overview-mode'));
-
-            const btn = extendBtn;
-            const shield = panel.querySelector('.ov-shield');
-            const btnCS = btn ? getComputedStyle(btn) : null;
-            const shieldCS = shield ? getComputedStyle(shield) : null;
-
-            console.log('[CHAIN][ov][extendBtn:pointerdown]', {
-              overviewActive,
-              panelId: panel.id,
-              target: e.target?.className || e.target?.tagName,
-              pointerType: e.pointerType,
-              button: e.button,
-              btn_pe: btnCS?.pointerEvents,
-              btn_z: btnCS?.zIndex,
-              shield_exists: !!shield,
-              shield_pe: shieldCS?.pointerEvents,
-              shield_z: shieldCS?.zIndex,
-            });
-            try {
-              const x = e.clientX, y = e.clientY;
-              const el = document.elementFromPoint(x, y);
-              const path = (typeof e.composedPath === 'function') ? e.composedPath() : [];
-              console.log('[CHAIN][ov][hitTest]', {
-                x, y,
-                elementFromPoint: el ? (el.className || el.tagName) : null,
-                elementFromPoint_id: el?.id || null,
-                elementFromPoint_pe: el ? getComputedStyle(el).pointerEvents : null,
-                composedPathTop: path.slice(0, 6).map(n => n?.className || n?.tagName),
-              });
-            } catch {}
-          }
-        } catch {}
-        if (CHAIN_OV_DBG) {
-          dbgOvEv('[OVDBG][chainBtn:pointerdown]', e, panel.id);
-          console.log('[CHAIN][ov][extendBtn:gate]', {
-            panelId: panel.id,
-            chainDisabled: extendBtn.dataset.chainDisabled,
-            nextToyId: panel.dataset.nextToyId || null,
-            chainHasChild: panel.dataset.chainHasChild || null,
-          });
-        }
-        if (extendBtn.dataset.chainDisabled === '1' || panel.dataset.nextToyId) {
-            return;
-        }
-        const tStart = performance.now();
-        if (CHAIN_OV_DBG) {
-          dbgPanelRect(panel, 'before-chain-create');
-        }
-
-        const sourcePanel = panel;
-        const toyType = sourcePanel.dataset.toy;
-        if (!toyType || !toyInitializers[toyType]) return;
-
-        const newPanel = document.createElement('div');
-        newPanel.className = 'toy-panel';
-        newPanel.dataset.toy = toyType;
-        // --- Ensure brand new identity & no inherited persistence hints
-        newPanel.id = `toy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        try { delete newPanel.dataset.toyid; } catch {}
-        newPanel.dataset.toyid = newPanel.id;
-        // drawgrid uses panel.id as its key; make that explicit too
-        newPanel.dataset.chainParent = sourcePanel.id;
-        try {
-            document.dispatchEvent(new CustomEvent('chain:linked', { detail: { parent: sourcePanel.id, child: newPanel.id, phase: 'create' } }));
-            if (window.__CHAIN_DEBUG) {
-                console.log('[chain] new child', { parent: panel.id, child: newPanel.id });
-            }
-        } catch {}
-        // Hint the focus animator to scale in on first focus.
-        newPanel.dataset.spawnScaleHint = '0.75';
-        
-        if (sourcePanel.dataset.instrument) {
-            newPanel.dataset.instrument = sourcePanel.dataset.instrument;
-            if (sourcePanel.dataset.instrumentPersisted) {
-                newPanel.dataset.instrumentPersisted = sourcePanel.dataset.instrumentPersisted;
-            }
-        }
-
-        const board = document.getElementById('board');
-        const boardScale = window.__effectiveBoardScale || window.__boardScale || 1;
-        let sourceWidth = sourcePanel.offsetWidth || (getRect(sourcePanel).width / boardScale);
-        let sourceHeight = sourcePanel.offsetHeight || (getRect(sourcePanel).height / boardScale);
-
-        newPanel.style.width = `${sourceWidth}px`;
-        // Height is only needed during the initial placement. Drop it after boot
-        // so chained toys can collapse their headers/footers when unfocused.
-        newPanel.style.height = `${sourceHeight}px`;
-        newPanel.style.position = 'absolute';
-        // Cache "normal mode" placement (board/world coords).
-        // IMPORTANT: In overview, getBoundingClientRect() is in SCREEN space under a different zoom.
-        // So prefer the panel's existing world-space left/top if available.
-        let srcLeft = parseFloat(sourcePanel.style.left);
-        let srcTop  = parseFloat(sourcePanel.style.top);
-
-        const overviewActive =
-            !!(window.__overviewMode?.isActive?.() ||
-               document.querySelector('#board')?.classList?.contains('board-overview') ||
-               document.body?.classList?.contains('overview-mode'));
-
-        if (overviewActive) {
-            const ovState = window.__overviewMode?.state;
-            const snap = ovState?.positions?.get?.(sourcePanel.id);
-            if (snap && Number.isFinite(snap.left) && Number.isFinite(snap.top)) {
-                srcLeft = snap.left;
-                srcTop = snap.top;
-                if (Number.isFinite(snap.width) && snap.width > 0) sourceWidth = snap.width;
-                if (Number.isFinite(snap.height) && snap.height > 0) sourceHeight = snap.height;
-            }
-        }
-
-        if (!Number.isFinite(srcLeft) || !Number.isFinite(srcTop)) {
-            // Fallback: derive from rects (best-effort)
-            const sourceRect = getRect(sourcePanel);
-            const boardRect = getRect(board);
-            const boardScale = window.__effectiveBoardScale || window.__boardScale || 1;
-            if (boardRect) {
-              srcLeft = (sourceRect.left - boardRect.left) / boardScale;
-              srcTop  = (sourceRect.top - boardRect.top) / boardScale;
-            } else {
-              srcLeft = sourceRect.left / boardScale;
-              srcTop  = sourceRect.top / boardScale;
-            }
-        }
-
-        const normalLeft = srcLeft + sourceWidth + CHAIN_SPAWN_GAP;
-        const normalTop  = srcTop;
-
-        newPanel.style.left = `${normalLeft}px`;
-        newPanel.style.top  = `${normalTop}px`;
-
-        // If Overview is active, register this panel's normal position so it restores correctly on exit,
-        // and ensure overview decorations get applied.
-        const overviewActiveAtCreate = overviewActive;
-        const oldNextId = sourcePanel.dataset.nextToyId || null;
-
-        // -----------------------------------------------------------------
-        // Internal-board ownership propagation
-        // -----------------------------------------------------------------
-        // In internal mode, chain visuals are filtered by art-toy ownership.
-        // The chain button creates new panels directly, so we MUST stamp the
-        // same owner metadata onto the spawned child panel, otherwise the
-        // scheduler will play but connector edges will be filtered out.
-        try {
-            const parentOwner =
-                (sourcePanel && sourcePanel.dataset && sourcePanel.dataset.artOwnerId) ? sourcePanel.dataset.artOwnerId : '';
-            const internalActive = !!(g_artInternal && g_artInternal.active);
-            const internalOwner = internalActive ? (g_artInternal.artToyId || '') : '';
-            const resolvedOwner = internalOwner || parentOwner;
-            if (resolvedOwner) {
-                newPanel.dataset.artOwnerId = resolvedOwner;
-            }
-            // Helpful explicit flag: "this panel belongs to an internal board world"
-            if (internalActive) {
-                newPanel.dataset.internalBoardOwner = '1';
-            } else if (sourcePanel?.dataset?.internalBoardOwner) {
-                newPanel.dataset.internalBoardOwner = sourcePanel.dataset.internalBoardOwner;
-            }
-        } catch {}
-
-        // Lock the chain immediately to avoid multi-click races before async init completes.
-        sourcePanel.dataset.nextToyId = newPanel.id;
-        newPanel.dataset.prevToyId = sourcePanel.id;
-        lockChainButton(sourcePanel, { hasChild: true });
-
-        if (overviewActive) {
-            try {
-                // Ensure this new toy has a saved "pre-overview" position so it won't snap on zoom-in.
-                const st = window.__overviewMode?.state;
-                if (st?.positions?.set) {
-                    st.positions.set(newPanel.id, {
-                        left: normalLeft,
-                        top: normalTop,
-                        width: sourceWidth,
-                        height: sourceHeight
-                    });
-                }
-                if (typeof localStorage !== 'undefined' && localStorage.getItem('OV_NUDGE_DBG') === '1') {
-                    console.log('[OV_NUDGE][chain-create]', {
-                        parent: sourcePanel.id,
-                        child: newPanel.id,
-                        parentTop: sourcePanel.style.top,
-                        parentBodyOffset: sourcePanel.querySelector('.toy-body')?.offsetTop || 0,
-                        childTop: newPanel.style.top,
-                        childBodyOffset: newPanel.querySelector('.toy-body')?.offsetTop || 0
-                    });
-                }
-            } catch (err) {
-                if (window.__CHAIN_DEBUG) {
-                    console.warn('[chain][overview] failed to register new panel in overview positions', err);
-                }
-            }
-
-            // Add an immediate input shield so the new toy can't be interacted with in overview
-            // (overview-mode will also add/relocate this later).
-            try {
-                if (!newPanel.querySelector('.ov-shield')) {
-                    const shield = document.createElement('div');
-                    shield.className = 'ov-shield';
-                    newPanel.appendChild(shield);
-                }
-            } catch {}
-        }
-
-        board.appendChild(newPanel);
-        // Place the new panel immediately using the standard gap, avoiding later snap adjustments.
-        const initialPlacement = ensureSharedPanelSpawnPlacement(newPanel, {
-            baseLeft: normalLeft,
-            baseTop: normalTop,
-            fallbackWidth: sourceWidth,
-            fallbackHeight: sourceHeight,
-        });
-        syncOverviewPosition(newPanel);
-        if (!overviewActiveAtCreate && initialPlacement?.changed) {
-            try { persistToyPosition(newPanel); } catch (err) {
-                if (window.__CHAIN_DEBUG) console.warn('[chain] persistToyPosition failed', err);
-            }
-        }
-        delete newPanel.dataset.spawnAutoManaged;
-        delete newPanel.dataset.spawnAutoLeft;
-        delete newPanel.dataset.spawnAutoTop;
-        g_lastChainedDebugPanel = newPanel;
-        if (CHAIN_OV_DBG) {
-          dbgPanelRect(newPanel, 'after-chain-create');
-        }
-
-        // Defer the rest of the initialization to the next event loop cycle.
-        // This gives the browser time to calculate the new panel's layout,
-        // which is crucial for the toy's internal canvases to be sized correctly.
-        setTimeout(() => {
-            if (!newPanel.isConnected) return; // Guard against panel being removed before init
-
-            // Do not bootstrap drawgrid while the panel is still pinned to the
-            // temporary copied height from spawn placement.
-            if (!overviewActiveAtCreate) {
-                newPanel.style.height = '';
-            }
-            initializeNewToy(newPanel);
-            try {
-                newPanel.__drawToy?.refreshLayout?.('chain-post-init');
-                newPanel.__dgRefreshLayout?.('chain-post-init');
-            } catch {}
-            try {
-                sourcePanel.__drawToy?.refreshLayout?.('chain-parent-post-link');
-                sourcePanel.__dgRefreshLayout?.('chain-parent-post-link');
-            } catch {}
-            initToyChaining(newPanel); // Give the new toy its own extend button
-            // If Overview is active, apply overview decorations to include this newly created toy
-            // (shield, collapsed header/footer behavior, outline sync, etc.)
-            try {
-                if (window.__overviewMode?.isActive?.()) {
-                    window.__overviewMode.refreshDecorations?.();
-                }
-            } catch (err) {
-                if (window.__CHAIN_DEBUG) {
-                    console.warn('[chain][overview] refreshDecorations failed', err);
-                }
-            }
-            const enqueueClear = (typeof queueMicrotask === 'function')
-                ? queueMicrotask
-                : ((fn) => {
-                    try {
-                        Promise.resolve().then(fn);
-                    } catch {
-                        setTimeout(fn, 0);
-                    }
-                });
-            enqueueClear(() => {
-                try {
-                    const drawToy = newPanel.__drawToy;
-                    if (drawToy && typeof drawToy.clear === 'function') {
-                        // Programmatic, not user-initiated
-                        drawToy.clear({ user: false, reason: 'spawn-enqueue-clear' });
-                    } else {
-                        // Keep it scoped to this panel and mark as programmatic
-                        newPanel.dispatchEvent(new CustomEvent('toy-clear', {
-                            bubbles: false,
-                            detail: { user: false, reason: 'spawn-enqueue-clear' }
-                        }));
-                    }
-                } catch {
-                    // Best-effort clear; ignore failures so chaining still works.
-                }
-            });
-
-            // Always log detailed state for debugging when creating chain links.
-            const btn = sourcePanel.querySelector('.toy-chain-btn');
-            const core = btn?.querySelector('.c-btn-core');
-            if (window.__CHAIN_DEBUG) {
-              console.log('[chain][new-child]', {
-                parent: sourcePanel.id,
-                child: newPanel.id,
-                oldNextId: oldNextId || null,
-                chainHasChild: sourcePanel.dataset.chainHasChild || null,
-                btnDisabledAttr: btn?.getAttribute('data-chaindisabled') || null,
-                btnHasDisabledClass: btn?.classList?.contains?.('toy-chain-btn-disabled') || false,
-                btnComputedIcon: core ? getComputedStyle(core).getPropertyValue('--c-btn-icon-url') : null,
-              });
-            }
-
-            // Immediately swap the source "+" texture to the empty state now that it has an outgoing link.
-            const sourceChainCore = sourcePanel.querySelector('.toy-chain-btn .c-btn-core');
-            if (sourceChainCore) {
-                sourceChainCore.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonEmpty.png')`);
-                // Force the pseudo-element to update after styles apply
-                requestAnimationFrame(() => {
-                    sourceChainCore.style.setProperty('--c-btn-icon-url', `url('./assets/UI/T_ButtonEmpty.png')`);
-                });
-            }
-            // Lock the source button right away so the user sees it disable without waiting
-            const sourceChainBtn = sourcePanel.querySelector('.toy-chain-btn');
-            if (sourceChainBtn) {
-                sourceChainBtn.setAttribute('data-chaindisabled', '1');
-                sourceChainBtn.style.pointerEvents = 'none';
-                sourceChainBtn.classList.add('toy-chain-btn-disabled');
-                // Nudge a repaint to avoid blank icons when chaining immediately after refresh
-                getRect(sourceChainBtn);
-            }
-
-            if (oldNextId) {
-                const oldNextPanel = document.getElementById(oldNextId);
-                newPanel.dataset.nextToyId = oldNextId;
-                if (oldNextPanel) oldNextPanel.dataset.prevToyId = newPanel.id;
-            }
-
-            const finalizePlacement = () => {
-                // If this toy was created while overview was active, skip auto-placement and auto-focus
-                // to avoid post-create snapping when zooming back in.
-                if (overviewActiveAtCreate) {
-                    newPanel.style.height = '';
-                    try {
-                        persistToyPosition(newPanel);
-                    } catch (err) {
-                        if (window.__CHAIN_DEBUG) console.warn('[chain] persistToyPosition failed', err);
-                    }
-                    syncOverviewPosition(newPanel);
-                    updateChains();
-                    updateAllChainUIs();
-                    // Ensure connector geometry is rebuilt immediately (important for internal mode).
-                    try { rebuildChainSegments(); } catch {}
-                    try { scheduleChainRedraw(true); } catch {}
-                    delete newPanel.dataset.spawnAutoManaged;
-                    delete newPanel.dataset.spawnAutoLeft;
-                    delete newPanel.dataset.spawnAutoTop;
-                    return;
-                }
-
-                // Let the layout return to natural height so unfocused chained toys
-                // don't retain the old header/footer space.
-                newPanel.style.height = '';
-                try {
-                    newPanel.__drawToy?.refreshLayout?.('chain-finalize-height-clear');
-                    newPanel.__dgRefreshLayout?.('chain-finalize-height-clear');
-                } catch {}
-
-                // Always persist at least once for chained toys so their position is saved,
-                // regardless of whether the helper actually moved them.
-                try {
-                    persistToyPosition(newPanel);
-                } catch (err) {
-                    if (window.__CHAIN_DEBUG) console.warn('[chain] persistToyPosition failed', err);
-                }
-
-                updateChains();
-                updateAllChainUIs();
-                // Ensure connector geometry is rebuilt immediately (important for internal mode).
-                try { rebuildChainSegments(); } catch {}
-                try { scheduleChainRedraw(true); } catch {}
-                delete newPanel.dataset.spawnAutoManaged;
-                delete newPanel.dataset.spawnAutoLeft;
-                delete newPanel.dataset.spawnAutoTop;
-                // Always focus the newly created toy, even if the source toy was unfocused.
-                const focusNew = () => {
-                    if (newPanel.isConnected && !g_isRestoringSnapshot && !g_suppressBootFocus) {
-                        setToyFocus(newPanel, { center: true });
-                    }
-                };
-                focusNew();
-                // Reinforce once more on the next frame to override any existing focus state.
-                raf(() => {
-                    focusNew();
-                    try {
-                        newPanel.__drawToy?.refreshLayout?.('chain-post-focus');
-                        newPanel.__dgRefreshLayout?.('chain-post-focus');
-                    } catch {}
-                    try {
-                        sourcePanel.__drawToy?.refreshLayout?.('chain-source-post-focus');
-                        sourcePanel.__dgRefreshLayout?.('chain-source-post-focus');
-                    } catch {}
-                });
-            };
-
-            const raf = window.requestAnimationFrame?.bind(window) ?? ((fn) => setTimeout(fn, 16));
-            raf(() => raf(finalizePlacement));
-        }, 0);
-        try {
-            const dt = performance.now() - tStart;
-            if (window.__CHAIN_DEBUG) {
-                console.log('[CHAIN][perf] chained toy created in', dt.toFixed(1), 'ms');
-            }
-        } catch {}
-    }, true);
 }
 
 function pickToyPanelSize(type) {
@@ -6523,7 +5883,7 @@ function syncOverviewPosition(panel) {
 function createToyPanelAt(toyType, {
     centerX,
     centerY,
-    instrument,
+    instrument, soundState,
     autoCenter,
     allowOffscreen = false,
     shouldHintOffscreen,
@@ -6577,6 +5937,7 @@ function createToyPanelAt(toyType, {
     }
     panel.style.position = 'absolute';
 
+    restoreToySoundState(panel, soundState);
     if (chosenInstrument) {
         panel.dataset.instrument = chosenInstrument;
         panel.dataset.instrumentPersisted = '1';
@@ -6606,6 +5967,7 @@ function createToyPanelAt(toyType, {
 
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
+    panel.dataset.positionSource='auto';
 
     // If this was spawned inside an Art Toy internal board, tag it for ownership.
     if (resolvedArtOwnerId) {
@@ -6657,6 +6019,7 @@ function createToyPanelAt(toyType, {
         // If something (eg Art Toy external random) forced init immediately, skip.
         if (panel.__mtToyInitDone) return;
         panel.__mtToyInitDone = true;
+        const restoringSnapshot=!!panel.__restoringFromSnapshot;
 
         try { initializeNewToy(panel); } catch (err) { console.warn('[createToyPanelAt] init failed', err); }
         try { initToyChaining(panel); } catch (err) { console.warn('[createToyPanelAt] chain init failed', err); }
@@ -6673,6 +6036,7 @@ function createToyPanelAt(toyType, {
                 }
             }
             if (!isInternalSpawn) syncOverviewPosition(panel);
+            if(!restoringSnapshot){const parent=connectionModel.getParent(panel.id);requestGraphLayout(parent?.from.objectId,parent?.kind==='transport'?parent.id:null);}
             try { updateChains(); updateAllChainUIs(); } catch (err) { console.warn('[createToyPanelAt] chain update failed', err); }
             try { applyStackingOrder(); } catch (err) { console.warn('[createToyPanelAt] stacking failed', err); }
             try { window.Persistence?.markDirty?.(); } catch (err) { console.warn('[createToyPanelAt] mark dirty failed', err); }
@@ -6762,6 +6126,7 @@ function destroyToyPanel(panelOrId, opts = {}) {
     const allowOffBoard = !!opts.allowOffBoard;
     const board = document.getElementById('board');
     if (!allowOffBoard && (!board || !board.contains(panel))) return false;
+    closeInstrumentPicker(panel);
 
     const panelId = panel.id;
     const prevId = panel.dataset.prevToyId || '';
@@ -6939,6 +6304,12 @@ try {
 }
 
 function getChainAnchor(panel, side = 'right') {
+  const at=getLogicalChainAnchor(panel,side);
+  const target={x:parseFloat(panel.style.left)||0,y:parseFloat(panel.style.top)||0};
+  const rendered=g_layoutAnimation.position(panel.id,target);
+  return {x:at.x+rendered.x-target.x,y:at.y+rendered.y-target.y};
+}
+function getLogicalChainAnchor(panel, side = 'right') {
   // Internal board: panels live inside a different viewport/world that is transformed
   // independently. Using style.left/top math here can drift/offset under pan+zoom.
   // Prefer a rect->world conversion using the internal board's transform when active.
@@ -6972,7 +6343,9 @@ function getChainAnchor(panel, side = 'right') {
       });
 
       if (wHelper && Number.isFinite(wHelper.x) && Number.isFinite(wHelper.y)) {
-        return { x: wHelper.x, y: wHelper.y };
+        const target={x:parseFloat(panel.style.left)||0,y:parseFloat(panel.style.top)||0};
+        const shown=g_layoutAnimation.position(panel.id,target);
+        return { x: wHelper.x-shown.x+target.x, y: wHelper.y-shown.y+target.y };
       }
 
     }
@@ -7113,264 +6486,9 @@ function rebuildChainSegments() {
 }
 
 function drawChains(forceFull = false) {
-  if (window.__PERF_DISABLE_CHAINS) return;
-  if (!CHAIN_FEATURE_ENABLE_CONNECTOR_DRAW) return;
-
-  const boardCtx = getActiveBoardContext();
-  const layer = getOrCreateChainLayer(boardCtx.key);
-
-  // Ensure chain canvas is attached to the active context's viewport.
-  try { ensureChainCanvasAttachedToActiveBoard(boardCtx); } catch {}
-  if (!chainCanvas || !chainCtx) return;
-
-  // Per-context sizing cache (prevents main<->internal cache leakage)
-  try {
-    const vp = boardCtx?.viewportEl;
-    layer.cache.boardClientWidth = vp?.clientWidth || 0;
-    layer.cache.boardClientHeight = vp?.clientHeight || 0;
-    // keep legacy globals in sync for debug/compat
-    g_boardClientWidth = layer.cache.boardClientWidth;
-    g_boardClientHeight = layer.cache.boardClientHeight;
-  } catch {}
-  const __perfOn = !!(window.__PerfFrameProf && typeof performance !== 'undefined' && performance.now);
-
-  const width = g_boardClientWidth || 0;
-  const height = g_boardClientHeight || 0;
-  const internalActive = !!(g_artInternal && g_artInternal.active);
-
-  // IMPORTANT:
-  // Chains draw in WORLD coords and we apply a world->screen transform on the 2D ctx.
-  // In internal-board mode, the *source of truth* is the CSS transform on the internal world element
-  // (identity swap can make #board point at internal world, and g_artInternal.{scale,tx,ty} can drift).
-  // So we read the world element’s computed transform instead of using g_artInternal.
-  let scale = 1;
-  let tx = 0;
-  let ty = 0;
-  try {
-    if (internalActive) {
-      // IMPORTANT: during identity swap, internal world may be #board.
-      // Use the active board context’s worldEl so we always read the real element.
-      const cssT = (typeof getInternalBoardCssTransform === 'function')
-        ? getInternalBoardCssTransform(boardCtx?.worldEl || null)
-        : null;
-
-      if (cssT && Number.isFinite(cssT.scale)) {
-        scale = Number(cssT.scale) || 1;
-        tx = Number(cssT.tx) || 0;
-        ty = Number(cssT.ty) || 0;
-        dbgChainInternalDeep?.('internalCssTransform(used)', {
-          css: { scale: cssT.scale, tx: cssT.tx, ty: cssT.ty, raw: cssT.raw, worldId: cssT.worldId, worldClass: cssT.worldClass },
-          gArt: { scale: g_artInternal?.scale, tx: g_artInternal?.tx, ty: g_artInternal?.ty },
-        });
-      } else {
-        // Fallback: should be rare now, but keep it safe.
-        scale = Number(g_artInternal?.scale) || 1;
-        tx = Number(g_artInternal?.tx) || 0;
-        ty = Number(g_artInternal?.ty) || 0;
-        dbgChainInternalDeep?.('internalCssTransformMissing_fallbackToGArt', { boardCtxKey: boardCtx?.key || null });
-      }
-    } else {
-      const t = getViewportTransform() || {};
-      scale = Number(t.scale) || 1;
-      tx = Number(t.tx) || 0;
-      ty = Number(t.ty) || 0;
-    }
-  } catch {}
-
-  const safeScale = (Number.isFinite(scale) && Math.abs(scale) > 1e-6) ? scale : 1;
-  if (internalActive) {
-    dbgChainInternalDeep?.('internalCamFinal', { safeScale, tx, ty });
-  }
-
-  // IMPORTANT:
-  // The chain canvas is a SCREEN-SPACE overlay attached to the active viewport.
-  // Therefore:
-  // - the canvas element is sized/positioned in SCREEN pixels (0,0 .. viewport w/h)
-  // - we draw geometry in WORLD coords and apply the camera transform on the 2D ctx
-  //   (screen = world * scale + translate)
-  //
-  // Previously we attempted to position the canvas in WORLD space (left/top in world
-  // units) while ALSO attaching it as a viewport overlay. That mismatch is what caused
-  // chains to appear ~half-size and massively offset.
-  const worldLeft = 0;
-  const worldTop = 0;
-  const edgeCount = g_chainEdges ? g_chainEdges.size : 0;
-
-  if (!width || !height) return;
-
-  const tStart = performance.now();
-
-  // Use a lower-resolution backing buffer for the chain canvas to reduce GPU cost.
-  // We still draw in board coordinates, but the internal pixel density is scaled down.
-  const devicePixelRatioForChains = window.devicePixelRatio || 1;
-  const dpr = devicePixelRatioForChains * CHAIN_CANVAS_RESOLUTION_SCALE;
-  const canvasW = chainCanvas.width / dpr;
-  const canvasH = chainCanvas.height / dpr;
-
-  dbgChainInternalDeep('drawChains(pre)', {
-    width,
-    height,
-    internalActive: internalActive,
-    edgeCount,
-    cam: { scale, tx, ty, safeScale, worldLeft, worldTop },
-    dpr: { device: devicePixelRatioForChains, mul: CHAIN_CANVAS_RESOLUTION_SCALE, effective: dpr },
-    canvasLogical: { w: canvasW, h: canvasH },
-  });
-
-  // --- Phase 1: resize canvas if board viewport changed ---
-  let tAfterResize = tStart;
-  const sizeChanged = forceFull || canvasW !== width || canvasH !== height;
-
-  if (sizeChanged) {
-    const tResizeStart = performance.now();
-
-    // Screen-sized backing buffer (viewport pixels * dpr)
-    chainCanvas.width = width * dpr;
-    chainCanvas.height = height * dpr;
-    tAfterResize = performance.now();
-
-    if (CHAIN_DEBUG) {
-      console.log('[CHAIN][perf][resize] chainCanvas resized', 'board=', width, 'x', height, 'canvas=', chainCanvas.width, 'x', chainCanvas.height, 'cost=', (tAfterResize - tResizeStart).toFixed(2), 'ms')
-    }
-  } else {
-    tAfterResize = performance.now();
-  }
-
-  // Keep the overlay canvas pinned to the viewport.
-  if (sizeChanged || forceFull) {
-    chainCanvas.style.left = '0px';
-    chainCanvas.style.top = '0px';
-    chainCanvas.style.width = `${width}px`;
-    chainCanvas.style.height = `${height}px`;
-    // Keep bookkeeping for debug/metrics.
-    g_chainCanvasWorldLeft = 0;
-    g_chainCanvasWorldTop = 0;
-  }
-
-  // --- Phase 2: clear the canvas ---
-  chainCtx.setTransform(1, 0, 0, 1, 0, 0);
-  const tClearStart = performance.now();
-  chainCtx.clearRect(0, 0, chainCanvas.width, chainCanvas.height);
-  const tAfterClear = performance.now();
-
-  if (!edgeCount) {
-    if (CHAIN_DEBUG) {
-      const total = tAfterClear - tStart;
-      const resizeCost = tAfterResize - tStart;
-      const clearCost = tAfterClear - tClearStart;
-      if (total > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
-        console.log('[CHAIN][perf] drawChains(empty)', 'total=', total.toFixed(2), 'ms', 'resize=', resizeCost.toFixed(2), 'ms', 'clear=', clearCost.toFixed(2), 'ms', 'edges=', edgeCount)
-      }
-    }
-    if (__perfOn) {
-      window.__PerfFrameProf.mark('chain.draw', performance.now() - tStart);
-    }
-    return;
-  }
-
-  // --- Phase 3: draw all edges ---
-  // Apply camera transform directly: screen = world*scale + translate
-  // Include dpr (and CHAIN_CANVAS_RESOLUTION_SCALE via dpr).
-  chainCtx.setTransform(
-    safeScale * dpr, 0,
-    0, safeScale * dpr,
-    tx * dpr,
-    ty * dpr
-  );
-
-  const now = performance.now();
-  // You can tweak these to taste. Thicker curves = slightly more GPU work.
-  const baseWidth = 4;
-  const pulseExtraWidth = 2;
-
-  let connectorCount = 0;
-  const tEdgesStart = performance.now();
-
-  chainCtx.lineCap = 'round';
-  const baseStroke = 'hsl(222, 100%, 80%)';
-  const pulseStroke = 'hsl(222, 100%, 95%)';
-
-  chainCtx.lineWidth = (baseWidth * 3) / safeScale;
-  chainCtx.strokeStyle = baseStroke;
-  chainCtx.beginPath();
-  let hasBasePath = false;
-  const pulsingEdges = [];
-
-  for (const edge of g_chainEdges.values()) {
-    const { fromToyId, toToyId, p1x, p1y, p2x, p2y, c1x, c1y, c2x, c2y } = edge;
-
-    if (!Number.isFinite(p1x) || !Number.isFinite(p1y) ||
-        !Number.isFinite(p2x) || !Number.isFinite(p2y) ||
-        !Number.isFinite(c1x) || !Number.isFinite(c1y) ||
-        !Number.isFinite(c2x) || !Number.isFinite(c2y)) {
-      continue;
-    }
-
-    const pulseInfo = g_pulsingConnectors.get(fromToyId);
-    const isPulsing = !!(pulseInfo && pulseInfo.toId === toToyId && pulseInfo.until > now);
-
-    if (isPulsing) {
-      pulsingEdges.push(edge);
-    } else {
-      chainCtx.moveTo(p1x, p1y);
-      chainCtx.bezierCurveTo(c1x, c1y, c2x, c2y, p2x, p2y);
-      hasBasePath = true;
-    }
-
-    connectorCount++;
-  }
-
-  if (hasBasePath) {
-    chainCtx.stroke();
-  }
-  if (pulsingEdges.length) {
-    chainCtx.lineWidth = ((baseWidth + pulseExtraWidth) * 3) / safeScale;
-    chainCtx.strokeStyle = pulseStroke;
-    for (const edge of pulsingEdges) {
-      chainCtx.beginPath();
-      chainCtx.moveTo(edge.p1x, edge.p1y);
-      chainCtx.bezierCurveTo(edge.c1x, edge.c1y, edge.c2x, edge.c2y, edge.p2x, edge.p2y);
-      chainCtx.stroke();
-    }
-  }
-
-  const tAfterEdges = performance.now();
-
-  if (CHAIN_DEBUG && connectorCount > 0 && g_chainState.size > 0) {
-    console.log('[CHAIN][perf][detail] drawChains connectors=', connectorCount, 'heads=', g_chainState.size)
-  }
-
-  if (CHAIN_DEBUG) {
-    const total = tAfterEdges - tStart;
-    const resizeCost = tAfterResize - tStart;
-    const clearCost = tAfterClear - tClearStart;
-    const edgesCost = tAfterEdges - tEdgesStart;
-
-    if (total > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
-      console.log(
-        '[CHAIN][perf] drawChains',
-        'total=', total.toFixed(2), 'ms',
-        'resize=', resizeCost.toFixed(2), 'ms',
-        'clear=', clearCost.toFixed(2), 'ms',
-        'edges=', edgesCost.toFixed(2), 'ms',
-        'edgeCount=', edgeCount
-      )
-    } else {
-      console.log(
-        '[CHAIN][drag] drawChains',
-        'total=', total.toFixed(2), 'ms',
-        'resize=', resizeCost.toFixed(2), 'ms',
-        'clear=', clearCost.toFixed(2), 'ms',
-        'edges=', edgesCost.toFixed(2), 'ms',
-        'edgeCount=', edgeCount
-      )
-    }
-  }
-  if (__perfOn) {
-    window.__PerfFrameProf.mark('chain.draw', performance.now() - tStart);
-  }
-
-  dbgChainInternal('drawChains', { forceFull, width, height, scale, tx, ty });
+  // Both wire kinds render through the same view and projection.
+  clearChainCanvasHard();
+  g_connectionView?.render();
 }
 
 // Shift connector geometry only for segments touching a specific toy by applying
@@ -7549,6 +6667,337 @@ try {
   }
 })();
 const g_chainState = new Map();
+let g_connectionPanels = [];
+const g_layoutMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+const g_layoutAnimation = createGraphLayoutAnimation({
+  reducedMotion: () => g_layoutMotionPreference.matches,
+  render: (id, current, target) => {
+    const panel=document.getElementById(id);
+    if(panel)panel.style.translate=current.x===target.x&&current.y===target.y?'':(current.x-target.x)+'px '+(current.y-target.y)+'px';
+  },
+});
+function takeLayoutDrag(id) {
+  if(!g_layoutAnimation.has(id))return;
+  const s=structureToyModel.get(id),panel=document.getElementById(id);
+  const target=s||{x:parseFloat(panel?.style.left)||0,y:parseFloat(panel?.style.top)||0};
+  const current=g_layoutAnimation.cancel(id,target);
+  if(s)structureToyModel.move(id,current.x,current.y,{manual:false});
+  else if(panel){panel.style.left=current.x+'px';panel.style.top=current.y+'px';}
+}
+const g_graphPlacement = createGraphPlacement({
+  model: connectionModel,
+  isManual: id => (structureToyModel.get(id)?.positionSource || document.getElementById(id)?.dataset?.positionSource || 'manual') === 'manual',
+  getPortPoint: (point,rect) => {
+    if(point.objectId===MAIN_TRANSPORT_ID)return {x:rect.x+rect.width/2+HEARTBEAT_OUTPUT_OFFSET,y:rect.y+rect.height/2};
+    const s=structureToyModel.get(point.objectId);
+    if(s)return structurePortPoint({...s,x:rect.x,y:rect.y},point.portId);
+    const panel=document.getElementById(point.objectId);
+    if(panel){const at=getLogicalChainAnchor(panel,point.portId==='input'?'left':'right');return {x:at.x+rect.x-(parseFloat(panel.style.left)||0),y:at.y+rect.y-(parseFloat(panel.style.top)||0)};}
+    return null;
+  },
+  getScope: id => structureToyModel.get(id)?.artOwnerId || document.getElementById(id)?.dataset?.artOwnerId || null,
+  getRect: id => {
+    const s=structureToyModel.get(id);
+    if(s)return {x:s.x,y:s.y,width:structureToyWidth(s),height:structureToyHeight(s)};
+    if(id===MAIN_TRANSPORT_ID){const p=getAnchorWorld();return {x:p.x-48,y:p.y-48,width:96,height:96};}
+    const panel=document.getElementById(id);if(!panel)return null;
+    const fallback=pickToyPanelSize(panel.dataset.toy);
+    return {x:parseFloat(panel.style.left)||0,y:parseFloat(panel.style.top)||0,
+      width:panel.offsetWidth||fallback.width,height:panel.offsetHeight||fallback.height};
+  },
+  setPosition: (id,x,y) => {
+    const s=structureToyModel.get(id);
+    if(s){g_layoutAnimation.move(id,s,{x,y});structureToyModel.move(id,x,y,{manual:false});return;}
+    if(id===MAIN_TRANSPORT_ID)return;
+    const panel=document.getElementById(id);if(!panel)return;
+    g_layoutAnimation.move(id,{x:parseFloat(panel.style.left)||0,y:parseFloat(panel.style.top)||0},{x,y});
+    panel.style.left=`${x}px`;panel.style.top=`${y}px`;
+    syncOverviewPosition(panel);persistToyPosition(panel);notifyChainPanelMoved(panel);
+  },
+});
+const g_branchDrag = createGraphBranchDrag({
+  descendants: id => [...g_graphPlacement.descendants(id)].filter(child => g_graphPlacementScope(child) === g_graphPlacementScope(id)),
+  getPosition: id => {
+    const structure=structureToyModel.get(id);if(structure)return {x:structure.x,y:structure.y};
+    const panel=document.getElementById(id);return panel?{x:parseFloat(panel.style.left)||0,y:parseFloat(panel.style.top)||0}:null;
+  },
+  cancelAnimation: takeLayoutDrag,
+  setPosition: (id,x,y,{manual}) => {
+    if(structureToyModel.get(id)){structureToyModel.move(id,x,y,{manual});return;}
+    const panel=document.getElementById(id);if(!panel)return;
+    panel.style.left=x+'px';panel.style.top=y+'px';
+    if(manual)panel.dataset.positionSource='manual';
+    syncOverviewPosition(panel);persistToyPosition(panel);notifyChainPanelMoved(panel);
+  },
+});
+window.__graphBranchDragSync = () => g_branchDrag.sync();
+window.__graphIsDragDescendant = (root,id) => id!==root&&g_graphPlacementScope(id)===g_graphPlacementScope(root)&&g_graphPlacement.descendants(root).has(id);
+window.__graphTranslateDragDescendants = (root,dx,dy) => g_branchDrag.translateDescendants(root,dx,dy);
+function g_graphPlacementScope(id){return structureToyModel.get(id)?.artOwnerId||document.getElementById(id)?.dataset.artOwnerId||null;}
+// Coalesce topology growth only; playback and position drags never arrange.
+const g_layoutPending=new Set(),g_layoutConnections=new Set(),g_layoutSizes=new Map(),g_layoutParents=new Map(),g_layoutAttached=new Set();
+let g_layoutQueued=false,g_layoutRestoring=false,g_layoutManualDrag=null;
+function requestGraphLayout(id,connectionId=null){
+  if(g_layoutRestoring||!id)return;
+  // Balance the connected branch up to its stable/manual anchor, never another
+  // Heartbeat root. This also closes old-parent gaps after a reparent.
+  if(!connectionId){
+    let parent=connectionModel.getParent(id);
+    while(parent?.kind==='sequence'){
+      const manual=structureToyModel.get(id)?.positionSource==='manual'||document.getElementById(id)?.dataset.positionSource==='manual';
+      if(manual)break;
+      id=parent.from.objectId;parent=connectionModel.getParent(id);
+    }
+  }
+  if(connectionId)g_layoutConnections.add(connectionId);else g_layoutPending.add(id);
+  if(g_layoutQueued)return;g_layoutQueued=true;
+  queueMicrotask(()=>{
+    if(g_layoutRestoring){g_layoutQueued=false;g_layoutPending.clear();g_layoutConnections.clear();g_layoutAttached.clear();return;}
+    g_layoutQueued=false;const roots=[...g_layoutPending],options={recentlyAttached:new Set(g_layoutAttached)};g_layoutPending.clear();g_layoutAttached.clear();
+    const receivesBranch=root=>[...options.recentlyAttached].some(id=>{let p=connectionModel.getParent(id);while(p){if(p.from.objectId===root)return true;p=connectionModel.getParent(p.from.objectId);}return false;});
+    roots.sort((a,b)=>Number(receivesBranch(b))-Number(receivesBranch(a)));
+    g_layoutAnimation.batch(()=>{
+      for(const root of roots){
+        if(!connectionModel.getObject(root))continue;
+        let parent=connectionModel.getParent(root),covered=false;
+        while(parent){if(roots.includes(parent.from.objectId)){covered=true;break;}parent=connectionModel.getParent(parent.from.objectId);}
+        if(!covered){
+          g_graphPlacement.repairSubgraph(root,options);
+          const incoming=connectionModel.getParent(root);
+          if(incoming&&!g_graphPlacement.hasUsableConnectionCorridor(incoming.id))g_graphPlacement.repairConnection(incoming.id);
+        }
+      }
+      for(const id of g_layoutConnections)g_graphPlacement.repairConnection(id);g_layoutConnections.clear();
+    });
+    g_connectionView.render();
+  });
+}
+function isActivelyEditingToy() {
+  try {
+    if (typeof window !== 'undefined') {
+      if (window.__focusEditingActive === true) return true;
+      if (window.__isFocusEditing === true) return true;
+    }
+    const body = document.body;
+    if (!body) return false;
+    return body.classList.contains('toy-editing') ||
+           body.classList.contains('focused-editing') ||
+           body.classList.contains('toy-focus-editing') ||
+           body.classList.contains('focus-editing');
+  } catch {
+    return false;
+  }
+}
+
+// Position provenance follows an actual drag, independently of selection.
+document.addEventListener('pointerdown',e=>{
+  const panel=e.target?.closest?.('.toy-panel');
+  const overview=!!(window.__overviewMode?.isActive?.()||document.getElementById('board')?.classList.contains('board-overview')||document.body.classList.contains('overview-mode'));
+  const dragSurface=panel&&(e.target.closest('.toy-header')||overview&&!isActivelyEditingToy()||isFocusEditingEnabled()&&panel.classList.contains('toy-unfocused'));
+  if(dragSurface&&(e.button==null||e.button===0)&&!e.target.closest('button,a,select,input,textarea,[role="button"],[data-action],.c-btn,.toy-inst-btn'))g_branchDrag.start(panel.id);
+  g_layoutManualDrag=panel?{panel,id:e.pointerId,x:parseFloat(panel.style.left)||0,y:parseFloat(panel.style.top)||0}:null;
+},true);
+document.addEventListener('pointerup',e=>{
+  g_branchDrag.end();
+  const drag=g_layoutManualDrag;if(!drag||drag.id!==e.pointerId)return;g_layoutManualDrag=null;
+  if(Math.hypot((parseFloat(drag.panel.style.left)||0)-drag.x,(parseFloat(drag.panel.style.top)||0)-drag.y)>2){drag.panel.dataset.positionSource='manual';window.Persistence?.markDirty?.();}
+},true);
+document.addEventListener('pointercancel',()=>{g_branchDrag.end();g_layoutManualDrag=null;},true);
+window.arrangeSubgraph = rootId => {
+  const context=getActiveBoardContext();
+  const options=rootId===MAIN_TRANSPORT_ID?{scope:context.key==='internal'?g_artInternal.artToyId:null}:{};
+  const result=g_layoutAnimation.batch(()=>g_graphPlacement.arrangeSubgraph(rootId,options));g_connectionView.render();return result;
+};
+window.hasUsableConnectionCorridor = id => g_graphPlacement.hasUsableConnectionCorridor(id);
+window.beginCreationGraphRestore = () => {g_branchDrag.clear();g_layoutAnimation.clear();g_layoutRestoring=true;g_layoutPending.clear();g_layoutConnections.clear();g_layoutAttached.clear();g_layoutParents.clear();g_layoutManualDrag=null;};
+window.endCreationGraphRestore = () => {g_layoutRestoring=false;};
+window.restoreConnections = (saved, structures = []) => {
+  g_branchDrag.clear();g_layoutAnimation.clear();
+  g_connectionView.reset();
+  g_layoutPending.clear();g_layoutConnections.clear();g_layoutSizes.clear();g_layoutParents.clear();g_layoutAttached.clear();g_layoutRestoring=true;
+  g_connectionPanels = getConnectionPanels();
+  if (!Array.isArray(saved)) {
+    // Capture legacy links before removing the previous scene's Structures:
+    // model notifications project datasets as objects are removed.
+    const present = new Set(g_connectionPanels.map(panel => panel.id));
+    const links = new Map();
+    for (const panel of g_connectionPanels) {
+      const parent = panel.dataset.prevToyId || panel.dataset.chainParent;
+      const next = panel.dataset.nextToyId;
+      if (present.has(parent)) links.set(`${parent}|${panel.id}`, [parent, panel.id]);
+      if (present.has(next)) links.set(`${panel.id}|${next}`, [panel.id, next]);
+    }
+    saved = [...links.values()].map(([from, to]) => ({ kind: 'sequence',
+      from: { objectId: from, portId: 'output' }, to: { objectId: to, portId: 'input' } }));
+    const children = new Set(saved.map(c => c.to.objectId));
+    for (const panel of g_connectionPanels) if (!children.has(panel.id)) saved.push({ kind: 'transport',
+      from: { objectId: MAIN_TRANSPORT_ID, portId: 'output' }, to: { objectId: panel.id, portId: 'input' } });
+  }
+  structureToyModel.suspend(() => {
+    structureToyModel.restore(structures);
+    g_connections.restore(saved, g_connectionPanels);
+  });
+  for(const s of structureToyModel.list())g_layoutSizes.set(s.id,`${s.type}|${s.outputCount}`);
+  for(const c of connectionModel.list())g_layoutParents.set(c.to.objectId,c.from);
+  g_layoutRestoring=false;
+};
+structureToyModel.configure({
+  placeStructure: (desired,parentId,excludeId) => g_graphPlacement.placeStructure(desired,parentId,excludeId),
+  getToyType: id => document.getElementById(id)?.dataset?.toy,
+  onRemove: structure => g_sequenceChains.terminateStructure(structure.definitionId),
+  getPosition: point => {
+    const structure = structureToyModel.get(point.objectId);
+    if (structure) return structurePortPoint(structure, point.portId);
+    const panel = document.getElementById(point.objectId);
+    return panel ? getLogicalChainAnchor(panel, point.portId === 'input' ? 'left' : 'right') : { x: 0, y: 0 };
+  },
+  getOwner: id => structureToyModel.get(id)?.artOwnerId || document.getElementById(id)?.dataset?.artOwnerId || null,
+  onMove: () => { try { window.Persistence?.markDirty?.(); } catch {} },
+  onPresentation: s => {
+    if(g_branchDrag.active||connectionModel.getEditing())return;
+    const parent=connectionModel.getParent(s.id);
+    requestGraphLayout(parent?.from.objectId||s.id,parent?.kind==='transport'?parent.id:null);
+    // Size tracking belongs to topology changes; presentation has its own path.
+    g_layoutSizes.set(s.id,s.type+'|'+s.outputCount);
+  },
+});
+const g_connections = createConnectionAdapter(connectionModel, {
+  isPlaying: isRunning,
+  onDetach: toyId => {
+    const toy = document.getElementById(toyId);
+    const audioId = toy?.dataset?.audiotoyid || toy?.__audioToyId || toyId;
+    cancelScheduledToySources(audioId);
+    if (audioId !== toyId) cancelScheduledToySources(toyId);
+    bumpToyAudioGen(audioId, 'connection-detach');
+    g_sequencerScheduler?.clearToy(toyId);
+  },
+  onSequenceChange: () => {
+    g_chainStructureVersion++;
+    updateChains();
+    updateAllChainUIs({ force: true });
+  },
+});
+window.clearCreationGraph = () => {
+  closeInstrumentPicker();
+  g_branchDrag.clear();g_layoutAnimation.clear();
+  g_connectionView.reset();
+  g_layoutPending.clear();g_layoutConnections.clear();g_layoutSizes.clear();g_layoutParents.clear();g_layoutAttached.clear();g_layoutManualDrag=null;g_layoutRestoring=true;
+  clearCreationGraph({ model: connectionModel, structures: structureToyModel,
+    sequence: g_sequenceChains, adapter: g_connections,
+    clearScheduled: () => {
+      for (const id of connectionModel.getObjectIds()) {
+        cancelScheduledToySources(id); g_sequencerScheduler?.clearToy(id);
+      }
+      g_sequencerScheduler?.reset();
+    } });
+  g_layoutRestoring=false;
+  g_pulseUntil.clear(); g_pulseAddQueue.clear(); g_pulseRemoveQueue.clear();
+  g_chainPausedSnapshot = null;
+  resetChainState({ clearDom: false }); g_chainUiStateKey = '';
+  g_lastSequencedToyCount = -1;
+  g_connectionView.render();
+};
+const g_connectionView = createConnectionView({
+  model: connectionModel,
+  structureToys: structureToyModel,
+  onQuickAdd: createConnectionQuickAdd({
+    model: connectionModel, structures: structureToyModel,
+    getToy: id => document.getElementById(id),
+    createToy: (type, { reference, structure, point, soundState }) => {
+      const size = pickToyPanelSize(type);
+      const placement = g_graphPlacement.placeChild(point.objectId,size);
+      if(!placement)return null;
+      const context = getActiveBoardContext();
+      return createToyPanelAt(type, {
+        centerX: placement.x + size.width / 2, centerY: placement.y + size.height / 2,
+        skipSpawnPlacement: true,
+        soundState, instrument: soundState.instrument, allowOffscreen: true,
+        containerEl: context.worldEl, artOwnerId: structure?.artOwnerId || reference?.dataset?.artOwnerId || null,
+      });
+    },
+    removeToy: toy => window.MusicToyFactory?.destroy?.(toy),
+    pickToy: point => {
+      document.dispatchEvent(new CustomEvent('connection:pick-toy', { detail: point }));
+      window.ToySpawner?.open?.();
+    },
+  }),
+  getPanels: () => g_connectionPanels,
+  getToyPoint: getChainAnchor,
+  getRenderedStructure: s => ({...s,...g_layoutAnimation.position(s.id,s)}),
+  onStructureDrag: id => g_branchDrag.start(id),
+  onStructureMove: (id,x,y) => g_branchDrag.move(id,x,y),
+  onStructureDragEnd: () => g_branchDrag.end(),
+  isBranchDragging: () => g_branchDrag.active,
+  getHeartbeatPoint: getAnchorWorld,
+  getContext: () => {
+    const context = getActiveBoardContext();
+    const internal = context.key === 'internal';
+    const transform = internal
+      ? (getInternalBoardCssTransform(context.worldEl) || { scale: g_artInternal.scale, tx: g_artInternal.tx, ty: g_artInternal.ty })
+      : getViewportTransform();
+    return { ...context, transform,
+      visible: panel => internal ? panel.dataset.artOwnerId === g_artInternal.artToyId : !panel.dataset.artOwnerId,
+    };
+  },
+  getPulse: connection => connection.kind === 'transport'
+    ? getHeartbeatVisualPhase(transportRegistry.get(MAIN_TRANSPORT_ID).getState())
+    : (g_pulsingConnectors.get(connection.from.objectId)?.toId === connection.to.objectId
+      && g_pulsingConnectors.get(connection.from.objectId)?.until > performance.now()),
+  onFrame: () => {g_branchDrag.sync();g_layoutAnimation.tick();g_connections.discoverOwnership();},
+});
+connectionModel.subscribe(event => {
+  if (event.type === 'change') {
+    if(!g_layoutRestoring){
+      for(const change of event.events||[event]){
+        const c=change.connection;
+        if(change.removed?.kind==='sequence')requestGraphLayout(change.removed.from.objectId);
+        if(c){
+          const previous=g_layoutParents.get(c.to.objectId);
+          if(previous&&(previous.objectId!==c.from.objectId||previous.portId!==c.from.portId))requestGraphLayout(previous.objectId);
+          const oldBranchInNewStructure=connectionModel.getObject(c.from.objectId)?.structure&&!g_layoutSizes.has(c.from.objectId)&&previous?.objectId===connectionModel.getParent(c.from.objectId)?.from.objectId;
+          if(c.kind==='sequence'&&previous&&(previous.objectId!==c.from.objectId||previous.portId!==c.from.portId)&&!oldBranchInNewStructure)g_layoutAttached.add(c.to.objectId);
+          g_layoutParents.set(c.to.objectId,c.from);
+        }
+        if(change.removedObjectId){g_layoutAnimation.cancel(change.removedObjectId);g_layoutParents.delete(change.removedObjectId);}
+        if(c?.kind==='sequence')requestGraphLayout(c.from.objectId);
+        if(c?.kind==='transport')requestGraphLayout(c.from.objectId,c.id);
+      }
+      for(const s of structureToyModel.list()){
+        const size=`${s.type}|${s.outputCount}`;
+        if(g_layoutSizes.get(s.id)!==size){g_layoutSizes.set(s.id,size);const parent=connectionModel.getParent(s.id);requestGraphLayout(parent?.from.objectId||s.id,parent?.kind==='transport'?parent.id:null);}
+      }
+    }
+    globalThis.__CONNECTION_DEBUG = connectionModel.snapshot();
+    try { window.Persistence?.markDirty?.(); } catch {}
+  }
+});
+const g_sequenceChains = createChainSequenceAdapter({
+  connectionModel,
+  getToy: id => document.getElementById(id),
+  chainState: g_chainState,
+  cancelToy: toyId => {
+    const toy = document.getElementById(toyId);
+    const audioId = toy?.dataset?.audiotoyid || toy?.__audioToyId || toyId;
+    cancelScheduledToySources(audioId);
+    if (audioId !== toyId) cancelScheduledToySources(toyId);
+    bumpToyAudioGen(audioId, 'sequence-replace');
+    g_sequencerScheduler?.clearToy(toyId);
+  },
+  onTurn: (turn, previous) => {
+    const toy = document.getElementById(turn.toyId);
+    if (toy) toy.__chainStartAt = tickToAudioTime(turn.startTick);
+    if (previous && previous.toyId !== turn.toyId) triggerConnectorPulse(previous.toyId, turn.toyId);
+  },
+  onRelease: toyId => {
+    const toy = document.getElementById(toyId);
+    const audioId = toy?.dataset?.audiotoyid || toy?.__audioToyId || toyId;
+    cancelScheduledToySources(audioId);
+    if (audioId !== toyId) cancelScheduledToySources(toyId);
+    bumpToyAudioGen(audioId, 'sequence-release');
+    g_sequencerScheduler?.clearToy(toyId);
+  },
+  publishDebug: snapshot => { globalThis.__STRUCTURE_DEBUG = snapshot; },
+});
 let g_chainPausedSnapshot = null;
 // Bump this whenever toys are created/destroyed so the scheduler can resync chain state
 // even if toy counts happen to return to the same value (delete then create).
@@ -7562,7 +7011,6 @@ function snapshotChainStateForPause(){
     const snap = new Map();
     g_chainState.forEach((v,k)=> snap.set(k,v));
     g_chainPausedSnapshot = snap;
-    g_lastAudioPhase01 = null;
     if (window.__CHAIN_DEBUG) console.log('[chain] snapshot pause', { size: snap.size });
   }catch(e){
     g_chainPausedSnapshot = null;
@@ -7571,29 +7019,10 @@ function snapshotChainStateForPause(){
 }
 
 function restoreChainStateAfterResume(){
-  try{
-    // On resume, always restart chains from their heads.
-    // This avoids mid-chain resumes that can skip early notes.
-    updateChains();
-    const now = ensureAudioContext()?.currentTime;
-    for (const headId of g_chainState.keys()) {
-      g_chainState.set(headId, headId);
-      const headEl = document.getElementById(headId);
-      if (headEl) {
-        const migratedTickToy = ['loopgrid', 'loopgrid-drum', 'drawgrid', 'chordwheel', 'rippler'].includes(headEl.dataset?.toy);
-        if (!migratedTickToy && Number.isFinite(now)) headEl.__loopStartOverrideSec = now;
-        try {
-          if (!migratedTickToy && typeof headEl.__seqTouch === 'function') headEl.__seqTouch('resume');
-        } catch {}
-        headEl.__chainJustActivated = true;
-        headEl.__forceSchedulerReset = true;
-      }
-    }
-    g_chainPausedSnapshot = null;
-    if (window.__CHAIN_DEBUG) console.log('[chain] resume -> reset to heads', { size: g_chainState.size });
-  }catch(e){
-    if (window.__CHAIN_DEBUG) console.warn('[chain] restore resume failed', e);
-  }
+  // Resume uses the same absolute position, Sequence instance and child turn.
+  updateChains();
+  g_sequenceChains.updateCurrent(transportRegistry.get(MAIN_TRANSPORT_ID).currentTick);
+  g_chainPausedSnapshot = null;
 }
 
 // Install listeners once
@@ -7612,7 +7041,6 @@ let g_sequencerScheduler = null;
 let audioSchedIntervalId = null;
 let g_noteSchedCfg = null;
 let g_audioTickBusy = false;
-let g_lastAudioPhase01 = null;
 let g_audioPostResumeLogUntil = 0;
 
 function computeNoteSchedTiming() {
@@ -7653,25 +7081,7 @@ try {
         ensureSequencerScheduler().resetTimeline(tick, {
           includeBoundary: detail.fromState !== 'paused',
         });
-        if (detail.fromState !== 'paused') {
-          try {
-            for (const [headId, activeId] of g_chainState.entries()) {
-              const head = document.getElementById(headId);
-              const active = document.getElementById(activeId);
-              if (!head || !active) continue;
-              if (!head.dataset.nextToyId) continue; // standalone playback keeps its existing instance
-              if (active !== head) active.dataset.chainActive = 'false';
-              head.dataset.chainActive = 'true';
-              g_chainState.set(headId, headId);
-              deactivatePlaybackInstance(activeId);
-              activatePlaybackInstanceForChainTurn(headId, tick, { loopLengthTicks: TICKS_PER_BAR });
-              head.__chainTurnStartTick = tick;
-              head.__chainTurnEndTick = tick + TICKS_PER_BAR;
-              head.__chainJustActivated = true;
-              head.__forceSchedulerReset = true;
-            }
-          } catch {}
-        }
+        g_sequenceChains.updateCurrent(tick);
       }
     });
   }
@@ -7722,22 +7132,7 @@ function tickAudioScheduler() {
     } catch {}
     const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
 
-    // Advance chains on bar wrap inside the audio tick to avoid scheduling col0 for the outgoing toy.
-    try {
-      const phase01 = Number(info?.phase01);
-      if (Number.isFinite(phase01)) {
-        const wrapped = Number.isFinite(g_lastAudioPhase01) && phase01 < g_lastAudioPhase01 && g_lastAudioPhase01 > 0.9;
-        g_lastAudioPhase01 = phase01;
-        if (wrapped && g_chainState && g_chainState.size) {
-          for (const headId of g_chainState.keys()) {
-            const activeToy = document.getElementById(g_chainState.get(headId));
-            if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
-              try { advanceChain(headId); } catch {}
-            }
-          }
-        }
-      }
-    } catch {}
+    const playbackTurns = g_sequenceChains.turnsForLookahead(currentTransportTick, lookaheadEndTick);
     // Active toys are the currently-active toy per chain head.
     // If we still have no chain state (or it got cleared), fall back to all sequenced toys.
     let activeToyIds = null;
@@ -7745,7 +7140,7 @@ function tickAudioScheduler() {
       if (forceSequencerAll) {
         activeToyIds = new Set(getSequencedToys().map(p => p.id).filter(Boolean));
       } else if (g_chainState && g_chainState.size) {
-        activeToyIds = new Set(g_chainState.values());
+        activeToyIds = g_sequenceChains.getActiveToyIds();
       } else {
         const all = getSequencedToys();
         activeToyIds = new Set(all.map(t => t.id));
@@ -7754,18 +7149,20 @@ function tickAudioScheduler() {
       activeToyIds = new Set();
     }
 
-    if (!activeToyIds || !activeToyIds.size) return;
+    for (const turn of playbackTurns) activeToyIds.add(turn.toyId);
+    if (!activeToyIds.size) return;
 
     const sequencerScheduler = ensureSequencerScheduler();
     try {
       const activeAudioToyIds = new Set();
       for (const toyId of activeToyIds) {
+        if (!connectionModel.isRooted(toyId)) continue;
         const toy = document.getElementById(toyId);
         if (!toy) continue;
         // Bouncer chain completion is transport lifecycle, not rendering. The
         // render loop also calls this as a fallback, with the playback-instance
         // guard ensuring that exactly one handoff is emitted per turn.
-        if (toy.dataset?.toy === 'bouncer') {
+        if (toy.dataset?.toy === 'bouncer' && !g_sequenceChains.isManaged(toyId)) {
           try {
             if (toy.__advanceBouncerReplayLifecycle?.(currentTransportTick)) continue;
           } catch {}
@@ -7830,7 +7227,8 @@ function tickAudioScheduler() {
       } catch {}
 
       sequencerScheduler.tick({
-        activeToyIds: activeAudioToyIds,
+        activeToyIds: new Set([...activeAudioToyIds].filter(id => !g_sequenceChains.isManaged(id))),
+        playbackTurns: playbackTurns.filter(turn => activeAudioToyIds.has(turn.toyId)),
         getToy: (id) => document.getElementById(id),
         currentTick: currentTransportTick,
         lookaheadEndTick,
@@ -7884,20 +7282,26 @@ function resetChainState({ clearDom = true } = {}) {
 }
 try { window.resetChainState = resetChainState; } catch {}
 
+function getConnectionRootId(id) {
+  const visited = new Set();
+  while (id && !visited.has(id)) {
+    visited.add(id);
+    const parent = connectionModel.list('sequence').find(c => c.to.objectId === id)?.from.objectId;
+    if (!parent) break;
+    id = parent;
+  }
+  return id;
+}
 function findChainHead(toy) {
-    if (!toy) return null;
-    let current = toy;
-    let sanity = 100;
-    while (current && current.dataset.prevToyId && sanity-- > 0) {
-        const prev = document.getElementById(current.dataset.prevToyId);
-        if (!prev || prev === current) break;
-        current = prev;
-    }
-    return current;
+  if (!toy) return null;
+  const id = getConnectionRootId(toy.id);
+  return document.getElementById(id) || { id, dataset: {} };
 }
 
 function updateChains() {
   const allToys = getSequencedToys();
+  g_connectionPanels = getConnectionPanels();
+  g_connections.sync(g_connectionPanels);
 
   // --- Normalize linkage + compute true chain heads ---
   const seenHeads = new Set();
@@ -7911,7 +7315,7 @@ function updateChains() {
       // Ensure parent.nextToyId points at child
       if (toy.dataset.prevToyId) {
         const parent = document.getElementById(toy.dataset.prevToyId);
-        if (parent && !parent.dataset.nextToyId) parent.dataset.nextToyId = toy.id;
+        if (parent && !connectionModel.getObject(parent.id)?.structure && !parent.dataset.nextToyId) parent.dataset.nextToyId = toy.id;
       }
     } catch {}
 
@@ -7963,6 +7367,8 @@ function updateChains() {
     } catch {}
     if (CHAIN_DEBUG) console.warn('[CHAIN] updateChains rebuild failed', err);
   }
+
+  g_sequenceChains.sync(allToys, transportRegistry.get(MAIN_TRANSPORT_ID).getState(), { connections: connectionModel.list('sequence'), structures: structureToyModel.list() });
 
   // Rebuild cached connector geometry whenever chain heads change and redraw once.
   try {
@@ -8049,16 +7455,12 @@ function withPerfMark(name, fn) {
   }
 }
 function scheduler(){
-  let lastPhase = 0;
   const lastCol = new Map();
   let lastPerfLog = 0;
   const prevActiveToyIds = new Set();
   let prevHadActiveToys = false;
   let prevRunning = false;
-  let chainPreAdvanced = false;
   let visualSuppressionAppliedForInternal = false;
-  const CHAIN_PRE_ADVANCE_PHASE = 0.97;
-  const CHAIN_PRE_ADVANCE_ENABLED = false;
   const debugFirstStep = () => !!window.__CHAIN_DEBUG_FIRST_STEP;
 
   function step(){
@@ -8152,62 +7554,19 @@ function scheduler(){
     // In internal mode this renders against the internal viewport/anchor context.
     try { tickBoardAnchor({ nowMs: frameStart, loopInfo: info, running, internalActive: __internalActive }); } catch {}
     const hasChains = g_chainState && g_chainState.size > 0;
+    g_connections.projectActiveState();
     const allowChainWork = !window.__PERF_DISABLE_CHAIN_WORK;
 
     if (CHAIN_FEATURE_ENABLE_SCHEDULER && running && hasChains && allowChainWork){
-      // When the note scheduler is enabled, chain advance is driven by the audio tick
-      // to align with AudioContext timing and avoid duplicate advances.
-      if (window.__NOTE_SCHEDULER_ENABLED) {
-        lastPhase = info.phase01;
-      } else {
-      // --- Phase: advance chains on bar wrap ---
-      const phase = info.phase01;
-      const prevPhase = lastPhase;
-      const phaseJustWrapped = phase < prevPhase && prevPhase > 0.9;
-      lastPhase = phase;
-
-      // Reset the "already advanced this wrap" guard shortly after we enter the new bar.
-      // (If we don't reset it, we'll suppress the NEXT bar-wrap advance and schedule
-      // the old toy's early notes into the new bar -> audible repeats at chain boundaries.)
-      if (!phaseJustWrapped && chainPreAdvanced && Number.isFinite(phase) && phase > 0.1) {
-        chainPreAdvanced = false;
-      }
-
-      if (phaseJustWrapped && !chainPreAdvanced) {
-        const tAdvanceStart = __perfOn ? performance.now() : 0;
-        for (const [headId] of g_chainState.entries()) {
-          const activeToy = document.getElementById(g_chainState.get(headId));
-          // Bouncers and Ripplers manage their own advancement via the 'chain:next' event.
-          // All other toys (like loopgrid) advance on the global bar clock.
-          if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
-            advanceChain(headId);
-          }
-        }
-        const tAdvanceEnd = __perfOn ? performance.now() : 0;
-        if (__perfOn) {
-          window.__PerfFrameProf.mark('chain.advance', tAdvanceEnd - tAdvanceStart);
-        }
-        if (CHAIN_DEBUG && (tAdvanceEnd - tAdvanceStart) > CHAIN_DEBUG_LOG_THRESHOLD_MS) {
-          console.log('[CHAIN][perf] advanceChain batch', (tAdvanceEnd - tAdvanceStart).toFixed(2), 'ms', 'heads=', g_chainState.size);
-        }
-        chainPreAdvanced = true;
-      } else if (CHAIN_PRE_ADVANCE_ENABLED && !chainPreAdvanced && phase >= CHAIN_PRE_ADVANCE_PHASE && prevPhase < CHAIN_PRE_ADVANCE_PHASE) {
-        for (const [headId] of g_chainState.entries()) {
-          const activeToy = document.getElementById(g_chainState.get(headId));
-          if (activeToy && activeToy.dataset.toy !== 'bouncer' && activeToy.dataset.toy !== 'rippler') {
-            advanceChain(headId);
-          }
-        }
-        chainPreAdvanced = true;
-      }
-      }
+      // The Sequence audio lookahead owns all handoffs, including self-timed toys.
+      g_sequenceChains.updateCurrent(Number(info.currentTick) || 0);
 
       // --- Phase A: chain-active flags ---
       const tActiveStart = __perfOn ? performance.now() : 0;
       const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
       const activeToyIds = forceSequencerAll
         ? new Set(getSequencedToys().map(p => p.id).filter(Boolean))
-        : new Set(g_chainState.values());
+        : g_sequenceChains.getActiveToyIds();
       const hasActiveToys = activeToyIds.size > 0;
       if (debugFirstStep()) {
         console.log('[chain][debug] activeToyIds', {
@@ -8225,7 +7584,7 @@ function scheduler(){
         return false;
       })();
 
-      if (CHAIN_FEATURE_ENABLE_MARK_ACTIVE && hasActiveToys && activeChanged) {
+      if (CHAIN_FEATURE_ENABLE_MARK_ACTIVE && activeChanged) {
         const tMarkDomStart = __perfOn ? performance.now() : 0;
         document.querySelectorAll('.toy-panel[id]').forEach(toy => {
           const isActive = activeToyIds.has(toy.id);
@@ -8640,32 +7999,9 @@ async function boot(){
         return;
       }
 
-      // Instrument picker
-      if (action === 'instrument') {
-        try {
-          const chosen = await openInstrumentPicker({
-            panel,
-            toyId: (panel.dataset.audiotoyid || panel.dataset.toyid || panel.dataset.toy || panel.id || 'master'),
-          });
-          if (!chosen) return;
-          const val = String((typeof chosen === 'string' ? chosen : chosen?.value) || '');
-          if (!val) return;
-          const chosenNote = (typeof chosen === 'object' && chosen) ? chosen.note : null;
-          const chosenOctave = (typeof chosen === 'object' && chosen) ? chosen.octave : null;
-          const chosenPitchShift = (typeof chosen === 'object' && chosen) ? chosen.pitchShift : null;
+      // Instrument buttons share a single picker and per-toy edit path.
+      if (action === 'instrument') { await chooseToyInstrument(panel); return; }
 
-          panel.dataset.instrument = val;
-          panel.dataset.instrumentPersisted = '1';
-          if (chosenOctave !== null && chosenOctave !== undefined) panel.dataset.instrumentOctave = String(chosenOctave);
-          if (chosenPitchShift !== null && chosenPitchShift !== undefined) panel.dataset.instrumentPitchShift = chosenPitchShift ? '1' : '0';
-          if (chosenNote) panel.dataset.instrumentNote = String(chosenNote);
-          else delete panel.dataset.instrumentNote;
-
-          try { panel.dispatchEvent(new CustomEvent('toy-instrument', { bubbles: true, composed: true, detail:{ value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift } })); } catch {}
-          try { panel.dispatchEvent(new CustomEvent('toy:instrument', { detail:{ name: val, value: val, note: chosenNote, octave: chosenOctave, pitchShift: chosenPitchShift }, bubbles:true })); } catch {}
-        } catch {}
-        return;
-      }
     }, true);
     document.querySelectorAll('.toy-panel').forEach(initToyChaining);
     // Initial sync once toys are present
@@ -8804,96 +8140,29 @@ async function boot(){
     }
   });
 
-  // Add event listener for bouncer-driven chain advancement
-  document.addEventListener('chain:next', (e) => {
-    const panel = e.target.closest('.toy-panel');
-    if (!panel) return;
+  // Legacy completion events remain toy/visual notifications only.
+  document.addEventListener('chain:next', () => {});
 
-    // Only toys that manage their own lifecycle should fire this event.
-    if (panel.dataset.toy !== 'bouncer' && panel.dataset.toy !== 'rippler') return;
-
-    const head = findChainHead(panel);
-    if (!head) return;
-
-    const headId = head.id;
-    const activeToyId = g_chainState.get(headId);
-
-    // Only advance if the event is from the currently active toy in the chain
-    if (activeToyId !== panel.id) return;
-    advanceChain(headId, e.detail?.completedAt);
-  });
-
-  // A new head gesture replaces the entire current turn, including queued audio.
   document.addEventListener('chain:restart', (e) => {
     const head = e.target.closest('.toy-panel');
     if (!head || head.dataset.prevToyId || !head.dataset.nextToyId) return;
-    const seen = new Set();
-    let toy = head;
-    while (toy && !seen.has(toy.id)) {
-      seen.add(toy.id);
-      toy.dispatchEvent(new CustomEvent('chain:stop', { bubbles: false }));
-      const audioId = toy.dataset.audiotoyid || toy.__audioToyId || toy.id;
-      cancelScheduledToySources(audioId);
-      if (audioId !== toy.id) cancelScheduledToySources(toy.id);
-      bumpToyAudioGen(audioId, 'chain-restart');
-      toy.__forceSchedulerReset = true;
-      delete toy.__chainStartAt;
-      delete toy.__chainTurnStartTick;
-      delete toy.__chainTurnEndTick;
-      toy.dataset.chainActive = toy === head ? 'true' : 'false';
-      toy = document.getElementById(toy.dataset.nextToyId);
-    }
-    g_chainState.set(head.id, head.id);
-    try {
-      const turnTick = getPositionAtAudioTime(ensureAudioContext()?.currentTime || 0);
-      activatePlaybackInstanceForChainTurn(head.id, turnTick, { loopLengthTicks: TICKS_PER_BAR });
-      head.__chainTurnStartTick = turnTick;
-      head.__chainTurnEndTick = turnTick + TICKS_PER_BAR;
-      head.__chainJustActivated = true;
-      head.__forceSchedulerReset = true;
-    } catch {}
+    updateChains();
+    g_sequenceChains.retrigger(head.id, transportRegistry.get(MAIN_TRANSPORT_ID).getState());
   });
 
-  // Add event listener for toys to request becoming the active link in a chain.
-  document.addEventListener('chain:set-active', (e) => {
-    const panel = e.target.closest('.toy-panel');
-    if (!panel) return;
+  // Definition edits must not move a Sequence. The old set-active requests are
+  // no longer musical authority; deliberate head gestures use chain:restart.
+  document.addEventListener('chain:set-active', () => {});
 
-    const head = findChainHead(panel);
-    if (!head) return;
+  document.addEventListener('toy:retrigger', (e) => {
+    const head = e.target.closest('.toy-panel');
+    if (!head || head.dataset.prevToyId || !head.dataset.nextToyId) return;
+    updateChains();
+    g_sequenceChains.retrigger(head.id, transportRegistry.get(MAIN_TRANSPORT_ID).getState());
+  }, true);
 
-    g_chainState.set(head.id, panel.id);
-    try {
-      const turnTick = getPositionAtAudioTime(ensureAudioContext()?.currentTime || 0);
-      activatePlaybackInstanceForChainTurn(panel.id, turnTick, { loopLengthTicks: TICKS_PER_BAR });
-      panel.__chainTurnStartTick = turnTick;
-      panel.__chainTurnEndTick = turnTick + TICKS_PER_BAR;
-      panel.__chainJustActivated = true;
-      panel.__forceSchedulerReset = true;
-    } catch {}
-  });
-
-  // Add event listener for instrument propagation down chains
-  document.addEventListener('toy-instrument', (e) => {
-    const sourcePanel = e.target.closest('.toy-panel');
-    // Only propagate from chain heads (or standalone toys)
-    if (!sourcePanel || sourcePanel.dataset.prevToyId) {
-      return;
-    }
-
-    const instrument = e.detail.value;
-    let current = sourcePanel;
-    while (current && current.dataset.nextToyId) {
-      const nextToy = document.getElementById(current.dataset.nextToyId);
-      if (!nextToy) break;
-
-      nextToy.dataset.instrument = instrument;
-      nextToy.dataset.instrumentPersisted = '1';
-      nextToy.dispatchEvent(new CustomEvent('toy-instrument', { detail: { value: instrument }, bubbles: true }));
-      nextToy.dispatchEvent(new CustomEvent('toy:instrument', { detail: { name: instrument, value: instrument }, bubbles: true }));
-      current = nextToy;
-    }
-  });
+  // Add event listener for instrument propagation: retired. Each musical toy
+  // owns its sound; only creation-time quick-add inherits a source sound.
 
   window.addEventListener('overview:transition', () => {
     try {
@@ -8930,22 +8199,6 @@ async function boot(){
     });
   }, { passive: true });
 
-  function isActivelyEditingToy() {
-    try {
-      if (typeof window !== 'undefined') {
-        if (window.__focusEditingActive === true) return true;
-        if (window.__isFocusEditing === true) return true;
-      }
-      const body = document.body;
-      if (!body) return false;
-      return body.classList.contains('toy-editing') ||
-             body.classList.contains('focused-editing') ||
-             body.classList.contains('toy-focus-editing') ||
-             body.classList.contains('focus-editing');
-    } catch {
-      return false;
-    }
-  }
 
   function handleOverviewPanelMove(e) {
     const st = g_overviewPanelDrag;
@@ -8958,6 +8211,7 @@ async function boot(){
     const ny = st.startTop + dy / Math.max(scale, 0.0001);
     st.panel.style.left = `${nx}px`;
     st.panel.style.top = `${ny}px`;
+    g_branchDrag.sync();
 
     try {
       window.ToySpawner?.updatePanelDrag?.({ clientX: e.clientX, clientY: e.clientY });
@@ -9366,11 +8620,3 @@ import { PERF_FLAGS } from "./perf-flags.js";
 
 // Expose for live debugging / perf-lab runs
 window.PERF_FLAGS = PERF_FLAGS;
-
-
-
-
-
-
-
-

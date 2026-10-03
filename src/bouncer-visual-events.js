@@ -9,13 +9,14 @@ export function createBouncerVisualEventQueue() {
     return true;
   }
 
-  function drain(audioTime, playbackInstanceId = null) {
+  function drain(audioTime, playbackInstanceId = null, { isUpcomingInstance = () => false } = {}) {
     const now = Number(audioTime);
     if (!Number.isFinite(now)) return [];
     const due = [];
     for (let index = 0; index < pending.length;) {
       const event = pending[index];
       if (event.playbackInstanceId && playbackInstanceId && event.playbackInstanceId !== playbackInstanceId) {
+        if (event.audioTime > now && isUpcomingInstance(event.playbackInstanceId)) break;
         pending.splice(index, 1);
         continue;
       }

@@ -1,5 +1,5 @@
 // src/audio-samples.js — samples + tone fallback (<=300 lines)
-import { ensureAudioContext, getToyGain, registerActiveNode, getLoopInfo } from './audio-core.js';
+import { ensureAudioContext, getToyGain, registerActiveNode, getLoopInfo, withActiveNodeCollector } from './audio-core.js';
 import { playById, noteToFreq, TONE_NAMES } from './audio-tones.js';
 
 // id -> { url, synth }
@@ -18,11 +18,10 @@ const entries = new Map();
 // id -> AudioBuffer
 const buffers = new Map();
 
-// Track scheduled sample sources so we can cancel pending notes on pause/resume.
-// Note: this only covers AudioBufferSourceNode-based samples (not tone synth fallbacks).
+// Track sample and synth sources so retrigger can cancel all pending toy notes.
 const __scheduledSampleByToy = new Map(); // toyId -> Set<{ src: AudioBufferSourceNode, tStart: number }>
 
-function __trackScheduledSample(toyId, src, tStart){
+export function trackScheduledToySource(toyId, src, tStart){
   if (!toyId || !src) return;
   const id = String(toyId);
   let set = __scheduledSampleByToy.get(id);
@@ -41,7 +40,14 @@ function __trackScheduledSample(toyId, src, tStart){
   } catch {}
 }
 
-/** Stop and forget any scheduled (future) sample sources for a toy (or all toys if toyId is falsy). */
+const __trackScheduledSample = trackScheduledToySource;
+
+function playToneForToy(toyId, id, frequency, when, destination, velocity, options) {
+  return withActiveNodeCollector(node => __trackScheduledSample(toyId || 'master', node, when),
+    () => playById(id, frequency, when, destination, velocity, options));
+}
+
+/** Stop and forget any scheduled future sources for a toy (or all toys if toyId is falsy). */
 export function cancelScheduledToySources(toyId){
   try{
     const ctx = ensureAudioContext();
@@ -432,7 +438,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
   if (synthId){
     const sNorm = String(synthId||'').toLowerCase().replace(/_/g,'-');
     const toneId = TONE_NAMES.includes(sNorm) ? sNorm : 'tone';
-    return playById(toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(toyId||'master'), effectiveGain, options);
+    return playToneForToy(toyId, toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(toyId||'master'), effectiveGain, options);
   }
   return false;
 }
@@ -471,8 +477,8 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
     // Common "tone (sine)" pattern: prefer the inner token if present
     const m = /\(([a-z-\s_]+)\)/.exec(id.toLowerCase());
     const inner = m ? m[1].trim().replace(/[_\s]+/g,'-') : '';
-      if (inner && TONE_NAMES.includes(inner)) return playById(inner, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
-      if (TONE_NAMES.includes(idLoose)) return playById(idLoose, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
+      if (inner && TONE_NAMES.includes(inner)) return playToneForToy(toyId, inner, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
+      if (TONE_NAMES.includes(idLoose)) return playToneForToy(toyId, idLoose, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
     }catch{}
 
   // exact or alias match first
@@ -530,7 +536,7 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
       if (s && (s === id || sNorm === id || s === iNorm || sNorm === iNorm)){
         const toneId2 = TONE_NAMES.includes(sNorm) ? sNorm : (TONE_NAMES.includes(s) ? s : 'tone');
         const effectiveVel = vel * getEntryVolumeMultiplier(ent);
-        const ok = playById(toneId2, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), effectiveVel);
+        const ok = playToneForToy(toyId, toneId2, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), effectiveVel);
         if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
         return ok;
       }
@@ -553,7 +559,7 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
       console.warn('[audio] instrument not found:', id, '— using', toneId);
     }
   }catch{}
-  const ok = playById(toneId, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
+  const ok = playToneForToy(toyId, toneId, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
   if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
   return ok;
 }

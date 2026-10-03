@@ -64,10 +64,10 @@ test('shared side-button contract fixes anchor, hit area, offset, scaling, and z
   assert.equal(button.dataset.sideButtonPosition, 'shared');
 });
 
-test('production has one shared chain-button positioning path and no per-toy override', async () => {
+test('shared connector ports retain the established side anchor without per-toy overrides', async () => {
   const main = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
   const css = await readFile(new URL('../style.css', import.meta.url), 'utf8');
-  assert.match(main, /applyToySideButtonPosition\(panel, extendBtn\)/);
+  assert.match(main, /getToyPoint: getChainAnchor/);
   assert.match(main, /measureToySideAnchor\(panel\)/);
   assert.doesNotMatch(main, /right:\s*-65px/);
   assert.doesNotMatch(css, /data-toy=["']bouncer["'][^{}]*toy-chain-btn/);

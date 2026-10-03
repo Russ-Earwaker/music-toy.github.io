@@ -4,7 +4,7 @@
 // Features:
 // - Screen-space canvas overlay (not affected by board pan/zoom transform)
 // - Central "energy ball" (simple circle + glow)
-// - Idle animation when transport is stopped
+// - Resting core when transport is paused/stopped
 // - Beat/bar pulses when transport is running
 // - Directional background gradient that points toward the anchor when off-screen
 // - Mini "home" button under the ? button to recenter the camera
@@ -18,6 +18,18 @@ import {
   updateOrbitParticleStreamMetrics,
 } from './tutorial-fx.js';
 import { BEATS_PER_BAR } from './audio-core.js';
+import { MAIN_TRANSPORT_ID, transportRegistry } from './transport-registry.js';
+import { createHeartbeatVisualModel, getHeartbeatVisualPhase } from './heartbeat-visuals.js';
+import { getRect } from './layout-cache.js';
+
+const heartbeatVisuals = createHeartbeatVisualModel();
+function clearOwnershipVisuals() {
+  globalThis.__HEARTBEAT_VISUAL_DEBUG = null;
+}
+function drawOwnershipVisuals(local, transportState) {
+  // Drawing, attachment and editing belong to the shared connector view.
+  globalThis.__HEARTBEAT_VISUAL_DEBUG = heartbeatVisuals.update(null, transportState);
+}
 
 const DEFAULT_WORLD_POS = Object.freeze({ x: 0, y: 0 });
 
@@ -37,16 +49,6 @@ function perfMark(dt) {
 
 function __anchIsGesturing() {
   try { return !!window.__GESTURE_ACTIVE; } catch {}
-  return false;
-}
-
-function isViewportSettling(cooldownMs = 320) {
-  try {
-    if (window.__mtZoomGesturing || window.__GESTURE_ACTIVE || window.__camTweenLock) return true;
-    const ts = Number(window.__MT_LAST_VIEWPORT_GESTURE_TS);
-    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    if (Number.isFinite(ts) && (now - ts) < cooldownMs) return true;
-  } catch {}
   return false;
 }
 
@@ -81,8 +83,6 @@ let lastCenterWorldTs = 0;
 
 let pulseBeat = 0;
 let pulseBar = 0;
-let pulseBeatT = 1; // 0..1
-let pulseBarT = 1;  // 0..1
 let beatDurSec = 0.5;
 let flashingCells = [];
 let lastFlashedCells = new Set();
@@ -258,6 +258,7 @@ function onResize() {
 }
 
 function teardown() {
+  clearOwnershipVisuals();
   try { window.removeEventListener('resize', onResize); } catch {}
   try { window.removeEventListener('overview:transition', onResize); } catch {}
   try {
@@ -307,7 +308,7 @@ function teardown() {
   miniStyleEl = null;
 }
 
-function getAnchorWorld() {
+export function getAnchorWorld() {
   try {
     if (window.__ArtInternal?.isActive?.()) {
       const home = window.__ArtInternal?.getHomeAnchor?.();
@@ -512,7 +513,7 @@ function ensureMiniButton() {
 function getViewportLocalPointFromWorld(worldPt) {
   const host = pickHost();
   if (!host) return null;
-  const vpRect = host.getBoundingClientRect();
+  const vpRect = getRect(host);
   let { scale = 1, tx = 0, ty = 0 } = getViewportTransform?.() || {};
   const flag = window?.__ZOOM_GESTURE_FLAG;
   if (flag?.active) {
@@ -528,7 +529,7 @@ function getViewportLocalPointFromWorld(worldPt) {
   let y = worldPt.y * safeScale + safeTy;
 
   const board = document.getElementById('board');
-  const boardRect = board?.getBoundingClientRect?.();
+  const boardRect = getRect(board);
   if (boardRect) {
     const expectedLeft = vpRect.left + safeTx;
     const expectedTop = vpRect.top + safeTy;
@@ -831,30 +832,12 @@ function getDistanceWorldFromCenter(anchorWorld) {
   } catch { return 0; }
 }
 
-function triggerBeatPulse(intensity = 1) {
-  // Replace, don’t accumulate (so pulses don’t overlap).
-  pulseBeat = clamp(intensity, 0, 2.0);
-    pulseBeatT = 0;
+function triggerBeatPulse() {
   triggerGridFlash(3);
 }
-function triggerBarPulse(intensity = 1) {
-  pulseBar = clamp(intensity, 0, 3.0);
-    pulseBarT = 0;
+function triggerBarPulse() {
   triggerGridFlash(6);
 }
-function servicePulses(dt) {
-  const d = Math.max(0.08, beatDurSec || 0.5);
-  pulseBeatT = clamp(pulseBeatT + dt / d, 0, 1);
-  pulseBarT  = clamp(pulseBarT  + dt / d, 0, 1);
-
-  // Simple one-beat “thump” curve (fast up, smooth down)
-  const beatEnv = 1 - pulseBeatT;
-  const barEnv  = 1 - pulseBarT;
-
-  pulseBeat = pulseBeat * beatEnv;
-  pulseBar  = pulseBar  * barEnv;
-}
-
 function serviceFlashes(dt) {
   if (flashingCells.length === 0) return;
   const barSec = Math.max(0.001, beatDurSec * BEATS_PER_BAR);
@@ -998,10 +981,9 @@ function serviceLoopTriggers(loopInfo, running) {
 function clearFrame() {
   if (!ctx || !canvas) return;
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.width / dpr;
-  const h = canvas.height / dpr;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, w, h);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 function clampToEdge(cx, cy, x, y, w, h, pad) {
@@ -1139,7 +1121,7 @@ function drawAnchorGrid(local, drawScale = 1) {
 function drawAnchorParticles(local, nowSec, running, drawScale = 1, pulseBeat = 0, pulseBar = 0, corePulseActive = false) {
     if (!ctx) return;
 
-    const idle = 0.5 + 0.5 * Math.sin(nowSec * 1.2);
+    const idle = 0.5;
     const energy = clamp((running ? 0.52 : 0.28) + idle * 0.20 + pulseBeat * 0.25 + pulseBar * 0.48, 0, 2.6);
     const coreR = CORE_BASE_R_PX + energy * CORE_PULSE_R_PX;
 
@@ -1251,15 +1233,14 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
   lastNowMs = now;
   const internalMode = !!document.body?.classList?.contains?.('internal-board-active');
 
-  serviceLoopTriggers(loopInfo, !!running);
-  servicePulses(dt);
+  const transportState = transportRegistry.get(MAIN_TRANSPORT_ID).getState();
+  running = transportState.state === 'playing';
+  serviceLoopTriggers(loopInfo, running);
+  // Envelope is recomputed from authoritative ticks, never integrated wall time.
+  const visualPhase = getHeartbeatVisualPhase(transportState);
+  pulseBeat = visualPhase.energy;
+  pulseBar = visualPhase.beat % BEATS_PER_BAR === 0 ? visualPhase.energy * 0.35 : 0;
   serviceFlashes(dt);
-  const settling = isViewportSettling();
-  if (settling) {
-    // Avoid perceived "flash at pan end" by damping pulse energy during motion settle.
-    pulseBeat = 0;
-    pulseBar = 0;
-  }
 
   const anchorWorld = getAnchorWorld();
   updateMarkerPos(anchorWorld);
@@ -1276,6 +1257,7 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
   else if (target < offscreenFade01) offscreenFade01 = Math.max(0, offscreenFade01 - step);
 
   clearFrame();
+  drawOwnershipVisuals(local, transportState);
 
   const distWorld = getDistanceWorldFromCenter(anchorWorld);
   const nowSec = now / 1000;
@@ -1299,16 +1281,15 @@ export function tickBoardAnchor({ nowMs, loopInfo, running } = {}) {
   if (doFull) drawAnchorGrid(local, drawScale);
 
   drawGradient(local, distWorld, !!running, drawScale);
-  // Keep anchor visible during drag/settle, but remove pulse energy so it
-  // doesn't burst at pan end.
+  // Beat energy remains phase-correct during camera motion too.
   drawAnchorParticles(
     local,
     nowSec,
-    settling ? false : !!running,
+    !!running,
     drawScale,
-    settling ? 0 : pulseBeat,
-    settling ? 0 : pulseBar,
-    settling ? false : anchorGuideActive
+    pulseBeat,
+    pulseBar,
+    anchorGuideActive
   );
   updateHoverFx(local, drawScale);
   if (tA) perfMark(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - tA);

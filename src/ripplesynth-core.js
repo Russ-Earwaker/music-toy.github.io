@@ -323,9 +323,10 @@ export function createRippleSynth(selector){
   lifecycle.addCleanup?.(() => { deactivatePlaybackInstance(panel.id); removePlaybackInstance(panel.id); });
   const beginRecordingPass = ({ clearPattern = true } = {}) => {
     const transport = getTransportState();
-    const requestedTick = transport.state === 'playing'
+    let requestedTick = transport.state === 'playing'
       ? nextRipplerRecordingStartTick(transport.currentTick, TICKS_PER_BAR)
       : transport.currentTick;
+    if (panel.__sequenceDefinitionId) requestedTick = panel.__getSequenceNextTurn?.(transport.currentTick)?.startTick ?? requestedTick;
     const previous = getPlaybackInstance(panel.id);
     const instance = activatePlaybackInstance(panel.id, requestedTick, {
       loopLengthTicks: TICKS_PER_BAR,
@@ -340,7 +341,7 @@ export function createRippleSynth(selector){
       touchPattern();
     }
     recording = true;
-    barStartAT = tickToAudioTime(instance.startTick);
+    barStartAT = tickToAudioTime(panel.__sequenceDefinitionId ? requestedTick : instance.startTick);
     nextSlotAT = barStartAT + stepSeconds();
     nextSlotIx = 1;
     ripples.length = 0;
@@ -574,6 +575,12 @@ export function createRippleSynth(selector){
     for (const b of blocks) { b._visFlashAt = 0; b.flashEnd = 0; }
   }
   lifecycle.listen(panel, 'chain:stop', doSoftReset);
+  panel.__sequenceTurnEnded = () => {
+    recording = false;
+    __schedState.turnOver = false;
+    __schedState.chainAdvanceAt = 0;
+  };
+  lifecycle.addCleanup(() => { delete panel.__sequenceTurnEnded; });
 
   const getBlockRects = makeGetBlockRects(n2x, n2y, sizing, BASE, blocks);
 
@@ -730,6 +737,7 @@ export function createRippleSynth(selector){
         const instance = typeof getPlaybackInstance === 'function' ? getPlaybackInstance(panel.id) : null;
         const hasTickTransport = !!instance && typeof getPositionAtAudioTime === 'function';
         const hitTick = hasTickTransport ? getPositionAtAudioTime(whenAT) : 0;
+        if (panel.__sequenceDefinitionId && (hitTick >= panel.__chainTurnEndTick || hitTick < getPositionAtAudioTime(barStartAT))) continue;
         const rawOffsetTick = hasTickTransport ? Math.max(0, hitTick - instance.startTick) : 0;
         const legacySlotLen = stepSeconds();
         const legacySlot = Math.max(0, Math.floor(((whenAT - barStartAT) + 1e-6) / legacySlotLen)) % NUM_STEPS;
@@ -1038,8 +1046,11 @@ export function createRippleSynth(selector){
                 barStartAT = nowAT;
                 nextSlotAT = barStartAT + stepSeconds();
                 nextSlotIx = 1;
-                pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear());
-                recording = true;
+                // A learned Sequence child replays at its assigned phase; only
+                // a missing/invalidated pattern requires a new learning pass.
+                const needsLearning = !panel.__sequenceDefinitionId || !pattern.some(set => set.size > 0);
+                if (needsLearning) { pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); }
+                recording = needsLearning;
                 __deferredSpawn = false; // Consume any deferred spawn from other actions
             } else {
                 // No generator, start a "ghost" timer to advance the chain, but
@@ -1059,7 +1070,7 @@ export function createRippleSynth(selector){
 
         if (__schedState.chainAdvanceAt > 0 && ac.currentTime >= __schedState.chainAdvanceAt) {
             // Only advance if this toy is the currently active one.
-            if (isChained && isActiveInChain) {
+            if (isChained && isActiveInChain && !panel.__sequenceDefinitionId) {
                 // A toy's turn is over. If it has a pending preview state, apply it now
                 // so it's ready for the next time it becomes active.
                 if (hasPreviewState || previewGenerator.placed) {
@@ -1216,10 +1227,12 @@ export function createRippleSynth(selector){
     panel.__applyRipplerSnapshot = (st={}) => {
       try{
         if (st.instrument){
+          currentInstrument = st.instrument;
           try{ ui.setInstrument(st.instrument); }catch{}
           try{
             panel.dataset.instrument = st.instrument;
             panel.dataset.instrumentPersisted = '1';
+            panel.dispatchEvent(new CustomEvent('toy:instrument', { detail: { value: st.instrument, name: st.instrument }, bubbles: true }));
           }catch{}
         } else {
           delete panel.dataset.instrumentPersisted;

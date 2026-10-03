@@ -2075,6 +2075,7 @@ if (document.readyState === 'loading') {
             } catch {}
 
             try{ localStorage.removeItem('toyPositions'); }catch{}
+            window.clearCreationGraph?.();
           }
 
           try{

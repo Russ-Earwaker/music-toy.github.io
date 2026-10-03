@@ -5,6 +5,12 @@ import { loadInstrumentEntries } from './instrument-catalog.js';
 import { resumeAudioContextIfNeeded, setToyVolume, getToyVolume } from './audio-core.js';
 import { noteList } from './utils.js';
 import { triggerInstrument } from './audio-samples.js';
+import { createInstrumentPopupOwner } from './instrument-popup-lifecycle.js';
+
+let activePicker = null;
+export function closeInstrumentPicker(panel = null) {
+  if (!panel || activePicker?.panel === panel) activePicker?.session.close();
+}
 
 function el(tag, cls, text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text) e.textContent=text; return e; }
 
@@ -16,6 +22,9 @@ function buildOverlay(){
   const host = el('div','inst-host');
   // Build a proper panel using existing toy styles
   const panel = el('div','toy-panel inst-panel');
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-label', 'Choose Instrument');
   panel.dataset.focusSkip = '1'; // treat picker as standalone, not part of toy focus ring
   const header = el('div','toy-header');
   const title = el('div','toy-title'); title.textContent = 'Choose Instrument';
@@ -86,6 +95,13 @@ function parseOctaveFromNote(note){
 }
 
 export async function openInstrumentPicker({ panel, toyId }){
+  closeInstrumentPicker();
+  let finish = null;
+  const session = createInstrumentPopupOwner({ panel, document, onClose: result => {
+    if (activePicker?.session === session) activePicker = null;
+    finish?.(result);
+  } });
+  activePicker = { panel, session };
   const ov = buildOverlay();
   const host = ov.querySelector('.inst-host');
   const filters = ov.querySelector('.inst-filters');
@@ -96,7 +112,9 @@ export async function openInstrumentPicker({ panel, toyId }){
   const footer = ov.querySelector('.inst-picker-footer');
 
   // Load entries and build categories
-  const entries = await loadInstrumentEntries();
+  let entries;
+  try { entries = await loadInstrumentEntries(); } catch (error) { session.close(); throw error; }
+  if (session.closed || panel && !panel.isConnected) { session.close(); return null; }
 
   const normalizeId = (val)=> String(val || '').trim().toLowerCase().replace(/_/g, '-');
   const getEntryKey = (entry)=>{
@@ -408,7 +426,7 @@ export async function openInstrumentPicker({ panel, toyId }){
 
   function close(result){
     ov.classList.remove('open');
-    window.setTimeout(()=>{ ov.style.display='none'; }, 120);
+    ov.style.display='none';
     try{ host?.removeEventListener('wheel', wheelBlocker, { passive: false }); }catch{}
     // Restore volumes using ref-counted ducking
     try{
@@ -442,17 +460,18 @@ export async function openInstrumentPicker({ panel, toyId }){
   }
   let resolve;
   const p = new Promise(r=> resolve=r);
+  finish = close;
   okBtn.onclick = ()=>{
     const finalValue = selected || current || null;
-    if (!finalValue) return close(null);
-    close({ value: finalValue, note: pitchShiftEnabled ? noteForOctave() : null, octave: selectedOctave, pitchShift: pitchShiftEnabled });
+    if (!finalValue) return session.close(null);
+    session.close({ value: finalValue, note: pitchShiftEnabled ? noteForOctave() : null, octave: selectedOctave, pitchShift: pitchShiftEnabled });
   };
-  cancelBtn.onclick = ()=> close(null);
-  backdrop.onclick = ()=> close(null);
+  cancelBtn.onclick = ()=> session.close(null);
+  backdrop.onclick = ()=> session.close(null);
 
   // Open
   ov.style.display='block';
-  requestAnimationFrame(()=> ov.classList.add('open'));
+  requestAnimationFrame(()=> { if (!session.closed) ov.classList.add('open'); });
   return p;
 }
 

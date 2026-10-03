@@ -812,6 +812,32 @@ body.internal-board-active #internal-board-viewport.board-viewport {
   align-items: center;
 }
 
+/* Shared musical-toy instrument control; label does not change panel bounds. */
+.toy-inst-btn { position: relative; flex: 0 0 auto; }
+.toy-panel[data-instrument-colour] .toy-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: var(--instrument-colour);
+  pointer-events: none;
+}
+
+.toy-instrument-name {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text, #fff);
+  font: 600 16px/1.25 sans-serif;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
 /* -------------------- */
 /* --- UI Controls ---- */
 /* -------------------- */

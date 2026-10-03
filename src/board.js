@@ -83,6 +83,7 @@ export function initDragBoard(boardSel = '#board') {
     const rects = [];
     board.querySelectorAll(':scope > .toy-panel').forEach(other => {
       if (other === panel) return;
+      if (window.__graphIsDragDescendant?.(panel.id,other.id)) return;
       if (other.classList.contains('toy-zoomed')) return;
       const r = getPanelRect(other);
       if (r.w <= 0 || r.h <= 0) return;
@@ -153,8 +154,10 @@ export function initDragBoard(boardSel = '#board') {
       const eased = 1 - Math.pow(1 - t, 3);
       const x = from.x + (to.x - from.x) * eased;
       const y = from.y + (to.y - from.y) * eased;
+      const dx=x-(parseFloat(panel.style.left)||0),dy=y-(parseFloat(panel.style.top)||0);
       panel.style.left = x + 'px';
       panel.style.top = y + 'px';
+      window.__graphTranslateDragDescendants?.(panel.id,dx,dy);
       if (shouldNotifyChain) notifyChainMove(panel);
       if (t < 1) {
         requestAnimationFrame(tick);
@@ -199,6 +202,7 @@ export function initDragBoard(boardSel = '#board') {
     drag.style.position='absolute';
     drag.style.left = nx + 'px';
     drag.style.top  = ny + 'px';
+    window.__graphBranchDragSync?.();
     const rect = getPanelRect(drag, nx, ny);
     const overlap = overlapsAny(rect, collectOtherRects(drag));
     dragOverlapping = overlap;
