@@ -7,13 +7,14 @@ import { getToyLifecycle } from './baseMusicToy/toyLifecycle.js';
 import { startSection } from './perf-meter.js';
 import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
+import { getBouncerResponseColor } from './bouncer-response-style.js';
 
 export function createBouncerDraw(env){
   const {
     panel, canvas, ctx, sizing, resizeCanvasForDPR, renderScale, physW, physH, EDGE,
     ensureEdgeControllers, edgeControllers, blockSize, blocks, handle,
     particles, drawEdgeBondLines, ensureAudioContext, noteList,
-    drawEdgeDecorations, edgeFlash, getLoopInfo,
+    drawEdgeDecorations, edgeFlash, getLoopInfo, getTransportState,
     getPreviewState, applyPreviewState,
     stepBouncer, buildStateForStep, applyFromStep, installInteractions,
     getBall, lockPhysWorld, getAim, spawnBallFrom, getLastLaunch,
@@ -150,7 +151,7 @@ export function createBouncerDraw(env){
     }catch{}
 
     // Edge bond decorations
-    try{ drawEdgeBondLines(ctx, w, h, EDGE, edgeControllers); }catch{}
+    // Border responses are drawn with their controller cubes after due events.
 
     // Aim line (neon) and spawn ring
     try{
@@ -172,13 +173,29 @@ export function createBouncerDraw(env){
       // reaches the event time so visuals align with the heard note and ball.
       const dueReplayVisuals = drainScheduledReplayVisuals?.(ensureAudioContext()?.currentTime ?? 0) || [];
       for (const event of dueReplayVisuals) {
-        if (event.blockIndex != null && blocks?.[event.blockIndex]) blockFlashes[event.blockIndex] = 1;
-        if (event.edgeControllerIndex != null && edgeControllers?.[event.edgeControllerIndex]) edgeFlashes[event.edgeControllerIndex] = 1;
-        panel.__pulseHighlight = 1;
+        const isImpact = event.kind === 'impact';
+        if (event.blockIndex != null && blocks?.[event.blockIndex]) {
+          if (!isImpact) blockFlashes[event.blockIndex] = 1;
+        }
+        if (event.edgeControllerIndex != null && edgeControllers?.[event.edgeControllerIndex]) {
+          if (!isImpact) edgeFlashes[event.edgeControllerIndex] = 1;
+        }
+        if (!isImpact) panel.__pulseHighlight = 1;
       }
       // Decay local flash values for animation. The physics step sets flash to 1.0 on hit.
       for (let i = 0; i < (blocks?.length || 0); i++) { blockFlashes[i] = Math.max(0, (blockFlashes[i] || 0) - 0.08); }
       for (let i = 0; i < (edgeControllers?.length || 0); i++) { edgeFlashes[i] = Math.max(0, (edgeFlashes[i] || 0) - 0.08); }
+      const edgeResponses = {};
+      for (let i = 0; i < (edgeControllers?.length || 0); i++) {
+        const controller = edgeControllers[i];
+        if (!controller) continue;
+        if (controller.active === false) controller.pendingHit = null;
+        edgeResponses[controller.edge] = {
+          color: getBouncerResponseColor(controller),
+          flash: edgeFlashes[i] || 0,
+        };
+      }
+      drawEdgeBondLines(ctx, w, h, EDGE, edgeControllers, edgeResponses);
 
       // Check if in advanced/zoomed view for showing note labels
       const isAdv = !!canvas.closest('.toy-zoomed');
@@ -187,6 +204,7 @@ export function createBouncerDraw(env){
       if (blocks) {
         blocks.forEach((b, i) => {
           if (!b) return;
+          if (b.active === false) b.pendingHit = null;
           if (!_loggedCubeOnce && i === 0) {
             _loggedCubeOnce = true;
             const rs = renderScale();
@@ -206,7 +224,7 @@ export function createBouncerDraw(env){
             });
           }
           drawBlock(ctx, b, {
-            variant: 'button', active: b.active !== false, flash: blockFlashes[i] || 0,
+            variant: 'button', active: b.active !== false, baseColor: getBouncerResponseColor(b), flash: blockFlashes[i] || 0,
             noteLabel: isAdv ? (noteList[b.noteIndex] || '') : null, showArrows: isAdv,
           });
         });
@@ -214,8 +232,9 @@ export function createBouncerDraw(env){
       if (edgeControllers) {
         edgeControllers.forEach((c, i) => {
           if (!c) return;
+          if (c.active === false) c.pendingHit = null;
           drawBlock(ctx, c, {
-            variant: 'button', active: c.active !== false, flash: edgeFlashes[i] || 0,
+            variant: 'button', active: c.active !== false, baseColor: getBouncerResponseColor(c), flash: edgeFlashes[i] || 0,
             noteLabel: isAdv ? (noteList[c.noteIndex] || '') : null, showArrows: isAdv,
           });
         });

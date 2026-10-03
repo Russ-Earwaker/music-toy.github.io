@@ -75,6 +75,42 @@ function activationFixture() {
   return { context, block, scales, whiteFlashes, drawAt };
 }
 
+test('a delayed frame records both same-pitch cubes and activates both on replay', () => {
+  const { context } = fixture(false);
+  const sounds = [];
+  const blocks = [0, 1].map(() => ({ nx: 0.75, ny: 0.5, active: true, noteIndex: 0,
+    vx: 0, vy: 0, flashEnd: 0, flashDur: 0.18 }));
+  Object.assign(context, {
+    blocks, recording: true, playbackMuted: false, dragMuteActive: false,
+    generator: { placed: true, nx: 0.5, ny: 0.5 },
+    ripples: [{ startAT: 0, speed: 200, lastHitRadius: 70 }],
+    getBlockRects: () => blocks.map(() => ({ x: 310, y: 200, w: 20, h: 20 })),
+    liveBlocks: new Set(), recordOnly: new Set(),
+    pattern: Array.from({ length: 8 }, () => new Set()),
+    patternOffsets: Array.from({ length: 8 }, () => new Map()),
+    barStartAT: 0, barSec: () => 2, __getQuantDiv: () => 0,
+    getLoopInfo: () => ({ beatLen: 0.5, loopStartTime: 0 }),
+    currentInstrument: 'test', noteList: ['C4'],
+    triggerInstrument: (_instrument, note, when) => sounds.push({ note, when }),
+    __dbg() {}, touchPattern() {},
+  });
+  const a = source.indexOf('  function handleRingHits(');
+  const b = source.indexOf('  function springBlocks(', a);
+  vm.runInContext(source.slice(a, b), context);
+  context.ac.currentTime = 0.65;
+  context.handleRingHits(0.65);
+  assert.equal(sounds.length, 2);
+  assert.deepEqual([...context.pattern[2]], [0, 1]);
+  context.handleRingHits(0.7);
+  assert.equal(sounds.length, 2, 'each cube is hit only once per ripple');
+  const replayStart = source.indexOf('  panel.__sequencerScheduleEvent =');
+  const replayEnd = source.indexOf('\n  };', replayStart) + 5;
+  vm.runInContext(source.slice(replayStart, replayEnd), context);
+  for (const blockIndex of context.pattern[2]) context.panel.__sequencerScheduleEvent({ blockIndex }, 2.65);
+  assert.equal(sounds.length, 4);
+  assert.ok(blocks.every(block => block._visFlashAt === 2.65), 'both cubes receive replay activation');
+});
+
 test('initially disabled cubes join the loop after enabling in either view', () => {
   for (const zoomed of [false, true]) {
     const { context, block, scales, drawAt } = activationFixture();

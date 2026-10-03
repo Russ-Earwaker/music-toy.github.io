@@ -88,3 +88,10 @@ test('resizing preserves logical Rippler state', () => {
   assert.equal(RIPPLER_LOGICAL_HEIGHT, 300);
 });
 
+test('a delayed ripple frame sweeps past the cube hit band without losing the crossing', () => {
+  const source = { x: 0, y: 0 };
+  const blockRect = { x: 100, y: -10, w: 20, h: 20 };
+  assert.equal(doesRippleIntersectBlock({ source, radius: 130, blockRect }), false);
+  assert.equal(doesRippleIntersectBlock({ source, previousRadius: 70, radius: 130, blockRect }), true);
+  assert.equal(doesRippleIntersectBlock({ source, previousRadius: 130, radius: 160, blockRect }), false);
+});

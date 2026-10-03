@@ -108,7 +108,7 @@ export function getBouncerReplayCompletionTick({
 }
 
 export function bouncerEventsInWindow({
-  instance, pattern, blocks, edgeControllers, fromTick, toTick,
+  instance, pattern, blocks, edgeControllers, fromTick, toTick, includeImpactCues = false,
 }) {
   if (!instance?.active || toTick <= fromTick) return [];
   const loop = Math.max(1, cleanTick(instance.loopLengthTicks || BOUNCER_LOOP_TICKS));
@@ -136,12 +136,23 @@ export function bouncerEventsInWindow({
       }
       iteration += 1;
     }
+    if (includeImpactCues && Number.isFinite(Number(event.impactOffsetTick))) {
+      const impactOffsetTick = cleanTick(event.impactOffsetTick) % loop;
+      let impactIteration = Math.max(0, Math.ceil((fromTick - instance.startTick - impactOffsetTick) / loop));
+      for (;;) {
+        const eventTick = instance.startTick + (impactIteration * loop) + impactOffsetTick;
+        if (eventTick >= toTick) break;
+        if (eventTick >= fromTick) {
+          const source = event.blockIndex != null ? `block:${event.blockIndex}`
+            : event.edgeControllerIndex != null ? `edge:${event.edgeControllerIndex}`
+              : `edge-name:${event.edgeName ?? 'unknown'}`;
+          events.push({ ...event, visualOnly: 'impact', eventTick, offsetTick: impactOffsetTick,
+            fireOffsetTick: offsetTick,
+            eventKey: `${source}:impact:${index}` });
+        }
+        impactIteration += 1;
+      }
+    }
   }
   return events.sort((a, b) => a.eventTick - b.eventTick || a.eventKey.localeCompare(b.eventKey));
-}
-
-export function bouncerVisualEventTick(instance, event) {
-  if (!instance?.active || !Number.isFinite(Number(event?.visualOffsetTick))) return null;
-  const loop = Math.max(1, cleanTick(instance.loopLengthTicks || BOUNCER_LOOP_TICKS));
-  return cleanTick(instance.startTick) + (cleanTick(event.visualOffsetTick) % loop);
 }

@@ -713,13 +713,17 @@ export function createRippleSynth(selector){
     if (playbackMuted && !dragMuteActive) return;
     if (!ripples.length || !generator.placed) return;
     const rMain = ripples[ripples.length-1]; rMain.hit = rMain.hit || new Set();
-    const R = Math.max(0, (nowAT - (rMain.startAT||nowAT)) * (rMain.speed||RING_SPEED()));
+    const R = Math.max(0, (nowAT - (rMain.startAT ?? nowAT)) * (rMain.speed||RING_SPEED()));
+    // Sweep the front through the whole elapsed frame so a slow frame cannot
+    // skip a cube's hit band. Each ripple owns its own previous front.
+    const previousRadius = Math.min(R, rMain.lastHitRadius ?? 0);
+    rMain.lastHitRadius = R;
     const band = 9; const gx = n2x(generator.nx), gy = n2y(generator.ny);
     const hitRects = getBlockRects();
     for (let i=0;i<blocks.length;i++){
       const b = blocks[i]; if (!b.active || rMain.hit.has(i)) continue;
       const cx = n2x(b.nx), cy = n2y(b.ny);
-      if (doesRippleIntersectBlock({ source: { x: gx, y: gy }, radius: R, blockRect: hitRects[i], band })){
+      if (doesRippleIntersectBlock({ source: { x: gx, y: gy }, radius: R, previousRadius, blockRect: hitRects[i], band })){
         rMain.hit.add(i);
         const ang = Math.atan2(cy - gy, cx - gx), push = 64 * (sizing.scale || 1); b.vx += Math.cos(ang)*push; b.vy += Math.sin(ang)*push;
         const whenAT = ac.currentTime;
@@ -806,9 +810,9 @@ export function createRippleSynth(selector){
             triggerInstrument(currentInstrument, name, tSched);
             patternOffsets[slotIx].set(i, hasTickTransport ? offsetTick : Math.max(0, whenAT - barStartAT));
           } catch(e) { __dbg('quant-record-fail', e); }
-          const slot = pattern[slotIx]; let existsSame = false;
-          for (const jj of slot){ const nm = noteList[blocks[jj].noteIndex] || 'C4'; if (nm === name){ existsSame = true; break; } }
-          if (!existsSame) slot.add(i); if (recordOnly.has(i)) recordOnly.delete(i);
+          // Cube identity owns its activation, even when another cube has the
+          // same pitch in this slot. The Set already deduplicates this cube.
+          pattern[slotIx].add(i); if (recordOnly.has(i)) recordOnly.delete(i);
           if (typeof touchPattern === 'function') touchPattern();
         }
       }

@@ -29,8 +29,6 @@ export function stepBouncer(S, nowAT){
     console.log(`[BNC_DBG] step: ENTER. ball flightEnd=${S.ball?.flightEnd?.toFixed(3)}`);
   }
 
-  // Global coalescing disabled: allow multiple sources to fire in the same tick.
-  function allowGlobalAtTick(){ return true; }
   // Optional quant debug aggregator
   function dbgMarkFire(label, t){
     try{
@@ -48,29 +46,6 @@ export function stepBouncer(S, nowAT){
       const c = g.counts.get(tick) || 0; g.counts.set(tick, c+1);
     }catch{}
   }
-  // Quantize to next division aligned to project BEAT (not bar), or immediate if off
-  function qSixteenth(){
-    const ac = (S.ensureAudioContext && S.ensureAudioContext()) || null;
-    const at = ac ? ac.currentTime : (S.now || 0);
-    const li = S.getLoopInfo ? S.getLoopInfo() : null;
-    if (li && typeof li.loopStartTime === 'number' && li.barLen){
-      const divRaw = (typeof S.getQuantDiv==='function') ? (S.getQuantDiv()) : 4;
-      const div = Number.isFinite(divRaw) ? divRaw : 4;
-      if (!div || div <= 0) return at + 0.0005; // no quantization
-      // Use beat length so 1/1 = every beat, 1/2 = half-beat, etc.
-      const grid = (li.beatLen || (li.barLen/4)) / div;
-      const anchor = Number.isFinite(S.visQ?.loopRec?.anchorStartTime) ? S.visQ.loopRec.anchorStartTime : li.loopStartTime;
-      const rel  = Math.max(0, at - anchor);
-      const k    = Math.ceil((rel + 1e-6) / grid);
-      return anchor + k * grid;
-    }
-    return at + 0.0005;
-  }
-
-  // Tick de-dupe maps (per-division index since epoch, aligned to beats)
-  S.__lastTickByBlock = S.__lastTickByBlock || new Map();
-  S.__lastTickByEdge  = S.__lastTickByEdge  || new Map();
-
   const ac = S.ensureAudioContext && S.ensureAudioContext();
   const now = nowAT || (ac ? ac.currentTime : (S.lastAT || 0));
 
@@ -176,66 +151,42 @@ export function stepBouncer(S, nowAT){
           if (best.ny != 0) S.ball.vy = -S.ball.vy;
           S.ball.x += best.nx * eps; S.ball.y += best.ny * eps;
 
-          // Compute grid tick for de-dupe
-          let tick16 = null;
-          try {
-            const li = S.getLoopInfo ? S.getLoopInfo() : null;
-            if (li && li.barLen) {
-              // De-dupe logic should use a fixed small interval (e.g., 16th notes)
-              // regardless of the user's quantization setting, to prevent single
-              // physics events from triggering multiple notes.
-              const DEDUPE_DIV = 4; // 4 divisions per beat = 16th notes
-              const baseBeat = (li && (li.beatLen || (li.barLen/4))) || 0;
-              const grid = baseBeat / DEDUPE_DIV;
-              const at = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
-              const rel = Math.max(0, at - li.loopStartTime);
-              tick16 = grid > 0 ? Math.ceil((rel + 1e-6) / grid) : null;
-            }
-          } catch(e){}
-
           // Trigger logic
           if (bestIdx >= 0){
             const b = blocks[bestIdx];
             const isActive = !!(b && b.active !== false);
             if (isActive){
-              // de-dupe per tick
-              const last = S.__lastTickByBlock.get(bestIdx);
-              if (tick16 == null || last !== tick16){
                 const nm = S.noteValue ? (S.noteList && Number.isFinite((b.noteIndex))) ? S.noteList[Math.max(0, Math.min(S.noteList.length-1, ((b.noteIndex)|0)))] : null : null;
-                const t = qSixteenth();
-                // Global coalescing: only one scheduler per tick across all sources (per bar)
-                // Global coalescing disabled: do not suppress other sources in this tick
+                const t = now;
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&b.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
                 // Pass block index for replay logic
-                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { blockIndex: bestIdx, impactAudioTime: now });
-                if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
-                if (S.panel) S.panel.__pulseHighlight = 1.0;
-                dbgMarkFire('block', t);
-                b.flash = 1.0; b.flashDur = 0.12;
-                const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
-                b.flashEnd = at2 + b.flashDur;
-                if (tick16 != null) S.__lastTickByBlock.set(bestIdx, tick16);
-              }
+                const accepted = !!(nm && S.triggerInstrument && S.triggerInstrument(S.instrument, nm, t, { blockIndex: bestIdx, impactAudioTime: now }));
+                if (accepted && S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
+                if (accepted && S.panel && !S.deferImpactVisuals) S.panel.__pulseHighlight = 1.0;
+                if (accepted) dbgMarkFire('block', t);
+                if (accepted && !S.deferImpactVisuals) {
+                  b.flash = 1.0; b.flashDur = 0.12;
+                  const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
+                  b.flashEnd = at2 + b.flashDur;
+                }
             }
           } else if (bestIdx <= -1000){
             const ei = (-1000 - bestIdx) | 0;
             const c = (S.edgeControllers && S.edgeControllers[ei]) ? S.edgeControllers[ei] : null;
             if (c && c.active !== false){
-              const last = S.__lastTickByEdge.get(ei);
-                if (tick16 == null || last !== tick16){
                 const nm = S.noteValue ? (S.noteList && Number.isFinite((c.noteIndex))) ? S.noteList[Math.max(0, Math.min(S.noteList.length-1, ((c.noteIndex)|0)))] : null : null;
-                const t = qSixteenth();
+                const t = now;
                 // Global coalescing disabled: do not suppress other sources in this tick
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&c.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {} // Pass edge controller index for replay logic
-                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeControllerIndex: ei, impactAudioTime: now });
-                if (S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
-                if (S.panel) S.panel.__pulseHighlight = 1.0;
-                dbgMarkFire('edge-controller', t);
-                c.flash = 1.0; c.flashDur = 0.12;
-                const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
-                c.flashEnd = at2 + c.flashDur;
-                if (tick16 != null) S.__lastTickByEdge.set(ei, tick16);
-              }
+                const accepted = !!(nm && S.triggerInstrument && S.triggerInstrument(S.instrument, nm, t, { edgeControllerIndex: ei, impactAudioTime: now }));
+                if (accepted && S.fx && S.fx.onHit) S.fx.onHit(S.ball.x, S.ball.y);
+                if (accepted && S.panel && !S.deferImpactVisuals) S.panel.__pulseHighlight = 1.0;
+                if (accepted) dbgMarkFire('edge-controller', t);
+                if (accepted && !S.deferImpactVisuals) {
+                  c.flash = 1.0; c.flashDur = 0.12;
+                  const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
+                  c.flashEnd = at2 + c.flashDur;
+                }
             }
           } else {
             // Edge wall as note (via controllers mapping)
@@ -244,21 +195,18 @@ export function stepBouncer(S, nowAT){
                       const c = (best.nx>0)?(m&&m.left) : (best.nx<0)?(m&&m.right) : (best.ny>0)?(m&&m.top):(m&&m.bot);
               if (c && (c.active!==false)){
                 const nm = S.noteValue ? (S.noteList && Number.isFinite((c.noteIndex))) ? S.noteList[Math.max(0, Math.min(S.noteList.length-1, ((c.noteIndex)|0)))] : null : null;
-                const t = qSixteenth();
+                const t = now;
                 try { if (window && window.BOUNCER_LOOP_DBG) { var __tt=(t && t.toFixed)?t.toFixed(4):t; console.log('[bouncer-step] HIT', nm, 'idx=', (b&&c.noteIndex), 'listLen=', (S.noteList&&S.noteList.length), 't=', __tt); } } catch(e) {}
-                // de-dupe per 16th tick for world edges
                 const edgeKey = (best.nx>0)?'L':(best.nx<0)?'R':(best.ny>0)?'T':'B';
-                const lastEdgeTick = (S.__lastTickByEdge && S.__lastTickByEdge.get) ? S.__lastTickByEdge.get(edgeKey) : undefined;
-                if (tick16 != null && lastEdgeTick === tick16) { /* already fired this edge this tick */ return; }
-                // Global coalescing disabled: do not suppress other sources in this tick
-                if (S.__lastTickByEdge && S.__lastTickByEdge.set) S.__lastTickByEdge.set(edgeKey, tick16);
-                if (nm && S.triggerInstrument) S.triggerInstrument(S.instrument, nm, t, { edgeName: edgeKey, impactAudioTime: now });
-                if (typeof S.flashEdge==='function') S.flashEdge((best.nx>0)?'left':(best.nx<0)?'right':(best.ny>0)?'top':'bot');
-                if (S.panel) S.panel.__pulseHighlight = 1.0;
-                dbgMarkFire('border', t);
-                c.flash = 1.0; c.flashDur = 0.12;
-                const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
-                c.flashEnd = at2 + c.flashDur;
+                const accepted = !!(nm && S.triggerInstrument && S.triggerInstrument(S.instrument, nm, t, { edgeName: edgeKey, impactAudioTime: now }));
+                if (accepted && !S.deferImpactVisuals && typeof S.flashEdge==='function') S.flashEdge((best.nx>0)?'left':(best.nx<0)?'right':(best.ny>0)?'top':'bot');
+                if (accepted && S.panel && !S.deferImpactVisuals) S.panel.__pulseHighlight = 1.0;
+                if (accepted) dbgMarkFire('border', t);
+                if (accepted && !S.deferImpactVisuals) {
+                  c.flash = 1.0; c.flashDur = 0.12;
+                  const at2 = (S.ensureAudioContext && S.ensureAudioContext())?.currentTime || now;
+                  c.flashEnd = at2 + c.flashDur;
+                }
               }
             } catch(e){}
           }

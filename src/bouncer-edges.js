@@ -30,27 +30,40 @@ export function makeEdgeControllers(w, h, size, EDGE_PAD, noteList){
 }
 
 // Orange inner bond lines; dim when corresponding controller is disabled.
-export function drawEdgeBondLines(ctx, w, h, EDGE_PAD, ctrls=null){
+export function drawEdgeBondLines(ctx, w, h, EDGE_PAD, ctrls=null, responses=null){
   const map = ctrls ? mapControllersByEdge(ctrls) : null;
   const activeCol = 'rgba(255,140,0,0.9)';
   const inactiveCol = '#293042';
   ctx.save(); ctx.lineWidth = 2;
+  const setResponse = (edge) => {
+    const controller = map?.[edge];
+    const response = responses?.[edge];
+    const enabled = controller?.active !== false;
+    const flash = enabled ? Math.max(0, Math.min(1, response?.flash || 0)) : 0;
+    ctx.strokeStyle = enabled ? (response?.color || activeCol) : inactiveCol;
+    if (flash > 0) {
+      ctx.strokeStyle = `rgba(255,255,255,${0.65 + 0.35 * flash})`;
+    }
+    ctx.lineWidth = 2 + 3 * flash;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = flash > 0 ? 12 * flash : (enabled && controller?.pendingHit ? 6 : 0);
+  };
 
   // top
   ctx.beginPath(); ctx.moveTo(EDGE_PAD+1, EDGE_PAD+1); ctx.lineTo(w-EDGE_PAD-1, EDGE_PAD+1);
-  ctx.strokeStyle = (map && map.top && !map.top.active) ? inactiveCol : activeCol; ctx.stroke();
+  setResponse('top'); ctx.stroke();
 
   // bottom
   ctx.beginPath(); ctx.moveTo(EDGE_PAD+1, h-EDGE_PAD-1); ctx.lineTo(w-EDGE_PAD-1, h-EDGE_PAD-1);
-  ctx.strokeStyle = (map && map.bot && !map.bot.active) ? inactiveCol : activeCol; ctx.stroke();
+  setResponse('bot'); ctx.stroke();
 
   // left
   ctx.beginPath(); ctx.moveTo(EDGE_PAD+1, EDGE_PAD+1); ctx.lineTo(EDGE_PAD+1, h-EDGE_PAD-1);
-  ctx.strokeStyle = (map && map.left && !map.left.active) ? inactiveCol : activeCol; ctx.stroke();
+  setResponse('left'); ctx.stroke();
 
   // right
   ctx.beginPath(); ctx.moveTo(w-EDGE_PAD-1, EDGE_PAD+1); ctx.lineTo(w-EDGE_PAD-1, h-EDGE_PAD-1);
-  ctx.strokeStyle = (map && map.right && !map.right.active) ? inactiveCol : activeCol; ctx.stroke();
+  setResponse('right'); ctx.stroke();
 
   ctx.restore();
 }

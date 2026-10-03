@@ -22,9 +22,10 @@ import { installQuantUI } from './bouncer-quant-ui.js';
 import { installBouncerOSD } from './bouncer-osd.js';
 import { circleRectHit } from './bouncer-helpers.js';
 import { activatePlaybackInstance, deactivatePlaybackInstance, ensurePlaybackInstance, getPlaybackInstance, getPlaybackLocalTick, removePlaybackInstance } from './playback-instances.js';
-import { bouncerEventsInWindow, bouncerVisualEventTick, getBouncerReplayCompletionTick, interpolateBouncerTrajectory, nextBouncerRecordingStartTick, normalizeBouncerPattern, normalizeBouncerTrajectory, quantizeBouncerOffsetTick, recordBouncerTrajectorySample } from './bouncer-transport.js';
+import { bouncerEventsInWindow, getBouncerReplayCompletionTick, interpolateBouncerTrajectory, nextBouncerRecordingStartTick, normalizeBouncerPattern, normalizeBouncerTrajectory, quantizeBouncerOffsetTick, recordBouncerTrajectorySample } from './bouncer-transport.js';
 import { bumpToyAudioGen } from './toy-audio.js';
 import { createBouncerVisualEventQueue } from './bouncer-visual-events.js';
+import { acceptBouncerPendingHit, clearBouncerPendingHit, clearBouncerPendingHits } from './bouncer-pending-hit.js';
 import {
   BOUNCER_LOGICAL_HEIGHT,
   BOUNCER_LOGICAL_WIDTH,
@@ -362,8 +363,14 @@ export function createBouncer(selector){
       // The signature is also invalidated to ensure a clean slate on the next bar.
       loopRec.pattern.length = 0;
       loopRec.trajectory.length = 0;
+      clearAllPendingHits();
+      replayVisualEvents.clear();
+      bumpToyAudioGen(toyId, 'bouncer-state-change');
       loopRec.mode = 'record';
       loopRec.signature = ''; // Guarantees onNewBar will confirm the reset.
+      clearAllPendingHits();
+      replayVisualEvents.clear();
+      bumpToyAudioGen(toyId, 'bouncer-quant-change');
       loopRec.pendingRecordTick = nextBouncerRecordingStartTick(getTransportState().currentTick, TICKS_PER_BAR);
       panel.__seqRev = (panel.__seqRev || 0) + 1;
       panel.__forceSchedulerReset = true;
@@ -606,6 +613,37 @@ export function createBouncer(selector){
   let visQ = { loopRec: { mode: 'record', pattern: [], trajectory: [], signature: '', recordingStartTick: 0, lastBarIndex: -1, scheduledBarIndex: -999, seen: new Set() } };
   const fx = createImpactFX();
   const replayVisualEvents = createBouncerVisualEventQueue();
+  const resolveReplayEdgeControllerIndex = (event) => {
+    if (event?.edgeControllerIndex != null) return event.edgeControllerIndex;
+    if (event?.edgeName == null) return null;
+    const edge = { L: 'left', R: 'right', T: 'top', B: 'bot' }[event.edgeName] || event.edgeName;
+    const index = edgeControllers.findIndex(item => item?.edge === edge);
+    return index >= 0 ? index : null;
+  };
+  const resolveImpactSource = (event) => {
+    if (event?.blockIndex != null) return blocks[event.blockIndex] || null;
+    const edgeIndex = resolveReplayEdgeControllerIndex(event);
+    return edgeIndex == null ? null : edgeControllers[edgeIndex] || null;
+  };
+  const clearAllPendingHits = () => clearBouncerPendingHits([...blocks, ...edgeControllers]);
+  const replayPendingEventId = (event, fireTick, playbackInstanceId) => {
+    const source = event?.blockIndex != null ? `block:${event.blockIndex}`
+      : event?.edgeControllerIndex != null ? `edge:${event.edgeControllerIndex}` : `edge-name:${event?.edgeName}`;
+    return `${playbackInstanceId || panel.id}:${source}:${fireTick}`;
+  };
+  let pendingHitSequence = 0;
+  const queueImpactVisual = (event, audioTime, playbackInstanceId = null, kind = 'note') => {
+    replayVisualEvents.enqueue({
+      audioTime,
+      playbackInstanceId,
+      blockIndex: event?.blockIndex,
+      edgeControllerIndex: resolveReplayEdgeControllerIndex(event),
+      kind,
+      impactTick: event?.impactTick,
+      fireTick: event?.fireTick,
+      eventId: event?.eventId,
+    });
+  };
 
 // --- anchor-based sizing for blocks & handle (fractions of world size) ---
 
@@ -772,6 +810,9 @@ export function createBouncer(selector){
     visQ.loopRec.trajectory.length = 0;
     visQ.loopRec.mode = 'record';
     visQ.loopRec.signature = '';
+    clearAllPendingHits();
+    replayVisualEvents.clear();
+    bumpToyAudioGen(toyId, 'bouncer-reset');
     handle.userPlaced = false;
     handle.vx = 0; handle.vy = 0;
     try { for (const b of blocks){ b.flash = 0; } } catch {}
@@ -870,6 +911,12 @@ export function createBouncer(selector){
     if (!isRespawn) {
         if (DBG_RESPAWN()) console.log(`[BNC_DBG] Resetting loop recorder due to new ball (isRespawn: ${isRespawn})`);
 
+        // A new authored launch invalidates any flashes waiting on the previous
+        // recording's AudioContext timeline.
+        replayVisualEvents.clear();
+        clearAllPendingHits();
+        bumpToyAudioGen(toyId, 'bouncer-new-launch');
+
         // Clear the old pattern and scheduling state together, retaining the shared
         // recorder object. Record mode suppresses replay while the new shot is
         // captured; a stale invalid flag must not silence its later repetitions.
@@ -949,8 +996,6 @@ function setNextLaunchAt(t){ nextLaunchAt = t; }
 
     const __aim = { active:false, sx:0, sy:0, cx:0, cy:0 };
 // Persistent per-step state for physics (dedupe & spawn windows)
-let __lastTickByBlock = new Map();
-let __lastTickByEdge  = new Map();
 let __justSpawnedUntil = 0;
 
 
@@ -1007,56 +1052,45 @@ let __justSpawnedUntil = 0;
   lockPhysWorld();
 
   const buildStateForStep = (now, prevNow)=>{ // now is current AudioContext.currentTime
-    // Time conversion logic is now handled inside bouncer-step.js to ensure perfect sync with physics.
+    // Physics reports raw impact time; this layer owns the single tick-domain quantization.
 
-    const li0 = (typeof getLoopInfo==='function') ? getLoopInfo() : null;
     const triggerPhysAware = (i,n,t,meta)=>{
-      const loopRec = visQ.loopRec; // Always use the instance-specific loopRec
-      if (window && window.BOUNCER_LOOP_DBG) try{ if ((globalThis.BOUNCER_DBG_LEVEL|0)>=2) console.log('[bouncer-audio] fire?', n, 't=', (typeof t==='number')?t.toFixed(4):'imm'); }catch{}
-      try{
-        const li = (typeof getLoopInfo==='function') ? getLoopInfo() : li0;
-        const lr = (visQ && visQ.loopRec) ? visQ.loopRec : null;
-        const nowT = li ? li.now : (t||0);
-        const barLen = li ? li.barLen : 1;
-        const beatDur = barLen/4;
-        const anchor = Number.isFinite(loopRec?.anchorStartTime) ? loopRec.anchorStartTime : (li ? li.loopStartTime : 0);
-        const k = Math.floor(Math.max(0, (nowT - anchor) / barLen));
+      const loopRec = visQ.loopRec;
+      if (loopRec?.mode === 'replay') return false;
+      try {
+        if (loopRec?.mode === 'record') {
+          const ac = ensureAudioContext ? ensureAudioContext() : null;
+          const impactAudioTime = Number.isFinite(Number(meta?.impactAudioTime)) ? Number(meta.impactAudioTime)
+            : ((typeof t === 'number') ? t : (ac?.currentTime || 0));
+          const impactTick = audioTimeToTick(impactAudioTime);
+          const recordingStartTick = Number.isFinite(loopRec.recordingStartTick)
+            ? loopRec.recordingStartTick : getPlaybackInstance(panel.id)?.startTick || 0;
+          if (impactTick < recordingStartTick) return false;
+          const offsetTick = quantizeBouncerOffsetTick(impactTick, recordingStartTick, __getQuantDiv(), {
+            ticksPerBeat: TICKS_PER_BEAT, loopLengthTicks: TICKS_PER_BAR,
+          });
+          const fireTick = recordingStartTick + offsetTick;
+          const impactOffsetTick = Math.max(0, Math.min(TICKS_PER_BAR - 1, impactTick - recordingStartTick));
+          const source = resolveImpactSource(meta);
+          const eventId = `${panel.id}:hit:${++pendingHitSequence}`;
+          if (!acceptBouncerPendingHit(source, { impactTick, fireTick, eventId })) return false;
 
-        // During replay, all sound comes from the scheduler. The live ball is silent.
-        if (loopRec && loopRec.mode === 'replay') {
-            return;
-        }
+          const scheduledT = Math.max(ac ? ac.currentTime + 0.0008 : 0, tickToAudioTime(fireTick));
+          triggerInstrument(i || instrument, n, scheduledT, toyId);
 
-        if (loopRec && loopRec.mode === 'record'){
-          try {
-            const ac = ensureAudioContext ? ensureAudioContext() : null;
-            const scheduledT = (typeof t === 'number') ? t : ((ac ? ac.currentTime : 0) + 0.0008);
-            triggerInstrument(i||instrument, n, scheduledT, toyId);
-          } catch(e){}
-          const at = (typeof t==='number' ? t : nowT);
-          const hitTick = audioTimeToTick(at);
-          const recordingStartTick = Number.isFinite(loopRec.recordingStartTick) ? loopRec.recordingStartTick : getPlaybackInstance(panel.id)?.startTick || 0;
-          if (hitTick < recordingStartTick) return;
-          const offsetTick = quantizeBouncerOffsetTick(hitTick, recordingStartTick, __getQuantDiv(), { ticksPerBeat: TICKS_PER_BEAT, loopLengthTicks: TICKS_PER_BAR });
-          const impactTick = audioTimeToTick(Number.isFinite(Number(meta?.impactAudioTime)) ? meta.impactAudioTime : at);
-          const visualOffsetTick = Math.max(0, Math.min(TICKS_PER_BAR - 1, impactTick - recordingStartTick));
-          if (loopRec && Array.isArray(loopRec.pattern)){
-            // De-dupe notes recorded in the same bar to prevent runaway pattern growth.
-            const key = `${n}@${offsetTick}`;
-            if (loopRec.seen && !loopRec.seen.has(key)) {
-              loopRec.seen.add(key);
-              const event = { note: n, offsetTick, visualOffsetTick };
-              if (meta && meta.blockIndex != null) event.blockIndex = meta.blockIndex;
-              if (meta && meta.edgeControllerIndex != null) event.edgeControllerIndex = meta.edgeControllerIndex;
-              if (meta && meta.edgeName != null) event.edgeName = meta.edgeName;
-              loopRec.pattern.push(event);
-              panel.__seqRev = (panel.__seqRev || 0) + 1;
-            }
+          if (Array.isArray(loopRec.pattern)) {
+            const event = { note: n, offsetTick, impactOffsetTick, impactTick, fireTick, eventId };
+            if (meta?.blockIndex != null) event.blockIndex = meta.blockIndex;
+            if (meta?.edgeControllerIndex != null) event.edgeControllerIndex = meta.edgeControllerIndex;
+            if (meta?.edgeName != null) event.edgeName = meta.edgeName;
+            loopRec.pattern.push(event);
+            queueImpactVisual(event, scheduledT, getPlaybackInstance(panel.id)?.id || null);
+            panel.__seqRev = (panel.__seqRev || 0) + 1;
           }
-          return;
+          return true;
         }
-      }catch(e){}
-      try { triggerInstrument(i||instrument, n, (typeof t==='number'?t:undefined), toyId); }catch(e){}
+      } catch(e) { return false; }
+      try { triggerInstrument(i||instrument, n, (typeof t==='number'?t:undefined), toyId); return true; } catch(e) { return false; }
     };
     const S = {
       panel,
@@ -1093,10 +1127,9 @@ let __justSpawnedUntil = 0;
       setNextLaunchAt: (t)=>{ nextLaunchAt = t; },
       setBallOut: (o)=>{ ball = o; },
       fx,
-      __lastTickByBlock,
-      __lastTickByEdge,
       __justSpawnedUntil
     };
+    S.deferImpactVisuals = true;
     S.visQ = visQ;
     S.ball = ball; // Use the module-scoped `ball` directly.
     if (DBG_RESPAWN()) {
@@ -1119,8 +1152,6 @@ let __justSpawnedUntil = 0;
             console.log(`[BNC_DBG] applyFromStep: Updated nextLaunchAt from ${oldVal?.toFixed(3)} to ${nextLaunchAt?.toFixed(3)}`);
         }
       }
-      if (S.__lastTickByBlock) __lastTickByBlock = S.__lastTickByBlock;
-      if (S.__lastTickByEdge) __lastTickByEdge = S.__lastTickByEdge;
       if (typeof S.__justSpawnedUntil === 'number') __justSpawnedUntil = S.__justSpawnedUntil;
       if ('nextLaunchAtRemaining' in S) {
         nextLaunchAtRemaining = S.nextLaunchAtRemaining;
@@ -1181,10 +1212,16 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   getBall: getDisplayBall,
   captureTrajectorySample,
   advanceReplayLifecycle,
-  drainScheduledReplayVisuals: (audioTime) => replayVisualEvents.drain(
-    audioTime,
-    getPlaybackInstance(panel.id)?.id || null,
-  ),
+  drainScheduledReplayVisuals: (audioTime) => {
+    const instance = getPlaybackInstance(panel.id);
+    const due = replayVisualEvents.drain(audioTime, instance?.active ? instance.id : '__inactive__');
+    for (const event of due) {
+      const source = resolveImpactSource(event);
+      if (event.kind === 'impact') acceptBouncerPendingHit(source, event);
+      else clearBouncerPendingHit(source, event.eventId);
+    }
+    return due;
+  },
   rescale: () => {},
   updateLaunchBaseline,
   buildStateForStep, installInteractions, getLastLaunch: ()=>lastLaunch,
@@ -1193,7 +1230,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   ballR,
   BOUNCER_BARS_PER_LIFE,
   setBallOut, setNextLaunchAt,
-  getLoopInfo
+  getLoopInfo, getTransportState
 });
 
 // The `draw` function is now self-starting from within `createBouncerDraw`.
@@ -1221,39 +1258,32 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
     if (loopRec.mode !== 'replay' || loopRec.isInvalid) {
       return null;
     }
-    return bouncerEventsInWindow({ instance, pattern: loopRec.pattern, blocks, edgeControllers, fromTick, toTick });
+    return bouncerEventsInWindow({ instance, pattern: loopRec.pattern, blocks, edgeControllers, fromTick, toTick, includeImpactCues: true });
   };
   panel.__sequencerScheduleEvent = (event, audioTime, metadata = {}) => {
+    if (event?.visualOnly === 'impact') {
+      const fireTick = metadata.eventTick - event.offsetTick + event.fireOffsetTick;
+      const eventId = replayPendingEventId(event, fireTick, metadata.playbackInstanceId);
+      queueImpactVisual({ ...event, impactTick: metadata.eventTick, fireTick, eventId }, audioTime, metadata.playbackInstanceId || null, 'impact');
+      return;
+    }
     if (!event?.note) return;
     triggerInstrument(instrument, event.note, audioTime, toyId);
-    const instance = getPlaybackInstance(panel.id);
-    const visualTick = bouncerVisualEventTick(instance, event);
-    const visualAudioTime = visualTick == null ? audioTime : tickToAudioTime(visualTick);
-    let edgeControllerIndex = event.edgeControllerIndex;
-    if (edgeControllerIndex == null && event.edgeName != null) {
-      const edge = { L: 'left', R: 'right', T: 'top', B: 'bot' }[event.edgeName] || event.edgeName;
-      edgeControllerIndex = edgeControllers.findIndex(item => item?.edge === edge);
-      if (edgeControllerIndex < 0) edgeControllerIndex = null;
-    }
-    replayVisualEvents.enqueue({
-      audioTime: visualAudioTime,
-      playbackInstanceId: metadata.playbackInstanceId || null,
-      blockIndex: event.blockIndex,
-      edgeControllerIndex,
-    });
+    const eventId = replayPendingEventId(event, metadata.eventTick, metadata.playbackInstanceId);
+    queueImpactVisual({ ...event, fireTick: metadata.eventTick, eventId }, audioTime, metadata.playbackInstanceId || null);
   };
   const activateAtTransport = ({ retrigger = false } = {}) => {
     const state = getTransportState();
     const previous = getPlaybackInstance(panel.id);
     const instance = activatePlaybackInstance(panel.id, state.currentTick, { loopLengthTicks: TICKS_PER_BAR, quantize: state.state === 'playing', retrigger });
-    if (instance !== previous) { bumpToyAudioGen(toyId, retrigger ? 'bouncer-retrigger' : 'bouncer-activate'); panel.__forceSchedulerReset = true; }
+    if (instance !== previous) { clearAllPendingHits(); replayVisualEvents.clear(); bumpToyAudioGen(toyId, retrigger ? 'bouncer-retrigger' : 'bouncer-activate'); panel.__forceSchedulerReset = true; }
     return instance;
   };
   panel.__bouncerPlayback = {
     get instance(){ return getPlaybackInstance(panel.id); },
     activate: () => activateAtTransport(),
     retrigger: () => activateAtTransport({ retrigger: true }),
-    deactivate: () => { replayVisualEvents.clear(); const instance = deactivatePlaybackInstance(panel.id); bumpToyAudioGen(toyId, 'bouncer-deactivate'); panel.__forceSchedulerReset = true; return instance; },
+    deactivate: () => { replayVisualEvents.clear(); clearAllPendingHits(); const instance = deactivatePlaybackInstance(panel.id); bumpToyAudioGen(toyId, 'bouncer-deactivate'); panel.__forceSchedulerReset = true; return instance; },
   };
   panel.__bouncerPlaybackState = () => visQ.loopRec;
   lifecycle.listen(panel, 'toy:start', () => panel.__bouncerPlayback.activate());

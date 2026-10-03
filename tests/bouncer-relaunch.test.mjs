@@ -21,6 +21,7 @@ function harness() {
   const recorder = { mode: 'record', pattern: [], signature: '', seen: new Set() };
   const context = vm.createContext({
     console, window: {}, DBG_RESPAWN: () => false,
+    toyId: 'bouncer-test',
     panel: { id: 'bouncer-test', dataset: {}, dispatchEvent() {} }, blocks: [], edgeControllers: [],
     visQ: { loopRec: recorder }, lastLaunch: null, ball: null, nextLaunchAt: null,
     ensureAudioContext: () => clock, isRunning: () => true,
@@ -30,6 +31,9 @@ function harness() {
     tickToAudioTime: tick => tick / 192,
     activatePlaybackInstance: (_id, tick) => ({ startTick: tick }),
     getPlaybackInstance: () => ({ startTick: 0 }),
+    replayVisualEvents: { clear() {} },
+    clearAllPendingHits() {},
+    bumpToyAudioGen() {},
     nextBouncerRecordingStartTick: tick => (Math.floor(tick / 384) + 1) * 384,
     TICKS_PER_BAR: 384, TICKS_PER_BEAT: 96,
     ballR: () => 7, BOUNCER_BARS_PER_LIFE: 1, fx: {},

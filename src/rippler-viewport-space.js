@@ -66,11 +66,14 @@ export function reconstructRipplerBlock(block, size = RIPPLER_BLOCK_SIZE) {
   };
 }
 
-export function doesRippleIntersectBlock({ source, radius, block, blockRect, band = 9 } = {}) {
+export function doesRippleIntersectBlock({ source, radius, previousRadius = radius, block, blockRect, band = 9 } = {}) {
   const rect = blockRect || reconstructRipplerBlock(block);
   const centreX = rect.x + rect.w / 2;
   const centreY = rect.y + rect.h / 2;
   const dx = Math.max(Math.abs(centreX - source.x) - rect.w / 2, 0);
   const dy = Math.max(Math.abs(centreY - source.y) - rect.h / 2, 0);
-  return Math.abs(Math.hypot(dx, dy) - radius) <= band;
+  const distance = Math.hypot(dx, dy);
+  const inner = Math.min(previousRadius, radius) - band;
+  const outer = Math.max(previousRadius, radius) + band;
+  return distance >= inner && distance <= outer;
 }

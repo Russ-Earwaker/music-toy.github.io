@@ -5,7 +5,6 @@ import { createSequencerScheduler } from '../src/note-scheduler.js';
 import { activatePlaybackInstance, clearPlaybackInstancesForTests, deactivatePlaybackInstance, getPlaybackInstance } from '../src/playback-instances.js';
 import {
   bouncerEventsInWindow,
-  bouncerVisualEventTick,
   getBouncerReplayCompletionTick,
   interpolateBouncerTrajectory,
   nextBouncerRecordingStartTick,
@@ -42,6 +41,23 @@ test('Bouncer pattern repeats once per bar and filters inactive collision source
   });
   assert.deepEqual(events.map(event => event.eventTick), [48, 432, 816]);
   assert.ok(events.every(event => Number.isInteger(event.offsetTick)));
+});
+
+test('Bouncer replay exposes raw impact cues before quantized note events', () => {
+  clearPlaybackInstancesForTests();
+  const instance = activatePlaybackInstance('bouncer-cues', 0, { quantize: false, loopLengthTicks: 384 });
+  const events = bouncerEventsInWindow({
+    instance,
+    pattern: [{ note: 'C4', impactOffsetTick: 37, offsetTick: 48, blockIndex: 0 }],
+    blocks: [{ active: true }],
+    fromTick: 0,
+    toTick: 100,
+    includeImpactCues: true,
+  });
+  assert.deepEqual(events.map(event => [event.eventTick, event.visualOnly || 'note']), [
+    [37, 'impact'],
+    [48, 'note'],
+  ]);
 });
 
 test('shared scheduler gives Bouncer stable tick identities across repeated polls and tempo mapping', () => {
@@ -101,12 +117,6 @@ test('Bouncer trajectory sampling is limited to the learning loop and normalizes
   ]).map(sample => sample.offsetTick), [4, 8]);
 });
 
-test('Bouncer replay keeps physical impact time separate from quantized note time', () => {
-  const instance = { active: true, startTick: 768, loopLengthTicks: 384 };
-  assert.equal(bouncerVisualEventTick(instance, { offsetTick: 96, visualOffsetTick: 83 }), 851);
-  assert.equal(bouncerVisualEventTick(instance, { offsetTick: 96 }), null);
-});
-
 test('production Bouncer bypasses physics during stable trajectory replay', () => {
   const render = readFileSync(new URL('../src/bouncer-render.js', import.meta.url), 'utf8');
   const main = readFileSync(new URL('../src/bouncer.main.js', import.meta.url), 'utf8');
@@ -117,6 +127,24 @@ test('production Bouncer bypasses physics during stable trajectory replay', () =
     'the learning pass must not consume the first scheduler replay window');
   assert.match(main, /loopRec\.trajectory\.length === 0[\s\S]*loopRec\.trajectory\.push/,
     'recording must anchor trajectory replay at its launch seam');
+});
+
+test('Bouncer learning and replay flashes share the quantized note-time queue', () => {
+  const main = readFileSync(new URL('../src/bouncer.main.js', import.meta.url), 'utf8');
+  const step = readFileSync(new URL('../src/bouncer-step.js', import.meta.url), 'utf8');
+  assert.match(main, /queueImpactVisual\(event, scheduledT,/,
+    'the physics-learning pass must flash at its quantized note time');
+  assert.match(main, /queueImpactVisual\(\{ \.\.\.event, fireTick: metadata\.eventTick/,
+    'stable replay must use the same AudioContext-time visual queue');
+  assert.match(main, /S\.deferImpactVisuals = true/);
+  assert.match(step, /!S\.deferImpactVisuals/,
+    'physics collisions must not also emit an immediate, unquantized flash');
+  assert.doesNotMatch(step, /qSixteenth|DEDUPE_DIV/,
+    'the collision layer must report raw impacts instead of owning quantization');
+  assert.match(main, /acceptBouncerPendingHit/,
+    'accepted impacts should be guarded by per-source pending state');
+  assert.match(main, /includeImpactCues: true/,
+    'stable replay must reproduce the pre-quantization impact glow');
 });
 
 test('Bouncer recording leaves its scheduler window open for the first replay', () => {
