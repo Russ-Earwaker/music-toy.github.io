@@ -80,14 +80,15 @@ test('normal and Structure parents replace old upstream wires, with no redundant
   for(const id of [s.id,'B','C']){assert.equal(h.model.getTransportId(id),MAIN_TRANSPORT_ID);assert.notEqual(h.model.getParent(id).kind,'transport');}
   h.link('D','C');assert.equal(h.model.getParent('C').from.objectId,'D');assert.equal(h.model.list().filter(c=>c.to.objectId==='C').length,1);
 });
-test('connected input drag reparents without prior wire selection and can switch between musical and Heartbeat parents',()=>{
-  const h=harness(),initial=h.model.getParent('B');
-  assert.equal(h.model.beginDrag(input('B')),true);assert.equal(h.model.preview(output('A')).ok,true);
-  h.model.drop(output('A'));assert.equal(h.model.getParent('B').id,initial.id);assert.equal(h.model.getParent('B').kind,'sequence');
-  h.model.beginDrag(input('B'));h.model.drop(output('C'));assert.equal(h.model.getParent('B').from.objectId,'C');
-  h.model.beginDrag(input('B'));h.model.drop(output(MAIN_TRANSPORT_ID));assert.equal(h.model.getParent('B').kind,'transport');
-  h.model.beginDrag(input('B'));h.model.drop(null);assert.equal(h.model.getParent('B'),null);assert.equal(getPlaybackInstance('B').active,false);
+test('grabbed endpoints retain the opposite endpoint and source reconnect can change parent kind',()=>{
+ const h=harness(),initial=h.model.getParent('B');
+ h.model.beginDrag(input('B'),h.model.socketDragIntent(input('B')));h.model.detachDrag();assert.equal(h.model.preview(input('A')).ok,true);h.model.drop(input('A'));assert.equal(h.model.getParent('A').id,initial.id);assert.equal(h.model.getParent('B'),null);
+ h.link('A','B');const edge=h.model.getParent('B');
+ h.model.beginDrag(output('A'),h.model.socketDragIntent(output('A')));h.model.detachDrag();h.model.drop(output('C'));assert.equal(h.model.getParent('B').from.objectId,'C');assert.equal(h.model.getParent('B').id,edge.id);
+ h.model.beginDrag(output('C'),h.model.socketDragIntent(output('C')));h.model.detachDrag();h.model.drop(output(MAIN_TRANSPORT_ID));assert.equal(h.model.getParent('B').kind,'transport');assert.equal(h.model.getParent('B').id,edge.id);
+ h.model.beginDrag(input('B'),h.model.socketDragIntent(input('B')));h.model.detachDrag();h.model.drop(null);assert.equal(h.model.getParent('B'),null);assert.equal(getPlaybackInstance('B').active,false);
 });
+
 test('restoring older parallel ownership wires keeps the structural parent regardless of saved order',()=>{
   for(const reverse of [false,true]){
     const h=harness(),saved=[{id:'rootA',kind:'transport',from:output(MAIN_TRANSPORT_ID),to:input('A')},

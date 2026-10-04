@@ -66,6 +66,8 @@ export function createStructureToyModel(model, options = {}) {
     const placed=config.placeStructure?.({x:s.x,y:s.y,width:structureToyWidth(s),height:structureToyHeight(s)},from.objectId);
     if(placed)s=Object.freeze({...s,x:placed.x,y:placed.y});
     records.set(id, s); register(s);
+    // Publish creation with the completed topology transaction, including nested Structures.
+    model.touchObject(id, {structureCreated:true});
     return s;
   }
   function mustConnect(kind, from, to, id = null) {
@@ -152,7 +154,7 @@ export function createStructureToyModel(model, options = {}) {
     refresh();return records.get(id);
   }
   function refresh() {
-    if (busy || suspended) return;
+    if (busy || suspended || model.getEditing()?.suspended) return;
     busy = true;
     try {
       model.transaction(() => {
@@ -178,7 +180,7 @@ export function createStructureToyModel(model, options = {}) {
   }
   model.setPromotionResolver(promoteOccupied);
   const unsubscribe = model.subscribe(event => {
-    if (event.type !== 'change') return;
+    if (event.type !== 'change' || event.transient) return;
     for (const change of event.events || [event]) {
       const c = change.connection, s = c?.kind === 'sequence' && records.get(c.from.objectId);
       const type = s && config.getToyType?.(c.to.objectId);

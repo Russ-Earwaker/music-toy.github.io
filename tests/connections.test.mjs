@@ -158,7 +158,7 @@ test('joining two running chains yields one Sequence instance without resetting 
   const h = integration();
   link(h.model, 'A','B'); link(h.model,'B','C'); link(h.model,'D','E');
   const instance = h.sequence.runtime.getInstance('sequence:A');
-  h.model.beginDrag(input('D')); h.model.drop(output('C'));
+  h.model.beginDrag(output('C')); h.model.drop(input('D'));
   assert.deepEqual(h.sequence.runtime.getDefinition('sequence:A').children.map(c => c.toyId), ['A','B','C','D','E']);
   assert.strictEqual(h.sequence.runtime.getInstance('sequence:A'), instance);
   assert.equal(h.sequence.runtime.getInstance('sequence:D'), null);
@@ -262,4 +262,27 @@ test('movement, pan, zoom and responsive projection affect geometry only; both k
   assert.deepEqual(curvePoint(curves[0],0), {x:120,y:150});
   assert.deepEqual(curvePoint(curves[0],1), {x:620,y:330});
   assert.deepEqual(m.snapshot(), snapshot);
+});
+
+
+test('socket intent pulls the grabbed endpoint and leaves multi-capacity ports creating',()=>{
+ const m=modelWithToys('A','B','C');assert.deepEqual(m.socketDragIntent(output('A')),{kind:'sequence'});
+ const edge=link(m,'A','B').connection;
+ assert.deepEqual(m.socketDragIntent(output('A')),{kind:'sequence',connectionId:edge.id,end:'from'});
+ assert.deepEqual(m.socketDragIntent(input('B')),{kind:'sequence',connectionId:edge.id,end:'to'});
+ m.beginDrag(input('B'),m.socketDragIntent(input('B')));m.detachDrag();assert.equal(m.drop(input('C')).ok,true);
+ assert.equal(m.get(edge.id).from.objectId,'A');assert.equal(m.get(edge.id).to.objectId,'C');
+ m.beginDrag(output('A'),m.socketDragIntent(output('A')));m.detachDrag();assert.equal(m.drop(output('B')).ok,true);
+ assert.equal(m.get(edge.id).from.objectId,'B');assert.equal(m.get(edge.id).to.objectId,'C');
+ for(const id of ['A','B']){const hb=output(MAIN_TRANSPORT_ID),intent=m.socketDragIntent(hb,'transport');assert.deepEqual(intent,{kind:'transport'});m.beginDrag(hb,intent);assert.equal(m.drop(input(id)).ok,true);}
+ assert.equal(m.list('transport').length,2);
+});
+
+
+test('loose relationships suspend musical reachability without losing playback anchors or the saved record',()=>{
+ const h=integration();link(h.model,'A','B');const edge=h.model.getParent('B'),before={...getPlaybackInstance('B')},runtime=h.sequence.runtime.getInstance('sequence:A'),updates=h.getUpdates();
+ h.model.beginDrag(input('B'),h.model.socketDragIntent(input('B')));h.model.detachDrag();h.adapter.discoverOwnership();
+ assert.equal(h.model.isRooted('B'),false);assert.equal(h.model.get(edge.id),edge);assert.equal(h.model.list().some(c=>c.id===edge.id),false);assert.ok(h.model.snapshot().connections.includes(edge));assert.equal(h.getUpdates(),updates);assert.strictEqual(h.sequence.runtime.getInstance('sequence:A'),runtime);
+ h.model.cancelDrag();h.adapter.discoverOwnership();assert.equal(h.model.isRooted('B'),true);assert.strictEqual(h.sequence.runtime.getInstance('sequence:A'),runtime);assert.equal(h.getUpdates(),updates);
+ for(const key of ['id','startTick','transportId','generation'])assert.equal(getPlaybackInstance('B')[key],before[key]);
 });

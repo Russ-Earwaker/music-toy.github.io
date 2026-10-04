@@ -6738,7 +6738,7 @@ function g_graphPlacementScope(id){return structureToyModel.get(id)?.artOwnerId|
 const g_layoutPending=new Set(),g_layoutConnections=new Set(),g_layoutSizes=new Map(),g_layoutParents=new Map(),g_layoutAttached=new Set();
 let g_layoutQueued=false,g_layoutRestoring=false,g_layoutManualDrag=null;
 function requestGraphLayout(id,connectionId=null){
-  if(g_layoutRestoring||!id)return;
+  if(g_layoutRestoring||connectionModel.getEditing()?.suspended||!id)return;
   // Balance the connected branch up to its stable/manual anchor, never another
   // Heartbeat root. This also closes old-parent gaps after a reparent.
   if(!connectionId){
@@ -6752,7 +6752,7 @@ function requestGraphLayout(id,connectionId=null){
   if(connectionId)g_layoutConnections.add(connectionId);else g_layoutPending.add(id);
   if(g_layoutQueued)return;g_layoutQueued=true;
   queueMicrotask(()=>{
-    if(g_layoutRestoring){g_layoutQueued=false;g_layoutPending.clear();g_layoutConnections.clear();g_layoutAttached.clear();return;}
+    if(g_layoutRestoring||connectionModel.getEditing()?.suspended){g_layoutQueued=false;g_layoutPending.clear();g_layoutConnections.clear();g_layoutAttached.clear();return;}
     g_layoutQueued=false;const roots=[...g_layoutPending],options={recentlyAttached:new Set(g_layoutAttached)};g_layoutPending.clear();g_layoutAttached.clear();
     const receivesBranch=root=>[...options.recentlyAttached].some(id=>{let p=connectionModel.getParent(id);while(p){if(p.from.objectId===root)return true;p=connectionModel.getParent(p.from.objectId);}return false;});
     roots.sort((a,b)=>Number(receivesBranch(b))-Number(receivesBranch(a)));
@@ -6900,6 +6900,7 @@ window.clearCreationGraph = () => {
 const g_connectionView = createConnectionView({
   model: connectionModel,
   structureToys: structureToyModel,
+  onConnectionDrag: () => {for(const id of connectionModel.getObjectIds())takeLayoutDrag(id);},
   onQuickAdd: createConnectionQuickAdd({
     model: connectionModel, structures: structureToyModel,
     getToy: id => document.getElementById(id),
@@ -6924,9 +6925,16 @@ const g_connectionView = createConnectionView({
   getPanels: () => g_connectionPanels,
   getToyPoint: getChainAnchor,
   getRenderedStructure: s => ({...s,...g_layoutAnimation.position(s.id,s)}),
-  onStructureDrag: id => g_branchDrag.start(id),
+  onStructureDrag: (id,e) => {
+    g_branchDrag.start(id);
+    window.ToySpawner?.beginPanelDrag?.({panel:{id},pointerId:e.pointerId,remove:()=>{structureToyModel.remove(id);return true;}});
+  },
+  onStructureDragUpdate: e => window.ToySpawner?.updatePanelDrag?.(e),
   onStructureMove: (id,x,y) => g_branchDrag.move(id,x,y),
-  onStructureDragEnd: () => g_branchDrag.end(),
+  onStructureDragEnd: (e,canceled) => {
+    g_branchDrag.end();
+    window.ToySpawner?.endPanelDrag?.({clientX:e?.clientX,clientY:e?.clientY,pointerId:e?.pointerId,canceled});
+  },
   isBranchDragging: () => g_branchDrag.active,
   getHeartbeatPoint: getAnchorWorld,
   getContext: () => {
@@ -6946,10 +6954,11 @@ const g_connectionView = createConnectionView({
   onFrame: () => {g_branchDrag.sync();g_layoutAnimation.tick();g_connections.discoverOwnership();},
 });
 connectionModel.subscribe(event => {
-  if (event.type === 'change') {
+  if (event.type === 'change' && !event.transient) {
     if(!g_layoutRestoring){
       for(const change of event.events||[event]){
         const c=change.connection;
+        if(change.previous?.kind==='sequence')requestGraphLayout(change.previous.from.objectId);
         if(change.removed?.kind==='sequence')requestGraphLayout(change.removed.from.objectId);
         if(c){
           const previous=g_layoutParents.get(c.to.objectId);
@@ -7299,6 +7308,7 @@ function findChainHead(toy) {
 }
 
 function updateChains() {
+  if(connectionModel.getEditing()?.suspended)return;
   const allToys = getSequencedToys();
   g_connectionPanels = getConnectionPanels();
   g_connections.sync(g_connectionPanels);

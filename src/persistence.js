@@ -901,7 +901,7 @@ export function getSnapshot(){
     artToys,
     toys,
     chains,
-    connections: connectionModel.list(),
+    connections: connectionModel.snapshot().connections,
     structureToys: structureToyModel.list(),
     camera,
   };

@@ -28,7 +28,8 @@ export function createConnectionModel() {
     for (const listener of listeners) listener(event);
   };
   const port = point => objects.get(point?.objectId)?.ports[point?.portId] || null;
-  const list = kind => [...connections.values()].filter(c => !kind || c.kind === kind);
+  const list = (kind, { includeSuspended = false } = {}) => [...connections.values()].filter(c =>
+    (includeSuspended || !editing?.suspended || c.id !== editing.connectionId) && (!kind || c.kind === kind));
   const getParent = id => list().find(c => c.to.objectId === id) || null;
   function getTransportId(id) {
     const visited = new Set();
@@ -115,7 +116,7 @@ export function createConnectionModel() {
       const previous = connections.get(connection.id);
       if (previous && previous.kind !== kind) disconnect(previous.id);
       connections.set(connection.id, connection);
-      emit({ type: 'change', connection });
+      emit({ type: 'change', connection, previous });
     });
     return { ok: true, connection };
   }
@@ -131,11 +132,11 @@ export function createConnectionModel() {
     registerObject(id, { ports = TOY_PORTS, transportId = null, structure = null } = {}) {
       objects.set(String(id), { ports, transportId: transportId ?? objects.get(String(id))?.transportId ?? null, structure });
     },
-    touchObject(id) { emit({ type: 'change', structureChanged: true, objectId: id }); },
+    touchObject(id, { structureCreated = false } = {}) { emit({ type: 'change', structureChanged: true, objectId: id, ...(structureCreated ? {structureCreated:true} : {}) }); },
     setPromotionResolver(resolver) { promotionResolver = resolver; },
     transaction,
     removeObject(id) {
-      const affected = list().filter(c => c.from.objectId === id || c.to.objectId === id);
+      const affected = list(null, {includeSuspended:true}).filter(c => c.from.objectId === id || c.to.objectId === id);
       objects.delete(id);
       if (editing?.fixed.objectId === id || editing?.original?.from.objectId === id || editing?.original?.to.objectId === id) editing = null;
       for (const c of affected) connections.delete(c.id);
@@ -146,16 +147,36 @@ export function createConnectionModel() {
     getPort: port, getParent, getTransportId, isRooted: id => !!getTransportId(id), list, validate, connect, disconnect,
     get: id => connections.get(id) || null,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    socketDragIntent(point, preferredKind = 'sequence') {
+      const metadata = port(point);
+      if (!metadata) return null;
+      const attached = list().filter(c => same(c.from, point) || same(c.to, point));
+      const kind = metadata.accepts.includes(preferredKind) ? preferredKind : metadata.accepts[0];
+      const single = metadata.direction === 'in' && metadata.parentCapacity === 1
+        || (metadata.capacity[kind] ?? 0) === 1;
+      if (single && attached.length === 1) {
+        const edge = attached[0];
+        // Pick up the relationship at this socket, keeping the opposite socket anchored.
+        return { kind: edge.kind, connectionId: edge.id, end: metadata.direction === 'in' ? 'to' : 'from' };
+      }
+      return { kind };
+    },
     beginDrag(point, { kind = 'sequence', connectionId = null, end = null } = {}) {
       const parent = port(point)?.direction === 'in' ? getParent(point.objectId) : null;
-      if (!connectionId && parent) { connectionId = parent.id; end = 'from'; }
+      if (!connectionId && parent) { connectionId = parent.id; end = 'to'; }
       const original = connectionId ? connections.get(connectionId) : null;
       if (connectionId && (!original || !['from', 'to'].includes(end))) return false;
       if (!original && !port(point)?.accepts.includes(kind)) return false;
       editing = Object.freeze(original
-        ? { connectionId, kind: original.kind, end, original, fixed: original[end === 'from' ? 'to' : 'from'] }
+        ? { connectionId, kind: original.kind, end, original, originalEndpoint: original[end], suspended: false, fixed: original[end === 'from' ? 'to' : 'from'] }
         : { connectionId: null, kind, end: port(point).direction === 'out' ? 'to' : 'from', fixed: endpoint(point) });
       emit({ type: 'editing', editing });
+      return true;
+    },
+    detachDrag() {
+      if (!editing?.connectionId || editing.suspended) return false;
+      editing = Object.freeze({...editing, suspended:true});
+      emit({type:'change', transient:true, connection:editing.original});
       return true;
     },
     preview(target) {
@@ -169,13 +190,17 @@ export function createConnectionModel() {
       if (!target) {
         if (edit.connectionId) disconnect(edit.connectionId);
         result = { ok: true, deleted: !!edit.connectionId };
-      } else result = connect(dragKind(edit.fixed, target, edit.kind), edit.fixed, target, { id: edit.connectionId });
+      } else {
+        result = connect(dragKind(edit.fixed, target, edit.kind), edit.fixed, target, { id: edit.connectionId });
+        if (!result.ok && edit.suspended) emit({type:'change',transient:true,connection:edit.original});
+        else if (result.ok && edit.suspended && result.connection === edit.original) emit({type:'change',transient:true,connection:edit.original});
+      }
       emit({ type: 'editing', editing: null });
       return result;
     },
-    cancelDrag() { editing = null; emit({ type: 'editing', editing: null }); },
+    cancelDrag() { const edit=editing; editing = null; if(edit?.suspended)emit({type:'change',transient:true,connection:edit.original}); emit({ type: 'editing', editing: null }); },
     getEditing: () => editing,
-    snapshot() { return Object.freeze({ connections: Object.freeze(list()), editing }); },
+    snapshot() { return Object.freeze({ connections: Object.freeze(list(null,{includeSuspended:true})), editing }); },
   };
 }
 

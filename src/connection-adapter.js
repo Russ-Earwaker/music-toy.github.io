@@ -25,16 +25,16 @@ export function createConnectionAdapter(model, { getInstance = getPlaybackInstan
       }
     }
   }
-  function applyOwnership() {
+  function applyOwnership({transient=!!model.getEditing()?.suspended} = {}) {
     for (const panel of panels) {
       const transportId = model.getTransportId(panel.id);
       const rooted = !!transportId;
       const instance = getInstance(panel.id);
       if (instance && transportId) instance.transportId = transportId;
-      if (!rooted) {
+      if (!transient && !rooted) {
         if (rootedState.get(panel.id)) onDetach(panel.id);
         if (instance) instance.active = false;
-      } else if (instance && model.getParent(panel.id)?.kind === 'transport'
+      } else if (!transient && instance && model.getParent(panel.id)?.kind === 'transport'
         && !model.list('sequence').some(c => c.from.objectId === panel.id)) instance.active = true;
       rootedState.set(panel.id, rooted);
       projectMusicalActiveState(panel, isPlaying() && isObjectMusicallyActive(model, panel.id, instance));
@@ -43,8 +43,8 @@ export function createConnectionAdapter(model, { getInstance = getPlaybackInstan
   const unsubscribe = model.subscribe(event => {
     if (syncing || event.type !== 'change') return;
     project();
-    onSequenceChange();
-    applyOwnership();
+    if (!event.transient) onSequenceChange();
+    applyOwnership({transient:!!event.transient});
   });
   function sync(nextPanels, { importLegacy = true, autoRoot = true } = {}) {
       syncing = true;

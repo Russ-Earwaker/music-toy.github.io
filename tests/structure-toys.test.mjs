@@ -254,8 +254,7 @@ test('occupied normal output atomically auto-promotes to Sequence without losing
   const h=harness(); h.connect('A','B'); const original=h.connect('B','C').connection;
   const root=h.sequence.runtime.getInstance('sequence:A');
   const observed=[]; h.model.subscribe(e=>{if(e.type==='change')observed.push(h.model.list('sequence'));});
-  h.model.beginDrag(input('D'));
-  const result=h.model.drop(output('B'));
+  const result=h.model.connect('sequence',output('B'),input('D'));
   assert.equal(result.ok,true);
   const s=h.toys.get(result.structureId);
   assert.equal(s.type,'sequence'); assert.equal(s.provenance,'auto'); assert.equal(s.includeInput,false);

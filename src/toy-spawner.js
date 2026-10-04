@@ -651,12 +651,12 @@ function isPointOverTrash(x, y) {
   return x >= rect.left - margin && x <= rect.right + margin && y >= rect.top - margin && y <= rect.bottom + margin;
 }
 
-function beginPanelDrag({ panel, pointerId } = {}) {
+function beginPanelDrag({ panel, pointerId, remove = null } = {}) {
   if (!panel) return;
   ensureDock();
   let chainPanels = [panel];
   try {
-    const list = window.__mtArtToys?.collectChainPanelsForMove?.(panel);
+    const list = !remove && window.__mtArtToys?.collectChainPanelsForMove?.(panel);
     if (Array.isArray(list) && list.length) chainPanels = list;
   } catch {}
   const startPositions = chainPanels.map((p) => ({
@@ -664,7 +664,7 @@ function beginPanelDrag({ panel, pointerId } = {}) {
     left: Number.parseFloat(p?.style?.left || '') || Number(p?.offsetLeft) || 0,
     top: Number.parseFloat(p?.style?.top || '') || Number(p?.offsetTop) || 0,
   }));
-  state.panelDrag = { panel, pointerId: pointerId ?? null, hovering: false, startPositions };
+  state.panelDrag = { panel, pointerId: pointerId ?? null, hovering: false, startPositions, remove };
   setPanelDragActive(true);
   setTrashArmed(true);
   setTrashHover(false);
@@ -681,7 +681,7 @@ function updatePanelDrag({ clientX, clientY } = {}) {
     setTrashHover(hovering);
   }
   // Update art-toy drop highlight while dragging a music toy.
-  try { window.__mtArtToys?.probeDropForPanel?.(state.panelDrag.panel, clientX, clientY); } catch {}
+  try { if (!state.panelDrag.remove) window.__mtArtToys?.probeDropForPanel?.(state.panelDrag.panel, clientX, clientY); } catch {}
 }
 
 function resolveRemoveHandler(panel) {
@@ -706,11 +706,12 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
   setPanelDragActive(false);
   setTrashArmed(false);
   try { window.__mtArtToys?.clearDropHover?.(); } catch {}
+  const objectRemove = state.panelDrag.remove;
   const startPositions = Array.isArray(state.panelDrag?.startPositions) ? state.panelDrag.startPositions : [];
   state.panelDrag = null;
 
   // Priority 1: trash delete
-  const removeHandler = resolveRemoveHandler(panel);
+  const removeHandler = objectRemove || resolveRemoveHandler(panel);
   if (shouldRemove && typeof removeHandler === 'function') {
     try {
       return !!removeHandler(panel);
@@ -721,7 +722,7 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
   }
 
   // Priority 2: drop onto an Art Toy (moves the entire chain into the art toy's internal container)
-  if (hasPoint) {
+  if (hasPoint && !objectRemove) {
     try {
       const result = window.__mtArtToys?.tryPlaceChainFromPanel?.(panel, clientX, clientY);
       const placed = !!(result && (result.placed === true || result === true));

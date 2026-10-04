@@ -14,8 +14,8 @@ function svgNode(tag, attrs = {}) {
 }
 
 export function createConnectionView({ model, getContext, getPanels, getToyPoint, getHeartbeatPoint,
-  getPulse = () => null, onFrame = () => {}, getRenderedStructure = s => s, onStructureDrag = () => {},
-  onStructureMove = null, onStructureDragEnd = () => {}, isBranchDragging = () => false, structureToys = null, onQuickAdd = () => {} }) {
+  onConnectionDrag = () => {}, getPulse = () => null, onFrame = () => {}, getRenderedStructure = s => s, onStructureDrag = () => {},
+  onStructureMove = null, onStructureDragUpdate = () => {}, onStructureDragEnd = () => {}, isBranchDragging = () => false, structureToys = null, onQuickAdd = () => {} }) {
   const svg = svgNode('svg', { class: 'connection-layer', 'aria-label': 'Musical connections' });
   Object.assign(svg.style, { position: 'absolute', inset: '0', width: '100%', height: '100%',
     // The board viewport clips this overlay. Clipping the SVG again would hide
@@ -26,7 +26,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     .connection-layer .connection-path { fill:none; stroke:#99b9ff; stroke-width:4; pointer-events:stroke; cursor:pointer; }
     .connection-layer .connection-hit { fill:none; stroke:transparent; stroke-width:18; pointer-events:stroke; cursor:pointer; }
     .connection-layer .transport .connection-path { stroke:rgba(155,180,255,.38); stroke-width:1.5; stroke-dasharray:3 7; }
-    .connection-layer .connection-port,.connection-layer .connection-handle { fill:#172539; stroke:#a3c6ff; stroke-width:2; pointer-events:all; cursor:crosshair; touch-action:none; }
+    .connection-layer .connection-port { fill:#172539; stroke:#a3c6ff; stroke-width:2; pointer-events:all; cursor:crosshair; touch-action:none; }
     .connection-layer .transport-port { stroke:#b1a5ee; }
     .connection-layer .connection-port { stroke-width:2.5; fill:#263c59; }
     .connection-layer .connection-port.connected { fill:#1b2d43; stroke:#aec7e8; }
@@ -53,9 +53,10 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     .connection-layer .structure-minimise { fill:#263c59; stroke:#7eb9e9; pointer-events:all; cursor:pointer; }
   `;
   document.head.append(style);
-  const edgesGroup = svgNode('g'), cardsGroup = svgNode('g'), midpointsGroup = svgNode('g'), portsGroup = svgNode('g'), handlesGroup = svgNode('g');
+  const edgesGroup = svgNode('g'), cardsGroup = svgNode('g'), midpointsGroup = svgNode('g'), portsGroup = svgNode('g'), actionsGroup = svgNode('g');
   const previewPath = svgNode('path', { class: 'connection-preview', display: 'none' });
-  svg.append(edgesGroup, cardsGroup, midpointsGroup, portsGroup, handlesGroup, previewPath);
+  const looseEndpoint=svgNode('circle',{class:'connection-loose-endpoint',r:10,fill:'#6689c9',stroke:'#dbe9ff','stroke-width':2,'pointer-events':'none',display:'none'});
+  svg.append(edgesGroup, cardsGroup, midpointsGroup, portsGroup, actionsGroup, previewPath,looseEndpoint);
   const status = document.createElement('div');
   status.className = 'connection-status'; status.setAttribute('role', 'status'); status.hidden = true;
   const menu = document.createElement('div'); menu.className = 'connection-menu'; menu.hidden = true;
@@ -71,7 +72,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   const closeMenu = () => { menu.hidden = true; menuOwner = null; };
   const ownerOf = target => { for(let n=target;n;n=n.parentNode){const id=n.getAttribute?.('data-structure-id');if(id)return id;}return null; };
   function selectStructure(id) {
-    if(selectedStructure&&selectedStructure!==id&&!moving&&!model.getEditing()&&menu.hidden)structureToys?.setCollapsed(selectedStructure,true);
+    if(selectedStructure&&selectedStructure!==id&&!moving&&!model.getEditing())structureToys?.setCollapsed(selectedStructure,true);
     selected=null;selectedStructure=id;structureToys?.setCollapsed(id,false);
   }
   const key = point => `${point.objectId}|${point.portId}`;
@@ -81,6 +82,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   }
   function select(id) {
     selected = id;
+    if (selectedStructure) structureToys?.setCollapsed(selectedStructure, true);
     selectedStructure = null;
     const connection = model.get(id);
     document.dispatchEvent(new CustomEvent('connection:selected', {
@@ -110,8 +112,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       tabindex: 0, role: 'button', 'data-object-id': point.objectId, 'data-port-id': point.portId,
       'aria-label': `${point.objectId} ${point.portId === 'input' ? 'input: connect a preceding toy' : kind === 'transport' ? 'transport output' : 'output: connect a following toy'}` });
     const title = svgNode('title'); title.textContent = circle.getAttribute('aria-label'); circle.append(title);
-    circle.addEventListener('pointerdown', e => start(e, point, { kind }));
-    hit.addEventListener('pointerdown',e=>start(e,point,{kind}));
+    circle.addEventListener('pointerdown', e => start(e, point, model.socketDragIntent(point, kind)));
+    hit.addEventListener('pointerdown',e=>start(e,point,model.socketDragIntent(point,kind)));
     const label = svgNode('text', { class: 'connection-label', 'text-anchor': 'middle' });
     label.textContent = model.getPort(point)?.direction === 'out' ? '+' : '‹';
     group.append(hit,circle, label); portsGroup.append(group);
@@ -152,7 +154,6 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       menu.append(count);
     }
     if (c) button('Disconnect', () => { model.disconnect(c.id); select(null); });
-    else if (s) button('Delete structure', () => { structureToys.remove(s.id); selectedStructure = null; });
     const visual = edges.get(connectionId);
     const at = s && structureId ? projectConnectionPoint({ x: s.x + structureToyWidth(s)/2, y: s.y + 30 }, getContext().transform)
       : { x: Number(visual?.midpoint.getAttribute('cx')) || 0, y: Number(visual?.midpoint.getAttribute('cy')) || 0 };
@@ -172,13 +173,17 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const tracksGroup=svgNode('g'),tracks=new Map();
     const choose = e => {
       e.preventDefault(); e.stopPropagation(); closeMenu();selectStructure(s.id);
-      openMenu(null, s.id); render();
+      render();
     };
+    const typeButton = svgNode('rect', {class:'structure-minimise structure-type',rx:4,role:'button',tabindex:0,'aria-label':'Change structure type'});
+    const editType = e => { choose(e); openMenu(null,s.id); };
+    typeButton.addEventListener('pointerdown',editType);
+    typeButton.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')editType(e);});
     const beginMove = (e, selectOnTap=false) => {
       if(e.button!=null&&e.button!==0)return;
       e.preventDefault();e.stopPropagation();
-      if(moving){onStructureDragEnd();moving=null;}
-      onStructureDrag(s.id);
+      if(moving){moving=null;onStructureDragEnd(null,true);}
+      onStructureDrag(s.id,e);
       closeMenu();
       const current=structureToys.get(s.id);
       moving={id:s.id,x:current.x,y:current.y,onTap:selectOnTap?()=>choose(e):null};gestureMoved=false;
@@ -186,45 +191,39 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       svg.setPointerCapture?.(pointerId);
     };
     rect.addEventListener('pointerdown', e=>beginMove(e,true));
-    count.addEventListener('pointerdown',choose);
-    count.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')choose(e);});
+    count.addEventListener('pointerdown',editType);
+    count.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')editType(e);});
     rect.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') choose(e); });
     moveHandle.addEventListener('pointerdown', e=>beginMove(e));
     const toggle=e=>{e.preventDefault();e.stopPropagation();closeMenu();const current=structureToys.get(s.id);structureToys.setCollapsed(s.id,!current.collapsed);if(!current.collapsed)selectedStructure=null;else selectStructure(s.id);render();};
     minimise.addEventListener('pointerdown',toggle);
     minimise.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')toggle(e);});
-    group.append(rect, name, count, tracksGroup, moveHandle,minimise,minimiseLabel); cardsGroup.append(group);
-    return { group, rect, name, count, moveHandle, minimise,minimiseLabel, tracksGroup, tracks };
+    group.append(rect, typeButton, name, count, tracksGroup, moveHandle,minimise,minimiseLabel); cardsGroup.append(group);
+    return { group, rect, typeButton, name, count, moveHandle, minimise,minimiseLabel, tracksGroup, tracks };
   }
   function makeEdge(c) {
     const group = svgNode('g', { 'data-connection-id': c.id });
     const middleGroup = svgNode('g', { 'data-connection-id': c.id });
-    const handles = svgNode('g', { 'data-connection-id': c.id });
+    const actions = svgNode('g', { 'data-connection-id': c.id });
     const hit = svgNode('path', { class: 'connection-hit', tabindex: 0, role: 'button', 'aria-label': `Select ${c.kind} connection` });
     const path = svgNode('path', { class: 'connection-path' });
     const pulse = svgNode('path', { fill: 'none', stroke: 'rgba(180,205,255,.65)',
       'stroke-width': 2, 'pointer-events': 'none', pathLength: 1000, 'stroke-dasharray': '90 1000' });
     const midpointHit=svgNode('circle',{r:20,fill:'transparent','pointer-events':'all'});
     const midpoint = svgNode('circle', { r: 8, class: 'connection-midpoint', tabindex: 0, role: 'button', 'aria-label': `${c.kind} connection options` });
-    const from = svgNode('circle', { r: 12, class: 'connection-handle', 'data-end': 'from', 'aria-label': 'Reconnect source endpoint' });
-    const to = svgNode('circle', { r: 12, class: 'connection-handle', 'data-end': 'to', 'aria-label': 'Reconnect destination endpoint' });
-    const fromStem = svgNode('line', { stroke: '#a3c6ff', 'stroke-width': 1, 'pointer-events': 'none' });
-    const toStem = svgNode('line', { stroke: '#a3c6ff', 'stroke-width': 1, 'pointer-events': 'none' });
     const remove = svgNode('circle', { r: 10, class: 'connection-delete', tabindex: 0, role: 'button', 'aria-label': 'Disconnect connection' });
     const cross = svgNode('text', { class: 'connection-label', 'text-anchor': 'middle' }); cross.textContent = '×';
     for (const node of [hit, path, midpoint,midpointHit]) node.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); select(c.id); });
     for (const node of [hit, midpoint]) node.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(c.id); }
     });
-    from.addEventListener('pointerdown', e => start(e, model.get(c.id)?.from, { connectionId: c.id, end: 'from' }));
-    to.addEventListener('pointerdown', e => start(e, model.get(c.id)?.to, { connectionId: c.id, end: 'to' }));
     const disconnect = e => { e.stopPropagation(); e.preventDefault(); model.disconnect(c.id); select(null); };
     remove.addEventListener('pointerdown', disconnect);
     remove.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') disconnect(e); });
     group.append(hit, path, pulse); edgesGroup.append(group);
     middleGroup.append(midpointHit,midpoint); midpointsGroup.append(middleGroup);
-    handles.append(fromStem, toStem, from, to, remove, cross); handlesGroup.append(handles);
-    return { group, middleGroup, handles, hit, path, pulse, midpoint,midpointHit, from, to, fromStem, toStem, remove, cross };
+    actions.append(remove, cross); actionsGroup.append(actions);
+    return { group, middleGroup, actions, hit, path, pulse, midpoint,midpointHit, remove, cross };
   }
   function render() {
     if (disposed) return;
@@ -259,6 +258,9 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       set(card.rect, 'aria-label', `${structureTypeLabel(s.type)} structure`);
       set(card.rect, 'aria-expanded', !s.collapsed);
       set(card.group,'data-collapsed',!!s.collapsed);
+      set(card.typeButton,'display',s.collapsed?'none':'inline');
+      set(card.typeButton,'x',pos.x+36*scale);set(card.typeButton,'y',pos.y+5*scale);
+      set(card.typeButton,'width',(width-72)*scale);set(card.typeButton,'height',30*scale);
       set(card.name, 'x', pos.x + width/2 * scale); set(card.name, 'y', pos.y + 30 * scale);
       set(card.name, 'font-size', (s.collapsed?14:18) * scale);
       const label = s.collapsed ? (s.type==='repeat'?`×${s.count}`:s.type==='sequence'?'Seq':structureTypeLabel(s.type)) : `${structureTypeLabel(s.type)} ▾`;
@@ -325,14 +327,15 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       points.set(id, projected); position(visual.circle, projected);position(visual.hit,projected);
       const structure = structureToys?.get(value.point.objectId);
       if(structure)set(visual.group,'data-structure-id',structure.id);
-      const attached = model.list().some(c => (c.from.objectId === value.point.objectId && c.from.portId === value.point.portId)
-        || (c.to.objectId === value.point.objectId && c.to.portId === value.point.portId));
+      const attached = model.list(null,{includeSuspended:true}).some(c =>
+        (key(c.from)===key(value.point) && !(editing?.suspended && editing.connectionId===c.id && editing.end==='from'))
+        || (key(c.to)===key(value.point) && !(editing?.suspended && editing.connectionId===c.id && editing.end==='to')));
       set(visual.circle, 'data-connected', attached);
       if (structure) {
         const scale=context.transform?.scale || 1;
         set(visual.circle,'r',(attached?STRUCTURE_PORT_RADIUS:STRUCTURE_PLUS_RADIUS)*scale);
         set(visual.hit,'r',STRUCTURE_PORT_HIT_RADIUS*scale);set(visual.label,'font-size',20*scale);
-        const childEdge = model.list('sequence').find(c => c.from.objectId === structure.id && c.from.portId === value.point.portId);
+        const childEdge = attached && model.list('sequence',{includeSuspended:true}).find(c => c.from.objectId === structure.id && c.from.portId === value.point.portId);
         const text = value.point.portId === 'input' ? '‹' : childEdge ? String(Number(value.point.portId.split(':')[1]) + 1) : '+';
         if (visual.label.textContent !== text) visual.label.textContent = text;
       }
@@ -344,34 +347,33 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       }
       set(visual.label, 'x', projected.x); set(visual.label, 'y', projected.y + (structure?6:4)*(context.transform?.scale||1));
       const result = editing ? model.preview(value.point) : null;
+      if(result?.ok){set(visual.circle,'r',Number(visual.circle.getAttribute('r'))*1.2);}
       set(visual.circle, 'class', `connection-port${attached ? ' connected' : ''}${value.kind === 'transport' ? ' transport-port' : ''}${result?.ok ? ' compatible' : result?.reason === 'requires-promotion' ? ' requires-promotion' : ''}`);
     }
     for (const [id, visual] of ports) if (!desired.has(id)) { visual.group.remove(); ports.delete(id); }
     const present = new Set();
-    for (const c of model.list()) {
-      const a = points.get(key(c.from)), b = points.get(key(c.to));
+    for (const c of model.list(null,{includeSuspended:true})) {
+      let a = points.get(key(c.from)), b = points.get(key(c.to));
+      const reconnect=editing?.connectionId===c.id && gestureMoved && pointer;
+      if(reconnect){const rect=svg.getBoundingClientRect(),loose={x:pointer.x-rect.left,y:pointer.y-rect.top};if(editing.end==='from')a=loose;else b=loose;}
       if (!a || !b) continue;
       present.add(c.id);
       let visual = edges.get(c.id);
       if (!visual) { visual = makeEdge(c); edges.set(c.id, visual); }
       set(visual.group, 'class', `${c.kind}${selected === c.id ? ' selected' : ''}`);
       set(visual.middleGroup, 'class', `${c.kind}${selected === c.id ? ' selected' : ''}`);
-      set(visual.group, 'display', editing?.connectionId === c.id ? 'none' : 'inline');
-      set(visual.middleGroup, 'display', editing?.connectionId === c.id ? 'none' : 'inline');
+      set(visual.group, 'display', 'inline');
+      set(visual.middleGroup, 'display', reconnect ? 'none' : 'inline');
+      set(visual.actions,'display',reconnect?'none':'inline');
+      set(visual.hit,'pointer-events',reconnect?'none':'stroke');
       const curve = connectionCurve(a, b), path = curvePath(curve), middle = curvePoint(curve, 0.5);
       set(visual.path, 'd', path); set(visual.hit, 'd', path); position(visual.midpoint, middle);position(visual.midpointHit,middle);
-      // Keep sockets available for a new drag, including multi-connect outputs.
-      // Short stems identify which attached endpoint each edit handle controls.
       const controlScale=context.transform?.scale||1;
       set(visual.midpoint,'r',8*controlScale);set(visual.midpointHit,'r',20*controlScale);
-      set(visual.from,'r',12*controlScale);set(visual.to,'r',12*controlScale);set(visual.remove,'r',10*controlScale);set(visual.cross,'font-size',12*controlScale);
-      position(visual.from, { x: a.x+40*controlScale, y: a.y }); position(visual.to, { x: b.x-40*controlScale, y: b.y });
-      for (const [stem, point, offset] of [[visual.fromStem, a, 40*controlScale], [visual.toStem, b, -40*controlScale]]) {
-        set(stem, 'x1', point.x); set(stem, 'y1', point.y); set(stem, 'x2', point.x+offset); set(stem, 'y2', point.y);
-      }
+      set(visual.remove,'r',10*controlScale);set(visual.cross,'font-size',12*controlScale);
       position(visual.remove, { x: middle.x, y: middle.y - 22*controlScale });
       set(visual.cross, 'x', middle.x); set(visual.cross, 'y', middle.y - 18*controlScale);
-      for (const node of [visual.from, visual.to, visual.fromStem, visual.toStem, visual.remove, visual.cross]) set(node, 'display', selected === c.id ? 'inline' : 'none');
+      for (const node of [visual.remove, visual.cross]) set(node, 'display', selected === c.id ? 'inline' : 'none');
       const pulsing = getPulse(c);
       set(visual.path, 'stroke-width', c.kind === 'sequence' && pulsing ? 6 : c.kind === 'transport' ? 1.5 : 4);
       const travel = c.kind === 'transport' ? pulsing?.travel : null;
@@ -381,9 +383,11 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         set(visual.pulse, 'stroke-dashoffset', -Math.max(0, travel - 0.09) * 1000);
       }
     }
-    for (const [id, visual] of edges) if (!present.has(id)) { visual.group.remove(); visual.middleGroup.remove(); visual.handles.remove(); edges.delete(id); }
-    // Paths sit below all midpoint controls, ports and endpoint handles.
-    if (editing && pointer) {
+    for (const [id, visual] of edges) if (!present.has(id)) { visual.group.remove(); visual.middleGroup.remove(); visual.actions.remove(); edges.delete(id); }
+    // Paths sit below all midpoint controls and ports.
+    set(looseEndpoint,'display',editing&&pointer&&gestureMoved?'inline':'none');
+    if(editing&&pointer&&gestureMoved){const r=svg.getBoundingClientRect();position(looseEndpoint,{x:pointer.x-r.left,y:pointer.y-r.top});set(looseEndpoint,'r',10*(context.transform?.scale||1));}
+    if (editing && !editing.connectionId && pointer) {
       const fixed = points.get(key(editing.fixed));
       const rect = svg.getBoundingClientRect();
       const loose = { x: pointer.x - rect.left, y: pointer.y - rect.top };
@@ -409,10 +413,12 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     if (e.pointerId !== pointerId) return;
     e.preventDefault(); pointer = { x: e.clientX, y: e.clientY };
     if (dragOrigin && Math.hypot(pointer.x - dragOrigin.x, pointer.y - dragOrigin.y) >= 4) gestureMoved = true;
+    if(gestureMoved&&model.getEditing()?.connectionId&&!model.getEditing().suspended){onConnectionDrag();model.detachDrag();}
     if(editingEntry)structureToys.setOffset(editingEntry.id,editingEntry.portId,
       editingEntry.offsetTick+(pointer.x-dragOrigin.x)*editingEntry.ticksPerPixel);
     if (moving && Math.hypot(pointer.x - dragOrigin.x, pointer.y - dragOrigin.y) >= 4) {
       closeMenu();
+      onStructureDragUpdate(e);
       const scale = getContext().transform?.scale || 1;
       const x=moving.x+(pointer.x-dragOrigin.x)/scale,y=moving.y+(pointer.y-dragOrigin.y)/scale;
       if(onStructureMove)onStructureMove(moving.id,x,y);else structureToys.move(moving.id,x,y);
@@ -428,7 +434,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     }
     if (moving) {
       const onTap=!gestureMoved?moving.onTap:null;
-      onStructureDragEnd();moving = null; pointerId = null; pointer = dragOrigin = null;
+      moving = null; pointerId = null; pointer = dragOrigin = null;onStructureDragEnd(e,!gestureMoved);
       onTap?.();render();return;
     }
     const moved = gestureMoved || (dragOrigin && Math.hypot(e.clientX - dragOrigin.x, e.clientY - dragOrigin.y) >= 4);
@@ -439,11 +445,11 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     if (result.connection) selected = result.connection.id;
     pointerId = null; pointer = dragOrigin = null; render();
   };
-  const cancel = () => { if(moving)onStructureDragEnd();tapPoint = null; moving = null; editingEntry=null; pointerId = null; pointer = dragOrigin = null; model.cancelDrag(); render(); };
+  const cancel = () => { if(moving)onStructureDragEnd(null,true);tapPoint = null; moving = null; editingEntry=null; pointerId = null; pointer = dragOrigin = null; model.cancelDrag(); render(); };
   const reset = () => { closeMenu(); selected = selectedStructure = null; cancel(); status.hidden=true; clearTimeout(statusTimer); };
   const outside = e => {
     for (let node=e.target;node;node=node.parentNode) if(node===menu)return;
-    if(ownerOf(e.target))return;
+    if(selectedStructure && ownerOf(e.target)===selectedStructure)return;
     closeMenu();
     if(selectedStructure&&!moving&&!isBranchDragging()&&!model.getEditing()&&!editingEntry){structureToys?.setCollapsed(selectedStructure,true);selectedStructure=null;render();}
   };
@@ -464,6 +470,9 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     if((moving&&!structureToys?.get(moving.id))||(editingEntry&&!structureToys?.get(editingEntry.id)))cancel();
     if(selected&&!model.get(selected))selected=null;
     if(selectedStructure&&!structureToys?.get(selectedStructure))selectedStructure=null;
+    for (const change of event.events || [event]) {
+      if (change.structureCreated && structureToys?.get(change.objectId)) selectStructure(change.objectId);
+    }
     if (event.type === 'promotion-required') notify('This junction needs a Structure toy. Existing connection kept.');
     globalThis.__CONNECTION_DEBUG = model.snapshot(); render();
   });
