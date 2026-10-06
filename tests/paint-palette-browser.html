@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Palette touch regression tests</title><base href="../"><link rel="stylesheet" href="paint-palette.css">
+<style>body{margin:0;background:#142032;color:white;font:16px sans-serif}.board-viewport{position:absolute;inset:90px 0 0;touch-action:none}.toy-panel{position:absolute;top:40px;width:90px;height:120px;background:#405570;border:2px solid var(--instrument-colour,#fff)}#a{left:310px}#b{left:440px}#structure{left:570px}#heartbeat{left:700px}#result{position:relative;z-index:1000;white-space:pre-wrap;pointer-events:none}</style>
+</head><body><button id="run">Run touch regressions</button><output id="result">Ready</output>
+<main class="board-viewport"><section class="toy-panel" id="a" data-toy="loopgrid" data-instrument="tone">Toy A</section><section class="toy-panel" id="b" data-toy="chordwheel" data-instrument="tone">Toy B</section><section class="toy-panel" id="structure" data-toy="sequence">Structure</section><section class="toy-panel" id="heartbeat" data-toy="main-heartbeat">Heartbeat</section></main>
+<script type="module" src="tests/paint-palette-browser.js"></script></body></html>

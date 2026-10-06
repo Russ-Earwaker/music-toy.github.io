@@ -54,6 +54,7 @@ import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';
 import './board-tap-dots.js';
 import { initAudioAssets, cancelScheduledToySources, triggerInstrument } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog, getInstrumentEntries as getInstrumentCatalogEntries } from './instrument-catalog.js';
+import './paint-palette.js';
 import { closeInstrumentPicker } from './instrument-picker.js';
 import { chooseToyInstrument } from './instrument-selection.js';
 import { readToySoundState, restoreToySoundState } from './instrument-state.js';
