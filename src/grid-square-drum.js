@@ -1,3 +1,4 @@
+import { panelTransportBindings } from './panel-transport.js';
 // grid-square-drum.js
 import { getLoopInfo } from './audio-core.js';
 import { isHelpActive } from './help-overlay.js';
@@ -7,6 +8,7 @@ const DEBUG = false; // disable debug logs for grid-square-drum overlay
 const LOG = () => {};
 
 function addDrumPad(panel, padWrap, toyId) {
+  const {getLoopInfo} = panelTransportBindings(panel);
   let pad = padWrap.querySelector('.grid-drum-pad');
   if (!pad) {
     pad = document.createElement('div');

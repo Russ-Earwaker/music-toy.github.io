@@ -44,6 +44,12 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
     if (!toyId) return;
     for (const key of states.keys()) if (key === toyId || key.startsWith(`${toyId}|`)) states.delete(key);
   }
+  function resetToyTimeline(toyId, tick, { includeBoundary = true } = {}) {
+    for (const [key, state] of states) if (key === toyId || key.startsWith(`${toyId}|`)) {
+      state.scheduledUntilTick = intTick(tick) + (includeBoundary ? 0 : 1);
+      state.identities.clear();
+    }
+  }
   function resolveGeneration(toy, toyId) {
     const audioId = toy?.__audioToyId || toy?.dataset?.audiotoyid || toy?.dataset?.toyid || toyId;
     try { return Number(window.__TOY_AUDIO_GEN?.[audioId]) || 0; } catch { return 0; }
@@ -54,7 +60,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       ? intTick(audioTimeToTick(override)) : 0;
   }
 
-  function tick({ activeToyIds, playbackTurns = [], getToy, currentTick, lookaheadEndTick, tickToAudioTime, audioTimeToTick } = {}) {
+  function tick({ transportId = null, activeToyIds, playbackTurns = [], getToy, currentTick, lookaheadEndTick, tickToAudioTime, audioTimeToTick } = {}) {
     if ((!activeToyIds?.size && !playbackTurns.length) || typeof tickToAudioTime !== 'function') return { scheduled: 0, events: [] };
     const nowTick = intTick(currentTick);
     const endTick = Math.max(nowTick, intTick(lookaheadEndTick, nowTick));
@@ -76,6 +82,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       const usesPlaybackInstance = structureTurn || migratedGrid || usesEventProvider;
       const playbackInstance = turn.playbackInstance || (usesPlaybackInstance ? getPlaybackInstance(toyId) : null);
       if (usesPlaybackInstance && (!playbackInstance || !playbackInstance.active)) continue;
+      if (transportId && playbackInstance && playbackInstance.transportId !== transportId) continue;
       const toyLoopTicks = usesPlaybackInstance
         ? Math.max(1, intTick(playbackInstance.loopLengthTicks, loopTicks))
         : loopTicks;
@@ -83,6 +90,8 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       const generation = resolveGeneration(toy, toyId);
       const stateKey = structureTurn ? `${toyId}|${playbackInstance.id}` : toyId;
       const state = getState(stateKey, structureTurn ? Math.max(nowTick, turn.startTick) : nowTick);
+      if (state.transportId != null && state.transportId !== transportId) { state.scheduledUntilTick = nowTick; state.identities.clear(); }
+      state.transportId = transportId;
       const chainTurnEndTick = Number(structureTurn ? turn.endTick : toy.__chainTurnEndTick);
       const scheduleEndTick = Number.isFinite(chainTurnEndTick)
         ? Math.min(endTick, intTick(chainTurnEndTick))
@@ -151,7 +160,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
           if (state.identities.has(identity)) continue;
           state.identities.add(identity);
           const metadata = {
-            toyId: String(toyId), playbackInstanceId: playbackInstance.id,
+            transportId: playbackInstance.transportId || transportId, toyId: String(toyId), playbackInstanceId: playbackInstance.id,
             eventTick, eventKey, definitionRevision: revision,
             generation: playbackInstance.generation, audioGeneration: generation,
             late: eventTick < nowTick, identity,
@@ -198,6 +207,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
           if (!state.identities.has(identity)) {
             state.identities.add(identity);
             const metadata = {
+              transportId: playbackInstance?.transportId || transportId,
               toyId: String(toyId), playbackInstanceId, eventTick, eventKey,
               definitionRevision: revision,
               generation: identityGeneration,
@@ -236,7 +246,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
     }
     // Occurrence scheduler state is bounded even after thousands of loops.
     for (const [key, state] of states) {
-      if (key.includes('|') && state.scheduledUntilTick < nowTick - loopTicks * 2) states.delete(key);
+      if ((!transportId || state.transportId === transportId) && key.includes('|') && state.scheduledUntilTick < nowTick - loopTicks * 2) states.delete(key);
     }
     return { scheduled: events.length, events };
   }
@@ -250,6 +260,6 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       generation: state.generation,
     } : null;
   }
-  return { tick, clearToy, resetTimeline, getDebugState,
+  return { tick, clearToy, resetTimeline, resetToyTimeline, getDebugState,
     reset() { states.clear(); pendingReset = null; resetSerial++; } };
 }

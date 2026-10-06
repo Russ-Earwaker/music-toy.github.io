@@ -1,7 +1,7 @@
 // Logical board units only. Layout never changes musical state.
 export const MIN_NODE_GAP_X=144, MIN_CONNECTION_CORRIDOR=144, MIN_SIBLING_GAP_Y=72, CONNECTION_CONTROL_RADIUS=24;
 export const ENDPOINT_CONTROL_RADIUS=26;
-export const HEARTBEAT_OUTPUT_OFFSET=52;
+export const HEARTBEAT_OUTPUT_OFFSET=112;
 export const GRAPH_HORIZONTAL_GAP=MIN_NODE_GAP_X, GRAPH_SIBLING_GAP=MIN_SIBLING_GAP_Y;
 // Horizontal detours make wires and the local graph much longer. Prefer a
 // compact corridor over equally-sized sideways displacement.

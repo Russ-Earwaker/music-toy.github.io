@@ -1,3 +1,4 @@
+import { panelTransportBindings } from '../panel-transport.js';
 // src/drawgrid.js
 // Minimal, scoped Drawing Grid -- 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
@@ -172,6 +173,7 @@ import {
 const drawgridLog = makeDebugLogger('mt_debug_logs', 'log');
 
 function isPanelTransportRunning(panel) {
+  const {isRunning} = panelTransportBindings(panel);
   const mainTransport = (typeof isRunning === 'function') && isRunning();
   if (mainTransport) return true;
   try {
@@ -181,6 +183,7 @@ function isPanelTransportRunning(panel) {
   }
 }
 function getPanelLoopInfo(panel) {
+  const {getLoopInfo} = panelTransportBindings(panel);
   try {
     if (panel?.dataset?.beatSwarmSubboard === '1' && !!window.BeatSwarmMode?.isSubBoardPlaying?.()) {
       const phase01 = Number(panel.__beatSwarmSubBoardLocalPhase01);
@@ -521,6 +524,8 @@ let __dgRegenSource = '';
  * @returns {Array<Set<number>>} A new array with all columns filled.
  */
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
+  const getLoopInfo = () => getPanelLoopInfo(panel);
+  const isRunning = () => isPanelTransportRunning(panel);
   // Per-instance state (WAS module-level; moving fixes cross-toy leakage)
   let currentMap = null;                // { active:boolean[], nodes:Set[], disabled:Set[] }
   let usingBackBuffers = false;
@@ -7522,7 +7527,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   try { panel.dispatchEvent(new CustomEvent('drawgrid:ready', { bubbles: true })); } catch {}
   return api;
 }
-
 
 
 

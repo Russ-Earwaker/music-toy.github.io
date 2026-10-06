@@ -1,6 +1,6 @@
 // Compile shared Connection topology into the same Structure runtime. Implicit
 // chains stay flattened; explicit branch children may themselves be chains.
-export function compileStructureGraph({ panels, structures, connections, runtime, currentTick, getDuration }) {
+export function compileStructureGraph({ panels, structures, connections, runtime, currentTick, getDuration, getTransportId = () => undefined, getCurrentTick = () => currentTick }) {
   const toys = new Map(panels.map(p => [p.id, p]));
   const explicit = new Map(structures.map(s => [s.id, s]));
   const incoming = new Map(connections.map(c => [c.to.objectId, c]));
@@ -32,12 +32,12 @@ export function compileStructureGraph({ panels, structures, connections, runtime
       else if (child.children.length === 1) reference=child.children[0];
       else {
         const branchId = `branch:${id}:${edge.from.portId}`;
-        runtime.defineStructure(branchId, child.type, child.children, currentTick);
+        runtime.defineStructure(branchId, child.type, child.children, getCurrentTick(id), {transportId:getTransportId(id)});
         defined.add(branchId); reference={ structureId: branchId };
       }
       children.push({...reference,...(s.type==='timeline'?{offsetTick:s.entries?.find(e=>e.portId===edge.from.portId)?.offsetTick||0}:{})});
     }
-    runtime.defineStructure(s.definitionId, s.type, children, currentTick, { representationId: s.definitionId, transportId: s.transportId, count:s.count });
+    runtime.defineStructure(s.definitionId, s.type, children, getCurrentTick(id), { representationId: s.definitionId, transportId: getTransportId(id) ?? s.transportId, count:s.count });
     defined.add(s.definitionId); resolving.delete(id);
     return { type: s.type, count:s.count, children, members, representationId: s.definitionId,
       reference: { structureId: s.definitionId }, preferredId: s.definitionId };

@@ -1,3 +1,4 @@
+import { connectionModel } from './connections.js';
 // src/toy-audio.js — shared per-toy mute/volume policy (<=300 lines)
 import { ensureAudioContext, resumeAudioContextIfNeeded, setToyVolume, setToyMuted } from './audio-core.js';
 import { cancelScheduledToySources } from './audio-samples.js';
@@ -240,8 +241,11 @@ try {
 // On transport pause, invalidate any already-scheduled future notes.
 // Otherwise they remain pending while AudioContext is suspended and will double-play after resume.
 try {
-  document.addEventListener('transport:pause', () => {
-    bumpAllToyAudioGen();
+  document.addEventListener('transport:pause', event => {
+    const transportId = event.detail?.transportId || 'main-heartbeat';
+    for (const panel of document.querySelectorAll('.toy-panel')) if (connectionModel.getTransportId(panel.id) === transportId) {
+      bumpToyAudioGen(panel.dataset.audiotoyid || panel.__audioToyId || panel.id, 'domain-pause');
+    }
     if (window.__AUDIO_GATE_DEBUG) {
       console.log('[audio-gate] transport:pause -> bumpAllToyAudioGen');
     }

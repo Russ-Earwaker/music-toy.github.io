@@ -117,13 +117,18 @@ export function createStructureRuntime() {
       for (const child of definitions.get(childId)?.children || []) if (child.structureId) checkChild(child.structureId);
     };
     for (const child of children) if (child.structureId || (child.childId && (String(child.childId) === id || definitions.has(String(child.childId))))) checkChild(String(child.structureId || child.childId));
+    for (const child of children) {
+      const domain = child.transportId ?? definitions.get(String(child.structureId || child.childId))?.transportId;
+      if (domain && domain !== transportId) throw new Error('Mixed transport Structure rejected');
+    }
     const layout = freezeLayout(type, children, definitions, representationId, count);
     const previous = definitions.get(id);
-    if (previous?.type === type && previous.count === count && previous.representationId === representationId && JSON.stringify(previous.children) === JSON.stringify(layout.children)) return previous;
+    if (previous?.transportId === transportId && previous?.type === type && previous.count === count && previous.representationId === representationId && JSON.stringify(previous.children) === JSON.stringify(layout.children)) return previous;
     const definition = Object.freeze({ id, type, transportId, representationId, count,
       revision: (previous?.revision ?? -1) + 1, ...layout });
     definitions.set(id, definition);
     const instance = instances.get(id);
+    if (instance && instance.transportId !== transportId) { instance.active = false; timelines.delete(id); instances.delete(id); }
     if (instance?.active && !instance.parentDefinitionId) {
       const epochs = timelines.get(id);
       const horizon = Math.max(tick(currentTick), instance.scheduledUntilTick);
@@ -139,7 +144,7 @@ export function createStructureRuntime() {
     }
     // A child edit updates all containing definitions through their existing
     // references, so future repetitions never retain a whole-loop snapshot.
-    for (const parent of [...definitions.values()]) if (parent.id !== id && parent.children.some(c=>c.structureId === id)) {
+    for (const parent of [...definitions.values()]) if (parent.id !== id && parent.transportId === transportId && parent.children.some(c=>c.structureId === id)) {
       defineStructure(parent.id,parent.type,parent.children,currentTick,
         {representationId:parent.representationId,transportId:parent.transportId,count:parent.count});
     }

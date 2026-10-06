@@ -1,3 +1,5 @@
+import { heartbeatModel, transportLoopInfo } from './heartbeats.js';
+import { connectionModel } from './connections.js';
 // src/topbar.js - wires page header buttons to board helpers
 import * as Core from './audio-core.js';
 import { resumeAudioContextIfNeeded } from './audio-core.js';
@@ -57,7 +59,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
 
   function updateBpmButtonVisual(btn){
     if (!btn) return;
-    const raw = Number(Core?.bpm);
+    const raw = Number(heartbeatModel.transport()?.bpm);
     const safe = Number.isFinite(raw) ? raw : (Core?.DEFAULT_BPM ?? 120);
     const bpmNow = Math.round(safe);
     const label = btn.querySelector('.bpm-label');
@@ -65,7 +67,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     btn.title = `Tempo: ${bpmNow} BPM`;
   }
   function isTransportOrBeatSwarmSubBoardRunning(){
-    return !!(Core?.isRunning?.() || window.BeatSwarmMode?.isSubBoardPlaying?.());
+    return !!((heartbeatModel.transport()?.state === 'playing') || window.BeatSwarmMode?.isSubBoardPlaying?.());
   }
 
   function ensureBpmMetronomeAnimator(bar){
@@ -155,7 +157,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
         const arm = btn?.querySelector?.('.metro-arm') || null;
         const weight = btn?.querySelector?.('.metro-weight') || null;
 
-        const bpmRounded = Math.round(Number(Core?.bpm) || (Core?.DEFAULT_BPM ?? 120));
+        const bpmRounded = Math.round(Number(heartbeatModel.transport()?.bpm) || (Core?.DEFAULT_BPM ?? 120));
         if (btn && bpmRounded !== state.lastBpm){
           updateBpmButtonVisual(btn);
           if (bpmState.open && typeof bpmState.sync === 'function') bpmState.sync();
@@ -193,7 +195,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
         let beatNum = 0;
         let beatInBar = 0;
         if (playing){
-          const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
+          const li = (typeof Core?.getLoopInfo === 'function') ? (transportLoopInfo(heartbeatModel.transport(), Core.ensureAudioContext().currentTime) || {}) : {};
           const phase01 = Number.isFinite(li.phase01) ? li.phase01 : 0;
           beatPos = phase01 * beatsPerBar;
           beatNum = Math.floor(beatPos);
@@ -202,7 +204,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
           const nowMs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
             ? performance.now()
             : Date.now();
-          const bpmNow = Math.max(1e-6, (Number(Core?.bpm) || (Core?.DEFAULT_BPM ?? 120)));
+          const bpmNow = Math.max(1e-6, (Number(heartbeatModel.transport()?.bpm) || (Core?.DEFAULT_BPM ?? 120)));
           const dt = (Number.isFinite(state.pausedLastMs) && state.pausedLastMs > 0)
             ? Math.max(0, (nowMs - state.pausedLastMs)) / 1000
             : 0;
@@ -256,7 +258,7 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
   }
 
   function pauseTransportAndSyncUI(){
-    try{ Core?.stop?.(); }catch{}
+    try{ heartbeatModel.transport()?.pause?.(); }catch{}
     try{
       const btn = document.querySelector('#topbar [data-action="toggle-play"]');
       if (btn) updatePlayButtonVisual(btn, false);
@@ -337,7 +339,8 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
   }
 
   function getLeadInToyPanels() {
-    return Array.from(document.querySelectorAll('#board > .toy-panel'));
+    return Array.from(document.querySelectorAll('#board > .toy-panel')).filter(panel =>
+      connectionModel.getTransportId(panel.id) === heartbeatModel.target().transportId);
   }
 
   function getChainHead(panel) {
@@ -628,8 +631,8 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     const state = getLeadInState(bar);
     cancelRandomization(bar);
     if (!state.randomizeEnabled && !state.toggleEnabled) return;
-    const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
-    const barLen = Number(li.barLen) || (60 / (Core?.bpm || 120)) * (Core?.BEATS_PER_BAR || 4);
+    const li = (typeof Core?.getLoopInfo === 'function') ? (transportLoopInfo(heartbeatModel.transport(), Core.ensureAudioContext().currentTime) || {}) : {};
+    const barLen = Number(li.barLen) || (60 / (heartbeatModel.transport()?.bpm || 120)) * (Core?.BEATS_PER_BAR || 4);
     const token = ++state.randomToken;
 
     const schedule = (fn, bars) => {
@@ -662,8 +665,8 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
     if (!state.enabled) return 0;
     const chains = getLeadInChains();
     if (!chains.length) return 0;
-    const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
-    const barLen = Number(li.barLen) || (60 / (Core?.bpm || 120)) * (Core?.BEATS_PER_BAR || 4);
+    const li = (typeof Core?.getLoopInfo === 'function') ? (transportLoopInfo(heartbeatModel.transport(), Core.ensureAudioContext().currentTime) || {}) : {};
+    const barLen = Number(li.barLen) || (60 / (heartbeatModel.transport()?.bpm || 120)) * (Core?.BEATS_PER_BAR || 4);
     const intervalSec = Math.max(0.05, barLen) * Math.max(1, state.bars || 1);
     return Math.max(0, Math.round(chains.length * intervalSec * 1000));
   }
@@ -701,8 +704,8 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
       });
     }
 
-    const li = (typeof Core?.getLoopInfo === 'function') ? (Core.getLoopInfo() || {}) : {};
-    const barLen = Number(li.barLen) || (60 / (Core?.bpm || 120)) * (Core?.BEATS_PER_BAR || 4);
+    const li = (typeof Core?.getLoopInfo === 'function') ? (transportLoopInfo(heartbeatModel.transport(), Core.ensureAudioContext().currentTime) || {}) : {};
+    const barLen = Number(li.barLen) || (60 / (heartbeatModel.transport()?.bpm || 120)) * (Core?.BEATS_PER_BAR || 4);
     const intervalSec = Math.max(0.05, barLen) * Math.max(1, state.bars || 1);
     const token = ++state.token;
 
@@ -1427,7 +1430,7 @@ function ensureTopbar(){
       bpmState.slider = bpmPanel.querySelector('input[type="range"]');
       bpmState.valueEl = bpmPanel.querySelector('.topbar-bpm-value');
       bpmState.sync = ()=>{
-        const raw = Number(Core?.bpm);
+        const raw = Number(heartbeatModel.transport()?.bpm);
         const safe = Number.isFinite(raw) ? raw : (Core?.DEFAULT_BPM ?? 120);
         const v = Math.round(safe);
         if (bpmState.slider) bpmState.slider.value = String(v);
@@ -1436,7 +1439,7 @@ function ensureTopbar(){
       };
       const apply = ()=>{
         const v = Number(bpmState.slider?.value);
-        try{ Core?.setBpm?.(v); }catch{}
+        try{ heartbeatModel.transport()?.setBpm?.(v); }catch{}
         bpmState.sync?.();
       };
       bpmState.slider?.addEventListener('input', apply, { passive: true });
@@ -1448,6 +1451,8 @@ function ensureTopbar(){
 
       bpmState.wired = true;
       try{ bpmState.sync(); }catch{}
+      document.addEventListener('heartbeat:selection', () => bpmState.sync());
+      document.addEventListener('transport:change', () => bpmState.sync());
     }
 
     if (!bpmState.boundOutside && bpmPanel && bpmBtn){
@@ -1759,7 +1764,7 @@ function ensureTopbar(){
         if (!state.enabled) {
           cancelLeadInSequence(bar, { restore: true });
           cancelRandomization(bar);
-        } else if (Core?.isRunning?.()) {
+        } else if ((heartbeatModel.transport()?.state === 'playing')) {
           scheduleRandomization(bar, getLeadInDelayMs(bar));
         }
       });
@@ -1768,14 +1773,14 @@ function ensureTopbar(){
         state.bars = Math.max(1, (Number(state.bars) || 1) - 1);
         try { localStorage.setItem(LEAD_IN_BARS_KEY, String(state.bars)); } catch {}
         updateLeadInUI();
-        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+        if ((heartbeatModel.transport()?.state === 'playing')) scheduleRandomization(bar, getLeadInDelayMs(bar));
       });
       optionsState.leadInPlus?.addEventListener('click', () => {
         const state = getLeadInState(bar);
         state.bars = Math.min(16, (Number(state.bars) || 1) + 1);
         try { localStorage.setItem(LEAD_IN_BARS_KEY, String(state.bars)); } catch {}
         updateLeadInUI();
-        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+        if ((heartbeatModel.transport()?.state === 'playing')) scheduleRandomization(bar, getLeadInDelayMs(bar));
       });
       optionsState.randomizeToggleBtn?.addEventListener('click', () => {
         const state = getLeadInState(bar);
@@ -1784,7 +1789,7 @@ function ensureTopbar(){
         updateRandomUI();
         if (!state.randomizeEnabled && !state.toggleEnabled) {
           cancelRandomization(bar);
-        } else if (Core?.isRunning?.()) {
+        } else if ((heartbeatModel.transport()?.state === 'playing')) {
           scheduleRandomization(bar, getLeadInDelayMs(bar));
         }
       });
@@ -1793,14 +1798,14 @@ function ensureTopbar(){
         state.randomizeBars = Math.max(1, (Number(state.randomizeBars) || 1) - 1);
         try { localStorage.setItem(LEAD_IN_RANDOMIZE_BARS_KEY, String(state.randomizeBars)); } catch {}
         updateRandomUI();
-        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+        if ((heartbeatModel.transport()?.state === 'playing')) scheduleRandomization(bar, getLeadInDelayMs(bar));
       });
       optionsState.randomizePlus?.addEventListener('click', () => {
         const state = getLeadInState(bar);
         state.randomizeBars = Math.min(16, (Number(state.randomizeBars) || 1) + 1);
         try { localStorage.setItem(LEAD_IN_RANDOMIZE_BARS_KEY, String(state.randomizeBars)); } catch {}
         updateRandomUI();
-        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+        if ((heartbeatModel.transport()?.state === 'playing')) scheduleRandomization(bar, getLeadInDelayMs(bar));
       });
       optionsState.toggleToggleBtn?.addEventListener('click', () => {
         const state = getLeadInState(bar);
@@ -1812,7 +1817,7 @@ function ensureTopbar(){
         }
         if (!state.randomizeEnabled && !state.toggleEnabled) {
           cancelRandomization(bar);
-        } else if (Core?.isRunning?.()) {
+        } else if ((heartbeatModel.transport()?.state === 'playing')) {
           scheduleRandomization(bar, getLeadInDelayMs(bar));
         }
       });
@@ -1821,14 +1826,14 @@ function ensureTopbar(){
         state.toggleBars = Math.max(1, (Number(state.toggleBars) || 1) - 1);
         try { localStorage.setItem(LEAD_IN_TOGGLE_BARS_KEY, String(state.toggleBars)); } catch {}
         updateRandomUI();
-        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+        if ((heartbeatModel.transport()?.state === 'playing')) scheduleRandomization(bar, getLeadInDelayMs(bar));
       });
       optionsState.togglePlus?.addEventListener('click', () => {
         const state = getLeadInState(bar);
         state.toggleBars = Math.min(16, (Number(state.toggleBars) || 1) + 1);
         try { localStorage.setItem(LEAD_IN_TOGGLE_BARS_KEY, String(state.toggleBars)); } catch {}
         updateRandomUI();
-        if (Core?.isRunning?.()) scheduleRandomization(bar, getLeadInDelayMs(bar));
+        if ((heartbeatModel.transport()?.state === 'playing')) scheduleRandomization(bar, getLeadInDelayMs(bar));
       });
       syncMasterVolume();
       const isMuted = typeof Core?.isToyMuted === 'function' ? Core.isToyMuted('master') : false;
@@ -1932,6 +1937,8 @@ if (document.readyState === 'loading') {
           try{ updatePlayButtonVisual(playBtn, isTransportOrBeatSwarmSubBoardRunning()); }catch{}
         };
         document.addEventListener('transport:resume', sync, { passive: true });
+        document.addEventListener('transport:change', sync, { passive: true });
+        document.addEventListener('heartbeat:selection', sync, { passive: true });
         document.addEventListener('transport:pause', sync, { passive: true });
         document.addEventListener('beat-swarm:subboard-playback', sync, { passive: true });
         playBtn.__transportSyncBound = true;
@@ -2008,14 +2015,14 @@ if (document.readyState === 'loading') {
           try{
             await resumeAudioContextIfNeeded();
             Core?.ensureAudioContext?.();
-            if (Core?.isRunning?.()){
-              Core?.stop?.();
+            if ((heartbeatModel.transport()?.state === 'playing')){
+              heartbeatModel.transport()?.pause?.();
               updatePlayButtonVisual(b, false);
               cancelLeadInSequence(bar, { restore: true });
               cancelRandomization(bar);
               restoreToggleOffChains(bar);
             } else {
-              Core?.start?.();
+              heartbeatModel.transport()?.play?.();
               updatePlayButtonVisual(b, true);
               const leadState = getLeadInState(bar);
               let leadInfo = null;
@@ -2107,7 +2114,7 @@ if (document.readyState === 'loading') {
           if (!ok) return;
         }
         pauseTransportAndSyncUI();
-        try{ Core?.setBpm?.(Core?.DEFAULT_BPM ?? 120); }catch{}
+        try{ heartbeatModel.transport()?.setBpm?.(Core?.DEFAULT_BPM ?? 120); }catch{}
         try{ bar.__bpmState?.sync?.(); }catch{}
         runSceneClear({ removePanels: true });
         menuState?.close?.();
@@ -2255,4 +2262,3 @@ if (document.readyState === 'loading') {
   tryInitToggle();
 
 })();
-

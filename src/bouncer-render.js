@@ -1,3 +1,4 @@
+import { panelTransportBindings } from './panel-transport.js';
 // src/bouncer-render.js
 const __DBG = (globalThis.BOUNCER_DBG_LEVEL|0)||0; const __d=(lvl,...a)=>{ if(__DBG>=lvl) console.log(...a); };
 // Encapsulates the Bouncer draw loop to keep bouncer.main.js concise.
@@ -23,6 +24,7 @@ export function createBouncerDraw(env){
     drainScheduledReplayVisuals
   } = env;
 
+  const { isRunning } = panelTransportBindings(panel);
   const lifecycle = getToyLifecycle(panel);
   let lastCssW = 0, lastCssH = 0;
   const ballTrail = []; let lastBallPos = null; let teleportGuard = false;

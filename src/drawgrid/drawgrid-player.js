@@ -1,3 +1,4 @@
+import { panelTransportBindings } from '../panel-transport.js';
 // src/drawgrid-player.js
 import { triggerInstrument } from '../audio-samples.js';
 import { gateTriggerForToy, getToyAudioGen, bumpToyAudioGen } from '../toy-audio.js';
@@ -45,6 +46,7 @@ try { if (window.__DRAWGRID_PLAYER_DEBUG === undefined) window.__DRAWGRID_PLAYER
 export function connectDrawGridToPlayer(panel) {
   if (!panel || panel.__drawGridPlayer) return;
   panel.__drawGridPlayer = true;
+  const { isRunning: isTransportRunning, getTransportState } = panelTransportBindings(panel);
 
   const toyId = getAudioToyId(panel) || 'drawgrid';
   panel.__audioToyId = toyId;
@@ -236,7 +238,8 @@ export function connectDrawGridToPlayer(panel) {
   // Best-effort cleanup: if transport pauses, clear pending fx timeouts so nothing "ticks" visually.
   // (Even without this, the gen gate above prevents post-pause triggers.)
   try {
-    panel.__dgOnTransportPause = panel.__dgOnTransportPause || (() => {
+    panel.__dgOnTransportPause = panel.__dgOnTransportPause || ((event) => {
+      if (event.detail?.type !== 'pause' || event.detail.transportId !== getPlaybackInstance(panel.id)?.transportId) return;
       try {
         if (panel.__dgFxTimeouts) {
           for (const tid of Array.from(panel.__dgFxTimeouts)) {
@@ -247,7 +250,7 @@ export function connectDrawGridToPlayer(panel) {
         if (panel.__dgFxKeys) panel.__dgFxKeys.clear();
       } catch {}
     });
-    document.addEventListener('transport:pause', panel.__dgOnTransportPause);
+    document.addEventListener('transport:change', panel.__dgOnTransportPause);
   } catch {}
 
   panel.addEventListener('drawgrid:update', (e) => {
@@ -542,4 +545,3 @@ export function connectDrawGridToPlayer(panel) {
     }
   };
 }
-

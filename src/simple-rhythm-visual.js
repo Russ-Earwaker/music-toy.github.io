@@ -1,3 +1,4 @@
+import { panelTransportBindings } from './panel-transport.js';
 // src/simple-rhythm-visual.js
 // Renders and handles interaction for the 8-step sequencer cubes.
 import { drawBlock, whichThirdRect } from './toyhelpers.js';
@@ -34,6 +35,7 @@ import { requestPanelPulse } from './pulse-border.js';
 import { queueClassToggle, markPanelForDomCommit } from './dom-commit.js';
 
 function isPanelTransportRunning(panel) {
+  const {isRunning} = panelTransportBindings(panel);
   const mainTransport = (typeof isRunning === 'function') && isRunning();
   if (mainTransport) return true;
   try {
@@ -405,7 +407,8 @@ function isPanelVisible(panel, st) {
   return visible;
 }
 
-export async function attachSimpleRhythmVisual(panel) { // Made async
+export async function attachSimpleRhythmVisual(panel) {
+  const {isRunning, getLoopInfo, getTransportState} = panelTransportBindings(panel); // Made async
   if (!panel || panel.__simpleRhythmVisualAttached) return;
   panel.__simpleRhythmVisualAttached = true;
 
@@ -962,6 +965,7 @@ export async function attachSimpleRhythmVisual(panel) { // Made async
 }
 
 function render(panel, opts = {}) {
+  const {isRunning, getLoopInfo, getTransportState} = panelTransportBindings(panel);
   const __perfOn = !!window.__PERF_ZOOM_PROFILE;
   const p = __perfOn ? {
     _start: performance.now(),

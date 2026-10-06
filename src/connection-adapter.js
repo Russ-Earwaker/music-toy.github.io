@@ -1,10 +1,10 @@
 import { TOY_PORTS, HEARTBEAT_PORTS } from './connections.js';
-import { MAIN_TRANSPORT_ID } from './transport-registry.js';
-import { getPlaybackInstance } from './playback-instances.js';
+import { MAIN_TRANSPORT_ID, transportRegistry } from './transport-registry.js';
+import { getPlaybackInstance, rebasePlaybackTransport } from './playback-instances.js';
 import { isObjectMusicallyActive, projectMusicalActiveState } from './graph-playback-state.js';
 
 // DOM datasets remain a persistence/legacy-creation adapter, never wire state.
-export function createConnectionAdapter(model, { getInstance = getPlaybackInstance, isPlaying = () => true, onSequenceChange = () => {}, onDetach = () => {} } = {}) {
+export function createConnectionAdapter(model, { getInstance = getPlaybackInstance, isPlaying = () => true, onSequenceChange = () => {}, onDetach = () => {}, onTransportChange = onDetach, rebaseInstance = rebasePlaybackTransport } = {}) {
   let panels = [], syncing = false;
   const known = new Set();
   const rootedState = new Map();
@@ -29,20 +29,31 @@ export function createConnectionAdapter(model, { getInstance = getPlaybackInstan
     for (const panel of panels) {
       const transportId = model.getTransportId(panel.id);
       const rooted = !!transportId;
-      const instance = getInstance(panel.id);
-      if (instance && transportId) instance.transportId = transportId;
+      let instance = getInstance(panel.id);
+      if (!transient && rooted && instance && instance.transportId !== transportId) {
+        onTransportChange(panel.id);
+        const transport = transportRegistry.get(transportId);
+        const tick = transport?.state === 'playing' ? transport.nextBeatTick() : transport?.currentTick || 0;
+        instance = rebaseInstance(panel.id, transportId, tick) || instance;
+        if (instance) instance.transportId = transportId;
+        panel.__forceSchedulerReset = true;
+        delete panel.__loopStartOverrideSec;
+        delete panel.__chainStartAt;
+      }
+      if (!transient) { panel.dataset.transportId = transportId || ''; }
       if (!transient && !rooted) {
         if (rootedState.get(panel.id)) onDetach(panel.id);
         if (instance) instance.active = false;
       } else if (!transient && instance && model.getParent(panel.id)?.kind === 'transport'
         && !model.list('sequence').some(c => c.from.objectId === panel.id)) instance.active = true;
       rootedState.set(panel.id, rooted);
-      projectMusicalActiveState(panel, isPlaying() && isObjectMusicallyActive(model, panel.id, instance));
+      projectMusicalActiveState(panel, isPlaying(transportId) && isObjectMusicallyActive(model, panel.id, instance));
     }
   }
   const unsubscribe = model.subscribe(event => {
     if (syncing || event.type !== 'change') return;
     project();
+    applyOwnership({transient:!!event.transient});
     if (!event.transient) onSequenceChange();
     applyOwnership({transient:!!event.transient});
   });
@@ -75,7 +86,7 @@ export function createConnectionAdapter(model, { getInstance = getPlaybackInstan
           }
         }
         for (const panel of added) {
-          if (autoRoot && !model.getParent(panel.id)) model.connect('transport', point(MAIN_TRANSPORT_ID, 'output'), point(panel.id, 'input'));
+          if (autoRoot && !model.getParent(panel.id)) model.connect('transport', point(panel.__creationHeartbeatId || MAIN_TRANSPORT_ID, 'output'), point(panel.id, 'input'));
         }
         project();
         applyOwnership();
@@ -112,7 +123,7 @@ export function createConnectionAdapter(model, { getInstance = getPlaybackInstan
     },
     projectActiveState() {
       for (const panel of panels) projectMusicalActiveState(panel,
-        isPlaying() && isObjectMusicallyActive(model, panel.id, getInstance(panel.id)));
+        isPlaying(model.getTransportId(panel.id)) && isObjectMusicallyActive(model, panel.id, getInstance(panel.id)));
     },
     project, applyOwnership, dispose: unsubscribe,
   };

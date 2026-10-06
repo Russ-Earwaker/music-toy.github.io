@@ -1,3 +1,4 @@
+import { panelTransportBindings } from './panel-transport.js';
 import { getToyLifecycle } from './baseMusicToy/index.js';
 import { initToyUI } from './toyui.js';
 import { createToySurfaceManager } from './toy-surface-manager.js';
@@ -49,6 +50,7 @@ import {
 export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   const panel  = shell?.closest?.('.toy-panel') || shell;
+  const { isRunning, getLoopInfo, getPositionAtAudioTime, tickToAudioTime, getTransportState, barSeconds: audioBarSeconds } = panelTransportBindings(panel);
   if (panel.__toyInstance) return panel.__toyInstance;
   const lifecycle = getToyLifecycle(panel);
   const { initParticles, setParticleBounds, drawParticles } = createRippleParticles();
@@ -1327,7 +1329,7 @@ export function createRippleSynth(selector){
   // Apply pending snapshot if early restore stashed it
   try{ if (panel.__pendingRipplerState && typeof panel.__applyRipplerSnapshot==='function'){ panel.__applyRipplerSnapshot(panel.__pendingRipplerState||{}); delete panel.__pendingRipplerState; } }catch{}
 
-  try { lifecycle.listen(document, 'transport:pause', () => { __pausedNow = ac.currentTime; }); } catch {}
+  try { lifecycle.listen(document, 'transport:change', e => { if (e.detail?.type === 'pause' && e.detail.transportId === getPlaybackInstance(panel.id)?.transportId) __pausedNow = ac.currentTime; }); } catch {}
 
   lifecycle.requestFrame(draw);
 

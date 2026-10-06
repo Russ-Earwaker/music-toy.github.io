@@ -29,7 +29,7 @@ export function ensurePlaybackInstance(toyId, options = {}) {
   const key = String(toyId);
   let instance = instancesByToyId.get(key);
   if (!instance) {
-    instance = makeInstance(key, options);
+    instance = makeInstance(key, options, options.transportId ?? MAIN_TRANSPORT_ID);
     instancesByToyId.set(key, instance);
   } else if (options.loopLengthTicks != null) {
     instance.loopLengthTicks = cleanLoop(options.loopLengthTicks);
@@ -73,6 +73,17 @@ export function deactivatePlaybackInstance(toyId) {
   if (!instance) return null;
   instance.active = false;
   instance.generation += 1;
+  return instance;
+}
+
+// Replace identity, rather than mutating a scheduled instance into another clock.
+export function rebasePlaybackTransport(toyId, transportId, startTick = 0) {
+  const old = getPlaybackInstance(toyId);
+  if (!old) return null;
+  old.active = false;
+  const instance = makeInstance(toyId, { startTick, loopLengthTicks: old.loopLengthTicks,
+    generation: old.generation + 1, active: !!transportId }, transportId);
+  instancesByToyId.set(String(toyId), instance);
   return instance;
 }
 

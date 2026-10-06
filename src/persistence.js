@@ -7,6 +7,7 @@ import { getActiveThemeKey, setActiveThemeKey } from './theme-manager.js';
 import { syncVolumeUI } from './baseToy/volume-ui.js';
 import { connectionModel } from './connections.js';
 import { structureToyModel } from './structure-toys.js';
+import { heartbeatModel } from './heartbeats.js';
 import { applyToyInstrument } from './instrument-state.js';
 
 // ---- Persistence diagnostics ----
@@ -897,6 +898,7 @@ export function getSnapshot(){
     createdAt: nowIso(),
     updatedAt: nowIso(),
     transport: { bpm },
+    heartbeats: heartbeatModel.snapshot(),
     themeId: getActiveThemeKey?.() || undefined,
     artToys,
     toys,
@@ -918,6 +920,7 @@ export function applySceneSnapshot(snap){
   try{
     // Always pause transport when applying a scene so it doesn't auto-play after load.
     try { if (typeof stopTransport === 'function') stopTransport(); } catch {}
+    heartbeatModel.restore(snap.heartbeats, snap.transport?.bpm || 120);
     // try{ persistTraceLog('[persistence] applySnapshot begin', { toys: snap?.toys?.length||0, theme: snap?.themeId, bpm: snap?.transport?.bpm }); }catch{}
     // Theme first so instrument resolution matches theme
     if (snap.themeId && typeof setActiveThemeKey === 'function'){

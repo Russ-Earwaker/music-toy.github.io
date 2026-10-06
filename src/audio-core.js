@@ -1,3 +1,4 @@
+import { createTickTransport } from './tick-transport.js';
 // src/audio-core.js — transport + per‑toy buses (<=300 lines)
 export const DEFAULT_BPM = 120;
 export const NUM_STEPS = 8;
@@ -18,88 +19,51 @@ const LS_MASTER_MUTE_KEY = 'rhythmake_master_mute_v1';
 let __ctx;
 export let bpm = DEFAULT_BPM;
 const __activeNodes = new Set();
-
 export let transportState = 'stopped';
-export let positionTick = 0;
-export let currentTick = 0;
-export let currentBeat = 0;
-export let currentBar = 0;
-let __mapping = { originTick: 0, originAudioTime: 0, bpm: DEFAULT_BPM };
-let __playPromise = null;
+export let positionTick = 0, currentTick = 0, currentBeat = 0, currentBar = 0;
 
-function clampTick(value){
-  const n = Number(value);
-  return Math.max(0, Number.isFinite(n) ? Math.round(n) : 0);
+function syncCompatibility(state) {
+  bpm = state.bpm; transportState = state.state; positionTick = currentTick = state.currentTick;
+  currentBeat = state.currentBeat; currentBar = state.currentBar;
+  return state;
 }
-function ticksPerSecond(atBpm = bpm){
-  return (TICKS_PER_BEAT * Math.max(MIN_BPM, Math.min(MAX_BPM, Number(atBpm) || DEFAULT_BPM))) / 60;
-}
-export function audioTimeToTick(audioTime){
-  const time = Number(audioTime);
-  if (!Number.isFinite(time)) return clampTick(positionTick);
-  return clampTick(__mapping.originTick + ((time - __mapping.originAudioTime) * ticksPerSecond(__mapping.bpm)));
-}
-export function tickToAudioTime(tick){
-  const target = clampTick(tick);
-  return __mapping.originAudioTime + ((target - __mapping.originTick) / ticksPerSecond(__mapping.bpm));
-}
-export function getPositionAtAudioTime(audioTime){ return audioTimeToTick(audioTime); }
-export function nextBeatTick(tick = currentTick, { strict = true } = {}){
-  const value = clampTick(tick);
-  const beat = Math.floor(value / TICKS_PER_BEAT);
-  if (!strict && value % TICKS_PER_BEAT === 0) return value;
-  return (beat + 1) * TICKS_PER_BEAT;
-}
-function refreshPosition(audioTime = null){
-  const now = Number.isFinite(Number(audioTime)) ? Number(audioTime) : Number(__ctx?.currentTime);
-  if (transportState === 'playing' && Number.isFinite(now)) positionTick = audioTimeToTick(now);
-  currentTick = clampTick(positionTick);
-  currentBeat = Math.floor(currentTick / TICKS_PER_BEAT);
-  currentBar = Math.floor(currentTick / TICKS_PER_BAR);
-  return currentTick;
-}
-function rebaseMapping(tick, audioTime, atBpm = bpm){
-  __mapping = {
-    originTick: clampTick(tick),
-    originAudioTime: Number.isFinite(Number(audioTime)) ? Number(audioTime) : 0,
-    bpm: Math.max(MIN_BPM, Math.min(MAX_BPM, Number(atBpm) || DEFAULT_BPM)),
-  };
-}
-function emitTransportChange(detail){
-  const payload = Object.freeze({ ...detail });
-  try { document.dispatchEvent(new CustomEvent('transport:change', { detail: payload })); } catch {}
-  return payload;
-}
-function emitLegacyEvent(name, detail){
+function emitLegacyEvent(name, detail) {
   try { document.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
 }
-export function getTransportState(){
-  refreshPosition(__ctx?.currentTime);
-  return {
-    state: transportState, positionTick: currentTick, currentTick, currentBeat, currentBar, bpm,
-    ticksPerBeat: TICKS_PER_BEAT, beatsPerBar: BEATS_PER_BAR, ticksPerBar: TICKS_PER_BAR,
-    mapping: { ...__mapping },
-  };
-}
+const mainClock = createTickTransport({ id: 'main-heartbeat', getContext: () => __ctx, ensureContext: ensureAudioContext,
+  emit(detail) {
+    syncCompatibility(mainClock.getState());
+    if (detail.type === 'play') {
+      try { window.__ripplerUserArmed = true; window.__NOTE_SCHED_LAST_RESUME_AT = detail.audioTime; } catch {}
+    } else if (detail.type === 'pause') {
+      try { window.__NOTE_SCHED_LAST_RESUME_AT = NaN; } catch {}
+    }
+    emitLegacyEvent('transport:change', Object.freeze(detail));
+    if (detail.type === 'play') {
+      emitLegacyEvent('transport:play', detail); emitLegacyEvent('transport:resume', detail);
+    } else if (['pause', 'seek'].includes(detail.type)) emitLegacyEvent('transport:' + detail.type, detail);
+  }
+});
+export const audioTimeToTick = mainClock.audioTimeToTick;
+export const tickToAudioTime = mainClock.tickToAudioTime;
+export const getPositionAtAudioTime = mainClock.getPositionAtAudioTime;
+export const nextBeatTick = mainClock.nextBeatTick;
+export function getTransportState() { return syncCompatibility(mainClock.getState()); }
 export const transport = Object.freeze({
-  get state(){ return transportState; },
+  id: 'main-heartbeat',
+  get state(){ return mainClock.state; },
   get positionTick(){ return getTransportState().positionTick; },
   get currentTick(){ return getTransportState().currentTick; },
   get currentBeat(){ return getTransportState().currentBeat; },
   get currentBar(){ return getTransportState().currentBar; },
-  get bpm(){ return bpm; },
-  ticksPerBeat: TICKS_PER_BEAT,
-  beatsPerBar: BEATS_PER_BAR,
-  ticksPerBar: TICKS_PER_BAR,
-  play: (...args) => play(...args),
-  pause: (...args) => pause(...args),
-  seekTick: (...args) => seekTick(...args),
-  returnToStart: (...args) => returnToStart(...args),
-  getPositionAtAudioTime,
-  tickToAudioTime,
-  audioTimeToTick,
-  nextBeatTick,
-  getState: getTransportState,
+  get bpm(){ return mainClock.bpm; },
+  get originTick(){ return mainClock.originTick; },
+  get originAudioTime(){ return mainClock.originAudioTime; },
+  ticksPerBeat: TICKS_PER_BEAT, beatsPerBar: BEATS_PER_BAR, ticksPerBar: TICKS_PER_BAR,
+  play: (...args) => play(...args), pause: (...args) => pause(...args),
+  seekTick: (...args) => seekTick(...args), returnToStart: (...args) => returnToStart(...args),
+  setBpm: (...args) => setBpm(...args),
+  getPositionAtAudioTime, tickToAudioTime, audioTimeToTick, nextBeatTick, getState: getTransportState,
 });
 
 export function ensureAudioContext(){
@@ -114,16 +78,7 @@ export function peekAudioContext(){
   return __ctx || null;
 }
 
-export function setBpm(v){
-  const next = Math.max(MIN_BPM, Math.min(MAX_BPM, Number(v)||DEFAULT_BPM));
-  if (next === bpm) return;
-  const oldBpm = bpm;
-  const now = Number(__ctx?.currentTime) || 0;
-  const tick = refreshPosition(now);
-  bpm = next;
-  rebaseMapping(tick, now, bpm);
-  emitTransportChange({ type: 'tempo', tick, oldBpm, bpm, audioTime: now });
-}
+export function setBpm(v){ return mainClock.setBpm(v); }
 
 export function beatSeconds(){ return 60 / bpm; }
 export function barSeconds(){ return beatSeconds() * BEATS_PER_BAR; }
@@ -133,7 +88,7 @@ export function getLoopInfo(){
   const ctx = ensureAudioContext();
   const now = ctx.currentTime;
   const bl = barSeconds();
-  const tick = refreshPosition(now);
+  const tick = getTransportState().currentTick;
   const tickInBar = tick % TICKS_PER_BAR;
   return {
     loopStartTime: tickToAudioTime(0),
@@ -297,82 +252,17 @@ export function stopAllActiveNodes(){
   }
 }
 
-// Transport helpers
-export function play(){
-  const ctx = ensureAudioContext();
-  if (transportState === 'playing') return Promise.resolve(false);
-  if (__playPromise) return __playPromise;
-  const fromState = transportState;
-  const retainedTick = clampTick(positionTick);
-  const resumePromise = (ctx.state === 'suspended') ? ctx.resume() : Promise.resolve();
-
-  // Audio time may stop while paused, so every play establishes a fresh mapping
-  // from the retained musical tick after the context is running.
-  __playPromise = resumePromise.then(() => {
-    const now = ctx.currentTime;
-    rebaseMapping(retainedTick, now, bpm);
-    positionTick = retainedTick;
-    transportState = 'playing';
-    refreshPosition(now);
-    try{ window.__ripplerUserArmed = true; }catch{}
-
-    // Let compatibility schedulers know audio can be scheduled from `now`.
-    try { window.__NOTE_SCHED_LAST_RESUME_AT = now; } catch {}
-    const detail = { type: 'play', positionTick: currentTick, audioTime: now, fromState };
-    emitTransportChange(detail);
-    emitLegacyEvent('transport:play', detail);
-    emitLegacyEvent('transport:resume', detail);
-    return true;
-  }).catch(() => false).finally(() => { __playPromise = null; });
-  return __playPromise;
-}
+// Legacy exports address Main; all domains use the same tick mapping implementation.
+export function play(){ return mainClock.play(); }
 export function start(){ return play(); }
-export function pause(){
-  if (transportState !== 'playing') return false;
-  const ctx = ensureAudioContext();
-  const now = ctx.currentTime;
-  const tick = refreshPosition(now);
-  positionTick = tick;
-  transportState = 'paused';
-
-  // Cancel queued sources, but retain the captured musical position.
-  try{ stopAllActiveNodes(); }catch{}
-  try{ ctx && ctx.suspend && ctx.suspend(); }catch{}
-  try { window.__NOTE_SCHED_LAST_RESUME_AT = NaN; } catch {}
-  const detail = { type: 'pause', positionTick: tick, audioTime: now };
-  emitTransportChange(detail);
-  emitLegacyEvent('transport:pause', detail);
-  return true;
-}
+export function pause(){ return mainClock.pause(); }
 export function stop(){ return pause(); }
-
-export function seekTick(tick, reason = 'seek'){
-  const now = Number(__ctx?.currentTime) || 0;
-  const fromTick = refreshPosition(now);
-  const toTick = clampTick(tick);
-  positionTick = toTick;
-  rebaseMapping(toTick, now, bpm);
-  currentTick = toTick;
-  currentBeat = Math.floor(toTick / TICKS_PER_BEAT);
-  currentBar = Math.floor(toTick / TICKS_PER_BAR);
-  try { stopAllActiveNodes(); } catch {}
-  const detail = { type: 'seek', fromTick, toTick, positionTick: toTick, audioTime: now, reason };
-  emitTransportChange(detail);
-  emitLegacyEvent('transport:seek', detail);
-  return toTick;
-}
-
-export function returnToStart(){ return seekTick(0, 'return-to-start'); }
-
+export function seekTick(tick, reason = 'seek'){ return mainClock.seekTick(tick, reason); }
+export function returnToStart(){ return mainClock.returnToStart(); }
 export function hardStop(){
-  if (transportState === 'playing') pause();
-  transportState = 'stopped';
-  try{ stopAllActiveNodes(); }catch{}
-  try{ const ctx = ensureAudioContext(); ctx && ctx.suspend && ctx.suspend(); }catch{}
-  try { window.__NOTE_SCHED_LAST_RESUME_AT = NaN; } catch {}
+  mainClock.hardStop(); syncCompatibility(mainClock.getState());
 }
-
-export function isRunning(){ return transportState === 'playing'; }
+export function isRunning(){ return mainClock.state === 'playing'; }
 
 export function getToyVolume(id='master'){
   const key = String(id||'master').toLowerCase();

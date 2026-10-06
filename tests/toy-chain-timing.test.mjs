@@ -26,6 +26,7 @@ function harness() {
     document: { addEventListener: (name, fn) => listeners.set(name, fn) },
     g_sequenceChains: adapter, MAIN_TRANSPORT_ID: 'main-heartbeat',
     transportRegistry: { get: () => ({ getState: () => ({ currentTick: 1450, state: 'playing' }) }) },
+    getPanelTransport: () => ({getState: () => ({currentTick:1450,state:'playing'})}),
     updateChains: () => adapter.sync(Object.values(panels), { currentTick: 1450, state: 'playing' }),
   });
   const a = source.indexOf('  // Legacy completion events');
@@ -65,7 +66,7 @@ test('head restart creates one strict-next-beat Sequence performance; set-active
 
 test('production resume and scheduler use the parent timeline, with no global-bar or child-completion authority', () => {
   assert.doesNotMatch(source, /advanceChain\(|CHAIN_PRE_ADVANCE/);
-  assert.match(source, /g_sequenceChains\.turnsForLookahead\(currentTransportTick, lookaheadEndTick\)/);
+  assert.match(source, /g_sequenceChains\.turnsForLookahead\(currentTick, lookaheadEndTick, id\)/);
   assert.match(source, /playbackTurns: playbackTurns\.filter/);
   const a = source.indexOf('function restoreChainStateAfterResume');
   const b = source.indexOf('// Install listeners once', a);

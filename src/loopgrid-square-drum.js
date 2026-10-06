@@ -1,3 +1,4 @@
+import { getPanelTransport } from './panel-transport.js';
 // src/loopgrid-square-drum.js — circular pad that triggers current instrument (<=300 lines)
 import { isRunning } from './audio-core.js';
 import { onZoomChange, namedZoomListener } from './zoom/ZoomCoordinator.js';
@@ -98,7 +99,7 @@ if (window.__loopgridDrumBoot) {
 
     const gridState = panel.__gridState;
     const hasActiveSteps = gridState && gridState.steps.some(Boolean);
-    const running = isRunning();
+    const running = getPanelTransport(panel)?.state === 'playing';
 
     if (running && !hasActiveSteps) {
       label.style.opacity = '1';

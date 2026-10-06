@@ -315,8 +315,10 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       }
     }
     for (const [id, card] of cards) if (!visibleStructures.has(id)) { card.group.remove(); cards.delete(id); }
-    const heartbeat = { objectId: MAIN_TRANSPORT_ID, portId: 'output' };
-    if (context.showHeartbeat !== false) desired.set(key(heartbeat), { point: heartbeat, world: getHeartbeatPoint(), kind: 'transport' });
+    for (const id of model.getObjectIds().filter(id => model.getObject(id)?.ports.output?.accepts.includes('transport'))) {
+      const heartbeat = { objectId: id, portId: 'output' };
+      if (context.showHeartbeat !== false) desired.set(key(heartbeat), { point: heartbeat, world: getHeartbeatPoint(id), kind: 'transport' });
+    }
     points.clear();
     const editing = model.getEditing();
     for (const [id, value] of desired) {

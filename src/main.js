@@ -1,3 +1,11 @@
+import { heartbeatModel, transportLoopInfo } from './heartbeats.js';
+import { installHeartbeatView } from './heartbeat-view.js';
+import { getPanelTransport } from './panel-transport.js';
+let g_creationHeartbeatId = null;
+document.addEventListener('pointerdown', event => {
+  if (!event.target.closest?.('.heartbeat-toy,.toy-spawner-menu')) g_creationHeartbeatId = null;
+}, true);
+document.addEventListener('keydown', event => {if(event.key==='Escape')g_creationHeartbeatId=null;});
 import './mobile-viewport.js';
 import './fullscreen.js';
 // --- Module Imports ---
@@ -1681,12 +1689,10 @@ function bootTopbar(){
   playBtn?.addEventListener('click', ()=>{
     ensureAudioContext();
     // Cancel anything pending from a prior run (deferred setTimeout gates + scheduled sources)
-    try { bumpAllToyAudioGen(); } catch {}
-
-    start();
+    heartbeatModel.transport().play();
     try {
       const panels = Array.from(document.querySelectorAll('.toy-panel[id]'));
-      const roots = panels.filter(el => !el.dataset.chainParent);
+      const roots = panels.filter(el => !el.dataset.chainParent && connectionModel.getTransportId(el.id) === heartbeatModel.target().transportId);
       if (window.__CHAIN_DEBUG) console.log('[chain] play ? roots', roots.map(r => r.id));
       const visited = new Set();
       for (const root of roots) {
@@ -1697,20 +1703,17 @@ function bootTopbar(){
     }
   });
   stopBtn?.addEventListener('click', ()=>{
-    // Invalidate any deferred scheduled triggers + pending sources first
-    try { bumpAllToyAudioGen(); } catch {}
-
-    // IMPORTANT: actually stop the transport (resets epoch/bar state + stops active nodes + suspends ctx)
-    try { stop(); } catch {}
+    try { heartbeatModel.transport().pause(); } catch {}
 
     // Clear all highlight state when paused
     try {
       document.querySelectorAll('.toy-panel').forEach(p => {
+        if (connectionModel.getTransportId(p.id) !== heartbeatModel.target().transportId) return;
         p.classList.remove('toy-playing', 'toy-playing-pulse');
       });
     } catch {}
   });
-  bpmInput?.addEventListener('change', (e)=> setBpm(Number(e.target.value)||DEFAULT_BPM));
+  bpmInput?.addEventListener('change', (e)=> heartbeatModel.transport().setBpm(Number(e.target.value)||DEFAULT_BPM));
 }
 
 // --- First-run Volume Setup overlay ---
@@ -5702,7 +5705,7 @@ function queuePulseClassAdd(panel) {
     g_pulseAddTimer = 0;
     for (const p of g_pulseAddQueue) {
       try {
-        if (!p || !p.isConnected || !isRunning() || !isObjectMusicallyActive(connectionModel, p.id)) continue;
+        if (!p || !p.isConnected || getPanelTransport(p)?.state !== 'playing' || !isObjectMusicallyActive(connectionModel, p.id)) continue;
         if (!p.classList.contains('toy-playing')) {
           if (window.__PERF_TRACE_DOM_WRITES) traceDomWrite('pulseToyBorder: classList.add toy-playing');
           p.classList.add('toy-playing');
@@ -5737,7 +5740,7 @@ function queueBodyOutlineSync(panel) {
 
 function pulseToyBorder(panel, durationMs = 320) {
   if (!panel || !panel.isConnected) return;
-  if (!isRunning() || !isObjectMusicallyActive(connectionModel, panel.id)) return;
+  if (getPanelTransport(panel)?.state !== 'playing' || !isObjectMusicallyActive(connectionModel, panel.id)) return;
   if (window.__PERF_DISABLE_PULSES) return;
   if (!shouldRenderToyVisuals(panel)) return;
 
@@ -5884,6 +5887,7 @@ function createToyPanelAt(toyType, {
     centerX,
     centerY,
     instrument, soundState,
+    heartbeatId = g_creationHeartbeatId || MAIN_TRANSPORT_ID,
     autoCenter,
     allowOffscreen = false,
     shouldHintOffscreen,
@@ -5927,6 +5931,8 @@ function createToyPanelAt(toyType, {
     }
 
     const panel = document.createElement('section');
+    g_creationHeartbeatId = null;
+    panel.__creationHeartbeatId = heartbeatId;
     panel.className = 'toy-panel';
     panel.dataset.toy = type;
     const idSuffix = Math.random().toString(36).slice(2, 8);
@@ -6688,7 +6694,7 @@ const g_graphPlacement = createGraphPlacement({
   model: connectionModel,
   isManual: id => (structureToyModel.get(id)?.positionSource || document.getElementById(id)?.dataset?.positionSource || 'manual') === 'manual',
   getPortPoint: (point,rect) => {
-    if(point.objectId===MAIN_TRANSPORT_ID)return {x:rect.x+rect.width/2+HEARTBEAT_OUTPUT_OFFSET,y:rect.y+rect.height/2};
+    if(heartbeatModel.get(point.objectId))return {x:rect.x+rect.width/2+HEARTBEAT_OUTPUT_OFFSET,y:rect.y+rect.height/2};
     const s=structureToyModel.get(point.objectId);
     if(s)return structurePortPoint({...s,x:rect.x,y:rect.y},point.portId);
     const panel=document.getElementById(point.objectId);
@@ -6699,7 +6705,7 @@ const g_graphPlacement = createGraphPlacement({
   getRect: id => {
     const s=structureToyModel.get(id);
     if(s)return {x:s.x,y:s.y,width:structureToyWidth(s),height:structureToyHeight(s)};
-    if(id===MAIN_TRANSPORT_ID){const p=getAnchorWorld();return {x:p.x-48,y:p.y-48,width:96,height:96};}
+    if(heartbeatModel.get(id)){const p=id===MAIN_TRANSPORT_ID?getAnchorWorld():heartbeatModel.get(id).position;return {x:p.x-88,y:p.y-52,width:176,height:104};}
     const panel=document.getElementById(id);if(!panel)return null;
     const fallback=pickToyPanelSize(panel.dataset.toy);
     return {x:parseFloat(panel.style.left)||0,y:parseFloat(panel.style.top)||0,
@@ -6862,7 +6868,7 @@ structureToyModel.configure({
   },
 });
 const g_connections = createConnectionAdapter(connectionModel, {
-  isPlaying: isRunning,
+  isPlaying: id => transportRegistry.get(id)?.state === 'playing',
   onDetach: toyId => {
     const toy = document.getElementById(toyId);
     const audioId = toy?.dataset?.audiotoyid || toy?.__audioToyId || toyId;
@@ -6879,6 +6885,7 @@ const g_connections = createConnectionAdapter(connectionModel, {
 });
 window.clearCreationGraph = () => {
   closeInstrumentPicker();
+  heartbeatModel.restore([], DEFAULT_BPM);
   g_branchDrag.clear();g_layoutAnimation.clear();
   g_connectionView.reset();
   g_layoutPending.clear();g_layoutConnections.clear();g_layoutSizes.clear();g_layoutParents.clear();g_layoutAttached.clear();g_layoutManualDrag=null;g_layoutRestoring=true;
@@ -6913,6 +6920,7 @@ const g_connectionView = createConnectionView({
         centerX: placement.x + size.width / 2, centerY: placement.y + size.height / 2,
         skipSpawnPlacement: true,
         soundState, instrument: soundState.instrument, allowOffscreen: true,
+        heartbeatId: heartbeatModel.list().find(h => h.transportId === connectionModel.getTransportId(point.objectId))?.id || (heartbeatModel.get(point.objectId) ? point.objectId : MAIN_TRANSPORT_ID),
         containerEl: context.worldEl, artOwnerId: structure?.artOwnerId || reference?.dataset?.artOwnerId || null,
       });
     },
@@ -6936,7 +6944,7 @@ const g_connectionView = createConnectionView({
     window.ToySpawner?.endPanelDrag?.({clientX:e?.clientX,clientY:e?.clientY,pointerId:e?.pointerId,canceled});
   },
   isBranchDragging: () => g_branchDrag.active,
-  getHeartbeatPoint: getAnchorWorld,
+  getHeartbeatPoint: id => id===MAIN_TRANSPORT_ID ? getAnchorWorld() : heartbeatModel.get(id)?.position || getAnchorWorld(),
   getContext: () => {
     const context = getActiveBoardContext();
     const internal = context.key === 'internal';
@@ -6948,11 +6956,20 @@ const g_connectionView = createConnectionView({
     };
   },
   getPulse: connection => connection.kind === 'transport'
-    ? getHeartbeatVisualPhase(transportRegistry.get(MAIN_TRANSPORT_ID).getState())
+    ? getHeartbeatVisualPhase(transportRegistry.get(connectionModel.getObject(connection.from.objectId)?.transportId)?.getState())
     : (g_pulsingConnectors.get(connection.from.objectId)?.toId === connection.to.objectId
       && g_pulsingConnectors.get(connection.from.objectId)?.until > performance.now()),
-  onFrame: () => {g_branchDrag.sync();g_layoutAnimation.tick();g_connections.discoverOwnership();},
+  onFrame: () => {g_heartbeatView.render();g_branchDrag.sync();g_layoutAnimation.tick();g_connections.discoverOwnership();},
 });
+const g_heartbeatView = installHeartbeatView({
+  getWorld: () => getActiveBoardContext().worldEl,
+  getMainPoint: getAnchorWorld,
+  getSpawnPoint: () => screenToWorld({x:window.innerWidth/2,y:window.innerHeight/2}),
+  getScale: () => getViewportTransform().scale || 1,
+  onCreateToy: id => { g_creationHeartbeatId = id; window.ToySpawner?.open?.(); },
+  onChange: () => { window.Persistence?.markDirty?.(); g_connectionView.render(); }
+});
+window.Heartbeats = heartbeatModel;
 connectionModel.subscribe(event => {
   if (event.type === 'change' && !event.transient) {
     if(!g_layoutRestoring){
@@ -6994,7 +7011,7 @@ const g_sequenceChains = createChainSequenceAdapter({
   },
   onTurn: (turn, previous) => {
     const toy = document.getElementById(turn.toyId);
-    if (toy) toy.__chainStartAt = tickToAudioTime(turn.startTick);
+    if (toy) toy.__chainStartAt = transportRegistry.get(turn.transportId).tickToAudioTime(turn.startTick);
     if (previous && previous.toyId !== turn.toyId) triggerConnectorPulse(previous.toyId, turn.toyId);
   },
   onRelease: toyId => {
@@ -7081,17 +7098,36 @@ try {
   if (!window.__TICK_NOTE_SCHED_TRANSPORT_BOUND) {
     window.__TICK_NOTE_SCHED_TRANSPORT_BOUND = true;
     document.addEventListener('transport:change', (event) => {
-      const detail = event?.detail || {};
+      const detail = event.detail || {}, id = detail.transportId || MAIN_TRANSPORT_ID;
+      const transport = transportRegistry.get(id); if (!transport) return;
       const tick = Number(detail.positionTick ?? detail.toTick ?? detail.tick) || 0;
-      if (detail.type === 'seek') {
-        try { bumpAllToyAudioGen(); } catch {}
-        ensureSequencerScheduler().resetTimeline(tick, { includeBoundary: true });
-      } else if (detail.type === 'play') {
-        ensureSequencerScheduler().resetTimeline(tick, {
-          includeBoundary: detail.fromState !== 'paused',
-        });
-        g_sequenceChains.updateCurrent(tick);
+      const scheduler = ensureSequencerScheduler();
+      for (const panel of getSequencedToys()) {
+        if (connectionModel.getTransportId(panel.id) !== id) continue;
+        if (['pause', 'seek', 'tempo'].includes(detail.type)) {
+          const audioId = panel.dataset.audiotoyid || panel.__audioToyId || panel.id;
+          cancelScheduledToySources(audioId); bumpToyAudioGen(audioId, 'transport-' + detail.type);
+        }
+        if (detail.type === 'play') {
+          scheduler.resetToyTimeline(panel.id, tick, {includeBoundary:detail.fromState !== 'paused'});
+          panel.__forceSchedulerReset = false;
+        } else {
+          scheduler.clearToy(panel.id);
+          panel.__forceSchedulerReset = true;
+        }
       }
+      if (detail.type === 'seek') {
+        for (const head of connectionModel.list('transport').filter(c => connectionModel.getObject(c.from.objectId)?.transportId === id)) {
+          if (g_sequenceChains.hasSequence(head.to.objectId)) g_sequenceChains.retrigger(head.to.objectId, transport.getState(), {quantize:false});
+          else {
+            const instance = getPlaybackInstance(head.to.objectId);
+            if (instance) { instance.startTick = tick; instance.scheduledUntilTick = tick; instance.generation++; }
+          }
+        }
+      }
+      g_sequenceChains.updateCurrent(tick, id);
+      g_connections.projectActiveState();
+      window.Persistence?.markDirty?.();
     });
   }
 } catch {}
@@ -7101,153 +7137,44 @@ function tickAudioScheduler() {
   g_audioTickBusy = true;
   try {
     if (!CHAIN_FEATURE_ENABLE_SCHEDULER || !CHAIN_FEATURE_ENABLE_SEQUENCER) return;
-    if (!isRunning()) return;
-    // Keep chain state in sync with DOM changes (new toys / deleted toys).
-    // Critical: delete+create can produce the same toy-count, so we also use a structure version.
-    try {
-      const nowMs = performance?.now?.() ?? Date.now();
-      const throttled = !g_lastChainSyncAt || (nowMs - g_lastChainSyncAt) > 150;
-      if (throttled) {
-        g_lastChainSyncAt = nowMs;
-        const curCount = getSequencedToys?.()?.length ?? 0;
-        const structureChanged = (g_lastSeenChainStructureVersion !== g_chainStructureVersion);
-        const countChanged = (curCount !== g_lastSequencedToyCount);
-        if (structureChanged || countChanged || !g_chainState || g_chainState.size < 1) {
-          g_lastSeenChainStructureVersion = g_chainStructureVersion;
-          g_lastSequencedToyCount = curCount;
-          updateChains();
-        }
+    if (!transportRegistry.list().some(({transport}) => transport.state === 'playing')) return;
+    const nowMs = performance.now();
+    if (!g_lastChainSyncAt || nowMs - g_lastChainSyncAt > 150) {
+      g_lastChainSyncAt = nowMs;
+      const count = getSequencedToys().length;
+      if (g_lastSeenChainStructureVersion !== g_chainStructureVersion || count !== g_lastSequencedToyCount) {
+        g_lastSeenChainStructureVersion = g_chainStructureVersion; g_lastSequencedToyCount = count; updateChains();
       }
-    } catch {}
-    const info = getLoopInfo();
-    if (!info) return;
-    const ctx = ensureAudioContext();
-    const nowAt = ctx?.currentTime ?? 0;
-    const currentTransportTick = getPositionAtAudioTime(nowAt);
-    const lookaheadEndTick = getPositionAtAudioTime(
-      nowAt + Math.max(0.05, Number(g_noteSchedCfg?.lookaheadSec) || 0.2)
-    );
-    try {
-      BeatSwarmMode?.scheduleAudioLookahead?.({
-        nowAt,
-        lookaheadSec: Math.max(0.1, Number(g_noteSchedCfg?.lookaheadSec) || 0.2),
-      });
-    } catch {}
-    if (window.__PERF_DISABLE_CHAIN_WORK) return;
-    try {
-      const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
-      const justResumed = Number.isFinite(lastResumeAt) && (nowAt - lastResumeAt) < 0.25;
-      if (justResumed) g_audioPostResumeLogUntil = Math.max(g_audioPostResumeLogUntil, nowAt + 0.5);
-    } catch {}
-    const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
-
-    const playbackTurns = g_sequenceChains.turnsForLookahead(currentTransportTick, lookaheadEndTick);
-    // Active toys are the currently-active toy per chain head.
-    // If we still have no chain state (or it got cleared), fall back to all sequenced toys.
-    let activeToyIds = null;
-    try {
-      if (forceSequencerAll) {
-        activeToyIds = new Set(getSequencedToys().map(p => p.id).filter(Boolean));
-      } else if (g_chainState && g_chainState.size) {
-        activeToyIds = g_sequenceChains.getActiveToyIds();
-      } else {
-        const all = getSequencedToys();
-        activeToyIds = new Set(all.map(t => t.id));
-      }
-    } catch {
-      activeToyIds = new Set();
     }
-
-    for (const turn of playbackTurns) activeToyIds.add(turn.toyId);
-    if (!activeToyIds.size) return;
-
-    const sequencerScheduler = ensureSequencerScheduler();
-    try {
-      const activeAudioToyIds = new Set();
-      for (const toyId of activeToyIds) {
-        if (!connectionModel.isRooted(toyId)) continue;
-        const toy = document.getElementById(toyId);
-        if (!toy) continue;
-        // Bouncer chain completion is transport lifecycle, not rendering. The
-        // render loop also calls this as a fallback, with the playback-instance
-        // guard ensuring that exactly one handoff is emitted per turn.
-        if (toy.dataset?.toy === 'bouncer' && !g_sequenceChains.isManaged(toyId)) {
-          try {
-            if (toy.__advanceBouncerReplayLifecycle?.(currentTransportTick)) continue;
-          } catch {}
-        }
-        const hasNotes = panelHasAnyNotes(toy);
-        try {
-          if (window.__SCHED_MISMATCH_DEBUG && nowAt < g_audioPostResumeLogUntil) {
-            const payload = {
-              toyId,
-              toyType: toy?.dataset?.toy,
-              hasNotes,
-              hasSeqPattern: !!(toy.__seqPatternActive || toy.__seqPattern),
-              chainActive: toy?.dataset?.chainActive,
-              loopStartOverride: toy?.__loopStartOverrideSec,
-              loopStart: info?.loopStartTime,
-              barLen: info?.barLen,
-              windowStart: (nowAt + Math.max(0, g_noteSchedCfg?.leadSec ?? 0)) - Math.max(0, g_noteSchedCfg?.lateGraceSec ?? 0),
-              windowEnd: nowAt + Math.max(0.05, g_noteSchedCfg?.lookaheadSec ?? 0),
-              nowAt,
-            };
-            console.log('[sched][resume-check] ' + JSON.stringify(payload));
-          }
-        } catch {}
-        if (hasNotes) {
-          activeAudioToyIds.add(toyId);
-        } else {
-          try { toy.__chainJustActivated = false; } catch {}
-        }
-      }
-
-      // Publish authoritative active set every tick (used as a hard guard in toy schedulers).
-      // This prevents "inactive toy schedules anyway" bleed/repeats during chain transitions.
-      try {
-        window.__mtSchedTick = (window.__mtSchedTick | 0) + 1;
-        window.__mtActiveToyIds = Array.from(activeAudioToyIds);
-        window.__mtChainState = Array.from(g_chainState.entries());
-        window.__mtNowAt = nowAt;
-      } catch {}
-
-      // --- DEBUG: publish active sets for mismatch investigations ---
-      try {
-        if (window.__SCHED_MISMATCH_DEBUG) {
-          // Throttle spam, but DON'T miss transitions:
-          // log on bar start OR whenever active set changes.
-          const key = window.__mtActiveToyIds.join('|');
-          const prevKey = window.__mtActiveToyIdsKey || '';
-          const changed = key !== prevKey;
-          window.__mtActiveToyIdsKey = key;
-          if (info?.tickInBar === 0 || changed) {
-            console.log(changed ? '[sched][tick][active-changed]' : '[sched][tick]', {
-              schedulerPoll: window.__mtSchedTick,
-              transportTick: info?.currentTick,
-              phase01: info?.phase01,
-              nowAt,
-              activeToyIds: window.__mtActiveToyIds,
-              chainState: window.__mtChainState,
-              changed,
-              prevActiveToyIds: prevKey ? prevKey.split('|').filter(Boolean) : [],
-            });
-          }
-        }
-      } catch {}
-
-      sequencerScheduler.tick({
-        activeToyIds: new Set([...activeAudioToyIds].filter(id => !g_sequenceChains.isManaged(id))),
+    const scheduler = ensureSequencerScheduler(), nowAt = ensureAudioContext().currentTime;
+    const groups = [], allActive = new Set();
+    for (const {id, transport} of transportRegistry.list()) {
+      if (transport.state !== 'playing') continue;
+      const currentTick = transport.currentTick;
+      const lookaheadEndTick = transport.audioTimeToTick(nowAt + Math.max(0.2, Number(g_noteSchedCfg?.lookaheadSec) || 0.5));
+      const playbackTurns = g_sequenceChains.turnsForLookahead(currentTick, lookaheadEndTick, id);
+      const active = new Set([...g_sequenceChains.getActiveToyIds(), ...playbackTurns.map(t => t.toyId)]);
+      // Standalone rooted toys also use this scheduler, independently of Structure heads.
+      for (const panel of getSequencedToys()) if (!g_sequenceChains.isManaged(panel.id) && getPlaybackInstance(panel.id)?.active) active.add(panel.id);
+      const activeAudioToyIds = new Set([...active].filter(toyId => {
+        if (connectionModel.getTransportId(toyId) !== id) return false;
+        const toy = document.getElementById(toyId); if (!toy) return false;
+        if (toy.dataset.toy === 'bouncer' && !g_sequenceChains.isManaged(toyId) && toy.__advanceBouncerReplayLifecycle?.(currentTick)) return false;
+        return panelHasAnyNotes(toy);
+      }));
+      for (const toyId of activeAudioToyIds) allActive.add(toyId);
+      groups.push({ transportId:id, activeToyIds: new Set([...activeAudioToyIds].filter(toyId => !g_sequenceChains.isManaged(toyId))),
         playbackTurns: playbackTurns.filter(turn => activeAudioToyIds.has(turn.toyId)),
-        getToy: (id) => document.getElementById(id),
-        currentTick: currentTransportTick,
-        lookaheadEndTick,
-        tickToAudioTime,
-        audioTimeToTick,
-      });
-    } catch {}
-  } finally {
-    g_audioTickBusy = false;
-  }
+        getToy: toyId => document.getElementById(toyId), currentTick, lookaheadEndTick,
+        tickToAudioTime: transport.tickToAudioTime, audioTimeToTick: transport.audioTimeToTick });
+    }
+    // Publish the union before any toy callback: callbacks can consult this guard.
+    window.__mtActiveToyIds = [...allActive]; window.__mtNowAt = nowAt;
+    window.__mtSchedTick = (window.__mtSchedTick | 0) + 1;
+    window.__mtChainState = [...g_chainState];
+    for (const group of groups) scheduler.tick(group);
+    if (isRunning()) BeatSwarmMode?.scheduleAudioLookahead?.({nowAt, lookaheadSec:g_noteSchedCfg?.lookaheadSec || 0.5});
+  } finally { g_audioTickBusy = false; }
 }
 
 function startAudioScheduler() {
@@ -7546,13 +7473,6 @@ function scheduler(){
     const wasRunning = prevRunning;
     if (running && !wasRunning) {
       lastCol.clear();
-      try {
-        document.querySelectorAll('.toy-panel').forEach((toy) => {
-          if (typeof toy.__sequencerSchedule === 'function') {
-            toy.__chainJustActivated = true;
-          }
-        });
-      } catch {}
       if (debugFirstStep()) {
         console.log('[chain][debug] transport start', { phase01: info?.phase01 });
       }
@@ -7567,7 +7487,7 @@ function scheduler(){
     g_connections.projectActiveState();
     const allowChainWork = !window.__PERF_DISABLE_CHAIN_WORK;
 
-    if (CHAIN_FEATURE_ENABLE_SCHEDULER && running && hasChains && allowChainWork){
+    if (CHAIN_FEATURE_ENABLE_SCHEDULER && transportRegistry.list().some(({transport}) => transport.state === 'playing') && hasChains && allowChainWork){
       // The Sequence audio lookahead owns all handoffs, including self-timed toys.
       g_sequenceChains.updateCurrent(Number(info.currentTick) || 0);
 
@@ -7576,7 +7496,7 @@ function scheduler(){
       const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
       const activeToyIds = forceSequencerAll
         ? new Set(getSequencedToys().map(p => p.id).filter(Boolean))
-        : g_sequenceChains.getActiveToyIds();
+        : new Set([...g_sequenceChains.getActiveToyIds()].filter(id => getPanelTransport(document.getElementById(id))?.state === 'playing'));
       const hasActiveToys = activeToyIds.size > 0;
       if (debugFirstStep()) {
         console.log('[chain][debug] activeToyIds', {
@@ -7648,6 +7568,8 @@ function scheduler(){
         for (const activeToyId of activeToyIds) {
           const toy = document.getElementById(activeToyId);
           if (toy && typeof toy.__sequencerStep === 'function') {
+            const info = transportLoopInfo(getPanelTransport(toy), ensureAudioContext().currentTime);
+            if (!info || info.state !== 'playing') continue;
             if (!shouldRenderToyVisuals(toy)) continue;
             const steps = parseInt(toy.dataset.steps, 10) || NUM_STEPS;
             let col = Math.floor(info.phase01 * steps) % steps;
@@ -8157,7 +8079,7 @@ async function boot(){
     const head = e.target.closest('.toy-panel');
     if (!head || head.dataset.prevToyId || !head.dataset.nextToyId) return;
     updateChains();
-    g_sequenceChains.retrigger(head.id, transportRegistry.get(MAIN_TRANSPORT_ID).getState());
+    g_sequenceChains.retrigger(head.id, getPanelTransport(head)?.getState() || transportRegistry.get(MAIN_TRANSPORT_ID).getState());
   });
 
   // Definition edits must not move a Sequence. The old set-active requests are
@@ -8168,7 +8090,7 @@ async function boot(){
     const head = e.target.closest('.toy-panel');
     if (!head || head.dataset.prevToyId || !head.dataset.nextToyId) return;
     updateChains();
-    g_sequenceChains.retrigger(head.id, transportRegistry.get(MAIN_TRANSPORT_ID).getState());
+    g_sequenceChains.retrigger(head.id, getPanelTransport(head)?.getState() || transportRegistry.get(MAIN_TRANSPORT_ID).getState());
   }, true);
 
   // Add event listener for instrument propagation: retired. Each musical toy

@@ -1,3 +1,4 @@
+import { panelTransportBindings } from './panel-transport.js';
 // src/chordwheel.js — chord wheel with 16-step radial ring (per active segment)
 import { initToyUI } from './toyui.js';
 import { NUM_STEPS, TICKS_PER_BAR, getLoopInfo, getTransportState, ensureAudioContext, getToyGain, isRunning, registerActiveNode } from './audio-core.js';
@@ -142,6 +143,7 @@ function chainHasSequencedNotes(head) {
 }
 
 export function createChordWheel(panel){
+  const { isRunning, getLoopInfo, getTransportState } = panelTransportBindings(panel);
   initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'Acoustic Guitar' });
   const toyId = panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;
   panel.__audioToyId = toyId;

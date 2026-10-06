@@ -1,3 +1,4 @@
+import { panelTransportBindings } from './panel-transport.js';
 // c:\Users\Russ_\Desktop\music-toy\music-toy.github.io\src\bouncer.main.js
 import { getToyLifecycle, mountToySurface } from './baseMusicToy/index.js';
 import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
@@ -42,6 +43,7 @@ const DBG_RESPAWN = ()=> window.BOUNCER_RESPAWN_DBG;
 export function createBouncer(selector){
   const shell = (typeof selector==='string') ? document.querySelector(selector) : selector; if (!shell) return null;
   const panel = shell.closest('.toy-panel') || shell;
+  const { isRunning, getLoopInfo, getTransportState, audioTimeToTick, tickToAudioTime } = panelTransportBindings(panel);
   // Prevent double-initialization, which can cause duplicate draw loops and event listeners.
   if (panel.__bouncer_main_instance) return panel.__bouncer_main_instance;
   const lifecycle = getToyLifecycle(panel);

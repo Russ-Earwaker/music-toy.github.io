@@ -1,3 +1,4 @@
+import { MAIN_TRANSPORT_ID, transportRegistry } from './transport-registry.js';
 import { TICKS_PER_BAR } from './audio-core.js';
 import { createStructureRuntime } from './structure-runtime.js';
 import { compileStructureGraph } from './structure-graph.js';
@@ -42,6 +43,8 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     return { ...turn, playbackInstance: instance };
   }
 
+  const domainFor = id => connectionModel?.getTransportId(id) || MAIN_TRANSPORT_ID;
+  const stateFor = (id, fallback) => domainFor(id) === MAIN_TRANSPORT_ID ? fallback : transportRegistry.get(domainFor(id))?.getState() || fallback;
   function sync(panels, transportState, { connections = null, structures = [] } = {}) {
     if (connectionModel) for (const id of terminatedToys) if (connectionModel.isRooted(id)) terminatedToys.delete(id);
     const previousId = panel => connections
@@ -54,7 +57,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     let auxiliary = new Set();
     if (structures.length) {
       const graph = compileStructureGraph({ panels, structures, connections: connections || [], runtime,
-        currentTick: transportState.currentTick,
+        currentTick: transportState.currentTick, getTransportId: domainFor, getCurrentTick: id => stateFor(id, transportState).currentTick,
         getDuration: id => getPlaybackInstance(id)?.loopLengthTicks || TICKS_PER_BAR });
       roots.push(...graph.roots); auxiliary = graph.defined;
     } else {
@@ -74,6 +77,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     const candidateHeads = new Set(roots.map(root => root.headId)), nextManaged = new Set();
     for (const root of roots) {
       const headId = root.headId, members = root.members;
+      const ownerId = domainFor(headId), ownerState = stateFor(headId, transportState);
       for (const toyId of members) nextManaged.add(toyId);
       if (!headDefinitions.has(headId)) {
         const owner = [...previousHeads].find(([oldHead, oldMembers]) =>
@@ -83,11 +87,19 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
       }
       seen.add(headId); heads.set(headId, members);
       const id = definitionId(headId); seenDefinitions.add(id);
-      runtime.defineStructure(id, root.type, root.children, transportState.currentTick, { representationId: root.representationId || null, count:root.count });
+      const previousInstance = runtime.getInstance(id);
+      const migrated = previousInstance && previousInstance.transportId !== ownerId;
+      if (migrated) {
+        for (const toyId of members) { cancelToy(toyId); deactivatePlaybackInstance(toyId); }
+        for (const [key, entry] of prepared) if (members.includes(entry.turn.toyId)) { entry.instance.active = false; prepared.delete(key); }
+        currentTurns.delete(headId);
+        runtime.remove(id);
+      }
+      runtime.defineStructure(id, root.type, root.children, ownerState.currentTick, { representationId: root.representationId || null, transportId: ownerId, count:root.count });
       const existingInstance = runtime.getInstance(id);
       if (!existingInstance || existingInstance.parentDefinitionId) {
-        runtime.startSequence(id, transportState.currentTick, {
-          quantize: transportState.state === 'playing', retrigger: !!existingInstance });
+        runtime.startSequence(id, ownerState.currentTick, {
+          quantize: ownerState.state === 'playing', retrigger: !!existingInstance });
         for (const toyId of members) { cancelToy(toyId); deactivatePlaybackInstance(toyId); }
       }
       if (members.length && members.every(toyId => terminatedToys.has(toyId))) runtime.getInstance(id).active = false;
@@ -150,7 +162,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
       }
     }
     for (const [key, entry] of prepared) {
-      const at = Math.max(transportState.currentTick, entry.turn.startTick);
+      const at = Math.max(stateFor(entry.turn.toyId, transportState).currentTick, entry.turn.startTick);
       if (!nextManaged.has(entry.turn.toyId) || (connectionModel && !connectionModel.isRooted(entry.turn.toyId))
         || !runtime.turnsInWindow(entry.turn.definitionId, at, at + 1).some(turn => turn.id === key)) {
         entry.instance.active = false; prepared.delete(key);
@@ -164,10 +176,12 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     return null;
   }
 
-  function updateCurrent(currentTick) {
+  function updateCurrent(currentTick, transportId = null) {
     for (const [headId, children] of heads) {
+      if (transportId && runtime.getDefinition(definitionId(headId))?.transportId !== transportId) continue;
+      const ownerTick = transportId || !connectionModel ? currentTick : stateFor(headId, {currentTick}).currentTick;
       const turns = connectionModel && !connectionModel.isRooted(headId) ? []
-        : runtime.turnsInWindow(definitionId(headId), currentTick, currentTick + 1).filter(t => children.includes(t.toyId));
+        : runtime.turnsInWindow(definitionId(headId), ownerTick, ownerTick + 1).filter(t => children.includes(t.toyId));
       const active = new Map(turns.map(t => [t.toyId, t]));
       const previous = currentTurns.get(headId) || new Map();
       for (const [toyId, oldTurn] of previous) {
@@ -194,14 +208,15 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
       currentTurns.set(headId, active);
       chainState.set(headId, turns[0]?.toyId ?? null);
     }
-    for (const [id, entry] of prepared) if (entry.turn.endTick < currentTick - TICKS_PER_BAR * 2) prepared.delete(id);
+    for (const [id, entry] of prepared) if ((!transportId || entry.turn.transportId === transportId) && entry.turn.endTick < (transportId || !connectionModel ? currentTick : stateFor(entry.turn.toyId, {currentTick}).currentTick) - TICKS_PER_BAR * 2) prepared.delete(id);
     publishDebug(runtime.debugSnapshot(currentTick));
   }
 
-  function turnsForLookahead(currentTick, endTick) {
-    updateCurrent(currentTick);
+  function turnsForLookahead(currentTick, endTick, transportId = null) {
+    updateCurrent(currentTick, transportId);
     const turns = [];
     for (const headId of heads.keys()) {
+      if (transportId && runtime.getDefinition(definitionId(headId))?.transportId !== transportId) continue;
       if (connectionModel && !connectionModel.isRooted(headId)) continue;
       const id = definitionId(headId);
       turns.push(...runtime.turnsInWindow(id, currentTick, endTick)
@@ -211,7 +226,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     return turns;
   }
 
-  function retrigger(headId, transportState) {
+  function retrigger(headId, transportState, { quantize = transportState.state === 'playing' } = {}) {
     if (!heads.has(headId) || (connectionModel && !connectionModel.isRooted(headId))) return null;
     for (const toyId of heads.get(headId)) {
       terminatedToys.delete(toyId);
@@ -223,7 +238,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     for (const [id, entry] of prepared) if (entry.turn.definitionId === definitionId(headId)) prepared.delete(id);
     currentTurns.delete(headId);
     const instance = runtime.startSequence(definitionId(headId), transportState.currentTick,
-      { quantize: transportState.state === 'playing', retrigger: true });
+      { quantize, retrigger: true });
     // Head gestures can immediately begin internal relearning, but their musical
     // anchor must already be the new (possibly future) parent-assigned boundary.
     for (const turn of runtime.turnsInWindow(definitionId(headId), instance.startTick, instance.startTick + 1)) adoptPlaybackInstance(prepare(turn).playbackInstance);

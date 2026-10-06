@@ -1,3 +1,4 @@
+import { panelTransportBindings } from './panel-transport.js';
 // src/grid-core.js — grid core + instrument sync (<=300 lines)
 import { triggerInstrument } from './audio-samples.js';
 import { ensureAudioContext, resumeAudioContextIfNeeded, isRunning, getTransportState, TICKS_PER_BAR } from './audio-core.js';
@@ -95,6 +96,7 @@ export function buildGrid(panel, numSteps = 8){
   if (typeof panel === 'string') panel = document.querySelector(panel);
   if (!panel || !(panel instanceof Element) || panel.__gridBuilt) return null;
   panel.__gridBuilt = true;
+  const { isRunning, getTransportState } = panelTransportBindings(panel);
   panel.dataset.toy = panel.dataset.toy || 'loopgrid';
   const initialTransport = getTransportState();
   if (isRunning()) {

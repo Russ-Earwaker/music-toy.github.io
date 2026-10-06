@@ -20,7 +20,7 @@ export function createStructureToyModel(model, options = {}) {
   const records = new Map();
   let serial = 1, busy = false, suspended = 0;
   const config = { getPosition: () => ({ x: 0, y: 0 }), getDuration:id=>getPlaybackInstance(id)?.loopLengthTicks || TICKS_PER_BAR, ...options };
-  const list = () => [...records.values()];
+  const list = () => [...records.values()].map(s => ({...s,transportId:model.getTransportId(s.id)}));
   const childEdges = id => model.list('sequence').filter(c=>c.from.objectId===id).sort((a,b)=>order(a.from.portId)-order(b.from.portId));
   function durationOf(id,seen=new Set()) {
     if(seen.has(id)) throw new Error('Cyclic Structure graph');
@@ -189,7 +189,7 @@ export function createStructureToyModel(model, options = {}) {
     refresh();
   });
   return {
-    list, get: id => records.get(id) || null, promote, setType, conversion, durationOf,
+    list, get: id => records.has(id) ? {...records.get(id),transportId:model.getTransportId(id)} : null, promote, setType, conversion, durationOf,
     getTimelineEntries(id) {return (records.get(id)?.entries||[]).map(e=>({...e,durationTicks:durationOf(e.childId),label:structureTypeLabelForChild(e.childId)}));},
     setOffset(id,portId,value,{snap=true}={}) {
       const s=records.get(id);if(s?.type!=='timeline'||!s.entries.some(e=>e.portId===portId))return null;
