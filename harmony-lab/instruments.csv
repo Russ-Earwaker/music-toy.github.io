@@ -1,0 +1,4 @@
+filename,instrument,instrument_type,instrument_id,base_note,music_behavior,volume
+../assets/samples/DrumKick.wav,drum,percussion,lab-kick,C4,rhythmic,
+../assets/samples/DrumSnare1.wav,drum,percussion,lab-snare,C4,rhythmic,
+../assets/samples/Drum_HiHat_Closed.wav,drum,percussion,lab-hat,C4,rhythmic,-6

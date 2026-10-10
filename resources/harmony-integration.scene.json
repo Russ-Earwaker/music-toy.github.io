@@ -1,0 +1,263 @@
+{
+  "type": "music-toys-scene",
+  "schemaVersion": 1,
+  "displayName": "Harmony integration: Bass + Melody + Drums",
+  "payload": {
+    "schemaVersion": 1,
+    "transport": {
+      "bpm": 120
+    },
+    "heartbeats": [
+      {
+        "id": "main-heartbeat",
+        "transportId": "main-heartbeat",
+        "name": "Main",
+        "position": {
+          "x": 0,
+          "y": 300
+        },
+        "bpm": 120,
+        "positionTick": 0
+      }
+    ],
+    "toys": [
+      {
+        "id": "proof-bass",
+        "type": "loopgrid",
+        "ui": {
+          "left": "1150px",
+          "top": "0px",
+          "width": "480px",
+          "height": "420px"
+        },
+        "state": {
+          "instrument": "BASS GUITAR SLAP",
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "instrumentPitchShift": true,
+          "instrumentOctave": 3
+        },
+        "volume": 0.7,
+        "muted": false
+      },
+      {
+        "id": "proof-melody",
+        "type": "loopgrid",
+        "ui": {
+          "left": "1150px",
+          "top": "470px",
+          "width": "480px",
+          "height": "420px"
+        },
+        "state": {
+          "instrument": "PIANO",
+          "steps": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "noteIndices": [
+            16,
+            19,
+            21,
+            19,
+            16,
+            18,
+            14,
+            12
+          ],
+          "instrumentPitchShift": true,
+          "instrumentOctave": 4
+        },
+        "volume": 1,
+        "muted": false
+      },
+      {
+        "id": "proof-drums",
+        "type": "loopgrid-drum",
+        "ui": {
+          "left": "1150px",
+          "top": "940px",
+          "width": "480px",
+          "height": "420px"
+        },
+        "state": {
+          "instrument": "DRUM KICK",
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ]
+        },
+        "volume": 0.45,
+        "muted": false
+      }
+    ],
+    "structureToys": [
+      {
+        "id": "proof-chords",
+        "definitionId": "definition:proof-chords",
+        "type": "chord-progression",
+        "chords": [
+          {
+            "root": "C",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "x": 180,
+        "y": 0,
+        "collapsed": false,
+        "outputCount": 1
+      },
+      {
+        "id": "proof-repeat",
+        "definitionId": "definition:proof-repeat",
+        "type": "repeat",
+        "count": 4,
+        "x": 600,
+        "y": 230,
+        "collapsed": false,
+        "outputCount": 1
+      },
+      {
+        "id": "proof-together",
+        "definitionId": "definition:proof-together",
+        "type": "together",
+        "x": 860,
+        "y": 230,
+        "collapsed": false,
+        "outputCount": 4
+      }
+    ],
+    "connections": [
+      {
+        "id": "proof-root",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "proof-chords",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-cr",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-chords",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "proof-repeat",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-rt",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-repeat",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "proof-together",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-part-0",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-together",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "proof-bass",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-part-1",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-together",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "proof-melody",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-part-2",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-together",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "proof-drums",
+          "portId": "input"
+        }
+      }
+    ],
+    "camera": {
+      "scale": 0.65,
+      "x": 40,
+      "y": 120
+    }
+  }
+}

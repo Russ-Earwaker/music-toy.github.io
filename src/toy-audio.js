@@ -1,3 +1,5 @@
+import { getCurrentPlaybackOccurrence, withPlaybackOccurrence } from './playback-context.js';
+import { isPlaybackOccurrenceValid, onPlaybackOccurrenceInvalidated } from './playback-instances.js';
 import { connectionModel } from './connections.js';
 // src/toy-audio.js — shared per-toy mute/volume policy (<=300 lines)
 import { ensureAudioContext, resumeAudioContextIfNeeded, setToyVolume, setToyMuted } from './audio-core.js';
@@ -19,6 +21,13 @@ const __DEFERRED_GATE_TIMEOUTS = (typeof window !== 'undefined')
   ? (window.__DEFERRED_GATE_TIMEOUTS = window.__DEFERRED_GATE_TIMEOUTS || new Map())
   : new Map();
 
+const occurrenceTimeouts = new Map();
+onPlaybackOccurrenceInvalidated(occurrenceId => {
+  for (const [tid, entry] of occurrenceTimeouts) if (entry.occurrenceId === occurrenceId) {
+    clearTimeout(tid); __untrackGateTimeout(entry.toyId, tid); occurrenceTimeouts.delete(tid);
+  }
+});
+
 function __trackGateTimeout(toyKey, timeoutId) {
   if (!toyKey || !timeoutId) return;
   let set = __DEFERRED_GATE_TIMEOUTS.get(toyKey);
@@ -39,7 +48,7 @@ function __clearGateTimeouts(toyKey /* optional */) {
   const clearSet = (set) => {
     if (!set) return;
     for (const tid of Array.from(set)) {
-      try { clearTimeout(tid); } catch {}
+      try { clearTimeout(tid); occurrenceTimeouts.delete(tid); } catch {}
       try { set.delete(tid); } catch {}
     }
   };
@@ -284,6 +293,11 @@ export function gateTriggerForToy(toyId, triggerFn){
   }
 
   return function(inst, noteName, when, ...rest){
+    const occurrence = getCurrentPlaybackOccurrence();
+    const trigger = () => {
+      if (!isPlaybackOccurrenceValid(occurrence)) return;
+      return withPlaybackOccurrence(occurrence, () => triggerFn(inst, noteName, when, id, ...rest));
+    };
     // If the transport paused, AudioContext may be suspended.
     // UI clicks should still audition notes, so resume before any timing/gate logic.
     const ctx = ensureAudioContext();
@@ -338,7 +352,7 @@ export function gateTriggerForToy(toyId, triggerFn){
 
           const tid = setTimeout(() => {
             // Untrack immediately
-            try { __untrackGateTimeout(id, tid); } catch {}
+            try { __untrackGateTimeout(id, tid); occurrenceTimeouts.delete(tid); } catch {}
 
             const genNow = getToyAudioGen(id);
             if (genNow !== genAtSchedule) {
@@ -361,10 +375,12 @@ export function gateTriggerForToy(toyId, triggerFn){
 
               return;
             }
-            try { return triggerFn(inst, noteName, when, id, ...rest); } catch (err) { /* noop */ }
+            try { return trigger(); } catch (err) { /* noop */ }
           }, delayMs);
 
-          try { __trackGateTimeout(id, tid); } catch {}
+          try { __trackGateTimeout(id, tid);
+            if (occurrence?.occurrenceId) occurrenceTimeouts.set(tid, { occurrenceId: occurrence.occurrenceId, toyId: id });
+          } catch {}
 
           return;
         }
@@ -391,7 +407,7 @@ export function gateTriggerForToy(toyId, triggerFn){
       }
 
       try {
-        const r = triggerFn(inst, noteName, when, id, ...rest);
+        const r = trigger();
         try {
           if (window.__AUDIO_GATE_DEBUG) console.log('[audio-gate][pass]', { id, inst, noteName, when, genNow });
         } catch {}

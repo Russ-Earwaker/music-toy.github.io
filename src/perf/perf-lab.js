@@ -571,6 +571,7 @@ function ensureUI() {
             <button class="perf-lab-tab is-active" data-tab="controls">Controls</button>
             <button class="perf-lab-tab" data-tab="music">Music</button>
             <button class="perf-lab-tab" data-tab="tests">Tests</button>
+            <button class="perf-lab-tab" data-tab="harmony">Harmony</button>
           </div>
 
           <div class="perf-lab-tabpage is-active" data-tabpage="controls">
@@ -665,6 +666,10 @@ function ensureUI() {
           </div>
 
 
+          <div class="perf-lab-tabpage" data-tabpage="harmony">
+            <iframe class="perf-lab-harmony-frame" title="Harmony Lab" allow="autoplay"></iframe>
+          </div>
+
           <div class="perf-lab-lastresult">
             <div class="perf-lab-output-title">Last Result</div>
             <pre class="perf-lab-output perf-lab-output-small" id="perf-lab-output"></pre>
@@ -713,6 +718,10 @@ function ensureUI() {
         flex-direction:column;
         min-height:0;
       }
+      .perf-lab-overlay.is-harmony .perf-lab-panel{width:min(960px, calc(100vw - 24px));}
+      .perf-lab-overlay.is-harmony .perf-lab-lastresult,
+      .perf-lab-overlay.is-harmony .perf-lab-footer{display:none;}
+      .perf-lab-harmony-frame{display:block;width:100%;height:min(70vh, 650px);border:0;border-radius:10px;}
       .perf-lab-tabs{
         display:flex;
         gap:8px;
@@ -1305,13 +1314,18 @@ function ensureUI() {
   }
 
   ov.addEventListener('click', async (e) => {
-    // Tabs (Controls / Tests)
+    // Tabs (Controls / Music / Tests / Harmony)
     const tabBtn = e.target && e.target.closest ? e.target.closest('button[data-tab]') : null;
     if (tabBtn) {
       try { e.preventDefault(); } catch {}
       try { e.stopPropagation(); } catch {}
       try {
         const tab = String(tabBtn.getAttribute('data-tab') || 'controls');
+        ov.classList.toggle('is-harmony', tab === 'harmony');
+        const frame = ov.querySelector('.perf-lab-harmony-frame');
+        if (tab === 'harmony' && !frame.hasAttribute('src')) {
+          frame.src = new URL('../../harmony-lab/?debug=1', import.meta.url).href;
+        } else if (tab !== 'harmony') pauseHarmonyLab(ov);
         ov.querySelectorAll('.perf-lab-tab').forEach((b) => b.classList.toggle('is-active', b === tabBtn));
         ov.querySelectorAll('.perf-lab-tabpage').forEach((p) => {
           const key = String(p.getAttribute('data-tabpage') || '');
@@ -3424,6 +3438,16 @@ function appendOutputLine(line) {
   } catch {}
 }
 
+function pauseHarmonyLab(ov) {
+  ov.querySelector('.perf-lab-harmony-frame')?.contentWindow?.postMessage({ type: 'rhythmake:harmony-lab:pause' }, location.origin);
+}
+
+// Keep the menu shortcut available while focus is inside the embedded bench.
+window.addEventListener('message', (event) => {
+  const frame = document.querySelector('#perf-lab-overlay .perf-lab-harmony-frame');
+  if (event.origin === location.origin && event.source === frame?.contentWindow && event.data?.type === 'rhythmake:harmony-lab:toggle') toggle();
+});
+
 function show() {
   const ov = ensureUI();
   ov.style.display = 'flex';
@@ -3432,12 +3456,14 @@ function show() {
 function hide() {
   stopPerfMusicRepeatSpawn();
   const ov = ensureUI();
+  pauseHarmonyLab(ov);
   ov.style.display = 'none';
 }
 
 function toggle() {
   const ov = ensureUI();
-  ov.style.display = (ov.style.display === 'flex') ? 'none' : 'flex';
+  if (ov.style.display === 'flex') hide();
+  else show();
 }
 
 function buildP2() {

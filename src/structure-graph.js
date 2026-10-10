@@ -1,3 +1,4 @@
+import { isModifier } from './modifier-types.js';
 // Compile shared Connection topology into the same Structure runtime. Implicit
 // chains stay flattened; explicit branch children may themselves be chains.
 export function compileStructureGraph({ panels, structures, connections, runtime, currentTick, getDuration, getTransportId = () => undefined, getCurrentTick = () => currentTick }) {
@@ -37,9 +38,10 @@ export function compileStructureGraph({ panels, structures, connections, runtime
       }
       children.push({...reference,...(s.type==='timeline'?{offsetTick:s.entries?.find(e=>e.portId===edge.from.portId)?.offsetTick||0}:{})});
     }
-    runtime.defineStructure(s.definitionId, s.type, children, getCurrentTick(id), { representationId: s.definitionId, transportId: getTransportId(id) ?? s.transportId, count:s.count });
+    const define = isModifier(s.type) ? runtime.defineModifier : runtime.defineStructure;
+    define(s.definitionId, s.type, children, getCurrentTick(id), { representationId: s.definitionId, transportId: getTransportId(id) ?? s.transportId, count:s.count, semitones:s.semitones, chords:s.chords, stepTicks:s.stepTicks });
     defined.add(s.definitionId); resolving.delete(id);
-    return { type: s.type, count:s.count, children, members, representationId: s.definitionId,
+    return { type: s.type, count:s.count, semitones:s.semitones, chords:s.chords, stepTicks:s.stepTicks, children, members, representationId: s.definitionId,
       reference: { structureId: s.definitionId }, preferredId: s.definitionId };
   }
   const roots = [];

@@ -1,3 +1,5 @@
+import { normalizeChords, normalizeChordStep } from './chord-progression.js';
+import { LOGIC_NODE_TYPES, isModifier, normalizeSemitones, logicNodeLabel } from './modifier-types.js';
 import { GRAPH_ENDPOINT_DIAMETER, GRAPH_ENDPOINT_HIT_DIAMETER } from './graph-visuals.js';
 import { connectionModel, createStructurePorts } from './connections.js';
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
@@ -11,10 +13,10 @@ export const STRUCTURE_PORT_RADIUS=GRAPH_ENDPOINT_DIAMETER/2, STRUCTURE_PLUS_RAD
 export const structurePortPoint = (s, portId) => portId === 'input'
   ? { x: s.x, y: s.y + structureToyHeight(s) / 2 }
   : { x: s.x + structureToyWidth(s), y: s.y + (s.collapsed?40:s.type==='timeline'?80:48) + order(portId) * STRUCTURE_SOCKET_STEP };
-export const structureToyWidth = s => s.collapsed ? 128 : s.type === 'timeline' ? 440 : 224;
+export const structureToyWidth = s => s.type === 'chord-progression' ? 360 : s.collapsed ? 128 : s.type === 'timeline' ? 440 : 224;
 export const structureToyHeight = s => s.collapsed
   ? Math.max(80, (s.outputCount-1) * STRUCTURE_SOCKET_STEP + 80)
-  : Math.max(128, (s.outputCount-1) * STRUCTURE_SOCKET_STEP + (s.type==='timeline'?120:88));
+  : s.type === 'chord-progression' ? 168 + s.chords.length * 48 : Math.max(128, (s.outputCount-1) * STRUCTURE_SOCKET_STEP + (s.type==='timeline'?120:88));
 
 // Board representations only. Musical definitions/instances live in the existing runtime.
 export function createStructureToyModel(model, options = {}) {
@@ -27,6 +29,7 @@ export function createStructureToyModel(model, options = {}) {
     if(seen.has(id)) throw new Error('Cyclic Structure graph');
     const next=new Set(seen).add(id),s=records.get(id),edges=childEdges(id);
     if(!s) return config.getDuration(id)+(edges[0]?durationOf(edges[0].to.objectId,next):0);
+    if (isModifier(s.type)) return edges[0] ? durationOf(edges[0].to.objectId,next) : 0;
     return structureDuration(s.type,edges.map(c=>({durationTicks:durationOf(c.to.objectId,next),
       offsetTick:s.entries?.find(e=>e.portId===c.from.portId)?.offsetTick || 0})),s.count);
   }
@@ -46,10 +49,10 @@ export function createStructureToyModel(model, options = {}) {
     for(const e of entries) {if(e.offsetTick!==(type==='together'?0:end))lossy=true;end+=durationOf(e.childId);}
     return {lossy,message:type==='sequence'?'Sequence removes Timeline gaps and overlaps.':'Together moves every Timeline entry to the start.'};
   }
-  const structureTypeLabelForChild = id => records.has(id)?structureTypeLabel(records.get(id).type)
+  const structureTypeLabelForChild = id => records.has(id)?logicNodeLabel(records.get(id).type)
     : ({loopgrid:'Rhythm',drawgrid:'Draw Line',bouncer:'Bouncer',rippler:'Rippler'}[config.getToyType?.(id)] || 'Toy');
   const register = s => model.registerObject(s.id, { ports: createStructurePorts(s.outputCount,s.type),
-    transportId: s.transportId, structure: s });
+    transportId: s.transportId, ...(isModifier(s.type) ? {modifier:s} : {structure:s}) });
   function update(id, changes, { notify = true } = {}) {
     const before = records.get(id);
     if (!before) return null;
@@ -61,9 +64,9 @@ export function createStructureToyModel(model, options = {}) {
   function create(type, from, to, provenance, includeInput, position = null) {
     let id; do { id = `structure-toy:${serial++}`; } while (model.getObject(id));
     const a = position || config.getPosition(from), b = position || config.getPosition(to);
-    let s = Object.freeze({ id, definitionId: `definition:${id}`, type, provenance, includeInput,
+    let s = Object.freeze({ id, definitionId: `definition:${id}`, type, kind:isModifier(type)?'modifier':'structure', ...(type==='transpose'?{semitones:0}:type==='chord-progression'?{chords:normalizeChords(),stepTicks:384}:{}), provenance, includeInput,
       transportId: MAIN_TRANSPORT_ID, x: (a.x + b.x) / 2 - 72, y: (a.y + b.y) / 2 - 38,
-      positionSource:'auto', collapsed:false, outputCount: type === 'repeat' ? 1 : 2, ...(type === 'repeat' ? {count:2} : {}), ...(type === 'timeline'?{entries:Object.freeze([])}:{}), artOwnerId: config.getOwner?.(from.objectId) || null });
+      positionSource:'auto', collapsed:false, outputCount: type === 'repeat' || isModifier(type) ? 1 : 2, ...(type === 'repeat' ? {count:2} : {}), ...(type === 'timeline'?{entries:Object.freeze([])}:{}), artOwnerId: config.getOwner?.(from.objectId) || null });
     const placed=config.placeStructure?.({x:s.x,y:s.y,width:structureToyWidth(s),height:structureToyHeight(s)},from.objectId);
     if(placed)s=Object.freeze({...s,x:placed.x,y:placed.y});
     records.set(id, s); register(s);
@@ -77,10 +80,10 @@ export function createStructureToyModel(model, options = {}) {
   }
   // A detached board object has no transport authority until its input is rooted.
   function createStandalone(type, {x=0,y=0,artOwnerId=null} = {}) {
-    if(!STRUCTURE_TYPES.includes(type))return null;
+    if(!LOGIC_NODE_TYPES.includes(type))return null;
     let id;do {id=`structure-toy:${serial++}`;}while(model.getObject(id));
-    const s=Object.freeze({id,definitionId:`definition:${id}`,type,provenance:'explicit',includeInput:false,
-      x,y,artOwnerId,positionSource:'auto',collapsed:false,outputCount:type==='repeat'?1:2,
+    const s=Object.freeze({id,definitionId:`definition:${id}`,type,kind:isModifier(type)?'modifier':'structure',...(type==='transpose'?{semitones:0}:type==='chord-progression'?{chords:normalizeChords(),stepTicks:384}:{}),provenance:'explicit',includeInput:false,
+      x,y,artOwnerId,positionSource:'auto',collapsed:false,outputCount:type==='repeat'||isModifier(type)?1:2,
       ...(type==='repeat'?{count:2}:{}),...(type==='timeline'?{entries:Object.freeze([])}:{})});
     model.transaction(()=>{records.set(id,s);register(s);model.touchObject(id,{structureCreated:true});});
     return records.get(id);
@@ -91,7 +94,7 @@ export function createStructureToyModel(model, options = {}) {
     return result;
   }
   function promote(connectionId, type = 'together') {
-    if (!STRUCTURE_TYPES.includes(type)) return null;
+    if (!LOGIC_NODE_TYPES.includes(type)) return null;
     const c = model.get(connectionId);
     if (!c || !['sequence','transport'].includes(c.kind)) return null;
     let s;
@@ -130,7 +133,7 @@ export function createStructureToyModel(model, options = {}) {
     refresh(); return { ...result, structureId: s.id };
   }
   function setType(id, type, {allowLossy=false}={}) {
-    if (!STRUCTURE_TYPES.includes(type) || !records.has(id)) return null;
+    if (!STRUCTURE_TYPES.includes(type) || isModifier(records.get(id)?.type) || !records.has(id)) return null;
     if(conversion(id,type).lossy&&!allowLossy)return null;
     const s=records.get(id),children=model.list('sequence').filter(c=>c.from.objectId===id).sort((a,b)=>order(a.from.portId)-order(b.from.portId));
     const before=new Map(records);busy=true;
@@ -187,7 +190,7 @@ export function createStructureToyModel(model, options = {}) {
             mustConnect('sequence', input.from, child.to, child.id);
             model.touchObject(s.id);
           } else {
-            const outputCount = s.type === 'repeat' ? 1 : Math.max(2, ...children.map(c => order(c.from.portId) + 2));
+            const outputCount = s.type === 'repeat' || isModifier(s.type) ? 1 : Math.max(2, ...children.map(c => order(c.from.portId) + 2));
             if (outputCount !== s.outputCount) update(s.id, { outputCount }, { notify: false });
           }
         }
@@ -212,6 +215,11 @@ export function createStructureToyModel(model, options = {}) {
       const offsetTick=snap?snapTimelineOffset(value):normalizeTimelineOffset(value);
       return update(id,{entries:Object.freeze(s.entries.map(e=>e.portId===portId?Object.freeze({...e,offsetTick}):e))});
     },
+    setProgression(id,{chords,stepTicks}={}) { const s=records.get(id);if(s?.type!=='chord-progression')return null;
+      const next={chords:normalizeChords(chords ?? s.chords),stepTicks:normalizeChordStep(stepTicks ?? s.stepTicks)};
+      return JSON.stringify([s.chords,s.stepTicks])===JSON.stringify([next.chords,next.stepTicks])?s:update(id,next); },
+    setSemitones(id,value) { const s=records.get(id);if(s?.type!=='transpose')return null;
+      const semitones=normalizeSemitones(value);return s.semitones===semitones?s:update(id,{semitones}); },
     setCount(id,count) { return records.get(id)?.type === 'repeat' ? update(id,{count:normalizeRepeatCount(count)}) : null; },
     setCollapsed(id, collapsed) {
       const before = records.get(id);
@@ -238,9 +246,9 @@ export function createStructureToyModel(model, options = {}) {
       for (const s of list()) model.removeObject(s.id);
       records.clear();
       for (const value of saved) {
-        if (!value || typeof value.id !== 'string' || !STRUCTURE_TYPES.includes(value.type)) continue;
+        if (!value || typeof value.id !== 'string' || !LOGIC_NODE_TYPES.includes(value.type)) continue;
         const s = Object.freeze({ ...value, definitionId: `definition:${value.id}`, transportId: MAIN_TRANSPORT_ID,
-          x: Number(value.x) || 0, y: Number(value.y) || 0, outputCount: value.type === 'repeat' ? 1 : Math.max(2, Math.trunc(Number(value.outputCount) || 2)),
+          x: Number(value.x) || 0, y: Number(value.y) || 0, kind:isModifier(value.type)?'modifier':'structure', ...(value.type==='transpose'?{semitones:normalizeSemitones(value.semitones)}:value.type==='chord-progression'?{chords:normalizeChords(value.chords),stepTicks:normalizeChordStep(value.stepTicks)}:{}), outputCount: value.type === 'repeat' || isModifier(value.type) ? 1 : Math.max(2, Math.trunc(Number(value.outputCount) || 2)),
           ...(value.type === 'repeat' ? {count:normalizeRepeatCount(value.count)} : {}),
           ...(value.type==='timeline'?{entries:Object.freeze((Array.isArray(value.entries)?value.entries:[]).filter(e=>typeof e?.childId==='string'&&/^child:\d+$/.test(e.portId)).map(e=>Object.freeze({childId:e.childId,portId:e.portId,offsetTick:normalizeTimelineOffset(e.offsetTick)})))}:{}),
           collapsed:value.collapsed===true, provenance: value.provenance === 'auto' ? 'auto' : 'explicit', includeInput: false });

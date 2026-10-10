@@ -1,16 +1,25 @@
 import { TICKS_PER_BAR, nextBeatTick } from './audio-core.js';
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 import { STRUCTURE_TYPES, normalizeRepeatCount, structureDuration } from './structure-types.js';
+import { LOGIC_NODE_TYPES, MODIFIER_TYPES, isModifier, normalizeSemitones, logicNodeLabel } from './modifier-types.js';
+import { composeContext, normalizeContext } from './playback-context.js';
 
+import { normalizeChords, normalizeChordStep, resolveChordAtTick } from './chord-progression.js';
+// Definition layouts carry relative origins; occurrences rebase them exactly once.
+const shiftHarmony = (context, offset) => context?.harmony ? normalizeContext({...context,harmony:{...context.harmony,originTick:context.harmony.originTick+offset}}) : context;
+const occurrenceContext = (authored, historical, cycleStart) => authored.harmony ? normalizeContext({...authored,harmony:{...authored.harmony,originTick:cycleStart+(historical.harmony?.originTick ?? authored.harmony.originTick)}}) : authored;
+let runtimeSerial = 1;
+const authoredPathKey = leaf => JSON.stringify([leaf.toyId, leaf.authoredPath]);
 const tick = value => Math.max(0, Math.round(Number(value) || 0));
-const assembleLayout = (entries, representationId) => {
+const assembleLayout = (entries, representationId, context) => {
   const durationTicks = Math.max(0, ...entries.map(c => c.offsetTicks + c.durationTicks));
   const leaves = entries.flatMap(c => c.definition ? c.definition.leafLayout.map(l => ({ ...l,
+    structuralPath: [c.entryId, ...l.structuralPath], authoredPath: [c.relationshipId || c.entryId, ...l.authoredPath], definitionIds: [c.structureId, ...l.definitionIds], context: composeContext(c.context, shiftHarmony(l.context,c.offsetTicks)),
     offsetTicks: c.offsetTicks + l.offsetTicks,
     contexts: l.contexts.map(context => ({ ...context, offsetTicks: context.offsetTicks + c.offsetTicks })) }))
-    : [{ toyId: c.toyId, offsetTicks: c.offsetTicks, durationTicks: c.durationTicks, contexts: [] }]);
+    : [{ toyId: c.toyId, structuralPath: [c.entryId], authoredPath: [c.relationshipId || c.entryId], definitionIds: [], context: normalizeContext(c.context), offsetTicks: c.offsetTicks, durationTicks: c.durationTicks, contexts: [] }]);
   return { children: Object.freeze(entries.map(Object.freeze)), durationTicks,
-    leafLayout: Object.freeze(leaves.map(l => Object.freeze({ ...l, contexts: Object.freeze([
+    leafLayout: Object.freeze(leaves.map(l => Object.freeze({ ...l, structuralPath: Object.freeze(l.structuralPath), authoredPath: Object.freeze(l.authoredPath), definitionIds: Object.freeze(l.definitionIds), context: composeContext(context, l.context), contexts: Object.freeze([
       ...(representationId ? [{ definitionId: representationId, offsetTicks: 0, durationTicks }] : []),
       ...l.contexts].map(Object.freeze)) }))) };
 };
@@ -35,13 +44,13 @@ const reconcile = (old, latest, horizon) => {
     let end = Math.max(0,...committed.map(c=>c.offsetTicks+c.durationTicks));
     const iterations = [...committed];
     for (let i=committed.length;i<latest.count;i++) {
-      iterations.push({...child,offsetTicks:end});end+=child.durationTicks;
+      iterations.push({...child,relationshipId:child.entryId,entryId:child.entryId+':repeat:'+i,offsetTicks:end});end+=child.durationTicks;
     }
-    const layout=assembleLayout(iterations,latest.representationId);
+    const layout=assembleLayout(iterations,latest.representationId,latest.context);
     return Object.freeze({...latest,...layout,children:latest.children,iterations:Object.freeze(iterations.map(Object.freeze))});
   }
   if (old.type === 'repeat') old = {...old,children:old.iterations};
-  const key = c => c.structureId || `toy:${c.toyId}`;
+  const key = c => c.entryId;
   if (latest.type === 'timeline' && old.durationTicks > 0 && horizon >= old.durationTicks && latest.children.length) return old;
   const committed = old.children.filter(c => c.offsetTicks < horizon && latest.children.some(n => key(n) === key(c))).map(c => {
     const next = latest.children.find(n => key(n) === key(c));
@@ -58,16 +67,16 @@ const reconcile = (old, latest, horizon) => {
     return entry;
   });
   const eligible = latest.type === 'timeline' ? pending.filter(c=>c.offsetTicks >= horizon) : pending;
-  const layout = assembleLayout([...committed, ...eligible], latest.representationId);
+  const layout = assembleLayout([...committed, ...eligible], latest.representationId, latest.context);
   // An unreached entry moved into the submitted/past window waits for the next
   // activation; it cannot trigger a retroactive occurrence or restart this one.
   if (latest.type === 'timeline' && eligible.length < pending.length) layout.durationTicks=Math.max(layout.durationTicks,old.durationTicks);
   return Object.freeze({ ...latest, ...layout });
 };
-const freezeLayout = (type, children, definitions, representationId, count) => {
-  if (type === 'repeat' && children.length > 1) throw new Error('Repeat requires at most one child');
+const freezeLayout = (type, children, definitions, representationId, count, context, previous) => {
+  if ((type === 'repeat' || isModifier(type)) && children.length > 1) throw new Error(logicNodeLabel(type)+' requires at most one child');
   let offsetTicks = 0, durationTicks = 0;
-  const leaves = [];
+  const slots = new Map(), available = [...(previous?.children || [])], usedIds = new Set();
   const layout = children.map(child => {
     const structureId = child.structureId || (child.childId && definitions.has(String(child.childId)) ? String(child.childId) : null);
     const toyId = child.toyId ?? child.childId;
@@ -75,38 +84,49 @@ const freezeLayout = (type, children, definitions, representationId, count) => {
     if (child.structureId && !nested) throw new Error(`Unknown child structure: ${child.structureId}`);
     const length = nested?.durationTicks ?? Math.max(1, tick(child.durationTicks) || TICKS_PER_BAR);
     const offset = type === 'timeline' ? tick(child.offsetTick ?? child.offsetTicks) : type === 'together' ? 0 : offsetTicks;
-    const entry = Object.freeze({...(nested ? { structureId: nested.id, offsetTicks: offset, durationTicks: length, definition: nested }
+    const sourceId = nested?.id || String(toyId);
+    const ordinal = slots.get(sourceId) || 0; slots.set(sourceId, ordinal + 1);
+    // Reuse authored slots when callers omit IDs. Timeline offsets disambiguate
+    // duplicate references; explicit entryId is preferred for arbitrary moves.
+    const candidates = available.filter(c => (c.structureId || c.toyId) === sourceId);
+    const matched = candidates.find(c => type === 'timeline' && c.offsetTicks === offset)
+      || candidates.find(c => JSON.stringify(c.context) === JSON.stringify(normalizeContext(child.context))) || candidates[0];
+    let entryId = String(child.entryId ?? child.id ?? matched?.entryId ?? `slot:${sourceId}:${ordinal}`);
+    if (child.entryId == null && child.id == null && !matched) {
+      let suffix = ordinal;
+      while (usedIds.has(entryId) || available.some(c => c.entryId === entryId)) entryId = `slot:${sourceId}:${++suffix}`;
+    }
+    const previousSlot = available.findIndex(c => c.entryId === entryId);
+    if (previousSlot >= 0) available.splice(previousSlot, 1);
+    usedIds.add(entryId);
+    const entry = Object.freeze({entryId, context: normalizeContext(child.context), ...(nested ? { structureId: nested.id, offsetTicks: offset, durationTicks: length, definition: nested }
       : { toyId: String(toyId), offsetTicks: offset, durationTicks: length }),
       ...(type === 'timeline' ? {childId:nested?.id || String(toyId),offsetTick:offset} : {})});
-    if (nested) for (const leaf of nested.leafLayout) leaves.push({ ...leaf,
-      offsetTicks: offset + leaf.offsetTicks,
-      contexts: leaf.contexts.map(c => ({ ...c, offsetTicks: c.offsetTicks + offset })) });
-    else leaves.push({ toyId: entry.toyId, offsetTicks: offset, durationTicks: length, contexts: [] });
     offsetTicks += length;
     return entry;
   });
+  if (new Set(layout.map(c => c.entryId)).size !== layout.length) throw new Error('Duplicate Structure entry ID');
   durationTicks=structureDuration(type,layout,type==='repeat'?1:count);
   if (type === 'repeat') {
-    const iterations = Array.from({length:layout.length ? count : 0},(_,i)=>({...layout[0],offsetTicks:i*durationTicks}));
-    const repeated=assembleLayout(iterations,representationId);
+    const iterations = Array.from({length:layout.length ? count : 0},(_,i)=>({...layout[0],relationshipId:layout[0].entryId,entryId:layout[0].entryId+':repeat:'+i,offsetTicks:i*durationTicks}));
+    const repeated=assembleLayout(iterations,representationId,context);
     return Object.freeze({...repeated,children:Object.freeze(layout),iterations:Object.freeze(iterations.map(Object.freeze))});
   }
-  const leafLayout = leaves.map(leaf => Object.freeze({ ...leaf, contexts: Object.freeze([
-    ...(representationId ? [{ definitionId: representationId, offsetTicks: 0, durationTicks }] : []),
-    ...leaf.contexts,
-  ].map(c => Object.freeze(c))) }));
+  const assembled = assembleLayout(layout, representationId, context);
+  const leafLayout = assembled.leafLayout;
   return Object.freeze({ children: Object.freeze(layout), leafLayout: Object.freeze(leafLayout), durationTicks });
 };
 
 // Tick-domain structure state only. It never controls or rebases a transport.
 export function createStructureRuntime() {
+  const runtimeId = runtimeSerial++;
   const definitions = new Map();
   const instances = new Map();
   const timelines = new Map();
   let serial = 1;
 
-  function defineStructure(id, type, children, currentTick = 0, { representationId = null, transportId = MAIN_TRANSPORT_ID, count = 2 } = {}) {
-    if (!STRUCTURE_TYPES.includes(type)) throw new Error(`Unsupported structure type: ${type}`);
+  function defineNode(id, type, children, currentTick = 0, { representationId = null, transportId = MAIN_TRANSPORT_ID, count = 2, context = null, semitones = 0, chords, stepTicks = 384 } = {}) {
+    if (!LOGIC_NODE_TYPES.includes(type)) throw new Error(`Unsupported structure type: ${type}`);
     count = type === 'repeat' ? normalizeRepeatCount(count) : null;
     id = String(id);
     const visits = new Set();
@@ -121,10 +141,15 @@ export function createStructureRuntime() {
       const domain = child.transportId ?? definitions.get(String(child.structureId || child.childId))?.transportId;
       if (domain && domain !== transportId) throw new Error('Mixed transport Structure rejected');
     }
-    const layout = freezeLayout(type, children, definitions, representationId, count);
+    const baseContext = normalizeContext(context);
+    semitones = type === 'transpose' ? normalizeSemitones(semitones) : null;
+    chords = type === 'chord-progression' ? normalizeChords(chords) : null;
+    stepTicks = type === 'chord-progression' ? normalizeChordStep(stepTicks) : null;
+    context = type === 'transpose' ? composeContext(baseContext,{transposeSemitones:semitones}) : type === 'chord-progression' ? composeContext(baseContext,{harmony:{progressionId:id,originTick:0,stepTicks,chords}}) : baseContext;
     const previous = definitions.get(id);
-    if (previous?.transportId === transportId && previous?.type === type && previous.count === count && previous.representationId === representationId && JSON.stringify(previous.children) === JSON.stringify(layout.children)) return previous;
-    const definition = Object.freeze({ id, type, transportId, representationId, count,
+    const layout = freezeLayout(type, children, definitions, representationId, count, context, previous);
+    if (previous?.transportId === transportId && previous?.type === type && previous.count === count && previous.semitones === semitones && JSON.stringify(previous.baseContext) === JSON.stringify(baseContext) && previous.representationId === representationId && JSON.stringify(previous.context) === JSON.stringify(context) && JSON.stringify(previous.children) === JSON.stringify(layout.children)) return previous;
+    const definition = Object.freeze({ id, type, kind:isModifier(type)?'modifier':'structure', transportId, representationId, count, context, baseContext, semitones, chords, stepTicks,
       revision: (previous?.revision ?? -1) + 1, ...layout });
     definitions.set(id, definition);
     const instance = instances.get(id);
@@ -145,21 +170,29 @@ export function createStructureRuntime() {
     // A child edit updates all containing definitions through their existing
     // references, so future repetitions never retain a whole-loop snapshot.
     for (const parent of [...definitions.values()]) if (parent.id !== id && parent.transportId === transportId && parent.children.some(c=>c.structureId === id)) {
-      defineStructure(parent.id,parent.type,parent.children,currentTick,
-        {representationId:parent.representationId,transportId:parent.transportId,count:parent.count});
+      defineNode(parent.id,parent.type,parent.children,currentTick,
+        {representationId:parent.representationId,transportId:parent.transportId,count:parent.count,context:parent.baseContext,semitones:parent.semitones,chords:parent.chords,stepTicks:parent.stepTicks});
     }
     return definition;
   }
+  function defineStructure(id, type, children, currentTick = 0, options = {}) {
+    if (!STRUCTURE_TYPES.includes(type)) throw new Error('Expected a Structure definition');
+    return defineNode(id,type,children,currentTick,options);
+  }
+  function defineModifier(id, type, children, currentTick = 0, options = {}) {
+    if (!MODIFIER_TYPES.includes(type)) throw new Error('Expected a modifier definition');
+    return defineNode(id,type,Array.isArray(children)?children:children?[children]:[],currentTick,options);
+  }
   function defineSequence(id, children, currentTick = 0) { return defineStructure(id, 'sequence', children, currentTick); }
 
-  function startSequence(id, requestedTick, { quantize = true, retrigger = false } = {}) {
+  function startSequence(id, requestedTick, { quantize = true, retrigger = false, context = null } = {}) {
     const definition = definitions.get(String(id));
     if (!definition) throw new Error(`Unknown Sequence: ${id}`);
     const old = instances.get(definition.id);
     if (old?.active && !retrigger) return old;
     const startTick = quantize ? nextBeatTick(requestedTick, { strict: true }) : tick(requestedTick);
-    const instance = { id: `structure:${serial++}`, definitionId: definition.id,
-      transportId: definition.transportId, startTick, active: true,
+    const instance = { id: `structure:${runtimeId}:${serial++}`, definitionId: definition.id,
+      transportId: definition.transportId, startTick, active: true, context: normalizeContext(context),
       generation: (old?.generation ?? -1) + 1, scheduledUntilTick: startTick };
     instances.set(definition.id, instance);
     timelines.set(definition.id, [{ startTick, definition }]);
@@ -176,6 +209,7 @@ export function createStructureRuntime() {
     if (to <= from) return [];
     const epochs = timelines.get(instance.definitionId);
     const turns = [];
+    const authoredLeaves = new Map(definitions.get(instance.definitionId)?.leafLayout.map(leaf => [authoredPathKey(leaf),leaf]) || []);
     for (let e = 0; e < epochs.length; e++) {
       const epoch = epochs[e];
       const effective = epoch.effectiveTick ?? epoch.startTick;
@@ -187,11 +221,17 @@ export function createStructureRuntime() {
       let cycle = Math.floor(Math.max(0, begin - epoch.startTick) / layout.durationTicks);
       for (let cycleStart = epoch.startTick + cycle * layout.durationTicks; cycleStart < end; cycle++, cycleStart += layout.durationTicks) {
         for (const child of layout.leafLayout) {
+          // Submitted timing survives edits, but removed execution paths cannot
+          // keep producing notes just because an older epoch retained them.
+          if (!authoredLeaves.has(authoredPathKey(child))) continue;
           const startTick = cycleStart + child.offsetTicks;
           const endTick = startTick + child.durationTicks;
           if (startTick >= end || endTick <= begin) continue;
           turns.push(Object.freeze({
-            id: `${instance.id}|${startTick}|${child.toyId}`,
+            id: JSON.stringify([instance.id, startTick, child.toyId, child.structuralPath]),
+            occurrenceId: JSON.stringify([instance.id, startTick, child.toyId, child.structuralPath]),
+            structuralPath: child.structuralPath, structureDefinitionIds: child.definitionIds, generation: instance.generation,
+            context: composeContext(instance.context, occurrenceContext(authoredLeaves.get(authoredPathKey(child)).context,child.context,cycleStart)),
             structureInstanceId: instance.id, definitionId: instance.definitionId,
             transportId: instance.transportId, toyId: child.toyId,
             startTick, endTick, durationTicks: child.durationTicks,
@@ -224,7 +264,7 @@ export function createStructureRuntime() {
     if (!parent || !definition) return null;
     let instance = instances.get(id);
     if (!instance || instance.parentInstanceId !== parent.id) {
-      instance = { id: `structure:${serial++}`, definitionId: id, transportId: parent.transportId,
+      instance = { id: `structure:${runtimeId}:${serial++}`, definitionId: id, transportId: parent.transportId,
         startTick: activationTick, active: true, generation: (instance?.generation ?? -1) + 1,
         scheduledUntilTick: parent.scheduledUntilTick, parentInstanceId: parent.id, parentDefinitionId };
       instances.set(id, instance);
@@ -242,7 +282,8 @@ export function createStructureRuntime() {
         return Object.freeze({ ...instance, currentLocalTick: turn ? tick(currentTick) - turn.startTick + turn.offsetTicks : null,
           currentStructureLocalTick: context ? tick(currentTick) - context.startTick : null,
           currentChild: turn?.toyId ?? null, currentChildren: Object.freeze(activeTurns.filter(t => !instance.parentDefinitionId || t.structureContexts.some(c => c.definitionId === instance.definitionId)).map(t => t.toyId)),
-          currentChildStartTick: turn?.startTick ?? null });
+          currentChildStartTick: turn?.startTick ?? null,
+          harmonicOccurrences: Object.freeze(activeTurns.filter(t=>!instance.parentDefinitionId||t.structureContexts.some(c=>c.definitionId===instance.definitionId)).map(t=>Object.freeze({occurrenceId:t.occurrenceId,toyId:t.toyId,harmony:t.context.harmony,resolvedChord:resolveChordAtTick(t.context,currentTick)}))) });
       })),
     });
   }
@@ -250,7 +291,8 @@ export function createStructureRuntime() {
     for (const instance of instances.values()) { instance.active = false; instance.generation++; }
     definitions.clear(); instances.clear(); timelines.clear();
   }
-  return { reset, defineSequence, defineStructure, startSequence, startStructure: startSequence, turnsInWindow, commitThrough, remove, bindChildInstance,
+  return { reset, defineSequence, defineStructure, defineModifier, startSequence, startStructure: startSequence, turnsInWindow, commitThrough, remove, bindChildInstance,
     getDefinition: id => definitions.get(String(id)) ?? null,
-    getInstance: id => instances.get(String(id)) ?? null, debugSnapshot };
+    getInstance: id => instances.get(String(id)) ?? null,
+    resolveChordsAtTick: (id, atTick) => turnsInWindow(id,atTick,Number(atTick)+1).map(turn=>Object.freeze({occurrenceId:turn.occurrenceId,toyId:turn.toyId,harmony:turn.context.harmony,chord:resolveChordAtTick(turn.context,atTick)})), debugSnapshot };
 }

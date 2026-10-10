@@ -1,3 +1,6 @@
+import { createChordProgressionEditor } from './chord-progression-editor.js';
+import { progressionLabel, chordStepLabel } from './chord-progression.js';
+import { isModifier, logicNodeLabel, signedSemitones } from './modifier-types.js';
 import { GRAPH_ENDPOINT_DIAMETER, GRAPH_ENDPOINT_HIT_DIAMETER, GRAPH_MIDPOINT_DIAMETER, GRAPH_MIDPOINT_HIT_DIAMETER } from './graph-visuals.js';
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 import { HEARTBEAT_OUTPUT_OFFSET } from './graph-placement.js';
@@ -54,6 +57,17 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     .connection-menu button:hover,.connection-menu button[aria-pressed=true] { background:#344c72; }
     .connection-menu input { display:block; box-sizing:border-box; width:115px; margin:4px 0; padding:6px 10px; color:inherit; background:#263c59; border:1px solid #718fc2; border-radius:6px; }
     .connection-layer .structure-card { fill:#192f48; stroke:#7eb9e9; stroke-width:2; pointer-events:all; cursor:grab; touch-action:none; }
+    .connection-layer .structure-card.transpose, .connection-layer .structure-card.chord-progression { fill:#243b33; stroke:#88d9b2; }
+    .progression-controls { font:14px system-ui; color:#e8f1ff; pointer-events:auto; padding:0 12px; }
+    .progression-summary { min-height:28px; text-align:center; font-weight:600; white-space:normal; overflow-wrap:anywhere; }
+    .progression-row { display:flex; gap:6px; align-items:center; height:48px; }
+    .progression-row span { width:16px; }
+    .progression-controls select, .progression-controls button { min-height:44px; border:1px solid #88d9b2; border-radius:6px; background:#315849; color:#fff; font:14px system-ui; padding:4px 8px; }
+    .progression-controls button:disabled { opacity:.35; }
+    .progression-controls label { display:block; margin-top:4px; }
+    .connection-layer .modifier-step { fill:#315849; stroke:#88d9b2; pointer-events:all; cursor:pointer; touch-action:none; }
+    .connection-layer .modifier-step[aria-disabled=true] { opacity:.35; }
+    .connection-menu .modifier-choice { color:#a2ebc4; border-top:1px solid #476455; }
     .connection-layer .structure-card.together { fill:#30254c; stroke:#b7a0f0; }
     .connection-layer .structure-card.selected { stroke:#fff; }
     .connection-layer .structure-name { fill:#e8f1ff; font-family:system-ui; font-weight:600; pointer-events:none; }
@@ -158,7 +172,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       menu.append(b);
     };
     if (kind === 'sequence' || kind === 'transport') {
-      for (const type of STRUCTURE_TYPES) button(structureTypeLabel(type), () => {
+      if (!isModifier(s?.type)) for (const type of STRUCTURE_TYPES) button(structureTypeLabel(type), () => {
         if (s && structureToys.conversion(s.id,type).lossy) {
           menu.replaceChildren();
           const explanation=document.createElement('div');explanation.textContent=structureToys.conversion(s.id,type).message;menu.append(explanation);
@@ -168,6 +182,12 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         else if (s) structureToys.setType(s.id, type);
         else structureToys.promote(connectionId, type);
       }, currentType === type);
+    }
+    if (c) {
+      for(const type of ['transpose','chord-progression']) {
+        button(logicNodeLabel(type), () => structureToys.promote(connectionId,type));
+        menu.children[menu.children.length-1].className='modifier-choice';
+      }
     }
     if (s?.type === 'repeat') {
       const count=document.createElement('input');count.type='number';count.min='1';count.max=String(MAX_REPEAT_COUNT);count.value=String(s.count);
@@ -195,6 +215,18 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const moveHandle = svgNode('rect', { class: 'structure-move', rx: 3, role: 'button', 'aria-label': 'Move structure' });
     const minimise = svgNode('rect', {class:'structure-minimise',rx:4,role:'button',tabindex:0,'aria-label':'Collapse structure'});
     const minimiseLabel=svgNode('text', {class:'structure-name','text-anchor':'middle'});
+    const transposeControls=svgNode('g'), transposeSteps=[];
+    for (const delta of [-1,1]) {
+      const button=svgNode('rect',{class:'modifier-step',rx:8,role:'button',tabindex:0,
+        'aria-label':delta<0?'Lower transpose by one semitone':'Raise transpose by one semitone'});
+      const label=svgNode('text',{class:'structure-name','text-anchor':'middle'});label.textContent=delta<0?'−':'+';
+      const change=e=>{e.preventDefault();e.stopPropagation();const current=structureToys.get(s.id);
+        if(current?.type==='transpose') {structureToys.setSemitones(s.id,current.semitones+delta);render();}};
+      button.addEventListener('pointerdown',change);
+      button.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')change(e);});
+      transposeControls.append(button,label);transposeSteps.push({button,label,delta});
+    }
+    const progressionEditor=createChordProgressionEditor(structureToys,s.id,()=>render(),()=>{closeMenu();selectStructure(s.id);render();});
     const tracksGroup=svgNode('g'),tracks=new Map();
     const choose = e => {
       e.preventDefault(); e.stopPropagation(); closeMenu();selectStructure(s.id);
@@ -223,8 +255,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const toggle=e=>{e.preventDefault();e.stopPropagation();closeMenu();const current=structureToys.get(s.id);structureToys.setCollapsed(s.id,!current.collapsed);if(!current.collapsed)selectedStructure=null;else selectStructure(s.id);render();};
     minimise.addEventListener('pointerdown',toggle);
     minimise.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')toggle(e);});
-    group.append(rect, activation, typeButton, name, count, tracksGroup, moveHandle,minimise,minimiseLabel); cardsGroup.append(group);
-    return { group, rect, activation, typeButton, name, count, moveHandle, minimise,minimiseLabel, tracksGroup, tracks };
+    group.append(rect, activation, typeButton, name, count, transposeControls, progressionEditor.object, tracksGroup, moveHandle,minimise,minimiseLabel); cardsGroup.append(group);
+    return { group, rect, activation, typeButton, name, count, transposeControls, transposeSteps, progressionEditor, moveHandle, minimise,minimiseLabel, tracksGroup, tracks };
   }
   function makeEdge(c) {
     const group = svgNode('g', { 'data-connection-id': c.id });
@@ -289,18 +321,39 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       for(const attr of ['x','y','width','height'])set(card.activation,attr,card.rect.getAttribute(attr));
       set(card.activation,'opacity',flash);set(card.activation,'stroke-width',(3+5*flash)*scale);
       card.activation.style.filter='drop-shadow(0 0 '+10*scale+'px #d9e8ff)';
-      set(card.rect, 'aria-label', `${structureTypeLabel(s.type)} structure`);
+      set(card.rect, 'aria-label', `${logicNodeLabel(s.type)} ${isModifier(s.type)?'modifier':'structure'}`);
       set(card.rect, 'aria-expanded', !s.collapsed);
-      set(card.group,'data-collapsed',!!s.collapsed);
-      set(card.typeButton,'display',s.collapsed?'none':'inline');
+      set(card.group,'data-collapsed',!!s.collapsed);set(card.group,'data-node-kind',isModifier(s.type)?'modifier':'structure');
+      set(card.typeButton,'display',s.collapsed||isModifier(s.type)?'none':'inline');
       set(card.typeButton,'x',pos.x+36*scale);set(card.typeButton,'y',pos.y+5*scale);
       set(card.typeButton,'width',(width-72)*scale);set(card.typeButton,'height',30*scale);
       set(card.name, 'x', pos.x + width/2 * scale); set(card.name, 'y', pos.y + 30 * scale);
       set(card.name, 'font-size', (s.collapsed?14:18) * scale);
-      const label = s.collapsed ? (s.type==='repeat'?`×${s.count}`:s.type==='sequence'?'Seq':structureTypeLabel(s.type)) : `${structureTypeLabel(s.type)} ▾`;
+      const label = s.type==='chord-progression' ? (s.collapsed ? 'Chords: '+progressionLabel(s.chords) : 'Chord Progression') : s.type==='transpose' ? (s.collapsed?'Tr '+signedSemitones(s.semitones):'Transpose') : s.collapsed ? (s.type==='repeat'?`×${s.count}`:s.type==='sequence'?'Seq':structureTypeLabel(s.type)) : `${structureTypeLabel(s.type)} ▾`;
       if (card.name.textContent !== label) card.name.textContent = label;
-      set(card.count,'display',s.type === 'repeat'&&!s.collapsed?'inline':'none');
+      set(card.count,'display',(s.type === 'repeat'||s.type==='transpose')&&!s.collapsed?'inline':'none');
+      set(card.count,'class',s.type==='transpose'?'structure-name modifier-value':'structure-name structure-count');
+      set(card.count,'role',s.type==='transpose'?'status':'button');
+      set(card.count,'tabindex',s.type==='transpose'?-1:0);
+      set(card.count,'aria-label',s.type==='transpose'?'Transpose '+signedSemitones(s.semitones)+' semitones':'Edit repeat count');
       set(card.count,'x',pos.x+width/2*scale);set(card.count,'y',pos.y+85*scale);set(card.count,'font-size',24*scale);
+      set(card.progressionEditor.object,'display',s.type==='chord-progression'&&!s.collapsed?'inline':'none');
+      if(s.type==='chord-progression'){
+        set(card.progressionEditor.object,'x',0);set(card.progressionEditor.object,'y',0);
+        set(card.progressionEditor.object,'width',width-24);set(card.progressionEditor.object,'height',structureToyHeight(s)-48);
+        set(card.progressionEditor.object,'transform',`translate(${pos.x+12*scale} ${pos.y+44*scale}) scale(${scale})`);
+        card.progressionEditor.render(s);
+        set(card.name,'font-size',s.collapsed?(s.chords.length>6?12:14)*scale:16*scale);
+        if(s.collapsed){set(card.count,'display','inline');set(card.count,'x',pos.x+width/2*scale);set(card.count,'y',pos.y+58*scale);set(card.count,'font-size',14*scale);set(card.count,'class','structure-name');set(card.count,'role','status');set(card.count,'aria-label','Chord step duration');set(card.count,'tabindex',-1);card.count.textContent=chordStepLabel(s.stepTicks);}
+      }
+      set(card.transposeControls,'display',s.type==='transpose'&&!s.collapsed?'inline':'none');
+      if(s.type==='transpose')card.count.textContent=signedSemitones(s.semitones);
+      for(const control of card.transposeSteps){
+        const x=pos.x+(control.delta<0?32:148)*scale;
+        set(control.button,'x',x);set(control.button,'y',pos.y+57*scale);set(control.button,'width',44*scale);set(control.button,'height',44*scale);
+        set(control.button,'aria-disabled',control.delta<0?s.semitones<=-12:s.semitones>=12);
+        set(control.label,'x',x+22*scale);set(control.label,'y',pos.y+85*scale);set(control.label,'font-size',24*scale);
+      }
       if(s.type === 'repeat')card.count.textContent=`× ${s.count}`;
       const entries=s.type==='timeline'&&!s.collapsed?structureToys.getTimelineEntries(s.id):[];
       const endTick=Math.max(TICKS_PER_BEAT*4,...entries.map(e=>e.offsetTick+e.durationTicks));

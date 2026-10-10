@@ -6,7 +6,7 @@ export function getActivationConnections(model, turn, previous) {
   const edges=[],seen=new Set();let id=turn.toyId;
   while(id&&!seen.has(id)){
     seen.add(id);const edge=model.getParent(id);if(!edge)break;
-    const structure=model.getObject(id)?.structure,context=structure&&contexts.get(structure.definitionId);
+    const structure=model.getObject(id)?.modifier || model.getObject(id)?.structure,context=structure&&contexts.get(structure.definitionId);
     if(id===turn.toyId || context&&old.get(structure.definitionId)?.startTick!==context.startTick)edges.push(edge);
     id=edge.from.objectId;
   }

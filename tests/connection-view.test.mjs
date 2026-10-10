@@ -53,7 +53,7 @@ for (const [sourceStructure,targetStructure] of [[false,false],[false,true],[tru
       transform={scale:.5,tx:40,ty:30};view.render();
       assert.equal(Number(midpoint.getAttribute('cx')),beforePoint.x*.5+40);assert.equal(Number(midpoint.getAttribute('cy')),beforePoint.y*.5+30);
       midpoint.dispatchEvent(event('pointerdown',350,200));
-      assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Timeline','Disconnect']);
+      assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Timeline','Transpose','Chord Progression','Disconnect']);
       const observed=[];const stop=model.subscribe(e=>{if(e.type==='change')observed.push(model.list());});
       menu.children.find(n=>n.textContent==='Together').dispatchEvent({type:'click',stopPropagation(){}});stop();
       const promoted=toys.list().find(s=>!['A','B'].includes(s.id));assert.ok(promoted);assert.equal(promoted.type,'together');
@@ -238,7 +238,7 @@ test('midpoint relationship menu promotes Together, switches the same card and e
     view.render(); view.select(edge.id);
     const menu=viewport.children.find(n=>n.className==='connection-menu');
     assert.equal(menu.hidden,false);
-    assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Timeline','Disconnect']);
+    assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Timeline','Transpose','Chord Progression','Disconnect']);
     menu.children.find(n=>n.textContent==='Sequence').dispatchEvent({type:'click',stopPropagation(){}});
     const explicit=toys.list()[0];
     assert.equal(explicit.type,'sequence');assert.equal(explicit.provenance,'explicit');

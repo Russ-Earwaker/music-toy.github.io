@@ -1,24 +1,49 @@
 import { TICKS_PER_BAR, nextBeatTick } from './audio-core.js';
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
-
+import { normalizeContext } from './playback-context.js';
+// Toy lookup selects the visible playhead only. All audio occurrences coexist.
 const instancesByToyId = new Map();
+const occurrences = new Map();
+const invalidationListeners = new Set();
+export const getPlaybackOccurrence = id => occurrences.get(String(id)) || null;
+export const getPlaybackOccurrences = toyId => [...occurrences.values()].filter(i => toyId == null || i.toyId === String(toyId));
+export function onPlaybackOccurrenceInvalidated(listener) {
+  invalidationListeners.add(listener);
+  return () => invalidationListeners.delete(listener);
+}
+export function invalidatePlaybackOccurrence(id) {
+  const instance = occurrences.get(String(id));
+  if (!instance) return;
+  instance.active = false; instance.generation++;
+  occurrences.delete(instance.occurrenceId);
+  for (const listener of invalidationListeners) { try { listener(instance.occurrenceId); } catch {} }
+}
+export function isPlaybackOccurrenceValid(metadata) {
+  if (!metadata?.occurrenceId) return true; // unscheduled UI auditions
+  const instance = getPlaybackOccurrence(metadata.occurrenceId);
+  return !!instance?.active && instance.generation === metadata.generation;
+}
 let instanceSequence = 1;
 
 const cleanTick = value => Math.max(0, Math.round(Number(value) || 0));
 const cleanLoop = value => Math.max(1, Math.round(Number(value) || TICKS_PER_BAR));
 
-function makeInstance(toyId, { startTick = 0, loopLengthTicks = TICKS_PER_BAR, active = true, generation = 0 } = {}, transportId = MAIN_TRANSPORT_ID) {
-  return {
-    id: `playback:${String(toyId)}:${instanceSequence++}`,
+function makeInstance(toyId, { startTick = 0, loopLengthTicks = TICKS_PER_BAR, active = true, generation = 0, occurrenceId = null, context = null } = {}, transportId = MAIN_TRANSPORT_ID) {
+  const id = occurrenceId || `playback:${String(toyId)}:${instanceSequence++}`;
+  const instance = {
+    id, occurrenceId: id, context: normalizeContext(context),
     toyId: String(toyId),
     transportId,
     active: !!active,
     startTick: cleanTick(startTick),
     loopLengthTicks: cleanLoop(loopLengthTicks),
+    durationTicks: cleanLoop(loopLengthTicks),
     scheduledUntilTick: cleanTick(startTick),
     definitionRevisionSeen: -1,
     generation: Math.max(0, Math.trunc(Number(generation) || 0)),
   };
+  occurrences.set(id, instance);
+  return instance;
 }
 
 export function getPlaybackInstance(toyId) {
@@ -33,6 +58,7 @@ export function ensurePlaybackInstance(toyId, options = {}) {
     instancesByToyId.set(key, instance);
   } else if (options.loopLengthTicks != null) {
     instance.loopLengthTicks = cleanLoop(options.loopLengthTicks);
+    instance.durationTicks = instance.loopLengthTicks;
   }
   return instance;
 }
@@ -51,7 +77,8 @@ export function activatePlaybackInstance(toyId, requestedTick, {
   const startTick = quantize ? nextBeatTick(requestedTick, { strict: true }) : cleanTick(requestedTick);
   const generation = (existing?.generation || 0) + (existing ? 1 : 0);
   // Replacement instances inherit ownership, including retriggers and chain turns.
-  const instance = makeInstance(key, { startTick, loopLengthTicks, active: true, generation }, existing?.transportId ?? MAIN_TRANSPORT_ID);
+  const instance = makeInstance(key, { startTick, loopLengthTicks, active: true, generation, context: existing?.context }, existing?.transportId ?? MAIN_TRANSPORT_ID);
+  if (existing) invalidatePlaybackOccurrence(existing.occurrenceId);
   instancesByToyId.set(key, instance);
   return instance;
 }
@@ -71,8 +98,7 @@ export function activatePlaybackInstanceForChainTurn(toyId, handoffTick, {
 export function deactivatePlaybackInstance(toyId) {
   const instance = getPlaybackInstance(toyId);
   if (!instance) return null;
-  instance.active = false;
-  instance.generation += 1;
+  invalidatePlaybackOccurrence(instance.occurrenceId);
   return instance;
 }
 
@@ -80,22 +106,37 @@ export function deactivatePlaybackInstance(toyId) {
 export function rebasePlaybackTransport(toyId, transportId, startTick = 0) {
   const old = getPlaybackInstance(toyId);
   if (!old) return null;
-  old.active = false;
+  invalidatePlaybackOccurrence(old.occurrenceId);
   const instance = makeInstance(toyId, { startTick, loopLengthTicks: old.loopLengthTicks,
-    generation: old.generation + 1, active: !!transportId }, transportId);
+    generation: old.generation + 1, active: !!transportId, context: old.context }, transportId);
   instancesByToyId.set(String(toyId), instance);
   return instance;
 }
 
 // Prepare future turns without replacing a toy's currently visible occurrence.
 export function createPlaybackInstanceForStructureTurn(turn) {
-  return { ...makeInstance(turn.toyId, { startTick: turn.startTick,
-    loopLengthTicks: turn.durationTicks }, turn.transportId),
-    structureInstanceId: turn.structureInstanceId, structureTurnId: turn.id };
+  const instance = makeInstance(turn.toyId, { startTick: turn.startTick,
+    loopLengthTicks: turn.durationTicks, occurrenceId: turn.occurrenceId || turn.id,
+    generation: turn.generation, context: turn.context }, turn.transportId);
+  Object.assign(instance, { structureInstanceId: turn.structureInstanceId, structureTurnId: turn.id, structuralPath: turn.structuralPath });
+  return instance;
 }
 
 export function adoptPlaybackInstance(instance) {
+  occurrences.set(instance.occurrenceId, instance);
   instancesByToyId.set(instance.toyId, instance);
+  return instance;
+}
+
+// Leaving a Structure creates standalone runtime state; it must not retain the
+// removed path's identity, modifier context, or cancelled scheduler cursor.
+export function releasePlaybackInstance(toyId, { active = true } = {}) {
+  const old = getPlaybackInstance(toyId);
+  if (!old) return null;
+  invalidatePlaybackOccurrence(old.occurrenceId);
+  const instance = makeInstance(toyId, { startTick: old.startTick, loopLengthTicks: old.loopLengthTicks,
+    active, generation: old.generation + 1 }, old.transportId);
+  instancesByToyId.set(String(toyId), instance);
   return instance;
 }
 
@@ -155,15 +196,16 @@ export function getPlaybackStepEvents(instance, fromTick, toTick, steps = 8) {
 }
 
 export function removePlaybackInstance(toyId) {
+  for (const instance of getPlaybackOccurrences(toyId)) invalidatePlaybackOccurrence(instance.occurrenceId);
   return instancesByToyId.delete(String(toyId));
 }
 
 export function clearPlaybackInstances() {
-  for (const instance of instancesByToyId.values()) { instance.active = false; instance.generation++; }
+  for (const id of [...occurrences.keys()]) invalidatePlaybackOccurrence(id);
   instancesByToyId.clear();
 }
 
 export function clearPlaybackInstancesForTests() {
-  instancesByToyId.clear();
+  clearPlaybackInstances();
   instanceSequence = 1;
 }

@@ -12,15 +12,15 @@ test('Logic shares palette exclusivity, outside/Escape/New Creation dismissal an
  const context={document,window,CustomEvent,console,screenToWorld:p=>({x:p.x+500,y:p.y+300}),toggleHelp:()=>false,isHelpActive:()=>false,overviewMode:{isActive:()=>false},setTimeout,clearTimeout};
  vm.createContext(context);const source=readFileSync(new URL('../src/toy-spawner.js',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace('export const ToySpawner','const ToySpawner');vm.runInContext(source,context);
  document.querySelector('.toy-spawner-dock').getBoundingClientRect=()=>({left:1000});
- const created=[];window.ToySpawner.configureLogic({getCatalog:()=>['Sequence','Together','Repeat','Timeline','Heartbeat'].map(name=>({type:name.toLowerCase(),name})),create:(type,options)=>{created.push({type,options});return {};}});
+ const created=[];window.ToySpawner.configureLogic({getCatalog:()=>['Sequence','Together','Repeat','Timeline','Transpose','Chord Progression','Heartbeat'].map(name=>({type:name.toLowerCase().replace(' ','-'),name})),create:(type,options)=>{created.push({type,options});return {};}});
  const logic=document.querySelector('.toy-spawner-logic'),music=document.querySelector('.toy-spawner-toggle'),menu=document.querySelector('.toy-spawner-menu');
  assert.equal(logic.classList.contains('c-btn'),true);assert.ok(logic.querySelector('.c-btn-core').style['--c-btn-icon-url'].includes('T_ButtonLogic'));
- logic.dispatchEvent(event('click'));assert.equal(logic.getAttribute('aria-pressed'),'true');assert.deepEqual(walk(menu,n=>n.className==='toy-spawner-name').map(n=>n.textContent),['Sequence','Together','Repeat','Timeline','Heartbeat']);
+ logic.dispatchEvent(event('click'));assert.equal(logic.getAttribute('aria-pressed'),'true');assert.deepEqual(walk(menu,n=>n.className==='toy-spawner-name').map(n=>n.textContent),['Sequence','Together','Repeat','Timeline','Transpose','Chord Progression','Heartbeat']);
  music.dispatchEvent(event('click'));assert.equal(menu.classList.contains('open'),true);assert.equal(logic.getAttribute('aria-pressed'),'false');assert.equal(music.getAttribute('aria-pressed'),'true');
  logic.dispatchEvent(event('click'));document.dispatchEvent(event('pointerdown',0,0,{target:board}));assert.equal(menu.classList.contains('open'),false);
  logic.dispatchEvent(event('click'));document.dispatchEvent(event('keydown',0,0,{key:'Escape'}));assert.equal(menu.classList.contains('open'),false);
  logic.dispatchEvent(event('click'));window.dispatchEvent(new CustomEvent('scene:new'));assert.equal(menu.classList.contains('open'),false);
- for(const type of ['sequence','together','repeat','timeline','heartbeat']){logic.dispatchEvent(event('click'));const card=walk(menu,n=>n.dataset.toyType===type)[0];card.dispatchEvent(event('click'));assert.equal(created.at(-1).type,type);assert.equal(created.at(-1).options.centerX,1000);assert.equal(created.at(-1).options.centerY,700);assert.equal(menu.classList.contains('open'),false);}
+ for(const type of ['sequence','together','repeat','timeline','transpose','chord-progression','heartbeat']){logic.dispatchEvent(event('click'));const card=walk(menu,n=>n.dataset.toyType===type)[0];card.dispatchEvent(event('click'));assert.equal(created.at(-1).type,type);assert.equal(created.at(-1).options.centerX,1000);assert.equal(created.at(-1).options.centerY,700);assert.equal(menu.classList.contains('open'),false);}
 });
 
 test('main Heartbeat has identity and life without duplicate controls; secondary retains controls and shared creation',()=>{

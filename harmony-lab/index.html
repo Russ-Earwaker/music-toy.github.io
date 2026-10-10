@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rhythmake Harmony Lab</title><link rel="stylesheet" href="../src/harmony-lab.css"></head>
+<body><header><p class="eyebrow">RHYTHMAKE · DEVELOPMENT BENCH</p><h1>Harmony Lab</h1><p>Compare the same musical idea before and after Follow Chords.</p></header>
+<p id="access">Available locally, or with <code>?debug=1</code>.</p>
+<main id="lab" hidden>
+<section class="transport" aria-label="Transport">
+<button id="play" disabled>Play</button><button id="start">Return to Start</button>
+<label>BPM <input id="bpm" type="number" min="30" max="200" value="120"></label>
+<span id="position">Bar 1 · Beat 1</span><button id="reset">Reset Test</button>
+</section>
+<section class="comparison" aria-label="A/B comparison"><div class="modes"><button id="original" aria-pressed="true">Original</button><button id="follow" aria-pressed="false">Follow Chords</button><button id="differences" aria-pressed="false">Differences</button></div>
+<div class="quick-compare"><button id="play-original" disabled>Play Original</button><button id="play-follow" disabled>Play Follow</button><button id="play-ab" disabled>A/B</button><button id="reset-comparison">Reset Comparison</button><span id="comparison-status"></span></div>
+<p id="selected-mode" role="status">Selected mode: Original</p><p id="mode-note">Authored notes. Same instruments, rhythm and velocity.</p><p class="now" id="chord">Now: C</p></section>
+<section class="card mix" aria-label="Listening mix">
+<div class="mix-heading"><h2>Listening mix</h2><label>Bass tone <select id="bass-instrument"><option value="retro-triangle">Triangle · clearer bass</option><option value="retro-square">Square · bright bass</option><option value="sine">Sine · soft bass</option></select></label></div>
+<div class="mix-parts">
+<div class="mix-part"><strong>Bass</strong><label>Bass level <input id="bass-level" type="range" min="0" max="100" value="60"></label><output id="bass-level-value" for="bass-level">60%</output><button id="bass-mute" aria-pressed="false">Mute Bass</button><button id="bass-solo" aria-pressed="false">Solo Bass</button></div>
+<div class="mix-part"><strong>Melody</strong><label>Melody level <input id="melody-level" type="range" min="0" max="100" value="100"></label><output id="melody-level-value" for="melody-level">100%</output><button id="melody-mute" aria-pressed="false">Mute Melody</button><button id="melody-solo" aria-pressed="true">Solo Melody</button></div>
+<div class="mix-part"><strong>Drums</strong><label>Drums level <input id="drums-level" type="range" min="0" max="100" value="45"></label><output id="drums-level-value" for="drums-level">45%</output><button id="drums-mute" aria-pressed="false">Mute Drums</button><button id="drums-solo" aria-pressed="false">Solo Drums</button></div>
+</div><p class="hint">Melody is the default focus. Solo Bass remains available as a reference. Solo and mute also focus the pitch readout. Mix and tone stay the same for Original / Follow; all parts keep time.</p>
+</section>
+<div class="grid">
+<section class="card"><h2>Source material</h2>
+<label>Test case <select id="preset"><option value="A">A — Chord-tone friendly</option><option value="B" selected>B — Scale melody</option><option value="C">C — Repeated-note motif</option><option value="D">D — Chromatic stress</option><option value="custom" disabled>Custom</option></select></label>
+<div class="source-row"><label>Bass notes <input id="bass-notes" value="C G E G" spellcheck="false" aria-describedby="note-help"></label>
+<label>Bass role <select id="bass-role"><option value="bass">Bass</option><option value="melody">Melody</option></select></label></div>
+<div class="source-row"><label>Melody notes <input id="melody-notes" value="E G A G E F# D C" spellcheck="false" aria-describedby="note-help"></label>
+<label>Melody role <select id="melody-role"><option value="melody">Melody</option><option value="bass">Bass</option></select></label></div>
+<p id="note-help" class="hint">One note per beat. Bass defaults to octave 3; melody to octave 4. Use F#, Bb3 or - for a rest. Drum kit: kick / snare / closed hat.</p>
+<p id="error" role="status"></p>
+<div class="source-proof"><strong>Authored source · unchanged by A/B</strong><p id="source-bass"></p><p id="source-melody"></p></div>
+</section>
+<section class="card"><h2>Chord Progression</h2><label>Progression preset <select id="progression-preset"><option value="0">C | Am | F | G</option><option value="1">C | F | G | C</option><option value="2">Am | F | C | G</option><option value="3">C | G | Am | F</option><option value="custom" disabled>Custom</option></select></label><div id="progression"></div>
+<label class="transpose">Transpose <input id="transpose" type="number" min="-12" max="12" value="0"><span>semitones</span></label>
+<p class="hint">Source → harmony adaptation → Transpose → final pitch. Edits affect future unscheduled notes.</p>
+</section>
+</div>
+<section class="log-export" aria-label="Log files"><button id="save-logs">Save logs to resources</button><button id="download-logs">Download logs JSON</button><span id="log-save-status" role="status">Logs include the current comparison, up to 4,096 pitched events.</span></section>
+<section class="card melody-evaluation" id="melody-evaluation">
+<h2>Melody preservation</h2>
+<div class="pattern-comparison"><div><strong>Source melody · unchanged</strong><p id="melody-source-pattern"></p></div><div><strong>Latest adapted pass · Follow</strong><p id="melody-adapted-pattern"></p></div></div>
+<p class="hint">Latest complete source-length pass, recorded from sounding Follow decisions; dots await the first complete pass and rests stay visible. Statistics count audible Follow melody notes only. Average movement is over changed notes. Relationships compare consecutive beats; rests break them. These are inspection aids, not a quality score.</p>
+<dl class="melody-stats"><div><dt>Notes played</dt><dd id="stats-played">0</dd></div><div><dt>Notes changed</dt><dd id="stats-changed">0</dd></div><div><dt>Change rate</dt><dd id="stats-rate">0%</dd></div><div><dt>Average movement</dt><dd id="stats-average">0</dd></div><div><dt>Largest movement</dt><dd id="stats-largest">0</dd></div><div><dt>Repeated notes preserved</dt><dd id="stats-repeated">0 / 0</dd></div><div><dt>Contour directions preserved</dt><dd id="stats-contour">0 / 0</dd></div><div><dt>New leaps &gt; 5 semitones</dt><dd id="stats-leaps">0</dd></div></dl>
+<h3>Latest melody decision</h3><dl class="melody-decision"><div><dt>Source</dt><dd id="melody-source">—</dd></div><div><dt>Chord</dt><dd id="melody-chord">—</dd></div><div><dt>Scale</dt><dd id="melody-scale">—</dd></div><div><dt>Adapted</dt><dd id="melody-adapted">—</dd></div><div><dt>Movement</dt><dd id="melody-movement">—</dd></div><div><dt>Previous adapted note</dt><dd id="melody-previous">—</dd></div><div><dt>Contour decision</dt><dd id="melody-contour">—</dd></div><div><dt>Final after Transpose</dt><dd id="melody-final">—</dd></div></dl>
+<h3>Follow melody history · latest 64</h3><p id="difference-note" class="hint">Choose Differences to highlight harmony changes. Transpose is excluded from movement.</p>
+<div class="table-wrap"><table><thead><tr><th>Tick</th><th>Source</th><th>Adapted</th><th>Changed?</th><th>Movement</th><th>Chord</th></tr></thead><tbody id="melody-events"></tbody></table></div>
+</section>
+<section class="card decisions"><h2>Latest sounding pitched note</h2><p id="decision-status" class="hint">Press Play to inspect pitch decisions.</p>
+<dl id="decision"><div><dt>Source</dt><dd id="source">—</dd></div><div><dt>Role</dt><dd id="role">—</dd></div><div><dt>Chord</dt><dd id="resolved-chord">—</dd></div><div><dt>Adapted</dt><dd id="adapted">—</dd></div><div><dt>Transpose</dt><dd id="offset">—</dd></div><div><dt>Final</dt><dd id="final">—</dd></div></dl>
+<details><summary>Recent pitched events · latest 24</summary><div class="table-wrap"><table><thead><tr><th>Tick</th><th>Part / Mode</th><th>Role</th><th>Source</th><th>Chord</th><th>Adapted</th><th>Transpose</th><th>Final</th></tr></thead><tbody id="events"></tbody></table></div></details>
+</section>
+<aside class="card guidance"><h2>Listen for</h2><ul><li>Is the tune still recognisable?</li><li>Are compatible notes being left alone?</li><li>Are changed notes moving by the smallest useful amount?</li><li>Do repeated notes stay repeated?</li><li>Is the contour preserved?</li><li>Are new large jumps introduced?</li><li>Does a chord change cause an awkward melodic jump?</li></ul><p><strong>Bass:</strong> clear chord movement, unchanged rhythm, no strange register jumps.</p><p><strong>Melody:</strong> recognisable motif, unchanged compatible notes, minimal corrections and preserved contour.</p><p><strong>Drums:</strong> identical in both modes.</p><p class="hint">Current limits: chromatic details can flatten; inferred keys may be ambiguous. Source edits stay in this lab and are never saved into the board.</p></aside>
+</main><script type="module" src="../src/harmony-lab.js"></script></body></html>

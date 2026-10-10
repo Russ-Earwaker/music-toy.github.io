@@ -1,7 +1,7 @@
 import { createLogicalToyMetricsReader } from './logical-toy-anchor.js';
 import { CONNECTION_FLASH_DURATION, STRUCTURE_FLASH_DURATION, structureFlashStrength } from './graph-visuals.js';
 import { getActivationConnections } from './graph-transition-feedback.js';
-import { STRUCTURE_TYPES, structureTypeLabel } from './structure-types.js';
+import { LOGIC_NODE_TYPES, logicNodeLabel, isModifier } from './modifier-types.js';
 import { heartbeatModel, transportLoopInfo } from './heartbeats.js';
 import { installHeartbeatView } from './heartbeat-view.js';
 import { getPanelTransport } from './panel-transport.js';
@@ -6819,9 +6819,13 @@ window.restoreConnections = (saved, structures = []) => {
   }
   structureToyModel.suspend(() => {
     structureToyModel.restore(structures);
+    // A scene restore replaces authored topology, unlike a live graph edit.
+    // Do not migrate occurrences/cursors from the previous scene into its roots.
+    g_sequenceChains.reset();
+    g_sequencerScheduler?.reset();
     g_connections.restore(saved, g_connectionPanels);
   });
-  for(const s of structureToyModel.list())g_layoutSizes.set(s.id,`${s.type}|${s.outputCount}`);
+  for(const s of structureToyModel.list())g_layoutSizes.set(s.id,`${s.type}|${s.outputCount}|${s.chords?.length ?? ''}`);
   for(const c of connectionModel.list())g_layoutParents.set(c.to.objectId,c.from);
   g_layoutRestoring=false;
 };
@@ -6842,7 +6846,7 @@ structureToyModel.configure({
     const parent=connectionModel.getParent(s.id);
     requestGraphLayout(parent?.from.objectId||s.id,parent?.kind==='transport'?parent.id:null);
     // Size tracking belongs to topology changes; presentation has its own path.
-    g_layoutSizes.set(s.id,s.type+'|'+s.outputCount);
+    g_layoutSizes.set(s.id,`${s.type}|${s.outputCount}|${s.chords?.length ?? ''}`);
   },
 });
 const g_connections = createConnectionAdapter(connectionModel, {
@@ -6956,10 +6960,10 @@ const g_heartbeatView = installHeartbeatView({
 window.Heartbeats = heartbeatModel;
 // Logic objects use the shared dock's screen-to-world spawn convention.
 window.ToySpawner?.configureLogic?.({
-  getCatalog:()=>[...STRUCTURE_TYPES.map(type=>({type,name:structureTypeLabel(type),description:'Create a '+structureTypeLabel(type)+' Structure',size:{width:type==='timeline'?440:224,height:144}})),
+  getCatalog:()=>[...LOGIC_NODE_TYPES.map(type=>({type,name:logicNodeLabel(type),description:'Create a '+logicNodeLabel(type)+(isModifier(type)?' modifier':' Structure'),size:{width:type==='chord-progression'?360:type==='timeline'?440:224,height:type==='chord-progression'?360:144}})),
     {type:'heartbeat',name:'Heartbeat',description:'Create an independent transport',size:{width:176,height:104}}],
   create:(type,{centerX=0,centerY=0,artOwnerId=null}={})=>{
-    const heartbeat=type==='heartbeat',width=heartbeat?176:type==='timeline'?440:224,height=heartbeat?104:type==='repeat'?128:144;
+    const heartbeat=type==='heartbeat',width=heartbeat?176:type==='chord-progression'?360:type==='timeline'?440:224,height=heartbeat?104:type==='chord-progression'?360:type==='repeat'?128:144;
     const obstacles=connectionModel.getObjectIds().filter(id=>g_graphPlacementScope(id)===artOwnerId).map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
     const slot=clearVerticalSlot({x:centerX-width/2,y:centerY-height/2,width,height},obstacles,72);
     const object=heartbeat?g_heartbeatView.createHeartbeat({x:slot.x+88,y:slot.y+52}):structureToyModel.createStandalone(type,{x:slot.x,y:slot.y,artOwnerId});
@@ -6995,7 +6999,7 @@ connectionModel.subscribe(event => {
         if(c?.kind==='transport')requestGraphLayout(c.from.objectId,c.id);
       }
       for(const s of structureToyModel.list()){
-        const size=`${s.type}|${s.outputCount}`;
+        const size=`${s.type}|${s.outputCount}|${s.chords?.length ?? ''}`;
         if(g_layoutSizes.get(s.id)!==size){g_layoutSizes.set(s.id,size);const parent=connectionModel.getParent(s.id);requestGraphLayout(parent?.from.objectId||s.id,parent?.kind==='transport'?parent.id:null);}
       }
     }
@@ -7017,7 +7021,8 @@ const g_sequenceChains = createChainSequenceAdapter({
   },
   onTurn: (turn, previous) => {
     const toy = document.getElementById(turn.toyId);
-    if (toy) toy.__chainStartAt = transportRegistry.get(turn.transportId).tickToAudioTime(turn.startTick);
+    if (toy && getPlaybackInstance(turn.toyId)?.structureTurnId === turn.id)
+      toy.__chainStartAt = transportRegistry.get(turn.transportId).tickToAudioTime(turn.startTick);
     if(transportRegistry.get(turn.transportId)?.state==='playing')
       for(const edge of getActivationConnections(connectionModel,turn,previous))triggerConnectorPulse(edge.from.objectId,edge.to.objectId,turn.startTick);
   },

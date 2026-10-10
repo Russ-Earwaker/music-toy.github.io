@@ -11,9 +11,9 @@ export const HEARTBEAT_PORTS = Object.freeze({
 });
 export function createStructurePorts(outputCount = 2, type = 'sequence') {
   const ports = { input: TOY_PORTS.input };
-  for (let i = 0; i < (type === 'repeat' ? 1 : Math.max(2, outputCount)); i++) ports[`child:${i}`] = Object.freeze({
+  for (let i = 0; i < (['repeat','transpose','chord-progression'].includes(type) ? 1 : Math.max(2, outputCount)); i++) ports[`child:${i}`] = Object.freeze({
     direction: 'out', accepts: Object.freeze(['sequence']), capacity: Object.freeze({ sequence: 1 }),
-    ...(type === 'repeat' ? {occupied:'replace-child'} : {}),
+    ...(['repeat','transpose','chord-progression'].includes(type) ? {occupied:'replace-child'} : {}),
   });
   return Object.freeze(ports);
 }
@@ -129,8 +129,8 @@ export function createConnectionModel() {
     return true;
   }
   return {
-    registerObject(id, { ports = TOY_PORTS, transportId = null, structure = null } = {}) {
-      objects.set(String(id), { ports, transportId: transportId ?? objects.get(String(id))?.transportId ?? null, structure });
+    registerObject(id, { ports = TOY_PORTS, transportId = null, structure = null, modifier = null } = {}) {
+      objects.set(String(id), { ports, transportId: transportId ?? objects.get(String(id))?.transportId ?? null, structure, ...(modifier ? {modifier} : {}) });
     },
     touchObject(id, { structureCreated = false, layoutInsertion = null } = {}) { emit({ type: 'change', structureChanged: true, objectId: id, ...(layoutInsertion ? {layoutInsertion} : {}), ...(structureCreated ? {structureCreated:true} : {}) }); },
     setPromotionResolver(resolver) { promotionResolver = resolver; },

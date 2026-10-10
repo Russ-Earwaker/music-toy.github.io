@@ -1,0 +1,1791 @@
+{
+  "schemaVersion": 1,
+  "kind": "harmony-lab",
+  "createdAt": "2026-10-10T15:13:06.435Z",
+  "href": "http://172.23.80.1:5500/music-toy.github.io/harmony-lab/?debug=1",
+  "settings": {
+    "mode": "follow",
+    "preset": "B",
+    "bassText": "C G E G",
+    "melodyText": "E G A G E F# D C",
+    "bassNotes": [
+      "C3",
+      "G3",
+      "E3",
+      "G3"
+    ],
+    "melodyNotes": [
+      "E4",
+      "G4",
+      "A4",
+      "G4",
+      "E4",
+      "F#4",
+      "D4",
+      "C4"
+    ],
+    "bassRole": "bass",
+    "melodyRole": "melody",
+    "bassInstrument": "retro-triangle",
+    "soloPart": "melody",
+    "mix": {
+      "bass": {
+        "volume": 0.6,
+        "muted": false
+      },
+      "melody": {
+        "volume": 1,
+        "muted": false
+      },
+      "drums": {
+        "volume": 0.45,
+        "muted": false
+      }
+    },
+    "chords": [
+      {
+        "root": "C",
+        "quality": "major"
+      },
+      {
+        "root": "A",
+        "quality": "minor"
+      },
+      {
+        "root": "F",
+        "quality": "major"
+      },
+      {
+        "root": "G",
+        "quality": "major"
+      }
+    ],
+    "stepTicks": 384,
+    "transpose": 0,
+    "bpm": 120
+  },
+  "transport": {
+    "state": "paused",
+    "bpm": 120,
+    "positionTick": 3076,
+    "currentTick": 3076,
+    "currentBeat": 32,
+    "currentBar": 8,
+    "ticksPerBeat": 96,
+    "ticksPerBar": 384,
+    "beatsPerBar": 4,
+    "mapping": {
+      "originTick": 0,
+      "originAudioTime": 1.8,
+      "bpm": 120
+    }
+  },
+  "comparison": null,
+  "comparisonCompleted": true,
+  "diagnostics": {
+    "latest": {
+      "sourceNote": "C4",
+      "eventTick": 2976,
+      "role": "melody",
+      "resolvedChord": {
+        "root": "G",
+        "quality": "major"
+      },
+      "scale": {
+        "root": "C",
+        "quality": "major",
+        "pitches": [
+          0,
+          2,
+          4,
+          5,
+          7,
+          9,
+          11
+        ]
+      },
+      "referenceHarmony": {
+        "root": "C",
+        "quality": "major"
+      },
+      "adaptedNote": "C4",
+      "transpose": 0,
+      "finalNote": "C4",
+      "when": 17.3,
+      "instrument": "pluck",
+      "velocity": 0.6,
+      "mode": "follow",
+      "part": "melody",
+      "evaluationEpoch": 1,
+      "movement": 0,
+      "changed": false,
+      "previousAdaptedNote": "D4",
+      "contour": "down kept"
+    },
+    "events": [
+      {
+        "sourceNote": "E4",
+        "eventTick": 1536,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 9.822333333333333,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": null,
+        "contour": "First note / after rest or gap"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 1632,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 10.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "A4",
+        "eventTick": 1728,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4",
+        "when": 10.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 1824,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 11.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "A4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 1920,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "A",
+          "quality": "minor"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 11.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "F#4",
+        "eventTick": 2016,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "A",
+          "quality": "minor"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F4",
+        "transpose": 0,
+        "finalNote": "F4",
+        "when": 12.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": -1,
+        "changed": true,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "D4",
+        "eventTick": 2112,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "A",
+          "quality": "minor"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4",
+        "when": 12.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "F4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "C4",
+        "eventTick": 2208,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "A",
+          "quality": "minor"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4",
+        "when": 13.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "D4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 2304,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 13.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "C4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 2400,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 14.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "A4",
+        "eventTick": 2496,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4",
+        "when": 14.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 2592,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 15.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "A4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 2688,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "G",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 15.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "F#4",
+        "eventTick": 2784,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "G",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F4",
+        "transpose": 0,
+        "finalNote": "F4",
+        "when": 16.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": -1,
+        "changed": true,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "D4",
+        "eventTick": 2880,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "G",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4",
+        "when": 16.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "F4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "C4",
+        "eventTick": 2976,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "G",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4",
+        "when": 17.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "D4",
+        "contour": "down kept"
+      }
+    ],
+    "pass": [
+      "E4",
+      "G4",
+      "A4",
+      "G4",
+      "E4",
+      "F4",
+      "D4",
+      "C4"
+    ],
+    "stats": {
+      "played": 16,
+      "changed": 2,
+      "movementTotal": 2,
+      "largestMovement": 1,
+      "repeatedTotal": 0,
+      "repeatedPreserved": 0,
+      "contourTotal": 15,
+      "contourPreserved": 15,
+      "newLeaps": 0,
+      "changeRate": 12.5,
+      "averageMovement": 1
+    }
+  },
+  "runtimeError": null,
+  "log": {
+    "scope": "Audible pitched events in the current comparison; reset with comparison statistics.",
+    "limit": 4096,
+    "dropped": 0,
+    "events": [
+      {
+        "sourceNote": "E4",
+        "eventTick": 0,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 1.801,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": null,
+        "contour": "First note / after rest or gap"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 96,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 2.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "A4",
+        "eventTick": 192,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4",
+        "when": 2.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 288,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 3.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "A4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 384,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 3.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "F#4",
+        "eventTick": 480,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "transpose": 0,
+        "finalNote": "F#4",
+        "when": 4.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "D4",
+        "eventTick": 576,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4",
+        "when": 4.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "F#4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "C4",
+        "eventTick": 672,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4",
+        "when": 5.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "D4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 768,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 5.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "C4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 864,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 6.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "A4",
+        "eventTick": 960,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4",
+        "when": 6.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 1056,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 7.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "A4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 1152,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 7.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "F#4",
+        "eventTick": 1248,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "transpose": 0,
+        "finalNote": "F#4",
+        "when": 8.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "D4",
+        "eventTick": 1344,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4",
+        "when": 8.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "F#4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "C4",
+        "eventTick": 1440,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4",
+        "when": 9.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "original",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "D4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 1536,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 9.822333333333333,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": null,
+        "contour": "First note / after rest or gap"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 1632,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 10.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "A4",
+        "eventTick": 1728,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4",
+        "when": 10.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 1824,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 11.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "A4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 1920,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "A",
+          "quality": "minor"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 11.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "F#4",
+        "eventTick": 2016,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "A",
+          "quality": "minor"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F4",
+        "transpose": 0,
+        "finalNote": "F4",
+        "when": 12.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": -1,
+        "changed": true,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "D4",
+        "eventTick": 2112,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "A",
+          "quality": "minor"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4",
+        "when": 12.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "F4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "C4",
+        "eventTick": 2208,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "A",
+          "quality": "minor"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4",
+        "when": 13.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "D4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 2304,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 13.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "C4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 2400,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 14.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "A4",
+        "eventTick": 2496,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4",
+        "when": 14.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "G4",
+        "eventTick": 2592,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4",
+        "when": 15.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "A4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "E4",
+        "eventTick": 2688,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "G",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4",
+        "when": 15.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "G4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "F#4",
+        "eventTick": 2784,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "G",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F4",
+        "transpose": 0,
+        "finalNote": "F4",
+        "when": 16.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": -1,
+        "changed": true,
+        "previousAdaptedNote": "E4",
+        "contour": "up kept"
+      },
+      {
+        "sourceNote": "D4",
+        "eventTick": 2880,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "G",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4",
+        "when": 16.8,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "F4",
+        "contour": "down kept"
+      },
+      {
+        "sourceNote": "C4",
+        "eventTick": 2976,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "G",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4",
+        "when": 17.3,
+        "instrument": "pluck",
+        "velocity": 0.6,
+        "mode": "follow",
+        "part": "melody",
+        "evaluationEpoch": 1,
+        "movement": 0,
+        "changed": false,
+        "previousAdaptedNote": "D4",
+        "contour": "down kept"
+      }
+    ]
+  }
+}

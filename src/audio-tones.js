@@ -9,6 +9,7 @@ function envGain(acx, t0, points){
   return g;
 }
 export function noteToFreq(note='C4'){
+  if (typeof note === 'number' && Number.isFinite(note)) return 440*Math.pow(2,(note-69)/12);
   const NOTE = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const m = /^([A-G]#?)(-?\d+)$/.exec(String(note).toUpperCase().trim()); if (!m) return 440;
   const nn = NOTE.indexOf(m[1]); const oct = parseInt(m[2],10); const midi = (oct+1)*12 + nn; return 440*Math.pow(2,(midi-69)/12);

@@ -1,5 +1,9 @@
+import { classifyMusicalRole, resolveMusicalPitch, noteMidi } from './harmonic-adaptation.js';
 // src/audio-samples.js — samples + tone fallback (<=300 lines)
 import { ensureAudioContext, getToyGain, registerActiveNode, getLoopInfo, withActiveNodeCollector } from './audio-core.js';
+import { getCurrentPlaybackOccurrence, withPlaybackOccurrence } from './playback-context.js';
+import { onPlaybackOccurrenceInvalidated, isPlaybackOccurrenceValid } from './playback-instances.js';
+import { isPitchedEvent } from './note-transpose.js';
 import { playById, noteToFreq, TONE_NAMES } from './audio-tones.js';
 
 // id -> { url, synth }
@@ -27,7 +31,7 @@ export function trackScheduledToySource(toyId, src, tStart){
   let set = __scheduledSampleByToy.get(id);
   if (!set) { set = new Set(); __scheduledSampleByToy.set(id, set); }
 
-  const rec = { src, tStart: Number(tStart) || 0 };
+  const rec = { src, tStart: Number(tStart) || 0, occurrence: getCurrentPlaybackOccurrence() };
   set.add(rec);
 
   // Best-effort cleanup when the node ends
@@ -46,6 +50,19 @@ function playToneForToy(toyId, id, frequency, when, destination, velocity, optio
   return withActiveNodeCollector(node => __trackScheduledSample(toyId || 'master', node, when),
     () => playById(id, frequency, when, destination, velocity, options));
 }
+
+// Occurrence cancellation never bumps the source toy's audio generation.
+export function cancelScheduledOccurrenceSources(occurrenceId) {
+  const now = ensureAudioContext()?.currentTime ?? 0;
+  for (const [toyId, set] of __scheduledSampleByToy) {
+    for (const rec of [...set]) if (rec.occurrence?.occurrenceId === occurrenceId) {
+      if (rec.tStart > now + 0.002) { try { rec.src?.stop?.(); } catch {} }
+      set.delete(rec);
+    }
+    if (!set.size) __scheduledSampleByToy.delete(toyId);
+  }
+}
+onPlaybackOccurrenceInvalidated(cancelScheduledOccurrenceSources);
 
 /** Stop and forget any scheduled future sources for a toy (or all toys if toyId is falsy). */
 export function cancelScheduledToySources(toyId){
@@ -253,6 +270,8 @@ export async function initAudioAssets(csvUrl='./samples.csv'){
   const col = {
     filename: head.indexOf('filename'),
     instrument: head.indexOf('instrument'),
+    instrument_type: head.indexOf('instrument_type'),
+    music_behavior: head.indexOf('music_behavior'),
     instrument_id: head.indexOf('instrument_id'),
     display: head.findIndex(h=>/^(display\s*_?name|display|label|title)$/.test(h)),
     synth: head.indexOf('synth_id'),
@@ -305,6 +324,10 @@ export async function initAudioAssets(csvUrl='./samples.csv'){
     const data = {
       url,
       synth,
+      instrumentType:col.instrument_type>=0?parts[col.instrument_type]:null,
+      unpitched: !String(col.music_behavior>=0?parts[col.music_behavior]:'').includes('melodic')
+        && (String(col.instrument_type>=0?parts[col.instrument_type]:'') === 'effects'
+          || !isPitchedEvent(col.instrument>=0?parts[col.instrument]:canonicalId)),
       baseNote: baseNoteCsv || undefined,
       sourceBaseNote: sourceBaseNoteCsv || undefined,
       volume: volumeCsv || undefined,
@@ -443,10 +466,25 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
   return false;
 }
 
-export function triggerInstrument(instrument, noteName='C4', when, toyId, options = {}, velocity = 1.0){
+export function triggerInstrument(instrument, noteName='C4', when, toyId, options = {}, velocity = 1.0) {
+  const occurrence = options?.playbackOccurrence || getCurrentPlaybackOccurrence();
+  if (!isPlaybackOccurrenceValid(occurrence)) return false;
+  return withPlaybackOccurrence(occurrence, () => triggerInstrumentInOccurrence(instrument, noteName, when, toyId,
+    { ...options, playbackOccurrence: occurrence, context: occurrence?.context || options?.context }, velocity));
+}
+function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, options = {}, velocity = 1.0){
   const ctx = ensureAudioContext();
   const id  = normId(instrument || 'TONE');
-  const resolvedNote = resolveOctaveForToy(noteName, toyId, options, id);
+  const sourceNote = resolveOctaveForToy(noteName, toyId, options, id);
+  const pitched = isPitchedEvent(id, entries.get(id), options, options.playbackOccurrence);
+  const occurrence=options.playbackOccurrence;
+  const panel=typeof document!=='undefined'?document.getElementById(toyId):null;
+  const role=classifyMusicalRole({toyType:occurrence?.toyType ?? panel?.dataset?.toy,instrument:id,entry:entries.get(id),options,occurrence});
+  const pitchDecision=resolveMusicalPitch({sourcePitch:sourceNote,eventTick:occurrence?.eventTick ?? options.eventTick,context:options.context,role,referenceHarmony:options.referenceHarmony,register:options.register});
+  const resolvedNote = pitchDecision.finalNote;
+  const pitchShift=pitched?(noteMidi(resolvedNote) ?? 0)-(noteMidi(sourceNote) ?? 0):0;
+  if (pitchShift && typeof options.playbackRate === 'number')
+    options = { ...options, playbackRate: options.playbackRate * Math.pow(2, pitchShift / 12) };
   const t   = safeStartTime(ctx, when);
   const vel = Math.max(0.001, Math.min(1.0, velocity));
   try{
@@ -459,7 +497,10 @@ export function triggerInstrument(instrument, noteName='C4', when, toyId, option
         detail: {
           toyId: String(toyId),
           instrument: id,
+          occurrenceId: options.playbackOccurrence?.occurrenceId || null,
+          context: options.context || null,
           note: resolvedNote,
+          ...(window.__HARMONY_DEBUG ? {pitchDecision} : {}),
           slotIndex,
           col,
           step,

@@ -1,0 +1,68 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Normal graph harmony integration check</title>
+<style>body{margin:0;background:#101820;color:#eee;font:14px system-ui}header{padding:8px}button{margin:0 8px}iframe{width:100%;height:82vh;border:0}pre{white-space:pre-wrap;margin:8px}</style>
+<header>Production graph check
+ <button id="open">Open normal board in tab</button>
+ <select id="variant" aria-label="Graph variant"><option value="base">Chord Progression → Repeat → Together</option><option value="outer">Transpose → Chord Progression</option><option value="inner">Chord Progression → Transpose</option></select>
+ <button id="load">Load C / Am / F / G fixture</button>
+ <button id="observe">Observe reloaded board</button>
+ <button id="save">Save observations to resources</button>
+ <span id="status">Use the normal board controls below.</span>
+</header>
+<iframe id="app" src="../" title="Normal Rhythmake board" allow="autoplay"></iframe>
+<pre id="observations">No scheduled notes yet.</pre>
+<script type="module">
+// Test-only observer: the normal app owns topology, transport, scheduling and audio.
+const app=document.querySelector('#app'),status=document.querySelector('#status'),output=document.querySelector('#observations');
+let events=[],before=null,testedWindow=null;
+function observe(win){
+ testedWindow=win;
+ win.__HARMONY_DEBUG=true;
+ if(win.__graphHarmonyObserver)win.removeEventListener('toy:note',win.__graphHarmonyObserver);
+ win.__graphHarmonyObserver=event=>{
+  events.push(structuredClone(event.detail));if(events.length>2048)events.shift();
+  output.textContent=JSON.stringify({scheduled:events.length,latest:events.slice(-3)},null,2);
+ };
+ win.addEventListener('toy:note',win.__graphHarmonyObserver);
+}
+app.addEventListener('load',()=>observe(app.contentWindow));
+document.querySelector('#open').onclick=()=>{
+ const win=window.open('../','harmony-graph-board');
+ if(!win){status.textContent='Allow this test page to open its board tab.';return;}
+ win.addEventListener('load',()=>observe(win),{once:true});
+ status.textContent='Board tab opened. Return here to load the fixture and save observations.';
+};
+document.querySelector('#load').onclick=async()=>{
+ const fixture=await (await fetch('../resources/harmony-integration.scene.json')).json();
+ if(!testedWindow?.Persistence){status.textContent='App is still loading; try again.';return;}
+ const variant=document.querySelector('#variant').value;
+ if(variant!=='base'){
+  fixture.payload.structureToys.push({id:'proof-transpose',definitionId:'definition:proof-transpose',type:'transpose',semitones:12,x:variant==='outer'?0:420,y:480,collapsed:false,outputCount:1});
+  const edge=fixture.payload.connections.find(c=>c.id===(variant==='outer'?'proof-root':'proof-cr'));
+  const target=edge.to;
+  edge.to={objectId:'proof-transpose',portId:'input'};
+  fixture.payload.connections.push({id:'proof-shift',kind:'sequence',from:{objectId:'proof-transpose',portId:'child:0'},to:target});
+ }
+ observe(testedWindow);
+ testedWindow.Persistence.applySnapshot(fixture.payload);
+ testedWindow.__HARMONY_DEBUG=true;
+ events=[];before=structuredClone(fixture.payload.toys);
+ output.textContent='No scheduled notes yet.';
+ status.textContent='Fixture loaded. Play and edit using the board controls.';
+};
+document.querySelector('#observe').onclick=()=>{observe(testedWindow);status.textContent='Observing restored board audio.';};
+document.querySelector('#save').onclick=async()=>{
+ const snapshot=testedWindow.Persistence.getSnapshot();
+ const win=testedWindow;
+ const diagnostics={schedulerTick:win.__mtSchedTick,activeToyIds:win.__mtActiveToyIds,chainState:win.__mtChainState,
+  providers:Array.from(win.document.querySelectorAll('.toy-panel[id]')).map(p=>({id:p.id,hasSchedule:typeof p.__sequencerSchedule==='function',pattern:p.__seqPattern,activePattern:p.__seqPatternActive,audioToyId:p.__audioToyId}))};
+ const report={kind:'normal-graph-harmony-integration',createdAt:new Date().toISOString(),authoredSources:before,events,snapshot,diagnostics};
+ const fileName='harmony-graph-'+report.createdAt.replace(/[:.]/g,'-')+'.json';
+ try{
+  const response=await fetch('http://localhost:5174/debug-output',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileName,text:JSON.stringify(report,null,2),meta:{kind:report.kind,eventCount:events.length}})});
+  if(!response.ok)throw new Error('HTTP '+response.status);
+  status.textContent='Saved resources/debug-output/'+fileName;
+ }catch(error){status.textContent='Save failed: '+error.message;}
+};
+</script>
