@@ -68,7 +68,7 @@ test('shared connector ports retain the established side anchor without per-toy 
   const main = await readFile(new URL('../src/main.js', import.meta.url), 'utf8');
   const css = await readFile(new URL('../style.css', import.meta.url), 'utf8');
   assert.match(main, /getToyPoint: getChainAnchor/);
-  assert.match(main, /measureToySideAnchor\(panel\)/);
+  assert.match(main, /readLogicalToyMetrics\(panel\)/);
   assert.doesNotMatch(main, /right:\s*-65px/);
   assert.doesNotMatch(css, /data-toy=["']bouncer["'][^{}]*toy-chain-btn/);
   assert.match(css, /\.toy-chain-btn\s*\{[\s\S]*?left:\s*100%;[\s\S]*?z-index:\s*10050;/);

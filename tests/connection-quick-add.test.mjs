@@ -47,7 +47,7 @@ test('Structure without child history exposes the picker hook without guessing a
   assert.equal(h.quickAdd(out('empty','child:0')),null);
   assert.equal(h.calls.length,0);assert.deepEqual(h.picks,[out('empty','child:0')]);
 });
-test('quick-add never creates musical toys from Heartbeat outputs or input sockets',()=>{
+test('occupied Heartbeat outputs and input sockets never quick-add',()=>{
   const h=harness();assert.equal(h.quickAdd(out(MAIN_TRANSPORT_ID)),null);assert.equal(h.quickAdd(input('A')),null);
   assert.equal(h.calls.length,0);
 });
@@ -57,4 +57,10 @@ test('persisted Structure interaction history survives restore',()=>{
   h.structures.suspend(()=>h.structures.restore(saved));
   assert.equal(h.structures.get(s.id).lastChildType,'bouncer');
   assert.equal(h.quickAdd(out(s.id,'child:1')).dataset.toy,'bouncer');
+});
+
+test('empty Heartbeat Extend routes creation through the shared picker',()=>{
+ const model=createConnectionModel(),picks=[];model.registerObject(MAIN_TRANSPORT_ID,{ports:HEARTBEAT_PORTS,transportId:MAIN_TRANSPORT_ID});
+ const quickAdd=createConnectionQuickAdd({model,getToy:()=>null,createToy:()=>assert.fail('Heartbeat needs a picker'),pickToy:p=>picks.push(p)});
+ assert.equal(quickAdd(out(MAIN_TRANSPORT_ID)),null);assert.deepEqual(picks,[out(MAIN_TRANSPORT_ID)]);assert.equal(model.list().length,0);
 });

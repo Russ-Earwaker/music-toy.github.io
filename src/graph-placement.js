@@ -1,6 +1,7 @@
+import { GRAPH_MIDPOINT_HIT_DIAMETER, GRAPH_ENDPOINT_HIT_DIAMETER } from './graph-visuals.js';
 // Logical board units only. Layout never changes musical state.
-export const MIN_NODE_GAP_X=144, MIN_CONNECTION_CORRIDOR=144, MIN_SIBLING_GAP_Y=72, CONNECTION_CONTROL_RADIUS=24;
-export const ENDPOINT_CONTROL_RADIUS=26;
+export const MIN_NODE_GAP_X=176, MIN_CONNECTION_CORRIDOR=176, MIN_SIBLING_GAP_Y=88, CONNECTION_CONTROL_RADIUS=GRAPH_MIDPOINT_HIT_DIAMETER/2;
+export const ENDPOINT_CONTROL_RADIUS=GRAPH_ENDPOINT_HIT_DIAMETER/2;
 export const HEARTBEAT_OUTPUT_OFFSET=112;
 export const GRAPH_HORIZONTAL_GAP=MIN_NODE_GAP_X, GRAPH_SIBLING_GAP=MIN_SIBLING_GAP_Y;
 // Horizontal detours make wires and the local graph much longer. Prefer a
@@ -46,7 +47,7 @@ export function createGraphPlacement({model,getRect,setPosition=()=>{},getScope=
     return {ok:b.x-a.x-a.width>=MIN_CONNECTION_CORRIDOR-1e-6&&!blocked.length&&!endpointBlocked.length,blocked,endpointBlocked,mid,a,b};
   }
   const hasUsableConnectionCorridor=id=>{const c=model.get(id);return !!c&&corridor(c).ok;};
-  function targets(rootId,{explicit=false,onlyChild=null,scope=getScope(onlyChild||rootId),recentlyAttached=new Set()}={}){
+  function targets(rootId,{explicit=false,onlyChild=null,scope=getScope(onlyChild||rootId),recentlyAttached=new Set(),preserveSubtrees=new Set()}={}){
     const root=getRect(rootId);if(!root)return [];
     function localDescendants(id,set=new Set()){if(set.has(id)||id!==rootId&&getScope(id)!==scope)return set;set.add(id);for(const c of edges(id))localDescendants(c.to.objectId,set);return set;}
     const ids=onlyChild?new Set([rootId,...localDescendants(onlyChild)]):localDescendants(rootId),original=new Map([...ids].map(id=>[id,getRect(id)]).filter(([,r])=>r)),ps=new Map([...original].map(([id,r])=>[id,{...r}]));
@@ -80,6 +81,10 @@ export function createGraphPlacement({model,getRect,setPosition=()=>{},getScope=
       }
     }
     function repair(id,balance=true){
+      // An insertion displaces the existing downstream composition as one branch.
+      // Explicit Arrange still balances its interior; corridor validation below
+      // can resolve an actual obstruction without depending on event ordering.
+      if(!explicit&&preserveSubtrees.has(id))return;
       const p=ps.get(id);if(!p)return;const children=edges(id).filter(c=>ps.has(c.to.objectId));
       for(const c of children){const childId=c.to.objectId,r=ps.get(childId),aligned=explicit||balance&&!isManual(childId),x=aligned?columns[levels.get(childId)]:p.x+p.width+horizontalGap;translate(childId,aligned||recentlyAttached.has(childId)?x-r.x:Math.max(0,x-r.x),0);repair(childId,balance);}
       if(!children.length)return;
@@ -166,7 +171,7 @@ export function createGraphPlacement({model,getRect,setPosition=()=>{},getScope=
     return [...ps].filter(([id,r])=>id!==rootId&&(Math.abs(r.x-original.get(id).x)>1e-6||Math.abs(r.y-original.get(id).y)>1e-6)).map(([id,r])=>({id,x:r.x,y:r.y,depth:depth(id)-depth(rootId)}));
   }
   function apply(id,options){const result=targets(id,options);for(const p of result)setPosition(p.id,p.x,p.y,{automatic:true});return result;}
-  return {placeChild,placeStructure,branchBounds,descendants,hasUsableConnectionCorridor,targets,depth,
+  return {getRect,placeChild,placeStructure,branchBounds,descendants,hasUsableConnectionCorridor,targets,depth,
     repairConnection:(id,options={})=>{const c=model.get(id);return c?apply(c.from.objectId,{...options,onlyChild:c.to.objectId}):[];},
     repairSubgraph:(id,options={})=>apply(id,options),arrangeSubgraph:(id,options={})=>apply(id,{...options,explicit:true})};
 }

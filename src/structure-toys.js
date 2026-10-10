@@ -1,3 +1,4 @@
+import { GRAPH_ENDPOINT_DIAMETER, GRAPH_ENDPOINT_HIT_DIAMETER } from './graph-visuals.js';
 import { connectionModel, createStructurePorts } from './connections.js';
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 import { STRUCTURE_TYPES, normalizeRepeatCount, structureDuration, structureTypeLabel } from './structure-types.js';
@@ -6,7 +7,7 @@ import { getPlaybackInstance } from './playback-instances.js';
 import { normalizeTimelineOffset, snapTimelineOffset } from './timeline-offsets.js';
 
 const order = port => Number(String(port).split(':')[1]) || 0;
-export const STRUCTURE_PORT_RADIUS=18, STRUCTURE_PLUS_RADIUS=22, STRUCTURE_PORT_HIT_RADIUS=26, STRUCTURE_SOCKET_STEP=56;
+export const STRUCTURE_PORT_RADIUS=GRAPH_ENDPOINT_DIAMETER/2, STRUCTURE_PLUS_RADIUS=GRAPH_ENDPOINT_DIAMETER/2, STRUCTURE_PORT_HIT_RADIUS=GRAPH_ENDPOINT_HIT_DIAMETER/2, STRUCTURE_SOCKET_STEP=56;
 export const structurePortPoint = (s, portId) => portId === 'input'
   ? { x: s.x, y: s.y + structureToyHeight(s) / 2 }
   : { x: s.x + structureToyWidth(s), y: s.y + (s.collapsed?40:s.type==='timeline'?80:48) + order(portId) * STRUCTURE_SOCKET_STEP };
@@ -67,8 +68,22 @@ export function createStructureToyModel(model, options = {}) {
     if(placed)s=Object.freeze({...s,x:placed.x,y:placed.y});
     records.set(id, s); register(s);
     // Publish creation with the completed topology transaction, including nested Structures.
-    model.touchObject(id, {structureCreated:true});
+    model.touchObject(id, {structureCreated:true, layoutInsertion:{
+      insertedObjectId:id, attachedBranchId:to.objectId, layoutRootId:from.objectId,
+      // Wrapping a type conversion adopts all existing children together.
+      ...(from.portId==='input'?{preserveSubtreeIds:childEdges(from.objectId).map(c=>c.to.objectId)}:{}),
+    }});
     return s;
+  }
+  // A detached board object has no transport authority until its input is rooted.
+  function createStandalone(type, {x=0,y=0,artOwnerId=null} = {}) {
+    if(!STRUCTURE_TYPES.includes(type))return null;
+    let id;do {id=`structure-toy:${serial++}`;}while(model.getObject(id));
+    const s=Object.freeze({id,definitionId:`definition:${id}`,type,provenance:'explicit',includeInput:false,
+      x,y,artOwnerId,positionSource:'auto',collapsed:false,outputCount:type==='repeat'?1:2,
+      ...(type==='repeat'?{count:2}:{}),...(type==='timeline'?{entries:Object.freeze([])}:{})});
+    model.transaction(()=>{records.set(id,s);register(s);model.touchObject(id,{structureCreated:true});});
+    return records.get(id);
   }
   function mustConnect(kind, from, to, id = null) {
     const result = model.connect(kind, from, to, { id });
@@ -78,15 +93,16 @@ export function createStructureToyModel(model, options = {}) {
   function promote(connectionId, type = 'together') {
     if (!STRUCTURE_TYPES.includes(type)) return null;
     const c = model.get(connectionId);
-    if (!c || c.kind !== 'sequence') return null;
+    if (!c || !['sequence','transport'].includes(c.kind)) return null;
     let s;
     busy = true;
     try {
       model.transaction(() => {
         s = create(type, c.from, c.to, 'explicit', false);
         model.disconnect(c.id);
-        mustConnect('sequence', c.from, { objectId: s.id, portId: 'input' });
+        mustConnect(c.kind, c.from, { objectId: s.id, portId: 'input' });
         mustConnect('sequence', { objectId: s.id, portId: 'child:0' }, c.to, c.id);
+        if(type==='timeline')update(s.id,{entries:timelineEntries(s)},{notify:false});
         model.touchObject(s.id);
       });
     } catch (error) { if (s) records.delete(s.id); throw error; }
@@ -189,7 +205,7 @@ export function createStructureToyModel(model, options = {}) {
     refresh();
   });
   return {
-    list, get: id => records.has(id) ? {...records.get(id),transportId:model.getTransportId(id)} : null, promote, setType, conversion, durationOf,
+    createStandalone, list, get: id => records.has(id) ? {...records.get(id),transportId:model.getTransportId(id)} : null, promote, setType, conversion, durationOf,
     getTimelineEntries(id) {return (records.get(id)?.entries||[]).map(e=>({...e,durationTicks:durationOf(e.childId),label:structureTypeLabelForChild(e.childId)}));},
     setOffset(id,portId,value,{snap=true}={}) {
       const s=records.get(id);if(s?.type!=='timeline'||!s.entries.some(e=>e.portId===portId))return null;

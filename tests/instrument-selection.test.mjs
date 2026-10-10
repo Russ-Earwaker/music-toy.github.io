@@ -158,7 +158,7 @@ test('owned popup dismisses on Escape, deletion, outside/selection and New Creat
     popup.close(); assert.equal(closes.length, 1); assert.equal(disconnected, true); assert.equal(popup.closed, true);
     doc.dispatchEvent(new Event('keydown')); assert.equal(closes.length, 1);
   }
-  assert.match(source('main.js'), /window\.clearCreationGraph = \(\) => \{\s*closeInstrumentPicker\(\)/);
+  assert.match(source('main.js'), /window\.clearCreationGraph = \(\) => \{[^}]*closeInstrumentPicker\(\)/);
   assert.match(source('instrument-picker.js'), /backdrop\.onclick = \(\)=> session\.close\(null\)/);
 });
 

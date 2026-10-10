@@ -42,7 +42,7 @@
 .c-btn-glow {
   inset: 1.5px;
   border: 2px solid var(--accent, #5fb3ff);
-  opacity: 0.55;
+  opacity: var(--c-btn-glow-strength, 0.55);
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.35));
 }
 
@@ -90,7 +90,7 @@
 }
 
 .c-btn:hover .c-btn-glow {
-  opacity: 0.85;
+  opacity: var(--c-btn-hover-glow-strength, 0.85);
   filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55));
 }
 
@@ -99,22 +99,22 @@
 }
 
 .c-btn:hover .c-btn-core::before {
-  transform: translate(-50%, -50%) scale(1.04);
+  transform: translate(-50%, -50%) scale(var(--c-btn-hover-core-scale, 1.04));
   filter: brightness(1.12);
 }
 
 .c-btn:hover .c-btn-core::after {
-  transform: translate(-50%, -50%) scale(1.08);
+  transform: translate(-50%, -50%) scale(var(--c-btn-hover-icon-scale, 1.08));
   filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55)) brightness(1.02);
 }
 
 .c-btn:active .c-btn-core::before {
-  transform: translate(-50%, -50%) scale(0.9);
+  transform: translate(-50%, -50%) scale(var(--c-btn-press-core-scale, 0.9));
   filter: brightness(1.2);
 }
 
 .c-btn:active .c-btn-core::after {
-  transform: translate(-50%, -50%) scale(0.94);
+  transform: translate(-50%, -50%) scale(var(--c-btn-press-icon-scale, 0.94));
 }
 
 .c-btn:active .c-btn-glow {
@@ -125,7 +125,7 @@
   0% {
     inset: 2px;
     border-color: var(--accent, cyan);
-    opacity: 0.85;
+    opacity: var(--c-btn-hover-glow-strength, 0.85);
     filter: blur(1.5px);
   }
   40% {
@@ -137,7 +137,7 @@
   100% {
     inset: 2px;
     border-color: var(--accent, cyan);
-    opacity: 0.85;
+    opacity: var(--c-btn-hover-glow-strength, 0.85);
     filter: blur(1.5px);
   }
 }

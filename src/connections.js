@@ -132,7 +132,7 @@ export function createConnectionModel() {
     registerObject(id, { ports = TOY_PORTS, transportId = null, structure = null } = {}) {
       objects.set(String(id), { ports, transportId: transportId ?? objects.get(String(id))?.transportId ?? null, structure });
     },
-    touchObject(id, { structureCreated = false } = {}) { emit({ type: 'change', structureChanged: true, objectId: id, ...(structureCreated ? {structureCreated:true} : {}) }); },
+    touchObject(id, { structureCreated = false, layoutInsertion = null } = {}) { emit({ type: 'change', structureChanged: true, objectId: id, ...(layoutInsertion ? {layoutInsertion} : {}), ...(structureCreated ? {structureCreated:true} : {}) }); },
     setPromotionResolver(resolver) { promotionResolver = resolver; },
     transaction,
     removeObject(id) {

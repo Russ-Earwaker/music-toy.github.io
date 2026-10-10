@@ -10,6 +10,7 @@ const state = {
   toggle: null,
   artToggle: null,
   gameToggle: null,
+  logicToggle: null,
   menu: null,
   listHost: null,
   trash: null,
@@ -31,6 +32,7 @@ const state = {
     create: () => null,
     remove: () => false,
   },
+  configLogic: {getCatalog:()=>[],create:()=>null,remove:()=>false},
   // Back-compat: many call sites assume a single active config.
   // We keep `config` as a pointer to the currently active palette config.
   config: null,
@@ -90,7 +92,8 @@ function updateOverviewToggleUI(nextState) {
 function updatePaletteToggleUI() {
   const isArt = state.activePalette === 'art';
   const isGame = state.activePalette === 'game';
-  const isMusic = !isArt && !isGame;
+  const isLogic = state.activePalette === 'logic';
+  const isMusic = !isArt && !isGame && !isLogic;
   if (state.toggle) {
     state.toggle.classList.toggle('is-active', isMusic && state.open);
     state.toggle.setAttribute('aria-pressed', (isMusic && state.open) ? 'true' : 'false');
@@ -99,21 +102,29 @@ function updatePaletteToggleUI() {
     state.artToggle.classList.toggle('is-active', isArt && state.open);
     state.artToggle.setAttribute('aria-pressed', (isArt && state.open) ? 'true' : 'false');
   }
+  if(state.logicToggle){
+    state.logicToggle.classList.toggle('is-active',isLogic&&state.open);
+    state.logicToggle.setAttribute('aria-pressed',String(isLogic&&state.open));
+  }
   if (state.gameToggle) {
     state.gameToggle.classList.toggle('is-active', isGame && state.open);
     state.gameToggle.setAttribute('aria-pressed', (isGame && state.open) ? 'true' : 'false');
   }
 }
 
+function togglePalette(palette) {
+  const open = !state.open || state.activePalette !== palette;
+  setActivePalette(palette);setMenuOpen(open);
+}
 function setActivePalette(palette) {
   const next = palette === 'art'
     ? 'art'
-    : (palette === 'game' ? 'game' : 'music');
+    : (palette === 'game' ? 'game' : palette === 'logic' ? 'logic' : 'music');
   if (state.activePalette === next && state.config) return;
   state.activePalette = next;
   state.config = next === 'art'
     ? state.configArt
-    : (next === 'game' ? state.configGame : state.configMusic);
+    : (next === 'game' ? state.configGame : next === 'logic' ? state.configLogic : state.configMusic);
   dbg('setActivePalette', next, { open: state.open });
   if (state.open) renderCatalog();
   updatePaletteToggleUI();
@@ -146,6 +157,8 @@ window.addEventListener('focus:change', (event) => {
     toggleButton.style.display = hasFocus ? 'none' : '';
   }
 });
+
+window.addEventListener('scene:new',()=>setMenuOpen(false));
 
 window.addEventListener('overview:change', (event) => {
   const active = typeof event?.detail?.active === 'boolean'
@@ -217,6 +230,15 @@ function ensureDock() {
   gameToggle.style.setProperty('--c-btn-size', 'var(--toy-spawner-button-size)');
   gameToggle.style.setProperty('--c-btn-bg', 'rgba(72, 132, 77, 0.9)');
 
+  const logicToggle=document.createElement('button');logicToggle.type='button';logicToggle.className='toy-spawner-logic c-btn';
+  logicToggle.setAttribute('aria-label','Logic / Structure');logicToggle.title='Logic / Structure';
+  logicToggle.dataset.helpLabel='Open the Logic / Structure menu';logicToggle.dataset.helpPosition='left';
+  logicToggle.innerHTML=BUTTON_ICON_HTML;
+  logicToggle.querySelector('.c-btn-core')?.style.setProperty('--c-btn-icon-url',"url('./assets/UI/T_ButtonLogic.svg')");
+  logicToggle.style.setProperty('--c-btn-size','var(--toy-spawner-button-size)');
+  logicToggle.style.setProperty('--c-btn-bg','rgba(91,104,168,.9)');
+  logicToggle.addEventListener('click',()=>togglePalette('logic'));
+
   const overview = document.createElement('button');
   overview.type = 'button';
   overview.id = 'overview-mode-button';
@@ -252,13 +274,14 @@ function ensureDock() {
   list.className = 'toy-spawner-list';
   menu.appendChild(list);
 
-  dock.append(trash, toggle, artToggle, gameToggle, overview, help, menu);
+  dock.append(trash, toggle, artToggle, logicToggle, gameToggle, overview, help, menu);
   document.body.appendChild(dock);
 
   state.dock = dock;
   state.toggle = toggle;
   state.artToggle = artToggle;
   state.gameToggle = gameToggle;
+  state.logicToggle=logicToggle;
   state.menu = menu;
   state.listHost = list;
   state.trash = trash;
@@ -279,18 +302,15 @@ function ensureDock() {
   });
 
   toggle.addEventListener('click', () => {
-    setActivePalette('music');
-    setMenuOpen(!state.open);
+    togglePalette('music');
   });
 
   artToggle.addEventListener('click', () => {
-    setActivePalette('art');
-    setMenuOpen(!state.open);
+    togglePalette('art');
   });
 
   gameToggle.addEventListener('click', () => {
-    setActivePalette('game');
-    setMenuOpen(!state.open);
+    togglePalette('game');
   });
 
   trash.addEventListener('click', (event) => {
@@ -335,6 +355,7 @@ function setMenuOpen(open) {
     cancelDrag();
   }
   updatePaletteToggleUI();
+  if(!state.open)document.dispatchEvent(new CustomEvent('toy-spawner:closed'));
 }
 
 function renderCatalog() {
@@ -771,6 +792,11 @@ function configureArt(options) {
   }
 }
 
+function configureLogic(options) {
+  state.configLogic=Object.assign({},state.configLogic,options||{});
+  if(state.activePalette==='logic'){state.config=state.configLogic;if(state.open)renderCatalog();}
+}
+
 function configureGame(options) {
   state.configGame = Object.assign({}, state.configGame, options || {});
   dbg('configure(game)', {
@@ -871,11 +897,12 @@ function hideTrashHint() {
 }
 
 export const ToySpawner = {
-  open: () => setMenuOpen(true),
+  open: () => {setActivePalette('music');setMenuOpen(true);},
   close: () => setMenuOpen(false),
   configure,
   configureArt,
   configureGame,
+  configureLogic,
   beginPanelDrag,
   updatePanelDrag,
   endPanelDrag,

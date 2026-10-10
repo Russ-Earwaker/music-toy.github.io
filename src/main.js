@@ -1,11 +1,17 @@
+import { createLogicalToyMetricsReader } from './logical-toy-anchor.js';
+import { CONNECTION_FLASH_DURATION, STRUCTURE_FLASH_DURATION, structureFlashStrength } from './graph-visuals.js';
+import { getActivationConnections } from './graph-transition-feedback.js';
+import { STRUCTURE_TYPES, structureTypeLabel } from './structure-types.js';
 import { heartbeatModel, transportLoopInfo } from './heartbeats.js';
 import { installHeartbeatView } from './heartbeat-view.js';
 import { getPanelTransport } from './panel-transport.js';
 let g_creationHeartbeatId = null;
+let g_creationConnectionPoint = null;
 document.addEventListener('pointerdown', event => {
-  if (!event.target.closest?.('.heartbeat-toy,.toy-spawner-menu')) g_creationHeartbeatId = null;
+  if (!event.target.closest?.('.heartbeat-toy,.toy-spawner-menu')) {g_creationHeartbeatId = null;g_creationConnectionPoint=null;}
 }, true);
-document.addEventListener('keydown', event => {if(event.key==='Escape')g_creationHeartbeatId=null;});
+document.addEventListener('keydown', event => {if(event.key==='Escape'){g_creationHeartbeatId=null;g_creationConnectionPoint=null;}});
+document.addEventListener('toy-spawner:closed',()=>{g_creationHeartbeatId=null;g_creationConnectionPoint=null;});
 import './mobile-viewport.js';
 import './fullscreen.js';
 // --- Module Imports ---
@@ -32,9 +38,6 @@ import { createChordWheel } from './chordwheel.js';
 import { createRippleSynth } from './ripplesynth.js';
 import { applyStackingOrder } from './stacking-manager.js';
 import { getViewportTransform, getViewportElement, screenToWorld } from './board-viewport.js';
-import {
-  measureToySideAnchor,
-} from './toy-side-button-position.js';
 import { getRect } from './layout-cache.js';
 
 import { bumpAllToyAudioGen, bumpToyAudioGen } from './toy-audio.js';
@@ -69,14 +72,13 @@ import { createChainSequenceAdapter } from './chain-sequence.js';
 import { createConnectionQuickAdd } from './connection-quick-add.js';
 import { createGraphBranchDrag } from './graph-branch-drag.js';
 import { createGraphLayoutAnimation } from './graph-layout-animation.js';
-import { createGraphPlacement, HEARTBEAT_OUTPUT_OFFSET } from './graph-placement.js';
+import { createGraphPlacement, HEARTBEAT_OUTPUT_OFFSET, clearVerticalSlot } from './graph-placement.js';
 import { clearCreationGraph } from './creation-graph.js';
-import { isObjectMusicallyActive } from './graph-playback-state.js';
+import { isObjectMusicallyActive, getVisualActiveToyIds } from './graph-playback-state.js';
 import { connectionModel } from './connections.js';
 import { createConnectionAdapter } from './connection-adapter.js';
 import { createConnectionView } from './connection-view.js';
 import { structureToyModel, structurePortPoint, structureToyWidth, structureToyHeight } from './structure-toys.js';
-import { getHeartbeatVisualPhase } from './heartbeat-visuals.js';
 import { MAIN_TRANSPORT_ID, transportRegistry } from './transport-registry.js';
 import { ensurePlaybackInstance, getPlaybackColumnWithinTurn, getPlaybackInstance } from './playback-instances.js';
 import { drawBlocksSection as drawOrangeTiles } from './ui-tiles.js';
@@ -1527,7 +1529,7 @@ mainLog('[MAIN] module start');
       }
       /* Normal view: force the outer border to animate */
       .toy-panel:not(.overview-outline).toy-playing-pulse{
-        animation: playingPulseAdaptive 0.3s ease-out;
+        animation: playingPulseAdaptive ${STRUCTURE_FLASH_DURATION}ms ease-out;
       }
       /* OVERVIEW ? suppress full-frame outline so only body overlay shows */
       .toy-panel.overview-outline.toy-playing{
@@ -5529,16 +5531,19 @@ function updateAllChainUIs({ force = false } = {}) {
     }
 }
 
-function triggerConnectorPulse(fromId, toId) {
+function triggerConnectorPulse(fromId, toId, activationTick = null) {
     // Keep the toy border pulse behaviour as before.
     const panel = document.getElementById(fromId);
-    if (panel) {
+    if (panel?.classList?.contains('toy-panel')) {
         pulseToyBorder(panel);
     }
 
     const now = performance.now();
-    const durationMs = 150;
-    g_pulsingConnectors.set(fromId, { toId, until: now + durationMs });
+    const durationMs = CONNECTION_FLASH_DURATION;
+    const pulseKey=connectionModel.list().find(c=>c.from.objectId===fromId&&c.to.objectId===toId)?.id;
+    // Together children at one runtime tick share a single source envelope.
+    const simultaneous = activationTick == null ? null : [...g_pulsingConnectors.values()].find(p => p.fromId === fromId && p.activationTick === activationTick && p.structureUntil > now);
+    if(pulseKey)g_pulsingConnectors.set(pulseKey, { fromId, toId, activationTick, until: now + durationMs, structureUntil: simultaneous?.structureUntil ?? now + STRUCTURE_FLASH_DURATION });
 
     const chainBtn = panel?.querySelector?.('.toy-chain-btn');
     if (chainBtn) {
@@ -5605,9 +5610,9 @@ function triggerConnectorPulse(fromId, toId) {
             }
         }
 
-        const pulseInfo = g_pulsingConnectors.get(fromId);
-        if (pulseInfo && pulseInfo.toId === toId && pulseInfo.until <= expireNow) {
-            g_pulsingConnectors.delete(fromId);
+        const pulseInfo = g_pulsingConnectors.get(pulseKey);
+        if (pulseInfo && pulseInfo.toId === toId && pulseInfo.structureUntil <= expireNow) {
+            g_pulsingConnectors.delete(pulseKey);
         }
 
         try {
@@ -5739,7 +5744,7 @@ function queueBodyOutlineSync(panel) {
   g_outlineSyncRaf = requestAnimationFrame(rafCb);
 }
 
-function pulseToyBorder(panel, durationMs = 320) {
+function pulseToyBorder(panel, durationMs = STRUCTURE_FLASH_DURATION) {
   if (!panel || !panel.isConnected) return;
   if (getPanelTransport(panel)?.state !== 'playing' || !isObjectMusicallyActive(connectionModel, panel.id)) return;
   if (window.__PERF_DISABLE_PULSES) return;
@@ -6290,7 +6295,18 @@ try {
     if (window.ToySpawner && typeof window.ToySpawner.configure === 'function') {
         window.ToySpawner.configure({
             getCatalog: () => getToyCatalog(),
-            create: createToyPanelAt,
+            create: (type,options) => {
+                const point=g_creationConnectionPoint;g_creationConnectionPoint=null;
+                if(!point)return createToyPanelAt(type,options);
+                const size=pickToyPanelSize(type),placement=g_graphPlacement.placeChild(point.objectId,size);
+                const panel=createToyPanelAt(type,{...options,...(placement?{centerX:placement.x+size.width/2,centerY:placement.y+size.height/2,skipSpawnPlacement:true}:{}),
+                  heartbeatId:heartbeatModel.get(point.objectId)?.id||MAIN_TRANSPORT_ID});
+                if(panel&&connectionModel.getPort(point)){
+                  connectionModel.registerObject(panel.id);
+                  connectionModel.connect(connectionModel.getPort(point).accepts.includes('transport')?'transport':'sequence',point,{objectId:panel.id,portId:'input'});
+                }
+                return panel;
+            },
             remove: destroyToyPanel,
         });
         if (typeof window.ToySpawner.configureArt === 'function') {
@@ -6316,60 +6332,21 @@ function getChainAnchor(panel, side = 'right') {
   const rendered=g_layoutAnimation.position(panel.id,target);
   return {x:at.x+rendered.x-target.x,y:at.y+rendered.y-target.y};
 }
+const readLogicalToyMetrics=createLogicalToyMetricsReader();
 function getLogicalChainAnchor(panel, side = 'right') {
-  // Internal board: panels live inside a different viewport/world that is transformed
-  // independently. Using style.left/top math here can drift/offset under pan+zoom.
-  // Prefer a rect->world conversion using the internal board's transform when active.
-  try {
-    const internalActive = !!(g_artInternal && g_artInternal.active);
-    const inInternal = internalActive && !!panel?.closest?.('#internal-board-world');
-    if (inInternal) {
-      const pr = panel.getBoundingClientRect();
-
-      const clientY = measureToySideAnchor(panel).clientY;
-
-      const clientX = (side === 'left') ? pr.left : pr.right;
-
-      // Internal board: prefer the internal helper which reads the live CSS camera vars.
-      let wHelper = null;
-      try { wHelper = window.__mtInternalBoard?.clientToWorld?.(clientX, clientY) || null; } catch {}
-
-      dbgChainInternalDeep('getChainAnchor(internal)', {
-        panelId: panel?.id || null,
-        side,
-        client: { x: clientX, y: clientY },
-        panelRect: pr ? { x: pr.x, y: pr.y, w: pr.width, h: pr.height } : null,
-        world_helper: (wHelper && Number.isFinite(wHelper.x) && Number.isFinite(wHelper.y)) ? { x: wHelper.x, y: wHelper.y } : null,
-        helper_meta: (wHelper && wHelper.rect) ? {
-          vp: { x: wHelper.rect.x, y: wHelper.rect.y, w: wHelper.rect.width, h: wHelper.rect.height },
-          local: (Number.isFinite(wHelper.localX) && Number.isFinite(wHelper.localY)) ? { x: wHelper.localX, y: wHelper.localY } : null,
-          scale: Number.isFinite(wHelper.scaleX) ? wHelper.scaleX : null,
-          pan: (Number.isFinite(wHelper.panX) && Number.isFinite(wHelper.panY)) ? { x: wHelper.panX, y: wHelper.panY } : null,
-          inside: !!wHelper.inside,
-        } : null,
-      });
-
-      if (wHelper && Number.isFinite(wHelper.x) && Number.isFinite(wHelper.y)) {
-        const target={x:parseFloat(panel.style.left)||0,y:parseFloat(panel.style.top)||0};
-        const shown=g_layoutAnimation.position(panel.id,target);
-        return { x: wHelper.x-shown.x+target.x, y: wHelper.y-shown.y+target.y };
-      }
-
-    }
-  } catch {}
-
   // Board-space coordinates of where the connector should start/end, accounting for scale transforms.
   const left = (parseFloat(panel.style.left) || 0);
   const top  = (parseFloat(panel.style.top)  || 0);
   const scale = panel.classList?.contains('toy-unfocused') ? 0.75 : 1;
-  const panelW = panel.offsetWidth || 0;
-  const panelH = panel.offsetHeight || 0;
+  const metrics=readLogicalToyMetrics(panel);
+  const panelW = metrics.width;
+  const panelH = metrics.height;
   const cx = left + panelW * 0.5;
   const cy = top  + panelH * 0.5;
   const halfW = (panelW * 0.5) * scale;
   const halfH = (panelH * 0.5) * scale;
 
-  const bodyOffsetY = measureToySideAnchor(panel).localY - panelH * 0.5;
+  const bodyOffsetY = metrics.localY - panelH * 0.5;
 
   const x = side === 'left' ? (cx - halfW) : (cx + halfW);
   const y = cy + bodyOffsetY * scale;
@@ -6742,7 +6719,7 @@ window.__graphIsDragDescendant = (root,id) => id!==root&&g_graphPlacementScope(i
 window.__graphTranslateDragDescendants = (root,dx,dy) => g_branchDrag.translateDescendants(root,dx,dy);
 function g_graphPlacementScope(id){return structureToyModel.get(id)?.artOwnerId||document.getElementById(id)?.dataset.artOwnerId||null;}
 // Coalesce topology growth only; playback and position drags never arrange.
-const g_layoutPending=new Set(),g_layoutConnections=new Set(),g_layoutSizes=new Map(),g_layoutParents=new Map(),g_layoutAttached=new Set();
+const g_layoutPending=new Set(),g_layoutConnections=new Set(),g_layoutSizes=new Map(),g_layoutParents=new Map(),g_layoutAttached=new Set(),g_layoutPreserved=new Set();
 let g_layoutQueued=false,g_layoutRestoring=false,g_layoutManualDrag=null;
 function requestGraphLayout(id,connectionId=null){
   if(g_layoutRestoring||connectionModel.getEditing()?.suspended||!id)return;
@@ -6759,8 +6736,8 @@ function requestGraphLayout(id,connectionId=null){
   if(connectionId)g_layoutConnections.add(connectionId);else g_layoutPending.add(id);
   if(g_layoutQueued)return;g_layoutQueued=true;
   queueMicrotask(()=>{
-    if(g_layoutRestoring||connectionModel.getEditing()?.suspended){g_layoutQueued=false;g_layoutPending.clear();g_layoutConnections.clear();g_layoutAttached.clear();return;}
-    g_layoutQueued=false;const roots=[...g_layoutPending],options={recentlyAttached:new Set(g_layoutAttached)};g_layoutPending.clear();g_layoutAttached.clear();
+    if(g_layoutRestoring||connectionModel.getEditing()?.suspended){g_layoutQueued=false;g_layoutPending.clear();g_layoutConnections.clear();g_layoutAttached.clear();g_layoutPreserved.clear();return;}
+    g_layoutQueued=false;const roots=[...g_layoutPending],options={recentlyAttached:new Set(g_layoutAttached),preserveSubtrees:new Set(g_layoutPreserved)};g_layoutPending.clear();g_layoutAttached.clear();g_layoutPreserved.clear();
     const receivesBranch=root=>[...options.recentlyAttached].some(id=>{let p=connectionModel.getParent(id);while(p){if(p.from.objectId===root)return true;p=connectionModel.getParent(p.from.objectId);}return false;});
     roots.sort((a,b)=>Number(receivesBranch(b))-Number(receivesBranch(a)));
     g_layoutAnimation.batch(()=>{
@@ -6771,10 +6748,10 @@ function requestGraphLayout(id,connectionId=null){
         if(!covered){
           g_graphPlacement.repairSubgraph(root,options);
           const incoming=connectionModel.getParent(root);
-          if(incoming&&!g_graphPlacement.hasUsableConnectionCorridor(incoming.id))g_graphPlacement.repairConnection(incoming.id);
+          if(incoming&&!g_graphPlacement.hasUsableConnectionCorridor(incoming.id))g_graphPlacement.repairConnection(incoming.id,options);
         }
       }
-      for(const id of g_layoutConnections)g_graphPlacement.repairConnection(id);g_layoutConnections.clear();
+      for(const id of g_layoutConnections)g_graphPlacement.repairConnection(id,options);g_layoutConnections.clear();
     });
     g_connectionView.render();
   });
@@ -6816,12 +6793,12 @@ window.arrangeSubgraph = rootId => {
   const result=g_layoutAnimation.batch(()=>g_graphPlacement.arrangeSubgraph(rootId,options));g_connectionView.render();return result;
 };
 window.hasUsableConnectionCorridor = id => g_graphPlacement.hasUsableConnectionCorridor(id);
-window.beginCreationGraphRestore = () => {g_branchDrag.clear();g_layoutAnimation.clear();g_layoutRestoring=true;g_layoutPending.clear();g_layoutConnections.clear();g_layoutAttached.clear();g_layoutParents.clear();g_layoutManualDrag=null;};
+window.beginCreationGraphRestore = () => {g_branchDrag.clear();g_layoutAnimation.clear();g_layoutRestoring=true;g_layoutPending.clear();g_layoutConnections.clear();g_layoutAttached.clear();g_layoutPreserved.clear();g_layoutParents.clear();g_layoutManualDrag=null;};
 window.endCreationGraphRestore = () => {g_layoutRestoring=false;};
 window.restoreConnections = (saved, structures = []) => {
   g_branchDrag.clear();g_layoutAnimation.clear();
   g_connectionView.reset();
-  g_layoutPending.clear();g_layoutConnections.clear();g_layoutSizes.clear();g_layoutParents.clear();g_layoutAttached.clear();g_layoutRestoring=true;
+  g_layoutPending.clear();g_layoutConnections.clear();g_layoutSizes.clear();g_layoutParents.clear();g_layoutAttached.clear();g_layoutPreserved.clear();g_layoutRestoring=true;
   g_connectionPanels = getConnectionPanels();
   if (!Array.isArray(saved)) {
     // Capture legacy links before removing the previous scene's Structures:
@@ -6885,11 +6862,12 @@ const g_connections = createConnectionAdapter(connectionModel, {
   },
 });
 window.clearCreationGraph = () => {
+  window.ToySpawner?.close?.();
   closeInstrumentPicker();
   heartbeatModel.restore([], DEFAULT_BPM);
   g_branchDrag.clear();g_layoutAnimation.clear();
   g_connectionView.reset();
-  g_layoutPending.clear();g_layoutConnections.clear();g_layoutSizes.clear();g_layoutParents.clear();g_layoutAttached.clear();g_layoutManualDrag=null;g_layoutRestoring=true;
+  g_layoutPending.clear();g_layoutConnections.clear();g_layoutSizes.clear();g_layoutParents.clear();g_layoutAttached.clear();g_layoutPreserved.clear();g_layoutManualDrag=null;g_layoutRestoring=true;
   clearCreationGraph({ model: connectionModel, structures: structureToyModel,
     sequence: g_sequenceChains, adapter: g_connections,
     clearScheduled: () => {
@@ -6927,6 +6905,8 @@ const g_connectionView = createConnectionView({
     },
     removeToy: toy => window.MusicToyFactory?.destroy?.(toy),
     pickToy: point => {
+      g_creationConnectionPoint=point;
+      g_creationHeartbeatId=heartbeatModel.get(point.objectId)?.id||null;
       document.dispatchEvent(new CustomEvent('connection:pick-toy', { detail: point }));
       window.ToySpawner?.open?.();
     },
@@ -6956,10 +6936,13 @@ const g_connectionView = createConnectionView({
       visible: panel => internal ? panel.dataset.artOwnerId === g_artInternal.artToyId : !panel.dataset.artOwnerId,
     };
   },
-  getPulse: connection => connection.kind === 'transport'
-    ? getHeartbeatVisualPhase(transportRegistry.get(connectionModel.getObject(connection.from.objectId)?.transportId)?.getState())
-    : (g_pulsingConnectors.get(connection.from.objectId)?.toId === connection.to.objectId
-      && g_pulsingConnectors.get(connection.from.objectId)?.until > performance.now()),
+  getStructurePulse: id => structureFlashStrength(g_pulsingConnectors,id,performance.now()),
+  getPulse: connection => {
+    const pulse=g_pulsingConnectors.get(connection.id);
+    if(pulse&&pulse.until>performance.now())return true;
+    if(pulse && pulse.structureUntil<=performance.now())g_pulsingConnectors.delete(connection.id);
+    return false;
+  },
   onFrame: () => {g_heartbeatView.render();g_branchDrag.sync();g_layoutAnimation.tick();g_connections.discoverOwnership();},
 });
 const g_heartbeatView = installHeartbeatView({
@@ -6971,18 +6954,40 @@ const g_heartbeatView = installHeartbeatView({
   onChange: () => { window.Persistence?.markDirty?.(); g_connectionView.render(); }
 });
 window.Heartbeats = heartbeatModel;
+// Logic objects use the shared dock's screen-to-world spawn convention.
+window.ToySpawner?.configureLogic?.({
+  getCatalog:()=>[...STRUCTURE_TYPES.map(type=>({type,name:structureTypeLabel(type),description:'Create a '+structureTypeLabel(type)+' Structure',size:{width:type==='timeline'?440:224,height:144}})),
+    {type:'heartbeat',name:'Heartbeat',description:'Create an independent transport',size:{width:176,height:104}}],
+  create:(type,{centerX=0,centerY=0,artOwnerId=null}={})=>{
+    const heartbeat=type==='heartbeat',width=heartbeat?176:type==='timeline'?440:224,height=heartbeat?104:type==='repeat'?128:144;
+    const obstacles=connectionModel.getObjectIds().filter(id=>g_graphPlacementScope(id)===artOwnerId).map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
+    const slot=clearVerticalSlot({x:centerX-width/2,y:centerY-height/2,width,height},obstacles,72);
+    const object=heartbeat?g_heartbeatView.createHeartbeat({x:slot.x+88,y:slot.y+52}):structureToyModel.createStandalone(type,{x:slot.x,y:slot.y,artOwnerId});
+    g_connectionView.render();window.Persistence?.markDirty?.();return object;
+  },
+});
 connectionModel.subscribe(event => {
   if (event.type === 'change' && !event.transient) {
     if(!g_layoutRestoring){
       for(const change of event.events||[event]){
         const c=change.connection;
+        if(change.layoutInsertion){
+          g_layoutAttached.add(change.layoutInsertion.insertedObjectId);
+          if(change.layoutInsertion.attachedBranchId){
+            g_layoutAttached.add(change.layoutInsertion.attachedBranchId);
+            for(const id of change.layoutInsertion.preserveSubtreeIds||[change.layoutInsertion.attachedBranchId])
+              if(connectionModel.getParent(id)?.from.objectId===change.layoutInsertion.insertedObjectId)g_layoutPreserved.add(id);
+          }
+          const insertedParent=connectionModel.getParent(change.layoutInsertion.insertedObjectId);
+          requestGraphLayout(change.layoutInsertion.layoutRootId,insertedParent?.kind==='transport'?insertedParent.id:null);
+        }
         if(change.previous?.kind==='sequence')requestGraphLayout(change.previous.from.objectId);
         if(change.removed?.kind==='sequence')requestGraphLayout(change.removed.from.objectId);
         if(c){
           const previous=g_layoutParents.get(c.to.objectId);
-          if(previous&&(previous.objectId!==c.from.objectId||previous.portId!==c.from.portId))requestGraphLayout(previous.objectId);
-          const oldBranchInNewStructure=connectionModel.getObject(c.from.objectId)?.structure&&!g_layoutSizes.has(c.from.objectId)&&previous?.objectId===connectionModel.getParent(c.from.objectId)?.from.objectId;
-          if(c.kind==='sequence'&&previous&&(previous.objectId!==c.from.objectId||previous.portId!==c.from.portId)&&!oldBranchInNewStructure)g_layoutAttached.add(c.to.objectId);
+          if(previous&&(previous.objectId!==c.from.objectId||previous.portId!==c.from.portId)
+            &&!connectionModel.getObject(previous.objectId)?.ports[previous.portId]?.accepts.includes('transport'))requestGraphLayout(previous.objectId);
+          if(c.kind==='sequence'&&(!previous||previous.objectId!==c.from.objectId||previous.portId!==c.from.portId))g_layoutAttached.add(c.to.objectId);
           g_layoutParents.set(c.to.objectId,c.from);
         }
         if(change.removedObjectId){g_layoutAnimation.cancel(change.removedObjectId);g_layoutParents.delete(change.removedObjectId);}
@@ -7013,7 +7018,8 @@ const g_sequenceChains = createChainSequenceAdapter({
   onTurn: (turn, previous) => {
     const toy = document.getElementById(turn.toyId);
     if (toy) toy.__chainStartAt = transportRegistry.get(turn.transportId).tickToAudioTime(turn.startTick);
-    if (previous && previous.toyId !== turn.toyId) triggerConnectorPulse(previous.toyId, turn.toyId);
+    if(transportRegistry.get(turn.transportId)?.state==='playing')
+      for(const edge of getActivationConnections(connectionModel,turn,previous))triggerConnectorPulse(edge.from.objectId,edge.to.objectId,turn.startTick);
   },
   onRelease: toyId => {
     const toy = document.getElementById(toyId);
@@ -7488,16 +7494,18 @@ function scheduler(){
     g_connections.projectActiveState();
     const allowChainWork = !window.__PERF_DISABLE_CHAIN_WORK;
 
-    if (CHAIN_FEATURE_ENABLE_SCHEDULER && transportRegistry.list().some(({transport}) => transport.state === 'playing') && hasChains && allowChainWork){
+    if (CHAIN_FEATURE_ENABLE_SCHEDULER && transportRegistry.list().some(({transport}) => transport.state === 'playing') && allowChainWork){
       // The Sequence audio lookahead owns all handoffs, including self-timed toys.
-      g_sequenceChains.updateCurrent(Number(info.currentTick) || 0);
+      if (hasChains) g_sequenceChains.updateCurrent(Number(info.currentTick) || 0);
 
       // --- Phase A: chain-active flags ---
       const tActiveStart = __perfOn ? performance.now() : 0;
       const forceSequencerAll = !!window.__PERF_FORCE_SEQUENCER_ALL;
       const activeToyIds = forceSequencerAll
         ? new Set(getSequencedToys().map(p => p.id).filter(Boolean))
-        : new Set([...g_sequenceChains.getActiveToyIds()].filter(id => getPanelTransport(document.getElementById(id))?.state === 'playing'));
+        : getVisualActiveToyIds(connectionModel, getSequencedToys(), {
+          isPlaying: id => !!id && transportRegistry.get(id)?.state === 'playing',
+        });
       const hasActiveToys = activeToyIds.size > 0;
       if (debugFirstStep()) {
         console.log('[chain][debug] activeToyIds', {

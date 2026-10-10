@@ -158,8 +158,10 @@ test('shared SVG pointer engine connects, reconnects, deletes, preserves fan-out
     for(const id of ['A','B','C'])for(const side of ['input','output']){
       const circle=port(id,side);
       assert.ok(circle,'both endpoint circles are always rendered');
-      assert.equal(circle.getAttribute('r'),'6','socket radius follows board zoom');
-      assert.notEqual(circle.getAttribute('display'),'none');
+      assert.equal(circle.getAttribute('r'),'13','socket radius follows board zoom');
+      const extending=side==='output'&&circle.getAttribute('data-connected')==='false';
+      assert.equal(circle.getAttribute('display'),'none');
+      if(extending)assert.equal(circle.parentNode.children.find(n=>n.tagName==='foreignObject').getAttribute('display'),'inline');
     }
     assert.equal(port('C','input').getAttribute('data-connected'),'true');
     drag(port('C','input'),229,130,129,130);

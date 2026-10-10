@@ -1,7 +1,8 @@
+import { GRAPH_ENDPOINT_DIAMETER, GRAPH_ENDPOINT_HIT_DIAMETER, GRAPH_MIDPOINT_DIAMETER, GRAPH_MIDPOINT_HIT_DIAMETER } from './graph-visuals.js';
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 import { HEARTBEAT_OUTPUT_OFFSET } from './graph-placement.js';
 import { connectionCurve, curvePath, curvePoint, projectConnectionPoint } from './connection-geometry.js';
-import { structurePortPoint, structureToyHeight, structureToyWidth, STRUCTURE_PORT_RADIUS, STRUCTURE_PLUS_RADIUS, STRUCTURE_PORT_HIT_RADIUS } from './structure-toys.js';
+import { structurePortPoint, structureToyHeight, structureToyWidth } from './structure-toys.js';
 import { TICKS_PER_BEAT } from './audio-core.js';
 import { STRUCTURE_TYPES, MAX_REPEAT_COUNT, structureTypeLabel } from './structure-types.js';
 
@@ -14,7 +15,7 @@ function svgNode(tag, attrs = {}) {
 }
 
 export function createConnectionView({ model, getContext, getPanels, getToyPoint, getHeartbeatPoint,
-  onConnectionDrag = () => {}, getPulse = () => null, onFrame = () => {}, getRenderedStructure = s => s, onStructureDrag = () => {},
+  onConnectionDrag = () => {}, getPulse = () => null, getStructurePulse = () => 0, onFrame = () => {}, getRenderedStructure = s => s, onStructureDrag = () => {},
   onStructureMove = null, onStructureDragUpdate = () => {}, onStructureDragEnd = () => {}, isBranchDragging = () => false, structureToys = null, onQuickAdd = () => {} }) {
   const svg = svgNode('svg', { class: 'connection-layer', 'aria-label': 'Musical connections' });
   Object.assign(svg.style, { position: 'absolute', inset: '0', width: '100%', height: '100%',
@@ -23,11 +24,17 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     overflow: 'visible', pointerEvents: 'none', zIndex: '120' });
   const style = document.createElement('style');
   style.textContent = `
-    .connection-layer .connection-path { fill:none; stroke:#99b9ff; stroke-width:4; pointer-events:stroke; cursor:pointer; }
+    .connection-layer .connection-path { fill:none; pointer-events:stroke; cursor:pointer; }
     .connection-layer .connection-hit { fill:none; stroke:transparent; stroke-width:18; pointer-events:stroke; cursor:pointer; }
-    .connection-layer .transport .connection-path { stroke:rgba(155,180,255,.38); stroke-width:1.5; stroke-dasharray:3 7; }
     .connection-layer .connection-port { fill:#172539; stroke:#a3c6ff; stroke-width:2; pointer-events:all; cursor:crosshair; touch-action:none; }
     .connection-layer .transport-port { stroke:#b1a5ee; }
+    .connection-layer .connection-path:hover { stroke:#e1ebff; }
+    .connection-layer .graph-extend-object { overflow:visible; pointer-events:none; }
+    .connection-layer .graph-extend { pointer-events:all; touch-action:none; }
+    .graph-endpoint-overlay { position:absolute; inset:0; display:grid; place-items:center; color:#eef5ff; font:bold 18px system-ui; pointer-events:none; z-index:3; text-shadow:0 1px 3px #000; }
+    .structure-activation { fill:none; stroke:#d9e8ff; pointer-events:none; }
+    .graph-extend.compatible { --accent:#7ef1cb; }
+    .graph-extend.requires-promotion { --accent:#ffcc7c; }
     .connection-layer .connection-port { stroke-width:2.5; fill:#263c59; }
     .connection-layer .connection-port.connected { fill:#1b2d43; stroke:#aec7e8; }
     .connection-layer .compatible { fill:#265f55; stroke:#7ef1cb; }
@@ -35,6 +42,9 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     .connection-layer .connection-midpoint { fill:#20304a; stroke:#93b1e5; stroke-width:1.5; pointer-events:all; cursor:pointer; }
     .connection-layer .selected .connection-path { stroke:#e1ebff; }
     .connection-layer .selected .connection-midpoint { fill:#6689c9; }
+    .connection-layer .connection-midpoint { transition:filter .15s ease,stroke-width .15s ease; }
+    .connection-layer .connection-midpoint-hit:hover + .connection-midpoint, .connection-layer .connection-midpoint:hover { filter:brightness(1.6) drop-shadow(0 0 5px #93b1e5); stroke-width:3; }
+    .connection-layer .connection-midpoint-hit:active + .connection-midpoint, .connection-layer .connection-midpoint:active { filter:brightness(1.9); stroke-width:5; }
     .connection-layer .connection-label { fill:#dbe9ff; font-family:system-ui; pointer-events:none; }
     .connection-layer .connection-delete { fill:#422d3e; stroke:#ec9ba6; pointer-events:all; cursor:pointer; }
     .connection-layer .connection-preview { fill:none; stroke:#c2d7ff; stroke-width:3; stroke-dasharray:6 5; pointer-events:none; }
@@ -69,6 +79,11 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   let tapPoint = null, gestureMoved = false;
   let statusTimer = null;
   let menuOwner = null;
+  let worldMode = false;
+  function pointerPoint(event) {
+    const rect=svg.getBoundingClientRect(), scale=worldMode?(getContext().transform?.scale||1):1;
+    return {x:(event.clientX-rect.left)/scale,y:(event.clientY-rect.top)/scale};
+  }
   const closeMenu = () => { menu.hidden = true; menuOwner = null; };
   const ownerOf = target => { for(let n=target;n;n=n.parentNode){const id=n.getAttribute?.('data-structure-id');if(id)return id;}return null; };
   function selectStructure(id) {
@@ -96,7 +111,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     closeMenu();
     if (!model.beginDrag(point, options)) return;
     tapPoint = !options?.connectionId && model.getPort(point)?.direction === 'out'
-      && options.kind === 'sequence' && !model.list().some(c => c.from.objectId === point.objectId && c.from.portId === point.portId) ? point : null;
+      && ['sequence','transport'].includes(options.kind) && !model.list().some(c => c.from.objectId === point.objectId && c.from.portId === point.portId) ? point : null;
     gestureMoved = false;
     pointerId = event.pointerId;
     pointer = { x: event.clientX, y: event.clientY };
@@ -116,8 +131,16 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     hit.addEventListener('pointerdown',e=>start(e,point,model.socketDragIntent(point,kind)));
     const label = svgNode('text', { class: 'connection-label', 'text-anchor': 'middle' });
     label.textContent = model.getPort(point)?.direction === 'out' ? '+' : '‹';
-    group.append(hit,circle, label); portsGroup.append(group);
-    return { group, hit, circle, label, point, kind };
+    const extendObject=svgNode('foreignObject',{class:'graph-extend-object',display:'none'});
+    const extendButton=document.createElement('button');extendButton.type='button';extendButton.className='c-btn graph-extend';
+    extendButton.setAttribute('aria-label',circle.getAttribute('aria-label'));
+    for(const name of ['outer','glow','core']){const layer=document.createElement('div');layer.className=`c-btn-${name}`;extendButton.append(layer);}
+    extendButton.addEventListener('pointerdown',e=>start(e,point,model.socketDragIntent(point,kind)));
+    extendButton.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();if(extendButton.getAttribute('data-extend')==='true')onQuickAdd(point);render();}});
+    const overlay=document.createElement('span');overlay.className='graph-endpoint-overlay';extendButton.append(overlay);
+    extendObject.append(extendButton);
+    group.append(hit,circle, label,extendObject); portsGroup.append(group);
+    return { group, hit, circle, label, point, kind, extendObject, extendButton, overlay };
   }
   function openMenu(connectionId = null, structureId = null) {
     if (!structureToys) return;
@@ -134,7 +157,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       b.addEventListener('click', e => { e.stopPropagation(); closeMenu(); action(); render(); });
       menu.append(b);
     };
-    if (kind === 'sequence') {
+    if (kind === 'sequence' || kind === 'transport') {
       for (const type of STRUCTURE_TYPES) button(structureTypeLabel(type), () => {
         if (s && structureToys.conversion(s.id,type).lossy) {
           menu.replaceChildren();
@@ -155,8 +178,9 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     }
     if (c) button('Disconnect', () => { model.disconnect(c.id); select(null); });
     const visual = edges.get(connectionId);
-    const at = s && structureId ? projectConnectionPoint({ x: s.x + structureToyWidth(s)/2, y: s.y + 30 }, getContext().transform)
+    let at = s && structureId ? projectConnectionPoint({ x: s.x + structureToyWidth(s)/2, y: s.y + 30 }, getContext().transform)
       : { x: Number(visual?.midpoint.getAttribute('cx')) || 0, y: Number(visual?.midpoint.getAttribute('cy')) || 0 };
+    if(worldMode && !(s && structureId)) at=projectConnectionPoint(at,getContext().transform);
     menu.style.left = `${Math.max(8, Math.min((viewport.clientWidth || 1000) - 135, at.x - 55))}px`;
     menu.style.top = `${Math.max(8, at.y + 24)}px`; menu.hidden = false;
   }
@@ -165,6 +189,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   function makeCard(s) {
     const group = svgNode('g', { id: s.id, 'data-structure-id': s.id });
     const rect = svgNode('rect', { rx: 12, tabindex: 0, role: 'button' });
+    const activation = svgNode('rect', { rx:12, class:'structure-activation' });
     const name = svgNode('text', { class: 'structure-name', 'text-anchor': 'middle' });
     const count = svgNode('text', { class:'structure-name structure-count', 'text-anchor':'middle',role:'button',tabindex:0,'aria-label':'Edit repeat count' });
     const moveHandle = svgNode('rect', { class: 'structure-move', rx: 3, role: 'button', 'aria-label': 'Move structure' });
@@ -198,8 +223,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const toggle=e=>{e.preventDefault();e.stopPropagation();closeMenu();const current=structureToys.get(s.id);structureToys.setCollapsed(s.id,!current.collapsed);if(!current.collapsed)selectedStructure=null;else selectStructure(s.id);render();};
     minimise.addEventListener('pointerdown',toggle);
     minimise.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')toggle(e);});
-    group.append(rect, typeButton, name, count, tracksGroup, moveHandle,minimise,minimiseLabel); cardsGroup.append(group);
-    return { group, rect, typeButton, name, count, moveHandle, minimise,minimiseLabel, tracksGroup, tracks };
+    group.append(rect, activation, typeButton, name, count, tracksGroup, moveHandle,minimise,minimiseLabel); cardsGroup.append(group);
+    return { group, rect, activation, typeButton, name, count, moveHandle, minimise,minimiseLabel, tracksGroup, tracks };
   }
   function makeEdge(c) {
     const group = svgNode('g', { 'data-connection-id': c.id });
@@ -208,9 +233,9 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const hit = svgNode('path', { class: 'connection-hit', tabindex: 0, role: 'button', 'aria-label': `Select ${c.kind} connection` });
     const path = svgNode('path', { class: 'connection-path' });
     const pulse = svgNode('path', { fill: 'none', stroke: 'rgba(180,205,255,.65)',
-      'stroke-width': 2, 'pointer-events': 'none', pathLength: 1000, 'stroke-dasharray': '90 1000' });
-    const midpointHit=svgNode('circle',{r:20,fill:'transparent','pointer-events':'all'});
-    const midpoint = svgNode('circle', { r: 8, class: 'connection-midpoint', tabindex: 0, role: 'button', 'aria-label': `${c.kind} connection options` });
+      'stroke-width': 12, 'pointer-events': 'none', class:'connection-transition', opacity:'.55' });
+    const midpointHit=svgNode('circle',{r:GRAPH_MIDPOINT_HIT_DIAMETER/2,class:'connection-midpoint-hit',fill:'transparent','pointer-events':'all'});
+    const midpoint = svgNode('circle', { r: GRAPH_MIDPOINT_DIAMETER/2, class: 'connection-midpoint', tabindex: 0, role: 'button', 'aria-label': `${c.kind} connection options` });
     const remove = svgNode('circle', { r: 10, class: 'connection-delete', tabindex: 0, role: 'button', 'aria-label': 'Disconnect connection' });
     const cross = svgNode('text', { class: 'connection-label', 'text-anchor': 'middle' }); cross.textContent = '×';
     for (const node of [hit, path, midpoint,midpointHit]) node.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); select(c.id); });
@@ -231,9 +256,14 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const context = getContext();
     if (!context?.viewportEl) return;
     if (viewport !== context.viewportEl) {
-      viewport = context.viewportEl; viewport.append(svg, status);
+      viewport = context.viewportEl; viewport.append(status);
       if (structureToys) viewport.append(menu);
     }
+    worldMode=!!context.worldEl;
+    const host=context.worldEl||viewport;
+    if(svg.parentNode!==host)host.append(svg);
+    Object.assign(svg.style,{width:worldMode?'1px':'100%',height:worldMode?'1px':'100%'});
+    const geometryTransform=worldMode?{scale:1,tx:0,ty:0}:context.transform;
     const desired = new Map();
     for (const panel of getPanels()) {
       if (context.visible && !context.visible(panel)) continue;
@@ -250,11 +280,15 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       visibleStructures.add(s.id);
       let card = cards.get(s.id);
       if (!card) { card = makeCard(s); cards.set(s.id, card); }
-      const pos = projectConnectionPoint(s, context.transform), scale = context.transform?.scale || 1;
+      const pos = projectConnectionPoint(s, geometryTransform), scale = geometryTransform?.scale || 1;
       set(card.rect, 'x', pos.x); set(card.rect, 'y', pos.y);
       const width=structureToyWidth(s);
       set(card.rect, 'width', width * scale); set(card.rect, 'height', structureToyHeight(s) * scale);
       set(card.rect, 'class', `structure-card ${s.type}${selectedStructure === s.id ? ' selected' : ''}`);
+      const flash=getStructurePulse(s.id);
+      for(const attr of ['x','y','width','height'])set(card.activation,attr,card.rect.getAttribute(attr));
+      set(card.activation,'opacity',flash);set(card.activation,'stroke-width',(3+5*flash)*scale);
+      card.activation.style.filter='drop-shadow(0 0 '+10*scale+'px #d9e8ff)';
       set(card.rect, 'aria-label', `${structureTypeLabel(s.type)} structure`);
       set(card.rect, 'aria-expanded', !s.collapsed);
       set(card.group,'data-collapsed',!!s.collapsed);
@@ -291,7 +325,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
             if(current)structureToys.setOffset(s.id,entry.portId,current.offsetTick+(e.key==='ArrowRight'?1:-1)*TICKS_PER_BEAT);render();
           });
         }
-        const y=projectConnectionPoint(structurePortPoint(s,entry.portId),context.transform).y;
+        const y=projectConnectionPoint(structurePortPoint(s,entry.portId),geometryTransform).y;
         set(track.label,'x',pos.x+8*scale);set(track.label,'y',y+4*scale);set(track.label,'font-size',12*scale);
         track.label.textContent=`${i+1} ${entry.label}`;
         set(track.bar,'x',pos.x+(102+entry.offsetTick*pixelsPerTick)*scale);set(track.bar,'y',y-8*scale);
@@ -324,8 +358,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     for (const [id, value] of desired) {
       let visual = ports.get(id);
       if (!visual) { visual = makePort(value.point, value.kind); ports.set(id, visual); }
-      const projected = projectConnectionPoint(value.world, context.transform);
-      if (value.kind === 'transport') projected.x += HEARTBEAT_OUTPUT_OFFSET*(context.transform?.scale||1);
+      const projected = projectConnectionPoint(value.world, geometryTransform);
+      if (value.kind === 'transport') projected.x += HEARTBEAT_OUTPUT_OFFSET*(geometryTransform?.scale||1);
       points.set(id, projected); position(visual.circle, projected);position(visual.hit,projected);
       const structure = structureToys?.get(value.point.objectId);
       if(structure)set(visual.group,'data-structure-id',structure.id);
@@ -333,23 +367,31 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         (key(c.from)===key(value.point) && !(editing?.suspended && editing.connectionId===c.id && editing.end==='from'))
         || (key(c.to)===key(value.point) && !(editing?.suspended && editing.connectionId===c.id && editing.end==='to')));
       set(visual.circle, 'data-connected', attached);
+      const extend = !attached && model.getPort(value.point)?.direction==='out';
+      const scale=geometryTransform?.scale||1,diameter=GRAPH_ENDPOINT_DIAMETER*scale,padding=(GRAPH_ENDPOINT_HIT_DIAMETER-GRAPH_ENDPOINT_DIAMETER)/2*scale;
+      set(visual.extendObject,'display','inline');
+      set(visual.extendObject,'x',projected.x-diameter/2-padding);set(visual.extendObject,'y',projected.y-diameter/2-padding);
+      set(visual.extendObject,'width',diameter+padding*2);set(visual.extendObject,'height',diameter+padding*2);
+      visual.extendButton.style.cssText=`--c-btn-size:${diameter}px;--c-btn-icon-url:url('./assets/UI/${extend?'T_ButtonExtend':'T_ButtonEmpty'}.png');position:absolute;left:${padding}px;top:${padding}px`;
+      set(visual.circle,'display','none');set(visual.label,'display','none');
+      set(visual.extendButton,'data-extend',extend);
+      set(visual.circle,'tabindex',-1);set(visual.circle,'aria-hidden','true');
       if (structure) {
-        const scale=context.transform?.scale || 1;
-        set(visual.circle,'r',(attached?STRUCTURE_PORT_RADIUS:STRUCTURE_PLUS_RADIUS)*scale);
-        set(visual.hit,'r',STRUCTURE_PORT_HIT_RADIUS*scale);set(visual.label,'font-size',20*scale);
         const childEdge = attached && model.list('sequence',{includeSuspended:true}).find(c => c.from.objectId === structure.id && c.from.portId === value.point.portId);
         const text = value.point.portId === 'input' ? '‹' : childEdge ? String(Number(value.point.portId.split(':')[1]) + 1) : '+';
         if (visual.label.textContent !== text) visual.label.textContent = text;
       }
       else {
-        const scale=context.transform?.scale||1;
-        set(visual.hit,'r',12*scale);set(visual.circle,'r',12*scale);set(visual.label,'font-size',12*scale);
-        const text = value.point.portId === 'input' ? '‹' : attached && value.kind !== 'transport' ? '·' : '+';
+        const text = value.point.portId === 'input' ? '‹' : attached ? '·' : '+';
         if (visual.label.textContent !== text) visual.label.textContent = text;
       }
-      set(visual.label, 'x', projected.x); set(visual.label, 'y', projected.y + (structure?6:4)*(context.transform?.scale||1));
+      set(visual.label, 'x', projected.x); set(visual.label, 'y', projected.y + (structure?6:4)*(geometryTransform?.scale||1));
+      set(visual.hit,'r',GRAPH_ENDPOINT_HIT_DIAMETER/2*scale);
+      set(visual.circle,'r',GRAPH_ENDPOINT_DIAMETER/2*scale);
+      visual.overlay.textContent=extend?'':visual.label.textContent;
+      visual.overlay.style.fontSize=18*scale+'px';
       const result = editing ? model.preview(value.point) : null;
-      if(result?.ok){set(visual.circle,'r',Number(visual.circle.getAttribute('r'))*1.2);}
+      set(visual.extendButton,'class',`c-btn graph-extend${result?.ok?' compatible':result?.reason==='requires-promotion'?' requires-promotion':''}`);
       set(visual.circle, 'class', `connection-port${attached ? ' connected' : ''}${value.kind === 'transport' ? ' transport-port' : ''}${result?.ok ? ' compatible' : result?.reason === 'requires-promotion' ? ' requires-promotion' : ''}`);
     }
     for (const [id, visual] of ports) if (!desired.has(id)) { visual.group.remove(); ports.delete(id); }
@@ -357,42 +399,45 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     for (const c of model.list(null,{includeSuspended:true})) {
       let a = points.get(key(c.from)), b = points.get(key(c.to));
       const reconnect=editing?.connectionId===c.id && gestureMoved && pointer;
-      if(reconnect){const rect=svg.getBoundingClientRect(),loose={x:pointer.x-rect.left,y:pointer.y-rect.top};if(editing.end==='from')a=loose;else b=loose;}
+      if(reconnect){const loose=pointerPoint({clientX:pointer.x,clientY:pointer.y});if(editing.end==='from')a=loose;else b=loose;}
       if (!a || !b) continue;
       present.add(c.id);
       let visual = edges.get(c.id);
       if (!visual) { visual = makeEdge(c); edges.set(c.id, visual); }
+      set(visual.hit,'aria-label',`Select ${c.kind} connection`);
+      set(visual.midpoint,'aria-label',`${c.kind} connection options`);
       set(visual.group, 'class', `${c.kind}${selected === c.id ? ' selected' : ''}`);
       set(visual.middleGroup, 'class', `${c.kind}${selected === c.id ? ' selected' : ''}`);
       set(visual.group, 'display', 'inline');
       set(visual.middleGroup, 'display', reconnect ? 'none' : 'inline');
       set(visual.actions,'display',reconnect?'none':'inline');
       set(visual.hit,'pointer-events',reconnect?'none':'stroke');
-      const curve = connectionCurve(a, b), path = curvePath(curve), middle = curvePoint(curve, 0.5);
+      const geometryKey=[a.x,a.y,b.x,b.y].join(',');
+      if(visual.geometryKey!==geometryKey){
+        const curve=connectionCurve(a,b);visual.geometry={path:curvePath(curve),middle:curvePoint(curve,.5)};visual.geometryKey=geometryKey;
+      }
+      const {path,middle}=visual.geometry;
       set(visual.path, 'd', path); set(visual.hit, 'd', path); position(visual.midpoint, middle);position(visual.midpointHit,middle);
-      const controlScale=context.transform?.scale||1;
-      set(visual.midpoint,'r',8*controlScale);set(visual.midpointHit,'r',20*controlScale);
+      const controlScale=geometryTransform?.scale||1;
+      set(visual.midpoint,'r',GRAPH_MIDPOINT_DIAMETER/2*controlScale);set(visual.midpointHit,'r',GRAPH_MIDPOINT_HIT_DIAMETER/2*controlScale);
       set(visual.remove,'r',10*controlScale);set(visual.cross,'font-size',12*controlScale);
-      position(visual.remove, { x: middle.x, y: middle.y - 22*controlScale });
-      set(visual.cross, 'x', middle.x); set(visual.cross, 'y', middle.y - 18*controlScale);
+      position(visual.remove, { x: middle.x, y: middle.y - 40*controlScale });
+      set(visual.cross, 'x', middle.x); set(visual.cross, 'y', middle.y - 36*controlScale);
       for (const node of [visual.remove, visual.cross]) set(node, 'display', selected === c.id ? 'inline' : 'none');
       const pulsing = getPulse(c);
-      set(visual.path, 'stroke-width', c.kind === 'sequence' && pulsing ? 6 : c.kind === 'transport' ? 1.5 : 4);
-      const travel = c.kind === 'transport' ? pulsing?.travel : null;
-      set(visual.pulse, 'display', travel == null ? 'none' : 'inline');
-      if (travel != null) {
-        set(visual.pulse, 'd', path);
-        set(visual.pulse, 'stroke-dashoffset', -Math.max(0, travel - 0.09) * 1000);
-      }
+      set(visual.path, 'stroke-width', pulsing ? 10 : 6);
+      set(visual.path, 'stroke', pulsing ? '#f5fbff' : '#99b9ff');
+      set(visual.pulse, 'display', pulsing ? 'inline' : 'none');
+      set(visual.pulse, 'd', path);
+
     }
     for (const [id, visual] of edges) if (!present.has(id)) { visual.group.remove(); visual.middleGroup.remove(); visual.actions.remove(); edges.delete(id); }
     // Paths sit below all midpoint controls and ports.
     set(looseEndpoint,'display',editing&&pointer&&gestureMoved?'inline':'none');
-    if(editing&&pointer&&gestureMoved){const r=svg.getBoundingClientRect();position(looseEndpoint,{x:pointer.x-r.left,y:pointer.y-r.top});set(looseEndpoint,'r',10*(context.transform?.scale||1));}
+    if(editing&&pointer&&gestureMoved){position(looseEndpoint,pointerPoint({clientX:pointer.x,clientY:pointer.y}));set(looseEndpoint,'r',10*(geometryTransform?.scale||1));}
     if (editing && !editing.connectionId && pointer) {
       const fixed = points.get(key(editing.fixed));
-      const rect = svg.getBoundingClientRect();
-      const loose = { x: pointer.x - rect.left, y: pointer.y - rect.top };
+      const loose = pointerPoint({clientX:pointer.x,clientY:pointer.y});
       if (fixed) {
         set(previewPath, 'display', 'inline');
         set(previewPath, 'd', curvePath(connectionCurve(editing.end === 'to' ? fixed : loose, editing.end === 'to' ? loose : fixed)));
@@ -402,8 +447,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   function targetAt(event) {
     // A viewport may have a native scroll offset (including focus scrolling).
     // Pointer coordinates belong to the rendered SVG, not its container box.
-    const rect = svg.getBoundingClientRect();
-    const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const point = pointerPoint(event);
     let target = null, nearest = Infinity;
     for (const [id, projected] of points) {
       const distance = Math.hypot(point.x - projected.x, point.y - projected.y);

@@ -1,4 +1,3 @@
-import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 import { readToySoundState } from './instrument-state.js';
 
 // Creation/placement stays in the existing toy factory; every resulting wire
@@ -6,8 +5,7 @@ import { readToySoundState } from './instrument-state.js';
 export function createConnectionQuickAdd({ model, structures, getToy, createToy, removeToy = () => {}, pickToy = () => {} }) {
   return point => {
     const port = model.getPort(point);
-    if (port?.direction !== 'out' || model.list().some(c => c.from.objectId === point.objectId && c.from.portId === point.portId)
-      || point.objectId === MAIN_TRANSPORT_ID) return null;
+    if (port?.direction !== 'out' || model.list().some(c => c.from.objectId === point.objectId && c.from.portId === point.portId)) return null;
     const structure = structures?.get(point.objectId), source = getToy(point.objectId);
     const type = structure ? structure.lastChildType : source?.dataset?.toy;
     if (!type) { pickToy(point); return null; }

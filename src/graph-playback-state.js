@@ -18,3 +18,9 @@ export function projectMusicalActiveState(panel, active) {
     panel.__loopgridNeedsRedraw = true;
   }
 }
+
+// Playback instances are the shared authority for standalone and Structure turns.
+export function getVisualActiveToyIds(model, panels, { getInstance = getPlaybackInstance, isPlaying = () => true } = {}) {
+  return new Set(panels.filter(panel => isPlaying(model.getTransportId(panel.id))
+    && isObjectMusicallyActive(model, panel.id, getInstance(panel.id))).map(panel => panel.id));
+}

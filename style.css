@@ -812,6 +812,13 @@ body.internal-board-active #internal-board-viewport.board-viewport {
   align-items: center;
 }
 
+/* The 25% instrument blend caps header luminance, even for white custom colours. */
+.toy-panel[data-instrument-colour] .toy-header {
+  background: color-mix(in srgb, var(--instrument-colour) 25%, #101725 75%);
+  color: #f4f7ff;
+}
+.toy-panel[data-instrument-colour] .toy-header .toy-title,
+.toy-panel[data-instrument-colour] .toy-header .toy-instrument-name { color: #f4f7ff; }
 /* Shared musical-toy instrument control; label does not change panel bounds. */
 .toy-inst-btn { position: relative; flex: 0 0 auto; }
 .toy-panel[data-instrument-colour] .toy-header::after {
@@ -2973,6 +2980,7 @@ body.internal-board-active #board-main {
 .toy-spawner-toggle,
 .toy-spawner-art,
 .toy-spawner-game,
+.toy-spawner-logic,
 .toy-spawner-trash,
 .toy-spawner-help,
 .toy-spawner-overview {
@@ -3175,6 +3183,7 @@ body.internal-board-active #board-main {
 .toy-spawner-toggle:focus-visible,
 .toy-spawner-trash:focus-visible,
 .toy-spawner-game:focus-visible,
+.toy-spawner-logic:focus-visible,
 .toy-spawner-help:focus-visible,
 .toy-spawner-overview:focus-visible {
   outline: 2px solid var(--accent);
@@ -6584,6 +6593,7 @@ body.beat-swarm-subboard-open #topbar [data-action="toggle-play"] {
 body.beat-swarm-active .toy-spawner-dock .toy-spawner-toggle,
 body.beat-swarm-active .toy-spawner-dock .toy-spawner-art,
 body.beat-swarm-active .toy-spawner-dock .toy-spawner-game,
+body.beat-swarm-active .toy-spawner-dock .toy-spawner-logic,
 body.beat-swarm-active .toy-spawner-dock .toy-spawner-overview,
 body.beat-swarm-active .toy-spawner-dock .toy-spawner-trash {
   display: none !important;
@@ -6710,9 +6720,12 @@ body.beat-swarm-active .anchor-mini-btn {
     gap: var(--ui-float-gap-sm);
   }
   .toy-spawner-menu {
-    position: static;
-    margin-top: 6px;
-    width: min(92vw, 360px);
+    position: absolute;
+    top: auto;
+    bottom: 0;
+    margin-top: 0;
+    box-sizing: border-box;
+    width: min(360px, calc(100vw - var(--toy-spawner-button-size) - var(--app-pad-right) - 3 * var(--ui-float-gap-sm)));
     max-height: 60vh;
   }
 }
