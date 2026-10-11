@@ -22,7 +22,7 @@ test('pattern references reuse a source without replacing its primary parent, in
  assert.equal(m.connect('sequence',output('A'),point('B','pattern')).reason,'pattern-needs-structure');
  const ref=m.connect('sequence',point('section','child:0'),point('A','pattern')).connection;
  m.beginDrag(ref.to,{connectionId:ref.id,end:'to'});m.detachDrag();
- assert.equal(m.preview(input('B')).to.portId,'pattern');assert.equal(m.drop(input('B')).ok,true);
+ assert.equal(m.preview(point('B','pattern')).to.portId,'pattern');assert.equal(m.drop(point('B','pattern')).ok,true);
  assert.equal(m.getParent('B').id,original.id);assert.equal(m.get(ref.id).to.portId,'pattern');
 });
 

@@ -1,0 +1,6412 @@
+{
+  "kind": "normal-graph-harmony-integration",
+  "createdAt": "2026-10-11T15:12:06.851Z",
+  "authoredSources": null,
+  "events": [
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",0,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 48,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 0.2623333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",0,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 96,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 0.513
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",0,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 144,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 0.761
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",0,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 192,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 1.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",0,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 240,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 1.2623333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",0,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 288,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 1.5023333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",0,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 336,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 1.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",384,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 384,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 2.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",384,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 432,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 2.2516666666666665
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",384,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 480,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 2.502333333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",384,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 528,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 2.7529999999999997
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",384,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 576,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 3.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",384,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 624,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 3.2516666666666665
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",384,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 672,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 3.502333333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",384,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 720,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 3.7529999999999997
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",768,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 768,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 4.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",768,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 816,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 4.251666666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",768,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 864,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 4.5023333333333335
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",768,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 912,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 4.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",768,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 960,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 5.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",768,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 1008,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 5.251666666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",768,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 1056,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 5.5023333333333335
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",768,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 1104,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 5.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1152,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 1152,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 6.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1152,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 1200,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 6.251666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1152,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 1248,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 6.5023333333333335
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1152,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 1296,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 6.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1152,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 1344,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 7.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1152,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 1392,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 7.251666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1152,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 1440,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 7.5023333333333335
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1152,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 1488,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 7.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1536,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 1536,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 8.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1536,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 1584,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 8.251666666666667
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1536,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 1632,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 8.502333333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1536,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 1680,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 8.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1536,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 1728,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 9.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1536,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 1776,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 9.251666666666667
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1536,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 1824,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 9.502333333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1536,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 1872,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 9.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1920,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 1920,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 10.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1920,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 1968,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 10.251666666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1920,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 2016,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 10.502333333333333
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1920,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 2064,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 10.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1920,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 2112,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 11.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1920,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 2160,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 11.251666666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1920,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 2208,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 11.502333333333333
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",1920,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 2256,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 11.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2304,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 2304,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 12.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2304,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 2352,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 12.251666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2304,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 2400,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 12.502333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2304,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 2448,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 12.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2304,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 2496,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 13.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2304,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 2544,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 13.251666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2304,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 2592,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 13.502333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2304,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 2640,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 13.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2688,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 2688,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 14.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2688,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 2736,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 14.251666666666667
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2688,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 2784,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 14.502333333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2688,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 2832,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 14.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2688,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 2880,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 15.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2688,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 2928,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 15.251666666666667
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2688,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 2976,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 15.502333333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",2688,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 3024,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 15.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3072,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 3072,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 16.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3072,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 3120,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 16.25166666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3072,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 3168,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 16.502333333333336
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3072,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 3216,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 16.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3072,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 3264,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 17.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3072,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 3312,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 17.25166666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3072,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 3360,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 17.502333333333336
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3072,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 3408,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 17.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3456,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 3456,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 18.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3456,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 3504,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 18.25166666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3456,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 3552,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 18.502333333333336
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3456,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 3600,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 18.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3456,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 3648,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 19.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3456,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 3696,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 19.25166666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3456,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 3744,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 19.502333333333336
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3456,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 3792,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 19.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3840,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 3840,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 20.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3840,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 3888,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 20.25166666666667
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3840,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 3936,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 20.502333333333336
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3840,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 3984,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 20.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3840,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 4032,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 21.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3840,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 4080,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 21.25166666666667
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3840,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 4128,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 21.502333333333336
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",3840,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 4176,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 21.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4224,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 4224,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 22.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4224,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 4272,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 22.25166666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4224,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 4320,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 22.502333333333336
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4224,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 4368,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 22.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4224,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 4416,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 23.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4224,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 4464,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 23.25166666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4224,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 4512,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 23.502333333333336
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4224,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 4560,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 23.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4608,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 4608,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 24.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4608,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 4656,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 24.25166666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4608,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 4704,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 24.502333333333336
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4608,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 4752,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 24.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4608,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 4800,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 25.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4608,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 4848,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 25.25166666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4608,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 4896,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 25.502333333333336
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4608,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 4944,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 25.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4992,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 4992,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 26.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4992,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 5040,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 26.25166666666667
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4992,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 5088,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 26.502333333333336
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4992,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 5136,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 26.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4992,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 5184,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 27.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4992,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 5232,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 27.25166666666667
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4992,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 5280,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 27.502333333333336
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",4992,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 5328,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 27.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5376,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 5376,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 28.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5376,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 5424,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 28.25166666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5376,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 5472,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 28.502333333333336
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5376,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 5520,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 28.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5376,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 5568,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 29.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5376,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 5616,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 29.25166666666667
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5376,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 5664,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 29.502333333333336
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5376,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 5712,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 29.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5760,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 5760,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 30.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5760,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 5808,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 30.25166666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5760,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 5856,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 30.502333333333336
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5760,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 5904,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 30.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5760,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 5952,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 31.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5760,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 6000,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 31.25166666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5760,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 6048,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 31.502333333333336
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",5760,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 6096,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 31.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6144,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 6144,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 32.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6144,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 6192,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 32.251666666666665
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6144,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 6240,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 32.50233333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6144,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 6288,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 32.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6144,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 6336,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 33.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6144,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 6384,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 33.251666666666665
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6144,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 6432,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 33.50233333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6144,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 6480,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 33.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6528,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 6528,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 34.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6528,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 6576,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 34.251666666666665
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6528,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 6624,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 34.50233333333333
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6528,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 6672,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 34.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6528,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 6720,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 35.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6528,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 6768,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 35.251666666666665
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6528,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 6816,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 35.50233333333333
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6528,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 6864,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 35.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6912,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 6912,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 36.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6912,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 6960,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 36.251666666666665
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6912,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 7008,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 36.50233333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6912,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 7056,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 36.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6912,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 7104,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 37.001
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6912,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 7152,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 37.251666666666665
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6912,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 7200,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 37.50233333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_xok17ine",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",6912,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 7248,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 37.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7296,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 7296,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 38.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7296,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 7344,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 38.251666666666665
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7296,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 7392,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 38.50233333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7296,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 7440,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 38.753
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7296,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 7488,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 39.001
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7296,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 7536,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 39.251666666666665
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7296,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 7584,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 39.50233333333333
+    },
+    {
+      "toyId": "instance-1791730944967-sen6a5",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7296,\"instance-1791730944967-sen6a5\",[\"slot:instance-1791730944967-sen6a5:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 7632,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 39.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7680,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 7680,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 40.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7680,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 7728,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 40.251666666666665
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7680,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 7776,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 40.50233333333333
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7680,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 7824,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 40.753
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7680,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 7872,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 41.001
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7680,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F#4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 7920,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F#4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "F#4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 41.251666666666665
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7680,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 7968,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 41.50233333333333
+    },
+    {
+      "toyId": "instance-1791730960821-hh7740",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:14\",7680,\"instance-1791730960821-hh7740\",[\"slot:instance-1791730960821-hh7740:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": null,
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 8016,
+        "role": "melody",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "graphTranspose": 0,
+        "localTranspose": 0,
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 41.753
+    }
+  ],
+  "uiEvents": [
+    {
+      "type": "pointerdown",
+      "label": null,
+      "class": "c-btn"
+    },
+    {
+      "type": "pointerup",
+      "label": null,
+      "class": "c-btn"
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": "c-btn"
+    },
+    {
+      "type": "pointerdown",
+      "label": null,
+      "class": "c-btn"
+    },
+    {
+      "type": "pointerup",
+      "label": null,
+      "class": "c-btn"
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": "c-btn"
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": "toy-btn instance-duplicate"
+    },
+    {
+      "type": "pointerdown",
+      "label": "Toggle Overview",
+      "class": "toy-spawner-overview c-btn is-active"
+    },
+    {
+      "type": "pointerup",
+      "label": "Toggle Overview",
+      "class": "toy-spawner-overview c-btn is-active"
+    },
+    {
+      "type": "click",
+      "label": "Toggle Overview",
+      "class": "toy-spawner-overview c-btn is-active"
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": "toy-btn instance-duplicate"
+    }
+  ],
+  "snapshot": {
+    "schemaVersion": 1,
+    "createdAt": "2026-10-11T15:12:06.850Z",
+    "updatedAt": "2026-10-11T15:12:06.850Z",
+    "transport": {
+      "bpm": 120
+    },
+    "heartbeats": [
+      {
+        "id": "main-heartbeat",
+        "transportId": "main-heartbeat",
+        "name": "Main",
+        "position": {
+          "x": 0,
+          "y": 300
+        },
+        "bpm": 120,
+        "positionTick": 8056,
+        "state": "paused"
+      }
+    ],
+    "themeId": "default",
+    "artToys": [],
+    "toys": [
+      {
+        "id": "proof-melody",
+        "type": "drawgrid",
+        "toyName": "Draw 2",
+        "instanceSerial": 3,
+        "ui": {
+          "left": "1150px",
+          "top": "470px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "instrumentOctave": 4,
+          "instrumentPitchShift": true,
+          "musicalRole": "melody",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                7
+              ],
+              [
+                4
+              ],
+              [
+                2
+              ],
+              [
+                4
+              ],
+              [
+                7
+              ],
+              [
+                5
+              ],
+              [
+                9
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "instance-1791730944967-sen6a5",
+        "type": "drawgrid",
+        "masterToyId": "proof-melody",
+        "instanceNumber": 1,
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "2126px",
+          "top": "768.5px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791731526667-9x9pek",
+        "type": "drawgrid",
+        "masterToyId": "proof-melody",
+        "instanceNumber": 3,
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "264px",
+          "top": "-80px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      }
+    ],
+    "chains": [
+      {
+        "parentId": "proof-melody",
+        "childId": "instance-1791730944967-sen6a5"
+      }
+    ],
+    "connections": [
+      {
+        "id": "source-root-proof-melody",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "proof-melody",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "instance-chain-1",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-melody",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "instance-1791730944967-sen6a5",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:7",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "instance-1791731526667-9x9pek",
+          "portId": "input"
+        }
+      }
+    ],
+    "structureToys": [],
+    "camera": {
+      "boardTransform": "translate3d(-349.15px, -1220.48px, 0px) scale(0.850113)",
+      "viewportScrollLeft": 0,
+      "viewportScrollTop": 0,
+      "bvScale": "0.8501128214718555",
+      "scale": 0.9834210017026607,
+      "x": -349.14659616798497,
+      "y": -1220.4771283336431,
+      "overviewActive": false
+    }
+  },
+  "diagnostics": {
+    "schedulerTick": 1677,
+    "activeToyIds": [
+      "instance-1791730960821-hh7740",
+      "proof-melody"
+    ],
+    "chainState": [
+      [
+        "proof-melody",
+        "instance-1791730960821-hh7740"
+      ]
+    ],
+    "sourceUsePresentation": {
+      "chips": 0,
+      "extraSockets": 0,
+      "visibleCables": 3,
+      "dottedCables": 0,
+      "highlightedSources": [],
+      "sourcePositions": [
+        {
+          "id": "proof-melody",
+          "left": "1150px",
+          "top": "470px"
+        },
+        {
+          "id": "instance-1791730944967-sen6a5",
+          "left": "2126px",
+          "top": "768.5px"
+        },
+        {
+          "id": "instance-1791731526667-9x9pek",
+          "left": "264px",
+          "top": "-80px"
+        }
+      ],
+      "nodeBounds": []
+    },
+    "rootPerformances": [
+      {
+        "id": "structure:1:14",
+        "definitionId": "sequence:proof-melody",
+        "transportId": "main-heartbeat",
+        "startTick": 0,
+        "active": true,
+        "context": {
+          "transposeSemitones": 0,
+          "harmony": null,
+          "scale": null,
+          "velocityScale": 1
+        },
+        "loop": true,
+        "generation": 0,
+        "scheduledUntilTick": 8175,
+        "rootAnchor": true,
+        "powerConnectionId": "source-root-proof-melody",
+        "currentLocalTick": null,
+        "currentStructureLocalTick": null,
+        "currentChild": null,
+        "currentChildren": [],
+        "currentChildStartTick": null,
+        "harmonicOccurrences": []
+      },
+      {
+        "id": "structure:1:15",
+        "definitionId": "sequence:instance-1791731526667-9x9pek",
+        "transportId": "main-heartbeat",
+        "startTick": 8056,
+        "active": true,
+        "context": {
+          "transposeSemitones": 0,
+          "harmony": null,
+          "scale": null,
+          "velocityScale": 1
+        },
+        "loop": true,
+        "generation": 0,
+        "scheduledUntilTick": 8056,
+        "rootAnchor": true,
+        "powerConnectionId": "connection:7",
+        "currentLocalTick": 0,
+        "currentStructureLocalTick": null,
+        "currentChild": "instance-1791731526667-9x9pek",
+        "currentChildren": [
+          "instance-1791731526667-9x9pek"
+        ],
+        "currentChildStartTick": 8056,
+        "harmonicOccurrences": [
+          {
+            "occurrenceId": "[\"structure:1:15\",8056,\"instance-1791731526667-9x9pek\",[\"slot:instance-1791731526667-9x9pek:0\"]]",
+            "toyId": "instance-1791731526667-9x9pek",
+            "harmony": null,
+            "resolvedChord": null
+          }
+        ]
+      }
+    ],
+    "instancePresentation": [
+      {
+        "id": "proof-melody",
+        "name": "Draw 2",
+        "masterToyId": null,
+        "number": null,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 800,
+        "height": 758,
+        "visibleRoles": 0,
+        "sourceControls": null
+      },
+      {
+        "id": "instance-1791730944967-sen6a5",
+        "name": "Draw 2.1",
+        "masterToyId": "proof-melody",
+        "number": 1,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791731526667-9x9pek",
+        "name": "Draw 2.3",
+        "masterToyId": "proof-melody",
+        "number": 3,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": true,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      }
+    ],
+    "providers": [
+      {
+        "id": "proof-melody",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "activePattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "audioToyId": "audiotoy_proof-melody_xok17ine"
+      },
+      {
+        "id": "instance-1791730944967-sen6a5",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "activePattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791731526667-9x9pek",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

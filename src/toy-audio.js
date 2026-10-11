@@ -271,7 +271,7 @@ export function toyVolume(id){ return getState(id).volume; }
  * uses the correct per-toy bus (not 'master').
  */
 export function gateTriggerForToy(toyId, triggerFn){
-  const id = keyOf(toyId);
+  const sourceId = keyOf(toyId);
 
   // Debug defaults OFF (enable in DevTools: window.__AUDIO_GATE_DEBUG = true)
   try {
@@ -294,9 +294,10 @@ export function gateTriggerForToy(toyId, triggerFn){
 
   return function(inst, noteName, when, ...rest){
     const occurrence = getCurrentPlaybackOccurrence();
+    const id=occurrence?.instanceToyId || sourceId;
     const trigger = () => {
       if (!isPlaybackOccurrenceValid(occurrence)) return;
-      return withPlaybackOccurrence(occurrence, () => triggerFn(inst, noteName, when, id, ...rest));
+      return withPlaybackOccurrence(occurrence, () => triggerFn(inst, noteName, when, sourceId, ...rest));
     };
     // If the transport paused, AudioContext may be suspended.
     // UI clicks should still audition notes, so resume before any timing/gate logic.

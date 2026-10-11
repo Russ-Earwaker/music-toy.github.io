@@ -62,6 +62,7 @@ import { closeInstrumentPicker } from './instrument-picker.js';
 import { chooseToyInstrument } from './instrument-selection.js';
 import { readToySoundState, restoreToySoundState } from './instrument-state.js';
 import { initializeToyMusicalRole } from './musical-role.js';
+import {createToyInstanceController,ensureMasterName} from './toy-instances.js';
 import {createAutoArranger,selectArrangementSources} from './auto-arrange.js';
 import {installAutoArrangeUI} from './auto-arrange-ui.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
@@ -1980,9 +1981,9 @@ function showVolumeSetupIfFirstRun(){
 
 function bootGrids(){
   const simplePanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid"]'));
-  simplePanels.forEach(p => buildGrid(p, 8));
+  simplePanels.filter(p=>!p.dataset.masterToyId).forEach(p => buildGrid(p, 8));
   const drumPanels = Array.from(document.querySelectorAll('.toy-panel[data-toy="loopgrid-drum"]'));
-  drumPanels.forEach(p => buildDrumGrid(p, 8));
+  drumPanels.filter(p=>!p.dataset.masterToyId).forEach(p => buildDrumGrid(p, 8));
 }
 // --- Body-outline manager: keeps an outline hugging .toy-body only when header/footer are hidden ---
 // Treat element as "hidden" if any of these is true.
@@ -2079,7 +2080,7 @@ function syncAllBodyOutlines(){
 try { window.__syncAllBodyOutlines = syncAllBodyOutlines; } catch {}
 function bootDrawGrids(){
   const panels = Array.from(document.querySelectorAll('.toy-panel[data-toy="drawgrid"]'));
-  panels.forEach(p => initDrawGrid(p));
+  panels.filter(p=>!p.dataset.masterToyId).forEach(p => initDrawGrid(p));
 }
 function getConnectionPanels() {
   return [...document.querySelectorAll('.toy-panel[id][data-toy]')].filter(panel =>
@@ -5145,6 +5146,7 @@ function panelHasNotesAtColumn(panel, col){
 
 function panelHasAnyNotes(panel) {
   if (!panel) return false;
+  if(panel.dataset.masterToyId)return panelHasAnyNotes(document.getElementById(panel.dataset.masterToyId));
   const type = panel.dataset?.toy;
 
   if (type === 'loopgrid' || type === 'loopgrid-drum') {
@@ -5321,6 +5323,7 @@ function startToyAndDescendants(panelEl, visited = new Set()) {
 const DRAWGRID_BOOT_DEBUG = false;
 
 function initializeNewToy(panel) {
+    if(panel.dataset.masterToyId)return;
     const toyType = panel.dataset.toy;
     const initFn = toyInitializers[toyType];
     if (initFn) {
@@ -5805,7 +5808,7 @@ function initToyChaining(panel) {
 function pickToyPanelSize(type) {
     const board = document.getElementById('board');
     if (board) {
-        const sample = board.querySelector(`:scope > .toy-panel[data-toy="${type}"]`);
+        const sample = board.querySelector(`:scope > .toy-panel[data-toy="${type}"]:not([data-master-toy-id])`);
         if (sample) {
             const width = Math.max(240, sample.offsetWidth || parseFloat(sample.style.width) || 380);
             const height = Math.max(200, sample.offsetHeight || parseFloat(sample.style.height) || 320);
@@ -6140,6 +6143,10 @@ try {
 function destroyToyPanel(panelOrId, opts = {}) {
     const panel = typeof panelOrId === 'string' ? document.getElementById(panelOrId) : panelOrId;
     if (!panel) return false;
+    if(!opts.sceneRestore && !g_toyInstances.canDelete(panel)){
+      document.querySelector('.master-delete-message')?.remove();
+      const message=document.createElement('div');message.className='master-delete-message';message.setAttribute('role','status');message.textContent='Delete linked Instances before deleting their Master.';document.body.append(message);setTimeout(()=>message.remove(),4000);return false;
+    }
     if (!panel.classList || !panel.classList.contains('toy-panel')) return false;
     const allowOffBoard = !!opts.allowOffBoard;
     const board = document.getElementById('board');
@@ -6286,9 +6293,18 @@ function destroyArtToyPanel(panelOrId) {
     return true;
 }
 
+const g_toyInstances=createToyInstanceController({
+ getPanels:()=>Array.from(document.querySelectorAll('.toy-panel')),
+ getMaster:id=>document.getElementById(id),
+ register:panel=>{initToyChaining(panel);updateChains();},
+ changed:()=>{g_chainStructureVersion++;g_lastSequencedToyCount=-1;window.Persistence?.markDirty?.();},
+ focus:panel=>{document.querySelectorAll('.linked-toy-highlight').forEach(p=>p.classList.remove('linked-toy-highlight'));panel.classList.add('linked-toy-highlight');panel.tabIndex=-1;panel.focus({preventScroll:true});setToyFocus(panel,{center:true});centerBoardOnElementSlow(panel,1,{duration:450});},
+ remove:panel=>destroyToyPanel(panel,{allowOffBoard:true}),
+});
 try {
     window.MusicToyFactory = Object.assign(window.MusicToyFactory || {}, {
         create: createToyPanelAt,
+        createInstance: g_toyInstances.create,
         destroy: destroyToyPanel,
         getCatalog: () => getToyCatalog(),
         enableExperimentalToys: () => setExperimentalEnabled(true),
@@ -6344,7 +6360,7 @@ function getLogicalChainAnchor(panel, side = 'right') {
   const left = (parseFloat(panel.style.left) || 0);
   const top  = (parseFloat(panel.style.top)  || 0);
   const scale = panel.classList?.contains('toy-unfocused') ? 0.75 : 1;
-  const metrics=readLogicalToyMetrics(panel);
+  const metrics=panel.dataset.masterToyId?{width:240,height:160,localY:104}:readLogicalToyMetrics(panel);
   const panelW = metrics.width;
   const panelH = metrics.height;
   const cx = left + panelW * 0.5;
@@ -6899,7 +6915,6 @@ window.clearCreationGraph = () => {
 const g_connectionView = createConnectionView({
   model: connectionModel,
   structureToys: structureToyModel,
-  onSourceFocus:id=>{const panel=document.getElementById(id);if(panel)window.centerBoardOnElementSlow?.(panel,1,{duration:450});},
   onConnectionDrag: () => {for(const id of connectionModel.getObjectIds())takeLayoutDrag(id);},
   onQuickAdd: createConnectionQuickAdd({
     model: connectionModel, structures: structureToyModel,
@@ -7059,7 +7074,9 @@ const g_sequenceChains = createChainSequenceAdapter({
 let g_chainPausedSnapshot = null;
 const arrangementScope=()=>getActiveBoardContext().key==='internal'?g_artInternal.artToyId:null;
 const g_autoArranger=createAutoArranger({model:connectionModel,structures:structureToyModel,scope:arrangementScope,
-  getPanels:()=>getSequencedToys().filter(p=>(p.dataset.artOwnerId || null)===arrangementScope()),
+  getPanels:()=>getSequencedToys().filter(p=>!p.dataset.masterToyId && (p.dataset.artOwnerId || null)===arrangementScope()),
+  createInstance:(master,options)=>g_toyInstances.create(master,options),
+  removeInstances:owner=>g_toyInstances.removeOwned(owner),
   createSource:async(role,{heartbeatId})=>{
     const type=role==='rhythm'?'loopgrid':'drawgrid',context=getActiveBoardContext();
     const point=screenToWorld({x:window.innerWidth*.45,y:window.innerHeight*.5});
@@ -7102,7 +7119,7 @@ installAutoArrangeUI({
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     const nodes=result.created.map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
     const minX=Math.min(...nodes.map(r=>r.x)),minY=Math.min(...nodes.map(r=>r.y)),maxX=Math.max(...nodes.map(r=>r.x+r.width)),maxY=Math.max(...nodes.map(r=>r.y+r.height));
-    const scale=Math.max(.37,Math.min(.8,(window.innerWidth-140)/(maxX-minX+240),(window.innerHeight-180)/(maxY-minY+160)));
+    const scale=Math.max(.2,Math.min(.8,(window.innerWidth-140)/(maxX-minX+240),(window.innerHeight-180)/(maxY-minY+160)));
     window.centerBoardOnWorldPoint?.((minX+maxX)/2,(minY+maxY)/2,scale,{duration:500});
   },
 });
@@ -7227,6 +7244,7 @@ function tickAudioScheduler() {
         g_lastSeenChainStructureVersion = g_chainStructureVersion; g_lastSequencedToyCount = count; updateChains();
       }
     }
+    g_toyInstances.prepare();
     const scheduler = ensureSequencerScheduler(), nowAt = ensureAudioContext().currentTime;
     const groups = [], allActive = new Set();
     for (const {id, transport} of transportRegistry.list()) {
@@ -7316,6 +7334,7 @@ function findChainHead(toy) {
 }
 
 function updateChains() {
+  g_toyInstances.prepare();
   if(connectionModel.getEditing()?.suspended)return;
   const allToys = getSequencedToys();
   g_connectionPanels = getConnectionPanels();

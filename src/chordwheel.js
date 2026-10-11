@@ -143,6 +143,7 @@ function chainHasSequencedNotes(head) {
 }
 
 export function createChordWheel(panel){
+  if(panel?.dataset?.masterToyId)return;
   const { isRunning, getLoopInfo, getTransportState } = panelTransportBindings(panel);
   initToyUI(panel, { toyName: 'Chord Wheel', defaultInstrument: 'Acoustic Guitar' });
   const toyId = panel.dataset.toyid = panel.id || `chordwheel-${Math.random().toString(36).slice(2, 8)}`;

@@ -7,7 +7,7 @@ function bootRipplers() {
   const panels = document.querySelectorAll('.toy-panel[data-toy="rippler"]');
   panels.forEach(panel => {
     // Prevent double-initialization
-    if (panel.__toyInstance) return;
+    if (panel.dataset.masterToyId || panel.__toyInstance) return;
     try {
       panel.__toyInstance = createRippleSynth(panel);
     } catch (e) {

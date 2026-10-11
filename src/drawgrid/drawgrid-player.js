@@ -1,3 +1,4 @@
+import {getCurrentPlaybackOccurrence} from '../playback-context.js';
 import { panelTransportBindings } from '../panel-transport.js';
 // src/drawgrid-player.js
 import { triggerInstrument } from '../audio-samples.js';
@@ -411,13 +412,13 @@ export function connectDrawGridToPlayer(panel) {
     }
 
     // Schedule drawgrid effects (flash/particles/etc) at the actual play time.
-    scheduleDrawgridEffects(panel, col, when);
+    if(!getCurrentPlaybackOccurrence()?.instanceToyId)scheduleDrawgridEffects(panel, col, when);
 
     // Authoritative guard: NEVER schedule audio if this toy isn't in the active set.
     // (Chain DOM flags can be stale during transitions.)
     try {
       const activeList = Array.isArray(window.__mtActiveToyIds) ? window.__mtActiveToyIds : null;
-      const panelId = panel?.id || '';
+      const panelId = getCurrentPlaybackOccurrence()?.instanceToyId || panel?.id || '';
       if (activeList && panelId && !activeList.includes(panelId)) {
         if (window.__SCHED_MISMATCH_DEBUG) {
           console.warn('[sched][MISMATCH][drawgrid] blocked schedule (not active)', {
@@ -443,7 +444,7 @@ export function connectDrawGridToPlayer(panel) {
     try {
       if (window.__SCHED_MISMATCH_DEBUG) {
         const activeList = Array.isArray(window.__mtActiveToyIds) ? window.__mtActiveToyIds : [];
-        const panelId = panel?.id || '';
+        const panelId = getCurrentPlaybackOccurrence()?.instanceToyId || panel?.id || '';
         const inActiveSet = !!panelId && activeList.includes(panelId);
         if (!inActiveSet) {
           console.warn('[sched][MISMATCH][drawgrid] scheduled while NOT in active set', {

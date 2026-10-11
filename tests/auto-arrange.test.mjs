@@ -11,6 +11,7 @@ import {MAIN_TRANSPORT_ID} from '../src/transport-registry.js';
 import {rectanglesOverlap} from '../src/graph-placement.js';
 import {getActivationConnections} from '../src/graph-transition-feedback.js';
 
+const panelsMaster=(h,id)=>h.panels.find(p=>p.id===id)?.dataset.masterToyId||id;
 const input=objectId=>({objectId,portId:'input'}),out=(objectId,portId='output')=>({objectId,portId});
 function harness(roles=['rhythm','accompaniment','melody']){
  clearPlaybackInstancesForTests();
@@ -26,7 +27,10 @@ function harness(roles=['rhythm','accompaniment','melody']){
  const structures=createStructureToyModel(model),adapter=createChainSequenceAdapter({model,connectionModel:model,getToy:id=>panels.find(p=>p.id===id),chainState:new Map()});
  const state={state:'paused',currentTick:0};
  const sync=()=>adapter.sync(panels,state,{connections:model.list('sequence'),structures:structures.list()});
- const arranger=createAutoArranger({model,structures,getPanels:()=>panels,createSource:async role=>{generated.push(role);return add(role,'filled-'+role);}});
+ const instanceSerial=new Map();
+ const createInstance=(master,options)=>{const n=(instanceSerial.get(master.id)||0)+1;instanceSerial.set(master.id,n);const p={id:master.id+'.'+n,dataset:{...master.dataset,masterToyId:master.id,autoArrangeOwner:options.autoArrangeOwner},get sourceNotes(){return master.sourceNotes;},__sequencerSchedule:(...args)=>master.__sequencerSchedule(...args)};panels.push(p);model.registerObject(p.id);ensurePlaybackInstance(p.id,{loopLengthTicks:384});return p;};
+ const removeInstances=owner=>{for(const p of [...panels])if(p.dataset.autoArrangeOwner===owner){model.removeObject(p.id);panels.splice(panels.indexOf(p),1);}};
+ const arranger=createAutoArranger({model,structures,getPanels:()=>panels,createInstance,removeInstances,createSource:async role=>{generated.push(role);return add(role,'filled-'+role);}});
  const schedule=(from=0,to=6144)=>{
   const scheduler=createSequencerScheduler();scheduler.tick({currentTick:from,lookaheadEndTick:to,playbackTurns:adapter.turnsForLookahead(from,to),activeToyIds:new Set(),getToy:id=>panels.find(p=>p.id===id),tickToAudioTime:t=>t/192});scheduler.dispose();
  };
@@ -41,13 +45,13 @@ test('three supplied roles build a real finite 16-bar graph with seven named str
   const root=h.structures.get(result.rootId);assert.equal(root.type,'sequence');assert.equal(h.model.getParent(root.id).kind,'transport');
   assert.equal(h.adapter.runtime.getDefinition(root.definitionId).durationTicks,6144);
   assert.deepEqual(h.model.list('sequence').filter(e=>e.from.objectId===root.id).map(e=>h.structures.get(e.to.objectId).name),['Intro','A','B','Outro']);
-  const bars=Array.from({length:16},(_,bar)=>h.adapter.runtime.turnsInWindow(root.definitionId,bar*384,bar*384+1).map(t=>t.toyId).sort());
+  const bars=Array.from({length:16},(_,bar)=>h.adapter.runtime.turnsInWindow(root.definitionId,bar*384,bar*384+1).map(t=>panelsMaster(h,t.toyId)).sort());
   assert.ok(bars.slice(0,4).every(ids=>JSON.stringify(ids)==='["accompaniment"]'));
   assert.ok(bars.slice(4,12).every(ids=>JSON.stringify(ids)==='["accompaniment","melody","rhythm"]'));
   assert.ok(bars.slice(12).every(ids=>JSON.stringify(ids)==='["accompaniment"]'));
-  assert.deepEqual(h.panels.map(p=>({notes:p.sourceNotes,dataset:{toy:p.dataset.toy,musicalRole:p.dataset.musicalRole,steps:p.dataset.steps}})),before);
-  assert.equal(h.model.list('sequence').filter(e=>e.to.portId==='pattern').length,8);
-  assert.ok(h.panels.every(p=>h.model.getParent(p.id)===null && h.model.isRooted(p.id)));
+  assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>({notes:p.sourceNotes,dataset:{toy:p.dataset.toy,musicalRole:p.dataset.musicalRole,steps:p.dataset.steps}})),before);
+  assert.equal(h.model.list('sequence').filter(e=>h.panels.find(p=>p.id===e.to.objectId)?.dataset.masterToyId).length,8);
+  assert.ok(h.panels.filter(p=>!p.dataset.masterToyId).every(p=>h.model.getParent(p.id)===null));assert.equal(h.panels.filter(p=>p.dataset.masterToyId).length,8);
   for(const [i,a] of h.structures.list().entries())for(const b of h.structures.list().slice(i+1))assert.equal(rectanglesOverlap({...a,width:structureToyWidth(a),height:structureToyHeight(a)},{...b,width:structureToyWidth(b),height:structureToyHeight(b)}),false);
  }finally{h.close();}
 });
@@ -55,7 +59,7 @@ test('three supplied roles build a real finite 16-bar graph with seven named str
 for(const roles of [['melody'],['accompaniment'],['rhythm'],['rhythm','melody'],['accompaniment','melody']])test('missing roles become ordinary editable sources for '+roles.join('+'),async()=>{
  const h=harness(roles);try{
   const originals=h.panels.map(p=>({id:p.id,notes:structuredClone(p.sourceNotes)})),result=await h.arranger.arrange();h.sync();
-  assert.equal(h.panels.length,3);assert.deepEqual(h.generated.sort(),['rhythm','accompaniment','melody'].filter(r=>!roles.includes(r)).sort());
+  assert.equal(h.panels.filter(p=>!p.dataset.masterToyId).length,3);assert.deepEqual(h.generated.sort(),['rhythm','accompaniment','melody'].filter(r=>!roles.includes(r)).sort());
   for(const p of originals)assert.deepEqual(h.panels.find(t=>t.id===p.id).sourceNotes,p.notes);
   for(const role of h.generated){const p=h.panels.find(p=>p.id===result.sourceIds[role]);assert.equal(arrangementRole(p),role);assert.equal(p.dataset.autoArrangeOrigin,'filled');p.sourceNotes[0]='D4';}
   assert.equal(h.adapter.runtime.getDefinition(h.structures.get(result.rootId).definitionId).durationTicks,6144);
@@ -79,9 +83,9 @@ test('production scheduling adapts accompaniment, preserves the melody motif and
   const root=h.structures.get(result.rootId),first=h.adapter.runtime.turnsInWindow(root.definitionId,0,6144),second=h.adapter.runtime.turnsInWindow(root.definitionId,6144,12288);
   assert.deepEqual(second.map(t=>[t.toyId,t.startTick-6144]),first.map(t=>[t.toyId,t.startTick]));
   assert.ok(second.every(t=>t.rootCycleStartTick===6144));
-  const turn=h.adapter.runtime.turnsInWindow(root.definitionId,1536,1537).find(t=>t.toyId==='accompaniment');
-  const edges=getActivationConnections(h.model,turn);assert.ok(edges.some(e=>e.to.portId==='pattern'));
-  assert.ok(edges.every(e=>e.to.objectId==='accompaniment'||turn.structureDefinitionIds.includes(h.structures.get(e.to.objectId)?.definitionId)||e.to.objectId===root.id));
+  const turn=h.adapter.runtime.turnsInWindow(root.definitionId,1536,1537).find(t=>panelsMaster(h,t.toyId)==='accompaniment');
+  const edges=getActivationConnections(h.model,turn);assert.ok(edges.some(e=>e.to.objectId===turn.toyId));
+  assert.ok(edges.every(e=>e.to.objectId===turn.toyId||turn.structureDefinitionIds.includes(h.structures.get(e.to.objectId)?.definitionId)||e.to.objectId===root.id));
  }finally{h.close();}
 });
 
@@ -91,10 +95,12 @@ test('Arrange Again replaces only owned topology, preserves every source and unr
   h.model.connect('sequence',out(unrelated.id,'child:0'),input(spare.id));h.model.connect('transport',out(MAIN_TRANSPORT_ID),input(unrelated.id));
   const unrelatedEdges=h.model.list().filter(e=>e.from.objectId===unrelated.id||e.to.objectId===unrelated.id);
   const first=await h.arranger.arrange();h.panels.find(p=>p.id===first.sourceIds.accompaniment).sourceNotes[0]='E3';
-  const sources=structuredClone(h.panels.map(p=>p.sourceNotes));const second=await h.arranger.arrange();h.sync();
-  assert.equal(h.structures.get(first.rootId),null);assert.equal(h.structures.list().length,8);assert.deepEqual(h.panels.map(p=>p.sourceNotes),sources);
+  h.structures.move(first.rootId,750,220,{manual:true});
+  const sources=structuredClone(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>p.sourceNotes));const second=await h.arranger.arrange();h.sync();
+  assert.equal(h.structures.get(first.rootId),null);assert.equal(h.structures.list().length,8);assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>p.sourceNotes),sources);
+  assert.equal(h.structures.get(second.rootId).x,750);assert.equal(h.structures.get(second.rootId).y,220);
   assert.deepEqual(second.sourceIds,first.sourceIds);assert.deepEqual(h.model.list().filter(e=>e.from.objectId===unrelated.id||e.to.objectId===unrelated.id),unrelatedEdges);
-  assert.equal(h.panels.filter(p=>p.dataset.autoArrangeOrigin==='filled').length,1);assert.ok(h.structures.get(unrelated.id));
+  assert.equal(h.panels.filter(p=>!p.dataset.masterToyId&&p.dataset.autoArrangeOrigin==='filled').length,1);assert.ok(h.structures.get(unrelated.id));
  }finally{h.close();}
 });
 
@@ -103,15 +109,15 @@ test('ordinary topology and ownership persist/reload without regeneration, suppo
   const first=await h.arranger.arrange();const saved=JSON.parse(JSON.stringify({nodes:h.structures.list(),edges:h.model.list()}));
   h.adapter.reset();h.model.list().forEach(e=>h.model.disconnect(e.id));h.structures.restore(saved.nodes);saved.edges.forEach(e=>assert.equal(h.model.connect(e.kind,e.from,e.to,{id:e.id}).ok,true));h.sync();
   const root=h.structures.get(first.rootId);assert.equal(h.adapter.runtime.getDefinition(root.definitionId).durationTicks,6144);assert.equal(h.adapter.runtime.turnsInWindow(root.definitionId,6144,6145).length,1);
-  await h.arranger.arrange();assert.equal(h.structures.list().length,7);assert.equal(h.panels.length,3);
+  await h.arranger.arrange();assert.equal(h.structures.list().length,7);assert.equal(h.panels.filter(p=>!p.dataset.masterToyId).length,3);
  }finally{h.close();}
 });
 
 test('failed graph construction rolls back prior arrangement and unrelated topology without touching notes',async()=>{
  const h=harness();try{
-  await h.arranger.arrange();const ids=h.structures.list().map(s=>s.id),edges=h.model.list(),notes=structuredClone(h.panels.map(p=>p.sourceNotes));
+  await h.arranger.arrange();const ids=h.structures.list().map(s=>s.id),edges=h.model.list(),notes=structuredClone(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>p.sourceNotes));
   const broken=createAutoArranger({model:h.model,structures:h.structures,getPanels:()=>h.panels,createSource:()=>assert.fail(),place:()=>({x:NaN,y:0})});
-  await assert.rejects(broken.arrange(),/place/);assert.deepEqual(h.structures.list().map(s=>s.id),ids);assert.deepEqual(h.model.list(),edges);assert.deepEqual(h.panels.map(p=>p.sourceNotes),notes);
+  await assert.rejects(broken.arrange(),/place/);assert.deepEqual(h.structures.list().map(s=>s.id),ids);assert.deepEqual(h.model.list(),edges);assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>p.sourceNotes),notes);
  }finally{h.close();}
 });
 
@@ -140,6 +146,6 @@ test('sources from another Heartbeat stay intact while missing roles fill the ch
   h.model.connect('transport',out('other-heartbeat'),input('accompaniment'));
   const original=h.model.getParent('accompaniment'),result=await h.arranger.arrange();
   assert.equal(result.sourceIds.accompaniment,'filled-accompaniment');assert.deepEqual(h.model.getParent('accompaniment'),original);
-  assert.equal(h.model.getTransportId(result.rootId),MAIN_TRANSPORT_ID);assert.equal(h.model.getTransportId('filled-accompaniment'),MAIN_TRANSPORT_ID);
+  assert.equal(h.model.getTransportId(result.rootId),MAIN_TRANSPORT_ID);assert.equal(h.model.getTransportId(h.panels.find(p=>p.dataset.masterToyId==='filled-accompaniment').id),MAIN_TRANSPORT_ID);
  }finally{h.close();}
 });

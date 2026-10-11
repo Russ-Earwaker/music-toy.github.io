@@ -1,5 +1,5 @@
 // Shared presentation only: no transport, scheduling or authored-state changes.
-export const ADVANCED_TOYS = Object.freeze(['drawgrid', 'bouncer', 'rippler', 'chordwheel']);
+export const ADVANCED_TOYS = Object.freeze(['drawgrid', 'bouncer', 'rippler', 'chordwheel', 'loopgrid', 'loopgrid-drum']);
 let openPanel = null;
 export function zoomOutPanel({restoreFocus = true} = {}) {
   const panel = openPanel;
@@ -22,7 +22,7 @@ export function zoomInPanel(panel) {
   shelf.style.top = ((panel.querySelector('.toy-header')?.offsetHeight || 80) + 8) + 'px';
   shelf.removeAttribute('hidden');
   panel.dispatchEvent(new CustomEvent('toy-zoom', {detail:{zoomed:true}, bubbles:true}));
-  for(const key of ['musical','pattern','pitch','motion','timing','chords','randomise']){const group=shelf.querySelector('[data-group="'+key+'"]');if(group)shelf.append(group);}
+  for(const key of ['musical','pattern','pitch','motion','timing','chords','randomise','reuse']){const group=shelf.querySelector('[data-group="'+key+'"]');if(group)shelf.append(group);}
   panel.querySelector('.toy-advanced-close').focus();
 }
 export function installToyAdvanced(panel) {
@@ -43,6 +43,9 @@ export function installToyAdvanced(panel) {
   for(const el of [toggle,shelf])el.addEventListener('pointerdown',event=>event.stopPropagation());
   shelf.addEventListener('keydown',event=>{if(event.key==='Escape'){event.stopPropagation();event.preventDefault();zoomOutPanel();}});
   right.append(toggle);panel.append(shelf);
+  const reuse=advancedGroup(panel,'reuse','Linked toys');
+  const instance=document.createElement('button');instance.type='button';instance.className='toy-btn';instance.textContent='Create Instance';
+  instance.addEventListener('click',event=>{event.stopPropagation();zoomOutPanel();window.MusicToyFactory?.createInstance?.(panel,{focus:true});});reuse.append(instance);
 }
 export function advancedGroup(panel, key, label) {
   const shelf=panel.querySelector('.toy-advanced-panel');if(!shelf)return null;

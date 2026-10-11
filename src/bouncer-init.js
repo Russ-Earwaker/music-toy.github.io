@@ -3,6 +3,7 @@ import { createBouncer } from './bouncer.main.js';
 import { initToyUI } from './toyui.js';
 
 export function initializeBouncer(panel) {
+    if(panel?.dataset?.masterToyId)return;
     // Prevent double-initialization
     if (panel.__toyInstance) return;
     try{

@@ -5,8 +5,7 @@ import { GRAPH_ENDPOINT_DIAMETER, GRAPH_ENDPOINT_HIT_DIAMETER, GRAPH_MIDPOINT_DI
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 import { HEARTBEAT_OUTPUT_OFFSET } from './graph-placement.js';
 import { connectionCurve, curvePath, curvePoint, projectConnectionPoint } from './connection-geometry.js';
-import { structurePortPoint, structureToyHeight, structureToyWidth, sourceUseExtraHeight } from './structure-toys.js';
-import { normalizeMusicalRole } from './musical-role.js';
+import { structurePortPoint, structureToyHeight, structureToyWidth } from './structure-toys.js';
 import { TICKS_PER_BEAT } from './audio-core.js';
 import { STRUCTURE_TYPES, MAX_REPEAT_COUNT, structureTypeLabel } from './structure-types.js';
 import { BASIC_LOGIC_TYPES, openAdvancedLogic, closeAdvancedLogic } from './logic-creation-menu.js';
@@ -21,7 +20,7 @@ function svgNode(tag, attrs = {}) {
 
 export function createConnectionView({ model, getContext, getPanels, getToyPoint, getHeartbeatPoint,
   onConnectionDrag = () => {}, getPulse = () => null, getStructurePulse = () => 0, onFrame = () => {}, getRenderedStructure = s => s, onStructureDrag = () => {},
-  onStructureMove = null, onStructureDragUpdate = () => {}, onStructureDragEnd = () => {}, isBranchDragging = () => false, structureToys = null, onQuickAdd = () => {}, onSourceFocus = () => {} }) {
+  onStructureMove = null, onStructureDragUpdate = () => {}, onStructureDragEnd = () => {}, isBranchDragging = () => false, structureToys = null, onQuickAdd = () => {} }) {
   const svg = svgNode('svg', { class: 'connection-layer', 'aria-label': 'Musical connections' });
   Object.assign(svg.style, { position: 'absolute', inset: '0', width: '100%', height: '100%',
     // The board viewport clips this overlay. Clipping the SVG again would hide
@@ -77,15 +76,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     .connection-layer .timeline-entry { fill:#557daa; stroke:#9ccfff; pointer-events:all; cursor:ew-resize; touch-action:none; }
     .connection-layer .structure-move { fill:#4a6283; pointer-events:all; cursor:grab; touch-action:none; }
     .connection-layer .structure-minimise { fill:#263c59; stroke:#7eb9e9; pointer-events:all; cursor:pointer; }
-    .source-use { display:flex; gap:2px; height:40px; align-items:center; pointer-events:auto; }
-    .source-use button { min-height:40px; border:1px solid var(--source-color,#a3c6ff); border-radius:18px; color:#eff6ff; background:#263746; font:600 12px system-ui; cursor:pointer; touch-action:manipulation; }
-    .source-use .source-use-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:4px 10px; }
-    .source-use .source-use-options { width:32px; flex:none; }
-    .source-use[data-active=true] .source-use-label { box-shadow:0 0 10px var(--source-color); background:#365b50; }
-    .source-use button:hover,.source-use button:focus-visible { background:#435b75; outline:2px solid #e8f1ff; }
-    .toy-panel.source-use-highlight { outline:3px solid #e8f1ff; outline-offset:6px; }
-    .connection-menu[aria-label="Add musical material"],.connection-menu[aria-label="Use existing toy"],.connection-menu[aria-label="Used material"] { min-width:180px; max-height:60vh; overflow:auto; }
-    .connection-menu[aria-label="Add musical material"] button,.connection-menu[aria-label="Use existing toy"] button,.connection-menu[aria-label="Used material"] button { min-height:44px; }
+    .connection-menu[aria-label="Add musical material"],.connection-menu[aria-label="Used material"] { min-width:180px; max-height:60vh; overflow:auto; }
+    .connection-menu[aria-label="Add musical material"] button button,.connection-menu[aria-label="Used material"] button { min-height:44px; }
   `;
   document.head.append(style);
   const edgesGroup = svgNode('g'), cardsGroup = svgNode('g'), midpointsGroup = svgNode('g'), portsGroup = svgNode('g'), actionsGroup = svgNode('g');
@@ -106,33 +98,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   let menuOwner = null;
   let menuReturnFocus = null;
   let worldMode = false;
-  let revealedUse=null,pinnedUse=null,focusedSource=null;
-  const clearSourceFocus=()=>{focusedSource?.classList?.remove('source-use-highlight');focusedSource=null;};
-  const sourceLabel=panel=>panel?.dataset?.toyName||panel?.dataset?.name||({melody:'Melody',accompaniment:'Accompaniment',percussion:'Rhythm'}[normalizeMusicalRole(panel?.dataset?.musicalRole)])||({drawgrid:'DrawGrid',loopgrid:'Rhythm',bouncer:'Bouncer',rippler:'Rippler'}[panel?.dataset?.toy])||'Toy';
-  const useAt=target=>{for(let n=target;n;n=n.parentNode){const id=n.getAttribute?.('data-use-id');if(id)return id;}return null;};
-  const socketIntent=(point,kind)=>{
-    const use=model.get(revealedUse||pinnedUse);
-    return point.portId==='input'&&use?.to.objectId===point.objectId?{kind:use.kind,connectionId:use.id,end:'to'}:model.socketDragIntent(point,kind);
-  };
-  function quickAdd(point){
-    if(!structureToys?.get(point.objectId)){onQuickAdd(point);return;}
-    closeMenu();menu.replaceChildren();menuOwner={structureId:point.objectId};menuReturnFocus=ports.get(key(point))?.extendButton;
-    menu.setAttribute('aria-label','Add musical material');
-    const action=(label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',e=>{e.stopPropagation();fn();});menu.append(b);};
-    action('Create new toy',()=>{closeMenu();onQuickAdd(point);});
-    action('Use existing toy',()=>{
-      menu.replaceChildren();menu.setAttribute('aria-label','Use existing toy');
-      const candidates=getPanels().filter(p=>(!getContext().visible||getContext().visible(p))&&model.validate('sequence',point,{objectId:p.id,portId:'pattern'}).ok).sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);
-      for(const [index,panel]of candidates.entries()){
-        const label=sourceLabel(panel),duplicate=candidates.filter(p=>sourceLabel(p)===label).length>1;
-        action(`${label}${duplicate?' '+(index+1):''}${panel.dataset?.instrument?' · '+panel.dataset.instrument:''}`,()=>{model.connect('sequence',point,{objectId:panel.id,portId:'pattern'});closeMenu();render();});
-      }
-      if(!candidates.length){const label=document.createElement('div');label.textContent='No compatible toys on this board.';menu.append(label);}
-      action('Back',()=>quickAdd(point));menu.querySelector?.('button')?.focus?.();
-    });
-    let at=points.get(key(point))||{x:0,y:0};if(worldMode)at=projectConnectionPoint(at,getContext().transform);
-    menu.style.left=`${Math.max(8,Math.min((viewport.clientWidth||1000)-180,at.x-90))}px`;menu.style.top=`${Math.max(8,at.y+24)}px`;menu.hidden=false;menu.querySelector?.('button')?.focus?.();
-  }
+  const socketIntent=(point,kind)=>model.socketDragIntent(point,kind);
+  function quickAdd(point){onQuickAdd(point);}
   function pointerPoint(event) {
     const rect=svg.getBoundingClientRect(), scale=worldMode?(getContext().transform?.scale||1):1;
     return {x:(event.clientX-rect.left)/scale,y:(event.clientY-rect.top)/scale};
@@ -140,7 +107,6 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   const closeMenu = () => { const wasOpen=!menu.hidden;menu.hidden = true; menuOwner = null;if(wasOpen)menuReturnFocus?.focus?.(); };
   const ownerOf = target => { for(let n=target;n;n=n.parentNode){const id=n.getAttribute?.('data-structure-id');if(id)return id;}return null; };
   function selectStructure(id) {
-    revealedUse=pinnedUse=null;clearSourceFocus();
     if(selectedStructure&&selectedStructure!==id&&!moving&&!model.getEditing())structureToys?.setCollapsed(selectedStructure,true);
     selected=null;selectedStructure=id;structureToys?.setCollapsed(id,false);
   }
@@ -150,7 +116,6 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     clearTimeout(statusTimer); statusTimer = setTimeout(() => { status.hidden = true; }, 2500);
   }
   function select(id) {
-    revealedUse=pinnedUse=model.get(id)?.to.portId==='pattern'?id:null;clearSourceFocus();
     selected = id;
     if (selectedStructure) structureToys?.setCollapsed(selectedStructure, true);
     selectedStructure = null;
@@ -206,7 +171,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     if (!c && !s) { closeMenu(); return; }
     menuOwner = s ? {structureId:s.id} : {connectionId:c.id};
     menuReturnFocus = anchorElement || (c ? edges.get(connectionId)?.midpoint : cards.get(structureId)?.typeButton);
-    menu.setAttribute('aria-label', c?.to.portId==='pattern'?'Used material':c ? 'Structure insertion' : 'Change structure type');
+    menu.setAttribute('aria-label', c ? 'Structure insertion' : 'Change structure type');
     const kind = c?.kind || 'sequence';
     const currentType = s?.type || 'sequence';
     const button = (label, action, pressed = null) => {
@@ -215,7 +180,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       b.addEventListener('click', e => { e.stopPropagation(); closeMenu(); action(); render(); });
       menu.append(b);
     };
-    if ((kind === 'sequence' || kind === 'transport') && c?.to.portId!=='pattern') {
+    if ((kind === 'sequence' || kind === 'transport')) {
       if (!isModifier(s?.type)) for (const type of (s ? STRUCTURE_TYPES : BASIC_LOGIC_TYPES)) button(structureTypeLabel(type), () => {
         if (s && structureToys.conversion(s.id,type).lossy) {
           menu.replaceChildren();
@@ -227,7 +192,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         else structureToys.promote(connectionId, type);
       }, currentType === type);
     }
-    if (c && c.to.portId!=='pattern') {
+    if (c) {
       button('Advanced >', () => openAdvancedLogic({anchor:menuReturnFocus,returnFocus:menuReturnFocus,
         onChoose:type=>{if(model.get(connectionId))structureToys.promote(connectionId,type);render();}}));
     }
@@ -239,7 +204,6 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       menu.append(count);
     }
     if (c) button('Disconnect', () => { model.disconnect(c.id); select(null); });
-    if(c?.to.portId==='pattern')button('Show source',()=>focusSource(c));
     const visual = edges.get(connectionId);
     let at = s && structureId ? projectConnectionPoint({ x: s.x + structureToyWidth(s)/2, y: s.y + 30 }, getContext().transform)
       : { x: Number(visual?.midpoint.getAttribute('cx')) || 0, y: Number(visual?.midpoint.getAttribute('cy')) || 0 };
@@ -271,7 +235,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       transposeControls.append(button,label);transposeSteps.push({button,label,delta});
     }
     const progressionEditor=createChordProgressionEditor(structureToys,s.id,()=>render(),()=>{closeMenu();selectStructure(s.id);render();});
-    const tracksGroup=svgNode('g'),tracks=new Map(),usesGroup=svgNode('g'),uses=new Map();
+    const tracksGroup=svgNode('g'),tracks=new Map();
     const choose = e => {
       e.preventDefault(); e.stopPropagation(); closeMenu();selectStructure(s.id);
       render();
@@ -299,37 +263,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const toggle=e=>{e.preventDefault();e.stopPropagation();closeMenu();const current=structureToys.get(s.id);structureToys.setCollapsed(s.id,!current.collapsed);if(!current.collapsed)selectedStructure=null;else selectStructure(s.id);render();};
     minimise.addEventListener('pointerdown',toggle);
     minimise.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')toggle(e);});
-    group.append(rect, activation, typeButton, name, count, transposeControls, progressionEditor.object, tracksGroup,usesGroup, moveHandle,minimise,minimiseLabel); cardsGroup.append(group);
-    return { group, rect, activation, typeButton, name, count, transposeControls, transposeSteps, progressionEditor, moveHandle, minimise,minimiseLabel, tracksGroup, tracks,usesGroup,uses };
-  }
-  function focusSource(c){
-    if(!c)return;
-    clearSourceFocus();closeMenu();selected=c.id;revealedUse=pinnedUse=c.id;
-    focusedSource=getPanels().find(p=>p.id===c.to.objectId);focusedSource?.classList?.add('source-use-highlight');onSourceFocus(c.to.objectId);render();
-  }
-  function renderUses(card,s,pos,scale){
-    const retained=new Set();
-    for(const c of model.list('sequence',{includeSuspended:true}).filter(c=>c.from.objectId===s.id&&c.to.portId==='pattern')){
-      const panel=getPanels().find(p=>p.id===c.to.objectId);if(!panel)continue;retained.add(c.id);
-      let use=card.uses.get(c.id);
-      if(!use){
-        const object=svgNode('foreignObject',{'data-use-id':c.id}),body=document.createElement('div');body.className='source-use';body.setAttribute('data-use-id',c.id);
-        body.addEventListener('pointerdown',e=>e.stopPropagation());
-        const button=document.createElement('button');button.type='button';button.className='source-use-label';button.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();focusSource(model.get(c.id));});
-        const options=document.createElement('button');options.type='button';options.className='source-use-options';options.textContent='⋯';options.addEventListener('click',e=>{e.stopPropagation();selected=pinnedUse=revealedUse=c.id;render();openMenu(c.id,null,options);});
-        const reveal=()=>{revealedUse=c.id;render();},hide=()=>{if(revealedUse===c.id)revealedUse=null;render();};
-        body.addEventListener('pointerenter',reveal);body.addEventListener('pointerleave',hide);button.addEventListener('focus',reveal);button.addEventListener('blur',hide);
-        body.append(button,options);object.append(body);card.usesGroup.append(object);use={object,body,button,options};card.uses.set(c.id,use);
-      }
-      const label=sourceLabel(panel),width=s.type==='timeline'&&!s.collapsed?90:structureToyWidth(s)-52;
-      set(use.button,'aria-label',`Show source: ${label}`);if(use.button.textContent!==label)use.button.textContent=label;use.button.title=panel.dataset?.instrument?`${label} · ${panel.dataset.instrument}`:label;
-      set(use.options,'aria-label',`${label} use options`);
-      use.body.style.setProperty?.('--source-color',({melody:'#cba0e0',accompaniment:'#86d5b9',percussion:'#e5ac59'}[normalizeMusicalRole(panel.dataset?.musicalRole)])||'#a3c6ff');
-      set(use.body,'data-active',!!getPulse(c));
-      const y=structurePortPoint(s,c.from.portId).y-s.y-20;
-      set(use.object,'x',0);set(use.object,'y',0);set(use.object,'width',width);set(use.object,'height',40);set(use.object,'transform',`translate(${pos.x+10*scale} ${pos.y+y*scale}) scale(${scale})`);
-    }
-    for(const [id,use]of card.uses)if(!retained.has(id)){use.object.remove();card.uses.delete(id);}
+    group.append(rect, activation, typeButton, name, count, transposeControls, progressionEditor.object, tracksGroup, moveHandle,minimise,minimiseLabel); cardsGroup.append(group);
+    return { group, rect, activation, typeButton, name, count, transposeControls, transposeSteps, progressionEditor, moveHandle, minimise,minimiseLabel, tracksGroup, tracks };
   }
   function makeEdge(c) {
     const group = svgNode('g', { 'data-connection-id': c.id });
@@ -414,7 +349,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       set(card.progressionEditor.object,'display',s.type==='chord-progression'&&!s.collapsed?'inline':'none');
       if(s.type==='chord-progression'){
         set(card.progressionEditor.object,'x',0);set(card.progressionEditor.object,'y',0);
-        set(card.progressionEditor.object,'width',width-24);set(card.progressionEditor.object,'height',structureToyHeight(s)-48-sourceUseExtraHeight(s));
+        set(card.progressionEditor.object,'width',width-24);set(card.progressionEditor.object,'height',structureToyHeight(s)-48);
         set(card.progressionEditor.object,'transform',`translate(${pos.x+12*scale} ${pos.y+44*scale}) scale(${scale})`);
         card.progressionEditor.render(s);
         set(card.name,'font-size',s.collapsed?(s.chords.length>6?12:14)*scale:16*scale);
@@ -454,7 +389,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         }
         const y=projectConnectionPoint(structurePortPoint(s,entry.portId),geometryTransform).y;
         set(track.label,'x',pos.x+8*scale);set(track.label,'y',y+4*scale);set(track.label,'font-size',12*scale);
-        track.label.textContent=`${i+1} ${entry.label}`;set(track.label,'display',s.sourceUsePorts?.includes(entry.portId)?'none':'inline');
+        track.label.textContent=`${i+1} ${entry.label}`;set(track.label,'display','inline');
         set(track.bar,'x',pos.x+(102+entry.offsetTick*pixelsPerTick)*scale);set(track.bar,'y',y-8*scale);
         set(track.bar,'width',Math.max(6,entry.durationTicks*pixelsPerTick*scale));set(track.bar,'height',16*scale);
         set(track.bar,'aria-label',`Timeline entry ${i+1}: ${entry.label}`);set(track.bar,'aria-valuenow',entry.offsetTick);
@@ -463,7 +398,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       }
       card.pixelsPerTick=pixelsPerTick;
       for(const [port,track]of card.tracks)if(!retained.has(port)){track.group.remove();card.tracks.delete(port);}
-      renderUses(card,s,pos,scale);
+
       set(card.moveHandle, 'x', pos.x + 7 * scale); set(card.moveHandle, 'y', pos.y + 5 * scale);
       set(card.moveHandle, 'width', 24 * scale); set(card.moveHandle, 'height', 24 * scale);
       set(card.minimise,'x',pos.x+(width-30)*scale);set(card.minimise,'y',pos.y+5*scale);
@@ -493,7 +428,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       if(structure)set(visual.group,'data-structure-id',structure.id);
       const attached = model.list(null,{includeSuspended:true}).some(c =>
         (key(c.from)===key(value.point) && !(editing?.suspended && editing.connectionId===c.id && editing.end==='from'))
-        || ((key(c.to)===key(value.point)||value.point.portId==='input'&&c.to.objectId===value.point.objectId&&c.to.portId==='pattern'&&[revealedUse,pinnedUse,selected,editing?.connectionId].includes(c.id)) && !(editing?.suspended && editing.connectionId===c.id && editing.end==='to')));
+        || ((key(c.to)===key(value.point)) && !(editing?.suspended && editing.connectionId===c.id && editing.end==='to')));
       set(visual.circle, 'data-connected', attached);
       const extend = !attached && model.getPort(value.point)?.direction==='out';
       const scale=geometryTransform?.scale||1,diameter=GRAPH_ENDPOINT_DIAMETER*scale,padding=(GRAPH_ENDPOINT_HIT_DIAMETER-GRAPH_ENDPOINT_DIAMETER)/2*scale;
@@ -524,10 +459,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     }
     for (const [id, visual] of ports) if (!desired.has(id)) { visual.group.remove(); ports.delete(id); }
     // Shared uses terminate at the same visible input artwork. No extra socket.
-    for(const panel of getPanels()){const at=points.get(key({objectId:panel.id,portId:'input'}));if(at)points.set(key({objectId:panel.id,portId:'pattern'}),at);}
     const present = new Set();
     for (const c of model.list(null,{includeSuspended:true})) {
-      if(c.to.portId==='pattern'&&!([revealedUse,pinnedUse,selected,editing?.connectionId].includes(c.id)))continue;
       let a = points.get(key(c.from)), b = points.get(key(c.to));
       const reconnect=editing?.connectionId===c.id && gestureMoved && pointer;
       if(reconnect){const loose=pointerPoint({clientX:pointer.x,clientY:pointer.y});if(editing.end==='from')a=loose;else b=loose;}
@@ -622,22 +555,14 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     tapPoint = null;
     if (!result.ok) notify(result.reason === 'requires-promotion' ? 'This junction needs a Structure toy. Existing connection kept.' : 'These ports cannot connect. Existing connection kept.');
     if (result.connection){
-      selected = result.connection.to.portId==='pattern'?null:result.connection.id;
-      if(result.connection.to.portId==='pattern'){revealedUse=pinnedUse=null;clearSourceFocus();}
+      selected = result.connection.id;
     }
     pointerId = null; pointer = dragOrigin = null; render();
   };
   const cancel = () => { if(moving)onStructureDragEnd(null,true);tapPoint = null; moving = null; editingEntry=null; pointerId = null; pointer = dragOrigin = null; model.cancelDrag(); render(); };
-  const reset = () => { closeAdvancedLogic();closeMenu(); revealedUse=pinnedUse=null;clearSourceFocus();selected = selectedStructure = null; cancel(); status.hidden=true; clearTimeout(statusTimer); };
+  const reset = () => { closeAdvancedLogic();closeMenu(); selected = selectedStructure = null; cancel(); status.hidden=true; clearTimeout(statusTimer); };
   const outside = e => {
     for (let node=e.target;node;node=node.parentNode) if(node===menu)return;
-    if(useAt(e.target))return;
-    const revealed=model.get(revealedUse||pinnedUse||selected);
-    if(revealed?.to.portId==='pattern')for(let n=e.target;n;n=n.parentNode){
-      if(n.getAttribute?.('data-socket-key')===key({objectId:revealed.to.objectId,portId:'input'})
-        ||n.getAttribute?.('data-object-id')===revealed.to.objectId&&n.getAttribute?.('data-port-id')==='input')return;
-    }
-    if(!model.getEditing()){revealedUse=pinnedUse=null;clearSourceFocus();if(model.get(selected)?.to.portId==='pattern')selected=null;}
     if(selectedStructure && ownerOf(e.target)===selectedStructure)return;
     closeMenu();
     if(selectedStructure&&!moving&&!isBranchDragging()&&!model.getEditing()&&!editingEntry){structureToys?.setCollapsed(selectedStructure,true);selectedStructure=null;}render();

@@ -7,6 +7,7 @@ import { installInstrumentSelection } from './instrument-selection.js';
 import { applyToyInstrument, supportsToyInstrument } from './instrument-state.js';
 import { refreshHelpOverlay } from './help-overlay.js';
 import { overviewMode } from './overview-mode.js';
+import {ensureMasterName} from './toy-instances.js';
 import { installToyAdvanced, advancedGroup, curateToyAdvanced } from './toy-advanced.js';
 import { initializeToyMusicalRole } from './musical-role.js';
 
@@ -104,10 +105,12 @@ function buildInstrumentSelect(panel){
 }
 
 export function initToyUI(panel, { toyName, defaultInstrument }={}){
-  if (!panel) return null;
+  if (!panel || panel.dataset.masterToyId) return null;
   initializeToyMusicalRole(panel);
   const toyKind = String(panel.dataset.toy||'').toLowerCase();
   const header = ensureHeader(panel, toyName);
+  const publicName=ensureMasterName(panel,Array.from(document.querySelectorAll('.toy-panel')));
+  let nameLabel=header.querySelector('.master-name');if(!nameLabel){nameLabel=document.createElement('span');nameLabel.className='master-name';(header.querySelector('.toy-title')||header).prepend(nameLabel);}nameLabel.textContent=publicName;
   ensureBody(panel);
   const footer = ensureFooter(panel);
 

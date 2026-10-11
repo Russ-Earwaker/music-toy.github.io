@@ -482,6 +482,8 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
   const role=classifyMusicalRole({toyType:occurrence?.toyType ?? panel?.dataset?.toy,instrument:id,entry:entries.get(id),options:{...options,toyMusicalRole:panel?.dataset?.musicalRole},occurrence});
   const pitchDecision=resolveMusicalPitch({sourcePitch:sourceNote,eventTick:occurrence?.eventTick ?? options.eventTick,context:options.context,role,localTranspose:panel?.dataset?.toy==='drawgrid'?panel.dataset.localTranspose:0,referenceHarmony:options.referenceHarmony,register:options.register});
   const resolvedNote = pitchDecision.finalNote;
+  // Source policy was resolved above; audio ownership belongs to the visible Instance.
+  if(occurrence?.instanceToyId)toyId=occurrence.instanceToyId;
   const pitchShift=pitched?(noteMidi(resolvedNote) ?? 0)-(noteMidi(sourceNote) ?? 0):0;
   if (pitchShift && typeof options.playbackRate === 'number')
     options = { ...options, playbackRate: options.playbackRate * Math.pow(2, pitchShift / 12) };

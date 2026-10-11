@@ -1,3 +1,4 @@
+import {getCurrentPlaybackOccurrence} from './playback-context.js';
 import { panelTransportBindings } from './panel-transport.js';
 // src/grid-core.js — grid core + instrument sync (<=300 lines)
 import { triggerInstrument } from './audio-samples.js';
@@ -93,6 +94,7 @@ export function markPlayingColumn(panel, colIndex){
 }
 
 export function buildGrid(panel, numSteps = 8){
+  if(panel?.dataset?.masterToyId)return;
   if (typeof panel === 'string') panel = document.querySelector(panel);
   if (!panel || !(panel instanceof Element) || panel.__gridBuilt) return null;
   panel.__gridBuilt = true;
@@ -439,7 +441,7 @@ export function buildGrid(panel, numSteps = 8){
     // (Chain DOM flags can be stale during transitions.)
     try {
       const activeList = Array.isArray(window.__mtActiveToyIds) ? window.__mtActiveToyIds : null;
-      const panelId = panel?.id || '';
+      const panelId = getCurrentPlaybackOccurrence()?.instanceToyId || panel?.id || '';
       if (activeList && panelId && !activeList.includes(panelId)) {
         if (window.__SCHED_MISMATCH_DEBUG) {
           console.warn('[sched][MISMATCH][loopgrid] blocked schedule (not active)', {
@@ -466,7 +468,7 @@ export function buildGrid(panel, numSteps = 8){
     try {
       if (window.__SCHED_MISMATCH_DEBUG) {
         const activeList = Array.isArray(window.__mtActiveToyIds) ? window.__mtActiveToyIds : [];
-        const panelId = panel?.id || '';
+        const panelId = getCurrentPlaybackOccurrence()?.instanceToyId || panel?.id || '';
         const inActiveSet = !!panelId && activeList.includes(panelId);
         if (!inActiveSet) {
           console.warn('[sched][MISMATCH][loopgrid] scheduled while NOT in active set', {

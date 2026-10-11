@@ -11,8 +11,15 @@ class Element extends EventTarget {
 const doc=new EventTarget();doc.createElement=tag=>new Element(tag);globalThis.document=doc;
 const {ADVANCED_TOYS,installToyAdvanced,curateToyAdvanced,zoomInPanel,zoomOutPanel}=await import('../src/toy-advanced.js');
 function panel(kind){const p=new Element();p.dataset.toy=kind;p.id=kind;p.source={notes:['C3','E3'],generatorIds:[1,2]};p.style={left:'40px',width:'480px'};const header=new Element();header.className='toy-header';header.offsetHeight=80;const right=new Element();right.className='toy-controls-right';header.append(right);p.append(header);installToyAdvanced(p);return p;}
-test('Advanced appears only on curated compatible toys; Simple Rhythm stays Basic',()=>{
+test('Advanced appears only on compatible musical Master toys',()=>{
  for(const kind of [...ADVANCED_TOYS,'loopgrid','loopgrid-drum','heartbeat','transpose'])assert.equal(!!panel(kind).querySelector('.toy-advanced-toggle'),ADVANCED_TOYS.includes(kind));
+});
+test('Simple Rhythm Advanced offers linked Instances without pitched controls',()=>{
+ const p=panel('loopgrid'),shelf=p.querySelector('.toy-advanced-panel'),groups=shelf.querySelectorAll('[data-group="reuse"]');
+ assert.equal(groups.length,1);assert.equal(groups[0].children[1].textContent,'Create Instance');
+ assert.equal(p.querySelector('.musical-role-control'),null);assert.equal(p.querySelector('.local-transpose-control'),null);
+ const before=structuredClone(p.source),calls=[];globalThis.window={MusicToyFactory:{createInstance:(master,options)=>calls.push({master,options})}};
+ groups[0].children[1].dispatchEvent(new Event('click'));assert.equal(calls[0].master,p);assert.equal(calls[0].options.focus,true);assert.deepEqual(p.source,before);delete globalThis.window;
 });
 test('open/close is keyboard accessible, idempotent and leaves source data and geometry untouched',()=>{
  const p=panel('drawgrid'),before=JSON.stringify([p.source,p.style]),parent=p.parentElement,events=[];p.addEventListener('toy-zoom',e=>events.push(e.detail.zoomed));

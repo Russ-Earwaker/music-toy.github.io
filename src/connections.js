@@ -60,17 +60,7 @@ export function createConnectionModel() {
   }
   const dragKind = (a, b, preferred) => [preferred, 'sequence', 'transport'].find(kind =>
     kind && port(a)?.accepts.includes(kind) && port(b)?.accepts.includes(kind));
-  const dragEndpoints=target=>{
-    let fixed=editing?.fixed;
-    if(!editing||!target)return {fixed,target};
-    const from=port(editing.fixed)?.direction==='out'?editing.fixed:target;
-    const to=port(editing.fixed)?.direction==='in'?editing.fixed:target;
-    if(editing.original?.to.portId==='input'&&editing.end==='from')return {fixed,target};
-    if(to.portId==='input'&&port({objectId:to.objectId,portId:'pattern'})&&(objects.get(from.objectId)?.structure||objects.get(from.objectId)?.modifier)){
-      if(to===target)target={...target,portId:'pattern'};else fixed={...fixed,portId:'pattern'};
-    }
-    return {fixed,target};
-  };
+  const dragEndpoints=target=>({fixed:editing?.fixed,target});
   function validate(kind, a, b, excludeId = null) {
     const pa = port(a), pb = port(b);
     if (!pa || !pb) return { ok: false, reason: 'missing-port' };

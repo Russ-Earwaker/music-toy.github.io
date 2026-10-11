@@ -9812,3 +9812,19 @@ body.beat-swarm-active #internal-board-overlay {
 .advanced-logic-group > strong {font-size:12px;color:#b8cadc;letter-spacing:.05em;}
 .advanced-logic-popup button {min-height:44px;border:1px solid #617b98;border-radius:8px;padding:8px 12px;background:#263b47;color:inherit;text-align:left;font:14px system-ui;cursor:pointer;}
 .advanced-logic-popup button:hover,.advanced-logic-popup button:focus-visible {background:#344c72;outline:2px solid #a2c5f3;}
+
+/* Linked Instances retain toy-family identity with compact board chrome. */
+.toy-panel.toy-instance[data-toy]{--panel-w:240px;width:240px!important;min-width:240px!important;min-height:160px!important;height:160px!important;border-radius:18px;overflow:visible;background:var(--toy-color,#293b4c);border:2px solid var(--toy-accent,#809cb3);box-shadow:0 6px 16px #0004}
+.toy-instance .toy-header{height:54px;min-height:54px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:16px 16px 0 0}
+.instance-name{font-size:20px}.instance-marker{font-size:10px;letter-spacing:1px;opacity:.7}
+.toy-instance .instance-body{height:100px;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:8px}
+.instance-instrument{font-size:12px;color:var(--instrument-colour);opacity:.9}.instance-actions{display:flex;gap:12px}.instance-actions button{min-height:40px;padding:6px 12px}
+.toy-instance.instance-playing{box-shadow:0 0 22px #fff9;filter:brightness(1.25)}
+.master-delete-message{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);padding:12px 20px;border-radius:12px;background:#253d4f;color:white;z-index:10000}
+.toy-panel.linked-toy-highlight{outline:3px solid #ecf5ff;outline-offset:6px}
+.overview-mode .toy-panel.toy-instance[data-toy] .toy-header,
+.board-overview .toy-panel.toy-instance[data-toy] .toy-header,
+.overview-mode .toy-panel.toy-instance[data-toy] .toy-header *,
+.board-overview .toy-panel.toy-instance[data-toy] .toy-header *{visibility:visible!important;opacity:1!important;pointer-events:auto!important}
+.toy-panel.toy-instance[data-toy] .instance-body,
+.toy-panel.toy-instance[data-toy] .instance-body *{pointer-events:auto!important;visibility:visible!important;opacity:1!important}

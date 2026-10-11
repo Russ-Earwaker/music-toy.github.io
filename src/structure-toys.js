@@ -12,13 +12,12 @@ const order = port => Number(String(port).split(':')[1]) || 0;
 export const STRUCTURE_PORT_RADIUS=GRAPH_ENDPOINT_DIAMETER/2, STRUCTURE_PLUS_RADIUS=GRAPH_ENDPOINT_DIAMETER/2, STRUCTURE_PORT_HIT_RADIUS=GRAPH_ENDPOINT_HIT_DIAMETER/2, STRUCTURE_SOCKET_STEP=56;
 export const structurePortPoint = (s, portId) => portId === 'input'
   ? { x: s.x, y: s.y + structureToyHeight(s) / 2 }
-  : { x: s.x + structureToyWidth(s), y: s.y + (s.type==='chord-progression'&&s.sourceUsePorts?.length&&!s.collapsed?baseStructureHeight(s)+28:(s.collapsed?40:s.type==='timeline'?80:48)+(s.sourceUsePorts?.length?40:0)) + order(portId) * STRUCTURE_SOCKET_STEP };
-export const structureToyWidth = s => s.type === 'chord-progression' ? 360 : s.collapsed ? (s.sourceUsePorts?.length?224:128) : s.type === 'timeline' ? 440 : 224;
+  : { x: s.x + structureToyWidth(s), y: s.y + (s.collapsed?40:s.type==='timeline'?80:48) + order(portId) * STRUCTURE_SOCKET_STEP };
+export const structureToyWidth = s => s.type === 'chord-progression' ? 360 : s.collapsed ? 128 : s.type === 'timeline' ? 440 : 224;
 const baseStructureHeight = s => s.collapsed
   ? Math.max(80, (s.outputCount-1) * STRUCTURE_SOCKET_STEP + 80)
   : s.type === 'chord-progression' ? 168 + s.chords.length * 48 : Math.max(128, (s.outputCount-1) * STRUCTURE_SOCKET_STEP + (s.type==='timeline'?120:88));
-export const sourceUseExtraHeight=s=>s.sourceUsePorts?.length?(s.type==='chord-progression'&&!s.collapsed?56:40):0;
-export const structureToyHeight=s=>baseStructureHeight(s)+sourceUseExtraHeight(s);
+export const structureToyHeight=s=>baseStructureHeight(s);
 
 // Board representations only. Musical definitions/instances live in the existing runtime.
 export function createStructureToyModel(model, options = {}) {
@@ -28,7 +27,7 @@ export function createStructureToyModel(model, options = {}) {
   const list = () => [...records.values()].map(s => ({...s,transportId:model.getTransportId(s.id)}));
   const childEdges = id => model.list('sequence').filter(c=>c.from.objectId===id).sort((a,b)=>order(a.from.portId)-order(b.from.portId));
   // Derived presentation only; list()/persistence retain canonical records.
-  const presented=s=>({...s,transportId:model.getTransportId(s.id),sourceUsePorts:childEdges(s.id).filter(c=>c.to.portId==='pattern').map(c=>c.from.portId)});
+  const presented=s=>({...s,transportId:model.getTransportId(s.id),});
   const edgeDuration=(edge,seen)=>edge.to.portId==='pattern'?config.getDuration(edge.to.objectId):durationOf(edge.to.objectId,seen);
   function durationOf(id,seen=new Set()) {
     if(seen.has(id)) throw new Error('Cyclic Structure graph');

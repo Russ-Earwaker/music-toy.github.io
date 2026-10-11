@@ -1,3 +1,4 @@
+import {getCurrentPlaybackOccurrence} from './playback-context.js';
 const PULSE_CLASS = 'toy-playing-pulse';
 const DEFAULT_DURATION_MS = 320;
 const REARM_DELAY_MS = 30;
@@ -59,6 +60,8 @@ function schedulePulseRemove(panel, delayMs) {
 }
 
 export function requestPanelPulse(panel, opts = {}) {
+  const instanceId=getCurrentPlaybackOccurrence()?.instanceToyId;
+  if(instanceId)panel=document.getElementById(instanceId);
   if (!panel?.isConnected) return;
   const durationMs = Number.isFinite(opts.durationMs) ? opts.durationMs : DEFAULT_DURATION_MS;
   const rearm = !!opts.rearm;

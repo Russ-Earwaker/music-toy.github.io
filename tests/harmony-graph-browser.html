@@ -4,10 +4,13 @@
 <style>body{margin:0;background:#101820;color:#eee;font:14px system-ui}header{padding:8px}button{margin:0 8px}iframe{width:100%;height:82vh;border:0}pre{white-space:pre-wrap;margin:8px}</style>
 <header>Production graph check
  <button id="open">Open normal board in tab</button>
- <select id="variant" aria-label="Graph variant"><option value="base">Chord Progression → Together</option><option value="outer">Transpose → Chord Progression</option><option value="inner">Chord Progression → Transpose</option><option value="roots">Heartbeat independent 1 / 2 / 4 bar roots</option><option value="arrange3">Arrange: three authored ideas</option><option value="arrange1">Arrange: melody only</option></select>
+ <select id="variant" aria-label="Graph variant"><option value="base">Chord Progression → Together</option><option value="outer">Transpose → Chord Progression</option><option value="inner">Chord Progression → Transpose</option><option value="roots">Heartbeat independent 1 / 2 / 4 bar roots</option><option value="arrange3">Arrange: three authored ideas</option><option value="arrange1">Arrange: melody only</option><option value="legacy">Legacy compact arrangement</option></select>
  <button id="load">Load C / Am / F / G fixture</button>
  <button id="observe">Observe reloaded board</button>
  <button id="save">Save observations to resources</button>
+ <button id="check-master-delete">Check Master deletion safety</button>
+ <button id="remove-instance">Remove last test Instance</button>
+ <button id="connect-instances">Connect Master and Instances</button>
  <span id="status">Use the normal board controls below.</span>
 </header>
 <iframe id="app" src="../" title="Normal Rhythmake board" allow="autoplay"></iframe>
@@ -38,13 +41,13 @@ document.querySelector('#open').onclick=()=>{
 };
 document.querySelector('#load').onclick=async()=>{
  const variant=document.querySelector('#variant').value;
- const fixture=await (await fetch(variant==='roots'?'../resources/heartbeat-roots.scene.json':'../resources/harmony-integration.scene.json')).json();
+ const fixture=variant==='legacy'?{payload:(await (await fetch('../resources/debug-output/harmony-graph-2026-10-11T12-34-31-905Z.json')).json()).snapshot}:await (await fetch(variant==='roots'?'../resources/heartbeat-roots.scene.json':'../resources/harmony-integration.scene.json')).json();
  if(!testedWindow?.Persistence){status.textContent='App is still loading; try again.';return;}
  if(variant==='arrange3' || variant==='arrange1'){
   fixture.payload.structureToys=[];fixture.payload.chains=[];
   if(variant==='arrange1')fixture.payload.toys=fixture.payload.toys.filter(t=>t.id==='proof-melody');
   fixture.payload.connections=fixture.payload.toys.map(t=>({id:'source-root-'+t.id,kind:'transport',from:{objectId:'main-heartbeat',portId:'output'},to:{objectId:t.id,portId:'input'}}));
- }else if(variant!=='base' && variant!=='roots'){
+ }else if(variant!=='base' && variant!=='roots' && variant!=='legacy'){
   fixture.payload.structureToys.push({id:'proof-transpose',definitionId:'definition:proof-transpose',type:'transpose',semitones:12,x:variant==='outer'?0:420,y:480,collapsed:false,outputCount:1});
   const edge=fixture.payload.connections.find(c=>c.id===(variant==='outer'?'proof-root':'proof-cr'));
   const target=edge.to;
@@ -59,6 +62,9 @@ document.querySelector('#load').onclick=async()=>{
  status.textContent='Fixture loaded. Play and edit using the board controls.';
 };
 document.querySelector('#observe').onclick=()=>{observe(testedWindow);status.textContent='Observing restored board audio.';};
+document.querySelector('#check-master-delete').onclick=()=>{const master=testedWindow.document.querySelector('.toy-panel:not([data-master-toy-id])');status.textContent=testedWindow.MusicToyFactory.destroy(master)?'ERROR: Master deleted':'Master deletion prevented';};
+document.querySelector('#remove-instance').onclick=()=>{const instances=[...testedWindow.document.querySelectorAll('.toy-instance')];const panel=instances.at(-1);status.textContent=panel&&testedWindow.MusicToyFactory.destroy(panel)?'Test Instance removed':'No Instance removed';};
+document.querySelector('#connect-instances').onclick=()=>{const snap=testedWindow.Persistence.getSnapshot(),master=snap.toys.find(t=>!t.masterToyId),instances=snap.toys.filter(t=>t.masterToyId===master?.id).sort((a,b)=>a.instanceNumber-b.instanceNumber),ids=instances.map(t=>t.id),edges=snap.connections.filter(e=>!ids.includes(e.to.objectId)&&e.from.objectId!==master.id&&!ids.includes(e.from.objectId));[master,...instances].forEach((toy,i,list)=>{if(i)edges.push({id:'instance-chain-'+i,kind:'sequence',from:{objectId:list[i-1].id,portId:'output'},to:{objectId:toy.id,portId:'input'}});});testedWindow.restoreConnections(edges,snap.structureToys);testedWindow.arrangeSubgraph(master.id);status.textContent='Connected ordinary Master → Instance → Instance chain';};
 document.querySelector('#save').onclick=async()=>{
  const snapshot=testedWindow.Persistence.getSnapshot();
  const win=testedWindow;
@@ -69,6 +75,7 @@ document.querySelector('#save').onclick=async()=>{
    sourcePositions:Array.from(win.document.querySelectorAll('.toy-panel[id]')).map(p=>({id:p.id,left:p.style.left,top:p.style.top})),
    nodeBounds:Array.from(win.document.querySelectorAll('.structure-card')).map(n=>({label:n.getAttribute('aria-label'),x:n.getAttribute('x'),y:n.getAttribute('y'),width:n.getAttribute('width'),height:n.getAttribute('height')}))},
   rootPerformances:win.__STRUCTURE_DEBUG?.instances.filter(i=>!i.parentDefinitionId),
+  instancePresentation:Array.from(win.document.querySelectorAll('.toy-panel[id]')).map(p=>({id:p.id,name:p.dataset.toyName,masterToyId:p.dataset.masterToyId||null,number:Number(p.dataset.instanceNumber)||null,colour:p.dataset.instrumentColour||null,highlighted:p.classList.contains('linked-toy-highlight'),width:p.offsetWidth,height:p.offsetHeight,visibleRoles:[...p.querySelectorAll('.musical-role-control')].filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').length,sourceControls:p.dataset.masterToyId?p.querySelectorAll('[data-action="random"],[data-action="clear"],.toy-inst-btn,.musical-role-control').length:null})),
   providers:Array.from(win.document.querySelectorAll('.toy-panel[id]')).map(p=>({id:p.id,hasSchedule:typeof p.__sequencerSchedule==='function',pattern:p.__seqPattern,activePattern:p.__seqPatternActive,audioToyId:p.__audioToyId}))};
  const report={kind:'normal-graph-harmony-integration',createdAt:new Date().toISOString(),authoredSources:before,events,uiEvents,snapshot,diagnostics};
  const fileName='harmony-graph-'+report.createdAt.replace(/[:.]/g,'-')+'.json';

@@ -1,0 +1,2027 @@
+{
+  "kind": "normal-graph-harmony-integration",
+  "createdAt": "2026-10-11T15:22:22.552Z",
+  "authoredSources": null,
+  "events": [],
+  "uiEvents": [
+    {
+      "type": "pointerdown",
+      "label": "Arrange",
+      "class": "toy-spawner-arrange c-btn"
+    },
+    {
+      "type": "pointerup",
+      "label": "Arrange",
+      "class": "toy-spawner-arrange c-btn"
+    },
+    {
+      "type": "click",
+      "label": "Arrange",
+      "class": "toy-spawner-arrange c-btn"
+    },
+    {
+      "type": "pointerdown",
+      "label": null,
+      "class": null
+    },
+    {
+      "type": "pointerup",
+      "label": null,
+      "class": null
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": null
+    },
+    {
+      "type": "pointerdown",
+      "label": null,
+      "class": null
+    },
+    {
+      "type": "pointerup",
+      "label": null,
+      "class": null
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": null
+    }
+  ],
+  "snapshot": {
+    "schemaVersion": 1,
+    "createdAt": "2026-10-11T15:22:22.551Z",
+    "updatedAt": "2026-10-11T15:22:22.551Z",
+    "transport": {
+      "bpm": 120
+    },
+    "heartbeats": [
+      {
+        "id": "main-heartbeat",
+        "transportId": "main-heartbeat",
+        "name": "Main",
+        "position": {
+          "x": 0,
+          "y": 300
+        },
+        "bpm": 120,
+        "positionTick": 86890,
+        "state": "stopped"
+      }
+    ],
+    "themeId": "default",
+    "artToys": [],
+    "toys": [
+      {
+        "id": "proof-bass",
+        "type": "drawgrid",
+        "toyName": "Draw 1",
+        "instanceSerial": 16,
+        "ui": {
+          "left": "1150px",
+          "top": "-379px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "RETRO TRIANGLE",
+          "instrumentNote": "C4",
+          "instrumentOctave": 3,
+          "instrumentPitchShift": true,
+          "musicalRole": "accompaniment",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "volume": 0.7,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "proof-drums",
+        "type": "loopgrid",
+        "toyName": "Rhythm 1",
+        "instanceSerial": 8,
+        "ui": {
+          "left": "1150px",
+          "top": "940px",
+          "width": "618px",
+          "height": "345px",
+          "positionSource": "manual",
+          "z": 5
+        },
+        "state": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "notes": [
+            60,
+            60,
+            60,
+            60,
+            60,
+            60,
+            60,
+            60
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK",
+          "instrumentPitchShift": false,
+          "musicalRole": "percussion"
+        },
+        "volume": 0.45,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "proof-melody",
+        "type": "drawgrid",
+        "toyName": "Draw 2",
+        "instanceSerial": 9,
+        "ui": {
+          "left": "1150px",
+          "top": "470px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "instrumentOctave": 4,
+          "instrumentPitchShift": true,
+          "musicalRole": "melody",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                7
+              ],
+              [
+                4
+              ],
+              [
+                2
+              ],
+              [
+                4
+              ],
+              [
+                7
+              ],
+              [
+                5
+              ],
+              [
+                9
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "instance-1791731687743-m2qw9q",
+        "type": "drawgrid",
+        "masterToyId": "proof-melody",
+        "instanceNumber": 3,
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "264px",
+          "top": "-80px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791732133549-v7end1",
+        "type": "drawgrid",
+        "masterToyId": "proof-bass",
+        "instanceNumber": 13,
+        "autoArrangeOwner": "arrangement:1791732133545:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "4933.37px",
+          "top": "861.22px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791732133552-52ai3f",
+        "type": "loopgrid",
+        "masterToyId": "proof-drums",
+        "instanceNumber": 7,
+        "autoArrangeOwner": "arrangement:1791732133545:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "5349.37px",
+          "top": "1109.22px",
+          "width": "240px",
+          "height": "160px",
+          "positionSource": "auto",
+          "z": 4
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791732133554-ibdpu8",
+        "type": "drawgrid",
+        "masterToyId": "proof-bass",
+        "instanceNumber": 14,
+        "autoArrangeOwner": "arrangement:1791732133545:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "5349.37px",
+          "top": "1357.22px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791732133556-1dlotp",
+        "type": "drawgrid",
+        "masterToyId": "proof-melody",
+        "instanceNumber": 8,
+        "autoArrangeOwner": "arrangement:1791732133545:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "5349.37px",
+          "top": "1605.22px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791732133561-hoowtm",
+        "type": "loopgrid",
+        "masterToyId": "proof-drums",
+        "instanceNumber": 8,
+        "autoArrangeOwner": "arrangement:1791732133545:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "5349.37px",
+          "top": "1853.22px",
+          "width": "240px",
+          "height": "160px",
+          "positionSource": "auto",
+          "z": 3
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791732133563-usmr24",
+        "type": "drawgrid",
+        "masterToyId": "proof-bass",
+        "instanceNumber": 15,
+        "autoArrangeOwner": "arrangement:1791732133545:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "5349.37px",
+          "top": "2101.22px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791732133567-lyiisb",
+        "type": "drawgrid",
+        "masterToyId": "proof-melody",
+        "instanceNumber": 9,
+        "autoArrangeOwner": "arrangement:1791732133545:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "5349.37px",
+          "top": "2349.22px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791732133570-jyua30",
+        "type": "drawgrid",
+        "masterToyId": "proof-bass",
+        "instanceNumber": 16,
+        "autoArrangeOwner": "arrangement:1791732133545:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "4933.37px",
+          "top": "2597.22px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      }
+    ],
+    "chains": [
+      {
+        "parentId": "structure-toy:2",
+        "childId": "instance-1791732133549-v7end1"
+      },
+      {
+        "parentId": "structure-toy:4",
+        "childId": "instance-1791732133552-52ai3f"
+      },
+      {
+        "parentId": "structure-toy:4",
+        "childId": "instance-1791732133554-ibdpu8"
+      },
+      {
+        "parentId": "structure-toy:4",
+        "childId": "instance-1791732133556-1dlotp"
+      },
+      {
+        "parentId": "structure-toy:6",
+        "childId": "instance-1791732133561-hoowtm"
+      },
+      {
+        "parentId": "structure-toy:6",
+        "childId": "instance-1791732133563-usmr24"
+      },
+      {
+        "parentId": "structure-toy:6",
+        "childId": "instance-1791732133567-lyiisb"
+      },
+      {
+        "parentId": "structure-toy:7",
+        "childId": "instance-1791732133570-jyua30"
+      }
+    ],
+    "connections": [
+      {
+        "id": "connection:22",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "instance-1791731687743-m2qw9q",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:25",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "structure-toy:2",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:27",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:2",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791732133549-v7end1",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:28",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "structure-toy:3",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:29",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:3",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "structure-toy:4",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:31",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:4",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791732133552-52ai3f",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:33",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:4",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "instance-1791732133554-ibdpu8",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:35",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:4",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "instance-1791732133556-1dlotp",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:36",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "structure-toy:5",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:37",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:5",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "structure-toy:6",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:39",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:6",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791732133561-hoowtm",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:41",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:6",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "instance-1791732133563-usmr24",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:43",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:6",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "instance-1791732133567-lyiisb",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:44",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:3"
+        },
+        "to": {
+          "objectId": "structure-toy:7",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:46",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:7",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791732133570-jyua30",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:47",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "structure-toy:1",
+          "portId": "input"
+        }
+      }
+    ],
+    "structureToys": [
+      {
+        "id": "structure-toy:1",
+        "definitionId": "definition:structure-toy:1",
+        "type": "sequence",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 4093.3718008469286,
+        "y": 1657.22,
+        "artOwnerId": null,
+        "name": "Arrangement",
+        "autoArrange": {
+          "owner": "arrangement:1791732133545:1",
+          "root": true,
+          "version": 1,
+          "heartbeatId": "main-heartbeat",
+          "sourceIds": {
+            "rhythm": "proof-drums",
+            "accompaniment": "proof-bass",
+            "melody": "proof-melody"
+          },
+          "origins": {
+            "rhythm": "authored",
+            "accompaniment": "authored",
+            "melody": "authored"
+          },
+          "displacedConnections": [
+            {
+              "id": "source-root-proof-drums",
+              "kind": "transport",
+              "from": {
+                "objectId": "main-heartbeat",
+                "portId": "output"
+              },
+              "to": {
+                "objectId": "proof-drums",
+                "portId": "input"
+              }
+            },
+            {
+              "id": "source-root-proof-bass",
+              "kind": "transport",
+              "from": {
+                "objectId": "main-heartbeat",
+                "portId": "output"
+              },
+              "to": {
+                "objectId": "proof-bass",
+                "portId": "input"
+              }
+            },
+            {
+              "id": "source-root-proof-melody",
+              "kind": "transport",
+              "from": {
+                "objectId": "main-heartbeat",
+                "portId": "output"
+              },
+              "to": {
+                "objectId": "proof-melody",
+                "portId": "input"
+              }
+            }
+          ]
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 5,
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:2",
+        "definitionId": "definition:structure-toy:2",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "C",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 4397.371800846929,
+        "y": 901.22,
+        "artOwnerId": null,
+        "name": "Intro",
+        "autoArrange": {
+          "owner": "arrangement:1791732133545:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "lastChildType": "drawgrid",
+        "lastChildId": "instance-1791732133549-v7end1",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:3",
+        "definitionId": "definition:structure-toy:3",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "C",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 4397.371800846929,
+        "y": 1397.2199999999998,
+        "artOwnerId": null,
+        "name": "A",
+        "autoArrange": {
+          "owner": "arrangement:1791732133545:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:4",
+        "definitionId": "definition:structure-toy:4",
+        "type": "together",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 4933.371800846929,
+        "y": 1313.22,
+        "artOwnerId": null,
+        "name": "A layers",
+        "autoArrange": {
+          "owner": "arrangement:1791732133545:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 4,
+        "lastChildType": "drawgrid",
+        "lastChildId": "instance-1791732133556-1dlotp",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:5",
+        "definitionId": "definition:structure-toy:5",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "C",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 4397.371800846929,
+        "y": 2141.2200000000003,
+        "artOwnerId": null,
+        "name": "B",
+        "autoArrange": {
+          "owner": "arrangement:1791732133545:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:6",
+        "definitionId": "definition:structure-toy:6",
+        "type": "together",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 4933.371800846929,
+        "y": 2057.2200000000003,
+        "artOwnerId": null,
+        "name": "B layers",
+        "autoArrange": {
+          "owner": "arrangement:1791732133545:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 4,
+        "lastChildType": "drawgrid",
+        "lastChildId": "instance-1791732133567-lyiisb",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:7",
+        "definitionId": "definition:structure-toy:7",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "C",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 4397.371800846929,
+        "y": 2637.2200000000003,
+        "artOwnerId": null,
+        "name": "Outro",
+        "autoArrange": {
+          "owner": "arrangement:1791732133545:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "lastChildType": "drawgrid",
+        "lastChildId": "instance-1791732133570-jyua30",
+        "transportId": "main-heartbeat"
+      }
+    ],
+    "camera": {
+      "boardTransform": "translate3d(-854.25px, -293.49px, 0px) scale(0.411965)",
+      "viewportScrollLeft": 0,
+      "viewportScrollTop": 0,
+      "bvScale": "0.41196498054474706",
+      "scale": 0.41196498054474706,
+      "x": -854.253567247077,
+      "y": -293.4865400993745,
+      "overviewActive": false
+    }
+  },
+  "diagnostics": {
+    "sourceUsePresentation": {
+      "chips": 0,
+      "extraSockets": 0,
+      "visibleCables": 16,
+      "dottedCables": 0,
+      "highlightedSources": [],
+      "sourcePositions": [
+        {
+          "id": "proof-bass",
+          "left": "1150px",
+          "top": "-379px"
+        },
+        {
+          "id": "proof-drums",
+          "left": "1150px",
+          "top": "940px"
+        },
+        {
+          "id": "proof-melody",
+          "left": "1150px",
+          "top": "470px"
+        },
+        {
+          "id": "instance-1791731687743-m2qw9q",
+          "left": "264px",
+          "top": "-80px"
+        },
+        {
+          "id": "instance-1791732133549-v7end1",
+          "left": "4933.37px",
+          "top": "861.22px"
+        },
+        {
+          "id": "instance-1791732133552-52ai3f",
+          "left": "5349.37px",
+          "top": "1109.22px"
+        },
+        {
+          "id": "instance-1791732133554-ibdpu8",
+          "left": "5349.37px",
+          "top": "1357.22px"
+        },
+        {
+          "id": "instance-1791732133556-1dlotp",
+          "left": "5349.37px",
+          "top": "1605.22px"
+        },
+        {
+          "id": "instance-1791732133561-hoowtm",
+          "left": "5349.37px",
+          "top": "1853.22px"
+        },
+        {
+          "id": "instance-1791732133563-usmr24",
+          "left": "5349.37px",
+          "top": "2101.22px"
+        },
+        {
+          "id": "instance-1791732133567-lyiisb",
+          "left": "5349.37px",
+          "top": "2349.22px"
+        },
+        {
+          "id": "instance-1791732133570-jyua30",
+          "left": "4933.37px",
+          "top": "2597.22px"
+        }
+      ],
+      "nodeBounds": [
+        {
+          "label": "Arrangement · Sequence structure",
+          "x": "4093.3718008469286",
+          "y": "1657.22",
+          "width": "128",
+          "height": "304"
+        },
+        {
+          "label": "Intro · Chord Progression",
+          "x": "4397.371800846929",
+          "y": "901.22",
+          "width": "360",
+          "height": "80"
+        },
+        {
+          "label": "A · Chord Progression",
+          "x": "4397.371800846929",
+          "y": "1397.2199999999998",
+          "width": "360",
+          "height": "80"
+        },
+        {
+          "label": "A layers · Together structure",
+          "x": "4933.371800846929",
+          "y": "1313.22",
+          "width": "128",
+          "height": "248"
+        },
+        {
+          "label": "B · Chord Progression",
+          "x": "4397.371800846929",
+          "y": "2141.2200000000003",
+          "width": "360",
+          "height": "80"
+        },
+        {
+          "label": "B layers · Together structure",
+          "x": "4933.371800846929",
+          "y": "2057.2200000000003",
+          "width": "128",
+          "height": "248"
+        },
+        {
+          "label": "Outro · Chord Progression",
+          "x": "4397.371800846929",
+          "y": "2637.2200000000003",
+          "width": "360",
+          "height": "80"
+        }
+      ]
+    },
+    "rootPerformances": [
+      {
+        "id": "structure:1:40",
+        "definitionId": "sequence:instance-1791731687743-m2qw9q",
+        "transportId": "main-heartbeat",
+        "startTick": 86890,
+        "active": true,
+        "context": {
+          "transposeSemitones": 0,
+          "harmony": null,
+          "scale": null,
+          "velocityScale": 1
+        },
+        "loop": true,
+        "generation": 0,
+        "scheduledUntilTick": 86890,
+        "rootAnchor": true,
+        "powerConnectionId": "connection:22",
+        "currentLocalTick": 0,
+        "currentStructureLocalTick": null,
+        "currentChild": "instance-1791731687743-m2qw9q",
+        "currentChildren": [
+          "instance-1791731687743-m2qw9q"
+        ],
+        "currentChildStartTick": 86890,
+        "harmonicOccurrences": [
+          {
+            "occurrenceId": "[\"structure:1:40\",86890,\"instance-1791731687743-m2qw9q\",[\"slot:instance-1791731687743-m2qw9q:0\"]]",
+            "toyId": "instance-1791731687743-m2qw9q",
+            "harmony": null,
+            "resolvedChord": null
+          }
+        ]
+      },
+      {
+        "id": "structure:1:52",
+        "definitionId": "definition:structure-toy:1",
+        "transportId": "main-heartbeat",
+        "startTick": 86890,
+        "active": true,
+        "context": {
+          "transposeSemitones": 0,
+          "harmony": null,
+          "scale": null,
+          "velocityScale": 1
+        },
+        "loop": true,
+        "generation": 1,
+        "scheduledUntilTick": 86890,
+        "rootAnchor": true,
+        "powerConnectionId": "connection:47",
+        "currentLocalTick": 0,
+        "currentStructureLocalTick": 0,
+        "currentChild": "instance-1791732133549-v7end1",
+        "currentChildren": [
+          "instance-1791732133549-v7end1"
+        ],
+        "currentChildStartTick": 86890,
+        "harmonicOccurrences": [
+          {
+            "occurrenceId": "[\"structure:1:52\",86890,\"instance-1791732133549-v7end1\",[\"slot:definition:structure-toy:2:0\",\"slot:instance-1791732133549-v7end1:0:progression:0\"]]",
+            "toyId": "instance-1791732133549-v7end1",
+            "harmony": {
+              "progressionId": "definition:structure-toy:2",
+              "originTick": 86890,
+              "stepTicks": 384,
+              "chords": [
+                {
+                  "root": "C",
+                  "quality": "major"
+                },
+                {
+                  "root": "A",
+                  "quality": "minor"
+                },
+                {
+                  "root": "F",
+                  "quality": "major"
+                },
+                {
+                  "root": "G",
+                  "quality": "major"
+                }
+              ]
+            },
+            "resolvedChord": {
+              "root": "C",
+              "quality": "major"
+            }
+          }
+        ]
+      }
+    ],
+    "instancePresentation": [
+      {
+        "id": "proof-bass",
+        "name": "Draw 1",
+        "masterToyId": null,
+        "number": null,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 800,
+        "height": 758,
+        "visibleRoles": 0,
+        "sourceControls": null
+      },
+      {
+        "id": "proof-drums",
+        "name": "Rhythm 1",
+        "masterToyId": null,
+        "number": null,
+        "colour": "oklch(76% 0.14 262.6165)",
+        "highlighted": false,
+        "width": 618,
+        "height": 345,
+        "visibleRoles": 0,
+        "sourceControls": null
+      },
+      {
+        "id": "proof-melody",
+        "name": "Draw 2",
+        "masterToyId": null,
+        "number": null,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 800,
+        "height": 758,
+        "visibleRoles": 0,
+        "sourceControls": null
+      },
+      {
+        "id": "instance-1791731687743-m2qw9q",
+        "name": "Draw 2.3",
+        "masterToyId": "proof-melody",
+        "number": 3,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791732133549-v7end1",
+        "name": "Draw 1.13",
+        "masterToyId": "proof-bass",
+        "number": 13,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791732133552-52ai3f",
+        "name": "Rhythm 1.7",
+        "masterToyId": "proof-drums",
+        "number": 7,
+        "colour": "oklch(76% 0.14 262.6165)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791732133554-ibdpu8",
+        "name": "Draw 1.14",
+        "masterToyId": "proof-bass",
+        "number": 14,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791732133556-1dlotp",
+        "name": "Draw 2.8",
+        "masterToyId": "proof-melody",
+        "number": 8,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791732133561-hoowtm",
+        "name": "Rhythm 1.8",
+        "masterToyId": "proof-drums",
+        "number": 8,
+        "colour": "oklch(76% 0.14 262.6165)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791732133563-usmr24",
+        "name": "Draw 1.15",
+        "masterToyId": "proof-bass",
+        "number": 15,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791732133567-lyiisb",
+        "name": "Draw 2.9",
+        "masterToyId": "proof-melody",
+        "number": 9,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791732133570-jyua30",
+        "name": "Draw 1.16",
+        "masterToyId": "proof-bass",
+        "number": 16,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      }
+    ],
+    "providers": [
+      {
+        "id": "proof-bass",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "audioToyId": "audiotoy_proof-bass_tm84k2x8"
+      },
+      {
+        "id": "proof-drums",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK"
+        },
+        "audioToyId": "audiotoy_proof-drums_fj5a8d46"
+      },
+      {
+        "id": "proof-melody",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "audioToyId": "audiotoy_proof-melody_y6g78g1a"
+      },
+      {
+        "id": "instance-1791731687743-m2qw9q",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791732133549-v7end1",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791732133552-52ai3f",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK"
+        }
+      },
+      {
+        "id": "instance-1791732133554-ibdpu8",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791732133556-1dlotp",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791732133561-hoowtm",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK"
+        }
+      },
+      {
+        "id": "instance-1791732133563-usmr24",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791732133567-lyiisb",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791732133570-jyua30",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

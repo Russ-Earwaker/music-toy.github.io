@@ -28,6 +28,7 @@ function drawgridStateSignature(stateLike) {
 }
 
 export function initDrawGrid(panel){
+  if(panel?.dataset?.masterToyId)return;
   if (!panel || panel.__drawgridInit) return panel?.__drawToy;
   const artOwnerId = String(panel?.dataset?.artOwnerId || '').trim();
   const artPanel = artOwnerId ? document.getElementById(artOwnerId) : null;

@@ -10,6 +10,7 @@ import { structureToyModel } from './structure-toys.js';
 import { heartbeatModel } from './heartbeats.js';
 import { applyToyInstrument } from './instrument-state.js';
 import { normalizeMusicalRole, restoreToyMusicalRole } from './musical-role.js';
+import {migrateSourceUses,validateInstanceLinks} from './toy-instances.js';
 import { restoreToyLocalTranspose } from './toy-local-transpose.js';
 
 // ---- Persistence diagnostics ----
@@ -833,11 +834,12 @@ export function getSnapshot(){
   const toys = panels.map(panel => {
     const type = String(panel.dataset.toy||'').toLowerCase();
     const id = panelId(panel);
+    if(panel.dataset.masterToyId)return {id,type,masterToyId:panel.dataset.masterToyId,instanceNumber:Number(panel.dataset.instanceNumber),autoArrangeOwner:panel.dataset.autoArrangeOwner||undefined,ownerArtToyId:panel.dataset.artOwnerId||null,ui:panel.dataset.artOwnerId?readOwnedToyUI(panel):readUI(panel),state:{}};
     const snapper = ToySnapshotters[type]?.snap || (()=>({}));
     const audio = snapToyAudio(panel, id);
     const ownerArtToyId = panel.dataset?.artOwnerId || null;
     return {
-      id, type,
+      id, type, toyName:panel.dataset.toyName,instanceSerial:Number(panel.dataset.instanceSerial)||0,
       ui: ownerArtToyId ? readOwnedToyUI(panel) : readUI(panel),
       state: { ...(snapper(panel) || {}), ...(panel.dataset.autoArrangeOrigin==='filled'?{autoArrangeOrigin:'filled'}:{}), ...(panel.dataset.musicalRole ? {musicalRole:normalizeMusicalRole(panel.dataset.musicalRole)} : {}) },
       volume: audio.volume,
@@ -917,6 +919,8 @@ export function applySnapshot(snap){
 }
 
 export function applySceneSnapshot(snap){
+  const migratedUses=snap?.connections?.some(c=>c.to.portId==='pattern');
+  try{snap=validateInstanceLinks(migrateSourceUses(snap));}catch(error){console.warn('[persistence] invalid linked toy scene',error);return false;}
   if (!snap || typeof snap !== 'object') return false;
   window.beginCreationGraphRestore?.();
   try{
@@ -1027,12 +1031,12 @@ export function applySceneSnapshot(snap){
     const posMap = {};
     const internalHost = ensureArtInternalHostForRestore();
     let appliedCount = 0;
-    for (const t of (snap.toys||[])){
+    for (const t of (snap.toys||[]).filter(t=>!t.masterToyId)){
       let createdFromFactory = false;
       let panel = byId.get(t.id);
       // A type fallback can rename a panel whose previous ID is requested later.
       // The stale byId entry must never assign that same panel to two sources.
-      if(usedPanels.has(panel))panel=null;
+      if(usedPanels.has(panel)||panel?.dataset.masterToyId)panel=null;
       // An imported scene may reuse an ID for a different toy kind.
       if (panel && String(panel.dataset.toy || "").toLowerCase() !== t.type) {
         factory?.destroy?.(panel);
@@ -1043,7 +1047,7 @@ export function applySceneSnapshot(snap){
       }
       if (!panel){
         // Try to find first panel of same type not yet used
-        panel = panels.find(p => String(p.dataset.toy||'').toLowerCase() === t.type && !usedPanels.has(p));
+        panel = panels.find(p => String(p.dataset.toy||'').toLowerCase() === t.type && !p.dataset.masterToyId && !usedPanels.has(p));
       }
       if (!panel && factory && typeof factory.create === 'function'){
         try{
@@ -1117,6 +1121,8 @@ export function applySceneSnapshot(snap){
           delete panel.dataset.focusSkip;
         } catch {}
       }
+      if(t.toyName)panel.dataset.toyName=t.toyName;else delete panel.dataset.toyName;
+      panel.dataset.instanceSerial=String(t.instanceSerial||0);
       restoreToyMusicalRole(panel, t.state || {});
       if(t.state?.autoArrangeOrigin==='filled')panel.dataset.autoArrangeOrigin='filled';else delete panel.dataset.autoArrangeOrigin;
       restoreToyLocalTranspose(panel, t.state || {});
@@ -1150,6 +1156,13 @@ export function applySceneSnapshot(snap){
       try { applyToyAudio(panel, t, t.id); } catch {}
       applyInstrumentPitch(panel, t.state || {});
       appliedCount++;
+    }
+    // Replace linked objects only after every authored Master has been restored.
+    for(const old of panels.filter(p=>p.dataset.masterToyId)){factory?.destroy?.(old,{allowOffBoard:true,sceneRestore:true});old.remove();}
+    for(const t of (snap.toys||[]).filter(t=>t.masterToyId)){
+      if(!document.getElementById(t.masterToyId))throw new Error('Missing Master: '+t.masterToyId);
+      const instance=factory.createInstance(t.masterToyId,{id:t.id,instanceNumber:t.instanceNumber,autoArrangeOwner:t.autoArrangeOwner,ui:t.ui,containerEl:t.ownerArtToyId?internalHost:undefined});
+      panels.push(instance);usedPanels.add(instance);
     }
     // --- Re-link chain edges AFTER all toys exist ---
     try {
@@ -1203,6 +1216,7 @@ export function applySceneSnapshot(snap){
             window.restoreConnections?.(snap.connections, snap.structureToys || []);
             window.updateChains?.();
           } catch {} finally {window.endCreationGraphRestore?.();}
+          if(migratedUses)for(const root of (snap.structureToys||[]).filter(s=>!snap.connections.some(c=>c.kind==='sequence'&&c.to.objectId===s.id)))window.arrangeSubgraph?.(root.id);
           try { window.updateAllChainUIs?.(); } catch {}
           // Optional: log graph for diagnostics
           try {
@@ -1231,7 +1245,7 @@ export function applySceneSnapshot(snap){
       try{
         const destroy = window.MusicToyFactory?.destroy;
         if (typeof destroy === 'function'){
-          destroy(panel);
+          destroy(panel,{sceneRestore:true,allowOffBoard:true});
         }
       }catch{}
       try{ panel.remove(); }catch{}
