@@ -1,4 +1,4 @@
-import { normalizeChords, normalizeChordStep } from './chord-progression.js';
+import { normalizeChords, normalizeChordStep, progressionDurationTicks } from './chord-progression.js';
 import { LOGIC_NODE_TYPES, isModifier, normalizeSemitones, logicNodeLabel } from './modifier-types.js';
 import { GRAPH_ENDPOINT_DIAMETER, GRAPH_ENDPOINT_HIT_DIAMETER } from './graph-visuals.js';
 import { connectionModel, createStructurePorts } from './connections.js';
@@ -29,8 +29,9 @@ export function createStructureToyModel(model, options = {}) {
     if(seen.has(id)) throw new Error('Cyclic Structure graph');
     const next=new Set(seen).add(id),s=records.get(id),edges=childEdges(id);
     if(!s) return config.getDuration(id)+(edges[0]?durationOf(edges[0].to.objectId,next):0);
+    if (s.type === 'chord-progression') return progressionDurationTicks(s.chords,s.stepTicks);
     if (isModifier(s.type)) return edges[0] ? durationOf(edges[0].to.objectId,next) : 0;
-    return structureDuration(s.type,edges.map(c=>({durationTicks:durationOf(c.to.objectId,next),
+    return structureDuration(s.type,edges.map(c=>({durationTicks:c.to.portId==='pattern'?config.getDuration(c.to.objectId):durationOf(c.to.objectId,next),
       offsetTick:s.entries?.find(e=>e.portId===c.from.portId)?.offsetTick || 0})),s.count);
   }
   function timelineEntries(s,edges=childEdges(s.id),sourceType=s.type) {
@@ -79,11 +80,11 @@ export function createStructureToyModel(model, options = {}) {
     return s;
   }
   // A detached board object has no transport authority until its input is rooted.
-  function createStandalone(type, {x=0,y=0,artOwnerId=null} = {}) {
+  function createStandalone(type, {x=0,y=0,artOwnerId=null,name=null,autoArrange=null,collapsed=false} = {}) {
     if(!LOGIC_NODE_TYPES.includes(type))return null;
     let id;do {id=`structure-toy:${serial++}`;}while(model.getObject(id));
     const s=Object.freeze({id,definitionId:`definition:${id}`,type,kind:isModifier(type)?'modifier':'structure',...(type==='transpose'?{semitones:0}:type==='chord-progression'?{chords:normalizeChords(),stepTicks:384}:{}),provenance:'explicit',includeInput:false,
-      x,y,artOwnerId,positionSource:'auto',collapsed:false,outputCount:type==='repeat'||isModifier(type)?1:2,
+      x,y,artOwnerId,...(name?{name}:{}),...(autoArrange?{autoArrange}:{}),positionSource:'auto',collapsed:!!collapsed,outputCount:type==='repeat'||isModifier(type)?1:2,
       ...(type==='repeat'?{count:2}:{}),...(type==='timeline'?{entries:Object.freeze([])}:{})});
     model.transaction(()=>{records.set(id,s);register(s);model.touchObject(id,{structureCreated:true});});
     return records.get(id);
@@ -231,6 +232,7 @@ export function createStructureToyModel(model, options = {}) {
       return next;
     },
     configure: changes => Object.assign(config, changes),
+    annotate(id,changes) {return update(id,changes);},
     move(id, x, y, {manual=true}={}) {
       const result = update(id, { x, y, ...(manual?{provenance:'explicit',positionSource:'manual'}:{}) }, { notify: false });
       config.onMove?.(); return result;

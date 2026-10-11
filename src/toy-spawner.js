@@ -1,5 +1,6 @@
 // src/toy-spawner.js
 // Provides the "Create Toy" palette dock and drag-to-spawn affordance.
+import { openAdvancedLogic, logicCreationEntry } from './logic-creation-menu.js';
 import { screenToWorld } from './board-viewport.js';
 
 import { toggleHelp, isHelpActive } from './help-overlay.js';
@@ -274,7 +275,12 @@ function ensureDock() {
   list.className = 'toy-spawner-list';
   menu.appendChild(list);
 
-  dock.append(trash, toggle, artToggle, logicToggle, gameToggle, overview, help, menu);
+  const arrange=document.createElement('button');arrange.type='button';arrange.className='toy-spawner-arrange c-btn';
+  arrange.setAttribute('aria-label','Arrange');arrange.title='Arrange your musical ideas';arrange.innerHTML=BUTTON_ICON_HTML;
+  const arrangeLabel=document.createElement('span');arrangeLabel.className='arrange-label';arrangeLabel.textContent='Arrange';arrange.appendChild(arrangeLabel);
+  arrange.style.setProperty('--c-btn-bg','rgba(76,130,116,.95)');arrange.style.setProperty('--c-btn-size','var(--toy-spawner-button-size)');
+  arrange.addEventListener('click',()=>{setMenuOpen(false);document.dispatchEvent(new CustomEvent('arrange:request'));});
+  dock.append(trash, toggle, arrange, artToggle, logicToggle, gameToggle, overview, help, menu);
   document.body.appendChild(dock);
 
   state.dock = dock;
@@ -363,6 +369,7 @@ function renderCatalog() {
   const catalog = safeCatalog();
   dbg('renderCatalog', state.activePalette, { count: catalog.length });
   state.listHost.innerHTML = '';
+  if(state.activePalette==='logic'){const title=document.createElement('strong');title.className='logic-palette-title';title.textContent='STRUCTURE';state.listHost.append(title);}
   catalog.forEach((entry) => {
     const card = document.createElement('button');
     card.type = 'button';
@@ -404,6 +411,14 @@ function renderCatalog() {
     }
     state.listHost.appendChild(card);
   });
+}
+
+function openAdvancedPalette() {
+  setMenuOpen(false);
+  openAdvancedLogic({anchor:state.logicToggle,returnFocus:state.logicToggle,
+    onChoose:type=>spawnAtDefault(logicCreationEntry(type)),
+    onHeartbeat:()=>spawnAtDefault({type:'heartbeat',name:'Independent Heartbeat',size:{width:176,height:104}})});
+  return false;
 }
 
 function safeCatalog() {
@@ -903,6 +918,7 @@ export const ToySpawner = {
   configureArt,
   configureGame,
   configureLogic,
+  openAdvancedLogic:openAdvancedPalette,
   beginPanelDrag,
   updatePanelDrag,
   endPanelDrag,

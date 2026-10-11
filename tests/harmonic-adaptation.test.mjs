@@ -36,7 +36,7 @@ const ref = structureId => ({ structureId, entryId: structureId });
 const input = objectId => ({ objectId, portId: 'input' });
 const out = (objectId, portId = 'output') => ({ objectId, portId });
 const state = tick => ({ currentTick: tick, state: 'paused' });
-function harness(kinds = ['loopgrid']) {
+function harness(kinds = ['drawgrid']) {
   clearPlaybackInstancesForTests(); notes.length = 0; ctx.nodes.length = 0; ctx.currentTime = 0;
   const panels = kinds.map((toy, i) => ({ id: String.fromCharCode(65+i), dataset: { toy, steps: '8' },
     __seqRev: 0, sourceNote: i === 1 ? 'C3' : 'C4',
@@ -61,13 +61,13 @@ import { classifyMusicalRole, adaptNoteToHarmony, deriveProgressionScale, resolv
 const harmony={progressionId:'M',originTick:96,stepTicks:384,chords:DEFAULT_CHORDS};
 const adapt=(sourcePitch,tick,role='melody',extra={})=>adaptNoteToHarmony({sourcePitch,eventTick:tick,harmony,role,...extra});
 test('explicit capabilities, instrument bass hint and all current toy classifications',()=>{
- for(const toyType of ['loopgrid','drawgrid','bouncer','rippler'])assert.equal(classifyMusicalRole({toyType,instrument:'piano'}),'melody');
+ for(const toyType of ['drawgrid','bouncer','rippler'])assert.equal(classifyMusicalRole({toyType,instrument:'piano'}),'melody');
  assert.equal(classifyMusicalRole({toyType:'chordwheel',instrument:'piano',options:{musicalRole:'melody'}}),'harmony');
  assert.equal(classifyMusicalRole({toyType:'loopgrid-drum',instrument:'piano'}),'percussion');
- assert.equal(classifyMusicalRole({toyType:'drawgrid',instrument:'electric_bass'}),'bass');
+ assert.equal(classifyMusicalRole({toyType:'drawgrid',instrument:'electric_bass'}),'accompaniment');
  assert.equal(classifyMusicalRole({instrument:'marimba'}),'melody');
  assert.equal(classifyMusicalRole({instrument:'bassoon'}),'melody');
- assert.equal(classifyMusicalRole({instrument:'piano',options:{musicalRole:'bass'}}),'bass');
+ assert.equal(classifyMusicalRole({instrument:'piano',options:{musicalRole:'bass'}}),'accompaniment');
  assert.equal(classifyMusicalRole({instrument:'DRUM_KICK',options:{musicalRole:'bass'}}),'percussion');
 });
 test('progression-wide shared scale defaults naturally to C major and supports other keys',()=>{
@@ -98,7 +98,7 @@ test('harmony voices and percussion bypass adaptation; explicit Transpose follow
  assert.equal(resolveMusicalPitch({sourcePitch:'C3',eventTick:480,context:{harmony,transposeSemitones:12},role:'percussion'}).finalNote,'C3');
 });
 test('audible compact bass/melody/drum proof preserves source rhythm, rests, velocity and event boundaries',()=>{
- const h=harness(['loopgrid','drawgrid','loopgrid-drum']);
+ const h=harness(['drawgrid','drawgrid','loopgrid']);
  const patterns=[['C3','G3',null,'E3','G3',null,'C3',null],['C4','D4','E4',null,'G4','F#4','E4',null],['C4',null,'C4',null,'C4',null,'C4',null]];
  h.panels.forEach((p,i)=>{p.pattern=patterns[i];p.dataset.musicalRole=i===0?'bass':i===1?'melody':'percussion';
  p.__sequencerSchedule=function(column,when){const n=this.pattern[column];if(n)triggerInstrument('tone',n,when,this.id,{},.65);};});
@@ -159,27 +159,27 @@ test('Piano to Marimba changes timbre without changing melody adaptation or sour
  assert.equal(ctx.nodes[0].playbackRate.value,ctx.nodes[1].playbackRate.value);
  }finally{globalThis.fetch=previous;}
 });
-async function boardGraph(nesting = []) {
+async function boardGraph(nesting = [], withRepeat = true) {
  const previousFetch=globalThis.fetch;
  globalThis.fetch=async url=>String(url).endsWith('.csv')?{ok:true,text:async()=>await (await import('node:fs/promises')).readFile(new URL('../samples.csv',import.meta.url),'utf8')}:{arrayBuffer:async()=>new ArrayBuffer(8)};
  try{await initAudioAssets('http://localhost/board.csv');}finally{globalThis.fetch=previousFetch;}
- const h=harness(['loopgrid','loopgrid','loopgrid-drum']);
+ const h=harness(['drawgrid','drawgrid','loopgrid']);
  h.adapter.reset();
  const model=createConnectionModel();
  model.registerObject(MAIN_TRANSPORT_ID,{ports:HEARTBEAT_PORTS});
  const patterns=[['C3',null,'C3',null,'C3',null,'C3',null],['E4','G4','A4','G4','E4','F#4','D4','C4'],['C4',null,'C4',null,'C4',null,'C4',null]];
- h.panels.forEach((p,i)=>{model.registerObject(p.id);p.pattern=patterns[i];
+ h.panels.forEach((p,i)=>{model.registerObject(p.id);p.pattern=patterns[i];p.dataset.musicalRole=i===0?'bass':i===1?'melody':'percussion';
  p.__sequencerSchedule=function(column,when){if(this.pattern[column])triggerInstrument(i===0?'BASS GUITAR SLAP':'tone',this.pattern[column],when,this.id,{},.65);};});
  const structures=createStructureToyModel(model);
  const connect=(kind,from,to)=>assert.equal(model.connect(kind,from,to).ok,true);
- const band=structures.createStandalone('together'),repeat=structures.createStandalone('repeat'),chords=structures.createStandalone('chord-progression');
- structures.setCount(repeat.id,4);
+ const band=structures.createStandalone('together'),repeat=withRepeat?structures.createStandalone('repeat'):null,chords=structures.createStandalone('chord-progression');
+ if(repeat)structures.setCount(repeat.id,4);
  h.panels.forEach((p,i)=>connect('sequence',out(band.id,'child:'+i),input(p.id)));
- connect('sequence',out(repeat.id,'child:0'),input(band.id));
- connect('sequence',out(chords.id,'child:0'),input(repeat.id));
+ if(repeat)connect('sequence',out(repeat.id,'child:0'),input(band.id));
+ connect('sequence',out(chords.id,'child:0'),input(repeat?.id||band.id));
  connect('transport',out(MAIN_TRANSPORT_ID),input(chords.id));
  let transpose;
- if(nesting.length){transpose=structures.promote(model.getParent(nesting[0]==='transpose'?chords.id:repeat.id).id,'transpose');structures.setSemitones(transpose.id,12);}
+ if(nesting.length){transpose=structures.promote(model.getParent(nesting[0]==='transpose'?chords.id:(repeat?.id||band.id)).id,'transpose');structures.setSemitones(transpose.id,12);}
  const adapter=createChainSequenceAdapter({connectionModel:model,getToy:id=>h.panels.find(p=>p.id===id),chainState:new Map()});
  const sync=tick=>adapter.sync(h.panels,state(tick||0),{connections:model.list('sequence'),structures:structures.list()});
  const schedule=(from,to,bpm=120)=>h.scheduler.tick({currentTick:from,lookaheadEndTick:to,playbackTurns:adapter.turnsForLookahead(from,to),getToy:id=>h.panels.find(p=>p.id===id),tickToAudioTime:tick=>tick*60/(96*bpm)});
@@ -191,7 +191,7 @@ for(const nesting of [[],['transpose','chords'],['chords','transpose']])test('no
  const bass=notes.filter(n=>n.toyId==='A'),melody=notes.filter(n=>n.toyId==='B'),drums=notes.filter(n=>n.toyId==='C');
  const shift=nesting.length?12:0;
  assert.deepEqual(bass.filter(n=>n.pitchDecision.eventTick%384===0).map(n=>n.pitchDecision.adaptedNote),['C3','A2','F3','G2']);
- assert.ok(bass.every(n=>n.pitchDecision.role==='bass'&&n.note===transposeNote(n.pitchDecision.adaptedNote,shift)));
+ assert.ok(bass.every(n=>n.pitchDecision.role==='accompaniment'&&n.note===transposeNote(n.pitchDecision.adaptedNote,shift)));
  assert.equal(melody.length,32);assert.ok(melody.every(n=>n.pitchDecision.adaptedNote===(n.pitchDecision.sourceNote==='F#4'?'F4':n.pitchDecision.sourceNote)&&n.note===transposeNote(n.pitchDecision.adaptedNote,shift)));
  assert.equal(drums.length,16);assert.ok(drums.every(n=>n.note==='C4'&&n.pitchDecision.role==='percussion'));
  assert.deepEqual(h.panels.map(p=>p.pattern),source);
@@ -238,7 +238,7 @@ test('scene restoration discards old occurrences and scheduler cursors when modi
   edges.forEach(c=>assert.equal(h.model.connect(c.kind,c.from,c.to,{id:c.id}).ok,true));
  });
  notes.length=0;h.sync(0);h.schedule(0,1536);
- assert.deepEqual(notes.filter(n=>n.pitchDecision.role==='bass'&&n.pitchDecision.eventTick%384===0).map(n=>n.note),['C4','A3','F4','G3']);
+ assert.deepEqual(notes.filter(n=>n.pitchDecision.role==='accompaniment'&&n.pitchDecision.eventTick%384===0).map(n=>n.note),['C4','A3','F4','G3']);
  assert.ok(notes.every(n=>n.pitchDecision.eventTick<1536));
  assert.deepEqual(h.panels.map(p=>p.pattern),source);h.close();
 });
@@ -266,5 +266,53 @@ test('pitch inspection is opt-in developer metadata and adds no permanent player
  window.__HARMONY_DEBUG=false;notes.length=0;triggerInstrument('tone','C3',4,'test',{eventTick:480,context:{harmony},musicalRole:'bass'});
  assert.equal(notes[0].note,'A2');assert.equal('pitchDecision' in notes[0],false);
  window.__HARMONY_DEBUG=true;triggerInstrument('tone','C3',4,'test',{eventTick:480,context:{harmony},musicalRole:'bass'});
- assert.deepEqual([notes[1].pitchDecision.sourceNote,notes[1].pitchDecision.role,notes[1].pitchDecision.resolvedChord.root,notes[1].pitchDecision.adaptedNote,notes[1].pitchDecision.transpose,notes[1].pitchDecision.finalNote],['C3','bass','A','A2',0,'A2']);
+ assert.deepEqual([notes[1].pitchDecision.sourceNote,notes[1].pitchDecision.role,notes[1].pitchDecision.resolvedChord.root,notes[1].pitchDecision.adaptedNote,notes[1].pitchDecision.transpose,notes[1].pitchDecision.finalNote],['C3','accompaniment','A','A2',0,'A2']);
+});
+
+test('production scheduling reads local transpose live and composes with graph context',()=>{
+ const h=harness(),p=h.panels[0];p.dataset.musicalRole='accompaniment';p.dataset.localTranspose='3';p.sourceNote='C3';
+ globalThis.document={getElementById:id=>h.panels.find(p=>p.id===id),querySelector:()=>p};
+ try {
+  triggerInstrument('tone',p.sourceNote,1,p.id,{eventTick:480,context:{harmony,transposeSemitones:5}});
+  assert.deepEqual([notes[0].pitchDecision.role,notes[0].pitchDecision.transpose,notes[0].note],['accompaniment',8,'F3']);
+  p.dataset.localTranspose='0';triggerInstrument('tone',p.sourceNote,2,p.id,{eventTick:480,context:{harmony,transposeSemitones:5}});
+  assert.equal(notes[1].note,'D3');assert.equal(p.sourceNote,'C3');
+ } finally {delete globalThis.document;h.close();}
+});
+
+test('real graph Progression → Together cycles all four chords without Repeat or source mutation',async()=>{
+ const h=await boardGraph([],false),source=structuredClone(h.panels.map(p=>p.pattern));
+ try {
+  h.sync();h.schedule(0,3072);
+  const bass=notes.filter(n=>n.toyId==='A'),melody=notes.filter(n=>n.toyId==='B'),drums=notes.filter(n=>n.toyId==='C');
+  assert.deepEqual(bass.filter(n=>n.pitchDecision.eventTick%384===0).map(n=>n.note),['C3','A2','F3','G2','C3','A2','F3','G2']);
+  assert.equal(bass.length,32);assert.equal(melody.length,64);assert.equal(drums.length,32);
+  assert.ok(melody.every(n=>n.pitchDecision.adaptedNote===(n.pitchDecision.sourceNote==='F#4'?'F4':n.pitchDecision.sourceNote)));
+  assert.ok(drums.every(n=>n.note==='C4'&&n.pitchDecision.role==='percussion'));
+  assert.ok(notes.every(n=>n.pitchDecision.eventTick<3072));assert.ok(h.adapter.turnsForLookahead(1536,1537).length>0);
+  assert.deepEqual(h.panels.map(p=>p.pattern),source);assert.deepEqual(h.structures.list().map(s=>s.type),['together','chord-progression']);
+ }finally{h.close();}
+});
+
+for(const nesting of [['transpose','chords'],['chords','transpose']])test('toy offset survives graph nesting '+nesting.join(' → '),async()=>{
+ const h=await boardGraph(nesting),p=h.panels[0],source=structuredClone(p.pattern);
+ p.dataset.localTranspose='3';h.structures.setSemitones(h.transpose.id,5);
+ globalThis.document={getElementById:id=>h.panels.find(p=>p.id===id),querySelector:()=>null};
+ try {
+  h.sync();h.schedule(0,1536);
+  const own=notes.filter(n=>n.toyId===p.id);assert.equal(own.length,16);
+  assert.ok(own.every(n=>n.pitchDecision.localTranspose===3&&n.pitchDecision.graphTranspose===5&&n.pitchDecision.transpose===8&&n.note===transposeNote(n.pitchDecision.adaptedNote,8)));
+  assert.ok(notes.filter(n=>n.toyId==='B').every(n=>n.pitchDecision.transpose===5));
+  assert.ok(notes.filter(n=>n.toyId==='C').every(n=>n.pitchDecision.transpose===0));
+  assert.deepEqual(p.pattern,source);assert.equal(p.dataset.localTranspose,'3');
+  // Reparent this same source into a new group outside graph modifiers.
+  const edge=h.model.getParent(p.id);h.model.disconnect(edge.id);
+  const group=h.structures.createStandalone('together');
+  assert.equal(h.model.connect('transport',out(MAIN_TRANSPORT_ID),input(group.id)).ok,true);
+  assert.equal(h.model.connect('sequence',out(group.id,'child:0'),input(p.id)).ok,true);
+  notes.length=0;h.sync(1536);h.schedule(1536,1920);
+  const moved=notes.filter(n=>n.toyId===p.id);assert.ok(moved.length>0);
+  assert.ok(moved.every(n=>n.pitchDecision.localTranspose===3&&n.pitchDecision.graphTranspose===0&&n.pitchDecision.role==='accompaniment'));
+  assert.deepEqual(p.pattern,source);
+ } finally {delete globalThis.document;h.close();}
 });

@@ -1,0 +1,5980 @@
+{
+  "kind": "normal-graph-harmony-integration",
+  "createdAt": "2026-10-11T07:27:13.627Z",
+  "authoredSources": null,
+  "events": [
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 21206,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 0.2623333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 21206,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 0.2916666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 21254,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 0.513
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 21254,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 0.513
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 21254,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 0.5183333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 21302,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 0.761
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 21302,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 0.761
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 21350,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 1.0116666666666665
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 21350,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 1.0116666666666665
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 21350,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 1.0116666666666665
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 21398,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 1.2623333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 21398,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F4",
+        "transpose": 0,
+        "finalNote": "F4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 1.2623333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 21446,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 1.521
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 21446,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 1.521
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 21446,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 1.521
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 21494,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 1.753
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21158,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:0\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 21494,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 1.753
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 21926,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 4.022333333333334
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 21926,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 4.022333333333334
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 21926,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 4.022333333333334
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 21974,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 4.262333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 21974,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 4.262333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22022,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 4.513
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 22022,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 4.513
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 22022,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 4.513
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22070,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 4.761
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 22070,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 4.761
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22118,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 5.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 22118,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 5.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 22118,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 5.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22166,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 5.262333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 22166,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F4",
+        "transpose": 0,
+        "finalNote": "F4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 5.262333333333333
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22214,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 5.513
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 22214,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 5.513
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 22214,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 5.513
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22262,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 5.761
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",21926,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:1\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 22262,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 5.761
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22694,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 8.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 22694,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 8.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 22694,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 8.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22742,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 8.262333333333332
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 22742,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 8.262333333333332
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22790,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 8.513
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 22790,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 8.513
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 22790,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 8.513
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22838,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 8.761
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 22838,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 8.761
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22886,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 9.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 22886,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 9.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 22886,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 9.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22934,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 9.262333333333332
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 22934,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F4",
+        "transpose": 0,
+        "finalNote": "F4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 9.262333333333332
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 22982,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 9.513
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 22982,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 9.513
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 22982,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 9.513
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 23030,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C3",
+        "transpose": 0,
+        "finalNote": "C3"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 9.761
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",22694,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:2\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 23030,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "C",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 9.761
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 23462,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 12.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 23462,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 12.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 23462,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 0,
+      "col": 0,
+      "step": 0,
+      "index": 0,
+      "velocity": 1,
+      "when": 12.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 23510,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 12.262333333333332
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 23510,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 1,
+      "col": 1,
+      "step": 1,
+      "index": 1,
+      "velocity": 1,
+      "when": 12.262333333333332
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 23558,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 12.513
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "A4",
+      "pitchDecision": {
+        "sourceNote": "A4",
+        "eventTick": 23558,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "A4",
+        "transpose": 0,
+        "finalNote": "A4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 12.513
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 23558,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 2,
+      "col": 2,
+      "step": 2,
+      "index": 2,
+      "velocity": 1,
+      "when": 12.513
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 23606,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 12.761
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "G4",
+      "pitchDecision": {
+        "sourceNote": "G4",
+        "eventTick": 23606,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "G4",
+        "transpose": 0,
+        "finalNote": "G4"
+      },
+      "slotIndex": 3,
+      "col": 3,
+      "step": 3,
+      "index": 3,
+      "velocity": 1,
+      "when": 12.761
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 23654,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 13.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "E4",
+      "pitchDecision": {
+        "sourceNote": "E4",
+        "eventTick": 23654,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "E4",
+        "transpose": 0,
+        "finalNote": "E4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 13.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 23654,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 4,
+      "col": 4,
+      "step": 4,
+      "index": 4,
+      "velocity": 1,
+      "when": 13.011666666666667
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 23702,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 13.262333333333332
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F4",
+      "pitchDecision": {
+        "sourceNote": "F#4",
+        "eventTick": 23702,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F4",
+        "transpose": 0,
+        "finalNote": "F4"
+      },
+      "slotIndex": 5,
+      "col": 5,
+      "step": 5,
+      "index": 5,
+      "velocity": 1,
+      "when": 13.262333333333332
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 23750,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 13.513
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "D4",
+      "pitchDecision": {
+        "sourceNote": "D4",
+        "eventTick": 23750,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "D4",
+        "transpose": 0,
+        "finalNote": "D4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 13.513
+    },
+    {
+      "toyId": "audiotoy_proof-drums_b3a03560",
+      "instrument": "DRUM KICK",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-drums\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-drums:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 23750,
+        "role": "percussion",
+        "resolvedChord": null,
+        "scale": null,
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 6,
+      "col": 6,
+      "step": 6,
+      "index": 6,
+      "velocity": 1,
+      "when": 13.513
+    },
+    {
+      "toyId": "audiotoy_proof-bass_bv2eqcuu",
+      "instrument": "PIANO",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-bass\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:branch:proof-together:child:0:0\",\"slot:proof-bass:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "F3",
+      "pitchDecision": {
+        "sourceNote": "C3",
+        "eventTick": 23798,
+        "role": "bass",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "F3",
+        "transpose": 0,
+        "finalNote": "F3"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 13.761
+    },
+    {
+      "toyId": "audiotoy_proof-melody_9hjo41vj",
+      "instrument": "BASS GUITAR SLAP",
+      "occurrenceId": "[\"structure:1:8\",23462,\"proof-melody\",[\"slot:definition:proof-repeat:0\",\"slot:definition:proof-together:0:repeat:3\",\"slot:proof-melody:0\"]]",
+      "context": {
+        "transposeSemitones": 0,
+        "harmony": {
+          "progressionId": "definition:proof-chords",
+          "originTick": 21158,
+          "stepTicks": 384,
+          "chords": [
+            {
+              "root": "C",
+              "quality": "major"
+            },
+            {
+              "root": "A",
+              "quality": "minor"
+            },
+            {
+              "root": "F",
+              "quality": "major"
+            },
+            {
+              "root": "G",
+              "quality": "major"
+            }
+          ]
+        },
+        "scale": null,
+        "velocityScale": 1
+      },
+      "note": "C4",
+      "pitchDecision": {
+        "sourceNote": "C4",
+        "eventTick": 23798,
+        "role": "melody",
+        "resolvedChord": {
+          "root": "F",
+          "quality": "major"
+        },
+        "scale": {
+          "root": "C",
+          "quality": "major",
+          "pitches": [
+            0,
+            2,
+            4,
+            5,
+            7,
+            9,
+            11
+          ]
+        },
+        "referenceHarmony": {
+          "root": "C",
+          "quality": "major"
+        },
+        "adaptedNote": "C4",
+        "transpose": 0,
+        "finalNote": "C4"
+      },
+      "slotIndex": 7,
+      "col": 7,
+      "step": 7,
+      "index": 7,
+      "velocity": 1,
+      "when": 13.761
+    }
+  ],
+  "snapshot": {
+    "schemaVersion": 1,
+    "createdAt": "2026-10-11T07:27:13.626Z",
+    "updatedAt": "2026-10-11T07:27:13.626Z",
+    "transport": {
+      "bpm": 120
+    },
+    "heartbeats": [
+      {
+        "id": "main-heartbeat",
+        "transportId": "main-heartbeat",
+        "name": "Main",
+        "position": {
+          "x": 0,
+          "y": 300
+        },
+        "bpm": 120,
+        "positionTick": 23937,
+        "state": "playing"
+      }
+    ],
+    "themeId": "default",
+    "artToys": [],
+    "toys": [
+      {
+        "id": "proof-bass",
+        "type": "drawgrid",
+        "ui": {
+          "left": "1260px",
+          "top": "-376px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "musicalRole": "bass",
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "instrumentPitchShift": true,
+          "instrumentOctave": 3,
+          "instrumentNote": "C3"
+        },
+        "volume": 0.7,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "proof-melody",
+        "type": "drawgrid",
+        "ui": {
+          "left": "1150px",
+          "top": "470px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "BASS GUITAR SLAP",
+          "musicalRole": "melody",
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                7
+              ],
+              [
+                4
+              ],
+              [
+                2
+              ],
+              [
+                4
+              ],
+              [
+                7
+              ],
+              [
+                5
+              ],
+              [
+                9
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "instrumentPitchShift": true,
+          "instrumentOctave": 4,
+          "instrumentNote": "C4"
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "proof-drums",
+        "type": "loopgrid",
+        "ui": {
+          "left": "1150px",
+          "top": "940px",
+          "width": "618px",
+          "height": "345px",
+          "positionSource": "manual",
+          "z": 3
+        },
+        "state": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "notes": [
+            60,
+            60,
+            60,
+            60,
+            60,
+            60,
+            60,
+            60
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK",
+          "instrumentPitchShift": false,
+          "musicalRole": "percussion"
+        },
+        "volume": 0.45,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "drawgrid-1791703581073-bky8sb",
+        "type": "drawgrid",
+        "ui": {
+          "left": "2236px",
+          "top": "-376px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "musicalRole": "bass",
+          "strokes": [],
+          "nodes": {
+            "active": [
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false,
+              false
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "groups": []
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "instrumentPitchShift": true,
+          "instrumentOctave": 3,
+          "instrumentNote": "C3"
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      }
+    ],
+    "chains": [
+      {
+        "parentId": "proof-together",
+        "childId": "proof-bass"
+      },
+      {
+        "parentId": "proof-together",
+        "childId": "proof-melody"
+      },
+      {
+        "parentId": "proof-together",
+        "childId": "proof-drums"
+      },
+      {
+        "parentId": "proof-bass",
+        "childId": "drawgrid-1791703581073-bky8sb"
+      }
+    ],
+    "connections": [
+      {
+        "id": "proof-root",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "proof-chords",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-cr",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-chords",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "proof-repeat",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-rt",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-repeat",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "proof-together",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-part-0",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-together",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "proof-bass",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-part-1",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-together",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "proof-melody",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "proof-part-2",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-together",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "proof-drums",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:14",
+        "kind": "sequence",
+        "from": {
+          "objectId": "proof-bass",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "drawgrid-1791703581073-bky8sb",
+          "portId": "input"
+        }
+      }
+    ],
+    "structureToys": [
+      {
+        "id": "proof-chords",
+        "definitionId": "definition:proof-chords",
+        "type": "chord-progression",
+        "chords": [
+          {
+            "root": "C",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "x": 180,
+        "y": 0,
+        "collapsed": false,
+        "outputCount": 1,
+        "transportId": "main-heartbeat",
+        "kind": "modifier",
+        "provenance": "explicit",
+        "includeInput": false
+      },
+      {
+        "id": "proof-repeat",
+        "definitionId": "definition:proof-repeat",
+        "type": "repeat",
+        "count": 4,
+        "x": 600,
+        "y": 230,
+        "collapsed": false,
+        "outputCount": 1,
+        "transportId": "main-heartbeat",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false
+      },
+      {
+        "id": "proof-together",
+        "definitionId": "definition:proof-together",
+        "type": "together",
+        "x": 860,
+        "y": 230,
+        "collapsed": false,
+        "outputCount": 4,
+        "transportId": "main-heartbeat",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "lastChildType": "loopgrid",
+        "lastChildId": "proof-drums"
+      }
+    ],
+    "camera": {
+      "boardTransform": "translate3d(25px, 120px, 0px) scale(0.65)",
+      "viewportScrollLeft": 0,
+      "viewportScrollTop": 0,
+      "bvScale": "0.65",
+      "scale": 0.65,
+      "x": 25.000000000000114,
+      "y": 120,
+      "overviewActive": false
+    }
+  },
+  "diagnostics": {
+    "schedulerTick": 572,
+    "activeToyIds": [],
+    "chainState": [
+      [
+        "proof-chords",
+        "drawgrid-1791703581073-bky8sb"
+      ]
+    ],
+    "providers": [
+      {
+        "id": "proof-bass",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "activePattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "audioToyId": "audiotoy_proof-bass_bv2eqcuu"
+      },
+      {
+        "id": "proof-melody",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "BASS GUITAR SLAP",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "activePattern": {
+          "steps": 8,
+          "instrument": "BASS GUITAR SLAP",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "audioToyId": "audiotoy_proof-melody_9hjo41vj"
+      },
+      {
+        "id": "proof-drums",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK"
+        },
+        "activePattern": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK"
+        },
+        "audioToyId": "audiotoy_proof-drums_b3a03560"
+      },
+      {
+        "id": "drawgrid-1791703581073-bky8sb",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": false,
+              "nodes": [],
+              "disabled": []
+            },
+            {
+              "active": false,
+              "nodes": [],
+              "disabled": []
+            },
+            {
+              "active": false,
+              "nodes": [],
+              "disabled": []
+            },
+            {
+              "active": false,
+              "nodes": [],
+              "disabled": []
+            },
+            {
+              "active": false,
+              "nodes": [],
+              "disabled": []
+            },
+            {
+              "active": false,
+              "nodes": [],
+              "disabled": []
+            },
+            {
+              "active": false,
+              "nodes": [],
+              "disabled": []
+            },
+            {
+              "active": false,
+              "nodes": [],
+              "disabled": []
+            }
+          ]
+        },
+        "audioToyId": "audiotoy_drawgrid-1791703581073-bky8sb_bayfujbr"
+      }
+    ]
+  }
+}

@@ -15,7 +15,7 @@ const turns=(r,id,from,to)=>r.turnsInWindow(id,from,to).map(t=>[t.toyId,t.startT
 test('Timeline stores explicit relative offsets and overlaps, and duration is the maximum end',()=>{
   const r=createStructureRuntime();r.defineStructure('T','timeline',[toy('A',0,768),toy('B',384,384),toy('C',768,192)]);
   assert.equal(r.getDefinition('T').durationTicks,960);assert.deepEqual(r.getDefinition('T').children.map(c=>[c.childId,c.offsetTick]),[['A',0],['B',384],['C',768]]);
-  r.startSequence('T',96,{quantize:false});assert.deepEqual(turns(r,'T',96,1056),[['A',96,864],['B',480,864],['C',864,1056]]);
+  r.startSequence('T',96,{quantize:false,loop:true});assert.deepEqual(turns(r,'T',96,1056),[['A',96,864],['B',480,864],['C',864,1056]]);
   assert.deepEqual(turns(r,'T',600,601).map(t=>t[0]),['A','B']);
 });
 test('Sequence and Repeat can be Timeline children, and Timeline offsets repeat relative to each activation',()=>{
@@ -23,7 +23,7 @@ test('Sequence and Repeat can be Timeline children, and Timeline offsets repeat 
   r.defineStructure('R','repeat',[toy('C',0,96)],0,{count:3});
   r.defineStructure('T','timeline',[ref('S',96),ref('R',192)],0,{representationId:'T'});
   assert.equal(r.getDefinition('T').durationTicks,480);
-  r.defineStructure('outer','repeat',[ref('T')],0,{count:2});r.startSequence('outer',100,{quantize:false});
+  r.defineStructure('outer','repeat',[ref('T')],0,{count:2});r.startSequence('outer',100,{quantize:false,loop:true});
   assert.deepEqual(turns(r,'outer',100,1060),[['A',196,292],['B',292,484],['C',292,388],['C',388,484],['C',484,580],
     ['A',676,772],['B',772,964],['C',772,868],['C',868,964],['C',964,1060]]);
   assert.equal(r.getDefinition('outer').durationTicks,960);
@@ -32,28 +32,28 @@ test('Sequence and Repeat can be Timeline children, and Timeline offsets repeat 
 test('nested Timeline and childId definitions share the same runtime and reject cycles',()=>{
   assert.throws(()=>createStructureRuntime().defineStructure('self','timeline',[{childId:'self',offsetTick:0}]),/Cyclic/);
   const r=createStructureRuntime();r.defineStructure('inner','timeline',[{childId:'A',offsetTick:96,durationTicks:96}]);
-  r.defineStructure('outer','timeline',[{childId:'inner',offsetTick:192}]);r.startSequence('outer',0,{quantize:false});
+  r.defineStructure('outer','timeline',[{childId:'inner',offsetTick:192}]);r.startSequence('outer',0,{quantize:false,loop:true});
   assert.deepEqual(turns(r,'outer',0,384),[['A',288,384]]);assert.throws(()=>r.defineStructure('inner','timeline',[ref('outer')]),/Cyclic/);
 });
 test('an unreached entry moves at the existing anchor without rewriting submitted events',()=>{
-  const r=createStructureRuntime();r.defineStructure('T','timeline',[toy('A'),toy('B',768)]);const root=r.startSequence('T',0,{quantize:false});
+  const r=createStructureRuntime();r.defineStructure('T','timeline',[toy('A'),toy('B',768)]);const root=r.startSequence('T',0,{quantize:false,loop:true});
   const before=turns(r,'T',0,120);r.commitThrough('T',120);r.defineStructure('T','timeline',[toy('A'),toy('B',384)],100);
   assert.deepEqual(turns(r,'T',0,120),before);assert.deepEqual(turns(r,'T',120,768),[['A',0,384],['B',384,768]]);
   assert.strictEqual(r.getInstance('T'),root);assert.equal(root.startTick,0);
 });
 test('moving an already active or submitted entry keeps this occurrence and changes its next activation',()=>{
-  const r=createStructureRuntime();r.defineStructure('T','timeline',[toy('A',0,192),toy('B',192,192)]);r.startSequence('T',0,{quantize:false});
+  const r=createStructureRuntime();r.defineStructure('T','timeline',[toy('A',0,192),toy('B',192,192)]);r.startSequence('T',0,{quantize:false,loop:true});
   const before=turns(r,'T',0,240);r.commitThrough('T',240);r.defineStructure('T','timeline',[toy('A',96,192),toy('B',384,192)],200);
   assert.deepEqual(turns(r,'T',0,240),before);assert.deepEqual(turns(r,'T',240,960),[['B',192,384],['A',480,672],['B',768,960]]);
 });
 test('an unreached entry moved behind lookahead waits for the next activation',()=>{
-  const r=createStructureRuntime();r.defineStructure('T','timeline',[toy('A',0,192),toy('B',384,192)]);r.startSequence('T',0,{quantize:false});r.commitThrough('T',120);
+  const r=createStructureRuntime();r.defineStructure('T','timeline',[toy('A',0,192),toy('B',384,192)]);r.startSequence('T',0,{quantize:false,loop:true});r.commitThrough('T',120);
   r.defineStructure('T','timeline',[toy('A',0,192),toy('B',0,192)],100);
   assert.deepEqual(turns(r,'T',120,576),[['A',0,192]]);assert.deepEqual(turns(r,'T',576,768),[['A',576,768],['B',576,768]]);
 });
 test('empty Timeline has no silent bar, including nested inside Repeat',()=>{
   const r=createStructureRuntime();r.defineStructure('T','timeline',[]);r.defineStructure('R','repeat',[ref('T')],0,{count:4});
-  assert.equal(r.getDefinition('T').durationTicks,0);assert.equal(r.getDefinition('R').durationTicks,0);r.startSequence('R',0,{quantize:false});assert.deepEqual(turns(r,'R',0,10000),[]);
+  assert.equal(r.getDefinition('T').durationTicks,0);assert.equal(r.getDefinition('R').durationTicks,0);r.startSequence('R',0,{quantize:false,loop:true});assert.deepEqual(turns(r,'R',0,10000),[]);
 });
 function graph(lengths={}) {
   clearPlaybackInstancesForTests();globalThis.window=globalThis.window||{};window.__TOY_AUDIO_GEN=Object.create(null);

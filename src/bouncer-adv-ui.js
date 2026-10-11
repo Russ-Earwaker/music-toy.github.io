@@ -18,11 +18,13 @@ export function installAdvancedCubeUI(panel, canvas, {
   });
 
   const lab  = document.createElement('span');
-  lab.textContent = 'Cube:';
+  lab.textContent = 'Block note:';
   Object.assign(lab.style, { fontSize:'12px', opacity:'0.85' });
 
   const sel  = document.createElement('select');
-  sel.style.fontSize = '12px';
+  sel.style.fontSize = '14px';
+  sel.style.minHeight = '40px';
+  sel.setAttribute('aria-label','Block note');
   const list = notes || [];
   list.forEach(n=>{
     const o = document.createElement('option');
@@ -37,6 +39,8 @@ export function installAdvancedCubeUI(panel, canvas, {
 
   const closeBtn = document.createElement('button');
   closeBtn.textContent = 'Close';
+  closeBtn.setAttribute('aria-label','Close block editor');
+  closeBtn.style.minHeight = '40px';
   Object.assign(closeBtn.style, { fontSize:'12px', padding:'2px 8px', borderRadius:'6px' });
 
   wrap.append(lab, sel, label, closeBtn);

@@ -19,7 +19,7 @@ test('Transpose root promotion, touch stepper, collapsed value, sockets, drag an
   try {
     view.render();walk(viewport,n=>n.getAttribute('class')==='connection-midpoint')[0].dispatchEvent(event('pointerdown'));
     const menu=walk(viewport,n=>n.className==='connection-menu')[0];
-    const choice=menu.children.find(n=>n.textContent==='Transpose');assert.equal(choice.className,'modifier-choice');
+    const choice=(menu.children.find(n=>n.textContent==='Advanced >').dispatchEvent(event('click')),walk(document.body,n=>n.tagName==='button')).find(n=>n.textContent==='Transpose');assert.ok(choice);
     choice.dispatchEvent(event('click'));
     const modifier=structures.list()[0],card=walk(viewport,n=>n.getAttribute('id')===modifier.id)[0];
     assert.equal(card.getAttribute('data-node-kind'),'modifier');

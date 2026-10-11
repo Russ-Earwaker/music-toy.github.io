@@ -35,7 +35,7 @@ const ref = structureId => ({ structureId, entryId: structureId });
 const input = objectId => ({ objectId, portId: 'input' });
 const out = (objectId, portId = 'output') => ({ objectId, portId });
 const state = tick => ({ currentTick: tick, state: 'paused' });
-function harness(kinds = ['loopgrid']) {
+function harness(kinds = ['drawgrid']) {
   clearPlaybackInstancesForTests(); notes.length = 0; ctx.nodes.length = 0; ctx.currentTime = 0;
   const panels = kinds.map((toy, i) => ({ id: String.fromCharCode(65+i), dataset: { toy, steps: '8' },
     __seqRev: 0, sourceNote: i === 1 ? 'C3' : 'C4',
@@ -70,10 +70,10 @@ test('default chords, all presets, boundaries, wrap and normalized authored limi
   }
   assert.equal(resolveChordAtTick(normalizeContext(),384),null);
 });
-test('Chord Progression is a single-child modifier with transparent duration',()=>{
+test('Chord Progression is a single-child modifier with a complete progression duration',()=>{
  const r=createStructureRuntime();assert.throws(()=>r.defineStructure('M','chord-progression',[child()]),/Structure/);
  assert.throws(()=>r.defineModifier('M','chord-progression',[child(),child('B')]),/at most one/);
- const m=progression(r,'M',child());assert.equal(m.durationTicks,384);assert.equal(m.kind,'modifier');assert.equal(m.context.transposeSemitones,0);
+ const m=progression(r,'M',child());assert.equal(m.durationTicks,1536);assert.equal(m.kind,'modifier');assert.equal(m.context.transposeSemitones,0);
 });
 test('compact Progression → Repeat four → Together Bass/Melody/Beat resolves all four bars',()=>{
  const r=createStructureRuntime();r.defineStructure('band','together',[child('Bass'),child('Melody'),child('Beat')]);
@@ -83,7 +83,7 @@ test('compact Progression → Repeat four → Together Bass/Melody/Beat resolves
  assert.deepEqual(turns.map(t=>chordAt(t.context,t.startTick)),['C','C','C','Am','Am','Am','F','F','F','G','G','G']);
  assert.ok(turns.every(t=>t.context.harmony.originTick===96));
  assert.equal(r.getDefinition('repeat').context.harmony,null,'Repeat has no harmonic policy or counter');
- assert.equal(chordAt(r.turnsInWindow('M',1632,1633)[0].context,1632),'C');
+ assert.deepEqual(r.turnsInWindow('M',1632,3200),[]);
 });
 for(const type of ['sequence','timeline'])test(type+' below progression uses event ticks including long and overlapping leaves',()=>{
  const r=createStructureRuntime();r.defineStructure('section',type,[{...child(),durationTicks:768,offsetTick:0},{...child('B'),durationTicks:768,offsetTick:384}]);
@@ -96,12 +96,12 @@ for(const type of ['sequence','timeline'])test(type+' below progression uses eve
 test('Sequence sections and repeated nested modifiers each have independent local origins',()=>{
  const r=createStructureRuntime();progression(r,'M', {...child(),durationTicks:768});
  r.defineStructure('sections','sequence',[{...ref('M'),entryId:'first'},{...ref('M'),entryId:'second'}]);
- r.startStructure('sections',96,{quantize:false});const ts=r.turnsInWindow('sections',96,1632);
- assert.deepEqual(ts.map(t=>t.context.harmony.originTick),[96,864]);
- assert.deepEqual(ts.map(t=>chordAt(t.context,t.startTick)),['C','C']);
- assert.equal(chordAt(ts[1].context,1248),'Am');
+ r.startStructure('sections',96,{quantize:false});const ts=r.turnsInWindow('sections',96,3168);
+ assert.deepEqual(ts.map(t=>t.context.harmony.originTick),[96,96,1632,1632]);
+ assert.deepEqual(ts.map(t=>chordAt(t.context,t.startTick)),['C','F','C','F']);
+ assert.equal(chordAt(ts[2].context,2016),'Am');
  r.defineStructure('repeat','repeat',[ref('M')],0,{count:2});r.startStructure('repeat',192,{quantize:false});
- assert.deepEqual(r.turnsInWindow('repeat',192,1728).map(t=>t.context.harmony.originTick),[192,960]);
+ assert.deepEqual(r.turnsInWindow('repeat',192,3264).map(t=>t.context.harmony.originTick),[192,192,1728,1728]);
 });
 test('child harmony overrides only its subtree, while Transpose adds and velocity multiplies',()=>{
  const r=createStructureRuntime();progression(r,'inner',child(),{chords:[{root:'D',quality:'minor'}]});
@@ -122,8 +122,8 @@ test('live chord order and duration changes retain local origins, IDs, generatio
  assert.equal(after.id,before.id);assert.equal(after.context.harmony.originTick,480);assert.equal(chordAt(after.context,960),'F');
  assert.equal(chordAt(before.context,960),'Am','already captured metadata remains immutable');
  progression(r,'M',{...child(),durationTicks:1536},{chords:[{root:'G',quality:'minor'},{root:'D',quality:'major'}],stepTicks:192},960);
- after=r.turnsInWindow('section',1152,1153)[0];assert.equal(after.id,before.id);assert.equal(after.startTick,480);
- assert.equal(after.context.harmony.originTick,480);assert.equal(chordAt(after.context,1152),'D');
+ assert.deepEqual(r.turnsInWindow('section',1152,2000),[]);
+ assert.equal(before.context.harmony.originTick,480);
  assert.equal(r.getInstance('section'),owner);assert.equal(owner.generation,0);
 });
 for(const provider of [false,true])test('event metadata spans chord boundaries while compatible source melody pitches remain unchanged ('+(provider?'provider':'grid')+')',()=>{
@@ -139,14 +139,27 @@ for(const provider of [false,true])test('event metadata spans chord boundaries w
  assert.equal(result.events[0].resolvedChord.root,'A');assert.equal(result.events[0].when,undefined);
  assert.ok(notes.filter(n=>n.when>=768/144).every(n=>n.note==='C4'));
  h.roots[0].stepTicks=192;h.sync(960);result=h.schedule(960,1152,90);
- assert.equal(result.events[0].resolvedChord.root,'F');assert.equal(getPlaybackInstance('A'),original);
+ assert.equal(result.scheduled,0);assert.equal(getPlaybackInstance('A'),original);
  assert.equal(h.schedule(960,1152,90).scheduled,0);h.close();
 });
 test('audible Transpose remains independent from harmony through the final synth boundary',()=>{
  const h=harness();h.modifier('shift',5);h.roots.push({headId:'song',type:'chord-progression',children:[ref('shift')],members:['A']});h.sync();
  const result=h.schedule(0,48);assert.equal(result.events[0].resolvedChord.root,'C');assert.equal(notes[0].note,'F4');h.close();
 });
+
+for(const provider of [false,true])for(const durationTicks of [1152,3072])test('production '+(provider?'provider':'grid')+' clips '+durationTicks+' tick child without compressing its notes',()=>{
+ const h=harness(),toy=h.panels[0];
+ if(provider){toy.__sequencerEventsInWindow=(from,to,instance)=>getPlaybackStepEvents(instance,from,to,8);toy.__sequencerScheduleEvent=(event,when)=>triggerInstrument('tone',toy.sourceNote,when,toy.id);}
+ h.roots.push({headId:'song',type:'chord-progression',children:[{...child(),durationTicks}],members:['A']});
+ try {
+  h.sync();const result=h.schedule(0,5000),ticks=result.events.map(e=>e.eventTick);
+  assert.deepEqual(ticks,durationTicks===1152?[0,144,288,432,576,720,864,1008,1152,1296,1440]:[0,384,768,1152]);
+  assert.equal(notes.length,ticks.length);assert.ok(ticks.every(t=>t<1536));assert.equal(toy.sourceNote,'C4');
+  assert.equal(h.schedule(1536,5000).scheduled,0);
+ }finally{h.close();}
+});
 for(const kind of ['sequence','transport'])test(kind+' promotion, persistence and activation use the shared modifier graph',()=>{
+ clearPlaybackInstancesForTests();
  const model=createConnectionModel();model.registerObject('A');model.registerObject('B');model.registerObject(MAIN_TRANSPORT_ID,{ports:HEARTBEAT_PORTS});
  const structures=createStructureToyModel(model);model.connect('transport',out(MAIN_TRANSPORT_ID),input('A'));
  const edge=kind==='sequence'?model.connect('sequence',out('A'),input('B')).connection:model.getParent('A');

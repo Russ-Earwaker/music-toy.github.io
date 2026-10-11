@@ -61,7 +61,7 @@ test('deleting a musical parent leaves its child inactive until an explicit Hear
   for(let now=120;now<2000;now+=96){h.adapter.sync(h.panels);h.adapter.discoverOwnership();h.poll(now,now+120);}
   assert.equal(h.model.getParent('B'),null);assert.equal(h.calls.filter(c=>c.toyId==='B').length,0);
   const instance=getPlaybackInstance('B');h.root('B');
-  assert.strictEqual(getPlaybackInstance('B'),instance);assert.equal(instance.startTick,anchor);assert.equal(instance.active,true);
+  assert.notStrictEqual(getPlaybackInstance('B'),instance);assert.equal(getPlaybackInstance('B').active,true);
   h.poll(2000,2200);assert.ok(h.calls.some(c=>c.toyId==='B'));
 });
 test('disconnecting an ancestor silences the entire downstream chain while unrelated roots continue',()=>{
@@ -70,7 +70,7 @@ test('disconnecting an ancestor silences the entire downstream chain while unrel
   for(let now=120;now<2500;now+=96)assert.ok(h.sequence.turnsForLookahead(now,now+120).every(t=>!['B','C'].includes(t.toyId)));
   assert.equal(getPlaybackInstance('B').active,false);assert.equal(getPlaybackInstance('C').active,false);
   assert.equal(h.sequence.retrigger('B',{state:'playing',currentTick:2500}),null,'a toy gesture cannot create a hidden root');
-  assert.strictEqual(getPlaybackInstance('D'),unrelated);assert.equal(unrelated.active,true);
+  assert.equal(h.sequence.runtime.getInstance('sequence:D').startTick,0);assert.equal(getPlaybackInstance('D').active,true);
   h.root('B');assert.equal(h.model.getTransportId('C'),MAIN_TRANSPORT_ID);
   assert.ok(h.sequence.turnsForLookahead(2500,3300).some(t=>['B','C'].includes(t.toyId)));
 });

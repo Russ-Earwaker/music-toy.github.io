@@ -1,19 +1,21 @@
 import { CHORD_ROOTS, resolveChordAtTick } from './chord-progression.js';
 import { transposeNote, isPitchedEvent } from './note-transpose.js';
+import { normalizeLocalTranspose } from './toy-local-transpose.js';
 const pc = n => ((n%12)+12)%12;
 const intervals = quality => quality==='minor'?[0,3,7]:[0,4,7];
 const scaleIntervals = quality => quality==='minor'?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11];
 export const TOY_MUSICAL_ROLES = Object.freeze({
   'loopgrid-drum':'percussion',chordwheel:'harmony',
-  loopgrid:'melody',drawgrid:'melody',bouncer:'melody',rippler:'melody'
+  loopgrid:'percussion',drawgrid:'melody',bouncer:'melody',rippler:'melody'
 });
 export function classifyMusicalRole({toyType,instrument,entry,options={},occurrence=null}={}) {
   if (!isPitchedEvent(instrument,entry,options,occurrence) || TOY_MUSICAL_ROLES[toyType]==='percussion') return 'percussion';
   // Chord Wheel already authors voicings: never quantize its voices as melody.
   if (TOY_MUSICAL_ROLES[toyType]==='harmony') return 'harmony';
-  const explicit=options.musicalRole ?? occurrence?.musicalRole;
-  if (['bass','melody','harmony'].includes(explicit)) return explicit;
-  if (/(^|[ _-])(bass|contrabass)([ _-]|$)/i.test(String(entry?.instrumentType ?? '')+' '+String(instrument))) return 'bass';
+  const explicit=options.toyMusicalRole ?? occurrence?.musicalRole ?? options.musicalRole;
+  if (explicit === 'bass') return 'accompaniment';
+  if (['accompaniment','melody','percussion','harmony'].includes(explicit)) return explicit;
+  if (/(^|[ _-])(bass|contrabass)([ _-]|$)/i.test(String(entry?.instrumentType ?? '')+' '+String(instrument))) return 'accompaniment';
   return TOY_MUSICAL_ROLES[toyType] ?? 'melody';
 }
 export function noteMidi(note) {
@@ -59,7 +61,7 @@ export function adaptNoteToHarmony({sourcePitch,eventTick,harmony,role='melody',
   const chord=resolveChordAtTick({harmony},eventTick),midi=noteMidi(sourcePitch);
   if(!chord||midi==null||role==='percussion'||role==='harmony')return sourcePitch;
   let result=midi;
-  if(role==='bass'){
+  if(role==='bass'||role==='accompaniment'){
     const reference=CHORD_ROOTS.includes(referenceHarmony?.root)?referenceHarmony:DEFAULT_REFERENCE;
     const homeRoot=CHORD_ROOTS.indexOf(reference.root),targetRoot=CHORD_ROOTS.indexOf(chord.root);
     const home=intervals(reference.quality),target=intervals(chord.quality);
@@ -79,11 +81,14 @@ export function adaptNoteToHarmony({sourcePitch,eventTick,harmony,role='melody',
   }
   return transposeNote(sourcePitch,fitRegister(result,register)-midi);
 }
-export function resolveMusicalPitch({sourcePitch,eventTick,context,role='melody',referenceHarmony,register}={}) {
+export function resolveMusicalPitch({sourcePitch,eventTick,context,role='melody',referenceHarmony,register,localTranspose=0}={}) {
+  if(role==='bass') role='accompaniment';
   const chord=role==='percussion'?null:resolveChordAtTick(context,eventTick);
   const adaptedNote=adaptNoteToHarmony({sourcePitch,eventTick,harmony:context?.harmony,role,referenceHarmony,register});
-  const transpose=role==='percussion'?0:Math.trunc(Number(context?.transposeSemitones)||0);
+  const graphTranspose=role==='percussion'?0:Math.trunc(Number(context?.transposeSemitones)||0);
+  const toyTranspose=role==='percussion'?0:normalizeLocalTranspose(localTranspose);
+  const transpose=graphTranspose+toyTranspose;
   return Object.freeze({sourceNote:sourcePitch,eventTick,role,resolvedChord:chord,
     scale:role!=='percussion'&&context?.harmony?deriveProgressionScale(context.harmony.chords):null,
-    referenceHarmony:referenceHarmony??DEFAULT_REFERENCE,adaptedNote,transpose,finalNote:transposeNote(adaptedNote,transpose)});
+    referenceHarmony:referenceHarmony??DEFAULT_REFERENCE,adaptedNote,graphTranspose,localTranspose:toyTranspose,transpose,finalNote:transposeNote(adaptedNote,transpose)});
 }

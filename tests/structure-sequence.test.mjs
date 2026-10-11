@@ -16,7 +16,7 @@ const children = ids => ids.map(toyId => ({ toyId, durationTicks: 384 }));
 test('A-B-C has exact half-open boundaries, no gap/overlap, and stable repeated loops', () => {
   const runtime = createStructureRuntime();
   const definition = runtime.defineSequence('abc', children(['A', 'B', 'C']));
-  const instance = runtime.startSequence('abc', 130);
+  const instance = runtime.startSequence('abc', 130, {loop:true});
   assert.equal(instance.startTick, 192);
   assert.equal(instance.transportId, MAIN_TRANSPORT_ID);
   assert.equal(definition.durationTicks, 1152);
@@ -37,11 +37,11 @@ test('A-B-C has exact half-open boundaries, no gap/overlap, and stable repeated 
 test('durations come from children, and reorder preserves anchor and committed lookahead', () => {
   const runtime = createStructureRuntime();
   runtime.defineSequence('variable', [{ toyId: 'A', durationTicks: 96 }, { toyId: 'B', durationTicks: 192 }]);
-  runtime.startSequence('variable', 0, { quantize: false });
+  runtime.startSequence('variable', 0, { quantize: false, loop: true });
   assert.equal(runtime.getDefinition('variable').durationTicks, 288);
   assert.deepEqual(runtime.turnsInWindow('variable', 0, 576).map(turn => turn.startTick), [0, 96, 288, 384]);
   runtime.defineSequence('abc', children(['A', 'B', 'C']));
-  const instance = runtime.startSequence('abc', 130);
+  const instance = runtime.startSequence('abc', 130, {loop:true});
   const before = runtime.turnsInWindow('abc', 550, 800);
   runtime.commitThrough('abc', 800);
   runtime.defineSequence('abc', children(['A', 'C', 'B']), 550);

@@ -3,6 +3,7 @@
 import { createDrawGrid } from './drawgrid.js';
 import { connectDrawGridToPlayer } from './drawgrid-player.js';
 import { initToyUI } from '../toyui.js';
+import { installMusicalRoleUI } from '../musical-role-ui.js';
 
 function drawgridInitDebugEnabled() {
   try { if (window.__DG_INIT_DEBUG === true) return true; } catch {}
@@ -59,6 +60,7 @@ export function initDrawGrid(panel){
   // Use the canonical instrument_id directly to avoid a race condition where
   // the display name lookup fails because the instrument catalog hasn't loaded yet.
   initToyUI(panel, { toyName: 'Draw Grid', defaultInstrument: 'acoustic_guitar', });
+  installMusicalRoleUI(panel);
   const toy = createDrawGrid(panel, { toyId: panel.id });
   if (initDebugAtCreate) {
     try { console.log('[drawgrid-init] create', { id: panel.id, toyId: panel.id }); } catch {}

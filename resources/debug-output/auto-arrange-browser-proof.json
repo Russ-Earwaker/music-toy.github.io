@@ -1,0 +1,112 @@
+{
+  "passed": true,
+  "files": {
+    "three": "harmony-graph-2026-10-11T11-20-57-218Z.json",
+    "loops": "harmony-graph-2026-10-11T11-18-27-707Z.json",
+    "restoredThree": "harmony-graph-2026-10-11T11-21-43-184Z.json",
+    "filled": "harmony-graph-2026-10-11T11-23-38-752Z.json",
+    "edited": "harmony-graph-2026-10-11T11-25-35-200Z.json",
+    "regenerated": "harmony-graph-2026-10-11T11-25-59-634Z.json",
+    "restoredFilled": "harmony-graph-2026-10-11T11-27-10-116Z.json"
+  },
+  "scheduledEvents": {
+    "three": 426,
+    "loops": 708,
+    "restoredThree": 134,
+    "filled": 186,
+    "edited": 443,
+    "regenerated": 443,
+    "restoredFilled": 225
+  },
+  "rolesByBar": [
+    [
+      "accompaniment"
+    ],
+    [
+      "accompaniment"
+    ],
+    [
+      "accompaniment"
+    ],
+    [
+      "accompaniment"
+    ],
+    [
+      "accompaniment",
+      "melody",
+      "percussion"
+    ],
+    [
+      "accompaniment",
+      "melody",
+      "percussion"
+    ],
+    [
+      "accompaniment",
+      "melody",
+      "percussion"
+    ],
+    [
+      "accompaniment",
+      "melody",
+      "percussion"
+    ],
+    [
+      "accompaniment",
+      "melody",
+      "percussion"
+    ],
+    [
+      "accompaniment",
+      "melody",
+      "percussion"
+    ],
+    [
+      "accompaniment",
+      "melody",
+      "percussion"
+    ],
+    [
+      "accompaniment",
+      "melody",
+      "percussion"
+    ],
+    [
+      "accompaniment"
+    ],
+    [
+      "accompaniment"
+    ],
+    [
+      "accompaniment"
+    ],
+    [
+      "accompaniment"
+    ]
+  ],
+  "accompanimentByBar": [
+    "C3",
+    "A2",
+    "F3",
+    "G2",
+    "C3",
+    "A2",
+    "F3",
+    "G2",
+    "F3",
+    "G2",
+    "A2",
+    "C3",
+    "C3",
+    "A2",
+    "F3",
+    "G2"
+  ],
+  "checks": [
+    "authored source patterns unchanged",
+    "production harmony decisions",
+    "16-bar layering and whole-piece cycling",
+    "ordinary persistence and resumed audio",
+    "edited fill notes/transpose survive regeneration and reload"
+  ]
+}

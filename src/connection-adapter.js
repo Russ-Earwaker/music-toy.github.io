@@ -13,6 +13,7 @@ export function createConnectionAdapter(model, { getInstance = getPlaybackInstan
   function project() {
     const inputs = new Map(), outputs = new Map();
     for (const c of model.list('sequence')) {
+      if(c.to.portId==='pattern')continue;
       inputs.set(c.to.objectId, c.from.objectId);
       outputs.set(c.from.objectId, c.to.objectId);
     }

@@ -23,9 +23,9 @@
 <section class="card"><h2>Source material</h2>
 <label>Test case <select id="preset"><option value="A">A — Chord-tone friendly</option><option value="B" selected>B — Scale melody</option><option value="C">C — Repeated-note motif</option><option value="D">D — Chromatic stress</option><option value="custom" disabled>Custom</option></select></label>
 <div class="source-row"><label>Bass notes <input id="bass-notes" value="C G E G" spellcheck="false" aria-describedby="note-help"></label>
-<label>Bass role <select id="bass-role"><option value="bass">Bass</option><option value="melody">Melody</option></select></label></div>
+<label>Bass role <select id="bass-role"><option value="accompaniment">Accompaniment</option><option value="melody">Melody</option></select></label></div>
 <div class="source-row"><label>Melody notes <input id="melody-notes" value="E G A G E F# D C" spellcheck="false" aria-describedby="note-help"></label>
-<label>Melody role <select id="melody-role"><option value="melody">Melody</option><option value="bass">Bass</option></select></label></div>
+<label>Melody role <select id="melody-role"><option value="melody">Melody</option><option value="accompaniment">Accompaniment</option></select></label></div>
 <p id="note-help" class="hint">One note per beat. Bass defaults to octave 3; melody to octave 4. Use F#, Bb3 or - for a rest. Drum kit: kick / snare / closed hat.</p>
 <p id="error" role="status"></p>
 <div class="source-proof"><strong>Authored source · unchanged by A/B</strong><p id="source-bass"></p><p id="source-melody"></p></div>

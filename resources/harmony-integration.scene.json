@@ -1,7 +1,7 @@
 {
   "type": "music-toys-scene",
   "schemaVersion": 1,
-  "displayName": "Harmony integration: Bass + Melody + Drums",
+  "displayName": "Harmony integration: DrawGrid Accompaniment + DrawGrid Melody + Simple Rhythm",
   "payload": {
     "schemaVersion": 1,
     "transport": {
@@ -23,7 +23,7 @@
     "toys": [
       {
         "id": "proof-bass",
-        "type": "loopgrid",
+        "type": "drawgrid",
         "ui": {
           "left": "1150px",
           "top": "0px",
@@ -31,36 +31,71 @@
           "height": "420px"
         },
         "state": {
-          "instrument": "BASS GUITAR SLAP",
-          "steps": [
-            true,
-            false,
-            true,
-            false,
-            true,
-            false,
-            true,
-            false
-          ],
-          "noteIndices": [
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0
-          ],
+          "instrument": "RETRO TRIANGLE",
+          "musicalRole": "accompaniment",
           "instrumentPitchShift": true,
-          "instrumentOctave": 3
+          "instrumentOctave": 3,
+          "steps": 8,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "list": [
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ]
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "meta": {
+            "preserveNodesOverStrokes": true
+          },
+          "localTranspose": 0
         },
         "volume": 0.7,
         "muted": false
       },
       {
         "id": "proof-melody",
-        "type": "loopgrid",
+        "type": "drawgrid",
         "ui": {
           "left": "1150px",
           "top": "470px",
@@ -69,35 +104,70 @@
         },
         "state": {
           "instrument": "PIANO",
-          "steps": [
-            true,
-            true,
-            true,
-            true,
-            true,
-            true,
-            true,
-            true
-          ],
-          "noteIndices": [
-            16,
-            19,
-            21,
-            19,
-            16,
-            18,
-            14,
-            12
-          ],
+          "musicalRole": "melody",
           "instrumentPitchShift": true,
-          "instrumentOctave": 4
+          "instrumentOctave": 4,
+          "steps": 8,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "list": [
+              [
+                7
+              ],
+              [
+                4
+              ],
+              [
+                2
+              ],
+              [
+                4
+              ],
+              [
+                7
+              ],
+              [
+                5
+              ],
+              [
+                9
+              ],
+              [
+                11
+              ]
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "meta": {
+            "preserveNodesOverStrokes": true
+          },
+          "localTranspose": 0
         },
         "volume": 1,
         "muted": false
       },
       {
         "id": "proof-drums",
-        "type": "loopgrid-drum",
+        "type": "loopgrid",
         "ui": {
           "left": "1150px",
           "top": "940px",
@@ -125,7 +195,9 @@
             12,
             12,
             12
-          ]
+          ],
+          "musicalRole": "percussion",
+          "instrumentPitchShift": false
         },
         "volume": 0.45,
         "muted": false
@@ -161,16 +233,6 @@
         "outputCount": 1
       },
       {
-        "id": "proof-repeat",
-        "definitionId": "definition:proof-repeat",
-        "type": "repeat",
-        "count": 4,
-        "x": 600,
-        "y": 230,
-        "collapsed": false,
-        "outputCount": 1
-      },
-      {
         "id": "proof-together",
         "definitionId": "definition:proof-together",
         "type": "together",
@@ -198,18 +260,6 @@
         "kind": "sequence",
         "from": {
           "objectId": "proof-chords",
-          "portId": "child:0"
-        },
-        "to": {
-          "objectId": "proof-repeat",
-          "portId": "input"
-        }
-      },
-      {
-        "id": "proof-rt",
-        "kind": "sequence",
-        "from": {
-          "objectId": "proof-repeat",
           "portId": "child:0"
         },
         "to": {

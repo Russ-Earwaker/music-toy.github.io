@@ -64,3 +64,8 @@ test('empty Heartbeat Extend routes creation through the shared picker',()=>{
  const quickAdd=createConnectionQuickAdd({model,getToy:()=>null,createToy:()=>assert.fail('Heartbeat needs a picker'),pickToy:p=>picks.push(p)});
  assert.equal(quickAdd(out(MAIN_TRANSPORT_ID)),null);assert.deepEqual(picks,[out(MAIN_TRANSPORT_ID)]);assert.equal(model.list().length,0);
 });
+
+test('DrawGrid quick-add copies instrument, pitch settings and source role',()=>{
+ const h=harness();Object.assign(h.panels.get('A').dataset,{instrument:'PIANO',instrumentOctave:'3',instrumentPitchShift:'1',musicalRole:'accompaniment',localTranspose:3});
+ h.quickAdd(out('A'));assert.deepEqual(h.calls[0].context.soundState,{instrument:'PIANO',instrumentOctave:'3',instrumentPitchShift:'1',musicalRole:'accompaniment',localTranspose:3});
+});

@@ -123,7 +123,7 @@ test('quick-add clones instrument and pitch metadata, including a Structure last
 test('promotion, structure conversion and reparenting preserve each musical sound', () => {
   for (const type of ['sequence', 'together', 'repeat', 'timeline']) {
     const model = createConnectionModel(), a = new Element('A'), b = new Element('B');
-    for (const p of [a, b]) { model.registerObject(p.id); applyToyInstrument(p, p.id === 'A' ? 'kalimba' : 'retro_square'); }
+    for (const p of [a, b]) { p.dataset.musicalRole=p.id==='A'?'bass':'melody'; model.registerObject(p.id); applyToyInstrument(p, p.id === 'A' ? 'kalimba' : 'retro_square'); }
     const structures = createStructureToyModel(model);
     const edge = model.connect('sequence', { objectId: a.id, portId: 'output' }, { objectId: b.id, portId: 'input' }).connection;
     const before = [readToySoundState(a), readToySoundState(b)];
@@ -136,7 +136,7 @@ test('promotion, structure conversion and reparenting preserve each musical soun
 
 test('sound state round-trips JSON and missing legacy fields retain the existing default', () => {
   for (const kind of MUSICAL_INSTRUMENT_TOYS) {
-    const p = new Element(kind, kind); applyToyInstrument(p, { value: 'kalimba', octave: 4, pitchShift: true, note: 'C4' });
+    const p = new Element(kind, kind); if (['loopgrid','loopgrid-drum'].includes(kind)) p.dataset.musicalRole='percussion'; applyToyInstrument(p, { value: 'kalimba', octave: 4, pitchShift: true, note: 'C4' });
     const restored = new Element('restored', kind); restored.dataset.instrument = 'default';
     restoreToySoundState(restored, JSON.parse(JSON.stringify(readToySoundState(p))));
     assert.deepEqual(readToySoundState(restored), readToySoundState(p));

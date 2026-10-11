@@ -1,7 +1,7 @@
 import { createLogicalToyMetricsReader } from './logical-toy-anchor.js';
 import { CONNECTION_FLASH_DURATION, STRUCTURE_FLASH_DURATION, structureFlashStrength } from './graph-visuals.js';
 import { getActivationConnections } from './graph-transition-feedback.js';
-import { LOGIC_NODE_TYPES, logicNodeLabel, isModifier } from './modifier-types.js';
+import { BASIC_LOGIC_TYPES, logicCreationEntry } from './logic-creation-menu.js';
 import { heartbeatModel, transportLoopInfo } from './heartbeats.js';
 import { installHeartbeatView } from './heartbeat-view.js';
 import { getPanelTransport } from './panel-transport.js';
@@ -61,6 +61,9 @@ import './paint-palette.js';
 import { closeInstrumentPicker } from './instrument-picker.js';
 import { chooseToyInstrument } from './instrument-selection.js';
 import { readToySoundState, restoreToySoundState } from './instrument-state.js';
+import { initializeToyMusicalRole } from './musical-role.js';
+import {createAutoArranger,selectArrangementSources} from './auto-arrange.js';
+import {installAutoArrangeUI} from './auto-arrange-ui.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
@@ -2116,7 +2119,7 @@ const UNFINISHED_TOY_LOCK_ENABLED = false;
 
 const toyCatalog = [
     { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 800, height: 760 } },
-    { type: 'loopgrid', name: 'Simple Rhythm', description: 'Layer drum patterns and melodies with an 8x12 step matrix.', size: { width: 420, height: 420 } },
+    { type: 'loopgrid', name: 'Simple Rhythm', description: 'Make a simple one-note percussion pattern.', size: { width: 420, height: 420 } },
     { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 }, disabled: true },
     { type: 'rippler', name: 'Rippler', description: 'Evolving pads driven by ripple collisions.', size: { width: 420, height: 420 }, disabled: true },
     { type: 'loopgrid-drum', name: 'Drum Kit', description: 'Tap a responsive pad while sequencing the 8-step cube grid.', size: { width: 380, height: 420 }, disabled: true },
@@ -5540,10 +5543,12 @@ function triggerConnectorPulse(fromId, toId, activationTick = null) {
 
     const now = performance.now();
     const durationMs = CONNECTION_FLASH_DURATION;
-    const pulseKey=connectionModel.list().find(c=>c.from.objectId===fromId&&c.to.objectId===toId)?.id;
+    const activatedEdge=connectionModel.list().find(c=>c.from.objectId===fromId&&c.to.objectId===toId);
+    const pulseKey=activatedEdge?.id, rootActivation=activatedEdge?.kind==='transport';
+    if(rootActivation){const receiving=document.getElementById(toId);if(receiving?.classList?.contains('toy-panel'))pulseToyBorder(receiving);}
     // Together children at one runtime tick share a single source envelope.
     const simultaneous = activationTick == null ? null : [...g_pulsingConnectors.values()].find(p => p.fromId === fromId && p.activationTick === activationTick && p.structureUntil > now);
-    if(pulseKey)g_pulsingConnectors.set(pulseKey, { fromId, toId, activationTick, until: now + durationMs, structureUntil: simultaneous?.structureUntil ?? now + STRUCTURE_FLASH_DURATION });
+    if(pulseKey)g_pulsingConnectors.set(pulseKey, { fromId, toId, rootActivation, activationTick, until: now + durationMs, structureUntil: simultaneous?.structureUntil ?? now + STRUCTURE_FLASH_DURATION });
 
     const chainBtn = panel?.querySelector?.('.toy-chain-btn');
     if (chainBtn) {
@@ -5949,6 +5954,7 @@ function createToyPanelAt(toyType, {
     }
     panel.style.position = 'absolute';
 
+    initializeToyMusicalRole(panel);
     restoreToySoundState(panel, soundState);
     if (chosenInstrument) {
         panel.dataset.instrument = chosenInstrument;
@@ -6960,8 +6966,8 @@ const g_heartbeatView = installHeartbeatView({
 window.Heartbeats = heartbeatModel;
 // Logic objects use the shared dock's screen-to-world spawn convention.
 window.ToySpawner?.configureLogic?.({
-  getCatalog:()=>[...LOGIC_NODE_TYPES.map(type=>({type,name:logicNodeLabel(type),description:'Create a '+logicNodeLabel(type)+(isModifier(type)?' modifier':' Structure'),size:{width:type==='chord-progression'?360:type==='timeline'?440:224,height:type==='chord-progression'?360:144}})),
-    {type:'heartbeat',name:'Heartbeat',description:'Create an independent transport',size:{width:176,height:104}}],
+  getCatalog:()=>[...BASIC_LOGIC_TYPES.map(logicCreationEntry),
+    {name:'Advanced >',description:'Deeper structure and musical controls.',action:()=>window.ToySpawner.openAdvancedLogic()}],
   create:(type,{centerX=0,centerY=0,artOwnerId=null}={})=>{
     const heartbeat=type==='heartbeat',width=heartbeat?176:type==='chord-progression'?360:type==='timeline'?440:224,height=heartbeat?104:type==='chord-progression'?360:type==='repeat'?128:144;
     const obstacles=connectionModel.getObjectIds().filter(id=>g_graphPlacementScope(id)===artOwnerId).map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
@@ -6975,6 +6981,7 @@ connectionModel.subscribe(event => {
     if(!g_layoutRestoring){
       for(const change of event.events||[event]){
         const c=change.connection;
+        if(c?.to.portId==='pattern' || change.removed?.to.portId==='pattern')continue;
         if(change.layoutInsertion){
           g_layoutAttached.add(change.layoutInsertion.insertedObjectId);
           if(change.layoutInsertion.attachedBranchId){
@@ -7019,6 +7026,10 @@ const g_sequenceChains = createChainSequenceAdapter({
     bumpToyAudioGen(audioId, 'sequence-replace');
     g_sequencerScheduler?.clearToy(toyId);
   },
+  onRootCycle: ({connection,startTick,transportId}) => {
+    if(connection?.kind!=='transport' || transportRegistry.get(transportId)?.state!=='playing')return false;
+    triggerConnectorPulse(connection.from.objectId,connection.to.objectId,startTick);
+  },
   onTurn: (turn, previous) => {
     const toy = document.getElementById(turn.toyId);
     if (toy && getPlaybackInstance(turn.toyId)?.structureTurnId === turn.id)
@@ -7037,6 +7048,55 @@ const g_sequenceChains = createChainSequenceAdapter({
   publishDebug: snapshot => { globalThis.__STRUCTURE_DEBUG = snapshot; },
 });
 let g_chainPausedSnapshot = null;
+const arrangementScope=()=>getActiveBoardContext().key==='internal'?g_artInternal.artToyId:null;
+const g_autoArranger=createAutoArranger({model:connectionModel,structures:structureToyModel,scope:arrangementScope,
+  getPanels:()=>getSequencedToys().filter(p=>(p.dataset.artOwnerId || null)===arrangementScope()),
+  createSource:async(role,{heartbeatId})=>{
+    const type=role==='rhythm'?'loopgrid':'drawgrid',context=getActiveBoardContext();
+    const point=screenToWorld({x:window.innerWidth*.45,y:window.innerHeight*.5});
+    const panel=createToyPanelAt(type,{centerX:point.x,centerY:point.y,autoCenter:false,allowOffscreen:true,
+      containerEl:context.worldEl,artOwnerId:arrangementScope(),heartbeatId,
+      instrument:role==='rhythm'?'DRUM KICK':role==='accompaniment'?'RETRO TRIANGLE':'PIANO'});
+    if(!panel)return null;
+    await new Promise(resolve=>setTimeout(resolve,0));
+    panel.dataset.musicalRole=role==='rhythm'?'percussion':role;
+    panel.dataset.autoArrangeOrigin='filled';
+    panel.dispatchEvent(new CustomEvent('toy:role',{bubbles:true}));
+    randomizeToyMusic(panel);return panel;
+  },
+  place:(type,parentId,index)=>{
+    const width=type==='chord-progression'?360:224,height=type==='sequence'?304:type==='together'?248:80;
+    const context=screenToWorld({x:window.innerWidth*.5,y:window.innerHeight*.5});
+    const parent=parentId && g_graphPlacement.getRect(parentId);
+    const proposed=parent?{x:parent.x+parent.width+176,y:parent.y+index*250,width,height}:{x:context.x+500,y:context.y,width,height};
+    const obstacles=connectionModel.getObjectIds().filter(id=>g_graphPlacementScope(id)===arrangementScope()).map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
+    return clearVerticalSlot(proposed,obstacles,88);
+  },
+});
+installAutoArrangeUI({
+  arrange:async()=>{
+    const previousRestoring=g_layoutRestoring;
+    const sources=selectArrangementSources(getSequencedToys().filter(p=>(p.dataset.artOwnerId || null)===arrangementScope()));
+    const seed=sources.melody || sources.accompaniment || sources.rhythm;
+    if(!seed)throw new Error('Make a musical idea first, then press Arrange.');
+    const transport=transportRegistry.get(connectionModel.getTransportId(seed.id) || MAIN_TRANSPORT_ID);transport?.pause();
+    g_layoutRestoring=true;
+    try{const result=await g_autoArranger.arrange();g_graphPlacement.arrangeSubgraph(result.rootId);g_connectionView.select(null);g_connectionView.render();window.Persistence?.markDirty?.();return result;}
+    finally{g_layoutRestoring=previousRestoring;}
+  },
+  play:result=>transportRegistry.get(connectionModel.getTransportId(result.rootId))?.play(),
+  edit:async result=>{
+    const root=structureToyModel.get(result.rootId);if(!root)return;
+    const previousRestoring=g_layoutRestoring;g_layoutRestoring=true;
+    try{structureToyModel.setCollapsed(root.id,false);g_connectionView.focusStructure(root.id);g_graphPlacement.arrangeSubgraph(root.id);g_connectionView.render();}
+    finally{g_layoutRestoring=previousRestoring;}
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const nodes=result.created.map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
+    const minX=Math.min(...nodes.map(r=>r.x)),minY=Math.min(...nodes.map(r=>r.y)),maxX=Math.max(...nodes.map(r=>r.x+r.width)),maxY=Math.max(...nodes.map(r=>r.y+r.height));
+    const scale=Math.max(.37,Math.min(.8,(window.innerWidth-140)/(maxX-minX+240),(window.innerHeight-180)/(maxY-minY+160)));
+    window.centerBoardOnWorldPoint?.((minX+maxX)/2,(minY+maxY)/2,scale,{duration:500});
+  },
+});
 // Bump this whenever toys are created/destroyed so the scheduler can resync chain state
 // even if toy counts happen to return to the same value (delete then create).
 let g_chainStructureVersion = 0;

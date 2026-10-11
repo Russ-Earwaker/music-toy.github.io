@@ -26,7 +26,7 @@ function orderedStarts(items,gap){
 }
 export function createGraphPlacement({model,getRect,setPosition=()=>{},getScope=()=>null,isManual=()=>false,getPortPoint=null,horizontalGap=MIN_NODE_GAP_X,siblingGap=MIN_SIBLING_GAP_Y}){
   horizontalGap=Math.max(horizontalGap,MIN_CONNECTION_CORRIDOR);
-  const edges=id=>model.list().filter(c=>c.from.objectId===id).sort((a,b)=>(Number(a.from.portId.split(':')[1])||0)-(Number(b.from.portId.split(':')[1])||0));
+  const edges=id=>model.list().filter(c=>c.from.objectId===id && c.to.portId!=='pattern').sort((a,b)=>(Number(a.from.portId.split(':')[1])||0)-(Number(b.from.portId.split(':')[1])||0));
   function descendants(id,seen=new Set()){if(seen.has(id))return seen;seen.add(id);for(const c of edges(id))descendants(c.to.objectId,seen);return seen;}
   function branchBounds(id,ps=null){return union([...descendants(id)].map(n=>ps?.get(n)||getRect(n)).filter(Boolean));}
   function depth(id,seen=new Set()){if(seen.has(id))throw new Error('Cyclic placement graph');const p=model.getParent(id);return p?1+depth(p.from.objectId,new Set(seen).add(id)):0;}
@@ -126,8 +126,8 @@ export function createGraphPlacement({model,getRect,setPosition=()=>{},getScope=
     repair(rootId);
     // Validate actual control geometry. Unrelated blockers stay anchored; only
     // the obstructed downstream branch extends. Work is bounded by graph size.
-    const cs=model.list().filter(c=>ids.has(c.from.objectId)&&ids.has(c.to.objectId));
-    const stationaryWires=model.list().filter(c=>getScope(c.to.objectId)===scope&&![c.from.objectId,c.to.objectId].some(id=>ids.has(id)&&id!==rootId));
+    const cs=model.list().filter(c=>c.to.portId!=='pattern'&&ids.has(c.from.objectId)&&ids.has(c.to.objectId));
+    const stationaryWires=model.list().filter(c=>c.to.portId!=='pattern'&&getScope(c.to.objectId)===scope&&![c.from.objectId,c.to.objectId].some(id=>ids.has(id)&&id!==rootId));
     const footprint=r=>({...r,x:r.x-ENDPOINT_CONTROL_RADIUS,width:r.width+ENDPOINT_CONTROL_RADIUS*2});
     for(let pass=0;pass<cs.length+stationaryWires.length+1;pass++){
       let changed=false;
@@ -172,6 +172,6 @@ export function createGraphPlacement({model,getRect,setPosition=()=>{},getScope=
   }
   function apply(id,options){const result=targets(id,options);for(const p of result)setPosition(p.id,p.x,p.y,{automatic:true});return result;}
   return {getRect,placeChild,placeStructure,branchBounds,descendants,hasUsableConnectionCorridor,targets,depth,
-    repairConnection:(id,options={})=>{const c=model.get(id);return c?apply(c.from.objectId,{...options,onlyChild:c.to.objectId}):[];},
+    repairConnection:(id,options={})=>{const c=model.get(id);return c&&c.to.portId!=='pattern'?apply(c.from.objectId,{...options,onlyChild:c.to.objectId}):[];},
     repairSubgraph:(id,options={})=>apply(id,options),arrangeSubgraph:(id,options={})=>apply(id,{...options,explicit:true})};
 }

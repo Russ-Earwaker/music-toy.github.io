@@ -28,7 +28,7 @@ export function createHarmonyLabModel() {
   let state;
   const reset=()=>{state=Object.freeze({mode:'original',preset:'B',bassText:LAB_PRESETS.B.bass,melodyText:LAB_PRESETS.B.melody,
     bassNotes:parseLabNotes(LAB_PRESETS.B.bass,3),melodyNotes:parseLabNotes(LAB_PRESETS.B.melody,4),
-    bassRole:'bass',melodyRole:'melody',bassInstrument:'retro-triangle',soloPart:'melody',
+    bassRole:'accompaniment',melodyRole:'melody',bassInstrument:'retro-triangle',soloPart:'melody',
     mix:Object.freeze({bass:Object.freeze({volume:.6,muted:false}),melody:Object.freeze({volume:1,muted:false}),drums:Object.freeze({volume:.45,muted:false})}),chords:normalizeChords(DEFAULT_CHORDS),stepTicks:384,transpose:0,bpm:120});return state;};
   reset();
   const update=patch=>{state=Object.freeze({...state,...patch});return state;};
@@ -38,7 +38,7 @@ export function createHarmonyLabModel() {
     setBassInstrument:instrument=>{if(!['sine','retro-triangle','retro-square'].includes(instrument))throw new Error('Unknown bass tone');return update({bassInstrument:instrument});},
     setSolo:part=>{if(part!==null&&!['bass','melody','drums'].includes(part))throw new Error('Unknown solo part');return update({soloPart:part});},
     setMix:(part,patch)=>{if(!state.mix[part])throw new Error('Unknown mix part');const current=state.mix[part];return update({mix:Object.freeze({...state.mix,[part]:Object.freeze({volume:patch.volume==null?current.volume:Math.max(0,Math.min(1,Number(patch.volume)||0)),muted:patch.muted==null?current.muted:!!patch.muted})})});},
-    setRole:(part,role)=>['bass','melody'].includes(part)&&['bass','melody'].includes(role)?update({[part+'Role']:role}):state,
+    setRole:(part,role)=>['bass','melody'].includes(part)&&['bass','accompaniment','melody'].includes(role)?update({[part+'Role']:role==='bass'?'accompaniment':role}):state,
     setNotes:(part,text)=>{if(!['bass','melody'].includes(part))return state;const notes=parseLabNotes(text,part==='bass'?3:4);return update({[part+'Text']:text,[part+'Notes']:notes,preset:'custom'});},
     loadProgression:index=>{const p=LAB_PROGRESSIONS[index];if(!p)throw new Error('Unknown progression preset');return update({chords:p.chords});},
     setProgression:({chords=state.chords,stepTicks=state.stepTicks}={})=>update({chords:normalizeChords(chords),stepTicks:normalizeChordStep(stepTicks)}),

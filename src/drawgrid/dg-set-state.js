@@ -2,12 +2,16 @@
 // External state application for DrawGrid.
 
 import { upgradeDrawGridStrokes } from './drawgrid-stroke-persistence.js';
+import { restoreToyLocalTranspose } from '../toy-local-transpose.js';
+import { restoreToyMusicalRole } from '../musical-role.js';
 
 export function createDgSetState({ state, deps } = {}) {
   const s = state || {};
   const d = deps || {};
 
   function setState(st = {}) {
+    if (Object.hasOwn(st, 'musicalRole')) restoreToyMusicalRole(s.panel, st);
+    if (Object.hasOwn(st, 'localTranspose')) restoreToyLocalTranspose(s.panel, st);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (!s.panel?.isConnected) return;
@@ -69,7 +73,7 @@ export function createDgSetState({ state, deps } = {}) {
             try {
               const btn = s.panel?.querySelector?.('.drawgrid-autotune');
               if (btn) {
-                btn.textContent = `Auto-tune: ${s.autoTune ? 'On' : 'Off'}`;
+                btn.textContent = `Snap to Notes: ${s.autoTune ? 'On' : 'Off'}`;
                 btn.setAttribute('aria-pressed', String(s.autoTune));
               }
             } catch {}

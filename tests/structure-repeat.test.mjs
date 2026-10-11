@@ -15,13 +15,13 @@ const turns=(r,id,from,to)=>r.turnsInWindow(id,from,to).map(t=>[t.toyId,t.startT
 for(const count of [2,4])test(`Repeat toy ×${count} keeps one child and uses its exact duration`,()=>{
   const r=createStructureRuntime();r.defineStructure('R','repeat',[toy('B',240)],0,{count});
   assert.equal(r.getDefinition('R').children.length,1);assert.equal(r.getDefinition('R').durationTicks,240*count);
-  r.defineSequence('S',[toy('A',96),ref('R'),toy('C',96)]);r.startSequence('S',0,{quantize:false});
+  r.defineSequence('S',[toy('A',96),ref('R'),toy('C',96)]);r.startSequence('S',0,{quantize:false,loop:true});
   assert.deepEqual(turns(r,'S',0,192+count*240),[['A',0,96],...Array.from({length:count},(_,i)=>['B',96+i*240,96+(i+1)*240]),['C',96+count*240,192+count*240]]);
   assert.deepEqual(turns(r,'S',335,337),[['B',96,336],['B',336,576]]);
 });
 for(const type of ['sequence','together'])test(`${type} inside Repeat inherits ticks and nested activation contexts`,()=>{
   const r=createStructureRuntime();r.defineStructure('child',type,[toy('A',96),toy('B',192)],0,{representationId:'child'});
-  r.defineStructure('R','repeat',[ref('child')],0,{count:2,representationId:'R'});r.startSequence('R',100,{quantize:false});
+  r.defineStructure('R','repeat',[ref('child')],0,{count:2,representationId:'R'});r.startSequence('R',100,{quantize:false,loop:true});
   const d=type==='sequence'?288:192;assert.equal(r.getDefinition('R').durationTicks,d*2);
   assert.deepEqual(turns(r,'R',100,100+d*2),type==='sequence'?[['A',100,196],['B',196,388],['A',388,484],['B',484,676]]:[['A',100,196],['B',100,292],['A',292,388],['B',292,484]]);
   const second=r.turnsInWindow('R',100+d,101+d)[0];
@@ -29,20 +29,20 @@ for(const type of ['sequence','together'])test(`${type} inside Repeat inherits t
 });
 test('nested Repeat multiplies duration without duplicating child definitions',()=>{
   const r=createStructureRuntime();r.defineStructure('inner','repeat',[toy('B',96)],0,{count:3});
-  r.defineStructure('outer','repeat',[ref('inner')],0,{count:4});r.startSequence('outer',0,{quantize:false});
+  r.defineStructure('outer','repeat',[ref('inner')],0,{count:4});r.startSequence('outer',0,{quantize:false,loop:true});
   assert.equal(r.getDefinition('outer').durationTicks,1152);assert.equal(r.debugSnapshot().definitions.length,2);
   assert.deepEqual(turns(r,'outer',0,1152),Array.from({length:12},(_,i)=>['B',96*i,96*(i+1)]));
 });
 test('live single-child conversion preserves the current turn without duplicate activation contexts',()=>{
   const r=createStructureRuntime();r.defineStructure('R','sequence',[toy('B',96)],0,{representationId:'R'});
-  r.startSequence('R',0,{quantize:false});r.commitThrough('R',48);
+  r.startSequence('R',0,{quantize:false,loop:true});r.commitThrough('R',48);
   r.defineStructure('R','repeat',[toy('B',96)],40,{count:2,representationId:'R'});
   assert.deepEqual(turns(r,'R',48,192),[['B',0,96],['B',96,192]]);
   assert.ok(r.turnsInWindow('R',48,192).every(t=>t.structureContexts.filter(c=>c.definitionId==='R').length===1));
 });
 for(const count of [1,4])test(`live count change to ${count} preserves a committed iteration and parent start`,()=>{
   const r=createStructureRuntime();r.defineStructure('R','repeat',[toy('B',96)],0,{count:2});
-  r.defineSequence('S',[ref('R'),toy('C',96)]);const instance=r.startSequence('S',0,{quantize:false});
+  r.defineSequence('S',[ref('R'),toy('C',96)]);const instance=r.startSequence('S',0,{quantize:false,loop:true});
   const before=r.turnsInWindow('S',0,120).map(t=>[t.id,t.startTick,t.endTick]);r.commitThrough('S',120);
   r.defineStructure('R','repeat',[toy('B',96)],100,{count});
   assert.deepEqual(r.turnsInWindow('S',0,120).map(t=>[t.id,t.startTick,t.endTick]),before);
@@ -51,7 +51,7 @@ for(const count of [1,4])test(`live count change to ${count} preserves a committ
 });
 test('live nested child duration edit uses its latest definition on unscheduled repetitions',()=>{
   const r=createStructureRuntime();r.defineSequence('child',[toy('B',96)]);
-  r.defineStructure('R','repeat',[ref('child')],0,{count:3});r.defineSequence('S',[ref('R'),toy('C',96)]);const root=r.startSequence('S',0,{quantize:false});
+  r.defineStructure('R','repeat',[ref('child')],0,{count:3});r.defineSequence('S',[ref('R'),toy('C',96)]);const root=r.startSequence('S',0,{quantize:false,loop:true});
   r.commitThrough('S',48);r.defineSequence('child',[toy('B',192)],40);
   assert.equal(r.getDefinition('R').durationTicks,576);
   assert.deepEqual(turns(r,'S',48,576),[['B',0,96],['B',96,288],['B',288,480],['C',480,576]]);
@@ -60,27 +60,27 @@ test('live nested child duration edit uses its latest definition on unscheduled 
 test('child edits never extend completed iterations retroactively',()=>{
   const r=createStructureRuntime();r.defineSequence('child',[toy('B',96)]);
   r.defineStructure('R','repeat',[ref('child')],0,{count:3});r.defineSequence('S',[ref('R'),toy('D',96)]);
-  r.startSequence('S',0,{quantize:false});r.commitThrough('S',150);
+  r.startSequence('S',0,{quantize:false,loop:true});r.commitThrough('S',150);
   r.defineSequence('child',[toy('B',96),toy('C',96)],140);
   assert.deepEqual(turns(r,'S',150,576),[['B',96,192],['C',192,288],['B',288,384],['C',384,480],['D',480,576]]);
 });
 test('editing a Repeat already completed within its parent affects its next activation only',()=>{
   const r=createStructureRuntime();r.defineStructure('R','repeat',[toy('B',48)],0,{count:2});
-  r.defineSequence('S',[ref('R'),toy('C',192)]);r.startSequence('S',0,{quantize:false});r.commitThrough('S',150);
+  r.defineSequence('S',[ref('R'),toy('C',192)]);r.startSequence('S',0,{quantize:false,loop:true});r.commitThrough('S',150);
   r.defineStructure('R','repeat',[toy('B',48)],140,{count:4});
   assert.deepEqual(turns(r,'S',150,288),[['C',96,288]]);
   assert.deepEqual(turns(r,'S',288,672),[['B',288,336],['B',336,384],['B',384,432],['B',432,480],['C',480,672]]);
 });
 test('empty Repeat, including an empty nested child, is zero duration and inert',()=>{
   const r=createStructureRuntime();r.defineStructure('R','repeat',[],0,{count:4});assert.equal(r.getDefinition('R').durationTicks,0);
-  r.startSequence('R',0,{quantize:false});assert.deepEqual(turns(r,'R',0,10000),[]);
+  r.startSequence('R',0,{quantize:false,loop:true});assert.deepEqual(turns(r,'R',0,10000),[]);
   r.defineSequence('empty',[]);r.defineStructure('R','repeat',[ref('empty')],20,{count:4});assert.equal(r.getDefinition('R').durationTicks,0);
   assert.deepEqual(turns(r,'R',20,10000),[]);assert.throws(()=>r.defineSequence('empty',[ref('R')]),/Cyclic/);
 });
 test('emptying a nested child during a later committed repetition removes all ghost duration',()=>{
   const r=createStructureRuntime();r.defineSequence('child',[toy('B',96)]);
   r.defineStructure('R','repeat',[ref('child')],0,{count:4});r.defineSequence('S',[toy('A',96),ref('R')]);
-  r.startSequence('S',0,{quantize:false});r.commitThrough('S',350);r.defineSequence('child',[],340);
+  r.startSequence('S',0,{quantize:false,loop:true});r.commitThrough('S',350);r.defineSequence('child',[],340);
   assert.equal(r.getDefinition('R').durationTicks,0);assert.equal(r.getDefinition('S').durationTicks,96);
   assert.deepEqual(turns(r,'S',350,480),[['A',288,384],['A',384,480]]);
 });
@@ -103,10 +103,10 @@ test('midpoint Repeat promotion preserves connection, parent anchor and transpor
   assert.equal(h.model.get(edge.id).from.objectId,s.id);assert.equal(h.model.get(edge.id).to.objectId,'B');
   assert.equal(h.model.getParent(s.id).from.objectId,'A');assert.equal(h.model.getTransportId('B'),MAIN_TRANSPORT_ID);
   assert.equal(h.model.getPort({objectId:s.id,portId:'child:1'}),null);
-  const before=h.sequence.turnsForLookahead(0,1152).map(t=>[t.id,t.toyId,t.startTick]);
+  const before=h.sequence.turnsForLookahead(0,1152).filter(t=>t.toyId!=='C').map(t=>[t.id,t.toyId,t.startTick]);
   h.state.state='paused';h.adapter.applyOwnership();h.state.bpm=180;h.state.state='playing';
   h.sequence.sync(h.panels,h.state,{connections:h.model.list('sequence'),structures:h.structures.list()});
-  assert.deepEqual(h.sequence.turnsForLookahead(0,1152).map(t=>[t.id,t.toyId,t.startTick]),before);
+  assert.deepEqual(h.sequence.turnsForLookahead(0,1152).filter(t=>t.toyId!=='C').map(t=>[t.id,t.toyId,t.startTick]),before);
   assert.deepEqual(before.map(([,id,t])=>[id,t]),[['A',0],['B',384],['B',768]]);
   assert.strictEqual(h.sequence.runtime.getInstance('sequence:A'),root);assert.equal(root.startTick,0);
 });

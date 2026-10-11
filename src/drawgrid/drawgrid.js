@@ -7102,33 +7102,6 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     };
   } catch {}
 
-  // Add some CSS for the new buttons
-  const style = document.createElement('style');
-  style.textContent = `
-      .toy-panel[data-toy="drawgrid"] .drawgrid-generator-buttons {
-          position: absolute;
-          left: -115px; /* Position outside the panel */
-          top: 50%;
-          transform: translateY(-50%);
-          display: none; /* Hidden by default */
-          flex-direction: column;
-          gap: 10px;
-          z-index: 1;
-      }
-      .toy-panel[data-toy="drawgrid"].toy-zoomed .drawgrid-generator-buttons {
-          display: flex; /* Visible only in advanced mode */
-      }
-      .toy-panel[data-toy="drawgrid"] .c-btn.active .c-btn-glow {
-          opacity: 1;
-          filter: blur(2.5px) brightness(1.6);
-      }
-      .toy-panel[data-toy="drawgrid"] .c-btn.active .c-btn-core::before {
-          filter: brightness(1.8);
-          transform: translate(-50%, -50%) scale(1.1);
-      }
-  `;
-  panel.appendChild(style);
-
   panel.addEventListener('toy-clear', (event) => {
     // Ignore clears that were dispatched on other panels (defensive guard)
     if (event?.target !== panel) return;

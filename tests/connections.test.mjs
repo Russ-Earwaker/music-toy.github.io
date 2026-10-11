@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createConnectionModel, TOY_PORTS, HEARTBEAT_PORTS } from '../src/connections.js';
+import { createConnectionModel, createStructurePorts, TOY_PORTS, HEARTBEAT_PORTS } from '../src/connections.js';
 import { createConnectionAdapter } from '../src/connection-adapter.js';
 import { createChainSequenceAdapter } from '../src/chain-sequence.js';
 import { ensurePlaybackInstance, getPlaybackInstance, clearPlaybackInstancesForTests } from '../src/playback-instances.js';
@@ -16,6 +16,15 @@ function modelWithToys(...ids) {
   return model;
 }
 const link = (m, a, b) => m.connect('sequence', output(a), input(b));
+test('pattern references reuse a source without replacing its primary parent, including drag preview/drop',()=>{
+ const m=modelWithToys('A','B','parent');m.registerObject('section',{ports:createStructurePorts(),structure:{type:'sequence'}});
+ const original=link(m,'parent','B').connection;
+ assert.equal(m.connect('sequence',output('A'),point('B','pattern')).reason,'pattern-needs-structure');
+ const ref=m.connect('sequence',point('section','child:0'),point('A','pattern')).connection;
+ m.beginDrag(ref.to,{connectionId:ref.id,end:'to'});m.detachDrag();
+ assert.equal(m.preview(input('B')).to.portId,'pattern');assert.equal(m.drop(input('B')).ok,true);
+ assert.equal(m.getParent('B').id,original.id);assert.equal(m.get(ref.id).to.portId,'pattern');
+});
 
 test('output to input and input to output normalize to the same directional connection', () => {
   for (const reverse of [false, true]) {

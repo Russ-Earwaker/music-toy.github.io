@@ -64,7 +64,7 @@ test('Original bypasses harmony, Follow uses production adaptation, toggling pre
 test('role controls and Transpose go through the production explicit role and context paths',async()=>{
  const lab=setup();try{lab.edit(m=>{m.setMode('follow');m.setTranspose(12);});await lab.play();
  advance(lab,384);let n=partNotes(lab,'bass').at(-1);
- assert.deepEqual([n.pitchDecision.role,n.pitchDecision.adaptedNote,n.pitchDecision.transpose,n.note],['bass','A2',12,'A3']);
+ assert.deepEqual([n.pitchDecision.role,n.pitchDecision.adaptedNote,n.pitchDecision.transpose,n.note],['accompaniment','A2',12,'A3']);
  lab.edit(m=>m.setRole('bass','melody'));advance(lab,768);n=partNotes(lab,'bass').at(-1);
  assert.deepEqual([n.pitchDecision.role,n.pitchDecision.adaptedNote,n.note],['melody','C3','C4']);
  }finally{lab.dispose();active=null;}
@@ -92,7 +92,7 @@ test('progression and source edits affect unscheduled events only, keeping origi
  const lab=setup();try{lab.edit(m=>m.setMode('follow'));await lab.play();advance(lab,384);
  const committed=partNotes(lab,'bass').at(-1);assert.equal(committed.note,'A2');
  const instance=lab.adapter.turnsForLookahead(384,385)[0].playbackInstance;
- lab.edit(m=>{m.setProgression({chords:[{root:'D',quality:'minor'}]});m.setNotes('bass','C - E G');});
+ lab.edit(m=>{m.setProgression({chords:Array.from({length:4},()=>({root:'D',quality:'minor'}))});m.setNotes('bass','C - E G');});
  assert.equal(instance.context.harmony.originTick,0);
  advance(lab,480);assert.equal(partNotes(lab,'bass').at(-1),committed,'new rest does not generate an event');
  advance(lab,576);assert.equal(partNotes(lab,'bass').at(-1).note,'F3');
@@ -145,7 +145,7 @@ test('constant C3 bass follows all four production chord contexts; Original rema
     assert.equal(events.length,4);
     for(const n of events){
      assert.equal(n.pitchDecision.sourceNote,'C3');
-     assert.equal(n.pitchDecision.role,'bass');
+     assert.equal(n.pitchDecision.role,'accompaniment');
      assert.equal(n.pitchDecision.transpose,0);
      assert.equal(n.pitchDecision.resolvedChord?.root??null,mode==='follow'?roots[bar]:null);
      assert.equal(n.pitchDecision.adaptedNote,mode==='follow'?expected[bar]:'C3');

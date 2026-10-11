@@ -10,6 +10,7 @@ export function normalizeChords(chords = DEFAULT_CHORDS) {
   })));
 }
 export const normalizeChordStep = value => CHORD_STEP_TICKS.includes(Number(value)) ? Number(value) : 384;
+export const progressionDurationTicks = (chords, stepTicks) => normalizeChords(chords).length * normalizeChordStep(stepTicks);
 export const chordLabel = chord => chord.root + (chord.quality==='minor'?'m':'');
 export const progressionLabel = chords => chords.map(chordLabel).join(' | ');
 export const chordStepLabel = ticks => ({96:'1 beat',192:'2 beats',384:'1 bar',768:'2 bars'}[ticks]);

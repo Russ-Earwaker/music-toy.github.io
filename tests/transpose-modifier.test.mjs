@@ -35,7 +35,7 @@ const ref = structureId => ({ structureId, entryId: structureId });
 const input = objectId => ({ objectId, portId: 'input' });
 const out = (objectId, portId = 'output') => ({ objectId, portId });
 const state = tick => ({ currentTick: tick, state: 'paused' });
-function harness(kinds = ['loopgrid']) {
+function harness(kinds = ['drawgrid']) {
   clearPlaybackInstancesForTests(); notes.length = 0; ctx.nodes.length = 0; ctx.currentTime = 0;
   const panels = kinds.map((toy, i) => ({ id: String.fromCharCode(65+i), dataset: { toy, steps: '8' },
     __seqRev: 0, sourceNote: i === 1 ? 'C3' : 'C4',
@@ -106,7 +106,7 @@ test('nested +5/-2 modifiers compose to +3 at the actual audio boundary', () => 
 });
 
 test('Transpose around Sequence shifts Melody and Bass while Drum Grid retains pitch and all timing', () => {
-  const h=harness(['loopgrid','drawgrid','loopgrid-drum']);
+  const h=harness(['drawgrid','drawgrid','loopgrid-drum']);
   h.adapter.runtime.defineSequence('sequence',[child('A'),child('B'),child('C')]);
   h.roots.push({headId:'song',type:'transpose',semitones:5,children:[ref('sequence')],members:['A','B','C']});
   h.sync();h.schedule(0,1152);

@@ -7,6 +7,8 @@ import { installInstrumentSelection } from './instrument-selection.js';
 import { applyToyInstrument, supportsToyInstrument } from './instrument-state.js';
 import { refreshHelpOverlay } from './help-overlay.js';
 import { overviewMode } from './overview-mode.js';
+import { installToyAdvanced, advancedGroup, curateToyAdvanced } from './toy-advanced.js';
+import { initializeToyMusicalRole } from './musical-role.js';
 
 const $ = (sel, root=document)=> root.querySelector(sel);
 
@@ -103,6 +105,7 @@ function buildInstrumentSelect(panel){
 
 export function initToyUI(panel, { toyName, defaultInstrument }={}){
   if (!panel) return null;
+  initializeToyMusicalRole(panel);
   const toyKind = String(panel.dataset.toy||'').toLowerCase();
   const header = ensureHeader(panel, toyName);
   ensureBody(panel);
@@ -110,7 +113,6 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
 
   // Get header height for positioning external buttons. This must be read after
   // the header is in the DOM and has its content.
-  const headerHeight = header.offsetHeight;
 
 
   // Centrally install the volume UI for every toy.
@@ -127,51 +129,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   let sel = null;
 
   if (!isTutorialContext) {
-  // Advanced / Close buttons
-  if (toyKind === 'loopgrid' || toyKind === 'loopgrid-drum' || toyKind === 'bouncer' || toyKind === 'rippler' || toyKind === 'chordwheel' || toyKind === 'drawgrid') {
-    // For the Drum Toy and Bouncer, use the new circular "Edit" button, positioned outside the panel.
-    // We append it to the panel itself, not the header.
-
-    // --- FIX: Set overflow directly to prevent clipping of the external button ---
-    panel.style.setProperty('overflow', 'visible', 'important');
-
-    if (!panel.querySelector(':scope > .toy-mode-btn[data-action="advanced"]')) {
-        const editBtn = document.createElement('button');
-        editBtn.className = 'c-btn toy-mode-btn'; editBtn.dataset.action = 'advanced'; editBtn.title = 'Edit Mode';
-        // Apply positioning directly via inline styles for maximum robustness against CSS conflicts.
-        const btnSize = 96;
-        editBtn.style.position = 'absolute';
-        editBtn.style.top = `${headerHeight - 40}px`;
-        editBtn.style.left = '-48px';
-        editBtn.style.zIndex = '51';
-        editBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
-        editBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonEdit.png');"></div>`;
-        panel.appendChild(editBtn);
-    }
-    if (!panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]')) {
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'c-btn toy-mode-btn'; closeBtn.dataset.action = 'close-advanced'; closeBtn.title = 'Close Edit Mode';
-        const btnSize = 96;
-        closeBtn.style.position = 'absolute';
-        closeBtn.style.top = `${headerHeight - 40}px`; // Match the edit button's vertical position
-        closeBtn.style.left = '-48px';
-        closeBtn.style.zIndex = '51';
-        closeBtn.style.setProperty('--c-btn-size', `${btnSize}px`);
-        closeBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow" style="--accent: #f87171;"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClose.png');"></div>`;
-        panel.appendChild(closeBtn);
-    }
-  } else {
-      if (!right.querySelector('[data-action="advanced"]')) { const advBtn = btn('Advanced'); advBtn.dataset.action = 'advanced'; right.prepend(advBtn); }
-      if (!right.querySelector('[data-action="close-advanced"]')) { const closeBtn = btn('Close'); closeBtn.dataset.action = 'close-advanced'; right.prepend(closeBtn); }
-  }
-
-  // Advanced help metadata for edit/close toggles
-  {
-    const advBtnEl = panel.querySelector(':scope > .toy-mode-btn[data-action="advanced"]');
-    const closeAdvEl = panel.querySelector(':scope > .toy-mode-btn[data-action="close-advanced"]');
-    markHelp(advBtnEl, 'Advanced Controls', 'top');
-    markHelp(closeAdvEl, 'Exit advanced controls', 'top');
-  }
+  installToyAdvanced(panel);
 
   // Random / Clear buttons (delegated elsewhere)
   if (toyKind === 'loopgrid' || toyKind === 'loopgrid-drum') {
@@ -193,18 +151,8 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       wireScopedRandom(randomBtn, panel);
     }
 
-    // The "Random Notes" button randomizes pitches and is only visible in advanced mode.
-    let randomNotesBtn = left.querySelector('[data-action="random-notes"]');
-    if (!randomNotesBtn) {
-        randomNotesBtn = document.createElement('button');
-        randomNotesBtn.className = 'c-btn';
-        randomNotesBtn.dataset.action = 'random-notes';
-        randomNotesBtn.title = 'Random Notes';
-        randomNotesBtn.style.setProperty('--c-btn-size', '65px');
-        randomNotesBtn.style.marginLeft = '10px';
-        randomNotesBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandomNotes.png');"></div>`;
-        left.appendChild(randomNotesBtn);
-    }
+    // Percussion toys keep their legacy pitch data internally, without a pitched editor.
+    const randomNotesBtn = null;
 
     // The "Clear" button is to the right of the random buttons.
     if (!left.querySelector('[data-action="clear"]')) {
@@ -293,7 +241,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     }
 
     // Advanced-view "Random Blocks" button
-    let randomBlocksBtn = left.querySelector('[data-action="random-blocks"]');
+    let randomBlocksBtn = panel.querySelector('[data-action="random-blocks"]');
     if (!randomBlocksBtn) {
       randomBlocksBtn = document.createElement('button');
       randomBlocksBtn.className = 'c-btn';
@@ -305,7 +253,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     }
 
     // Advanced-view "Random Notes" button
-    let randomNotesBtn = left.querySelector('[data-action="random-notes"]');
+    let randomNotesBtn = panel.querySelector('[data-action="random-notes"]');
     if (!randomNotesBtn) {
       randomNotesBtn = document.createElement('button');
       randomNotesBtn.className = 'c-btn';
@@ -348,7 +296,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     panel.addEventListener('toy-zoom', updateVisibility);
 
     // --- Logic for external controls in Advanced mode ---
-    let externalHost = panel.querySelector('.rippler-external-controls');
+    let externalHost = advancedGroup(panel, 'timing', 'Timing');
     if (!externalHost) {
       externalHost = document.createElement('div');
       externalHost.className = 'rippler-external-controls';
@@ -469,7 +417,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     }
 
     // Advanced-view "Random Blocks" button
-    let randomBlocksBtn = left.querySelector('[data-action="random-blocks"]');
+    let randomBlocksBtn = panel.querySelector('[data-action="random-blocks"]');
     if (!randomBlocksBtn) {
         randomBlocksBtn = document.createElement('button');
         randomBlocksBtn.className = 'c-btn';
@@ -481,7 +429,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     }
 
     // Advanced-view "Random Notes" button
-    let randomNotesBtn = left.querySelector('[data-action="random-notes"]');
+    let randomNotesBtn = panel.querySelector('[data-action="random-notes"]');
     if (!randomNotesBtn) {
         randomNotesBtn = document.createElement('button');
         randomNotesBtn.className = 'c-btn';
@@ -520,7 +468,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     panel.addEventListener('toy-zoom', updateVisibility);
 
     // --- Logic for external controls in Advanced mode ---
-    let externalHost = panel.querySelector('.drawgrid-external-controls');
+    let externalHost = advancedGroup(panel, 'pattern', 'Pattern');
     if (!externalHost) {
       externalHost = document.createElement('div');
       externalHost.className = 'drawgrid-external-controls';      Object.assign(externalHost.style, { position: 'absolute', right: '-160px', top: '50%', transform: 'translateY(-50%)', display: 'none', flexDirection: 'column', gap: '10px', zIndex: '1', width: '150px' });
@@ -531,7 +479,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       const headerRight = panel.querySelector('.toy-header .toy-controls-right');
       const stepsCtrl = panel.querySelector('.drawgrid-steps');
       const autotuneCtrl = panel.querySelector('.drawgrid-autotune');
-      if (isAdvanced) { if (stepsCtrl) externalHost.appendChild(stepsCtrl); if (autotuneCtrl) externalHost.appendChild(autotuneCtrl); externalHost.style.display = 'flex'; }
+      if (isAdvanced) { if (stepsCtrl) externalHost.appendChild(stepsCtrl); if (autotuneCtrl) advancedGroup(panel, "pitch", "Pitch")?.appendChild(autotuneCtrl); externalHost.style.display = 'flex'; }
       else { if (headerRight) { if (stepsCtrl) headerRight.appendChild(stepsCtrl); if (autotuneCtrl) headerRight.appendChild(autotuneCtrl); } externalHost.style.display = 'none'; }
     };
     const mo = new MutationObserver(() => { const s = panel.querySelector('.drawgrid-steps'), a = panel.querySelector('.drawgrid-autotune'); if (s && a) { moveDrawGridControls(); mo.disconnect(); } });
@@ -585,7 +533,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     }
 
     // Advanced-view "Random Blocks" button
-    let randomCubesBtn = left.querySelector('[data-action="random-cubes"]');
+    let randomCubesBtn = panel.querySelector('[data-action="random-cubes"]');
     if (!randomCubesBtn) {
       randomCubesBtn = document.createElement('button');
       randomCubesBtn.className = 'c-btn';
@@ -597,7 +545,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     }
 
     // Advanced-view "Random Notes" button
-    let randomNotesBtn = left.querySelector('[data-action="random-notes"]');
+    let randomNotesBtn = panel.querySelector('[data-action="random-notes"]');
     if (!randomNotesBtn) {
       randomNotesBtn = document.createElement('button');
       randomNotesBtn.className = 'c-btn';
@@ -645,7 +593,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
     panel.addEventListener('toy-zoom', updateVisibility); // Update on view change
 
     // --- Logic for external controls in Advanced mode ---
-    let externalHost = panel.querySelector('.bouncer-external-controls');
+    let externalHost = advancedGroup(panel, 'motion', 'Motion & Timing');
     if (!externalHost) {
       externalHost = document.createElement('div');
       externalHost.className = 'bouncer-external-controls';
@@ -825,6 +773,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
   }
 
 
+  if (!isTutorialContext) curateToyAdvanced(panel);
   refreshHelpOverlay();
 
   return { header, footer, body: panel.querySelector('.toy-body'), instrument: panel.dataset.instrument || initialInstrument || 'tone' };

@@ -5,9 +5,11 @@ export function getActivationConnections(model, turn, previous) {
   const old=new Map((previous?.structureContexts||[]).map(c=>[c.definitionId,c]));
   const edges=[],seen=new Set();let id=turn.toyId;
   while(id&&!seen.has(id)){
-    seen.add(id);const edge=model.getParent(id);if(!edge)break;
+    seen.add(id);const edge=id===turn.toyId ? model.list('sequence').find(c=>c.to.objectId===id&&c.to.portId==='pattern'&&contexts.has((model.getObject(c.from.objectId)?.structure || model.getObject(c.from.objectId)?.modifier)?.definitionId)) || model.getParent(id) : model.getParent(id);if(!edge)break;
     const structure=model.getObject(id)?.modifier || model.getObject(id)?.structure,context=structure&&contexts.get(structure.definitionId);
-    if(id===turn.toyId || context&&old.get(structure.definitionId)?.startTick!==context.startTick)edges.push(edge);
+    if(edge.kind === 'transport') {
+      if(turn.rootCycleActivation ?? (turn.rootCycleStartTick !== undefined ? turn.rootCycleStartTick !== previous?.rootCycleStartTick : id===turn.toyId || context&&old.get(structure.definitionId)?.startTick!==context.startTick)) edges.push(edge);
+    } else if(id===turn.toyId || context&&old.get(structure.definitionId)?.startTick!==context.startTick)edges.push(edge);
     id=edge.from.objectId;
   }
   return edges;

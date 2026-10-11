@@ -1,4 +1,12 @@
 # Harmony Lab
+
+In **Ctrl+Shift+P → Harmony**, use **Build harmony proof graph** to generate the
+normal board's Heartbeat → Chord Progression C / Am / F / G → Together
+graph, with DrawGrid Accompaniment, DrawGrid Melody and Simple Rhythm Percussion. The lab
+closes after building; press the board's Play button to listen. This replaces the
+current board. Reopen the lab and use **Restore previous board** to bring back
+the pre-build scene during the same page session (the backup is lost on reload).
+
 Open the Perf Lab with **Ctrl+Shift+P**, then select **Harmony**. Switching tabs
 or closing the menu pauses playback and preserves the bench settings.
 

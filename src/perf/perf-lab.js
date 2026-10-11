@@ -667,6 +667,12 @@ function ensureUI() {
 
 
           <div class="perf-lab-tabpage" data-tabpage="harmony">
+            <div class="perf-lab-row">
+              <button class="perf-lab-btn" data-act="buildHarmonyProof">Build harmony proof graph</button>
+              <button class="perf-lab-btn" data-act="restoreHarmonyProof" disabled>Restore previous board</button>
+            </div>
+            <p class="perf-lab-hint">Creates Heartbeat → Chord Progression → Together with DrawGrid Accompaniment, DrawGrid Melody and Simple Rhythm Percussion. Replaces the board; Restore previous board brings it back during this session, until reload.</p>
+            <p data-harmony-proof-status role="status"></p>
             <iframe class="perf-lab-harmony-frame" title="Harmony Lab" allow="autoplay"></iframe>
           </div>
 
@@ -1313,6 +1319,7 @@ function ensureUI() {
     };
   }
 
+  let harmonyProofPreviousScene = null;
   ov.addEventListener('click', async (e) => {
     // Tabs (Controls / Music / Tests / Harmony)
     const tabBtn = e.target && e.target.closest ? e.target.closest('button[data-tab]') : null;
@@ -1341,6 +1348,37 @@ function ensureUI() {
     try { e.stopPropagation(); } catch {}
     const act = btn.getAttribute('data-act');
     if (act === 'close') hide();
+
+    if (act === 'buildHarmonyProof' || act === 'restoreHarmonyProof') {
+      const status = ov.querySelector('[data-harmony-proof-status]');
+      btn.disabled = true;
+      try {
+        const persistence = window.Persistence;
+        if (!persistence?.applySnapshot || !persistence?.getSnapshot) throw new Error('Board is still loading.');
+        let snapshot = harmonyProofPreviousScene;
+        if (act === 'buildHarmonyProof') {
+          const response = await fetch(new URL('../../resources/harmony-integration.scene.json', import.meta.url));
+          if (!response.ok) throw new Error(`Could not load proof (${response.status}).`);
+          snapshot = (await response.json()).payload;
+          if (!snapshot?.toys || !snapshot?.connections) throw new Error('Invalid proof scene.');
+          if (!harmonyProofPreviousScene) harmonyProofPreviousScene = structuredClone(persistence.getSnapshot());
+        }
+        if (!snapshot) throw new Error('No previous board to restore.');
+        pauseHarmonyLab(ov);
+        stopTransport();
+        if (!persistence.applySnapshot(snapshot)) throw new Error('Board could not be restored.');
+        persistence.markDirty?.();
+        if (act === 'restoreHarmonyProof') harmonyProofPreviousScene = null;
+        status.textContent = act === 'buildHarmonyProof' ? 'Graph built. Press Play on the board to hear it.' : 'Previous board restored.';
+        hide();
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        btn.disabled = false;
+        ov.querySelector('[data-act="restoreHarmonyProof"]').disabled = !harmonyProofPreviousScene;
+      }
+      return;
+    }
 
     if (act === 'enemySandboxSpawn') {
       const kind = String(ov.querySelector('[data-enemy-sandbox-kind]')?.value || 'basic_small').trim().toLowerCase();
@@ -2047,14 +2085,14 @@ const perfMeasuredFootprints = new Map();
 async function waitForPanelReady(panel, { timeoutMs = 1200 } = {}) {
   if (!panel) return false;
   const start = performance?.now?.() ?? Date.now();
-  const needsModeButtons = ['loopgrid', 'loopgrid-drum', 'bouncer', 'rippler', 'chordwheel', 'drawgrid']
+  const needsModeButtons = ['bouncer', 'rippler', 'chordwheel', 'drawgrid']
     .includes(panel?.dataset?.toy || '');
   return await new Promise((resolve) => {
     const tick = () => {
       if (!panel.isConnected) return resolve(false);
       const body = panel.querySelector('.toy-body');
       const chain = panel.querySelector(':scope > .toy-chain-btn');
-      const modeBtn = needsModeButtons ? panel.querySelector(':scope > .toy-mode-btn') : null;
+      const modeBtn = needsModeButtons ? panel.querySelector('.toy-advanced-toggle') : null;
       if (body && chain && (!needsModeButtons || modeBtn)) return resolve(true);
       const now = performance?.now?.() ?? Date.now();
       if ((now - start) > timeoutMs) return resolve(false);

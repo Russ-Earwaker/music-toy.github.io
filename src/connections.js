@@ -1,5 +1,6 @@
 // Canonical logical connections. Coordinates and DOM elements never enter this model.
 export const TOY_PORTS = Object.freeze({
+  pattern: Object.freeze({direction:'in',accepts:Object.freeze(['sequence']),capacity:Object.freeze({sequence:Infinity})}),
   input: Object.freeze({ direction: 'in', accepts: Object.freeze(['sequence', 'transport']),
     capacity: Object.freeze({ sequence: 1, transport: 1 }), parentCapacity: 1, occupied: 'replace-parent' }),
   output: Object.freeze({ direction: 'out', accepts: Object.freeze(['sequence']),
@@ -30,17 +31,13 @@ export function createConnectionModel() {
   const port = point => objects.get(point?.objectId)?.ports[point?.portId] || null;
   const list = (kind, { includeSuspended = false } = {}) => [...connections.values()].filter(c =>
     (includeSuspended || !editing?.suspended || c.id !== editing.connectionId) && (!kind || c.kind === kind));
-  const getParent = id => list().find(c => c.to.objectId === id) || null;
-  function getTransportId(id) {
-    const visited = new Set();
-    while (id && !visited.has(id)) {
-      visited.add(id);
-      const parent = getParent(id);
-      if (!parent) return null;
-      if (parent.kind === 'transport') return objects.get(parent.from.objectId)?.transportId || parent.from.objectId;
-      id = parent.from.objectId;
-    }
-    return null;
+  const getParent = id => list().find(c => c.to.objectId === id && c.to.portId!=='pattern') || null;
+  function getTransportId(id, visited = new Set()) {
+    if(!id || visited.has(id))return null;
+    const next=new Set(visited).add(id),parent=getParent(id);
+    if(parent?.kind==='transport')return objects.get(parent.from.objectId)?.transportId || parent.from.objectId;
+    const inherited=parent && getTransportId(parent.from.objectId,next);
+    return inherited || list('sequence').filter(c=>c.to.objectId===id && c.to.portId==='pattern').map(c=>getTransportId(c.from.objectId,next)).find(Boolean) || null;
   }
   function transaction(fn) {
     if (transactionDepth) return fn();
@@ -68,6 +65,7 @@ export function createConnectionModel() {
     if (!pa || !pb) return { ok: false, reason: 'missing-port' };
     if (pa.direction === pb.direction) return { ok: false, reason: 'invalid-direction' };
     const from = pa.direction === 'out' ? a : b, to = pa.direction === 'in' ? a : b;
+    if(to.portId==='pattern' && !objects.get(from.objectId)?.structure && !objects.get(from.objectId)?.modifier)return {ok:false,reason:'pattern-needs-structure'};
     if (from.objectId === to.objectId) return { ok: false, reason: 'self-connection' };
     if (![port(from), port(to)].every(p => p.accepts.includes(kind))) return { ok: false, reason: 'invalid-kind' };
     if (kind === 'sequence') {
@@ -112,7 +110,7 @@ export function createConnectionModel() {
       }
       // Both kinds occupy the same logical parent slot. Publish only the final
       // topology so observers never see a child simultaneously rooted twice.
-      for (const previous of list()) if (previous.to.objectId === result.to.objectId && previous.id !== connection.id) disconnect(previous.id);
+      for (const previous of list()) if (result.to.portId!=='pattern' && previous.to.portId!=='pattern' && previous.to.objectId === result.to.objectId && previous.id !== connection.id) disconnect(previous.id);
       const previous = connections.get(connection.id);
       if (previous && previous.kind !== kind) disconnect(previous.id);
       connections.set(connection.id, connection);
@@ -162,7 +160,7 @@ export function createConnectionModel() {
       return { kind };
     },
     beginDrag(point, { kind = 'sequence', connectionId = null, end = null } = {}) {
-      const parent = port(point)?.direction === 'in' ? getParent(point.objectId) : null;
+      const parent = point.portId!=='pattern' && port(point)?.direction === 'in' ? getParent(point.objectId) : null;
       if (!connectionId && parent) { connectionId = parent.id; end = 'to'; }
       const original = connectionId ? connections.get(connectionId) : null;
       if (connectionId && (!original || !['from', 'to'].includes(end))) return false;
@@ -180,11 +178,13 @@ export function createConnectionModel() {
       return true;
     },
     preview(target) {
+      if(editing?.original?.to.portId==='pattern' && editing.end==='to' && target?.portId==='input' && port({objectId:target.objectId,portId:'pattern'}))target={...target,portId:'pattern'};
       return editing ? validate(dragKind(editing.fixed, target, editing.kind), editing.fixed, target, editing.connectionId) : { ok: false, reason: 'not-editing' };
     },
     drop(target) {
       const edit = editing;
       if (!edit) return { ok: false, reason: 'not-editing' };
+      if(edit.original?.to.portId==='pattern' && edit.end==='to' && target?.portId==='input' && port({objectId:target.objectId,portId:'pattern'}))target={...target,portId:'pattern'};
       editing = null;
       let result;
       if (!target) {

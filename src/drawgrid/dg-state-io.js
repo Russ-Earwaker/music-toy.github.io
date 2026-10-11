@@ -1,6 +1,7 @@
 // src/drawgrid/dg-state-io.js
 // Capture/restore state helpers for DrawGrid.
 
+import { readToySoundState } from '../instrument-state.js';
 import { drawGridLogicalPointToNormalized } from './drawgrid-viewport-space.js';
 import {
   DRAWGRID_PERSISTENCE_COORDINATE_SPACE,
@@ -38,6 +39,7 @@ export function createDgStateIo({ state, deps } = {}) {
         steps: s.cols | 0,
         autotune: !!s.autoTune,
         instrument: s.panel?.dataset?.instrument || undefined,
+        ...readToySoundState(s.panel),
         strokes: (s.strokes || []).map((stroke) => ({
           // Runtime logical points are authoritative. Rebuild normalized
           // persistence data at the serialization boundary so it cannot stale.

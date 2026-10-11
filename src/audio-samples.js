@@ -478,9 +478,9 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
   const sourceNote = resolveOctaveForToy(noteName, toyId, options, id);
   const pitched = isPitchedEvent(id, entries.get(id), options, options.playbackOccurrence);
   const occurrence=options.playbackOccurrence;
-  const panel=typeof document!=='undefined'?document.getElementById(toyId):null;
-  const role=classifyMusicalRole({toyType:occurrence?.toyType ?? panel?.dataset?.toy,instrument:id,entry:entries.get(id),options,occurrence});
-  const pitchDecision=resolveMusicalPitch({sourcePitch:sourceNote,eventTick:occurrence?.eventTick ?? options.eventTick,context:options.context,role,referenceHarmony:options.referenceHarmony,register:options.register});
+  const panel=typeof document!=='undefined'?(document.getElementById(toyId) || document.querySelector?.(`.toy-panel[data-audiotoyid="${toyId}"], #${toyId}`)):null;
+  const role=classifyMusicalRole({toyType:occurrence?.toyType ?? panel?.dataset?.toy,instrument:id,entry:entries.get(id),options:{...options,toyMusicalRole:panel?.dataset?.musicalRole},occurrence});
+  const pitchDecision=resolveMusicalPitch({sourcePitch:sourceNote,eventTick:occurrence?.eventTick ?? options.eventTick,context:options.context,role,localTranspose:panel?.dataset?.toy==='drawgrid'?panel.dataset.localTranspose:0,referenceHarmony:options.referenceHarmony,register:options.register});
   const resolvedNote = pitchDecision.finalNote;
   const pitchShift=pitched?(noteMidi(resolvedNote) ?? 0)-(noteMidi(sourceNote) ?? 0):0;
   if (pitchShift && typeof options.playbackRate === 'number')

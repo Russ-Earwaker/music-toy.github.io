@@ -18,10 +18,42 @@ class Node {
   removeEventListener(k, fn) { this.handlers.get(k)?.delete(fn); }
   dispatchEvent(e) { for (const fn of this.handlers.get(e.type) ?? []) fn(e); }
   getBoundingClientRect() { return { left: 0, top: 0 }; }
+  focus() { document.activeElement=this; }
+  get isConnected() { return !!this.parentNode; }
+  contains(target) { return this===target || this.children.some(n=>n.contains(target)); }
+  querySelectorAll(tag) { return walk(this,n=>n!==this&&n.tagName===tag); }
   setPointerCapture() {}
 }
 const walk = (root, predicate) => [root, ...root.children.flatMap(n => walk(n, () => true))].filter(predicate);
 const event = (type, x, y) => ({ type, button: 0, pointerId: 1, clientX: x, clientY: y, preventDefault() {}, stopPropagation() {} });
+
+test('midpoint uses shared Advanced choices; dismissal preserves graph and focus, choices insert real nodes',()=>{
+ const original=Object.fromEntries(['document','window','requestAnimationFrame','cancelAnimationFrame','CustomEvent'].map(k=>[k,globalThis[k]]));
+ const document=new Node(),window=new Node();document.head=new Node('head');document.body=new Node('body');document.createElementNS=(ns,tag)=>new Node(tag);document.createElement=tag=>new Node(tag);
+ window.innerWidth=1000;window.innerHeight=800;
+ Object.assign(globalThis,{document,window,requestAnimationFrame:()=>1,cancelAnimationFrame(){},CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail;}}});
+ let view,toys;
+ try {
+  const model=createConnectionModel(),viewport=new Node(),panels=[{id:'A',x:100},{id:'B',x:400}];
+  panels.forEach(p=>model.registerObject(p.id));toys=createStructureToyModel(model);
+  const edge=model.connect('sequence',{objectId:'A',portId:'output'},{objectId:'B',portId:'input'}).connection;
+  view=createConnectionView({model,structureToys:toys,getPanels:()=>panels,getContext:()=>({viewportEl:viewport,transform:{scale:1,tx:0,ty:0}}),getToyPoint:(p,side)=>({x:p.x+(side==='right'?100:0),y:200}),getHeartbeatPoint:()=>({x:0,y:40})});view.render();
+  const menu=viewport.children.find(n=>n.className==='connection-menu');
+  const open=()=>{view.select(edge.id);menu.children.find(n=>n.textContent==='Advanced >').dispatchEvent({type:'click',stopPropagation(){}});return document.body.children.find(n=>n.className==='advanced-logic-popup');};
+  const before=model.snapshot();let popup=open();
+  assert.equal(menu.hidden,true);assert.equal(popup.getAttribute('role'),'dialog');
+  assert.deepEqual(walk(popup,n=>n.tagName==='button').map(n=>n.textContent),['Close','Timeline','Chord Progression','Transpose']);
+  document.dispatchEvent({type:'pointerdown',target:popup.children[1]});assert.ok(document.body.children.includes(popup));
+  document.dispatchEvent({type:'keydown',key:'Escape',preventDefault(){},stopImmediatePropagation(){}});assert.equal(document.body.children.length,0);assert.deepEqual(model.snapshot(),before);
+  assert.equal(document.activeElement.getAttribute('class'),'connection-midpoint');
+  popup=open();document.dispatchEvent({type:'pointerdown',target:new Node()});assert.equal(document.body.children.length,0);assert.equal(toys.list().length,0);
+  for(const [label,type] of [['Timeline','timeline'],['Chord Progression','chord-progression'],['Transpose','transpose']]){
+   popup=open();walk(popup,n=>n.textContent===label)[0].dispatchEvent({type:'click',stopPropagation(){}});
+   assert.equal(toys.list().at(-1).type,type);assert.equal(document.body.children.length,0);
+  }
+  assert.equal(toys.list().length,3);assert.ok(toys.list().some(s=>s.type==='timeline'));
+ } finally {view?.dispose();toys?.dispose();for(const[k,v]of Object.entries(original)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}}
+});
 
 
 function editCard(node,x,y){tapCard(node,x,y);node.parentNode.children.find(n=>n.getAttribute('aria-label')==='Change structure type').dispatchEvent(event('pointerdown',x,y));}
@@ -53,7 +85,7 @@ for (const [sourceStructure,targetStructure] of [[false,false],[false,true],[tru
       transform={scale:.5,tx:40,ty:30};view.render();
       assert.equal(Number(midpoint.getAttribute('cx')),beforePoint.x*.5+40);assert.equal(Number(midpoint.getAttribute('cy')),beforePoint.y*.5+30);
       midpoint.dispatchEvent(event('pointerdown',350,200));
-      assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Timeline','Transpose','Chord Progression','Disconnect']);
+      assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Advanced >','Disconnect']);
       const observed=[];const stop=model.subscribe(e=>{if(e.type==='change')observed.push(model.list());});
       menu.children.find(n=>n.textContent==='Together').dispatchEvent({type:'click',stopPropagation(){}});stop();
       const promoted=toys.list().find(s=>!['A','B'].includes(s.id));assert.ok(promoted);assert.equal(promoted.type,'together');
@@ -238,7 +270,7 @@ test('midpoint relationship menu promotes Together, switches the same card and e
     view.render(); view.select(edge.id);
     const menu=viewport.children.find(n=>n.className==='connection-menu');
     assert.equal(menu.hidden,false);
-    assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Timeline','Transpose','Chord Progression','Disconnect']);
+    assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Advanced >','Disconnect']);
     menu.children.find(n=>n.textContent==='Sequence').dispatchEvent({type:'click',stopPropagation(){}});
     const explicit=toys.list()[0];
     assert.equal(explicit.type,'sequence');assert.equal(explicit.provenance,'explicit');

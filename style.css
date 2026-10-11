@@ -1319,7 +1319,7 @@ body.advanced-controls-disabled [data-adv] {
 }
 
 /* Sizing for the toy panel when it's inside the host */
-.toy-zoomed {
+.adv-host > .toy-zoomed {
   max-width: 100%;
   max-height: 100%;
   position: relative !important; /* Override inline position */
@@ -1330,27 +1330,27 @@ body.advanced-controls-disabled [data-adv] {
 }
 
 /* Specific sizing for zoomed toys */
-.toy-zoomed[data-toy="loopgrid"],
-.toy-zoomed[data-toy="loopgrid-drum"] {
+.adv-host > .toy-zoomed[data-toy="loopgrid"],
+.adv-host > .toy-zoomed[data-toy="loopgrid-drum"] {
   width: min(100vw, 2100px);
   height: auto;
 }
 /* In Advanced, let loopgrid body grow freely (not forced square) */
-.toy-zoomed[data-toy="loopgrid"] .toy-body,
-.toy-zoomed[data-toy="loopgrid-drum"] .toy-body { aspect-ratio: auto; }
-.toy-zoomed[data-toy="loopgrid"] .toy-body,
-.toy-zoomed[data-toy="loopgrid-drum"] .toy-body { flex-grow: 1; }
+.adv-host > .toy-zoomed[data-toy="loopgrid"] .toy-body,
+.adv-host > .toy-zoomed[data-toy="loopgrid-drum"] .toy-body { aspect-ratio: auto; }
+.adv-host > .toy-zoomed[data-toy="loopgrid"] .toy-body,
+.adv-host > .toy-zoomed[data-toy="loopgrid-drum"] .toy-body { flex-grow: 1; }
 /* Give loopgrid more vertical headroom in Advanced so cubes can grow */
-.toy-zoomed[data-toy="loopgrid"] .sequencer-wrap,
-.toy-zoomed[data-toy="loopgrid-drum"] .sequencer-wrap { aspect-ratio: 4 / 1; }
+.adv-host > .toy-zoomed[data-toy="loopgrid"] .sequencer-wrap,
+.adv-host > .toy-zoomed[data-toy="loopgrid-drum"] .sequencer-wrap { aspect-ratio: 4 / 1; }
 
-.toy-zoomed[data-toy-layout="square"] {
+.adv-host > .toy-zoomed[data-toy-layout="square"] {
   /* Width is the smaller of 95% viewport width or a calculation based on viewport height */
   width: min(95vw, calc(90vh - 8rem));
   height: auto;
 }
 
-.toy-zoomed[data-toy="drawgrid"] {
+.adv-host > .toy-zoomed[data-toy="drawgrid"] {
   /* A wider, fixed-width layout for advanced mode to ensure header controls fit. */
   width: min(90vw, 900px) !important;
   height: auto !important; /* Override JS inline style to respect body's aspect-ratio */
@@ -1414,6 +1414,13 @@ body.advanced-controls-disabled [data-adv] {
   z-index: 960; /* Higher than particle canvas (950) */
   pointer-events: none;
 }
+
+.toy-spawner-arrange .arrange-label {position:absolute;inset:0;z-index:4;font-size:12px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.arrangement-result {position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:1100;background:#253342;color:#fff;border:1px solid #7babc0;border-radius:16px;padding:16px;max-width:calc(100vw - 32px);box-shadow:0 6px 24px #0008;}
+.arrangement-result[hidden] {display:none;}
+.arrangement-actions {display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.arrangement-actions button {min-height:44px;padding:8px 14px;border:1px solid #7994a9;border-radius:10px;background:#385c69;color:#fff;cursor:pointer;}
+.arrangement-actions button:disabled {opacity:.5;}
 
 /* --- Art Toys (First pass placeholder) --- */
 .art-toy-panel {
@@ -9779,3 +9786,29 @@ body.intro-open .topbar-menu-wrap {
 body.beat-swarm-active #internal-board-overlay {
   z-index: 1000 !important;
 }
+
+/* Curated Advanced controls stay attached to the source toy. */
+.toy-advanced-toggle {min-height:40px;padding:6px 10px;white-space:nowrap;font:600 14px system-ui;border-radius:8px;background:#263b47;color:#eee;}
+.toy-advanced-panel {position:absolute;top:88px;left:0;width:100%;box-sizing:border-box;z-index:60;padding:12px;border:2px solid var(--accent,#617b98);border-radius:12px;background:#172333;color:#eee;box-shadow:0 8px 20px #0008;display:flex;flex-direction:column;gap:10px;}
+.toy-advanced-panel[hidden] {display:none!important;}
+.toy-advanced-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;font:600 12px system-ui;letter-spacing:.06em;}
+.toy-advanced-group {display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+.toy-advanced-label {min-width:70px;font:600 13px system-ui;color:#b8cadc;}
+.toy-advanced-panel button,.toy-advanced-panel select {min-height:40px;padding:6px 10px;font:14px system-ui;border-radius:8px;background:#263b47;color:#eee;border:1px solid #617b98;}
+.toy-advanced-panel input[type=range] {min-height:40px;}
+.toy-advanced-panel [class*=quant-ctrl] {display:flex!important;}
+.toy-panel.toy-advanced-inline:not(.toy-zoomed) [class*=quant-ctrl],
+.toy-panel.toy-advanced-inline:not(.toy-zoomed) [class*=speed-ctrl] {display:none!important;}
+.toy-advanced-inline .drawgrid-generator-buttons {display:none!important;}
+.toy-panel[data-toy="chordwheel"].toy-advanced-inline .toy-advanced-panel {
+  width: 48%;
+}
+
+/* Shared progressive disclosure for graph creation. */
+.advanced-logic-popup {position:fixed;z-index:200010;width:260px;max-width:calc(100vw - 16px);box-sizing:border-box;padding:14px;border:2px solid #718fc2;border-radius:12px;background:#172539;color:#eee;box-shadow:0 8px 24px #0009;font:14px system-ui;}
+.advanced-logic-heading {display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;}
+.advanced-logic-heading strong {font-size:12px;letter-spacing:.05em;}
+.advanced-logic-group {display:flex;flex-direction:column;gap:4px;margin-top:12px;}
+.advanced-logic-group > strong {font-size:12px;color:#b8cadc;letter-spacing:.05em;}
+.advanced-logic-popup button {min-height:44px;border:1px solid #617b98;border-radius:8px;padding:8px 12px;background:#263b47;color:inherit;text-align:left;font:14px system-ui;cursor:pointer;}
+.advanced-logic-popup button:hover,.advanced-logic-popup button:focus-visible {background:#344c72;outline:2px solid #a2c5f3;}

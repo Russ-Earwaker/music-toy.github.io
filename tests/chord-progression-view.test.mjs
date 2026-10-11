@@ -19,8 +19,8 @@ test('Chord Progression root insertion exposes touch chord editing, limits, dura
  getHeartbeatPoint:()=>({x:0,y:100}),getStructurePulse:()=>flash});
  try {
  view.render();walk(viewport,n=>n.getAttribute('class')==='connection-midpoint')[0].dispatchEvent(event('pointerdown'));
- const menu=walk(viewport,n=>n.className==='connection-menu')[0],choice=menu.children.find(n=>n.textContent==='Chord Progression');
- assert.equal(choice.className,'modifier-choice');choice.dispatchEvent(event('click'));
+ const menu=walk(viewport,n=>n.className==='connection-menu')[0],choice=(menu.children.find(n=>n.textContent==='Advanced >').dispatchEvent(event('click')),walk(document.body,n=>n.tagName==='button')).find(n=>n.textContent==='Chord Progression');
+ assert.ok(choice);choice.dispatchEvent(event('click'));
  const m=structures.list()[0],card=walk(viewport,n=>n.getAttribute('id')===m.id)[0];
  assert.equal(card.getAttribute('data-node-kind'),'modifier');assert.equal(model.get(edge.id).from.objectId,m.id);
  const control=label=>walk(card,n=>n.getAttribute('aria-label')===label)[0];

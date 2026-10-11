@@ -64,7 +64,8 @@ export function createDgMapRegen({ state, deps } = {}) {
       }
       return;
     }
-    const isZoomed = s.panel.classList.contains('toy-zoomed');
+    // Opening inline controls must not switch which authored strokes play.
+    const isZoomed = s.panel.classList.contains('toy-zoomed') && !s.panel.classList.contains('toy-advanced-inline');
     const newMap = {
       active: Array(s.cols).fill(false),
       nodes: Array.from({ length: s.cols }, () => new Set()),

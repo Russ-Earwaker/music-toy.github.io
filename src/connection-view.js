@@ -8,6 +8,7 @@ import { connectionCurve, curvePath, curvePoint, projectConnectionPoint } from '
 import { structurePortPoint, structureToyHeight, structureToyWidth } from './structure-toys.js';
 import { TICKS_PER_BEAT } from './audio-core.js';
 import { STRUCTURE_TYPES, MAX_REPEAT_COUNT, structureTypeLabel } from './structure-types.js';
+import { BASIC_LOGIC_TYPES, openAdvancedLogic, closeAdvancedLogic } from './logic-creation-menu.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const set = (node, key, value) => { if (node.getAttribute(key) !== String(value)) node.setAttribute(key, value); };
@@ -53,7 +54,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     .connection-layer .connection-preview { fill:none; stroke:#c2d7ff; stroke-width:3; stroke-dasharray:6 5; pointer-events:none; }
     .connection-status { position:absolute; left:50%; bottom:24px; transform:translateX(-50%); padding:8px 14px; border-radius:12px; background:#243044; color:white; font:13px system-ui; pointer-events:none; z-index:121; }
     .connection-menu { position:absolute; padding:5px; border:1px solid #718fc2; border-radius:10px; background:#172539; color:white; z-index:122; box-shadow:0 5px 18px #0008; }
-    .connection-menu button { display:block; min-width:115px; padding:7px 12px; border:0; border-radius:6px; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+    .connection-menu button { display:block; min-height:44px; min-width:115px; padding:7px 12px; border:0; border-radius:6px; background:transparent; color:inherit; text-align:left; cursor:pointer; }
     .connection-menu button:hover,.connection-menu button[aria-pressed=true] { background:#344c72; }
     .connection-menu input { display:block; box-sizing:border-box; width:115px; margin:4px 0; padding:6px 10px; color:inherit; background:#263c59; border:1px solid #718fc2; border-radius:6px; }
     .connection-layer .structure-card { fill:#192f48; stroke:#7eb9e9; stroke-width:2; pointer-events:all; cursor:grab; touch-action:none; }
@@ -93,12 +94,13 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   let tapPoint = null, gestureMoved = false;
   let statusTimer = null;
   let menuOwner = null;
+  let menuReturnFocus = null;
   let worldMode = false;
   function pointerPoint(event) {
     const rect=svg.getBoundingClientRect(), scale=worldMode?(getContext().transform?.scale||1):1;
     return {x:(event.clientX-rect.left)/scale,y:(event.clientY-rect.top)/scale};
   }
-  const closeMenu = () => { menu.hidden = true; menuOwner = null; };
+  const closeMenu = () => { const wasOpen=!menu.hidden;menu.hidden = true; menuOwner = null;if(wasOpen)menuReturnFocus?.focus?.(); };
   const ownerOf = target => { for(let n=target;n;n=n.parentNode){const id=n.getAttribute?.('data-structure-id');if(id)return id;}return null; };
   function selectStructure(id) {
     if(selectedStructure&&selectedStructure!==id&&!moving&&!model.getEditing())structureToys?.setCollapsed(selectedStructure,true);
@@ -139,7 +141,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const hit=svgNode('circle',{fill:'transparent','pointer-events':'all',class:'connection-port-hit'});
     const circle = svgNode('circle', { r: 12, class: `connection-port${kind === 'transport' ? ' transport-port' : ''}`,
       tabindex: 0, role: 'button', 'data-object-id': point.objectId, 'data-port-id': point.portId,
-      'aria-label': `${point.objectId} ${point.portId === 'input' ? 'input: connect a preceding toy' : kind === 'transport' ? 'transport output' : 'output: connect a following toy'}` });
+      'aria-label': `${point.objectId} ${point.portId==='pattern'?'pattern reference: reuse this source':point.portId === 'input' ? 'input: connect a preceding toy' : kind === 'transport' ? 'transport output' : 'output: connect a following toy'}` });
     const title = svgNode('title'); title.textContent = circle.getAttribute('aria-label'); circle.append(title);
     circle.addEventListener('pointerdown', e => start(e, point, model.socketDragIntent(point, kind)));
     hit.addEventListener('pointerdown',e=>start(e,point,model.socketDragIntent(point,kind)));
@@ -163,6 +165,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const s = structureId ? structureToys.get(structureId) : null;
     if (!c && !s) { closeMenu(); return; }
     menuOwner = s ? {structureId:s.id} : {connectionId:c.id};
+    menuReturnFocus = c ? edges.get(connectionId)?.midpoint : cards.get(structureId)?.typeButton;
+    menu.setAttribute('aria-label', c ? 'Structure insertion' : 'Change structure type');
     const kind = c?.kind || 'sequence';
     const currentType = s?.type || 'sequence';
     const button = (label, action, pressed = null) => {
@@ -171,8 +175,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       b.addEventListener('click', e => { e.stopPropagation(); closeMenu(); action(); render(); });
       menu.append(b);
     };
-    if (kind === 'sequence' || kind === 'transport') {
-      if (!isModifier(s?.type)) for (const type of STRUCTURE_TYPES) button(structureTypeLabel(type), () => {
+    if ((kind === 'sequence' || kind === 'transport') && c?.to.portId!=='pattern') {
+      if (!isModifier(s?.type)) for (const type of (s ? STRUCTURE_TYPES : BASIC_LOGIC_TYPES)) button(structureTypeLabel(type), () => {
         if (s && structureToys.conversion(s.id,type).lossy) {
           menu.replaceChildren();
           const explanation=document.createElement('div');explanation.textContent=structureToys.conversion(s.id,type).message;menu.append(explanation);
@@ -183,11 +187,9 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         else structureToys.promote(connectionId, type);
       }, currentType === type);
     }
-    if (c) {
-      for(const type of ['transpose','chord-progression']) {
-        button(logicNodeLabel(type), () => structureToys.promote(connectionId,type));
-        menu.children[menu.children.length-1].className='modifier-choice';
-      }
+    if (c && c.to.portId!=='pattern') {
+      button('Advanced >', () => openAdvancedLogic({anchor:menuReturnFocus,returnFocus:menuReturnFocus,
+        onChoose:type=>{if(model.get(connectionId))structureToys.promote(connectionId,type);render();}}));
     }
     if (s?.type === 'repeat') {
       const count=document.createElement('input');count.type='number';count.min='1';count.max=String(MAX_REPEAT_COUNT);count.value=String(s.count);
@@ -202,7 +204,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       : { x: Number(visual?.midpoint.getAttribute('cx')) || 0, y: Number(visual?.midpoint.getAttribute('cy')) || 0 };
     if(worldMode && !(s && structureId)) at=projectConnectionPoint(at,getContext().transform);
     menu.style.left = `${Math.max(8, Math.min((viewport.clientWidth || 1000) - 135, at.x - 55))}px`;
-    menu.style.top = `${Math.max(8, at.y + 24)}px`; menu.hidden = false;
+    menu.style.top = `${Math.max(8, at.y + 24)}px`; menu.hidden = false;menu.querySelector?.('button')?.focus?.();
   }
   const selectionHook = e => { if (e.detail) openMenu(e.detail.id); else closeMenu(); };
   document.addEventListener('connection:selected', selectionHook);
@@ -299,9 +301,10 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const desired = new Map();
     for (const panel of getPanels()) {
       if (context.visible && !context.visible(panel)) continue;
-      for (const portId of ['input', 'output']) {
+      for (const portId of ['input', 'output',...(model.list('sequence').some(c=>c.to.objectId===panel.id&&c.to.portId==='pattern')?['pattern']:[])]) {
         const point = { objectId: panel.id, portId };
-        const world = getToyPoint(panel, portId === 'input' ? 'left' : 'right');
+        const anchor = getToyPoint(panel, portId !== 'output' ? 'left' : 'right');
+        const world=portId==='pattern' && anchor ? {...anchor,y:anchor.y-64}:anchor;
         if (world && Number.isFinite(world.x) && Number.isFinite(world.y)) desired.set(key(point), { point, world, kind: 'sequence' });
       }
     }
@@ -321,7 +324,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       for(const attr of ['x','y','width','height'])set(card.activation,attr,card.rect.getAttribute(attr));
       set(card.activation,'opacity',flash);set(card.activation,'stroke-width',(3+5*flash)*scale);
       card.activation.style.filter='drop-shadow(0 0 '+10*scale+'px #d9e8ff)';
-      set(card.rect, 'aria-label', `${logicNodeLabel(s.type)} ${isModifier(s.type)?'modifier':'structure'}`);
+      set(card.rect, 'aria-label', `${s.name?s.name+' · ':''}${logicNodeLabel(s.type)}${isModifier(s.type)?'':' structure'}`);
       set(card.rect, 'aria-expanded', !s.collapsed);
       set(card.group,'data-collapsed',!!s.collapsed);set(card.group,'data-node-kind',isModifier(s.type)?'modifier':'structure');
       set(card.typeButton,'display',s.collapsed||isModifier(s.type)?'none':'inline');
@@ -330,7 +333,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       set(card.name, 'x', pos.x + width/2 * scale); set(card.name, 'y', pos.y + 30 * scale);
       set(card.name, 'font-size', (s.collapsed?14:18) * scale);
       const label = s.type==='chord-progression' ? (s.collapsed ? 'Chords: '+progressionLabel(s.chords) : 'Chord Progression') : s.type==='transpose' ? (s.collapsed?'Tr '+signedSemitones(s.semitones):'Transpose') : s.collapsed ? (s.type==='repeat'?`×${s.count}`:s.type==='sequence'?'Seq':structureTypeLabel(s.type)) : `${structureTypeLabel(s.type)} ▾`;
-      if (card.name.textContent !== label) card.name.textContent = label;
+      if (card.name.textContent !== (s.name || label)) card.name.textContent = s.name || label;
       set(card.count,'display',(s.type === 'repeat'||s.type==='transpose')&&!s.collapsed?'inline':'none');
       set(card.count,'class',s.type==='transpose'?'structure-name modifier-value':'structure-name structure-count');
       set(card.count,'role',s.type==='transpose'?'status':'button');
@@ -480,6 +483,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       const pulsing = getPulse(c);
       set(visual.path, 'stroke-width', pulsing ? 10 : 6);
       set(visual.path, 'stroke', pulsing ? '#f5fbff' : '#99b9ff');
+      set(visual.path,'stroke-dasharray',c.to.portId==='pattern'?'12 8':'none');
       set(visual.pulse, 'display', pulsing ? 'inline' : 'none');
       set(visual.pulse, 'd', path);
 
@@ -545,7 +549,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     pointerId = null; pointer = dragOrigin = null; render();
   };
   const cancel = () => { if(moving)onStructureDragEnd(null,true);tapPoint = null; moving = null; editingEntry=null; pointerId = null; pointer = dragOrigin = null; model.cancelDrag(); render(); };
-  const reset = () => { closeMenu(); selected = selectedStructure = null; cancel(); status.hidden=true; clearTimeout(statusTimer); };
+  const reset = () => { closeAdvancedLogic();closeMenu(); selected = selectedStructure = null; cancel(); status.hidden=true; clearTimeout(statusTimer); };
   const outside = e => {
     for (let node=e.target;node;node=node.parentNode) if(node===menu)return;
     if(selectedStructure && ownerOf(e.target)===selectedStructure)return;
@@ -577,8 +581,8 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   });
   function frame() { if (disposed) return; onFrame(); render(); frameId = requestAnimationFrame(frame); }
   frameId = requestAnimationFrame(frame);
-  return { render, select, reset, dispose() {
-    disposed = true; cancelAnimationFrame(frameId); clearTimeout(statusTimer); unsubscribe();
+  return { render, select, focusStructure:selectStructure, reset, dispose() {
+    closeAdvancedLogic({restoreFocus:false}); disposed = true; cancelAnimationFrame(frameId); clearTimeout(statusTimer); unsubscribe();
     document.removeEventListener('keydown', keyboard); window.removeEventListener('blur', cancel);
     document.removeEventListener('pointerdown', outside, true);
     document.removeEventListener('connection:selected', selectionHook);

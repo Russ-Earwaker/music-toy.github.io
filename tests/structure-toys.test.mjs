@@ -395,7 +395,7 @@ test('nested definitions use one flattened tick-domain turn stream; a shorter To
   const runtime=createStructureRuntime();
   runtime.defineStructure('parallel','together',[{toyId:'B',durationTicks:96},{toyId:'C',durationTicks:192}],0,{representationId:'parallel'});
   runtime.defineSequence('root',[{toyId:'A',durationTicks:96},{structureId:'parallel'}]);
-  runtime.startSequence('root',0,{quantize:false});
+  runtime.startSequence('root',0,{quantize:false,loop:true});
   assert.equal(runtime.getDefinition('root').durationTicks,288);
   assert.deepEqual(runtime.turnsInWindow('root',0,576).map(t=>[t.toyId,t.startTick,t.endTick]),[['A',0,96],['B',96,192],['C',96,288],['A',288,384],['B',384,480],['C',384,576]]);
 });

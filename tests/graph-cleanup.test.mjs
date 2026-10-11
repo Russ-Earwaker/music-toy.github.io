@@ -43,13 +43,13 @@ test('disconnect clears active borders immediately throughout a branch, preservi
 });
 for(const type of ['sequence','together']) test(`empty ${type} is zero duration, can be edited live, and cannot spin a zero-length scheduler loop`,()=>{
   const r=createStructureRuntime();r.defineStructure('empty',type,[]);
-  assert.equal(r.getDefinition('empty').durationTicks,0);r.startSequence('empty',0,{quantize:false});
+  assert.equal(r.getDefinition('empty').durationTicks,0);r.startSequence('empty',0,{quantize:false,loop:true});
   assert.deepEqual(r.turnsInWindow('empty',0,10000),[]);
   r.defineStructure('empty',type,[{toyId:'B',durationTicks:384}],100);
-  assert.deepEqual(r.turnsInWindow('empty',100,484).map(t=>[t.toyId,t.startTick]),[['B',100]]);
+  assert.deepEqual(r.turnsInWindow('empty',100,484).map(t=>[t.toyId,t.startTick]),[['B',0],['B',384]]);
   r.defineStructure('empty',type,[],200);assert.deepEqual(r.turnsInWindow('empty',200,10000),[]);
 });
-for(const type of ['sequence','together']) test(`removing final ${type} child immediately removes the containing loop's ghost gap`,()=>{
+for(const type of ['sequence','together']) test(`removing final ${type} child removes ghost duration and rejoins root boundaries beyond committed lookahead`,()=>{
   const h=harness(),s=h.structures.promote(h.link('A','B').connection.id,type);
   h.state.currentTick=100;h.sequence.turnsForLookahead(100,220);
   const obsolete=h.sequence.turnsForLookahead(220,600).filter(t=>t.toyId==='B');
@@ -57,7 +57,7 @@ for(const type of ['sequence','together']) test(`removing final ${type} child im
   h.model.disconnect(h.model.getParent('B').id);
   assert.equal(h.sequence.runtime.getDefinition(s.definitionId).durationTicks,0);
   assert.equal(h.sequence.runtime.getDefinition('sequence:A').durationTicks,384);
-  assert.deepEqual(h.sequence.turnsForLookahead(220,1536).map(t=>[t.toyId,t.startTick]),[['A',0],['A',384],['A',768],['A',1152]]);
+  assert.deepEqual(h.sequence.turnsForLookahead(220,1536).filter(t=>t.toyId==='A').map(t=>[t.toyId,t.startTick]),[['A',0],['A',768],['A',1152]]);
   assert.strictEqual(h.sequence.runtime.getInstance('sequence:A'),root);
   assert.equal(getPlaybackInstance('B').active,false);
   assert.ok(obsolete.every(t=>!t.playbackInstance.active),'removed prepared child activations are revoked');

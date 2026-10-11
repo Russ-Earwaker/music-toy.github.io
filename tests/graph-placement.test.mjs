@@ -4,6 +4,15 @@ import {createConnectionModel,createStructurePorts,HEARTBEAT_PORTS} from '../src
 import {createStructureToyModel,structureToyWidth,structureToyHeight} from '../src/structure-toys.js';
 import {createGraphPlacement,rectanglesOverlap,clearVerticalSlot,MIN_NODE_GAP_X,MIN_SIBLING_GAP_Y} from '../src/graph-placement.js';
 const out=(objectId,portId='output')=>({objectId,portId}),input=objectId=>({objectId,portId:'input'});
+test('shared pattern references leave source geometry and primary parenting outside structure layout',()=>{
+ const h=harness();h.add('root',0,0,224,304,true);h.add('section',400,500,360,80,true);h.add('source',1000,200,300,200);
+ h.connect('root','section','child:0');
+ const edge=h.model.connect('sequence',out('section','child:0'),{objectId:'source',portId:'pattern'}).connection;
+ const before={...h.rects.get('source')};
+ assert.equal(h.model.getParent('source'),null);assert.deepEqual([...h.layout.descendants('root')],['root','section']);
+ assert.deepEqual(h.layout.repairConnection(edge.id),[]);h.layout.arrangeSubgraph('root');
+ assert.deepEqual(h.rects.get('source'),before);assert.ok(!h.moves.includes('source'));
+});
 function harness(manual=new Set()){
   const model=createConnectionModel(),rects=new Map(),moves=[];
   const add=(id,x,y,width=144,height=100,structure=false)=>{

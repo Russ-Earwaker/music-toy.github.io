@@ -9,6 +9,8 @@ import { connectionModel } from './connections.js';
 import { structureToyModel } from './structure-toys.js';
 import { heartbeatModel } from './heartbeats.js';
 import { applyToyInstrument } from './instrument-state.js';
+import { normalizeMusicalRole, restoreToyMusicalRole } from './musical-role.js';
+import { restoreToyLocalTranspose } from './toy-local-transpose.js';
 
 // ---- Persistence diagnostics ----
 const PERSIST_DIAG = (typeof window !== 'undefined') ? (window.__PERSIST_DIAG = window.__PERSIST_DIAG || {}) : {};
@@ -837,7 +839,7 @@ export function getSnapshot(){
     return {
       id, type,
       ui: ownerArtToyId ? readOwnedToyUI(panel) : readUI(panel),
-      state: snapper(panel) || {},
+      state: { ...(snapper(panel) || {}), ...(panel.dataset.autoArrangeOrigin==='filled'?{autoArrangeOrigin:'filled'}:{}), ...(panel.dataset.musicalRole ? {musicalRole:normalizeMusicalRole(panel.dataset.musicalRole)} : {}) },
       volume: audio.volume,
       muted: audio.muted,
       solo: undefined,
@@ -1028,6 +1030,14 @@ export function applySceneSnapshot(snap){
     for (const t of (snap.toys||[])){
       let createdFromFactory = false;
       let panel = byId.get(t.id);
+      // An imported scene may reuse an ID for a different toy kind.
+      if (panel && String(panel.dataset.toy || "").toLowerCase() !== t.type) {
+        factory?.destroy?.(panel);
+        panel.remove();
+        panels.splice(panels.indexOf(panel), 1);
+        byId.delete(t.id);
+        panel = null;
+      }
       if (!panel){
         // Try to find first panel of same type not yet used
         panel = panels.find(p => String(p.dataset.toy||'').toLowerCase() === t.type && !usedPanels.has(p));
@@ -1104,6 +1114,9 @@ export function applySceneSnapshot(snap){
           delete panel.dataset.focusSkip;
         } catch {}
       }
+      restoreToyMusicalRole(panel, t.state || {});
+      if(t.state?.autoArrangeOrigin==='filled')panel.dataset.autoArrangeOrigin='filled';else delete panel.dataset.autoArrangeOrigin;
+      restoreToyLocalTranspose(panel, t.state || {});
       const applier = ToySnapshotters[t.type]?.apply;
       if (typeof applier === 'function'){
         try {

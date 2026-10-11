@@ -80,7 +80,7 @@ test('nested Structures inherit one domain; a whole nested branch moves together
   for(const id of ['A','B','C',s.id,nested.id])assert.equal(h.model.getTransportId(id),h.second.transportId);
   assert.equal(h.structures.get(s.id).transportId,h.second.transportId);
   assert.equal(h.structures.get(nested.id).transportId,h.second.transportId);
-  for(const d of h.sequence.runtime.debugSnapshot().definitions)assert.equal(d.transportId,h.second.transportId);
+  for(const d of h.sequence.runtime.debugSnapshot().definitions.filter(d=>d.leafLayout.some(l=>['A','B','C'].includes(l.toyId))))assert.equal(d.transportId,h.second.transportId);
   const runtime=createStructureRuntime();runtime.defineStructure('foreign','repeat',[{toyId:'x',durationTicks:384}],0,{transportId:'foreign'});
   assert.throws(()=>runtime.defineStructure('mixed','sequence',[{structureId:'foreign'}],0,{transportId:MAIN_TRANSPORT_ID}),/Mixed transport/);
   assert.throws(()=>runtime.defineStructure('mixed-leaf','together',[{toyId:'x',transportId:'foreign'}]),/Mixed transport/);

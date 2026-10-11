@@ -4,7 +4,7 @@
 <style>body{margin:0;background:#101820;color:#eee;font:14px system-ui}header{padding:8px}button{margin:0 8px}iframe{width:100%;height:82vh;border:0}pre{white-space:pre-wrap;margin:8px}</style>
 <header>Production graph check
  <button id="open">Open normal board in tab</button>
- <select id="variant" aria-label="Graph variant"><option value="base">Chord Progression → Repeat → Together</option><option value="outer">Transpose → Chord Progression</option><option value="inner">Chord Progression → Transpose</option></select>
+ <select id="variant" aria-label="Graph variant"><option value="base">Chord Progression → Together</option><option value="outer">Transpose → Chord Progression</option><option value="inner">Chord Progression → Transpose</option><option value="roots">Heartbeat independent 1 / 2 / 4 bar roots</option><option value="arrange3">Arrange: three authored ideas</option><option value="arrange1">Arrange: melody only</option></select>
  <button id="load">Load C / Am / F / G fixture</button>
  <button id="observe">Observe reloaded board</button>
  <button id="save">Save observations to resources</button>
@@ -34,10 +34,14 @@ document.querySelector('#open').onclick=()=>{
  status.textContent='Board tab opened. Return here to load the fixture and save observations.';
 };
 document.querySelector('#load').onclick=async()=>{
- const fixture=await (await fetch('../resources/harmony-integration.scene.json')).json();
- if(!testedWindow?.Persistence){status.textContent='App is still loading; try again.';return;}
  const variant=document.querySelector('#variant').value;
- if(variant!=='base'){
+ const fixture=await (await fetch(variant==='roots'?'../resources/heartbeat-roots.scene.json':'../resources/harmony-integration.scene.json')).json();
+ if(!testedWindow?.Persistence){status.textContent='App is still loading; try again.';return;}
+ if(variant==='arrange3' || variant==='arrange1'){
+  fixture.payload.structureToys=[];fixture.payload.chains=[];
+  if(variant==='arrange1')fixture.payload.toys=fixture.payload.toys.filter(t=>t.id==='proof-melody');
+  fixture.payload.connections=fixture.payload.toys.map(t=>({id:'source-root-'+t.id,kind:'transport',from:{objectId:'main-heartbeat',portId:'output'},to:{objectId:t.id,portId:'input'}}));
+ }else if(variant!=='base' && variant!=='roots'){
   fixture.payload.structureToys.push({id:'proof-transpose',definitionId:'definition:proof-transpose',type:'transpose',semitones:12,x:variant==='outer'?0:420,y:480,collapsed:false,outputCount:1});
   const edge=fixture.payload.connections.find(c=>c.id===(variant==='outer'?'proof-root':'proof-cr'));
   const target=edge.to;
@@ -56,6 +60,7 @@ document.querySelector('#save').onclick=async()=>{
  const snapshot=testedWindow.Persistence.getSnapshot();
  const win=testedWindow;
  const diagnostics={schedulerTick:win.__mtSchedTick,activeToyIds:win.__mtActiveToyIds,chainState:win.__mtChainState,
+  rootPerformances:win.__STRUCTURE_DEBUG?.instances.filter(i=>!i.parentDefinitionId),
   providers:Array.from(win.document.querySelectorAll('.toy-panel[id]')).map(p=>({id:p.id,hasSchedule:typeof p.__sequencerSchedule==='function',pattern:p.__seqPattern,activePattern:p.__seqPatternActive,audioToyId:p.__audioToyId}))};
  const report={kind:'normal-graph-harmony-integration',createdAt:new Date().toISOString(),authoredSources:before,events,snapshot,diagnostics};
  const fileName='harmony-graph-'+report.createdAt.replace(/[:.]/g,'-')+'.json';

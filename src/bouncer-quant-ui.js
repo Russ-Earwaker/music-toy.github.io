@@ -11,12 +11,13 @@ export function installQuantUI(panel, initialDiv = 4){
   Object.assign(qWrap.style, { display:'none', alignItems:'center', gap:'6px' });
 
   let qLabel = qWrap.querySelector('.bouncer-quant-label');
-  if (!qLabel){ qLabel = document.createElement('span'); qLabel.className='bouncer-quant-label'; qLabel.textContent = 'Quant:'; }
+  if (!qLabel){ qLabel = document.createElement('span'); qLabel.className='bouncer-quant-label'; qLabel.textContent = 'Timing Snap:'; }
   qLabel.style.fontSize = '12px';
   qLabel.style.opacity = '0.8';
 
   let sel = qWrap.querySelector('select');
   if (!sel){ sel = document.createElement('select'); }
+  sel.setAttribute('aria-label', 'Timing Snap');
   sel.innerHTML = '';
   const options = [
     { label:'Off', value:'0' },

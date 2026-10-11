@@ -1,10 +1,10 @@
 import { isModifier } from './modifier-types.js';
 // Compile shared Connection topology into the same Structure runtime. Implicit
 // chains stay flattened; explicit branch children may themselves be chains.
-export function compileStructureGraph({ panels, structures, connections, runtime, currentTick, getDuration, getTransportId = () => undefined, getCurrentTick = () => currentTick }) {
+export function compileStructureGraph({ panels, structures, connections, runtime, currentTick, getDuration, poweredRoots = new Set(), getTransportId = () => undefined, getCurrentTick = () => currentTick }) {
   const toys = new Map(panels.map(p => [p.id, p]));
   const explicit = new Map(structures.map(s => [s.id, s]));
-  const incoming = new Map(connections.map(c => [c.to.objectId, c]));
+  const incoming = new Map(connections.filter(c=>c.to.portId!=='pattern').map(c => [c.to.objectId, c]));
   const outgoing = id => connections.filter(c => c.from.objectId === id)
     .sort((a, b) => (Number(a.from.portId.split(':')[1]) || 0) - (Number(b.from.portId.split(':')[1]) || 0));
   const defined = new Set(), resolving = new Set();
@@ -25,7 +25,7 @@ export function compileStructureGraph({ panels, structures, connections, runtime
     // Only output edges are children. The input toy remains a predecessor.
     const children = [], members = [];
     for (const edge of outgoing(id)) {
-      const child = expression(edge.to.objectId);
+      const child = edge.to.portId==='pattern' && toys.has(edge.to.objectId) ? {children:[leaf(edge.to.objectId)],members:[edge.to.objectId]} : expression(edge.to.objectId);
       if (!child) continue;
       members.push(...child.members);
       let reference;
@@ -47,7 +47,7 @@ export function compileStructureGraph({ panels, structures, connections, runtime
   const roots = [];
   for (const id of [...toys.keys(), ...explicit.keys()]) {
     if (incoming.has(id)) continue;
-    if (!explicit.has(id) && !outgoing(id).length) continue;
+    if (!explicit.has(id) && !outgoing(id).length && !poweredRoots.has(id)) continue;
     const node = expression(id);
     if (node) roots.push({ headId: id, ...node });
   }

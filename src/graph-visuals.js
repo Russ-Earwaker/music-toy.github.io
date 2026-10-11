@@ -7,7 +7,7 @@ export const CONNECTION_FLASH_DURATION = 150;
 export const STRUCTURE_FLASH_DURATION = 320;
 export function structureFlashStrength(pulses, objectId, now) {
   let strength = 0;
-  for (const pulse of pulses.values()) if (pulse.fromId === objectId)
+  for (const pulse of pulses.values()) if (pulse.fromId === objectId || pulse.rootActivation && pulse.toId === objectId)
     strength = Math.max(strength, Math.max(0, (pulse.structureUntil - now) / STRUCTURE_FLASH_DURATION));
   return Math.pow(Math.min(1, strength), 3);
 }

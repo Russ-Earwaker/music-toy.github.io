@@ -38,6 +38,7 @@ export function installSpeedUI(panel, sizing, initial=1.00){
 
   let sp = spWrap.querySelector('input[type="range"]');
   if (!sp){ sp = document.createElement('input'); sp.type = 'range'; }
+  sp.setAttribute('aria-label', 'Ball speed');
   sp.min = '0.20'; sp.max = '1.60'; sp.step = '0.05';
   sp.value = String(speedFactor.toFixed(2));
   sp.style.width = '120px';

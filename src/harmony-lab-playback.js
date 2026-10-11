@@ -18,7 +18,7 @@ export function createHarmonyLabPlayback({model=createHarmonyLabModel(),onChange
   function resetEvaluation(){evaluationEpoch++;evaluation.reset();logEvents.length=0;logDropped=0;}
   const modeError='HARMONY LAB ERROR: UI is Follow Chords but playback event is using Original mode.';
   function reportModeError(){runtimeError=modeError;console.error(modeError);onChange();}
-  const panels=['bass','melody','drums'].map(part=>({id:prefix+'-'+part,dataset:{toy:part==='drums'?'loopgrid-drum':'loopgrid'},__seqRev:0,part}));
+  const panels=['bass','melody','drums'].map(part=>({id:prefix+'-'+part,dataset:{toy:part==='drums'?'loopgrid-drum':'drawgrid',musicalRole:part==='drums'?'percussion':part},__seqRev:0,part}));
   const drums=Object.freeze([['lab-kick','lab-hat'],['lab-hat'],['lab-snare','lab-hat'],['lab-hat'],['lab-kick','lab-hat'],['lab-hat'],['lab-snare','lab-hat'],['lab-hat']].map(Object.freeze));
   for(const panel of panels){
     panel.__sequencerEventsInWindow=(from,to)=>{
@@ -49,15 +49,16 @@ export function createHarmonyLabPlayback({model=createHarmonyLabModel(),onChange
   const ids={band:prefix+':band',progression:prefix+':progression',song:prefix+':song'};
   function sync(){
     const s=model.getState(),tick=transport.currentTick,options={transportId:transport.id};
-    // A long-lived occurrence allows editable progressions of any supported
-    // length to wrap via the resolver without a lab chord counter or restart.
+    for(const p of panels) p.dataset.musicalRole=p.part==='drums'?'percussion':s[p.part+'Role'];
+    // The listening bench explicitly loops complete progression sections.
+    // Its absolute-tick providers keep authored motifs continuous between passes.
     adapter.runtime.defineStructure(ids.band,'together',panels.map(p=>({toyId:p.id,durationTicks:Number.MAX_SAFE_INTEGER})),tick,options);
     adapter.runtime.defineModifier(ids.progression,'chord-progression',[{structureId:ids.band}],tick,{...options,chords:s.chords,stepTicks:s.stepTicks});
-    const root={headId:ids.song,type:'transpose',semitones:s.transpose,transportId:transport.id,
+    const root={headId:ids.song,type:'transpose',semitones:s.transpose,transportId:transport.id,loop:true,
       children:[{structureId:ids.progression}],members:panels.map(p=>p.id)};
     if(!adapter.hasSequence(ids.song)){
       adapter.runtime.defineModifier('sequence:'+ids.song,'transpose',root.children,tick,{...options,semitones:s.transpose});
-      adapter.runtime.startStructure('sequence:'+ids.song,tick,{quantize:false});
+      adapter.runtime.startStructure('sequence:'+ids.song,tick,{quantize:false,loop:true});
     }
     adapter.sync(panels,transport.getState(),{runtimeRoots:[root]});
   }

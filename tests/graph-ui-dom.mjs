@@ -8,6 +8,7 @@ export class Node {
  matches(sel){return sel.startsWith('.')?this.classList.contains(sel.slice(1)):sel.startsWith('#')?this.id===sel.slice(1):this.tagName===sel;}
  querySelector(sel){return walk(this,n=>n!==this&&n.matches(sel))[0]||null;}closest(sel){for(let n=this;n;n=n.parentNode)if(sel.split(',').some(s=>n.matches(s)))return n;return null;}
  contains(node){return walk(this,n=>n===node).length>0;}
+ focus(){globalThis.document.activeElement=this;}
  getBoundingClientRect(){return {left:0,top:0,right:1000,bottom:800,width:1000,height:800};}setPointerCapture(){}
 }
 export const walk=(node,fn)=>[node,...node.children.flatMap(c=>walk(c,()=>true))].filter(fn);

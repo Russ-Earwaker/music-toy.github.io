@@ -9,12 +9,13 @@ import { adoptPlaybackInstance, createPlaybackInstanceForStructureTurn,
 // Connection edges define chains; DOM flags are compatibility/presentation state.
 // Musical handoffs are derived exclusively from the parent Sequence timeline.
 export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () => {},
-  onTurn = () => {}, onRelease = () => {}, publishDebug = () => {}, connectionModel = null } = {}) {
+  onTurn = () => {}, onRootCycle = null, onRelease = () => {}, publishDebug = () => {}, connectionModel = null } = {}) {
   const runtime = createStructureRuntime();
   const heads = new Map();
   const headDefinitions = new Map();
   const prepared = new Map();
   const currentTurns = new Map();
+  const currentRootCycles = new Map();
   const definitionId = headId => headDefinitions.get(headId) || `sequence:${headId}`;
   const managed = new Set();
   let auxiliaryDefinitions = new Set();
@@ -78,8 +79,9 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
       : panel.dataset.nextToyId;
     const roots = [];
     let auxiliary = new Set();
-    if (structures.length) {
+    if (structures.length || connectionModel) {
       const graph = compileStructureGraph({ panels, structures, connections: connections || [], runtime,
+        poweredRoots: new Set(connectionModel?.list('transport').map(edge => edge.to.objectId) || []),
         currentTick: transportState.currentTick, getTransportId: domainFor, getCurrentTick: id => stateFor(id, transportState).currentTick,
         getDuration: id => getPlaybackInstance(id)?.loopLengthTicks || TICKS_PER_BAR });
       roots.push(...graph.roots); auxiliary = graph.defined;
@@ -108,7 +110,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
           !candidateHeads.has(oldHead) && members.some(id => oldMembers.includes(id)));
         // A newly inserted wrapper cannot inherit the ID of a definition now
         // compiled as its descendant: that would turn its child into itself.
-        const reusableOwner = owner && !(auxiliary.has(definitionId(owner[0])) && root.preferredId !== definitionId(owner[0]));
+        const reusableOwner = owner && !connectionModel?.getObject(headId)?.structure?.autoArrange?.root && !(auxiliary.has(definitionId(owner[0])) && root.preferredId !== definitionId(owner[0]));
         headDefinitions.set(headId, reusableOwner ? definitionId(owner[0]) : root.preferredId || ('sequence:' + headId));
         if (reusableOwner && currentTurns.has(owner[0])) currentTurns.set(headId, currentTurns.get(owner[0]));
       }
@@ -125,13 +127,20 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
       const define = isModifier(root.type) ? runtime.defineModifier : runtime.defineStructure;
       define(id, root.type, root.children, ownerState.currentTick, { representationId: root.representationId || null, transportId: ownerId, count:root.count, context:root.context, semitones:root.semitones, chords:root.chords, stepTicks:root.stepTicks });
       const existingInstance = runtime.getInstance(id);
-      if (!existingInstance || existingInstance.parentDefinitionId) {
+      const power = connectionModel?.getParent(headId);
+      const powerId = power?.kind === 'transport' ? power.id : null;
+      const powered = connectionModel ? !!powerId : true;
+      const reconnect = connectionModel && existingInstance && powered && (!existingInstance.active || existingInstance.powerConnectionId !== powerId);
+      if (!existingInstance || existingInstance.parentDefinitionId || reconnect) {
+        if (reconnect) { discardPrepared(turn => turn.definitionId === id); currentTurns.delete(headId); }
         runtime.startSequence(id, ownerState.currentTick, {
-          quantize: ownerState.state === 'playing', retrigger: !!existingInstance });
+          quantize: ownerState.state === 'playing', retrigger: !!existingInstance,loop:root.loop ?? (connectionModel ? powered : !runtime.getDefinition(id).leafLayout.some(leaf=>leaf.context.harmony)) });
         for (const toyId of members) if (!hasOtherRoot(toyId, headId)) { cancelToy(toyId); deactivatePlaybackInstance(toyId); }
       }
+      if (connectionModel && powered) runtime.getInstance(id).rootAnchor = true;
+      runtime.getInstance(id).powerConnectionId = powerId;
       if (members.length && members.every(toyId => terminatedToys.has(toyId))) runtime.getInstance(id).active = false;
-      else if (connectionModel) runtime.getInstance(id).active = connectionModel.isRooted(headId);
+      else if (connectionModel) runtime.getInstance(id).active = powered;
     }
     for (const headId of heads.keys()) if (!seen.has(headId)) {
       if (!seenDefinitions.has(definitionId(headId))) {
@@ -142,6 +151,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
       heads.delete(headId);
       headDefinitions.delete(headId);
       currentTurns.delete(headId);
+      currentRootCycles.delete(headId);
     }
     for (const id of auxiliaryDefinitions) if (!seenDefinitions.has(id)) runtime.remove(id);
     auxiliaryDefinitions = auxiliary;
@@ -207,13 +217,21 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     for (const [headId, children] of heads) {
       if (transportId && runtime.getDefinition(definitionId(headId))?.transportId !== transportId) continue;
       const ownerTick = transportId || !connectionModel ? currentTick : stateFor(headId, {currentTick}).currentTick;
+      const rootCycle=runtime.rootCycleAtTick(definitionId(headId),ownerTick);
+      if(rootCycle && currentRootCycles.get(headId)!==rootCycle.id){
+        if(onRootCycle?.({...rootCycle,headId,connection:connectionModel?.getParent(headId)})!==false)currentRootCycles.set(headId,rootCycle.id);
+      }
       const turns = connectionModel && !connectionModel.isRooted(headId) ? []
         : runtime.turnsInWindow(definitionId(headId), ownerTick, ownerTick + 1).filter(t => children.includes(t.toyId));
       const previous = currentTurns.get(headId) || new Map();
       const active = new Map(turns.map(t => [t.id, t]));
+      let cycle = [...previous.values()].at(-1)?.rootCycleStartTick;
       for (const turn of turns) {
         prepare(turn);
-        if (!previous.has(turn.id)) activations.push([turn, [...previous.values()].at(-1)]);
+        if (!previous.has(turn.id)) {
+          activations.push([{...turn,rootCycleActivation:!onRootCycle && turn.rootCycleStartTick !== cycle}, [...previous.values()].at(-1)]);
+          cycle = turn.rootCycleStartTick;
+        }
       }
       currentTurns.set(headId, active);
       chainState.set(headId, turns[0]?.toyId ?? null);
@@ -268,10 +286,12 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
       const toy = getToy(toyId);
       if (toy) { toy.dataset.chainActive = 'false'; delete toy.__chainStartAt; }
     }
-    for (const [id, entry] of prepared) if (entry.turn.definitionId === definitionId(headId)) prepared.delete(id);
+    discardPrepared(turn => turn.definitionId === definitionId(headId));
     currentTurns.delete(headId);
+    const old=runtime.getInstance(definitionId(headId));
     const instance = runtime.startSequence(definitionId(headId), transportState.currentTick,
-      { quantize, retrigger: true });
+      { quantize, retrigger: true, loop: old?.loop });
+    instance.rootAnchor=old?.rootAnchor;instance.powerConnectionId=old?.powerConnectionId;
     // Head gestures can immediately begin internal relearning, but their musical
     // anchor must already be the new (possibly future) parent-assigned boundary.
     for (const turn of runtime.turnsInWindow(definitionId(headId), instance.startTick, instance.startTick + 1)) adoptPlaybackInstance(prepare(turn).playbackInstance);
@@ -283,7 +303,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     for (const toyId of managed) { cancelToy(toyId); deactivatePlaybackInstance(toyId); }
     discardPrepared(() => true);
     runtime.reset(); heads.clear(); headDefinitions.clear(); prepared.clear(); currentTurns.clear();
-    managed.clear(); auxiliaryDefinitions.clear(); terminatedToys.clear(); chainState.clear();
+    managed.clear(); auxiliaryDefinitions.clear(); terminatedToys.clear(); chainState.clear();currentRootCycles.clear();
     publishDebug(runtime.debugSnapshot());
   }
   return { reset, sync, updateCurrent, turnsForLookahead, retrigger, terminateStructure, runtime,
