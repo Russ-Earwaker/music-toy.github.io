@@ -1030,6 +1030,9 @@ export function applySceneSnapshot(snap){
     for (const t of (snap.toys||[])){
       let createdFromFactory = false;
       let panel = byId.get(t.id);
+      // A type fallback can rename a panel whose previous ID is requested later.
+      // The stale byId entry must never assign that same panel to two sources.
+      if(usedPanels.has(panel))panel=null;
       // An imported scene may reuse an ID for a different toy kind.
       if (panel && String(panel.dataset.toy || "").toLowerCase() !== t.type) {
         factory?.destroy?.(panel);

@@ -6,18 +6,65 @@ import {createStructureToyModel} from '../src/structure-toys.js';
 import {createConnectionView} from '../src/connection-view.js';
 import {Node,walk,dom,CustomEvent,event} from './graph-ui-dom.mjs';
 const input=objectId=>({objectId,portId:'input'}),out=(objectId,portId='output')=>({objectId,portId});
+test('Timeline bars and Transpose duration use the source pattern, excluding its separate authored chain',()=>{
+ const model=createConnectionModel();model.registerObject('source');model.registerObject('tail');model.connect('sequence',out('source'),input('tail'));
+ const structures=createStructureToyModel(model,{getDuration:id=>id==='source'?384:768});
+ try{
+  const timeline=structures.createStandalone('timeline'),transpose=structures.createStandalone('transpose');
+  for(const s of [timeline,transpose])model.connect('sequence',out(s.id,'child:0'),{objectId:'source',portId:'pattern'});
+  assert.equal(structures.getTimelineEntries(timeline.id)[0].durationTicks,384);assert.equal(structures.durationOf(transpose.id),384);
+  assert.equal(structures.durationOf('source'),1152);
+ }finally{structures.dispose();}
+});
+test('legacy shared edges render compact chips, focus real sources, reveal solid cables, and disconnect only one use',()=>setup(({model,structures,view,viewport,panels,pulses})=>{
+ panels[2].dataset={toy:'drawgrid',musicalRole:'melody',instrument:'PIANO'};panels[2].classList=new Node().classList;
+ const a=structures.createStandalone('together'),b=structures.createStandalone('together');
+ model.connect('transport',out('H'),input(a.id));model.connect('transport',out('H'),input(b.id));
+ const useA=model.connect('sequence',out(a.id,'child:0'),{objectId:'C',portId:'pattern'}).connection;
+ const useB=model.connect('sequence',out(b.id,'child:0'),{objectId:'C',portId:'pattern'}).connection;view.render();
+ const chips=()=>walk(viewport,n=>n.className==='source-use');assert.equal(chips().length,2);
+ assert.equal(walk(viewport,n=>n.getAttribute('data-port-id')==='pattern').length,0);
+ const path=id=>walk(viewport,n=>n.getAttribute('class')==='connection-path'&&n.parentNode.getAttribute('data-connection-id')===id)[0];
+ assert.equal(path(useA.id),undefined);assert.equal(path(useB.id),undefined);
+ const chip=chips().find(n=>n.getAttribute('data-use-id')===useA.id);chip.dispatchEvent(event('pointerenter'));assert.equal(path(useA.id).getAttribute('stroke-dasharray'),'none');
+ chip.dispatchEvent(event('pointerleave'));assert.equal(path(useA.id),undefined);
+ pulses.add(useA.id);view.render();assert.equal(chip.getAttribute('data-active'),'true');
+ chip.children[0].dispatchEvent(event('click'));assert.equal(panels[2].classList.contains('source-use-highlight'),true);assert.ok(path(useA.id));
+ const inputSocket=walk(viewport,n=>n.getAttribute('data-object-id')==='C'&&n.getAttribute('data-port-id')==='input')[0];
+ const inputButton=inputSocket.parentNode.children.find(n=>n.tagName==='foreignObject').children[0];
+ document.dispatchEvent(event('pointerdown',0,0,{target:inputButton}));inputButton.dispatchEvent(event('pointerdown',0,0));assert.equal(model.getEditing().connectionId,useA.id,'the revealed source endpoint reconnects that exact use');
+ document.dispatchEvent({type:'keydown',key:'Escape'});assert.ok(model.get(useA.id));chip.children[0].dispatchEvent(event('click'));
+ assert.equal(panels.length,3);assert.ok(!structures.list().some(s=>'sourceUsePorts' in s));
+ chip.children[1].dispatchEvent(event('click'));const menu=walk(viewport,n=>n.className==='connection-menu')[0];
+ assert.deepEqual(menu.children.map(n=>n.textContent),['Disconnect','Show source']);menu.children[0].dispatchEvent(event('click'));
+ assert.equal(model.get(useA.id),null);assert.ok(model.get(useB.id));assert.equal(chips().length,1);assert.equal(panels.length,3);
+}));
+
+test('spare socket Use existing toy and direct forward/reverse cable gestures create the same shared relationship',()=>setup(({model,structures,view,viewport,panels,adds})=>{
+ panels[2].dataset={toy:'drawgrid',musicalRole:'melody'};
+ const a=structures.createStandalone('together'),b=structures.createStandalone('together'),c=structures.createStandalone('together');
+ const primary=model.connect('transport',out('H'),input('C')).connection;view.render();
+ const socket=walk(viewport,n=>n.getAttribute('data-object-id')===a.id&&n.getAttribute('data-port-id')==='child:0')[0];
+ const button=socket.parentNode.children.find(n=>n.tagName==='foreignObject').children[0];button.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){},stopPropagation(){}});
+ const menu=walk(viewport,n=>n.className==='connection-menu')[0];assert.deepEqual(menu.children.map(n=>n.textContent),['Create new toy','Use existing toy']);menu.children[1].dispatchEvent(event('click'));
+ menu.children.find(n=>n.textContent==='Melody').dispatchEvent(event('click'));assert.equal(adds.length,0);
+ const fromA=model.list().find(e=>e.from.objectId===a.id);assert.deepEqual(fromA.to,{objectId:'C',portId:'pattern'});
+ model.beginDrag(out(b.id,'child:0'));assert.equal(model.preview(input('C')).to.portId,'pattern');assert.equal(model.drop(input('C')).connection.to.portId,'pattern');
+ model.beginDrag(input('B'));assert.equal(model.preview(out(c.id,'child:0')).to.portId,'pattern');assert.equal(model.drop(out(c.id,'child:0')).connection.to.portId,'pattern');
+ assert.equal(model.getParent('C').id,primary.id);assert.equal(model.list('sequence').length,3);assert.equal(panels.length,3);
+}));
 function setup(fn,{world=false}={}){const keys=['document','window','requestAnimationFrame','cancelAnimationFrame','CustomEvent'],before=Object.fromEntries(keys.map(k=>[k,globalThis[k]]));Object.assign(globalThis,{...dom(),CustomEvent,requestAnimationFrame:()=>1,cancelAnimationFrame(){}});let view,structures;try{const model=createConnectionModel(),viewport=new Node(),worldEl=world?new Node():null,transform={scale:1,tx:0,ty:0},panels=['A','B','C'].map((id,i)=>({id,x:300+i*600}));for(const p of panels)model.registerObject(p.id);model.registerObject('H',{ports:HEARTBEAT_PORTS,transportId:'H'});structures=createStructureToyModel(model);const pulses=new Set(),sourcePulses=new Map(),adds=[];view=createConnectionView({model,structureToys:structures,getPanels:()=>panels,getContext:()=>({viewportEl:viewport,worldEl,transform}),getToyPoint:(p,side)=>({x:p.x+(side==='right'?200:0),y:250}),getHeartbeatPoint:()=>({x:0,y:250}),getPulse:c=>pulses.has(c.id),getStructurePulse:id=>sourcePulses.get(id)||0,onQuickAdd:p=>adds.push(p)});fn({model,structures,view,viewport,worldEl,transform,panels,pulses,sourcePulses,adds});}finally{view?.dispose();structures?.dispose();for(const [k,v]of Object.entries(before)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}}}
 test('empty toy and Structure outputs share Extend layers; occupied endpoints retain cable gestures and all edges share pulse weight',()=>setup(({model,structures,view,viewport,pulses,adds})=>{
  const s=structures.createStandalone('sequence',{x:900,y:200});const connections=[model.connect('transport',out('H'),input('A')).connection,model.connect('sequence',out('A'),input(s.id)).connection,model.connect('sequence',out(s.id,'child:0'),input('B')).connection];view.render();
  const port=(id,p)=>walk(viewport,n=>n.getAttribute('data-object-id')===id&&n.getAttribute('data-port-id')===p)[0];
- for(const [id,p]of [['B','output'],[s.id,'child:1']]){const circle=port(id,p),fo=circle.parentNode.children.find(n=>n.tagName==='foreignObject'),button=fo.children[0];assert.equal(fo.getAttribute('display'),'inline');assert.equal(button.classList.contains('c-btn'),true);assert.ok(button.style.cssText.includes('T_ButtonExtend.png'));assert.deepEqual(button.children.map(n=>n.className),['c-btn-outer','c-btn-glow','c-btn-core','graph-endpoint-overlay']);assert.equal(circle.getAttribute('display'),'none');button.dispatchEvent(event('pointerdown',700,250,{pointerType:'touch'}));assert.equal(model.getEditing().fixed.objectId,id);const svg=walk(viewport,n=>n.tagName==='svg')[0];svg.dispatchEvent(event('pointerup',700,250,{pointerType:'touch'}));assert.equal(adds.at(-1).objectId,id);}
+ for(const [id,p]of [['B','output'],[s.id,'child:1']]){const circle=port(id,p),fo=circle.parentNode.children.find(n=>n.tagName==='foreignObject'),button=fo.children[0];assert.equal(fo.getAttribute('display'),'inline');assert.equal(button.classList.contains('c-btn'),true);assert.ok(button.style.cssText.includes('T_ButtonExtend.png'));assert.deepEqual(button.children.map(n=>n.className),['c-btn-outer','c-btn-glow','c-btn-core','graph-endpoint-overlay']);assert.equal(circle.getAttribute('display'),'none');button.dispatchEvent(event('pointerdown',700,250,{pointerType:'touch'}));assert.equal(model.getEditing().fixed.objectId,id);const svg=walk(viewport,n=>n.tagName==='svg')[0];svg.dispatchEvent(event('pointerup',700,250,{pointerType:'touch'}));if(id===s.id)walk(viewport,n=>n.className==='connection-menu')[0].children.find(n=>n.textContent==='Create new toy').dispatchEvent(event('click'));assert.equal(adds.at(-1).objectId,id);}
  const occupied=port(s.id,'child:0');assert.equal(occupied.getAttribute('display'),'none');const occupiedButton=occupied.parentNode.children.find(n=>n.tagName==='foreignObject').children[0];assert.ok(occupiedButton.style.cssText.includes('T_ButtonEmpty.png'));occupiedButton.dispatchEvent(event('pointerdown'));assert.equal(model.getEditing().connectionId,connections[2].id);model.cancelDrag();
  for(const edge of connections){const group=walk(viewport,n=>n.getAttribute('data-connection-id')===edge.id&&n.children.some(c=>c.getAttribute('class')==='connection-path'))[0];const path=group.children.find(c=>c.getAttribute('class')==='connection-path');assert.equal(path.getAttribute('stroke-width'),'6');pulses.add(edge.id);view.render();assert.equal(path.getAttribute('stroke-width'),'10');assert.equal(path.getAttribute('stroke'),'#f5fbff');assert.equal(group.children.find(c=>c.getAttribute('class')==='connection-transition').getAttribute('display'),'inline');pulses.delete(edge.id);view.render();}
  const css=document.head.children[0].textContent;assert.doesNotMatch(css,/transport .*stroke-dasharray/);
  const buttonCss=readFileSync(new URL('../circular-button.css',import.meta.url),'utf8');assert.match(buttonCss,/\.c-btn:hover \.c-btn-glow/);assert.match(buttonCss,/\.c-btn:active \.c-btn-core::after/);
 }));
 test('Heartbeat midpoint presents all Structure insertions and promotes the root instead of leaving a parallel wire',()=>setup(({model,structures,view,viewport})=>{
- const edge=model.connect('transport',out('H'),input('A')).connection;view.render();const midpoint=walk(viewport,n=>n.getAttribute('class')==='connection-midpoint'&&n.parentNode.getAttribute('data-connection-id')===edge.id)[0];midpoint.dispatchEvent(event('pointerdown'));const menu=walk(viewport,n=>n.className==='connection-menu')[0];assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Advanced >','Disconnect']);menu.children[0].dispatchEvent(event('click'));const s=structures.list()[0];assert.equal(model.getParent(s.id).from.objectId,'H');assert.equal(model.getParent('A').from.objectId,s.id);assert.equal(model.list('transport').length,1);assert.equal(walk(viewport,n=>n.getAttribute('aria-label')==='transport connection options').length,1);assert.equal(walk(viewport,n=>n.getAttribute('aria-label')==='sequence connection options').length,1);
+ const edge=model.connect('transport',out('H'),input('A')).connection;view.render();const midpoint=walk(viewport,n=>n.getAttribute('class')==='connection-midpoint'&&n.parentNode.getAttribute('data-connection-id')===edge.id)[0];midpoint.dispatchEvent(event('pointerdown'));const menu=walk(viewport,n=>n.className==='connection-menu')[0];assert.deepEqual(menu.children.map(n=>n.textContent),['Sequence','Together','Repeat','Advanced >','Disconnect']);menu.children[0].dispatchEvent(event('click'));const s=structures.list()[0];assert.equal(model.getParent(s.id).from.objectId,'H');assert.equal(model.getParent('A').from.objectId,s.id);assert.equal(model.list('transport').length,1);assert.equal(walk(viewport,n=>n.getAttribute('aria-label')==='Connection options').length,2);
 }));
 
 test('all endpoints share visible and touch hit diameters, Empty artwork and centered socket overlays',()=>setup(({model,structures,view,viewport})=>{

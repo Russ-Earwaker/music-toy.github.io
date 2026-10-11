@@ -6754,7 +6754,7 @@ function requestGraphLayout(id,connectionId=null){
         if(!covered){
           g_graphPlacement.repairSubgraph(root,options);
           const incoming=connectionModel.getParent(root);
-          if(incoming&&!g_graphPlacement.hasUsableConnectionCorridor(incoming.id))g_graphPlacement.repairConnection(incoming.id,options);
+          if(incoming&&!structureToyModel.get(root)?.autoArrange?.root&&!g_graphPlacement.hasUsableConnectionCorridor(incoming.id))g_graphPlacement.repairConnection(incoming.id,options);
         }
       }
       for(const id of g_layoutConnections)g_graphPlacement.repairConnection(id,options);g_layoutConnections.clear();
@@ -6850,7 +6850,10 @@ structureToyModel.configure({
   onPresentation: s => {
     if(g_branchDrag.active||connectionModel.getEditing())return;
     const parent=connectionModel.getParent(s.id);
-    requestGraphLayout(parent?.from.objectId||s.id,parent?.kind==='transport'?parent.id:null);
+    // Arrangement presentation changes keep its placed root anchored instead
+    // of rebuilding the whole Heartbeat column through the source toy pool.
+    if(s.autoArrange?.root)requestGraphLayout(s.id);
+    else requestGraphLayout(parent?.from.objectId||s.id,parent?.kind==='transport'?parent.id:null);
     // Size tracking belongs to topology changes; presentation has its own path.
     g_layoutSizes.set(s.id,`${s.type}|${s.outputCount}|${s.chords?.length ?? ''}`);
   },
@@ -6896,6 +6899,7 @@ window.clearCreationGraph = () => {
 const g_connectionView = createConnectionView({
   model: connectionModel,
   structureToys: structureToyModel,
+  onSourceFocus:id=>{const panel=document.getElementById(id);if(panel)window.centerBoardOnElementSlow?.(panel,1,{duration:450});},
   onConnectionDrag: () => {for(const id of connectionModel.getObjectIds())takeLayoutDrag(id);},
   onQuickAdd: createConnectionQuickAdd({
     model: connectionModel, structures: structureToyModel,
@@ -6981,7 +6985,12 @@ connectionModel.subscribe(event => {
     if(!g_layoutRestoring){
       for(const change of event.events||[event]){
         const c=change.connection;
-        if(c?.to.portId==='pattern' || change.removed?.to.portId==='pattern')continue;
+        if(c?.to.portId==='pattern' || change.removed?.to.portId==='pattern'){
+          if(c)requestGraphLayout(c.from.objectId);
+          if(change.removed)requestGraphLayout(change.removed.from.objectId);
+          if(change.previous)requestGraphLayout(change.previous.from.objectId);
+          continue;
+        }
         if(change.layoutInsertion){
           g_layoutAttached.add(change.layoutInsertion.insertedObjectId);
           if(change.layoutInsertion.attachedBranchId){

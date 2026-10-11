@@ -12,11 +12,13 @@ const order = port => Number(String(port).split(':')[1]) || 0;
 export const STRUCTURE_PORT_RADIUS=GRAPH_ENDPOINT_DIAMETER/2, STRUCTURE_PLUS_RADIUS=GRAPH_ENDPOINT_DIAMETER/2, STRUCTURE_PORT_HIT_RADIUS=GRAPH_ENDPOINT_HIT_DIAMETER/2, STRUCTURE_SOCKET_STEP=56;
 export const structurePortPoint = (s, portId) => portId === 'input'
   ? { x: s.x, y: s.y + structureToyHeight(s) / 2 }
-  : { x: s.x + structureToyWidth(s), y: s.y + (s.collapsed?40:s.type==='timeline'?80:48) + order(portId) * STRUCTURE_SOCKET_STEP };
-export const structureToyWidth = s => s.type === 'chord-progression' ? 360 : s.collapsed ? 128 : s.type === 'timeline' ? 440 : 224;
-export const structureToyHeight = s => s.collapsed
+  : { x: s.x + structureToyWidth(s), y: s.y + (s.type==='chord-progression'&&s.sourceUsePorts?.length&&!s.collapsed?baseStructureHeight(s)+28:(s.collapsed?40:s.type==='timeline'?80:48)+(s.sourceUsePorts?.length?40:0)) + order(portId) * STRUCTURE_SOCKET_STEP };
+export const structureToyWidth = s => s.type === 'chord-progression' ? 360 : s.collapsed ? (s.sourceUsePorts?.length?224:128) : s.type === 'timeline' ? 440 : 224;
+const baseStructureHeight = s => s.collapsed
   ? Math.max(80, (s.outputCount-1) * STRUCTURE_SOCKET_STEP + 80)
   : s.type === 'chord-progression' ? 168 + s.chords.length * 48 : Math.max(128, (s.outputCount-1) * STRUCTURE_SOCKET_STEP + (s.type==='timeline'?120:88));
+export const sourceUseExtraHeight=s=>s.sourceUsePorts?.length?(s.type==='chord-progression'&&!s.collapsed?56:40):0;
+export const structureToyHeight=s=>baseStructureHeight(s)+sourceUseExtraHeight(s);
 
 // Board representations only. Musical definitions/instances live in the existing runtime.
 export function createStructureToyModel(model, options = {}) {
@@ -25,12 +27,15 @@ export function createStructureToyModel(model, options = {}) {
   const config = { getPosition: () => ({ x: 0, y: 0 }), getDuration:id=>getPlaybackInstance(id)?.loopLengthTicks || TICKS_PER_BAR, ...options };
   const list = () => [...records.values()].map(s => ({...s,transportId:model.getTransportId(s.id)}));
   const childEdges = id => model.list('sequence').filter(c=>c.from.objectId===id).sort((a,b)=>order(a.from.portId)-order(b.from.portId));
+  // Derived presentation only; list()/persistence retain canonical records.
+  const presented=s=>({...s,transportId:model.getTransportId(s.id),sourceUsePorts:childEdges(s.id).filter(c=>c.to.portId==='pattern').map(c=>c.from.portId)});
+  const edgeDuration=(edge,seen)=>edge.to.portId==='pattern'?config.getDuration(edge.to.objectId):durationOf(edge.to.objectId,seen);
   function durationOf(id,seen=new Set()) {
     if(seen.has(id)) throw new Error('Cyclic Structure graph');
     const next=new Set(seen).add(id),s=records.get(id),edges=childEdges(id);
     if(!s) return config.getDuration(id)+(edges[0]?durationOf(edges[0].to.objectId,next):0);
     if (s.type === 'chord-progression') return progressionDurationTicks(s.chords,s.stepTicks);
-    if (isModifier(s.type)) return edges[0] ? durationOf(edges[0].to.objectId,next) : 0;
+    if (isModifier(s.type)) return edges[0] ? edgeDuration(edges[0],next) : 0;
     return structureDuration(s.type,edges.map(c=>({durationTicks:c.to.portId==='pattern'?config.getDuration(c.to.objectId):durationOf(c.to.objectId,next),
       offsetTick:s.entries?.find(e=>e.portId===c.from.portId)?.offsetTick || 0})),s.count);
   }
@@ -39,7 +44,7 @@ export function createStructureToyModel(model, options = {}) {
     return Object.freeze(edges.map(c=>{
       const previous=sourceType==='timeline' && s.entries?.find(e=>e.portId===c.from.portId);
       const offsetTick=previous?previous.offsetTick:sourceType==='together'?0:end;
-      end=offsetTick+durationOf(c.to.objectId);
+      end=offsetTick+edgeDuration(c);
       return Object.freeze({childId:c.to.objectId,portId:c.from.portId,offsetTick});
     }));
   }
@@ -209,8 +214,8 @@ export function createStructureToyModel(model, options = {}) {
     refresh();
   });
   return {
-    createStandalone, list, get: id => records.has(id) ? {...records.get(id),transportId:model.getTransportId(id)} : null, promote, setType, conversion, durationOf,
-    getTimelineEntries(id) {return (records.get(id)?.entries||[]).map(e=>({...e,durationTicks:durationOf(e.childId),label:structureTypeLabelForChild(e.childId)}));},
+    createStandalone, list, get: id => records.has(id) ? presented(records.get(id)) : null, promote, setType, conversion, durationOf,
+    getTimelineEntries(id) {return (records.get(id)?.entries||[]).map(e=>{const edge=childEdges(id).find(c=>c.from.portId===e.portId);return {...e,durationTicks:edge?edgeDuration(edge):durationOf(e.childId),label:structureTypeLabelForChild(e.childId)};});},
     setOffset(id,portId,value,{snap=true}={}) {
       const s=records.get(id);if(s?.type!=='timeline'||!s.entries.some(e=>e.portId===portId))return null;
       const offsetTick=snap?snapTimelineOffset(value):normalizeTimelineOffset(value);

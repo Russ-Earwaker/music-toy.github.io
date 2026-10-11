@@ -15,7 +15,7 @@
 <script type="module">
 // Test-only observer: the normal app owns topology, transport, scheduling and audio.
 const app=document.querySelector('#app'),status=document.querySelector('#status'),output=document.querySelector('#observations');
-let events=[],before=null,testedWindow=null;
+let events=[],before=null,testedWindow=null,uiEvents=[];
 function observe(win){
  testedWindow=win;
  win.__HARMONY_DEBUG=true;
@@ -25,6 +25,9 @@ function observe(win){
   output.textContent=JSON.stringify({scheduled:events.length,latest:events.slice(-3)},null,2);
  };
  win.addEventListener('toy:note',win.__graphHarmonyObserver);
+ if(win.__graphUiObserver)for(const type of ['pointerdown','pointerup','click'])win.document.removeEventListener(type,win.__graphUiObserver,true);
+ win.__graphUiObserver=event=>{const target=event.target;if(!target?.getAttribute)return;uiEvents.push({type:event.type,label:target.getAttribute('aria-label'),class:target.getAttribute('class'),use:target.closest?.('[data-use-id]')?.getAttribute('data-use-id')});if(uiEvents.length>30)uiEvents.shift();};
+ for(const type of ['pointerdown','pointerup','click'])win.document.addEventListener(type,win.__graphUiObserver,true);
 }
 app.addEventListener('load',()=>observe(app.contentWindow));
 document.querySelector('#open').onclick=()=>{
@@ -60,9 +63,14 @@ document.querySelector('#save').onclick=async()=>{
  const snapshot=testedWindow.Persistence.getSnapshot();
  const win=testedWindow;
  const diagnostics={schedulerTick:win.__mtSchedTick,activeToyIds:win.__mtActiveToyIds,chainState:win.__mtChainState,
+  sourceUsePresentation:{chips:win.document.querySelectorAll('.source-use').length,extraSockets:win.document.querySelectorAll('[data-port-id="pattern"]').length,
+   visibleCables:win.document.querySelectorAll('.connection-path').length,dottedCables:Array.from(win.document.querySelectorAll('.connection-path')).filter(p=>p.getAttribute('stroke-dasharray')!=='none').length,
+   highlightedSources:Array.from(win.document.querySelectorAll('.source-use-highlight')).map(p=>p.id),
+   sourcePositions:Array.from(win.document.querySelectorAll('.toy-panel[id]')).map(p=>({id:p.id,left:p.style.left,top:p.style.top})),
+   nodeBounds:Array.from(win.document.querySelectorAll('.structure-card')).map(n=>({label:n.getAttribute('aria-label'),x:n.getAttribute('x'),y:n.getAttribute('y'),width:n.getAttribute('width'),height:n.getAttribute('height')}))},
   rootPerformances:win.__STRUCTURE_DEBUG?.instances.filter(i=>!i.parentDefinitionId),
   providers:Array.from(win.document.querySelectorAll('.toy-panel[id]')).map(p=>({id:p.id,hasSchedule:typeof p.__sequencerSchedule==='function',pattern:p.__seqPattern,activePattern:p.__seqPatternActive,audioToyId:p.__audioToyId}))};
- const report={kind:'normal-graph-harmony-integration',createdAt:new Date().toISOString(),authoredSources:before,events,snapshot,diagnostics};
+ const report={kind:'normal-graph-harmony-integration',createdAt:new Date().toISOString(),authoredSources:before,events,uiEvents,snapshot,diagnostics};
  const fileName='harmony-graph-'+report.createdAt.replace(/[:.]/g,'-')+'.json';
  try{
   const response=await fetch('http://localhost:5174/debug-output',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileName,text:JSON.stringify(report,null,2),meta:{kind:report.kind,eventCount:events.length}})});

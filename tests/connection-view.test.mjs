@@ -364,7 +364,7 @@ test('collapsed Structures keep connecting and quick-add; selection expands, out
   const port=(id,which)=>walk(svg,n=>n.getAttribute('data-object-id')===id&&n.getAttribute('data-port-id')===which)[0];
   const d=port('D','output');d.dispatchEvent(event('pointerdown',100,350));assert.ok(model.getEditing());assert.equal(toys.get('S').collapsed,true);
   const input=port('S','input');svg.dispatchEvent(event('pointermove',Number(input.getAttribute('cx')),Number(input.getAttribute('cy'))));svg.dispatchEvent(event('pointerup',Number(input.getAttribute('cx')),Number(input.getAttribute('cy'))));assert.equal(model.getParent('S').from.objectId,'D');assert.equal(toys.get('S').collapsed,true);
-  const plus=port('S','child:1');plus.dispatchEvent(event('pointerdown',428,196));svg.dispatchEvent(event('pointerup',428,196));assert.equal(added,1);assert.equal(toys.get('S').collapsed,true);assert.ok(port('S','child:2'));
+  const plus=port('S','child:1');plus.dispatchEvent(event('pointerdown',428,196));svg.dispatchEvent(event('pointerup',428,196));menu.children.find(n=>n.textContent==='Create new toy').dispatchEvent(event('click'));assert.equal(added,1);assert.equal(toys.get('S').collapsed,true);assert.ok(port('S','child:2'));
   tapCard(card('S'),320,120);assert.equal(toys.get('S').collapsed,false);assert.equal(menu.hidden,true);
   tapCard(card('S'),320,120);assert.equal(menu.hidden,true);
   card('S').dispatchEvent(event('pointerdown',320,120));
@@ -395,7 +395,7 @@ test('Structure sockets reconnect occupied children, create from spare, and outs
   const card=id=>walk(svg,n=>n.getAttribute('class')?.startsWith('structure-card')&&n.parentNode.getAttribute('id')===id)[0];
   const drag=(n,to)=>{n.dispatchEvent(event('pointerdown',Number(n.getAttribute('cx')),Number(n.getAttribute('cy'))));svg.dispatchEvent(event('pointermove',Number(to.getAttribute('cx')),Number(to.getAttribute('cy'))));svg.dispatchEvent(event('pointerup',Number(to.getAttribute('cx')),Number(to.getAttribute('cy'))));};
   drag(port('S','child:0'),port('R','child:0'));assert.equal(model.get(original.id).from.objectId,'R');assert.equal(model.get(original.id).to.objectId,'B');assert.equal(model.list().length,1);
-  drag(port('S','child:1'),port('C','input'));assert.equal(model.list().length,2);assert.equal(model.getParent('C').from.portId,'child:1');
+  drag(port('S','child:1'),port('C','input'));assert.equal(model.list().length,2);assert.equal(model.list().find(c=>c.to.objectId==='C').from.portId,'child:1');assert.equal(model.getParent('C'),null);
   tapCard(card('S'),130,140);assert.equal(menu.hidden,true);assert.equal(drops.at(-1).canceled,true);
   document.dispatchEvent({type:'pointerdown',target:port('B','input')});assert.equal(toys.get('S').collapsed,true);
   tapCard(card('S'),130,140);document.dispatchEvent({type:'pointerdown',target:walk(svg,n=>n.getAttribute('class')==='connection-path')[0]});assert.equal(toys.get('S').collapsed,true);

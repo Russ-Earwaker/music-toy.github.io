@@ -109,8 +109,8 @@ test('entry reconnection preserves its offset; removal/persistence/cycle/deletio
   const saved=JSON.parse(JSON.stringify({structures:h.structures.list(),connections:h.model.list()}));h.structures.suspend(()=>{h.structures.restore(saved.structures);h.adapter.restore(saved.connections,h.panels);});
   assert.equal(h.structures.get(s.id).entries[0].offsetTick,192);const prepared=h.sequence.turnsForLookahead(0,2000);
   h.model.disconnect(id);assert.deepEqual(h.structures.get(s.id).entries,[]);assert.equal(h.sequence.runtime.getDefinition(s.definitionId).durationTicks,0);
-  assert.ok(prepared.filter(t=>t.toyId==='C').every(t=>!t.playbackInstance.active));assert.equal(getPlaybackInstance('C').active,false);
-  h.structures.remove(s.id);assert.equal(h.sequence.runtime.getDefinition(s.definitionId),null);assert.ok(h.sequence.turnsForLookahead(2000,4000).every(t=>t.toyId!=='C'));
+  assert.ok(prepared.filter(t=>t.toyId==='C'&&t.structureDefinitionIds.includes(s.definitionId)).every(t=>!t.playbackInstance.active));assert.equal(getPlaybackInstance('C').active,true,'the independent source root survives deleting its Timeline use');
+  h.structures.remove(s.id);assert.equal(h.sequence.runtime.getDefinition(s.definitionId),null);assert.ok(h.sequence.turnsForLookahead(2000,4000).some(t=>t.toyId==='C'));
 });
 test('overlap uses existing scheduler once and active state includes both children',()=>{
   const h=graph(),s=h.structures.promote(h.edge('A','B').connection.id,'timeline');h.edge(s.id,'C','child:1');h.structures.setOffset(s.id,'child:1',96);

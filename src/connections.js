@@ -60,6 +60,17 @@ export function createConnectionModel() {
   }
   const dragKind = (a, b, preferred) => [preferred, 'sequence', 'transport'].find(kind =>
     kind && port(a)?.accepts.includes(kind) && port(b)?.accepts.includes(kind));
+  const dragEndpoints=target=>{
+    let fixed=editing?.fixed;
+    if(!editing||!target)return {fixed,target};
+    const from=port(editing.fixed)?.direction==='out'?editing.fixed:target;
+    const to=port(editing.fixed)?.direction==='in'?editing.fixed:target;
+    if(editing.original?.to.portId==='input'&&editing.end==='from')return {fixed,target};
+    if(to.portId==='input'&&port({objectId:to.objectId,portId:'pattern'})&&(objects.get(from.objectId)?.structure||objects.get(from.objectId)?.modifier)){
+      if(to===target)target={...target,portId:'pattern'};else fixed={...fixed,portId:'pattern'};
+    }
+    return {fixed,target};
+  };
   function validate(kind, a, b, excludeId = null) {
     const pa = port(a), pb = port(b);
     if (!pa || !pb) return { ok: false, reason: 'missing-port' };
@@ -178,20 +189,20 @@ export function createConnectionModel() {
       return true;
     },
     preview(target) {
-      if(editing?.original?.to.portId==='pattern' && editing.end==='to' && target?.portId==='input' && port({objectId:target.objectId,portId:'pattern'}))target={...target,portId:'pattern'};
-      return editing ? validate(dragKind(editing.fixed, target, editing.kind), editing.fixed, target, editing.connectionId) : { ok: false, reason: 'not-editing' };
+      const ends=dragEndpoints(target);
+      return editing ? validate(dragKind(ends.fixed, ends.target, editing.kind), ends.fixed, ends.target, editing.connectionId) : { ok: false, reason: 'not-editing' };
     },
     drop(target) {
       const edit = editing;
       if (!edit) return { ok: false, reason: 'not-editing' };
-      if(edit.original?.to.portId==='pattern' && edit.end==='to' && target?.portId==='input' && port({objectId:target.objectId,portId:'pattern'}))target={...target,portId:'pattern'};
+      const ends=dragEndpoints(target);target=ends.target;
       editing = null;
       let result;
       if (!target) {
         if (edit.connectionId) disconnect(edit.connectionId);
         result = { ok: true, deleted: !!edit.connectionId };
       } else {
-        result = connect(dragKind(edit.fixed, target, edit.kind), edit.fixed, target, { id: edit.connectionId });
+        result = connect(dragKind(ends.fixed, target, edit.kind), ends.fixed, target, { id: edit.connectionId });
         if (!result.ok && edit.suspended) emit({type:'change',transient:true,connection:edit.original});
         else if (result.ok && edit.suspended && result.connection === edit.original) emit({type:'change',transient:true,connection:edit.original});
       }
