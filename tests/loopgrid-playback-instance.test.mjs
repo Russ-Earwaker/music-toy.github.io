@@ -25,7 +25,7 @@ function makeGrid(id, calls) {
   };
 }
 
-test('Loop Grid playback instances retain independent offsets through transport changes and edits', () => {
+test('Loop Grid playback instances retain shared phase through transport changes and edits', () => {
   clearPlaybackInstancesForTests();
   const calls = [];
   const a = makeGrid('A', calls);
@@ -47,7 +47,7 @@ test('Loop Grid playback instances retain independent offsets through transport 
   });
   poll(0, 400);
   const at192 = calls.filter(call => call.metadata.eventTick === 192);
-  assert.deepEqual(at192.map(call => [call.id, call.column]), [['A', 4], ['B', 0]]);
+  assert.deepEqual(at192.map(call => [call.id, call.column]), [['A', 4], ['B', 4]]);
   assert.match(at192.find(call => call.id === 'A').metadata.playbackInstanceId, /^playback:A:/);
   assert.match(at192.find(call => call.id === 'B').metadata.playbackInstanceId, /^playback:B:/);
 
@@ -55,9 +55,9 @@ test('Loop Grid playback instances retain independent offsets through transport 
   scheduler.resetTimeline(960, { includeBoundary: false });
   poll(960, 1010);
   const afterResume = calls.filter(call => call.metadata.eventTick === 1008);
-  assert.deepEqual(afterResume.map(call => [call.id, call.column]), [['A', 5], ['B', 1]]);
+  assert.deepEqual(afterResume.map(call => [call.id, call.column]), [['A', 5], ['B', 5]]);
   assert.equal(getPlaybackInstance('B').startTick - getPlaybackInstance('A').startTick, 192,
-    'pause/resume preserves the authored offset');
+    'pause/resume preserves activation gates, independently of shared phase');
 
   calls.length = 0;
   scheduler.resetTimeline(1008, { includeBoundary: true });

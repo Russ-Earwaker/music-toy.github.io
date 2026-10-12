@@ -1,3 +1,4 @@
+import {createRelationshipReveal} from './toy-relationship-reveal.js';
 import {ensurePlaybackInstance,getPlaybackInstance} from './playback-instances.js';
 import {getCurrentPlaybackOccurrence,withPlaybackOccurrence} from './playback-context.js';
 import {setToyVolume,setToyMuted,getToyVolumeRaw,isToyMuted} from './audio-core.js';
@@ -53,6 +54,7 @@ export function migrateSourceUses(snapshot){
 }
 
 export function createToyInstanceController({getPanels,getMaster,register,changed,focus,remove}){
+ const reveal=createRelationshipReveal({getPanels,getMaster});
  const masters=()=>getPanels().filter(p=>!p.dataset.masterToyId);
  function sync(panel){
   const master=getMaster(panel.dataset.masterToyId);if(!master)return false;
@@ -95,16 +97,16 @@ export function createToyInstanceController({getPanels,getMaster,register,change
   Object.assign(panel.style,{position:'absolute',width:'240px',height:'160px',left:options.ui?.left||`${(parseFloat(master.style.left)||0)+master.offsetWidth+80}px`,top:options.ui?.top||master.style.top||'0px'});
   panel.innerHTML='<header class="toy-header" data-drag-handle="1"><strong class="instance-name"></strong><span class="instance-marker">INSTANCE</span></header><div class="toy-body instance-body"><span class="instance-instrument"></span><div class="instance-actions"><button type="button" class="toy-btn instance-duplicate">Duplicate</button><button type="button" class="toy-btn instance-master">See Master</button></div></div>';
   panel.querySelector('.instance-duplicate').addEventListener('click',e=>{e.stopPropagation();create(master,{focus:true,ui:{left:`${parseFloat(panel.style.left)+300}px`,top:panel.style.top}});});
-  panel.querySelector('.instance-master').addEventListener('click',e=>{e.stopPropagation();focus(master);});
-  panel.addEventListener('dblclick',e=>{e.stopPropagation();focus(master);});
+  panel.querySelector('.instance-master').addEventListener('click',e=>{e.stopPropagation();reveal.show(panel);focus(master);});
+  panel.addEventListener('dblclick',e=>{e.stopPropagation();reveal.show(panel);focus(master);});
   panel.__sequencerStep=()=>{panel.classList.add('instance-playing');clearTimeout(panel.__instanceFlash);panel.__instanceFlash=setTimeout(()=>panel.classList.remove('instance-playing'),140);};
   // Read the source at each unscheduled call. Never copy authored state or call
   // its visual step: the Instance is the visible playback object.
   attachInstancePlayback(panel,master,sync);
   (options.containerEl||master.parentElement).append(panel);sync(panel);register(panel);changed();if(options.focus)focus(panel);return panel;
  }
- function prepare(){for(const p of getPanels())if(p.dataset.masterToyId)sync(p);else{const name=ensureMasterName(p,masters());const label=p.querySelector('.master-name');if(label&&label.textContent!==name)label.textContent=name;}}
+ function prepare(){reveal.prepare();for(const p of getPanels())if(p.dataset.masterToyId)sync(p);else{const name=ensureMasterName(p,masters());const label=p.querySelector('.master-name');if(label&&label.textContent!==name)label.textContent=name;}}
  function canDelete(panel){return !!panel.dataset.masterToyId||!getPanels().some(p=>p.dataset.masterToyId===panel.id);}
  function removeOwned(owner){for(const p of [...getPanels()])if(p.dataset.masterToyId&&p.dataset.autoArrangeOwner===owner)remove(p);}
- return {create,prepare,canDelete,removeOwned};
+ return {create,prepare,canDelete,removeOwned,reveal:reveal.show};
 }

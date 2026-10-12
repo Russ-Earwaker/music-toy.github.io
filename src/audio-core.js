@@ -51,6 +51,7 @@ export const nextBeatTick = mainClock.nextBeatTick;
 export function getTransportState() { return syncCompatibility(mainClock.getState()); }
 export const transport = Object.freeze({
   id: 'main-heartbeat',
+  heartbeatPhaseOriginTick: mainClock.heartbeatPhaseOriginTick,
   get state(){ return mainClock.state; },
   get positionTick(){ return getTransportState().positionTick; },
   get currentTick(){ return getTransportState().currentTick; },

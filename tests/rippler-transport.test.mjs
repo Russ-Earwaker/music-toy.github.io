@@ -36,7 +36,7 @@ test('recorded Rippler pattern repeats exactly once per bar without physics', ()
   const blocks = [{ active: true }, { active: true }];
   const events = ripplerEventsInWindow({ instance, pattern, patternOffsets: offsets, blocks, fromTick: 0, toTick: 1100 });
   assert.deepEqual(events.map(event => [event.eventTick, event.blockIndex]), [
-    [216, 0], [312, 1], [600, 0], [696, 1], [984, 0], [1080, 1],
+    [408, 0], [504, 1], [792, 0], [888, 1],
   ]);
 });
 
@@ -98,7 +98,7 @@ test('shared scheduler deduplicates Rippler replay and preserves ticks across te
   });
   poll(190, 700);
   poll(300, 800);
-  assert.deepEqual(calls.map(call => call.metadata.eventTick), [240, 624]);
+  assert.deepEqual(calls.map(call => call.metadata.eventTick), [432]);
   assert.equal(new Set(calls.map(call => call.metadata.identity)).size, calls.length);
   assert.ok(calls.every(call => call.metadata.playbackInstanceId === instance.id));
 
@@ -108,7 +108,7 @@ test('shared scheduler deduplicates Rippler replay and preserves ticks across te
   toy.__seqRev += 1;
   offsets[0].set(0, 72);
   poll(700, 1100, 73);
-  assert.deepEqual(calls.map(call => call.metadata.eventTick), [1032]);
+  assert.deepEqual(calls.map(call => call.metadata.eventTick), [840]);
   assert.equal(getPlaybackInstance('rippler').id, before.id);
   assert.equal(getPlaybackInstance('rippler').startTick, before.startTick);
   assert.ok(calls.every(call => call.metadata.definitionRevision === 2));

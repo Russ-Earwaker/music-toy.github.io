@@ -21,15 +21,15 @@ test('A-B-C has exact half-open boundaries, no gap/overlap, and stable repeated 
   assert.equal(instance.transportId, MAIN_TRANSPORT_ID);
   assert.equal(definition.durationTicks, 1152);
   assert.deepEqual(definition.children.map(child => child.offsetTicks), [0, 384, 768]);
-  const turns = runtime.turnsInWindow('abc', 192, 192 + 1152 * 1000);
+  const turns = runtime.turnsInWindow('abc', 192, 1152 * 1000);
   assert.equal(turns.length, 3000);
   for (let index = 0; index < turns.length; index++) {
-    assert.equal(turns[index].startTick, 192 + index * 384);
-    assert.equal(turns[index].endTick, 192 + (index + 1) * 384);
+    assert.equal(turns[index].startTick, Math.max(192,index * 384));
+    assert.equal(turns[index].endTick, (index + 1) * 384);
     assert.equal(turns[index].toyId, ['A', 'B', 'C'][index % 3]);
   }
-  assert.equal(runtime.turnsInWindow('abc', 575, 576)[0].toyId, 'A');
-  assert.equal(runtime.turnsInWindow('abc', 576, 577)[0].toyId, 'B');
+  assert.equal(runtime.turnsInWindow('abc', 383, 384)[0].toyId, 'A');
+  assert.equal(runtime.turnsInWindow('abc', 384, 385)[0].toyId, 'B');
   assert.equal(runtime.turnsInWindow('abc', 1344, 1345)[0].toyId, 'A');
   assert.equal(runtime.turnsInWindow('abc', 0, 192).length, 0);
 });
@@ -49,7 +49,7 @@ test('durations come from children, and reorder preserves anchor and committed l
   assert.equal(instance.startTick, 192);
   assert.deepEqual(runtime.turnsInWindow('abc', 550, 800), before);
   assert.deepEqual(runtime.turnsInWindow('abc', 1344, 2496).map(turn => [turn.toyId, turn.startTick]),
-    [['A', 1344], ['C', 1728], ['B', 2112]]);
+    [['A', 1152], ['C', 1536], ['B', 1920], ['A',2304]]);
 });
 
 function integrationHarness() {

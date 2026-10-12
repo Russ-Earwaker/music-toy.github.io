@@ -19,7 +19,7 @@ import { snapDrawGridStrokeLogical } from '../src/drawgrid/drawgrid-logical-snap
 test('Simple Rhythm stopped/new-scene visual is column zero despite retained transport tick', () => {
   const instance = ensurePlaybackInstance('visual', { startTick: 1000, loopLengthTicks: 384 });
   assert.equal(resolveSimpleRhythmPlayheadColumn({ running: false, instance, transportTick: 1192 }), 0);
-  assert.equal(resolveSimpleRhythmPlayheadColumn({ running: true, instance, transportTick: 1048 }), 1);
+  assert.equal(resolveSimpleRhythmPlayheadColumn({ running: true, instance, transportTick: 1048 }), 5);
 });
 
 test('an exact chain-turn boundary schedules local column zero once', () => {
@@ -35,14 +35,14 @@ test('an exact chain-turn boundary schedules local column zero once', () => {
   assert.deepEqual(calls, [[0, 768], [1, 816]]);
 });
 
-test('fresh DrawGrid includes its first playable column on the first scheduler pass', () => {
+test('fresh DrawGrid enters on its next Heartbeat-phase column on the first scheduler pass', () => {
   clearPlaybackInstancesForTests();
   activatePlaybackInstanceForChainTurn('draw', 500, { loopLengthTicks: 384 });
   const calls = [];
   const toy = { dataset: { steps: '8', toy: 'drawgrid' }, __chainJustActivated: true, __chainTurnStartTick: 500,
     __sequencerSchedule: col => calls.push(col) };
   createSequencerScheduler().tick({ activeToyIds: new Set(['draw']), getToy: () => toy, currentTick: 501, lookaheadEndTick: 550, tickToAudioTime: tick => tick });
-  assert.equal(calls[0], 0);
+  assert.equal(calls[0], 3);
 });
 
 test('DrawGrid Random logical stroke produces varying rows that follow its curve', () => {
@@ -80,13 +80,13 @@ test('two Bouncer chain turns alternate A-B-A-B without gaps or simultaneous act
   }
 });
 
-test('DrawGrid-to-DrawGrid chain turns retain exact local-zero boundaries', () => {
+test('DrawGrid-to-DrawGrid chain turns retain shared phase at their exact activation boundaries', () => {
   clearPlaybackInstancesForTests();
   const first = activatePlaybackInstanceForChainTurn('draw-a', 960, { loopLengthTicks: 384 });
   deactivatePlaybackInstance('draw-a');
   const second = activatePlaybackInstanceForChainTurn('draw-b', 1344, { loopLengthTicks: 384 });
   assert.equal(getPlaybackColumn(first, 960, 8), null);
-  assert.equal(getPlaybackColumn(second, 1344, 8), 0);
+  assert.equal(getPlaybackColumn(second, 1344, 8), 4);
   assert.equal(second.startTick - first.startTick, 384);
 });
 

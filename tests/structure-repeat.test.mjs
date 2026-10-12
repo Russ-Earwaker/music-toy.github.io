@@ -23,9 +23,9 @@ for(const type of ['sequence','together'])test(`${type} inside Repeat inherits t
   const r=createStructureRuntime();r.defineStructure('child',type,[toy('A',96),toy('B',192)],0,{representationId:'child'});
   r.defineStructure('R','repeat',[ref('child')],0,{count:2,representationId:'R'});r.startSequence('R',100,{quantize:false,loop:true});
   const d=type==='sequence'?288:192;assert.equal(r.getDefinition('R').durationTicks,d*2);
-  assert.deepEqual(turns(r,'R',100,100+d*2),type==='sequence'?[['A',100,196],['B',196,388],['A',388,484],['B',484,676]]:[['A',100,196],['B',100,292],['A',292,388],['B',292,484]]);
-  const second=r.turnsInWindow('R',100+d,101+d)[0];
-  assert.equal(second.transportId,MAIN_TRANSPORT_ID);assert.equal(second.structureContexts.find(c=>c.definitionId==='child').startTick,100+d);
+  assert.deepEqual(turns(r,'R',100,d*2),type==='sequence'?[['B',100,288],['A',288,384],['B',384,576]]:[['B',100,192],['A',192,288],['B',192,384]]);
+  const second=r.turnsInWindow('R',d,d+1)[0];
+  assert.equal(second.transportId,MAIN_TRANSPORT_ID);assert.equal(second.structureContexts.find(c=>c.definitionId==='child').startTick,d);
 });
 test('nested Repeat multiplies duration without duplicating child definitions',()=>{
   const r=createStructureRuntime();r.defineStructure('inner','repeat',[toy('B',96)],0,{count:3});

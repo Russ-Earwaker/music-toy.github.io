@@ -1,12 +1,13 @@
 import {normalizeMusicalRole} from './musical-role.js';
 import {MAIN_TRANSPORT_ID} from './transport-registry.js';
+import {getPlaybackInstance} from './playback-instances.js';
 
 export const ARRANGEMENT_ROLES=Object.freeze(['rhythm','accompaniment','melody']);
 const progression=roots=>roots.map(root=>({root,quality:root==='A'?'minor':'major'}));
 export const ARRANGEMENT_RECIPE=Object.freeze([
  {name:'Intro',roles:['accompaniment'],chords:progression(['C','A','F','G'])},
  {name:'A',roles:['rhythm','accompaniment','melody'],chords:progression(['C','A','F','G'])},
- {name:'B',roles:['rhythm','accompaniment','melody'],chords:progression(['F','G','A','C'])},
+ {name:'B',roles:['accompaniment','rhythm','melody'],presentation:'timeline',offsets:{accompaniment:0,rhythm:384,melody:768},chords:progression(['F','G','A','C'])},
  {name:'Outro',roles:['accompaniment'],chords:progression(['C','A','F','G'])},
 ]);
 export function arrangementRole(panel){
@@ -66,18 +67,31 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
       model.disconnect(edge.id);
      }
     }
-    structures.annotate(root.id,{outputCount:5,autoArrange:{owner,root:true,version:1,heartbeatId:heartbeat,sourceIds,
+    structures.annotate(root.id,{outputCount:5,autoArrange:{owner,root:true,version:1.1,heartbeatId:heartbeat,sourceIds,
      origins:Object.fromEntries(ARRANGEMENT_ROLES.map(role=>[role,sources[role].dataset.autoArrangeOrigin==='filled'?'filled':'authored'])),displacedConnections:displaced}});
     for(const [index,section] of ARRANGEMENT_RECIPE.entries()){
      const context=make('chord-progression',section.name,root.id,index);
      structures.setProgression(context.id,{chords:section.chords,stepTicks:384});
-     const band=section.roles.length>1?make('together',section.name+' layers',context.id):context;
+     const band=section.roles.length>1?make(section.presentation || 'together',section.name+' layers',context.id):context;
      if(section.roles.length>1)structures.annotate(band.id,{outputCount:section.roles.length+1});
+     const timelineEntries=[];
      section.roles.forEach((role,i)=>{
-      const p=structures.get(band.id),instance=createInstance(sources[role],{autoArrangeOwner:owner,ui:{left:`${p.x+536}px`,top:`${p.y+i*220}px`}});
+      const offset=section.offsets?.[role] || 0;
+      const branch=section.presentation==='timeline'?make('repeat',section.name+' layer '+(i+1),band.id,i):band;
+      if(section.presentation==='timeline'){
+       // Timeline gates entry; Repeat sustains each linked pattern to B's end.
+       // The parent progression clips the final cycle for unusual source lengths.
+       const naturalTicks=getPlaybackInstance(sources[role].id)?.loopLengthTicks || 384;
+       structures.setCount(branch.id,Math.ceil((1536-offset)/naturalTicks));
+       timelineEntries.push(Object.freeze({childId:branch.id,portId:'child:'+i,offsetTick:offset}));
+      }
+      const p=structures.get(branch.id),instance=createInstance(sources[role],{autoArrangeOwner:owner,ui:{left:`${p.x+536}px`,top:`${p.y+(section.presentation==='timeline'?0:i*220)}px`}});
       created.push(instance.id);
-      connect('sequence',output(band.id,i),input(instance.id));
+      connect('sequence',output(branch.id,section.presentation==='timeline'?0:i),input(instance.id));
      });
+     // Refresh is suspended during construction; author entries before it can
+     // derive its default sequential offsets from the newly connected branches.
+     if(section.presentation==='timeline')structures.annotate(band.id,{entries:Object.freeze(timelineEntries)});
     }
     connect('transport',{objectId:heartbeat,portId:'output'},input(root.id));
     for(const id of created)if(structures.get(id))structures.setCollapsed(id,true);

@@ -6,11 +6,15 @@
  <button id="open">Open normal board in tab</button>
  <select id="variant" aria-label="Graph variant"><option value="base">Chord Progression → Together</option><option value="outer">Transpose → Chord Progression</option><option value="inner">Chord Progression → Transpose</option><option value="roots">Heartbeat independent 1 / 2 / 4 bar roots</option><option value="arrange3">Arrange: three authored ideas</option><option value="arrange1">Arrange: melody only</option><option value="legacy">Legacy compact arrangement</option></select>
  <button id="load">Load C / Am / F / G fixture</button>
+ <button id="phase">Load obvious shared-phase fixture</button>
+ <button id="independent-phase">Load unrelated-toy phase fixture</button>
+ <button id="late-independent">Add independent motif during playback</button>
  <button id="observe">Observe reloaded board</button>
  <button id="save">Save observations to resources</button>
  <button id="check-master-delete">Check Master deletion safety</button>
  <button id="remove-instance">Remove last test Instance</button>
  <button id="connect-instances">Connect Master and Instances</button>
+ <button id="power-masters">Power test Masters alongside arrangement</button>
  <span id="status">Use the normal board controls below.</span>
 </header>
 <iframe id="app" src="../" title="Normal Rhythmake board" allow="autoplay"></iframe>
@@ -18,9 +22,10 @@
 <script type="module">
 // Test-only observer: the normal app owns topology, transport, scheduling and audio.
 const app=document.querySelector('#app'),status=document.querySelector('#status'),output=document.querySelector('#observations');
-let events=[],before=null,testedWindow=null,uiEvents=[];
+let events=[],before=null,testedWindow=null,uiEvents=[],relationshipEvents=[],timingActions=[];
 function observe(win){
  testedWindow=win;
+ if(!win.document.querySelector('script[data-chord-observer]')){const script=win.document.createElement('script');script.type='module';script.dataset.chordObserver='1';script.src=new URL('chord-indicator-observer.js',location.href).href;win.document.body.append(script);}
  win.__HARMONY_DEBUG=true;
  if(win.__graphHarmonyObserver)win.removeEventListener('toy:note',win.__graphHarmonyObserver);
  win.__graphHarmonyObserver=event=>{
@@ -28,6 +33,9 @@ function observe(win){
   output.textContent=JSON.stringify({scheduled:events.length,latest:events.slice(-3)},null,2);
  };
  win.addEventListener('toy:note',win.__graphHarmonyObserver);
+ if(win.__graphRelationshipObserver)for(const type of ['pointerup','click'])win.document.removeEventListener(type,win.__graphRelationshipObserver,true);
+ win.__graphRelationshipObserver=event=>{if(!event.target.closest('.toy-panel'))return;setTimeout(()=>relationshipEvents.push({label:event.target.textContent,flashed:[...win.document.querySelectorAll('.relationship-flash')].map(p=>p.id),tethers:[...win.document.querySelectorAll('.relationship-tethers')].map(s=>({paths:s.querySelectorAll('path').length,colour:s.style.getPropertyValue('--relationship-colour'),pointer:win.getComputedStyle(s).pointerEvents,z:win.getComputedStyle(s).zIndex}))}),100);};
+ for(const type of ['pointerup','click'])win.document.addEventListener(type,win.__graphRelationshipObserver,true);
  if(win.__graphUiObserver)for(const type of ['pointerdown','pointerup','click'])win.document.removeEventListener(type,win.__graphUiObserver,true);
  win.__graphUiObserver=event=>{const target=event.target;if(!target?.getAttribute)return;uiEvents.push({type:event.type,label:target.getAttribute('aria-label'),class:target.getAttribute('class'),use:target.closest?.('[data-use-id]')?.getAttribute('data-use-id')});if(uiEvents.length>30)uiEvents.shift();};
  for(const type of ['pointerdown','pointerup','click'])win.document.addEventListener(type,win.__graphUiObserver,true);
@@ -62,6 +70,29 @@ document.querySelector('#load').onclick=async()=>{
  status.textContent='Fixture loaded. Play and edit using the board controls.';
 };
 document.querySelector('#observe').onclick=()=>{observe(testedWindow);status.textContent='Observing restored board audio.';};
+document.querySelector('#power-masters').onclick=()=>{const snap=structuredClone(testedWindow.Persistence.getSnapshot());for(const t of snap.toys.filter(t=>!t.masterToyId))if(!snap.connections.some(e=>e.kind==='transport'&&e.to.objectId===t.id))snap.connections.push({id:'test-master-root-'+t.id,kind:'transport',from:{objectId:'main-heartbeat',portId:'output'},to:{objectId:t.id,portId:'input'}});testedWindow.restoreConnections(snap.connections,snap.structureToys);status.textContent='Test Masters powered alongside arrangement at current transport tick';};
+document.querySelector('#phase').onclick=async()=>{
+ const fixture=await (await fetch('../resources/harmony-integration.scene.json')).json(),snap=fixture.payload;
+ const master=snap.toys.find(t=>t.id==='proof-melody');master.instanceSerial=2;master.toyName='Phase motif';master.ui.left='300px';master.ui.top='300px';
+ master.state.instrument='PIANO';master.state.nodes.list=[[11],[9],[7],[5],[3],[5],[7],[9]];
+ snap.toys=[master,...[1,2].map(n=>({id:'phase-instance-'+n,type:'drawgrid',masterToyId:master.id,instanceNumber:n,ui:{left:'1250px',top:(240+n*220)+'px'},state:{}}))];
+ snap.structureToys=[{id:'phase-together',definitionId:'definition:phase-together',type:'together',x:900,y:300,collapsed:false,outputCount:2}];snap.chains=[];
+ snap.connections=[{id:'phase-master-root',kind:'transport',from:{objectId:'main-heartbeat',portId:'output'},to:{objectId:master.id,portId:'input'}},{id:'phase-together-root',kind:'transport',from:{objectId:'main-heartbeat',portId:'output'},to:{objectId:'phase-together',portId:'input'}},...[1,2].map((n,i)=>({id:'phase-child-'+n,kind:'sequence',from:{objectId:'phase-together',portId:'child:'+i},to:{objectId:'phase-instance-'+n,portId:'input'}}))];
+ observe(testedWindow);testedWindow.Persistence.applySnapshot(snap);events=[];before=structuredClone(snap.toys);status.textContent='Shared-phase fixture loaded: ascending/descending piano motif. Create or Duplicate an Instance during playback.';
+};
+document.querySelector('#independent-phase').onclick=async()=>{
+ const fixture=await (await fetch('../resources/harmony-integration.scene.json')).json(),snap=fixture.payload,master=snap.toys.find(t=>t.id==='proof-melody');
+ master.id='independent-phase-a';master.toyName='Independent motif A';master.ui.left='300px';master.ui.top='300px';master.state.instrument='PIANO';master.state.nodes.list=[[11],[9],[7],[5],[3],[5],[7],[9]];
+ snap.toys=[master];snap.structureToys=[];snap.chains=[];snap.connections=[{id:'independent-a-root',kind:'transport',from:{objectId:'main-heartbeat',portId:'output'},to:{objectId:master.id,portId:'input'}}];
+ observe(testedWindow);testedWindow.Persistence.applySnapshot(snap);events=[];timingActions=[];before=structuredClone(snap.toys);status.textContent='Independent Piano motif loaded. Start Play, then add the independent motif.';
+};
+document.querySelector('#late-independent').onclick=()=>{
+ const source=testedWindow.document.getElementById('independent-phase-a');if(!source?.__drawToy){status.textContent='Load the unrelated-toy fixture first.';return;}
+ const rootsBefore=structuredClone(testedWindow.__STRUCTURE_DEBUG?.instances.filter(i=>!i.parentDefinitionId)||[]),sourceState=structuredClone(source.__drawToy.getState());
+ const panel=testedWindow.MusicToyFactory.create('drawgrid',{centerX:1500,centerY:600});panel.dataset.toyName='Independent motif B';
+ if(panel.__drawToy)panel.__drawToy.setState(sourceState);else panel.__pendingDrawGridState=sourceState;
+ setTimeout(()=>{timingActions.push({kind:'late-independent',id:panel.id,rootsBefore,rootsAfter:structuredClone(testedWindow.__STRUCTURE_DEBUG?.instances.filter(i=>!i.parentDefinitionId)||[])});status.textContent='Added independent motif '+panel.id+' without restarting the existing root';},100);
+};
 document.querySelector('#check-master-delete').onclick=()=>{const master=testedWindow.document.querySelector('.toy-panel:not([data-master-toy-id])');status.textContent=testedWindow.MusicToyFactory.destroy(master)?'ERROR: Master deleted':'Master deletion prevented';};
 document.querySelector('#remove-instance').onclick=()=>{const instances=[...testedWindow.document.querySelectorAll('.toy-instance')];const panel=instances.at(-1);status.textContent=panel&&testedWindow.MusicToyFactory.destroy(panel)?'Test Instance removed':'No Instance removed';};
 document.querySelector('#connect-instances').onclick=()=>{const snap=testedWindow.Persistence.getSnapshot(),master=snap.toys.find(t=>!t.masterToyId),instances=snap.toys.filter(t=>t.masterToyId===master?.id).sort((a,b)=>a.instanceNumber-b.instanceNumber),ids=instances.map(t=>t.id),edges=snap.connections.filter(e=>!ids.includes(e.to.objectId)&&e.from.objectId!==master.id&&!ids.includes(e.from.objectId));[master,...instances].forEach((toy,i,list)=>{if(i)edges.push({id:'instance-chain-'+i,kind:'sequence',from:{objectId:list[i-1].id,portId:'output'},to:{objectId:toy.id,portId:'input'}});});testedWindow.restoreConnections(edges,snap.structureToys);testedWindow.arrangeSubgraph(master.id);status.textContent='Connected ordinary Master → Instance → Instance chain';};
@@ -77,7 +108,7 @@ document.querySelector('#save').onclick=async()=>{
   rootPerformances:win.__STRUCTURE_DEBUG?.instances.filter(i=>!i.parentDefinitionId),
   instancePresentation:Array.from(win.document.querySelectorAll('.toy-panel[id]')).map(p=>({id:p.id,name:p.dataset.toyName,masterToyId:p.dataset.masterToyId||null,number:Number(p.dataset.instanceNumber)||null,colour:p.dataset.instrumentColour||null,highlighted:p.classList.contains('linked-toy-highlight'),width:p.offsetWidth,height:p.offsetHeight,visibleRoles:[...p.querySelectorAll('.musical-role-control')].filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').length,sourceControls:p.dataset.masterToyId?p.querySelectorAll('[data-action="random"],[data-action="clear"],.toy-inst-btn,.musical-role-control').length:null})),
   providers:Array.from(win.document.querySelectorAll('.toy-panel[id]')).map(p=>({id:p.id,hasSchedule:typeof p.__sequencerSchedule==='function',pattern:p.__seqPattern,activePattern:p.__seqPatternActive,audioToyId:p.__audioToyId}))};
- const report={kind:'normal-graph-harmony-integration',createdAt:new Date().toISOString(),authoredSources:before,events,uiEvents,snapshot,diagnostics};
+ const report={kind:'normal-graph-harmony-integration',createdAt:new Date().toISOString(),authoredSources:before,events,uiEvents,relationshipEvents,timingActions,chordIndicators:win.__chordIndicatorObservations||[],chordIndicatorStatus:win.__readChordIndicatorStatus?.()||[],snapshot,diagnostics};
  const fileName='harmony-graph-'+report.createdAt.replace(/[:.]/g,'-')+'.json';
  try{
   const response=await fetch('http://localhost:5174/debug-output',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileName,text:JSON.stringify(report,null,2),meta:{kind:report.kind,eventCount:events.length}})});

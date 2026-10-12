@@ -5,6 +5,8 @@ import { BASIC_LOGIC_TYPES, logicCreationEntry } from './logic-creation-menu.js'
 import { heartbeatModel, transportLoopInfo } from './heartbeats.js';
 import { installHeartbeatView } from './heartbeat-view.js';
 import { getPanelTransport } from './panel-transport.js';
+import {createToyChordIndicator} from './toy-chord-indicator.js';
+const updateToyChordIndicator = createToyChordIndicator();
 let g_creationHeartbeatId = null;
 let g_creationConnectionPoint = null;
 document.addEventListener('pointerdown', event => {
@@ -55,7 +57,7 @@ import { getArtCatalog, createArtToyAt } from './art/art-toy-factory.js';
 import { createArtTriggerRouter } from './art/art-trigger-router.js';
 import { setBaseArtToyControlsVisible } from './art/base-art-toy.js';
 import './board-tap-dots.js';
-import { initAudioAssets, cancelScheduledToySources, triggerInstrument } from './audio-samples.js';
+import { initAudioAssets, cancelScheduledToySources, triggerInstrument, instrumentMusicalRole } from './audio-samples.js';
 import { loadInstrumentEntries as loadInstrumentCatalog, getInstrumentEntries as getInstrumentCatalogEntries } from './instrument-catalog.js';
 import './paint-palette.js';
 import { closeInstrumentPicker } from './instrument-picker.js';
@@ -7050,9 +7052,9 @@ const g_sequenceChains = createChainSequenceAdapter({
     bumpToyAudioGen(audioId, 'sequence-replace');
     g_sequencerScheduler?.clearToy(toyId);
   },
-  onRootCycle: ({connection,startTick,transportId}) => {
+  onRootCycle: ({connection,startTick,activationTick,transportId}) => {
     if(connection?.kind!=='transport' || transportRegistry.get(transportId)?.state!=='playing')return false;
-    triggerConnectorPulse(connection.from.objectId,connection.to.objectId,startTick);
+    triggerConnectorPulse(connection.from.objectId,connection.to.objectId,activationTick ?? startTick);
   },
   onTurn: (turn, previous) => {
     const toy = document.getElementById(turn.toyId);
@@ -7756,6 +7758,16 @@ function scheduler(){
       } catch {}
       // Also clear any pending pulse bookkeeping so we don't re-add visuals while paused.
       try { g_pulseUntil && g_pulseUntil.clear && g_pulseUntil.clear(); } catch {}
+    }
+    // Use the current playhead occurrence, not its Master or a lookahead note.
+    // This also hides badges when paused, disconnected, or between turns.
+    for (const toy of g_connectionPanels) {
+      const transport = getPanelTransport(toy);
+      updateToyChordIndicator(toy, {
+        instance: getPlaybackInstance(toy.id), currentTick: transport?.currentTick,
+        playing: transport?.state === 'playing' && toy.dataset.chainActive === 'true',
+        role: instrumentMusicalRole(toy.dataset.instrument, toy.dataset.toy, toy.dataset.musicalRole),
+      });
     }
     // --- Whole-frame cost ---
     const now = performance.now();

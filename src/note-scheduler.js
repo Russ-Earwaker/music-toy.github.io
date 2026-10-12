@@ -1,3 +1,4 @@
+import {applySourcePhase,patternOriginTick} from './source-phase.js';
 import { resolveChordAtTick } from './chord-progression.js';
 // Absolute-tick lookahead scheduler for legacy grid sequencers.
 // Toys keep receiving __sequencerSchedule(column, audioTime); tick metadata is
@@ -86,6 +87,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       const structureTurn = !!turn.playbackInstance;
       const usesPlaybackInstance = structureTurn || migratedGrid || usesEventProvider;
       const playbackInstance = turn.playbackInstance || (usesPlaybackInstance ? getPlaybackInstance(toyId) : null);
+      applySourcePhase(playbackInstance);
       if (usesPlaybackInstance && (!playbackInstance || !playbackInstance.active)) continue;
       if (transportId && playbackInstance && playbackInstance.transportId !== transportId) continue;
       const toyLoopTicks = usesPlaybackInstance
@@ -134,11 +136,12 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
 
       // Schedule [fromTick, endTick). Delayed polls recover only the explicit
       // grace range; older events are skipped and are never moved to a new tick.
-      const fromTick = structureTurn
+      const requestedFromTick = structureTurn
         ? Math.max(state.scheduledUntilTick, turn.startTick, Math.max(0, nowTick - graceTicks))
         : hasExplicitStart
         ? state.scheduledUntilTick
         : Math.max(state.scheduledUntilTick, Math.max(0, nowTick - graceTicks));
+      const fromTick = Math.max(requestedFromTick, playbackInstance?.startTick || 0);
       if (fromTick >= scheduleEndTick) {
         state.scheduledUntilTick = Math.max(state.scheduledUntilTick, scheduleEndTick);
         continue;
@@ -198,7 +201,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
         continue;
       }
 
-      const startTick = usesPlaybackInstance ? playbackInstance.startTick : resolveStartTick(toy, audioTimeToTick);
+      const startTick = usesPlaybackInstance ? patternOriginTick(playbackInstance) : resolveStartTick(toy, audioTimeToTick);
       let stepNumber = Math.ceil(((fromTick - startTick) * steps) / toyLoopTicks);
       while (startTick + Math.round((stepNumber * toyLoopTicks) / steps) < fromTick) stepNumber += 1;
       for (;;) {

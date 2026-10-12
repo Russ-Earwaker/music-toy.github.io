@@ -1,0 +1,63 @@
+{
+  "kind": "normal-graph-harmony-integration",
+  "createdAt": "2026-10-12T21:10:21.135Z",
+  "authoredSources": null,
+  "events": [],
+  "uiEvents": [],
+  "relationshipEvents": [],
+  "timingActions": [],
+  "chordIndicators": [],
+  "chordIndicatorStatus": [],
+  "snapshot": {
+    "schemaVersion": 1,
+    "createdAt": "2026-10-12T21:10:21.135Z",
+    "updatedAt": "2026-10-12T21:10:21.135Z",
+    "transport": {
+      "bpm": 120
+    },
+    "heartbeats": [
+      {
+        "id": "main-heartbeat",
+        "transportId": "main-heartbeat",
+        "name": "Main",
+        "position": {
+          "x": 0,
+          "y": 300
+        },
+        "bpm": 120,
+        "positionTick": 0,
+        "state": "stopped"
+      }
+    ],
+    "themeId": "default",
+    "artToys": [],
+    "toys": [],
+    "chains": [],
+    "connections": [],
+    "structureToys": [],
+    "camera": {
+      "boardTransform": "translate3d(828.5px, 337.17px, 0px) scale(0.518667)",
+      "viewportScrollLeft": 0,
+      "viewportScrollTop": 0,
+      "bvScale": "0.5186666666666666",
+      "scale": 0.6,
+      "x": 828.5,
+      "y": 337.171875,
+      "overviewActive": false
+    }
+  },
+  "diagnostics": {
+    "sourceUsePresentation": {
+      "chips": 0,
+      "extraSockets": 0,
+      "visibleCables": 0,
+      "dottedCables": 0,
+      "highlightedSources": [],
+      "sourcePositions": [],
+      "nodeBounds": []
+    },
+    "rootPerformances": [],
+    "instancePresentation": [],
+    "providers": []
+  }
+}

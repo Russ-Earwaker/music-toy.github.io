@@ -1,0 +1,857 @@
+{
+  "kind": "normal-graph-harmony-integration",
+  "createdAt": "2026-10-12T19:38:55.043Z",
+  "authoredSources": [
+    {
+      "id": "proof-melody",
+      "type": "drawgrid",
+      "ui": {
+        "left": "300px",
+        "top": "300px",
+        "width": "480px",
+        "height": "420px"
+      },
+      "state": {
+        "instrument": "PIANO",
+        "musicalRole": "melody",
+        "instrumentPitchShift": true,
+        "instrumentOctave": 4,
+        "steps": 8,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "list": [
+            [
+              11
+            ],
+            [
+              9
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              3
+            ],
+            [
+              5
+            ],
+            [
+              7
+            ],
+            [
+              9
+            ]
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "meta": {
+          "preserveNodesOverStrokes": true
+        },
+        "localTranspose": 0
+      },
+      "volume": 1,
+      "muted": false,
+      "instanceSerial": 2,
+      "toyName": "Phase motif"
+    },
+    {
+      "id": "phase-instance-1",
+      "type": "drawgrid",
+      "masterToyId": "proof-melody",
+      "instanceNumber": 1,
+      "ui": {
+        "left": "1250px",
+        "top": "460px"
+      },
+      "state": {}
+    },
+    {
+      "id": "phase-instance-2",
+      "type": "drawgrid",
+      "masterToyId": "proof-melody",
+      "instanceNumber": 2,
+      "ui": {
+        "left": "1250px",
+        "top": "680px"
+      },
+      "state": {}
+    }
+  ],
+  "events": [],
+  "uiEvents": [
+    {
+      "type": "pointerdown",
+      "label": null,
+      "class": "toy-header"
+    },
+    {
+      "type": "pointerup",
+      "label": null,
+      "class": "toy-panel toy-advanced-inline drawgrid-single toy-playing relationship-flash"
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": "toy-panel toy-advanced-inline drawgrid-single toy-playing relationship-flash"
+    },
+    {
+      "type": "pointerdown",
+      "label": null,
+      "class": "instance-name"
+    },
+    {
+      "type": "pointerup",
+      "label": null,
+      "class": "toy-panel toy-instance drawgrid-instance relationship-flash"
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": "toy-panel toy-instance drawgrid-instance relationship-flash"
+    },
+    {
+      "type": "pointerdown",
+      "label": null,
+      "class": "master-name"
+    },
+    {
+      "type": "pointerup",
+      "label": null,
+      "class": "toy-panel toy-advanced-inline drawgrid-single relationship-flash"
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": "toy-panel toy-advanced-inline drawgrid-single relationship-flash"
+    },
+    {
+      "type": "click",
+      "label": null,
+      "class": "toy-btn instance-master"
+    }
+  ],
+  "relationshipEvents": [
+    {
+      "label": "Phase motifAdvanced >PIANO8 steps16 stepsSnap to Notes: OnPIANODRAWADVANCEDCloseLinked toysCreate InstancePatternRandomisePatternNotesMusicalRole: MelodyAccompanimentTranspose: -12-11-10-9-8-7-6-5-4-3-2-10+1+2+3+4+5+6+7+8+9+10+11+12",
+      "flashed": [
+        "proof-melody",
+        "phase-instance-1",
+        "phase-instance-2"
+      ],
+      "tethers": [
+        {
+          "paths": 2,
+          "colour": "oklch(84% 0.14 137.5078)",
+          "pointer": "none",
+          "z": "0"
+        }
+      ]
+    },
+    {
+      "label": "Phase motifAdvanced >PIANO8 steps16 stepsSnap to Notes: OnPIANODRAWADVANCEDCloseLinked toysCreate InstancePatternRandomisePatternNotesMusicalRole: MelodyAccompanimentTranspose: -12-11-10-9-8-7-6-5-4-3-2-10+1+2+3+4+5+6+7+8+9+10+11+12",
+      "flashed": [
+        "proof-melody",
+        "phase-instance-1",
+        "phase-instance-2"
+      ],
+      "tethers": [
+        {
+          "paths": 2,
+          "colour": "oklch(84% 0.14 137.5078)",
+          "pointer": "none",
+          "z": "0"
+        }
+      ]
+    },
+    {
+      "label": "Phase motif.1INSTANCEPIANODuplicateSee Master",
+      "flashed": [
+        "proof-melody",
+        "phase-instance-1"
+      ],
+      "tethers": [
+        {
+          "paths": 1,
+          "colour": "oklch(84% 0.14 137.5078)",
+          "pointer": "none",
+          "z": "0"
+        }
+      ]
+    },
+    {
+      "label": "Phase motif.1INSTANCEPIANODuplicateSee Master",
+      "flashed": [
+        "proof-melody",
+        "phase-instance-1"
+      ],
+      "tethers": [
+        {
+          "paths": 1,
+          "colour": "oklch(84% 0.14 137.5078)",
+          "pointer": "none",
+          "z": "0"
+        }
+      ]
+    },
+    {
+      "label": "Phase motifAdvanced >PIANO8 steps16 stepsSnap to Notes: OnPIANODRAWADVANCEDCloseLinked toysCreate InstancePatternRandomisePatternNotesMusicalRole: MelodyAccompanimentTranspose: -12-11-10-9-8-7-6-5-4-3-2-10+1+2+3+4+5+6+7+8+9+10+11+12",
+      "flashed": [
+        "proof-melody",
+        "phase-instance-1",
+        "phase-instance-2"
+      ],
+      "tethers": [
+        {
+          "paths": 2,
+          "colour": "oklch(84% 0.14 137.5078)",
+          "pointer": "none",
+          "z": "0"
+        }
+      ]
+    },
+    {
+      "label": "Phase motifAdvanced >PIANO8 steps16 stepsSnap to Notes: OnPIANODRAWADVANCEDCloseLinked toysCreate InstancePatternRandomisePatternNotesMusicalRole: MelodyAccompanimentTranspose: -12-11-10-9-8-7-6-5-4-3-2-10+1+2+3+4+5+6+7+8+9+10+11+12",
+      "flashed": [
+        "proof-melody",
+        "phase-instance-1",
+        "phase-instance-2"
+      ],
+      "tethers": [
+        {
+          "paths": 2,
+          "colour": "oklch(84% 0.14 137.5078)",
+          "pointer": "none",
+          "z": "0"
+        }
+      ]
+    },
+    {
+      "label": "See Master",
+      "flashed": [
+        "proof-melody",
+        "phase-instance-1"
+      ],
+      "tethers": [
+        {
+          "paths": 1,
+          "colour": "oklch(84% 0.14 137.5078)",
+          "pointer": "none",
+          "z": "0"
+        }
+      ]
+    }
+  ],
+  "snapshot": {
+    "schemaVersion": 1,
+    "createdAt": "2026-10-12T19:38:55.043Z",
+    "updatedAt": "2026-10-12T19:38:55.043Z",
+    "transport": {
+      "bpm": 120
+    },
+    "heartbeats": [
+      {
+        "id": "main-heartbeat",
+        "transportId": "main-heartbeat",
+        "name": "Main",
+        "position": {
+          "x": 0,
+          "y": 300
+        },
+        "bpm": 120,
+        "positionTick": 0,
+        "state": "stopped"
+      }
+    ],
+    "themeId": "default",
+    "artToys": [],
+    "toys": [
+      {
+        "id": "proof-melody",
+        "type": "drawgrid",
+        "toyName": "Phase motif",
+        "instanceSerial": 2,
+        "ui": {
+          "left": "300px",
+          "top": "300px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "instrumentOctave": 4,
+          "instrumentPitchShift": true,
+          "musicalRole": "melody",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                11
+              ],
+              [
+                9
+              ],
+              [
+                7
+              ],
+              [
+                5
+              ],
+              [
+                3
+              ],
+              [
+                5
+              ],
+              [
+                7
+              ],
+              [
+                9
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "phase-instance-1",
+        "type": "drawgrid",
+        "masterToyId": "proof-melody",
+        "instanceNumber": 1,
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1250px",
+          "top": "460px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "phase-instance-2",
+        "type": "drawgrid",
+        "masterToyId": "proof-melody",
+        "instanceNumber": 2,
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1250px",
+          "top": "680px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      }
+    ],
+    "chains": [
+      {
+        "parentId": "phase-together",
+        "childId": "phase-instance-1"
+      },
+      {
+        "parentId": "phase-together",
+        "childId": "phase-instance-2"
+      }
+    ],
+    "connections": [
+      {
+        "id": "phase-master-root",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "proof-melody",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "phase-together-root",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "phase-together",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "phase-child-1",
+        "kind": "sequence",
+        "from": {
+          "objectId": "phase-together",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "phase-instance-1",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "phase-child-2",
+        "kind": "sequence",
+        "from": {
+          "objectId": "phase-together",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "phase-instance-2",
+          "portId": "input"
+        }
+      }
+    ],
+    "structureToys": [
+      {
+        "id": "phase-together",
+        "definitionId": "definition:phase-together",
+        "type": "together",
+        "x": 900,
+        "y": 300,
+        "collapsed": false,
+        "outputCount": 3,
+        "transportId": "main-heartbeat",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "lastChildType": "drawgrid",
+        "lastChildId": "phase-instance-2"
+      }
+    ],
+    "camera": {
+      "boardTransform": "translate3d(75.56px, -171.24px, 0px) scale(0.747778)",
+      "viewportScrollLeft": 0,
+      "viewportScrollTop": 0,
+      "bvScale": "0.7477777777777778",
+      "scale": 1,
+      "x": 75.55555555555554,
+      "y": -171.24111111111108,
+      "overviewActive": false
+    }
+  },
+  "diagnostics": {
+    "sourceUsePresentation": {
+      "chips": 0,
+      "extraSockets": 0,
+      "visibleCables": 4,
+      "dottedCables": 0,
+      "highlightedSources": [],
+      "sourcePositions": [
+        {
+          "id": "proof-melody",
+          "left": "300px",
+          "top": "300px"
+        },
+        {
+          "id": "phase-instance-1",
+          "left": "1250px",
+          "top": "460px"
+        },
+        {
+          "id": "phase-instance-2",
+          "left": "1250px",
+          "top": "680px"
+        }
+      ],
+      "nodeBounds": [
+        {
+          "label": "Together structure",
+          "x": "900",
+          "y": "300",
+          "width": "224",
+          "height": "200"
+        }
+      ]
+    },
+    "rootPerformances": [
+      {
+        "id": "structure:1:22",
+        "definitionId": "sequence:proof-melody",
+        "transportId": "main-heartbeat",
+        "startTick": 0,
+        "active": true,
+        "context": {
+          "transposeSemitones": 0,
+          "harmony": null,
+          "scale": null,
+          "velocityScale": 1
+        },
+        "loop": true,
+        "generation": 0,
+        "scheduledUntilTick": 0,
+        "rootAnchor": true,
+        "powerConnectionId": "phase-master-root",
+        "currentLocalTick": 0,
+        "currentStructureLocalTick": null,
+        "currentChild": "proof-melody",
+        "currentChildren": [
+          "proof-melody"
+        ],
+        "currentChildStartTick": 0,
+        "harmonicOccurrences": [
+          {
+            "occurrenceId": "[\"structure:1:22\",0,\"proof-melody\",[\"slot:proof-melody:0\"]]",
+            "toyId": "proof-melody",
+            "harmony": null,
+            "resolvedChord": null
+          }
+        ]
+      },
+      {
+        "id": "structure:1:23",
+        "definitionId": "definition:phase-together",
+        "transportId": "main-heartbeat",
+        "startTick": 0,
+        "active": true,
+        "context": {
+          "transposeSemitones": 0,
+          "harmony": null,
+          "scale": null,
+          "velocityScale": 1
+        },
+        "loop": true,
+        "generation": 0,
+        "scheduledUntilTick": 0,
+        "rootAnchor": true,
+        "powerConnectionId": "phase-together-root",
+        "currentLocalTick": 0,
+        "currentStructureLocalTick": 0,
+        "currentChild": "phase-instance-1",
+        "currentChildren": [
+          "phase-instance-1",
+          "phase-instance-2"
+        ],
+        "currentChildStartTick": 0,
+        "harmonicOccurrences": [
+          {
+            "occurrenceId": "[\"structure:1:23\",0,\"phase-instance-1\",[\"slot:phase-instance-1:0\"]]",
+            "toyId": "phase-instance-1",
+            "harmony": null,
+            "resolvedChord": null
+          },
+          {
+            "occurrenceId": "[\"structure:1:23\",0,\"phase-instance-2\",[\"slot:phase-instance-2:0\"]]",
+            "toyId": "phase-instance-2",
+            "harmony": null,
+            "resolvedChord": null
+          }
+        ]
+      }
+    ],
+    "instancePresentation": [
+      {
+        "id": "proof-melody",
+        "name": "Phase motif",
+        "masterToyId": null,
+        "number": null,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": true,
+        "width": 800,
+        "height": 758,
+        "visibleRoles": 0,
+        "sourceControls": null
+      },
+      {
+        "id": "phase-instance-1",
+        "name": "Phase motif.1",
+        "masterToyId": "proof-melody",
+        "number": 1,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "phase-instance-2",
+        "name": "Phase motif.2",
+        "masterToyId": "proof-melody",
+        "number": 2,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      }
+    ],
+    "providers": [
+      {
+        "id": "proof-melody",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                3
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "audioToyId": "audiotoy_proof-melody_bwsc58do"
+      },
+      {
+        "id": "phase-instance-1",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                3
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "phase-instance-2",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                3
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

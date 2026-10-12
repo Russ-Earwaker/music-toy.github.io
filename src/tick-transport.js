@@ -1,3 +1,4 @@
+import {HEARTBEAT_PHASE_ORIGIN_TICK} from './source-phase.js';
 // Independent tick mappings over one shared AudioContext. No polling or scheduler.
 export function createTickTransport({ id, getContext, ensureContext = getContext, bpm = 120, positionTick = 0, emit = () => {} }) {
   const clean = v => Math.max(0, Math.round(Number(v) || 0));
@@ -12,6 +13,7 @@ export function createTickTransport({ id, getContext, ensureContext = getContext
   const change = detail => emit({ transportId: id, ...detail });
   const transport = {
     id, ticksPerBeat: 96, ticksPerBar: 384, beatsPerBar: 4,
+    heartbeatPhaseOriginTick: HEARTBEAT_PHASE_ORIGIN_TICK,
     get state() { return state; }, get bpm() { return rate; },
     get positionTick() { return position(); }, get currentTick() { return position(); },
     get currentBeat() { return Math.floor(position() / 96); },

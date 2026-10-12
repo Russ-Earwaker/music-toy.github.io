@@ -466,6 +466,12 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
   return false;
 }
 
+// Share the catalog-aware role boundary with playback-context presentation.
+export function instrumentMusicalRole(instrument, toyType, musicalRole, options = {}, occurrence = null) {
+  const id = normId(instrument || 'TONE');
+  return classifyMusicalRole({toyType,instrument:id,entry:entries.get(id),options:{...options,toyMusicalRole:musicalRole},occurrence});
+}
+
 export function triggerInstrument(instrument, noteName='C4', when, toyId, options = {}, velocity = 1.0) {
   const occurrence = options?.playbackOccurrence || getCurrentPlaybackOccurrence();
   if (!isPlaybackOccurrenceValid(occurrence)) return false;
@@ -479,7 +485,7 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
   const pitched = isPitchedEvent(id, entries.get(id), options, options.playbackOccurrence);
   const occurrence=options.playbackOccurrence;
   const panel=typeof document!=='undefined'?(document.getElementById(toyId) || document.querySelector?.(`.toy-panel[data-audiotoyid="${toyId}"], #${toyId}`)):null;
-  const role=classifyMusicalRole({toyType:occurrence?.toyType ?? panel?.dataset?.toy,instrument:id,entry:entries.get(id),options:{...options,toyMusicalRole:panel?.dataset?.musicalRole},occurrence});
+  const role=instrumentMusicalRole(id,occurrence?.toyType ?? panel?.dataset?.toy,panel?.dataset?.musicalRole,options,occurrence);
   const pitchDecision=resolveMusicalPitch({sourcePitch:sourceNote,eventTick:occurrence?.eventTick ?? options.eventTick,context:options.context,role,localTranspose:panel?.dataset?.toy==='drawgrid'?panel.dataset.localTranspose:0,referenceHarmony:options.referenceHarmony,register:options.register});
   const resolvedNote = pitchDecision.finalNote;
   // Source policy was resolved above; audio ownership belongs to the visible Instance.

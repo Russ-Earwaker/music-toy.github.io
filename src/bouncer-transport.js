@@ -1,3 +1,4 @@
+import {patternOriginTick} from './source-phase.js';
 export const BOUNCER_LOOP_TICKS = 384;
 
 const cleanTick = value => Math.max(0, Math.round(Number(value) || 0));
@@ -124,11 +125,11 @@ export function bouncerEventsInWindow({
       if (controller?.active === false) continue;
     }
     const offsetTick = cleanTick(event.offsetTick) % loop;
-    let iteration = Math.max(0, Math.ceil((fromTick - instance.startTick - offsetTick) / loop));
+    let iteration = Math.max(0, Math.ceil((Math.max(fromTick,instance.startTick) - patternOriginTick(instance) - offsetTick) / loop));
     for (;;) {
-      const eventTick = instance.startTick + (iteration * loop) + offsetTick;
+      const eventTick = patternOriginTick(instance) + (iteration * loop) + offsetTick;
       if (eventTick >= toTick) break;
-      if (eventTick >= fromTick) {
+      if (eventTick >= Math.max(fromTick,instance.startTick)) {
         const source = event.blockIndex != null ? `block:${event.blockIndex}`
           : event.edgeControllerIndex != null ? `edge:${event.edgeControllerIndex}`
             : `edge-name:${event.edgeName ?? 'unknown'}`;
@@ -138,11 +139,11 @@ export function bouncerEventsInWindow({
     }
     if (includeImpactCues && Number.isFinite(Number(event.impactOffsetTick))) {
       const impactOffsetTick = cleanTick(event.impactOffsetTick) % loop;
-      let impactIteration = Math.max(0, Math.ceil((fromTick - instance.startTick - impactOffsetTick) / loop));
+      let impactIteration = Math.max(0, Math.ceil((Math.max(fromTick,instance.startTick) - patternOriginTick(instance) - impactOffsetTick) / loop));
       for (;;) {
-        const eventTick = instance.startTick + (impactIteration * loop) + impactOffsetTick;
+        const eventTick = patternOriginTick(instance) + (impactIteration * loop) + impactOffsetTick;
         if (eventTick >= toTick) break;
-        if (eventTick >= fromTick) {
+        if (eventTick >= Math.max(fromTick,instance.startTick)) {
           const source = event.blockIndex != null ? `block:${event.blockIndex}`
             : event.edgeControllerIndex != null ? `edge:${event.edgeControllerIndex}`
               : `edge-name:${event.edgeName ?? 'unknown'}`;

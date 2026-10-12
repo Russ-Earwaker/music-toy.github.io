@@ -39,7 +39,9 @@ test('disconnect clears active borders immediately throughout a branch, preservi
   }
   assert.ok(h.sequence.turnsForLookahead(400,1600).every(t=>!['B','C'].includes(t.toyId)));
   h.model.connect('transport',out(MAIN_TRANSPORT_ID),input('B'));
-  assert.ok(b.classes.has('toy-playing'));assert.equal(getPlaybackInstance('B').active,true);
+  assert.equal(b.classes.has('toy-playing'),false);assert.equal(getPlaybackInstance('B').active,false);
+  assert.ok(h.panels[2].classes.has('toy-playing'),'reconnected B → C rejoins C at the shared Sequence phase');
+  assert.equal(getPlaybackInstance('C').active,true);
 });
 for(const type of ['sequence','together']) test(`empty ${type} is zero duration, can be edited live, and cannot spin a zero-length scheduler loop`,()=>{
   const r=createStructureRuntime();r.defineStructure('empty',type,[]);

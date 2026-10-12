@@ -1,6 +1,11 @@
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 import { clearPlaybackInstances } from './playback-instances.js';
 
+// Bulk removal must release source users before the normal Master delete guard.
+export function orderCreationPanelRemoval(panels) {
+  return [...panels].sort((a,b) => Number(!!b.dataset?.masterToyId) - Number(!!a.dataset?.masterToyId));
+}
+
 // Called after panel destruction and before saving the empty creation.
 export function clearCreationGraph({ model, structures, sequence, adapter, clearScheduled = () => {} }) {
   sequence.reset();

@@ -1,3 +1,4 @@
+import {patternOriginTick} from './source-phase.js';
 export const RIPPLER_LOOP_TICKS = 384;
 
 export function nextRipplerRecordingStartTick(currentTick, loopLengthTicks = RIPPLER_LOOP_TICKS) {
@@ -35,12 +36,12 @@ export function ripplerEventsInWindow({
       const offsetTick = Number.isFinite(raw)
         ? Math.max(0, Math.round(raw)) % loop
         : Math.round((slot * loop) / Math.max(1, pattern.length));
-      let iteration = Math.ceil((fromTick - instance.startTick - offsetTick) / loop);
+      let iteration = Math.ceil((Math.max(fromTick,instance.startTick) - patternOriginTick(instance) - offsetTick) / loop);
       iteration = Math.max(0, iteration);
       for (;;) {
-        const eventTick = instance.startTick + (iteration * loop) + offsetTick;
+        const eventTick = patternOriginTick(instance) + (iteration * loop) + offsetTick;
         if (eventTick >= toTick) break;
-        if (eventTick >= fromTick) {
+        if (eventTick >= Math.max(fromTick,instance.startTick)) {
           events.push({ eventTick, blockIndex, slot, offsetTick, eventKey: `block:${blockIndex}` });
         }
         iteration += 1;

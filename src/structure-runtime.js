@@ -1,4 +1,5 @@
 import { TICKS_PER_BAR, nextBeatTick } from './audio-core.js';
+import {HEARTBEAT_PHASE_ORIGIN_TICK} from './source-phase.js';
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 import { STRUCTURE_TYPES, normalizeRepeatCount, structureDuration } from './structure-types.js';
 import { LOGIC_NODE_TYPES, MODIFIER_TYPES, isModifier, normalizeSemitones, logicNodeLabel } from './modifier-types.js';
@@ -15,10 +16,11 @@ const assembleLayout = (entries, representationId, context, sectionDuration = nu
   const durationTicks = sectionDuration ?? Math.max(0, ...entries.map(c => c.offsetTicks + c.durationTicks));
   const leaves = entries.flatMap(c => c.definition ? c.definition.leafLayout.map(l => ({ ...l,
     structuralPath: [c.entryId, ...l.structuralPath], authoredPath: [c.relationshipId || c.entryId, ...l.authoredPath], definitionIds: [c.structureId, ...l.definitionIds], context: composeContext(c.context, shiftHarmony(l.context,c.offsetTicks)),
+    explicitPhaseOffsetTicks: (c.explicitPhaseOffsetTicks || 0) + (l.explicitPhaseOffsetTicks || 0),
     offsetTicks: c.offsetTicks + l.offsetTicks,
     endOffsetTicks: Math.min(durationTicks,c.offsetTicks+(l.endOffsetTicks ?? l.offsetTicks+l.durationTicks)),
     contexts: l.contexts.map(context => ({ ...context, offsetTicks: context.offsetTicks + c.offsetTicks })) }))
-    : [{ toyId: c.toyId, structuralPath: [c.entryId], authoredPath: [c.relationshipId || c.entryId], definitionIds: [], context: normalizeContext(c.context), offsetTicks: c.offsetTicks, endOffsetTicks:Math.min(durationTicks,c.offsetTicks+c.durationTicks), durationTicks: c.durationTicks, contexts: [] }]);
+    : [{ toyId: c.toyId, structuralPath: [c.entryId], authoredPath: [c.relationshipId || c.entryId], definitionIds: [], context: normalizeContext(c.context), explicitPhaseOffsetTicks: c.explicitPhaseOffsetTicks || 0, offsetTicks: c.offsetTicks, endOffsetTicks:Math.min(durationTicks,c.offsetTicks+c.durationTicks), durationTicks: c.durationTicks, contexts: [] }]);
   return { children: Object.freeze(entries.map(Object.freeze)), durationTicks,
     leafLayout: Object.freeze(leaves.filter(l=>l.offsetTicks<durationTicks).map(l => Object.freeze({ ...l, structuralPath: Object.freeze(l.structuralPath), authoredPath: Object.freeze(l.authoredPath), definitionIds: Object.freeze(l.definitionIds), context: composeContext(context, l.context), contexts: Object.freeze([
       ...(representationId ? [{ definitionId: representationId, offsetTicks: 0, durationTicks }] : []),
@@ -120,7 +122,7 @@ const freezeLayout = (type, children, definitions, representationId, count, cont
     const previousSlot = available.findIndex(c => c.entryId === entryId);
     if (previousSlot >= 0) available.splice(previousSlot, 1);
     usedIds.add(entryId);
-    const entry = Object.freeze({entryId, context: normalizeContext(child.context), ...(nested ? { structureId: nested.id, offsetTicks: offset, durationTicks: length, definition: nested }
+    const entry = Object.freeze({entryId, explicitPhaseOffsetTicks: type === 'timeline' ? offset : 0, context: normalizeContext(child.context), ...(nested ? { structureId: nested.id, offsetTicks: offset, durationTicks: length, definition: nested }
       : { toyId: String(toyId), offsetTicks: offset, durationTicks: length }),
       ...(type === 'timeline' ? {childId:nested?.id || String(toyId),offsetTick:offset} : {})});
     offsetTicks += length;
@@ -185,13 +187,15 @@ export function createStructureRuntime() {
       const cycleStart = loops && !last.oneCycle && last.definition.durationTicks > 0
         ? last.startTick + Math.floor(Math.max(0, horizon - last.startTick) / last.definition.durationTicks) * last.definition.durationTicks
         : last.oneCycle ? last.startTick : instance.startTick;
-      const live = reconcile(last.definition, definition, horizon - cycleStart);
+      const pendingActivation = instance.scheduledUntilTick <= instance.startTick && tick(currentTick) < instance.startTick;
+      const live = pendingActivation ? definition : reconcile(last.definition, definition, horizon - cycleStart);
       const durationChanged = loops && instance.rootAnchor && (last.definition.durationTicks !== definition.durationTicks || live.durationTicks !== definition.durationTicks);
       epochs.push({ startTick: cycleStart, effectiveTick: horizon, definition: live, oneCycle: durationChanged });
       if(durationChanged && definition.durationTicks > 0) {
         // Preserve the committed/current occurrence, then rejoin the new
         // duration's lattice measured from the original root anchor.
-        const boundary = instance.startTick + Math.ceil(Math.max(0, Math.max(horizon, cycleStart + live.durationTicks) - instance.startTick) / definition.durationTicks) * definition.durationTicks;
+        const anchor = instance.phaseOriginTick;
+        const boundary = anchor + Math.ceil(Math.max(0, Math.max(horizon, cycleStart + live.durationTicks) - anchor) / definition.durationTicks) * definition.durationTicks;
         epochs.push({ startTick: boundary, effectiveTick: boundary, definition });
       } else if(loops) epochs.push({startTick:cycleStart+live.durationTicks,effectiveTick:Math.max(horizon,cycleStart+live.durationTicks),definition});
     }
@@ -220,10 +224,10 @@ export function createStructureRuntime() {
     if (old?.active && !retrigger) return old;
     const startTick = quantize ? nextBeatTick(requestedTick, { strict: true }) : tick(requestedTick);
     const instance = { id: `structure:${runtimeId}:${serial++}`, definitionId: definition.id,
-      transportId: definition.transportId, startTick, active: true, context: normalizeContext(context),loop,
+      transportId: definition.transportId, startTick, phaseOriginTick: loop ? HEARTBEAT_PHASE_ORIGIN_TICK : startTick, active: true, context: normalizeContext(context),loop,
       generation: (old?.generation ?? -1) + 1, scheduledUntilTick: startTick };
     instances.set(definition.id, instance);
-    timelines.set(definition.id, [{ startTick, definition }]);
+    timelines.set(definition.id, [{ startTick: instance.phaseOriginTick, effectiveTick: startTick, definition }]);
     return instance;
   }
 
@@ -254,8 +258,9 @@ export function createStructureRuntime() {
           // Submitted timing survives edits, but removed execution paths cannot
           // keep producing notes just because an older epoch retained them.
           if (!authoredLeaves.has(authoredPathKey(child))) continue;
-          const startTick = cycleStart + child.offsetTicks;
-          const endTick = Math.min(startTick + child.durationTicks,cycleStart+(child.endOffsetTicks ?? child.offsetTicks+child.durationTicks));
+          const naturalStartTick = cycleStart + child.offsetTicks;
+          const startTick = Math.max(naturalStartTick,instance.startTick);
+          const endTick = Math.min(naturalStartTick + child.durationTicks,cycleStart+(child.endOffsetTicks ?? child.offsetTicks+child.durationTicks));
           if (startTick >= end || endTick <= begin) continue;
           turns.push(Object.freeze({
             id: JSON.stringify([instance.id, startTick, child.toyId, child.structuralPath]),
@@ -264,7 +269,7 @@ export function createStructureRuntime() {
             context: composeContext(instance.context, occurrenceContext(authoredLeaves.get(authoredPathKey(child)).context,child.context,cycleStart)),
             structureInstanceId: instance.id, definitionId: instance.definitionId,
             transportId: instance.transportId, toyId: child.toyId, rootCycleStartTick: cycleStart,
-            startTick, endTick, durationTicks: child.durationTicks,
+            startTick, endTick, explicitPhaseOffsetTicks: child.explicitPhaseOffsetTicks || 0, durationTicks: child.durationTicks,
             offsetTicks: child.offsetTicks, sequenceDurationTicks: layout.durationTicks,
             structureContexts: Object.freeze(child.contexts.map(c => Object.freeze({
               ...c, startTick: cycleStart + c.offsetTicks,
@@ -283,7 +288,7 @@ export function createStructureRuntime() {
     const duration=epoch?.definition.durationTicks;
     if(!duration || (!(instance.loop && !epoch.oneCycle) && atTick>=epoch.startTick+duration))return null;
     const startTick=epoch.startTick+(instance.loop && !epoch.oneCycle ? Math.floor((atTick-epoch.startTick)/duration)*duration : 0);
-    return {id:JSON.stringify([instance.id,startTick]),startTick,durationTicks:duration,transportId:instance.transportId};
+    return {id:JSON.stringify([instance.id,startTick]),startTick,activationTick:Math.max(startTick,instance.startTick),durationTicks:duration,transportId:instance.transportId};
   }
   function commitThrough(id, endTick) {
     const instance = instances.get(String(id));
@@ -318,7 +323,7 @@ export function createStructureRuntime() {
         const activeTurns = turnsInWindow(instance.parentDefinitionId || instance.definitionId, currentTick, tick(currentTick) + 1);
         const turn = activeTurns.find(t => !instance.parentDefinitionId || t.structureContexts.some(c => c.definitionId === instance.definitionId));
         const context = turn?.structureContexts.find(c => c.definitionId === instance.definitionId);
-        return Object.freeze({ ...instance, currentLocalTick: turn ? tick(currentTick) - turn.startTick + turn.offsetTicks : null,
+        return Object.freeze({ ...instance, currentLocalTick: turn ? tick(currentTick) - turn.rootCycleStartTick : null,
           currentStructureLocalTick: context ? tick(currentTick) - context.startTick : null,
           currentChild: turn?.toyId ?? null, currentChildren: Object.freeze(activeTurns.filter(t => !instance.parentDefinitionId || t.structureContexts.some(c => c.definitionId === instance.definitionId)).map(t => t.toyId)),
           currentChildStartTick: turn?.startTick ?? null,

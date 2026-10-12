@@ -1,5 +1,6 @@
 import { heartbeatModel, transportLoopInfo } from './heartbeats.js';
 import { connectionModel } from './connections.js';
+import { orderCreationPanelRemoval } from './creation-graph.js';
 // src/topbar.js - wires page header buttons to board helpers
 import * as Core from './audio-core.js';
 import { resumeAudioContextIfNeeded } from './audio-core.js';
@@ -2059,7 +2060,7 @@ if (document.readyState === 'loading') {
             } catch {}
 
             const destroy = window.MusicToyFactory?.destroy;
-            panels.forEach(panel=>{
+            orderCreationPanelRemoval(panels).forEach(panel=>{
               try{
                 if (typeof destroy === 'function'){
                   destroy(panel);

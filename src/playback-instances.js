@@ -1,3 +1,4 @@
+import {patternOriginTick,applySourcePhase} from './source-phase.js';
 import { TICKS_PER_BAR, nextBeatTick } from './audio-core.js';
 import { MAIN_TRANSPORT_ID } from './transport-registry.js';
 import { normalizeContext } from './playback-context.js';
@@ -42,6 +43,7 @@ function makeInstance(toyId, { startTick = 0, loopLengthTicks = TICKS_PER_BAR, a
     definitionRevisionSeen: -1,
     generation: Math.max(0, Math.trunc(Number(generation) || 0)),
   };
+  applySourcePhase(instance);
   occurrences.set(id, instance);
   return instance;
 }
@@ -118,7 +120,9 @@ export function createPlaybackInstanceForStructureTurn(turn) {
   const instance = makeInstance(turn.toyId, { startTick: turn.startTick,
     loopLengthTicks: turn.durationTicks, occurrenceId: turn.occurrenceId || turn.id,
     generation: turn.generation, context: turn.context }, turn.transportId);
-  Object.assign(instance, { structureInstanceId: turn.structureInstanceId, structureTurnId: turn.id, structuralPath: turn.structuralPath });
+  Object.assign(instance, { structureInstanceId: turn.structureInstanceId, structureTurnId: turn.id, explicitPhaseOffsetTicks: turn.explicitPhaseOffsetTicks || 0, structuralPath: turn.structuralPath });
+  instance.endTick = turn.endTick;
+  applySourcePhase(instance);
   return instance;
 }
 
@@ -153,7 +157,7 @@ export function getPlaybackLocalTick(instance, transportTick) {
   const tick = cleanTick(transportTick);
   if (tick < instance.startTick) return null;
   const loop = cleanLoop(instance.loopLengthTicks);
-  return ((tick - instance.startTick) % loop + loop) % loop;
+  return ((tick - patternOriginTick(instance)) % loop + loop) % loop;
 }
 
 export function getPlaybackColumn(instance, transportTick, steps = 8) {
@@ -180,11 +184,11 @@ export function getPlaybackStepEvents(instance, fromTick, toTick, steps = 8) {
   const from = Math.max(cleanTick(fromTick), instance.startTick);
   const to = cleanTick(toTick);
   if (to <= from) return [];
-  let stepNumber = Math.ceil(((from - instance.startTick) * count) / loop);
-  while (instance.startTick + Math.round((stepNumber * loop) / count) < from) stepNumber += 1;
+  let stepNumber = Math.ceil(((from - patternOriginTick(instance)) * count) / loop);
+  while (patternOriginTick(instance) + Math.round((stepNumber * loop) / count) < from) stepNumber += 1;
   const events = [];
   for (;;) {
-    const eventTick = instance.startTick + Math.round((stepNumber * loop) / count);
+    const eventTick = patternOriginTick(instance) + Math.round((stepNumber * loop) / count);
     if (eventTick >= to) break;
     events.push({
       eventTick,

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStructureRuntime } from '../src/structure-runtime.js';
+import {activeToyChord} from '../src/toy-chord-indicator.js';
 import { createChainSequenceAdapter } from '../src/chain-sequence.js';
 import { createSequencerScheduler } from '../src/note-scheduler.js';
 import { composeContext, normalizeContext, getCurrentPlaybackOccurrence } from '../src/playback-context.js';
@@ -31,6 +32,21 @@ function harness(roots, { provider = false } = {}) {
   sync();
   return { toy, notes, adapter, scheduler, roots, sync, schedule };
 }
+test('conflicting harmony occurrences follow the same deterministic visible playhead without merging context',()=>{
+  const harmony=root=>({harmony:{originTick:0,stepTicks:384,chords:[{root,quality:'major'}]}});
+  const h=harness([{headId:'composition',type:'timeline',members:['A'],children:[
+    {...leaf('long',0,768),context:harmony('C')},
+    {...leaf('later',384,768),context:harmony('F')},
+  ]}]);
+  try{
+    h.adapter.turnsForLookahead(384,385);
+    const selected=getPlaybackInstance('A');assert.equal(selected.startTick,384);
+    assert.equal(activeToyChord({instance:selected,currentTick:384,playing:true,role:'melody'}),'F');
+    assert.deepEqual(getPlaybackOccurrences('A').filter(i=>i.active).map(instance=>activeToyChord({instance,currentTick:384,playing:true,role:'melody'})).sort(),['C','F']);
+    h.adapter.updateCurrent(100);assert.equal(activeToyChord({instance:getPlaybackInstance('A'),currentTick:100,playing:true,role:'melody'}),'C');
+  }finally{h.scheduler.dispose();h.adapter.reset();}
+});
+
 const root = (children, type = 'timeline', extra = {}) =>
   ({ headId: 'composition', type, children, members: ['A'], ...extra });
 

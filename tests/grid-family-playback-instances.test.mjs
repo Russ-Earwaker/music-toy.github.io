@@ -28,7 +28,7 @@ function makeToy(id, calls) {
   };
 }
 
-test('Loop, Drum and DrawGrid keep independent tick offsets through pause/resume and tempo changes', () => {
+test('Loop, Drum and DrawGrid share phase despite different activation ticks through pause/resume and tempo changes', () => {
   clearPlaybackInstancesForTests();
   const loop = ensurePlaybackInstance('loop', { active: true, startTick: 0, loopLengthTicks: 384 });
   const drum = activatePlaybackInstance('drum', 130, { quantize: true, loopLengthTicks: 384 });
@@ -39,7 +39,7 @@ test('Loop, Drum and DrawGrid keep independent tick offsets through pause/resume
   const starts = [loop.startTick, drum.startTick, draw.startTick];
   const farTick = (384 * 9) + 330;
   const columns = [loop, drum, draw].map(instance => getPlaybackColumn(instance, farTick, 8));
-  assert.equal(new Set(columns).size, 3, 'distinct starts remain distinct several bars later');
+  assert.equal(new Set(columns).size, 1, 'activation gates do not become permanent pattern offsets');
 
   // Pause/resume and BPM changes alter only transport-to-audio mapping. Instances
   // remain musical state and therefore do not need reconstruction or rebasing.

@@ -141,8 +141,8 @@ test('fresh migrated grids retain their exact first column when the first poll i
     tickToAudioTime: tickToAudioAt120, audioTimeToTick: audioToTickAt120,
   });
   assert.deepEqual(calls.map(call => [call.id, call.column, call.metadata.eventTick]).sort(), [
-    ['draw-first', 0, 1200],
-    ['loop-first', 0, 1200],
+    ['draw-first', 1, 1200],
+    ['loop-first', 1, 1200],
   ]);
   assert.ok(calls.every(call => call.metadata.late), 'the boundary is preserved rather than shifted');
 });

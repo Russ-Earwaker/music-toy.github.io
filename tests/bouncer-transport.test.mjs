@@ -78,7 +78,7 @@ test('shared scheduler gives Bouncer stable tick identities across repeated poll
   });
   poll(120);
   poll(90);
-  assert.deepEqual(calls.map(call => call.metadata.eventTick), [144, 528]);
+  assert.deepEqual(calls.map(call => call.metadata.eventTick), [432]);
   assert.equal(new Set(calls.map(call => call.metadata.identity)).size, calls.length);
 });
 

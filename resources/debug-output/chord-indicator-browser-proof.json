@@ -1,0 +1,71 @@
+{
+  "testsPassed": 919,
+  "visibleTransitionsVerified": 362,
+  "pauseHidesVerified": 10,
+  "arrangementCapture": "harmony-graph-2026-10-12T20-56-10-106Z.json",
+  "sections": {
+    "instance-1791838531968-bk18v2": {
+      "section": "Intro",
+      "labels": [
+        "C",
+        "Am",
+        "F",
+        "G"
+      ]
+    },
+    "instance-1791838531974-n3at17": {
+      "section": "A",
+      "labels": [
+        "C",
+        "Am",
+        "F",
+        "G"
+      ]
+    },
+    "instance-1791838531979-668gxi": {
+      "section": "A",
+      "labels": [
+        "C",
+        "Am",
+        "F",
+        "G"
+      ]
+    },
+    "instance-1791838531987-fo0qrq": {
+      "section": "B",
+      "labels": [
+        "F",
+        "G",
+        "Am",
+        "C"
+      ]
+    },
+    "instance-1791838531991-9o27sr": {
+      "section": "B",
+      "labels": [
+        "F",
+        "G",
+        "Am",
+        "C"
+      ]
+    },
+    "instance-1791838532002-gfob39": {
+      "section": "Outro",
+      "labels": [
+        "C",
+        "Am",
+        "F",
+        "G"
+      ]
+    }
+  },
+  "captures": [
+    "harmony-graph-2026-10-12T20-56-10-106Z.json",
+    "harmony-graph-2026-10-12T20-57-20-116Z.json",
+    "harmony-graph-2026-10-12T20-57-46-568Z.json",
+    "harmony-graph-2026-10-12T20-58-35-509Z.json",
+    "harmony-graph-2026-10-12T20-59-15-757Z.json",
+    "harmony-graph-2026-10-12T21-01-32-225Z.json",
+    "harmony-graph-2026-10-12T21-02-42-580Z.json"
+  ]
+}

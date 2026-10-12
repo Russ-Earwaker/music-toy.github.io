@@ -9828,3 +9828,24 @@ body.beat-swarm-active #internal-board-overlay {
 .board-overview .toy-panel.toy-instance[data-toy] .toy-header *{visibility:visible!important;opacity:1!important;pointer-events:auto!important}
 .toy-panel.toy-instance[data-toy] .instance-body,
 .toy-panel.toy-instance[data-toy] .instance-body *{pointer-events:auto!important;visibility:visible!important;opacity:1!important}
+/* Source inspection is temporary and separate from graph connections. */
+.relationship-tethers{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none!important;z-index:0;filter:saturate(.35);animation:relationship-fade 1.8s ease-out both}
+.relationship-tethers *{pointer-events:none!important}
+.relationship-tethers path{fill:none;stroke:var(--relationship-colour);stroke-width:3;stroke-opacity:.55;stroke-dasharray:7 9}
+.relationship-flash{animation:relationship-node-flash 1.8s ease-out both}
+@keyframes relationship-fade{0%,20%{opacity:.7}100%{opacity:0}}
+@keyframes relationship-node-flash{0%,18%{outline:3px solid var(--relationship-colour);outline-offset:5px}100%{outline:3px solid transparent;outline-offset:8px}}
+.toy-chord-anchor{position:relative;display:inline-block}
+.toy-active-chord{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);padding:2px 6px;border-radius:6px;background:rgba(10,18,28,.35);border:1px solid rgba(238,245,255,.3);color:#eef5ff;font:600 12px/1.2 system-ui;white-space:nowrap;pointer-events:none}
+.toy-active-chord[hidden]{display:none!important}
+.toy-panel:not(.toy-instance) .toy-active-chord{left:auto;right:calc(100% + 8px)}
+.overview-mode .toy-title:has(.toy-active-chord:not([hidden])){opacity:1}
+.overview-mode .toy-title:has(.toy-active-chord:not([hidden])) > :not(.toy-chord-anchor){opacity:0}
+.toy-active-chord{visibility:visible!important}
+.toy-active-chord.chord-change{animation:toy-chord-change .3s ease-out}
+@keyframes toy-chord-change{from{background:rgba(238,245,255,.3)}to{background:rgba(10,18,28,.35)}}
+@media (prefers-reduced-motion:reduce){.toy-active-chord.chord-change{animation:none}}
+.overview-mode .toy-panel[data-instance-serial] .toy-header,
+.board-overview .toy-panel[data-instance-serial] .toy-header{visibility:visible!important;opacity:1!important;pointer-events:auto!important;transform:none!important}
+.overview-mode .toy-panel[data-instance-serial] .master-name,
+.board-overview .toy-panel[data-instance-serial] .master-name{visibility:visible!important;opacity:1!important;color:#eef5ff!important;pointer-events:auto!important}

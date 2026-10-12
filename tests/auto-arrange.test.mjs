@@ -5,7 +5,8 @@ import {createConnectionModel,HEARTBEAT_PORTS} from '../src/connections.js';
 import {createStructureToyModel,structureToyWidth,structureToyHeight} from '../src/structure-toys.js';
 import {createChainSequenceAdapter} from '../src/chain-sequence.js';
 import {createSequencerScheduler} from '../src/note-scheduler.js';
-import {ensurePlaybackInstance,clearPlaybackInstancesForTests} from '../src/playback-instances.js';
+import {ensurePlaybackInstance,clearPlaybackInstancesForTests,getPlaybackInstance} from '../src/playback-instances.js';
+import {activeToyChord} from '../src/toy-chord-indicator.js';
 import {resolveMusicalPitch,noteMidi} from '../src/harmonic-adaptation.js';
 import {MAIN_TRANSPORT_ID} from '../src/transport-registry.js';
 import {rectanglesOverlap} from '../src/graph-placement.js';
@@ -28,7 +29,7 @@ function harness(roles=['rhythm','accompaniment','melody']){
  const state={state:'paused',currentTick:0};
  const sync=()=>adapter.sync(panels,state,{connections:model.list('sequence'),structures:structures.list()});
  const instanceSerial=new Map();
- const createInstance=(master,options)=>{const n=(instanceSerial.get(master.id)||0)+1;instanceSerial.set(master.id,n);const p={id:master.id+'.'+n,dataset:{...master.dataset,masterToyId:master.id,autoArrangeOwner:options.autoArrangeOwner},get sourceNotes(){return master.sourceNotes;},__sequencerSchedule:(...args)=>master.__sequencerSchedule(...args)};panels.push(p);model.registerObject(p.id);ensurePlaybackInstance(p.id,{loopLengthTicks:384});return p;};
+ const createInstance=(master,options)=>{const n=(instanceSerial.get(master.id)||0)+1;instanceSerial.set(master.id,n);const p={id:master.id+'.'+n,dataset:{...master.dataset,masterToyId:master.id,autoArrangeOwner:options.autoArrangeOwner},get sourceNotes(){return master.sourceNotes;},__sequencerSchedule:(...args)=>master.__sequencerSchedule(...args)};panels.push(p);model.registerObject(p.id);ensurePlaybackInstance(p.id,{loopLengthTicks:getPlaybackInstance(master.id)?.loopLengthTicks||384});return p;};
  const removeInstances=owner=>{for(const p of [...panels])if(p.dataset.autoArrangeOwner===owner){model.removeObject(p.id);panels.splice(panels.indexOf(p),1);}};
  const arranger=createAutoArranger({model,structures,getPanels:()=>panels,createInstance,removeInstances,createSource:async role=>{generated.push(role);return add(role,'filled-'+role);}});
  const schedule=(from=0,to=6144)=>{
@@ -38,16 +39,17 @@ function harness(roles=['rhythm','accompaniment','melody']){
  return {model,panels,structures,adapter,arranger,generated,notes,sync,schedule,close,add,state};
 }
 
-test('three supplied roles build a real finite 16-bar graph with seven named structures and unchanged sources',async()=>{
+test('three supplied roles build a real finite 16-bar graph with compact B Timeline branches and unchanged sources',async()=>{
  const h=harness();try{
   const before=structuredClone(h.panels.map(p=>({notes:p.sourceNotes,dataset:p.dataset})));const result=await h.arranger.arrange();h.sync();
-  assert.deepEqual(h.generated,[]);assert.equal(h.structures.list().length,7);
+  assert.deepEqual(h.generated,[]);assert.equal(h.structures.list().length,10);
   const root=h.structures.get(result.rootId);assert.equal(root.type,'sequence');assert.equal(h.model.getParent(root.id).kind,'transport');
   assert.equal(h.adapter.runtime.getDefinition(root.definitionId).durationTicks,6144);
   assert.deepEqual(h.model.list('sequence').filter(e=>e.from.objectId===root.id).map(e=>h.structures.get(e.to.objectId).name),['Intro','A','B','Outro']);
   const bars=Array.from({length:16},(_,bar)=>h.adapter.runtime.turnsInWindow(root.definitionId,bar*384,bar*384+1).map(t=>panelsMaster(h,t.toyId)).sort());
   assert.ok(bars.slice(0,4).every(ids=>JSON.stringify(ids)==='["accompaniment"]'));
-  assert.ok(bars.slice(4,12).every(ids=>JSON.stringify(ids)==='["accompaniment","melody","rhythm"]'));
+  assert.ok(bars.slice(4,8).every(ids=>JSON.stringify(ids)==='["accompaniment","melody","rhythm"]'));
+  assert.deepEqual(bars.slice(8,12),[['accompaniment'],['accompaniment','rhythm'],['accompaniment','melody','rhythm'],['accompaniment','melody','rhythm']]);
   assert.ok(bars.slice(12).every(ids=>JSON.stringify(ids)==='["accompaniment"]'));
   assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>({notes:p.sourceNotes,dataset:{toy:p.dataset.toy,musicalRole:p.dataset.musicalRole,steps:p.dataset.steps}})),before);
   assert.equal(h.model.list('sequence').filter(e=>h.panels.find(p=>p.id===e.to.objectId)?.dataset.masterToyId).length,8);
@@ -66,6 +68,55 @@ for(const roles of [['melody'],['accompaniment'],['rhythm'],['rhythm','melody'],
  }finally{h.close();}
 });
 
+test('16-bar chord display follows each Instance section including reordered B and complete piece looping',async()=>{
+ const h=harness();try{
+  await h.arranger.arrange();h.sync();
+  const expected=['C','Am','F','G','C','Am','F','G','F','G','Am','C','C','Am','F','G'];
+  for(let bar=0;bar<32;bar++){
+   const tick=bar*384;h.adapter.updateCurrent(tick);
+   for(const panel of h.panels){
+    const instance=getPlaybackInstance(panel.id),role=panel.dataset.musicalRole;
+    const displayed=activeToyChord({instance,currentTick:tick,playing:true,role});
+    if(!panel.dataset.masterToyId || role==='percussion' || !instance?.active)assert.equal(displayed,null);
+    else assert.equal(displayed,expected[bar%16],`${panel.id} at bar ${bar}`);
+   }
+  }
+ }finally{h.close();}
+});
+
+test('B Timeline sustains linked layers with explicit offsets, current harmony and stable Heartbeat phase',async()=>{
+ const h=harness();try{
+  const before=h.panels.map(p=>structuredClone(p.sourceNotes)),result=await h.arranger.arrange();h.sync();
+  const a=h.structures.list().find(n=>n.name==='A layers'),b=h.structures.list().find(n=>n.name==='B layers');
+  assert.equal(a.type,'together');assert.equal(b.type,'timeline');assert.deepEqual(b.entries.map(e=>e.offsetTick),[0,384,768]);
+  assert.deepEqual(b.entries.map(e=>h.structures.get(e.childId).count),[4,3,2]);assert.equal(h.structures.durationOf(b.id),1536);
+  assert.equal(h.adapter.runtime.getInstance(h.structures.get(result.rootId).definitionId).phaseOriginTick,0);
+  const bInstances=b.entries.map(e=>h.panels.find(p=>p.id===h.model.list('sequence').find(c=>c.from.objectId===e.childId).to.objectId));
+  assert.deepEqual(bInstances.map(p=>p.dataset.masterToyId),['accompaniment','rhythm','melody']);
+  assert.ok(bInstances.every(p=>p.sourceNotes===h.panels.find(m=>m.id===p.dataset.masterToyId).sourceNotes));
+  for(const cycle of [0,6144])for(let bar=0;bar<4;bar++){
+   const tick=cycle+3072+bar*384;h.adapter.updateCurrent(tick);
+   const active=h.adapter.turnsForLookahead(tick,tick+1);
+   assert.deepEqual(active.map(t=>panelsMaster(h,t.toyId)).sort(),bar===0?['accompaniment']:bar===1?['accompaniment','rhythm']:['accompaniment','melody','rhythm']);
+   for(const turn of active){const role=h.panels.find(p=>p.id===turn.toyId).dataset.musicalRole;
+    assert.equal(turn.playbackInstance.sourcePhaseOriginTick,{accompaniment:0,percussion:384,melody:768}[role]);
+    assert.equal(activeToyChord({instance:turn.playbackInstance,currentTick:tick,playing:true,role}),role==='percussion'?null:['F','G','Am','C'][bar]);
+   }
+  }
+  const aTurns=h.adapter.turnsForLookahead(1536,1537);assert.equal(aTurns.length,3);assert.ok(aTurns.every(t=>t.playbackInstance.sourcePhaseOriginTick===0));
+  assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>p.sourceNotes),before);
+ }finally{h.close();}
+});
+
+test('B Repeat counts respect longer natural sources while the complete arrangement stays 16 bars',async()=>{
+ const h=harness();try{
+  ensurePlaybackInstance('accompaniment',{loopLengthTicks:768});const result=await h.arranger.arrange();h.sync();
+  const timeline=h.structures.list().find(n=>n.type==='timeline');assert.deepEqual(timeline.entries.map(e=>h.structures.get(e.childId).count),[2,3,2]);
+  assert.equal(h.structures.durationOf(timeline.id),1536);assert.equal(h.adapter.runtime.getDefinition(h.structures.get(result.rootId).definitionId).durationTicks,6144);
+  for(const tick of [3072,3456,3840,4224])assert.ok(h.adapter.turnsForLookahead(tick,tick+1).some(t=>panelsMaster(h,t.toyId)==='accompaniment'));
+ }finally{h.close();}
+});
+
 test('selection is deterministic, prefers authored sources, ignores instruments, and excludes Drum Kit',()=>{
  const p=(id,toy,role,filled=false)=>({id,dataset:{toy,musicalRole:role,instrument:'bass',...(filled?{autoArrangeOrigin:'filled'}:{})}});
  const panels=[p('z','drawgrid','melody'),p('a','drawgrid','melody'),p('0','drawgrid','melody',true),p('kit','loopgrid-drum','percussion'),p('bass','drawgrid','bass')];
@@ -78,8 +129,8 @@ test('production scheduling adapts accompaniment, preserves the melody motif and
   const result=await h.arranger.arrange();h.sync();h.schedule();
   const accompaniment=h.notes.filter(n=>n.toyId==='accompaniment');assert.equal(accompaniment.length,128);
   assert.deepEqual(accompaniment.filter(n=>n.eventTick%384===0).map(n=>n.finalNote),['C3','A2','F3','G2','C3','A2','F3','G2','F3','G2','A2','C3','C3','A2','F3','G2']);
-  const melody=h.notes.filter(n=>n.toyId==='melody');assert.equal(melody.length,64);assert.ok(melody.every(n=>Math.abs(noteMidi(n.finalNote)-noteMidi(n.sourceNote))<=1));
-  const drums=h.notes.filter(n=>n.toyId==='rhythm');assert.equal(drums.length,64);assert.ok(drums.every(n=>n.finalNote===n.sourceNote && n.resolvedChord===null));
+  const melody=h.notes.filter(n=>n.toyId==='melody');assert.equal(melody.length,48);assert.ok(melody.every(n=>Math.abs(noteMidi(n.finalNote)-noteMidi(n.sourceNote))<=1));
+  const drums=h.notes.filter(n=>n.toyId==='rhythm');assert.equal(drums.length,56);assert.ok(drums.every(n=>n.finalNote===n.sourceNote && n.resolvedChord===null));
   const root=h.structures.get(result.rootId),first=h.adapter.runtime.turnsInWindow(root.definitionId,0,6144),second=h.adapter.runtime.turnsInWindow(root.definitionId,6144,12288);
   assert.deepEqual(second.map(t=>[t.toyId,t.startTick-6144]),first.map(t=>[t.toyId,t.startTick]));
   assert.ok(second.every(t=>t.rootCycleStartTick===6144));
@@ -97,7 +148,7 @@ test('Arrange Again replaces only owned topology, preserves every source and unr
   const first=await h.arranger.arrange();h.panels.find(p=>p.id===first.sourceIds.accompaniment).sourceNotes[0]='E3';
   h.structures.move(first.rootId,750,220,{manual:true});
   const sources=structuredClone(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>p.sourceNotes));const second=await h.arranger.arrange();h.sync();
-  assert.equal(h.structures.get(first.rootId),null);assert.equal(h.structures.list().length,8);assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>p.sourceNotes),sources);
+  assert.equal(h.structures.get(first.rootId),null);assert.equal(h.structures.list().length,11);assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>p.sourceNotes),sources);
   assert.equal(h.structures.get(second.rootId).x,750);assert.equal(h.structures.get(second.rootId).y,220);
   assert.deepEqual(second.sourceIds,first.sourceIds);assert.deepEqual(h.model.list().filter(e=>e.from.objectId===unrelated.id||e.to.objectId===unrelated.id),unrelatedEdges);
   assert.equal(h.panels.filter(p=>!p.dataset.masterToyId&&p.dataset.autoArrangeOrigin==='filled').length,1);assert.ok(h.structures.get(unrelated.id));
@@ -107,9 +158,11 @@ test('Arrange Again replaces only owned topology, preserves every source and unr
 test('ordinary topology and ownership persist/reload without regeneration, supporting safe Arrange Again',async()=>{
  const h=harness();try{
   const first=await h.arranger.arrange();const saved=JSON.parse(JSON.stringify({nodes:h.structures.list(),edges:h.model.list()}));
-  h.adapter.reset();h.model.list().forEach(e=>h.model.disconnect(e.id));h.structures.restore(saved.nodes);saved.edges.forEach(e=>assert.equal(h.model.connect(e.kind,e.from,e.to,{id:e.id}).ok,true));h.sync();
+  h.adapter.reset();h.model.list().forEach(e=>h.model.disconnect(e.id));h.structures.suspend(()=>{h.structures.restore(saved.nodes);saved.edges.forEach(e=>assert.equal(h.model.connect(e.kind,e.from,e.to,{id:e.id}).ok,true));});h.sync();
   const root=h.structures.get(first.rootId);assert.equal(h.adapter.runtime.getDefinition(root.definitionId).durationTicks,6144);assert.equal(h.adapter.runtime.turnsInWindow(root.definitionId,6144,6145).length,1);
-  await h.arranger.arrange();assert.equal(h.structures.list().length,7);assert.equal(h.panels.filter(p=>!p.dataset.masterToyId).length,3);
+  const timeline=h.structures.list().find(n=>n.type==='timeline');assert.deepEqual(timeline.entries.map(e=>e.offsetTick),[0,384,768]);
+  const b=h.adapter.turnsForLookahead(3456,3457);assert.deepEqual(b.map(t=>panelsMaster(h,t.toyId)).sort(),['accompaniment','rhythm']);
+  await h.arranger.arrange();assert.equal(h.structures.list().length,10);assert.equal(h.panels.filter(p=>!p.dataset.masterToyId).length,3);
  }finally{h.close();}
 });
 

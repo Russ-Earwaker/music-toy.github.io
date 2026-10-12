@@ -89,7 +89,7 @@ test('root progression plays C Am F G twice; nested progression completes before
  }finally{h.close();}
 });
 
-test('disconnect revokes owned future occurrences; reconnect and deliberate retrigger establish fresh quantized anchors',()=>{
+test('disconnect revokes future occurrences; reconnect and retrigger establish gates on the shared phase lattice',()=>{
  const h=harness({A:384,B:384});try{
   const edge=h.root('A');h.root('B');h.sync();const pending=h.turns(400,800).find(t=>t.toyId==='A');
   assert.equal(isPlaybackOccurrenceValid(pending.playbackInstance),true);
@@ -97,7 +97,7 @@ test('disconnect revokes owned future occurrences; reconnect and deliberate retr
   assert.ok(h.turns(400,2000).every(t=>t.toyId==='B'));assert.equal(isPlaybackOccurrenceValid(pending.playbackInstance),false);
   assert.equal(h.model.getParent('A'),null);h.root('A');h.sync();
   const instance=h.adapter.runtime.getInstance('sequence:A');assert.equal(instance.startTick,480);
-  assert.deepEqual(h.turns(400,1248).filter(t=>t.toyId==='A').map(t=>t.startTick),[480,864]);
+  assert.deepEqual(h.turns(400,1248).filter(t=>t.toyId==='A').map(t=>t.startTick),[480,768,1152]);
   h.adapter.retrigger('A',{state:'playing',currentTick:500});h.state.currentTick=510;h.sync();
   assert.equal(h.adapter.runtime.getInstance('sequence:A').startTick,576,'resync must not restart a deliberately retriggered root');
  }finally{h.close();}

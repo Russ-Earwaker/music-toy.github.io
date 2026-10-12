@@ -15,19 +15,19 @@ const turns=(r,id,from,to)=>r.turnsInWindow(id,from,to).map(t=>[t.toyId,t.startT
 test('Timeline stores explicit relative offsets and overlaps, and duration is the maximum end',()=>{
   const r=createStructureRuntime();r.defineStructure('T','timeline',[toy('A',0,768),toy('B',384,384),toy('C',768,192)]);
   assert.equal(r.getDefinition('T').durationTicks,960);assert.deepEqual(r.getDefinition('T').children.map(c=>[c.childId,c.offsetTick]),[['A',0],['B',384],['C',768]]);
-  r.startSequence('T',96,{quantize:false,loop:true});assert.deepEqual(turns(r,'T',96,1056),[['A',96,864],['B',480,864],['C',864,1056]]);
+  r.startSequence('T',96,{quantize:false,loop:true});assert.deepEqual(turns(r,'T',96,960),[['A',96,768],['B',384,768],['C',768,960]]);
   assert.deepEqual(turns(r,'T',600,601).map(t=>t[0]),['A','B']);
 });
-test('Sequence and Repeat can be Timeline children, and Timeline offsets repeat relative to each activation',()=>{
+test('Sequence and Repeat can be Timeline children, and Timeline offsets repeat on the Heartbeat lattice',()=>{
   const r=createStructureRuntime();r.defineSequence('S',[toy('A',0,96),toy('B',0,192)]);
   r.defineStructure('R','repeat',[toy('C',0,96)],0,{count:3});
   r.defineStructure('T','timeline',[ref('S',96),ref('R',192)],0,{representationId:'T'});
   assert.equal(r.getDefinition('T').durationTicks,480);
   r.defineStructure('outer','repeat',[ref('T')],0,{count:2});r.startSequence('outer',100,{quantize:false,loop:true});
-  assert.deepEqual(turns(r,'outer',100,1060),[['A',196,292],['B',292,484],['C',292,388],['C',388,484],['C',484,580],
-    ['A',676,772],['B',772,964],['C',772,868],['C',868,964],['C',964,1060]]);
+  assert.deepEqual(turns(r,'outer',100,960),[['A',100,192],['B',192,384],['C',192,288],['C',288,384],['C',384,480],
+    ['A',576,672],['B',672,864],['C',672,768],['C',768,864],['C',864,960]]);
   assert.equal(r.getDefinition('outer').durationTicks,960);
-  assert.equal(r.turnsInWindow('outer',676,677)[0].structureContexts.find(c=>c.definitionId==='T').startTick,580);
+  assert.equal(r.turnsInWindow('outer',676,677)[0].structureContexts.find(c=>c.definitionId==='T').startTick,480);
 });
 test('nested Timeline and childId definitions share the same runtime and reject cycles',()=>{
   assert.throws(()=>createStructureRuntime().defineStructure('self','timeline',[{childId:'self',offsetTick:0}]),/Cyclic/);

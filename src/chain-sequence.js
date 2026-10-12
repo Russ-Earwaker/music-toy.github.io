@@ -256,7 +256,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
         if (toy) toy.dataset.chainActive = 'false';
       }
       if (previous?.structureTurnId && previous.structureTurnId !== turn?.id)
-        toy?.__sequenceTurnEnded?.(previous.startTick + previous.durationTicks);
+        toy?.__sequenceTurnEnded?.(previous.endTick ?? previous.startTick + previous.durationTicks);
     }
     for (const [turn, previous] of activations) onTurn(turn, previous);
     discardPrepared(turn => (!transportId || turn.transportId === transportId) && turn.endTick <
