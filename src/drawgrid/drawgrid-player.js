@@ -108,7 +108,7 @@ export function connectDrawGridToPlayer(panel) {
   };
 
   // The gated trigger respects the toy's volume/mute settings.
-  const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument);
+  const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument, { scheduleAhead: true });
 
   const activateAtTransport = ({ retrigger = false } = {}) => {
     const transport = getTransportState();

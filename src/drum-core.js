@@ -139,7 +139,7 @@ export function buildDrumGrid(panel, numSteps = 8){
   panel.__audioToyId = toyId;
 
   // Create gated trigger for audio generation guard
-  const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument);
+  const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument, { scheduleAhead: true });
 
   const activateAtTransport = ({ retrigger = false } = {}) => {
     const transport = getTransportState();

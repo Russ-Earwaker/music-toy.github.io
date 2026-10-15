@@ -67,4 +67,7 @@ test('legacy generator IDs survive save/load and Advanced cannot change the play
  const notes=()=>state.currentMap.nodes.map(s=>[...s]);
  regen.regenerateMapFromStrokes();const before=notes(),authored=JSON.stringify(strokes);zoomInPanel(p);regen.regenerateMapFromStrokes();assert.deepEqual(notes(),before);zoomOutPanel();regen.regenerateMapFromStrokes();assert.deepEqual(notes(),before);assert.equal(JSON.stringify(strokes),authored);
  const saved=createDgStateIo({state}).captureState();const restored=upgradeDrawGridStrokes(saved.strokes);assert.deepEqual(restored.map(s=>[s.generatorId,s.isSpecial]),[[1,true],[2,false]]);
+ state.__dgPreserveNodesOverStrokes=true;state.currentMap.nodes[0]=new Set([3]);const imported=notes();
+ for(const reason of ['layout','zoom-recompute-back','setState-strokes']){state.__dgRegenSource=reason;regen.regenerateMapFromStrokes();assert.deepEqual(notes(),imported,'presentation redraw retains imported notes');}
+ state.__dgRegenSource='stroke-commit';regen.regenerateMapFromStrokes();assert.equal(state.__dgPreserveNodesOverStrokes,false);assert.deepEqual(notes(),before,'a real drawing edit still regenerates the musical map');
 });

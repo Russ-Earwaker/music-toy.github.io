@@ -270,7 +270,7 @@ export function toyVolume(id){ return getState(id).volume; }
  * the captured toyId to the trigger function as the 4th argument so routing
  * uses the correct per-toy bus (not 'master').
  */
-export function gateTriggerForToy(toyId, triggerFn){
+export function gateTriggerForToy(toyId, triggerFn, { scheduleAhead = false } = {}){
   const sourceId = keyOf(toyId);
 
   // Debug defaults OFF (enable in DevTools: window.__AUDIO_GATE_DEBUG = true)
@@ -337,9 +337,11 @@ export function gateTriggerForToy(toyId, triggerFn){
         try { window.dispatchEvent(new CustomEvent('toy-hit', { detail: { id, note: noteName, when } })); } catch {}
       }
 
-      // If scheduled for the future, ALWAYS defer the actual trigger until near play time,
-      // then re-check generation. This is what prevents "old chain toy col0" from firing.
-      if (Number.isFinite(when) && when > 0) {
+      // Legacy callbacks without cancellable Web Audio sources still defer.
+      // Grid players use triggerInstrument's source registry: commit their
+      // audio now, so camera/render stalls cannot delay note-onset timers.
+      // Generation/occurrence invalidation cancels those registered sources.
+      if (!scheduleAhead && Number.isFinite(when) && when > 0) {
         let now = null;
         try {
           const ctx = ensureAudioContext();

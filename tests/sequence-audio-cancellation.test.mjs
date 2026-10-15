@@ -100,3 +100,17 @@ test('deferred legacy audio gates capture context and discard only an invalidate
     globalThis.setTimeout = originalSet; globalThis.clearTimeout = originalClear;
   }
 });
+
+test('cancellable grid gates commit Web Audio ahead of camera work and still cancel per occurrence or generation',async()=>{
+ const {gateTriggerForToy,bumpToyAudioGen}=await import('../src/toy-audio.js');
+ const ctx=ensureAudioContext(),start=ctx.currentTime+1,initial=ctx.nodes.length;
+ const a=createPlaybackInstanceForStructureTurn({id:'ahead-a',toyId:'ahead-source',startTick:0,durationTicks:768,transportId:'main-heartbeat',generation:0});
+ const b=createPlaybackInstanceForStructureTurn({id:'ahead-b',toyId:'ahead-source',startTick:0,durationTicks:768,transportId:'main-heartbeat',generation:0});
+ const gate=gateTriggerForToy('ahead-source',triggerInstrument,{scheduleAhead:true});
+ const metadata=(instance,view)=>({occurrenceId:instance.occurrenceId,generation:instance.generation,instanceToyId:view,context:instance.context});
+ withPlaybackOccurrence(metadata(a,'ahead-view-a'),()=>gate('tone','C4',start));
+ withPlaybackOccurrence(metadata(b,'ahead-view-b'),()=>gate('tone','D4',start));
+ const [first,second]=ctx.nodes.slice(initial);assert.ok(first&&second,'sources exist immediately, without waiting for a JavaScript timer');assert.equal(first.startTime,start);assert.equal(second.startTime,start);
+ invalidatePlaybackOccurrence(a.occurrenceId);assert.equal(first.stopCalls.length,2);assert.equal(second.stopCalls.length,1);
+ bumpToyAudioGen('ahead-view-b','pause-test');assert.equal(second.stopCalls.length,2);invalidatePlaybackOccurrence(b.occurrenceId);
+});

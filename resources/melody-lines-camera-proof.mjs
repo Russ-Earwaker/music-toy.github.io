@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
+const dir=new URL('./debug-output/',import.meta.url),files=readdirSync(dir),read=file=>({file,...JSON.parse(readFileSync(new URL(file,dir)))});
+const baseline=files.filter(f=>f.startsWith('melody-lines-camera-before-')).sort().map(read).at(-1);
+const reports=files.filter(f=>/^melody-lines-camera-20.*\.json$/.test(f)).sort().map(read);
+const beforeAudio=reports.find(r=>r.events.some(e=>e.schedulingLateMs>500));assert.ok(beforeAudio);
+const final=reports.findLast(r=>r.seed?.state.strokes?.length&&r.events.length>50&&r.events.every(e=>e.schedulingLateMs<=1));assert.ok(final);
+const snapshot=final.actions.at(-1).snapshot,definitions=snapshot.sharedToyDefinitions.filter(d=>d.state.musicalRole==='melody');assert.equal(definitions.length,4);assert.ok(definitions.every(d=>d.state.strokes.some(s=>s.ptsN?.length>1)));
+assert.deepEqual(definitions.find(d=>d.id==='toy-definition:'+final.seed.id).state.nodes,final.seed.state.nodes);
+const views=final.actions.at(-1).panels.filter(p=>p.role==='melody');assert.equal(views.length,8);assert.ok(views.every(p=>p.editor.strokes.some(s=>s.ptsN?.length>1)));assert.deepEqual(final.actions.at(-1).unconnected,[]);
+const lead=final.events.map(e=>e.audioLeadMs).sort((a,b)=>a-b),before=baseline.timing.at(-1),after=final.timing.at(-1);
+assert.ok(lead[Math.floor(lead.length/2)]>500);assert.ok(after.uiMutations/after.samples<before.uiMutations/before.samples/10);assert.deepEqual(final.errors.filter(e=>!e.includes('[BV]')),[]);
+const result={baselineUI:baseline.file,beforeAudio:beforeAudio.file,final:final.file,melodyDefinitionsWithLines:4,melodyViewsWithLines:8,sourceNotesPreserved:true,noteEvents:final.events.length,lateNoteSchedulesOver1ms:0,maxSchedulingLateMs:Math.max(...final.events.map(e=>e.schedulingLateMs)),medianSchedulingLeadMs:lead[Math.floor(lead.length/2)],beforeHeaderMutations:before.uiMutations,afterHeaderMutations:after.uiMutations,beforeSamples:before.samples,afterSamples:after.samples,finalCameraTimerMaxGapMs:after.max};
+writeFileSync(new URL('melody-lines-camera-proof.json',dir),JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result,null,2));

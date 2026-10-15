@@ -1,10 +1,10 @@
-// Canonical storage anchors are internal. All Sequence views can edit the same
-// ordered child definitions, with independent local expansions and occurrences.
-export function createLinkedSequenceController({model,structures,getToy,getPanels,createToyInstance,removeToy,placeChild,placeInstance,changed=()=>{}}){
- let busy=false,paused=false;
+// Definition records own the Sequence's musical membership. Board structures
+// are local expansions; legacy parent links are a compiler compatibility index.
+export function createLinkedSequenceController({model,structures,getToy,getPanels,createToyInstance,adoptToy,removeToy,placeChild,placeInstance,changed=()=>{}}){
+ let busy=false,paused=false;const definitions=new Map();
  const edges=id=>model.list('sequence').filter(e=>e.from.objectId===id).sort((a,b)=>Number(a.from.portId.split(':')[1])-Number(b.from.portId.split(':')[1]));
- const root=s=>s?.masterStructureId?structures.get(s.masterStructureId):s;
- const family=s=>structures.list().filter(q=>q.id===root(s)?.id||q.masterStructureId===root(s)?.id);
+ const root=s=>s?.sharedDefinitionId?structures.list().find(q=>q.sharedDefinitionId===s.sharedDefinitionId&&!q.masterStructureId)||s:s?.masterStructureId?structures.get(s.masterStructureId):s;
+ const family=s=>s?.sharedDefinitionId?structures.list().filter(q=>q.sharedDefinitionId===s.sharedDefinitionId):structures.list().filter(q=>q.id===s?.id||q.masterStructureId===s?.id);
  const source=p=>p?.dataset.masterToyId?getToy(p.dataset.masterToyId):p;
  const definition=p=>{const s=source(p);if(!s)throw new Error('Missing linked toy definition.');return s.dataset.sharedDefinitionId ||= 'toy-definition:'+s.id;};
  const toyFor=id=>getPanels().find(p=>!p.dataset.masterToyId&&p.dataset.sharedDefinitionId===id);
@@ -20,7 +20,11 @@ export function createLinkedSequenceController({model,structures,getToy,getPanel
    for(const [i,e] of edges(s.id).entries()){const p=getToy(e.to.objectId);p.dataset.structureInstanceId=s.id;p.dataset.structureMasterChildId=children[i].slotId;}
   }
   if(!structures.get(s.id).sharedName){const current=structures.get(s.id),suffix=current.linkedCopyNumber||current.structureInstanceNumber;const name=current.name||'Phrase 1';structures.annotate(s.id,{sharedName:suffix&&name.endsWith('.'+suffix)?name.slice(0,-String(suffix).length-1):name});}
-  return structures.get(s.id);
+  const current=structures.get(s.id);let record=definitions.get(current.sharedDefinitionId);
+  if(!record){record={id:current.sharedDefinitionId,type:'sequence',views:new Set(),children:structuredClone(current.sharedChildren)};definitions.set(record.id,record);}
+  Object.assign(record,{name:current.sharedName,serial:current.structureInstanceSerial||0,autoArrangePhrase:current.autoArrangePhrase});
+  for(const view of family(current))record.views.add(view.id);
+  return {...current,sharedChildren:record.children};
  }
  function syncView(view,canonical){
   const owned=getPanels().filter(p=>p.dataset.structureInstanceId===view.id),wanted=canonical.sharedChildren.filter(slot=>!view.omittedChildSlots?.includes(slot.slotId)).map((slot,i)=>{
@@ -63,14 +67,16 @@ export function createLinkedSequenceController({model,structures,getToy,getPanel
   const visible=describe(id);let index=0;
   const children=view.omittedChildSlots?.length?[...canonical.sharedChildren.map(slot=>view.omittedChildSlots.includes(slot.slotId)?slot:visible[index++]).filter(Boolean),...visible.slice(index)]:visible;
   if(JSON.stringify(children)===JSON.stringify(canonical.sharedChildren))return;
-  busy=true;try{structures.annotate(canonical.id,{sharedChildren:children});for(const e of edges(id)){const p=getToy(e.to.objectId);p.dataset.structureInstanceId=id;p.dataset.structureMasterChildId ||=p.id;}}finally{busy=false;}sync();changed();
+  busy=true;try{const record=definitions.get(canonical.sharedDefinitionId);if(record)record.children=structuredClone(children);structures.annotate(canonical.id,{sharedChildren:children});for(const e of edges(id)){const p=getToy(e.to.objectId);p.dataset.structureInstanceId=id;p.dataset.structureMasterChildId ||=p.id;}}finally{busy=false;}sync();changed();
  }
  function cleanup(s){const previous=busy;busy=true;
   try{
+   const definition=definitions.get(s.sharedDefinitionId);definition?.views.delete(s.id);if(family(s).length<=1)definitions.delete(s.sharedDefinitionId);
    if(!s.masterStructureId&&s.sharedChildren){const others=family(s).filter(q=>q.id!==s.id);if(others.length){
     const next=others.sort((a,b)=>(a.linkedCopyNumber||a.structureInstanceNumber)-(b.linkedCopyNumber||b.structureInstanceNumber))[0];
     const base=s.sharedName||s.name;
-    structures.annotate(next.id,{masterStructureId:null,sharedName:base,sharedChildren:s.sharedChildren,name:base+'.'+(next.linkedCopyNumber||next.structureInstanceNumber),structureInstanceSerial:s.structureInstanceSerial,autoArrange:null,autoArrangePhrase:s.autoArrangePhrase});
+    const record=definitions.get(s.sharedDefinitionId);record?.views.delete(s.id);
+    structures.annotate(next.id,{masterStructureId:null,sharedName:base,sharedChildren:record?.children||s.sharedChildren,name:base+'.'+(next.linkedCopyNumber||next.structureInstanceNumber),structureInstanceSerial:s.structureInstanceSerial,autoArrange:next.autoArrange,autoArrangePhrase:record?.autoArrangePhrase||s.autoArrangePhrase});
     for(const peer of others)if(peer.id!==next.id)structures.annotate(peer.id,{masterStructureId:next.id});
     for(const node of structures.list())if(node.autoArrange?.root&&node.autoArrange.sourceIds.melody===s.id)structures.annotate(node.id,{autoArrange:{...node.autoArrange,sourceIds:{...node.autoArrange.sourceIds,melody:next.id}}});
    }}
@@ -90,6 +96,7 @@ export function createLinkedSequenceController({model,structures,getToy,getPanel
   if(parent&&structures.get(parent.from.objectId)?.sharedDefinitionId)return 'linked-sequence-direct-children';return null;
  });
  function removeLocalChild(p){const view=structures.get(p.dataset.structureInstanceId);if(!view)return;const slot=p.dataset.structureMasterChildId;busy=true;try{structures.annotate(view.id,{omittedChildSlots:[...new Set([...(view.omittedChildSlots||[]),slot])]});delete p.dataset.structureInstanceId;delete p.dataset.structureMasterChildId;}finally{busy=false;}}
- return {create,sync,cleanup,editView,removeLocalChild,canRemove:()=>true,canChangeType:(id,type)=>type==='sequence'||!structures.get(id)?.sharedDefinitionId,instances:id=>family(structures.get(id)).filter(s=>s.id!==id),pause:()=>{paused=true;},resume:()=>{paused=false;sync();},remove:id=>structures.remove(id),removeOwned:owner=>{for(const s of structures.list())if(s.masterStructureId&&s.autoArrange?.owner===owner)structures.remove(s.id);},sourcePromoted:()=>sync(),dispose:()=>{unsubscribe();stop();}};
+ function adopt(id,options){busy=true;try{const s=initialise(structures.get(typeof id==='string'?id:id.id)),number=s.linkedCopyNumber||Math.max(1,(s.structureInstanceSerial||0)+1);structures.annotate(s.id,{linkedCopyNumber:number,structureInstanceSerial:Math.max(s.structureInstanceSerial||0,number),autoArrange:{owner:options.owner}});for(const edge of edges(s.id))adoptToy?.(getToy(edge.to.objectId));structures.move(s.id,options.x,options.y);syncView(structures.get(s.id),structures.get(s.id));structures.setCollapsed(s.id,false);return structures.get(s.id);}finally{busy=false;}}
+ return {adopt,definitions:()=>[...definitions.values()],create,sync,cleanup,editView,removeLocalChild,canRemove:()=>true,canChangeType:(id,type)=>type==='sequence'||!structures.get(id)?.sharedDefinitionId,instances:id=>family(structures.get(id)).filter(s=>s.id!==id),pause:()=>{paused=true;definitions.clear();},resume:()=>{paused=false;sync();},remove:id=>structures.remove(id),removeOwned:owner=>{for(const s of structures.list())if(s.masterStructureId&&s.autoArrange?.owner===owner)structures.remove(s.id);},sourcePromoted:()=>sync(),dispose:()=>{unsubscribe();stop();}};
 }
 // TODO: Make Independent — clone the Sequence definition and its toy links.

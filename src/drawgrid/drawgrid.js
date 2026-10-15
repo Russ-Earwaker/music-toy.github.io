@@ -513,7 +513,6 @@ try {
   }
 } catch {}
 let __dgLayerDebugLastTs = 0;
-let __dgRegenSource = '';
   let __dgLayerTraceLastTs = 0;
   let __dgSampleCanvas = null;
   let __dgSampleCtx = null;
@@ -528,6 +527,7 @@ let __dgRegenSource = '';
  * @returns {Array<Set<number>>} A new array with all columns filled.
  */
 export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
+  let __dgRegenSource = '', __dgPreserveNodesOverStrokes = false, __dgSkipMapRegenOnce = false;
   const getLoopInfo = () => getPanelLoopInfo(panel);
   const isRunning = () => isPanelTransportRunning(panel);
   // Per-instance state (WAS module-level; moving fixes cross-toy leakage)
@@ -3225,6 +3225,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   // New central helper to redraw the paint canvas and regenerate the node map from the `strokes` array.
   ({ clearAndRedrawFromStrokes, drawIntoBackOnly } = createDgPaintRedraw({
     state: {
+      get __dgSkipMapRegenOnce() { return __dgSkipMapRegenOnce; },
+      set __dgSkipMapRegenOnce(v) { __dgSkipMapRegenOnce = v; },
       get panel() { return panel; },
       get strokes() { return strokes; },
       get cur() { return cur; },
@@ -4463,6 +4465,8 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
    * and marks the interpolated nodes as disabled.
    */
   const dgMapRegenState = {
+    get __dgPreserveNodesOverStrokes() { return __dgPreserveNodesOverStrokes; },
+    set __dgPreserveNodesOverStrokes(v) { __dgPreserveNodesOverStrokes = v; },
     get panel() { return panel; },
     get cols() { return cols; },
     get currentCols() { return currentCols; },
@@ -6996,6 +7000,10 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   }));
   ({ setState } = createDgSetState({
     state: {
+      get __dgPreserveNodesOverStrokes() { return __dgPreserveNodesOverStrokes; },
+      set __dgPreserveNodesOverStrokes(v) { __dgPreserveNodesOverStrokes = v; },
+      get __dgSkipMapRegenOnce() { return __dgSkipMapRegenOnce; },
+      set __dgSkipMapRegenOnce(v) { __dgSkipMapRegenOnce = v; },
       get panel() { return panel; },
       get cols() { return cols; },
       set cols(v) {

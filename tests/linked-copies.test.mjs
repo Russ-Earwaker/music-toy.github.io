@@ -10,27 +10,70 @@ import {ensurePlaybackInstance,clearPlaybackInstancesForTests} from '../src/play
 import {linkToyAudioBus,setToyVolume,getToyVolumeRaw,setToyMuted,isToyMuted,getToyGain} from '../src/audio-core.js';
 import {validateInstanceLinks} from '../src/toy-instances.js';
 import {validateStructureInstanceLinks} from '../src/structure-instances.js';
+import {createAutoArranger} from '../src/auto-arrange.js';
+import {continueDrawgridPhrase,splitDrawgridPhrase,prepareDrawgridPhrase,hasDrawgridPhraseMaterial,repairDrawgridPhraseStrokes} from '../src/drawgrid/dg-phrase-chunks.js';
+import {storeLinkedDefinitions,projectLinkedDefinitions} from '../src/linked-definitions.js';
+
+test('Arrange generates melody for a freshly created empty DrawGrid but preserves an authored seed',async()=>{
+ const empty={steps:8,instrument:'PIANO',nodes:{active:Array(8).fill(false),list:Array.from({length:8},()=>[]),disabled:Array.from({length:8},()=>[])},strokes:[]};
+ let generated=0;const generate=async()=>{generated++;return {...empty,steps:32,nodes:{active:Array(32).fill(true),list:Array.from({length:32},(_,i)=>[i%5]),disabled:Array.from({length:32},()=>[])}};};
+ assert.equal(hasDrawgridPhraseMaterial(empty),false);const parts=await prepareDrawgridPhrase(empty,generate);assert.equal(generated,1);assert.equal(parts.length,4);assert.ok(parts.every(p=>p.steps===8&&hasDrawgridPhraseMaterial(p)));assert.equal(empty.steps,8);assert.ok(empty.nodes.list.every(rows=>rows.length===0));
+ const authored=structuredClone(parts[0]),before=structuredClone(authored),seeded=await prepareDrawgridPhrase(authored,()=>assert.fail('Authored notes must not be randomized'));assert.deepEqual(authored,before);assert.deepEqual(seeded[0],authored);
+ await assert.rejects(prepareDrawgridPhrase(empty,async()=>({...empty,steps:32})),/no notes/);
+});
+
+test('seed continuations preserve authored chunk, instrument, range and rhythm with a motif development',()=>{
+ const seed={steps:8,instrument:'PIANO',musicalRole:'melody',nodes:{active:[true,false,true,true,true,false,true,true],list:[[2],[],[4],[6],[3],[],[5],[4]],disabled:Array.from({length:8},()=>[])},strokes:[{ptsN:[{nx:0,ny:.2},{nx:.5,ny:.6},{nx:1,ny:.4}],color:'#abcdef',isSpecial:true,generatorId:1}],manualOverrides:[]};
+ const before=structuredClone(seed),parts=continueDrawgridPhrase(seed);assert.deepEqual(seed,before);assert.deepEqual(parts[0],seed);assert.deepEqual(parts[1].nodes,seed.nodes);assert.deepEqual(parts[2].nodes.list,[...seed.nodes.list.slice(4),...seed.nodes.list.slice(0,4)]);assert.deepEqual(parts[3].nodes.list.at(-1),[2]);
+ assert.ok(parts.every(p=>p.instrument==='PIANO'&&p.musicalRole==='melody'&&p.steps===8));
+ assert.deepEqual(parts[1].strokes,seed.strokes);assert.deepEqual(parts[3].strokes,seed.strokes);assert.equal(parts[2].strokes.length,2);assert.deepEqual(parts[2].strokes.map(s=>s.ptsN),[[{nx:0,ny:.6},{nx:.5,ny:.4}],[{nx:.5,ny:.2},{nx:1,ny:.6}]]);
+ for(const steps of [16,32]){const long={...seed,steps,nodes:Object.fromEntries(Object.entries(seed.nodes).map(([k,v])=>[k,Array.from({length:steps},(_,i)=>structuredClone(v[i%8]))]))},before=structuredClone(long),chunks=continueDrawgridPhrase(long);assert.deepEqual(long,before);assert.equal(chunks.length,4);assert.deepEqual(chunks.slice(0,steps/8).flatMap(c=>c.nodes.list),long.nodes.list);}
+ const backwards=splitDrawgridPhrase({...seed,steps:32,strokes:[{ptsN:[{nx:1,ny:.2},{nx:0,ny:.8}],color:'#abc'}]});assert.ok(backwards.every(p=>p.strokes.length===1&&p.strokes[0].ptsN.length===2));assert.equal(backwards[0].strokes[0].ptsN[0].nx,1);assert.equal(backwards[3].strokes[0].ptsN.at(-1).nx,0);
+ const old=structuredClone(parts);old.slice(1).forEach(p=>{p.strokes=[];p.nodes.list[0]=[9];});const repaired=repairDrawgridPhraseStrokes(old);assert.ok(repaired.every(p=>p.strokes.length));assert.ok(repaired.slice(1).every(p=>p.nodes.list[0][0]===9));assert.ok(old.slice(1).every(p=>p.strokes.length===0));assert.equal(repairDrawgridPhraseStrokes(repaired)[2],repaired[2]);
+});
+
+test('definition-centric scenes persist data independently of any editor ID and migrate legacy scenes',()=>{
+ const legacy={toys:[{id:'a',type:'drawgrid',toyName:'Draw 1',sharedDefinitionId:'notes',instanceSerial:2,linkedCopyNumber:1,state:{notes:['C4']},volume:.4,muted:true},{id:'b',type:'drawgrid',sharedDefinitionId:'notes',masterToyId:'a',instanceNumber:2,linkedCopyNumber:2,state:{}}],structureToys:[{id:'p',type:'sequence',sharedDefinitionId:'phrase',sharedName:'Phrase',sharedChildren:[{slotId:'one',toyDefinitionId:'notes'}],linkedCopyNumber:1,structureInstanceSerial:2},{id:'q',type:'sequence',masterStructureId:'p',sharedDefinitionId:'phrase',linkedCopyNumber:2}],connections:[]};
+ const saved=storeLinkedDefinitions(legacy);assert.equal(saved.sharedToyDefinitions.length,1);assert.equal(saved.sharedSequenceDefinitions.length,1);assert.ok(saved.toys.every(t=>!t.masterToyId&&!t.state));assert.ok(saved.structureToys.every(s=>!s.masterStructureId&&!s.sharedChildren));
+ // A different visible editor can be the first restored view; identity/state/audio do not change.
+ saved.toys.reverse();saved.structureToys.reverse();const restored=projectLinkedDefinitions(JSON.parse(JSON.stringify(saved)));assert.equal(restored.toys[0].id,'b');assert.deepEqual(restored.toys[0].state,{notes:['C4']});assert.equal(restored.toys[0].volume,.4);assert.equal(restored.toys[0].sharedDefinitionData.bus,'shared-audio:notes');assert.equal(restored.toys[1].masterToyId,'b');assert.deepEqual(restored.structureToys[0].sharedChildren,legacy.structureToys[0].sharedChildren);assert.equal(restored.structureToys[1].masterStructureId,'q');
+ assert.equal(projectLinkedDefinitions(legacy),legacy);
+});
+
+test('reload repairs old nodes-only Phrase continuations without overwriting edited notes',()=>{
+ const seed={steps:8,strokes:[{ptsN:[{nx:0,ny:.2},{nx:1,ny:.7}],color:'#abc'}],nodes:{list:Array.from({length:8},()=>[4])}},states=continueDrawgridPhrase(seed);
+ states.slice(1).forEach(s=>{s.strokes=[];s.nodes.list[0]=[9];});
+ const scene={
+  toys:states.map((s,i)=>({id:'view-'+i,type:'drawgrid',sharedDefinitionId:'d'+i})),structureToys:[],
+  sharedToyDefinitions:states.map((state,i)=>({id:'d'+i,type:'drawgrid',state})),
+  sharedSequenceDefinitions:[{id:'phrase',autoArrangePhrase:{heartbeatId:'main-heartbeat'},children:states.map((s,i)=>({slotId:'s'+i,toyDefinitionId:'d'+i}))}]
+ };
+ const projected=projectLinkedDefinitions(scene);assert.ok(projected.toys.every(t=>t.state.strokes.length>0));assert.ok(projected.toys.slice(1).every(t=>t.state.nodes.list[0][0]===9));assert.ok(scene.sharedToyDefinitions.slice(1).every(d=>d.state.strokes.length===0));
+});
 
 function dom(){
  const saved=Object.fromEntries(['document','window','CustomEvent'].map(k=>[k,globalThis[k]]));
- const node=()=>({textContent:'',style:{setProperty(){}},classList:{add(){},remove(){}},addEventListener(){},append(){},setAttribute(){},querySelector(){return null;}});
+ const node=()=>({children:[],textContent:'',style:{setProperty(){}},classList:{add(){},remove(){}},addEventListener(){},append(n){this.children.push(n);},setAttribute(){},querySelector(q){return q==='.linked-copy-marker'?this.children.find(n=>n.className==='linked-copy-marker')||null:null;}});
  globalThis.document={addEventListener(){},createElement:node};globalThis.window={addEventListener(){},dispatchEvent(){},AudioContext:class{constructor(){this.currentTime=0;this.state='running';this.destination={};}createGain(){return {gain:{value:1,setValueAtTime(v){this.value=v;},cancelScheduledValues(){}},connect(){}};}}};globalThis.CustomEvent=class{constructor(type,args){this.type=type;this.detail=args?.detail;}};
  return {node,close:()=>Object.assign(globalThis,saved)};
 }
 test('equal-status full toy views share edits, keep local positions/context, and promote safely after original deletion',async()=>{
- const d=dom(),panels=[];let n=0;
+ const d=dom(),panels=[];let n=0,uiSyncs=0,panelReads=0;
  function panel(id){const label=d.node(),header=d.node(),p={id,isConnected:true,__drawToy:{},dataset:{toy:'drawgrid',toyName:'Draw 1'},style:{left:'0px',top:'0px'},classList:d.node().classList,offsetWidth:680,addEventListener(){},querySelector:q=>q.includes('master-name')?label:q==='.toy-header'?header:null,state:{notes:['C3'],instrument:'PIANO',musicalRole:'melody',localTranspose:0},__audioToyId:'bus-'+id};p.__sequencerSchedule=step=>({note:p.state.notes[step],context:getCurrentPlaybackOccurrence()});panels.push(p);return p;}
- const source=panel('source'),controller=createLinkedToyViewController({getPanels:()=>panels,getMaster:id=>panels.find(p=>p.id===id),createView:()=>panel('copy-'+(++n)),capture:p=>structuredClone(p.state),apply:async(p,state)=>{p.state=structuredClone(state);},register(){},changed(){},focus(){},remove(){}});
+ const source=panel('source'),controller=createLinkedToyViewController({getPanels:()=>{panelReads++;return panels;},getMaster:id=>panels.find(p=>p.id===id),createView:()=>panel('copy-'+(++n)),capture:p=>structuredClone(p.state),apply:async(p,state)=>{p.state=structuredClone(state);},syncVolumeUI:()=>uiSyncs++,register(){},changed(){},focus(){},remove(){}});
  try{
   const a=controller.create(source),b=controller.create(a);assert.equal(a.dataset.linkedCopyNumber,'1');assert.equal(b.dataset.linkedCopyNumber,'2');assert.equal(a.dataset.sharedDefinitionId,b.dataset.sharedDefinitionId);
+  controller.prepare();const initialSyncs=uiSyncs;for(let i=0;i<40;i++)controller.prepare();assert.equal(uiSyncs,initialSyncs,'idle preparation must not repaint unchanged headers or volume controls');
+  const reads=panelReads;for(let i=0;i<40;i++)a.__sequencerSchedule(0);assert.equal(panelReads,reads,'playback getters must not repeatedly scan the DOM family');
   await new Promise(resolve=>setImmediate(resolve));a.style.left='100px';b.style.left='900px';b.state.notes=['E4'];b.state.instrument='KALIMBA';b.state.musicalRole='accompaniment';controller.edit(b);
   // Scheduling reads the editing view immediately, even before peer hydration.
   const scheduled=withPlaybackOccurrence({occurrenceId:'B',context:{harmony:{progressionId:'B'}}},()=>a.__sequencerSchedule(0));assert.equal(scheduled.note,'E4');assert.equal(scheduled.context.instanceToyId,a.id);assert.equal(scheduled.context.context.harmony.progressionId,'B');
   await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(a.state,b.state);assert.deepEqual(source.state,b.state);assert.equal(a.style.left,'100px');assert.equal(b.style.left,'900px');
   a.state.notes=['G3'];controller.edit(a);await new Promise(resolve=>setImmediate(resolve));assert.equal(b.state.notes[0],'G3');
-  const definition=b.dataset.sharedDefinitionId;controller.beforeDelete(source);source.isConnected=false;panels.splice(panels.indexOf(source),1);
+  const definition=b.dataset.sharedDefinitionId,bus=b.__sharedToyDefinition.bus,record=b.__sharedToyDefinition;setToyVolume(bus,.42);controller.beforeDelete(source);source.isConnected=false;panels.splice(panels.indexOf(source),1);
   assert.equal(a.dataset.masterToyId,undefined);assert.equal(b.dataset.masterToyId,a.id);assert.equal(b.dataset.sharedDefinitionId,definition);assert.equal(a.dataset.linkedCopyNumber,'1');assert.equal(b.dataset.linkedCopyNumber,'2');assert.equal(b.__sequencerSchedule(0).note,'G3');
   const c=controller.create(b);assert.equal(c.dataset.linkedCopyNumber,'3');assert.equal(controller.canDelete(a),true);
+  assert.equal(c.__sharedToyDefinition,record);assert.equal(c.__sharedToyDefinition.bus,bus);assert.equal(getToyVolumeRaw(c.__audioToyId),.42);assert.equal(getToyGain(c.__audioToyId),getToyGain(bus));
  }finally{d.close();}
 });
 
@@ -45,6 +88,30 @@ function sequences(){
  const ordered=id=>model.list('sequence').filter(e=>e.from.objectId===id).sort((a,b)=>a.from.portId.localeCompare(b.from.portId));
  return {model,structures,controller,source,panels,getToy,ordered,close:()=>{controller.dispose();structures.dispose();}};
 }
+
+test('connected arrangement consumes authored seed, shares four chunks, preserves 16 bars and regenerates without orphans',async()=>{
+ const d=dom(),panels=[],model=createConnectionModel();let serial=0;
+ model.registerObject('main-heartbeat',{ports:HEARTBEAT_PORTS,transportId:'main-heartbeat'});const structures=createStructureToyModel(model);
+ const make=(role,id='toy-'+(++serial))=>{const header=d.node(),label=d.node(),p={id,isConnected:true,dataset:{toy:role==='percussion'?'loopgrid':'drawgrid',musicalRole:role,steps:'8'},style:{left:'0px',top:'0px'},classList:d.node().classList,offsetWidth:680,addEventListener(){},querySelector:q=>q.includes('master-name')?label:q==='.toy-header'?header:null,__audioToyId:'audio-'+id,state:{steps:8,instrument:'PIANO',musicalRole:role,nodes:{active:Array(8).fill(true),list:[0,2,4,2,0,1,3,0].map(n=>[n]),disabled:Array.from({length:8},()=>[])},strokes:[]}};p.__drawToy={getState:()=>p.state};p.__sequencerSchedule=()=>({state:p.state,occurrence:getCurrentPlaybackOccurrence()});panels.push(p);model.registerObject(p.id);ensurePlaybackInstance(p.id,{loopLengthTicks:384});return p;};
+ const getToy=id=>panels.find(p=>p.id===id);let toys,phrases;
+ const remove=p=>{toys.beforeDelete(p);p.isConnected=false;model.removeObject(p.id);panels.splice(panels.indexOf(p),1);};
+ toys=createLinkedToyViewController({getPanels:()=>panels,getMaster:getToy,createView:p=>make(p.dataset.musicalRole),capture:p=>structuredClone(p.state),apply:async(p,s)=>{p.state=structuredClone(s);},register(){},changed(){},focus(){},remove});
+ phrases=createLinkedSequenceController({model,structures,getToy,getPanels:()=>panels,createToyInstance:toys.create,removeToy:remove});structures.configure({canRemove:phrases.canRemove,canChangeType:phrases.canChangeType,onRemove:phrases.cleanup});
+ const seed=make('melody','authored-seed'),original=structuredClone(seed.state);model.connect('transport',{objectId:'main-heartbeat',portId:'output'},{objectId:seed.id,portId:'input'});
+ const arranger=createAutoArranger({model,structures,getPanels:()=>panels,createSource:async role=>make(role==='accompaniment'?role:'percussion'),createInstance:toys.create,createStructureInstance:phrases.create,adoptSource:(p,{owner})=>{toys.adopt(p);p.dataset.autoArrangeOwner=owner;return p;},adoptPhrase:phrases.adopt,removeInstances:owner=>{phrases.removeOwned(owner);toys.removeOwned(owner);},createPhraseSource:async({seed})=>{
+  const parts=continueDrawgridPhrase(seed.state),children=[seed,...parts.slice(1).map(state=>{const p=make('melody');p.state=state;return p;})],s=structures.createStandalone('sequence',{name:'Melody Phrase'});model.transaction(()=>structures.suspend(()=>{structures.annotate(s.id,{autoArrangePhrase:{heartbeatId:'main-heartbeat'},outputCount:5});children.forEach((p,i)=>{p.dataset.autoArrangeFill='melody-chunk';const parent=model.getParent(p.id);if(parent)model.disconnect(parent.id);assert.equal(model.connect('sequence',{objectId:s.id,portId:'child:'+i},{objectId:p.id,portId:'input'}).ok,true);});}));return structures.get(s.id);
+ }});
+ const adapter=createChainSequenceAdapter({connectionModel:model,getToy,chainState:new Map()});
+ try{
+  const first=await arranger.arrange();await new Promise(r=>setImmediate(r));assert.deepEqual(seed.state,original);
+  const verify=()=>{assert.equal(panels.length,15);assert.ok(panels.every(p=>model.isRooted(p.id)),panels.filter(p=>!model.isRooted(p.id)).map(p=>p.id).join(','));const views=structures.list().filter(s=>s.sharedDefinitionId);assert.equal(views.length,2);assert.ok(views.every(s=>!s.collapsed));assert.equal(new Set(panels.map(p=>p.dataset.sharedDefinitionId)).size,7);
+   adapter.sync(panels,{state:'paused',currentTick:0},{connections:model.list('sequence'),structures:structures.list()});const root=structures.list().find(s=>s.autoArrange?.root);assert.equal(adapter.runtime.getDefinition(root.definitionId).durationTicks,6144);
+   for(let bar=0;bar<16;bar++){const turns=adapter.runtime.turnsInWindow(root.definitionId,bar*384,bar*384+1);assert.equal(turns.length,bar<4||bar>=12?1:bar<8?3:4);for(const t of turns){assert.equal(t.context.transposeSemitones,0);assert.equal(t.context.harmony.chords[0].root,bar>=8&&bar<12?'F':'C');}}
+  };verify();
+  const b=structures.list().filter(s=>s.sharedDefinitionId).find(s=>s.linkedCopyNumber===2),secondChild=getToy(model.list('sequence').find(e=>e.from.objectId===b.id&&e.from.portId==='child:1').to.objectId);secondChild.state.nodes.list[0]=[7];toys.edit(secondChild);await new Promise(r=>setImmediate(r));assert.ok(panels.filter(p=>p.dataset.sharedDefinitionId===secondChild.dataset.sharedDefinitionId).every(p=>p.state.nodes.list[0][0]===7));
+  const bus=secondChild.__sharedToyDefinition.bus;setToyVolume(bus,.3);const definitions=[...new Set(panels.map(p=>p.dataset.sharedDefinitionId))].sort();const next=await arranger.arrange();await new Promise(r=>setImmediate(r));assert.notEqual(next.rootId,first.rootId);verify();assert.deepEqual([...new Set(panels.map(p=>p.dataset.sharedDefinitionId))].sort(),definitions);assert.equal(getToyVolumeRaw(bus),.3);
+ }finally{panels.forEach(p=>p.isConnected=false);adapter.reset();phrases.dispose();structures.dispose();d.close();}
+});
 test('editing either linked Sequence order updates every expansion while movement and context stay independent',()=>{
  const h=sequences();try{
   const a=h.controller.create(h.source),b=h.controller.create(a);assert.equal(a.name,'Phrase 1.1');assert.equal(b.name,'Phrase 1.2');assert.equal(a.collapsed,false);assert.equal(b.collapsed,false);

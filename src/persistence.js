@@ -1,5 +1,6 @@
 // src/persistence.js
 // Lightweight scene save/load with versioning and localStorage backend.
+import {storeLinkedDefinitions,projectLinkedDefinitions} from './linked-definitions.js';
 
 import { bpm, setBpm, stop as stopTransport, setToyVolume, setToyMuted, getToyVolumeRaw, isToyMuted } from './audio-core.js';
 import { setGestureTransform as zcSetGestureTransform, commitGesture as zcCommitGesture, getZoomState as zcGetZoomState } from './zoom/ZoomCoordinator.js';
@@ -137,7 +138,7 @@ function __shouldVetoEmptyOverwrite(prevPayload, nextPayload, meta) {
   return (prev.nonEmpty && !next.nonEmpty && !userCleared);
 }
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const AUTOSAVE_KEY = 'scene:autosave';
 const LAST_SCENE_KEY = 'prefs:lastScene';
 
@@ -857,6 +858,7 @@ export function getSnapshot(){
     return {
       id, type, toyName:panel.dataset.toyName,instanceSerial:Number(panel.dataset.instanceSerial)||0,
       sharedDefinitionId:panel.dataset.sharedDefinitionId,linkedCopyNumber:Number(panel.dataset.linkedCopyNumber)||undefined,
+      autoArrangeOwner:panel.dataset.autoArrangeOwner||undefined,
       structureInstanceId:panel.dataset.structureInstanceId||undefined,structureMasterChildId:panel.dataset.structureMasterChildId||undefined,
       ui: ownerArtToyId ? readOwnedToyUI(panel) : readUI(panel),
       state: { ...(panel.__sharedToyState || snapper(panel) || {}), ...(panel.dataset.autoArrangeOrigin==='filled'?{autoArrangeOrigin:'filled'}:{}), ...(panel.dataset.autoArrangeFill?{autoArrangeFill:panel.dataset.autoArrangeFill,autoArrangeFillHeartbeat:panel.dataset.autoArrangeFillHeartbeat}:{}), ...(panel.dataset.musicalRole ? {musicalRole:normalizeMusicalRole(panel.dataset.musicalRole)} : {}) },
@@ -915,7 +917,7 @@ export function getSnapshot(){
   // --- Capture camera / board view ---
   const camera = captureCameraState();
 
-  return {
+  return storeLinkedDefinitions({
     schemaVersion: SCHEMA_VERSION,
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -928,7 +930,7 @@ export function getSnapshot(){
     connections: connectionModel.snapshot().connections,
     structureToys: structureToyModel.list(),
     camera,
-  };
+  },panels.map(p=>p.__sharedToyDefinition).filter(Boolean));
 }
 
 export function applySnapshot(snap){
@@ -938,7 +940,7 @@ export function applySnapshot(snap){
 
 export function applySceneSnapshot(snap){
   const migratedUses=snap?.connections?.some(c=>c.to.portId==='pattern');
-  try{snap=validateStructureInstanceLinks(validateInstanceLinks(migrateSourceUses(snap)));}catch(error){console.warn('[persistence] invalid linked toy scene',error);return false;}
+  try{snap=validateStructureInstanceLinks(validateInstanceLinks(migrateSourceUses(projectLinkedDefinitions(snap))));}catch(error){console.warn('[persistence] invalid linked toy scene',error);return false;}
   if (!snap || typeof snap !== 'object') return false;
   window.beginCreationGraphRestore?.();
   try{
@@ -1142,6 +1144,8 @@ export function applySceneSnapshot(snap){
       if(t.toyName)panel.dataset.toyName=t.toyName;else delete panel.dataset.toyName;
       panel.dataset.instanceSerial=String(t.instanceSerial||0);
       panel.__linkedInitialState=t.state;
+      panel.__linkedDefinitionData=t.sharedDefinitionData;
+      if(t.autoArrangeOwner)panel.dataset.autoArrangeOwner=t.autoArrangeOwner;else delete panel.dataset.autoArrangeOwner;
       for(const key of ['sharedDefinitionId','linkedCopyNumber','structureInstanceId','structureMasterChildId']){if(t[key]!=null)panel.dataset[key]=String(t[key]);else delete panel.dataset[key];}
       restoreToyMusicalRole(panel, t.state || {});
       if(t.state?.autoArrangeOrigin==='filled')panel.dataset.autoArrangeOrigin='filled';else delete panel.dataset.autoArrangeOrigin;

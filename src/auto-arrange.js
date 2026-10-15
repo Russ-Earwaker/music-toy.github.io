@@ -23,8 +23,8 @@ export function selectArrangementSources(panels){
 }
 
 // Authored graph builder only. Playback, harmony and repetitions belong to the
-// ordinary compiler/runtime. Instances read editable Master toys.
-export function createAutoArranger({model,structures,getPanels,createSource,createPhraseSource,createStructureInstance,createInstance,removeInstances=()=>{},place=null,scope=()=>null}){
+// ordinary compiler/runtime. Connected views read shared musical definitions.
+export function createAutoArranger({model,structures,getPanels,createSource,createPhraseSource,createStructureInstance,createInstance,adoptSource,adoptPhrase,removeInstances=()=>{},place=null,scope=()=>null}){
  let busy=false,serial=0;
  async function arrange(){
   if(busy)throw new Error('Arrangement is already being built.');
@@ -38,10 +38,10 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
   const heartbeat=model.getObjectIds().find(id=>model.getObject(id)?.ports.output?.accepts.includes('transport') && (model.getObject(id).transportId || id)===domain) || MAIN_TRANSPORT_ID;
   sources=selectArrangementSources(getPanels().filter(p=>!model.getTransportId(p.id) || model.getTransportId(p.id)===domain));
   try{
-   if(!sources.melody && createPhraseSource){
+   if(createPhraseSource){
     const phrase=structures.list().find(s=>!s.masterStructureId && s.autoArrangePhrase?.heartbeatId===heartbeat && (s.artOwnerId||null)===board);
-    const master=phrase||await createPhraseSource({heartbeatId:heartbeat});
-    if(!master||master.type!=='sequence')throw new Error('Could not create Melody Phrase Master.');
+    const master=phrase||await createPhraseSource({heartbeatId:heartbeat,seed:sources.melody});
+    if(!master||master.type!=='sequence')throw new Error('Could not create Melody Phrase.');
     sources.melody={...master,dataset:{autoArrangeOrigin:'filled'}};
    }
    for(const role of ARRANGEMENT_ROLES)if(!sources[role]){
@@ -69,7 +69,7 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
    try{model.transaction(()=>structures.suspend(()=>{
     // Keep linked expansions alive until replacement succeeds, so rollback can
     // restore their connections without losing any child identities/positions.
-    if(previous)for(const node of structures.list().filter(s=>s.autoArrange?.owner===previous.autoArrange.owner&&!s.masterStructureId))structures.remove(node.id);
+    if(previous)for(const node of structures.list().filter(s=>s.autoArrange?.owner===previous.autoArrange.owner&&!s.masterStructureId&&!Object.values(sourceIds).includes(s.id)))structures.remove(node.id);
     for(const edge of displaced)if(!Object.values(sourceIds).includes(edge.to.objectId) && model.getObject(edge.to.objectId) && model.getObject(edge.from.objectId) && !model.getParent(edge.to.objectId))connect(edge.kind,edge.from,edge.to);
     const make=(type,name,parent,index=0)=>{
      const p=parent && structures.get(parent),position=!parent&&previous?{x:previous.x,y:previous.y}:place?.(type,parent,index) || {x:p?p.x+(p.type==='chord-progression'?536:400):0,y:(p?.y || 0)+index*480};
@@ -78,9 +78,10 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
      created.push(node.id);if(parent)connect('sequence',output(parent,index),input(node.id));return node;
     };
     root=make('sequence','Arrangement',null);
+    const usedSources=new Set();
     for(const panel of Object.values(sources)){
      const edge=model.getParent(panel.id);
-     if(edge?.kind==='transport'){
+     if(edge&&(edge.kind==='transport'||previous&&structures.get(edge.from.objectId)?.autoArrange?.owner===previous.autoArrange.owner)){
       if(!displaced.some(e=>e.to.objectId===panel.id))displaced.push(edge);
       model.disconnect(edge.id);
      }
@@ -99,10 +100,13 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
       const repeat=section.roles.length>1&&naturalTicks<bandTicks;
       const branch=repeat?make('repeat',section.name+' layer '+(i+1),band.id,i):band;
       if(repeat)structures.setCount(branch.id,Math.ceil(bandTicks/naturalTicks));
-      const p=structures.get(branch.id),instance=sources[role].type==='sequence'
+      const p=structures.get(branch.id),source=sources[role];
+      const canAdopt=adoptSource&&!usedSources.has(source.id)&&!model.getParent(source.id);
+      const instance=canAdopt?(source.type==='sequence'?adoptPhrase(source,{owner,x:p.x+536,y:p.y+(repeat?0:i*220)}):adoptSource(source,{owner,x:p.x+536,y:p.y+(repeat?0:i*220)})):sources[role].type==='sequence'
         ?createStructureInstance(sources[role],{x:p.x+536,y:p.y+(repeat?0:i*220),autoArrange:{owner},collapsed:true})
         :createInstance(sources[role],{autoArrangeOwner:owner,ui:{left:`${p.x+536}px`,top:`${p.y+(repeat?0:i*220)}px`}});
       created.push(instance.id);
+      usedSources.add(source.id);
       if(sources[role].type==='sequence')created.push(...model.list('sequence').filter(e=>e.from.objectId===instance.id).map(e=>e.to.objectId));
       connect('sequence',output(branch.id,repeat?0:i),input(instance.id));
      });

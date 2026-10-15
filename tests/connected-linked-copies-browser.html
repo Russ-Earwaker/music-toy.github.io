@@ -1,0 +1,9 @@
+<!doctype html><meta charset="utf-8"><title>Connected Linked Copies proof</title>
+<style>body{margin:0;background:#101820;color:white;font:14px system-ui}header{display:flex;gap:6px;flex-wrap:wrap;padding:8px}button{padding:8px}iframe{width:100%;height:85vh;border:0}pre{white-space:pre-wrap}</style>
+<header><button data-action="clean">Clean test board</button><button data-action="seed">Enter obvious seed</button><button data-action="edit">Edit chunk 2 in B</button><button data-action="focusVolume">Focus accompaniment</button><button data-action="save">Save proof</button><button data-action="reload">Save and reload</button><button data-action="deleteFirstPhrase">Remove first Phrase test view</button><span id="status">Loading</span></header>
+<button data-action="focusMelody">Focus melody</button><button data-action="seedLine">Enter drawn seed</button><button data-action="startTiming">Start timing sample</button><button data-action="cameraSweep">Move camera sample</button><button data-action="stopTiming">Stop timing sample</button>
+<iframe id="app" src="../" allow="autoplay"></iframe><pre id="proof"></pre>
+<script type="module">
+const frame=document.querySelector('#app'),status=document.querySelector('#status');frame.addEventListener('load',()=>{const s=frame.contentDocument.createElement('script');s.type='module';s.src=new URL('connected-linked-copies-observer.js',location.href);frame.contentDocument.body.append(s);s.onload=()=>status.textContent='Ready';});
+for(const b of document.querySelectorAll('[data-action]'))b.onclick=async()=>{try{status.textContent=await frame.contentWindow.__connectedProof[b.dataset.action]();}catch(e){status.textContent='ERROR: '+e.stack;}};
+</script>

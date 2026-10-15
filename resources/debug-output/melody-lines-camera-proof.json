@@ -1,0 +1,17 @@
+{
+  "baselineUI": "melody-lines-camera-before-2026-10-15T18-12-50-642Z.json",
+  "beforeAudio": "melody-lines-camera-2026-10-15T18-20-30-675Z.json",
+  "final": "melody-lines-camera-2026-10-15T18-35-01-731Z.json",
+  "melodyDefinitionsWithLines": 4,
+  "melodyViewsWithLines": 8,
+  "sourceNotesPreserved": true,
+  "noteEvents": 88,
+  "lateNoteSchedulesOver1ms": 0,
+  "maxSchedulingLateMs": 0.6666666666674814,
+  "medianSchedulingLeadMs": 969.9999999999989,
+  "beforeHeaderMutations": 41579,
+  "afterHeaderMutations": 51,
+  "beforeSamples": 552,
+  "afterSamples": 320,
+  "finalCameraTimerMaxGapMs": 2062.5
+}

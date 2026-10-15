@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
+const dir=new URL('./debug-output/',import.meta.url),files=readdirSync(dir);
+const read=file=>({file,...JSON.parse(readFileSync(new URL(file,dir)))});
+const before=files.filter(f=>f.startsWith('empty-drawgrid-arrange-before-')).sort().map(read).at(-1);
+const after=files.filter(f=>/^empty-drawgrid-arrange-20.*\.json$/.test(f)).sort().map(read).findLast(r=>r.actions.at(-1).panels.length===15);
+const melody=snapshot=>snapshot.sharedToyDefinitions.filter(d=>d.state.musicalRole==='melody');
+const counts=r=>melody(r.actions.at(-1).snapshot).map(d=>d.state.nodes.list.reduce((n,rows)=>n+rows.length,0));
+assert.deepEqual(counts(before),[0,0,0,0]);assert.equal(counts(after).length,4);assert.ok(counts(after).every(n=>n>0));
+assert.deepEqual(after.actions.at(-1).unconnected,[]);assert.equal(after.actions.at(-1).snapshot.sharedToyDefinitions.length,7);assert.equal(after.actions.at(-1).snapshot.structureToys.filter(s=>s.sharedDefinitionId&&!s.collapsed).length,2);
+assert.ok(after.events.some(e=>e.pitchDecision?.role==='melody'),'nonempty generated melody reaches production scheduling');assert.deepEqual(after.errors.filter(e=>!e.includes('[BV]')),[]);
+const summary={before:before.file,after:after.file,beforeNotesPerChunk:counts(before),afterNotesPerChunk:counts(after),connectedViews:15,melodyPlaybackEvents:after.events.filter(e=>e.pitchDecision?.role==='melody').length};
+writeFileSync(new URL('empty-drawgrid-arrange-proof.json',dir),JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary,null,2));
