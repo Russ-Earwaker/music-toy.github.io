@@ -112,6 +112,15 @@ export function getLoopInfo(){
 const __buses = new Map();       // id -> GainNode
 const __vol = new Map();         // id -> volume [0..1]
 const __mute = new Map();        // id -> bool
+const __toyBusAliases=new Map();
+function toyBusKey(id){let key=String(id||'master').toLowerCase();const seen=new Set();while(__toyBusAliases.has(key)&&!seen.has(key)){seen.add(key);key=__toyBusAliases.get(key);}return key;}
+export function linkToyAudioBus(alias,target){
+ const key=String(alias).toLowerCase(),destination=toyBusKey(target);if(key===destination||__toyBusAliases.get(key)===destination)return;
+ // Some toys keep the GainNode obtained during initialization. Redirect that
+ // existing node too, so audition/synth paths obey the shared volume/mute.
+ const existing=__buses.get(key);if(existing){const shared=getToyGain(destination);existing.disconnect?.();existing.gain.setValueAtTime(1,ensureAudioContext().currentTime);existing.connect(shared);}
+ __toyBusAliases.set(key,destination);
+}
 let __masterGain = null;
 
 function __readMasterPersistedVolume(){
@@ -176,7 +185,7 @@ function ensureMasterGain() {
 }
 
 export function getToyGain(id='master'){
-  const key = String(id||'master').toLowerCase();
+  const key = toyBusKey(id);
   if (__buses.has(key)) return __buses.get(key);
 
   const ctx = ensureAudioContext();
@@ -196,7 +205,7 @@ export function getToyGain(id='master'){
 }
 
 export function setToyVolume(id='master', v=1){
-  const key = String(id||'master').toLowerCase();
+  const key = toyBusKey(id);
   const ctx = ensureAudioContext();
   const g = getToyGain(key);
   const vv = Math.max(0, Math.min(1, Number(v)||0));
@@ -206,7 +215,7 @@ export function setToyVolume(id='master', v=1){
 }
 
 export function setToyMuted(id='master', muted=false, rampTime = 0){
-  const key = String(id||'master').toLowerCase();
+  const key = toyBusKey(id);
   const ctx = ensureAudioContext();
   const g = getToyGain(key);
   __mute.set(key, !!muted);
@@ -266,13 +275,13 @@ export function hardStop(){
 export function isRunning(){ return mainClock.state === 'playing'; }
 
 export function getToyVolume(id='master'){
-  const key = String(id||'master').toLowerCase();
+  const key = toyBusKey(id);
   const fallback = (key === 'master') ? DEFAULT_MASTER_VOLUME : 1.0;
   return (__mute.get(key) ? 0 : (__vol.get(key) ?? fallback));
 }
-export function isToyMuted(id='master'){ const key=String(id||'master').toLowerCase(); return !!__mute.get(key); }
+export function isToyMuted(id='master'){ return !!__mute.get(toyBusKey(id)); }
 export function getToyVolumeRaw(id='master'){
-  const key = String(id||'master').toLowerCase();
+  const key = toyBusKey(id);
   const fallback = (key === 'master') ? DEFAULT_MASTER_VOLUME : 1.0;
   return (__vol.get(key) ?? fallback);
 }

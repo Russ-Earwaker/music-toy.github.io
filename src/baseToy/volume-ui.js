@@ -174,6 +174,7 @@ export function installVolumeUI(footer, opts = {}) {
 
   // --- 3. Wire Event Listeners ---
   range.addEventListener('input', () => {
+    const audioToyId = getAudioToyId(panel);
     const newVolPercent = parseInt(range.value, 10);
     const newVol = newVolPercent / 100;
     dispatchToyVolume(toyId, newVol);
@@ -190,6 +191,7 @@ export function installVolumeUI(footer, opts = {}) {
   });
 
   muteBtn.addEventListener('click', () => {
+    const audioToyId = getAudioToyId(panel);
     const shouldMute = !isToyMuted(audioToyId);
     dispatchToyMute(toyId, shouldMute);
     setToyMuted(audioToyId, shouldMute);

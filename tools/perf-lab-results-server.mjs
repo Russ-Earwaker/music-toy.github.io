@@ -75,7 +75,8 @@ const server = http.createServer(async (req, res) => {
       const text = typeof payload?.text === 'string'
         ? payload.text
         : JSON.stringify(payload, null, 2);
-      writeFileSync(outPath, text, 'utf8');
+      if(payload.encoding==='base64'&&/\.wav$/i.test(safeFileName))writeFileSync(outPath,Buffer.from(text,'base64'));
+      else writeFileSync(outPath, text, 'utf8');
       send(res, 200, 'saved');
       console.log('[debug-output] saved', outPath);
       return;

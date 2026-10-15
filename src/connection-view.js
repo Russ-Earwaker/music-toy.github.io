@@ -9,6 +9,7 @@ import { structurePortPoint, structureToyHeight, structureToyWidth } from './str
 import { TICKS_PER_BEAT } from './audio-core.js';
 import { STRUCTURE_TYPES, MAX_REPEAT_COUNT, structureTypeLabel } from './structure-types.js';
 import { BASIC_LOGIC_TYPES, openAdvancedLogic, closeAdvancedLogic } from './logic-creation-menu.js';
+import {createRelationshipReveal} from './toy-relationship-reveal.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const set = (node, key, value) => { if (node.getAttribute(key) !== String(value)) node.setAttribute(key, value); };
@@ -20,7 +21,7 @@ function svgNode(tag, attrs = {}) {
 
 export function createConnectionView({ model, getContext, getPanels, getToyPoint, getHeartbeatPoint,
   onConnectionDrag = () => {}, getPulse = () => null, getStructurePulse = () => 0, onFrame = () => {}, getRenderedStructure = s => s, onStructureDrag = () => {},
-  onStructureMove = null, onStructureDragUpdate = () => {}, onStructureDragEnd = () => {}, isBranchDragging = () => false, structureToys = null, onQuickAdd = () => {} }) {
+  onStructureMove = null, onStructureDragUpdate = () => {}, onStructureDragEnd = () => {}, isBranchDragging = () => false, structureToys = null, structureInstances = null, onLinkedCopy = () => {}, onSeeStructure = () => {}, onQuickAdd = () => {} }) {
   const svg = svgNode('svg', { class: 'connection-layer', 'aria-label': 'Musical connections' });
   Object.assign(svg.style, { position: 'absolute', inset: '0', width: '100%', height: '100%',
     // The board viewport clips this overlay. Clipping the SVG again would hide
@@ -91,6 +92,9 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   menu.addEventListener('pointerdown', e => e.stopPropagation());
   const edges = new Map(), ports = new Map(), points = new Map();
   const cards = new Map();
+  const relationship=createRelationshipReveal({getPanels:()=>[...cards.values()].map(c=>c.group),getMaster:id=>cards.get(id)?.group,
+    getHost:()=>getContext().worldEl||getContext().viewportEl,
+    getCentre:p=>{const s=getRenderedStructure(structureToys.get(p.id));return {x:s.x+structureToyWidth(s)/2,y:s.y+structureToyHeight(s)/2};},getColour:()=> '#9fc8ef'});
   let selected = null, pointerId = null, pointer = null, dragOrigin = null, viewport = null, frameId = null, disposed = false;
   let selectedStructure = null, moving = null, editingEntry = null;
   let tapPoint = null, gestureMoved = false;
@@ -99,6 +103,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   let menuReturnFocus = null;
   let worldMode = false;
   const socketIntent=(point,kind)=>model.socketDragIntent(point,kind);
+  const linkedEdge=()=>false;
   function quickAdd(point){onQuickAdd(point);}
   function pointerPoint(event) {
     const rect=svg.getBoundingClientRect(), scale=worldMode?(getContext().transform?.scale||1):1;
@@ -107,7 +112,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   const closeMenu = () => { const wasOpen=!menu.hidden;menu.hidden = true; menuOwner = null;if(wasOpen)menuReturnFocus?.focus?.(); };
   const ownerOf = target => { for(let n=target;n;n=n.parentNode){const id=n.getAttribute?.('data-structure-id');if(id)return id;}return null; };
   function selectStructure(id) {
-    if(selectedStructure&&selectedStructure!==id&&!moving&&!model.getEditing())structureToys?.setCollapsed(selectedStructure,true);
+    if(selectedStructure&&selectedStructure!==id&&!moving&&!model.getEditing()&&!structureToys?.get(selectedStructure)?.sharedDefinitionId)structureToys?.setCollapsed(selectedStructure,true);
     selected=null;selectedStructure=id;structureToys?.setCollapsed(id,false);
   }
   const key = point => `${point.objectId}|${point.portId}`;
@@ -117,7 +122,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   }
   function select(id) {
     selected = id;
-    if (selectedStructure) structureToys?.setCollapsed(selectedStructure, true);
+    if (selectedStructure&&!structureToys?.get(selectedStructure)?.sharedDefinitionId) structureToys?.setCollapsed(selectedStructure, true);
     selectedStructure = null;
     const connection = model.get(id);
     document.dispatchEvent(new CustomEvent('connection:selected', {
@@ -181,7 +186,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       menu.append(b);
     };
     if ((kind === 'sequence' || kind === 'transport')) {
-      if (!isModifier(s?.type)) for (const type of (s ? STRUCTURE_TYPES : BASIC_LOGIC_TYPES)) button(structureTypeLabel(type), () => {
+      if (!isModifier(s?.type)) for (const type of (s?.sharedDefinitionId?['sequence']:s ? STRUCTURE_TYPES : BASIC_LOGIC_TYPES)) button(structureTypeLabel(type), () => {
         if (s && structureToys.conversion(s.id,type).lossy) {
           menu.replaceChildren();
           const explanation=document.createElement('div');explanation.textContent=structureToys.conversion(s.id,type).message;menu.append(explanation);
@@ -192,7 +197,19 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         else structureToys.promote(connectionId, type);
       }, currentType === type);
     }
-    if (c) {
+    if(s?.type==='sequence'&&structureInstances){
+      const linkedCopy=()=>{try{const copy=structureInstances.create(s.id);onLinkedCopy(copy);}catch(error){notify(error.message);}};
+      button('Advanced >',()=>{
+        menu.replaceChildren();menuOwner={structureId:s.id};menu.setAttribute('aria-label','Advanced Sequence');
+        const title=document.createElement('strong');title.textContent='ADVANCED';menu.append(title);
+        button('Create Linked Copy',linkedCopy);
+        const rename=document.createElement('input');rename.setAttribute('aria-label','Sequence name');const canonical=structureToys.get(s.masterStructureId||s.id);rename.value=canonical.sharedName||canonical.name||'';
+        rename.addEventListener('change',()=>{const name=rename.value.trim();if(name)structureToys.annotate(canonical.id,{sharedName:name,name:name+(canonical.linkedCopyNumber?'.'+canonical.linkedCopyNumber:'')});render();});menu.append(rename);
+        button('Close',()=>{});menu.hidden=false;menu.querySelector('button').focus();
+      });
+    }
+    if(s)button('Delete',()=>{if(structureToys.remove(s.id)===false)notify('This linked definition is still in use.');});
+    if (c&&!linkedEdge(c)) {
       button('Advanced >', () => openAdvancedLogic({anchor:menuReturnFocus,returnFocus:menuReturnFocus,
         onChoose:type=>{if(model.get(connectionId))structureToys.promote(connectionId,type);render();}}));
     }
@@ -203,7 +220,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       count.addEventListener('change',()=>{structureToys.setCount(s.id,count.value);count.value=String(structureToys.get(s.id).count);render();});
       menu.append(count);
     }
-    if (c) button('Disconnect', () => { model.disconnect(c.id); select(null); });
+    if (c&&!linkedEdge(c)) button('Disconnect', () => { model.disconnect(c.id); select(null); });
     const visual = edges.get(connectionId);
     let at = s && structureId ? projectConnectionPoint({ x: s.x + structureToyWidth(s)/2, y: s.y + 30 }, getContext().transform)
       : { x: Number(visual?.midpoint.getAttribute('cx')) || 0, y: Number(visual?.midpoint.getAttribute('cy')) || 0 };
@@ -238,6 +255,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const tracksGroup=svgNode('g'),tracks=new Map();
     const choose = e => {
       e.preventDefault(); e.stopPropagation(); closeMenu();selectStructure(s.id);
+      if(structureInstances)relationship.show(group);
       render();
     };
     const typeButton = svgNode('rect', {class:'structure-minimise structure-type',rx:4,role:'button',tabindex:0,'aria-label':'Change structure type'});
@@ -333,7 +351,9 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       set(card.rect, 'aria-label', `${s.name?s.name+' · ':''}${logicNodeLabel(s.type)}${isModifier(s.type)?'':' structure'}`);
       set(card.rect, 'aria-expanded', !s.collapsed);
       set(card.group,'data-collapsed',!!s.collapsed);set(card.group,'data-node-kind',isModifier(s.type)?'modifier':'structure');
+      set(card.group,'data-master-toy-id',s.masterStructureId||'');set(card.group,'data-master-structure-id',s.masterStructureId||'');
       set(card.typeButton,'display',s.collapsed||isModifier(s.type)?'none':'inline');
+      set(card.typeButton,'aria-label','Change structure type');
       set(card.typeButton,'x',pos.x+36*scale);set(card.typeButton,'y',pos.y+5*scale);
       set(card.typeButton,'width',(width-72)*scale);set(card.typeButton,'height',30*scale);
       set(card.name, 'x', pos.x + width/2 * scale); set(card.name, 'y', pos.y + 30 * scale);
@@ -364,6 +384,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         set(control.label,'x',x+22*scale);set(control.label,'y',pos.y+85*scale);set(control.label,'font-size',24*scale);
       }
       if(s.type === 'repeat')card.count.textContent=`× ${s.count}`;
+      if(s.sharedDefinitionId||s.masterStructureId){set(card.count,'display','inline');set(card.count,'class','structure-name');set(card.count,'role','status');set(card.count,'tabindex',-1);set(card.count,'aria-label','Linked Copy');set(card.count,'x',pos.x+width/2*scale);set(card.count,'y',pos.y+58*scale);set(card.count,'font-size',14*scale);card.count.textContent='↔';}
       const entries=s.type==='timeline'&&!s.collapsed?structureToys.getTimelineEntries(s.id):[];
       const endTick=Math.max(TICKS_PER_BEAT*4,...entries.map(e=>e.offsetTick+e.durationTicks));
       const pixelsPerTick=(width-124)/endTick;
@@ -487,7 +508,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       set(visual.remove,'r',10*controlScale);set(visual.cross,'font-size',12*controlScale);
       position(visual.remove, { x: middle.x, y: middle.y - 40*controlScale });
       set(visual.cross, 'x', middle.x); set(visual.cross, 'y', middle.y - 36*controlScale);
-      for (const node of [visual.remove, visual.cross]) set(node, 'display', selected === c.id ? 'inline' : 'none');
+      for (const node of [visual.remove, visual.cross]) set(node, 'display', selected === c.id&&!linkedEdge(c) ? 'inline' : 'none');
       const pulsing = getPulse(c);
       set(visual.path, 'stroke-width', pulsing ? 10 : 6);
       set(visual.path, 'stroke', pulsing ? '#f5fbff' : '#99b9ff');
@@ -553,7 +574,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const result = moved ? model.drop(targetAt(e)) : (model.cancelDrag(), { ok: true });
     if (!moved && tapPoint) quickAdd(tapPoint);
     tapPoint = null;
-    if (!result.ok) notify(result.reason === 'requires-promotion' ? 'This junction needs a Structure toy. Existing connection kept.' : 'These ports cannot connect. Existing connection kept.');
+    if (!result.ok) notify(result.reason?.startsWith('linked-sequence-')?'Edit the Master Sequence; linked copies currently support direct toy children only.':result.reason === 'requires-promotion' ? 'This junction needs a Structure toy. Existing connection kept.' : 'These ports cannot connect. Existing connection kept.');
     if (result.connection){
       selected = result.connection.id;
     }
@@ -565,12 +586,15 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     for (let node=e.target;node;node=node.parentNode) if(node===menu)return;
     if(selectedStructure && ownerOf(e.target)===selectedStructure)return;
     closeMenu();
-    if(selectedStructure&&!moving&&!isBranchDragging()&&!model.getEditing()&&!editingEntry){structureToys?.setCollapsed(selectedStructure,true);selectedStructure=null;}render();
+    if(selectedStructure&&!moving&&!isBranchDragging()&&!model.getEditing()&&!editingEntry){if(!structureToys?.get(selectedStructure)?.sharedDefinitionId)structureToys?.setCollapsed(selectedStructure,true);selectedStructure=null;}render();
   };
   const keyboard = e => {
     if (e.key === 'Escape') { reset(); select(null); }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selected && !/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName) && !e.target?.isContentEditable) {
-      e.preventDefault(); model.disconnect(selected); select(null);
+      e.preventDefault();if(linkedEdge(model.get(selected)))notify('Edit the Master Sequence to change its linked children.');else {model.disconnect(selected);select(null);}
+    }
+    else if((e.key==='Delete'||e.key==='Backspace')&&selectedStructure&&!/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)&&!e.target?.isContentEditable){
+      e.preventDefault();if(structureToys.remove(selectedStructure)===false)notify('This linked definition is still in use.');else selectedStructure=null;render();
     }
   };
   svg.addEventListener('pointermove', move);
@@ -593,6 +617,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   function frame() { if (disposed) return; onFrame(); render(); frameId = requestAnimationFrame(frame); }
   frameId = requestAnimationFrame(frame);
   return { render, select, focusStructure:selectStructure, reset, dispose() {
+    relationship.clear();
     closeAdvancedLogic({restoreFocus:false}); disposed = true; cancelAnimationFrame(frameId); clearTimeout(statusTimer); unsubscribe();
     document.removeEventListener('keydown', keyboard); window.removeEventListener('blur', cancel);
     document.removeEventListener('pointerdown', outside, true);

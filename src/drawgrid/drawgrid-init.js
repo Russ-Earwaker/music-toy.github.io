@@ -28,7 +28,7 @@ function drawgridStateSignature(stateLike) {
 }
 
 export function initDrawGrid(panel){
-  if(panel?.dataset?.masterToyId)return;
+  if(panel?.dataset?.masterToyId&&!panel.dataset.linkedView)return;
   if (!panel || panel.__drawgridInit) return panel?.__drawToy;
   const artOwnerId = String(panel?.dataset?.artOwnerId || '').trim();
   const artPanel = artOwnerId ? document.getElementById(artOwnerId) : null;
@@ -105,7 +105,7 @@ export function initDrawGrid(panel){
           signature: drawgridStateSignature(pending),
         });
       }
-      if (typeof toy?.setState === 'function') toy.setState(pending);
+      if (typeof toy?.setState === 'function') Promise.resolve(toy.setState(pending)).then(()=>{delete panel.__linkedInitialState;});
       else toy.restoreState(pending);
       if (initDebug) {
         setTimeout(() => {

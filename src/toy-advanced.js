@@ -44,7 +44,7 @@ export function installToyAdvanced(panel) {
   shelf.addEventListener('keydown',event=>{if(event.key==='Escape'){event.stopPropagation();event.preventDefault();zoomOutPanel();}});
   right.append(toggle);panel.append(shelf);
   const reuse=advancedGroup(panel,'reuse','Linked toys');
-  const instance=document.createElement('button');instance.type='button';instance.className='toy-btn';instance.textContent='Create Instance';
+  const instance=document.createElement('button');instance.type='button';instance.className='toy-btn';instance.textContent='Create Linked Copy';
   instance.addEventListener('click',event=>{event.stopPropagation();zoomOutPanel();window.MusicToyFactory?.createInstance?.(panel,{focus:true});});reuse.append(instance);
 }
 export function advancedGroup(panel, key, label) {

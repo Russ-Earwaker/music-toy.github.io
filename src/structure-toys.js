@@ -138,6 +138,7 @@ export function createStructureToyModel(model, options = {}) {
     refresh(); return { ...result, structureId: s.id };
   }
   function setType(id, type, {allowLossy=false}={}) {
+    if(records.get(id)?.masterStructureId || config.canChangeType?.(id,type)===false)return null;
     if (!STRUCTURE_TYPES.includes(type) || isModifier(records.get(id)?.type) || !records.has(id)) return null;
     if(conversion(id,type).lossy&&!allowLossy)return null;
     const s=records.get(id),children=model.list('sequence').filter(c=>c.from.objectId===id).sort((a,b)=>order(a.from.portId)-order(b.from.portId));
@@ -214,6 +215,7 @@ export function createStructureToyModel(model, options = {}) {
   });
   return {
     createStandalone, list, get: id => records.has(id) ? presented(records.get(id)) : null, promote, setType, conversion, durationOf,
+    isSuspended:()=>suspended>0,
     getTimelineEntries(id) {return (records.get(id)?.entries||[]).map(e=>{const edge=childEdges(id).find(c=>c.from.portId===e.portId);return {...e,durationTicks:edge?edgeDuration(edge):durationOf(e.childId),label:structureTypeLabelForChild(e.childId)};});},
     setOffset(id,portId,value,{snap=true}={}) {
       const s=records.get(id);if(s?.type!=='timeline'||!s.entries.some(e=>e.portId===portId))return null;
@@ -244,8 +246,10 @@ export function createStructureToyModel(model, options = {}) {
     remove(id) {
       const s = records.get(id);
       if (!s) return;
+      if(config.canRemove?.(s)===false)return false;
       config.onRemove?.(s);
       model.transaction(() => { records.delete(id); model.removeObject(id); model.touchObject(id); });
+      return true;
     },
     suspend(fn) { suspended++; try { return fn(); } finally { suspended--; refresh(); } },
     restore(saved = []) {

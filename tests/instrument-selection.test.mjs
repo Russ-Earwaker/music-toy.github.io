@@ -183,7 +183,7 @@ test('actual Rippler persistence hook retains pitch metadata when the runtime sn
 
 test('Chord Wheel scene restore notifies its live definition and reserializes the selected sound', () => {
   const s = source('persistence.js');
-  const snapshots = s.slice(s.indexOf('const ToySnapshotters ='), s.indexOf('export function getSnapshot'));
+  const snapshots = s.slice(s.indexOf('const ToySnapshotters ='), s.indexOf('export function captureLinkedToyState'));
   const pitch = s.slice(s.indexOf('function applyInstrumentPitch'), s.indexOf('\nfunction ', s.indexOf('function applyInstrumentPitch')+10));
   const panel = new Element('wheel', 'chordwheel'); panel.dataset.instrument = 'tone'; let definitionInstrument = 'tone';
   panel.addEventListener('toy-instrument', () => { definitionInstrument = panel.dataset.instrument; });

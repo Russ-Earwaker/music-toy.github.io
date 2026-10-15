@@ -54,7 +54,7 @@ export function installGeneratorButtons(panel, apiHooks = {}, opts = {}) {
     stepsSel = document.createElement('select');
     stepsSel.className = 'drawgrid-steps';
     stepsSel.setAttribute('aria-label', 'Pattern length');
-    stepsSel.innerHTML = `<option value="8">8 steps</option><option value="16">16 steps</option>`;
+    stepsSel.innerHTML = `<option value="8">8 steps</option><option value="16">16 steps</option><option value="32">32 steps / 4 bars</option>`;
     stepsSel.value = String(getCols?.());
     right.appendChild(stepsSel);
 

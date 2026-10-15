@@ -16,7 +16,7 @@ test('Advanced appears only on compatible musical Master toys',()=>{
 });
 test('Simple Rhythm Advanced offers linked Instances without pitched controls',()=>{
  const p=panel('loopgrid'),shelf=p.querySelector('.toy-advanced-panel'),groups=shelf.querySelectorAll('[data-group="reuse"]');
- assert.equal(groups.length,1);assert.equal(groups[0].children[1].textContent,'Create Instance');
+ assert.equal(groups.length,1);assert.equal(groups[0].children[1].textContent,'Create Linked Copy');
  assert.equal(p.querySelector('.musical-role-control'),null);assert.equal(p.querySelector('.local-transpose-control'),null);
  const before=structuredClone(p.source),calls=[];globalThis.window={MusicToyFactory:{createInstance:(master,options)=>calls.push({master,options})}};
  groups[0].children[1].dispatchEvent(new Event('click'));assert.equal(calls[0].master,p);assert.equal(calls[0].options.focus,true);assert.deepEqual(p.source,before);delete globalThis.window;

@@ -1,0 +1,2515 @@
+{
+  "kind": "normal-graph-harmony-integration",
+  "createdAt": "2026-10-13T16:51:52.726Z",
+  "authoredSources": [
+    {
+      "id": "proof-bass",
+      "type": "drawgrid",
+      "toyName": "Draw 1",
+      "instanceSerial": 4,
+      "ui": {
+        "left": "1150px",
+        "top": "0px",
+        "width": "800px",
+        "height": "",
+        "positionSource": "manual",
+        "z": 0
+      },
+      "state": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "RETRO TRIANGLE",
+        "instrumentOctave": 3,
+        "instrumentPitchShift": true,
+        "musicalRole": "accompaniment",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              11
+            ],
+            [
+              11
+            ],
+            [
+              11
+            ],
+            [
+              11
+            ],
+            [
+              11
+            ],
+            [
+              11
+            ],
+            [
+              11
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "volume": 0.7,
+      "muted": false,
+      "ownerArtToyId": null
+    },
+    {
+      "id": "proof-melody",
+      "type": "drawgrid",
+      "toyName": "Draw 2",
+      "instanceSerial": 2,
+      "ui": {
+        "left": "1150px",
+        "top": "470px",
+        "width": "800px",
+        "height": "",
+        "positionSource": "manual",
+        "z": 0
+      },
+      "state": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": 4,
+        "instrumentPitchShift": true,
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "volume": 1,
+      "muted": false,
+      "ownerArtToyId": null
+    },
+    {
+      "id": "proof-drums",
+      "type": "loopgrid",
+      "toyName": "Rhythm 1",
+      "instanceSerial": 2,
+      "ui": {
+        "left": "1150px",
+        "top": "940px",
+        "width": "618px",
+        "height": "345px",
+        "positionSource": "manual",
+        "z": 3
+      },
+      "state": {
+        "steps": [
+          true,
+          false,
+          true,
+          false,
+          true,
+          false,
+          true,
+          false
+        ],
+        "notes": [
+          60,
+          60,
+          60,
+          60,
+          60,
+          60,
+          60,
+          60
+        ],
+        "noteIndices": [
+          12,
+          12,
+          12,
+          12,
+          12,
+          12,
+          12,
+          12
+        ],
+        "instrument": "DRUM KICK",
+        "instrumentPitchShift": false,
+        "musicalRole": "percussion"
+      },
+      "volume": 0.45,
+      "muted": false,
+      "ownerArtToyId": null
+    },
+    {
+      "id": "instance-1791839765875-03l70v",
+      "type": "drawgrid",
+      "masterToyId": "proof-bass",
+      "instanceNumber": 1,
+      "autoArrangeOwner": "arrangement:1791839765870:1",
+      "ownerArtToyId": null,
+      "ui": {
+        "left": "2743.3px",
+        "top": "-1288px",
+        "width": "240px",
+        "height": "",
+        "positionSource": "auto",
+        "z": 0
+      },
+      "state": {}
+    },
+    {
+      "id": "instance-1791839765885-r6pzkm",
+      "type": "loopgrid",
+      "masterToyId": "proof-drums",
+      "instanceNumber": 1,
+      "autoArrangeOwner": "arrangement:1791839765870:1",
+      "ownerArtToyId": null,
+      "ui": {
+        "left": "3159.3px",
+        "top": "-1040px",
+        "width": "240px",
+        "height": "160px",
+        "positionSource": "auto",
+        "z": 0
+      },
+      "state": {}
+    },
+    {
+      "id": "instance-1791839765887-d5iuy5",
+      "type": "drawgrid",
+      "masterToyId": "proof-bass",
+      "instanceNumber": 2,
+      "autoArrangeOwner": "arrangement:1791839765870:1",
+      "ownerArtToyId": null,
+      "ui": {
+        "left": "3159.3px",
+        "top": "-792px",
+        "width": "240px",
+        "height": "",
+        "positionSource": "auto",
+        "z": 0
+      },
+      "state": {}
+    },
+    {
+      "id": "instance-1791839765891-ui03eh",
+      "type": "drawgrid",
+      "masterToyId": "proof-melody",
+      "instanceNumber": 1,
+      "autoArrangeOwner": "arrangement:1791839765870:1",
+      "ownerArtToyId": null,
+      "ui": {
+        "left": "3159.3px",
+        "top": "-544px",
+        "width": "240px",
+        "height": "",
+        "positionSource": "auto",
+        "z": 0
+      },
+      "state": {}
+    },
+    {
+      "id": "instance-1791839765898-k13c0p",
+      "type": "drawgrid",
+      "masterToyId": "proof-bass",
+      "instanceNumber": 3,
+      "autoArrangeOwner": "arrangement:1791839765870:1",
+      "ownerArtToyId": null,
+      "ui": {
+        "left": "3575.3px",
+        "top": "-296px",
+        "width": "240px",
+        "height": "",
+        "positionSource": "auto",
+        "z": 0
+      },
+      "state": {}
+    },
+    {
+      "id": "instance-1791839765901-i21ynt",
+      "type": "loopgrid",
+      "masterToyId": "proof-drums",
+      "instanceNumber": 2,
+      "autoArrangeOwner": "arrangement:1791839765870:1",
+      "ownerArtToyId": null,
+      "ui": {
+        "left": "3575.3px",
+        "top": "-48px",
+        "width": "240px",
+        "height": "160px",
+        "positionSource": "auto",
+        "z": 0
+      },
+      "state": {}
+    },
+    {
+      "id": "instance-1791839765905-20e7e8",
+      "type": "drawgrid",
+      "masterToyId": "proof-melody",
+      "instanceNumber": 2,
+      "autoArrangeOwner": "arrangement:1791839765870:1",
+      "ownerArtToyId": null,
+      "ui": {
+        "left": "3575.3px",
+        "top": "200px",
+        "width": "240px",
+        "height": "",
+        "positionSource": "auto",
+        "z": 0
+      },
+      "state": {}
+    },
+    {
+      "id": "instance-1791839765914-x0ynom",
+      "type": "drawgrid",
+      "masterToyId": "proof-bass",
+      "instanceNumber": 4,
+      "autoArrangeOwner": "arrangement:1791839765870:1",
+      "ownerArtToyId": null,
+      "ui": {
+        "left": "2743.3px",
+        "top": "548px",
+        "width": "240px",
+        "height": "",
+        "positionSource": "auto",
+        "z": 0
+      },
+      "state": {}
+    }
+  ],
+  "events": [],
+  "uiEvents": [],
+  "relationshipEvents": [],
+  "timingActions": [],
+  "chordIndicators": [],
+  "chordIndicatorStatus": [
+    {
+      "toyId": "proof-bass",
+      "role": "accompaniment",
+      "label": null,
+      "playing": false,
+      "width": 800,
+      "height": 758
+    },
+    {
+      "toyId": "proof-melody",
+      "role": "melody",
+      "label": null,
+      "playing": false,
+      "width": 800,
+      "height": 758
+    },
+    {
+      "toyId": "proof-drums",
+      "role": "percussion",
+      "label": null,
+      "playing": false,
+      "width": 618,
+      "height": 345
+    },
+    {
+      "toyId": "instance-1791839765875-03l70v",
+      "role": "accompaniment",
+      "label": null,
+      "playing": false,
+      "width": 240,
+      "height": 160
+    },
+    {
+      "toyId": "instance-1791839765885-r6pzkm",
+      "role": "percussion",
+      "label": null,
+      "playing": false,
+      "width": 240,
+      "height": 160
+    },
+    {
+      "toyId": "instance-1791839765887-d5iuy5",
+      "role": "accompaniment",
+      "label": null,
+      "playing": false,
+      "width": 240,
+      "height": 160
+    },
+    {
+      "toyId": "instance-1791839765891-ui03eh",
+      "role": "melody",
+      "label": null,
+      "playing": false,
+      "width": 240,
+      "height": 160
+    },
+    {
+      "toyId": "instance-1791839765898-k13c0p",
+      "role": "accompaniment",
+      "label": null,
+      "playing": false,
+      "width": 240,
+      "height": 160
+    },
+    {
+      "toyId": "instance-1791839765901-i21ynt",
+      "role": "percussion",
+      "label": null,
+      "playing": false,
+      "width": 240,
+      "height": 160
+    },
+    {
+      "toyId": "instance-1791839765905-20e7e8",
+      "role": "melody",
+      "label": null,
+      "playing": false,
+      "width": 240,
+      "height": 160
+    },
+    {
+      "toyId": "instance-1791839765914-x0ynom",
+      "role": "accompaniment",
+      "label": null,
+      "playing": false,
+      "width": 240,
+      "height": 160
+    }
+  ],
+  "snapshot": {
+    "schemaVersion": 1,
+    "createdAt": "2026-10-13T16:51:52.725Z",
+    "updatedAt": "2026-10-13T16:51:52.725Z",
+    "transport": {
+      "bpm": 120
+    },
+    "heartbeats": [
+      {
+        "id": "main-heartbeat",
+        "transportId": "main-heartbeat",
+        "name": "Main",
+        "position": {
+          "x": 0,
+          "y": 300
+        },
+        "bpm": 120,
+        "positionTick": 10055,
+        "state": "stopped"
+      }
+    ],
+    "themeId": "default",
+    "artToys": [],
+    "toys": [
+      {
+        "id": "proof-bass",
+        "type": "drawgrid",
+        "toyName": "Draw 1",
+        "instanceSerial": 4,
+        "ui": {
+          "left": "1150px",
+          "top": "0px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "RETRO TRIANGLE",
+          "instrumentOctave": 3,
+          "instrumentPitchShift": true,
+          "musicalRole": "accompaniment",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "volume": 0.7,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "proof-melody",
+        "type": "drawgrid",
+        "toyName": "Draw 2",
+        "instanceSerial": 2,
+        "ui": {
+          "left": "1150px",
+          "top": "470px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "instrumentOctave": 4,
+          "instrumentPitchShift": true,
+          "musicalRole": "melody",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                7
+              ],
+              [
+                4
+              ],
+              [
+                2
+              ],
+              [
+                4
+              ],
+              [
+                7
+              ],
+              [
+                5
+              ],
+              [
+                9
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "proof-drums",
+        "type": "loopgrid",
+        "toyName": "Rhythm 1",
+        "instanceSerial": 2,
+        "ui": {
+          "left": "1150px",
+          "top": "940px",
+          "width": "618px",
+          "height": "345px",
+          "positionSource": "manual",
+          "z": 5
+        },
+        "state": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "notes": [
+            60,
+            60,
+            60,
+            60,
+            60,
+            60,
+            60,
+            60
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK",
+          "instrumentPitchShift": false,
+          "musicalRole": "percussion"
+        },
+        "volume": 0.45,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "instance-1791839765875-03l70v",
+        "type": "drawgrid",
+        "masterToyId": "proof-bass",
+        "instanceNumber": 1,
+        "autoArrangeOwner": "arrangement:1791839765870:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "2743.3px",
+          "top": "-1288px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791839765885-r6pzkm",
+        "type": "loopgrid",
+        "masterToyId": "proof-drums",
+        "instanceNumber": 1,
+        "autoArrangeOwner": "arrangement:1791839765870:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "3159.3px",
+          "top": "-1040px",
+          "width": "240px",
+          "height": "160px",
+          "positionSource": "auto",
+          "z": 4
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791839765887-d5iuy5",
+        "type": "drawgrid",
+        "masterToyId": "proof-bass",
+        "instanceNumber": 2,
+        "autoArrangeOwner": "arrangement:1791839765870:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "3159.3px",
+          "top": "-792px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791839765891-ui03eh",
+        "type": "drawgrid",
+        "masterToyId": "proof-melody",
+        "instanceNumber": 1,
+        "autoArrangeOwner": "arrangement:1791839765870:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "3159.3px",
+          "top": "-544px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791839765898-k13c0p",
+        "type": "drawgrid",
+        "masterToyId": "proof-bass",
+        "instanceNumber": 3,
+        "autoArrangeOwner": "arrangement:1791839765870:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "3575.3px",
+          "top": "-296px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791839765901-i21ynt",
+        "type": "loopgrid",
+        "masterToyId": "proof-drums",
+        "instanceNumber": 2,
+        "autoArrangeOwner": "arrangement:1791839765870:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "3575.3px",
+          "top": "-48px",
+          "width": "240px",
+          "height": "160px",
+          "positionSource": "auto",
+          "z": 3
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791839765905-20e7e8",
+        "type": "drawgrid",
+        "masterToyId": "proof-melody",
+        "instanceNumber": 2,
+        "autoArrangeOwner": "arrangement:1791839765870:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "3575.3px",
+          "top": "200px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "instance-1791839765914-x0ynom",
+        "type": "drawgrid",
+        "masterToyId": "proof-bass",
+        "instanceNumber": 4,
+        "autoArrangeOwner": "arrangement:1791839765870:1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "2743.3px",
+          "top": "548px",
+          "width": "240px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      }
+    ],
+    "chains": [
+      {
+        "parentId": "structure-toy:2",
+        "childId": "instance-1791839765875-03l70v"
+      },
+      {
+        "parentId": "structure-toy:4",
+        "childId": "instance-1791839765885-r6pzkm"
+      },
+      {
+        "parentId": "structure-toy:4",
+        "childId": "instance-1791839765887-d5iuy5"
+      },
+      {
+        "parentId": "structure-toy:4",
+        "childId": "instance-1791839765891-ui03eh"
+      },
+      {
+        "parentId": "structure-toy:7",
+        "childId": "instance-1791839765898-k13c0p"
+      },
+      {
+        "parentId": "structure-toy:8",
+        "childId": "instance-1791839765901-i21ynt"
+      },
+      {
+        "parentId": "structure-toy:9",
+        "childId": "instance-1791839765905-20e7e8"
+      },
+      {
+        "parentId": "structure-toy:10",
+        "childId": "instance-1791839765914-x0ynom"
+      }
+    ],
+    "connections": [
+      {
+        "id": "connection:31",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "structure-toy:1",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:6",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "structure-toy:2",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:8",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:2",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791839765875-03l70v",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:9",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "structure-toy:3",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:10",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:3",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "structure-toy:4",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:12",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:4",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791839765885-r6pzkm",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:14",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:4",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "instance-1791839765887-d5iuy5",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:16",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:4",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "instance-1791839765891-ui03eh",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:17",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "structure-toy:5",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:18",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:5",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "structure-toy:6",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:19",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:6",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "structure-toy:7",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:21",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:7",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791839765898-k13c0p",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:22",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:6",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "structure-toy:8",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:24",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:8",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791839765901-i21ynt",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:25",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:6",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "structure-toy:9",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:27",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:9",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791839765905-20e7e8",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:28",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:3"
+        },
+        "to": {
+          "objectId": "structure-toy:10",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:30",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:10",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "instance-1791839765914-x0ynom",
+          "portId": "input"
+        }
+      }
+    ],
+    "structureToys": [
+      {
+        "id": "structure-toy:1",
+        "definitionId": "definition:structure-toy:1",
+        "type": "sequence",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 1903.3023531738186,
+        "y": -392,
+        "artOwnerId": null,
+        "name": "Arrangement",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1",
+          "root": true,
+          "version": 1.1,
+          "heartbeatId": "main-heartbeat",
+          "sourceIds": {
+            "rhythm": "proof-drums",
+            "accompaniment": "proof-bass",
+            "melody": "proof-melody"
+          },
+          "origins": {
+            "rhythm": "authored",
+            "accompaniment": "authored",
+            "melody": "authored"
+          },
+          "displacedConnections": [
+            {
+              "id": "source-root-proof-drums",
+              "kind": "transport",
+              "from": {
+                "objectId": "main-heartbeat",
+                "portId": "output"
+              },
+              "to": {
+                "objectId": "proof-drums",
+                "portId": "input"
+              }
+            },
+            {
+              "id": "source-root-proof-bass",
+              "kind": "transport",
+              "from": {
+                "objectId": "main-heartbeat",
+                "portId": "output"
+              },
+              "to": {
+                "objectId": "proof-bass",
+                "portId": "input"
+              }
+            },
+            {
+              "id": "source-root-proof-melody",
+              "kind": "transport",
+              "from": {
+                "objectId": "main-heartbeat",
+                "portId": "output"
+              },
+              "to": {
+                "objectId": "proof-melody",
+                "portId": "input"
+              }
+            }
+          ]
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 5,
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:2",
+        "definitionId": "definition:structure-toy:2",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "C",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 2207.3023531738186,
+        "y": -1248,
+        "artOwnerId": null,
+        "name": "Intro",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "lastChildType": "drawgrid",
+        "lastChildId": "instance-1791839765875-03l70v",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:3",
+        "definitionId": "definition:structure-toy:3",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "C",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 2207.3023531738186,
+        "y": -752,
+        "artOwnerId": null,
+        "name": "A",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:4",
+        "definitionId": "definition:structure-toy:4",
+        "type": "together",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 2743.3023531738186,
+        "y": -836,
+        "artOwnerId": null,
+        "name": "A layers",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 4,
+        "lastChildType": "drawgrid",
+        "lastChildId": "instance-1791839765891-ui03eh",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:5",
+        "definitionId": "definition:structure-toy:5",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "C",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 2207.3023531738186,
+        "y": -8,
+        "artOwnerId": null,
+        "name": "B",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:6",
+        "definitionId": "definition:structure-toy:6",
+        "type": "timeline",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 2743.3023531738186,
+        "y": -92,
+        "artOwnerId": null,
+        "name": "B layers",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 4,
+        "entries": [
+          {
+            "childId": "structure-toy:7",
+            "portId": "child:0",
+            "offsetTick": 0
+          },
+          {
+            "childId": "structure-toy:8",
+            "portId": "child:1",
+            "offsetTick": 384
+          },
+          {
+            "childId": "structure-toy:9",
+            "portId": "child:2",
+            "offsetTick": 768
+          }
+        ],
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:7",
+        "definitionId": "definition:structure-toy:7",
+        "type": "repeat",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 3159.3023531738186,
+        "y": -256,
+        "artOwnerId": null,
+        "name": "B layer 1",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "count": 4,
+        "lastChildType": "drawgrid",
+        "lastChildId": "instance-1791839765898-k13c0p",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:8",
+        "definitionId": "definition:structure-toy:8",
+        "type": "repeat",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 3159.3023531738186,
+        "y": -8,
+        "artOwnerId": null,
+        "name": "B layer 2",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "count": 3,
+        "lastChildType": "loopgrid",
+        "lastChildId": "instance-1791839765901-i21ynt",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:9",
+        "definitionId": "definition:structure-toy:9",
+        "type": "repeat",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 3159.3023531738186,
+        "y": 240,
+        "artOwnerId": null,
+        "name": "B layer 3",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "count": 2,
+        "lastChildType": "drawgrid",
+        "lastChildId": "instance-1791839765905-20e7e8",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:10",
+        "definitionId": "definition:structure-toy:10",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "C",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 2207.3023531738186,
+        "y": 448,
+        "artOwnerId": null,
+        "name": "Outro",
+        "autoArrange": {
+          "owner": "arrangement:1791839765870:1"
+        },
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "lastChildType": "drawgrid",
+        "lastChildId": "instance-1791839765914-x0ynom",
+        "transportId": "main-heartbeat"
+      }
+    ],
+    "camera": {
+      "boardTransform": "translate3d(32.5px, 120px, 0px) scale(0.561889)",
+      "viewportScrollLeft": 0,
+      "viewportScrollTop": 0,
+      "bvScale": "0.5618888888888889",
+      "scale": 0.65,
+      "x": 32.5,
+      "y": 120,
+      "overviewActive": false
+    }
+  },
+  "diagnostics": {
+    "sourceUsePresentation": {
+      "chips": 0,
+      "extraSockets": 0,
+      "visibleCables": 18,
+      "dottedCables": 0,
+      "highlightedSources": [],
+      "sourcePositions": [
+        {
+          "id": "proof-bass",
+          "left": "1150px",
+          "top": "0px"
+        },
+        {
+          "id": "proof-melody",
+          "left": "1150px",
+          "top": "470px"
+        },
+        {
+          "id": "proof-drums",
+          "left": "1150px",
+          "top": "940px"
+        },
+        {
+          "id": "instance-1791839765875-03l70v",
+          "left": "2743.3px",
+          "top": "-1288px"
+        },
+        {
+          "id": "instance-1791839765885-r6pzkm",
+          "left": "3159.3px",
+          "top": "-1040px"
+        },
+        {
+          "id": "instance-1791839765887-d5iuy5",
+          "left": "3159.3px",
+          "top": "-792px"
+        },
+        {
+          "id": "instance-1791839765891-ui03eh",
+          "left": "3159.3px",
+          "top": "-544px"
+        },
+        {
+          "id": "instance-1791839765898-k13c0p",
+          "left": "3575.3px",
+          "top": "-296px"
+        },
+        {
+          "id": "instance-1791839765901-i21ynt",
+          "left": "3575.3px",
+          "top": "-48px"
+        },
+        {
+          "id": "instance-1791839765905-20e7e8",
+          "left": "3575.3px",
+          "top": "200px"
+        },
+        {
+          "id": "instance-1791839765914-x0ynom",
+          "left": "2743.3px",
+          "top": "548px"
+        }
+      ],
+      "nodeBounds": [
+        {
+          "label": "Arrangement · Sequence structure",
+          "x": "1903.3023531738186",
+          "y": "-392",
+          "width": "128",
+          "height": "304"
+        },
+        {
+          "label": "Intro · Chord Progression",
+          "x": "2207.3023531738186",
+          "y": "-1248",
+          "width": "360",
+          "height": "80"
+        },
+        {
+          "label": "A · Chord Progression",
+          "x": "2207.3023531738186",
+          "y": "-752",
+          "width": "360",
+          "height": "80"
+        },
+        {
+          "label": "A layers · Together structure",
+          "x": "2743.3023531738186",
+          "y": "-836",
+          "width": "128",
+          "height": "248"
+        },
+        {
+          "label": "B · Chord Progression",
+          "x": "2207.3023531738186",
+          "y": "-8",
+          "width": "360",
+          "height": "80"
+        },
+        {
+          "label": "B layers · Timeline structure",
+          "x": "2743.3023531738186",
+          "y": "-92",
+          "width": "128",
+          "height": "248"
+        },
+        {
+          "label": "B layer 1 · Repeat structure",
+          "x": "3159.3023531738186",
+          "y": "-256",
+          "width": "128",
+          "height": "80"
+        },
+        {
+          "label": "B layer 2 · Repeat structure",
+          "x": "3159.3023531738186",
+          "y": "-8",
+          "width": "128",
+          "height": "80"
+        },
+        {
+          "label": "B layer 3 · Repeat structure",
+          "x": "3159.3023531738186",
+          "y": "240",
+          "width": "128",
+          "height": "80"
+        },
+        {
+          "label": "Outro · Chord Progression",
+          "x": "2207.3023531738186",
+          "y": "448",
+          "width": "360",
+          "height": "80"
+        }
+      ]
+    },
+    "rootPerformances": [
+      {
+        "id": "structure:1:64",
+        "definitionId": "definition:structure-toy:1",
+        "transportId": "main-heartbeat",
+        "startTick": 10055,
+        "phaseOriginTick": 0,
+        "active": true,
+        "context": {
+          "transposeSemitones": 0,
+          "harmony": null,
+          "scale": null,
+          "velocityScale": 1
+        },
+        "loop": true,
+        "generation": 0,
+        "scheduledUntilTick": 10055,
+        "rootAnchor": true,
+        "powerConnectionId": "connection:31",
+        "currentLocalTick": 3911,
+        "currentStructureLocalTick": 3911,
+        "currentChild": "instance-1791839765898-k13c0p",
+        "currentChildren": [
+          "instance-1791839765898-k13c0p",
+          "instance-1791839765901-i21ynt",
+          "instance-1791839765905-20e7e8"
+        ],
+        "currentChildStartTick": 10055,
+        "harmonicOccurrences": [
+          {
+            "occurrenceId": "[\"structure:1:64\",10055,\"instance-1791839765898-k13c0p\",[\"slot:definition:structure-toy:5:0\",\"slot:definition:structure-toy:6:0:progression:0\",\"slot:definition:structure-toy:7:0\",\"slot:instance-1791839765898-k13c0p:0:repeat:2\"]]",
+            "toyId": "instance-1791839765898-k13c0p",
+            "harmony": {
+              "progressionId": "definition:structure-toy:5",
+              "originTick": 9216,
+              "stepTicks": 384,
+              "chords": [
+                {
+                  "root": "F",
+                  "quality": "major"
+                },
+                {
+                  "root": "G",
+                  "quality": "major"
+                },
+                {
+                  "root": "A",
+                  "quality": "minor"
+                },
+                {
+                  "root": "C",
+                  "quality": "major"
+                }
+              ]
+            },
+            "resolvedChord": {
+              "root": "A",
+              "quality": "minor"
+            }
+          },
+          {
+            "occurrenceId": "[\"structure:1:64\",10055,\"instance-1791839765901-i21ynt\",[\"slot:definition:structure-toy:5:0\",\"slot:definition:structure-toy:6:0:progression:0\",\"slot:definition:structure-toy:8:0\",\"slot:instance-1791839765901-i21ynt:0:repeat:1\"]]",
+            "toyId": "instance-1791839765901-i21ynt",
+            "harmony": {
+              "progressionId": "definition:structure-toy:5",
+              "originTick": 9216,
+              "stepTicks": 384,
+              "chords": [
+                {
+                  "root": "F",
+                  "quality": "major"
+                },
+                {
+                  "root": "G",
+                  "quality": "major"
+                },
+                {
+                  "root": "A",
+                  "quality": "minor"
+                },
+                {
+                  "root": "C",
+                  "quality": "major"
+                }
+              ]
+            },
+            "resolvedChord": {
+              "root": "A",
+              "quality": "minor"
+            }
+          },
+          {
+            "occurrenceId": "[\"structure:1:64\",10055,\"instance-1791839765905-20e7e8\",[\"slot:definition:structure-toy:5:0\",\"slot:definition:structure-toy:6:0:progression:0\",\"slot:definition:structure-toy:9:0\",\"slot:instance-1791839765905-20e7e8:0:repeat:0\"]]",
+            "toyId": "instance-1791839765905-20e7e8",
+            "harmony": {
+              "progressionId": "definition:structure-toy:5",
+              "originTick": 9216,
+              "stepTicks": 384,
+              "chords": [
+                {
+                  "root": "F",
+                  "quality": "major"
+                },
+                {
+                  "root": "G",
+                  "quality": "major"
+                },
+                {
+                  "root": "A",
+                  "quality": "minor"
+                },
+                {
+                  "root": "C",
+                  "quality": "major"
+                }
+              ]
+            },
+            "resolvedChord": {
+              "root": "A",
+              "quality": "minor"
+            }
+          }
+        ]
+      }
+    ],
+    "instancePresentation": [
+      {
+        "id": "proof-bass",
+        "name": "Draw 1",
+        "masterToyId": null,
+        "number": null,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 800,
+        "height": 758,
+        "visibleRoles": 0,
+        "sourceControls": null
+      },
+      {
+        "id": "proof-melody",
+        "name": "Draw 2",
+        "masterToyId": null,
+        "number": null,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 800,
+        "height": 758,
+        "visibleRoles": 0,
+        "sourceControls": null
+      },
+      {
+        "id": "proof-drums",
+        "name": "Rhythm 1",
+        "masterToyId": null,
+        "number": null,
+        "colour": "oklch(76% 0.14 262.6165)",
+        "highlighted": false,
+        "width": 618,
+        "height": 345,
+        "visibleRoles": 0,
+        "sourceControls": null
+      },
+      {
+        "id": "instance-1791839765875-03l70v",
+        "name": "Draw 1.1",
+        "masterToyId": "proof-bass",
+        "number": 1,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791839765885-r6pzkm",
+        "name": "Rhythm 1.1",
+        "masterToyId": "proof-drums",
+        "number": 1,
+        "colour": "oklch(76% 0.14 262.6165)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791839765887-d5iuy5",
+        "name": "Draw 1.2",
+        "masterToyId": "proof-bass",
+        "number": 2,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791839765891-ui03eh",
+        "name": "Draw 2.1",
+        "masterToyId": "proof-melody",
+        "number": 1,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791839765898-k13c0p",
+        "name": "Draw 1.3",
+        "masterToyId": "proof-bass",
+        "number": 3,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791839765901-i21ynt",
+        "name": "Rhythm 1.2",
+        "masterToyId": "proof-drums",
+        "number": 2,
+        "colour": "oklch(76% 0.14 262.6165)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791839765905-20e7e8",
+        "name": "Draw 2.2",
+        "masterToyId": "proof-melody",
+        "number": 2,
+        "colour": "oklch(84% 0.14 137.5078)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      },
+      {
+        "id": "instance-1791839765914-x0ynom",
+        "name": "Draw 1.4",
+        "masterToyId": "proof-bass",
+        "number": 4,
+        "colour": "oklch(68% 0.14 327.5388)",
+        "highlighted": false,
+        "width": 240,
+        "height": 160,
+        "visibleRoles": 0,
+        "sourceControls": 0
+      }
+    ],
+    "providers": [
+      {
+        "id": "proof-bass",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "audioToyId": "audiotoy_proof-bass_3krgft04"
+      },
+      {
+        "id": "proof-melody",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        },
+        "audioToyId": "audiotoy_proof-melody_lu7lclh3"
+      },
+      {
+        "id": "proof-drums",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK"
+        },
+        "audioToyId": "audiotoy_proof-drums_6cspbuy3"
+      },
+      {
+        "id": "instance-1791839765875-03l70v",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791839765885-r6pzkm",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK"
+        }
+      },
+      {
+        "id": "instance-1791839765887-d5iuy5",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791839765891-ui03eh",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791839765898-k13c0p",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791839765901-i21ynt",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false
+          ],
+          "noteIndices": [
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12,
+            12
+          ],
+          "instrument": "DRUM KICK"
+        }
+      },
+      {
+        "id": "instance-1791839765905-20e7e8",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "PIANO",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                2
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                4
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                7
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                5
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                9
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      },
+      {
+        "id": "instance-1791839765914-x0ynom",
+        "hasSchedule": true,
+        "pattern": {
+          "steps": 8,
+          "instrument": "RETRO TRIANGLE",
+          "cols": [
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            },
+            {
+              "active": true,
+              "nodes": [
+                11
+              ],
+              "disabled": []
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -11,6 +11,7 @@ import { heartbeatModel } from './heartbeats.js';
 import { applyToyInstrument } from './instrument-state.js';
 import { normalizeMusicalRole, restoreToyMusicalRole } from './musical-role.js';
 import {migrateSourceUses,validateInstanceLinks} from './toy-instances.js';
+import {validateStructureInstanceLinks} from './structure-instances.js';
 import { restoreToyLocalTranspose } from './toy-local-transpose.js';
 
 // ---- Persistence diagnostics ----
@@ -303,7 +304,7 @@ function panelId(panel){ return panel.id || panel.dataset.toyid || panel.dataset
 function clamp01(v){ return Math.max(0, Math.min(1, Number(v))); }
 
 function resolveToyAudioId(panel, fallbackId){
-  return String(panel?.dataset?.toyid || panel?.id || fallbackId || 'master');
+  return String(panel?.__audioToyId || panel?.dataset?.audiotoyid || panel?.dataset?.toyid || panel?.id || fallbackId || 'master');
 }
 
 function snapToyAudio(panel, fallbackId){
@@ -643,7 +644,7 @@ function applyDrawGrid(panel, state) {
       if (meaningful) {
         persistTraceLog('[persistence][drawgrid] APPLY (meaningful)', panel.id, sum(state));
         applyInstrumentPitch(panel, state);
-        toy.setState(state);
+        Promise.resolve(toy.setState(state)).then(()=>{delete panel.__linkedInitialState;});
         return;
       }
 
@@ -820,6 +821,21 @@ const ToySnapshotters = {
   drawgrid: { snap: snapDrawGrid, apply: applyDrawGrid },
 };
 
+export function captureLinkedToyState(panel){
+ return {...(ToySnapshotters[panel.dataset.toy]?.snap(panel)||{}),musicalRole:normalizeMusicalRole(panel.dataset.musicalRole),localTranspose:Number(panel.dataset.localTranspose)||0};
+}
+export async function applyLinkedToyState(panel,state){
+ restoreToyMusicalRole(panel,state);restoreToyLocalTranspose(panel,state);
+ applyInstrumentPitch(panel,state);
+ if(state.instrument)applyToyInstrument(panel,state.instrument);
+ if(panel.dataset.toy==='drawgrid'){
+  if(panel.__drawToy?.setState)await panel.__drawToy.setState({...state,meta:{...state.meta,preserveNodesOverStrokes:true}});
+  else panel.__pendingDrawGridState=state;
+ }else{
+  ToySnapshotters[panel.dataset.toy]?.apply(panel,state);
+  if(panel.dataset.toy==='loopgrid')panel.dispatchEvent(new CustomEvent('loopgrid:update',{detail:{...state,reason:'linked-copy-sync'}}));
+ }
+}
 export function getSnapshot(){
   const board = document.getElementById('board');
   const boardMain = document.getElementById('board-main');
@@ -834,14 +850,16 @@ export function getSnapshot(){
   const toys = panels.map(panel => {
     const type = String(panel.dataset.toy||'').toLowerCase();
     const id = panelId(panel);
-    if(panel.dataset.masterToyId)return {id,type,masterToyId:panel.dataset.masterToyId,instanceNumber:Number(panel.dataset.instanceNumber),autoArrangeOwner:panel.dataset.autoArrangeOwner||undefined,ownerArtToyId:panel.dataset.artOwnerId||null,ui:panel.dataset.artOwnerId?readOwnedToyUI(panel):readUI(panel),state:{}};
+    if(panel.dataset.masterToyId)return {id,type,masterToyId:panel.dataset.masterToyId,sharedDefinitionId:panel.dataset.sharedDefinitionId,linkedCopyNumber:Number(panel.dataset.linkedCopyNumber)||undefined,instanceNumber:Number(panel.dataset.instanceNumber),autoArrangeOwner:panel.dataset.autoArrangeOwner||undefined,structureInstanceId:panel.dataset.structureInstanceId||undefined,structureMasterChildId:panel.dataset.structureMasterChildId||undefined,ownerArtToyId:panel.dataset.artOwnerId||null,ui:panel.dataset.artOwnerId?readOwnedToyUI(panel):readUI(panel),state:{}};
     const snapper = ToySnapshotters[type]?.snap || (()=>({}));
     const audio = snapToyAudio(panel, id);
     const ownerArtToyId = panel.dataset?.artOwnerId || null;
     return {
       id, type, toyName:panel.dataset.toyName,instanceSerial:Number(panel.dataset.instanceSerial)||0,
+      sharedDefinitionId:panel.dataset.sharedDefinitionId,linkedCopyNumber:Number(panel.dataset.linkedCopyNumber)||undefined,
+      structureInstanceId:panel.dataset.structureInstanceId||undefined,structureMasterChildId:panel.dataset.structureMasterChildId||undefined,
       ui: ownerArtToyId ? readOwnedToyUI(panel) : readUI(panel),
-      state: { ...(snapper(panel) || {}), ...(panel.dataset.autoArrangeOrigin==='filled'?{autoArrangeOrigin:'filled'}:{}), ...(panel.dataset.musicalRole ? {musicalRole:normalizeMusicalRole(panel.dataset.musicalRole)} : {}) },
+      state: { ...(panel.__sharedToyState || snapper(panel) || {}), ...(panel.dataset.autoArrangeOrigin==='filled'?{autoArrangeOrigin:'filled'}:{}), ...(panel.dataset.autoArrangeFill?{autoArrangeFill:panel.dataset.autoArrangeFill,autoArrangeFillHeartbeat:panel.dataset.autoArrangeFillHeartbeat}:{}), ...(panel.dataset.musicalRole ? {musicalRole:normalizeMusicalRole(panel.dataset.musicalRole)} : {}) },
       volume: audio.volume,
       muted: audio.muted,
       solo: undefined,
@@ -920,7 +938,7 @@ export function applySnapshot(snap){
 
 export function applySceneSnapshot(snap){
   const migratedUses=snap?.connections?.some(c=>c.to.portId==='pattern');
-  try{snap=validateInstanceLinks(migrateSourceUses(snap));}catch(error){console.warn('[persistence] invalid linked toy scene',error);return false;}
+  try{snap=validateStructureInstanceLinks(validateInstanceLinks(migrateSourceUses(snap)));}catch(error){console.warn('[persistence] invalid linked toy scene',error);return false;}
   if (!snap || typeof snap !== 'object') return false;
   window.beginCreationGraphRestore?.();
   try{
@@ -1123,8 +1141,13 @@ export function applySceneSnapshot(snap){
       }
       if(t.toyName)panel.dataset.toyName=t.toyName;else delete panel.dataset.toyName;
       panel.dataset.instanceSerial=String(t.instanceSerial||0);
+      panel.__linkedInitialState=t.state;
+      for(const key of ['sharedDefinitionId','linkedCopyNumber','structureInstanceId','structureMasterChildId']){if(t[key]!=null)panel.dataset[key]=String(t[key]);else delete panel.dataset[key];}
       restoreToyMusicalRole(panel, t.state || {});
       if(t.state?.autoArrangeOrigin==='filled')panel.dataset.autoArrangeOrigin='filled';else delete panel.dataset.autoArrangeOrigin;
+      if(t.state?.autoArrangeFill){
+        panel.dataset.autoArrangeFill=t.state.autoArrangeFill;panel.dataset.autoArrangeFillHeartbeat=t.state.autoArrangeFillHeartbeat||'main-heartbeat';
+      }else{delete panel.dataset.autoArrangeFill;delete panel.dataset.autoArrangeFillHeartbeat;}
       restoreToyLocalTranspose(panel, t.state || {});
       const applier = ToySnapshotters[t.type]?.apply;
       if (typeof applier === 'function'){
@@ -1161,7 +1184,7 @@ export function applySceneSnapshot(snap){
     for(const old of panels.filter(p=>p.dataset.masterToyId)){factory?.destroy?.(old,{allowOffBoard:true,sceneRestore:true});old.remove();}
     for(const t of (snap.toys||[]).filter(t=>t.masterToyId)){
       if(!document.getElementById(t.masterToyId))throw new Error('Missing Master: '+t.masterToyId);
-      const instance=factory.createInstance(t.masterToyId,{id:t.id,instanceNumber:t.instanceNumber,autoArrangeOwner:t.autoArrangeOwner,ui:t.ui,containerEl:t.ownerArtToyId?internalHost:undefined});
+      const instance=factory.createInstance(t.masterToyId,{id:t.id,instanceNumber:t.instanceNumber,linkedCopyNumber:t.linkedCopyNumber,sharedDefinitionId:t.sharedDefinitionId,autoArrangeOwner:t.autoArrangeOwner,structureInstanceId:t.structureInstanceId,structureMasterChildId:t.structureMasterChildId,ui:t.ui,containerEl:t.ownerArtToyId?internalHost:undefined});
       panels.push(instance);usedPanels.add(instance);
     }
     // --- Re-link chain edges AFTER all toys exist ---

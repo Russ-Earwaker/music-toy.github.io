@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>Equal-status Linked Copies proof</title>
+<style>body{margin:0;background:#101820;color:white;font:14px system-ui}header{display:flex;gap:6px;flex-wrap:wrap;padding:8px}button{padding:8px}iframe{width:100%;height:80vh;border:0}pre{white-space:pre-wrap}</style>
+<header>
+<button data-action="load">Load four-part Phrase</button><button data-action="contexts">Connect A and B harmony</button>
+<button data-action="editCopy">Edit Draw B.2 in place</button><button data-action="reorderCopy">Reorder Phrase.2</button>
+<button data-action="moveCopy">Move Phrase.2</button><button data-action="deleteOriginal">Delete original Phrase view</button>
+<button data-action="focusCopy">Focus Draw B.2</button><button data-action="save">Save proof</button><button data-action="reload">Save and reload</button>
+<button data-action="arrange">Load missing-melody ideas</button><span id="status">Loading…</span></header>
+<button data-action="restoreManual">Restore saved linked graph</button>
+<button data-action="deleteTemplate">Delete original generated Phrase view</button>
+<iframe id="app" title="Normal board" src="../" allow="autoplay"></iframe><pre id="proof"></pre>
+<script type="module">
+const frame=document.querySelector('#app'),status=document.querySelector('#status');frame.addEventListener('load',()=>{
+const script=frame.contentDocument.createElement('script');script.type='module';script.src=new URL('structure-instances-observer.js',location.href).href;frame.contentDocument.body.append(script);script.onload=()=>status.textContent='Ready. Use normal Advanced → Create Linked Copy.';
+});for(const b of document.querySelectorAll('[data-action]'))b.onclick=async()=>{try{status.textContent=await frame.contentWindow.__structureProofActions[b.dataset.action]();}catch(e){status.textContent='ERROR: '+e.message;}};
+</script>

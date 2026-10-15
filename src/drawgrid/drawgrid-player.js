@@ -1,4 +1,5 @@
 import {getCurrentPlaybackOccurrence} from '../playback-context.js';
+import {drawgridLoopLengthTicks} from './dg-pattern-length.js';
 import { panelTransportBindings } from '../panel-transport.js';
 // src/drawgrid-player.js
 import { triggerInstrument } from '../audio-samples.js';
@@ -54,11 +55,11 @@ export function connectDrawGridToPlayer(panel) {
   const initialTransport = getTransportState();
   if (isTransportRunning()) {
     activatePlaybackInstance(panel.id, initialTransport.currentTick, {
-      loopLengthTicks: TICKS_PER_BAR,
+      loopLengthTicks: drawgridLoopLengthTicks(panel.dataset.steps),
       quantize: true,
     });
   } else {
-    ensurePlaybackInstance(panel.id, { active: true, startTick: initialTransport.currentTick, loopLengthTicks: TICKS_PER_BAR });
+    ensurePlaybackInstance(panel.id, { active: true, startTick: initialTransport.currentTick, loopLengthTicks: drawgridLoopLengthTicks(panel.dataset.steps) });
   }
   let instrument = panel.dataset.instrument || 'acoustic_guitar';
 
@@ -113,7 +114,7 @@ export function connectDrawGridToPlayer(panel) {
     const transport = getTransportState();
     const existing = getPlaybackInstance(panel.id);
     const instance = activatePlaybackInstance(panel.id, transport.currentTick, {
-      loopLengthTicks: TICKS_PER_BAR,
+      loopLengthTicks: drawgridLoopLengthTicks(panel.dataset.steps),
       quantize: transport.state === 'playing',
       retrigger,
     });
@@ -257,6 +258,9 @@ export function connectDrawGridToPlayer(panel) {
   panel.addEventListener('drawgrid:update', (e) => {
     const map = e?.detail?.map || (e?.detail && e.detail.nodes ? { nodes: e.detail.nodes } : null);
     steps = e?.detail?.steps ?? (map?.nodes?.length ?? 16);
+    const loopTicks=drawgridLoopLengthTicks(steps),previousLoop=getPlaybackInstance(panel.id)?.loopLengthTicks;
+    ensurePlaybackInstance(panel.id,{loopLengthTicks:loopTicks});
+    if(previousLoop!==loopTicks)panel.dispatchEvent(new CustomEvent('toy:pattern-length',{bubbles:true}));
     if (map) {
       gridState = map;
     } else if (e.detail) {

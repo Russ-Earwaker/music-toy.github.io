@@ -1,0 +1,6943 @@
+{
+  "kind": "structure-instances-browser",
+  "events": [],
+  "actions": [
+    {
+      "kind": "saved",
+      "eventCount": 0,
+      "snapshot": {
+        "schemaVersion": 1,
+        "createdAt": "2026-10-14T19:57:42.644Z",
+        "updatedAt": "2026-10-14T19:57:42.644Z",
+        "transport": {
+          "bpm": 120
+        },
+        "heartbeats": [
+          {
+            "id": "main-heartbeat",
+            "transportId": "main-heartbeat",
+            "name": "Main",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "bpm": 120,
+            "positionTick": 0,
+            "state": "stopped"
+          }
+        ],
+        "themeId": "default",
+        "artToys": [],
+        "toys": [],
+        "chains": [],
+        "connections": [],
+        "structureToys": [],
+        "camera": {
+          "boardTransform": "translate3d(274.19px, -679.56px, 0px) scale(0.192188)",
+          "viewportScrollLeft": 0,
+          "viewportScrollTop": 0,
+          "bvScale": "0.19218750000000004",
+          "scale": 0.30000000000000004,
+          "x": 274.1870096842447,
+          "y": -679.5596893310546,
+          "overviewActive": true
+        }
+      },
+      "roots": []
+    },
+    {
+      "kind": "manual-loaded",
+      "eventCount": 0,
+      "snapshot": {
+        "schemaVersion": 1,
+        "createdAt": "2026-10-14T19:59:34.928Z",
+        "updatedAt": "2026-10-14T19:59:34.928Z",
+        "transport": {
+          "bpm": 120
+        },
+        "heartbeats": [
+          {
+            "id": "main-heartbeat",
+            "transportId": "main-heartbeat",
+            "name": "Main",
+            "position": {
+              "x": 0,
+              "y": 300
+            },
+            "bpm": 120,
+            "positionTick": 0,
+            "state": "stopped"
+          }
+        ],
+        "themeId": "default",
+        "artToys": [],
+        "toys": [
+          {
+            "id": "phrase-draw-0",
+            "type": "drawgrid",
+            "toyName": "Draw A",
+            "instanceSerial": 0,
+            "ui": {
+              "left": "550px",
+              "top": "200px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "instrumentPitchShift": true,
+              "instrumentOctave": 4,
+              "musicalRole": "melody"
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-1",
+            "type": "drawgrid",
+            "toyName": "Draw B",
+            "instanceSerial": 0,
+            "ui": {
+              "left": "550px",
+              "top": "660px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "instrumentPitchShift": true,
+              "instrumentOctave": 4,
+              "musicalRole": "melody"
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-2",
+            "type": "drawgrid",
+            "toyName": "Draw C",
+            "instanceSerial": 0,
+            "ui": {
+              "left": "550px",
+              "top": "1120px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "instrumentPitchShift": true,
+              "instrumentOctave": 4,
+              "musicalRole": "melody"
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-3",
+            "type": "drawgrid",
+            "toyName": "Draw D",
+            "instanceSerial": 0,
+            "ui": {
+              "left": "550px",
+              "top": "1580px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "instrumentPitchShift": true,
+              "instrumentOctave": 4,
+              "musicalRole": "melody"
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          }
+        ],
+        "chains": [],
+        "connections": [
+          {
+            "id": "connection:2",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "phrase-draw-0",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:4",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "phrase-draw-1",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:6",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "phrase-draw-2",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:7",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "drawgrid-1792007974911-cuehp0",
+              "portId": "input"
+            }
+          }
+        ],
+        "structureToys": [],
+        "camera": {
+          "boardTransform": "translate3d(274.19px, -679.56px, 0px) scale(0.192188)",
+          "viewportScrollLeft": 0,
+          "viewportScrollTop": 0,
+          "bvScale": "0.19218750000000004",
+          "scale": 0.30000000000000004,
+          "x": 274.1870096842447,
+          "y": -679.5596893310546,
+          "overviewActive": true
+        }
+      },
+      "roots": []
+    },
+    {
+      "kind": "contexts",
+      "eventCount": 0,
+      "snapshot": {
+        "schemaVersion": 1,
+        "createdAt": "2026-10-14T20:00:17.663Z",
+        "updatedAt": "2026-10-14T20:00:17.664Z",
+        "transport": {
+          "bpm": 120
+        },
+        "heartbeats": [
+          {
+            "id": "main-heartbeat",
+            "transportId": "main-heartbeat",
+            "name": "Main",
+            "position": {
+              "x": 0,
+              "y": 300
+            },
+            "bpm": 120,
+            "positionTick": 0,
+            "state": "stopped"
+          }
+        ],
+        "themeId": "default",
+        "artToys": [],
+        "toys": [
+          {
+            "id": "phrase-draw-0",
+            "type": "drawgrid",
+            "toyName": "Draw A",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-0",
+            "ui": {
+              "left": "550px",
+              "top": "-558px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-1",
+            "type": "drawgrid",
+            "toyName": "Draw B",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-1",
+            "ui": {
+              "left": "550px",
+              "top": "362px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-2",
+            "type": "drawgrid",
+            "toyName": "Draw C",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-2",
+            "ui": {
+              "left": "550px",
+              "top": "2338px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-3",
+            "type": "drawgrid",
+            "toyName": "Draw D",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-3",
+            "ui": {
+              "left": "550px",
+              "top": "1580px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": []
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "drawgrid-1792008013329-pnbrsz",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-0",
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-0",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1936px",
+              "top": "-1408px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013347-oars83",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-1",
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-1",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1936px",
+              "top": "-562px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013364-q3zpl3",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-2",
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-2",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1936px",
+              "top": "284px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013393-rwws81",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-3",
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-3",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1936px",
+              "top": "1130px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014224-k5xg9i",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-0",
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-0",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1936px",
+              "top": "1976px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014240-uniy8m",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-1",
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-1",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1936px",
+              "top": "2822px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014244-k3wkew",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-2",
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-2",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1936px",
+              "top": "3668px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014257-ndqxlf",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-3",
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-3",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1936px",
+              "top": "4514px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          }
+        ],
+        "chains": [
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-0"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-1"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-2"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-3"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013329-pnbrsz"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013347-oars83"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013364-q3zpl3"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013393-rwws81"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014224-k5xg9i"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014240-uniy8m"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014244-k3wkew"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014257-ndqxlf"
+          }
+        ],
+        "connections": [
+          {
+            "id": "phrase-child-0",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "phrase-draw-0",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-1",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "phrase-draw-1",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-2",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "phrase-draw-2",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-3",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "phrase-draw-3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:12",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013329-pnbrsz",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:13",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013347-oars83",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:14",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013364-q3zpl3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:15",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013393-rwws81",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:20",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014224-k5xg9i",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:21",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014240-uniy8m",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:22",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014244-k3wkew",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:23",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014257-ndqxlf",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:24",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "structure-toy:3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:25",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:3",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "structure-toy:1",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:26",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "structure-toy:4",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:27",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:4",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "structure-toy:2",
+              "portId": "input"
+            }
+          }
+        ],
+        "structureToys": [
+          {
+            "id": "phrase-proof-master",
+            "type": "sequence",
+            "name": "Phrase Proof",
+            "x": 200,
+            "y": 220,
+            "outputCount": 5,
+            "collapsed": false,
+            "definitionId": "definition:phrase-proof-master",
+            "transportId": null,
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "lastChildType": "drawgrid",
+            "lastChildId": "phrase-draw-3",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "sharedChildren": [
+              {
+                "slotId": "phrase-draw-0",
+                "toyDefinitionId": "toy-definition:phrase-draw-0"
+              },
+              {
+                "slotId": "phrase-draw-1",
+                "toyDefinitionId": "toy-definition:phrase-draw-1"
+              },
+              {
+                "slotId": "phrase-draw-2",
+                "toyDefinitionId": "toy-definition:phrase-draw-2"
+              },
+              {
+                "slotId": "phrase-draw-3",
+                "toyDefinitionId": "toy-definition:phrase-draw-3"
+              }
+            ],
+            "structureInstanceSerial": 2
+          },
+          {
+            "id": "structure-toy:1",
+            "definitionId": "definition:structure-toy:1",
+            "type": "sequence",
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 1536,
+            "y": 84,
+            "artOwnerId": null,
+            "name": "Phrase Proof.1",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 5,
+            "masterStructureId": "phrase-proof-master",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "structureInstanceNumber": 1,
+            "linkedCopyNumber": 1,
+            "lastChildType": "drawgrid",
+            "lastChildId": "drawgrid-1792008013393-rwws81",
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:2",
+            "definitionId": "definition:structure-toy:2",
+            "type": "sequence",
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 1536,
+            "y": 2426,
+            "artOwnerId": null,
+            "name": "Phrase Proof.2",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 5,
+            "masterStructureId": "phrase-proof-master",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "structureInstanceNumber": 2,
+            "linkedCopyNumber": 2,
+            "lastChildType": "drawgrid",
+            "lastChildId": "drawgrid-1792008014257-ndqxlf",
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:3",
+            "definitionId": "definition:structure-toy:3",
+            "type": "chord-progression",
+            "kind": "modifier",
+            "chords": [
+              {
+                "root": "C",
+                "quality": "major"
+              },
+              {
+                "root": "A",
+                "quality": "minor"
+              },
+              {
+                "root": "F",
+                "quality": "major"
+              },
+              {
+                "root": "G",
+                "quality": "major"
+              }
+            ],
+            "stepTicks": 384,
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 1000,
+            "y": 200,
+            "artOwnerId": null,
+            "name": "A context",
+            "positionSource": "auto",
+            "collapsed": true,
+            "outputCount": 1,
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:4",
+            "definitionId": "definition:structure-toy:4",
+            "type": "chord-progression",
+            "kind": "modifier",
+            "chords": [
+              {
+                "root": "F",
+                "quality": "major"
+              },
+              {
+                "root": "G",
+                "quality": "major"
+              },
+              {
+                "root": "A",
+                "quality": "minor"
+              },
+              {
+                "root": "C",
+                "quality": "major"
+              }
+            ],
+            "stepTicks": 384,
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 1000,
+            "y": 1300,
+            "artOwnerId": null,
+            "name": "B context",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 1,
+            "transportId": "main-heartbeat"
+          }
+        ],
+        "camera": {
+          "boardTransform": "translate3d(192.22px, 35.82px, 0px) scale(0.192188)",
+          "viewportScrollLeft": 0,
+          "viewportScrollTop": 0,
+          "bvScale": "0.19218749999999998",
+          "scale": 0.3,
+          "x": 192.21953125000005,
+          "y": 35.817187500000045,
+          "overviewActive": false
+        }
+      },
+      "roots": [
+        {
+          "id": "structure:1:1",
+          "definitionId": "definition:phrase-proof-master",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": false,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": false,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "powerConnectionId": null,
+          "currentLocalTick": null,
+          "currentStructureLocalTick": null,
+          "currentChild": null,
+          "currentChildren": [],
+          "currentChildStartTick": null,
+          "harmonicOccurrences": []
+        },
+        {
+          "id": "structure:1:4",
+          "definitionId": "definition:structure-toy:3",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": true,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": true,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "rootAnchor": true,
+          "powerConnectionId": "connection:24",
+          "currentLocalTick": 0,
+          "currentStructureLocalTick": 0,
+          "currentChild": "drawgrid-1792008013329-pnbrsz",
+          "currentChildren": [
+            "drawgrid-1792008013329-pnbrsz"
+          ],
+          "currentChildStartTick": 0,
+          "harmonicOccurrences": [
+            {
+              "occurrenceId": "[\"structure:1:4\",0,\"drawgrid-1792008013329-pnbrsz\",[\"slot:definition:structure-toy:1:0:progression:0\",\"slot:drawgrid-1792008013329-pnbrsz:0\"]]",
+              "toyId": "drawgrid-1792008013329-pnbrsz",
+              "harmony": {
+                "progressionId": "definition:structure-toy:3",
+                "originTick": 0,
+                "stepTicks": 384,
+                "chords": [
+                  {
+                    "root": "C",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "A",
+                    "quality": "minor"
+                  },
+                  {
+                    "root": "F",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "G",
+                    "quality": "major"
+                  }
+                ]
+              },
+              "resolvedChord": {
+                "root": "C",
+                "quality": "major"
+              }
+            }
+          ]
+        },
+        {
+          "id": "structure:1:5",
+          "definitionId": "definition:structure-toy:4",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": true,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": true,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "rootAnchor": true,
+          "powerConnectionId": "connection:26",
+          "currentLocalTick": 0,
+          "currentStructureLocalTick": 0,
+          "currentChild": "drawgrid-1792008014224-k5xg9i",
+          "currentChildren": [
+            "drawgrid-1792008014224-k5xg9i"
+          ],
+          "currentChildStartTick": 0,
+          "harmonicOccurrences": [
+            {
+              "occurrenceId": "[\"structure:1:5\",0,\"drawgrid-1792008014224-k5xg9i\",[\"slot:definition:structure-toy:2:0:progression:0\",\"slot:drawgrid-1792008014224-k5xg9i:0\"]]",
+              "toyId": "drawgrid-1792008014224-k5xg9i",
+              "harmony": {
+                "progressionId": "definition:structure-toy:4",
+                "originTick": 0,
+                "stepTicks": 384,
+                "chords": [
+                  {
+                    "root": "F",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "G",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "A",
+                    "quality": "minor"
+                  },
+                  {
+                    "root": "C",
+                    "quality": "major"
+                  }
+                ]
+              },
+              "resolvedChord": {
+                "root": "F",
+                "quality": "major"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "edited-copy-b",
+      "eventCount": 0,
+      "snapshot": {
+        "schemaVersion": 1,
+        "createdAt": "2026-10-14T20:01:01.197Z",
+        "updatedAt": "2026-10-14T20:01:01.197Z",
+        "transport": {
+          "bpm": 120
+        },
+        "heartbeats": [
+          {
+            "id": "main-heartbeat",
+            "transportId": "main-heartbeat",
+            "name": "Main",
+            "position": {
+              "x": 0,
+              "y": 300
+            },
+            "bpm": 120,
+            "positionTick": 0,
+            "state": "stopped"
+          }
+        ],
+        "themeId": "default",
+        "artToys": [],
+        "toys": [
+          {
+            "id": "phrase-draw-0",
+            "type": "drawgrid",
+            "toyName": "Draw A",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-0",
+            "ui": {
+              "left": "550px",
+              "top": "-558px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-1",
+            "type": "drawgrid",
+            "toyName": "Draw B",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-1",
+            "ui": {
+              "left": "550px",
+              "top": "362px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-2",
+            "type": "drawgrid",
+            "toyName": "Draw C",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-2",
+            "ui": {
+              "left": "550px",
+              "top": "2338px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-3",
+            "type": "drawgrid",
+            "toyName": "Draw D",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-3",
+            "ui": {
+              "left": "550px",
+              "top": "1580px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": []
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "drawgrid-1792008013329-pnbrsz",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-0",
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-0",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-3942px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013347-oars83",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-1",
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-1",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-3096px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013364-q3zpl3",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-2",
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-2",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-2250px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013393-rwws81",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-3",
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-3",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-1404px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014224-k5xg9i",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-0",
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-0",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "3184px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014240-uniy8m",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-1",
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-1",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "4030px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014244-k3wkew",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-2",
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-2",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "4876px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014257-ndqxlf",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-3",
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-3",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "5722px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          }
+        ],
+        "chains": [
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-0"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-1"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-2"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-3"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013329-pnbrsz"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013347-oars83"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013364-q3zpl3"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013393-rwws81"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014224-k5xg9i"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014240-uniy8m"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014244-k3wkew"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014257-ndqxlf"
+          }
+        ],
+        "connections": [
+          {
+            "id": "phrase-child-0",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "phrase-draw-0",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-1",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "phrase-draw-1",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-2",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "phrase-draw-2",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-3",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "phrase-draw-3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:12",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013329-pnbrsz",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:13",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013347-oars83",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:14",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013364-q3zpl3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:15",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013393-rwws81",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:20",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014224-k5xg9i",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:21",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014240-uniy8m",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:22",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014244-k3wkew",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:23",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014257-ndqxlf",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:24",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "structure-toy:3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:25",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:3",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "structure-toy:1",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:26",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "structure-toy:4",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:27",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:4",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "structure-toy:2",
+              "portId": "input"
+            }
+          }
+        ],
+        "structureToys": [
+          {
+            "id": "phrase-proof-master",
+            "type": "sequence",
+            "name": "Phrase Proof",
+            "x": 200,
+            "y": 220,
+            "outputCount": 5,
+            "collapsed": false,
+            "definitionId": "definition:phrase-proof-master",
+            "transportId": null,
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "lastChildType": "drawgrid",
+            "lastChildId": "phrase-draw-3",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "sharedChildren": [
+              {
+                "slotId": "phrase-draw-0",
+                "toyDefinitionId": "toy-definition:phrase-draw-0"
+              },
+              {
+                "slotId": "phrase-draw-1",
+                "toyDefinitionId": "toy-definition:phrase-draw-1"
+              },
+              {
+                "slotId": "phrase-draw-2",
+                "toyDefinitionId": "toy-definition:phrase-draw-2"
+              },
+              {
+                "slotId": "phrase-draw-3",
+                "toyDefinitionId": "toy-definition:phrase-draw-3"
+              }
+            ],
+            "structureInstanceSerial": 2
+          },
+          {
+            "id": "structure-toy:1",
+            "definitionId": "definition:structure-toy:1",
+            "type": "sequence",
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 800,
+            "y": -1884,
+            "artOwnerId": null,
+            "name": "Phrase Proof.1",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 5,
+            "masterStructureId": "phrase-proof-master",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "structureInstanceNumber": 1,
+            "linkedCopyNumber": 1,
+            "lastChildType": "drawgrid",
+            "lastChildId": "drawgrid-1792008013393-rwws81",
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:2",
+            "definitionId": "definition:structure-toy:2",
+            "type": "sequence",
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 800,
+            "y": 3208,
+            "artOwnerId": null,
+            "name": "Phrase Proof.2",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 5,
+            "masterStructureId": "phrase-proof-master",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "structureInstanceNumber": 2,
+            "linkedCopyNumber": 2,
+            "lastChildType": "drawgrid",
+            "lastChildId": "drawgrid-1792008014257-ndqxlf",
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:3",
+            "definitionId": "definition:structure-toy:3",
+            "type": "chord-progression",
+            "kind": "modifier",
+            "chords": [
+              {
+                "root": "C",
+                "quality": "major"
+              },
+              {
+                "root": "A",
+                "quality": "minor"
+              },
+              {
+                "root": "F",
+                "quality": "major"
+              },
+              {
+                "root": "G",
+                "quality": "major"
+              }
+            ],
+            "stepTicks": 384,
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 264,
+            "y": -726,
+            "artOwnerId": null,
+            "name": "A context",
+            "positionSource": "auto",
+            "collapsed": true,
+            "outputCount": 1,
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:4",
+            "definitionId": "definition:structure-toy:4",
+            "type": "chord-progression",
+            "kind": "modifier",
+            "chords": [
+              {
+                "root": "F",
+                "quality": "major"
+              },
+              {
+                "root": "G",
+                "quality": "major"
+              },
+              {
+                "root": "A",
+                "quality": "minor"
+              },
+              {
+                "root": "C",
+                "quality": "major"
+              }
+            ],
+            "stepTicks": 384,
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 264,
+            "y": 3184,
+            "artOwnerId": null,
+            "name": "B context",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 1,
+            "transportId": "main-heartbeat"
+          }
+        ],
+        "camera": {
+          "boardTransform": "translate3d(80.15px, -1123.47px, 0px) scale(0.622456)",
+          "viewportScrollLeft": 0,
+          "viewportScrollTop": 0,
+          "bvScale": "0.6187849100799999",
+          "scale": 0.971639296,
+          "x": 80.14662377424472,
+          "y": -1123.4667896788048,
+          "overviewActive": false
+        }
+      },
+      "roots": [
+        {
+          "id": "structure:1:1",
+          "definitionId": "definition:phrase-proof-master",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": false,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": false,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "powerConnectionId": null,
+          "currentLocalTick": null,
+          "currentStructureLocalTick": null,
+          "currentChild": null,
+          "currentChildren": [],
+          "currentChildStartTick": null,
+          "harmonicOccurrences": []
+        },
+        {
+          "id": "structure:1:4",
+          "definitionId": "definition:structure-toy:3",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": true,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": true,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "rootAnchor": true,
+          "powerConnectionId": "connection:24",
+          "currentLocalTick": 0,
+          "currentStructureLocalTick": 0,
+          "currentChild": "drawgrid-1792008013329-pnbrsz",
+          "currentChildren": [
+            "drawgrid-1792008013329-pnbrsz"
+          ],
+          "currentChildStartTick": 0,
+          "harmonicOccurrences": [
+            {
+              "occurrenceId": "[\"structure:1:4\",0,\"drawgrid-1792008013329-pnbrsz\",[\"slot:definition:structure-toy:1:0:progression:0\",\"slot:drawgrid-1792008013329-pnbrsz:0\"]]",
+              "toyId": "drawgrid-1792008013329-pnbrsz",
+              "harmony": {
+                "progressionId": "definition:structure-toy:3",
+                "originTick": 0,
+                "stepTicks": 384,
+                "chords": [
+                  {
+                    "root": "C",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "A",
+                    "quality": "minor"
+                  },
+                  {
+                    "root": "F",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "G",
+                    "quality": "major"
+                  }
+                ]
+              },
+              "resolvedChord": {
+                "root": "C",
+                "quality": "major"
+              }
+            }
+          ]
+        },
+        {
+          "id": "structure:1:5",
+          "definitionId": "definition:structure-toy:4",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": true,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": true,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "rootAnchor": true,
+          "powerConnectionId": "connection:26",
+          "currentLocalTick": 0,
+          "currentStructureLocalTick": 0,
+          "currentChild": "drawgrid-1792008014224-k5xg9i",
+          "currentChildren": [
+            "drawgrid-1792008014224-k5xg9i"
+          ],
+          "currentChildStartTick": 0,
+          "harmonicOccurrences": [
+            {
+              "occurrenceId": "[\"structure:1:5\",0,\"drawgrid-1792008014224-k5xg9i\",[\"slot:definition:structure-toy:2:0:progression:0\",\"slot:drawgrid-1792008014224-k5xg9i:0\"]]",
+              "toyId": "drawgrid-1792008014224-k5xg9i",
+              "harmony": {
+                "progressionId": "definition:structure-toy:4",
+                "originTick": 0,
+                "stepTicks": 384,
+                "chords": [
+                  {
+                    "root": "F",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "G",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "A",
+                    "quality": "minor"
+                  },
+                  {
+                    "root": "C",
+                    "quality": "major"
+                  }
+                ]
+              },
+              "resolvedChord": {
+                "root": "F",
+                "quality": "major"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "saved",
+      "eventCount": 0,
+      "snapshot": {
+        "schemaVersion": 1,
+        "createdAt": "2026-10-14T20:01:02.247Z",
+        "updatedAt": "2026-10-14T20:01:02.247Z",
+        "transport": {
+          "bpm": 120
+        },
+        "heartbeats": [
+          {
+            "id": "main-heartbeat",
+            "transportId": "main-heartbeat",
+            "name": "Main",
+            "position": {
+              "x": 0,
+              "y": 300
+            },
+            "bpm": 120,
+            "positionTick": 0,
+            "state": "stopped"
+          }
+        ],
+        "themeId": "default",
+        "artToys": [],
+        "toys": [
+          {
+            "id": "phrase-draw-0",
+            "type": "drawgrid",
+            "toyName": "Draw A",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-0",
+            "ui": {
+              "left": "550px",
+              "top": "-558px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-1",
+            "type": "drawgrid",
+            "toyName": "Draw B",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-1",
+            "ui": {
+              "left": "550px",
+              "top": "362px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-2",
+            "type": "drawgrid",
+            "toyName": "Draw C",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-2",
+            "ui": {
+              "left": "550px",
+              "top": "2338px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-3",
+            "type": "drawgrid",
+            "toyName": "Draw D",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-3",
+            "ui": {
+              "left": "550px",
+              "top": "1580px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": []
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "drawgrid-1792008013329-pnbrsz",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-0",
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-0",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-3942px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013347-oars83",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-1",
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-1",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-3096px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013364-q3zpl3",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-2",
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-2",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-2250px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013393-rwws81",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-3",
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-3",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-1404px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014224-k5xg9i",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-0",
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-0",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "3184px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014240-uniy8m",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-1",
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-1",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "4030px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014244-k3wkew",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-2",
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-2",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "4876px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014257-ndqxlf",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-3",
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-3",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "5722px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          }
+        ],
+        "chains": [
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-0"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-1"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-2"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-3"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013329-pnbrsz"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013347-oars83"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013364-q3zpl3"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013393-rwws81"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014224-k5xg9i"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014240-uniy8m"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014244-k3wkew"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014257-ndqxlf"
+          }
+        ],
+        "connections": [
+          {
+            "id": "phrase-child-0",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "phrase-draw-0",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-1",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "phrase-draw-1",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-2",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "phrase-draw-2",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-3",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "phrase-draw-3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:12",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013329-pnbrsz",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:13",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013347-oars83",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:14",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013364-q3zpl3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:15",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013393-rwws81",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:20",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014224-k5xg9i",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:21",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014240-uniy8m",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:22",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014244-k3wkew",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:23",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014257-ndqxlf",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:24",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "structure-toy:3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:25",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:3",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "structure-toy:1",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:26",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "structure-toy:4",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:27",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:4",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "structure-toy:2",
+              "portId": "input"
+            }
+          }
+        ],
+        "structureToys": [
+          {
+            "id": "phrase-proof-master",
+            "type": "sequence",
+            "name": "Phrase Proof",
+            "x": 200,
+            "y": 220,
+            "outputCount": 5,
+            "collapsed": false,
+            "definitionId": "definition:phrase-proof-master",
+            "transportId": null,
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "lastChildType": "drawgrid",
+            "lastChildId": "phrase-draw-3",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "sharedChildren": [
+              {
+                "slotId": "phrase-draw-0",
+                "toyDefinitionId": "toy-definition:phrase-draw-0"
+              },
+              {
+                "slotId": "phrase-draw-1",
+                "toyDefinitionId": "toy-definition:phrase-draw-1"
+              },
+              {
+                "slotId": "phrase-draw-2",
+                "toyDefinitionId": "toy-definition:phrase-draw-2"
+              },
+              {
+                "slotId": "phrase-draw-3",
+                "toyDefinitionId": "toy-definition:phrase-draw-3"
+              }
+            ],
+            "structureInstanceSerial": 2
+          },
+          {
+            "id": "structure-toy:1",
+            "definitionId": "definition:structure-toy:1",
+            "type": "sequence",
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 800,
+            "y": -1884,
+            "artOwnerId": null,
+            "name": "Phrase Proof.1",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 5,
+            "masterStructureId": "phrase-proof-master",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "structureInstanceNumber": 1,
+            "linkedCopyNumber": 1,
+            "lastChildType": "drawgrid",
+            "lastChildId": "drawgrid-1792008013393-rwws81",
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:2",
+            "definitionId": "definition:structure-toy:2",
+            "type": "sequence",
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 800,
+            "y": 3208,
+            "artOwnerId": null,
+            "name": "Phrase Proof.2",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 5,
+            "masterStructureId": "phrase-proof-master",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "structureInstanceNumber": 2,
+            "linkedCopyNumber": 2,
+            "lastChildType": "drawgrid",
+            "lastChildId": "drawgrid-1792008014257-ndqxlf",
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:3",
+            "definitionId": "definition:structure-toy:3",
+            "type": "chord-progression",
+            "kind": "modifier",
+            "chords": [
+              {
+                "root": "C",
+                "quality": "major"
+              },
+              {
+                "root": "A",
+                "quality": "minor"
+              },
+              {
+                "root": "F",
+                "quality": "major"
+              },
+              {
+                "root": "G",
+                "quality": "major"
+              }
+            ],
+            "stepTicks": 384,
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 264,
+            "y": -726,
+            "artOwnerId": null,
+            "name": "A context",
+            "positionSource": "auto",
+            "collapsed": true,
+            "outputCount": 1,
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:4",
+            "definitionId": "definition:structure-toy:4",
+            "type": "chord-progression",
+            "kind": "modifier",
+            "chords": [
+              {
+                "root": "F",
+                "quality": "major"
+              },
+              {
+                "root": "G",
+                "quality": "major"
+              },
+              {
+                "root": "A",
+                "quality": "minor"
+              },
+              {
+                "root": "C",
+                "quality": "major"
+              }
+            ],
+            "stepTicks": 384,
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 264,
+            "y": 3184,
+            "artOwnerId": null,
+            "name": "B context",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 1,
+            "transportId": "main-heartbeat"
+          }
+        ],
+        "camera": {
+          "boardTransform": "translate3d(40.93px, -1213.17px, 0px) scale(0.618785)",
+          "viewportScrollLeft": 0,
+          "viewportScrollTop": 0,
+          "bvScale": "0.6154071172736",
+          "scale": 0.9659081523199999,
+          "x": 40.93485627464889,
+          "y": -1213.1717339800864,
+          "overviewActive": false
+        }
+      },
+      "roots": [
+        {
+          "id": "structure:1:1",
+          "definitionId": "definition:phrase-proof-master",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": false,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": false,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "powerConnectionId": null,
+          "currentLocalTick": null,
+          "currentStructureLocalTick": null,
+          "currentChild": null,
+          "currentChildren": [],
+          "currentChildStartTick": null,
+          "harmonicOccurrences": []
+        },
+        {
+          "id": "structure:1:4",
+          "definitionId": "definition:structure-toy:3",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": true,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": true,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "rootAnchor": true,
+          "powerConnectionId": "connection:24",
+          "currentLocalTick": 0,
+          "currentStructureLocalTick": 0,
+          "currentChild": "drawgrid-1792008013329-pnbrsz",
+          "currentChildren": [
+            "drawgrid-1792008013329-pnbrsz"
+          ],
+          "currentChildStartTick": 0,
+          "harmonicOccurrences": [
+            {
+              "occurrenceId": "[\"structure:1:4\",0,\"drawgrid-1792008013329-pnbrsz\",[\"slot:definition:structure-toy:1:0:progression:0\",\"slot:drawgrid-1792008013329-pnbrsz:0\"]]",
+              "toyId": "drawgrid-1792008013329-pnbrsz",
+              "harmony": {
+                "progressionId": "definition:structure-toy:3",
+                "originTick": 0,
+                "stepTicks": 384,
+                "chords": [
+                  {
+                    "root": "C",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "A",
+                    "quality": "minor"
+                  },
+                  {
+                    "root": "F",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "G",
+                    "quality": "major"
+                  }
+                ]
+              },
+              "resolvedChord": {
+                "root": "C",
+                "quality": "major"
+              }
+            }
+          ]
+        },
+        {
+          "id": "structure:1:5",
+          "definitionId": "definition:structure-toy:4",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": true,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": true,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "rootAnchor": true,
+          "powerConnectionId": "connection:26",
+          "currentLocalTick": 0,
+          "currentStructureLocalTick": 0,
+          "currentChild": "drawgrid-1792008014224-k5xg9i",
+          "currentChildren": [
+            "drawgrid-1792008014224-k5xg9i"
+          ],
+          "currentChildStartTick": 0,
+          "harmonicOccurrences": [
+            {
+              "occurrenceId": "[\"structure:1:5\",0,\"drawgrid-1792008014224-k5xg9i\",[\"slot:definition:structure-toy:2:0:progression:0\",\"slot:drawgrid-1792008014224-k5xg9i:0\"]]",
+              "toyId": "drawgrid-1792008014224-k5xg9i",
+              "harmony": {
+                "progressionId": "definition:structure-toy:4",
+                "originTick": 0,
+                "stepTicks": 384,
+                "chords": [
+                  {
+                    "root": "F",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "G",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "A",
+                    "quality": "minor"
+                  },
+                  {
+                    "root": "C",
+                    "quality": "major"
+                  }
+                ]
+              },
+              "resolvedChord": {
+                "root": "F",
+                "quality": "major"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "saved",
+      "eventCount": 0,
+      "snapshot": {
+        "schemaVersion": 1,
+        "createdAt": "2026-10-14T20:02:09.993Z",
+        "updatedAt": "2026-10-14T20:02:09.993Z",
+        "transport": {
+          "bpm": 120
+        },
+        "heartbeats": [
+          {
+            "id": "main-heartbeat",
+            "transportId": "main-heartbeat",
+            "name": "Main",
+            "position": {
+              "x": 0,
+              "y": 300
+            },
+            "bpm": 120,
+            "positionTick": 0,
+            "state": "stopped"
+          }
+        ],
+        "themeId": "default",
+        "artToys": [],
+        "toys": [
+          {
+            "id": "phrase-draw-0",
+            "type": "drawgrid",
+            "toyName": "Draw A",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-0",
+            "ui": {
+              "left": "550px",
+              "top": "-558px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-1",
+            "type": "drawgrid",
+            "toyName": "Draw B",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-1",
+            "ui": {
+              "left": "550px",
+              "top": "362px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    3
+                  ],
+                  [
+                    3
+                  ],
+                  [
+                    3
+                  ],
+                  [
+                    3
+                  ],
+                  [
+                    3
+                  ],
+                  [
+                    3
+                  ],
+                  [
+                    3
+                  ],
+                  [
+                    3
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-2",
+            "type": "drawgrid",
+            "toyName": "Draw C",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-2",
+            "ui": {
+              "left": "550px",
+              "top": "2338px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": [
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                []
+              ]
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "phrase-draw-3",
+            "type": "drawgrid",
+            "toyName": "Draw D",
+            "instanceSerial": 2,
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "structureInstanceId": "phrase-proof-master",
+            "structureMasterChildId": "phrase-draw-3",
+            "ui": {
+              "left": "550px",
+              "top": "1580px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "manual",
+              "z": 0
+            },
+            "state": {
+              "schemaVersion": 2,
+              "coordinateSpace": "drawgrid-logical-800x600",
+              "steps": 8,
+              "autotune": true,
+              "instrument": "PIANO",
+              "instrumentOctave": 4,
+              "instrumentPitchShift": true,
+              "musicalRole": "melody",
+              "localTranspose": 0,
+              "strokes": [],
+              "nodes": {
+                "active": [
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true,
+                  true
+                ],
+                "disabled": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "list": [
+                  [
+                    7
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    2
+                  ],
+                  [
+                    4
+                  ],
+                  [
+                    7
+                  ],
+                  [
+                    5
+                  ],
+                  [
+                    9
+                  ],
+                  [
+                    11
+                  ]
+                ],
+                "groups": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "manualOverrides": []
+            },
+            "volume": 1,
+            "muted": false,
+            "ownerArtToyId": null
+          },
+          {
+            "id": "drawgrid-1792008013329-pnbrsz",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-0",
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-0",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-3942px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013347-oars83",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-1",
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-1",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-3096px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013364-q3zpl3",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-2",
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-2",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-2250px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008013393-rwws81",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-3",
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "linkedCopyNumber": 1,
+            "instanceNumber": 1,
+            "structureInstanceId": "structure-toy:1",
+            "structureMasterChildId": "phrase-draw-3",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "-1404px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014224-k5xg9i",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-0",
+            "sharedDefinitionId": "toy-definition:phrase-draw-0",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-0",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "3184px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014240-uniy8m",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-1",
+            "sharedDefinitionId": "toy-definition:phrase-draw-1",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-1",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "4030px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014244-k3wkew",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-2",
+            "sharedDefinitionId": "toy-definition:phrase-draw-2",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-2",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "4876px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          },
+          {
+            "id": "drawgrid-1792008014257-ndqxlf",
+            "type": "drawgrid",
+            "masterToyId": "phrase-draw-3",
+            "sharedDefinitionId": "toy-definition:phrase-draw-3",
+            "linkedCopyNumber": 2,
+            "instanceNumber": 2,
+            "structureInstanceId": "structure-toy:2",
+            "structureMasterChildId": "phrase-draw-3",
+            "ownerArtToyId": null,
+            "ui": {
+              "left": "1200px",
+              "top": "5722px",
+              "width": "800px",
+              "height": "",
+              "positionSource": "auto",
+              "z": 0
+            },
+            "state": {}
+          }
+        ],
+        "chains": [
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-0"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-1"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-2"
+          },
+          {
+            "parentId": "phrase-proof-master",
+            "childId": "phrase-draw-3"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013329-pnbrsz"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013347-oars83"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013364-q3zpl3"
+          },
+          {
+            "parentId": "structure-toy:1",
+            "childId": "drawgrid-1792008013393-rwws81"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014224-k5xg9i"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014240-uniy8m"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014244-k3wkew"
+          },
+          {
+            "parentId": "structure-toy:2",
+            "childId": "drawgrid-1792008014257-ndqxlf"
+          }
+        ],
+        "connections": [
+          {
+            "id": "phrase-child-0",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "phrase-draw-0",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-1",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "phrase-draw-1",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-2",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "phrase-draw-2",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "phrase-child-3",
+            "kind": "sequence",
+            "from": {
+              "objectId": "phrase-proof-master",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "phrase-draw-3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:12",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013329-pnbrsz",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:13",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013347-oars83",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:14",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013364-q3zpl3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:15",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:1",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008013393-rwws81",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:20",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014224-k5xg9i",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:21",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:1"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014240-uniy8m",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:22",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:2"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014244-k3wkew",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:23",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:2",
+              "portId": "child:3"
+            },
+            "to": {
+              "objectId": "drawgrid-1792008014257-ndqxlf",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:24",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "structure-toy:3",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:25",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:3",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "structure-toy:1",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:26",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "structure-toy:4",
+              "portId": "input"
+            }
+          },
+          {
+            "id": "connection:27",
+            "kind": "sequence",
+            "from": {
+              "objectId": "structure-toy:4",
+              "portId": "child:0"
+            },
+            "to": {
+              "objectId": "structure-toy:2",
+              "portId": "input"
+            }
+          }
+        ],
+        "structureToys": [
+          {
+            "id": "phrase-proof-master",
+            "type": "sequence",
+            "name": "Phrase Proof",
+            "x": 200,
+            "y": 220,
+            "outputCount": 5,
+            "collapsed": false,
+            "definitionId": "definition:phrase-proof-master",
+            "transportId": null,
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "lastChildType": "drawgrid",
+            "lastChildId": "phrase-draw-3",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "sharedChildren": [
+              {
+                "slotId": "phrase-draw-0",
+                "toyDefinitionId": "toy-definition:phrase-draw-0"
+              },
+              {
+                "slotId": "phrase-draw-1",
+                "toyDefinitionId": "toy-definition:phrase-draw-1"
+              },
+              {
+                "slotId": "phrase-draw-2",
+                "toyDefinitionId": "toy-definition:phrase-draw-2"
+              },
+              {
+                "slotId": "phrase-draw-3",
+                "toyDefinitionId": "toy-definition:phrase-draw-3"
+              }
+            ],
+            "structureInstanceSerial": 2
+          },
+          {
+            "id": "structure-toy:1",
+            "definitionId": "definition:structure-toy:1",
+            "type": "sequence",
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 800,
+            "y": -1884,
+            "artOwnerId": null,
+            "name": "Phrase Proof.1",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 5,
+            "masterStructureId": "phrase-proof-master",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "structureInstanceNumber": 1,
+            "linkedCopyNumber": 1,
+            "lastChildType": "drawgrid",
+            "lastChildId": "drawgrid-1792008013393-rwws81",
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:2",
+            "definitionId": "definition:structure-toy:2",
+            "type": "sequence",
+            "kind": "structure",
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 800,
+            "y": 3208,
+            "artOwnerId": null,
+            "name": "Phrase Proof.2",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 5,
+            "masterStructureId": "phrase-proof-master",
+            "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+            "structureInstanceNumber": 2,
+            "linkedCopyNumber": 2,
+            "lastChildType": "drawgrid",
+            "lastChildId": "drawgrid-1792008014257-ndqxlf",
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:3",
+            "definitionId": "definition:structure-toy:3",
+            "type": "chord-progression",
+            "kind": "modifier",
+            "chords": [
+              {
+                "root": "C",
+                "quality": "major"
+              },
+              {
+                "root": "A",
+                "quality": "minor"
+              },
+              {
+                "root": "F",
+                "quality": "major"
+              },
+              {
+                "root": "G",
+                "quality": "major"
+              }
+            ],
+            "stepTicks": 384,
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 264,
+            "y": -726,
+            "artOwnerId": null,
+            "name": "A context",
+            "positionSource": "auto",
+            "collapsed": true,
+            "outputCount": 1,
+            "transportId": "main-heartbeat"
+          },
+          {
+            "id": "structure-toy:4",
+            "definitionId": "definition:structure-toy:4",
+            "type": "chord-progression",
+            "kind": "modifier",
+            "chords": [
+              {
+                "root": "F",
+                "quality": "major"
+              },
+              {
+                "root": "G",
+                "quality": "major"
+              },
+              {
+                "root": "A",
+                "quality": "minor"
+              },
+              {
+                "root": "C",
+                "quality": "major"
+              }
+            ],
+            "stepTicks": 384,
+            "provenance": "explicit",
+            "includeInput": false,
+            "x": 264,
+            "y": 3184,
+            "artOwnerId": null,
+            "name": "B context",
+            "positionSource": "auto",
+            "collapsed": false,
+            "outputCount": 1,
+            "transportId": "main-heartbeat"
+          }
+        ],
+        "camera": {
+          "boardTransform": "translate3d(-408.57px, -2241.51px, 0px) scale(0.576696)",
+          "viewportScrollLeft": 0,
+          "viewportScrollTop": 0,
+          "bvScale": "0.5766857227604423",
+          "scale": 0.9002090736126274,
+          "x": -408.570014489844,
+          "y": -2241.5061337364673,
+          "overviewActive": false
+        }
+      },
+      "roots": [
+        {
+          "id": "structure:1:1",
+          "definitionId": "definition:phrase-proof-master",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": false,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": false,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "powerConnectionId": null,
+          "currentLocalTick": null,
+          "currentStructureLocalTick": null,
+          "currentChild": null,
+          "currentChildren": [],
+          "currentChildStartTick": null,
+          "harmonicOccurrences": []
+        },
+        {
+          "id": "structure:1:4",
+          "definitionId": "definition:structure-toy:3",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": true,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": true,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "rootAnchor": true,
+          "powerConnectionId": "connection:24",
+          "currentLocalTick": 0,
+          "currentStructureLocalTick": 0,
+          "currentChild": "drawgrid-1792008013329-pnbrsz",
+          "currentChildren": [
+            "drawgrid-1792008013329-pnbrsz"
+          ],
+          "currentChildStartTick": 0,
+          "harmonicOccurrences": [
+            {
+              "occurrenceId": "[\"structure:1:4\",0,\"drawgrid-1792008013329-pnbrsz\",[\"slot:definition:structure-toy:1:0:progression:0\",\"slot:drawgrid-1792008013329-pnbrsz:0\"]]",
+              "toyId": "drawgrid-1792008013329-pnbrsz",
+              "harmony": {
+                "progressionId": "definition:structure-toy:3",
+                "originTick": 0,
+                "stepTicks": 384,
+                "chords": [
+                  {
+                    "root": "C",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "A",
+                    "quality": "minor"
+                  },
+                  {
+                    "root": "F",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "G",
+                    "quality": "major"
+                  }
+                ]
+              },
+              "resolvedChord": {
+                "root": "C",
+                "quality": "major"
+              }
+            }
+          ]
+        },
+        {
+          "id": "structure:1:5",
+          "definitionId": "definition:structure-toy:4",
+          "transportId": "main-heartbeat",
+          "startTick": 0,
+          "phaseOriginTick": 0,
+          "active": true,
+          "context": {
+            "transposeSemitones": 0,
+            "harmony": null,
+            "scale": null,
+            "velocityScale": 1
+          },
+          "loop": true,
+          "generation": 0,
+          "scheduledUntilTick": 0,
+          "rootAnchor": true,
+          "powerConnectionId": "connection:26",
+          "currentLocalTick": 0,
+          "currentStructureLocalTick": 0,
+          "currentChild": "drawgrid-1792008014224-k5xg9i",
+          "currentChildren": [
+            "drawgrid-1792008014224-k5xg9i"
+          ],
+          "currentChildStartTick": 0,
+          "harmonicOccurrences": [
+            {
+              "occurrenceId": "[\"structure:1:5\",0,\"drawgrid-1792008014224-k5xg9i\",[\"slot:definition:structure-toy:2:0:progression:0\",\"slot:drawgrid-1792008014224-k5xg9i:0\"]]",
+              "toyId": "drawgrid-1792008014224-k5xg9i",
+              "harmony": {
+                "progressionId": "definition:structure-toy:4",
+                "originTick": 0,
+                "stepTicks": 384,
+                "chords": [
+                  {
+                    "root": "F",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "G",
+                    "quality": "major"
+                  },
+                  {
+                    "root": "A",
+                    "quality": "minor"
+                  },
+                  {
+                    "root": "C",
+                    "quality": "major"
+                  }
+                ]
+              },
+              "resolvedChord": {
+                "root": "F",
+                "quality": "major"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "flashed": [],
+      "tethers": []
+    },
+    {
+      "flashed": [
+        "phrase-proof-master",
+        "structure-toy:1"
+      ],
+      "tethers": [
+        {
+          "paths": 1,
+          "pointer": "none"
+        }
+      ]
+    },
+    {
+      "flashed": [
+        "phrase-proof-master",
+        "structure-toy:1"
+      ],
+      "tethers": [
+        {
+          "paths": 1,
+          "pointer": "none"
+        }
+      ]
+    }
+  ],
+  "errors": [
+    "[BV][reflow] layoutOffset:getBoundingClientRect 6.30ms"
+  ],
+  "createdAt": "2026-10-14T20:02:09.994Z",
+  "snapshot": {
+    "schemaVersion": 1,
+    "createdAt": "2026-10-14T20:02:09.994Z",
+    "updatedAt": "2026-10-14T20:02:09.994Z",
+    "transport": {
+      "bpm": 120
+    },
+    "heartbeats": [
+      {
+        "id": "main-heartbeat",
+        "transportId": "main-heartbeat",
+        "name": "Main",
+        "position": {
+          "x": 0,
+          "y": 300
+        },
+        "bpm": 120,
+        "positionTick": 0,
+        "state": "stopped"
+      }
+    ],
+    "themeId": "default",
+    "artToys": [],
+    "toys": [
+      {
+        "id": "phrase-draw-0",
+        "type": "drawgrid",
+        "toyName": "Draw A",
+        "instanceSerial": 2,
+        "sharedDefinitionId": "toy-definition:phrase-draw-0",
+        "structureInstanceId": "phrase-proof-master",
+        "structureMasterChildId": "phrase-draw-0",
+        "ui": {
+          "left": "550px",
+          "top": "-558px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "instrumentOctave": 4,
+          "instrumentPitchShift": true,
+          "musicalRole": "melody",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                7
+              ],
+              [
+                4
+              ],
+              [
+                2
+              ],
+              [
+                4
+              ],
+              [
+                7
+              ],
+              [
+                5
+              ],
+              [
+                9
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "phrase-draw-1",
+        "type": "drawgrid",
+        "toyName": "Draw B",
+        "instanceSerial": 2,
+        "sharedDefinitionId": "toy-definition:phrase-draw-1",
+        "structureInstanceId": "phrase-proof-master",
+        "structureMasterChildId": "phrase-draw-1",
+        "ui": {
+          "left": "550px",
+          "top": "362px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "instrumentOctave": 4,
+          "instrumentPitchShift": true,
+          "musicalRole": "melody",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                3
+              ],
+              [
+                3
+              ],
+              [
+                3
+              ],
+              [
+                3
+              ],
+              [
+                3
+              ],
+              [
+                3
+              ],
+              [
+                3
+              ],
+              [
+                3
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "phrase-draw-2",
+        "type": "drawgrid",
+        "toyName": "Draw C",
+        "instanceSerial": 2,
+        "sharedDefinitionId": "toy-definition:phrase-draw-2",
+        "structureInstanceId": "phrase-proof-master",
+        "structureMasterChildId": "phrase-draw-2",
+        "ui": {
+          "left": "550px",
+          "top": "2338px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "instrumentOctave": 4,
+          "instrumentPitchShift": true,
+          "musicalRole": "melody",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                7
+              ],
+              [
+                4
+              ],
+              [
+                2
+              ],
+              [
+                4
+              ],
+              [
+                7
+              ],
+              [
+                5
+              ],
+              [
+                9
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "phrase-draw-3",
+        "type": "drawgrid",
+        "toyName": "Draw D",
+        "instanceSerial": 2,
+        "sharedDefinitionId": "toy-definition:phrase-draw-3",
+        "structureInstanceId": "phrase-proof-master",
+        "structureMasterChildId": "phrase-draw-3",
+        "ui": {
+          "left": "550px",
+          "top": "1580px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "manual",
+          "z": 0
+        },
+        "state": {
+          "schemaVersion": 2,
+          "coordinateSpace": "drawgrid-logical-800x600",
+          "steps": 8,
+          "autotune": true,
+          "instrument": "PIANO",
+          "instrumentOctave": 4,
+          "instrumentPitchShift": true,
+          "musicalRole": "melody",
+          "localTranspose": 0,
+          "strokes": [],
+          "nodes": {
+            "active": [
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true,
+              true
+            ],
+            "disabled": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ],
+            "list": [
+              [
+                7
+              ],
+              [
+                4
+              ],
+              [
+                2
+              ],
+              [
+                4
+              ],
+              [
+                7
+              ],
+              [
+                5
+              ],
+              [
+                9
+              ],
+              [
+                11
+              ]
+            ],
+            "groups": [
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              [],
+              []
+            ]
+          },
+          "manualOverrides": []
+        },
+        "volume": 1,
+        "muted": false,
+        "ownerArtToyId": null
+      },
+      {
+        "id": "drawgrid-1792008013329-pnbrsz",
+        "type": "drawgrid",
+        "masterToyId": "phrase-draw-0",
+        "sharedDefinitionId": "toy-definition:phrase-draw-0",
+        "linkedCopyNumber": 1,
+        "instanceNumber": 1,
+        "structureInstanceId": "structure-toy:1",
+        "structureMasterChildId": "phrase-draw-0",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1200px",
+          "top": "-3942px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "drawgrid-1792008013347-oars83",
+        "type": "drawgrid",
+        "masterToyId": "phrase-draw-1",
+        "sharedDefinitionId": "toy-definition:phrase-draw-1",
+        "linkedCopyNumber": 1,
+        "instanceNumber": 1,
+        "structureInstanceId": "structure-toy:1",
+        "structureMasterChildId": "phrase-draw-1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1200px",
+          "top": "-3096px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "drawgrid-1792008013364-q3zpl3",
+        "type": "drawgrid",
+        "masterToyId": "phrase-draw-2",
+        "sharedDefinitionId": "toy-definition:phrase-draw-2",
+        "linkedCopyNumber": 1,
+        "instanceNumber": 1,
+        "structureInstanceId": "structure-toy:1",
+        "structureMasterChildId": "phrase-draw-2",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1200px",
+          "top": "-2250px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "drawgrid-1792008013393-rwws81",
+        "type": "drawgrid",
+        "masterToyId": "phrase-draw-3",
+        "sharedDefinitionId": "toy-definition:phrase-draw-3",
+        "linkedCopyNumber": 1,
+        "instanceNumber": 1,
+        "structureInstanceId": "structure-toy:1",
+        "structureMasterChildId": "phrase-draw-3",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1200px",
+          "top": "-1404px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "drawgrid-1792008014224-k5xg9i",
+        "type": "drawgrid",
+        "masterToyId": "phrase-draw-0",
+        "sharedDefinitionId": "toy-definition:phrase-draw-0",
+        "linkedCopyNumber": 2,
+        "instanceNumber": 2,
+        "structureInstanceId": "structure-toy:2",
+        "structureMasterChildId": "phrase-draw-0",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1200px",
+          "top": "3184px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "drawgrid-1792008014240-uniy8m",
+        "type": "drawgrid",
+        "masterToyId": "phrase-draw-1",
+        "sharedDefinitionId": "toy-definition:phrase-draw-1",
+        "linkedCopyNumber": 2,
+        "instanceNumber": 2,
+        "structureInstanceId": "structure-toy:2",
+        "structureMasterChildId": "phrase-draw-1",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1200px",
+          "top": "4030px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "drawgrid-1792008014244-k3wkew",
+        "type": "drawgrid",
+        "masterToyId": "phrase-draw-2",
+        "sharedDefinitionId": "toy-definition:phrase-draw-2",
+        "linkedCopyNumber": 2,
+        "instanceNumber": 2,
+        "structureInstanceId": "structure-toy:2",
+        "structureMasterChildId": "phrase-draw-2",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1200px",
+          "top": "4876px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      },
+      {
+        "id": "drawgrid-1792008014257-ndqxlf",
+        "type": "drawgrid",
+        "masterToyId": "phrase-draw-3",
+        "sharedDefinitionId": "toy-definition:phrase-draw-3",
+        "linkedCopyNumber": 2,
+        "instanceNumber": 2,
+        "structureInstanceId": "structure-toy:2",
+        "structureMasterChildId": "phrase-draw-3",
+        "ownerArtToyId": null,
+        "ui": {
+          "left": "1200px",
+          "top": "5722px",
+          "width": "800px",
+          "height": "",
+          "positionSource": "auto",
+          "z": 0
+        },
+        "state": {}
+      }
+    ],
+    "chains": [
+      {
+        "parentId": "phrase-proof-master",
+        "childId": "phrase-draw-0"
+      },
+      {
+        "parentId": "phrase-proof-master",
+        "childId": "phrase-draw-1"
+      },
+      {
+        "parentId": "phrase-proof-master",
+        "childId": "phrase-draw-2"
+      },
+      {
+        "parentId": "phrase-proof-master",
+        "childId": "phrase-draw-3"
+      },
+      {
+        "parentId": "structure-toy:1",
+        "childId": "drawgrid-1792008013329-pnbrsz"
+      },
+      {
+        "parentId": "structure-toy:1",
+        "childId": "drawgrid-1792008013347-oars83"
+      },
+      {
+        "parentId": "structure-toy:1",
+        "childId": "drawgrid-1792008013364-q3zpl3"
+      },
+      {
+        "parentId": "structure-toy:1",
+        "childId": "drawgrid-1792008013393-rwws81"
+      },
+      {
+        "parentId": "structure-toy:2",
+        "childId": "drawgrid-1792008014224-k5xg9i"
+      },
+      {
+        "parentId": "structure-toy:2",
+        "childId": "drawgrid-1792008014240-uniy8m"
+      },
+      {
+        "parentId": "structure-toy:2",
+        "childId": "drawgrid-1792008014244-k3wkew"
+      },
+      {
+        "parentId": "structure-toy:2",
+        "childId": "drawgrid-1792008014257-ndqxlf"
+      }
+    ],
+    "connections": [
+      {
+        "id": "phrase-child-0",
+        "kind": "sequence",
+        "from": {
+          "objectId": "phrase-proof-master",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "phrase-draw-0",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "phrase-child-1",
+        "kind": "sequence",
+        "from": {
+          "objectId": "phrase-proof-master",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "phrase-draw-1",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "phrase-child-2",
+        "kind": "sequence",
+        "from": {
+          "objectId": "phrase-proof-master",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "phrase-draw-2",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "phrase-child-3",
+        "kind": "sequence",
+        "from": {
+          "objectId": "phrase-proof-master",
+          "portId": "child:3"
+        },
+        "to": {
+          "objectId": "phrase-draw-3",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:12",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "drawgrid-1792008013329-pnbrsz",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:13",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "drawgrid-1792008013347-oars83",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:14",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "drawgrid-1792008013364-q3zpl3",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:15",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:1",
+          "portId": "child:3"
+        },
+        "to": {
+          "objectId": "drawgrid-1792008013393-rwws81",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:20",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:2",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "drawgrid-1792008014224-k5xg9i",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:21",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:2",
+          "portId": "child:1"
+        },
+        "to": {
+          "objectId": "drawgrid-1792008014240-uniy8m",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:22",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:2",
+          "portId": "child:2"
+        },
+        "to": {
+          "objectId": "drawgrid-1792008014244-k3wkew",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:23",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:2",
+          "portId": "child:3"
+        },
+        "to": {
+          "objectId": "drawgrid-1792008014257-ndqxlf",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:24",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "structure-toy:3",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:25",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:3",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "structure-toy:1",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:26",
+        "kind": "transport",
+        "from": {
+          "objectId": "main-heartbeat",
+          "portId": "output"
+        },
+        "to": {
+          "objectId": "structure-toy:4",
+          "portId": "input"
+        }
+      },
+      {
+        "id": "connection:27",
+        "kind": "sequence",
+        "from": {
+          "objectId": "structure-toy:4",
+          "portId": "child:0"
+        },
+        "to": {
+          "objectId": "structure-toy:2",
+          "portId": "input"
+        }
+      }
+    ],
+    "structureToys": [
+      {
+        "id": "phrase-proof-master",
+        "type": "sequence",
+        "name": "Phrase Proof",
+        "x": 200,
+        "y": 220,
+        "outputCount": 5,
+        "collapsed": false,
+        "definitionId": "definition:phrase-proof-master",
+        "transportId": null,
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "lastChildType": "drawgrid",
+        "lastChildId": "phrase-draw-3",
+        "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+        "sharedChildren": [
+          {
+            "slotId": "phrase-draw-0",
+            "toyDefinitionId": "toy-definition:phrase-draw-0"
+          },
+          {
+            "slotId": "phrase-draw-1",
+            "toyDefinitionId": "toy-definition:phrase-draw-1"
+          },
+          {
+            "slotId": "phrase-draw-2",
+            "toyDefinitionId": "toy-definition:phrase-draw-2"
+          },
+          {
+            "slotId": "phrase-draw-3",
+            "toyDefinitionId": "toy-definition:phrase-draw-3"
+          }
+        ],
+        "structureInstanceSerial": 2
+      },
+      {
+        "id": "structure-toy:1",
+        "definitionId": "definition:structure-toy:1",
+        "type": "sequence",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 800,
+        "y": -1884,
+        "artOwnerId": null,
+        "name": "Phrase Proof.1",
+        "positionSource": "auto",
+        "collapsed": false,
+        "outputCount": 5,
+        "masterStructureId": "phrase-proof-master",
+        "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+        "structureInstanceNumber": 1,
+        "linkedCopyNumber": 1,
+        "lastChildType": "drawgrid",
+        "lastChildId": "drawgrid-1792008013393-rwws81",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:2",
+        "definitionId": "definition:structure-toy:2",
+        "type": "sequence",
+        "kind": "structure",
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 800,
+        "y": 3208,
+        "artOwnerId": null,
+        "name": "Phrase Proof.2",
+        "positionSource": "auto",
+        "collapsed": false,
+        "outputCount": 5,
+        "masterStructureId": "phrase-proof-master",
+        "sharedDefinitionId": "sequence-definition:phrase-proof-master",
+        "structureInstanceNumber": 2,
+        "linkedCopyNumber": 2,
+        "lastChildType": "drawgrid",
+        "lastChildId": "drawgrid-1792008014257-ndqxlf",
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:3",
+        "definitionId": "definition:structure-toy:3",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "C",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 264,
+        "y": -726,
+        "artOwnerId": null,
+        "name": "A context",
+        "positionSource": "auto",
+        "collapsed": true,
+        "outputCount": 1,
+        "transportId": "main-heartbeat"
+      },
+      {
+        "id": "structure-toy:4",
+        "definitionId": "definition:structure-toy:4",
+        "type": "chord-progression",
+        "kind": "modifier",
+        "chords": [
+          {
+            "root": "F",
+            "quality": "major"
+          },
+          {
+            "root": "G",
+            "quality": "major"
+          },
+          {
+            "root": "A",
+            "quality": "minor"
+          },
+          {
+            "root": "C",
+            "quality": "major"
+          }
+        ],
+        "stepTicks": 384,
+        "provenance": "explicit",
+        "includeInput": false,
+        "x": 264,
+        "y": 3184,
+        "artOwnerId": null,
+        "name": "B context",
+        "positionSource": "auto",
+        "collapsed": false,
+        "outputCount": 1,
+        "transportId": "main-heartbeat"
+      }
+    ],
+    "camera": {
+      "boardTransform": "translate3d(-408.57px, -2241.51px, 0px) scale(0.576696)",
+      "viewportScrollLeft": 0,
+      "viewportScrollTop": 0,
+      "bvScale": "0.5766857227604423",
+      "scale": 0.9002090736126274,
+      "x": -408.570014489844,
+      "y": -2241.5061337364673,
+      "overviewActive": false
+    }
+  },
+  "currentRelationship": {
+    "flashed": [],
+    "paths": 0
+  },
+  "chordIndicators": [],
+  "panels": [
+    {
+      "id": "phrase-draw-0",
+      "structureInstanceId": "phrase-proof-master",
+      "name": "Draw A",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "controls": 5
+    },
+    {
+      "id": "phrase-draw-1",
+      "structureInstanceId": "phrase-proof-master",
+      "name": "Draw B",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "controls": 5
+    },
+    {
+      "id": "phrase-draw-2",
+      "structureInstanceId": "phrase-proof-master",
+      "name": "Draw C",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "controls": 5
+    },
+    {
+      "id": "phrase-draw-3",
+      "structureInstanceId": "phrase-proof-master",
+      "name": "Draw D",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": []
+      },
+      "controls": 5
+    },
+    {
+      "id": "drawgrid-1792008013329-pnbrsz",
+      "masterToyId": "phrase-draw-0",
+      "structureInstanceId": "structure-toy:1",
+      "name": "Draw A",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "controls": 5,
+      "transport": {
+        "state": "stopped",
+        "bpm": 120,
+        "positionTick": 0,
+        "currentTick": 0,
+        "currentBeat": 0,
+        "currentBar": 0,
+        "ticksPerBeat": 96,
+        "ticksPerBar": 384,
+        "beatsPerBar": 4,
+        "mapping": {
+          "originTick": 0,
+          "originAudioTime": 213.18133333333333,
+          "bpm": 120
+        }
+      }
+    },
+    {
+      "id": "drawgrid-1792008013347-oars83",
+      "masterToyId": "phrase-draw-1",
+      "structureInstanceId": "structure-toy:1",
+      "name": "Draw B",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "controls": 5,
+      "transport": {
+        "state": "stopped",
+        "bpm": 120,
+        "positionTick": 0,
+        "currentTick": 0,
+        "currentBeat": 0,
+        "currentBar": 0,
+        "ticksPerBeat": 96,
+        "ticksPerBar": 384,
+        "beatsPerBar": 4,
+        "mapping": {
+          "originTick": 0,
+          "originAudioTime": 213.18133333333333,
+          "bpm": 120
+        }
+      }
+    },
+    {
+      "id": "drawgrid-1792008013364-q3zpl3",
+      "masterToyId": "phrase-draw-2",
+      "structureInstanceId": "structure-toy:1",
+      "name": "Draw C",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "controls": 5,
+      "transport": {
+        "state": "stopped",
+        "bpm": 120,
+        "positionTick": 0,
+        "currentTick": 0,
+        "currentBeat": 0,
+        "currentBar": 0,
+        "ticksPerBeat": 96,
+        "ticksPerBar": 384,
+        "beatsPerBar": 4,
+        "mapping": {
+          "originTick": 0,
+          "originAudioTime": 213.18133333333333,
+          "bpm": 120
+        }
+      }
+    },
+    {
+      "id": "drawgrid-1792008013393-rwws81",
+      "masterToyId": "phrase-draw-3",
+      "structureInstanceId": "structure-toy:1",
+      "name": "Draw D",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": []
+      },
+      "controls": 5,
+      "transport": {
+        "state": "stopped",
+        "bpm": 120,
+        "positionTick": 0,
+        "currentTick": 0,
+        "currentBeat": 0,
+        "currentBar": 0,
+        "ticksPerBeat": 96,
+        "ticksPerBar": 384,
+        "beatsPerBar": 4,
+        "mapping": {
+          "originTick": 0,
+          "originAudioTime": 213.18133333333333,
+          "bpm": 120
+        }
+      }
+    },
+    {
+      "id": "drawgrid-1792008014224-k5xg9i",
+      "masterToyId": "phrase-draw-0",
+      "structureInstanceId": "structure-toy:2",
+      "name": "Draw A",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "controls": 5,
+      "transport": {
+        "state": "stopped",
+        "bpm": 120,
+        "positionTick": 0,
+        "currentTick": 0,
+        "currentBeat": 0,
+        "currentBar": 0,
+        "ticksPerBeat": 96,
+        "ticksPerBar": 384,
+        "beatsPerBar": 4,
+        "mapping": {
+          "originTick": 0,
+          "originAudioTime": 213.18133333333333,
+          "bpm": 120
+        }
+      }
+    },
+    {
+      "id": "drawgrid-1792008014240-uniy8m",
+      "masterToyId": "phrase-draw-1",
+      "structureInstanceId": "structure-toy:2",
+      "name": "Draw B",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ],
+            [
+              3
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "controls": 5,
+      "transport": {
+        "state": "stopped",
+        "bpm": 120,
+        "positionTick": 0,
+        "currentTick": 0,
+        "currentBeat": 0,
+        "currentBar": 0,
+        "ticksPerBeat": 96,
+        "ticksPerBar": 384,
+        "beatsPerBar": 4,
+        "mapping": {
+          "originTick": 0,
+          "originAudioTime": 213.18133333333333,
+          "bpm": 120
+        }
+      }
+    },
+    {
+      "id": "drawgrid-1792008014244-k3wkew",
+      "masterToyId": "phrase-draw-2",
+      "structureInstanceId": "structure-toy:2",
+      "name": "Draw C",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": [
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      "controls": 5,
+      "transport": {
+        "state": "stopped",
+        "bpm": 120,
+        "positionTick": 0,
+        "currentTick": 0,
+        "currentBeat": 0,
+        "currentBar": 0,
+        "ticksPerBeat": 96,
+        "ticksPerBar": 384,
+        "beatsPerBar": 4,
+        "mapping": {
+          "originTick": 0,
+          "originAudioTime": 213.18133333333333,
+          "bpm": 120
+        }
+      }
+    },
+    {
+      "id": "drawgrid-1792008014257-ndqxlf",
+      "masterToyId": "phrase-draw-3",
+      "structureInstanceId": "structure-toy:2",
+      "name": "Draw D",
+      "volume": "1",
+      "muted": "false",
+      "editor": {
+        "schemaVersion": 2,
+        "coordinateSpace": "drawgrid-logical-800x600",
+        "steps": 8,
+        "autotune": true,
+        "instrument": "PIANO",
+        "instrumentOctave": "4",
+        "instrumentPitchShift": "1",
+        "musicalRole": "melody",
+        "localTranspose": 0,
+        "strokes": [],
+        "nodes": {
+          "active": [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true
+          ],
+          "disabled": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ],
+          "list": [
+            [
+              7
+            ],
+            [
+              4
+            ],
+            [
+              2
+            ],
+            [
+              4
+            ],
+            [
+              7
+            ],
+            [
+              5
+            ],
+            [
+              9
+            ],
+            [
+              11
+            ]
+          ],
+          "groups": [
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+          ]
+        },
+        "manualOverrides": []
+      },
+      "controls": 5,
+      "transport": {
+        "state": "stopped",
+        "bpm": 120,
+        "positionTick": 0,
+        "currentTick": 0,
+        "currentBeat": 0,
+        "currentBar": 0,
+        "ticksPerBeat": 96,
+        "ticksPerBar": 384,
+        "beatsPerBar": 4,
+        "mapping": {
+          "originTick": 0,
+          "originAudioTime": 213.18133333333333,
+          "bpm": 120
+        }
+      }
+    }
+  ]
+}

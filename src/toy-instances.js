@@ -1,4 +1,5 @@
 import {createRelationshipReveal} from './toy-relationship-reveal.js';
+import {toyLoopLengthTicks} from './drawgrid/dg-pattern-length.js';
 import {ensurePlaybackInstance,getPlaybackInstance} from './playback-instances.js';
 import {getCurrentPlaybackOccurrence,withPlaybackOccurrence} from './playback-context.js';
 import {setToyVolume,setToyMuted,getToyVolumeRaw,isToyMuted} from './audio-core.js';
@@ -9,7 +10,7 @@ export function attachInstancePlayback(panel,master,sync=()=>{}){
  for(const key of ['__sequencerSchedule','__sequencerEventsInWindow','__sequencerScheduleEvent'])Object.defineProperty(panel,key,{configurable:true,get:()=>typeof master[key]==='function'? (...args)=>{
   sync(panel);const occurrence=getCurrentPlaybackOccurrence();
   if(key!=='__sequencerEventsInWindow'&&master.__seqPattern!==undefined)master.__seqPatternActive=master.__seqPattern||null;
-  return withPlaybackOccurrence(occurrence?{...occurrence,instanceToyId:panel.id,masterToyId:master.id}:null,()=>master[key](...args));
+  return withPlaybackOccurrence(occurrence?{...occurrence,instanceToyId:panel.id,masterToyId:master.id,sourceAudioToyId:master.__audioToyId||master.dataset?.audiotoyid||master.id}:null,()=>master[key](...args));
  }:undefined});
 }
 
@@ -79,7 +80,7 @@ export function createToyInstanceController({getPanels,getMaster,register,change
   const volume=getToyVolumeRaw(audioId),muted=isToyMuted(audioId);
   if(panel.__masterVolume!==volume){setToyVolume(panel.id,volume);panel.__masterVolume=volume;}
   if(panel.__masterMuted!==muted){setToyMuted(panel.id,muted);panel.__masterMuted=muted;}
-  ensurePlaybackInstance(panel.id,{loopLengthTicks:getPlaybackInstance(master.id)?.loopLengthTicks||384});
+  ensurePlaybackInstance(panel.id,{loopLengthTicks:toyLoopLengthTicks(master,getPlaybackInstance(master.id))});
   return true;
  }
  function create(masterOrId,options={}){
@@ -93,6 +94,8 @@ export function createToyInstanceController({getPanels,getMaster,register,change
   panel.dataset.instanceNumber=String(options.instanceNumber||nextInstanceNumber(master,getPanels()));
   master.dataset.instanceSerial=String(Math.max(Number(master.dataset.instanceSerial)||0,Number(panel.dataset.instanceNumber)));
   if(options.autoArrangeOwner)panel.dataset.autoArrangeOwner=options.autoArrangeOwner;
+  if(options.structureInstanceId)panel.dataset.structureInstanceId=options.structureInstanceId;
+  if(options.structureMasterChildId)panel.dataset.structureMasterChildId=options.structureMasterChildId;
   if(master.dataset.artOwnerId)panel.dataset.artOwnerId=master.dataset.artOwnerId;
   Object.assign(panel.style,{position:'absolute',width:'240px',height:'160px',left:options.ui?.left||`${(parseFloat(master.style.left)||0)+master.offsetWidth+80}px`,top:options.ui?.top||master.style.top||'0px'});
   panel.innerHTML='<header class="toy-header" data-drag-handle="1"><strong class="instance-name"></strong><span class="instance-marker">INSTANCE</span></header><div class="toy-body instance-body"><span class="instance-instrument"></span><div class="instance-actions"><button type="button" class="toy-btn instance-duplicate">Duplicate</button><button type="button" class="toy-btn instance-master">See Master</button></div></div>';

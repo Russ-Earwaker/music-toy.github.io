@@ -54,7 +54,7 @@ test('irregular Bouncer and Rippler providers honor shared phase and activation 
  assert.deepEqual(ripplerEventsInWindow({instance,pattern:[[0]],blocks:[{active:true}],fromTick:0,toTick:768}).map(e=>e.eventTick),[384]);
 });
 test('relationship inspection targets one pair or the Master family, independently of graph topology',()=>{
- const f=make();assert.deepEqual(relationshipTargets(f.panels[1],f.panels,f.getToy).map(p=>p.id),['m','a']);assert.deepEqual(relationshipTargets(f.panels[0],f.panels,f.getToy).map(p=>p.id),['m','a','b']);f.scheduler.dispose();
+ const f=make();assert.deepEqual(relationshipTargets(f.panels[1],f.panels,f.getToy).map(p=>p.id),['m','a','b']);assert.deepEqual(relationshipTargets(f.panels[0],f.panels,f.getToy).map(p=>p.id),['m','a','b']);f.scheduler.dispose();
 });
 test('real transport pause, tempo rebase and saved tick restore preserve the source clock',async()=>{
  const f=make(),ctx={state:'running',currentTime:0},transport=createTickTransport({id:'h',getContext:()=>ctx,positionTick:960});
@@ -71,13 +71,13 @@ test('header taps and shared reveal flash the family with capped, inert backgrou
  const getMaster=id=>panels.find(p=>p.id===id),reveal=createRelationshipReveal({getPanels:()=>panels,getMaster});
  try{
   reveal.prepare();const target={closest:()=>null};panels[1].header.listeners.pointerdown({target,pointerId:1,clientX:50,clientY:50});doc.listeners.pointerup({pointerId:1,clientX:50,clientY:50});
-  assert.ok(panels[0].classList.values.has('relationship-flash'));assert.ok(panels[1].classList.values.has('relationship-flash'));assert.ok(!panels[2].classList.values.has('relationship-flash'));assert.equal(host.layer.children.length,1);assert.equal(host.layer['aria-hidden'],'true');assert.equal(host.layer.style.values['--relationship-colour'],panels[0].style.values['--relationship-colour']);assert.equal(host.layer.children[0].children.length,0);
+  assert.ok(panels[0].classList.values.has('relationship-flash'));assert.ok(panels[1].classList.values.has('relationship-flash'));assert.ok(panels[2].classList.values.has('relationship-flash'));assert.equal(host.layer.children.length,12);assert.equal(host.layer['aria-hidden'],'true');assert.equal(host.layer.style.values['--relationship-colour'],panels[0].style.values['--relationship-colour']);assert.equal(host.layer.children[0].children.length,0);
   const firstLayer=host.layer;let animationRestarts=0;
   Object.defineProperty(panels[1],'offsetWidth',{configurable:true,get(){if(!panels[1].classList.values.has('relationship-flash'))animationRestarts++;return 100;}});
   for(let tap=0;tap<3;tap++){
    const previousLayer=host.layer;
    panels[1].header.listeners.pointerdown({target,pointerId:1,clientX:50,clientY:50});doc.listeners.pointerup({pointerId:1,clientX:50,clientY:50});
-   assert.ok(previousLayer.removed);assert.notEqual(host.layer,previousLayer);assert.equal(host.layer.children.length,1);assert.ok(panels[1].classList.values.has('relationship-flash'));
+   assert.ok(previousLayer.removed);assert.notEqual(host.layer,previousLayer);assert.equal(host.layer.children.length,12);assert.ok(panels[1].classList.values.has('relationship-flash'));
   }
   assert.ok(firstLayer.removed);assert.equal(animationRestarts,3);
   Object.defineProperty(panels[1],'offsetWidth',{value:100});

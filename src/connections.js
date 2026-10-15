@@ -22,7 +22,7 @@ const endpoint = value => Object.freeze({ objectId: String(value.objectId), port
 const same = (a, b) => a?.objectId === b?.objectId && a?.portId === b?.portId;
 
 export function createConnectionModel() {
-  const objects = new Map(), connections = new Map(), listeners = new Set();
+  const objects = new Map(), connections = new Map(), listeners = new Set(), validators=new Set();
   let serial = 1, editing = null, promotionResolver = null, transactionDepth = 0, pending = [];
   const emit = event => {
     if (transactionDepth) { pending.push(event); return; }
@@ -69,6 +69,7 @@ export function createConnectionModel() {
     if(to.portId==='pattern' && !objects.get(from.objectId)?.structure && !objects.get(from.objectId)?.modifier)return {ok:false,reason:'pattern-needs-structure'};
     if (from.objectId === to.objectId) return { ok: false, reason: 'self-connection' };
     if (![port(from), port(to)].every(p => p.accepts.includes(kind))) return { ok: false, reason: 'invalid-kind' };
+    for(const validator of validators){const reason=validator({kind,from,to});if(reason)return {ok:false,reason};}
     if (kind === 'sequence') {
       const visited = new Set(), queue = [to.objectId];
       while (queue.length) {
@@ -133,6 +134,7 @@ export function createConnectionModel() {
     },
     touchObject(id, { structureCreated = false, layoutInsertion = null } = {}) { emit({ type: 'change', structureChanged: true, objectId: id, ...(layoutInsertion ? {layoutInsertion} : {}), ...(structureCreated ? {structureCreated:true} : {}) }); },
     setPromotionResolver(resolver) { promotionResolver = resolver; },
+    addConnectionValidator(validator){validators.add(validator);return ()=>validators.delete(validator);},
     transaction,
     removeObject(id) {
       const affected = list(null, {includeSuspended:true}).filter(c => c.from.objectId === id || c.to.objectId === id);

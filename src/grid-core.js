@@ -94,7 +94,7 @@ export function markPlayingColumn(panel, colIndex){
 }
 
 export function buildGrid(panel, numSteps = 8){
-  if(panel?.dataset?.masterToyId)return;
+  if(panel?.dataset?.masterToyId&&!panel.dataset.linkedView)return;
   if (typeof panel === 'string') panel = document.querySelector(panel);
   if (!panel || !(panel instanceof Element) || panel.__gridBuilt) return null;
   panel.__gridBuilt = true;
@@ -359,10 +359,11 @@ export function buildGrid(panel, numSteps = 8){
     }
   });
 
-  panel.addEventListener('toy-random', () => {
+  panel.addEventListener('toy-random', (event) => {
     if (!panel.__gridState?.steps) return;
+    const random=typeof event.detail?.random==='function'?event.detail.random:Math.random;
     for (let i = 0; i < panel.__gridState.steps.length; i++) {
-      panel.__gridState.steps[i] = Math.random() < 0.5;
+      panel.__gridState.steps[i] = random() < 0.5;
     }
     emitLoopgridUpdate({ reason: 'random' });
     panel.__seqRev++;

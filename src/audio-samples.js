@@ -1,4 +1,6 @@
 import { classifyMusicalRole, resolveMusicalPitch, noteMidi } from './harmonic-adaptation.js';
+import {playbackAudioBusId} from './toy-audio-routing.js';
+import {getToyVolumeRaw,isToyMuted} from './audio-core.js';
 // src/audio-samples.js — samples + tone fallback (<=300 lines)
 import { ensureAudioContext, getToyGain, registerActiveNode, getLoopInfo, withActiveNodeCollector } from './audio-core.js';
 import { getCurrentPlaybackOccurrence, withPlaybackOccurrence } from './playback-context.js';
@@ -437,7 +439,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
     } else {
       g.gain.value = effectiveGain;
     }
-    src.connect(g).connect(getToyGain(toyId||'master'));
+    src.connect(g).connect(getToyGain(playbackAudioBusId(toyId,options.playbackOccurrence)));
     try{ registerActiveNode(src); }catch{}
     const __startAt = tStart;
     if (window && window.BOUNCER_LOOP_DBG) {
@@ -461,7 +463,7 @@ function playSampleAt(id, when, gain=1, toyId, noteName, options = {}){
   if (synthId){
     const sNorm = String(synthId||'').toLowerCase().replace(/_/g,'-');
     const toneId = TONE_NAMES.includes(sNorm) ? sNorm : 'tone';
-    return playToneForToy(toyId, toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(toyId||'master'), effectiveGain, options);
+    return playToneForToy(toyId, toneId, noteToFreq(noteName||'C4'), when||ctx.currentTime, getToyGain(playbackAudioBusId(toyId,options.playbackOccurrence)), effectiveGain, options);
   }
   return false;
 }
@@ -490,6 +492,7 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
   const resolvedNote = pitchDecision.finalNote;
   // Source policy was resolved above; audio ownership belongs to the visible Instance.
   if(occurrence?.instanceToyId)toyId=occurrence.instanceToyId;
+  const audioBusId=playbackAudioBusId(toyId,occurrence);
   const pitchShift=pitched?(noteMidi(resolvedNote) ?? 0)-(noteMidi(sourceNote) ?? 0):0;
   if (pitchShift && typeof options.playbackRate === 'number')
     options = { ...options, playbackRate: options.playbackRate * Math.pow(2, pitchShift / 12) };
@@ -508,7 +511,7 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
           occurrenceId: options.playbackOccurrence?.occurrenceId || null,
           context: options.context || null,
           note: resolvedNote,
-          ...(window.__HARMONY_DEBUG ? {pitchDecision} : {}),
+          ...(window.__HARMONY_DEBUG ? {pitchDecision,soundDecision:{audioBusId,volume:getToyVolumeRaw(audioBusId),gain:getToyGain(audioBusId).gain.value,muted:isToyMuted(audioBusId)}} : {}),
           slotIndex,
           col,
           step,
@@ -526,8 +529,8 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
     // Common "tone (sine)" pattern: prefer the inner token if present
     const m = /\(([a-z-\s_]+)\)/.exec(id.toLowerCase());
     const inner = m ? m[1].trim().replace(/[_\s]+/g,'-') : '';
-      if (inner && TONE_NAMES.includes(inner)) return playToneForToy(toyId, inner, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
-      if (TONE_NAMES.includes(idLoose)) return playToneForToy(toyId, idLoose, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
+      if (inner && TONE_NAMES.includes(inner)) return playToneForToy(toyId, inner, noteToFreq(resolvedNote), t, getToyGain(audioBusId), vel, options);
+      if (TONE_NAMES.includes(idLoose)) return playToneForToy(toyId, idLoose, noteToFreq(resolvedNote), t, getToyGain(audioBusId), vel, options);
     }catch{}
 
   // exact or alias match first
@@ -585,7 +588,7 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
       if (s && (s === id || sNorm === id || s === iNorm || sNorm === iNorm)){
         const toneId2 = TONE_NAMES.includes(sNorm) ? sNorm : (TONE_NAMES.includes(s) ? s : 'tone');
         const effectiveVel = vel * getEntryVolumeMultiplier(ent);
-        const ok = playToneForToy(toyId, toneId2, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), effectiveVel);
+        const ok = playToneForToy(toyId, toneId2, noteToFreq(resolvedNote), t, getToyGain(audioBusId), effectiveVel,options);
         if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
         return ok;
       }
@@ -608,7 +611,7 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
       console.warn('[audio] instrument not found:', id, '— using', toneId);
     }
   }catch{}
-  const ok = playToneForToy(toyId, toneId, noteToFreq(resolvedNote), t, getToyGain(toyId||'master'), vel, options);
+  const ok = playToneForToy(toyId, toneId, noteToFreq(resolvedNote), t, getToyGain(audioBusId), vel, options);
   if (ok) { try{ window.__toyActivityAt = ensureAudioContext().currentTime; }catch{} }
   return ok;
 }

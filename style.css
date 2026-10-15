@@ -9849,3 +9849,5 @@ body.beat-swarm-active #internal-board-overlay {
 .board-overview .toy-panel[data-instance-serial] .toy-header{visibility:visible!important;opacity:1!important;pointer-events:auto!important;transform:none!important}
 .overview-mode .toy-panel[data-instance-serial] .master-name,
 .board-overview .toy-panel[data-instance-serial] .master-name{visibility:visible!important;opacity:1!important;color:#eef5ff!important;pointer-events:auto!important}
+.linked-copy-marker{font:600 14px system-ui;opacity:.65;margin-left:6px;pointer-events:none}.linked-edit-flash{animation:relationship-node-flash .65s ease-out both}
+.linked-copy-delete-confirmation{max-width:340px;padding:20px;border:1px solid #718fc2;border-radius:14px;background:#172539;color:#eef5ff;font:15px system-ui}.linked-copy-delete-confirmation::backdrop{background:#0007}.linked-copy-delete-confirmation div{display:flex;justify-content:flex-end;gap:10px}.linked-copy-delete-confirmation button{min-height:44px;padding:8px 14px}

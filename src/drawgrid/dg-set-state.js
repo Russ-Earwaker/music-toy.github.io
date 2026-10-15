@@ -12,9 +12,9 @@ export function createDgSetState({ state, deps } = {}) {
   function setState(st = {}) {
     if (Object.hasOwn(st, 'musicalRole')) restoreToyMusicalRole(s.panel, st);
     if (Object.hasOwn(st, 'localTranspose')) restoreToyLocalTranspose(s.panel, st);
-    requestAnimationFrame(() => {
+    return new Promise(resolve=>{requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (!s.panel?.isConnected) return;
+        if (!s.panel?.isConnected) {resolve(false);return;}
         s.isRestoring = true;
         const fallbackHydrationState = d.getFallbackHydrationState?.();
         try {
@@ -54,7 +54,7 @@ export function createDgSetState({ state, deps } = {}) {
             !!st?.meta?.preserveNodesOverStrokes ||
             !!st?.__preserveNodesOverStrokes;
           // Steps first
-          if (typeof st.steps === 'number' && (st.steps === 8 || st.steps === 16)) {
+          if (typeof st.steps === 'number' && [8,16,32].includes(st.steps)) {
             if ((st.steps | 0) !== s.cols) {
               s.cols = st.steps | 0;
               s.currentCols = s.cols;
@@ -200,8 +200,9 @@ export function createDgSetState({ state, deps } = {}) {
           d.schedulePersistState?.({ source: 'setState-complete' });
         }
         try { d.dgTraceLog?.('[drawgrid] SETSTATE complete', s.panel?.id); } catch {}
+        resolve(true);
       });
-    });
+    });});
   }
 
   return {

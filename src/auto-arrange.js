@@ -1,16 +1,18 @@
 import {normalizeMusicalRole} from './musical-role.js';
 import {MAIN_TRANSPORT_ID} from './transport-registry.js';
 import {getPlaybackInstance} from './playback-instances.js';
+import {toyLoopLengthTicks} from './drawgrid/dg-pattern-length.js';
 
 export const ARRANGEMENT_ROLES=Object.freeze(['rhythm','accompaniment','melody']);
 const progression=roots=>roots.map(root=>({root,quality:root==='A'?'minor':'major'}));
 export const ARRANGEMENT_RECIPE=Object.freeze([
  {name:'Intro',roles:['accompaniment'],chords:progression(['C','A','F','G'])},
  {name:'A',roles:['rhythm','accompaniment','melody'],chords:progression(['C','A','F','G'])},
- {name:'B',roles:['accompaniment','rhythm','melody'],presentation:'timeline',offsets:{accompaniment:0,rhythm:384,melody:768},chords:progression(['F','G','A','C'])},
+ {name:'B',roles:['rhythm','accompaniment','melody','extraRhythm'],chords:progression(['F','G','A','C'])},
  {name:'Outro',roles:['accompaniment'],chords:progression(['C','A','F','G'])},
 ]);
 export function arrangementRole(panel){
+ if(['extra-rhythm','melody-chunk'].includes(panel.dataset.autoArrangeFill))return null;
  if(panel.dataset.toy==='loopgrid')return 'rhythm';
  const role=normalizeMusicalRole(panel.dataset.musicalRole);
  return panel.dataset.toy==='drawgrid' && ['melody','accompaniment'].includes(role)?role:null;
@@ -22,7 +24,7 @@ export function selectArrangementSources(panels){
 
 // Authored graph builder only. Playback, harmony and repetitions belong to the
 // ordinary compiler/runtime. Instances read editable Master toys.
-export function createAutoArranger({model,structures,getPanels,createSource,createInstance,removeInstances=()=>{},place=null,scope=()=>null}){
+export function createAutoArranger({model,structures,getPanels,createSource,createPhraseSource,createStructureInstance,createInstance,removeInstances=()=>{},place=null,scope=()=>null}){
  let busy=false,serial=0;
  async function arrange(){
   if(busy)throw new Error('Arrangement is already being built.');
@@ -36,12 +38,26 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
   const heartbeat=model.getObjectIds().find(id=>model.getObject(id)?.ports.output?.accepts.includes('transport') && (model.getObject(id).transportId || id)===domain) || MAIN_TRANSPORT_ID;
   sources=selectArrangementSources(getPanels().filter(p=>!model.getTransportId(p.id) || model.getTransportId(p.id)===domain));
   try{
+   if(!sources.melody && createPhraseSource){
+    const phrase=structures.list().find(s=>!s.masterStructureId && s.autoArrangePhrase?.heartbeatId===heartbeat && (s.artOwnerId||null)===board);
+    const master=phrase||await createPhraseSource({heartbeatId:heartbeat});
+    if(!master||master.type!=='sequence')throw new Error('Could not create Melody Phrase Master.');
+    sources.melody={...master,dataset:{autoArrangeOrigin:'filled'}};
+   }
    for(const role of ARRANGEMENT_ROLES)if(!sources[role]){
     const panel=await createSource(role,{heartbeatId:heartbeat});
     if(!panel || arrangementRole(panel)!==role)throw new Error('Could not create the missing '+role+' part.');
     panel.dataset.autoArrangeOrigin='filled';sources[role]=panel;
    }
-   const sourceIds=Object.fromEntries(ARRANGEMENT_ROLES.map(role=>[role,sources[role].id]));
+   const candidates=getPanels().filter(p=>!p.dataset.masterToyId&&p.dataset.toy==='loopgrid'&&p.dataset.autoArrangeFill==='extra-rhythm'&&p.dataset.autoArrangeFillHeartbeat===heartbeat&&(!model.getTransportId(p.id)||model.getTransportId(p.id)===domain));
+   let extra=candidates.find(p=>p.id===previous?.autoArrange.sourceIds.extraRhythm)||candidates.sort((a,b)=>a.id.localeCompare(b.id))[0];
+   if(!extra){
+    extra=await createSource('extraRhythm',{heartbeatId:heartbeat,mainRhythm:sources.rhythm});
+    if(!extra||extra.dataset.toy!=='loopgrid')throw new Error('Could not create the extra rhythmic layer.');
+    extra.dataset.autoArrangeOrigin='filled';extra.dataset.autoArrangeFill='extra-rhythm';extra.dataset.autoArrangeFillHeartbeat=heartbeat;
+   }
+   sources.extraRhythm=extra;
+   const sourceIds=Object.fromEntries(Object.entries(sources).map(([role,panel])=>[role,panel.id]));
    const displaced=[...(previous?.autoArrange.displacedConnections || [])];
    const created=[];
    const connect=(kind,from,to)=>{const r=model.connect(kind,from,to);if(!r.ok)throw new Error('Arrangement connection: '+r.reason);return r.connection;};
@@ -51,7 +67,9 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
    // ownership or cloned source patterns enter the playback compiler.
    const savedNodes=structures.list(),savedEdges=model.list();
    try{model.transaction(()=>structures.suspend(()=>{
-    if(previous)for(const node of structures.list().filter(s=>s.autoArrange?.owner===previous.autoArrange.owner))structures.remove(node.id);
+    // Keep linked expansions alive until replacement succeeds, so rollback can
+    // restore their connections without losing any child identities/positions.
+    if(previous)for(const node of structures.list().filter(s=>s.autoArrange?.owner===previous.autoArrange.owner&&!s.masterStructureId))structures.remove(node.id);
     for(const edge of displaced)if(!Object.values(sourceIds).includes(edge.to.objectId) && model.getObject(edge.to.objectId) && model.getObject(edge.from.objectId) && !model.getParent(edge.to.objectId))connect(edge.kind,edge.from,edge.to);
     const make=(type,name,parent,index=0)=>{
      const p=parent && structures.get(parent),position=!parent&&previous?{x:previous.x,y:previous.y}:place?.(type,parent,index) || {x:p?p.x+(p.type==='chord-progression'?536:400):0,y:(p?.y || 0)+index*480};
@@ -67,34 +85,30 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
       model.disconnect(edge.id);
      }
     }
-    structures.annotate(root.id,{outputCount:5,autoArrange:{owner,root:true,version:1.1,heartbeatId:heartbeat,sourceIds,
-     origins:Object.fromEntries(ARRANGEMENT_ROLES.map(role=>[role,sources[role].dataset.autoArrangeOrigin==='filled'?'filled':'authored'])),displacedConnections:displaced}});
+    structures.annotate(root.id,{outputCount:5,autoArrange:{owner,root:true,version:1.5,heartbeatId:heartbeat,sourceIds,
+     origins:Object.fromEntries(Object.entries(sources).map(([role,panel])=>[role,panel.dataset.autoArrangeOrigin==='filled'?'filled':'authored'])),displacedConnections:displaced}});
     for(const [index,section] of ARRANGEMENT_RECIPE.entries()){
      const context=make('chord-progression',section.name,root.id,index);
      structures.setProgression(context.id,{chords:section.chords,stepTicks:384});
-     const band=section.roles.length>1?make(section.presentation || 'together',section.name+' layers',context.id):context;
+     const band=section.roles.length>1?make('together',section.name+' layers',context.id):context;
      if(section.roles.length>1)structures.annotate(band.id,{outputCount:section.roles.length+1});
-     const timelineEntries=[];
+     const duration=source=>source.type==='sequence'?structures.durationOf(source.id):toyLoopLengthTicks(source,getPlaybackInstance(source.id));
+     const bandTicks=Math.min(1536,Math.max(...section.roles.map(role=>duration(sources[role]))));
      section.roles.forEach((role,i)=>{
-      const offset=section.offsets?.[role] || 0;
-      const branch=section.presentation==='timeline'?make('repeat',section.name+' layer '+(i+1),band.id,i):band;
-      if(section.presentation==='timeline'){
-       // Timeline gates entry; Repeat sustains each linked pattern to B's end.
-       // The parent progression clips the final cycle for unusual source lengths.
-       const naturalTicks=getPlaybackInstance(sources[role].id)?.loopLengthTicks || 384;
-       structures.setCount(branch.id,Math.ceil((1536-offset)/naturalTicks));
-       timelineEntries.push(Object.freeze({childId:branch.id,portId:'child:'+i,offsetTick:offset}));
-      }
-      const p=structures.get(branch.id),instance=createInstance(sources[role],{autoArrangeOwner:owner,ui:{left:`${p.x+536}px`,top:`${p.y+(section.presentation==='timeline'?0:i*220)}px`}});
+      const naturalTicks=duration(sources[role]);
+      const repeat=section.roles.length>1&&naturalTicks<bandTicks;
+      const branch=repeat?make('repeat',section.name+' layer '+(i+1),band.id,i):band;
+      if(repeat)structures.setCount(branch.id,Math.ceil(bandTicks/naturalTicks));
+      const p=structures.get(branch.id),instance=sources[role].type==='sequence'
+        ?createStructureInstance(sources[role],{x:p.x+536,y:p.y+(repeat?0:i*220),autoArrange:{owner},collapsed:true})
+        :createInstance(sources[role],{autoArrangeOwner:owner,ui:{left:`${p.x+536}px`,top:`${p.y+(repeat?0:i*220)}px`}});
       created.push(instance.id);
-      connect('sequence',output(branch.id,section.presentation==='timeline'?0:i),input(instance.id));
+      if(sources[role].type==='sequence')created.push(...model.list('sequence').filter(e=>e.from.objectId===instance.id).map(e=>e.to.objectId));
+      connect('sequence',output(branch.id,repeat?0:i),input(instance.id));
      });
-     // Refresh is suspended during construction; author entries before it can
-     // derive its default sequential offsets from the newly connected branches.
-     if(section.presentation==='timeline')structures.annotate(band.id,{entries:Object.freeze(timelineEntries)});
     }
     connect('transport',{objectId:heartbeat,portId:'output'},input(root.id));
-    for(const id of created)if(structures.get(id))structures.setCollapsed(id,true);
+    for(const id of created)if(structures.get(id)&&!structures.get(id).sharedDefinitionId)structures.setCollapsed(id,true);
    }));
    if(previous)removeInstances(previous.autoArrange.owner);
    }catch(error){

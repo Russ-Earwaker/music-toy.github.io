@@ -1,4 +1,5 @@
 import { isModifier } from './modifier-types.js';
+import {toyLoopLengthTicks} from './drawgrid/dg-pattern-length.js';
 import { MAIN_TRANSPORT_ID, transportRegistry } from './transport-registry.js';
 import { TICKS_PER_BAR } from './audio-core.js';
 import { createStructureRuntime } from './structure-runtime.js';
@@ -83,7 +84,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
       const graph = compileStructureGraph({ panels, structures, connections: connections || [], runtime,
         poweredRoots: new Set(connectionModel?.list('transport').map(edge => edge.to.objectId) || []),
         currentTick: transportState.currentTick, getTransportId: domainFor, getCurrentTick: id => stateFor(id, transportState).currentTick,
-        getDuration: id => getPlaybackInstance(id)?.loopLengthTicks || TICKS_PER_BAR });
+        getDuration: id => toyLoopLengthTicks(getToy(id),getPlaybackInstance(id)) });
       roots.push(...graph.roots); auxiliary = graph.defined;
     } else {
       for (const head of panels) {
@@ -92,7 +93,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
         let panel = head;
         while (panel && !visited.has(panel.id)) {
           visited.add(panel.id);
-          children.push({ toyId: panel.id, durationTicks: getPlaybackInstance(panel.id)?.loopLengthTicks || TICKS_PER_BAR });
+          children.push({ toyId: panel.id, durationTicks: toyLoopLengthTicks(panel,getPlaybackInstance(panel.id)) });
           panel = getToy(nextId(panel));
         }
         if (children.length >= 2) roots.push({ headId: head.id, type: 'sequence', children, members: children.map(c => c.toyId) });

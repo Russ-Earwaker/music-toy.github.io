@@ -1,4 +1,5 @@
 import { panelTransportBindings } from '../panel-transport.js';
+import {getPlaybackInstance,getPlaybackLocalTick} from '../playback-instances.js';
 // src/drawgrid.js
 // Minimal, scoped Drawing Grid -- 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
@@ -197,7 +198,10 @@ function getPanelLoopInfo(panel) {
       }
     }
   } catch {}
-  return (typeof getLoopInfo === 'function') ? getLoopInfo() : null;
+  const info=(typeof getLoopInfo === 'function') ? getLoopInfo() : null;
+  const instance=getPlaybackInstance(panel.id),local=info?getPlaybackLocalTick(instance,info.currentTick):null;
+  if(local!=null&&instance.loopLengthTicks>384){const phase=local/instance.loopLengthTicks;return {...info,phase01:phase,progress:phase,barLen:info.barLen*instance.loopLengthTicks/384};}
+  return info;
 }
 
 // Lightweight trace helpers (opt-in via console):

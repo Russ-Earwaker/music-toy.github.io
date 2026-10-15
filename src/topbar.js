@@ -2060,10 +2060,11 @@ if (document.readyState === 'loading') {
             } catch {}
 
             const destroy = window.MusicToyFactory?.destroy;
+            window.MusicToyFactory?.releaseStructureInstances?.();
             orderCreationPanelRemoval(panels).forEach(panel=>{
               try{
                 if (typeof destroy === 'function'){
-                  destroy(panel);
+                  destroy(panel,{sceneRestore:true});
                 } else {
                   panel.remove();
                 }

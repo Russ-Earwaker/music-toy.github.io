@@ -5,6 +5,9 @@
 <header>Production graph check
  <button id="open">Open normal board in tab</button>
  <select id="variant" aria-label="Graph variant"><option value="base">Chord Progression → Together</option><option value="outer">Transpose → Chord Progression</option><option value="inner">Chord Progression → Transpose</option><option value="roots">Heartbeat independent 1 / 2 / 4 bar roots</option><option value="arrange3">Arrange: three authored ideas</option><option value="arrange1">Arrange: melody only</option><option value="legacy">Legacy compact arrangement</option></select>
+ <script>document.querySelector('#variant').add(new Option('Legacy v1.1 staggered B','legacy11'));</script>
+ <script>document.querySelector('#variant').add(new Option('Arrange: generate long melody','arrange2'));document.querySelector('#variant').add(new Option('Legacy v1.3 octave lift','legacy13'));</script>
+ <button id="record">Record audio proof</button><button id="stop-record">Save audio proof</button>
  <button id="load">Load C / Am / F / G fixture</button>
  <button id="phase">Load obvious shared-phase fixture</button>
  <button id="independent-phase">Load unrelated-toy phase fixture</button>
@@ -25,6 +28,7 @@ const app=document.querySelector('#app'),status=document.querySelector('#status'
 let events=[],before=null,testedWindow=null,uiEvents=[],relationshipEvents=[],timingActions=[];
 function observe(win){
  testedWindow=win;
+ if(!win.document.querySelector('script[data-audio-proof]')){const script=win.document.createElement('script');script.type='module';script.dataset.audioProof='1';script.src=new URL('audio-proof-recorder.js',location.href).href;win.document.body.append(script);}
  if(!win.document.querySelector('script[data-chord-observer]')){const script=win.document.createElement('script');script.type='module';script.dataset.chordObserver='1';script.src=new URL('chord-indicator-observer.js',location.href).href;win.document.body.append(script);}
  win.__HARMONY_DEBUG=true;
  if(win.__graphHarmonyObserver)win.removeEventListener('toy:note',win.__graphHarmonyObserver);
@@ -49,13 +53,15 @@ document.querySelector('#open').onclick=()=>{
 };
 document.querySelector('#load').onclick=async()=>{
  const variant=document.querySelector('#variant').value;
- const fixture=variant==='legacy'?{payload:(await (await fetch('../resources/debug-output/harmony-graph-2026-10-11T12-34-31-905Z.json')).json()).snapshot}:await (await fetch(variant==='roots'?'../resources/heartbeat-roots.scene.json':'../resources/harmony-integration.scene.json')).json();
+ const legacyFiles={legacy:'harmony-graph-2026-10-11T12-34-31-905Z.json',legacy11:'harmony-graph-2026-10-12T21-17-01-262Z.json',legacy13:'harmony-graph-2026-10-13T17-30-21-466Z.json'};
+ const fixture=legacyFiles[variant]?{payload:(await (await fetch('../resources/debug-output/'+legacyFiles[variant])).json()).snapshot}:await (await fetch(variant==='roots'?'../resources/heartbeat-roots.scene.json':'../resources/harmony-integration.scene.json')).json();
  if(!testedWindow?.Persistence){status.textContent='App is still loading; try again.';return;}
- if(variant==='arrange3' || variant==='arrange1'){
+ if(variant==='arrange3' || variant==='arrange1' || variant==='arrange2'){
   fixture.payload.structureToys=[];fixture.payload.chains=[];
   if(variant==='arrange1')fixture.payload.toys=fixture.payload.toys.filter(t=>t.id==='proof-melody');
+  if(variant==='arrange2')fixture.payload.toys=fixture.payload.toys.filter(t=>t.id!=='proof-melody');
   fixture.payload.connections=fixture.payload.toys.map(t=>({id:'source-root-'+t.id,kind:'transport',from:{objectId:'main-heartbeat',portId:'output'},to:{objectId:t.id,portId:'input'}}));
- }else if(variant!=='base' && variant!=='roots' && variant!=='legacy'){
+ }else if(variant!=='base' && variant!=='roots' && !legacyFiles[variant]){
   fixture.payload.structureToys.push({id:'proof-transpose',definitionId:'definition:proof-transpose',type:'transpose',semitones:12,x:variant==='outer'?0:420,y:480,collapsed:false,outputCount:1});
   const edge=fixture.payload.connections.find(c=>c.id===(variant==='outer'?'proof-root':'proof-cr'));
   const target=edge.to;
@@ -70,6 +76,8 @@ document.querySelector('#load').onclick=async()=>{
  status.textContent='Fixture loaded. Play and edit using the board controls.';
 };
 document.querySelector('#observe').onclick=()=>{observe(testedWindow);status.textContent='Observing restored board audio.';};
+document.querySelector('#record').onclick=async()=>{await testedWindow.__startAudioProof();status.textContent='Recording actual mix and isolated Melody audio.';};
+document.querySelector('#stop-record').onclick=async()=>{status.textContent=await testedWindow.__saveAudioProof();};
 document.querySelector('#power-masters').onclick=()=>{const snap=structuredClone(testedWindow.Persistence.getSnapshot());for(const t of snap.toys.filter(t=>!t.masterToyId))if(!snap.connections.some(e=>e.kind==='transport'&&e.to.objectId===t.id))snap.connections.push({id:'test-master-root-'+t.id,kind:'transport',from:{objectId:'main-heartbeat',portId:'output'},to:{objectId:t.id,portId:'input'}});testedWindow.restoreConnections(snap.connections,snap.structureToys);status.textContent='Test Masters powered alongside arrangement at current transport tick';};
 document.querySelector('#phase').onclick=async()=>{
  const fixture=await (await fetch('../resources/harmony-integration.scene.json')).json(),snap=fixture.payload;

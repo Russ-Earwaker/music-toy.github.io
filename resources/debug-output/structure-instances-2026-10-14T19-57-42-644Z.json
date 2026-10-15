@@ -1,0 +1,98 @@
+{
+  "kind": "structure-instances-browser",
+  "events": [],
+  "actions": [
+    {
+      "kind": "saved",
+      "eventCount": 0,
+      "snapshot": {
+        "schemaVersion": 1,
+        "createdAt": "2026-10-14T19:57:42.644Z",
+        "updatedAt": "2026-10-14T19:57:42.644Z",
+        "transport": {
+          "bpm": 120
+        },
+        "heartbeats": [
+          {
+            "id": "main-heartbeat",
+            "transportId": "main-heartbeat",
+            "name": "Main",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "bpm": 120,
+            "positionTick": 0,
+            "state": "stopped"
+          }
+        ],
+        "themeId": "default",
+        "artToys": [],
+        "toys": [],
+        "chains": [],
+        "connections": [],
+        "structureToys": [],
+        "camera": {
+          "boardTransform": "translate3d(274.19px, -679.56px, 0px) scale(0.192188)",
+          "viewportScrollLeft": 0,
+          "viewportScrollTop": 0,
+          "bvScale": "0.19218750000000004",
+          "scale": 0.30000000000000004,
+          "x": 274.1870096842447,
+          "y": -679.5596893310546,
+          "overviewActive": true
+        }
+      },
+      "roots": []
+    }
+  ],
+  "relationships": [],
+  "errors": [
+    "[BV][reflow] layoutOffset:getBoundingClientRect 6.30ms"
+  ],
+  "createdAt": "2026-10-14T19:57:42.644Z",
+  "snapshot": {
+    "schemaVersion": 1,
+    "createdAt": "2026-10-14T19:57:42.644Z",
+    "updatedAt": "2026-10-14T19:57:42.644Z",
+    "transport": {
+      "bpm": 120
+    },
+    "heartbeats": [
+      {
+        "id": "main-heartbeat",
+        "transportId": "main-heartbeat",
+        "name": "Main",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "bpm": 120,
+        "positionTick": 0,
+        "state": "stopped"
+      }
+    ],
+    "themeId": "default",
+    "artToys": [],
+    "toys": [],
+    "chains": [],
+    "connections": [],
+    "structureToys": [],
+    "camera": {
+      "boardTransform": "translate3d(274.19px, -679.56px, 0px) scale(0.192188)",
+      "viewportScrollLeft": 0,
+      "viewportScrollTop": 0,
+      "bvScale": "0.19218750000000004",
+      "scale": 0.30000000000000004,
+      "x": 274.1870096842447,
+      "y": -679.5596893310546,
+      "overviewActive": true
+    }
+  },
+  "currentRelationship": {
+    "flashed": [],
+    "paths": 0
+  },
+  "chordIndicators": [],
+  "panels": []
+}

@@ -105,7 +105,7 @@ function buildInstrumentSelect(panel){
 }
 
 export function initToyUI(panel, { toyName, defaultInstrument }={}){
-  if (!panel || panel.dataset.masterToyId) return null;
+  if (!panel || (panel.dataset.masterToyId&&!panel.dataset.linkedView)) return null;
   initializeToyMusicalRole(panel);
   const toyKind = String(panel.dataset.toy||'').toLowerCase();
   const header = ensureHeader(panel, toyName);

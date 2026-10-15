@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><title>Linked Sequence browser proof</title>
+<style>body{margin:0;background:#101820;color:#eee;font:14px system-ui}header{padding:8px;display:flex;gap:8px;flex-wrap:wrap}button{padding:8px}iframe{width:100%;height:80vh;border:0}pre{white-space:pre-wrap}</style>
+<header>
+ <button data-action="load">Load manual Sequence Master</button>
+ <button data-action="contexts">Connect copies under different chords</button>
+ <button data-action="edit">Edit Draw C source</button>
+ <button data-action="reorder">Reorder Master C before B</button>
+ <button data-action="delete">Delete first linked Sequence</button>
+ <button data-action="save">Save proof to resources</button>
+ <button data-action="reload">Save and reload graph</button>
+ <button data-action="arrange">Load Auto-Arrange missing melody</button>
+ <button data-action="restore">Restore last saved arrangement</button>
+ <button data-action="editCopy">Edit Draw B.2 in place</button>
+ <button data-action="reorderCopy">Reorder second linked Phrase</button>
+ <button data-action="moveCopy">Move second linked Phrase</button>
+ <button data-action="deleteOriginal">Delete original Phrase view</button>
+ <span id="status">Loading normal board…</span>
+</header>
+<iframe id="app" title="Normal Rhythmake board" src="../" allow="autoplay"></iframe><pre id="proof"></pre>
+<script type="module">
+const frame=document.querySelector('#app'),status=document.querySelector('#status');
+frame.addEventListener('load',()=>{
+ const doc=frame.contentDocument,script=doc.createElement('script');script.type='module';script.src=new URL('structure-instances-observer.js',location.href).href;doc.body.append(script);
+ script.addEventListener('load',()=>{status.textContent='Ready: use real Sequence header → Advanced → Create Linked Copy twice.';});
+});
+for(const button of document.querySelectorAll('[data-action]'))button.onclick=async()=>{
+ try{const result=await frame.contentWindow.__structureProofActions[button.dataset.action]();status.textContent=result||'Done.';}catch(error){status.textContent='ERROR: '+error.message;}
+};
+</script>

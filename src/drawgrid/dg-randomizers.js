@@ -2,6 +2,18 @@
 
 let randomLineColorIndex = 0;
 
+// The long normal DrawGrid option develops one bounded contour/motif over four
+// bars. This has no chord knowledge: harmony remains a playback decision.
+export function createLongPhraseContour(count,random=Math.random){
+ const motif=[];let pitch=.45;
+ for(let i=0;i<8;i++){pitch=Math.max(.2,Math.min(.75,pitch+(random()-.5)*.3));motif.push(pitch);}
+ // Avoid an effectively flat motif after note snapping. A small arch stays
+ // inside the same safe register and develops the normal continuous line.
+ if(Math.max(...motif)-Math.min(...motif)<.22)for(let i=0;i<8;i++)motif[i]=.45+.24*Math.sin(i*Math.PI/7)+(random()-.5)*.04;
+ const lifts=[0,.16,-.12,.06];
+ return Array.from({length:count},(_,i)=>Math.max(.1,Math.min(.9,motif[i%8]+lifts[Math.min(3,Math.floor(i/8))])));
+}
+
 export function createRandomLineStroke(S, random = Math.random) {
     const STROKE_COLORS = [
       'rgba(95,179,255,0.95)', 'rgba(255,95,179,0.95)',
@@ -11,11 +23,12 @@ export function createRandomLineStroke(S, random = Math.random) {
     const rightX = S.gridArea.x + S.gridArea.w;
     const minY = S.gridArea.y + S.topPad + S.ch;
     const maxY = S.gridArea.y + S.topPad + (S.rows - 1) * S.ch;
-    const K = Math.max(6, Math.round(S.gridArea.w / Math.max(1, S.cw * 0.9)));
+    const K = S.cols===32?33:Math.max(6, Math.round(S.gridArea.w / Math.max(1, S.cw * 0.9)));
+    const phrase=S.cols===32?createLongPhraseContour(K,random):null;
     const cps = [];
     for (let i = 0; i < K; i++) {
       const t = i / (K - 1);
-      cps.push({ x: leftX + (rightX - leftX) * t, y: minY + random() * (maxY - minY) });
+      cps.push({ x: leftX + (rightX - leftX) * t, y: minY + (phrase?phrase[i]:random()) * (maxY - minY) });
     }
     const cr = (p0, p1, p2, p3, t) => {
       const t2 = t * t, t3 = t2 * t;
@@ -208,8 +221,9 @@ export function createDgRandomizers(getState) {
       // After generating the line, randomly deactivate some columns to create rests.
       // This addresses the user's feedback that "Random" no longer turns notes off.
       if (S.currentMap && S.currentMap.nodes) {
+        const motif=S.cols===32?Array.from({length:8},()=>Math.random()<.25):null;
         for (let c = 0; c < S.cols; c++) {
-          if (Math.random() < 0.35) {
+          if (motif?(c>=24&&Math.random()<.12?!motif[c%8]:motif[c%8]):Math.random()<.35) {
             // Deactivate the column by disabling all of its nodes. This state
             // is preserved by the `persistentDisabled` mechanism.
             if (S.currentMap.nodes[c]?.size > 0) {
