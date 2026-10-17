@@ -3,7 +3,7 @@ import { createBouncer } from './bouncer.main.js';
 import { initToyUI } from './toyui.js';
 
 export function initializeBouncer(panel) {
-    if(panel?.dataset?.masterToyId)return;
+    if(panel?.dataset?.masterToyId&&!panel.dataset.linkedView)return;
     // Prevent double-initialization
     if (panel.__toyInstance) return;
     try{

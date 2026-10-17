@@ -32,6 +32,7 @@ function fixture(placed) {
     lifecycle: { disposed: false }, startSection: () => () => {},
     panel: { dataset: {} }, window: {}, console,
     isRunning: () => true, ac: { currentTime: 1.5 }, __pausedNow: 1,
+    getTransportState:()=>({currentTick:96}), TICKS_PER_BAR:384,
     markPanelForDomCommit() {}, queueClassToggle() {}, queueDatasetSet() {},
     __schedState: {}, rippleNoteTime, generator: { placed, nx: 0.5, ny: 0.5, r: 10 },
     ripples: placed ? [{ x: 210, y: 210, startAT: 1, startTime: 1, speed: 200 }] : [],
@@ -75,6 +76,16 @@ function activationFixture() {
   return { context, block, scales, whiteFlashes, drawAt };
 }
 
+test('admitted ripple radius follows transport ticks through pause, BPM and presentation changes',()=>{
+  const {context}=fixture(true);
+  const ring={x:120,y:140,playbackOnly:true,startTick:0,startAT:1};context.ripples=[ring];
+  let tick=96;context.getTransportState=()=>({currentTick:tick});
+  context.draw();const radius=ring.transportRadius;
+  context.ac.currentTime=90;context.sizing.scale=2;context.draw();assert.equal(ring.transportRadius,radius);
+  context.RING_SPEED=()=>400;context.draw();assert.equal(ring.transportRadius,radius);
+  tick=192;context.draw();assert.equal(ring.transportRadius,2*radius);
+});
+
 test('a delayed frame records both same-pitch cubes and activates both on replay', () => {
   const { context } = fixture(false);
   const sounds = [];
@@ -105,10 +116,16 @@ test('a delayed frame records both same-pitch cubes and activates both on replay
   assert.equal(sounds.length, 2, 'each cube is hit only once per ripple');
   const replayStart = source.indexOf('  panel.__sequencerScheduleEvent =');
   const replayEnd = source.indexOf('\n  };', replayStart) + 5;
+  const admitted=[];
+  Object.assign(context,{toyId:'rippler-test',audioTimeToTick:t=>t,
+    __rawTrig:(instrument,note,when,_id,options)=>{context.triggerInstrument(instrument,note,when);options.onPlaybackScheduled({when,note});},
+    admittedToyVisual:(_panel,event,admission)=>admitted.push({...event,...admission}),
+  });
   vm.runInContext(source.slice(replayStart, replayEnd), context);
   for (const blockIndex of context.pattern[2]) context.panel.__sequencerScheduleEvent({ blockIndex }, 2.65);
   assert.equal(sounds.length, 4);
-  assert.ok(blocks.every(block => block._visFlashAt === 2.65), 'both cubes receive replay activation');
+  assert.deepEqual(admitted.map(e=>e.blockIndex),[0,1], 'both cubes retain distinct admitted replay activations');
+  assert.ok(admitted.every(e=>e.when===2.65));
 });
 
 test('initially disabled cubes join the loop after enabling in either view', () => {

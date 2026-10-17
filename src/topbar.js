@@ -1229,6 +1229,20 @@ function ensureTopbar(){
       if (!playBtn.dataset.helpPosition) playBtn.dataset.helpPosition = 'bottom';
     }
     updatePlayButtonVisual(playBtn, isTransportOrBeatSwarmSubBoardRunning());
+    let transportControls = bar.querySelector('.transport-controls');
+    if (!transportControls) {
+      transportControls = document.createElement('div');
+      transportControls.className = 'transport-controls';
+      transportControls.setAttribute('role', 'group');
+      transportControls.setAttribute('aria-label', 'Transport');
+      transportControls.style.cssText = 'position:relative;display:flex;flex-direction:column;align-items:center';
+      playBtn.before(transportControls); transportControls.append(playBtn);
+      const start = document.createElement('button');
+      start.type = 'button'; start.dataset.action = 'return-to-start'; start.className = 'transport-return-start';
+      start.textContent = '↤ Start'; start.title = 'Return to Start';
+      start.setAttribute('aria-label', 'Return to Start');
+      transportControls.append(start);
+    }
 
     let bpmBtn = bar.querySelector('[data-action="bpm"]');
     if (!bpmBtn){
@@ -1247,12 +1261,12 @@ function ensureTopbar(){
           '<div class="bpm-label">120</div>',
         '</div>',
       ].join('');
-      playBtn?.insertAdjacentElement('beforebegin', bpmBtn);
+      transportControls.insertAdjacentElement('beforebegin', bpmBtn);
     } else {
       bpmBtn.classList.add('c-btn');
       bpmBtn.type = 'button';
       if (!bpmBtn.dataset.helpPosition) bpmBtn.dataset.helpPosition = 'bottom';
-      playBtn?.insertAdjacentElement('beforebegin', bpmBtn);
+      transportControls.insertAdjacentElement('beforebegin', bpmBtn);
     }
     updateBpmButtonVisual(bpmBtn);
 
@@ -1272,7 +1286,7 @@ function ensureTopbar(){
       ].join('');
       const themeCore = soundThemeBtn.querySelector('.c-btn-core');
       if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonPlayOptions.png')");
-      playBtn?.insertAdjacentElement('afterend', soundThemeBtn);
+      transportControls.insertAdjacentElement('afterend', soundThemeBtn);
     } else {
       soundThemeBtn.classList.add('c-btn', 'sound-theme-btn');
       soundThemeBtn.type = 'button';
@@ -1281,7 +1295,7 @@ function ensureTopbar(){
       if (!soundThemeBtn.title) soundThemeBtn.title = 'Play options';
       const themeCore = soundThemeBtn.querySelector('.c-btn-core');
       if (themeCore) themeCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonPlayOptions.png')");
-      playBtn?.insertAdjacentElement('afterend', soundThemeBtn);
+      transportControls.insertAdjacentElement('afterend', soundThemeBtn);
     }
 
     // Master Volume control (moved out of Play Options menu)
@@ -2007,6 +2021,10 @@ if (document.readyState === 'loading') {
         return;
       }
 
+      if (action === 'return-to-start') {
+        heartbeatModel.transport()?.returnToStart();
+        return;
+      }
       if (action === 'toggle-play'){
         if (window.BeatSwarmMode?.isSubBoardOpen?.()) {
           try { window.BeatSwarmMode?.toggleSubBoardPlayback?.(); } catch {}

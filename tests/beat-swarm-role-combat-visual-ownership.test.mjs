@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const mode = readFileSync(new URL('../src/beat-swarm/beat-swarm-mode.js', import.meta.url), 'utf8');
-const pickupsCombat = readFileSync(new URL('../src/beat-swarm/beat-swarm-pickups-combat.js', import.meta.url), 'utf8');
-const eventExecution = readFileSync(new URL('../src/beat-swarm/beat-swarm-event-execution.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-const perfLab = readFileSync(new URL('../src/perf/perf-lab.js', import.meta.url), 'utf8');
+const mode = readFileSync(new URL('../src/beat-swarm/beat-swarm-mode.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const pickupsCombat = readFileSync(new URL('../src/beat-swarm/beat-swarm-pickups-combat.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const eventExecution = readFileSync(new URL('../src/beat-swarm/beat-swarm-event-execution.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const perfLab = readFileSync(new URL('../src/perf/perf-lab.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 test('performed composer abilities suppress combat body treatment but retain ability dispatch', () => {
   const composerAbility = mode.match(/function triggerSingleComposerGroupEnemyAbility[\s\S]*?\n}\n\nfunction triggerComposerGroupEnemyAbility/)?.[0] || '';

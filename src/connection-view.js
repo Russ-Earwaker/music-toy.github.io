@@ -10,6 +10,7 @@ import { TICKS_PER_BEAT } from './audio-core.js';
 import { STRUCTURE_TYPES, MAX_REPEAT_COUNT, structureTypeLabel } from './structure-types.js';
 import { BASIC_LOGIC_TYPES, openAdvancedLogic, closeAdvancedLogic } from './logic-creation-menu.js';
 import {createRelationshipReveal} from './toy-relationship-reveal.js';
+import { horizontalPhraseProjection } from './horizontal-phrases.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const set = (node, key, value) => { if (node.getAttribute(key) !== String(value)) node.setAttribute(key, value); };
@@ -333,7 +334,9 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       }
     }
     const visibleStructures = new Set();
+    const phraseProjection = horizontalPhraseProjection(model, model.list(null,{includeSuspended:true}));
     for (const logical of structureToys?.list() || []) {
+      if (phraseProjection.hidden.has(logical.id)) continue;
       const s=getRenderedStructure(structureToys.get(logical.id));
       if (context.visible && !context.visible({ dataset: { artOwnerId: s.artOwnerId } })) continue;
       visibleStructures.add(s.id);
@@ -447,7 +450,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       points.set(id, projected); position(visual.circle, projected);position(visual.hit,projected);
       const structure = structureToys?.get(value.point.objectId);
       if(structure)set(visual.group,'data-structure-id',structure.id);
-      const attached = model.list(null,{includeSuspended:true}).some(c =>
+      const attached = phraseProjection.connections.some(c =>
         (key(c.from)===key(value.point) && !(editing?.suspended && editing.connectionId===c.id && editing.end==='from'))
         || ((key(c.to)===key(value.point)) && !(editing?.suspended && editing.connectionId===c.id && editing.end==='to')));
       set(visual.circle, 'data-connected', attached);
@@ -481,7 +484,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     for (const [id, visual] of ports) if (!desired.has(id)) { visual.group.remove(); ports.delete(id); }
     // Shared uses terminate at the same visible input artwork. No extra socket.
     const present = new Set();
-    for (const c of model.list(null,{includeSuspended:true})) {
+    for (const c of phraseProjection.connections) {
       let a = points.get(key(c.from)), b = points.get(key(c.to));
       const reconnect=editing?.connectionId===c.id && gestureMoved && pointer;
       if(reconnect){const loose=pointerPoint({clientX:pointer.x,clientY:pointer.y});if(editing.end==='from')a=loose;else b=loose;}

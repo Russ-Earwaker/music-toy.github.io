@@ -7556,6 +7556,23 @@ body.tutorial-active .tutorial-unlock-animate .c-btn-glow {
   background-size: 50%;
 }
 
+#topbar .transport-return-start {
+  position: fixed;
+  top: calc(var(--top-btn-offset) + var(--top-btn-size) + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1451;
+  pointer-events: auto;
+  white-space: nowrap;
+  border: 1px solid #718fc2;
+  border-radius: 8px;
+  background: #243044;
+  color: white;
+  padding: 3px 8px;
+  cursor: pointer;
+  font: 12px system-ui;
+}
+
 body.beat-swarm-active.internal-board-active #topbar [data-action="toggle-play"],
 body.beat-swarm-active.internal-board-active .play-button,
 body.beat-swarm-active.internal-board-active .controls-layer {

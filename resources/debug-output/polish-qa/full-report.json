@@ -1,0 +1,202 @@
+{
+  "setup": {
+    "rows": [
+      [
+        {
+          "id": "drawgrid-1792227644687-9jsx4r",
+          "x": 1120,
+          "y": -221
+        },
+        {
+          "id": "drawgrid-1792227644760-1xxvcr",
+          "x": 2096,
+          "y": -221
+        },
+        {
+          "id": "drawgrid-1792227644798-v6s2zk",
+          "x": 3072,
+          "y": -221
+        },
+        {
+          "id": "drawgrid-1792227644889-bcadhb",
+          "x": 4048,
+          "y": -221
+        }
+      ],
+      [
+        {
+          "id": "drawgrid-1792227645303-tf8ei9",
+          "x": 3516,
+          "y": 1904
+        },
+        {
+          "id": "drawgrid-1792227645305-nn1i65",
+          "x": 4492,
+          "y": 1904
+        },
+        {
+          "id": "drawgrid-1792227645306-sn87yt",
+          "x": 5468,
+          "y": 1904
+        },
+        {
+          "id": "drawgrid-1792227645307-zopotz",
+          "x": 6444,
+          "y": 1904
+        }
+      ],
+      [
+        {
+          "id": "drawgrid-1792227645315-zbnvjb",
+          "x": 3516,
+          "y": 4029
+        },
+        {
+          "id": "drawgrid-1792227645317-48xfvc",
+          "x": 4492,
+          "y": 4029
+        },
+        {
+          "id": "drawgrid-1792227645318-ufirza",
+          "x": 5468,
+          "y": 4029
+        },
+        {
+          "id": "drawgrid-1792227645321-2vauoa",
+          "x": 6444,
+          "y": 4029
+        }
+      ]
+    ],
+    "structures": [
+      {
+        "id": "structure-toy:1",
+        "name": "Melody Phrase",
+        "type": "sequence",
+        "autoArrangePhrase": {
+          "heartbeatId": "main-heartbeat"
+        }
+      },
+      {
+        "id": "structure-toy:2",
+        "name": "Arrangement",
+        "type": "sequence"
+      },
+      {
+        "id": "structure-toy:3",
+        "name": "Intro",
+        "type": "chord-progression"
+      },
+      {
+        "id": "structure-toy:4",
+        "name": "A",
+        "type": "chord-progression"
+      },
+      {
+        "id": "structure-toy:5",
+        "name": "A layers",
+        "type": "together"
+      },
+      {
+        "id": "structure-toy:6",
+        "name": "A layer 1",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:7",
+        "name": "A layer 2",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:8",
+        "name": "Melody Phrase.1",
+        "type": "sequence",
+        "autoArrangePhrase": {
+          "heartbeatId": "main-heartbeat"
+        }
+      },
+      {
+        "id": "structure-toy:9",
+        "name": "B",
+        "type": "chord-progression"
+      },
+      {
+        "id": "structure-toy:10",
+        "name": "B layers",
+        "type": "together"
+      },
+      {
+        "id": "structure-toy:11",
+        "name": "B layer 1",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:12",
+        "name": "B layer 2",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:13",
+        "name": "Melody Phrase.2",
+        "type": "sequence",
+        "autoArrangePhrase": {
+          "heartbeatId": "main-heartbeat"
+        }
+      },
+      {
+        "id": "structure-toy:14",
+        "name": "B layer 4",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:15",
+        "name": "Outro",
+        "type": "chord-progression"
+      }
+    ],
+    "status": "Arrangement ready"
+  },
+  "reset": {
+    "paused": {
+      "state": "paused",
+      "bpm": 90,
+      "positionTick": 0,
+      "currentTick": 0,
+      "currentBeat": 0,
+      "currentBar": 0,
+      "ticksPerBeat": 96,
+      "ticksPerBar": 384,
+      "beatsPerBar": 4,
+      "mapping": {
+        "originTick": 0,
+        "originAudioTime": 18.24,
+        "bpm": 90
+      }
+    },
+    "playing": {
+      "state": "playing",
+      "bpm": 90,
+      "positionTick": 0,
+      "currentTick": 0,
+      "currentBeat": 0,
+      "currentBar": 0,
+      "ticksPerBeat": 96,
+      "ticksPerBar": 384,
+      "beatsPerBar": 4,
+      "mapping": {
+        "originTick": 0,
+        "originAudioTime": 18.76,
+        "bpm": 90
+      }
+    }
+  },
+  "validation": {
+    "drawGridNotes": 843,
+    "flashes": 843,
+    "totalNotes": 955,
+    "finalTick": 43264,
+    "arrangementLoops": 7.041666666666667,
+    "errors": []
+  },
+  "remaining": "Headless QA cannot provide subjective listening confirmation."
+}

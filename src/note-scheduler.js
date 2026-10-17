@@ -16,6 +16,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
   const loopTicks = Math.max(1, intTick(ticksPerBar, DEFAULT_TICKS_PER_BAR));
   const graceTicks = Math.max(0, intTick(lateGraceTicks));
   const states = new Map();
+  const toyResetCursors = new Map();
   const unsubscribe = onPlaybackOccurrenceInvalidated(id => {
     for (const [key, state] of states) if (state.occurrenceId === id) states.delete(key);
   });
@@ -26,9 +27,9 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
     scheduledUntilTick: intTick(cursorTick), identities: new Set(),
     definitionRevision: null, generation: null, resetSerial,
   });
-  function getState(toyId, cursorTick) {
+  function getState(toyId, cursorTick, ownerToyId) {
     let state = states.get(toyId);
-    if (!state) { state = makeState(cursorTick); states.set(toyId, state); }
+    if (!state) { state = makeState(toyResetCursors.get(String(ownerToyId)) ?? cursorTick); states.set(toyId, state); }
     if (state.resetSerial !== resetSerial && pendingReset) {
       state.scheduledUntilTick = pendingReset.cursorTick;
       state.identities.clear();
@@ -48,9 +49,11 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
   }
   function clearToy(toyId) {
     if (!toyId) return;
+    toyResetCursors.delete(String(toyId));
     for (const [key, state] of states) if (state.toyId === toyId) states.delete(key);
   }
   function resetToyTimeline(toyId, tick, { includeBoundary = true } = {}) {
+    toyResetCursors.set(String(toyId), intTick(tick) + (includeBoundary ? 0 : 1));
     for (const state of states.values()) if (state.toyId === toyId) {
       state.scheduledUntilTick = intTick(tick) + (includeBoundary ? 0 : 1);
       state.identities.clear();
@@ -97,7 +100,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       const revision = Number.isFinite(Number(toy.__seqRev)) ? Number(toy.__seqRev) : 0;
       const generation = resolveGeneration(toy, toyId);
       const stateKey = usesPlaybackInstance ? JSON.stringify([toyId, playbackInstance.occurrenceId]) : toyId;
-      const state = getState(stateKey, structureTurn ? Math.max(nowTick, turn.startTick) : nowTick);
+      const state = getState(stateKey, structureTurn ? Math.max(nowTick - graceTicks, turn.startTick) : nowTick, toyId);
       if (state.transportId != null && state.transportId !== transportId) { state.scheduledUntilTick = nowTick; state.identities.clear(); }
       state.transportId = transportId;
       state.toyId = toyId; state.occurrenceId = playbackInstance?.occurrenceId || null;
@@ -274,6 +277,6 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
     } : null;
   }
   return { tick, clearOccurrence: id => { for (const [key, state] of states) if (state.occurrenceId === id) states.delete(key); },
-    dispose() { unsubscribe(); states.clear(); }, clearToy, resetTimeline, resetToyTimeline, getDebugState,
-    reset() { states.clear(); pendingReset = null; resetSerial++; } };
+    dispose() { unsubscribe(); states.clear(); toyResetCursors.clear(); }, clearToy, resetTimeline, resetToyTimeline, getDebugState,
+    reset() { states.clear(); toyResetCursors.clear(); pendingReset = null; resetSerial++; } };
 }

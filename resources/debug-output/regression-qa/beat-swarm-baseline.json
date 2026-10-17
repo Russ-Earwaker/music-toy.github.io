@@ -1,0 +1,24 @@
+{
+  "sourceUnchangedFromHEAD": true,
+  "checkedOutHasCRLF": true,
+  "rawMatches": [
+    false,
+    false,
+    false
+  ],
+  "normalizedMatches": [
+    true,
+    true,
+    true
+  ],
+  "headMatches": [
+    true,
+    true,
+    true
+  ],
+  "headWithCRLFMatches": [
+    false,
+    false,
+    false
+  ]
+}

@@ -1,5 +1,6 @@
 import { panelTransportBindings } from '../panel-transport.js';
-import {getPlaybackInstance,getPlaybackLocalTick} from '../playback-instances.js';
+import { drawGridPlaybackLoopInfo } from './dg-playback-phase.js';
+import {getPlaybackInstance} from '../playback-instances.js';
 // src/drawgrid.js
 // Minimal, scoped Drawing Grid -- 16x12, draw strokes, build snapped nodes on release.
 // Strictly confined to the provided panel element.
@@ -199,9 +200,7 @@ function getPanelLoopInfo(panel) {
     }
   } catch {}
   const info=(typeof getLoopInfo === 'function') ? getLoopInfo() : null;
-  const instance=getPlaybackInstance(panel.id),local=info?getPlaybackLocalTick(instance,info.currentTick):null;
-  if(local!=null&&instance.loopLengthTicks>384){const phase=local/instance.loopLengthTicks;return {...info,phase01:phase,progress:phase,barLen:info.barLen*instance.loopLengthTicks/384};}
-  return info;
+  return drawGridPlaybackLoopInfo(info, getPlaybackInstance(panel.id));
 }
 
 // Lightweight trace helpers (opt-in via console):
@@ -4855,18 +4854,27 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     paint.style.cursor = 'default';
   });
   window.addEventListener('pointerup', onPointerUp);
+  panel.addEventListener('toy:transport-seek', () => {
+    playheadCol = -1;
+    flashes.fill(0);
+    noteEffects.reset();
+    panel.__dgPlayheadLastX = null;
+    panel.__dgPlayheadLayerEmpty = true;
+    if (playheadFrontCtx) playheadFrontCtx.clearRect(0, 0, playheadCanvas.width, playheadCanvas.height);
+    __dgMarkOverlayDirty(panel);
+  });
   panel.addEventListener('drawgrid:playcol', (e) => {
     const col = e?.detail?.col;
     playheadCol = col;
     if (col >= 0 && col < cols) {
-        if (currentMap?.active[col]) {
+        if (e.detail.rows || currentMap?.active[col]) {
             let pulseTriggered = false;
             flashes[col] = 1.0;
             // Add flashes for the grid cells that are playing
-            const nodesToFlash = currentMap.nodes[col];
+            const nodesToFlash = e.detail.rows ? new Set(e.detail.rows) : currentMap.nodes[col];
             if (nodesToFlash && nodesToFlash.size > 0) {
                 for (const row of nodesToFlash) {
-                    const isDisabled = currentMap.disabled?.[col]?.has(row);
+                    const isDisabled = !e.detail.rows && currentMap.disabled?.[col]?.has(row);
                     if (!isDisabled) {
                         if (!pulseTriggered) {
                             requestPanelPulse(panel, { rearm: true });

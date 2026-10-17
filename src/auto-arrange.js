@@ -23,8 +23,8 @@ export function selectArrangementSources(panels){
 }
 
 // Authored graph builder only. Playback, harmony and repetitions belong to the
-// ordinary compiler/runtime. Connected views read shared musical definitions.
-export function createAutoArranger({model,structures,getPanels,createSource,createPhraseSource,createStructureInstance,createInstance,adoptSource,adoptPhrase,removeInstances=()=>{},place=null,scope=()=>null}){
+// ordinary compiler/runtime. Connected views share editable definitions.
+export function createAutoArranger({model,structures,getPanels,createSource,createPhraseSource,createStructureInstance,createInstance,placeSource=()=>{},removeInstances=()=>{},place=null,scope=()=>null}){
  let busy=false,serial=0;
  async function arrange(){
   if(busy)throw new Error('Arrangement is already being built.');
@@ -40,9 +40,10 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
   try{
    if(createPhraseSource){
     const phrase=structures.list().find(s=>!s.masterStructureId && s.autoArrangePhrase?.heartbeatId===heartbeat && (s.artOwnerId||null)===board);
-    const master=phrase||await createPhraseSource({heartbeatId:heartbeat,seed:sources.melody});
+    const authored=sources.melody;
+    const master=phrase||await createPhraseSource({heartbeatId:heartbeat,firstChunk:authored});
     if(!master||master.type!=='sequence')throw new Error('Could not create Melody Phrase.');
-    sources.melody={...master,dataset:{autoArrangeOrigin:'filled'}};
+    sources.melody={...master,dataset:{autoArrangeOrigin:authored?.dataset.autoArrangeOrigin || 'filled'}};
    }
    for(const role of ARRANGEMENT_ROLES)if(!sources[role]){
     const panel=await createSource(role,{heartbeatId:heartbeat});
@@ -58,8 +59,14 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
    }
    sources.extraRhythm=extra;
    const sourceIds=Object.fromEntries(Object.entries(sources).map(([role,panel])=>[role,panel.id]));
+   const reusable=new Set(Object.values(sources).filter(source=>{
+    const parent=model.getParent(source.id),owner=parent&&structures.get(parent.from.objectId)?.autoArrange?.owner;
+    return (!parent||parent.kind==='transport'||owner===previous?.autoArrange.owner&&!!owner)
+      &&(source.type==='sequence'||!model.list('sequence').some(e=>e.from.objectId===source.id));
+   }).map(source=>source.id));
    const displaced=[...(previous?.autoArrange.displacedConnections || [])];
    const created=[];
+   const usedSources=new Set();
    const connect=(kind,from,to)=>{const r=model.connect(kind,from,to);if(!r.ok)throw new Error('Arrangement connection: '+r.reason);return r.connection;};
    const input=objectId=>({objectId,portId:'input'}),output=(objectId,index=0)=>({objectId,portId:'child:'+index});
    let root;
@@ -69,7 +76,7 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
    try{model.transaction(()=>structures.suspend(()=>{
     // Keep linked expansions alive until replacement succeeds, so rollback can
     // restore their connections without losing any child identities/positions.
-    if(previous)for(const node of structures.list().filter(s=>s.autoArrange?.owner===previous.autoArrange.owner&&!s.masterStructureId&&!Object.values(sourceIds).includes(s.id)))structures.remove(node.id);
+    if(previous)for(const node of structures.list().filter(s=>s.autoArrange?.owner===previous.autoArrange.owner&&!s.masterStructureId))structures.remove(node.id);
     for(const edge of displaced)if(!Object.values(sourceIds).includes(edge.to.objectId) && model.getObject(edge.to.objectId) && model.getObject(edge.from.objectId) && !model.getParent(edge.to.objectId))connect(edge.kind,edge.from,edge.to);
     const make=(type,name,parent,index=0)=>{
      const p=parent && structures.get(parent),position=!parent&&previous?{x:previous.x,y:previous.y}:place?.(type,parent,index) || {x:p?p.x+(p.type==='chord-progression'?536:400):0,y:(p?.y || 0)+index*480};
@@ -78,10 +85,9 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
      created.push(node.id);if(parent)connect('sequence',output(parent,index),input(node.id));return node;
     };
     root=make('sequence','Arrangement',null);
-    const usedSources=new Set();
     for(const panel of Object.values(sources)){
      const edge=model.getParent(panel.id);
-     if(edge&&(edge.kind==='transport'||previous&&structures.get(edge.from.objectId)?.autoArrange?.owner===previous.autoArrange.owner)){
+     if(edge?.kind==='transport'){
       if(!displaced.some(e=>e.to.objectId===panel.id))displaced.push(edge);
       model.disconnect(edge.id);
      }
@@ -100,13 +106,15 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
       const repeat=section.roles.length>1&&naturalTicks<bandTicks;
       const branch=repeat?make('repeat',section.name+' layer '+(i+1),band.id,i):band;
       if(repeat)structures.setCount(branch.id,Math.ceil(bandTicks/naturalTicks));
-      const p=structures.get(branch.id),source=sources[role];
-      const canAdopt=adoptSource&&!usedSources.has(source.id)&&!model.getParent(source.id);
-      const instance=canAdopt?(source.type==='sequence'?adoptPhrase(source,{owner,x:p.x+536,y:p.y+(repeat?0:i*220)}):adoptSource(source,{owner,x:p.x+536,y:p.y+(repeat?0:i*220)})):sources[role].type==='sequence'
+      const p=structures.get(branch.id),source=sources[role],position={x:p.x+536,y:p.y+(repeat?0:i*220)};
+      // The original is the first connected view of its definition. Further
+      // occurrences share it; no disconnected source bank is manufactured.
+      const reuse=reusable.has(source.id)&&!usedSources.has(source.id);usedSources.add(source.id);
+      const instance=reuse?source:source.type==='sequence'
         ?createStructureInstance(sources[role],{x:p.x+536,y:p.y+(repeat?0:i*220),autoArrange:{owner},collapsed:true})
         :createInstance(sources[role],{autoArrangeOwner:owner,ui:{left:`${p.x+536}px`,top:`${p.y+(repeat?0:i*220)}px`}});
+      if(reuse){const old=model.getParent(source.id);if(old)model.disconnect(old.id);placeSource(source,position);}
       created.push(instance.id);
-      usedSources.add(source.id);
       if(sources[role].type==='sequence')created.push(...model.list('sequence').filter(e=>e.from.objectId===instance.id).map(e=>e.to.objectId));
       connect('sequence',output(branch.id,repeat?0:i),input(instance.id));
      });

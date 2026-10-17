@@ -122,19 +122,19 @@ test('Auto-Arrange fills one reusable four-chunk phrase, uses separate A/B copie
  const h=harness();try{
   const rhythm=h.toy('rhythm','percussion'),accomp=h.toy('accomp','accompaniment');h.connect('main-heartbeat',rhythm.id);h.connect('main-heartbeat',accomp.id);
   let created=0,failCopies=false,copyCalls=0;
-  const arranger=createAutoArranger({model:h.model,structures:h.structures,getPanels:()=>h.panels,createInstance:h.instance,createStructureInstance:(...args)=>{if(failCopies&&++copyCalls===2)throw new Error('test placement failure');return h.linked.create(...args);},
+  const arranger=createAutoArranger({model:h.model,structures:h.structures,getPanels:()=>h.panels,createInstance:h.instance,createStructureInstance:(...args)=>{if(failCopies&&++copyCalls===1)throw new Error('test placement failure');return h.linked.create(...args);},
    removeInstances:owner=>{h.linked.removeOwned(owner);for(const p of [...h.panels])if(p.dataset.autoArrangeOwner===owner)h.removeToy(p);},
    createSource:async role=>{assert.equal(role,'extraRhythm');return h.toy('extra','percussion');},
    createPhraseSource:async({heartbeatId})=>{created++;const master=h.phrase();h.structures.annotate(master.id,{autoArrangePhrase:{heartbeatId}});for(const p of h.panels.filter(p=>['a','b','c','d'].includes(p.id))){p.dataset.autoArrangeFill='melody-chunk';p.dataset.autoArrangeOrigin='filled';}return h.structures.get(master.id);}});
   const result=await arranger.arrange();h.sync();assert.equal(created,1);assert.equal(h.structures.durationOf(result.rootId),6144);
-  const copies=h.structures.list().filter(s=>s.masterStructureId);assert.equal(copies.length,2);assert.ok(copies.every(s=>h.owned(s.id).length===4));
+  const copies=h.structures.list().filter(s=>s.masterStructureId);assert.equal(copies.length,1);assert.ok(copies.every(s=>h.owned(s.id).length===4));
   for(let bar=0;bar<16;bar++){
-   const turns=h.adapter.turnsForLookahead(bar*384,bar*384+1),masters=turns.map(t=>h.getToy(t.toyId).dataset.masterToyId);
+   const turns=h.adapter.turnsForLookahead(bar*384,bar*384+1),masters=turns.map(t=>(h.getToy(t.toyId).dataset.masterToyId||t.toyId));
    assert.equal(turns.length,bar<4||bar>=12?1:bar<8?3:4);
    if(bar>=4&&bar<12)assert.ok(masters.includes(['a','b','c','d'][bar%4]));if(bar>=8&&bar<12)assert.ok(masters.includes('extra'));
   }
   h.getToy('c').__seqPattern.notes[0]='B4';const old=copies.map(s=>s.id),again=await arranger.arrange();h.sync();
-  assert.equal(created,1);assert.equal(again.sourceIds.melody,result.sourceIds.melody);assert.equal(h.getToy('c').__seqPattern.notes[0],'B4');assert.ok(old.every(id=>!h.structures.get(id)&&h.owned(id).length===0));assert.equal(h.structures.list().filter(s=>s.masterStructureId).length,2);assert.equal(h.panels.filter(p=>!p.dataset.masterToyId).length,7);
+  assert.equal(created,1);assert.equal(again.sourceIds.melody,result.sourceIds.melody);assert.equal(h.getToy('c').__seqPattern.notes[0],'B4');assert.ok(old.every(id=>!h.structures.get(id)&&h.owned(id).length===0));assert.equal(h.structures.list().filter(s=>s.masterStructureId).length,1);assert.equal(h.panels.filter(p=>!p.dataset.masterToyId).length,7);
   const saved={nodes:h.structures.list(),edges:h.model.list(),ids:h.panels.map(p=>p.id)};failCopies=true;
   await assert.rejects(arranger.arrange(),/test placement failure/);
   assert.deepEqual(h.structures.list(),saved.nodes);const byId=(a,b)=>a.id.localeCompare(b.id);assert.deepEqual(h.model.list().sort(byId),saved.edges.sort(byId));assert.deepEqual(h.panels.map(p=>p.id),saved.ids);assert.equal(h.getToy('c').__seqPattern.notes[0],'B4');

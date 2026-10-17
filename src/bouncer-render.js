@@ -174,6 +174,8 @@ export function createBouncerDraw(env){
       // Audio is scheduled ahead; release replay flashes only when AudioContext
       // reaches the event time so visuals align with the heard note and ball.
       const dueReplayVisuals = drainScheduledReplayVisuals?.(ensureAudioContext()?.currentTime ?? 0) || [];
+      for(let i=0;i<(blocks?.length||0);i++)if(blocks[i]?.__playbackFlash){blockFlashes[i]=1;delete blocks[i].__playbackFlash;}
+      for(let i=0;i<(edgeControllers?.length||0);i++)if(edgeControllers[i]?.__playbackFlash){edgeFlashes[i]=1;delete edgeControllers[i].__playbackFlash;}
       for (const event of dueReplayVisuals) {
         const isImpact = event.kind === 'impact';
         if (event.blockIndex != null && blocks?.[event.blockIndex]) {

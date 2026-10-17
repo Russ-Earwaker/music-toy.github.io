@@ -1,2 +1,7 @@
 /resources/music-lab-results
 /resources/perf-lab-results
+/resources/debug-output/polish-qa/profile*/
+/resources/debug-output/polish-qa/*.log
+/resources/debug-output/regression-qa/*.log
+/resources/debug-output/regression-qa/replay.json
+/resources/debug-output/regression-qa/phrase.json

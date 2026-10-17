@@ -289,6 +289,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     }
     discardPrepared(turn => turn.definitionId === definitionId(headId));
     currentTurns.delete(headId);
+    currentRootCycles.delete(headId);
     const old=runtime.getInstance(definitionId(headId));
     const instance = runtime.startSequence(definitionId(headId), transportState.currentTick,
       { quantize, retrigger: true, loop: old?.loop });
@@ -300,6 +301,15 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     return instance;
   }
 
+  function seekTransport(transportId, transportState) {
+    // Rebase every powered root in this domain through the existing retrigger.
+    // Descendant occurrence identities and committed lookahead are invalidated.
+    for (const headId of heads.keys()) {
+      if (runtime.getDefinition(definitionId(headId))?.transportId === transportId)
+        retrigger(headId, transportState, { quantize: false });
+    }
+  }
+
   function reset() {
     for (const toyId of managed) { cancelToy(toyId); deactivatePlaybackInstance(toyId); }
     discardPrepared(() => true);
@@ -307,7 +317,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     managed.clear(); auxiliaryDefinitions.clear(); terminatedToys.clear(); chainState.clear();currentRootCycles.clear();
     publishDebug(runtime.debugSnapshot());
   }
-  return { reset, sync, updateCurrent, turnsForLookahead, retrigger, terminateStructure, runtime,
+  return { reset, sync, updateCurrent, turnsForLookahead, retrigger, seekTransport, terminateStructure, runtime,
     getActiveToyIds: () => new Set([...chainState.values()].filter(id => id && !managed.has(id) && getPlaybackInstance(id)?.active !== false).concat([...currentTurns.values()].flatMap(turns => [...turns.values()].map(turn => turn.toyId))).filter(id => !connectionModel || connectionModel.isRooted(id))),
     getRootForToy: toyId => [...heads].find(([, members]) => members.includes(toyId))?.[0] || null,
     isManaged: toyId => managed.has(toyId), hasSequence: headId => heads.has(headId) };
