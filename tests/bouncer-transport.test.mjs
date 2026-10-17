@@ -129,13 +129,13 @@ test('production Bouncer bypasses physics during stable trajectory replay', () =
     'recording must anchor trajectory replay at its launch seam');
 });
 
-test('Bouncer learning and replay flashes share the quantized note-time queue', () => {
+test('Bouncer learning and replay flashes share admitted musical event ownership', () => {
   const main = readFileSync(new URL('../src/bouncer.main.js', import.meta.url), 'utf8');
   const step = readFileSync(new URL('../src/bouncer-step.js', import.meta.url), 'utf8');
-  assert.match(main, /queueImpactVisual\(event, scheduledT,/,
+  assert.match(main, /onPlaybackScheduled:admission=>admittedToyVisual\(panel,\{\.\.\.meta,eventId,fireTick\}/,
     'the physics-learning pass must flash at its quantized note time');
-  assert.match(main, /queueImpactVisual\(\{ \.\.\.event, fireTick: metadata\.eventTick/,
-    'stable replay must use the same AudioContext-time visual queue');
+  assert.match(main, /onPlaybackScheduled:admission=>admittedToyVisual\(panel,\{\.\.\.event,eventId,fireTick:metadata\.eventTick\}/,
+    'stable replay must use the same admitted tick-domain visual queue');
   assert.match(main, /S\.deferImpactVisuals = true/);
   assert.match(step, /!S\.deferImpactVisuals/,
     'physics collisions must not also emit an immediate, unquantized flash');

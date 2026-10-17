@@ -51,6 +51,22 @@ test('node collection is synchronous and restores its previous owner even when c
   assert.deepEqual(collected, [node]);
 });
 
+test('playback visualization receives the admitted audio onset and resolved pitch once, never a cancelled occurrence',()=>{
+  const ctx=ensureAudioContext(), admitted=[];
+  const instance=createPlaybackInstanceForStructureTurn({id:'visual-admission',toyId:'visual-source',startTick:0,durationTicks:384,
+    transportId:'main-heartbeat',generation:0,context:{transposeSemitones:7}});
+  const occurrence={occurrenceId:instance.occurrenceId,generation:instance.generation,context:instance.context};
+  const initial=ctx.nodes.length;
+  withPlaybackOccurrence(occurrence,()=>triggerInstrument('tone','C4',ctx.currentTime-1,'visual-source',{onPlaybackScheduled:event=>admitted.push(event)}));
+  assert.equal(admitted.length,1);
+  assert.equal(admitted[0].when,ctx.nodes[initial].startTime);
+  assert.equal(admitted[0].note,'G4');
+  assert.equal(admitted[0].occurrence.occurrenceId,instance.occurrenceId);
+  invalidatePlaybackOccurrence(instance.occurrenceId);
+  withPlaybackOccurrence(occurrence,()=>triggerInstrument('tone','C4',ctx.currentTime,'visual-source',{onPlaybackScheduled:event=>admitted.push(event)}));
+  assert.equal(admitted.length,1);assert.equal(ctx.nodes.length,initial+1);
+});
+
 test('final audio boundary carries independent contexts and cancels only the removed same-source occurrence', () => {
   const ctx = ensureAudioContext(), notes = [];
   globalThis.CustomEvent = class { constructor(type, options) { this.type = type; this.detail = options.detail; } };

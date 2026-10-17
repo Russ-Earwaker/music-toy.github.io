@@ -1,5 +1,5 @@
 // src/ripplesynth-waves.js
-export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSeconds, scale=1, surfaceWidth=300, surfaceHeight=300){
+export function drawWaves(ctx, originX, originY, now, speed, ripples, NUM_STEPS, stepSeconds, scale=1, surfaceWidth=300, surfaceHeight=300){
   if (!ripples) return;
   ctx.save();
   ctx.strokeStyle = '#ffffff';
@@ -7,7 +7,8 @@ export function drawWaves(ctx, cx, cy, now, speed, ripples, NUM_STEPS, stepSecon
   const cssH = surfaceHeight;
   for (let i = ripples.length - 1; i >= 0; i--) {
     const rp = ripples[i];
-    const r = Math.max(0, (now - (rp.startAT ?? rp.startTime)) * speed);
+    const cx=rp.x??originX,cy=rp.y??originY;
+    const r = Number.isFinite(rp.transportRadius) ? rp.transportRadius : Math.max(0, (now - (rp.startAT ?? rp.startTime)) * speed);
 
     const cornerMax = Math.max(
       Math.hypot(cx - 0,        cy - 0),

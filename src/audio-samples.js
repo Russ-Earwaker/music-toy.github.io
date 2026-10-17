@@ -477,10 +477,13 @@ export function instrumentMusicalRole(instrument, toyType, musicalRole, options 
 export function triggerInstrument(instrument, noteName='C4', when, toyId, options = {}, velocity = 1.0) {
   const occurrence = options?.playbackOccurrence || getCurrentPlaybackOccurrence();
   if (!isPlaybackOccurrenceValid(occurrence)) return false;
-  return withPlaybackOccurrence(occurrence, () => triggerInstrumentInOccurrence(instrument, noteName, when, toyId,
-    { ...options, playbackOccurrence: occurrence, context: occurrence?.context || options?.context }, velocity));
+  const admission = {};
+  const result = withPlaybackOccurrence(occurrence, () => triggerInstrumentInOccurrence(instrument, noteName, when, toyId,
+    { ...options, playbackOccurrence: occurrence, context: occurrence?.context || options?.context }, velocity, admission));
+  if (result !== false) options.onPlaybackScheduled?.(admission);
+  return result;
 }
-function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, options = {}, velocity = 1.0){
+function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, options = {}, velocity = 1.0, admission = {}){
   const ctx = ensureAudioContext();
   const id  = normId(instrument || 'TONE');
   const sourceNote = resolveOctaveForToy(noteName, toyId, options, id);
@@ -497,6 +500,7 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
   if (pitchShift && typeof options.playbackRate === 'number')
     options = { ...options, playbackRate: options.playbackRate * Math.pow(2, pitchShift / 12) };
   const t   = safeStartTime(ctx, when);
+  Object.assign(admission, { when: t, note: resolvedNote, occurrence });
   const vel = Math.max(0.001, Math.min(1.0, velocity));
   try{
     if (toyId && toyId !== 'master') {

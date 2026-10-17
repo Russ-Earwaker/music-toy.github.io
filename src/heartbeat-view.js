@@ -34,7 +34,10 @@ export function installHeartbeatView({ getWorld, getMainPoint, getSpawnPoint = g
         }
         if (record.id !== MAIN_TRANSPORT_ID) {
           const controls = document.createElement('div'), actions = document.createElement('div'); el.append(controls,actions);
-          const play = document.createElement('button'); play.className = 'heartbeat-play'; controls.append(play);
+          const transportControls = document.createElement('span');
+          transportControls.style.cssText = 'display:inline-flex;flex-direction:column;vertical-align:middle';
+          controls.append(transportControls);
+          const play = document.createElement('button'); play.className = 'heartbeat-play'; transportControls.append(play);
           play.addEventListener('click', () => {
             heartbeatModel.select(record.id);
             const transport = heartbeatModel.transport(record.id);
@@ -47,7 +50,7 @@ export function installHeartbeatView({ getWorld, getMainPoint, getSpawnPoint = g
           bpm.addEventListener('input', updateTempo);
           bpm.addEventListener('change', updateTempo);
           const reset = document.createElement('button'); reset.textContent = '↤ Start'; reset.title = 'Return this Heartbeat to Start';
-          reset.addEventListener('click', () => { heartbeatModel.transport(record.id).returnToStart(); onChange(); }); actions.append(reset);
+          reset.addEventListener('click', () => { heartbeatModel.transport(record.id).returnToStart(); onChange(); }); transportControls.append(reset);
           const toy = document.createElement('button'); toy.textContent = '+ Toy'; toy.title = `Create a toy on ${record.name}`;
           toy.addEventListener('click', () => onCreateToy(record.id)); actions.append(toy);
           const remove = document.createElement('button'); remove.className = 'heartbeat-delete'; remove.textContent = '×';

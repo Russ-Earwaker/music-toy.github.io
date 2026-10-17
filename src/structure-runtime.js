@@ -222,6 +222,13 @@ export function createStructureRuntime() {
     if (!definition) throw new Error(`Unknown Sequence: ${id}`);
     const old = instances.get(definition.id);
     if (old?.active && !retrigger) return old;
+    // A seek/retrigger replaces occurrence state, retaining authored definitions.
+    if (retrigger && old) for (const [childId, child] of instances) {
+      if (child.parentInstanceId === old.id) {
+        child.active = false; child.generation++;
+        instances.delete(childId); timelines.delete(childId);
+      }
+    }
     const startTick = quantize ? nextBeatTick(requestedTick, { strict: true }) : tick(requestedTick);
     const instance = { id: `structure:${runtimeId}:${serial++}`, definitionId: definition.id,
       transportId: definition.transportId, startTick, phaseOriginTick: loop ? HEARTBEAT_PHASE_ORIGIN_TICK : startTick, active: true, context: normalizeContext(context),loop,

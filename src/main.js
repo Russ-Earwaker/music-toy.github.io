@@ -1,3 +1,5 @@
+import { drawGridPlaybackVisuals } from './drawgrid/dg-playback-visuals.js';
+import { playbackVisualEvents } from './playback-visual-events.js';
 import { createLogicalToyMetricsReader } from './logical-toy-anchor.js';
 import { CONNECTION_FLASH_DURATION, STRUCTURE_FLASH_DURATION, structureFlashStrength } from './graph-visuals.js';
 import { getActivationConnections } from './graph-transition-feedback.js';
@@ -7,7 +9,7 @@ import { installHeartbeatView } from './heartbeat-view.js';
 import { getPanelTransport } from './panel-transport.js';
 import {createToyChordIndicator} from './toy-chord-indicator.js';
 import {initializeExtraRhythm} from './auto-arrange-extra-rhythm.js';
-import {setToyVolume} from './audio-core.js';
+import {setToyVolume,setToyMuted,getToyVolumeRaw,isToyMuted} from './audio-core.js';
 import {syncVolumeUI} from './baseToy/volume-ui.js';
 const updateToyChordIndicator = createToyChordIndicator();
 let g_creationHeartbeatId = null;
@@ -73,7 +75,7 @@ import {createStructureInstanceController} from './structure-instances.js';
 import {createLinkedToyViewController} from './linked-toy-views.js';
 import {createLinkedSequenceController} from './linked-sequences.js';
 import {confirmFinalLinkedCopy} from './linked-copy-delete.js';
-import {splitDrawgridPhrase} from './drawgrid/dg-phrase-chunks.js';
+import {splitDrawgridPhrase,phraseChunkWithSeedSettings} from './drawgrid/dg-phrase-chunks.js';
 import {installAutoArrangeUI} from './auto-arrange-ui.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
@@ -7103,6 +7105,7 @@ const g_sequenceChains = createChainSequenceAdapter({
     cancelScheduledToySources(audioId);
     if (audioId !== toyId) cancelScheduledToySources(toyId);
     bumpToyAudioGen(audioId, 'sequence-replace');
+    if (audioId !== toyId) bumpToyAudioGen(toyId, 'sequence-replace');
     g_sequencerScheduler?.clearToy(toyId);
   },
   onRootCycle: ({connection,startTick,activationTick,transportId}) => {
@@ -7122,6 +7125,7 @@ const g_sequenceChains = createChainSequenceAdapter({
     cancelScheduledToySources(audioId);
     if (audioId !== toyId) cancelScheduledToySources(toyId);
     bumpToyAudioGen(audioId, 'sequence-release');
+    if (audioId !== toyId) bumpToyAudioGen(toyId, 'sequence-release');
     g_sequencerScheduler?.clearToy(toyId);
   },
   publishDebug: snapshot => { globalThis.__STRUCTURE_DEBUG = snapshot; },
@@ -7160,15 +7164,27 @@ const g_autoArranger=createAutoArranger({model:connectionModel,structures:struct
   createStructureInstance:g_structureInstances.create,
   removeInstances:owner=>{g_structureInstances.removeOwned(owner);g_toyInstances.removeOwned(owner);},
   createSource:createArrangementSource,
-  createPhraseSource:async({heartbeatId})=>{
-    const first=await createArrangementSource('melody',{heartbeatId});
+  placeSource:(source,position)=>{
+    if(source.type==='sequence')structureToyModel.move(source.id,position.x,position.y,{manual:false});
+    else {source.style.left=position.x+'px';source.style.top=position.y+'px';}
+  },
+  createPhraseSource:async({heartbeatId,firstChunk})=>{
+    const first=firstChunk || await createArrangementSource('melody',{heartbeatId});
+    const generated=firstChunk ? await createArrangementSource('melody',{heartbeatId}) : first;
     first.dataset.autoArrangeFill='melody-chunk';first.dataset.autoArrangeFillHeartbeat=heartbeatId;
-    const states=splitDrawgridPhrase(first.__drawToy.getState()),chunks=[first];
+    const seedSettings=captureLinkedToyState(first);
+    const states=splitDrawgridPhrase(generated.__drawToy.getState()),chunks=[first];
+    if (firstChunk) destroyToyPanel(generated);
     for(let i=1;i<4;i++){
       const chunk=await createArrangementSource('melody',{heartbeatId,phraseChunk:true});
       chunk.dataset.autoArrangeFill='melody-chunk';chunk.dataset.autoArrangeFillHeartbeat=heartbeatId;chunks.push(chunk);
     }
-    for(let i=0;i<4;i++)await chunks[i].__drawToy.setState(states[i]);
+    for(let i=firstChunk?1:0;i<4;i++){
+      await applyLinkedToyState(chunks[i],phraseChunkWithSeedSettings(states[i],seedSettings));
+      const id=chunks[i].__audioToyId||chunks[i].id,seedId=first.__audioToyId||first.id;
+      const volume=getToyVolumeRaw(seedId),muted=isToyMuted(seedId);
+      setToyVolume(id,volume);setToyMuted(id,muted);syncVolumeUI(chunks[i],{volume,muted});
+    }
     const at=g_graphPlacement.placeStructure({x:parseFloat(first.style.left)-400,y:parseFloat(first.style.top),width:224,height:304},null);
     const phrase=structureToyModel.createStandalone('sequence',{...at,artOwnerId:arrangementScope(),name:'Melody Phrase'});
     connectionModel.transaction(()=>structureToyModel.suspend(()=>{
@@ -7210,7 +7226,7 @@ installAutoArrangeUI({
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     const nodes=result.created.map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
     const minX=Math.min(...nodes.map(r=>r.x)),minY=Math.min(...nodes.map(r=>r.y)),maxX=Math.max(...nodes.map(r=>r.x+r.width)),maxY=Math.max(...nodes.map(r=>r.y+r.height));
-    const scale=Math.max(.2,Math.min(.8,(window.innerWidth-140)/(maxX-minX+240),(window.innerHeight-180)/(maxY-minY+160)));
+    const scale=Math.max(.15,Math.min(.8,(window.innerWidth-140)/(maxX-minX+240),(window.innerHeight-180)/(maxY-minY+160)));
     window.centerBoardOnWorldPoint?.((minX+maxX)/2,(minY+maxY)/2,scale,{duration:500});
   },
 });
@@ -7291,31 +7307,56 @@ try {
       const transport = transportRegistry.get(id); if (!transport) return;
       const tick = Number(detail.positionTick ?? detail.toTick ?? detail.tick) || 0;
       const scheduler = ensureSequencerScheduler();
+      // Deliver already-sounding notes before invalidating future lookahead.
+      // A seek has already rebased the clock, so use its captured outgoing tick.
+      if (['pause', 'seek', 'tempo'].includes(detail.type))
+        flushDrawGridPlaybackVisuals({id,tick:detail.type==='seek'?Number(detail.fromTick)||0:tick});
+      if (['pause', 'seek', 'tempo'].includes(detail.type)) drawGridPlaybackVisuals.clear(id);
+      if (['pause', 'seek', 'tempo'].includes(detail.type)) playbackVisualEvents.clear(id);
       for (const panel of getSequencedToys()) {
         if (connectionModel.getTransportId(panel.id) !== id) continue;
         if (['pause', 'seek', 'tempo'].includes(detail.type)) {
           const audioId = panel.dataset.audiotoyid || panel.__audioToyId || panel.id;
           cancelScheduledToySources(audioId); bumpToyAudioGen(audioId, 'transport-' + detail.type);
+          if (audioId !== panel.id) {
+            cancelScheduledToySources(panel.id); bumpToyAudioGen(panel.id, 'transport-' + detail.type);
+          }
         }
         if (detail.type === 'play') {
-          scheduler.resetToyTimeline(panel.id, tick, {includeBoundary:detail.fromState !== 'paused'});
+          scheduler.resetToyTimeline(panel.id, tick, {includeBoundary:panel.__transportSeekPending || detail.fromState !== 'paused'});
+          delete panel.__transportSeekPending;
           panel.__forceSchedulerReset = false;
         } else {
           scheduler.clearToy(panel.id);
+          if (detail.type === 'seek') {
+            panel.__transportSeekPending = transport.state !== 'playing';
+            delete panel.__chainStartAt;
+            scheduler.resetToyTimeline(panel.id, tick);
+          }
           panel.__forceSchedulerReset = true;
         }
       }
       if (detail.type === 'seek') {
+        g_sequenceChains.seekTransport(id, transport.getState());
         for (const head of connectionModel.list('transport').filter(c => connectionModel.getObject(c.from.objectId)?.transportId === id)) {
-          if (g_sequenceChains.hasSequence(head.to.objectId)) g_sequenceChains.retrigger(head.to.objectId, transport.getState(), {quantize:false});
-          else {
+          if (!g_sequenceChains.hasSequence(head.to.objectId)) {
             const instance = getPlaybackInstance(head.to.objectId);
             if (instance) { instance.startTick = tick; instance.scheduledUntilTick = tick; instance.generation++; }
           }
         }
       }
       g_sequenceChains.updateCurrent(tick, id);
+      if (detail.type === 'seek') {
+        for (const panel of getSequencedToys()) if (connectionModel.getTransportId(panel.id) === id) {
+          scheduler.resetToyTimeline(panel.id, tick);
+          panel.dispatchEvent(new CustomEvent('toy:transport-seek', { detail: { tick } }));
+        }
+        for (const [key, pulse] of g_pulsingConnectors) {
+          if (connectionModel.getTransportId(pulse.toId) === id) g_pulsingConnectors.delete(key);
+        }
+      }
       g_connections.projectActiveState();
+      if (detail.type === 'seek' && transport.state === 'playing') tickAudioScheduler();
       window.Persistence?.markDirty?.();
     });
   }
@@ -7362,9 +7403,29 @@ function tickAudioScheduler() {
     window.__mtActiveToyIds = [...allActive]; window.__mtNowAt = nowAt;
     window.__mtSchedTick = (window.__mtSchedTick | 0) + 1;
     window.__mtChainState = [...g_chainState];
-    for (const group of groups) scheduler.tick(group);
+    for (const group of groups) {
+      const result=scheduler.tick(group);
+      if(window.__PLAYBACK_EVENT_DEBUG)for(const event of result.events)
+        window.dispatchEvent(new CustomEvent('playback:scheduled',{detail:{...event,when:group.tickToAudioTime(event.eventTick)}}));
+    }
+    flushDrawGridPlaybackVisuals();
     if (isRunning()) BeatSwarmMode?.scheduleAudioLookahead?.({nowAt, lookaheadSec:g_noteSchedCfg?.lookaheadSec || 0.5});
   } finally { g_audioTickBusy = false; }
+}
+
+function flushDrawGridPlaybackVisuals(outgoing = null) {
+  const getTransport=id=>outgoing?.id===id?{state:'playing',currentTick:outgoing.tick}:transportRegistry.get(id);
+  playbackVisualEvents.flush(getTransport,event=>{
+    const panel=document.getElementById(event.toyId);
+    if(!panel)return;
+    panel.__applyPlaybackVisual?.(event);
+    panel.dispatchEvent(new CustomEvent('toy:playback-visual',{detail:event}));
+  });
+  drawGridPlaybackVisuals.flush(getTransport, event => {
+    const panel = document.getElementById(event.toyId);
+    panel?.dispatchEvent(new CustomEvent('drawgrid:playcol', { detail: { ...event, rows: [event.row] } }));
+    panel?.dispatchEvent(new CustomEvent('drawgrid:note-fired', { detail: event }));
+  });
 }
 
 function startAudioScheduler() {
@@ -7600,6 +7661,7 @@ function scheduler(){
     const __cpuBurnMs = __qlab ? (Number(__qlab.cpuBurnMs) || 0) : 0;
 
     const __now0 = performance.now();
+    flushDrawGridPlaybackVisuals();
 
     // Throttle scheduler execution to emulate low FPS (logic + render).
     if (__targetFps > 0) {

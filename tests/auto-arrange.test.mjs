@@ -53,8 +53,8 @@ test('three supplied roles build a real finite 16-bar graph with B percussion li
   assert.ok(bars.slice(8,12).every(ids=>JSON.stringify(ids)==='["accompaniment","filled-extraRhythm","melody","rhythm"]'));
   assert.ok(bars.slice(12).every(ids=>JSON.stringify(ids)==='["accompaniment"]'));
   assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId&&!p.dataset.autoArrangeFill).map(p=>({notes:p.sourceNotes,dataset:{toy:p.dataset.toy,musicalRole:p.dataset.musicalRole,steps:p.dataset.steps}})),before);
-  assert.equal(h.model.list('sequence').filter(e=>h.panels.find(p=>p.id===e.to.objectId)?.dataset.masterToyId).length,9);
-  assert.ok(h.panels.filter(p=>!p.dataset.masterToyId).every(p=>h.model.getParent(p.id)===null));assert.equal(h.panels.filter(p=>p.dataset.masterToyId).length,9);
+  assert.equal(h.model.list('sequence').filter(e=>h.panels.find(p=>p.id===e.to.objectId)?.dataset.masterToyId).length,5);
+  assert.ok(h.panels.filter(p=>!p.dataset.masterToyId).every(p=>h.model.getParent(p.id)?.kind==='sequence'));assert.equal(h.panels.filter(p=>p.dataset.masterToyId).length,5);
   for(const [i,a] of h.structures.list().entries())for(const b of h.structures.list().slice(i+1))assert.equal(rectanglesOverlap({...a,width:structureToyWidth(a),height:structureToyHeight(a)},{...b,width:structureToyWidth(b),height:structureToyHeight(b)}),false);
  }finally{h.close();}
 });
@@ -78,7 +78,7 @@ test('16-bar chord display follows each Instance section including reordered B a
    for(const panel of h.panels){
     const instance=getPlaybackInstance(panel.id),role=panel.dataset.musicalRole;
     const displayed=activeToyChord({instance,currentTick:tick,playing:true,role});
-    if(!panel.dataset.masterToyId || role==='percussion' || !instance?.active)assert.equal(displayed,null);
+    if(role==='percussion' || !instance?.active)assert.equal(displayed,null);
     else assert.equal(displayed,expected[bar%16],`${panel.id} at bar ${bar}`);
    }
   }
@@ -92,8 +92,8 @@ test('B Together keeps normal melody register, extra percussion, harmony and Hea
   assert.equal(a.type,'together');assert.equal(b.type,'together');assert.ok(h.structures.list().every(n=>!['timeline','repeat','transpose'].includes(n.type)));
   assert.equal(h.adapter.runtime.getInstance(h.structures.get(result.rootId).definitionId).phaseOriginTick,0);
   const bInstances=h.adapter.turnsForLookahead(3072,3073).map(t=>h.panels.find(p=>p.id===t.toyId));
-  assert.deepEqual(bInstances.map(p=>p.dataset.masterToyId).sort(),['accompaniment','filled-extraRhythm','melody','rhythm']);
-  assert.ok(bInstances.every(p=>p.sourceNotes===h.panels.find(m=>m.id===p.dataset.masterToyId).sourceNotes));
+  assert.deepEqual(bInstances.map(p=>panelsMaster(h,p.id)).sort(),['accompaniment','filled-extraRhythm','melody','rhythm']);
+  assert.ok(bInstances.every(p=>p.sourceNotes===h.panels.find(m=>m.id===panelsMaster(h,p.id)).sourceNotes));
   for(const cycle of [0,6144])for(let bar=0;bar<4;bar++){
    const tick=cycle+3072+bar*384;h.adapter.updateCurrent(tick);
    const active=h.adapter.turnsForLookahead(tick,tick+1);
@@ -133,7 +133,7 @@ test('new four-bar fill Melody is stored once, supports full A/B density and is 
    const tick=bar*384,turns=h.adapter.turnsForLookahead(tick,tick+1),melody=turns.find(t=>panelsMaster(h,t.toyId)===master.id);
    assert.equal(turns.length,bar<8?3:4);assert.equal(melody.playbackInstance.loopLengthTicks,1536);assert.equal(melody.playbackInstance.sourcePhaseOriginTick,0);
   }
-  const uses=h.panels.filter(p=>p.dataset.masterToyId===master.id);assert.equal(uses.length,2);assert.ok(uses.every(p=>p.sourceNotes===master.sourceNotes));
+  const uses=h.panels.filter(p=>p.dataset.masterToyId===master.id);assert.equal(uses.length,1);assert.ok(uses.every(p=>p.sourceNotes===master.sourceNotes));
   master.sourceNotes[0]='B4';const edited=structuredClone(master.sourceNotes);await h.arranger.arrange();assert.deepEqual(master.sourceNotes,edited);assert.equal(h.generated.filter(r=>r==='melody').length,1);
  }finally{h.close();}
 });
@@ -151,7 +151,7 @@ test('one editable extra rhythm Master is B-only, percussion, aligned, and reuse
   const edited=structuredClone({steps:extra.__gridState.steps,dataset:extra.dataset}),second=await h.arranger.arrange();
   assert.equal(second.sourceIds.extraRhythm,extra.id);assert.deepEqual({steps:extra.__gridState.steps,dataset:extra.dataset},edited);
   assert.equal(h.panels.filter(p=>!p.dataset.masterToyId&&p.dataset.autoArrangeFill==='extra-rhythm').length,1);
-  assert.equal(h.panels.filter(p=>p.dataset.masterToyId===extra.id).length,1);assert.equal(h.generated.filter(r=>r==='extraRhythm').length,1);
+  assert.equal(h.panels.filter(p=>p.dataset.masterToyId===extra.id).length,0);assert.equal(h.generated.filter(r=>r==='extraRhythm').length,1);
   assert.equal(selectArrangementSources(h.panels).rhythm.id,main.id);
  }finally{h.close();}
 });
@@ -195,7 +195,7 @@ test('Arrange Again replaces legacy owned B Timeline/Repeats while preserving Ma
   const oldNodes=h.structures.list().filter(n=>n.autoArrange?.owner===owner).map(n=>n.id),oldInstances=h.panels.filter(p=>p.dataset.autoArrangeOwner===owner).map(p=>p.id),userEdges=h.model.list().filter(e=>e.from.objectId===unrelated.id||e.to.objectId===unrelated.id);
   await h.arranger.arrange();h.sync();
   assert.ok(oldNodes.every(id=>!h.structures.get(id)));assert.ok(oldInstances.every(id=>!h.panels.some(p=>p.id===id)));
-  assert.equal(h.structures.list().filter(n=>n.autoArrange).length,7);assert.equal(h.panels.filter(p=>p.dataset.masterToyId).length,9);assert.ok(!h.structures.list().some(n=>n.type==='transpose'));
+  assert.equal(h.structures.list().filter(n=>n.autoArrange).length,7);assert.equal(h.panels.filter(p=>p.dataset.masterToyId).length,5);assert.ok(!h.structures.list().some(n=>n.type==='transpose'));
   assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>({id:p.id,notes:p.sourceNotes})),savedMasters);
   assert.deepEqual(h.model.list().filter(e=>e.from.objectId===unrelated.id||e.to.objectId===unrelated.id),userEdges);
   assert.equal(h.structures.get(unrelated.id).entries[0].offsetTick,192);

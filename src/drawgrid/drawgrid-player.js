@@ -1,12 +1,12 @@
+import { drawGridPlaybackVisuals } from './dg-playback-visuals.js';
 import {getCurrentPlaybackOccurrence} from '../playback-context.js';
 import {drawgridLoopLengthTicks} from './dg-pattern-length.js';
 import { panelTransportBindings } from '../panel-transport.js';
 // src/drawgrid-player.js
 import { triggerInstrument } from '../audio-samples.js';
-import { gateTriggerForToy, getToyAudioGen, bumpToyAudioGen } from '../toy-audio.js';
+import { gateTriggerForToy, bumpToyAudioGen } from '../toy-audio.js';
 import { buildPalette, midiToName } from '../note-helpers.js';
-import { resumeAudioContextIfNeeded, isRunning as isTransportRunning, ensureAudioContext, getTransportState, TICKS_PER_BAR } from '../audio-core.js';
-import { requestPanelPulse } from '../pulse-border.js';
+import { resumeAudioContextIfNeeded, ensureAudioContext } from '../audio-core.js';
 import {
   activatePlaybackInstance,
   deactivatePlaybackInstance,
@@ -36,10 +36,6 @@ function getAudioToyId(panel) {
 
 function isNoteSchedulerEnabled() {
   try { return !!window.__NOTE_SCHEDULER_ENABLED; } catch { return false; }
-}
-
-function markPlayingColumn(panel, colIndex){
-  try{ panel.dispatchEvent(new CustomEvent('drawgrid:playcol', { detail:{ col: colIndex }, bubbles:true }));}catch{}
 }
 
 // Default drawgrid-player debug OFF (enable in DevTools: window.__DRAWGRID_PLAYER_DEBUG = true)
@@ -108,7 +104,22 @@ export function connectDrawGridToPlayer(panel) {
   };
 
   // The gated trigger respects the toy's volume/mute settings.
-  const playNote = gateTriggerForToy(panel.__audioToyId, triggerInstrument);
+  const playNote = gateTriggerForToy(panel.__audioToyId, (inst, note, when, audioId, options) => {
+    return triggerInstrument(inst, note, when, audioId, { ...options,
+      onPlaybackScheduled(admission) {
+        if (options?.source !== 'drawgrid:sequencer') return;
+        const occurrence = admission.occurrence;
+        const owner = occurrence?.instanceToyId || panel.id;
+        const transport = panelTransportBindings(document.getElementById(owner) || panel);
+        drawGridPlaybackVisuals.enqueue({
+          toyId: owner, transportId: occurrence?.transportId || getPlaybackInstance(owner)?.transportId,
+          eventTick: occurrence?.eventTick ?? transport.audioTimeToTick(admission.when),
+          dueTick: transport.audioTimeToTick(admission.when),
+          occurrence, col: options.col, row: options.row, when: admission.when, note: admission.note,
+        });
+      },
+    });
+  });
 
   const activateAtTransport = ({ retrigger = false } = {}) => {
     const transport = getTransportState();
@@ -142,118 +153,6 @@ export function connectDrawGridToPlayer(panel) {
     deactivatePlaybackInstance(panel.id);
     removePlaybackInstance(panel.id);
   }, { once: true });
-
-  // Helper to trigger visual effects when scheduler fires a note.
-  // Calls playColumn with audio:false to avoid double-playing.
-  function triggerEffectsForScheduledColumn(col, when, snapshot) {
-    try {
-      if (typeof playColumn === 'function') {
-        playColumn(col, when, { visual: true, audio: false, fromScheduler: true, snapshot });
-        if (window.__DRAWGRID_PLAYER_DEBUG) console.log('[drawgrid effects]', { col, when });
-        return true;
-      }
-    } catch {}
-    return false;
-  }
-
-  // Schedule drawgrid effects (flash/particles/etc) at the actual play time.
-  function scheduleDrawgridEffects(panel, col, when) {
-    try {
-      const ctx = ensureAudioContext?.() || null;
-      const now = ctx?.currentTime;
-      if (!Number.isFinite(now) || !Number.isFinite(when)) {
-        // Fallback: fire immediately
-        markPlayingColumn(panel, col);
-        requestPanelPulse(panel, { rearm: true });
-        return;
-      }
-
-      // Avoid duplicate effect triggers for the same (col, when)
-      panel.__dgFxKeys = panel.__dgFxKeys || new Set();
-      panel.__dgFxTimeouts = panel.__dgFxTimeouts || new Set();
-      const k = `${col}@${Math.round(when * 1000)}`;
-      if (panel.__dgFxKeys.has(k)) return;
-      panel.__dgFxKeys.add(k);
-
-      const delayMs = Math.max(0, (when - now) * 1000 - 2);
-
-      // Capture generation at schedule time. Pause/delete bumps gen, invalidating these.
-      const genAtSchedule = getToyAudioGen(panel.__audioToyId);
-
-      const tid = setTimeout(() => {
-        try {
-          // If paused/stopped OR the toy has been invalidated (pause/delete/chain switch), do nothing.
-          if (!isTransportRunning()) {
-            try {
-              if (window.__SCHED_MISMATCH_DEBUG) {
-                const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
-                const nowDbg = ensureAudioContext()?.currentTime ?? 0;
-                if (Number.isFinite(lastResumeAt) && (nowDbg - lastResumeAt) < 0.5) {
-                  console.log('[drawgrid-player][resume-fx-skip] ' + JSON.stringify({ panelId: panel?.id, col, when, reason: 'transport', now: nowDbg }));
-                }
-              }
-            } catch {}
-            return;
-          }
-          if (getToyAudioGen(panel.__audioToyId) !== genAtSchedule) {
-            try {
-              if (window.__SCHED_MISMATCH_DEBUG) {
-                const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
-                const nowDbg = ensureAudioContext()?.currentTime ?? 0;
-                if (Number.isFinite(lastResumeAt) && (nowDbg - lastResumeAt) < 0.5) {
-                  console.log('[drawgrid-player][resume-fx-skip] ' + JSON.stringify({ panelId: panel?.id, col, when, reason: 'gen-mismatch', now: nowDbg }));
-                }
-              }
-            } catch {}
-            return;
-          }
-          if (!document.body.contains(panel)) {
-            try {
-              if (window.__SCHED_MISMATCH_DEBUG) {
-                const lastResumeAt = Number(window.__NOTE_SCHED_LAST_RESUME_AT);
-                const nowDbg = ensureAudioContext()?.currentTime ?? 0;
-                if (Number.isFinite(lastResumeAt) && (nowDbg - lastResumeAt) < 0.5) {
-                  console.log('[drawgrid-player][resume-fx-skip] ' + JSON.stringify({ panelId: panel?.id, col, when, reason: 'disconnected', now: nowDbg }));
-                }
-              }
-            } catch {}
-            return;
-          }
-
-          markPlayingColumn(panel, col);
-          requestPanelPulse(panel, { rearm: true });
-        } catch {}
-        // let keys expire
-        try { setTimeout(() => panel.__dgFxKeys?.delete?.(k), 1000); } catch {}
-        try { panel.__dgFxTimeouts?.delete?.(tid); } catch {}
-      }, delayMs);
-      try { panel.__dgFxTimeouts.add(tid); } catch {}
-    } catch {
-      // fallback immediate
-      try {
-        markPlayingColumn(panel, col);
-        requestPanelPulse(panel, { rearm: true });
-      } catch {}
-    }
-  }
-
-  // Best-effort cleanup: if transport pauses, clear pending fx timeouts so nothing "ticks" visually.
-  // (Even without this, the gen gate above prevents post-pause triggers.)
-  try {
-    panel.__dgOnTransportPause = panel.__dgOnTransportPause || ((event) => {
-      if (event.detail?.type !== 'pause' || event.detail.transportId !== getPlaybackInstance(panel.id)?.transportId) return;
-      try {
-        if (panel.__dgFxTimeouts) {
-          for (const tid of Array.from(panel.__dgFxTimeouts)) {
-            try { clearTimeout(tid); } catch {}
-          }
-          panel.__dgFxTimeouts.clear();
-        }
-        if (panel.__dgFxKeys) panel.__dgFxKeys.clear();
-      } catch {}
-    });
-    document.addEventListener('transport:change', panel.__dgOnTransportPause);
-  } catch {}
 
   panel.addEventListener('drawgrid:update', (e) => {
     const map = e?.detail?.map || (e?.detail && e.detail.nodes ? { nodes: e.detail.nodes } : null);
@@ -350,16 +249,8 @@ export function connectDrawGridToPlayer(panel) {
     originalSeqTouch?.(reason);
   };
 
-  panel.__sequencerStep = (col) => {
-    // Visual-only. Audio is handled exclusively by __sequencerSchedule when scheduler is enabled.
-    if (isNoteSchedulerEnabled()) {
-      // Keep whatever visuals you have for the step (border pulse etc).
-      // If playColumn exists and is safe for visuals, call it with audio=false.
-      try { playColumn(col, undefined, { visual: true, audio: false }); } catch {}
-      return;
-    }
-    // Legacy path: no scheduler -> step drives audio
-    playColumn(col, undefined, { visual: true, audio: true });
+  panel.__sequencerStep = col => {
+    if (!isNoteSchedulerEnabled()) panel.__sequencerSchedule(col, ensureAudioContext().currentTime);
   };
 
   panel.__sequencerSchedule = (col, when) => {
@@ -416,7 +307,7 @@ export function connectDrawGridToPlayer(panel) {
     }
 
     // Schedule drawgrid effects (flash/particles/etc) at the actual play time.
-    if(!getCurrentPlaybackOccurrence()?.instanceToyId)scheduleDrawgridEffects(panel, col, when);
+
 
     // Authoritative guard: NEVER schedule audio if this toy isn't in the active set.
     // (Chain DOM flags can be stale during transitions.)
@@ -504,25 +395,13 @@ export function connectDrawGridToPlayer(panel) {
     } catch {}
 
     // Use snapshot data only (deterministic).
-    let columnTriggered = false;
+
     const disabledSet = new Set(c.disabled || []);
 
     let loggedResumePlay = false;
     for (const row of c.nodes) {
       if (typeof row !== 'number' || Number.isNaN(row)) continue;
       if (disabledSet.has(row)) continue;
-
-      // Emit a custom event for systems that listen for note-fired events.
-      try {
-        panel.dispatchEvent(new CustomEvent('drawgrid:note-fired', {
-          detail: { col, row, when, toyId: panel.__audioToyId || panel.id }
-        }));
-      } catch {}
-
-      if (!columnTriggered) {
-        requestPanelPulse(panel, { rearm: true });
-        columnTriggered = true;
-      }
 
       const midiNote = notePalette[row];
       if (midiNote === undefined) continue;

@@ -23,6 +23,7 @@ export function createLinkedSequenceController({model,structures,getToy,getPanel
   return structures.get(s.id);
  }
  function syncView(view,canonical){
+  if (canonical.autoArrangePhrase && !view.autoArrangePhrase) structures.annotate(view.id,{autoArrangePhrase:canonical.autoArrangePhrase});
   const owned=getPanels().filter(p=>p.dataset.structureInstanceId===view.id),wanted=canonical.sharedChildren.filter(slot=>!view.omittedChildSlots?.includes(slot.slotId)).map((slot,i)=>{
    let p=owned.find(p=>p.dataset.structureMasterChildId===slot.slotId);
    if(!p){const toy=toyFor(slot.toyDefinitionId);if(!toy)throw new Error('Missing shared toy '+slot.toyDefinitionId);const at=placeChild?.(view,i,toy)||{x:view.x+400,y:view.y+i*480};p=createToyInstance(toy,{structureInstanceId:view.id,structureMasterChildId:slot.slotId,autoArrangeOwner:view.autoArrange?.owner,ui:{left:at.x+'px',top:at.y+'px'}});}
@@ -55,7 +56,7 @@ export function createLinkedSequenceController({model,structures,getToy,getPanel
    structures.annotate(canonical.id,{sharedName:name,name:name+(canonical.linkedCopyNumber?'.'+canonical.linkedCopyNumber:''),structureInstanceSerial:number});canonical=structures.get(canonical.id);
    const desired={x:options.x??canonical.x+440,y:options.y??canonical.y+number*480,width:224,height:Math.max(128,canonical.sharedChildren.length*56+88)},at=placeInstance?.(desired,canonical)||desired;
    copy=structures.createStandalone('sequence',{x:at.x,y:at.y,artOwnerId:canonical.artOwnerId,name:name+'.'+number,autoArrange:options.autoArrange,collapsed:false});
-   structures.annotate(copy.id,{masterStructureId:canonical.id,sharedDefinitionId:canonical.sharedDefinitionId,structureInstanceNumber:number,linkedCopyNumber:number});copy=structures.get(copy.id);
+   structures.annotate(copy.id,{masterStructureId:canonical.id,sharedDefinitionId:canonical.sharedDefinitionId,structureInstanceNumber:number,linkedCopyNumber:number,autoArrangePhrase:canonical.autoArrangePhrase});copy=structures.get(copy.id);
    for(const view of family(canonical))syncView(view,canonical);
   }));}finally{busy=false;}changed();return structures.get(copy.id);
  }

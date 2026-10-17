@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const modeSource = readFileSync(new URL('../src/beat-swarm/beat-swarm-mode.js', import.meta.url), 'utf8');
+const modeSource = readFileSync(new URL('../src/beat-swarm/beat-swarm-mode.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const attackAudioBody = modeSource.match(
   /function playEnemyCombatAttackAudio\([\s\S]*?\n}\nfunction updateEnemyCombatRuntime/
 )?.[0] || '';

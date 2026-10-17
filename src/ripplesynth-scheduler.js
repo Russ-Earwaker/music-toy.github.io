@@ -67,7 +67,7 @@ export function createScheduler(cfg){
       // For standalone (unchained) toys, spawn a ripple on every bar.
       // Chained toys are handled by the chain activation logic.
       const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
-      if (!isChained && generator.placed && !isPlaybackMuted()) {
+      if (!isChained && generator.placed && !isPlaybackMuted() && (!sharedReplay || state.recording)) {
         spawnRipple(true);
       }
       state.recording = false;

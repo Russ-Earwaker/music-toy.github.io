@@ -1,0 +1,216 @@
+{
+  "setup": {
+    "rows": [
+      [
+        {
+          "id": "drawgrid-1792228246634-w71clx",
+          "x": 1120,
+          "y": -221
+        },
+        {
+          "id": "drawgrid-1792228246713-29nkgr",
+          "x": 2096,
+          "y": -221
+        },
+        {
+          "id": "drawgrid-1792228246748-c3lig0",
+          "x": 3072,
+          "y": -221
+        },
+        {
+          "id": "drawgrid-1792228246841-qpj1ks",
+          "x": 4048,
+          "y": -221
+        }
+      ],
+      [
+        {
+          "id": "drawgrid-1792228247252-w9c8uh",
+          "x": 3516,
+          "y": 1904
+        },
+        {
+          "id": "drawgrid-1792228247254-sz4erb",
+          "x": 4492,
+          "y": 1904
+        },
+        {
+          "id": "drawgrid-1792228247255-kl1d8f",
+          "x": 5468,
+          "y": 1904
+        },
+        {
+          "id": "drawgrid-1792228247257-s6qe6a",
+          "x": 6444,
+          "y": 1904
+        }
+      ],
+      [
+        {
+          "id": "drawgrid-1792228247263-umxzbf",
+          "x": 3516,
+          "y": 4029
+        },
+        {
+          "id": "drawgrid-1792228247265-t1sebq",
+          "x": 4492,
+          "y": 4029
+        },
+        {
+          "id": "drawgrid-1792228247267-9fhjax",
+          "x": 5468,
+          "y": 4029
+        },
+        {
+          "id": "drawgrid-1792228247269-l6akuv",
+          "x": 6444,
+          "y": 4029
+        }
+      ]
+    ],
+    "structures": [
+      {
+        "id": "structure-toy:1",
+        "name": "Melody Phrase",
+        "type": "sequence",
+        "autoArrangePhrase": {
+          "heartbeatId": "main-heartbeat"
+        }
+      },
+      {
+        "id": "structure-toy:2",
+        "name": "Arrangement",
+        "type": "sequence"
+      },
+      {
+        "id": "structure-toy:3",
+        "name": "Intro",
+        "type": "chord-progression"
+      },
+      {
+        "id": "structure-toy:4",
+        "name": "A",
+        "type": "chord-progression"
+      },
+      {
+        "id": "structure-toy:5",
+        "name": "A layers",
+        "type": "together"
+      },
+      {
+        "id": "structure-toy:6",
+        "name": "A layer 1",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:7",
+        "name": "A layer 2",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:8",
+        "name": "Melody Phrase.1",
+        "type": "sequence",
+        "autoArrangePhrase": {
+          "heartbeatId": "main-heartbeat"
+        }
+      },
+      {
+        "id": "structure-toy:9",
+        "name": "B",
+        "type": "chord-progression"
+      },
+      {
+        "id": "structure-toy:10",
+        "name": "B layers",
+        "type": "together"
+      },
+      {
+        "id": "structure-toy:11",
+        "name": "B layer 1",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:12",
+        "name": "B layer 2",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:13",
+        "name": "Melody Phrase.2",
+        "type": "sequence",
+        "autoArrangePhrase": {
+          "heartbeatId": "main-heartbeat"
+        }
+      },
+      {
+        "id": "structure-toy:14",
+        "name": "B layer 4",
+        "type": "repeat"
+      },
+      {
+        "id": "structure-toy:15",
+        "name": "Outro",
+        "type": "chord-progression"
+      }
+    ],
+    "status": "Arrangement ready"
+  },
+  "reset": {
+    "paused": {
+      "state": "paused",
+      "bpm": 90,
+      "positionTick": 0,
+      "currentTick": 0,
+      "currentBeat": 0,
+      "currentBar": 0,
+      "ticksPerBeat": 96,
+      "ticksPerBar": 384,
+      "beatsPerBar": 4,
+      "mapping": {
+        "originTick": 0,
+        "originAudioTime": 17.341333333333335,
+        "bpm": 90
+      }
+    },
+    "playing": {
+      "state": "playing",
+      "bpm": 90,
+      "positionTick": 0,
+      "currentTick": 0,
+      "currentBeat": 0,
+      "currentBar": 0,
+      "ticksPerBeat": 96,
+      "ticksPerBar": 384,
+      "beatsPerBar": 4,
+      "mapping": {
+        "originTick": 0,
+        "originAudioTime": 17.88,
+        "bpm": 90
+      }
+    }
+  },
+  "transportUI": {
+    "play": {
+      "x": 586.6640625,
+      "y": 21.328125,
+      "width": 106.671875,
+      "height": 106.671875
+    },
+    "start": {
+      "x": 612.15625,
+      "y": 132.015625,
+      "width": 55.6875,
+      "height": 25
+    },
+    "clickable": "return-to-start"
+  },
+  "validation": {
+    "flashes": 39,
+    "drawGridNotes": 39,
+    "finalTick": 1992,
+    "arrangementLoops": 0.32421875,
+    "saveReload": true,
+    "errors": []
+  }
+}

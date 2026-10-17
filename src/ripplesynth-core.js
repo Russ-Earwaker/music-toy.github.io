@@ -1,4 +1,5 @@
 import { panelTransportBindings } from './panel-transport.js';
+import { admittedToyVisual } from './playback-visual-events.js';
 import { getToyLifecycle } from './baseMusicToy/index.js';
 import { initToyUI } from './toyui.js';
 import { createToySurfaceManager } from './toy-surface-manager.js';
@@ -50,7 +51,7 @@ import {
 export function createRippleSynth(selector){
   const shell = (typeof selector === 'string') ? document.querySelector(selector) : selector;
   const panel  = shell?.closest?.('.toy-panel') || shell;
-  const { isRunning, getLoopInfo, getPositionAtAudioTime, tickToAudioTime, getTransportState, barSeconds: audioBarSeconds } = panelTransportBindings(panel);
+  const { isRunning, getLoopInfo, getPositionAtAudioTime, tickToAudioTime, audioTimeToTick, getTransportState, barSeconds: audioBarSeconds } = panelTransportBindings(panel);
   if (panel.__toyInstance) return panel.__toyInstance;
   const lifecycle = getToyLifecycle(panel);
   const { initParticles, setParticleBounds, drawParticles } = createRippleParticles();
@@ -62,7 +63,11 @@ export function createRippleSynth(selector){
   // to correctly target the toy's audio bus.
   try { panel.dataset.toyid = toyId; } catch {}
 
-  const triggerInstrument = (inst, name, when)=> __rawTrig(inst, name, when, toyId);
+  const triggerInstrument = (inst, name, when, blockIndex)=> __rawTrig(inst, name, when, toyId, {
+    onPlaybackScheduled:admission=>{
+      if(blockIndex!=null)admittedToyVisual(panel,{blockIndex},admission,audioTimeToTick);
+    },
+  });
   const initialTransport = getTransportState();
   if (isRunning()) {
     activatePlaybackInstance(panel.id, initialTransport.currentTick, { loopLengthTicks: TICKS_PER_BAR, quantize: true });
@@ -721,7 +726,9 @@ export function createRippleSynth(selector){
   function handleRingHits(nowAT){
     if (playbackMuted && !dragMuteActive) return;
     if (!ripples.length || !generator.placed) return;
-    const rMain = ripples[ripples.length-1]; rMain.hit = rMain.hit || new Set();
+    const rMain = ripples.findLast(r=>!r.playbackOnly);
+    if(!rMain)return; // Admitted replay rings never discover new musical collisions.
+    rMain.hit = rMain.hit || new Set();
     const R = Math.max(0, (nowAT - (rMain.startAT ?? nowAT)) * (rMain.speed||RING_SPEED()));
     // Sweep the front through the whole elapsed frame so a slow frame cannot
     // skip a cube's hit band. Each ripple owns its own previous front.
@@ -776,7 +783,7 @@ export function createRippleSynth(selector){
               const ds = parseFloat(panel.dataset.quantDiv || panel.dataset.quant || '');
               if (Number.isFinite(ds)) div2 = ds;
             }
-            if (!Number.isFinite(div2) || div2 <= 0){ triggerInstrument(currentInstrument, name, whenAT + 0.0005); }
+            if (!Number.isFinite(div2) || div2 <= 0){ triggerInstrument(currentInstrument, name, whenAT + 0.0005, i); }
             else {
               const beatLen2 = li2?.beatLen || (audioBarSeconds()/4);
               const grid2 = beatLen2 / div2;
@@ -784,7 +791,7 @@ export function createRippleSynth(selector){
               const k2 = Math.ceil((rel2 + 1e-6) / grid2);
               const tSched2 = (li2?.loopStartTime || whenAT) + k2 * grid2 + 0.0004;
               __dbg('record-live-quant', { name, div: div2, grid: +grid2.toFixed?.(4) || grid2, rel: +rel2.toFixed?.(4) || rel2, k: k2, tSched: tSched2 });
-              triggerInstrument(currentInstrument, name, tSched2);
+              triggerInstrument(currentInstrument, name, tSched2, i);
             }
           } catch {}
         }
@@ -817,7 +824,7 @@ export function createRippleSynth(selector){
                 li3?.beatLen || (barSec() / 4), div3);
             }
             if (!doImmediateFlash){ try{ b._visFlashAt = tSched; }catch{} }
-            triggerInstrument(currentInstrument, name, tSched);
+            triggerInstrument(currentInstrument, name, tSched, i);
             patternOffsets[slotIx].set(i, hasTickTransport ? offsetTick : Math.max(0, whenAT - barStartAT));
           } catch(e) { __dbg('quant-record-fail', e); }
           // Cube identity owns its activation, even when another cube has the
@@ -914,6 +921,9 @@ export function createRippleSynth(selector){
         setParticleBounds(W(), H());
       }
       const center = { x: n2x(generator.nx), y: n2y(generator.ny) };
+      const visualTick=getTransportState().currentTick;
+      for(const ripple of ripples)if(ripple.playbackOnly)
+        ripple.transportRadius=Math.max(0,visualTick-ripple.startTick)*Math.hypot(W(),H())/TICKS_PER_BAR;
       drawParticles(ctx, tView, ripples, generator.placed ? center : null, blockRects);
       if (generator.placed) {
         drawWaves(ctx, center.x, center.y, tView, RING_SPEED(), ripples, NUM_STEPS, stepSeconds, sizing.scale || 1, W(), H());
@@ -1043,14 +1053,14 @@ export function createRippleSynth(selector){
             if (generator.placed && (isHandoff || !ripples.length)) {
                 // Spawn a ripple and reset the scheduler to start recording a new pattern.
                 // This handles both initial activation and re-activation in a loop.
-                spawnRipple(true, startAt); // preserve the preceding toy's completion time
+                const needsLearning = !pattern.some(set => set.size > 0);
+                if(needsLearning)spawnRipple(true, startAt);
                 const nowAT = startAt;
                 barStartAT = nowAT;
                 nextSlotAT = barStartAT + stepSeconds();
                 nextSlotIx = 1;
                 // A learned Sequence child replays at its assigned phase; only
                 // a missing/invalidated pattern requires a new learning pass.
-                const needsLearning = !panel.__sequenceDefinitionId || !pattern.some(set => set.size > 0);
                 if (needsLearning) { pattern.forEach(s=> s.clear()); patternOffsets.forEach(m=> m.clear()); }
                 recording = needsLearning;
                 __deferredSpawn = false; // Consume any deferred spawn from other actions
@@ -1337,14 +1347,30 @@ export function createRippleSynth(selector){
     if (recording) return null;
     return ripplerEventsInWindow({ instance, pattern, patternOffsets, blocks, fromTick, toTick });
   };
+  panel.__applyPlaybackVisual = event => {
+    const block=blocks[event.blockIndex];if(!block)return;
+    block.flashDur=.18;block.flashEnd=event.when+.18;block.pulse=1;
+    panel.__pulseHighlight=1;panel.__pulseRearm=true;
+    const x=n2x(generator.nx),y=n2y(generator.ny);
+    ripples.push({x,y,startAT:event.when,startTime:event.when,speed:RING_SPEED(),offR:Math.hypot(W(),H())+64,
+      hit:new Set(),r2off:RING_SPEED()*barSec()/2,playbackOnly:true,startTick:event.dueTick,occurrenceId:event.occurrence?.occurrenceId,eventTick:event.eventTick});
+    panel.dispatchEvent(new CustomEvent('rippler:ring-initiated',{detail:{...event,x,y}}));
+  };
+  panel.__getRipplerPlaybackVisualState=()=>({rings:ripples.length,origin:{x:n2x(generator.nx),y:n2y(generator.ny)}});
+  lifecycle.addCleanup(()=>{delete panel.__getRipplerPlaybackVisualState;delete panel.__applyPlaybackVisual;});
+  lifecycle.listen(panel,'toy:transport-seek',()=>{
+    ripples.length=0;lastSpawnPerf=-Infinity;
+    for(const b of blocks){delete b._visFlashAt;b.flashEnd=0;b.pulse=0;b.cflash=0;b.vx=b.vy=0;}
+    barStartAT=tickToAudioTime(0);nextSlotAT=barStartAT;nextSlotIx=0;
+    __schedState.turnOver=false;__schedState.chainAdvanceAt=0;
+  });
   panel.__sequencerScheduleEvent = (event, audioTime) => {
     const block = blocks[event?.blockIndex];
     if (!block?.active) return;
     const name = noteList[block.noteIndex] || 'C4';
-    triggerInstrument(currentInstrument, name, audioTime);
-    block._visFlashAt = Math.max(block._visFlashAt || 0, audioTime);
-    panel.__pulseHighlight = 1.0;
-    panel.__pulseRearm = true;
+    __rawTrig(currentInstrument,name,audioTime,toyId,{
+      onPlaybackScheduled:admission=>admittedToyVisual(panel,event,admission,audioTimeToTick),
+    });
   };
 
   // The main scheduler's step is only for grid-based toys.

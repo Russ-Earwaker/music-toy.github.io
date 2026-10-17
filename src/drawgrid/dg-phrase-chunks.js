@@ -1,5 +1,9 @@
 // Split the normal four-bar generator's authored output into four ordinary
 // one-bar toys. No phrase notes remain outside the resulting toy states.
+export function phraseChunkWithSeedSettings(chunk,seed){
+ const {steps,strokes,nodes,manualOverrides,meta}=chunk;
+ return structuredClone({...seed,steps,strokes,nodes,manualOverrides,meta});
+}
 export function splitDrawgridPhrase(state){
  if(state.steps!==32)throw new Error('A four-part phrase needs 32 generated steps.');
  const at=(points,x)=>{

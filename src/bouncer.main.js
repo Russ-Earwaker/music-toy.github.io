@@ -1,4 +1,5 @@
 import { panelTransportBindings } from './panel-transport.js';
+import { admittedToyVisual } from './playback-visual-events.js';
 // c:\Users\Russ_\Desktop\music-toy\music-toy.github.io\src\bouncer.main.js
 import { getToyLifecycle, mountToySurface } from './baseMusicToy/index.js';
 import { makeEdgeControllers, drawEdgeBondLines, handleEdgeControllerEdit, mapControllersByEdge, randomizeControllers, drawEdgeDecorations } from './bouncer-edges.js';
@@ -64,6 +65,7 @@ export function createBouncer(selector){
   // Define these early so they are available for pending state application.
   panel.__getBouncerSnapshot = () => {
     try{
+      const loopRec=visQ.loopRec;
       const blocksSnap = Array.isArray(blocks) ? blocks.map(b=> b ? ({ x: Math.round(b.x||0), y: Math.round(b.y||0), w: Math.round(b.w||b.size||BASE_BLOCK_SIZE), h: Math.round(b.h||b.size||BASE_BLOCK_SIZE), active: !!b.active, noteIndex: (b.noteIndex|0) }) : null) : [];
       const edgesSnap = Array.isArray(edgeControllers) ? edgeControllers.map(c=> c ? ({ x: Math.round(c.x||0), y: Math.round(c.y||0), w: Math.round(c.w||BASE_BLOCK_SIZE), h: Math.round(c.h||BASE_BLOCK_SIZE), active: !!c.active, noteIndex: (c.noteIndex|0), edge: c.edge }) : null) : [];
       const speed = (typeof __getSpeed === 'function') ? __getSpeed() : (parseFloat(panel.dataset.speed||'')||undefined);
@@ -92,6 +94,7 @@ export function createBouncer(selector){
   };
   panel.__applyBouncerSnapshot = (st)=>{
     try{
+      const loopRec=visQ.loopRec;
       if (!st || typeof st !== 'object') return;
       if (st.instrument){
         instrument = st.instrument;
@@ -187,17 +190,7 @@ export function createBouncer(selector){
     }catch(e){ try{ console.warn('[bouncer] apply snapshot failed', e); }catch{} }
   };
 
-  // If a pending snapshot exists (from early restore), apply it ASAP so
-  // anchors/blocks/handle are in place before we sync from anchors.
-  try{
-    const pendingEarly = panel.__pendingBouncerState;
-    if (pendingEarly && typeof pendingEarly === 'object'){
-      if (typeof panel.__applyBouncerSnapshot === 'function'){
-        try{ panel.__applyBouncerSnapshot(pendingEarly); delete panel.__pendingBouncerState; }catch{}
-      }
-    }
-  }catch{}
-
+  // Apply pending snapshots after recorder, geometry and launch state exist.
   const canvas = document.createElement('canvas');
   canvas.className = 'bouncer-canvas';
   const surface = mountToySurface(panel, canvas);
@@ -359,6 +352,7 @@ export function createBouncer(selector){
   // When quantization changes, reset the loop to start a new recording.
   // This prevents the old pattern from replaying with mismatched timing.
   lifecycle.listen(panel, 'bouncer:quant', () => {
+    const loopRec=visQ.loopRec;
     if (loopRec) {
       // Immediately clear the old pattern and switch to record mode.
       // This prevents the old notes from replaying with the new timing.
@@ -631,6 +625,16 @@ export function createBouncer(selector){
     return edgeIndex == null ? null : edgeControllers[edgeIndex] || null;
   };
   const clearAllPendingHits = () => clearBouncerPendingHits([...blocks, ...edgeControllers]);
+  panel.__applyPlaybackVisual = event => {
+    const source=resolveImpactSource(event);
+    if(source){source.__playbackFlash=1;clearBouncerPendingHit(source,event.eventId);}
+    panel.__pulseHighlight=1;
+  };
+  lifecycle.listen(panel,'toy:transport-seek',()=>{
+    replayVisualEvents.clear();clearAllPendingHits();replayCompletionInstanceId=null;
+    for(const source of [...blocks,...edgeControllers])if(source)delete source.__playbackFlash;
+    ball=null;nextLaunchAt=null;nextLaunchAtRemaining=null;
+  });
   const replayPendingEventId = (event, fireTick, playbackInstanceId) => {
     const source = event?.blockIndex != null ? `block:${event.blockIndex}`
       : event?.edgeControllerIndex != null ? `edge:${event.edgeControllerIndex}` : `edge-name:${event?.edgeName}`;
@@ -1082,7 +1086,9 @@ let __justSpawnedUntil = 0;
           if (!acceptBouncerPendingHit(source, { impactTick, fireTick, eventId })) return false;
 
           const scheduledT = Math.max(ac ? ac.currentTime + 0.0008 : 0, tickToAudioTime(fireTick));
-          triggerInstrument(i || instrument, n, scheduledT, toyId);
+          triggerInstrument(i || instrument, n, scheduledT, toyId, {
+            onPlaybackScheduled:admission=>admittedToyVisual(panel,{...meta,eventId,fireTick},admission,audioTimeToTick),
+          });
 
           if (Array.isArray(loopRec.pattern)) {
             const event = { note: n, offsetTick, impactOffsetTick, impactTick, fireTick, eventId };
@@ -1090,7 +1096,6 @@ let __justSpawnedUntil = 0;
             if (meta?.edgeControllerIndex != null) event.edgeControllerIndex = meta.edgeControllerIndex;
             if (meta?.edgeName != null) event.edgeName = meta.edgeName;
             loopRec.pattern.push(event);
-            queueImpactVisual(event, scheduledT, getPlaybackInstance(panel.id)?.id || null);
             panel.__seqRev = (panel.__seqRev || 0) + 1;
           }
           return true;
@@ -1183,6 +1188,8 @@ let __justSpawnedUntil = 0;
     const replayBall = interpolateBouncerTrajectory(loopRec.trajectory, localTick, TICKS_PER_BAR);
     return replayBall ? { ...replayBall, r: replayBall.r || ballR(), active: true } : null;
   };
+  panel.__getBouncerReplayPosition = getDisplayBall;
+  lifecycle.addCleanup(()=>{delete panel.__getBouncerReplayPosition;delete panel.__applyPlaybackVisual;});
   let replayCompletionInstanceId = null;
   const advanceReplayLifecycle = (transportTick = getTransportState().currentTick) => {
     if (panel.__sequenceDefinitionId) return false;
@@ -1284,9 +1291,10 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
       return;
     }
     if (!event?.note) return;
-    triggerInstrument(instrument, event.note, audioTime, toyId);
     const eventId = replayPendingEventId(event, metadata.eventTick, metadata.playbackInstanceId);
-    queueImpactVisual({ ...event, fireTick: metadata.eventTick, eventId }, audioTime, metadata.playbackInstanceId || null);
+    triggerInstrument(instrument, event.note, audioTime, toyId, {
+      onPlaybackScheduled:admission=>admittedToyVisual(panel,{...event,eventId,fireTick:metadata.eventTick},admission,audioTimeToTick),
+    });
   };
   const activateAtTransport = ({ retrigger = false } = {}) => {
     const state = getTransportState();
