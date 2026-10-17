@@ -1,3 +1,4 @@
+import { patternLearningStartTick } from './pattern-learning-anchor.js';
 import { panelTransportBindings } from './panel-transport.js';
 import { admittedToyVisual } from './playback-visual-events.js';
 // c:\Users\Russ_\Desktop\music-toy\music-toy.github.io\src\bouncer.main.js
@@ -429,10 +430,10 @@ export function createBouncer(selector){
       loopRec.pattern.length = 0;
       loopRec.trajectory.length = 0;
       loopRec.recordingStartTick = nextBouncerRecordingStartTick(getTransportState().currentTick, TICKS_PER_BAR);
-      if (panel.__sequenceDefinitionId) {
-        loopRec.recordingStartTick = panel.__getSequenceNextTurn?.(getTransportState().currentTick)?.startTick ?? loopRec.recordingStartTick;
-      }
-      const instance = activatePlaybackInstance(panel.id, loopRec.recordingStartTick, { loopLengthTicks: TICKS_PER_BAR, quantize: false, retrigger: true });
+      loopRec.recordingStartTick = patternLearningStartTick(panel, getPlaybackInstance(panel.id),
+        getTransportState().currentTick, loopRec.recordingStartTick);
+      const instance = panel.__sequenceDefinitionId ? getPlaybackInstance(panel.id)
+        : activatePlaybackInstance(panel.id, loopRec.recordingStartTick, { loopLengthTicks: TICKS_PER_BAR, quantize: false, retrigger: true });
       if (!panel.__sequenceDefinitionId) loopRec.recordingStartTick = instance.startTick;
       // The learned physics body is deliberately not reused. Re-arm the authored
       // launch at the new recording boundary so the replacement pass is complete.
@@ -555,6 +556,23 @@ export function createBouncer(selector){
     markPreviewUpdated();
   }
 
+  function commitHandleLaunch() {
+    lastLaunch = { x: handle.x, y: handle.y, vx: handle.vx, vy: handle.vy };
+    ball = null;
+    nextLaunchAt = null;
+    // The launch and the recorded trajectory are one authored pattern. A new
+    // spawner must not keep replaying the previous shot while cubes have moved.
+    const recorder = visQ.loopRec;
+    recorder.signature = '';
+    recorder.mode = 'record';
+    recorder.isInvalid = false;
+    recorder.pattern.length = 0;
+    recorder.trajectory.length = 0;
+    recorder.lastBarIndex = -1;
+    panel.__seqRev = (panel.__seqRev || 0) + 1;
+    panel.__forceSchedulerReset = true;
+  }
+
   function applyPreviewState() {
     if (!previewState) return;
     if (Array.isArray(previewState.blocks)) {
@@ -572,12 +590,7 @@ export function createBouncer(selector){
     if (previewState.handle) {
       Object.assign(handle, previewState.handle);
       handle.userPlaced = !!previewState.handle.userPlaced;
-      lastLaunch = {
-        x: handle.x,
-        y: handle.y,
-        vx: handle.vx,
-        vy: handle.vy,
-      };
+      commitHandleLaunch();
     }
     clearPreviewState();
     try { syncBlockAnchors(); } catch {}
@@ -589,7 +602,7 @@ export function createBouncer(selector){
 
   function shouldDeferChanges() {
     const isChainedFollower = !!panel.dataset.prevToyId;
-    if (!isChainedFollower) {
+    if (!isChainedFollower && !panel.__sequenceDefinitionId) {
       return false;
     }
     if (typeof isRunning === 'function' && !isRunning()) {
@@ -759,7 +772,9 @@ export function createBouncer(selector){
       return;
     }
 
-    if (!isChainedFollower) {
+    if (isChainedFollower || panel.__sequenceDefinitionId) {
+      commitHandleLaunch();
+    } else {
       if (panel.dataset.nextToyId) {
         panel.dispatchEvent(new CustomEvent('chain:set-active', { bubbles: true }));
       }
@@ -932,9 +947,11 @@ export function createBouncer(selector){
         // AudioContext time keeps advancing before the transport has ever
         // played. A stopped/paused launch belongs at the retained transport
         // position, not at an extrapolated audio-context tick.
-        const launchTick = getTransportState().currentTick;
-        const instance = activatePlaybackInstance(panel.id, launchTick, { loopLengthTicks: TICKS_PER_BAR, quantize: false, retrigger: true });
-        Object.assign(loopRec, { signature: '', mode: 'record', isInvalid: false, pattern: [], trajectory: [], recordingStartTick: instance.startTick, anchorStartTime: nowT, lastBarIndex: -1, scheduledBarIndex: -999, scheduledKeys: new Set(), seen: new Set() });
+        const launchTick = Number.isFinite(opts.startAt) ? audioTimeToTick(opts.startAt) : getTransportState().currentTick;
+        const instance = panel.__sequenceDefinitionId ? getPlaybackInstance(panel.id)
+          : activatePlaybackInstance(panel.id, launchTick, { loopLengthTicks: TICKS_PER_BAR, quantize: false, retrigger: true });
+        const recordingStartTick = panel.__sequenceDefinitionId ? launchTick : instance.startTick;
+        Object.assign(loopRec, { signature: '', mode: 'record', isInvalid: false, pattern: [], trajectory: [], recordingStartTick, anchorStartTime: nowT, lastBarIndex: -1, scheduledBarIndex: -999, scheduledKeys: new Set(), seen: new Set() });
         panel.__seqRev = (panel.__seqRev || 0) + 1;
         panel.__forceSchedulerReset = true;
         try {

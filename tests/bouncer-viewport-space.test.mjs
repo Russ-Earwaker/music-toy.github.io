@@ -90,6 +90,7 @@ test('block collision result is identical at every display size', () => {
 test('pointer mapping remains aligned through --toy-scale and board zoom transforms', () => {
   const logical = { x: 75, y: 210 };
   for (const rect of [
+    { left: 740, top: -215, width: 300 * .075 * .5, height: 300 * .075 * .5 },
     { left: 20, top: 30, width: 240, height: 240 }, // --toy-scale: 0.8
     { left: 40, top: 55, width: 450, height: 450 }, // board zoom: 1.5
     { left: 12, top: 18, width: 600, height: 360 }, // transformed non-square host

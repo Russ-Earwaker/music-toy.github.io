@@ -30,6 +30,7 @@ test('responsive board base scale follows the 1600x900 authored reference', () =
 test('effective scale composes responsive presentation with user zoom', () => {
   closeTo(composeEffectiveBoardScale(0.75, 0.8), 0.6);
   closeTo(composeEffectiveBoardScale(1, 0.5), 0.5);
+  closeTo(composeEffectiveBoardScale(.075, .5), .0375);
 });
 
 test('world and screen projection round trip through effective scale', () => {

@@ -36,6 +36,7 @@ test('normalized authored positions reconstruct fixed logical blocks', () => {
 test('pointer mapping remains aligned through board zoom and --toy-scale', () => {
   const logical = { x: 82, y: 218 };
   for (const rect of [
+    { left: 740, top: -215, width: 300 * .075 * .5, height: 300 * .075 * .5 },
     { left: 20, top: 30, width: 240, height: 240 },
     { left: 40, top: 55, width: 450, height: 450 },
     { left: 12, top: 18, width: 600, height: 360 },

@@ -24,7 +24,7 @@ export function selectArrangementSources(panels){
 
 // Authored graph builder only. Playback, harmony and repetitions belong to the
 // ordinary compiler/runtime. Connected views share editable definitions.
-export function createAutoArranger({model,structures,getPanels,createSource,createPhraseSource,createStructureInstance,createInstance,placeSource=()=>{},removeInstances=()=>{},place=null,scope=()=>null}){
+export function createAutoArranger({model,structures,getPanels,createSource,createPhraseSource,createStructureInstance,createInstance,adoptSource,adoptPhrase,placeSource=()=>{},removeInstances=()=>{},place=null,scope=()=>null}){
  let busy=false,serial=0;
  async function arrange(){
   if(busy)throw new Error('Arrangement is already being built.');
@@ -41,7 +41,7 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
    if(createPhraseSource){
     const phrase=structures.list().find(s=>!s.masterStructureId && s.autoArrangePhrase?.heartbeatId===heartbeat && (s.artOwnerId||null)===board);
     const authored=sources.melody;
-    const master=phrase||await createPhraseSource({heartbeatId:heartbeat,firstChunk:authored});
+    const master=phrase||await createPhraseSource({heartbeatId:heartbeat,firstChunk:authored,seed:authored});
     if(!master||master.type!=='sequence')throw new Error('Could not create Melody Phrase.');
     sources.melody={...master,dataset:{autoArrangeOrigin:authored?.dataset.autoArrangeOrigin || 'filled'}};
    }
@@ -76,7 +76,7 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
    try{model.transaction(()=>structures.suspend(()=>{
     // Keep linked expansions alive until replacement succeeds, so rollback can
     // restore their connections without losing any child identities/positions.
-    if(previous)for(const node of structures.list().filter(s=>s.autoArrange?.owner===previous.autoArrange.owner&&!s.masterStructureId))structures.remove(node.id);
+    if(previous)for(const node of structures.list().filter(s=>s.autoArrange?.owner===previous.autoArrange.owner&&!s.masterStructureId&&!Object.values(sourceIds).includes(s.id)))structures.remove(node.id);
     for(const edge of displaced)if(!Object.values(sourceIds).includes(edge.to.objectId) && model.getObject(edge.to.objectId) && model.getObject(edge.from.objectId) && !model.getParent(edge.to.objectId))connect(edge.kind,edge.from,edge.to);
     const make=(type,name,parent,index=0)=>{
      const p=parent && structures.get(parent),position=!parent&&previous?{x:previous.x,y:previous.y}:place?.(type,parent,index) || {x:p?p.x+(p.type==='chord-progression'?536:400):0,y:(p?.y || 0)+index*480};
@@ -113,7 +113,7 @@ export function createAutoArranger({model,structures,getPanels,createSource,crea
       const instance=reuse?source:source.type==='sequence'
         ?createStructureInstance(sources[role],{x:p.x+536,y:p.y+(repeat?0:i*220),autoArrange:{owner},collapsed:true})
         :createInstance(sources[role],{autoArrangeOwner:owner,ui:{left:`${p.x+536}px`,top:`${p.y+(repeat?0:i*220)}px`}});
-      if(reuse){const old=model.getParent(source.id);if(old)model.disconnect(old.id);placeSource(source,position);}
+      if(reuse){const old=model.getParent(source.id);if(old)model.disconnect(old.id);if(source.type==='sequence'&&adoptPhrase)adoptPhrase(source,{owner,...position});else if(adoptSource)adoptSource(source,{owner,...position});else placeSource(source,position);}
       created.push(instance.id);
       if(sources[role].type==='sequence')created.push(...model.list('sequence').filter(e=>e.from.objectId===instance.id).map(e=>e.to.objectId));
       connect('sequence',output(branch.id,repeat?0:i),input(instance.id));

@@ -94,6 +94,11 @@ export function interpolateBouncerTrajectory(samples, localTick, loopLengthTicks
   };
 }
 
+export function bouncerTurnProgress(instance, currentTick) {
+  if (!instance?.active || !instance.structureTurnId || currentTick < instance.startTick || currentTick >= instance.endTick) return 0;
+  return (currentTick - instance.startTick) / Math.max(1, instance.endTick - instance.startTick);
+}
+
 export function getBouncerReplayCompletionTick({
   recorder,
   instance,

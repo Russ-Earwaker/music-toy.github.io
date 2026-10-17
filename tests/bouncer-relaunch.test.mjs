@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import {patternLearningStartTick} from '../src/pattern-learning-anchor.js';
+import {recordBouncerTrajectorySample,interpolateBouncerTrajectory} from '../src/bouncer-transport.js';
 
 // Exercise the production launch, bar-transition and replay code without a
 // browser/audio device. Collision events are supplied at the recorder boundary.
@@ -143,4 +145,94 @@ test('a chained Bouncer hands off after learning instead of replaying its first 
 test('Bouncer bar transitions are disabled while transport is stopped', () => {
   const render = readFileSync(new URL('../src/bouncer-render.js', import.meta.url), 'utf8');
   assert.match(render, /if \(isRunning\(\) && S && typeof S\.getLoopInfo/);
+});
+
+test('randomising an inactive follower replaces the saved launch and discards its previous replay',()=>{
+ const {context,recorder}=harness();
+ context.panel.dataset.prevToyId='A';context.panel.dataset.chainActive='false';
+ Object.assign(context,{
+  handle:{x:20,y:30,vx:1,vy:2},physW:()=>300,physH:()=>300,EDGE:4,
+  shouldDeferChanges:()=>false,hasPreviewState:()=>false,
+  doRandomCubes:()=>{},doRandomNotes:()=>{},circleRectHit:()=>false,
+  velFrom:()=>({vx:9,vy:-4}),
+ });
+ context.lastLaunch={x:20,y:30,vx:1,vy:2};context.ball={x:21,y:31};
+ recorder.mode='replay';recorder.pattern=[{note:'C4',offsetTick:48}];recorder.trajectory=[{x:20,y:30,offsetTick:0}];
+ const commit=section(main,'  function commitHandleLaunch(','  function applyPreviewState(');
+ const random=section(main,'  function doRandom(options','  function doRandomCubes(');
+ vm.runInContext(commit+'\n'+random,context);
+ context.doRandom();
+ assert.deepEqual({...context.lastLaunch},{x:context.handle.x,y:context.handle.y,vx:9,vy:-4});
+ assert.equal(context.ball,null);assert.equal(context.nextLaunchAt,null);
+ assert.equal(recorder.mode,'record');assert.equal(recorder.pattern.length,0);assert.equal(recorder.trajectory.length,0);
+ const next=context.spawnBallFrom(context.lastLaunch,{startAt:2});
+ assert.equal(next.x,context.handle.x);assert.equal(next.y,context.handle.y);
+ assert.equal(next.spawnTime,2);
+});
+
+test('deferred follower randomisation keeps the current shot until applying the new launch and trajectory together',()=>{
+ const {context,recorder}=harness();
+ const oldBall={x:20,y:30};context.ball=oldBall;context.handle={x:20,y:30};
+ recorder.mode='replay';recorder.pattern=[{note:'C4'}];recorder.trajectory=[{x:20,y:30}];
+ context.previewState={blocks:[],edgeControllers:[],handle:{x:180,y:140,vx:6,vy:-7,userPlaced:true}};
+ context.clearPreviewState=()=>{context.previewState=null;};context.syncBlockAnchors=()=>{};
+ const code=section(main,'  function commitHandleLaunch(','  function isBouncerChained(');
+ vm.runInContext(code,context);
+ assert.equal(context.ball,oldBall);assert.equal(recorder.mode,'replay');
+ context.applyPreviewState();
+ assert.deepEqual({...context.lastLaunch},{x:180,y:140,vx:6,vy:-7});
+ assert.equal(context.ball,null);assert.equal(recorder.mode,'record');assert.equal(recorder.trajectory.length,0);
+ assert.equal(context.previewState,null);
+});
+
+function managedHeadRandomHarness(active){
+ const h=harness(),{context,recorder}=h;
+ Object.assign(context,{
+  handle:{x:20,y:30,vx:1,vy:2,userPlaced:true},physW:()=>300,physH:()=>300,EDGE:4,
+  doRandomCubes:()=>{},doRandomNotes:()=>{},circleRectHit:()=>false,
+  velFrom:()=>({vx:9,vy:-4}),previewState:null,syncBlockAnchors(){},patternLearningStartTick,
+ });
+ context.panel.__sequenceDefinitionId='root';context.panel.dataset.nextToyId='B';context.panel.dataset.chainActive=active?'true':'false';
+ context.panel.classList={add(){},remove(){}};
+ const instance={active,structureTurnId:'A-turn',startTick:768,endTick:1152};
+ context.getPlaybackInstance=()=>instance;
+ context.activatePlaybackInstance=()=>assert.fail('Random must not replace a structure occurrence');
+ context.lastLaunch={x:20,y:30,vx:1,vy:2};context.ball={x:21,y:31};
+ recorder.mode='replay';recorder.pattern=[{note:'C4',offsetTick:48}];recorder.trajectory=[{x:20,y:30,offsetTick:0},{x:80,y:70,offsetTick:192}];
+ vm.runInContext(section(main,'  function cloneBlock(','  function isBouncerChained(')+'\n'+
+  section(main,'  function shouldDeferChanges(','  const isAdvanced =')+'\n'+
+  section(main,'  function doRandom(options','  function doRandomCubes('),context);
+ return {...h,instance};
+}
+
+test('Random on a waiting chain head learns at its next assigned turn and keeps moving on successive returns',()=>{
+ const {context,recorder,clock,instance}=managedHeadRandomHarness(false);
+ clock.currentTime=2.5; // B is playing. A must not launch into an inactive recording window.
+ context.doRandom();assert.equal(context.ball,null);assert.equal(recorder.trajectory.length,0);
+ const start={...context.lastLaunch};
+ instance.active=true;clock.currentTime=4;context.onNewBar(context.getLoopInfo(),0);
+ assert.equal(recorder.recordingStartTick,768);
+ const ball=context.spawnBallFrom(start,{startAt:4});
+ for(let offset=12;offset<384;offset+=12){
+  ball.x=start.x+offset/4;ball.y=start.y+offset/8;
+  recordBouncerTrajectorySample(recorder.trajectory,ball,768+offset,768);
+ }
+ clock.currentTime=6;context.onNewBar(context.getLoopInfo(),1);assert.equal(recorder.mode,'replay');
+ assert.ok(recorder.trajectory.length>2);
+ const saved=JSON.stringify(recorder.trajectory);
+ for(const turnStart of [1536,2304,3072]){
+  instance.startTick=turnStart;instance.endTick=turnStart+384;clock.currentTime=turnStart/192;
+  context.onNewBar(context.getLoopInfo(),(turnStart-768)/384);
+  const a=interpolateBouncerTrajectory(recorder.trajectory,48),b=interpolateBouncerTrajectory(recorder.trajectory,192);
+  assert.notEqual(a.x,b.x,'replay must move rather than interpolate one stale launch sample');
+  assert.equal(JSON.stringify(recorder.trajectory),saved);
+ }
+});
+
+test('Random on the playing chain head defers its launch and preserves the current learned shot until turn end',()=>{
+ const {context,recorder}=managedHeadRandomHarness(true),ball=context.ball,launch=context.lastLaunch;
+ context.doRandom();assert.equal(context.ball,ball);assert.equal(context.lastLaunch,launch);
+ assert.equal(recorder.mode,'replay');assert.ok(context.previewState.handle);
+ context.applyPreviewState();assert.equal(context.ball,null);assert.equal(recorder.mode,'record');
+ assert.equal(recorder.trajectory.length,0);assert.equal(context.lastLaunch.x,context.handle.x);
 });

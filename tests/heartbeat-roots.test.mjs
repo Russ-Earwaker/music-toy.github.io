@@ -124,12 +124,12 @@ test('pause/resume, tempo and board edits preserve root instance and tick anchor
  }finally{h.close();}
 });
 
-test('a duration growth waits for the new anchored boundary without an extra old-length cycle',()=>{
+test('a duration growth continues at the committed turn end without inserting a silent lattice gap',()=>{
  const r=createStructureRuntime();r.defineSequence('root',[{toyId:'A',durationTicks:96}]);
  const root=r.startStructure('root',0,{quantize:false,loop:true});root.rootAnchor=true;r.commitThrough('root',48);
  r.defineSequence('root',[{toyId:'A',durationTicks:192}],48);
- assert.deepEqual(r.turnsInWindow('root',48,576).map(t=>[t.startTick,t.endTick]),[[0,96],[192,384],[384,576]]);
- assert.equal(r.rootCycleAtTick('root',120),null);assert.equal(r.rootCycleAtTick('root',192).startTick,192);
+ assert.deepEqual(r.turnsInWindow('root',48,576).map(t=>[t.startTick,t.endTick]),[[0,96],[96,288],[288,480],[480,672]]);
+ assert.equal(r.rootCycleAtTick('root',120).startTick,96);assert.equal(root.phaseOriginTick,0);
 });
 
 test('root feedback waits until playing and does not reflash the same cycle on resume',()=>{

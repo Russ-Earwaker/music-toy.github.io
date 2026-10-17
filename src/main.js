@@ -75,7 +75,7 @@ import {createStructureInstanceController} from './structure-instances.js';
 import {createLinkedToyViewController} from './linked-toy-views.js';
 import {createLinkedSequenceController} from './linked-sequences.js';
 import {confirmFinalLinkedCopy} from './linked-copy-delete.js';
-import {splitDrawgridPhrase,phraseChunkWithSeedSettings} from './drawgrid/dg-phrase-chunks.js';
+import {prepareDrawgridPhrase,hasDrawgridPhraseMaterial} from './drawgrid/dg-phrase-chunks.js';
 import {installAutoArrangeUI} from './auto-arrange-ui.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
@@ -6331,6 +6331,7 @@ const g_structureInstances=createLinkedSequenceController({
  model:connectionModel,structures:structureToyModel,getToy:id=>{const p=document.getElementById(id);return p?.classList.contains('toy-panel')?p:null;},
  getPanels:()=>Array.from(document.querySelectorAll('.toy-panel')),
  createToyInstance:(master,options)=>g_toyInstances.create(master,options),
+ adoptToy:g_toyInstances.adopt,
  removeToy:panel=>destroyToyPanel(panel,{allowOffBoard:true,structureCleanup:true}),
  placeChild:(instance,index)=>clearVerticalSlot({x:instance.x+400,y:instance.y+index*540,width:680,height:480},connectionModel.getObjectIds().filter(id=>g_graphPlacementScope(id)===(instance.artOwnerId||null)).map(id=>g_graphPlacement.getRect(id)).filter(Boolean),64),
  placeInstance:(desired,master)=>clearVerticalSlot(desired,connectionModel.getObjectIds().filter(id=>g_graphPlacementScope(id)===(master.artOwnerId||null)).map(id=>g_graphPlacement.getRect(id)).filter(Boolean),88),
@@ -7154,13 +7155,15 @@ async function createArrangementSource(role,{heartbeatId,mainRhythm,phraseChunk=
         if(toy?.setState)await toy.setState({...toy.getState(),steps:32});
         else throw new Error('Melody toy is not ready for generation.');
       }
-      randomizeToyMusic(panel);
+      if(!phraseChunk)randomizeToyMusic(panel);
     }
     return panel;
 }
 const g_autoArranger=createAutoArranger({model:connectionModel,structures:structureToyModel,scope:arrangementScope,
   getPanels:()=>getSequencedToys().filter(p=>!p.dataset.masterToyId && (p.dataset.artOwnerId || null)===arrangementScope()),
   createInstance:(master,options)=>g_toyInstances.create(master,options),
+  adoptSource:(panel,{owner,x,y})=>{g_toyInstances.adopt(panel);panel.dataset.autoArrangeOwner=owner;panel.style.left=x+'px';panel.style.top=y+'px';return panel;},
+  adoptPhrase:g_structureInstances.adopt,
   createStructureInstance:g_structureInstances.create,
   removeInstances:owner=>{g_structureInstances.removeOwned(owner);g_toyInstances.removeOwned(owner);},
   createSource:createArrangementSource,
@@ -7168,23 +7171,29 @@ const g_autoArranger=createAutoArranger({model:connectionModel,structures:struct
     if(source.type==='sequence')structureToyModel.move(source.id,position.x,position.y,{manual:false});
     else {source.style.left=position.x+'px';source.style.top=position.y+'px';}
   },
-  createPhraseSource:async({heartbeatId,firstChunk})=>{
-    const first=firstChunk || await createArrangementSource('melody',{heartbeatId});
-    const generated=firstChunk ? await createArrangementSource('melody',{heartbeatId}) : first;
+  createPhraseSource:async({heartbeatId,firstChunk:seed})=>{
+    // Reparent an authored idea itself when safe. An idea already used by an
+    // unrelated structure stays there; its ordinary linked view seeds this Phrase.
+    const parent=seed&&connectionModel.getParent(seed.id);
+    const seedState=seed&&structuredClone(seed.__sharedToyState||captureLinkedToyState(seed));
+    const first=seed?(parent&&parent.kind!=='transport'?g_toyInstances.create(seed):seed):await createArrangementSource('melody',{heartbeatId});
+    const states=await prepareDrawgridPhrase(seedState,async()=>{
+      if(!first.__drawToy)ensureToyPanelInitializedNow(first);
+      const toy=first.__drawToy;if(!toy)throw new Error('Melody toy is not ready for generation.');
+      if(toy.getState().steps!==32)await toy.setState({...toy.getState(),steps:32});
+      if(!hasDrawgridPhraseMaterial(toy.getState()))randomizeToyMusic(first);
+      // The normal generator can finish its initialization retry on the next
+      // frame. Capture the generated state, never the pre-generation empty cache.
+      for(let attempt=0;attempt<3&&!hasDrawgridPhraseMaterial(toy.getState());attempt++)await new Promise(resolve=>requestAnimationFrame(resolve));
+      return captureLinkedToyState(first);
+    }),chunks=[first];
     first.dataset.autoArrangeFill='melody-chunk';first.dataset.autoArrangeFillHeartbeat=heartbeatId;
-    const seedSettings=captureLinkedToyState(first);
-    const states=splitDrawgridPhrase(generated.__drawToy.getState()),chunks=[first];
-    if (firstChunk) destroyToyPanel(generated);
     for(let i=1;i<4;i++){
       const chunk=await createArrangementSource('melody',{heartbeatId,phraseChunk:true});
       chunk.dataset.autoArrangeFill='melody-chunk';chunk.dataset.autoArrangeFillHeartbeat=heartbeatId;chunks.push(chunk);
+      if(seed){const audio=seed.__audioToyId||seed.id,target=chunk.__audioToyId||chunk.id,volume=getToyVolumeRaw(audio),muted=isToyMuted(audio);setToyVolume(target,volume);setToyMuted(target,muted);syncVolumeUI(chunk,{volume,muted});}
     }
-    for(let i=firstChunk?1:0;i<4;i++){
-      await applyLinkedToyState(chunks[i],phraseChunkWithSeedSettings(states[i],seedSettings));
-      const id=chunks[i].__audioToyId||chunks[i].id,seedId=first.__audioToyId||first.id;
-      const volume=getToyVolumeRaw(seedId),muted=isToyMuted(seedId);
-      setToyVolume(id,volume);setToyMuted(id,muted);syncVolumeUI(chunks[i],{volume,muted});
-    }
+    for(let i=hasDrawgridPhraseMaterial(seedState)&&seedState.steps===8?1:0;i<4;i++)await applyLinkedToyState(chunks[i],states[i]);
     const at=g_graphPlacement.placeStructure({x:parseFloat(first.style.left)-400,y:parseFloat(first.style.top),width:224,height:304},null);
     const phrase=structureToyModel.createStandalone('sequence',{...at,artOwnerId:arrangementScope(),name:'Melody Phrase'});
     connectionModel.transaction(()=>structureToyModel.suspend(()=>{
@@ -7279,7 +7288,7 @@ function computeNoteSchedTiming() {
   const steps = Number.isFinite(NUM_STEPS) ? NUM_STEPS : 8;
   const barSec = Math.max(0.25, Number(info?.barSec ?? info?.barLenSec ?? 0) || 0);
   const stepSec = barSec / Math.max(1, steps);
-  const lookaheadSec = Math.max(0.5, stepSec * 2.5);
+  const lookaheadSec = Math.max(1, stepSec * 2.5);
   const leadSec = Math.max(0.02, Math.min(0.06, stepSec * 0.25));
   return { lookaheadSec, leadSec, stepSec, barSec, steps };
 }
@@ -7376,7 +7385,6 @@ function tickAudioScheduler() {
         g_lastSeenChainStructureVersion = g_chainStructureVersion; g_lastSequencedToyCount = count; updateChains();
       }
     }
-    g_toyInstances.prepare();
     const scheduler = ensureSequencerScheduler(), nowAt = ensureAudioContext().currentTime;
     const groups = [], allActive = new Set();
     for (const {id, transport} of transportRegistry.list()) {

@@ -1,6 +1,14 @@
 import {patternOriginTick} from './source-phase.js';
 export const RIPPLER_LOOP_TICKS = 384;
 
+export function ripplerCycleAtTick(instance, currentTick) {
+  if (!instance?.active || currentTick < instance.startTick || currentTick >= (instance.endTick ?? Infinity)) return null;
+  const loop = Math.max(1, Math.round(instance.loopLengthTicks || RIPPLER_LOOP_TICKS));
+  const origin = patternOriginTick(instance);
+  const startTick = origin + Math.floor((currentTick - origin) / loop) * loop;
+  return { startTick, key: JSON.stringify([instance.occurrenceId || instance.id, startTick]) };
+}
+
 export function nextRipplerRecordingStartTick(currentTick, loopLengthTicks = RIPPLER_LOOP_TICKS) {
   const loop = Math.max(1, Math.round(loopLengthTicks));
   return (Math.floor(Math.max(0, Number(currentTick) || 0) / loop) + 1) * loop;

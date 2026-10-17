@@ -1,3 +1,4 @@
+import { patternLearningStartTick } from './pattern-learning-anchor.js';
 import { panelTransportBindings } from './panel-transport.js';
 import { admittedToyVisual } from './playback-visual-events.js';
 import { getToyLifecycle } from './baseMusicToy/index.js';
@@ -35,7 +36,7 @@ import {
   getPlaybackInstance,
   removePlaybackInstance,
 } from './playback-instances.js';
-import { nextRipplerRecordingStartTick, quantizeRipplerOffsetTick, ripplerEventsInWindow } from './ripplesynth-transport.js';
+import { nextRipplerRecordingStartTick, quantizeRipplerOffsetTick, ripplerEventsInWindow, ripplerCycleAtTick } from './ripplesynth-transport.js';
 import {
   RIPPLER_BLOCK_SIZE,
   RIPPLER_EDGE,
@@ -216,6 +217,21 @@ export function createRippleSynth(selector){
 
   const generator = { nx:0.5, ny:0.5, r:10, placed:false };
   let ripples = []; // {x,y,startAT,speed}
+  let replayRippleKey = null;
+  function syncReplayRipple(currentTick) {
+    if (recording || !generator.placed) return;
+    const cycle = ripplerCycleAtTick(getPlaybackInstance(panel.id), currentTick);
+    if (!cycle || cycle.key === replayRippleKey) return;
+    replayRippleKey = cycle.key;
+    // A restored ring may already represent this cycle. Never launch a wave
+    // per note, or replay a series of missed cycles after a stalled frame.
+    if (ripples.some(r => r.startTick === cycle.startTick)) return;
+    const x=n2x(generator.nx),y=n2y(generator.ny),when=tickToAudioTime(cycle.startTick);
+    ripples.push({x,y,startAT:when,startTime:when,startTick:cycle.startTick,
+      speed:RING_SPEED(),offR:Math.hypot(W(),H())+64,hit:new Set(),
+      r2off:RING_SPEED()*barSec()/2,playbackOnly:true});
+    panel.dispatchEvent(new CustomEvent('rippler:ring-initiated',{detail:{startTick:cycle.startTick,x,y}}));
+  }
   const RING_SPEED = ()=> Math.hypot(W(), H()) / (audioBarSeconds() || 2.0); // px/sec
 
   function spawnRipple(manual=false, startAt=ac.currentTime){
@@ -252,7 +268,10 @@ export function createRippleSynth(selector){
     const lifeTime = barSec();
     __schedState.chainAdvanceAt = nowAT + lifeTime;
 
-    ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
+    ripples.push({ x: gx, y: gy, startAT: nowAT, startTime: nowPerf, speed: RING_SPEED(), offR,
+      startTick: audioTimeToTick(nowAT),
+      lastHitRadius: Math.max(0, (ac.currentTime - nowAT) * RING_SPEED()),
+      hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
     try{ if (localStorage.getItem('mt_rippler_dbg')==='1') console.log('[rippler] spawnRipple:ok',{ manual, ripples:(ripples?ripples.length:0) }); }catch{}
   }
 
@@ -261,7 +280,8 @@ export function createRippleSynth(selector){
   const NUM_STEPS = 8;
   const barSec = ()=> audioBarSeconds() || 2.0;
   const stepSeconds = ()=> barSec()/NUM_STEPS;
-  let barStartAT = ac.currentTime, nextSlotAT = barStartAT + stepSeconds(), nextSlotIx = 1;
+  let barStartAT = ac.currentTime, barStartTick = getTransportState().currentTick;
+  let nextSlotAT = barStartAT + stepSeconds(), nextSlotIx = 1;
 
   const pattern = Array.from({length:NUM_STEPS}, ()=> new Set());
   const patternOffsets = Array.from({length:NUM_STEPS}, ()=> new Map()); // blockIndex -> integer offsetTick
@@ -286,7 +306,8 @@ export function createRippleSynth(selector){
     ghostSpawnTime: null,    // for life line bar
     ghostEndTime: null,      // for life line bar
     lastGhostProgress: 0,    // for freezing life line on pause
-    get barStartAT(){ return barStartAT; }, set barStartAT(v){ barStartAT = v; },
+    get barStartTick(){ return barStartTick; },
+    get barStartAT(){ return barStartAT; }, set barStartAT(v){ barStartAT = v; barStartTick = audioTimeToTick(v); },
     get nextSlotAT(){ return nextSlotAT; }, set nextSlotAT(v){ nextSlotAT = v; },
     get nextSlotIx(){ return nextSlotIx; }, set nextSlotIx(v){ nextSlotIx = v; },
     get recording(){ return recording; }, set recording(v){ recording = v; },
@@ -333,9 +354,9 @@ export function createRippleSynth(selector){
     let requestedTick = transport.state === 'playing'
       ? nextRipplerRecordingStartTick(transport.currentTick, TICKS_PER_BAR)
       : transport.currentTick;
-    if (panel.__sequenceDefinitionId) requestedTick = panel.__getSequenceNextTurn?.(transport.currentTick)?.startTick ?? requestedTick;
     const previous = getPlaybackInstance(panel.id);
-    const instance = activatePlaybackInstance(panel.id, requestedTick, {
+    requestedTick = patternLearningStartTick(panel, previous, transport.currentTick, requestedTick);
+    const instance = panel.__sequenceDefinitionId ? previous : activatePlaybackInstance(panel.id, requestedTick, {
       loopLengthTicks: TICKS_PER_BAR,
       quantize: false,
       retrigger: true,
@@ -349,6 +370,7 @@ export function createRippleSynth(selector){
     }
     recording = true;
     barStartAT = tickToAudioTime(panel.__sequenceDefinitionId ? requestedTick : instance.startTick);
+    barStartTick = panel.__sequenceDefinitionId ? requestedTick : instance.startTick;
     nextSlotAT = barStartAT + stepSeconds();
     nextSlotIx = 1;
     ripples.length = 0;
@@ -365,6 +387,7 @@ export function createRippleSynth(selector){
     state: __schedState,
     isPlaybackMuted: ()=> playbackMuted,
     getLoopInfo, getPositionAtAudioTime,
+    getTransportState, tickToAudioTime,
     sharedReplay: true,
     getQuantDiv: ()=>{
       // Use the same robust read order
@@ -377,7 +400,7 @@ export function createRippleSynth(selector){
   });
 
   function applyPreviewState() {
-    if (!hasPreviewState && !previewGenerator.placed) return;
+    if (!hasPreviewState && !previewGenerator.placed) return false;
 
     // Apply preview blocks from 'random'
     if (hasPreviewState && previewBlocks.length === blocks.length) {
@@ -404,6 +427,17 @@ export function createRippleSynth(selector){
     hasPreviewState = false;
     previewBlocks = [];
     previewGenerator.placed = false;
+    // Geometry and its learned timing are one pattern. The next occurrence
+    // must learn this layout rather than replay the previous cubes' offsets.
+    pattern.forEach(events => events.clear());
+    patternOffsets.forEach(offsets => offsets.clear());
+    recordOnly.clear();
+    ripples.length = 0;
+    replayRippleKey = null;
+    recording = true;
+    touchPattern();
+    panel.__forceSchedulerReset = true;
+    return true;
   }
 
   function randomizeAll(opts = {}){
@@ -528,7 +562,7 @@ export function createRippleSynth(selector){
   }
   function shouldDeferChanges() {
     const isChainedFollower = !!panel.dataset.prevToyId;
-    if (!isChainedFollower) {
+    if (!isChainedFollower && !panel.__sequenceDefinitionId) {
       return false;
     }
     if (typeof isRunning === 'function' && !isRunning()) {
@@ -583,7 +617,7 @@ export function createRippleSynth(selector){
   }
   lifecycle.listen(panel, 'chain:stop', doSoftReset);
   panel.__sequenceTurnEnded = () => {
-    recording = false;
+    if (!applyPreviewState()) recording = false;
     __schedState.turnOver = false;
     __schedState.chainAdvanceAt = 0;
   };
@@ -728,8 +762,13 @@ export function createRippleSynth(selector){
     if (!ripples.length || !generator.placed) return;
     const rMain = ripples.findLast(r=>!r.playbackOnly);
     if(!rMain)return; // Admitted replay rings never discover new musical collisions.
+    const hasTickAnchor = Number.isFinite(rMain.startTick);
+    const ageTicks = hasTickAnchor ? getTransportState().currentTick - rMain.startTick : null;
+    if (hasTickAnchor ? ageTicks < 0 || ageTicks >= TICKS_PER_BAR
+      : nowAT < rMain.startAT || nowAT >= rMain.startAT + barSec()) return;
     rMain.hit = rMain.hit || new Set();
-    const R = Math.max(0, (nowAT - (rMain.startAT ?? nowAT)) * (rMain.speed||RING_SPEED()));
+    const R = hasTickAnchor ? ageTicks * Math.hypot(W(),H()) / TICKS_PER_BAR
+      : Math.max(0, (nowAT - (rMain.startAT ?? nowAT)) * (rMain.speed||RING_SPEED()));
     // Sweep the front through the whole elapsed frame so a slow frame cannot
     // skip a cube's hit band. Each ripple owns its own previous front.
     const previousRadius = Math.min(R, rMain.lastHitRadius ?? 0);
@@ -922,7 +961,8 @@ export function createRippleSynth(selector){
       }
       const center = { x: n2x(generator.nx), y: n2y(generator.ny) };
       const visualTick=getTransportState().currentTick;
-      for(const ripple of ripples)if(ripple.playbackOnly)
+      if (transportRunning) syncReplayRipple(visualTick);
+      for(const ripple of ripples)if(Number.isFinite(ripple.startTick))
         ripple.transportRadius=Math.max(0,visualTick-ripple.startTick)*Math.hypot(W(),H())/TICKS_PER_BAR;
       drawParticles(ctx, tView, ripples, generator.placed ? center : null, blockRects);
       if (generator.placed) {
@@ -1038,7 +1078,9 @@ export function createRippleSynth(selector){
       // Detect transport state change and realign timing
       try{
         // --- Chain Activation Logic ---
-        if (isActiveInChain && !__schedState.wasActiveInChain) {
+        const occurrenceId = getPlaybackInstance(panel.id)?.occurrenceId;
+        if (isActiveInChain && (!__schedState.wasActiveInChain || __schedState.activeOccurrenceId !== occurrenceId)) {
+            applyPreviewState();
             const startAt = Number.isFinite(panel.__chainStartAt) ? panel.__chainStartAt : ac.currentTime;
             const isHandoff = Number.isFinite(panel.__chainStartAt);
             delete panel.__chainStartAt;
@@ -1057,6 +1099,7 @@ export function createRippleSynth(selector){
                 if(needsLearning)spawnRipple(true, startAt);
                 const nowAT = startAt;
                 barStartAT = nowAT;
+                barStartTick = audioTimeToTick(nowAT);
                 nextSlotAT = barStartAT + stepSeconds();
                 nextSlotIx = 1;
                 // A learned Sequence child replays at its assigned phase; only
@@ -1079,6 +1122,7 @@ export function createRippleSynth(selector){
             }
         }
         __schedState.wasActiveInChain = isActiveInChain;
+        __schedState.activeOccurrenceId = isActiveInChain ? occurrenceId : null;
 
         if (__schedState.chainAdvanceAt > 0 && ac.currentTime >= __schedState.chainAdvanceAt) {
             // Only advance if this toy is the currently active one.
@@ -1130,8 +1174,8 @@ export function createRippleSynth(selector){
       // Only advance physics/scheduling if this toy is supposed to be running.
       if (shouldRun) {
           springBlocks(1/60);
-          handleRingHits(ac.currentTime);
           scheduler.tick();
+          handleRingHits(ac.currentTime);
         }
       
       }
@@ -1326,7 +1370,8 @@ export function createRippleSynth(selector){
             const offR = Math.max(...corners.map(([x,y])=> Math.hypot(x-gx, y-gy))) + 64;
             if (!Array.isArray(ripples)) ripples = [];
             ripples.length = 0;
-            ripples.push({ x: gx, y: gy, startAT, startTime: startAT, speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
+            ripples.push({ x: gx, y: gy, startAT, startTime: startAT, startTick:audioTimeToTick(startAT),
+              playbackOnly:true,speed: RING_SPEED(), offR, hit: new Set(), r2off: (RING_SPEED() * (barSec()/2)) });
           }
         }catch{}
       }catch(e){ try{ console.warn('[rippler] apply snapshot failed', e); }catch{} }
@@ -1351,17 +1396,13 @@ export function createRippleSynth(selector){
     const block=blocks[event.blockIndex];if(!block)return;
     block.flashDur=.18;block.flashEnd=event.when+.18;block.pulse=1;
     panel.__pulseHighlight=1;panel.__pulseRearm=true;
-    const x=n2x(generator.nx),y=n2y(generator.ny);
-    ripples.push({x,y,startAT:event.when,startTime:event.when,speed:RING_SPEED(),offR:Math.hypot(W(),H())+64,
-      hit:new Set(),r2off:RING_SPEED()*barSec()/2,playbackOnly:true,startTick:event.dueTick,occurrenceId:event.occurrence?.occurrenceId,eventTick:event.eventTick});
-    panel.dispatchEvent(new CustomEvent('rippler:ring-initiated',{detail:{...event,x,y}}));
   };
   panel.__getRipplerPlaybackVisualState=()=>({rings:ripples.length,origin:{x:n2x(generator.nx),y:n2y(generator.ny)}});
   lifecycle.addCleanup(()=>{delete panel.__getRipplerPlaybackVisualState;delete panel.__applyPlaybackVisual;});
   lifecycle.listen(panel,'toy:transport-seek',()=>{
-    ripples.length=0;lastSpawnPerf=-Infinity;
+    ripples.length=0;replayRippleKey=null;lastSpawnPerf=-Infinity;
     for(const b of blocks){delete b._visFlashAt;b.flashEnd=0;b.pulse=0;b.cflash=0;b.vx=b.vy=0;}
-    barStartAT=tickToAudioTime(0);nextSlotAT=barStartAT;nextSlotIx=0;
+    barStartAT=tickToAudioTime(0);barStartTick=0;nextSlotAT=barStartAT;nextSlotIx=0;
     __schedState.turnOver=false;__schedState.chainAdvanceAt=0;
   });
   panel.__sequencerScheduleEvent = (event, audioTime) => {

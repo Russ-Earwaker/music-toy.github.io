@@ -1,4 +1,6 @@
 import { panelTransportBindings } from './panel-transport.js';
+import { getPlaybackInstance } from './playback-instances.js';
+import { bouncerTurnProgress } from './bouncer-transport.js';
 // src/bouncer-render.js
 const __DBG = (globalThis.BOUNCER_DBG_LEVEL|0)||0; const __d=(lvl,...a)=>{ if(__DBG>=lvl) console.log(...a); };
 // Encapsulates the Bouncer draw loop to keep bouncer.main.js concise.
@@ -413,7 +415,10 @@ export function createBouncerDraw(env){
       const running = isRunning();
 
       let progress = 0;
-      if (b && b.flightEnd != null && b.spawnTime != null) {
+      if (panel.__sequenceDefinitionId) {
+        progress = panel.dataset.chainActive === 'true'
+          ? bouncerTurnProgress(getPlaybackInstance(panel.id), getTransportState().currentTick) : 0;
+      } else if (b && b.flightEnd != null && b.spawnTime != null) {
         const lifeDuration = b.flightEnd - b.spawnTime;
         if (lifeDuration > 0) {
           const lifeElapsed = now - b.spawnTime;
@@ -558,7 +563,7 @@ export function createBouncerDraw(env){
                 } else {
                     // This is an empty, untouched bouncer.
                     const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
-                    if (isChained && (!isChainHead || Number.isFinite(startAt))) {
+                    if (!panel.__sequenceDefinitionId && isChained && (!isChainHead || Number.isFinite(startAt))) {
                         // If it's part of a chain, it should get a ghost ball to act as a "rest" for one bar.
                         // This applies to both head and follower bouncers.
                         const ac = ensureAudioContext();

@@ -9,7 +9,7 @@ export function createScheduler(cfg){
     generator, RING_SPEED, spawnRipple,
     state, isPlaybackMuted,
     getLoopInfo, getPositionAtAudioTime,
-    getQuantDiv, sharedReplay = false
+    getQuantDiv, sharedReplay = false, getTransportState, tickToAudioTime
   } = cfg;
 
   // One-shot summary for the first replay after a recording bar
@@ -54,13 +54,23 @@ export function createScheduler(cfg){
 
   function tick(){
     const nowAT = ac.currentTime;
-    if (nowAT >= state.barStartAT + barSec()){
+    const nowTick = getTransportState?.().currentTick;
+    const tickClock = Number.isFinite(nowTick) && Number.isFinite(state.barStartTick) && typeof tickToAudioTime === 'function';
+    // Keep a recording's musical anchor fixed while pause/tempo rebases its
+    // AudioContext mapping. Seconds are only the projection of that anchor.
+    const anchorTick = state.barStartTick;
+    if (tickClock) state.barStartAT = tickToAudioTime(anchorTick);
+    if (tickClock ? nowTick >= anchorTick + 384 : nowAT >= state.barStartAT + barSec()){
       // state.recordOnly?.clear?.(); // keep queued re-records
       // Determine if we just finished a recording bar
       const justRecorded = !!state.recording;
-      state.barStartAT += barSec();
+      // A stalled frame may span many bars. Jump once to the current bar,
+      // never spawn/learn one historical ripple per subsequent frame.
+      state.barStartAT = tickClock
+        ? tickToAudioTime(anchorTick + Math.floor((nowTick - anchorTick) / 384) * 384)
+        : state.barStartAT + Math.floor((nowAT - state.barStartAT) / barSec()) * barSec();
       // On new bar, apply any pending preview state from clicks or randomizing.
-      if (typeof applyPreviewState === 'function') applyPreviewState();
+      const appliedPreview = typeof applyPreviewState === 'function' && applyPreviewState() === true;
       state.nextSlotAT = state.barStartAT;
       state.nextSlotIx = 0;
       try{ if (window && window.RIPPLER_TIMING_DBG) console.log('[rippler]', 'bar-start', { barStartAT: state.barStartAT }); }catch{}
@@ -70,7 +80,7 @@ export function createScheduler(cfg){
       if (!isChained && generator.placed && !isPlaybackMuted() && (!sharedReplay || state.recording)) {
         spawnRipple(true);
       }
-      state.recording = false;
+      state.recording = appliedPreview;
       if (justRecorded) {
         // The shared scheduler must include the first replay boundary; recording
         // windows deliberately did not advance its cursor.

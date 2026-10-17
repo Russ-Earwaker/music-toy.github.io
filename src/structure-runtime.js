@@ -192,10 +192,15 @@ export function createStructureRuntime() {
       const durationChanged = loops && instance.rootAnchor && (last.definition.durationTicks !== definition.durationTicks || live.durationTicks !== definition.durationTicks);
       epochs.push({ startTick: cycleStart, effectiveTick: horizon, definition: live, oneCycle: durationChanged });
       if(durationChanged && definition.durationTicks > 0) {
-        // Preserve the committed/current occurrence, then rejoin the new
-        // duration's lattice measured from the original root anchor.
-        const anchor = instance.phaseOriginTick;
-        const boundary = anchor + Math.ceil(Math.max(0, Math.max(horizon, cycleStart + live.durationTicks) - anchor) / definition.durationTicks) * definition.durationTicks;
+        // Finish the committed/current occurrence, then continue immediately.
+        // Rounding up to the new loop-length lattice inserts an unauthored rest
+        // after an appended child. Source phase still belongs to Heartbeat (0);
+        // changing a Structure's length must not insert silence to realign it.
+        const liveEnd = cycleStart + live.durationTicks;
+        // If removal already put that end behind the submitted horizon, keep
+        // the existing future boundary rule rather than anchoring to edit time.
+        const boundary = liveEnd >= horizon ? liveEnd
+          : instance.phaseOriginTick + Math.ceil((horizon - instance.phaseOriginTick) / definition.durationTicks) * definition.durationTicks;
         epochs.push({ startTick: boundary, effectiveTick: boundary, definition });
       } else if(loops) epochs.push({startTick:cycleStart+live.durationTicks,effectiveTick:Math.max(horizon,cycleStart+live.durationTicks),definition});
     }

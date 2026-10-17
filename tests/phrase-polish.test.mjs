@@ -19,7 +19,7 @@ test('continuations keep generated notes but inherit seed instrument and ordinar
 test('viewport doubles overview range, clamps both ends and preserves effective-scale coordinate inversion',()=>{
  const source=readFileSync(new URL('../src/board-viewport.js',import.meta.url),'utf8');
  const min=Number(source.match(/const SCALE_MIN = ([\d.]+)/)[1]),max=Number(source.match(/const SCALE_MAX = ([\d.]+)/)[1]);
- assert.equal(min,.15);assert.equal(max,1);
+ assert.equal(min,.075);assert.equal(max,1);
  const body=source.match(/function clampScale\(v\) \{([\s\S]*?)\n  \}/)[1];
  const clamp=vm.runInNewContext(`(v)=>{${body}}`,{SCALE_MIN:min,SCALE_MAX:max});
  assert.equal(clamp(.01),min);assert.equal(clamp(2),max);assert.equal(clamp(.2),.2);

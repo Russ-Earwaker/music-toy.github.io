@@ -119,7 +119,7 @@ export function connectDrawGridToPlayer(panel) {
         });
       },
     });
-  });
+  }, { scheduleAhead: true });
 
   const activateAtTransport = ({ retrigger = false } = {}) => {
     const transport = getTransportState();

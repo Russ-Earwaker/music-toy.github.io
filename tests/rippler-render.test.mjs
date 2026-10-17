@@ -7,6 +7,7 @@ import { createRippleParticles } from '../src/ripplesynth-particles.js';
 import { drawBlocksSection } from '../src/ripplesynth-blocks.js';
 import { makeGetBlockRects } from '../src/ripplesynth-rects.js';
 import { createScheduler } from '../src/ripplesynth-scheduler.js';
+import {ripplerCycleAtTick} from '../src/ripplesynth-transport.js';
 import { handleBlockTap } from '../src/ripplesynth-zoomtap.js';
 import { rippleNoteTime } from '../src/ripplesynth-audio.js';
 import { createRipplerViewportSpace, doesRippleIntersectBlock } from '../src/rippler-viewport-space.js';
@@ -17,6 +18,47 @@ const start = source.indexOf('  function draw(){');
 const end = source.indexOf('      // Draw preview generator', start);
 assert.ok(start >= 0 && end > start);
 const renderCode = source.slice(start, end) + '\n} finally {} }';
+
+test('structural turn completion commits Rippler preview once and invalidates the old learned pattern',()=>{
+ const blocks=[{nx:.1,ny:.2,noteIndex:1,active:true}],pattern=[new Set([0])],offsets=[new Map([[0,96]])];
+ let edits=0;
+ const context=vm.createContext({panel:{},__schedState:{},blocks,pattern,patternOffsets:offsets,
+  hasPreviewState:true,previewBlocks:[{nx:.8,ny:.7,noteIndex:8,active:true}],
+  previewGenerator:{placed:true,nx:.3,ny:.4},generator:{placed:true,nx:.5,ny:.5},
+  recording:false,recordOnly:new Set([0]),ripples:[{startTick:0}],replayRippleKey:'old',touchPattern:()=>edits++});
+ const apply=source.slice(source.indexOf('  function applyPreviewState()'),source.indexOf('  function randomizeAll('));
+ const a=source.indexOf('  panel.__sequenceTurnEnded ='),b=source.indexOf('  lifecycle.addCleanup',a);
+ vm.runInContext(apply+'\n'+source.slice(a,b),context);
+ context.panel.__sequenceTurnEnded();
+ assert.equal(blocks[0].nx,.8);assert.equal(blocks[0].noteIndex,8);assert.equal(context.generator.nx,.3);
+ assert.equal(context.hasPreviewState,false);assert.equal(context.previewGenerator.placed,false);
+ assert.equal(pattern[0].size,0);assert.equal(offsets[0].size,0);assert.equal(context.recording,true);
+ assert.equal(context.ripples.length,0);assert.equal(edits,1);
+ context.panel.__sequenceTurnEnded();assert.equal(edits,1,'preview must not commit again on later cycles');
+});
+
+test('consecutive Rippler occurrences re-enter activation even without an inactive frame',()=>{
+ let occurrenceId='first',commits=0;
+ const context=vm.createContext({panel:{id:'rippler'},isActiveInChain:true,
+  __schedState:{wasActiveInChain:true,activeOccurrenceId:'first'},
+  getPlaybackInstance:()=>({occurrenceId}),applyPreviewState:()=>commits++});
+ const a=source.indexOf('        const occurrenceId ='),b=source.indexOf('            const startAt =',a);
+ const code='{'+source.slice(a,b)+'\n}}';
+ vm.runInContext(code,context);assert.equal(commits,0);
+ occurrenceId='second';vm.runInContext(code,context);assert.equal(commits,1);
+ context.__schedState.activeOccurrenceId='second';occurrenceId='third';vm.runInContext(code,context);assert.equal(commits,2);
+});
+
+test('bar-boundary preview commit keeps Rippler recording until the new layout has completed its learning bar',()=>{
+ let pending=true;const state={barStartAT:0,recording:false},ac={currentTime:2},rings=[];
+ const scheduler=createScheduler({panel:{dataset:{}},ac,state,barSec:()=>2,generator:{placed:true},
+  isPlaybackMuted:()=>false,sharedReplay:true,pattern:[],getPositionAtAudioTime:t=>t*192,
+  applyPreviewState:()=>{if(!pending)return false;pending=false;state.recording=true;return true;},
+  spawnRipple:()=>rings.push(ac.currentTime)});
+ scheduler.tick();assert.equal(state.recording,true);assert.deepEqual(rings,[2]);
+ ac.currentTime=3;scheduler.tick();assert.equal(state.recording,true);
+ ac.currentTime=4;scheduler.tick();assert.equal(state.recording,false);
+});
 
 function fixture(placed) {
   const calls = { particles: 0, init: 0, waves: 0, generator: 0, times: [] };
@@ -33,6 +75,7 @@ function fixture(placed) {
     panel: { dataset: {} }, window: {}, console,
     isRunning: () => true, ac: { currentTime: 1.5 }, __pausedNow: 1,
     getTransportState:()=>({currentTick:96}), TICKS_PER_BAR:384,
+    syncReplayRipple(){},
     markPanelForDomCommit() {}, queueClassToggle() {}, queueDatasetSet() {},
     __schedState: {}, rippleNoteTime, generator: { placed, nx: 0.5, ny: 0.5, r: 10 },
     ripples: placed ? [{ x: 210, y: 210, startAT: 1, startTime: 1, speed: 200 }] : [],
@@ -384,6 +427,7 @@ test('ripple turns last one bar regardless of source position and handoff delay'
   Object.assign(context, {
     toyId: 'test', previewGenerator: {}, lastSpawnPerf: -1,
     barSec: () => 2, localStorage: { getItem: () => null },
+    audioTimeToTick: t => t * 192,
     window: { __ripplerUserArmed: true },
   });
   context.generator.placed = true;
@@ -401,4 +445,29 @@ test('ripple turns last one bar regardless of source position and handoff delay'
     assert.equal(context.ripples.at(-1).startAT, at);
     assert.equal(context.__schedState.chainAdvanceAt, at + 2);
   }
+});
+
+test('Rippler launches one wave at cycle start while admitted notes only flash their impacted cubes',()=>{
+ const instance={active:true,startTick:0,loopLengthTicks:384,sourcePhaseOriginTick:0,occurrenceId:'turn-1'};
+ const rings=[],blocks=[{},{},{}],events=[];
+ const context=vm.createContext({recording:false,generator:{placed:true,nx:.5,ny:.5},
+  ripplerCycleAtTick,getPlaybackInstance:()=>instance,panel:{id:'rippler',dispatchEvent:e=>events.push(e)},
+  CustomEvent:class{constructor(type,{detail}){this.type=type;this.detail=detail;}},
+  n2x:n=>n*300,n2y:n=>n*300,tickToAudioTime:t=>t/192,
+  RING_SPEED:()=>200,W:()=>300,H:()=>300,barSec:()=>2,ripples:rings,blocks});
+ const a=source.indexOf('  let replayRippleKey ='),b=source.indexOf('  const RING_SPEED',a);
+ const c=source.indexOf('  panel.__applyPlaybackVisual ='),d=source.indexOf('  panel.__getRipplerPlaybackVisualState',c);
+ vm.runInContext(source.slice(a,b)+'\n'+source.slice(c,d),context);
+ context.syncReplayRipple(0);assert.equal(rings.length,1);assert.equal(rings[0].startTick,0);
+ for(const [blockIndex,tick] of [[0,48],[1,144],[2,288]]){
+  context.syncReplayRipple(tick);
+  context.panel.__applyPlaybackVisual({blockIndex,eventTick:tick,dueTick:tick,when:tick/192});
+  assert.equal(blocks[blockIndex].flashEnd,tick/192+.18);assert.equal(rings.length,1);
+ }
+ context.syncReplayRipple(384);assert.equal(rings.length,2);assert.equal(rings[1].startTick,384);
+ context.syncReplayRipple(3900);assert.equal(rings.length,3,'a delayed frame creates only the current wave');
+ assert.equal(rings[2].startTick,3840);assert.equal(events.length,3);
+ instance.active=false;context.syncReplayRipple(4300);assert.equal(rings.length,3);
+ instance.active=true;instance.startTick=4400;instance.endTick=4608;context.syncReplayRipple(4399);assert.equal(rings.length,3);
+ context.syncReplayRipple(4500);assert.equal(rings.at(-1).startTick,4224,'late entry uses shared phase rather than restarting the ring');
 });
