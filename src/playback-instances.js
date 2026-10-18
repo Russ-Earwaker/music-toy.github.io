@@ -80,6 +80,7 @@ export function activatePlaybackInstance(toyId, requestedTick, {
   const generation = (existing?.generation || 0) + (existing ? 1 : 0);
   // Replacement instances inherit ownership, including retriggers and chain turns.
   const instance = makeInstance(key, { startTick, loopLengthTicks, active: true, generation, context: existing?.context }, existing?.transportId ?? MAIN_TRANSPORT_ID);
+  if(existing?.patternLengthTicks)instance.patternLengthTicks=existing.patternLengthTicks;
   if (existing) invalidatePlaybackOccurrence(existing.occurrenceId);
   instancesByToyId.set(key, instance);
   return instance;
@@ -111,6 +112,7 @@ export function rebasePlaybackTransport(toyId, transportId, startTick = 0) {
   invalidatePlaybackOccurrence(old.occurrenceId);
   const instance = makeInstance(toyId, { startTick, loopLengthTicks: old.loopLengthTicks,
     generation: old.generation + 1, active: !!transportId, context: old.context }, transportId);
+  if(old.patternLengthTicks)instance.patternLengthTicks=old.patternLengthTicks;
   instancesByToyId.set(String(toyId), instance);
   return instance;
 }
@@ -140,6 +142,7 @@ export function releasePlaybackInstance(toyId, { active = true } = {}) {
   invalidatePlaybackOccurrence(old.occurrenceId);
   const instance = makeInstance(toyId, { startTick: old.startTick, loopLengthTicks: old.loopLengthTicks,
     active, generation: old.generation + 1 }, old.transportId);
+  if(old.patternLengthTicks)instance.patternLengthTicks=old.patternLengthTicks;
   instancesByToyId.set(String(toyId), instance);
   return instance;
 }
@@ -164,7 +167,7 @@ export function getPlaybackColumn(instance, transportTick, steps = 8) {
   const localTick = getPlaybackLocalTick(instance, transportTick);
   if (localTick == null) return null;
   const count = Math.max(1, Math.trunc(Number(steps) || 1));
-  return Math.floor((localTick * count) / cleanLoop(instance.loopLengthTicks)) % count;
+    return Math.floor((localTick * count) / cleanLoop(instance.patternLengthTicks??instance.loopLengthTicks)) % count;
 }
 
 // Chain ownership is half-open: the outgoing turn owns [startTick, endTick).
@@ -184,15 +187,17 @@ export function getPlaybackStepEvents(instance, fromTick, toTick, steps = 8) {
   const from = Math.max(cleanTick(fromTick), instance.startTick);
   const to = cleanTick(toTick);
   if (to <= from) return [];
-  let stepNumber = Math.ceil(((from - patternOriginTick(instance)) * count) / loop);
-  while (patternOriginTick(instance) + Math.round((stepNumber * loop) / count) < from) stepNumber += 1;
+  const stepTicks=cleanLoop(instance.patternLengthTicks??loop)/count,slots=Math.min(count,Math.ceil(loop/stepTicks));
+  const eventAt=n=>patternOriginTick(instance)+Math.floor(n/slots)*loop+Math.round((((n%slots)+slots)%slots)*stepTicks);
+  let stepNumber = Math.floor((from-patternOriginTick(instance))/loop)*slots;
+  while(eventAt(stepNumber)<from)stepNumber++;
   const events = [];
   for (;;) {
-    const eventTick = patternOriginTick(instance) + Math.round((stepNumber * loop) / count);
+    const eventTick = eventAt(stepNumber);
     if (eventTick >= to) break;
     events.push({
       eventTick,
-      step: ((stepNumber % count) + count) % count,
+      step: ((stepNumber % slots) + slots) % slots,
     });
     stepNumber += 1;
   }

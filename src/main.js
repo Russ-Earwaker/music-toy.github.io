@@ -1,3 +1,5 @@
+import {lineDrawGridStates,drawGridLineSource,strokePhase} from './free-play-drawgrid.js';
+import {toyLoopLengthTicks} from './drawgrid/dg-pattern-length.js';
 import { drawGridPlaybackVisuals } from './drawgrid/dg-playback-visuals.js';
 import { playbackVisualEvents } from './playback-visual-events.js';
 import { createLogicalToyMetricsReader } from './logical-toy-anchor.js';
@@ -79,6 +81,11 @@ import {createLinkedSequenceController} from './linked-sequences.js';
 import {confirmFinalLinkedCopy} from './linked-copy-delete.js';
 import {prepareDrawgridPhrase,hasDrawgridPhraseMaterial,singleGeneratedDrawgridLine} from './drawgrid/dg-phrase-chunks.js';
 import {installAutoArrangeUI} from './auto-arrange-ui.js';
+import {installFreePlay} from './free-play.js';
+import {updateSilence} from './free-play-silence.js';
+let refreshFreePlaySilence=()=>{};
+import {initializeFreePlayLine} from './free-play-line-toy.js';
+import {getFreePlayTransport} from './free-play-transport.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
@@ -2112,6 +2119,7 @@ function getSequencedToys() {
 }
 
 const toyInitializers = {
+    'freeplay-line': initializeFreePlayLine,
     'bouncer': initializeBouncer,
     'drawgrid': initDrawGrid,
     'loopgrid': buildGrid,
@@ -5162,6 +5170,7 @@ function panelHasAnyNotes(panel) {
   if (!panel) return false;
   if(panel.dataset.masterToyId)return panelHasAnyNotes(document.getElementById(panel.dataset.masterToyId));
   const type = panel.dataset?.toy;
+  if(type==='freeplay-line')return !!panel.__freePlayLineState?.events?.length;
 
   if (type === 'loopgrid' || type === 'loopgrid-drum') {
     const steps = panel.__gridState?.steps;
@@ -7391,6 +7400,7 @@ function tickAudioScheduler() {
   try {
     if (!CHAIN_FEATURE_ENABLE_SCHEDULER || !CHAIN_FEATURE_ENABLE_SEQUENCER) return;
     if (!transportRegistry.list().some(({transport}) => transport.state === 'playing')) return;
+    refreshFreePlaySilence();
     const nowMs = performance.now();
     if (!g_lastChainSyncAt || nowMs - g_lastChainSyncAt > 150) {
       g_lastChainSyncAt = nowMs;
@@ -7441,10 +7451,12 @@ function flushDrawGridPlaybackVisuals(outgoing = null) {
     const panel=document.getElementById(event.toyId);
     if(!panel)return;
     panel.__applyPlaybackVisual?.(event);
+    notifyFreePlayNote(panel,event);
     panel.dispatchEvent(new CustomEvent('toy:playback-visual',{detail:event}));
   });
   drawGridPlaybackVisuals.flush(getTransport, event => {
     const panel = document.getElementById(event.toyId);
+    notifyFreePlayNote(panel,event);
     panel?.dispatchEvent(new CustomEvent('drawgrid:playcol', { detail: { ...event, rows: [event.row] } }));
     panel?.dispatchEvent(new CustomEvent('drawgrid:note-fired', { detail: event }));
   });
@@ -8839,3 +8851,90 @@ import { PERF_FLAGS } from "./perf-flags.js";
 
 // Expose for live debugging / perf-lab runs
 window.PERF_FLAGS = PERF_FLAGS;
+
+// Free Play presents provenance-marked ordinary DrawGrid chains.
+const freePlaySources=new Map(),freePlayNoteListeners=[];
+let freePlayGeneration=0;
+function recoverFreePlayLines(){
+ freePlaySources.clear();
+ for(const panel of getSequencedToys()){
+  const meta=panel.__freePlayDrawGrid;if(!meta||panel.dataset.masterToyId)continue;
+  if(!freePlaySources.has(meta.strokeId))freePlaySources.set(meta.strokeId,[]);
+  freePlaySources.get(meta.strokeId).push(panel);
+ }
+}
+function removeFreePlayStroke(id){
+ for(const panel of getSequencedToys())if(panel.__freePlayDrawGrid?.strokeId===id){cancelScheduledToySources(panel.__audioToyId||panel.id);destroyToyPanel(panel,{allowOffBoard:true,structureCleanup:true});}
+ freePlaySources.delete(id);window.Persistence?.markDirty?.();
+}
+const freePlay=installFreePlay({
+ enter:()=>{if(g_artInternal.active)exitInternalBoardImmediate();recoverFreePlayLines();heartbeatModel.select(MAIN_TRANSPORT_ID);},
+ unlock:()=>{const context=ensureAudioContext();if(context?.state==='suspended')void context.resume();},
+ addLine:source=>{
+  const id='stroke-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),panels=[],states=lineDrawGridStates(source,id),generation=freePlayGeneration;
+  const started=(async()=>{
+   try{
+    for(let i=0;i<states.length;i++){
+     const panel=createToyPanelAt('drawgrid',{centerX:800+i*700,centerY:500+freePlaySources.size*650,autoCenter:false,allowOffscreen:true,skipSpawnPlacement:true,heartbeatId:MAIN_TRANSPORT_ID,instrument:'PIANO'});
+     if(!panel)throw new Error('Could not create DrawGrid');
+     panels.push(panel);ensureToyPanelInitializedNow(panel,'free-play-drawgrid');
+     const parent=connectionModel.getParent(panel.id);if(parent)connectionModel.disconnect(parent.id);
+     await panel.__drawToy.setState(states[i]);
+     if(generation!==freePlayGeneration)throw new Error('Line creation cancelled');
+     panel.dataset.sharedDefinitionId='toy-definition:'+panel.id;
+     setToyVolume(panel.__audioToyId||panel.id,.65);panel.dataset.toyVolume='0.65';syncVolumeUI(panel,{volume:.65});
+    }
+    connectionModel.transaction(()=>{
+     for(let i=0;i<panels.length;i++){
+      const parent=connectionModel.getParent(panels[i].id);if(parent)connectionModel.disconnect(parent.id);
+      const result=connectionModel.connect(i?'sequence':'transport',{objectId:i?panels[i-1].id:MAIN_TRANSPORT_ID,portId:'output'},{objectId:panels[i].id,portId:'input'});
+      if(!result.ok)throw new Error('Could not connect DrawGrid: '+result.reason);
+     }
+    });
+    freePlaySources.set(id,panels);g_toyInstances.prepare();g_chainStructureVersion++;updateChains();window.Persistence?.markDirty?.();
+    await getFreePlayTransport().play();tickAudioScheduler();
+   }catch(error){for(const panel of panels)if(panel.isConnected)destroyToyPanel(panel,{allowOffBoard:true,structureCleanup:true});freePlaySources.delete(id);throw error;}
+  })();
+  return {id,started};
+ },
+ lines:()=>[...freePlaySources].flatMap(([id,panels])=>{
+  const connected=panels.filter(p=>p.isConnected),source=drawGridLineSource(connected);if(!source)return [];
+  const cycleTicks=connected.reduce((total,panel)=>total+toyLoopLengthTicks(panel),0);
+  return [{id,source,randomCutIds:connected[0].__freePlayDrawGrid.randomCutIds||[],straightened:!!connected[0].__freePlayDrawGrid.straightened,definitionIds:connected.map(p=>p.dataset.sharedDefinitionId||p.id),panelIds:connected.map(p=>p.id),phase:strokePhase(source,getFreePlayTransport().currentTick,cycleTicks)}];
+ }),
+ setSilence:(id,{cuts,paint,coveredIds,randomCutIds,randomSeed})=>{
+  const panels=freePlaySources.get(id)||[];
+  if(paint&&panels[0])panels[0].__freePlayDrawGrid.paint=structuredClone(paint);
+  if(panels[0]&&randomCutIds)panels[0].__freePlayDrawGrid.randomCutIds=[...randomCutIds];
+  if(panels[0]&&randomSeed!=null)panels[0].__freePlayDrawGrid.randomSeed=randomSeed;
+  for(const panel of panels){
+   const changed=updateSilence(panel.__dgAuthoredNotes||[],{cuts,paint,coveredIds});
+   if(changed){
+    cancelScheduledToySources(panel.__audioToyId||panel.id);
+    playbackVisualEvents.clearToy(panel.id);drawGridPlaybackVisuals.clearToy(panel.id);
+    g_sequencerScheduler?.resetToyTimeline(panel.id,getFreePlayTransport().currentTick,{includeBoundary:false});
+   }
+   panel.__drawToy?.publishAuthoredChange?.('free-play-silence');
+   g_toyInstances.edit(panel);
+  }
+  window.Persistence?.markDirty?.();
+ },
+ setStraightened:(id,value)=>{const first=freePlaySources.get(id)?.[0];if(first){first.__freePlayDrawGrid.straightened=value;if(first.__sharedToyState?.freePlay)first.__sharedToyState.freePlay.straightened=value;window.Persistence?.markDirty?.();}},
+ synchronize:()=>{for(const panels of freePlaySources.values())for(const panel of panels)if(panel.isConnected){panel.__drawToy?.publishAuthoredChange?.('free-play-board-sync');g_toyInstances.edit(panel);}},
+ reveal:()=>{g_connectionView.render();const panel=[...freePlaySources.values()].flat().find(p=>p.isConnected);if(panel)window.centerBoardOnElementSlow?.(panel,.65,{duration:350});},
+ onNote:listener=>freePlayNoteListeners.push(listener),
+ deleteLine:removeFreePlayStroke,
+ clear:()=>{
+  freePlayGeneration++;
+  for(const id of [...freePlaySources.keys()])removeFreePlayStroke(id);
+  freePlaySources.clear();window.Persistence?.markDirty?.();
+ },
+ forget:()=>{freePlayGeneration++;freePlaySources.clear();},
+});
+refreshFreePlaySilence=freePlay.syncSilence;
+function notifyFreePlayNote(panel,event){
+ if(!Number.isInteger(event.nodeIndex))return;
+ const id=panel?.__freePlayDrawGrid?.strokeId;
+ if(id&&freePlaySources.has(id))for(const listener of freePlayNoteListeners)listener(id,event);
+}
+if(new URLSearchParams(location.search).has('freePlayProof'))import('../tests/free-play-browser-observer.js').then(({observeFreePlay})=>observeFreePlay(freePlay,listener=>freePlayNoteListeners.push(listener)));

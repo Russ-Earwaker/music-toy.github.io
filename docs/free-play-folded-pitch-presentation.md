@@ -1,0 +1,25 @@
+# Free Play / DrawGrid folded pitch presentation
+
+Generated DrawGrids now use the ordinary one-octave layout. Full authored pitch, Register, timing and static-stroke behavior remain separate from presentation.
+
+1. **Visible range:** C3–B3, 12 chromatic rows in the existing 800×600 logical canvas. The safe grid is 540 units high, so each row is 45 logical units rather than 15. Source pitches are not limited to that reference octave.
+
+2. **Pitch projection:** `row = 11 − positiveModulo(sourceMidi, 12)`. B is at the top and C at the bottom. The octave marker is `floor(sourceMidi / 12) − 4`, relative to octave 3; zero is omitted. A4/A5/A6 therefore share the A row and retain +1/+2/+3. Canonical note IDs and full MIDI values survive capture, linked patterns and playback. Coincident pitches at the same step retain separate authored notes and playback voices; their visible cell can show combined offsets. Dragging changes pitch class within the existing source octave. Per-note octave controls remain deferred.
+
+3. **Pentatonic generation:** Free Play already chose the nearest pitch in its C-major pentatonic pool (C3–A5). The target is `48 + (1 − normalizedY) × 33`; nearest-distance ties retain the lower note. That algorithm remains intact. The mismatch was DrawGrid's minor guidance: generated grids now persist `suggestedPitchClasses: [0,2,4,7,9]`. Ordinary DrawGrids retain `[0,3,5,7,10]`. No project-wide scale or harmony policy changed.
+
+4. **Coiled geometry:** Every star keeps the exact sampled point on the drawn path, regardless of pitch quantization. At morph zero, presentation returns the original source geometry. Octave markers fade in during Straighten, rather than moving coiled stars onto rows.
+
+5. **Straighten targets:** X remains normalized musical time. A node's normalized Y is `0.05 + 0.9 × (row + 0.5) / 12`, exactly the corresponding DrawGrid logical center divided by 600. For the line, pitch classes are folded **before** the existing shape-preserving cubic interpolation; the curve therefore smoothly visits the same displayed positions, including deliberate octave wraps. Main-board ink uses that same folded curve. The existing animation duration, transport illumination and partial-bar timing remain intact.
+
+6. **Guidance agreement and editing:** All 107 initially generated browser-test nodes landed on their own grid's pentatonic suggestion rows. Manual C5→C♯5 remained valid on row 10, with source MIDI 73 and marker +2. Actual preview and sequenced playback both reported C♯5. It stayed chromatic after reload. The exact note name appears only during drag; there are no permanent row labels. The active drag row retains its temporary selection highlight even when it is outside the suggested set.
+
+7. **Extreme browser results:** Full-height rise, repeated low/high zigzag, broad spiral and capped four-bar sweeps generated 107 notes in 14 grids, spanning MIDI 48–81 (C3–A5). Every grid retained 12 rows; no additional octave lanes appeared. All 107 nodes had matching real preview and scheduled pitches, with no missing events or application errors. Save/reload retained every canonical note/ID, static stroke, original gesture and per-grid suggestion policy. A held-drag diagnostic fixture verified the large rows, safe-row highlights and C♯5 footer visually; the pitch-changing edit itself used an actual browser drag.
+
+The original generated ink stays static after edits. Frozen presentation-only `visualEvents` drive the Free Play curve; canonical authored notes drive playback. Old three-octave saves fold their row masks and migrate frozen ink once, using the old ink rather than edited source pitches. This is a presentation migration; Register and authored pitches are not baked or re-quantized.
+
+Implementation is concentrated in `dg-pitch-presentation.js`, `dg-authored-notes.js`, `dg-authored-stroke.js`, `dg-note-grid.js`, `dg-state-io.js`, `drawgrid-player.js`, `drawgrid.js`, `free-play-drawgrid.js`, `free-play-line.js` and `free-play-line-visual.js`. Existing range/curve tests now assert the intentional folded layout; six new regression tests cover palette agreement, untouched coiled points, shared targets, coincident notes, chromatic edits and save migration. **117 targeted tests passed**, along with syntax and whitespace checks.
+
+Evidence: [coiled rise](../resources/debug-output/free-play/folded-coiled-rise.png), [straightened rise](../resources/debug-output/free-play/folded-straightened-rise.png), [four-bar board chain](../resources/debug-output/free-play/folded-four-bar-chain.png), [chromatic drag feedback](../resources/debug-output/free-play/folded-drag-feedback.png), [107-node pitch comparison](../resources/debug-output/free-play/folded-node-proof.json), [reload comparison](../resources/debug-output/free-play/folded-reload-proof.json). Audio evidence records the normal sampler/tone input events, not microphone recordings.
+
+This pass supersedes the absolute-height presentation described in the earlier stress and octave-communication reports. Temporary QA controls and observer code are not part of the application.

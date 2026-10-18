@@ -1,6 +1,11 @@
 import { drawGridPlaybackVisuals } from './dg-playback-visuals.js';
+import {admittedToyVisual} from '../playback-visual-events.js';
+import {audioTimeToTick} from '../audio-core.js';
+import {LINE_STEP_TICKS} from '../free-play-line.js';
+import {eventMuted} from '../free-play-silence.js';
+import {syncAuthoredNotes,authoredNotesAt,authoredPerformanceOptions,pitchRange,sourceMidiToRow,rowToSourceMidi} from './dg-authored-notes.js';
 import {getCurrentPlaybackOccurrence} from '../playback-context.js';
-import {drawgridLoopLengthTicks} from './dg-pattern-length.js';
+import {drawgridNaturalDurationTicks,drawgridLoopLengthTicks} from './dg-pattern-length.js';
 import { panelTransportBindings } from '../panel-transport.js';
 // src/drawgrid-player.js
 import { triggerInstrument } from '../audio-samples.js';
@@ -51,13 +56,15 @@ export function connectDrawGridToPlayer(panel) {
   const initialTransport = getTransportState();
   if (isTransportRunning()) {
     activatePlaybackInstance(panel.id, initialTransport.currentTick, {
-      loopLengthTicks: drawgridLoopLengthTicks(panel.dataset.steps),
+      loopLengthTicks: drawgridNaturalDurationTicks(panel),
       quantize: true,
     });
   } else {
-    ensurePlaybackInstance(panel.id, { active: true, startTick: initialTransport.currentTick, loopLengthTicks: drawgridLoopLengthTicks(panel.dataset.steps) });
+    ensurePlaybackInstance(panel.id, { active: true, startTick: initialTransport.currentTick, loopLengthTicks: drawgridNaturalDurationTicks(panel) });
   }
   let instrument = panel.dataset.instrument || 'acoustic_guitar';
+  const syncPatternLength=instance=>{if(instance){if(Number(panel.dataset.authoredDurationTicks)>0)instance.patternLengthTicks=drawgridLoopLengthTicks(panel.dataset.steps);else delete instance.patternLengthTicks;}};
+  syncPatternLength(getPlaybackInstance(panel.id));
 
   const initialSteps = parseInt(panel.dataset.steps, 10) || 8;
 
@@ -77,6 +84,7 @@ export function connectDrawGridToPlayer(panel) {
   panel.__seqPattern = panel.__seqPattern || null;
 
   function cloneDrawgridPattern(map, stepsSnap, instrumentSnap) {
+    const authored=syncAuthoredNotes(panel,map);
     const nodesArr = (map && Array.isArray(map.nodes)) ? map.nodes : [];
     const disabledArr = (map && Array.isArray(map.disabled)) ? map.disabled : [];
     const activeArr = (map && Array.isArray(map.active)) ? map.active : [];
@@ -91,6 +99,7 @@ export function connectDrawGridToPlayer(panel) {
         active: !!activeArr[col],
         nodes: Array.from(nodes),
         disabled: Array.from(disabled),
+        notes:authored.filter(n=>n.col===col).map(n=>({...n,row:sourceMidiToRow(n.sourceMidi,pitchRange(panel))})),
       };
     }
 
@@ -117,6 +126,11 @@ export function connectDrawGridToPlayer(panel) {
           dueTick: transport.audioTimeToTick(admission.when),
           occurrence, col: options.col, row: options.row, when: admission.when, note: admission.note,
         });
+        if(panel.__freePlayDrawGrid){
+          const meta=panel.__freePlayDrawGrid,nodeIndex=Math.round(meta.startTick/LINE_STEP_TICKS)+options.col;
+          admittedToyVisual(panel,{nodeIndex},admission,audioTimeToTick);
+          panel.dispatchEvent(new CustomEvent('freeplay-line:admitted',{bubbles:true,detail:{toyId:owner,nodeIndex,note:admission.note,when:admission.when,eventTick:occurrence?.eventTick}}));
+        }
       },
     });
   }, { scheduleAhead: true });
@@ -125,10 +139,11 @@ export function connectDrawGridToPlayer(panel) {
     const transport = getTransportState();
     const existing = getPlaybackInstance(panel.id);
     const instance = activatePlaybackInstance(panel.id, transport.currentTick, {
-      loopLengthTicks: drawgridLoopLengthTicks(panel.dataset.steps),
+      loopLengthTicks: drawgridNaturalDurationTicks(panel),
       quantize: transport.state === 'playing',
       retrigger,
     });
+    syncPatternLength(instance);
     if (instance !== existing) {
       bumpToyAudioGen(panel.__audioToyId, retrigger ? 'drawgrid-retrigger' : 'drawgrid-activate');
       panel.__forceSchedulerReset = true;
@@ -157,8 +172,8 @@ export function connectDrawGridToPlayer(panel) {
   panel.addEventListener('drawgrid:update', (e) => {
     const map = e?.detail?.map || (e?.detail && e.detail.nodes ? { nodes: e.detail.nodes } : null);
     steps = e?.detail?.steps ?? (map?.nodes?.length ?? 16);
-    const loopTicks=drawgridLoopLengthTicks(steps),previousLoop=getPlaybackInstance(panel.id)?.loopLengthTicks;
-    ensurePlaybackInstance(panel.id,{loopLengthTicks:loopTicks});
+    const loopTicks=drawgridNaturalDurationTicks(panel),previousLoop=getPlaybackInstance(panel.id)?.loopLengthTicks;
+    syncPatternLength(ensurePlaybackInstance(panel.id,{loopLengthTicks:loopTicks}));
     if(previousLoop!==loopTicks)panel.dispatchEvent(new CustomEvent('toy:pattern-length',{bubbles:true}));
     if (map) {
       gridState = map;
@@ -185,17 +200,22 @@ export function connectDrawGridToPlayer(panel) {
     const disabled = e?.detail?.disabled;
     if (!Number.isInteger(col) || !Number.isInteger(row)) return;
     if (disabled !== false) return;
-    const midiNote = notePalette[row];
+    const voices=authoredNotesAt(panel,col,row);
+    for(const note of voices.length?voices:[{sourceMidi:rowToSourceMidi(row,pitchRange(panel))}]){
+    if(eventMuted(panel.__dgAuthoredNotes?.find(n=>n.id===note.id)||note))continue;
+    const midiNote = note.sourceMidi;
     if (midiNote === undefined) return;
     try { resumeAudioContextIfNeeded?.().catch?.(() => {}); } catch {}
     const when = (ensureAudioContext()?.currentTime ?? 0) + 0.01;
     playNote(instrument, midiToName(midiNote), when, {
+      ...authoredPerformanceOptions(panel,note),
       slotIndex: col,
       col,
       step: col,
       index: col,
       source: 'drawgrid:node-toggle',
     });
+    }
   });
 
   panel.addEventListener('toy-instrument', (e) => {
@@ -209,21 +229,26 @@ export function connectDrawGridToPlayer(panel) {
     // Avoid double-hitting during transport playback; only audition when stopped.
     if (typeof isTransportRunning === 'function' && isTransportRunning()) return;
     if (!Number.isInteger(col) || col < 0) return;
-    if (!Number.isInteger(row) || row < 0 || row >= notePalette.length) return;
+    if (!Number.isInteger(row) || row < 0 || row > pitchRange(panel).maxMidi-pitchRange(panel).minMidi) return;
     const nodes = gridState?.nodes?.[col];
     if (!(nodes instanceof Set) || !nodes.has(row)) return;
     const disabled = gridState?.disabled?.[col];
     if (disabled instanceof Set && disabled.has(row)) return;
-    const midiNote = notePalette[row];
+    const voices=authoredNotesAt(panel,col,row);
+    for(const note of voices.length?voices:[{sourceMidi:rowToSourceMidi(row,pitchRange(panel))}]){
+    if(eventMuted(panel.__dgAuthoredNotes?.find(n=>n.id===note.id)||note))continue;
+    const midiNote = note.sourceMidi;
     if (midiNote === undefined) return;
     try { await resumeAudioContextIfNeeded(); } catch {}
     playNote(instrument, midiToName(midiNote), undefined, {
+      ...authoredPerformanceOptions(panel,note),
       slotIndex: col,
       col,
       step: col,
       index: col,
       source: 'drawgrid:preview-drag',
     });
+    }
   }
 
   panel.addEventListener('drawgrid:node-drag-end', (e) => {
@@ -399,11 +424,17 @@ export function connectDrawGridToPlayer(panel) {
     const disabledSet = new Set(c.disabled || []);
 
     let loggedResumePlay = false;
-    for (const row of c.nodes) {
+    const scheduledNotes=c.nodes.flatMap(row=>{
+      const notes=c.notes?.filter(n=>n.row===row);
+      return notes?.length?notes:[{row,sourceMidi:rowToSourceMidi(row,pitchRange(panel))}];
+    });
+    for (const note of scheduledNotes) {
+      const row=note.row;
       if (typeof row !== 'number' || Number.isNaN(row)) continue;
       if (disabledSet.has(row)) continue;
 
-      const midiNote = notePalette[row];
+      if(eventMuted(panel.__dgAuthoredNotes?.find(n=>n.id===note.id)||note))continue;
+      const midiNote = note.sourceMidi;
       if (midiNote === undefined) continue;
 
       try {
@@ -419,6 +450,7 @@ export function connectDrawGridToPlayer(panel) {
       } catch {}
 
       playNote(pat.instrument || instrument, midiToName(midiNote), when, {
+        ...authoredPerformanceOptions(panel,note),
         slotIndex: col,
         col,
         step: col,

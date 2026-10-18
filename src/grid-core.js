@@ -1,8 +1,10 @@
 import {getCurrentPlaybackOccurrence} from './playback-context.js';
+import {installDenseRhythmGrid} from './dense-rhythm-grid.js';
+import {admittedToyVisual} from './playback-visual-events.js';
 import { panelTransportBindings } from './panel-transport.js';
 // src/grid-core.js — grid core + instrument sync (<=300 lines)
 import { triggerInstrument } from './audio-samples.js';
-import { ensureAudioContext, resumeAudioContextIfNeeded, isRunning, getTransportState, TICKS_PER_BAR } from './audio-core.js';
+import { ensureAudioContext, resumeAudioContextIfNeeded, isRunning, getTransportState, TICKS_PER_BAR, audioTimeToTick } from './audio-core.js';
 import { setToyInstrument } from './instrument-map.js';
 import { initToyUI } from './toyui.js';
 import { attachSimpleRhythmVisual } from './simple-rhythm-visual.js';
@@ -215,6 +217,7 @@ export function buildGrid(panel, numSteps = 8){
 
   // Attach visual renderer for the 8-step grid.
   attachSimpleRhythmVisual(panel);
+  installDenseRhythmGrid(panel,sequencerWrap);
 
   // --- Apply any pending restored state (set by persistence.applyLoopGrid before grid init) ---
   try {
@@ -222,6 +225,7 @@ export function buildGrid(panel, numSteps = 8){
     if (pending && panel.__gridState) {
       if (Array.isArray(pending.steps)) {
         panel.__gridState.steps = Array.from(pending.steps).map(v => !!v);
+        panel.dataset.steps = String(pending.steps.length);
       }
       if (Array.isArray(pending.notes)) {
         panel.__gridState.notes = Array.from(pending.notes).map(x => x | 0);
@@ -519,6 +523,7 @@ export function buildGrid(panel, numSteps = 8){
       step: col,
       index: col,
       source: 'loopgrid:sequencer',
+      onPlaybackScheduled:admission=>admittedToyVisual(panel,{col,slotIndex:col},admission,audioTimeToTick),
     });
   };
  

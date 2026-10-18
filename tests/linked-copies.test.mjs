@@ -13,6 +13,7 @@ import {validateStructureInstanceLinks} from '../src/structure-instances.js';
 import {createAutoArranger} from '../src/auto-arrange.js';
 import {continueDrawgridPhrase,splitDrawgridPhrase,prepareDrawgridPhrase,hasDrawgridPhraseMaterial,repairDrawgridPhraseStrokes} from '../src/drawgrid/dg-phrase-chunks.js';
 import {storeLinkedDefinitions,projectLinkedDefinitions} from '../src/linked-definitions.js';
+import {updateSilence,eventMuted} from '../src/free-play-silence.js';
 
 test('Arrange generates melody for a freshly created empty DrawGrid but preserves an authored seed',async()=>{
  const empty={steps:8,instrument:'PIANO',nodes:{active:Array(8).fill(false),list:Array.from({length:8},()=>[]),disabled:Array.from({length:8},()=>[])},strokes:[]};
@@ -164,5 +165,39 @@ test('Arrange can await delayed linked-view sizing before laying out a branch',a
   await Promise.resolve();assert.equal(ready,false);assert.equal(copy.offsetHeight,160);
   await controller.whenReady(['unrelated']);assert.equal(ready,false);
   release();await pending;assert.equal(copy.offsetHeight,757);assert.equal(ready,true);
+ }finally{d.close();}
+});
+
+test('DrawGrid shared commit publishes canonical state/pattern together before window pointerup and to siblings',async()=>{
+ const d=dom(),panels=[];
+ function panel(id){const p={id,isConnected:true,__drawToy:{},dataset:{toy:'drawgrid',toyName:'Draw'},style:{},classList:d.node().classList,addEventListener(){},querySelector(){return null;},state:{steps:8,instrument:'PIANO',authoredNotes:[{id:'note',col:0,sourceMidi:81}],pitchRange:{minMidi:48,maxMidi:83},nodes:{list:[[2],[],[],[],[],[],[],[]],active:[true],disabled:[[],[],[],[],[],[],[],[]]}},__seqPattern:{steps:8,cols:[{nodes:[2]}]},__sequencerSchedule(){return p.__seqPatternActive;}};panels.push(p);return p;}
+ const p=panel('source'),c=createLinkedToyViewController({getPanels:()=>panels,getMaster:id=>panels.find(p=>p.id===id),createView:()=>panel('peer'),capture:p=>structuredClone(p.state),apply:async(p,s)=>{p.state=structuredClone(s);},register(){},changed(){},focus(){},remove(){}});
+ try{c.adopt(p);const peer=c.create(p);await c.whenReady([peer.id]);
+  p.state.authoredNotes[0].sourceMidi=82;p.state.nodes.list[0]=[1];
+  c.edit(p); // panel pointerup: sequencer callback has not run yet
+  assert.equal(p.__sharedToyState.authoredNotes[0].sourceMidi,82);assert.equal(peer.__seqPattern.cols[0].notes[0].sourceMidi,82);assert.deepEqual(peer.__seqPattern.cols[0].nodes,[1]);
+  const revision=p.__sharedToyDefinition.revision;p.__seqPattern={steps:8,cols:[{nodes:[1]}]};c.edit(p);assert.equal(p.__sharedToyDefinition.revision,revision);
+  assert.equal(peer.__sequencerSchedule().cols[0].notes[0].sourceMidi,82);await c.whenReady([peer.id]);assert.equal(peer.state.authoredNotes[0].sourceMidi,82);
+  p.state.authoredNotes[0].sourceMidi=81;p.state.nodes.list[0]=[2];c.edit(p);assert.equal(peer.__seqPattern.cols[0].notes[0].sourceMidi,81);assert.equal(p.__sharedToyState.authoredNotes[0].id,'note');
+  const authored=structuredClone(p.state.authoredNotes);
+  for(const offset of [1,-1,2,-2,0]){p.state.registerOctaves=offset;c.edit(p);await c.whenReady([peer.id]);assert.equal(peer.dataset.registerOctaves,String(offset));assert.equal(peer.state.registerOctaves,offset);assert.deepEqual(peer.state.authoredNotes,authored);assert.deepEqual(peer.__seqPattern.cols[0].notes.map(n=>n.sourceMidi),[81]);}
+  for(const duration of [192,0]){p.state.authoredDurationTicks=duration;c.edit(p);await c.whenReady([peer.id]);assert.equal(peer.state.authoredDurationTicks,duration);assert.equal(peer.dataset.authoredDurationTicks,duration?String(duration):undefined);assert.deepEqual(peer.state.authoredNotes,authored);}
+ }finally{d.close();}
+});
+
+test('Free Play bulk silence publishes through the ordinary shared DrawGrid commit before playback/reload',async()=>{
+ const d=dom(),panels=[];
+ function panel(id){const p={id,isConnected:true,__drawToy:{},dataset:{toy:'drawgrid',toyName:'Draw'},style:{},classList:d.node().classList,addEventListener(){},querySelector(){return null;},
+  state:{steps:8,instrument:'PIANO',pitchRange:{minMidi:48,maxMidi:59},authoredNotes:[{id:'a',col:0,sourceMidi:81},{id:'b',col:1,sourceMidi:69},{id:'c',col:2,sourceMidi:60}],nodes:{list:[[2],[2],[11],[],[],[],[],[]],active:[true,true,true],disabled:[[],[],[],[],[],[],[],[]]},freePlay:{strokeId:'line',paint:[]}},
+  __seqPattern:{steps:8,cols:[]},__sequencerSchedule(){return p.__seqPatternActive.cols.flatMap(c=>c.notes.filter(n=>!eventMuted(n))).map(n=>n.id);}};panels.push(p);return p;}
+ const p=panel('source'),c=createLinkedToyViewController({getPanels:()=>panels,getMaster:id=>panels.find(p=>p.id===id),createView:()=>panel('peer'),capture:p=>structuredClone(p.state),apply:async(p,s)=>{p.state=structuredClone(s);},register(){},changed(){},focus(){},remove(){}});
+ try{
+  c.adopt(p);const peer=c.create(p);await c.whenReady([peer.id]);
+  updateSilence(p.state.authoredNotes,{cuts:{b:true},coveredIds:['c']});c.edit(p);
+  assert.deepEqual(peer.__sequencerSchedule(),['a']);assert.equal(peer.__seqPattern.cols[1].notes[0].scissorMuted,true);assert.equal(peer.__seqPattern.cols[2].notes[0].paintCovered,true);
+  await c.whenReady([peer.id]);assert.deepEqual(peer.state.authoredNotes,p.state.authoredNotes);
+  updateSilence(p.state.authoredNotes,{cuts:{b:false}});c.edit(p);assert.deepEqual(peer.__sequencerSchedule(),['a','b']);
+  updateSilence(p.state.authoredNotes,{coveredIds:[]});p.state.freePlay.paint=[];c.edit(p);assert.deepEqual(peer.__sequencerSchedule(),['a','b','c']);
+  await c.whenReady([peer.id]);const saved=JSON.parse(JSON.stringify(c.definitions()[0].state));assert.ok(saved.authoredNotes.every(n=>!eventMuted(n)));assert.deepEqual(saved.authoredNotes.map(n=>[n.id,n.sourceMidi,n.col]),[['a',81,0],['b',69,1],['c',60,2]]);
  }finally{d.close();}
 });

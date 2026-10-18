@@ -18,6 +18,7 @@ export function createPlaybackVisualQueue({getTransport=id=>transportRegistry.ge
       const key=JSON.stringify([event.toyId,event.occurrence?.identity,event.eventTick,event.eventKey]);
       if(!pending.has(key))pending.set(key,event);
     },
+    clearToy(toyId) {for(const [key,event] of pending)if(event.toyId===toyId)pending.delete(key);},
     clear(transportId) {for(const [key,e] of pending)if(e.transportId===transportId)pending.delete(key);},
     flush(getTransport,emit) {
       for(const [key,event] of pending){

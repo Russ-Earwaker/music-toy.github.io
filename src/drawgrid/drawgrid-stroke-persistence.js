@@ -44,6 +44,7 @@ export function upgradeDrawGridStroke(stroke, { fallbackColor } = {}) {
     isSpecial: !!source.isSpecial,
     generatorId: typeof source.generatorId === 'number' ? source.generatorId : undefined,
     overlayColorize: !!source.overlayColorize,
+    ...(source.noteDriven?{noteDriven:true}:{}),
   };
 }
 

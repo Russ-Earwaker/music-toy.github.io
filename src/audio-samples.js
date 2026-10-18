@@ -491,7 +491,7 @@ function triggerInstrumentInOccurrence(instrument, noteName='C4', when, toyId, o
   const occurrence=options.playbackOccurrence;
   const panel=typeof document!=='undefined'?(document.getElementById(toyId) || document.querySelector?.(`.toy-panel[data-audiotoyid="${toyId}"], #${toyId}`)):null;
   const role=instrumentMusicalRole(id,occurrence?.toyType ?? panel?.dataset?.toy,panel?.dataset?.musicalRole,options,occurrence);
-  const pitchDecision=resolveMusicalPitch({sourcePitch:sourceNote,eventTick:occurrence?.eventTick ?? options.eventTick,context:options.context,role,localTranspose:panel?.dataset?.toy==='drawgrid'?panel.dataset.localTranspose:0,referenceHarmony:options.referenceHarmony,register:options.register});
+  const pitchDecision=resolveMusicalPitch({sourcePitch:sourceNote,eventTick:occurrence?.eventTick ?? options.eventTick,context:options.context,role,localTranspose:panel?.dataset?.toy==='drawgrid'?panel.dataset.localTranspose:0,registerOctaves:panel?.dataset?.registerOctaves,referenceHarmony:options.referenceHarmony,register:options.register});
   const resolvedNote = pitchDecision.finalNote;
   // Source policy was resolved above; audio ownership belongs to the visible Instance.
   if(occurrence?.instanceToyId)toyId=occurrence.instanceToyId;

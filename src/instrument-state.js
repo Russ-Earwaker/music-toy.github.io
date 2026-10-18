@@ -1,6 +1,7 @@
 import { restoreToyMusicalRole, normalizeMusicalRole } from './musical-role.js';
 import { classifyMusicalRole } from './harmonic-adaptation.js';
 import { normalizeLocalTranspose, restoreToyLocalTranspose } from './toy-local-transpose.js';
+import { normalizeRegisterOctaves, restoreToyRegister } from './toy-register.js';
 // Sound ownership belongs to the musical toy, independently of graph ancestry.
 export const MUSICAL_INSTRUMENT_TOYS = Object.freeze(['loopgrid', 'drawgrid', 'loopgrid-drum', 'chordwheel', 'bouncer', 'rippler']);
 export const supportsToyInstrument = kind => MUSICAL_INSTRUMENT_TOYS.includes(kind);
@@ -10,6 +11,7 @@ export function readToySoundState(panel) {
   for (const key of ['instrument', ...pitchKeys, 'musicalRole']) if (panel?.dataset?.[key] != null) state[key] = panel.dataset[key];
   if(panel?.dataset?.toy==='drawgrid'){
     state.musicalRole=normalizeMusicalRole(state.musicalRole)||classifyMusicalRole({toyType:'drawgrid',instrument:state.instrument});
+    state.registerOctaves=normalizeRegisterOctaves(panel.dataset.registerOctaves);
     state.localTranspose=normalizeLocalTranspose(panel.dataset.localTranspose);
   }
   return state;
@@ -18,6 +20,7 @@ export function restoreToySoundState(panel, state) {
   if (!state) return;
   restoreToyMusicalRole(panel, state);
   restoreToyLocalTranspose(panel, state);
+  restoreToyRegister(panel, state);
   for (const key of ['instrument', ...pitchKeys]) if (state[key] != null) panel.dataset[key] = String(state[key]);
   if (state.instrumentPitchShift != null) panel.dataset.instrumentPitchShift = [true, 'true', '1', 1].includes(state.instrumentPitchShift) ? '1' : '0';
   if (state.instrument) panel.dataset.instrumentPersisted = '1';

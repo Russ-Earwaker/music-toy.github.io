@@ -1,6 +1,7 @@
 // src/persistence.js
 // Lightweight scene save/load with versioning and localStorage backend.
 import {storeLinkedDefinitions,projectLinkedDefinitions} from './linked-definitions.js';
+import {surfacePaint,restoreSurfacePaint} from './free-play-surface-paint.js';
 
 import { bpm, setBpm, stop as stopTransport, setToyVolume, setToyMuted, getToyVolumeRaw, isToyMuted } from './audio-core.js';
 import { setGestureTransform as zcSetGestureTransform, commitGesture as zcCommitGesture, getZoomState as zcGetZoomState } from './zoom/ZoomCoordinator.js';
@@ -13,6 +14,7 @@ import { applyToyInstrument } from './instrument-state.js';
 import { normalizeMusicalRole, restoreToyMusicalRole } from './musical-role.js';
 import {migrateSourceUses,validateInstanceLinks} from './toy-instances.js';
 import {validateStructureInstanceLinks} from './structure-instances.js';
+import { restoreToyRegister } from './toy-register.js';
 import { restoreToyLocalTranspose } from './toy-local-transpose.js';
 
 // ---- Persistence diagnostics ----
@@ -464,6 +466,7 @@ function applyLoopGrid(panel, state){
     if (panel.__gridState){
       if (Array.isArray(state.steps)){
         panel.__gridState.steps = Array.from(state.steps).map(v=>!!v);
+        panel.dataset.steps = String(state.steps.length);
       }
       if (Array.isArray(state.notes)){
         panel.__gridState.notes = Array.from(state.notes).map(x=> x|0);
@@ -785,6 +788,10 @@ function applyCameraState(camera) {
 }
 
 const ToySnapshotters = {
+  'freeplay-line': {
+    snap:panel=>panel.__getFreePlayLineSnapshot?.()||panel.__pendingFreePlayLineState||{},
+    apply:(panel,state)=>{if(panel.__applyFreePlayLineSnapshot)panel.__applyFreePlayLineSnapshot(state);else panel.__pendingFreePlayLineState=structuredClone(state);},
+  },
   loopgrid: { snap: snapLoopGrid, apply: applyLoopGrid },
   'loopgrid-drum': { snap: snapLoopGrid, apply: applyLoopGrid },
   bouncer: { snap: snapBouncer, apply: applyBouncer },
@@ -823,10 +830,10 @@ const ToySnapshotters = {
 };
 
 export function captureLinkedToyState(panel){
- return {...(ToySnapshotters[panel.dataset.toy]?.snap(panel)||{}),musicalRole:normalizeMusicalRole(panel.dataset.musicalRole),localTranspose:Number(panel.dataset.localTranspose)||0};
+ return {...(ToySnapshotters[panel.dataset.toy]?.snap(panel)||{}),musicalRole:normalizeMusicalRole(panel.dataset.musicalRole),localTranspose:Number(panel.dataset.localTranspose)||0,registerOctaves:Number(panel.dataset.registerOctaves)||0};
 }
 export async function applyLinkedToyState(panel,state){
- restoreToyMusicalRole(panel,state);restoreToyLocalTranspose(panel,state);
+ restoreToyMusicalRole(panel,state);restoreToyLocalTranspose(panel,state);restoreToyRegister(panel,state);
  applyInstrumentPitch(panel,state);
  if(state.instrument)applyToyInstrument(panel,state.instrument);
  if(panel.dataset.toy==='drawgrid'){
@@ -929,6 +936,7 @@ export function getSnapshot(){
     chains,
     connections: connectionModel.snapshot().connections,
     structureToys: structureToyModel.list(),
+    ...(surfacePaint().length?{freePlaySurfacePaint:structuredClone(surfacePaint())}:{}),
     camera,
   },panels.map(p=>p.__sharedToyDefinition).filter(Boolean));
 }
@@ -942,6 +950,7 @@ export function applySceneSnapshot(snap){
   const migratedUses=snap?.connections?.some(c=>c.to.portId==='pattern');
   try{snap=validateStructureInstanceLinks(validateInstanceLinks(migrateSourceUses(projectLinkedDefinitions(snap))));}catch(error){console.warn('[persistence] invalid linked toy scene',error);return false;}
   if (!snap || typeof snap !== 'object') return false;
+  restoreSurfacePaint(snap.freePlaySurfacePaint);
   window.beginCreationGraphRestore?.();
   try{
     // Always pause transport when applying a scene so it doesn't auto-play after load.
@@ -1153,6 +1162,7 @@ export function applySceneSnapshot(snap){
         panel.dataset.autoArrangeFill=t.state.autoArrangeFill;panel.dataset.autoArrangeFillHeartbeat=t.state.autoArrangeFillHeartbeat||'main-heartbeat';
       }else{delete panel.dataset.autoArrangeFill;delete panel.dataset.autoArrangeFillHeartbeat;}
       restoreToyLocalTranspose(panel, t.state || {});
+      restoreToyRegister(panel, t.state || {});
       const applier = ToySnapshotters[t.type]?.apply;
       if (typeof applier === 'function'){
         try {

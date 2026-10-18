@@ -181,6 +181,10 @@ export function createBouncer(selector){
           nextLaunchAtRemaining = st.nextLaunchAtRemaining;
           nextLaunchAt = null; // Clear absolute time
         }
+        // Imported replay belongs to the geometry and launch just restored.
+        // A persisted signature may describe a different viewport size.
+        if(loopRec.mode === 'replay' && loopRec.trajectory.length >= 2)
+          loopRec.signature = stateSignature();
         if (DBG_RESPAWN()) console.log('[BNC_DBG] applySnapshot: Applied state', {
             ballFlightTimeRemaining: ball?.flightTimeRemaining,
             nextLaunchAtRemaining: nextLaunchAtRemaining,

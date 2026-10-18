@@ -9,6 +9,7 @@ export function createDrawGridPlaybackVisuals() {
       const key = JSON.stringify([event.occurrence?.identity, event.toyId, event.eventTick, event.col, event.row]);
       if (!pending.has(key)) pending.set(key, event);
     },
+    clearToy(toyId) {for(const [key,event] of pending)if(event.toyId===toyId)pending.delete(key);},
     clear(transportId) {
       for (const [key, event] of pending) if (event.transportId === transportId) pending.delete(key);
     },

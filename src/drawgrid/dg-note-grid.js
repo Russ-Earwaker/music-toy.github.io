@@ -1,5 +1,13 @@
+import {authoredNoteAt,authoredNotesAt,pitchRange,rowToSourceMidi} from './dg-authored-notes.js';
 // src/drawgrid/dg-note-grid.js
 // Note grid palettes, labels, and drag-scale hints.
+
+// A fixed view-based reference cannot jump as individual notes are edited.
+export const drawGridReferenceOctave = range => Math.floor(((range.minMidi + range.maxMidi) / 2) / 12) - 1;
+export function octaveOffsetMarker(sourceMidi, referenceOctave) {
+  const offset = Math.floor(sourceMidi / 12) - 1 - referenceOctave;
+  return offset ? (offset > 0 ? `+${offset}` : String(offset)) : '';
+}
 
 export function createDgNoteGrid({ state, deps } = {}) {
   const s = state;
@@ -15,29 +23,43 @@ export function createDgNoteGrid({ state, deps } = {}) {
 
   function drawNoteLabelsTo(ctx, nodes) {
     if (!ctx) return;
-    const fadeAlpha = Math.max(0, Math.min(1, Number.isFinite(s.gridVisibilityAlpha) ? s.gridVisibilityAlpha : 0));
-    if (fadeAlpha <= 0.001) return;
     d.__dgWithLogicalSpace(ctx, () => {
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * fadeAlpha})`;
-      ctx.font = '600 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-      ctx.textAlign = 'center';
+      ctx.save();
+      const range = pitchRange(s.panel);
+      const reference = drawGridReferenceOctave(range);
+      ctx.fillStyle = 'rgba(230, 242, 255, 0.9)';
+      ctx.font = '600 14px system-ui, sans-serif';
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#080d19';
+      ctx.shadowBlur = 3;
       const gridBottomY = Math.round((s.gridArea?.y || 0) + (s.topPad || 0) + ((s.rows || 0) * (s.ch || 0)));
       const labelY = Math.round((gridBottomY + (s.cssH || 0)) * 0.5);
-
+      let hasOffsets = false;
       for (let c = 0; c < s.cols; c++) {
-        if (!nodes[c] || nodes[c].size === 0) continue;
-        let r = undefined;
-        const disabledSet = s.currentMap?.disabled?.[c] || new Set();
-        for (const row of nodes[c]) {
-          if (!disabledSet.has(row)) { r = row; break; }
+        for (const row of nodes[c] || []) {
+          const midi = authoredNoteAt(s.panel,c,row)?.sourceMidi ?? rowToSourceMidi(row,range);
+          const pitches = authoredNotesAt(s.panel,c,row);
+          const offsets = [...new Set((pitches.length?pitches:[{sourceMidi:midi}]).map(n=>octaveOffsetMarker(n.sourceMidi,reference)))];
+          const marker = offsets.length>1?offsets.map(s=>s||'0').join('/'):offsets[0];
+          if (!marker) continue;
+          hasOffsets = true;
+          const x = s.gridArea.x + (c + .5) * s.cw;
+          const y = s.gridArea.y + (s.topPad || 0) + (row + .5) * s.ch;
+          ctx.fillText(marker,x + Math.max(4,Math.min(s.cw,s.ch)*.2) + 6,y);
         }
-        if (r === undefined) continue;
-        const midiNote = chromaticPalette[r];
-        if (midiNote === undefined) continue;
-        const tx = Math.round(s.gridArea.x + c * s.cw + s.cw * 0.5);
-        ctx.fillText(d.midiToName(midiNote), tx, labelY);
       }
+      if (hasOffsets) ctx.fillText(`Ref C${reference}–B${reference}`,s.gridArea.x,Math.max(12,s.gridArea.y-14));
+      // Exact authored pitch is contextual feedback, never a permanent row label.
+      if (s.draggedNode) {
+        const {col,row} = s.draggedNode;
+        const pitches=authoredNotesAt(s.panel,col,row);
+        const names=(pitches.length?pitches:[{sourceMidi:rowToSourceMidi(row,range)}]).map(n=>d.midiToName(n.sourceMidi));
+        ctx.font = '600 24px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(names.join('/'),s.gridArea.x+(col+.5)*s.cw,labelY);
+      }
+      ctx.restore();
     });
   }
 
@@ -59,10 +81,12 @@ export function createDgNoteGrid({ state, deps } = {}) {
     ctx.lineJoin = 'miter';
     ctx.lineCap = 'butt';
     for (let r = 0; r < s.rows; r++) {
-      const midi = chromaticPalette[r];
+      const midi = rowToSourceMidi(r,pitchRange(s.panel));
       if (typeof midi !== 'number') continue;
       const pitchClass = ((midi % 12) + 12) % 12;
-      if (!pentatonicPitchClasses.has(pitchClass)) continue;
+      const suggested = s.panel?.__dgSuggestedPitchClasses || pentatonicOffsets;
+      // Pentatonic rows are suggestions; every chromatic row remains editable.
+      if (!suggested.includes(pitchClass) && activeRow !== r) continue;
       const y = noteGridY + r * s.ch;
       const alpha = ((activeRow === r) ? 0.6 : 0.35) * fadeAlpha;
       ctx.fillStyle = `rgba(90, 200, 255, ${alpha})`;

@@ -1,5 +1,5 @@
 import { isModifier } from './modifier-types.js';
-import {toyLoopLengthTicks} from './drawgrid/dg-pattern-length.js';
+import {toyLoopLengthTicks,drawgridLoopLengthTicks} from './drawgrid/dg-pattern-length.js';
 import { MAIN_TRANSPORT_ID, transportRegistry } from './transport-registry.js';
 import { TICKS_PER_BAR } from './audio-core.js';
 import { createStructureRuntime } from './structure-runtime.js';
@@ -65,6 +65,9 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     // Metadata already handed to audio keeps its immutable context snapshot.
     // The next unscheduled window sees the latest modifier definition.
     instance.context = turn.context;
+    const panel=getToy(turn.toyId);
+    if(panel?.dataset?.toy==='drawgrid'&&Number(panel.dataset.authoredDurationTicks)>0)instance.patternLengthTicks=drawgridLoopLengthTicks(panel.dataset.steps);
+    else delete instance.patternLengthTicks;
     return { ...turn, playbackInstance: instance };
   }
 

@@ -1,0 +1,54 @@
+{
+  "pausedBefore": {
+    "state": "paused",
+    "bpm": 120,
+    "positionTick": 70650,
+    "currentTick": 70650,
+    "currentBeat": 735,
+    "currentBar": 183,
+    "ticksPerBeat": 96,
+    "ticksPerBar": 384,
+    "beatsPerBar": 4,
+    "mapping": {
+      "originTick": 56396,
+      "originAudioTime": 27.472,
+      "bpm": 120
+    }
+  },
+  "tempoAfter": {
+    "state": "paused",
+    "bpm": 152,
+    "positionTick": 70650,
+    "currentTick": 70650,
+    "currentBeat": 735,
+    "currentBar": 183,
+    "ticksPerBeat": 96,
+    "ticksPerBar": 384,
+    "beatsPerBar": 4,
+    "mapping": {
+      "originTick": 70650,
+      "originAudioTime": 119.90133333333333,
+      "bpm": 152
+    }
+  },
+  "reset": {
+    "state": "stopped",
+    "bpm": 152,
+    "positionTick": 0,
+    "currentTick": 0,
+    "currentBeat": 0,
+    "currentBar": 0,
+    "ticksPerBeat": 96,
+    "ticksPerBar": 384,
+    "beatsPerBar": 4,
+    "mapping": {
+      "originTick": 0,
+      "originAudioTime": 3.021333333333333,
+      "bpm": 152
+    }
+  },
+  "phases": [
+    0,
+    0
+  ]
+}

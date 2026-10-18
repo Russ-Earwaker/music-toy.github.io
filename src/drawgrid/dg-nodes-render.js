@@ -1,5 +1,6 @@
 // src/drawgrid/dg-nodes-render.js
 // DrawGrid node rendering + caches.
+import {authoredCellSilent} from './dg-note-silence.js';
 
 export function createDgNodesRender({ state, deps } = {}) {
   const s = state;
@@ -147,6 +148,10 @@ export function createDgNodesRender({ state, deps } = {}) {
 
     // Include nodes signature so random-gen changes invalidate cache even if rev isn't bumped.
     mapKey = __dgHashStep(mapKey, nodesSig);
+    for(const note of s.panel?.__dgAuthoredNotes||[]){
+      mapKey=__dgHashStep(mapKey,note.col);mapKey=__dgHashStep(mapKey,note.sourceMidi);
+      mapKey=__dgHashStep(mapKey,note.scissorMuted?1:0);mapKey=__dgHashStep(mapKey,note.paintCovered?1:0);
+    }
 
     // Any content mutation that affects nodes/active/disabled must bump __dgRev.
     if (s.currentMap) {
@@ -557,7 +562,7 @@ export function createDgNodesRender({ state, deps } = {}) {
             const y = s.gridArea.y + s.topPad + r * s.ch + s.ch * 0.5;
             const groupEntry = s.nodeGroupMap?.[c]?.get(r) ?? null;
             const disabledSet = s.currentMap?.disabled?.[c];
-            const isDisabled = !!(disabledSet && disabledSet.has(r));
+            const isDisabled = !!(disabledSet && disabledSet.has(r)) || authoredCellSilent(s.panel,c,r);
             if (Array.isArray(groupEntry) && groupEntry.length > 0) {
               for (let i = groupEntry.length - 1; i >= 0; i--) {
                 const gid = groupEntry[i];

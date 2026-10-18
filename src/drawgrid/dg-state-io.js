@@ -1,7 +1,10 @@
 // src/drawgrid/dg-state-io.js
 // Capture/restore state helpers for DrawGrid.
 
+import { restoreToyRegister } from '../toy-register.js';
 import { readToySoundState } from '../instrument-state.js';
+import {applyFreePlayDrawGrid,prepareFreePlayDrawGridState} from '../free-play-drawgrid.js';
+import {syncAuthoredNotes,restoreAuthoredNotes,pitchRange} from './dg-authored-notes.js';
 import { drawGridLogicalPointToNormalized } from './drawgrid-viewport-space.js';
 import {
   DRAWGRID_PERSISTENCE_COORDINATE_SPACE,
@@ -37,6 +40,15 @@ export function createDgStateIo({ state, deps } = {}) {
         schemaVersion: DRAWGRID_PERSISTENCE_VERSION,
         coordinateSpace: DRAWGRID_PERSISTENCE_COORDINATE_SPACE,
         steps: s.cols | 0,
+        authoredDurationTicks:Number(s.panel?.dataset?.authoredDurationTicks)||0,
+        authoredNotes:structuredClone(syncAuthoredNotes(s.panel,s.currentMap)),
+        authoredProjectionKey:JSON.stringify((s.currentMap?.nodes||[]).map(rows=>[...rows])),
+        pitchRange:{...pitchRange(s.panel)},
+        pitchPresentation:'folded-octave-v1',
+        ...(s.panel?.__dgSuggestedPitchClasses?{suggestedPitchClasses:[...s.panel.__dgSuggestedPitchClasses]}:{}),
+        preserveSourceRegister:!!s.panel?.__dgPreserveSourceRegister,
+        ...(s.strokes?.some(st=>st.noteDriven)?{meta:{preserveNodesOverStrokes:true}}:{}),
+        ...(s.panel?.__freePlayDrawGrid?{freePlay:structuredClone(s.panel.__freePlayDrawGrid)}:{}),
         autotune: !!s.autoTune,
         instrument: s.panel?.dataset?.instrument || undefined,
         ...readToySoundState(s.panel),
@@ -48,6 +60,7 @@ export function createDgStateIo({ state, deps } = {}) {
           isSpecial: !!stroke.isSpecial,
           generatorId: (typeof stroke.generatorId === 'number') ? stroke.generatorId : undefined,
           overlayColorize: !!stroke.overlayColorize,
+          ...(stroke.noteDriven?{noteDriven:true}:{}),
         })),
         nodes: {
           active: (s.currentMap?.active && Array.isArray(s.currentMap.active)) ? s.currentMap.active.slice() : Array(s.cols).fill(false),
@@ -68,6 +81,11 @@ export function createDgStateIo({ state, deps } = {}) {
   }
 
   function restoreFromState(state) {
+    state=prepareFreePlayDrawGridState({...state,pitchRange:state?.pitchRange||s.panel?.__dgPitchRange,preserveSourceRegister:state?.preserveSourceRegister??s.panel?.__dgPreserveSourceRegister});
+    if(Object.hasOwn(state,'registerOctaves'))restoreToyRegister(s.panel,state);
+    restoreAuthoredNotes(s.panel,state);
+    d.configurePitchRange?.(state.pitchRange);
+    applyFreePlayDrawGrid(s.panel,state?.freePlay);
     const prevRestoring = s.isRestoring;
     s.isRestoring = true;
     if (state && typeof state.instrument === 'string') {
@@ -109,10 +127,15 @@ export function createDgStateIo({ state, deps } = {}) {
       });
 
       s.strokes = upgradeDrawGridStrokes(state?.strokes);
-
-      d.FD?.markRegenSource?.('restore-state');
-      d.FD?.markRegenSource?.('randomize');
-      d.regenerateMapFromStrokes?.();
+      if(hasNodeList){
+        s.currentMap={nodes:state.nodes.list.map(rows=>new Set(rows)),active:state.nodes.active.slice(),disabled:state.nodes.disabled.map(rows=>new Set(rows))};
+        s.persistentDisabled=s.currentMap.disabled;s.nodeGroupMap=state.nodes.groups.map(groups=>new Map(groups));
+        restoreAuthoredNotes(s.panel,state);
+      }else{
+        d.FD?.markRegenSource?.('restore-state');
+        d.FD?.markRegenSource?.('randomize');
+        d.regenerateMapFromStrokes?.();
+      }
       s.currentMap = d.normalizeMapColumns?.(s.currentMap, s.cols);
 
       d.__dgWithLogicalSpace(s.pctx, () => {

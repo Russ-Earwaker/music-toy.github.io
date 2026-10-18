@@ -2,15 +2,28 @@
 // External state application for DrawGrid.
 
 import { upgradeDrawGridStrokes } from './drawgrid-stroke-persistence.js';
+import { restoreToyRegister } from '../toy-register.js';
 import { restoreToyLocalTranspose } from '../toy-local-transpose.js';
 import { restoreToyMusicalRole } from '../musical-role.js';
+import {applyFreePlayDrawGrid,prepareFreePlayDrawGridState} from '../free-play-drawgrid.js';
+import {restoreAuthoredNotes} from './dg-authored-notes.js';
+import {restoreDrawgridDuration} from './dg-pattern-length.js';
 
 export function createDgSetState({ state, deps } = {}) {
   const s = state || {};
   const d = deps || {};
 
   function setState(st = {}) {
+    const hasAuthoredData=Array.isArray(st.authoredNotes)||Array.isArray(st.nodes?.list);
+    if(hasAuthoredData){
+      st=prepareFreePlayDrawGridState(st);
+      restoreAuthoredNotes(s.panel,st);
+      d.configurePitchRange?.(st.pitchRange);
+    }
+    applyFreePlayDrawGrid(s.panel,st.freePlay);
+    if(Object.hasOwn(st,'authoredDurationTicks'))restoreDrawgridDuration(s.panel,st);
     if (Object.hasOwn(st, 'musicalRole')) restoreToyMusicalRole(s.panel, st);
+    if (Object.hasOwn(st, 'registerOctaves')) restoreToyRegister(s.panel, st);
     if (Object.hasOwn(st, 'localTranspose')) restoreToyLocalTranspose(s.panel, st);
     return new Promise(resolve=>{requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -125,6 +138,7 @@ export function createDgSetState({ state, deps } = {}) {
               }
 
               s.persistentDisabled = s.currentMap.disabled;
+              if(hasAuthoredData)restoreAuthoredNotes(s.panel,st);
               s.__dgPreserveNodesOverStrokes = !!(preserveNodesOverStrokes && list);
               d.__dgBumpNodesRev?.('setState-nodes');
 

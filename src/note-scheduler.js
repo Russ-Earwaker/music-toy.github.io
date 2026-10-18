@@ -5,6 +5,7 @@ import { resolveChordAtTick } from './chord-progression.js';
 // supplied as an optional third argument until playback instances are migrated.
 import { withPlaybackOccurrence, normalizeContext } from './playback-context.js';
 import { getPlaybackInstance, updatePlaybackInstanceProgress, onPlaybackOccurrenceInvalidated } from './playback-instances.js';
+import {drawgridLoopLengthTicks} from './drawgrid/dg-pattern-length.js';
 
 const DEFAULT_TICKS_PER_BAR = 384;
 const intTick = (value, fallback = 0) => {
@@ -96,6 +97,10 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       const toyLoopTicks = usesPlaybackInstance
         ? Math.max(1, intTick(playbackInstance.loopLengthTicks, loopTicks))
         : loopTicks;
+      // Authored endings truncate slots; they must not squeeze their spacing.
+      const hasAuthoredEnding=toy.dataset?.toy==='drawgrid'&&Number(toy.dataset.authoredDurationTicks)>0;
+      const stepTicks=(hasAuthoredEnding?drawgridLoopLengthTicks(steps):toyLoopTicks)/steps;
+      const slotsPerCycle=hasAuthoredEnding?Math.min(steps,Math.ceil(toyLoopTicks/stepTicks)):steps;
       const pitched = toy.dataset?.toy !== 'loopgrid-drum';
       const revision = Number.isFinite(Number(toy.__seqRev)) ? Number(toy.__seqRev) : 0;
       const generation = resolveGeneration(toy, toyId);
@@ -112,7 +117,7 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       const chainTurnStartTick = Number(toy.__chainTurnStartTick);
       const providerWindowStartTick = Number(toy.__sequencerWindowStartTick);
       const playbackStartTick = Number(playbackInstance?.startTick);
-      const firstStepTicks = Math.max(1, Math.ceil(toyLoopTicks / steps));
+      const firstStepTicks = Math.max(1, Math.ceil(stepTicks));
       const freshPlaybackStartTick = usesPlaybackInstance
         && playbackInstance.definitionRevisionSeen < 0
         && Number.isFinite(playbackStartTick)
@@ -205,13 +210,14 @@ export function createSequencerScheduler({ ticksPerBar = DEFAULT_TICKS_PER_BAR, 
       }
 
       const startTick = usesPlaybackInstance ? patternOriginTick(playbackInstance) : resolveStartTick(toy, audioTimeToTick);
-      let stepNumber = Math.ceil(((fromTick - startTick) * steps) / toyLoopTicks);
-      while (startTick + Math.round((stepNumber * toyLoopTicks) / steps) < fromTick) stepNumber += 1;
+      const eventAt=n=>startTick+Math.floor(n/slotsPerCycle)*toyLoopTicks+Math.round((((n%slotsPerCycle)+slotsPerCycle)%slotsPerCycle)*stepTicks);
+      let stepNumber = Math.floor((fromTick-startTick)/toyLoopTicks)*slotsPerCycle;
+      while (eventAt(stepNumber) < fromTick) stepNumber += 1;
       for (;;) {
-        const eventTick = startTick + Math.round((stepNumber * toyLoopTicks) / steps);
+        const eventTick = eventAt(stepNumber);
         if (eventTick >= scheduleEndTick) break;
         if (eventTick >= fromTick && eventTick >= 0) {
-          const column = ((stepNumber % steps) + steps) % steps;
+          const column = ((stepNumber % slotsPerCycle) + slotsPerCycle) % slotsPerCycle;
           const playbackInstanceId = usesPlaybackInstance
             ? playbackInstance.id
             : String(toy.dataset?.playbackInstanceId || `legacy:${toyId}`);

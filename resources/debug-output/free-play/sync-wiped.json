@@ -1,0 +1,4703 @@
+{
+  "boardGrids": [
+    {
+      "id": "drawgrid-1792330004210-2riivm",
+      "notes": [
+        {
+          "id": "stroke-1792330004209-qon7sd:note:0",
+          "col": 0,
+          "sourceMidi": 55,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:1",
+          "col": 1,
+          "sourceMidi": 57,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:2",
+          "col": 2,
+          "sourceMidi": 60,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:3",
+          "col": 3,
+          "sourceMidi": 62,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:4",
+          "col": 4,
+          "sourceMidi": 64,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:5",
+          "col": 5,
+          "sourceMidi": 67,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:6",
+          "col": 6,
+          "sourceMidi": 69,
+          "scissorMuted": false,
+          "paintCovered": false
+        }
+      ],
+      "sharedNotes": [
+        {
+          "id": "stroke-1792330004209-qon7sd:note:0",
+          "col": 0,
+          "sourceMidi": 55,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:1",
+          "col": 1,
+          "sourceMidi": 57,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:2",
+          "col": 2,
+          "sourceMidi": 60,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:3",
+          "col": 3,
+          "sourceMidi": 62,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:4",
+          "col": 4,
+          "sourceMidi": 64,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:5",
+          "col": 5,
+          "sourceMidi": 67,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:6",
+          "col": 6,
+          "sourceMidi": 69,
+          "scissorMuted": false,
+          "paintCovered": false
+        }
+      ],
+      "pattern": {
+        "steps": 8,
+        "instrument": "PIANO",
+        "cols": [
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:0",
+                "col": 0,
+                "sourceMidi": 55,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              2
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:1",
+                "col": 1,
+                "sourceMidi": 57,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 2
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              11
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:2",
+                "col": 2,
+                "sourceMidi": 60,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 11
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              9
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:3",
+                "col": 3,
+                "sourceMidi": 62,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 9
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              7
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:4",
+                "col": 4,
+                "sourceMidi": 64,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 7
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:5",
+                "col": 5,
+                "sourceMidi": 67,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              2
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:6",
+                "col": 6,
+                "sourceMidi": 69,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 2
+              }
+            ]
+          },
+          {
+            "active": false,
+            "nodes": [],
+            "disabled": [],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "drawgrid-1792330021701-8beiba",
+      "notes": [
+        {
+          "id": "stroke-1792330021700-uzxebf:note:0",
+          "col": 0,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:1",
+          "col": 1,
+          "sourceMidi": 79,
+          "scissorMuted": true,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:2",
+          "col": 2,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:3",
+          "col": 3,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": true
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:4",
+          "col": 4,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:5",
+          "col": 5,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        }
+      ],
+      "sharedNotes": [
+        {
+          "id": "stroke-1792330021700-uzxebf:note:0",
+          "col": 0,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:1",
+          "col": 1,
+          "sourceMidi": 79,
+          "scissorMuted": true,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:2",
+          "col": 2,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:3",
+          "col": 3,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": true
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:4",
+          "col": 4,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:5",
+          "col": 5,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        }
+      ],
+      "pattern": {
+        "steps": 8,
+        "instrument": "PIANO",
+        "cols": [
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:0",
+                "col": 0,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:1",
+                "col": 1,
+                "sourceMidi": 79,
+                "scissorMuted": true,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:2",
+                "col": 2,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:3",
+                "col": 3,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": true,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:4",
+                "col": 4,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:5",
+                "col": 5,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": false,
+            "nodes": [],
+            "disabled": [],
+            "notes": []
+          },
+          {
+            "active": false,
+            "nodes": [],
+            "disabled": [],
+            "notes": []
+          }
+        ]
+      }
+    }
+  ],
+  "silence": {
+    "tool": "Black Paint",
+    "lastPlan": null,
+    "paint": {
+      "paint": [
+        {
+          "id": "paint-1792330064257-3",
+          "seed": 1328701828,
+          "x": 0.4912609238451935,
+          "y": 0.08661417322834646,
+          "radius": 0.065,
+          "order": 1792330064257.003,
+          "space": "surface-v2",
+          "owner": "stroke-1792330021700-uzxebf",
+          "notes": [
+            "stroke-1792330021700-uzxebf:note:3"
+          ]
+        }
+      ],
+      "coveredIds": [
+        "stroke-1792330021700-uzxebf:note:3"
+      ],
+      "nodes": [
+        {
+          "x": 0.11672908863920099,
+          "y": 0.8117326057298773,
+          "id": "stroke-1792330004209-qon7sd:note:0",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 55,
+          "note": "G3",
+          "offsetTick": 0,
+          "pathDistance": 0,
+          "lineId": "stroke-1792330004209-qon7sd"
+        },
+        {
+          "x": 0.22347243150830015,
+          "y": 0.7469293484628252,
+          "id": "stroke-1792330004209-qon7sd:note:1",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 57,
+          "note": "A3",
+          "offsetTick": 48,
+          "pathDistance": 0.12487435044591745,
+          "lineId": "stroke-1792330004209-qon7sd"
+        },
+        {
+          "x": 0.3180165834828901,
+          "y": 0.6654960453893047,
+          "id": "stroke-1792330004209-qon7sd:note:2",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 60,
+          "note": "C4",
+          "offsetTick": 96,
+          "pathDistance": 0.2497487008918349,
+          "lineId": "stroke-1792330004209-qon7sd"
+        },
+        {
+          "x": 0.4081206112761436,
+          "y": 0.5790974145388307,
+          "id": "stroke-1792330004209-qon7sd:note:3",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 62,
+          "note": "D4",
+          "offsetTick": 144,
+          "pathDistance": 0.37462305133775237,
+          "lineId": "stroke-1792330004209-qon7sd"
+        },
+        {
+          "x": 0.49971037647156463,
+          "y": 0.49431713963999646,
+          "id": "stroke-1792330004209-qon7sd:note:4",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 64,
+          "note": "E4",
+          "offsetTick": 192,
+          "pathDistance": 0.4994974017836698,
+          "lineId": "stroke-1792330004209-qon7sd"
+        },
+        {
+          "x": 0.5976912554698363,
+          "y": 0.4174366654096634,
+          "id": "stroke-1792330004209-qon7sd:note:5",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 67,
+          "note": "G4",
+          "offsetTick": 240,
+          "pathDistance": 0.6243717522295873,
+          "lineId": "stroke-1792330004209-qon7sd"
+        },
+        {
+          "x": 0.707537734752198,
+          "y": 0.36038288625781767,
+          "id": "stroke-1792330004209-qon7sd:note:6",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 69,
+          "note": "A4",
+          "offsetTick": 288,
+          "pathDistance": 0.7492461026755047,
+          "lineId": "stroke-1792330004209-qon7sd"
+        },
+        {
+          "x": 0.11672908863920099,
+          "y": 0.08661417322834646,
+          "id": "stroke-1792330021700-uzxebf:note:0",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 79,
+          "note": "G5",
+          "offsetTick": 0,
+          "pathDistance": 0,
+          "lineId": "stroke-1792330021700-uzxebf"
+        },
+        {
+          "x": 0.24157303370786515,
+          "y": 0.08661417322834646,
+          "id": "stroke-1792330021700-uzxebf:note:1",
+          "scissorMuted": true,
+          "paintCovered": false,
+          "midi": 79,
+          "note": "G5",
+          "offsetTick": 48,
+          "pathDistance": 0.12484394506866416,
+          "lineId": "stroke-1792330021700-uzxebf"
+        },
+        {
+          "x": 0.36641697877652935,
+          "y": 0.08661417322834646,
+          "id": "stroke-1792330021700-uzxebf:note:2",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 79,
+          "note": "G5",
+          "offsetTick": 96,
+          "pathDistance": 0.2496878901373283,
+          "lineId": "stroke-1792330021700-uzxebf"
+        },
+        {
+          "x": 0.4912609238451935,
+          "y": 0.08661417322834646,
+          "id": "stroke-1792330021700-uzxebf:note:3",
+          "scissorMuted": false,
+          "paintCovered": true,
+          "midi": 79,
+          "note": "G5",
+          "offsetTick": 144,
+          "pathDistance": 0.3745318352059925,
+          "lineId": "stroke-1792330021700-uzxebf"
+        },
+        {
+          "x": 0.6161048689138576,
+          "y": 0.08661417322834646,
+          "id": "stroke-1792330021700-uzxebf:note:4",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 79,
+          "note": "G5",
+          "offsetTick": 192,
+          "pathDistance": 0.4993757802746566,
+          "lineId": "stroke-1792330021700-uzxebf"
+        },
+        {
+          "x": 0.7409488139825219,
+          "y": 0.08661417322834646,
+          "id": "stroke-1792330021700-uzxebf:note:5",
+          "scissorMuted": false,
+          "paintCovered": false,
+          "midi": 79,
+          "note": "G5",
+          "offsetTick": 240,
+          "pathDistance": 0.6242197253433208,
+          "lineId": "stroke-1792330021700-uzxebf"
+        }
+      ]
+    },
+    "motion": [
+      [
+        "stroke-1792330004209-qon7sd:note:0",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330004209-qon7sd:note:1",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330004209-qon7sd:note:2",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330004209-qon7sd:note:3",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330004209-qon7sd:note:4",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330004209-qon7sd:note:5",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330004209-qon7sd:note:6",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330021700-uzxebf:note:0",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330021700-uzxebf:note:1",
+        {
+          "cut": true,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330021700-uzxebf:note:2",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330021700-uzxebf:note:3",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330021700-uzxebf:note:4",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ],
+      [
+        "stroke-1792330021700-uzxebf:note:5",
+        {
+          "cut": false,
+          "cutAt": -1000000000,
+          "mendAt": -1000000000
+        }
+      ]
+    ]
+  },
+  "surfacePaint": [],
+  "drawing": false,
+  "capped": false,
+  "capEvidence": null,
+  "stroke": null,
+  "drawings": [],
+  "lines": [
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "source": {
+        "version": 3,
+        "instrument": "PIANO",
+        "path": {
+          "points": [
+            {
+              "x": 0.11672908863920099,
+              "y": 0.8117326057298773
+            },
+            {
+              "x": 0.22908863920099876,
+              "y": 0.7435197817189632
+            },
+            {
+              "x": 0.3414481897627965,
+              "y": 0.6449375866851595
+            },
+            {
+              "x": 0.45380774032459426,
+              "y": 0.5339805825242718
+            },
+            {
+              "x": 0.5661672908863921,
+              "y": 0.4368932038834951
+            },
+            {
+              "x": 0.6785268414481898,
+              "y": 0.36754507628294036
+            },
+            {
+              "x": 0.7908863920099876,
+              "y": 0.33980582524271846
+            }
+          ],
+          "distances": [
+            0,
+            0.13144450525599438,
+            0.2809206497745499,
+            0.43883241429767983,
+            0.587326951886733,
+            0.7193641868023127,
+            0.835097218607073
+          ],
+          "totalLength": 0.835097218607073,
+          "metric": {
+            "width": 1,
+            "height": 1
+          }
+        },
+        "paint": [],
+        "visualEvents": [
+          {
+            "midi": 55,
+            "offsetTick": 0
+          },
+          {
+            "midi": 57,
+            "offsetTick": 48
+          },
+          {
+            "midi": 60,
+            "offsetTick": 96
+          },
+          {
+            "midi": 62,
+            "offsetTick": 144
+          },
+          {
+            "midi": 64,
+            "offsetTick": 192
+          },
+          {
+            "midi": 67,
+            "offsetTick": 240
+          },
+          {
+            "midi": 69,
+            "offsetTick": 288
+          }
+        ],
+        "durationTicks": 321,
+        "events": [
+          {
+            "x": 0.11672908863920099,
+            "y": 0.8117326057298773,
+            "id": "stroke-1792330004209-qon7sd:note:0",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 55,
+            "note": "G3",
+            "offsetTick": 0,
+            "pathDistance": 0
+          },
+          {
+            "x": 0.22347243150830015,
+            "y": 0.7469293484628252,
+            "id": "stroke-1792330004209-qon7sd:note:1",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 57,
+            "note": "A3",
+            "offsetTick": 48,
+            "pathDistance": 0.12487435044591745
+          },
+          {
+            "x": 0.3180165834828901,
+            "y": 0.6654960453893047,
+            "id": "stroke-1792330004209-qon7sd:note:2",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 60,
+            "note": "C4",
+            "offsetTick": 96,
+            "pathDistance": 0.2497487008918349
+          },
+          {
+            "x": 0.4081206112761436,
+            "y": 0.5790974145388307,
+            "id": "stroke-1792330004209-qon7sd:note:3",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 62,
+            "note": "D4",
+            "offsetTick": 144,
+            "pathDistance": 0.37462305133775237
+          },
+          {
+            "x": 0.49971037647156463,
+            "y": 0.49431713963999646,
+            "id": "stroke-1792330004209-qon7sd:note:4",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 64,
+            "note": "E4",
+            "offsetTick": 192,
+            "pathDistance": 0.4994974017836698
+          },
+          {
+            "x": 0.5976912554698363,
+            "y": 0.4174366654096634,
+            "id": "stroke-1792330004209-qon7sd:note:5",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 67,
+            "note": "G4",
+            "offsetTick": 240,
+            "pathDistance": 0.6243717522295873
+          },
+          {
+            "x": 0.707537734752198,
+            "y": 0.36038288625781767,
+            "id": "stroke-1792330004209-qon7sd:note:6",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 69,
+            "note": "A4",
+            "offsetTick": 288,
+            "pathDistance": 0.7492461026755047
+          }
+        ]
+      },
+      "randomCutIds": [],
+      "straightened": false,
+      "definitionIds": [
+        "toy-definition:drawgrid-1792330004210-2riivm"
+      ],
+      "panelIds": [
+        "drawgrid-1792330004210-2riivm"
+      ],
+      "phase": 0.7881619937694704,
+      "morph": 0,
+      "nodes": 7,
+      "transport": {
+        "id": "main-heartbeat",
+        "state": "playing",
+        "tick": 52897,
+        "bpm": 120
+      },
+      "highlight": {
+        "distance": 0.65819188880869,
+        "points": [
+          {
+            "x": 0.11672908863920099,
+            "y": 0.8117326057298773
+          },
+          {
+            "x": 0.22908863920099876,
+            "y": 0.7435197817189632
+          },
+          {
+            "x": 0.3414481897627965,
+            "y": 0.6449375866851595
+          },
+          {
+            "x": 0.45380774032459426,
+            "y": 0.5339805825242718
+          },
+          {
+            "x": 0.5661672908863921,
+            "y": 0.4368932038834951
+          },
+          {
+            "x": 0.62647113220988,
+            "y": 0.3996737733856419
+          }
+        ],
+        "tip": {
+          "x": 0.62647113220988,
+          "y": 0.3996737733856419
+        }
+      },
+      "grids": [
+        {
+          "id": "drawgrid-1792330004210-2riivm",
+          "type": "drawgrid",
+          "definitionId": "toy-definition:drawgrid-1792330004210-2riivm",
+          "metadata": {
+            "strokeId": "stroke-1792330004209-qon7sd",
+            "bar": 0,
+            "startTick": 0,
+            "durationTicks": 321,
+            "phraseDurationTicks": 321,
+            "path": {
+              "points": [
+                {
+                  "x": 0.11672908863920099,
+                  "y": 0.8117326057298773
+                },
+                {
+                  "x": 0.22908863920099876,
+                  "y": 0.7435197817189632
+                },
+                {
+                  "x": 0.3414481897627965,
+                  "y": 0.6449375866851595
+                },
+                {
+                  "x": 0.45380774032459426,
+                  "y": 0.5339805825242718
+                },
+                {
+                  "x": 0.5661672908863921,
+                  "y": 0.4368932038834951
+                },
+                {
+                  "x": 0.6785268414481898,
+                  "y": 0.36754507628294036
+                },
+                {
+                  "x": 0.7908863920099876,
+                  "y": 0.33980582524271846
+                }
+              ],
+              "distances": [
+                0,
+                0.13144450525599438,
+                0.2809206497745499,
+                0.43883241429767983,
+                0.587326951886733,
+                0.7193641868023127,
+                0.835097218607073
+              ],
+              "totalLength": 0.835097218607073,
+              "metric": {
+                "width": 1,
+                "height": 1
+              }
+            },
+            "visualEvents": [
+              {
+                "midi": 55,
+                "offsetTick": 0
+              },
+              {
+                "midi": 57,
+                "offsetTick": 48
+              },
+              {
+                "midi": 60,
+                "offsetTick": 96
+              },
+              {
+                "midi": 62,
+                "offsetTick": 144
+              },
+              {
+                "midi": 64,
+                "offsetTick": 192
+              },
+              {
+                "midi": 67,
+                "offsetTick": 240
+              },
+              {
+                "midi": 69,
+                "offsetTick": 288
+              }
+            ],
+            "straightened": false,
+            "paint": [],
+            "randomCutIds": []
+          },
+          "pattern": {
+            "steps": 8,
+            "instrument": "PIANO",
+            "cols": [
+              {
+                "active": true,
+                "nodes": [
+                  4
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330004209-qon7sd:note:0",
+                    "col": 0,
+                    "sourceMidi": 55,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 4
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  2
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330004209-qon7sd:note:1",
+                    "col": 1,
+                    "sourceMidi": 57,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 2
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  11
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330004209-qon7sd:note:2",
+                    "col": 2,
+                    "sourceMidi": 60,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 11
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  9
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330004209-qon7sd:note:3",
+                    "col": 3,
+                    "sourceMidi": 62,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 9
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  7
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330004209-qon7sd:note:4",
+                    "col": 4,
+                    "sourceMidi": 64,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 7
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  4
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330004209-qon7sd:note:5",
+                    "col": 5,
+                    "sourceMidi": 67,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 4
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  2
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330004209-qon7sd:note:6",
+                    "col": 6,
+                    "sourceMidi": 69,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 2
+                  }
+                ]
+              },
+              {
+                "active": false,
+                "nodes": [],
+                "disabled": [],
+                "notes": []
+              }
+            ]
+          },
+          "editorNotes": [
+            {
+              "id": "stroke-1792330004209-qon7sd:note:0",
+              "col": 0,
+              "sourceMidi": 55,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:1",
+              "col": 1,
+              "sourceMidi": 57,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:2",
+              "col": 2,
+              "sourceMidi": 60,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:3",
+              "col": 3,
+              "sourceMidi": 62,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:4",
+              "col": 4,
+              "sourceMidi": 64,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:5",
+              "col": 5,
+              "sourceMidi": 67,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:6",
+              "col": 6,
+              "sourceMidi": 69,
+              "scissorMuted": false,
+              "paintCovered": false
+            }
+          ],
+          "sharedNotes": [
+            {
+              "id": "stroke-1792330004209-qon7sd:note:0",
+              "col": 0,
+              "sourceMidi": 55,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:1",
+              "col": 1,
+              "sourceMidi": 57,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:2",
+              "col": 2,
+              "sourceMidi": 60,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:3",
+              "col": 3,
+              "sourceMidi": 62,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:4",
+              "col": 4,
+              "sourceMidi": 64,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:5",
+              "col": 5,
+              "sourceMidi": 67,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330004209-qon7sd:note:6",
+              "col": 6,
+              "sourceMidi": 69,
+              "scissorMuted": false,
+              "paintCovered": false
+            }
+          ],
+          "parent": {
+            "id": "connection:2",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "drawgrid-1792330004210-2riivm",
+              "portId": "input"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "source": {
+        "version": 3,
+        "instrument": "PIANO",
+        "path": {
+          "points": [
+            {
+              "x": 0.11672908863920099,
+              "y": 0.08661417322834646
+            },
+            {
+              "x": 0.266541822721598,
+              "y": 0.08661417322834646
+            },
+            {
+              "x": 0.416354556803995,
+              "y": 0.08661417322834646
+            },
+            {
+              "x": 0.5661672908863921,
+              "y": 0.08661417322834646
+            },
+            {
+              "x": 0.715980024968789,
+              "y": 0.08661417322834646
+            },
+            {
+              "x": 0.865792759051186,
+              "y": 0.08661417322834646
+            }
+          ],
+          "distances": [
+            0,
+            0.14981273408239698,
+            0.299625468164794,
+            0.44943820224719105,
+            0.5992509363295879,
+            0.749063670411985
+          ],
+          "totalLength": 0.749063670411985,
+          "metric": {
+            "width": 1,
+            "height": 1
+          }
+        },
+        "paint": [
+          {
+            "id": "paint-1792330064257-3",
+            "seed": 1328701828,
+            "x": 0.4912609238451935,
+            "y": 0.08661417322834646,
+            "radius": 0.065,
+            "order": 1792330064257.003,
+            "space": "surface-v2",
+            "owner": "stroke-1792330021700-uzxebf",
+            "notes": [
+              "stroke-1792330021700-uzxebf:note:3"
+            ]
+          }
+        ],
+        "visualEvents": [
+          {
+            "midi": 79,
+            "offsetTick": 0
+          },
+          {
+            "midi": 79,
+            "offsetTick": 48
+          },
+          {
+            "midi": 79,
+            "offsetTick": 96
+          },
+          {
+            "midi": 79,
+            "offsetTick": 144
+          },
+          {
+            "midi": 79,
+            "offsetTick": 192
+          },
+          {
+            "midi": 79,
+            "offsetTick": 240
+          }
+        ],
+        "durationTicks": 288,
+        "events": [
+          {
+            "x": 0.11672908863920099,
+            "y": 0.08661417322834646,
+            "id": "stroke-1792330021700-uzxebf:note:0",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 79,
+            "note": "G5",
+            "offsetTick": 0,
+            "pathDistance": 0
+          },
+          {
+            "x": 0.24157303370786515,
+            "y": 0.08661417322834646,
+            "id": "stroke-1792330021700-uzxebf:note:1",
+            "scissorMuted": true,
+            "paintCovered": false,
+            "midi": 79,
+            "note": "G5",
+            "offsetTick": 48,
+            "pathDistance": 0.12484394506866416
+          },
+          {
+            "x": 0.36641697877652935,
+            "y": 0.08661417322834646,
+            "id": "stroke-1792330021700-uzxebf:note:2",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 79,
+            "note": "G5",
+            "offsetTick": 96,
+            "pathDistance": 0.2496878901373283
+          },
+          {
+            "x": 0.4912609238451935,
+            "y": 0.08661417322834646,
+            "id": "stroke-1792330021700-uzxebf:note:3",
+            "scissorMuted": false,
+            "paintCovered": true,
+            "midi": 79,
+            "note": "G5",
+            "offsetTick": 144,
+            "pathDistance": 0.3745318352059925
+          },
+          {
+            "x": 0.6161048689138576,
+            "y": 0.08661417322834646,
+            "id": "stroke-1792330021700-uzxebf:note:4",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 79,
+            "note": "G5",
+            "offsetTick": 192,
+            "pathDistance": 0.4993757802746566
+          },
+          {
+            "x": 0.7409488139825219,
+            "y": 0.08661417322834646,
+            "id": "stroke-1792330021700-uzxebf:note:5",
+            "scissorMuted": false,
+            "paintCovered": false,
+            "midi": 79,
+            "note": "G5",
+            "offsetTick": 240,
+            "pathDistance": 0.6242197253433208
+          }
+        ]
+      },
+      "randomCutIds": [],
+      "straightened": false,
+      "definitionIds": [
+        "toy-definition:drawgrid-1792330021701-8beiba"
+      ],
+      "panelIds": [
+        "drawgrid-1792330021701-8beiba"
+      ],
+      "phase": 0.6701388888888888,
+      "morph": 0,
+      "nodes": 6,
+      "transport": {
+        "id": "main-heartbeat",
+        "state": "playing",
+        "tick": 52897,
+        "bpm": 120
+      },
+      "highlight": {
+        "distance": 0.5019766957969204,
+        "points": [
+          {
+            "x": 0.11672908863920099,
+            "y": 0.08661417322834646
+          },
+          {
+            "x": 0.266541822721598,
+            "y": 0.08661417322834646
+          },
+          {
+            "x": 0.416354556803995,
+            "y": 0.08661417322834646
+          },
+          {
+            "x": 0.5661672908863921,
+            "y": 0.08661417322834646
+          },
+          {
+            "x": 0.6187057844361215,
+            "y": 0.08661417322834646
+          }
+        ],
+        "tip": {
+          "x": 0.6187057844361215,
+          "y": 0.08661417322834646
+        }
+      },
+      "grids": [
+        {
+          "id": "drawgrid-1792330021701-8beiba",
+          "type": "drawgrid",
+          "definitionId": "toy-definition:drawgrid-1792330021701-8beiba",
+          "metadata": {
+            "strokeId": "stroke-1792330021700-uzxebf",
+            "bar": 0,
+            "startTick": 0,
+            "durationTicks": 288,
+            "phraseDurationTicks": 288,
+            "path": {
+              "points": [
+                {
+                  "x": 0.11672908863920099,
+                  "y": 0.08661417322834646
+                },
+                {
+                  "x": 0.266541822721598,
+                  "y": 0.08661417322834646
+                },
+                {
+                  "x": 0.416354556803995,
+                  "y": 0.08661417322834646
+                },
+                {
+                  "x": 0.5661672908863921,
+                  "y": 0.08661417322834646
+                },
+                {
+                  "x": 0.715980024968789,
+                  "y": 0.08661417322834646
+                },
+                {
+                  "x": 0.865792759051186,
+                  "y": 0.08661417322834646
+                }
+              ],
+              "distances": [
+                0,
+                0.14981273408239698,
+                0.299625468164794,
+                0.44943820224719105,
+                0.5992509363295879,
+                0.749063670411985
+              ],
+              "totalLength": 0.749063670411985,
+              "metric": {
+                "width": 1,
+                "height": 1
+              }
+            },
+            "visualEvents": [
+              {
+                "midi": 79,
+                "offsetTick": 0
+              },
+              {
+                "midi": 79,
+                "offsetTick": 48
+              },
+              {
+                "midi": 79,
+                "offsetTick": 96
+              },
+              {
+                "midi": 79,
+                "offsetTick": 144
+              },
+              {
+                "midi": 79,
+                "offsetTick": 192
+              },
+              {
+                "midi": 79,
+                "offsetTick": 240
+              }
+            ],
+            "straightened": false,
+            "paint": [
+              {
+                "id": "paint-1792330064257-3",
+                "seed": 1328701828,
+                "x": 0.4912609238451935,
+                "y": 0.08661417322834646,
+                "radius": 0.065,
+                "order": 1792330064257.003,
+                "space": "surface-v2",
+                "owner": "stroke-1792330021700-uzxebf",
+                "notes": [
+                  "stroke-1792330021700-uzxebf:note:3"
+                ]
+              }
+            ]
+          },
+          "pattern": {
+            "steps": 8,
+            "instrument": "PIANO",
+            "cols": [
+              {
+                "active": true,
+                "nodes": [
+                  4
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330021700-uzxebf:note:0",
+                    "col": 0,
+                    "sourceMidi": 79,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 4
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  4
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330021700-uzxebf:note:1",
+                    "col": 1,
+                    "sourceMidi": 79,
+                    "scissorMuted": true,
+                    "paintCovered": false,
+                    "row": 4
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  4
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330021700-uzxebf:note:2",
+                    "col": 2,
+                    "sourceMidi": 79,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 4
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  4
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330021700-uzxebf:note:3",
+                    "col": 3,
+                    "sourceMidi": 79,
+                    "scissorMuted": false,
+                    "paintCovered": true,
+                    "row": 4
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  4
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330021700-uzxebf:note:4",
+                    "col": 4,
+                    "sourceMidi": 79,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 4
+                  }
+                ]
+              },
+              {
+                "active": true,
+                "nodes": [
+                  4
+                ],
+                "disabled": [],
+                "notes": [
+                  {
+                    "id": "stroke-1792330021700-uzxebf:note:5",
+                    "col": 5,
+                    "sourceMidi": 79,
+                    "scissorMuted": false,
+                    "paintCovered": false,
+                    "row": 4
+                  }
+                ]
+              },
+              {
+                "active": false,
+                "nodes": [],
+                "disabled": [],
+                "notes": []
+              },
+              {
+                "active": false,
+                "nodes": [],
+                "disabled": [],
+                "notes": []
+              }
+            ]
+          },
+          "editorNotes": [
+            {
+              "id": "stroke-1792330021700-uzxebf:note:0",
+              "col": 0,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:1",
+              "col": 1,
+              "sourceMidi": 79,
+              "scissorMuted": true,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:2",
+              "col": 2,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:3",
+              "col": 3,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": true
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:4",
+              "col": 4,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:5",
+              "col": 5,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": false
+            }
+          ],
+          "sharedNotes": [
+            {
+              "id": "stroke-1792330021700-uzxebf:note:0",
+              "col": 0,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:1",
+              "col": 1,
+              "sourceMidi": 79,
+              "scissorMuted": true,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:2",
+              "col": 2,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:3",
+              "col": 3,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": true
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:4",
+              "col": 4,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": false
+            },
+            {
+              "id": "stroke-1792330021700-uzxebf:note:5",
+              "col": 5,
+              "sourceMidi": 79,
+              "scissorMuted": false,
+              "paintCovered": false
+            }
+          ],
+          "parent": {
+            "id": "connection:4",
+            "kind": "transport",
+            "from": {
+              "objectId": "main-heartbeat",
+              "portId": "output"
+            },
+            "to": {
+              "objectId": "drawgrid-1792330021701-8beiba",
+              "portId": "input"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "admitted": [
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 3.115083333333333,
+      "eventTick": 47925,
+      "leadMs": 24.416666666666753,
+      "scheduledAtTick": 47920
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 3.615083333333333,
+      "eventTick": 48021,
+      "leadMs": 524.4166666666667,
+      "scheduledAtTick": 47920
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 3.505708333333333,
+      "eventTick": 48000,
+      "leadMs": 415.04166666666674,
+      "scheduledAtTick": 47920
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 3.755708333333333,
+      "eventTick": 48048,
+      "leadMs": 665.0416666666667,
+      "scheduledAtTick": 47920
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 4.005708333333333,
+      "eventTick": 48096,
+      "leadMs": 915.0416666666663,
+      "scheduledAtTick": 47920
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 4.115083333333333,
+      "eventTick": 48117,
+      "leadMs": 973.7499999999994,
+      "scheduledAtTick": 47930
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 4.286958333333333,
+      "eventTick": 48150,
+      "leadMs": 985.6249999999993,
+      "scheduledAtTick": 47961
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 4.505708333333333,
+      "eventTick": 48192,
+      "leadMs": 993.7083333333328,
+      "scheduledAtTick": 48001
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 4.536958333333333,
+      "eventTick": 48198,
+      "leadMs": 995.6249999999995,
+      "scheduledAtTick": 48007
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 4.786958333333333,
+      "eventTick": 48246,
+      "leadMs": 976.2916666666661,
+      "scheduledAtTick": 48059
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 5.005708333333333,
+      "eventTick": 48288,
+      "leadMs": 995.0416666666664,
+      "scheduledAtTick": 48097
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 5.255708333333333,
+      "eventTick": 48336,
+      "leadMs": 994.3749999999998,
+      "scheduledAtTick": 48145
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 5.286958333333333,
+      "eventTick": 48342,
+      "leadMs": 996.2916666666662,
+      "scheduledAtTick": 48151
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 5.505708333333333,
+      "eventTick": 48384,
+      "leadMs": 993.7083333333331,
+      "scheduledAtTick": 48193
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 5.786958333333333,
+      "eventTick": 48438,
+      "leadMs": 994.9583333333329,
+      "scheduledAtTick": 48247
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 5.958833333333333,
+      "eventTick": 48471,
+      "leadMs": 966.8333333333328,
+      "scheduledAtTick": 48285
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 6.005708333333333,
+      "eventTick": 48480,
+      "leadMs": 995.0416666666664,
+      "scheduledAtTick": 48289
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 6.208833333333333,
+      "eventTick": 48519,
+      "leadMs": 968.8333333333326,
+      "scheduledAtTick": 48333
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 6.458833333333333,
+      "eventTick": 48567,
+      "leadMs": 968.166666666666,
+      "scheduledAtTick": 48381
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 6.505708333333333,
+      "eventTick": 48576,
+      "leadMs": 993.7083333333331,
+      "scheduledAtTick": 48385
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 6.755708333333333,
+      "eventTick": 48624,
+      "leadMs": 995.708333333333,
+      "scheduledAtTick": 48433
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 6.958833333333333,
+      "eventTick": 48663,
+      "leadMs": 966.8333333333328,
+      "scheduledAtTick": 48477
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 7.005708333333333,
+      "eventTick": 48672,
+      "leadMs": 995.0416666666664,
+      "scheduledAtTick": 48481
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 6.708833333333333,
+      "eventTick": 48615,
+      "leadMs": 196.8333333333332,
+      "scheduledAtTick": 48577
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 6.958833333333333,
+      "eventTick": 48663,
+      "leadMs": 446.8333333333332,
+      "scheduledAtTick": 48577
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 7.208833333333333,
+      "eventTick": 48711,
+      "leadMs": 696.8333333333331,
+      "scheduledAtTick": 48577
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 7.458833333333333,
+      "eventTick": 48759,
+      "leadMs": 946.8333333333331,
+      "scheduledAtTick": 48577
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 7.505708333333333,
+      "eventTick": 48768,
+      "leadMs": 993.7083333333331,
+      "scheduledAtTick": 48577
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 7.630708333333333,
+      "eventTick": 48792,
+      "leadMs": 990.708333333333,
+      "scheduledAtTick": 48602
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 7.880708333333333,
+      "eventTick": 48840,
+      "leadMs": 990.0416666666665,
+      "scheduledAtTick": 48650
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 8.005708333333333,
+      "eventTick": 48864,
+      "leadMs": 995.0416666666664,
+      "scheduledAtTick": 48673
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 8.130708333333333,
+      "eventTick": 48888,
+      "leadMs": 989.374999999999,
+      "scheduledAtTick": 48698
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 8.255708333333333,
+      "eventTick": 48912,
+      "leadMs": 994.3749999999998,
+      "scheduledAtTick": 48721
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 8.380708333333333,
+      "eventTick": 48936,
+      "leadMs": 988.7083333333325,
+      "scheduledAtTick": 48746
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 8.505708333333333,
+      "eventTick": 48960,
+      "leadMs": 993.7083333333331,
+      "scheduledAtTick": 48769
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 8.630708333333333,
+      "eventTick": 48984,
+      "leadMs": 969.3749999999994,
+      "scheduledAtTick": 48798
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 8.880708333333333,
+      "eventTick": 49032,
+      "leadMs": 990.0416666666665,
+      "scheduledAtTick": 48842
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 9.005708333333333,
+      "eventTick": 49056,
+      "leadMs": 995.0416666666655,
+      "scheduledAtTick": 48865
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 9.130708333333333,
+      "eventTick": 49080,
+      "leadMs": 989.374999999999,
+      "scheduledAtTick": 48890
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 9.302583333333333,
+      "eventTick": 49113,
+      "leadMs": 990.5833333333334,
+      "scheduledAtTick": 48923
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 9.505708333333333,
+      "eventTick": 49152,
+      "leadMs": 993.7083333333323,
+      "scheduledAtTick": 48961
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 9.552583333333333,
+      "eventTick": 49161,
+      "leadMs": 992.5833333333322,
+      "scheduledAtTick": 48970
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 9.755708333333333,
+      "eventTick": 49200,
+      "leadMs": 995.708333333333,
+      "scheduledAtTick": 49009
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 9.802583333333333,
+      "eventTick": 49209,
+      "leadMs": 991.9166666666665,
+      "scheduledAtTick": 49019
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 10.005708333333333,
+      "eventTick": 49248,
+      "leadMs": 995.0416666666655,
+      "scheduledAtTick": 49057
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 10.052583333333333,
+      "eventTick": 49257,
+      "leadMs": 991.2499999999991,
+      "scheduledAtTick": 49067
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 10.302583333333333,
+      "eventTick": 49305,
+      "leadMs": 990.5833333333334,
+      "scheduledAtTick": 49115
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 10.505708333333333,
+      "eventTick": 49344,
+      "leadMs": 993.7083333333323,
+      "scheduledAtTick": 49153
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 10.552583333333333,
+      "eventTick": 49353,
+      "leadMs": 992.5833333333322,
+      "scheduledAtTick": 49162
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 10.802583333333333,
+      "eventTick": 49401,
+      "leadMs": 991.9166666666665,
+      "scheduledAtTick": 49211
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 10.974458333333333,
+      "eventTick": 49434,
+      "leadMs": 982.4583333333319,
+      "scheduledAtTick": 49245
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 11.005708333333333,
+      "eventTick": 49440,
+      "leadMs": 995.0416666666655,
+      "scheduledAtTick": 49249
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 11.224458333333333,
+      "eventTick": 49482,
+      "leadMs": 984.4583333333326,
+      "scheduledAtTick": 49293
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 11.255708333333333,
+      "eventTick": 49488,
+      "leadMs": 994.3749999999998,
+      "scheduledAtTick": 49297
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 11.474458333333333,
+      "eventTick": 49530,
+      "leadMs": 983.7916666666669,
+      "scheduledAtTick": 49341
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 11.505708333333333,
+      "eventTick": 49536,
+      "leadMs": 993.7083333333323,
+      "scheduledAtTick": 49345
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 11.724458333333333,
+      "eventTick": 49578,
+      "leadMs": 983.1249999999993,
+      "scheduledAtTick": 49389
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 11.974458333333333,
+      "eventTick": 49626,
+      "leadMs": 982.4583333333319,
+      "scheduledAtTick": 49437
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 12.005708333333333,
+      "eventTick": 49632,
+      "leadMs": 995.0416666666655,
+      "scheduledAtTick": 49441
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 12.224458333333333,
+      "eventTick": 49674,
+      "leadMs": 984.4583333333326,
+      "scheduledAtTick": 49485
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 12.474458333333333,
+      "eventTick": 49722,
+      "leadMs": 983.7916666666669,
+      "scheduledAtTick": 49533
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 12.505708333333333,
+      "eventTick": 49728,
+      "leadMs": 993.7083333333323,
+      "scheduledAtTick": 49537
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 12.646333333333333,
+      "eventTick": 49755,
+      "leadMs": 984.9999999999994,
+      "scheduledAtTick": 49566
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 12.755708333333333,
+      "eventTick": 49776,
+      "leadMs": 995.708333333333,
+      "scheduledAtTick": 49585
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 12.896333333333333,
+      "eventTick": 49803,
+      "leadMs": 984.3333333333319,
+      "scheduledAtTick": 49614
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 13.005708333333333,
+      "eventTick": 49824,
+      "leadMs": 995.0416666666655,
+      "scheduledAtTick": 49633
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 13.146333333333333,
+      "eventTick": 49851,
+      "leadMs": 986.3333333333326,
+      "scheduledAtTick": 49662
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 13.396333333333333,
+      "eventTick": 49899,
+      "leadMs": 985.666666666667,
+      "scheduledAtTick": 49710
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 13.505708333333333,
+      "eventTick": 49920,
+      "leadMs": 993.7083333333323,
+      "scheduledAtTick": 49729
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 13.646333333333333,
+      "eventTick": 49947,
+      "leadMs": 984.9999999999994,
+      "scheduledAtTick": 49758
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 13.896333333333333,
+      "eventTick": 49995,
+      "leadMs": 994.9999999999992,
+      "scheduledAtTick": 49804
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 14.005708333333333,
+      "eventTick": 50016,
+      "leadMs": 995.0416666666655,
+      "scheduledAtTick": 49825
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 14.146333333333333,
+      "eventTick": 50043,
+      "leadMs": 986.3333333333326,
+      "scheduledAtTick": 49854
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 14.255708333333333,
+      "eventTick": 50064,
+      "leadMs": 994.3749999999998,
+      "scheduledAtTick": 49873
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 14.318208333333333,
+      "eventTick": 50076,
+      "leadMs": 976.8749999999998,
+      "scheduledAtTick": 49888
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 14.505708333333333,
+      "eventTick": 50112,
+      "leadMs": 993.7083333333323,
+      "scheduledAtTick": 49921
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 14.568208333333333,
+      "eventTick": 50124,
+      "leadMs": 976.2083333333322,
+      "scheduledAtTick": 49937
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 14.818208333333333,
+      "eventTick": 50172,
+      "leadMs": 978.2083333333329,
+      "scheduledAtTick": 49984
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 15.005708333333333,
+      "eventTick": 50208,
+      "leadMs": 995.0416666666655,
+      "scheduledAtTick": 50017
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 15.068208333333333,
+      "eventTick": 50220,
+      "leadMs": 977.5416666666654,
+      "scheduledAtTick": 50032
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 15.318208333333333,
+      "eventTick": 50268,
+      "leadMs": 976.8749999999998,
+      "scheduledAtTick": 50080
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 15.505708333333333,
+      "eventTick": 50304,
+      "leadMs": 993.7083333333323,
+      "scheduledAtTick": 50113
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 15.568208333333333,
+      "eventTick": 50316,
+      "leadMs": 976.2083333333322,
+      "scheduledAtTick": 50129
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 15.755708333333333,
+      "eventTick": 50352,
+      "leadMs": 995.708333333333,
+      "scheduledAtTick": 50161
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 15.818208333333333,
+      "eventTick": 50364,
+      "leadMs": 978.2083333333329,
+      "scheduledAtTick": 50176
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 15.990083333333333,
+      "eventTick": 50397,
+      "leadMs": 979.4166666666655,
+      "scheduledAtTick": 50209
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 16.005708333333335,
+      "eventTick": 50400,
+      "leadMs": 995.0416666666673,
+      "scheduledAtTick": 50209
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 16.240083333333335,
+      "eventTick": 50445,
+      "leadMs": 978.7500000000016,
+      "scheduledAtTick": 50257
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 16.490083333333335,
+      "eventTick": 50493,
+      "leadMs": 978.083333333334,
+      "scheduledAtTick": 50305
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 16.505708333333335,
+      "eventTick": 50496,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 50305
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 16.740083333333335,
+      "eventTick": 50541,
+      "leadMs": 980.0833333333347,
+      "scheduledAtTick": 50353
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 16.990083333333335,
+      "eventTick": 50589,
+      "leadMs": 979.416666666669,
+      "scheduledAtTick": 50401
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 17.005708333333335,
+      "eventTick": 50592,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 50401
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 17.240083333333335,
+      "eventTick": 50637,
+      "leadMs": 978.7500000000016,
+      "scheduledAtTick": 50449
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 17.255708333333335,
+      "eventTick": 50640,
+      "leadMs": 994.3750000000016,
+      "scheduledAtTick": 50449
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 17.490083333333335,
+      "eventTick": 50685,
+      "leadMs": 978.083333333334,
+      "scheduledAtTick": 50497
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 17.505708333333335,
+      "eventTick": 50688,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 50497
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 17.661958333333335,
+      "eventTick": 50718,
+      "leadMs": 971.2916666666694,
+      "scheduledAtTick": 50532
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 17.911958333333335,
+      "eventTick": 50766,
+      "leadMs": 970.6250000000018,
+      "scheduledAtTick": 50580
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 18.005708333333335,
+      "eventTick": 50784,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 50593
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 18.161958333333335,
+      "eventTick": 50814,
+      "leadMs": 969.9583333333344,
+      "scheduledAtTick": 50628
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 18.411958333333335,
+      "eventTick": 50862,
+      "leadMs": 971.9583333333333,
+      "scheduledAtTick": 50675
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 18.505708333333335,
+      "eventTick": 50880,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 50689
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 18.661958333333335,
+      "eventTick": 50910,
+      "leadMs": 971.2916666666694,
+      "scheduledAtTick": 50724
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 18.755708333333335,
+      "eventTick": 50928,
+      "leadMs": 995.708333333333,
+      "scheduledAtTick": 50737
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 18.911958333333335,
+      "eventTick": 50958,
+      "leadMs": 970.6250000000018,
+      "scheduledAtTick": 50772
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 19.005708333333335,
+      "eventTick": 50976,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 50785
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 19.161958333333335,
+      "eventTick": 51006,
+      "leadMs": 969.9583333333344,
+      "scheduledAtTick": 50820
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 19.333833333333335,
+      "eventTick": 51039,
+      "leadMs": 992.4999999999998,
+      "scheduledAtTick": 50848
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 19.505708333333335,
+      "eventTick": 51072,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 50881
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 19.583833333333335,
+      "eventTick": 51087,
+      "leadMs": 991.8333333333358,
+      "scheduledAtTick": 50897
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 19.833833333333335,
+      "eventTick": 51135,
+      "leadMs": 993.8333333333346,
+      "scheduledAtTick": 50944
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 20.005708333333335,
+      "eventTick": 51168,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 50977
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 20.083833333333335,
+      "eventTick": 51183,
+      "leadMs": 993.1666666666672,
+      "scheduledAtTick": 50992
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 20.255708333333335,
+      "eventTick": 51216,
+      "leadMs": 994.3750000000016,
+      "scheduledAtTick": 51025
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 20.333833333333335,
+      "eventTick": 51231,
+      "leadMs": 992.4999999999998,
+      "scheduledAtTick": 51040
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 20.505708333333335,
+      "eventTick": 51264,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 51073
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 20.583833333333335,
+      "eventTick": 51279,
+      "leadMs": 991.8333333333358,
+      "scheduledAtTick": 51089
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 20.833833333333335,
+      "eventTick": 51327,
+      "leadMs": 993.8333333333346,
+      "scheduledAtTick": 51136
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 21.005708333333335,
+      "eventTick": 51360,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 51169
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 21.005708333333335,
+      "eventTick": 51360,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 51169
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 21.255708333333335,
+      "eventTick": 51408,
+      "leadMs": 994.3750000000016,
+      "scheduledAtTick": 51217
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 21.505708333333335,
+      "eventTick": 51456,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 51265
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 21.505708333333335,
+      "eventTick": 51456,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 51265
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 21.755708333333335,
+      "eventTick": 51504,
+      "leadMs": 995.708333333333,
+      "scheduledAtTick": 51313
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 21.755708333333335,
+      "eventTick": 51504,
+      "leadMs": 995.708333333333,
+      "scheduledAtTick": 51313
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 22.005708333333335,
+      "eventTick": 51552,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 51361
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 22.005708333333335,
+      "eventTick": 51552,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 51361
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 22.255708333333335,
+      "eventTick": 51600,
+      "leadMs": 994.3750000000016,
+      "scheduledAtTick": 51409
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 22.505708333333335,
+      "eventTick": 51648,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 51457
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 22.505708333333335,
+      "eventTick": 51648,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 51457
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 22.677583333333335,
+      "eventTick": 51681,
+      "leadMs": 965.5833333333348,
+      "scheduledAtTick": 51496
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 22.927583333333335,
+      "eventTick": 51729,
+      "leadMs": 986.2500000000018,
+      "scheduledAtTick": 51540
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 23.005708333333335,
+      "eventTick": 51744,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 51553
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 23.177583333333335,
+      "eventTick": 51777,
+      "leadMs": 985.5833333333344,
+      "scheduledAtTick": 51588
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 23.255708333333335,
+      "eventTick": 51792,
+      "leadMs": 994.3750000000016,
+      "scheduledAtTick": 51601
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 23.427583333333335,
+      "eventTick": 51825,
+      "leadMs": 987.5833333333333,
+      "scheduledAtTick": 51635
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 23.505708333333335,
+      "eventTick": 51840,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 51649
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 23.677583333333335,
+      "eventTick": 51873,
+      "leadMs": 965.5833333333348,
+      "scheduledAtTick": 51688
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 23.927583333333335,
+      "eventTick": 51921,
+      "leadMs": 986.2500000000018,
+      "scheduledAtTick": 51732
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 24.005708333333335,
+      "eventTick": 51936,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 51745
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 24.177583333333335,
+      "eventTick": 51969,
+      "leadMs": 985.5833333333344,
+      "scheduledAtTick": 51780
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 24.349458333333335,
+      "eventTick": 52002,
+      "leadMs": 989.4583333333351,
+      "scheduledAtTick": 51812
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 24.505708333333335,
+      "eventTick": 52032,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 51841
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 24.599458333333335,
+      "eventTick": 52050,
+      "leadMs": 988.7916666666677,
+      "scheduledAtTick": 51860
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 24.755708333333335,
+      "eventTick": 52080,
+      "leadMs": 995.708333333333,
+      "scheduledAtTick": 51889
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 24.849458333333335,
+      "eventTick": 52098,
+      "leadMs": 988.1250000000001,
+      "scheduledAtTick": 51908
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 25.005708333333335,
+      "eventTick": 52128,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 51937
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 25.099458333333335,
+      "eventTick": 52146,
+      "leadMs": 987.4583333333362,
+      "scheduledAtTick": 51956
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 25.349458333333335,
+      "eventTick": 52194,
+      "leadMs": 989.4583333333351,
+      "scheduledAtTick": 52004
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 25.505708333333335,
+      "eventTick": 52224,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 52033
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 25.599458333333335,
+      "eventTick": 52242,
+      "leadMs": 988.7916666666677,
+      "scheduledAtTick": 52052
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 25.849458333333335,
+      "eventTick": 52290,
+      "leadMs": 988.1250000000001,
+      "scheduledAtTick": 52100
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 26.005708333333335,
+      "eventTick": 52320,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 52129
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 26.021333333333335,
+      "eventTick": 52323,
+      "leadMs": 981.3333333333354,
+      "scheduledAtTick": 52135
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 26.255708333333335,
+      "eventTick": 52368,
+      "leadMs": 994.3750000000016,
+      "scheduledAtTick": 52177
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 26.271333333333335,
+      "eventTick": 52371,
+      "leadMs": 980.6666666666679,
+      "scheduledAtTick": 52183
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 26.505708333333335,
+      "eventTick": 52416,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 52225
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 26.521333333333335,
+      "eventTick": 52419,
+      "leadMs": 980.0000000000005,
+      "scheduledAtTick": 52231
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 26.771333333333335,
+      "eventTick": 52467,
+      "leadMs": 979.3333333333329,
+      "scheduledAtTick": 52279
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 27.005708333333335,
+      "eventTick": 52512,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 52321
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 27.021333333333335,
+      "eventTick": 52515,
+      "leadMs": 981.3333333333354,
+      "scheduledAtTick": 52327
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 27.271333333333335,
+      "eventTick": 52563,
+      "leadMs": 980.6666666666679,
+      "scheduledAtTick": 52375
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 27.505708333333335,
+      "eventTick": 52608,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 52417
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 27.521333333333335,
+      "eventTick": 52611,
+      "leadMs": 980.0000000000005,
+      "scheduledAtTick": 52423
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 27.693208333333335,
+      "eventTick": 52644,
+      "leadMs": 981.2083333333348,
+      "scheduledAtTick": 52456
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 27.755708333333335,
+      "eventTick": 52656,
+      "leadMs": 995.708333333333,
+      "scheduledAtTick": 52465
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 27.943208333333335,
+      "eventTick": 52692,
+      "leadMs": 983.2083333333337,
+      "scheduledAtTick": 52503
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 28.005708333333335,
+      "eventTick": 52704,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 52513
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 28.193208333333335,
+      "eventTick": 52740,
+      "leadMs": 982.5416666666662,
+      "scheduledAtTick": 52551
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 3,
+      "note": "D4",
+      "when": 28.443208333333335,
+      "eventTick": 52788,
+      "leadMs": 981.8750000000023,
+      "scheduledAtTick": 52599
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 28.505708333333335,
+      "eventTick": 52800,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 52609
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 4,
+      "note": "E4",
+      "when": 28.693208333333335,
+      "eventTick": 52836,
+      "leadMs": 981.2083333333348,
+      "scheduledAtTick": 52648
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 5,
+      "note": "G4",
+      "when": 28.943208333333335,
+      "eventTick": 52884,
+      "leadMs": 983.2083333333337,
+      "scheduledAtTick": 52695
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 4,
+      "note": "G5",
+      "when": 29.005708333333335,
+      "eventTick": 52896,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 52705
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 6,
+      "note": "A4",
+      "when": 29.193208333333335,
+      "eventTick": 52932,
+      "leadMs": 982.5416666666662,
+      "scheduledAtTick": 52743
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 5,
+      "note": "G5",
+      "when": 29.255708333333335,
+      "eventTick": 52944,
+      "leadMs": 994.3750000000016,
+      "scheduledAtTick": 52753
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 0,
+      "note": "G3",
+      "when": 29.365083333333335,
+      "eventTick": 52965,
+      "leadMs": 973.0833333333351,
+      "scheduledAtTick": 52778
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 0,
+      "note": "G5",
+      "when": 29.505708333333335,
+      "eventTick": 52992,
+      "leadMs": 993.708333333334,
+      "scheduledAtTick": 52801
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 1,
+      "note": "A3",
+      "when": 29.615083333333335,
+      "eventTick": 53013,
+      "leadMs": 975.0833333333339,
+      "scheduledAtTick": 52826
+    },
+    {
+      "toyId": "drawgrid-1792330004210-2riivm",
+      "nodeIndex": 2,
+      "note": "C4",
+      "when": 29.865083333333335,
+      "eventTick": 53061,
+      "leadMs": 974.4166666666665,
+      "scheduledAtTick": 52874
+    },
+    {
+      "toyId": "drawgrid-1792330021701-8beiba",
+      "nodeIndex": 2,
+      "note": "G5",
+      "when": 30.005708333333335,
+      "eventTick": 53088,
+      "leadMs": 995.041666666669,
+      "scheduledAtTick": 52897
+    }
+  ],
+  "visuals": [
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 47925,
+      "dueTick": 47925
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 48000,
+      "dueTick": 48000
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 48021,
+      "dueTick": 48021
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 48048,
+      "dueTick": 48048
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 48096,
+      "dueTick": 48096
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 48117,
+      "dueTick": 48117
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 48150,
+      "dueTick": 48150
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 48192,
+      "dueTick": 48192
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 48198,
+      "dueTick": 48198
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 48246,
+      "dueTick": 48246
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 48288,
+      "dueTick": 48288
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 48336,
+      "dueTick": 48336
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 48342,
+      "dueTick": 48342
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 48384,
+      "dueTick": 48384
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 48438,
+      "dueTick": 48438
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 48471,
+      "dueTick": 48471
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 48480,
+      "dueTick": 48480
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 48519,
+      "dueTick": 48519
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 48576,
+      "dueTick": 48576
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 48615,
+      "dueTick": 48615
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 48624,
+      "dueTick": 48624
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 48663,
+      "dueTick": 48663
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 48672,
+      "dueTick": 48672
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 48711,
+      "dueTick": 48711
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 48759,
+      "dueTick": 48759
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 48768,
+      "dueTick": 48768
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 48792,
+      "dueTick": 48792
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 48840,
+      "dueTick": 48840
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 48864,
+      "dueTick": 48864
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 48888,
+      "dueTick": 48888
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 48912,
+      "dueTick": 48912
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 48936,
+      "dueTick": 48936
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 48960,
+      "dueTick": 48960
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 48984,
+      "dueTick": 48984
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 49032,
+      "dueTick": 49032
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 49056,
+      "dueTick": 49056
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 49080,
+      "dueTick": 49080
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 49113,
+      "dueTick": 49113
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 49152,
+      "dueTick": 49152
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 49161,
+      "dueTick": 49161
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 49200,
+      "dueTick": 49200
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 49209,
+      "dueTick": 49209
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 49248,
+      "dueTick": 49248
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 49257,
+      "dueTick": 49257
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 49305,
+      "dueTick": 49305
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 49344,
+      "dueTick": 49344
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 49353,
+      "dueTick": 49353
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 49401,
+      "dueTick": 49401
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 49434,
+      "dueTick": 49434
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 49440,
+      "dueTick": 49440
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 49482,
+      "dueTick": 49482
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 49488,
+      "dueTick": 49488
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 49530,
+      "dueTick": 49530
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 49536,
+      "dueTick": 49536
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 49578,
+      "dueTick": 49578
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 49626,
+      "dueTick": 49626
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 49632,
+      "dueTick": 49632
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 49674,
+      "dueTick": 49674
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 49722,
+      "dueTick": 49722
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 49728,
+      "dueTick": 49728
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 49755,
+      "dueTick": 49755
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 49776,
+      "dueTick": 49776
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 49803,
+      "dueTick": 49803
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 49824,
+      "dueTick": 49824
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 49851,
+      "dueTick": 49851
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 49899,
+      "dueTick": 49899
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 49920,
+      "dueTick": 49920
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 49947,
+      "dueTick": 49947
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 49995,
+      "dueTick": 49995
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 50016,
+      "dueTick": 50016
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 50043,
+      "dueTick": 50043
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 50064,
+      "dueTick": 50064
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 50076,
+      "dueTick": 50076
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 50112,
+      "dueTick": 50112
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 50124,
+      "dueTick": 50124
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 50172,
+      "dueTick": 50172
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 50208,
+      "dueTick": 50208
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 50220,
+      "dueTick": 50220
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 50268,
+      "dueTick": 50268
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 50304,
+      "dueTick": 50304
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 50316,
+      "dueTick": 50316
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 50352,
+      "dueTick": 50352
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 50364,
+      "dueTick": 50364
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 50397,
+      "dueTick": 50397
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 50400,
+      "dueTick": 50400
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 50445,
+      "dueTick": 50445
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 50493,
+      "dueTick": 50493
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 50496,
+      "dueTick": 50496
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 50541,
+      "dueTick": 50541
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 50589,
+      "dueTick": 50589
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 50592,
+      "dueTick": 50592
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 50637,
+      "dueTick": 50637
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 50640,
+      "dueTick": 50640
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 50685,
+      "dueTick": 50685
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 50688,
+      "dueTick": 50688
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 50718,
+      "dueTick": 50718
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 50766,
+      "dueTick": 50766
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 50784,
+      "dueTick": 50784
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 50814,
+      "dueTick": 50814
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 50862,
+      "dueTick": 50862
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 50880,
+      "dueTick": 50880
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 50910,
+      "dueTick": 50910
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 50928,
+      "dueTick": 50928
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 50958,
+      "dueTick": 50958
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 50976,
+      "dueTick": 50976
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 51006,
+      "dueTick": 51006
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 51039,
+      "dueTick": 51039
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 51072,
+      "dueTick": 51072
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 51087,
+      "dueTick": 51087
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 51135,
+      "dueTick": 51135
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 51168,
+      "dueTick": 51168
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 51183,
+      "dueTick": 51183
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 51216,
+      "dueTick": 51216
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 51231,
+      "dueTick": 51231
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 51264,
+      "dueTick": 51264
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 51279,
+      "dueTick": 51279
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 51327,
+      "dueTick": 51327
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 51360,
+      "dueTick": 51360
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 51360,
+      "dueTick": 51360
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 51408,
+      "dueTick": 51408
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 51456,
+      "dueTick": 51456
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 51456,
+      "dueTick": 51456
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 51504,
+      "dueTick": 51504
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 51504,
+      "dueTick": 51504
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 51552,
+      "dueTick": 51552
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 51552,
+      "dueTick": 51552
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 51600,
+      "dueTick": 51600
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 51648,
+      "dueTick": 51648
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 51648,
+      "dueTick": 51648
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 51681,
+      "dueTick": 51681
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 51729,
+      "dueTick": 51729
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 51744,
+      "dueTick": 51744
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 51777,
+      "dueTick": 51777
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 51792,
+      "dueTick": 51792
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 51825,
+      "dueTick": 51825
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 51840,
+      "dueTick": 51840
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 51873,
+      "dueTick": 51873
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 51921,
+      "dueTick": 51921
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 51936,
+      "dueTick": 51936
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 51969,
+      "dueTick": 51969
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 52002,
+      "dueTick": 52002
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 52032,
+      "dueTick": 52032
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 52050,
+      "dueTick": 52050
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 52080,
+      "dueTick": 52080
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 52098,
+      "dueTick": 52098
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 52128,
+      "dueTick": 52128
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 52146,
+      "dueTick": 52146
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 52194,
+      "dueTick": 52194
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 52224,
+      "dueTick": 52224
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 52242,
+      "dueTick": 52242
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 52290,
+      "dueTick": 52290
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 52320,
+      "dueTick": 52320
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 52323,
+      "dueTick": 52323
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 52368,
+      "dueTick": 52368
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 52371,
+      "dueTick": 52371
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 52416,
+      "dueTick": 52416
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 52419,
+      "dueTick": 52419
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 52467,
+      "dueTick": 52467
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 52512,
+      "dueTick": 52512
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 52515,
+      "dueTick": 52515
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 52563,
+      "dueTick": 52563
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 52608,
+      "dueTick": 52608
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 6,
+      "note": "A4",
+      "eventTick": 52611,
+      "dueTick": 52611
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 0,
+      "note": "G3",
+      "eventTick": 52644,
+      "dueTick": 52644
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 5,
+      "note": "G5",
+      "eventTick": 52656,
+      "dueTick": 52656
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 1,
+      "note": "A3",
+      "eventTick": 52692,
+      "dueTick": 52692
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 0,
+      "note": "G5",
+      "eventTick": 52704,
+      "dueTick": 52704
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 2,
+      "note": "C4",
+      "eventTick": 52740,
+      "dueTick": 52740
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 3,
+      "note": "D4",
+      "eventTick": 52788,
+      "dueTick": 52788
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 2,
+      "note": "G5",
+      "eventTick": 52800,
+      "dueTick": 52800
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 4,
+      "note": "E4",
+      "eventTick": 52836,
+      "dueTick": 52836
+    },
+    {
+      "id": "stroke-1792330004209-qon7sd",
+      "nodeIndex": 5,
+      "note": "G4",
+      "eventTick": 52884,
+      "dueTick": 52884
+    },
+    {
+      "id": "stroke-1792330021700-uzxebf",
+      "nodeIndex": 4,
+      "note": "G5",
+      "eventTick": 52896,
+      "dueTick": 52896
+    }
+  ],
+  "errors": [],
+  "main": {
+    "state": "playing",
+    "bpm": 120,
+    "positionTick": 52897,
+    "currentTick": 52897,
+    "currentBeat": 551,
+    "currentBar": 137,
+    "ticksPerBeat": 96,
+    "ticksPerBar": 384,
+    "beatsPerBar": 4,
+    "mapping": {
+      "originTick": 47907,
+      "originAudioTime": 3.021333333333333,
+      "bpm": 120
+    }
+  },
+  "heartbeats": [
+    {
+      "id": "main-heartbeat",
+      "name": "Main"
+    }
+  ],
+  "shell": {
+    "headers": 1,
+    "sceneHeaders": 0,
+    "sceneTransportControls": 0
+  },
+  "toys": 2,
+  "now": 76146.09999999404
+}

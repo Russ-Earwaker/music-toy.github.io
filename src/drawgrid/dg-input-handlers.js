@@ -1,3 +1,4 @@
+import {moveAuthoredNote} from './dg-authored-notes.js';
 // src/drawgrid/dg-input-handlers.js
 // DrawGrid pointer input handlers.
 
@@ -234,6 +235,7 @@ export function createDgInputHandlers({ state, deps } = {}) {
           colGroupMap.set(newRow, filtered);
         }
         s.currentMap.nodes[col].add(newRow);
+        moveAuthoredNote(s.panel,col,oldRow,newRow,{retainOld:s.currentMap.nodes[col].has(oldRow)});
 
         // record manual override for standard view preservation
         try {

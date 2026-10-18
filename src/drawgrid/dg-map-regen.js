@@ -53,7 +53,7 @@ export function createDgMapRegen({ state, deps } = {}) {
       sourceLower.includes('randomize');
     if (isUserEditSource) s.__dgPreserveNodesOverStrokes = false;
     const beatSwarmSubboard = isBeatSwarmSubboardPanel();
-    if ((s.__dgPreserveNodesOverStrokes || beatSwarmSubboard) && s.currentMap && !isUserEditSource) {
+    if ((s.__dgPreserveNodesOverStrokes || beatSwarmSubboard || s.strokes.some(st=>st.noteDriven)) && s.currentMap && !isUserEditSource) {
       // Keep externally hydrated node map authoritative (Beat Swarm subboard),
       // while still allowing stroke redraw for the animated visual guide line.
       try { d.drawNodes(s.currentMap.nodes); } catch {}

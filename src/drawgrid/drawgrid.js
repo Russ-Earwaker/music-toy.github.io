@@ -1,4 +1,6 @@
+import {syncAuthoredNotes} from './dg-authored-notes.js';
 import { panelTransportBindings } from '../panel-transport.js';
+import {DEFAULT_DRAWGRID_STEPS} from './dg-pattern-length.js';
 import { drawGridPlaybackLoopInfo } from './dg-playback-phase.js';
 import {getPlaybackInstance} from '../playback-instances.js';
 // src/drawgrid.js
@@ -428,12 +430,7 @@ const { dgGridAlphaLog, dgDumpCanvasMetrics, emitDG } = createDGDebugHelpers({
   },
 });
 
-const STROKE_COLORS = [
-  'rgba(95,179,255,0.95)',  // Blue
-  'rgba(255,95,179,0.95)',  // Pink
-  'rgba(95,255,179,0.95)',  // Green
-  'rgba(255,220,95,0.95)', // Yellow
-];
+import {DRAWGRID_LINE_COLORS as STROKE_COLORS} from './dg-line-style.js';
 
 // Opacity for decorative/visual-only strokes
 const VISUAL_ONLY_ALPHA = 0.35; // decorative lines (non-generator)
@@ -525,7 +522,7 @@ let __dgLayerDebugLastTs = 0;
  * @param {number} numCols - The total number of columns in the grid.
  * @returns {Array<Set<number>>} A new array with all columns filled.
  */
-export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId, bpm = 120 } = {}) {
+export function createDrawGrid(panel, { cols: initialCols = DEFAULT_DRAWGRID_STEPS, rows = 12, toyId, bpm = 120 } = {}) {
   let __dgRegenSource = '', __dgPreserveNodesOverStrokes = false, __dgSkipMapRegenOnce = false;
   const getLoopInfo = () => getPanelLoopInfo(panel);
   const isRunning = () => isPanelTransportRunning(panel);
@@ -2625,6 +2622,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       activeCount: currentMap.active?.filter(Boolean).length,
       nonEmptyCols: currentMap.nodes?.reduce((n, s)=>n + (s && s.size ? 1 : 0), 0)
     });
+    syncAuthoredNotes(panel,currentMap);
     const updateDetail = { map: currentMap, steps: stepCount, activityOnly };
     if (trapHydrateFlip) {
       if (DG_DEBUG) console.warn('[drawgrid][trap] 1->0 during hydrate window; DROP persist this frame', {
@@ -4361,6 +4359,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   const __dgBumpNodesRev = bumpNodesRev;
 
   const dgNoteGridState = {
+    get panel() { return panel; },
     get cssH() { return cssH; },
     get cols() { return cols; },
     get rows() { return rows; },
@@ -6860,6 +6859,15 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
   renderLoop.__perfRafTag = 'perf.raf.drawgrid';
   rafId = requestAnimationFrame(renderLoop);
 
+  function configurePitchRange(range){
+    rows=range.maxMidi-range.minMidi+1;
+    logicalGeometry=createDrawGridLogicalGeometry({cols,rows});
+    gridArea={...logicalGeometry.gridRect};cw=logicalGeometry.cellWidth;ch=logicalGeometry.cellHeight;topPad=logicalGeometry.topPad;
+    chromaticPalette=Array.from({length:rows},(_,i)=>range.maxMidi-i);
+    // Free Play grids retain their own safe palette; normal grids keep minor.
+    pentatonicPalette=buildPalette(range.minMidi,panel.__dgSuggestedPitchClasses||[0,3,5,7,10],2).reverse();
+    __dgBumpNodesRev('pitch-range');
+  }
   ({
     applyInstrumentFromState,
     captureState,
@@ -6906,6 +6914,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       get fctx() { return fctx; },
     },
     deps: {
+      configurePitchRange,
       computeSerializedNodeStats,
       updateHydrateInboundFromState,
       schedulePersistState,
@@ -7058,6 +7067,7 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
       get STROKE_COLORS() { return STROKE_COLORS; },
     },
     deps: {
+      configurePitchRange,
       getFallbackHydrationState,
       computeSerializedNodeStats,
       dgTraceLog,
@@ -7101,6 +7111,13 @@ export function createDrawGrid(panel, { cols: initialCols = 8, rows = 12, toyId,
     __inboundNonEmpty: () => inboundWasNonEmpty(),
     clear: clearDrawgridInternal,
     getState: captureState,
+    publishAuthoredChange: (reason='authored-edit') => {
+      currentMap.__dgRev=(currentMap.__dgRev||0)+1;
+      emitDrawgridUpdate({activityOnly:false});
+      markStaticDirty(reason);
+      drawNodes(currentMap.nodes);
+      __dgMarkSingleCanvasDirty(panel);
+    },
     hasActiveNotes: () => {
       try {
         return !!(currentMap?.active && currentMap.active.some(Boolean));

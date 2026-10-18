@@ -1,0 +1,49 @@
+{
+  "surfacePaint": [
+    {
+      "id": "paint-1792327008449-1",
+      "seed": 1325646018,
+      "x": 0.44756554307116103,
+      "y": 0.4417879417879418,
+      "radius": 0.065
+    }
+  ],
+  "drawing": false,
+  "capped": false,
+  "capEvidence": null,
+  "stroke": null,
+  "drawings": [],
+  "lines": [],
+  "admitted": [],
+  "visuals": [],
+  "errors": [],
+  "main": {
+    "state": "stopped",
+    "bpm": 152,
+    "positionTick": 0,
+    "currentTick": 0,
+    "currentBeat": 0,
+    "currentBar": 0,
+    "ticksPerBeat": 96,
+    "ticksPerBar": 384,
+    "beatsPerBar": 4,
+    "mapping": {
+      "originTick": 0,
+      "originAudioTime": 0,
+      "bpm": 152
+    }
+  },
+  "heartbeats": [
+    {
+      "id": "main-heartbeat",
+      "name": "Main"
+    }
+  ],
+  "shell": {
+    "headers": 1,
+    "sceneHeaders": 0,
+    "sceneTransportControls": 0
+  },
+  "toys": 0,
+  "now": 29640.29999998212
+}

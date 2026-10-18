@@ -2,6 +2,7 @@ import {createRelationshipReveal} from './toy-relationship-reveal.js';
 import {ensureMasterName} from './toy-instances.js';
 import {getCurrentPlaybackOccurrence,withPlaybackOccurrence} from './playback-context.js';
 import {linkToyAudioBus,getToyVolumeRaw,isToyMuted,setToyVolume,setToyMuted} from './audio-core.js';
+import {drawgridPatternFromState} from './drawgrid/dg-authored-notes.js';
 
 // Definitions own authored data, numbering and audio. Live editors supply the
 // existing toy-specific renderer/scheduler, never the shared data identity.
@@ -38,7 +39,7 @@ export function createLinkedToyViewController({getPanels,getMaster,createView,ca
    }:undefined;},set:fn=>{own[key]=fn;}});
   }
   providers.set(p,own);
-  for(const type of ['drawgrid:update','loopgrid:update','toy:instrument','toy-instrument','toy:role','toy:transpose'])p.addEventListener(type,e=>{if(e.detail?.activityOnly)return;queueMicrotask(()=>edit(p));});
+  for(const type of ['drawgrid:update','loopgrid:update','toy:instrument','toy-instrument','toy:role','toy:transpose','toy:register'])p.addEventListener(type,e=>{if(e.detail?.activityOnly)return;queueMicrotask(()=>edit(p));});
   for(const type of ['input','change','click','pointerup'])p.addEventListener(type,()=>queueMicrotask(()=>edit(p)));
  }
  // Preserve the already-initialized provider before replacing its accessors.
@@ -74,8 +75,9 @@ export function createLinkedToyViewController({getPanels,getMaster,createView,ca
   if(previous?.key===key&&previous.header===header&&previous.label===label&&(!label||label.textContent===text)&&(!header||!!header.querySelector('.linked-copy-marker')===linked))return;
   presentations.set(p,{key,header,label});
   p.dataset.sharedDefinitionId=m.id;p.dataset.linkedView='1';
-  for(const key of ['instrument','musicalRole','localTranspose','instrumentPitchShift','instrumentNote','instrumentOctave'])if(m.state[key]!=null)p.dataset[key]=String(m.state[key]);
+  for(const key of ['instrument','musicalRole','localTranspose','registerOctaves','instrumentPitchShift','instrumentNote','instrumentOctave'])if(m.state[key]!=null)p.dataset[key]=String(m.state[key]);
   if(p.dataset.toy==='drawgrid'&&m.state.steps)p.dataset.steps=String(m.state.steps);
+  if(p.dataset.toy==='drawgrid'){if(m.state.authoredDurationTicks>0)p.dataset.authoredDurationTicks=String(m.state.authoredDurationTicks);else delete p.dataset.authoredDurationTicks;}
   if(p.dataset.instanceNumber&&!p.dataset.linkedCopyNumber)p.dataset.linkedCopyNumber=p.dataset.instanceNumber;
   if(label)label.textContent=text;
   if(!linked)header?.querySelector('.linked-copy-marker')?.remove();
@@ -85,8 +87,12 @@ export function createLinkedToyViewController({getPanels,getMaster,createView,ca
  function edit(p){
   if(paused||applying.has(p)||!p.isConnected)return;
   const members=family(p);if(members.length<2&&!p.dataset.sharedDefinitionId)return;const m=model(p),state=capture(p);
-  if(JSON.stringify(state)===JSON.stringify(m.state))return;
-  m.state=structuredClone(state);m.revision++;m.playbackEditor=p;m.sharedPattern=patterns.get(p);for(const view of members)view.__sharedToyState=m.state;
+  // DrawGrid's state and pattern are one committed snapshot, even when a panel
+  // pointerup precedes its window-level sequencer callback. Other providers can
+  // publish a pattern-only revision without the state equality guard dropping it.
+  const pattern=p.dataset.toy==='drawgrid'&&state.nodes?.list?drawgridPatternFromState(state):patterns.get(p);
+  if(JSON.stringify(state)===JSON.stringify(m.state)&&JSON.stringify(pattern)===JSON.stringify(m.sharedPattern))return;
+  m.state=structuredClone(state);m.revision++;m.playbackEditor=p;m.sharedPattern=structuredClone(pattern);for(const view of members)view.__sharedToyState=m.state;
   for(const peer of members){presentation(peer,m);if(peer!==p){void hydrate(peer,m);peer.classList.remove('linked-edit-flash');void peer.offsetWidth;peer.classList.add('linked-edit-flash');setTimeout(()=>peer.classList.remove('linked-edit-flash'),650);}}
   changed();
  }

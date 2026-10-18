@@ -1,3 +1,4 @@
+import { normalizeRegisterOctaves, restoreToyRegister } from './toy-register.js';
 import { initializeToyMusicalRole, setToyMusicalRole } from './musical-role.js';
 import { classifyMusicalRole } from './harmonic-adaptation.js';
 import { advancedGroup } from './toy-advanced.js';
@@ -28,7 +29,14 @@ export function installMusicalRoleUI(panel) {
   transpose.addEventListener('change',()=>{restoreToyLocalTranspose(panel,{localTranspose:transpose.value});window.Persistence?.markDirty?.();});
   panel.addEventListener('toy:transpose',refreshTranspose);
   transposeLabel.append(transpose);group.append(transposeLabel);
+  const registerLabel=document.createElement('label');registerLabel.textContent='Register: ';
+  const register=document.createElement('select');register.className='toy-btn register-control';register.setAttribute('aria-label','Register');
+  register.title='Whole-toy octave offset. Drawing and authored notes stay at source pitches.';
+  for(const value of [-2,-1,0,1,2]){const option=document.createElement('option');option.value=String(value);option.textContent=(value>0?'+'+value:String(value))+' oct';register.append(option);}
+  const refreshRegister=()=>{register.value=String(normalizeRegisterOctaves(panel.dataset.registerOctaves));};
+  register.addEventListener('change',()=>{restoreToyRegister(panel,{registerOctaves:register.value});window.Persistence?.markDirty?.();});
+  panel.addEventListener('toy:register',refreshRegister);registerLabel.append(register);group.append(registerLabel);refreshRegister();
   // Allow Escape to reach the shared Advanced handler; other keys edit controls.
-  for(const control of [select,transpose]){control.addEventListener('pointerdown',event=>event.stopPropagation());control.addEventListener('keydown',event=>{if(event.key!=='Escape')event.stopPropagation();});}
+  for(const control of [select,transpose,register]){control.addEventListener('pointerdown',event=>event.stopPropagation());control.addEventListener('keydown',event=>{if(event.key!=='Escape')event.stopPropagation();});}
   refresh();refreshTranspose();
 }

@@ -13,6 +13,23 @@ import {rectanglesOverlap} from '../src/graph-placement.js';
 import {getActivationConnections} from '../src/graph-transition-feedback.js';
 
 const panelsMaster=(h,id)=>h.panels.find(p=>p.id===id)?.dataset.masterToyId||id;
+test('Free Play Heartbeat arrangements leave a pre-existing arrangement intact',async()=>{
+ const h=harness();
+ try{
+  const original=await h.arranger.arrange(),originalRoot=structuredClone(h.structures.get(original.rootId));
+  const heartbeat='free-play-test';h.model.registerObject(heartbeat,{ports:HEARTBEAT_PORTS,transportId:heartbeat});
+  const authored=['rhythm','accompaniment','melody'].map(role=>h.add(role,'play-'+role));
+  for(const panel of authored){h.model.disconnect(h.model.getParent(panel.id).id);assert.equal(h.model.connect('transport',out(heartbeat),input(panel.id)).ok,true);}
+  const result=await h.arranger.arrange({heartbeatId:heartbeat});
+  assert.equal(h.model.getTransportId(result.rootId),heartbeat);
+  assert.deepEqual(h.structures.get(original.rootId),originalRoot);
+  assert.equal(h.model.getTransportId(original.rootId),MAIN_TRANSPORT_ID);
+  assert.ok(authored.every(p=>result.inputReport.authoredSourceIds.includes(p.id)));
+  const rebuilt=await h.arranger.arrange({heartbeatId:heartbeat});
+  assert.equal(h.model.getTransportId(rebuilt.rootId),heartbeat);
+  assert.deepEqual(h.structures.get(original.rootId),originalRoot);
+ }finally{h.close();}
+});
 const input=objectId=>({objectId,portId:'input'}),out=(objectId,portId='output')=>({objectId,portId});
 function harness(roles=['rhythm','accompaniment','melody']){
  clearPlaybackInstancesForTests();

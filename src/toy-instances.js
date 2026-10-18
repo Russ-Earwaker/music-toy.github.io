@@ -14,7 +14,7 @@ export function attachInstancePlayback(panel,master,sync=()=>{}){
  }:undefined});
 }
 
-export const toyFamilyName=type=>({drawgrid:'Draw',loopgrid:'Rhythm','loopgrid-drum':'Rhythm',bouncer:'Bouncer',rippler:'Rippler',chordwheel:'Wheel'}[type] || 'Toy');
+export const toyFamilyName=type=>({drawgrid:'Draw','freeplay-line':'Line',loopgrid:'Rhythm','loopgrid-drum':'Rhythm',bouncer:'Bouncer',rippler:'Rippler',chordwheel:'Wheel'}[type] || 'Toy');
 export function ensureMasterName(panel,panels){
  if(panel.dataset.toyName)return panel.dataset.toyName;
  const prefix=toyFamilyName(panel.dataset.toy),used=new Set(panels.filter(p=>!p.dataset.masterToyId).map(p=>p.dataset.toyName));

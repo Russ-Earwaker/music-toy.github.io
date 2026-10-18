@@ -22,11 +22,11 @@ export function selectArrangementSources(panels){
 // ordinary compiler/runtime. Connected views share editable definitions.
 export function createAutoArranger({model,structures,getPanels,createSource,createPhraseSource,createStructureInstance,createInstance,adoptSource,adoptPhrase,placeSource=()=>{},removeInstances=()=>{},place=null,scope=()=>null,publishDebug=()=>{}}){
  let busy=false,serial=0,lastReport=null;
- async function arrange(){
+ async function arrange({heartbeatId:requestedHeartbeat=null}={}){
   if(busy)throw new Error('Arrangement is already being built.');
-  const board=scope(),previous=structures.list().find(s=>s.autoArrange?.root && (s.artOwnerId || null)===board);
+  const board=scope(),previous=structures.list().find(s=>s.autoArrange?.root && (s.artOwnerId || null)===board && (!requestedHeartbeat||s.autoArrange.heartbeatId===requestedHeartbeat));
   const reserved=[];
-  const available=getPanels().filter(p=>{
+  const available=getPanels().filter(p=>!requestedHeartbeat||model.getTransportId(p.id)===requestedHeartbeat).filter(p=>{
    const parent=model.getParent(p.id),parentOwner=parent&&structures.get(parent.from.objectId)?.autoArrange?.owner;
    const manualParent=parent&&parent.kind!=='transport'&&!(previous&&parentOwner===previous.autoArrange.owner);
    const manualChildren=model.list('sequence').some(e=>e.from.objectId===p.id);

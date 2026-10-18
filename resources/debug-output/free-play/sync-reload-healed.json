@@ -1,0 +1,500 @@
+{
+  "boardGrids": [
+    {
+      "id": "drawgrid-1792330004210-2riivm",
+      "notes": [
+        {
+          "id": "stroke-1792330004209-qon7sd:note:0",
+          "col": 0,
+          "sourceMidi": 55,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:1",
+          "col": 1,
+          "sourceMidi": 57,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:2",
+          "col": 2,
+          "sourceMidi": 60,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:3",
+          "col": 3,
+          "sourceMidi": 62,
+          "scissorMuted": false,
+          "paintCovered": true
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:4",
+          "col": 4,
+          "sourceMidi": 64,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:5",
+          "col": 5,
+          "sourceMidi": 67,
+          "scissorMuted": false,
+          "paintCovered": true
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:6",
+          "col": 6,
+          "sourceMidi": 69,
+          "scissorMuted": false,
+          "paintCovered": false
+        }
+      ],
+      "sharedNotes": [
+        {
+          "id": "stroke-1792330004209-qon7sd:note:0",
+          "col": 0,
+          "sourceMidi": 55,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:1",
+          "col": 1,
+          "sourceMidi": 57,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:2",
+          "col": 2,
+          "sourceMidi": 60,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:3",
+          "col": 3,
+          "sourceMidi": 62,
+          "scissorMuted": false,
+          "paintCovered": true
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:4",
+          "col": 4,
+          "sourceMidi": 64,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:5",
+          "col": 5,
+          "sourceMidi": 67,
+          "scissorMuted": false,
+          "paintCovered": true
+        },
+        {
+          "id": "stroke-1792330004209-qon7sd:note:6",
+          "col": 6,
+          "sourceMidi": 69,
+          "scissorMuted": false,
+          "paintCovered": false
+        }
+      ],
+      "pattern": {
+        "steps": 8,
+        "instrument": "PIANO",
+        "cols": [
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:0",
+                "col": 0,
+                "sourceMidi": 55,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              2
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:1",
+                "col": 1,
+                "sourceMidi": 57,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 2
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              11
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:2",
+                "col": 2,
+                "sourceMidi": 60,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 11
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              9
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:3",
+                "col": 3,
+                "sourceMidi": 62,
+                "scissorMuted": false,
+                "paintCovered": true,
+                "row": 9
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              7
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:4",
+                "col": 4,
+                "sourceMidi": 64,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 7
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:5",
+                "col": 5,
+                "sourceMidi": 67,
+                "scissorMuted": false,
+                "paintCovered": true,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              2
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330004209-qon7sd:note:6",
+                "col": 6,
+                "sourceMidi": 69,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 2
+              }
+            ]
+          },
+          {
+            "active": false,
+            "nodes": [],
+            "disabled": [],
+            "notes": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "drawgrid-1792330021701-8beiba",
+      "notes": [
+        {
+          "id": "stroke-1792330021700-uzxebf:note:0",
+          "col": 0,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:1",
+          "col": 1,
+          "sourceMidi": 79,
+          "scissorMuted": true,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:2",
+          "col": 2,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:3",
+          "col": 3,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": true
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:4",
+          "col": 4,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:5",
+          "col": 5,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        }
+      ],
+      "sharedNotes": [
+        {
+          "id": "stroke-1792330021700-uzxebf:note:0",
+          "col": 0,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:1",
+          "col": 1,
+          "sourceMidi": 79,
+          "scissorMuted": true,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:2",
+          "col": 2,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:3",
+          "col": 3,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": true
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:4",
+          "col": 4,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        },
+        {
+          "id": "stroke-1792330021700-uzxebf:note:5",
+          "col": 5,
+          "sourceMidi": 79,
+          "scissorMuted": false,
+          "paintCovered": false
+        }
+      ],
+      "pattern": {
+        "steps": 8,
+        "instrument": "PIANO",
+        "cols": [
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:0",
+                "col": 0,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:1",
+                "col": 1,
+                "sourceMidi": 79,
+                "scissorMuted": true,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:2",
+                "col": 2,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:3",
+                "col": 3,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": true,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:4",
+                "col": 4,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": true,
+            "nodes": [
+              4
+            ],
+            "disabled": [],
+            "notes": [
+              {
+                "id": "stroke-1792330021700-uzxebf:note:5",
+                "col": 5,
+                "sourceMidi": 79,
+                "scissorMuted": false,
+                "paintCovered": false,
+                "row": 4
+              }
+            ]
+          },
+          {
+            "active": false,
+            "nodes": [],
+            "disabled": [],
+            "notes": []
+          },
+          {
+            "active": false,
+            "nodes": [],
+            "disabled": [],
+            "notes": []
+          }
+        ]
+      }
+    }
+  ],
+  "silence": {
+    "tool": "Draw",
+    "lastPlan": null,
+    "paint": {
+      "paint": [],
+      "coveredIds": [],
+      "nodes": []
+    },
+    "motion": []
+  },
+  "surfacePaint": [],
+  "drawing": false,
+  "capped": false,
+  "capEvidence": null,
+  "stroke": null,
+  "drawings": [],
+  "lines": [],
+  "admitted": [],
+  "visuals": [],
+  "errors": [],
+  "main": {
+    "state": "stopped",
+    "bpm": 120,
+    "positionTick": 47907,
+    "currentTick": 47907,
+    "currentBeat": 499,
+    "currentBar": 124,
+    "ticksPerBeat": 96,
+    "ticksPerBar": 384,
+    "beatsPerBar": 4,
+    "mapping": {
+      "originTick": 47907,
+      "originAudioTime": 0,
+      "bpm": 120
+    }
+  },
+  "heartbeats": [
+    {
+      "id": "main-heartbeat",
+      "name": "Main"
+    }
+  ],
+  "shell": {
+    "headers": 1,
+    "sceneHeaders": 0,
+    "sceneTransportControls": 0
+  },
+  "toys": 2,
+  "now": 46145.90000000596
+}

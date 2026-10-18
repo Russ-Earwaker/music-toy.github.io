@@ -1,3 +1,5 @@
+import {DRAWGRID_LINE_COLORS as STROKE_COLORS} from './dg-line-style.js';
+import {selectDrawGridSilence} from './dg-random-silence.js';
 // src/drawgrid/dg-randomizers.js
 
 let randomLineColorIndex = 0;
@@ -15,10 +17,7 @@ export function createLongPhraseContour(count,random=Math.random){
 }
 
 export function createRandomLineStroke(S, random = Math.random) {
-    const STROKE_COLORS = [
-      'rgba(95,179,255,0.95)', 'rgba(255,95,179,0.95)',
-      'rgba(95,255,179,0.95)', 'rgba(255,220,95,0.95)',
-    ];
+
     const leftX = S.gridArea.x;
     const rightX = S.gridArea.x + S.gridArea.w;
     const minY = S.gridArea.y + S.topPad + S.ch;
@@ -54,12 +53,7 @@ export function createRandomLineStroke(S, random = Math.random) {
 export function createDgRandomizers(getState) {
   // Keep this palette in sync with drawgrid.js STROKE_COLORS.
   // (We keep it local here so randomizers don't depend on drawgrid module internals.)
-  const STROKE_COLORS = [
-    'rgba(95,179,255,0.95)',  // Blue
-    'rgba(255,95,179,0.95)',  // Pink
-    'rgba(95,255,179,0.95)',  // Green
-    'rgba(255,220,95,0.95)',  // Yellow
-  ];
+
 
   let __dgRandomColorIndex = 0;
 
@@ -221,9 +215,9 @@ export function createDgRandomizers(getState) {
       // After generating the line, randomly deactivate some columns to create rests.
       // This addresses the user's feedback that "Random" no longer turns notes off.
       if (S.currentMap && S.currentMap.nodes) {
-        const motif=S.cols===32?Array.from({length:8},()=>Math.random()<.25):null;
+        const selected=new Set(selectDrawGridSilence(S.currentMap.nodes.flatMap((rows,col)=>rows?.size?[{id:col,col}]:[]),{steps:S.cols,random:Math.random}));
         for (let c = 0; c < S.cols; c++) {
-          if (motif?(c>=24&&Math.random()<.12?!motif[c%8]:motif[c%8]):Math.random()<.35) {
+          if (selected.has(c)) {
             // Deactivate the column by disabling all of its nodes. This state
             // is preserved by the `persistentDisabled` mechanism.
             if (S.currentMap.nodes[c]?.size > 0) {
