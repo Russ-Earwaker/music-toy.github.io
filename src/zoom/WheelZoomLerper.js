@@ -1,5 +1,6 @@
 // src/zoom/WheelZoomLerper.js
 import { getZoomState } from './ZoomCoordinator.js';
+import { BOARD_ZOOM_MIN, BOARD_ZOOM_MAX } from '../board-zoom-limits.js';
 
 export class WheelZoomLerper {
   constructor(applyFn) {
@@ -14,8 +15,8 @@ export class WheelZoomLerper {
       targetY: 0,
       easing: 0.08, // slower responsiveness for smoother pans/zooms
       running: false,
-      minScale: 0.3,
-      maxScale: 1.0,
+      minScale: BOARD_ZOOM_MIN,
+      maxScale: BOARD_ZOOM_MAX,
     };
     const z = getZoomState();
     this.state.currentScale = this.state.targetScale = z.currentScale || 1;

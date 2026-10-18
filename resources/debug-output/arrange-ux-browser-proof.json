@@ -1,0 +1,2229 @@
+{
+  "cases": [
+    {
+      "kind": "bouncer",
+      "input": [
+        {
+          "id": "bouncer-1792269894882-2c2js8",
+          "type": "bouncer",
+          "audit": [
+            {
+              "id": "bouncer-1792269894882-2c2js8",
+              "definitionId": "bouncer-1792269894882-2c2js8",
+              "kind": "bouncer",
+              "explicit": false,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 1 of your toys\nAdded 3 supporting parts",
+      "markers": 8,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "bouncer-1792269941329-va9y14",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "bouncer-1792269894882-2c2js8",
+          "kind": "arrange-authored"
+        }
+      ],
+      "highlighted": [
+        "bouncer-1792269894882-2c2js8",
+        "bouncer-1792269941329-va9y14"
+      ],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 834.8912963867188,
+          "y": -569.57080078125
+        },
+        {
+          "name": "A",
+          "x": 834.8912963867188,
+          "y": 18.817337036132812
+        },
+        {
+          "name": "B",
+          "x": 834.8912963867188,
+          "y": 937.3018798828125
+        },
+        {
+          "name": "Outro",
+          "x": 834.8912963867188,
+          "y": 1614.5225830078125
+        }
+      ],
+      "notesByRole": {
+        "melody": 20
+      },
+      "errors": []
+    },
+    {
+      "kind": "bouncer",
+      "input": [
+        {
+          "id": "bouncer-1792269894882-2c2js8",
+          "type": "bouncer",
+          "audit": [
+            {
+              "id": "bouncer-1792269894882-2c2js8",
+              "definitionId": "bouncer-1792269894882-2c2js8",
+              "kind": "bouncer",
+              "explicit": false,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 1 of your toys\nAdded 3 supporting parts",
+      "markers": 8,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "bouncer-1792269941329-va9y14",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "bouncer-1792269894882-2c2js8",
+          "kind": "arrange-authored"
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 834.8912963867188,
+          "y": -569.57080078125
+        },
+        {
+          "name": "A",
+          "x": 834.8912963867188,
+          "y": 18.817337036132812
+        },
+        {
+          "name": "B",
+          "x": 834.8912963867188,
+          "y": 937.3018798828125
+        },
+        {
+          "name": "Outro",
+          "x": 834.8912963867188,
+          "y": 1614.5225830078125
+        }
+      ],
+      "notesByRole": {
+        "melody": 33,
+        "accompaniment": 110,
+        "percussion": 90
+      },
+      "errors": []
+    },
+    {
+      "kind": "rippler",
+      "input": [
+        {
+          "id": "rippler-1792270016085-dm49vi",
+          "type": "rippler",
+          "audit": [
+            {
+              "id": "rippler-1792270016085-dm49vi",
+              "definitionId": "rippler-1792270016085-dm49vi",
+              "kind": "rippler",
+              "explicit": false,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 1 of your toys\nAdded 3 supporting parts",
+      "markers": 8,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "rippler-1792270016085-dm49vi",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "loopgrid-1792270050271-y5moz2",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270050274-mexixd",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "rippler-1792270050277-q46lmr",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270050282-5z83l1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:2",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:3",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:5",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270050103-p1hda7",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270050152-qkf42f",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270050210-nbydd1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270050262-4v6l14",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:6",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:7",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "rippler-1792270016085-dm49vi",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "rippler-1792270050277-q46lmr",
+          "kind": "arrange-authored"
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 439.84381103515625,
+          "y": 169.5925750732422
+        },
+        {
+          "name": "A",
+          "x": 441.65576171875,
+          "y": 236.218505859375
+        },
+        {
+          "name": "B",
+          "x": 441.65576171875,
+          "y": 298.33331298828125
+        },
+        {
+          "name": "Outro",
+          "x": 437.057861328125,
+          "y": 325.8101806640625
+        }
+      ],
+      "notesByRole": {
+        "melody": 76
+      },
+      "errors": []
+    },
+    {
+      "kind": "rippler",
+      "input": [
+        {
+          "id": "rippler-1792270016085-dm49vi",
+          "type": "rippler",
+          "audit": [
+            {
+              "id": "rippler-1792270016085-dm49vi",
+              "definitionId": "rippler-1792270016085-dm49vi",
+              "kind": "rippler",
+              "explicit": false,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 1 of your toys\nAdded 3 supporting parts",
+      "markers": 8,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "rippler-1792270016085-dm49vi",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "loopgrid-1792270050271-y5moz2",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270050274-mexixd",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "rippler-1792270050277-q46lmr",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270050282-5z83l1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:2",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:3",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:5",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270050103-p1hda7",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270050152-qkf42f",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270050210-nbydd1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270050262-4v6l14",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:6",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:7",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "rippler-1792270016085-dm49vi",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "rippler-1792270050277-q46lmr",
+          "kind": "arrange-authored"
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 439.84381103515625,
+          "y": 169.5925750732422
+        },
+        {
+          "name": "A",
+          "x": 441.65576171875,
+          "y": 236.218505859375
+        },
+        {
+          "name": "B",
+          "x": 441.65576171875,
+          "y": 298.33331298828125
+        },
+        {
+          "name": "Outro",
+          "x": 437.057861328125,
+          "y": 325.8101806640625
+        }
+      ],
+      "notesByRole": {
+        "melody": 76
+      },
+      "errors": []
+    },
+    {
+      "kind": "rippler",
+      "input": [
+        {
+          "id": "rippler-1792270016085-dm49vi",
+          "type": "rippler",
+          "audit": [
+            {
+              "id": "rippler-1792270016085-dm49vi",
+              "definitionId": "rippler-1792270016085-dm49vi",
+              "kind": "rippler",
+              "explicit": false,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 1 of your toys\nAdded 3 supporting parts",
+      "markers": 8,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "rippler-1792270016085-dm49vi",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "loopgrid-1792270050271-y5moz2",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270050274-mexixd",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "rippler-1792270050277-q46lmr",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270050282-5z83l1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:2",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:3",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:5",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270050103-p1hda7",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270050152-qkf42f",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270050210-nbydd1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270050262-4v6l14",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:6",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:7",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "rippler-1792270016085-dm49vi",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "rippler-1792270050277-q46lmr",
+          "kind": "arrange-authored"
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 439.84381103515625,
+          "y": 169.5925750732422
+        },
+        {
+          "name": "A",
+          "x": 441.65576171875,
+          "y": 236.218505859375
+        },
+        {
+          "name": "B",
+          "x": 441.65576171875,
+          "y": 298.33331298828125
+        },
+        {
+          "name": "Outro",
+          "x": 437.057861328125,
+          "y": 325.8101806640625
+        }
+      ],
+      "notesByRole": {
+        "melody": 96,
+        "accompaniment": 82,
+        "percussion": 36
+      },
+      "errors": []
+    },
+    {
+      "kind": "draw-rhythm",
+      "input": [
+        {
+          "id": "drawgrid-1792270089230-bva9va",
+          "type": "drawgrid",
+          "role": "melody",
+          "audit": [
+            {
+              "id": "drawgrid-1792270089230-bva9va",
+              "definitionId": "drawgrid-1792270089230-bva9va",
+              "kind": "drawgrid",
+              "explicit": true,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        },
+        {
+          "id": "loopgrid-1792270089444-lrospq",
+          "type": "loopgrid",
+          "role": "percussion",
+          "audit": [
+            {
+              "id": "loopgrid-1792270089444-lrospq",
+              "definitionId": "loopgrid-1792270089444-lrospq",
+              "kind": "loopgrid",
+              "explicit": true,
+              "role": "rhythm",
+              "musicalRole": "percussion",
+              "empty": false,
+              "pitched": false,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 2 of your toys\nAdded 2 supporting parts",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 357.1382751464844,
+          "y": 165.838134765625
+        },
+        {
+          "name": "A",
+          "x": 360.5621337890625,
+          "y": 227.9082489013672
+        },
+        {
+          "name": "B",
+          "x": 360.5621337890625,
+          "y": 298.7218017578125
+        },
+        {
+          "name": "Outro",
+          "x": 354.351806640625,
+          "y": 334.91357421875
+        }
+      ],
+      "notesByRole": {
+        "melody": 236,
+        "percussion": 58
+      },
+      "errors": []
+    },
+    {
+      "kind": "draw-rhythm",
+      "input": [
+        {
+          "id": "drawgrid-1792270089230-bva9va",
+          "type": "drawgrid",
+          "role": "melody",
+          "audit": [
+            {
+              "id": "drawgrid-1792270089230-bva9va",
+              "definitionId": "drawgrid-1792270089230-bva9va",
+              "kind": "drawgrid",
+              "explicit": true,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        },
+        {
+          "id": "loopgrid-1792270089444-lrospq",
+          "type": "loopgrid",
+          "role": "percussion",
+          "audit": [
+            {
+              "id": "loopgrid-1792270089444-lrospq",
+              "definitionId": "loopgrid-1792270089444-lrospq",
+              "kind": "loopgrid",
+              "explicit": true,
+              "role": "rhythm",
+              "musicalRole": "percussion",
+              "empty": false,
+              "pitched": false,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 2 of your toys\nAdded 2 supporting parts",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "loopgrid-1792270089444-lrospq",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "loopgrid-1792270132768-ezvelv",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270132780-nkd3s7",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270089230-bva9va",
+          "kind": "arrange-authored"
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 357.1382751464844,
+          "y": 165.838134765625
+        },
+        {
+          "name": "A",
+          "x": 360.5621337890625,
+          "y": 227.9082489013672
+        },
+        {
+          "name": "B",
+          "x": 360.5621337890625,
+          "y": 298.7218017578125
+        },
+        {
+          "name": "Outro",
+          "x": 354.351806640625,
+          "y": 334.91357421875
+        }
+      ],
+      "notesByRole": {
+        "melody": 236,
+        "percussion": 58
+      },
+      "errors": []
+    },
+    {
+      "kind": "restored",
+      "input": [],
+      "summary": "",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 350.92828369140625,
+          "y": 118.97444915771484
+        },
+        {
+          "name": "A",
+          "x": 354.3521423339844,
+          "y": 217.5882568359375
+        },
+        {
+          "name": "B",
+          "x": 354.3521423339844,
+          "y": 325.8658447265625
+        },
+        {
+          "name": "Outro",
+          "x": 348.1418151855469,
+          "y": 417.87469482421875
+        }
+      ],
+      "notesByRole": {},
+      "errors": []
+    },
+    {
+      "kind": "restored",
+      "input": [],
+      "summary": "",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 344.7482604980469,
+          "y": 108.71443939208984
+        },
+        {
+          "name": "A",
+          "x": 348.172119140625,
+          "y": 207.3282470703125
+        },
+        {
+          "name": "B",
+          "x": 348.172119140625,
+          "y": 315.6058349609375
+        },
+        {
+          "name": "Outro",
+          "x": 341.9618225097656,
+          "y": 407.61468505859375
+        }
+      ],
+      "notesByRole": {},
+      "errors": []
+    },
+    {
+      "kind": "restored",
+      "input": [],
+      "summary": "",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 338.6082763671875,
+          "y": 98.50444793701172
+        },
+        {
+          "name": "A",
+          "x": 342.0321350097656,
+          "y": 197.11825561523438
+        },
+        {
+          "name": "B",
+          "x": 342.0321350097656,
+          "y": 305.3958435058594
+        },
+        {
+          "name": "Outro",
+          "x": 335.8218078613281,
+          "y": 397.40472412109375
+        }
+      ],
+      "notesByRole": {},
+      "errors": []
+    },
+    {
+      "kind": "restored",
+      "input": [],
+      "summary": "",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [],
+      "inputEvents": [
+        {
+          "type": "pointerdown",
+          "target": "SECTION",
+          "css": "toy-panel toy-advanced-inline drawgrid-single ov-body-border ov-freeze ov-collapse",
+          "header": false,
+          "x": 444.20489501953125,
+          "y": 207.37753295898438
+        },
+        {
+          "type": "pointerup",
+          "target": "DIV",
+          "css": "ov-shield grabbing",
+          "header": false,
+          "x": 444.20489501953125,
+          "y": 207.37753295898438
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 332.48828125,
+          "y": 88.35443878173828
+        },
+        {
+          "name": "A",
+          "x": 335.9121398925781,
+          "y": 186.96824645996094
+        },
+        {
+          "name": "B",
+          "x": 335.9121398925781,
+          "y": 295.2458190917969
+        },
+        {
+          "name": "Outro",
+          "x": 329.7018127441406,
+          "y": 387.25469970703125
+        }
+      ],
+      "notesByRole": {},
+      "errors": []
+    },
+    {
+      "kind": "restored",
+      "input": [],
+      "summary": "",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [],
+      "inputEvents": [
+        {
+          "type": "pointerdown",
+          "target": "SPAN",
+          "css": "master-name",
+          "header": true,
+          "x": 438.1248474121094,
+          "y": 197.27638244628906
+        },
+        {
+          "type": "pointerup",
+          "target": "SECTION",
+          "css": "toy-panel toy-advanced-inline drawgrid-single ov-body-border ov-freeze ov-collapse relationship-flash",
+          "header": false,
+          "x": 438.1248474121094,
+          "y": 197.27638244628906
+        },
+        {
+          "type": "click",
+          "target": "SECTION",
+          "css": "toy-panel toy-advanced-inline drawgrid-single ov-body-border ov-freeze ov-collapse relationship-flash",
+          "header": false,
+          "x": 438,
+          "y": 197
+        },
+        {
+          "type": "pointerdown",
+          "target": "SPAN",
+          "css": "master-name",
+          "header": true,
+          "x": 438.1248474121094,
+          "y": 197.27638244628906
+        },
+        {
+          "type": "pointerup",
+          "target": "SECTION",
+          "css": "toy-panel toy-advanced-inline drawgrid-single ov-body-border ov-freeze ov-collapse relationship-flash",
+          "header": false,
+          "x": 438.1248474121094,
+          "y": 197.27638244628906
+        },
+        {
+          "type": "click",
+          "target": "SECTION",
+          "css": "toy-panel toy-advanced-inline drawgrid-single ov-body-border ov-freeze ov-collapse relationship-flash",
+          "header": false,
+          "x": 438,
+          "y": 197
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 326.40826416015625,
+          "y": 78.24445343017578
+        },
+        {
+          "name": "A",
+          "x": 329.8321228027344,
+          "y": 176.85826110839844
+        },
+        {
+          "name": "B",
+          "x": 329.8321228027344,
+          "y": 285.1358337402344
+        },
+        {
+          "name": "Outro",
+          "x": 323.621826171875,
+          "y": 377.14471435546875
+        }
+      ],
+      "notesByRole": {},
+      "errors": []
+    },
+    {
+      "kind": "restored",
+      "input": [],
+      "summary": "",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "",
+          "kind": "relationship-fade"
+        },
+        {
+          "id": "drawgrid-1792270089230-bva9va",
+          "kind": "relationship-node-flash"
+        },
+        {
+          "id": "drawgrid-1792270132780-nkd3s7",
+          "kind": "relationship-node-flash"
+        }
+      ],
+      "inputEvents": [
+        {
+          "type": "pointerdown",
+          "target": "SPAN",
+          "css": "master-name",
+          "header": true,
+          "x": 438.1248474121094,
+          "y": 197.27638244628906
+        },
+        {
+          "type": "pointerup",
+          "target": "SECTION",
+          "css": "toy-panel toy-advanced-inline drawgrid-single ov-body-border ov-freeze ov-collapse relationship-flash",
+          "header": false,
+          "x": 438.1248474121094,
+          "y": 197.27638244628906
+        },
+        {
+          "type": "click",
+          "target": "SECTION",
+          "css": "toy-panel toy-advanced-inline drawgrid-single ov-body-border ov-freeze ov-collapse relationship-flash",
+          "header": false,
+          "x": 438,
+          "y": 197
+        },
+        {
+          "type": "pointerdown",
+          "target": "SPAN",
+          "css": "master-name",
+          "header": true,
+          "x": 438.1248474121094,
+          "y": 197.27638244628906
+        },
+        {
+          "type": "pointerup",
+          "target": "SECTION",
+          "css": "toy-panel toy-advanced-inline drawgrid-single ov-body-border ov-freeze ov-collapse relationship-flash",
+          "header": false,
+          "x": 438.1248474121094,
+          "y": 197.27638244628906
+        },
+        {
+          "type": "click",
+          "target": "SECTION",
+          "css": "toy-panel toy-advanced-inline drawgrid-single ov-body-border ov-freeze ov-collapse relationship-flash",
+          "header": false,
+          "x": 438,
+          "y": 197
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 326.40826416015625,
+          "y": 78.24445343017578
+        },
+        {
+          "name": "A",
+          "x": 329.8321228027344,
+          "y": 176.85826110839844
+        },
+        {
+          "name": "B",
+          "x": 329.8321228027344,
+          "y": 285.1358337402344
+        },
+        {
+          "name": "Outro",
+          "x": 323.621826171875,
+          "y": 377.14471435546875
+        }
+      ],
+      "notesByRole": {},
+      "errors": []
+    },
+    {
+      "kind": "bounce-ripple",
+      "input": [
+        {
+          "id": "bouncer-1792270552008-5daho1",
+          "type": "bouncer",
+          "audit": [
+            {
+              "id": "bouncer-1792270552008-5daho1",
+              "definitionId": "bouncer-1792270552008-5daho1",
+              "kind": "bouncer",
+              "explicit": false,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        },
+        {
+          "id": "rippler-1792270555028-557zet",
+          "type": "rippler",
+          "audit": [
+            {
+              "id": "rippler-1792270555028-557zet",
+              "definitionId": "rippler-1792270555028-557zet",
+              "kind": "rippler",
+              "explicit": false,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 2 of your toys\nAdded 3 supporting parts",
+      "markers": 8,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "bouncer-1792270552008-5daho1",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "rippler-1792270555028-557zet",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "structure-toy:3",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270634684-t0c5py",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:2",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270634569-8awkg4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270634620-c5tay4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270634756-373rdv",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270634762-incbka",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270634766-sdczfs",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "bouncer-1792270634770-hnmrx0",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270634779-9ag24e",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:6",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:7",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:8",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:9",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:5",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:10",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:11",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:12",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:13",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "bouncer-1792270552008-5daho1",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "rippler-1792270555028-557zet",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "bouncer-1792270634770-hnmrx0",
+          "kind": "arrange-authored"
+        }
+      ],
+      "inputEvents": [
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950,
+          "y": 258
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511,
+          "y": 507
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243.125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243.125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243,
+          "y": 507
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 410.55096435546875,
+          "y": 164.32745361328125
+        },
+        {
+          "name": "A",
+          "x": 414.6327209472656,
+          "y": 217.6390838623047
+        },
+        {
+          "name": "B",
+          "x": 414.6327209472656,
+          "y": 292.00274658203125
+        },
+        {
+          "name": "Outro",
+          "x": 407.7652587890625,
+          "y": 338.65045166015625
+        }
+      ],
+      "notesByRole": {
+        "melody": 218
+      },
+      "errors": []
+    },
+    {
+      "kind": "bounce-ripple",
+      "input": [
+        {
+          "id": "bouncer-1792270552008-5daho1",
+          "type": "bouncer",
+          "audit": [
+            {
+              "id": "bouncer-1792270552008-5daho1",
+              "definitionId": "bouncer-1792270552008-5daho1",
+              "kind": "bouncer",
+              "explicit": false,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        },
+        {
+          "id": "rippler-1792270555028-557zet",
+          "type": "rippler",
+          "audit": [
+            {
+              "id": "rippler-1792270555028-557zet",
+              "definitionId": "rippler-1792270555028-557zet",
+              "kind": "rippler",
+              "explicit": false,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 2 of your toys\nAdded 3 supporting parts",
+      "markers": 8,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "bouncer-1792270552008-5daho1",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "rippler-1792270555028-557zet",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "structure-toy:3",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270634684-t0c5py",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:2",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270634569-8awkg4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270634620-c5tay4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270634756-373rdv",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270634762-incbka",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270634766-sdczfs",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "bouncer-1792270634770-hnmrx0",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270634779-9ag24e",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:1",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:6",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:7",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:8",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:9",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:5",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:10",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:11",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:12",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:13",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "bouncer-1792270552008-5daho1",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "rippler-1792270555028-557zet",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "bouncer-1792270634770-hnmrx0",
+          "kind": "arrange-authored"
+        }
+      ],
+      "inputEvents": [
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950,
+          "y": 258
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511,
+          "y": 507
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243.125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243.125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243,
+          "y": 507
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 410.55096435546875,
+          "y": 164.32745361328125
+        },
+        {
+          "name": "A",
+          "x": 414.6327209472656,
+          "y": 217.6390838623047
+        },
+        {
+          "name": "B",
+          "x": 414.6327209472656,
+          "y": 292.00274658203125
+        },
+        {
+          "name": "Outro",
+          "x": 407.7652587890625,
+          "y": 338.65045166015625
+        }
+      ],
+      "notesByRole": {
+        "melody": 317,
+        "accompaniment": 299,
+        "percussion": 163
+      },
+      "errors": []
+    },
+    {
+      "kind": "drawgrid",
+      "input": [
+        {
+          "id": "drawgrid-1792270722275-bcq24o",
+          "type": "drawgrid",
+          "role": "melody",
+          "audit": [
+            {
+              "id": "drawgrid-1792270722275-bcq24o",
+              "definitionId": "drawgrid-1792270722275-bcq24o",
+              "kind": "drawgrid",
+              "explicit": true,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 1 of your toys\nAdded 3 supporting parts",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [],
+      "inputEvents": [
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950,
+          "y": 258
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511,
+          "y": 507
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243.125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243.125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243,
+          "y": 507
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 652.828125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 652.828125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 652,
+          "y": 507
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511,
+          "y": 507
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 357.1382751464844,
+          "y": 165.838134765625
+        },
+        {
+          "name": "A",
+          "x": 360.5621337890625,
+          "y": 227.9082489013672
+        },
+        {
+          "name": "B",
+          "x": 360.5621337890625,
+          "y": 298.7218017578125
+        },
+        {
+          "name": "Outro",
+          "x": 354.351806640625,
+          "y": 334.91357421875
+        }
+      ],
+      "notesByRole": {
+        "melody": 277
+      },
+      "errors": []
+    },
+    {
+      "kind": "drawgrid",
+      "input": [
+        {
+          "id": "drawgrid-1792270722275-bcq24o",
+          "type": "drawgrid",
+          "role": "melody",
+          "audit": [
+            {
+              "id": "drawgrid-1792270722275-bcq24o",
+              "definitionId": "drawgrid-1792270722275-bcq24o",
+              "kind": "drawgrid",
+              "explicit": true,
+              "role": "melody",
+              "musicalRole": "melody",
+              "empty": false,
+              "pitched": true,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 1 of your toys\nAdded 0 supporting parts",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "drawgrid-1792270722275-bcq24o",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270787879-42bto3",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "loopgrid-1792270787766-r4nhae",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270783896-zyjq4q",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270783978-nvh09b",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:30",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270787780-bgv7tp",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270722275-bcq24o",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "structure-toy:33",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:34",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:31",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:32",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:35",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270816136-zn5iji",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270816144-yc6rly",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270816153-cgytxf",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270816163-l1n268",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270816171-2ba19f",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270816179-1xmih5",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270816187-n7hl26",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270816197-3v3mp4",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:28",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:29",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270784015-1ke8ot",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:39",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:40",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "loopgrid-1792270787812-anbrdj",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:36",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "structure-toy:37",
+          "kind": "arrange-added"
+        },
+        {
+          "id": "drawgrid-1792270722275-bcq24o",
+          "kind": "arrange-authored"
+        },
+        {
+          "id": "drawgrid-1792270816163-l1n268",
+          "kind": "arrange-authored"
+        }
+      ],
+      "inputEvents": [
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950,
+          "y": 258
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511,
+          "y": 507
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243.125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243.125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 243,
+          "y": 507
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 652.828125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 652.828125,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 652,
+          "y": 507
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511.21875,
+          "y": 507.55517578125
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": null,
+          "header": false,
+          "x": 511,
+          "y": 507
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 356.9241943359375,
+          "y": 129.11083984375
+        },
+        {
+          "name": "A",
+          "x": 360.3334045410156,
+          "y": 227.8762969970703
+        },
+        {
+          "name": "B",
+          "x": 360.3334045410156,
+          "y": 336.2390441894531
+        },
+        {
+          "name": "Outro",
+          "x": 354.13812255859375,
+          "y": 428.3623046875
+        }
+      ],
+      "notesByRole": {
+        "melody": 341,
+        "accompaniment": 77,
+        "percussion": 52
+      },
+      "errors": []
+    },
+    {
+      "kind": "loopgrid",
+      "input": [
+        {
+          "id": "loopgrid-1792270843639-fz8ive",
+          "type": "loopgrid",
+          "role": "percussion",
+          "audit": [
+            {
+              "id": "loopgrid-1792270843639-fz8ive",
+              "definitionId": "loopgrid-1792270843639-fz8ive",
+              "kind": "loopgrid",
+              "explicit": true,
+              "role": "rhythm",
+              "musicalRole": "percussion",
+              "empty": false,
+              "pitched": false,
+              "generated": false,
+              "reason": null,
+              "usable": true
+            }
+          ]
+        }
+      ],
+      "summary": "Arrangement ready\nUsed 1 of your toys\nAdded 3 supporting parts",
+      "markers": 14,
+      "structureMarkers": 0,
+      "reveals": [
+        {
+          "id": "drawgrid-1792270903092-y0q0pa",
+          "kind": "relationship-node-flash"
+        },
+        {
+          "id": "drawgrid-1792270903109-s0v5t4",
+          "kind": "relationship-node-flash"
+        },
+        {
+          "id": "drawgrid-1792270903169-x6m78d",
+          "kind": "relationship-node-flash"
+        }
+      ],
+      "inputEvents": [
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68.806884765625
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "c-btn",
+          "header": false,
+          "x": 505,
+          "y": 68
+        },
+        {
+          "type": "pointerdown",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "pointerup",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950.3515625,
+          "y": 258.03167724609375
+        },
+        {
+          "type": "click",
+          "target": "BUTTON",
+          "css": "toy-spawner-arrange c-btn",
+          "header": false,
+          "x": 950,
+          "y": 258
+        }
+      ],
+      "highlighted": [],
+      "sections": [
+        {
+          "name": "Intro",
+          "x": 357.1382751464844,
+          "y": 165.8382568359375
+        },
+        {
+          "name": "A",
+          "x": 360.5621337890625,
+          "y": 227.90838623046875
+        },
+        {
+          "name": "B",
+          "x": 360.5621337890625,
+          "y": 298.721923828125
+        },
+        {
+          "name": "Outro",
+          "x": 354.351806640625,
+          "y": 334.9136962890625
+        }
+      ],
+      "notesByRole": {
+        "percussion": 175
+      },
+      "errors": []
+    }
+  ]
+}

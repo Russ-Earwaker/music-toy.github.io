@@ -1104,6 +1104,7 @@ let __justSpawnedUntil = 0;
 
           const scheduledT = Math.max(ac ? ac.currentTime + 0.0008 : 0, tickToAudioTime(fireTick));
           triggerInstrument(i || instrument, n, scheduledT, toyId, {
+            context:getPlaybackInstance(panel.id)?.context,eventTick:fireTick,
             onPlaybackScheduled:admission=>admittedToyVisual(panel,{...meta,eventId,fireTick},admission,audioTimeToTick),
           });
 
@@ -1265,6 +1266,7 @@ const draw = createBouncerDraw({ getAim: ()=>__aim,  lockPhysWorld,
   rescale: () => {},
   updateLaunchBaseline,
   buildStateForStep, installInteractions, getLastLaunch: ()=>lastLaunch,
+  isLearning:()=>visQ.loopRec.mode==='record'&&!!lastLaunch,
   applyFromStep,
   velFrom,
   ballR,

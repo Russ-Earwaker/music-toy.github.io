@@ -1,0 +1,10 @@
+﻿<!doctype html><meta charset="utf-8"><title>Auto-Arrange input robustness QA</title>
+<style>body{background:#101722;color:white;font:14px system-ui;margin:0}header{padding:8px;display:flex;gap:8px}button,select{padding:8px}iframe{width:100%;height:70vh;border:0}pre{white-space:pre-wrap;padding:12px}</style>
+<header><select aria-label="Input case"><option value="bouncer">One Bouncer</option><option value="rippler">One Rippler</option><option value="loopgrid">One Simple Rhythm</option><option value="drawgrid">One DrawGrid</option><option value="draw-rhythm">DrawGrid + Simple Rhythm</option><option value="bounce-ripple">Bouncer + Rippler</option><option value="mixed">DrawGrid + Bouncer + Rippler</option><option value="percussion">Three percussion toys</option></select><button id="prepare">Prepare input</button><button id="inspect">Inspect proof</button><button id="save">Save proof</button><button id="saveUX">Save UX proof</button><span id="status">Loading</span></header>
+<iframe id="app" src="../" allow="autoplay"></iframe><pre id="proof"></pre>
+<script type="module">
+ const frame=document.querySelector('#app'),status=document.querySelector('#status');
+ frame.addEventListener('load',()=>{const script=frame.contentDocument.createElement('script');script.type='module';script.src=new URL('auto-arrange-robustness-observer.js',location.href);frame.contentDocument.body.append(script);script.onload=()=>status.textContent='Ready';});
+ for(const action of ['prepare','inspect','save','saveUX'])document.querySelector('#'+action).onclick=async()=>{try{status.textContent=await frame.contentWindow.__arrangeInputQA[action](document.querySelector('select').value);}catch(error){status.textContent='ERROR: '+error.stack;}};
+</script>
+

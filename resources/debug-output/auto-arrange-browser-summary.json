@@ -1,0 +1,159 @@
+{
+  "errors": [],
+  "cases": [
+    {
+      "kind": "bouncer",
+      "tick": 13610,
+      "maxScheduledEventTick": 42816,
+      "durationTicks": 6144,
+      "notesByRole": {
+        "accompaniment": 219,
+        "percussion": 138,
+        "melody": 17
+      },
+      "authoredSourceNotes": [
+        {
+          "id": "bouncer-1792268276813-xoov23",
+          "type": "bouncer",
+          "notes": 28
+        }
+      ],
+      "unrooted": 0,
+      "lateNotes": 0
+    },
+    {
+      "kind": "rippler",
+      "tick": 6944,
+      "maxScheduledEventTick": 7488,
+      "durationTicks": 6144,
+      "notesByRole": {
+        "accompaniment": 95,
+        "percussion": 64,
+        "melody": 15
+      },
+      "authoredSourceNotes": [
+        {
+          "id": "rippler-1792268460315-ufd8ad",
+          "type": "rippler",
+          "notes": 3
+        }
+      ],
+      "unrooted": 0,
+      "lateNotes": 0
+    },
+    {
+      "kind": "loopgrid",
+      "tick": 15654,
+      "maxScheduledEventTick": 16272,
+      "durationTicks": 6144,
+      "notesByRole": {
+        "accompaniment": 290,
+        "percussion": 127,
+        "melody": 130
+      },
+      "authoredSourceNotes": [
+        {
+          "id": "loopgrid-1792268502751-1zl0ng",
+          "type": "loopgrid",
+          "notes": 60
+        }
+      ],
+      "unrooted": 0,
+      "lateNotes": 0
+    },
+    {
+      "kind": "drawgrid",
+      "tick": 3827,
+      "maxScheduledEventTick": 8112,
+      "durationTicks": 6144,
+      "notesByRole": {
+        "accompaniment": 129,
+        "percussion": 85,
+        "melody": 129
+      },
+      "authoredSourceNotes": [
+        {
+          "id": "drawgrid-1792268564050-pnhhbf",
+          "type": "drawgrid",
+          "notes": 24
+        }
+      ],
+      "unrooted": 0,
+      "lateNotes": 0
+    },
+    {
+      "kind": "mixed",
+      "tick": 12950,
+      "maxScheduledEventTick": 13248,
+      "durationTicks": 6144,
+      "notesByRole": {
+        "accompaniment": 242,
+        "melody": 152,
+        "percussion": 112
+      },
+      "authoredSourceNotes": [
+        {
+          "id": "drawgrid-1792268914856-ecwu8k",
+          "type": "drawgrid",
+          "notes": 16
+        },
+        {
+          "id": "bouncer-1792268916225-qjrw1l",
+          "type": "bouncer",
+          "notes": 8
+        },
+        {
+          "id": "rippler-1792268916376-axwed3",
+          "type": "rippler",
+          "notes": 16
+        }
+      ],
+      "unrooted": 0,
+      "lateNotes": 0
+    },
+    {
+      "kind": "restored",
+      "tick": 20310,
+      "maxScheduledEventTick": 20784,
+      "durationTicks": 6144,
+      "notesByRole": {
+        "percussion": 79,
+        "accompaniment": 106,
+        "melody": 93
+      },
+      "authoredSourceNotes": [],
+      "unrooted": 0,
+      "lateNotes": 0
+    },
+    {
+      "kind": "percussion",
+      "tick": 6544,
+      "maxScheduledEventTick": 8784,
+      "durationTicks": 6144,
+      "notesByRole": {
+        "accompaniment": 106,
+        "percussion": 62,
+        "melody": 42
+      },
+      "authoredSourceNotes": [
+        {
+          "id": "loopgrid-1792268775861-tina7f",
+          "type": "loopgrid",
+          "notes": 42
+        },
+        {
+          "id": "loopgrid-1792268775994-pnw6mq",
+          "type": "loopgrid",
+          "notes": 6
+        },
+        {
+          "id": "loopgrid-drum-1792268776129-0br7ze",
+          "type": "loopgrid-drum",
+          "notes": 8
+        }
+      ],
+      "unrooted": 0,
+      "lateNotes": 0
+    }
+  ]
+}

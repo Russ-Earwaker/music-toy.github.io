@@ -9868,3 +9868,20 @@ body.beat-swarm-active #internal-board-overlay {
 .board-overview .toy-panel[data-instance-serial] .master-name{visibility:visible!important;opacity:1!important;color:#eef5ff!important;pointer-events:auto!important}
 .linked-copy-marker{font:600 14px system-ui;opacity:.65;margin-left:6px;pointer-events:none}.linked-edit-flash{animation:relationship-node-flash .65s ease-out both}
 .linked-copy-delete-confirmation{max-width:340px;padding:20px;border:1px solid #718fc2;border-radius:14px;background:#172539;color:#eef5ff;font:15px system-ui}.linked-copy-delete-confirmation::backdrop{background:#0007}.linked-copy-delete-confirmation div{display:flex;justify-content:flex-end;gap:10px}.linked-copy-delete-confirmation button{min-height:44px;padding:8px 14px}
+.arrangement-result [role="status"]{white-space:pre-line;line-height:1.65;margin-bottom:10px}
+.arrange-authored{animation:arrange-authored 1.65s ease-out both}
+.arrange-added{animation:arrange-added 1.6s ease-out both;animation-delay:var(--arrange-delay,0ms)}
+@keyframes arrange-authored{0%,25%{filter:drop-shadow(0 0 12px var(--relationship-colour,#9fc8ef))}100%{filter:drop-shadow(0 0 0 transparent)}}
+@keyframes arrange-added{0%{opacity:.35}30%{opacity:1;filter:drop-shadow(0 0 7px #9fc8ef)}100%{opacity:1;filter:drop-shadow(0 0 0 transparent)}}
+.relationship-flash .structure-card{animation:relationship-structure 1.8s ease-out both}
+@keyframes relationship-structure{0%,20%{stroke:#c6e2fa;stroke-width:5}100%{stroke-width:2}}
+@media(prefers-reduced-motion:reduce){.arrange-authored,.arrange-added{animation-duration:.15s;animation-delay:0s}.relationship-flash,.relationship-tethers,.relationship-flash .structure-card{animation-duration:.15s}}
+/* Status glyphs stay small but readable in the full-board view, without reflow. */
+.toy-header .linked-copy-marker{position:absolute;right:8px;top:10px;line-height:1;font-size:clamp(14px,calc(9px / var(--graph-ui-scale,1)),180px);visibility:visible!important;opacity:.85!important}
+svg .linked-copy-marker{font-size:clamp(14px,calc(9px / var(--graph-ui-scale,1)),180px);opacity:.85}
+.arrangement-result{width:max-content}
+/* Keep linked headers above Overview's panel-wide drag surface. */
+.overview-mode .toy-panel[data-linked-view="1"] .toy-header{position:relative;z-index:6!important}
+.overview-mode .toy-panel[data-linked-view="1"] .toy-title{visibility:visible!important;opacity:1!important;pointer-events:auto!important}
+.overview-mode .toy-panel[data-linked-view="1"] .toy-title button{visibility:hidden!important;pointer-events:none!important}
+.toy-header .linked-copy-marker{pointer-events:auto}

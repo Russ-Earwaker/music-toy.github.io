@@ -1,16 +1,77 @@
+import {guideGeneratedDrawgridPhrase} from './dg-melody-harmony.js';
+
 // Split the normal four-bar generator's authored output into four ordinary
 // one-bar toys. No phrase notes remain outside the resulting toy states.
 export function hasDrawgridPhraseMaterial(state){
  return !!state?.nodes?.list?.some(rows=>rows?.length) || !!state?.strokes?.some(stroke=>(stroke.ptsN||stroke.__ptsN||[]).length);
 }
 
+// Generated contours can be cropped/exchanged in pieces. Keep those pieces
+// in one drawable path, including the connecting seam; notes stay authoritative.
+export function singleGeneratedDrawgridLine(state){
+ if((state.strokes?.length||0)<2)return state;
+ const strokes=state.strokes.filter(s=>(s.ptsN||s.__ptsN||[]).length);
+ if(!strokes.length)return state;
+ const points=strokes.flatMap(s=>s.ptsN||s.__ptsN||[]);
+ const stroke={...strokes[0],ptsN:points,__ptsN:points};delete stroke.pts;
+ return {...state,strokes:[stroke]};
+}
+
 // A newly created, empty toy is a place to generate melody, not an authored
 // empty motif to copy four times. Keep this decision shared with regression tests.
-export async function prepareDrawgridPhrase(seed,generate){
- if(hasDrawgridPhraseMaterial(seed))return continueDrawgridPhrase(seed);
- const generated=await generate();
- if(!hasDrawgridPhraseMaterial(generated))throw new Error('Melody generation returned no notes. Please try Arrange again.');
- return splitDrawgridPhrase(generated);
+export async function prepareDrawgridPhrase(seed,generate,options={}){
+ const authored=hasDrawgridPhraseMaterial(seed);
+ const preserveChunks=authored?seed.steps/8:0;
+ const finish=states=>states.map((state,bar)=>bar<preserveChunks?state:singleGeneratedDrawgridLine(state));
+ let states;
+ if(authored)states=continueDrawgridPhrase(seed);
+ else {
+  const generated=await generate();
+  if(!hasDrawgridPhraseMaterial(generated))throw new Error('Melody generation returned no notes. Please try Arrange again.');
+  states=splitDrawgridPhrase(generated);
+ }
+ if(!options.harmony)return finish(states);
+ const baselineDiagnostics=[];
+ const guided=guideGeneratedDrawgridPhrase(states,{...options,diagnostics:baselineDiagnostics,preserveChunks});
+ if(options.development===false||preserveChunks>=4){options.diagnostics?.push(...baselineDiagnostics);return finish(guided);}
+ // A generated statement gets the same guidance as before. Every subsequent
+ // bar is now derived from that statement, not from independent long-line bars.
+ const variations=developDrawgridMotif(guided[0],options);
+ const retained=Math.max(1,preserveChunks);
+ for(let i=0;i<retained;i++)variations[i]=guided[i];
+ options.diagnostics?.push(...baselineDiagnostics.filter(note=>note.bar<retained));
+ return finish(guideGeneratedDrawgridPhrase(variations,{...options,preserveChunks:retained}));
+}
+
+export function developDrawgridMotif(statement,{random=Math.random}={}){
+ const states=continueDrawgridPhrase(statement);
+ function shiftColumn(state,col,semitones){
+  const old=state.nodes.list[col];
+  const fit=shift=>Math.max(Math.max(...old)-11,Math.min(Math.min(...old),shift));
+  semitones=fit(semitones)||fit(-semitones);
+  const mapping=new Map(old.map(row=>[row,row-semitones]));
+  state.nodes.list[col]=[...new Set(old.map(row=>mapping.get(row)))];
+  if(state.nodes.disabled?.[col])state.nodes.disabled[col]=state.nodes.disabled[col].map(row=>mapping.get(row)??row);
+  if(state.manualOverrides?.[col])state.manualOverrides[col]=state.manualOverrides[col].map(row=>mapping.get(row)??row);
+  if(state.nodes.groups?.[col])state.nodes.groups[col]=state.nodes.groups[col].map(([row,group])=>[mapping.get(row)??row,group]);
+  const delta=old.length?(state.nodes.list[col].reduce((a,b)=>a+b,0)/state.nodes.list[col].length-old.reduce((a,b)=>a+b,0)/old.length)/12:0;
+  for(const stroke of state.strokes||[])stroke.ptsN=(stroke.ptsN||stroke.__ptsN||[]).map(p=>({...p,
+   ny:Math.max(0,Math.min(1,p.ny+delta*Math.max(0,1-Math.abs(p.nx*8-col-.5))))}));
+ }
+ const sounding=(state,col)=>state.nodes.active?.[col]!==false&&state.nodes.list[col]?.some(row=>!state.nodes.disabled?.[col]?.includes(row));
+ // Close variation: retain rhythm and opening; change only a late passing cell.
+ const close=states[1],weak=[7,5,3,1].find(col=>sounding(close,col));
+ if(weak!=null)shiftColumn(close,weak,random()<.5?-1:1);
+ // Development: the existing half-motif exchange plus a small register lift
+ // in its answering half. No new independently random contour is introduced.
+ const development=states[2];
+ for(let col=4;col<8;col++)if(sounding(development,col)){
+  const lift=development.nodes.list[col].some(row=>row<2)?-2:2;
+  shiftColumn(development,col,lift);
+ }
+ // continueDrawgridPhrase already returns to the opening contour in bar four
+ // and recalls the opening pitch at its ending; harmonic guidance resolves it.
+ return states;
 }
 
 function cropStrokes(strokes,start,end,mapX){
@@ -63,7 +124,7 @@ export function continueDrawgridPhrase(seed){
   if(bar===2){
    for(const [key,values] of Object.entries(state.nodes||{}))if(Array.isArray(values))state.nodes[key]=[...values.slice(4),...values.slice(0,4)];
    if(state.manualOverrides?.length===8)state.manualOverrides=[...state.manualOverrides.slice(4),...state.manualOverrides.slice(0,4)];
-   state.strokes=[...cropStrokes(seed.strokes,.5,1,x=>x-.5),...cropStrokes(seed.strokes,0,.5,x=>x+.5)];
+   state.strokes=singleGeneratedDrawgridLine({strokes:[...cropStrokes(seed.strokes,.5,1,x=>x-.5),...cropStrokes(seed.strokes,0,.5,x=>x+.5)]}).strokes;
   }
   const list=state.nodes?.list;
   if(bar===3&&list){const opening=seed.nodes.list.find(rows=>rows?.length),last=list.findLastIndex(rows=>rows?.length);if(opening&&last>=0)list[last]=structuredClone(opening);}

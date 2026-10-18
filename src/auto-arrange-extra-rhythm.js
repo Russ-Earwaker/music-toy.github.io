@@ -1,5 +1,11 @@
 // One scoped fill initializer, through Simple Rhythm's normal random/update
 // events. Regeneration reuses the authored Master and never calls this again.
+export function ensureGeneratedRhythmAudible(panel){
+ const current=panel.__gridState?.steps;
+ if(!current?.length||current.some(Boolean))return;
+ const steps=current.map((_,i)=>i%4===0);
+ panel.dispatchEvent(new CustomEvent('loopgrid:update',{detail:{steps,reason:'arrange-fill'},bubbles:true}));
+}
 export function initializeExtraRhythm(panel,mainRhythm){
  const main=mainRhythm?.__gridState?.steps||[],length=panel.__gridState?.steps?.length||8;
  let seed=main.reduce((s,on,i)=>(Math.imul(s,33)+(on?i+1:0))>>>0,1303),index=0;

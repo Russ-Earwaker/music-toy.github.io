@@ -70,18 +70,18 @@ test('header taps and shared reveal flash the family with capped, inert backgrou
  const host={prepend(n){this.layer=n;}},panels=Array.from({length:15},(_,n)=>Object.assign(node(),{id:n?'i'+n:'m',dataset:n?{masterToyId:'m'}:{instrument:'PIANO'},header:node(),parentElement:host,offsetLeft:n*20,offsetTop:100,offsetWidth:100,offsetHeight:100,getBoundingClientRect:()=>({width:100,height:100,left:1,top:1,right:101,bottom:101}),querySelector(){return this.header;}}));
  const getMaster=id=>panels.find(p=>p.id===id),reveal=createRelationshipReveal({getPanels:()=>panels,getMaster});
  try{
-  reveal.prepare();const target={closest:()=>null};panels[1].header.listeners.pointerdown({target,pointerId:1,clientX:50,clientY:50});doc.listeners.pointerup({pointerId:1,clientX:50,clientY:50});
+  reveal.prepare();const target={closest:s=>s==='.toy-header'?{closest:()=>panels[1]}:null};doc.listeners.pointerdown({target,pointerId:1,clientX:50,clientY:50});doc.listeners.pointerup({pointerId:1,clientX:50,clientY:50});
   assert.ok(panels[0].classList.values.has('relationship-flash'));assert.ok(panels[1].classList.values.has('relationship-flash'));assert.ok(panels[2].classList.values.has('relationship-flash'));assert.equal(host.layer.children.length,12);assert.equal(host.layer['aria-hidden'],'true');assert.equal(host.layer.style.values['--relationship-colour'],panels[0].style.values['--relationship-colour']);assert.equal(host.layer.children[0].children.length,0);
   const firstLayer=host.layer;let animationRestarts=0;
   Object.defineProperty(panels[1],'offsetWidth',{configurable:true,get(){if(!panels[1].classList.values.has('relationship-flash'))animationRestarts++;return 100;}});
   for(let tap=0;tap<3;tap++){
    const previousLayer=host.layer;
-   panels[1].header.listeners.pointerdown({target,pointerId:1,clientX:50,clientY:50});doc.listeners.pointerup({pointerId:1,clientX:50,clientY:50});
+   doc.listeners.pointerdown({target,pointerId:1,clientX:50,clientY:50});doc.listeners.pointerup({pointerId:1,clientX:50,clientY:50});
    assert.ok(previousLayer.removed);assert.notEqual(host.layer,previousLayer);assert.equal(host.layer.children.length,12);assert.ok(panels[1].classList.values.has('relationship-flash'));
   }
   assert.ok(firstLayer.removed);assert.equal(animationRestarts,3);
   Object.defineProperty(panels[1],'offsetWidth',{value:100});
   reveal.show(panels[0]);assert.equal(host.layer.children.length,12);assert.ok(panels.every(p=>p.classList.values.has('relationship-flash')));
-  reveal.clear();panels[1].header.listeners.pointerdown({target,pointerId:2,clientX:50,clientY:50});doc.listeners.pointerup({pointerId:2,clientX:75,clientY:50});assert.ok(!panels[1].classList.values.has('relationship-flash'));
+  reveal.clear();doc.listeners.pointerdown({target,pointerId:2,clientX:50,clientY:50});doc.listeners.pointerup({pointerId:2,clientX:75,clientY:50});assert.ok(!panels[1].classList.values.has('relationship-flash'));
  }finally{reveal.clear();Object.assign(globalThis,saved);}
 });

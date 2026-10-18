@@ -1,11 +1,10 @@
 import { overviewMode } from './overview-mode.js';
+import { BOARD_ZOOM_MIN as SCALE_MIN, BOARD_ZOOM_MAX as SCALE_MAX } from './board-zoom-limits.js';
 import { makeDebugLogger } from './debug-flags.js';
 
 const ICON_OVERVIEW_IN = "url('./assets/UI/T_ButtonOverviewZoomIn.png')";
 const ICON_OVERVIEW_OUT = "url('./assets/UI/T_ButtonOverviewZoomOut.png')";
 const ICON_FOCUS_CLOSE = "url('./assets/UI/T_ButtonClose.png')";
-const SCALE_MIN = 0.3; // Keep in sync with board-viewport.js clamp
-const SCALE_MAX = 1.0; // Max zoom-in level
 const SETTLE_EPS = 0.002;
 
 // Verbose console logs are hidden by default; enable via localStorage.setItem('mt_debug_logs','1')

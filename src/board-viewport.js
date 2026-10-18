@@ -1,5 +1,6 @@
 // src/board-viewport.js — pan & zoom coordinator bridge (clean, <=300 lines)
 import { overviewMode } from './overview-mode.js';
+import { BOARD_ZOOM_MIN, BOARD_ZOOM_MAX } from './board-zoom-limits.js';
 import { debugEnabled, makeDebugLogger } from './debug-flags.js';
 import { getRect } from './layout-cache.js';
 import {
@@ -184,8 +185,8 @@ export function toyToWorld(pointToy = { x: 0, y: 0 }, toyWorldOrigin = { x: 0, y
   function lerp(a,b,t){ return a + (b - a) * t; }
   viewportLog('[board-viewport] transform order =', ORDER);
 
-  const SCALE_MIN = 0.075;
-  const SCALE_MAX = 1.0;
+  const SCALE_MIN = BOARD_ZOOM_MIN;
+  const SCALE_MAX = BOARD_ZOOM_MAX;
   const SCALE_EVENT_EPSILON = 1e-4;
   const SCALE_NOTIFY_EPSILON = 1e-4;
   let overviewButtonGate = null;

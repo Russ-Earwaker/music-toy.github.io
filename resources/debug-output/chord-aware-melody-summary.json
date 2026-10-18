@@ -1,0 +1,362 @@
+[
+  {
+    "seed": 1,
+    "before": {
+      "strongChordRate": 0.3125,
+      "weakChordRate": 0.375,
+      "meanLeap": 0.8253968253968254,
+      "repeatedPitchRate": 0.6825396825396826
+    },
+    "after": {
+      "strongChordRate": 0.5625,
+      "weakChordRate": 0.5,
+      "meanLeap": 1.6031746031746033,
+      "repeatedPitchRate": 0.4126984126984127
+    },
+    "sections": {
+      "A": {
+        "before": {
+          "strongChordRate": 0.25,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.8387096774193549,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.9375,
+          "weakChordRate": 0.6875,
+          "meanLeap": 1.5806451612903225,
+          "repeatedPitchRate": 0.41935483870967744
+        }
+      },
+      "B": {
+        "before": {
+          "strongChordRate": 0.375,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.8387096774193549,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.1875,
+          "weakChordRate": 0.3125,
+          "meanLeap": 1.5806451612903225,
+          "repeatedPitchRate": 0.41935483870967744
+        }
+      }
+    }
+  },
+  {
+    "seed": 7,
+    "before": {
+      "strongChordRate": 0.3125,
+      "weakChordRate": 0.375,
+      "meanLeap": 0.9206349206349206,
+      "repeatedPitchRate": 0.6666666666666666
+    },
+    "after": {
+      "strongChordRate": 0.625,
+      "weakChordRate": 0.46875,
+      "meanLeap": 1.4603174603174602,
+      "repeatedPitchRate": 0.42857142857142855
+    },
+    "sections": {
+      "A": {
+        "before": {
+          "strongChordRate": 0.25,
+          "weakChordRate": 0.25,
+          "meanLeap": 0.9032258064516129,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.9375,
+          "weakChordRate": 0.625,
+          "meanLeap": 1.4838709677419355,
+          "repeatedPitchRate": 0.41935483870967744
+        }
+      },
+      "B": {
+        "before": {
+          "strongChordRate": 0.375,
+          "weakChordRate": 0.5,
+          "meanLeap": 0.9032258064516129,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.3125,
+          "weakChordRate": 0.3125,
+          "meanLeap": 1.4838709677419355,
+          "repeatedPitchRate": 0.41935483870967744
+        }
+      }
+    }
+  },
+  {
+    "seed": 19,
+    "before": {
+      "strongChordRate": 0.28125,
+      "weakChordRate": 0.375,
+      "meanLeap": 0.8253968253968254,
+      "repeatedPitchRate": 0.6825396825396826
+    },
+    "after": {
+      "strongChordRate": 0.5,
+      "weakChordRate": 0.53125,
+      "meanLeap": 1.4126984126984128,
+      "repeatedPitchRate": 0.3492063492063492
+    },
+    "sections": {
+      "A": {
+        "before": {
+          "strongChordRate": 0.25,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.8387096774193549,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.875,
+          "weakChordRate": 0.4375,
+          "meanLeap": 1.3870967741935485,
+          "repeatedPitchRate": 0.3548387096774194
+        }
+      },
+      "B": {
+        "before": {
+          "strongChordRate": 0.3125,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.8387096774193549,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.125,
+          "weakChordRate": 0.625,
+          "meanLeap": 1.3870967741935485,
+          "repeatedPitchRate": 0.3548387096774194
+        }
+      }
+    }
+  },
+  {
+    "seed": 42,
+    "before": {
+      "strongChordRate": 0.28125,
+      "weakChordRate": 0.375,
+      "meanLeap": 0.8253968253968254,
+      "repeatedPitchRate": 0.6825396825396826
+    },
+    "after": {
+      "strongChordRate": 0.625,
+      "weakChordRate": 0.40625,
+      "meanLeap": 1.7301587301587302,
+      "repeatedPitchRate": 0.4126984126984127
+    },
+    "sections": {
+      "A": {
+        "before": {
+          "strongChordRate": 0.25,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.8387096774193549,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.9375,
+          "weakChordRate": 0.5,
+          "meanLeap": 1.7096774193548387,
+          "repeatedPitchRate": 0.41935483870967744
+        }
+      },
+      "B": {
+        "before": {
+          "strongChordRate": 0.3125,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.8387096774193549,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.3125,
+          "weakChordRate": 0.3125,
+          "meanLeap": 1.7096774193548387,
+          "repeatedPitchRate": 0.41935483870967744
+        }
+      }
+    }
+  },
+  {
+    "seed": 73,
+    "before": {
+      "strongChordRate": 0.25,
+      "weakChordRate": 0.25,
+      "meanLeap": 0.7936507936507936,
+      "repeatedPitchRate": 0.6349206349206349
+    },
+    "after": {
+      "strongChordRate": 0.65625,
+      "weakChordRate": 0.5,
+      "meanLeap": 1.2698412698412698,
+      "repeatedPitchRate": 0.3333333333333333
+    },
+    "sections": {
+      "A": {
+        "before": {
+          "strongChordRate": 0.3125,
+          "weakChordRate": 0.125,
+          "meanLeap": 0.7741935483870968,
+          "repeatedPitchRate": 0.6451612903225806
+        },
+        "after": {
+          "strongChordRate": 1,
+          "weakChordRate": 0.4375,
+          "meanLeap": 1.2903225806451613,
+          "repeatedPitchRate": 0.3225806451612903
+        }
+      },
+      "B": {
+        "before": {
+          "strongChordRate": 0.1875,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.7741935483870968,
+          "repeatedPitchRate": 0.6451612903225806
+        },
+        "after": {
+          "strongChordRate": 0.3125,
+          "weakChordRate": 0.5625,
+          "meanLeap": 1.2903225806451613,
+          "repeatedPitchRate": 0.3225806451612903
+        }
+      }
+    }
+  },
+  {
+    "seed": 101,
+    "before": {
+      "strongChordRate": 0.3125,
+      "weakChordRate": 0.34375,
+      "meanLeap": 0.9523809523809523,
+      "repeatedPitchRate": 0.6190476190476191
+    },
+    "after": {
+      "strongChordRate": 0.53125,
+      "weakChordRate": 0.4375,
+      "meanLeap": 1.9841269841269842,
+      "repeatedPitchRate": 0.31746031746031744
+    },
+    "sections": {
+      "A": {
+        "before": {
+          "strongChordRate": 0.25,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.967741935483871,
+          "repeatedPitchRate": 0.6129032258064516
+        },
+        "after": {
+          "strongChordRate": 0.8125,
+          "weakChordRate": 0.5625,
+          "meanLeap": 1.967741935483871,
+          "repeatedPitchRate": 0.3225806451612903
+        }
+      },
+      "B": {
+        "before": {
+          "strongChordRate": 0.375,
+          "weakChordRate": 0.3125,
+          "meanLeap": 0.967741935483871,
+          "repeatedPitchRate": 0.6129032258064516
+        },
+        "after": {
+          "strongChordRate": 0.25,
+          "weakChordRate": 0.3125,
+          "meanLeap": 1.967741935483871,
+          "repeatedPitchRate": 0.3225806451612903
+        }
+      }
+    }
+  },
+  {
+    "seed": 313,
+    "before": {
+      "strongChordRate": 0.28125,
+      "weakChordRate": 0.375,
+      "meanLeap": 0.8253968253968254,
+      "repeatedPitchRate": 0.6825396825396826
+    },
+    "after": {
+      "strongChordRate": 0.5,
+      "weakChordRate": 0.40625,
+      "meanLeap": 1.2222222222222223,
+      "repeatedPitchRate": 0.5714285714285714
+    },
+    "sections": {
+      "A": {
+        "before": {
+          "strongChordRate": 0.25,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.8387096774193549,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.9375,
+          "weakChordRate": 0.625,
+          "meanLeap": 1.1935483870967742,
+          "repeatedPitchRate": 0.5806451612903226
+        }
+      },
+      "B": {
+        "before": {
+          "strongChordRate": 0.3125,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.8387096774193549,
+          "repeatedPitchRate": 0.6774193548387096
+        },
+        "after": {
+          "strongChordRate": 0.0625,
+          "weakChordRate": 0.1875,
+          "meanLeap": 1.1935483870967742,
+          "repeatedPitchRate": 0.5806451612903226
+        }
+      }
+    }
+  },
+  {
+    "seed": 1024,
+    "before": {
+      "strongChordRate": 0.3125,
+      "weakChordRate": 0.34375,
+      "meanLeap": 0.873015873015873,
+      "repeatedPitchRate": 0.6984126984126984
+    },
+    "after": {
+      "strongChordRate": 0.5625,
+      "weakChordRate": 0.5,
+      "meanLeap": 1.3174603174603174,
+      "repeatedPitchRate": 0.47619047619047616
+    },
+    "sections": {
+      "A": {
+        "before": {
+          "strongChordRate": 0.375,
+          "weakChordRate": 0.375,
+          "meanLeap": 0.8064516129032258,
+          "repeatedPitchRate": 0.7096774193548387
+        },
+        "after": {
+          "strongChordRate": 0.9375,
+          "weakChordRate": 0.625,
+          "meanLeap": 1.2580645161290323,
+          "repeatedPitchRate": 0.4838709677419355
+        }
+      },
+      "B": {
+        "before": {
+          "strongChordRate": 0.25,
+          "weakChordRate": 0.3125,
+          "meanLeap": 0.8064516129032258,
+          "repeatedPitchRate": 0.7096774193548387
+        },
+        "after": {
+          "strongChordRate": 0.1875,
+          "weakChordRate": 0.375,
+          "meanLeap": 1.2580645161290323,
+          "repeatedPitchRate": 0.4838709677419355
+        }
+      }
+    }
+  }
+]

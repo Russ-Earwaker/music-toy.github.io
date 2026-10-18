@@ -65,6 +65,7 @@ export function createRippleSynth(selector){
   try { panel.dataset.toyid = toyId; } catch {}
 
   const triggerInstrument = (inst, name, when, blockIndex)=> __rawTrig(inst, name, when, toyId, {
+    context:getPlaybackInstance(panel.id)?.context,eventTick:audioTimeToTick(when),
     onPlaybackScheduled:admission=>{
       if(blockIndex!=null)admittedToyVisual(panel,{blockIndex},admission,audioTimeToTick);
     },
@@ -684,7 +685,7 @@ export function createRippleSynth(selector){
     // Add new properties for state checking in input handler
     shouldDeferChanges: shouldDeferChanges,
     isActiveInChain: () => panel.dataset.chainActive === 'true',
-    isChained: () => !!(panel.dataset.nextToyId || panel.dataset.prevToyId),
+    isChained: () => !!(panel.__sequenceDefinitionId || panel.dataset.nextToyId || panel.dataset.prevToyId),
     isRunning: isRunning, // pass the function
     setPreviewGenerator: (pos) => {
       if (pos) {
@@ -713,7 +714,7 @@ export function createRippleSynth(selector){
     if (!wasPlaced && generator.placed){
       // A rippler is "running" if it's standalone or active in a chain, AND the transport is playing.
       const isActiveInChain = panel.dataset.chainActive === 'true';
-      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+      const isChained = !!(panel.__sequenceDefinitionId || panel.dataset.nextToyId || panel.dataset.prevToyId);
       const shouldRun = (isActiveInChain || !isChained || !panel.dataset.prevToyId);
       const transportIsRunning = (typeof isRunning === 'function') ? isRunning() : true;
 
@@ -893,7 +894,7 @@ export function createRippleSynth(selector){
     try {
       const transportRunning = isRunning();
       const tView = transportRunning ? ac.currentTime : (__pausedNow || ac.currentTime);
-      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+      const isChained = !!(panel.__sequenceDefinitionId || panel.dataset.nextToyId || panel.dataset.prevToyId);
       const isActiveInChain = isChained ? panel.dataset.chainActive === 'true' : true;
       // A toy is "playing" if it has active ripples, or if it's an empty
       // toy in a chain running its "ghost" timer (lifeline).
@@ -1074,7 +1075,7 @@ export function createRippleSynth(selector){
       // Only advance physics/scheduling while transport is running
       if (typeof isRunning !== 'function' || isRunning()){
       const isActiveInChain = panel.dataset.chainActive === 'true';
-      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+      const isChained = !!(panel.__sequenceDefinitionId || panel.dataset.nextToyId || panel.dataset.prevToyId);
       // Detect transport state change and realign timing
       try{
         // --- Chain Activation Logic ---

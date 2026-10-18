@@ -320,6 +320,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     }
     worldMode=!!context.worldEl;
     const host=context.worldEl||viewport;
+    host.style.setProperty?.('--graph-ui-scale',String(context.transform?.scale||1));
     if(svg.parentNode!==host)host.append(svg);
     Object.assign(svg.style,{width:worldMode?'1px':'100%',height:worldMode?'1px':'100%'});
     const geometryTransform=worldMode?{scale:1,tx:0,ty:0}:context.transform;
@@ -354,7 +355,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       set(card.rect, 'aria-label', `${s.name?s.name+' · ':''}${logicNodeLabel(s.type)}${isModifier(s.type)?'':' structure'}`);
       set(card.rect, 'aria-expanded', !s.collapsed);
       set(card.group,'data-collapsed',!!s.collapsed);set(card.group,'data-node-kind',isModifier(s.type)?'modifier':'structure');
-      set(card.group,'data-master-toy-id',s.masterStructureId||'');set(card.group,'data-master-structure-id',s.masterStructureId||'');
+      set(card.group,'data-master-toy-id',s.masterStructureId||'');set(card.group,'data-master-structure-id',s.masterStructureId||'');set(card.group,'data-shared-definition-id',s.sharedDefinitionId||'');
       set(card.typeButton,'display',s.collapsed||isModifier(s.type)?'none':'inline');
       set(card.typeButton,'aria-label','Change structure type');
       set(card.typeButton,'x',pos.x+36*scale);set(card.typeButton,'y',pos.y+5*scale);
@@ -387,7 +388,15 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         set(control.label,'x',x+22*scale);set(control.label,'y',pos.y+85*scale);set(control.label,'font-size',24*scale);
       }
       if(s.type === 'repeat')card.count.textContent=`× ${s.count}`;
-      if(s.sharedDefinitionId||s.masterStructureId){set(card.count,'display','inline');set(card.count,'class','structure-name');set(card.count,'role','status');set(card.count,'tabindex',-1);set(card.count,'aria-label','Linked Copy');set(card.count,'x',pos.x+width/2*scale);set(card.count,'y',pos.y+58*scale);set(card.count,'font-size',14*scale);card.count.textContent='↔';}
+      const linked=structureToys.list().filter(q=>s.sharedDefinitionId?q.sharedDefinitionId===s.sharedDefinitionId:q.id===(s.masterStructureId||s.id)||q.masterStructureId===(s.masterStructureId||s.id)).length>1;
+      let marker=card.linkedMarker;
+      if(linked&&!marker){marker=svgNode('text',{class:'structure-name linked-copy-marker','aria-label':'Linked Copy','pointer-events':'none'});marker.textContent='⧉';card.group.append(marker);card.linkedMarker=marker;}
+      if(!linked&&marker){marker.remove();card.linkedMarker=null;}
+      if(linked){set(marker,'x',pos.x+(width-48)*scale);set(marker,'y',pos.y+30*scale);set(marker,'font-size',14*scale);}
+      // Keep section landmarks readable in the full web without resizing cards.
+      if(s.autoArrange?.owner&&s.type==='chord-progression'&&['Intro','A','B','Outro'].includes(s.name)&&(context.transform?.scale||1)<.35){
+        const zoom=context.transform.scale;set(card.name,'font-size',12/zoom*scale);set(card.name,'y',pos.y-6/zoom*scale);
+      }
       const entries=s.type==='timeline'&&!s.collapsed?structureToys.getTimelineEntries(s.id):[];
       const endTick=Math.max(TICKS_PER_BEAT*4,...entries.map(e=>e.offsetTick+e.durationTicks));
       const pixelsPerTick=(width-124)/endTick;
@@ -577,7 +586,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     const result = moved ? model.drop(targetAt(e)) : (model.cancelDrag(), { ok: true });
     if (!moved && tapPoint) quickAdd(tapPoint);
     tapPoint = null;
-    if (!result.ok) notify(result.reason?.startsWith('linked-sequence-')?'Edit the Master Sequence; linked copies currently support direct toy children only.':result.reason === 'requires-promotion' ? 'This junction needs a Structure toy. Existing connection kept.' : 'These ports cannot connect. Existing connection kept.');
+    if (!result.ok) notify(result.reason?.startsWith('linked-sequence-')?'Edit a linked Sequence; its children must be individual toys.':result.reason === 'requires-promotion' ? 'This junction needs a Structure toy. Existing connection kept.' : 'These ports cannot connect. Existing connection kept.');
     if (result.connection){
       selected = result.connection.id;
     }
@@ -594,7 +603,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   const keyboard = e => {
     if (e.key === 'Escape') { reset(); select(null); }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selected && !/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName) && !e.target?.isContentEditable) {
-      e.preventDefault();if(linkedEdge(model.get(selected)))notify('Edit the Master Sequence to change its linked children.');else {model.disconnect(selected);select(null);}
+      e.preventDefault();if(linkedEdge(model.get(selected)))notify('Edit a linked Sequence to change its children.');else {model.disconnect(selected);select(null);}
     }
     else if((e.key==='Delete'||e.key==='Backspace')&&selectedStructure&&!/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName)&&!e.target?.isContentEditable){
       e.preventDefault();if(structureToys.remove(selectedStructure)===false)notify('This linked definition is still in use.');else selectedStructure=null;render();
@@ -620,7 +629,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   function frame() { if (disposed) return; onFrame(); render(); frameId = requestAnimationFrame(frame); }
   frameId = requestAnimationFrame(frame);
   return { render, select, focusStructure:selectStructure, reset, dispose() {
-    relationship.clear();
+    relationship.dispose();
     closeAdvancedLogic({restoreFocus:false}); disposed = true; cancelAnimationFrame(frameId); clearTimeout(statusTimer); unsubscribe();
     document.removeEventListener('keydown', keyboard); window.removeEventListener('blur', cancel);
     document.removeEventListener('pointerdown', outside, true);

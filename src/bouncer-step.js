@@ -86,7 +86,8 @@ export function stepBouncer(S, nowAT){
   
   // Framescale: keep speed consistent across FPS
   const dt = Math.max(0, (now - (S.lastAT || now)));
-  const frameFactor = Math.min(3.0, Math.max(0.25, dt * 60));
+  // Catch up ordinary slow frames without an unbounded background-tab jump.
+  const frameFactor = Math.min(15.0, Math.max(0.25, dt * 60));
 
   // integrate with swept collision (segment vs expanded AABB)
   if (S.ball){
@@ -102,7 +103,7 @@ export function stepBouncer(S, nowAT){
       const L=S.EDGE, T=S.EDGE, R=S.physW()-S.EDGE, B=S.physH()-S.EDGE;
       const rr = S.ball.r || S.ballR();
       const blocks = S.blocks || [];
-      let rem = frameFactor, iterations = 0, maxIter = 4;
+      let rem = frameFactor, iterations = 0, maxIter = Math.ceil(frameFactor) + 4;
 
       while (rem > 1e-4 && iterations++ < maxIter){
         const stepLen = Math.min(1, rem);
@@ -141,7 +142,9 @@ export function stepBouncer(S, nowAT){
 
         if (!best){
           // No hit: move fully
-          S.ball.x += vx; S.ball.y += vy; break;
+          S.ball.x += vx; S.ball.y += vy;
+          rem -= stepLen;
+          continue;
         } else {
           // Move to hit point and reflect
           const tMove = Math.max(0, Math.min(1, best.t));

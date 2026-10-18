@@ -6,7 +6,7 @@ import {linkToyAudioBus,getToyVolumeRaw,isToyMuted,setToyVolume,setToyMuted} fro
 // Definitions own authored data, numbering and audio. Live editors supply the
 // existing toy-specific renderer/scheduler, never the shared data identity.
 export function createLinkedToyViewController({getPanels,getMaster,createView,capture,apply,register,changed,focus,remove,syncVolumeUI=()=>{}}){
- const models=new Map(),providers=new WeakMap(),patterns=new WeakMap(),bound=new WeakSet(),applying=new WeakSet(),presentations=new WeakMap();let paused=false;
+ const models=new Map(),providers=new WeakMap(),patterns=new WeakMap(),bound=new WeakSet(),applying=new WeakSet(),presentations=new WeakMap(),hydrations=new Map();let paused=false;
  const audioId=p=>p.__audioToyId||p.dataset.audiotoyid||p.id;
  function model(p){
   if(!p)return null;
@@ -46,27 +46,40 @@ export function createLinkedToyViewController({getPanels,getMaster,createView,ca
   Object.defineProperty(p,'__seqRev',{configurable:true,get:()=>model(p)?.revision||revision,set:value=>{revision=value;}});
   Object.defineProperty(p,'__seqPattern',{configurable:true,get:()=>{const m=model(p),driver=m?.playbackEditor?.isConnected?m.playbackEditor:root(p);return m?.sharedPattern||patterns.get(driver);},set:value=>patterns.set(p,value)});
  }
- async function hydrate(p,m){
-  if(applying.has(p))return;applying.add(p);const revision=m.revision;
-  try{
-   if(p.dataset.toy==='drawgrid')while(!p.__drawToy&&p.isConnected)await new Promise(resolve=>setTimeout(resolve,0));
-   if(p.isConnected)await apply(p,structuredClone(m.state));
-  }finally{applying.delete(p);delete p.__linkedInitialState;if(m.revision!==revision)void hydrate(p,m);}
+ function hydrate(p,m){
+  if(hydrations.has(p))return hydrations.get(p);
+  const work=(async()=>{
+   applying.add(p);
+   try{
+    let revision;
+    do{revision=m.revision;
+     if(p.dataset.toy==='drawgrid')while(!p.__drawToy&&p.isConnected)await new Promise(resolve=>setTimeout(resolve,0));
+     if(p.isConnected)await apply(p,structuredClone(m.state));
+    }while(p.isConnected&&m.revision!==revision);
+   }finally{applying.delete(p);delete p.__linkedInitialState;}
+  })();
+  hydrations.set(p,work);const done=()=>{if(hydrations.get(p)===work)hydrations.delete(p);};work.then(done,done);return work;
+ }
+ async function whenReady(ids){
+  const wanted=new Set(ids);
+  for(;;){const pending=[...hydrations].filter(([p])=>wanted.has(p.id)).map(([,work])=>work);if(!pending.length)return;await Promise.all(pending);}
  }
  function presentation(p,m){
   m.views.add(p.id);p.__sharedToyDefinition=m;p.__sharedToyState=m.state;
   const name=m.name,label=p.querySelector('.master-name,.instance-name'),header=p.querySelector('.toy-header');
   const volume=getToyVolumeRaw(m.bus),muted=isToyMuted(m.bus),number=p.dataset.linkedCopyNumber||p.dataset.instanceNumber||'',text=name+(number?'.'+number:'');
-  const key=JSON.stringify([m.id,m.revision,name,number,volume,muted]);
+  const linked=family(p).length>1;
+  const key=JSON.stringify([m.id,m.revision,name,number,volume,muted,linked]);
   const previous=presentations.get(p);
-  if(previous?.key===key&&previous.header===header&&previous.label===label&&(!label||label.textContent===text)&&(!header||header.querySelector('.linked-copy-marker')))return;
+  if(previous?.key===key&&previous.header===header&&previous.label===label&&(!label||label.textContent===text)&&(!header||!!header.querySelector('.linked-copy-marker')===linked))return;
   presentations.set(p,{key,header,label});
   p.dataset.sharedDefinitionId=m.id;p.dataset.linkedView='1';
   for(const key of ['instrument','musicalRole','localTranspose','instrumentPitchShift','instrumentNote','instrumentOctave'])if(m.state[key]!=null)p.dataset[key]=String(m.state[key]);
   if(p.dataset.toy==='drawgrid'&&m.state.steps)p.dataset.steps=String(m.state.steps);
   if(p.dataset.instanceNumber&&!p.dataset.linkedCopyNumber)p.dataset.linkedCopyNumber=p.dataset.instanceNumber;
   if(label)label.textContent=text;
-  if(header&&!header.querySelector('.linked-copy-marker')){const marker=document.createElement('span');marker.className='linked-copy-marker';marker.textContent='↔';marker.title='Linked Copy';marker.setAttribute('aria-label','Linked Copy');header.append(marker);}
+  if(!linked)header?.querySelector('.linked-copy-marker')?.remove();
+  if(linked&&header&&!header.querySelector('.linked-copy-marker')){const marker=document.createElement('span');marker.className='linked-copy-marker';marker.textContent='⧉';marker.title='Linked copies — tap header to reveal';marker.setAttribute('aria-label','Linked Copy');header.append(marker);}
   linkToyAudioBus(audioId(p),m.bus);p.dataset.toyVolume=String(volume);p.dataset.toyMuted=String(muted);syncVolumeUI(p,{volume,muted});
  }
  function edit(p){
@@ -112,6 +125,6 @@ export function createLinkedToyViewController({getPanels,getMaster,createView,ca
   const m=model(p);if(type==='toy-volume')setToyVolume(m.bus,e.detail.value);else setToyMuted(m.bus,e.detail.muted);
   for(const peer of family(p))presentation(peer,m);changed();
  });
- return {adopt:p=>{const m=model(p);bind(p);if(!p.dataset.linkedCopyNumber)p.dataset.linkedCopyNumber=String(++m.serial);p.dataset.instanceSerial=String(m.serial);presentation(p,m);return p;},definitions:()=>[...models.values()],create,prepare,canDelete:()=>true,hasPeers:p=>family(p).length>1,beforeDelete,removeOwned:owner=>{for(const p of [...getPanels()])if(p.dataset.masterToyId&&p.dataset.autoArrangeOwner===owner)remove(p);},reveal:reveal.show,pause:()=>{paused=true;models.clear();for(const p of getPanels())delete p.__sharedToyState;},resume:()=>{models.clear();paused=false;prepare();for(const p of getPanels())if(p.dataset.sharedDefinitionId)void hydrate(p,model(p));},edit};
+ return {whenReady,adopt:p=>{const m=model(p);bind(p);if(!p.dataset.linkedCopyNumber)p.dataset.linkedCopyNumber=String(++m.serial);p.dataset.instanceSerial=String(m.serial);presentation(p,m);return p;},definitions:()=>[...models.values()],create,prepare,canDelete:()=>true,hasPeers:p=>family(p).length>1,beforeDelete,removeOwned:owner=>{for(const p of [...getPanels()])if(p.dataset.masterToyId&&p.dataset.autoArrangeOwner===owner)remove(p);},reveal:reveal.show,pause:()=>{paused=true;models.clear();for(const p of getPanels())delete p.__sharedToyState;},resume:()=>{models.clear();paused=false;prepare();for(const p of getPanels())if(p.dataset.sharedDefinitionId)void hydrate(p,model(p));},edit};
 }
 // TODO: Make Independent — clone the authored definition for one visible copy.

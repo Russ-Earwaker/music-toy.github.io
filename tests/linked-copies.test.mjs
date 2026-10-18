@@ -26,7 +26,7 @@ test('seed continuations preserve authored chunk, instrument, range and rhythm w
  const seed={steps:8,instrument:'PIANO',musicalRole:'melody',nodes:{active:[true,false,true,true,true,false,true,true],list:[[2],[],[4],[6],[3],[],[5],[4]],disabled:Array.from({length:8},()=>[])},strokes:[{ptsN:[{nx:0,ny:.2},{nx:.5,ny:.6},{nx:1,ny:.4}],color:'#abcdef',isSpecial:true,generatorId:1}],manualOverrides:[]};
  const before=structuredClone(seed),parts=continueDrawgridPhrase(seed);assert.deepEqual(seed,before);assert.deepEqual(parts[0],seed);assert.deepEqual(parts[1].nodes,seed.nodes);assert.deepEqual(parts[2].nodes.list,[...seed.nodes.list.slice(4),...seed.nodes.list.slice(0,4)]);assert.deepEqual(parts[3].nodes.list.at(-1),[2]);
  assert.ok(parts.every(p=>p.instrument==='PIANO'&&p.musicalRole==='melody'&&p.steps===8));
- assert.deepEqual(parts[1].strokes,seed.strokes);assert.deepEqual(parts[3].strokes,seed.strokes);assert.equal(parts[2].strokes.length,2);assert.deepEqual(parts[2].strokes.map(s=>s.ptsN),[[{nx:0,ny:.6},{nx:.5,ny:.4}],[{nx:.5,ny:.2},{nx:1,ny:.6}]]);
+ assert.deepEqual(parts[1].strokes,seed.strokes);assert.deepEqual(parts[3].strokes,seed.strokes);assert.equal(parts[2].strokes.length,1);assert.deepEqual(parts[2].strokes[0].ptsN,[{nx:0,ny:.6},{nx:.5,ny:.4},{nx:.5,ny:.2},{nx:1,ny:.6}]);
  for(const steps of [16,32]){const long={...seed,steps,nodes:Object.fromEntries(Object.entries(seed.nodes).map(([k,v])=>[k,Array.from({length:steps},(_,i)=>structuredClone(v[i%8]))]))},before=structuredClone(long),chunks=continueDrawgridPhrase(long);assert.deepEqual(long,before);assert.equal(chunks.length,4);assert.deepEqual(chunks.slice(0,steps/8).flatMap(c=>c.nodes.list),long.nodes.list);}
  const backwards=splitDrawgridPhrase({...seed,steps:32,strokes:[{ptsN:[{nx:1,ny:.2},{nx:0,ny:.8}],color:'#abc'}]});assert.ok(backwards.every(p=>p.strokes.length===1&&p.strokes[0].ptsN.length===2));assert.equal(backwards[0].strokes[0].ptsN[0].nx,1);assert.equal(backwards[3].strokes[0].ptsN.at(-1).nx,0);
  const old=structuredClone(parts);old.slice(1).forEach(p=>{p.strokes=[];p.nodes.list[0]=[9];});const repaired=repairDrawgridPhraseStrokes(old);assert.ok(repaired.every(p=>p.strokes.length));assert.ok(repaired.slice(1).every(p=>p.nodes.list[0][0]===9));assert.ok(old.slice(1).every(p=>p.strokes.length===0));assert.equal(repairDrawgridPhraseStrokes(repaired)[2],repaired[2]);
@@ -63,6 +63,8 @@ test('equal-status full toy views share edits, keep local positions/context, and
  const source=panel('source'),controller=createLinkedToyViewController({getPanels:()=>{panelReads++;return panels;},getMaster:id=>panels.find(p=>p.id===id),createView:()=>panel('copy-'+(++n)),capture:p=>structuredClone(p.state),apply:async(p,state)=>{p.state=structuredClone(state);},syncVolumeUI:()=>uiSyncs++,register(){},changed(){},focus(){},remove(){}});
  try{
   const a=controller.create(source),b=controller.create(a);assert.equal(a.dataset.linkedCopyNumber,'1');assert.equal(b.dataset.linkedCopyNumber,'2');assert.equal(a.dataset.sharedDefinitionId,b.dataset.sharedDefinitionId);
+  controller.prepare();for(const p of [source,a,b])assert.equal(p.querySelector('.toy-header').querySelector('.linked-copy-marker').textContent,'⧉');
+  const alone=panel('alone');controller.adopt(alone);assert.equal(alone.querySelector('.toy-header').querySelector('.linked-copy-marker'),null);
   controller.prepare();const initialSyncs=uiSyncs;for(let i=0;i<40;i++)controller.prepare();assert.equal(uiSyncs,initialSyncs,'idle preparation must not repaint unchanged headers or volume controls');
   const reads=panelReads;for(let i=0;i<40;i++)a.__sequencerSchedule(0);assert.equal(panelReads,reads,'playback getters must not repeatedly scan the DOM family');
   await new Promise(resolve=>setImmediate(resolve));a.style.left='100px';b.style.left='900px';b.state.notes=['E4'];b.state.instrument='KALIMBA';b.state.musicalRole='accompaniment';controller.edit(b);
@@ -151,4 +153,16 @@ test('migration hydration preserves saved definitions even while normal editor b
  const root=make('root');root.__linkedInitialState={notes:['F4'],instrument:'PIANO',musicalRole:'melody'};
  const controller=createLinkedToyViewController({getPanels:()=>panels,getMaster:id=>panels.find(p=>p.id===id),createView:()=>make('copy-'+(++serial)),capture:p=>structuredClone(p.state),apply:async(p,state)=>{await new Promise(resolve=>setImmediate(resolve));p.state=structuredClone(state);},register(){},changed(){},focus(){},remove(){}});
  try{controller.pause();root.__linkedInitialState={notes:['F4'],instrument:'PIANO',musicalRole:'melody'};const copy=controller.create(root);controller.resume();assert.equal(root.__sharedToyState.notes[0],'F4');await new Promise(resolve=>setTimeout(resolve,20));assert.equal(root.state.notes[0],'F4');assert.equal(copy.state.notes[0],'F4');assert.equal(copy.__sequencerSchedule(),'F4');}finally{panels.forEach(p=>p.isConnected=false);d.close();}
+});
+
+test('Arrange can await delayed linked-view sizing before laying out a branch',async()=>{
+ const d=dom(),panels=[];let release;
+ const make=id=>{const p={id,isConnected:true,dataset:{toy:'drawgrid'},style:{},classList:d.node().classList,addEventListener(){},querySelector:()=>null,state:{instrument:'PIANO',notes:['C4']},offsetHeight:160,__drawToy:{}};panels.push(p);return p;};
+ const source=make('source');source.offsetHeight=757;
+ const controller=createLinkedToyViewController({getPanels:()=>panels,getMaster:id=>panels.find(p=>p.id===id),capture:p=>p.state,createView:()=>make('copy'),apply:async p=>{await new Promise(r=>release=r);p.offsetHeight=source.offsetHeight;},register(){},changed(){},focus(){},remove(){}});
+ try{const copy=controller.create(source);let ready=false;const pending=controller.whenReady([copy.id]).then(()=>ready=true);
+  await Promise.resolve();assert.equal(ready,false);assert.equal(copy.offsetHeight,160);
+  await controller.whenReady(['unrelated']);assert.equal(ready,false);
+  release();await pending;assert.equal(copy.offsetHeight,757);assert.equal(ready,true);
+ }finally{d.close();}
 });

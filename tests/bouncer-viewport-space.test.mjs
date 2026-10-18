@@ -72,6 +72,23 @@ test('ball trajectory is identical at every display size', () => {
   assert.equal(results[0].r, 7);
 });
 
+test('slow frames consume all elapsed travel, including clear space before a collision', () => {
+  for (const blocks of [[], [{x:170,y:95,w:44,h:44,active:false}]]) {
+    const fast=makeStepState({ball:{x:80,y:120,vx:8,vy:0,r:7},blocks});
+    const slow=makeStepState({ball:{x:80,y:120,vx:8,vy:0,r:7},blocks});
+    for(let i=1;i<=15;i++)stepBouncer(fast,1+i/60);
+    stepBouncer(slow,1.25);
+    assert.ok(Math.abs(fast.ball.x-slow.ball.x)<1e-8);
+    assert.equal(fast.ball.vx,slow.ball.vx);
+  }
+});
+
+test('long background stalls retain a bounded physics catch-up budget', () => {
+  const state=makeStepState({ball:{x:30,y:140,vx:1,vy:0,r:7}});
+  stepBouncer(state,101);
+  assert.ok(Math.abs(state.ball.x-45)<1e-8);
+});
+
 test('block collision result is identical at every display size', () => {
   const results = DISPLAYS.map(([width, height]) => {
     createBouncerViewportSpace({ width, height });

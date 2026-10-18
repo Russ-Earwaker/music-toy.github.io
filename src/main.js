@@ -8,7 +8,7 @@ import { heartbeatModel, transportLoopInfo } from './heartbeats.js';
 import { installHeartbeatView } from './heartbeat-view.js';
 import { getPanelTransport } from './panel-transport.js';
 import {createToyChordIndicator} from './toy-chord-indicator.js';
-import {initializeExtraRhythm} from './auto-arrange-extra-rhythm.js';
+import {initializeExtraRhythm,ensureGeneratedRhythmAudible} from './auto-arrange-extra-rhythm.js';
 import {setToyVolume,setToyMuted,getToyVolumeRaw,isToyMuted} from './audio-core.js';
 import {syncVolumeUI} from './baseToy/volume-ui.js';
 const updateToyChordIndicator = createToyChordIndicator();
@@ -70,12 +70,14 @@ import { chooseToyInstrument } from './instrument-selection.js';
 import { readToySoundState, restoreToySoundState } from './instrument-state.js';
 import { initializeToyMusicalRole } from './musical-role.js';
 import {createToyInstanceController,ensureMasterName} from './toy-instances.js';
-import {createAutoArranger,selectArrangementSources} from './auto-arrange.js';
+import {createAutoArranger,selectArrangementSources,ARRANGEMENT_RECIPE} from './auto-arrange.js';
+import {selectInputPlan} from './auto-arrange-inputs.js';
+import {arrangementPresentation,createArrangementReveal} from './arrangement-reveal.js';
 import {createStructureInstanceController} from './structure-instances.js';
 import {createLinkedToyViewController} from './linked-toy-views.js';
 import {createLinkedSequenceController} from './linked-sequences.js';
 import {confirmFinalLinkedCopy} from './linked-copy-delete.js';
-import {prepareDrawgridPhrase,hasDrawgridPhraseMaterial} from './drawgrid/dg-phrase-chunks.js';
+import {prepareDrawgridPhrase,hasDrawgridPhraseMaterial,singleGeneratedDrawgridLine} from './drawgrid/dg-phrase-chunks.js';
 import {installAutoArrangeUI} from './auto-arrange-ui.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
@@ -7156,11 +7158,15 @@ async function createArrangementSource(role,{heartbeatId,mainRhythm,phraseChunk=
         else throw new Error('Melody toy is not ready for generation.');
       }
       if(!phraseChunk)randomizeToyMusic(panel);
+      if(role==='rhythm')ensureGeneratedRhythmAudible(panel);
+      if(type==='drawgrid'&&!phraseChunk)for(let attempt=0;attempt<3&&!hasDrawgridPhraseMaterial(panel.__drawToy?.getState());attempt++)await new Promise(resolve=>requestAnimationFrame(resolve));
+      if(type==='drawgrid'&&!phraseChunk){const state=panel.__drawToy?.getState(),single=state&&singleGeneratedDrawgridLine(state);if(single&&single!==state)await panel.__drawToy.setState(single);}
     }
     return panel;
 }
 const g_autoArranger=createAutoArranger({model:connectionModel,structures:structureToyModel,scope:arrangementScope,
-  getPanels:()=>getSequencedToys().filter(p=>!p.dataset.masterToyId && (p.dataset.artOwnerId || null)===arrangementScope()),
+  getPanels:()=>getSequencedToys().filter(p=>(!p.dataset.masterToyId||p.dataset.linkedView==='1') && (p.dataset.artOwnerId || null)===arrangementScope()),
+  publishDebug:report=>{window.__AUTO_ARRANGE_INPUT_DEBUG=report;},
   createInstance:(master,options)=>g_toyInstances.create(master,options),
   adoptSource:(panel,{owner,x,y})=>{g_toyInstances.adopt(panel);panel.dataset.autoArrangeOwner=owner;panel.style.left=x+'px';panel.style.top=y+'px';return panel;},
   adoptPhrase:g_structureInstances.adopt,
@@ -7186,7 +7192,7 @@ const g_autoArranger=createAutoArranger({model:connectionModel,structures:struct
       // frame. Capture the generated state, never the pre-generation empty cache.
       for(let attempt=0;attempt<3&&!hasDrawgridPhraseMaterial(toy.getState());attempt++)await new Promise(resolve=>requestAnimationFrame(resolve));
       return captureLinkedToyState(first);
-    }),chunks=[first];
+    },{harmony:{originTick:0,stepTicks:384,chords:ARRANGEMENT_RECIPE.find(section=>section.name==='A').chords}}),chunks=[first];
     first.dataset.autoArrangeFill='melody-chunk';first.dataset.autoArrangeFillHeartbeat=heartbeatId;
     for(let i=1;i<4;i++){
       const chunk=await createArrangementSource('melody',{heartbeatId,phraseChunk:true});
@@ -7215,15 +7221,27 @@ const g_autoArranger=createAutoArranger({model:connectionModel,structures:struct
     return clearVerticalSlot(proposed,obstacles,88);
   },
 });
+const g_arrangementReveal=createArrangementReveal({getPanels:getSequencedToys,getStructures:()=>Array.from(document.querySelectorAll('[data-node-kind="structure"],[data-node-kind="modifier"]'))});
+window.addEventListener('scene:new',g_arrangementReveal.clear);window.addEventListener('scene:load',g_arrangementReveal.clear);
+async function focusArrangementGraph(result){
+  // Commit placement before Overview snapshots positions during camera zoom.
+  g_layoutAnimation.clear();
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  const nodes=result.created.map(id=>g_graphPlacement.getRect(id)).filter(Boolean);if(!nodes.length)return;
+  const minX=Math.min(...nodes.map(r=>r.x)),minY=Math.min(...nodes.map(r=>r.y)),maxX=Math.max(...nodes.map(r=>r.x+r.width)),maxY=Math.max(...nodes.map(r=>r.y+r.height));
+  const scale=Math.max(.025,Math.min(.8,(window.innerWidth-140)/(maxX-minX+240),(window.innerHeight-180)/(maxY-minY+160)));
+  await window.centerBoardOnWorldPoint?.((minX+maxX)/2,(minY+maxY)/2,scale,{duration:500});
+}
 installAutoArrangeUI({
+  describe:result=>arrangementPresentation(result,getSequencedToys()),reveal:g_arrangementReveal.show,
   arrange:async()=>{
     const previousRestoring=g_layoutRestoring;
-    const sources=selectArrangementSources(getSequencedToys().filter(p=>(p.dataset.artOwnerId || null)===arrangementScope()));
-    const seed=sources.melody || sources.accompaniment || sources.rhythm;
+    const inputPlan=selectInputPlan(getSequencedToys().filter(p=>(p.dataset.artOwnerId || null)===arrangementScope())),sources=inputPlan.sources;
+    const seed=sources.melody || sources.accompaniment || sources.rhythm || inputPlan.audit.find(e=>e.usable)?.panel;
     if(!seed)throw new Error('Make a musical idea first, then press Arrange.');
     const transport=transportRegistry.get(connectionModel.getTransportId(seed.id) || MAIN_TRANSPORT_ID);transport?.pause();
     g_layoutRestoring=true;
-    try{const result=await g_autoArranger.arrange();g_graphPlacement.arrangeSubgraph(result.rootId);g_connectionView.select(null);g_connectionView.render();window.Persistence?.markDirty?.();return result;}
+    try{const result=await g_autoArranger.arrange();await g_toyInstances.whenReady(result.created);await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));g_graphPlacement.arrangeSubgraph(result.rootId);g_connectionView.select(null);g_connectionView.render();window.Persistence?.markDirty?.();await focusArrangementGraph(result);return result;}
     finally{g_layoutRestoring=previousRestoring;}
   },
   play:result=>transportRegistry.get(connectionModel.getTransportId(result.rootId))?.play(),
@@ -7232,11 +7250,7 @@ installAutoArrangeUI({
     const previousRestoring=g_layoutRestoring;g_layoutRestoring=true;
     try{structureToyModel.setCollapsed(root.id,false);g_connectionView.focusStructure(root.id);g_graphPlacement.arrangeSubgraph(root.id);g_connectionView.render();}
     finally{g_layoutRestoring=previousRestoring;}
-    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-    const nodes=result.created.map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
-    const minX=Math.min(...nodes.map(r=>r.x)),minY=Math.min(...nodes.map(r=>r.y)),maxX=Math.max(...nodes.map(r=>r.x+r.width)),maxY=Math.max(...nodes.map(r=>r.y+r.height));
-    const scale=Math.max(.15,Math.min(.8,(window.innerWidth-140)/(maxX-minX+240),(window.innerHeight-180)/(maxY-minY+160)));
-    window.centerBoardOnWorldPoint?.((minX+maxX)/2,(minY+maxY)/2,scale,{duration:500});
+    await focusArrangementGraph(result);
   },
 });
 // Bump this whenever toys are created/destroyed so the scheduler can resync chain state

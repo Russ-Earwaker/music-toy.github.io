@@ -23,7 +23,7 @@ export function createBouncerDraw(env){
     getBall, lockPhysWorld, getAim, spawnBallFrom, getLastLaunch,
     velFrom, ballR, updateLaunchBaseline,
     BOUNCER_BARS_PER_LIFE, setBallOut, setNextLaunchAt, captureTrajectorySample, advanceReplayLifecycle,
-    drainScheduledReplayVisuals
+    drainScheduledReplayVisuals, isLearning
   } = env;
 
   const { isRunning } = panelTransportBindings(panel);
@@ -60,7 +60,8 @@ export function createBouncerDraw(env){
       const __mustDraw = !!(
         panel.__pulseRearm ||
         (panel.__pulseHighlight && panel.__pulseHighlight > 0) ||
-        panel.__bouncerNeedsRedraw
+        panel.__bouncerNeedsRedraw ||
+        (panel.dataset.chainActive === 'true' && isRunning() && isLearning?.())
       );
 
       if (!__mustDraw) {
@@ -103,7 +104,7 @@ export function createBouncerDraw(env){
     // Set playing class for border highlight and handle pulse animation.
       const currentBall = getBall ? getBall() : env.ball;
       const isChainHead = !panel.dataset.prevToyId;
-      const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+      const isChained = !!(panel.__sequenceDefinitionId || panel.dataset.nextToyId || panel.dataset.prevToyId);
       const isActiveInChain = isChained ? panel.dataset.chainActive === 'true' : true;
       const transportRunning = isRunning();
       // A ghost ball on the head of a chain shouldn't trigger the "playing" highlight.
@@ -486,7 +487,7 @@ export function createBouncerDraw(env){
         // OR if it's a standalone toy (not part of any chain),
         // AND the global transport is playing.
         const isActiveInChain = panel.dataset.chainActive === 'true';
-        const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+        const isChained = !!(panel.__sequenceDefinitionId || panel.dataset.nextToyId || panel.dataset.prevToyId);
         // Only the active chain link may run or schedule notes.
         const shouldRunPhysics = (isActiveInChain || !isChained) && isRunning();
 
@@ -546,23 +547,23 @@ export function createBouncerDraw(env){
             const startAt = panel.__chainStartAt;
             delete panel.__chainStartAt;
             const b = getBall ? getBall() : null;
-            if (!b && (!panel.__sequenceDefinitionId || !replaying)) { // Learned Sequence turns reuse replay.
+            const needsAssignedLaunch = panel.__sequenceDefinitionId && S.visQ?.loopRec?.mode !== 'replay';
+            if ((!b || needsAssignedLaunch) && (!panel.__sequenceDefinitionId || !replaying)) { // Learned Sequence turns reuse replay.
                 const isChainHead = !panel.dataset.prevToyId;
                 const hasHistory = !!(getLastLaunch ? getLastLaunch() : null);
                 const userHasPlacedHandle = !!handle.userPlaced;
 
                 if (userHasPlacedHandle) {
                     // User has placed a spawner, so launch a ball from it.
-                    const vx = handle.vx || 0;
-                    const vy = handle.vy || -7.68; // Default upwards
-                    const newBall = spawnBallFrom({ x: handle.x, y: handle.y, vx, vy, r: ballR() }, { startAt });
+                    const launch=getLastLaunch?.()||{x:handle.x,y:handle.y,vx:handle.vx||0,vy:handle.vy||-7.68};
+                    const newBall = spawnBallFrom({ ...launch, r: ballR() }, { startAt });
                     setBallOut(newBall);
                 } else if (hasHistory) {
                     // No user placement, but has history. Let stepBouncer handle the respawn.
                     // This is a no-op here; stepBouncer will see no ball and check nextLaunchAt.
                 } else {
                     // This is an empty, untouched bouncer.
-                    const isChained = !!(panel.dataset.nextToyId || panel.dataset.prevToyId);
+                    const isChained = !!(panel.__sequenceDefinitionId || panel.dataset.nextToyId || panel.dataset.prevToyId);
                     if (!panel.__sequenceDefinitionId && isChained && (!isChainHead || Number.isFinite(startAt))) {
                         // If it's part of a chain, it should get a ghost ball to act as a "rest" for one bar.
                         // This applies to both head and follower bouncers.

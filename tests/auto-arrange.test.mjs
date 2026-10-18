@@ -117,11 +117,11 @@ test('B preserves longer natural source timing while the complete arrangement st
  }finally{h.close();}
 });
 
-test('selection is deterministic, prefers authored sources, ignores instruments, and excludes Drum Kit',()=>{
+test('selection is deterministic, prefers authored sources and explicit roles, and includes Drum Kit',()=>{
  const p=(id,toy,role,filled=false)=>({id,dataset:{toy,musicalRole:role,instrument:'bass',...(filled?{autoArrangeOrigin:'filled'}:{})}});
  const panels=[p('z','drawgrid','melody'),p('a','drawgrid','melody'),p('0','drawgrid','melody',true),p('kit','loopgrid-drum','percussion'),p('bass','drawgrid','bass')];
  assert.equal(selectArrangementSources(panels).melody.id,'a');assert.equal(selectArrangementSources(panels.reverse()).melody.id,'a');
- assert.equal(selectArrangementSources(panels).accompaniment.id,'bass');assert.equal(selectArrangementSources(panels).rhythm,null);
+ assert.equal(selectArrangementSources(panels).accompaniment.id,'bass');assert.equal(selectArrangementSources(panels).rhythm.id,'kit');
 });
 
 test('new four-bar fill Melody is stored once, supports full A/B density and is reused after edits',async()=>{
@@ -231,7 +231,7 @@ test('Arrange Again replaces only owned topology, preserves every source and unr
   assert.equal(h.structures.get(first.rootId),null);assert.equal(h.structures.list().length,8);assert.deepEqual(h.panels.filter(p=>!p.dataset.masterToyId).map(p=>p.sourceNotes),sources);
   assert.equal(h.structures.get(second.rootId).x,750);assert.equal(h.structures.get(second.rootId).y,220);
   assert.deepEqual(second.sourceIds,first.sourceIds);assert.deepEqual(h.model.list().filter(e=>e.from.objectId===unrelated.id||e.to.objectId===unrelated.id),unrelatedEdges);
-  assert.equal(h.panels.filter(p=>!p.dataset.masterToyId&&p.dataset.autoArrangeOrigin==='filled').length,2);assert.ok(h.structures.get(unrelated.id));
+  assert.equal(h.panels.filter(p=>!p.dataset.masterToyId&&p.dataset.autoArrangeOrigin==='filled').length,3);assert.ok(h.structures.get(unrelated.id));
  }finally{h.close();}
 });
 
