@@ -4,6 +4,22 @@ import {createConnectionModel,createStructurePorts,HEARTBEAT_PORTS} from '../src
 import {createStructureToyModel,structureToyWidth,structureToyHeight} from '../src/structure-toys.js';
 import {createGraphPlacement,rectanglesOverlap,clearVerticalSlot,MIN_NODE_GAP_X,MIN_SIBLING_GAP_Y} from '../src/graph-placement.js';
 const out=(objectId,portId='output')=>({objectId,portId}),input=objectId=>({objectId,portId:'input'});
+
+test('local size repair anchors authored content and moves only conflicting branches without topology drift',()=>{
+ const h=harness(new Set(['anchor','manual','distant']));h.add('anchor',500,200,900,600);h.add('manual',1100,250,700,500);h.add('structure',1850,450,224,200,true);h.add('art',2400,550,680,480);h.add('distant',10000,10000);h.connect('manual','structure');h.connect('structure','art','child:0');
+ const anchor={...h.rects.get('anchor')},distant={...h.rects.get('distant')},wires=h.model.snapshot().connections,relative={x:h.rects.get('art').x-h.rects.get('manual').x,y:h.rects.get('art').y-h.rects.get('manual').y};
+ const result=h.layout.repairAround('anchor');assert.deepEqual(result.unresolved,[]);assert.ok(result.moves.length);
+ assert.deepEqual(h.rects.get('anchor'),anchor);assert.deepEqual(h.rects.get('distant'),distant);assert.deepEqual(h.model.snapshot().connections,wires);
+ assert.equal(h.rects.get('art').x-h.rects.get('manual').x,relative.x);assert.equal(h.rects.get('art').y-h.rects.get('manual').y,relative.y);
+ assert.deepEqual(h.layout.repairAround('anchor').moves,[]);
+});
+test('independent Heartbeat roots have no sibling socket order during local overlap repair',()=>{
+ const h=harness(new Set(['anchor','normal','far']));h.model.registerObject('heartbeat',{ports:HEARTBEAT_PORTS,transportId:'heartbeat'});h.rects.set('heartbeat',{x:-1000,y:0,width:176,height:104});
+ h.add('far',0,1500);h.add('normal',500,-200,800,700);h.add('anchor',400,-100,900,500);
+ for(const id of ['far','normal','anchor'])assert.ok(h.model.connect('transport',out('heartbeat'),input(id)).ok);
+ const before={...h.rects.get('anchor')},far={...h.rects.get('far')},wires=h.model.snapshot().connections;
+ const result=h.layout.repairAround('anchor');assert.deepEqual(result.unresolved,[]);assert.ok(result.moves.some(m=>m.id==='normal'));assert.deepEqual(h.rects.get('anchor'),before);assert.deepEqual(h.rects.get('far'),far);assert.deepEqual(h.model.snapshot().connections,wires);
+});
 test('shared pattern references leave source geometry and primary parenting outside structure layout',()=>{
  const h=harness();h.add('root',0,0,224,304,true);h.add('section',400,500,360,80,true);h.add('source',1000,200,300,200);
  h.connect('root','section','child:0');

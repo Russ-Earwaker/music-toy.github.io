@@ -1,4 +1,3 @@
-import {lineDrawGridStates,drawGridLineSource,strokePhase} from './free-play-drawgrid.js';
 import {toyLoopLengthTicks} from './drawgrid/dg-pattern-length.js';
 import { drawGridPlaybackVisuals } from './drawgrid/dg-playback-visuals.js';
 import { playbackVisualEvents } from './playback-visual-events.js';
@@ -81,11 +80,14 @@ import {createLinkedSequenceController} from './linked-sequences.js';
 import {confirmFinalLinkedCopy} from './linked-copy-delete.js';
 import {prepareDrawgridPhrase,hasDrawgridPhraseMaterial,singleGeneratedDrawgridLine} from './drawgrid/dg-phrase-chunks.js';
 import {installAutoArrangeUI} from './auto-arrange-ui.js';
-import {installFreePlay} from './free-play.js';
-import {updateSilence} from './free-play-silence.js';
-let refreshFreePlaySilence=()=>{};
+import {createSimpleDrawController} from './simple-draw.js';
+import {installSimpleDrawSurface} from './simple-draw-surface.js';
+import {installSimpleDrawCreation} from './simple-draw-creation.js';
+import {drawingAuthoredBounds} from './simple-draw-placement.js';
+import {SIMPLE_DRAW_INSETS} from './container-fit.js';
+import {linePresentation} from './free-play-line-visual.js';
+let refreshSimpleDrawSilence=()=>{};
 import {initializeFreePlayLine} from './free-play-line-toy.js';
-import {getFreePlayTransport} from './free-play-transport.js';
 import { collectUsedInstruments, getSoundThemeKey, pickInstrumentForToy } from './sound-theme.js';
 import { installIOSAudioUnlock } from './ios-audio-unlock.js';
 import { installAudioDiagnostics } from './audio-diagnostics.js';
@@ -101,6 +103,9 @@ import { createGraphPlacement, HEARTBEAT_OUTPUT_OFFSET, clearVerticalSlot } from
 import { clearCreationGraph } from './creation-graph.js';
 import { isObjectMusicallyActive, getVisualActiveToyIds } from './graph-playback-state.js';
 import { connectionModel } from './connections.js';
+import { containerToyModel } from './container-toys.js';
+import { installContainerBoard } from './container-board.js';
+import { createContainerPresentations } from './container-presentations.js';
 import { createConnectionAdapter } from './connection-adapter.js';
 import { createConnectionView } from './connection-view.js';
 import { structureToyModel, structurePortPoint, structureToyWidth, structureToyHeight } from './structure-toys.js';
@@ -2141,6 +2146,7 @@ const EXPERIMENTAL_PREF_KEY = 'prefs:enable-experimental-toys';
 const UNFINISHED_TOY_LOCK_ENABLED = false;
 
 const toyCatalog = [
+    { type: 'simple-draw', name: 'Paint', description: 'Draw on the board. Release to make a Simple Draw toy.', size: { width: 640, height: 440 }, action:()=>{g_simpleDrawCreation.arm();return true;} },
     { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 800, height: 760 } },
     { type: 'loopgrid', name: 'Simple Rhythm', description: 'Make a simple one-note percussion pattern.', size: { width: 420, height: 420 } },
     { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 }, disabled: true },
@@ -2174,7 +2180,7 @@ function setExperimentalEnabled(enabled) {
 
 function getToyCatalog() {
     const experimentalOn = isExperimentalEnabled();
-    return toyCatalog.map((entry) => {
+    return toyCatalog.filter(entry=>entry.type!=='simple-draw'||!g_artInternal.active).map((entry) => {
         if (EXPERIMENTAL_TOYS.includes(entry.type)) {
             return { ...entry, disabled: entry.disabled && !experimentalOn };
         }
@@ -5935,6 +5941,7 @@ function createToyPanelAt(toyType, {
     artOwnerId = null,
 } = {}) {
     const type = String(toyType || '').toLowerCase();
+    if(type==='simple-draw'){if(artOwnerId||g_artInternal.active)return null;g_simpleDrawCreation.arm({heartbeatId});return null;}
     if (!type || !toyInitializers[type]) {
         console.warn('[createToyPanelAt] unknown toy type', toyType);
         return null;
@@ -6167,6 +6174,8 @@ try {
 function destroyToyPanel(panelOrId, opts = {}) {
     const panel = typeof panelOrId === 'string' ? document.getElementById(panelOrId) : panelOrId;
     if (!panel) return false;
+    if(containerToyModel.get(panel.id))return containerToyModel.remove(panel.id).ok;
+    if(!opts.sceneRestore&&containerToyModel.owner(panel.id))return false;
     if(!opts.sceneRestore && !g_toyInstances.canDelete(panel)){
       document.querySelector('.master-delete-message')?.remove();
       const message=document.createElement('div');message.className='master-delete-message';message.setAttribute('role','status');message.textContent=panel.dataset.structureInstanceId?'Delete the linked Sequence to remove its generated children.':'Delete linked Instances before deleting their Master.';document.body.append(message);setTimeout(()=>message.remove(),4000);return false;
@@ -6329,6 +6338,7 @@ const g_toyInstances=createLinkedToyViewController({
  capture:captureLinkedToyState,apply:applyLinkedToyState,
  syncVolumeUI,
  createView:(source,options)=>{
+   if(containerToyModel.owner(source.id))throw new Error('Expand the container before creating a linked copy of its internal toys.');
    const p=createToyPanelAt(source.dataset.toy,{id:options.id,instrument:source.dataset.instrument,autoCenter:false,allowOffscreen:true,skipSpawnPlacement:true,containerEl:options.containerEl||source.parentElement,artOwnerId:source.dataset.artOwnerId||null});
    p.style.left=options.ui?.left||`${(parseFloat(source.style.left)||0)+source.offsetWidth+120}px`;p.style.top=options.ui?.top||source.style.top||'0px';
    p.dataset.toyName=source.dataset.toyName;return p;
@@ -6350,15 +6360,16 @@ const g_structureInstances=createLinkedSequenceController({
 });
 const g_confirmedLinkedStructures=new Set();
 structureToyModel.configure({canRemove:s=>{
+ if(containerToyModel.owner(s.id))return false;
  if(s.sharedDefinitionId&&!g_structureInstances.instances(s.id).length&&!g_confirmedLinkedStructures.has(s.id)){
   confirmFinalLinkedCopy(()=>{g_confirmedLinkedStructures.add(s.id);try{structureToyModel.remove(s.id);}finally{g_confirmedLinkedStructures.delete(s.id);}});return false;
  }return g_structureInstances.canRemove(s);
-},canChangeType:g_structureInstances.canChangeType});
+},canChangeType:(id,type)=>!containerToyModel.owner(id)&&g_structureInstances.canChangeType(id,type)});
 try {
     window.MusicToyFactory = Object.assign(window.MusicToyFactory || {}, {
         create: createToyPanelAt,
-        createInstance: g_toyInstances.create,
-        createStructureInstance: g_structureInstances.create,
+        createInstance: (source,...args) => {const id=typeof source==='string'?source:source?.id;if(containerToyModel.get(id)||containerToyModel.owner(id))throw new Error('Expand before creating linked copies; container duplication is deferred.');return g_toyInstances.create(source,...args);},
+        createStructureInstance: (source,...args) => {const id=typeof source==='string'?source:source?.id;if(containerToyModel.get(id)||containerToyModel.owner(id))throw new Error('Expand before creating linked copies; container duplication is deferred.');return g_structureInstances.create(source,...args);},
         releaseStructureInstances:()=>{g_toyInstances.pause();g_structureInstances.pause();for(const s of structureToyModel.list())if(s.masterStructureId)g_structureInstances.remove(s.id);},
         destroy: destroyToyPanel,
         getCatalog: () => getToyCatalog(),
@@ -6746,9 +6757,10 @@ function takeLayoutDrag(id) {
   else if(panel){panel.style.left=current.x+'px';panel.style.top=current.y+'px';}
 }
 const g_graphPlacement = createGraphPlacement({
-  model: connectionModel,
+  model: containerToyModel.boardGraph,
   isManual: id => (structureToyModel.get(id)?.positionSource || document.getElementById(id)?.dataset?.positionSource || 'manual') === 'manual',
   getPortPoint: (point,rect) => {
+    if(containerToyModel.get(point.objectId))return {x:rect.x+(point.portId==='output'?rect.width:0),y:rect.y+rect.height/2};
     if(heartbeatModel.get(point.objectId))return {x:rect.x+rect.width/2+HEARTBEAT_OUTPUT_OFFSET,y:rect.y+rect.height/2};
     const s=structureToyModel.get(point.objectId);
     if(s)return structurePortPoint({...s,x:rect.x,y:rect.y},point.portId);
@@ -6756,8 +6768,9 @@ const g_graphPlacement = createGraphPlacement({
     if(panel){const at=getLogicalChainAnchor(panel,point.portId==='input'?'left':'right');return {x:at.x+rect.x-(parseFloat(panel.style.left)||0),y:at.y+rect.y-(parseFloat(panel.style.top)||0)};}
     return null;
   },
-  getScope: id => structureToyModel.get(id)?.artOwnerId || document.getElementById(id)?.dataset?.artOwnerId || null,
+  getScope: g_graphPlacementScope,
   getRect: id => {
+    const container=containerToyModel.get(id);if(container)return container.bounds;
     const s=structureToyModel.get(id);
     if(s)return {x:s.x,y:s.y,width:structureToyWidth(s),height:structureToyHeight(s)};
     if(heartbeatModel.get(id)){const p=id===MAIN_TRANSPORT_ID?getAnchorWorld():heartbeatModel.get(id).position;return {x:p.x-88,y:p.y-52,width:176,height:104};}
@@ -6767,6 +6780,7 @@ const g_graphPlacement = createGraphPlacement({
       width:panel.offsetWidth||fallback.width,height:panel.offsetHeight||fallback.height};
   },
   setPosition: (id,x,y) => {
+    if(containerToyModel.get(id)){const c=containerToyModel.get(id);g_layoutAnimation.move(id,c.bounds,{x,y});containerToyModel.move(id,x,y);return;}
     const s=structureToyModel.get(id);
     if(s){g_layoutAnimation.move(id,s,{x,y});structureToyModel.move(id,x,y,{manual:false});return;}
     if(id===MAIN_TRANSPORT_ID)return;
@@ -6779,11 +6793,13 @@ const g_graphPlacement = createGraphPlacement({
 const g_branchDrag = createGraphBranchDrag({
   descendants: id => [...g_graphPlacement.descendants(id)].filter(child => g_graphPlacementScope(child) === g_graphPlacementScope(id)),
   getPosition: id => {
+    const container=containerToyModel.get(id);if(container)return {x:container.bounds.x,y:container.bounds.y};
     const structure=structureToyModel.get(id);if(structure)return {x:structure.x,y:structure.y};
     const panel=document.getElementById(id);return panel?{x:parseFloat(panel.style.left)||0,y:parseFloat(panel.style.top)||0}:null;
   },
   cancelAnimation: takeLayoutDrag,
   setPosition: (id,x,y,{manual}) => {
+    if(containerToyModel.get(id)){containerToyModel.move(id,x,y);return;}
     if(structureToyModel.get(id)){structureToyModel.move(id,x,y,{manual});return;}
     const panel=document.getElementById(id);if(!panel)return;
     panel.style.left=x+'px';panel.style.top=y+'px';
@@ -6794,12 +6810,15 @@ const g_branchDrag = createGraphBranchDrag({
 window.__graphBranchDragSync = () => g_branchDrag.sync();
 window.__graphIsDragDescendant = (root,id) => id!==root&&g_graphPlacementScope(id)===g_graphPlacementScope(root)&&g_graphPlacement.descendants(root).has(id);
 window.__graphTranslateDragDescendants = (root,dx,dy) => g_branchDrag.translateDescendants(root,dx,dy);
-function g_graphPlacementScope(id){return structureToyModel.get(id)?.artOwnerId||document.getElementById(id)?.dataset.artOwnerId||null;}
+function g_graphPlacementScope(id){return containerToyModel.owner(id)||structureToyModel.get(id)?.artOwnerId||document.getElementById(id)?.dataset.artOwnerId||null;}
 // Coalesce topology growth only; playback and position drags never arrange.
 const g_layoutPending=new Set(),g_layoutConnections=new Set(),g_layoutSizes=new Map(),g_layoutParents=new Map(),g_layoutAttached=new Set(),g_layoutPreserved=new Set();
 let g_layoutQueued=false,g_layoutRestoring=false,g_layoutManualDrag=null;
 function requestGraphLayout(id,connectionId=null){
   if(g_layoutRestoring||connectionModel.getEditing()?.suspended||!id)return;
+  const target=connectionId?connectionModel.get(connectionId)?.to.objectId:id,owner=containerToyModel.owner(target)||target;
+  if(containerToyModel.get(owner)?.interactionData?.contentSpace)return;
+  if(!containerToyModel.isVisible(id))id=containerToyModel.owner(id);
   // Balance the connected branch up to its stable/manual anchor, never another
   // Heartbeat root. This also closes old-parent gaps after a reparent.
   if(!connectionId){
@@ -6872,7 +6891,8 @@ window.arrangeSubgraph = rootId => {
 window.hasUsableConnectionCorridor = id => g_graphPlacement.hasUsableConnectionCorridor(id);
 window.beginCreationGraphRestore = () => {g_toyInstances.pause();g_structureInstances.pause();g_branchDrag.clear();g_layoutAnimation.clear();g_layoutRestoring=true;g_layoutPending.clear();g_layoutConnections.clear();g_layoutAttached.clear();g_layoutPreserved.clear();g_layoutParents.clear();g_layoutManualDrag=null;};
 window.endCreationGraphRestore = () => {g_toyInstances.resume();g_structureInstances.resume();g_layoutRestoring=false;};
-window.restoreConnections = (saved, structures = []) => {
+window.restoreConnections = (saved, structures = [], containers = []) => {
+  containerToyModel.restore([]);
   g_branchDrag.clear();g_layoutAnimation.clear();
   g_connectionView.reset();
   g_layoutPending.clear();g_layoutConnections.clear();g_layoutSizes.clear();g_layoutParents.clear();g_layoutAttached.clear();g_layoutPreserved.clear();g_layoutRestoring=true;
@@ -6900,7 +6920,10 @@ window.restoreConnections = (saved, structures = []) => {
     // Do not migrate occurrences/cursors from the previous scene into its roots.
     g_sequenceChains.reset();
     g_sequencerScheduler?.reset();
+    containerToyModel.prepareRestore(containers);
     g_connections.restore(saved, g_connectionPanels);
+    containerToyModel.restore(containers);
+    g_simpleDraw.migrateLegacy();
   });
   g_structureInstances.sync();
   for(const s of structureToyModel.list())g_layoutSizes.set(s.id,`${s.type}|${s.outputCount}|${s.chords?.length ?? ''}`);
@@ -6947,6 +6970,7 @@ const g_connections = createConnectionAdapter(connectionModel, {
   },
 });
 window.clearCreationGraph = () => {
+  containerToyModel.restore([]);
   g_toyInstances.pause();g_structureInstances.pause();
   window.ToySpawner?.close?.();
   closeInstrumentPicker();
@@ -6997,8 +7021,16 @@ const g_connectionView = createConnectionView({
       window.ToySpawner?.open?.();
     },
   }),
-  getPanels: () => g_connectionPanels,
-  getToyPoint: getChainAnchor,
+  getPanels: () => [...g_connectionPanels,...document.querySelectorAll('.container-toy[data-open="false"]')],
+  getConnections: () => containerToyModel.connections(),
+  presentEndpoint: containerToyModel.presentedEndpoint,
+  canEditConnection: containerToyModel.canEditConnection,
+  canCopyStructure: id=>!containerToyModel.owner(id),
+  getToyPoint: (panel,side) => {
+    const c=containerToyModel.get(panel.id);
+    if(c){const r=c.presentation.state.open?{x:c.bounds.x,y:c.bounds.y-170,width:280,height:140}:c.bounds,at=g_layoutAnimation.position(c.id,c.bounds);return {x:r.x+at.x-c.bounds.x+(side==='right'?r.width:0),y:r.y+at.y-c.bounds.y+r.height/2};}
+    return getChainAnchor(panel,side);
+  },
   getRenderedStructure: s => ({...s,...g_layoutAnimation.position(s.id,s)}),
   structureInstances:g_structureInstances,
   onLinkedCopy:async copy=>{
@@ -7031,7 +7063,7 @@ const g_connectionView = createConnectionView({
       ? (getInternalBoardCssTransform(context.worldEl) || { scale: g_artInternal.scale, tx: g_artInternal.tx, ty: g_artInternal.ty })
       : getViewportTransform();
     return { ...context, transform,
-      visible: panel => internal ? panel.dataset.artOwnerId === g_artInternal.artToyId : !panel.dataset.artOwnerId,
+      visible: panel => !panel.classList?.contains('container-pending')&&containerToyModel.isVisible(panel.id)&&(internal ? panel.dataset.artOwnerId === g_artInternal.artToyId : !panel.dataset.artOwnerId),
     };
   },
   getStructurePulse: id => structureFlashStrength(g_pulsingConnectors,id,performance.now()),
@@ -7052,6 +7084,101 @@ const g_heartbeatView = installHeartbeatView({
   onChange: () => { window.Persistence?.markDirty?.(); g_connectionView.render(); }
 });
 window.Heartbeats = heartbeatModel;
+function canContainGraphObject(id){
+ const s=structureToyModel.get(id);
+ if(s)return !s.artOwnerId&&!s.sharedDefinitionId&&!s.masterStructureId&&!s.autoArrange&&s.provenance!=='auto';
+ const p=document.getElementById(id);
+ return !!p?.dataset.toy&&!p.dataset.artOwnerId&&!p.dataset.masterToyId&&!p.dataset.structureInstanceId&&!p.dataset.autoArrangeOwner&&p.dataset.beatSwarmSubboard!=='1'&&!g_toyInstances.hasPeers(p);
+}
+containerToyModel.configure({
+ onBoundsCommit:id=>tidySimpleContainer(id),
+ canContain:canContainGraphObject,
+ canDelete:id=>!!structureToyModel.get(id)||!!document.getElementById(id)&&g_toyInstances.canDelete(document.getElementById(id)),
+ getRect:id=>g_graphPlacement.getRect(id),
+ getDuration:id=>toyLoopLengthTicks(document.getElementById(id),getPlaybackInstance(id)),
+ setPosition:(id,x,y)=>{if(structureToyModel.get(id))structureToyModel.move(id,x,y,{manual:true});else{const p=document.getElementById(id);p.style.left=x+'px';p.style.top=y+'px';p.dataset.positionSource='manual';syncOverviewPosition(p);persistToyPosition(p);}},
+ removeInternal:id=>structureToyModel.get(id)?structureToyModel.remove(id):destroyToyPanel(id,{allowOffBoard:true,structureCleanup:true,confirmed:true}),
+});
+const g_containerPresentations=createContainerPresentations({
+ containers:containerToyModel,
+ readInternal:id=>{const p=document.getElementById(id);return p?captureLinkedToyState(p):structureToyModel.get(id);},
+ applyInternalEdit:(id,state)=>{const p=document.getElementById(id);if(!p)throw new Error('Use the normal Structure editor for logic changes.');return Promise.resolve(applyLinkedToyState(p,state)).then(()=>g_toyInstances.edit(p));},
+});
+const g_simpleDraw=createSimpleDrawController({
+ containers:containerToyModel,model:connectionModel,getToy:id=>document.getElementById(id),
+ createGrid:async(state,position)=>{
+  let panel;const previous=g_layoutRestoring;g_layoutRestoring=true;
+  try{panel=createToyPanelAt('drawgrid',{centerX:position.x+400,centerY:position.y+380,autoCenter:false,allowOffscreen:true,skipSpawnPlacement:true,instrument:state.instrument});
+   if(!panel)throw new Error('Could not create DrawGrid');panel.classList.add('container-pending');ensureToyPanelInitializedNow(panel,'simple-draw');
+   const parent=connectionModel.getParent(panel.id);if(parent)connectionModel.disconnect(parent.id);
+   panel.style.left=position.x+'px';panel.style.top=position.y+'px';panel.dataset.positionSource='manual';
+  }finally{g_layoutRestoring=previous;}
+  try{await panel.__drawToy.setState(state);panel.dataset.sharedDefinitionId='toy-definition:'+panel.id;setToyVolume(panel.__audioToyId||panel.id,.65);syncVolumeUI(panel,{volume:.65});return panel;}
+  catch(error){destroyToyPanel(panel,{allowOffBoard:true,structureCleanup:true,confirmed:true});throw error;}
+ },
+ removeGrid:p=>destroyToyPanel(p,{allowOffBoard:true,structureCleanup:true,confirmed:true}),
+ publish:(p,reason)=>{p.__drawToy?.publishAuthoredChange?.(reason);g_toyInstances.adopt(p);g_toyInstances.edit(p);},
+ cancelScheduled:(p,tick)=>{cancelScheduledToySources(p.__audioToyId||p.id);playbackVisualEvents.clearToy(p.id);drawGridPlaybackVisuals.clearToy(p.id);g_sequencerScheduler?.resetToyTimeline(p.id,tick,{includeBoundary:false});},
+ getTransport:id=>transportRegistry.get(connectionModel.getTransportId(id)),
+ onChanged:()=>{g_chainStructureVersion++;updateChains();window.Persistence?.markDirty?.();},onPlay:()=>tickAudioScheduler(),
+});
+const g_simpleDrawSurfaces=new Map();
+g_containerPresentations.register('simple-draw',{
+ renderSurface:(host,{container:c})=>{
+  let surface=g_simpleDrawSurfaces.get(c.id);
+  if(!surface){const api={lines:()=>{const line=g_simpleDraw.line(c.id);return line?[line]:[];},
+   unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},
+   addLine:source=>({id:c.id,started:g_simpleDraw.draw(c.id,source)}),clear:()=>g_simpleDraw.clear(c.id),
+   setSilence:g_simpleDraw.setSilence,setStraightened:(id,value)=>{const s=ensureSimpleDrawSpace(id);g_simpleDraw.setStraightened(id,value);const current=containerToyModel.get(id);if(s){moveSimpleDrawContent(id,{...s,x:current.bounds.x+s.x,y:current.bounds.y+s.y},0,0);containerToyModel.commitContainerBounds(id);}},onNote:listener=>g_simpleDraw.onNote(c.id,listener),
+   getGeometry:()=>{const space=g_simpleDraw.data(c.id).contentSpace;return space?{...space,x:space.x-SIMPLE_DRAW_INSETS.left,y:space.y-SIMPLE_DRAW_INSETS.top}:null;},
+   beginContentMove:()=>{const current=containerToyModel.get(c.id),space=ensureSimpleDrawSpace(c.id);if(!space)return null;return {x:current.bounds.x+space.x,y:current.bounds.y+space.y,width:space.width,height:space.height};},
+   moveAuthoredContent:(base,dx,dy)=>moveSimpleDrawContent(c.id,base,dx,dy),commitContainerBounds:()=>containerToyModel.commitContainerBounds(c.id)};
+   surface=installSimpleDrawSurface(host,api,g_simpleDraw.paintStore(c.id));g_simpleDrawSurfaces.set(c.id,surface);
+  }surface.setActive(!c.presentation.state.open);
+ },
+ disposeSurface:id=>{g_simpleDrawSurfaces.get(id)?.dispose();g_simpleDrawSurfaces.delete(id);g_simpleDraw.dispose(id);},
+});
+refreshSimpleDrawSilence=()=>{for(const surface of g_simpleDrawSurfaces.values())surface.syncSilence();};
+function ensureSimpleDrawSpace(id){
+ const current=containerToyModel.get(id);if(!current||!g_simpleDraw.data(id).gesture)return null;
+ let space=g_simpleDraw.data(id).contentSpace;
+ if(!space){space={x:SIMPLE_DRAW_INSETS.left,y:SIMPLE_DRAW_INSETS.top,width:current.bounds.width-SIMPLE_DRAW_INSETS.left-SIMPLE_DRAW_INSETS.right,height:current.bounds.height-SIMPLE_DRAW_INSETS.top-SIMPLE_DRAW_INSETS.bottom};g_simpleDraw.setData(id,{contentSpace:space});}
+ return space;
+}
+function moveSimpleDrawContent(id,base,dx,dy){
+ if(!base)return;const current=containerToyModel.get(id),line=g_simpleDraw.line(id);if(!line)return;
+ const space={...base,x:base.x+dx-current.bounds.x,y:base.y+dy-current.bounds.y},path=linePresentation(line.source,line.straightened?1:0).path;
+ const content=drawingAuthoredBounds(path,space,current.bounds),next=containerToyModel.requestContainerGrowth(id,content,{active:true,insets:SIMPLE_DRAW_INSETS});
+ g_simpleDraw.setData(id,{contentSpace:{...base,x:base.x+dx-next.bounds.x,y:base.y+dy-next.bounds.y}});
+}
+function tidySimpleContainer(id){const result=g_layoutAnimation.batch(()=>g_graphPlacement.repairAround(id));g_connectionView.render();window.Persistence?.markDirty?.();if(result.unresolved.length){const notice=document.createElement('p');notice.className='simple-draw-creation-hint';notice.setAttribute('role','status');notice.textContent='This space is crowded. Your drawing stayed in place; move a nearby toy to make more room.';document.body.append(notice);setTimeout(()=>notice.remove(),6000);}return result;}
+const g_simpleDrawCreation=installSimpleDrawCreation({getViewport:getViewportElement,getWorld:()=>document.getElementById('board'),screenToWorld,
+ canCreate:()=>!g_artInternal.active,
+ unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},
+ commit:async({source,bounds,contentSpace},{heartbeatId=heartbeatModel.target().id}={})=>{
+  const c=g_simpleDraw.create(bounds);g_simpleDraw.setData(c.id,{contentSpace});
+  try{const previous=g_layoutRestoring;g_layoutRestoring=true;try{const result=connectionModel.connect('transport',{objectId:heartbeatId,portId:'output'},{objectId:c.id,portId:'input'});if(!result.ok)throw new Error(result.reason);}finally{g_layoutRestoring=previous;}
+   const card=document.getElementById(c.id);card?.classList.add('simple-draw-materializing');setTimeout(()=>card?.classList.remove('simple-draw-materializing'),220);
+   tidySimpleContainer(c.id);await g_simpleDraw.draw(c.id,source);
+  }catch(error){if(error.code==='DRAWING_CANCELLED')return;containerToyModel.remove(c.id);throw error;}
+ }});
+const g_containerBoard=installContainerBoard({
+ containers:containerToyModel,getWorld:()=>document.getElementById('board'),getScale:()=>getViewportTransform().scale,
+ getCandidates:()=>[...g_connectionPanels.map(p=>({id:p.id,label:p.dataset.toyName||p.dataset.toy})),...structureToyModel.list().map(s=>({id:s.id,label:s.name||s.type}))].filter(c=>canContainGraphObject(c.id)||containerToyModel.owner(c.id)),
+ onRender:()=>g_connectionView.render(),onDirty:()=>window.Persistence?.markDirty?.(),
+ onOpenChange:c=>focusSimpleDraw(c,c.presentation.state.open,true),onExpand:c=>focusSimpleDraw(c,true,false),
+ renderSurface:g_containerPresentations.renderSurface,disposeSurface:g_containerPresentations.disposeSurface,handleInteraction:g_containerPresentations.handleInteraction,
+});
+function focusSimpleDraw(c,internals,includeHeader){
+ if(c?.presentation.type!=='simple-draw')return;
+ const rects=internals?c.internalObjectIds.map(id=>g_graphPlacement.getRect(id)).filter(Boolean):[c.bounds];
+ if(internals&&includeHeader)rects.push({x:c.bounds.x,y:c.bounds.y-170,width:280,height:140});if(!rects.length)return;
+ const x=Math.min(...rects.map(r=>r.x)),y=Math.min(...rects.map(r=>r.y)),width=Math.max(...rects.map(r=>r.x+r.width))-x,height=Math.max(...rects.map(r=>r.y+r.height))-y;
+ window.centerBoardOnWorldPoint?.(x+width/2,y+height/2,Math.max(.15,Math.min(.9,(window.innerWidth-240)/(width+120),(window.innerHeight-180)/(height+100))),{duration:350});
+}
+// Public organization API also supports later Simple/Art presentation adapters.
+window.ContainerToys={collapse:containerToyModel.collapse,open:containerToyModel.open,expand:containerToyModel.expand,remove:containerToyModel.remove,list:containerToyModel.list,move:containerToyModel.move,
+ registerPresentation:(type,adapter)=>{const unregister=g_containerPresentations.register(type,adapter);g_containerBoard.render();return unregister;}};
 // Logic objects use the shared dock's screen-to-world spawn convention.
 window.ToySpawner?.configureLogic?.({
   getCatalog:()=>[...BASIC_LOGIC_TYPES.map(logicCreationEntry),
@@ -7400,7 +7527,7 @@ function tickAudioScheduler() {
   try {
     if (!CHAIN_FEATURE_ENABLE_SCHEDULER || !CHAIN_FEATURE_ENABLE_SEQUENCER) return;
     if (!transportRegistry.list().some(({transport}) => transport.state === 'playing')) return;
-    refreshFreePlaySilence();
+    refreshSimpleDrawSilence();
     const nowMs = performance.now();
     if (!g_lastChainSyncAt || nowMs - g_lastChainSyncAt > 150) {
       g_lastChainSyncAt = nowMs;
@@ -7451,12 +7578,12 @@ function flushDrawGridPlaybackVisuals(outgoing = null) {
     const panel=document.getElementById(event.toyId);
     if(!panel)return;
     panel.__applyPlaybackVisual?.(event);
-    notifyFreePlayNote(panel,event);
+    notifySimpleDrawNote(panel,event);
     panel.dispatchEvent(new CustomEvent('toy:playback-visual',{detail:event}));
   });
   drawGridPlaybackVisuals.flush(getTransport, event => {
     const panel = document.getElementById(event.toyId);
-    notifyFreePlayNote(panel,event);
+    notifySimpleDrawNote(panel,event);
     panel?.dispatchEvent(new CustomEvent('drawgrid:playcol', { detail: { ...event, rows: [event.row] } }));
     panel?.dispatchEvent(new CustomEvent('drawgrid:note-fired', { detail: event }));
   });
@@ -8852,89 +8979,6 @@ import { PERF_FLAGS } from "./perf-flags.js";
 // Expose for live debugging / perf-lab runs
 window.PERF_FLAGS = PERF_FLAGS;
 
-// Free Play presents provenance-marked ordinary DrawGrid chains.
-const freePlaySources=new Map(),freePlayNoteListeners=[];
-let freePlayGeneration=0;
-function recoverFreePlayLines(){
- freePlaySources.clear();
- for(const panel of getSequencedToys()){
-  const meta=panel.__freePlayDrawGrid;if(!meta||panel.dataset.masterToyId)continue;
-  if(!freePlaySources.has(meta.strokeId))freePlaySources.set(meta.strokeId,[]);
-  freePlaySources.get(meta.strokeId).push(panel);
- }
-}
-function removeFreePlayStroke(id){
- for(const panel of getSequencedToys())if(panel.__freePlayDrawGrid?.strokeId===id){cancelScheduledToySources(panel.__audioToyId||panel.id);destroyToyPanel(panel,{allowOffBoard:true,structureCleanup:true});}
- freePlaySources.delete(id);window.Persistence?.markDirty?.();
-}
-const freePlay=installFreePlay({
- enter:()=>{if(g_artInternal.active)exitInternalBoardImmediate();recoverFreePlayLines();heartbeatModel.select(MAIN_TRANSPORT_ID);},
- unlock:()=>{const context=ensureAudioContext();if(context?.state==='suspended')void context.resume();},
- addLine:source=>{
-  const id='stroke-'+Date.now()+'-'+Math.random().toString(36).slice(2,8),panels=[],states=lineDrawGridStates(source,id),generation=freePlayGeneration;
-  const started=(async()=>{
-   try{
-    for(let i=0;i<states.length;i++){
-     const panel=createToyPanelAt('drawgrid',{centerX:800+i*700,centerY:500+freePlaySources.size*650,autoCenter:false,allowOffscreen:true,skipSpawnPlacement:true,heartbeatId:MAIN_TRANSPORT_ID,instrument:'PIANO'});
-     if(!panel)throw new Error('Could not create DrawGrid');
-     panels.push(panel);ensureToyPanelInitializedNow(panel,'free-play-drawgrid');
-     const parent=connectionModel.getParent(panel.id);if(parent)connectionModel.disconnect(parent.id);
-     await panel.__drawToy.setState(states[i]);
-     if(generation!==freePlayGeneration)throw new Error('Line creation cancelled');
-     panel.dataset.sharedDefinitionId='toy-definition:'+panel.id;
-     setToyVolume(panel.__audioToyId||panel.id,.65);panel.dataset.toyVolume='0.65';syncVolumeUI(panel,{volume:.65});
-    }
-    connectionModel.transaction(()=>{
-     for(let i=0;i<panels.length;i++){
-      const parent=connectionModel.getParent(panels[i].id);if(parent)connectionModel.disconnect(parent.id);
-      const result=connectionModel.connect(i?'sequence':'transport',{objectId:i?panels[i-1].id:MAIN_TRANSPORT_ID,portId:'output'},{objectId:panels[i].id,portId:'input'});
-      if(!result.ok)throw new Error('Could not connect DrawGrid: '+result.reason);
-     }
-    });
-    freePlaySources.set(id,panels);g_toyInstances.prepare();g_chainStructureVersion++;updateChains();window.Persistence?.markDirty?.();
-    await getFreePlayTransport().play();tickAudioScheduler();
-   }catch(error){for(const panel of panels)if(panel.isConnected)destroyToyPanel(panel,{allowOffBoard:true,structureCleanup:true});freePlaySources.delete(id);throw error;}
-  })();
-  return {id,started};
- },
- lines:()=>[...freePlaySources].flatMap(([id,panels])=>{
-  const connected=panels.filter(p=>p.isConnected),source=drawGridLineSource(connected);if(!source)return [];
-  const cycleTicks=connected.reduce((total,panel)=>total+toyLoopLengthTicks(panel),0);
-  return [{id,source,randomCutIds:connected[0].__freePlayDrawGrid.randomCutIds||[],straightened:!!connected[0].__freePlayDrawGrid.straightened,definitionIds:connected.map(p=>p.dataset.sharedDefinitionId||p.id),panelIds:connected.map(p=>p.id),phase:strokePhase(source,getFreePlayTransport().currentTick,cycleTicks)}];
- }),
- setSilence:(id,{cuts,paint,coveredIds,randomCutIds,randomSeed})=>{
-  const panels=freePlaySources.get(id)||[];
-  if(paint&&panels[0])panels[0].__freePlayDrawGrid.paint=structuredClone(paint);
-  if(panels[0]&&randomCutIds)panels[0].__freePlayDrawGrid.randomCutIds=[...randomCutIds];
-  if(panels[0]&&randomSeed!=null)panels[0].__freePlayDrawGrid.randomSeed=randomSeed;
-  for(const panel of panels){
-   const changed=updateSilence(panel.__dgAuthoredNotes||[],{cuts,paint,coveredIds});
-   if(changed){
-    cancelScheduledToySources(panel.__audioToyId||panel.id);
-    playbackVisualEvents.clearToy(panel.id);drawGridPlaybackVisuals.clearToy(panel.id);
-    g_sequencerScheduler?.resetToyTimeline(panel.id,getFreePlayTransport().currentTick,{includeBoundary:false});
-   }
-   panel.__drawToy?.publishAuthoredChange?.('free-play-silence');
-   g_toyInstances.edit(panel);
-  }
-  window.Persistence?.markDirty?.();
- },
- setStraightened:(id,value)=>{const first=freePlaySources.get(id)?.[0];if(first){first.__freePlayDrawGrid.straightened=value;if(first.__sharedToyState?.freePlay)first.__sharedToyState.freePlay.straightened=value;window.Persistence?.markDirty?.();}},
- synchronize:()=>{for(const panels of freePlaySources.values())for(const panel of panels)if(panel.isConnected){panel.__drawToy?.publishAuthoredChange?.('free-play-board-sync');g_toyInstances.edit(panel);}},
- reveal:()=>{g_connectionView.render();const panel=[...freePlaySources.values()].flat().find(p=>p.isConnected);if(panel)window.centerBoardOnElementSlow?.(panel,.65,{duration:350});},
- onNote:listener=>freePlayNoteListeners.push(listener),
- deleteLine:removeFreePlayStroke,
- clear:()=>{
-  freePlayGeneration++;
-  for(const id of [...freePlaySources.keys()])removeFreePlayStroke(id);
-  freePlaySources.clear();window.Persistence?.markDirty?.();
- },
- forget:()=>{freePlayGeneration++;freePlaySources.clear();},
-});
-refreshFreePlaySilence=freePlay.syncSilence;
-function notifyFreePlayNote(panel,event){
- if(!Number.isInteger(event.nodeIndex))return;
- const id=panel?.__freePlayDrawGrid?.strokeId;
- if(id&&freePlaySources.has(id))for(const listener of freePlayNoteListeners)listener(id,event);
-}
-if(new URLSearchParams(location.search).has('freePlayProof'))import('../tests/free-play-browser-observer.js').then(({observeFreePlay})=>observeFreePlay(freePlay,listener=>freePlayNoteListeners.push(listener)));
+// Note illumination is an observer of canonical DrawGrid admissions.
+function notifySimpleDrawNote(panel,event){g_simpleDraw.notify(panel,event);}
+if(new URLSearchParams(location.search).has('containerProof')||new URLSearchParams(location.search).has('simpleDrawProof'))import('../tests/container-browser-observer.js').then(({observeContainers})=>observeContainers({getSurfaceProof:()=>[...g_simpleDrawSurfaces].map(([id,surface])=>({id,...surface.getProof()}))}));

@@ -85,6 +85,7 @@ export function createChainSequenceAdapter({ getToy, chainState, cancelToy = () 
     let auxiliary = new Set();
     if (structures.length || connectionModel) {
       const graph = compileStructureGraph({ panels, structures, connections: connections || [], runtime,
+        transparentObjects:new Set(connectionModel?.getObjectIds().filter(id=>{const o=connectionModel.getObject(id);return o.container&&!o.container.input;})||[]),
         poweredRoots: new Set(connectionModel?.list('transport').map(edge => edge.to.objectId) || []),
         currentTick: transportState.currentTick, getTransportId: domainFor, getCurrentTick: id => stateFor(id, transportState).currentTick,
         getDuration: id => toyLoopLengthTicks(getToy(id),getPlaybackInstance(id)) });

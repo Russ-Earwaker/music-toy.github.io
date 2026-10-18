@@ -9,6 +9,7 @@ import { getActiveThemeKey, setActiveThemeKey } from './theme-manager.js';
 import { syncVolumeUI } from './baseToy/volume-ui.js';
 import { connectionModel } from './connections.js';
 import { structureToyModel } from './structure-toys.js';
+import { containerToyModel } from './container-toys.js';
 import { heartbeatModel } from './heartbeats.js';
 import { applyToyInstrument } from './instrument-state.js';
 import { normalizeMusicalRole, restoreToyMusicalRole } from './musical-role.js';
@@ -936,6 +937,7 @@ export function getSnapshot(){
     chains,
     connections: connectionModel.snapshot().connections,
     structureToys: structureToyModel.list(),
+    containers: containerToyModel.snapshot(),
     ...(surfacePaint().length?{freePlaySurfacePaint:structuredClone(surfacePaint())}:{}),
     camera,
   },panels.map(p=>p.__sharedToyDefinition).filter(Boolean));
@@ -1250,7 +1252,7 @@ export function applySceneSnapshot(snap){
         const raf = window.requestAnimationFrame?.bind(window) ?? (fn => setTimeout(fn, 16));
         raf(() => {
           try {
-            window.restoreConnections?.(snap.connections, snap.structureToys || []);
+            window.restoreConnections?.(snap.connections, snap.structureToys || [], snap.containers || []);
             window.updateChains?.();
           } catch {} finally {window.endCreationGraphRestore?.();}
           if(migratedUses)for(const root of (snap.structureToys||[]).filter(s=>!snap.connections.some(c=>c.kind==='sequence'&&c.to.objectId===s.id)))window.arrangeSubgraph?.(root.id);

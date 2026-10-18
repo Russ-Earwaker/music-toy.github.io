@@ -19,7 +19,7 @@ test('cuts and paint independently preserve stable authored notes, pitches, tick
  const states=lineDrawGridStates(s,'silence'),loaded=states.map(st=>prepareFreePlayDrawGridState(JSON.parse(JSON.stringify(st)))),ps=panels(loaded),restored=drawGridLineSource(ps);
  assert.deepEqual(restored.events.map(e=>[e.midi,e.offsetTick]),s.events.map(e=>[e.midi,e.offsetTick]));
  assert.deepEqual(restored.events.map(eventMuted),s.events.map(eventMuted));assert.deepEqual(restored.paint,s.paint);
- assert.deepEqual(restored.path,s.path);assert.equal(ps.reduce((n,p)=>n+toyLoopLengthTicks(p),0),s.durationTicks);
+ assert.deepEqual(restored.path,s.path);assert.equal(ps.reduce((n,p)=>n+toyLoopLengthTicks(p),0),Math.ceil(s.durationTicks/384)*384);
  for(const st of loaded)assert.deepEqual(prepareFreePlayDrawGridState(st),st);
 });
 

@@ -173,7 +173,46 @@ export function createGraphPlacement({model,getRect,setPosition=()=>{},getScope=
     return [...ps].filter(([id,r])=>id!==rootId&&(Math.abs(r.x-original.get(id).x)>1e-6||Math.abs(r.y-original.get(id).y)>1e-6)).map(([id,r])=>({id,x:r.x,y:r.y,depth:depth(id)-depth(rootId)}));
   }
   function apply(id,options){const result=targets(id,options);for(const p of result)setPosition(p.id,p.x,p.y,{automatic:true});return result;}
+  // Local body repair for authored size changes. The edited object is fixed;
+  // only bodies actually reached by a collision participate, never a root-wide
+  // Arrange. Descendant envelopes retain their relative graph composition.
+  function repairAround(anchorId){
+    if(!getRect(anchorId))return {moves:[],unresolved:[]};
+    const scope=getScope(anchorId),ids=model.getObjectIds().filter(id=>getScope(id)===scope&&getRect(id)),ps=new Map(ids.map(id=>[id,{...getRect(id)}])),original=new Map(ids.map(id=>[id,{...getRect(id)}])),touched=new Set([anchorId]);
+    const gap=siblingGap;
+    for(let pass=0;pass<ids.length*2;pass++){
+      const conflicts=[];
+      for(const a of touched)for(const b of ids)if(a!==b&&rectanglesOverlap(ps.get(a),ps.get(b),gap)){
+        const ra=ps.get(a),rb=ps.get(b),oa=original.get(a),ob=original.get(b);
+        if(a!==anchorId&&b!==anchorId&&rectanglesOverlap(oa,ob,gap)&&ra.x-oa.x===rb.x-ob.x&&ra.y-oa.y===rb.y-ob.y)continue;
+        conflicts.push([a,b]);
+      }
+      if(!conflicts.length)break;
+      const choices=[];
+      for(const pair of conflicts)for(const id of pair){
+        if(id===anchorId||!model.getObject(id)?.ports.input)continue;
+        const branch=new Set([...descendants(id)].filter(n=>ps.has(n)));if(branch.has(anchorId))continue;
+        const b=union([...branch].map(n=>ps.get(n))),others=ids.filter(n=>!branch.has(n)).map(n=>ps.get(n));
+        const vertical=clearVerticalSlot(b,others,gap),candidates=[{dx:0,dy:vertical.y-b.y},...others.flatMap(o=>[{dx:o.x+o.width+gap-b.x,dy:0},{dx:o.x-b.width-gap-b.x,dy:0}])];
+        const parent=model.getParent(id),siblings=parent&&model.getObject(parent.from.objectId)?.structure?edges(parent.from.objectId):[],index=siblings.findIndex(c=>c.to.objectId===id),prev=index>0?ps.get(siblings[index-1].to.objectId):null,next=index>=0&&index<siblings.length-1?ps.get(siblings[index+1].to.objectId):null;
+        for(const c of candidates){
+          if(Math.abs(c.dx)+Math.abs(c.dy)<1e-6||prev&&b.y+c.dy<prev.y||next&&b.y+c.dy>next.y)continue;
+          const parentRect=parent&&ps.get(parent.from.objectId);if(c.dx<0&&parent?.kind==='sequence'&&parentRect&&ps.get(id).x+c.dx<parentRect.x+parentRect.width+horizontalGap)continue;
+          if(others.some(o=>rectanglesOverlap({...b,x:b.x+c.dx,y:b.y+c.dy},o,gap)))continue;
+          const weight=[...branch].reduce((sum,n)=>sum+(isManual(n)?40:1),0);
+          choices.push({...c,id,branch,cost:localPlacementCost(c.dx,c.dy)*weight});
+        }
+      }
+      choices.sort((a,b)=>a.cost-b.cost||a.id.localeCompare(b.id));const best=choices[0];if(!best)break;
+      for(const id of best.branch){const r=ps.get(id);r.x+=best.dx;r.y+=best.dy;touched.add(id);}
+    }
+    const moves=[...ps].filter(([id,r])=>id!==anchorId&&(r.x!==original.get(id).x||r.y!==original.get(id).y)).map(([id,r])=>({id,x:r.x,y:r.y}));
+    for(const p of moves)setPosition(p.id,p.x,p.y,{automatic:true});
+    const unresolved=[...touched].flatMap(a=>ids.filter(b=>a!==b&&rectanglesOverlap(ps.get(a),ps.get(b),0)).map(b=>[a,b]));
+    return {moves,unresolved};
+  }
   return {getRect,placeChild,placeStructure,branchBounds,descendants,hasUsableConnectionCorridor,targets,depth,
+    repairAround,
     repairConnection:(id,options={})=>{const c=model.get(id);return c&&c.to.portId!=='pattern'?apply(c.from.objectId,{...options,onlyChild:c.to.objectId}):[];},
     repairSubgraph:(id,options={})=>apply(id,options),arrangeSubgraph:(id,options={})=>apply(id,{...options,explicit:true})};
 }

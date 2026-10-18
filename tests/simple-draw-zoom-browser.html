@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Simple Draw zoom regression</title>
+<link rel="stylesheet" href="../free-play.css">
+<style>
+body{background:#07111c;color:white;font:14px system-ui;margin:12px}
+nav{height:40px} #world{transform-origin:top left;width:800px;padding:14px;border:2px solid #91c4e0;border-radius:20px;box-sizing:border-box}
+</style>
+<nav aria-label="Test zoom"><button data-zoom="0.5">50%</button><button data-zoom="1">100%</button><button data-zoom="1.5">150%</button></nav>
+<!-- Keep the line, paint and cut ends aligned when switching zoom. -->
+<section id="world" aria-label="Simple Draw test toy"></section>
+<script type="module">
+import {installSimpleDrawSurface} from '../src/simple-draw-surface.js';
+import {createLineSource} from '../src/free-play-line.js';
+import {updateSilence} from '../src/free-play-silence.js';
+const source=createLineSource([{x:.1,y:.8},{x:.5,y:.2},{x:.9,y:.65}]);
+source.events.forEach((event,i)=>{event.id=`zoom-note-${i}`;event.col=i%8;});
+const line={id:'zoom-line',source,straightened:false,phase:null};
+let ink=[];
+const api={lines:()=>[line],unlock(){},addLine(next){line.source=next;return {started:Promise.resolve()};},clear(){line.source.events=[];},setStraightened(id,value){line.straightened=value;},onNote(){return ()=>{};},setSilence(id,changes){updateSilence(line.source.events,changes);if(changes.paint)line.source.paint=changes.paint;}};
+const surface=installSimpleDrawSurface(document.querySelector('#world'),api,{get:()=>ink,set:next=>ink=next});surface.setActive(true);
+for(const button of document.querySelectorAll('[data-zoom]'))button.onclick=()=>document.querySelector('#world').style.transform=`scale(${button.dataset.zoom})`;
+</script>

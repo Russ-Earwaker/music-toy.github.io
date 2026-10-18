@@ -182,6 +182,10 @@ test('DrawGrid shared commit publishes canonical state/pattern together before w
   const authored=structuredClone(p.state.authoredNotes);
   for(const offset of [1,-1,2,-2,0]){p.state.registerOctaves=offset;c.edit(p);await c.whenReady([peer.id]);assert.equal(peer.dataset.registerOctaves,String(offset));assert.equal(peer.state.registerOctaves,offset);assert.deepEqual(peer.state.authoredNotes,authored);assert.deepEqual(peer.__seqPattern.cols[0].notes.map(n=>n.sourceMidi),[81]);}
   for(const duration of [192,0]){p.state.authoredDurationTicks=duration;c.edit(p);await c.whenReady([peer.id]);assert.equal(peer.state.authoredDurationTicks,duration);assert.equal(peer.dataset.authoredDurationTicks,duration?String(duration):undefined);assert.deepEqual(peer.state.authoredNotes,authored);}
+  p.state.freePlay={strokeId:'legacy',durationTicks:192};p.state.authoredDurationTicks=192;
+  c.edit(p);await c.whenReady([peer.id]);
+  for(const view of [p,peer])assert.equal(view.dataset.authoredDurationTicks,undefined,'legacy Free Play endings cannot shorten linked toy loops');
+  assert.deepEqual(peer.state.authoredNotes,authored);
  }finally{d.close();}
 });
 

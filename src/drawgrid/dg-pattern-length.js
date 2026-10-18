@@ -12,7 +12,9 @@ export function drawgridNaturalDurationTicks(panel){
 }
 export function restoreDrawgridDuration(panel,state={}){
  if(!panel?.dataset)return;
- const value=Number(state.authoredDurationTicks);
+ // Normalize legacy Free Play state before it reaches either editor or linked
+ // view playback. Drawing extent is visual metadata, not a shortened toy loop.
+ const value=state.freePlay?0:Number(state.authoredDurationTicks);
  if(value>0)panel.dataset.authoredDurationTicks=String(Math.min(drawgridLoopLengthTicks(state.steps??panel.dataset.steps),Math.max(1,Math.round(value))));
  else delete panel.dataset.authoredDurationTicks;
 }

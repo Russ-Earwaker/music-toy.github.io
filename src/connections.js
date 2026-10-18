@@ -22,16 +22,19 @@ const endpoint = value => Object.freeze({ objectId: String(value.objectId), port
 const same = (a, b) => a?.objectId === b?.objectId && a?.portId === b?.portId;
 
 export function createConnectionModel() {
-  const objects = new Map(), connections = new Map(), listeners = new Set(), validators=new Set();
+  const objects = new Map(), connections = new Map(), listeners = new Set(), validators=new Set(), removalGuards=new Set();
   let serial = 1, editing = null, promotionResolver = null, transactionDepth = 0, pending = [];
   const emit = event => {
     if (transactionDepth) { pending.push(event); return; }
     for (const listener of listeners) listener(event);
   };
   const port = point => objects.get(point?.objectId)?.ports[point?.portId] || null;
+  // Containers alias existing endpoints. Canonical wires, compiler paths and
+  // playback identities stay on the original objects, including while open.
+  const resolveEndpoint = point => objects.get(point?.objectId)?.container?.[point?.portId] || point;
   const list = (kind, { includeSuspended = false } = {}) => [...connections.values()].filter(c =>
     (includeSuspended || !editing?.suspended || c.id !== editing.connectionId) && (!kind || c.kind === kind));
-  const getParent = id => list().find(c => c.to.objectId === id && c.to.portId!=='pattern') || null;
+  const getParent = id => list().find(c => c.to.objectId === (objects.get(id)?.container?.input?.objectId || id) && c.to.portId!=='pattern') || null;
   function getTransportId(id, visited = new Set()) {
     if(!id || visited.has(id))return null;
     const next=new Set(visited).add(id),parent=getParent(id);
@@ -62,6 +65,7 @@ export function createConnectionModel() {
     kind && port(a)?.accepts.includes(kind) && port(b)?.accepts.includes(kind));
   const dragEndpoints=target=>({fixed:editing?.fixed,target});
   function validate(kind, a, b, excludeId = null) {
+    a = resolveEndpoint(a); b = resolveEndpoint(b);
     const pa = port(a), pb = port(b);
     if (!pa || !pb) return { ok: false, reason: 'missing-port' };
     if (pa.direction === pb.direction) return { ok: false, reason: 'invalid-direction' };
@@ -92,6 +96,7 @@ export function createConnectionModel() {
     return { ok: true, from: endpoint(from), to: endpoint(to) };
   }
   function connect(kind, a, b, { id = null } = {}) {
+    a = resolveEndpoint(a); b = resolveEndpoint(b);
     const duplicate = list(kind).find(c => (same(c.from, a) && same(c.to, b)) || (same(c.from, b) && same(c.to, a)));
     if (duplicate && (!id || id === duplicate.id)) return { ok: true, connection: duplicate };
     const result = validate(kind, a, b, id);
@@ -123,18 +128,20 @@ export function createConnectionModel() {
   function disconnect(id) {
     const connection = connections.get(id);
     if (!connection) return false;
+    if([...removalGuards].some(guard=>guard(connection)))return false;
     connections.delete(id);
     if (editing?.connectionId === id) editing = null;
     emit({ type: 'change', removed: connection });
     return true;
   }
   return {
-    registerObject(id, { ports = TOY_PORTS, transportId = null, structure = null, modifier = null } = {}) {
-      objects.set(String(id), { ports, transportId: transportId ?? objects.get(String(id))?.transportId ?? null, structure, ...(modifier ? {modifier} : {}) });
+    registerObject(id, { ports = TOY_PORTS, transportId = null, structure = null, modifier = null, container = objects.get(String(id))?.container ?? null } = {}) {
+      objects.set(String(id), { ports, transportId: transportId ?? objects.get(String(id))?.transportId ?? null, structure, ...(modifier ? {modifier} : {}), ...(container ? {container} : {}) });
     },
     touchObject(id, { structureCreated = false, layoutInsertion = null } = {}) { emit({ type: 'change', structureChanged: true, objectId: id, ...(layoutInsertion ? {layoutInsertion} : {}), ...(structureCreated ? {structureCreated:true} : {}) }); },
     setPromotionResolver(resolver) { promotionResolver = resolver; },
     addConnectionValidator(validator){validators.add(validator);return ()=>validators.delete(validator);},
+    addConnectionRemovalGuard(guard){removalGuards.add(guard);return ()=>removalGuards.delete(guard);},
     transaction,
     removeObject(id) {
       const affected = list(null, {includeSuspended:true}).filter(c => c.from.objectId === id || c.to.objectId === id);
@@ -145,10 +152,11 @@ export function createConnectionModel() {
     },
     getObject: id => objects.get(id) || null,
     getObjectIds: () => [...objects.keys()],
-    getPort: port, getParent, getTransportId, isRooted: id => !!getTransportId(id), list, validate, connect, disconnect,
+    getPort: port, resolveEndpoint, getParent, getTransportId, isRooted: id => !!getTransportId(id), list, validate, connect, disconnect,
     get: id => connections.get(id) || null,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     socketDragIntent(point, preferredKind = 'sequence') {
+      point = resolveEndpoint(point);
       const metadata = port(point);
       if (!metadata) return null;
       const attached = list().filter(c => same(c.from, point) || same(c.to, point));
@@ -163,10 +171,12 @@ export function createConnectionModel() {
       return { kind };
     },
     beginDrag(point, { kind = 'sequence', connectionId = null, end = null } = {}) {
+      point = resolveEndpoint(point);
       const parent = point.portId!=='pattern' && port(point)?.direction === 'in' ? getParent(point.objectId) : null;
       if (!connectionId && parent) { connectionId = parent.id; end = 'to'; }
       const original = connectionId ? connections.get(connectionId) : null;
       if (connectionId && (!original || !['from', 'to'].includes(end))) return false;
+      if(original&&[...removalGuards].some(guard=>guard(original)))return false;
       if (!original && !port(point)?.accepts.includes(kind)) return false;
       editing = Object.freeze(original
         ? { connectionId, kind: original.kind, end, original, originalEndpoint: original[end], suspended: false, fixed: original[end === 'from' ? 'to' : 'from'] }

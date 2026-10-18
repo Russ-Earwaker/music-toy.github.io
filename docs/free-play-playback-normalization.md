@@ -1,19 +1,28 @@
 # Generated DrawGrid playback normalization
 
-1. **Previous restart cause.** Generated grids previously replaced normal duration with `panel.__freePlayDrawGrid.durationTicks` in `toyLoopLengthTicks`. `applyFreePlayDrawGrid` also installed a custom event-window provider that repeated events using `meta.phraseDurationTicks`. This used the geometric gesture ending as a private playback period. No literal “restart when the final note fires” callback was found; the gesture endpoint could be close to that note and produce that impression.
+Generated DrawGrids use the full natural duration of ordinary DrawGrids. A short
+drawing leaves inactive trailing columns rather than shortening its last toy.
+For example, a 2.5-bar drawing occupies three one-bar DrawGrids: notes through
+tick 912, silence through tick 1151, then restart at tick 1152.
 
-2. **Special timing removed.** Generated panels no longer install `__sequencerEventsInWindow` or `__sequencerScheduleEvent`. Their provenance cannot override the duration getter. They use the ordinary column scheduler, playback instances and Sequence composition. Free Play visualization no longer takes the stroke duration modulo itself; its cycle comes from the sum of the actual grids' natural durations. It holds the completed drawing when an explicitly full grid has a shorter original visual path.
+`lineDrawGridStates` writes `authoredDurationTicks: 0` for every generated grid.
+The original gesture duration, stroke geometry, source pitches and event offsets
+remain unchanged. Free Play highlight progress follows the sum of the grids'
+natural durations and holds at the drawing endpoint during trailing silence.
 
-3. **Normal duration authority.** `drawgridLoopLengthTicks` remains the normal pattern span: 384 ticks for eight/sixteen steps, 1536 for thirty-two. `drawgridNaturalDurationTicks` adds a general DrawGrid authored ending, `authoredDurationTicks`, independent of notes or provenance. Zero means the normal full span. State capture/restore and linked copies carry that property. The normal scheduler preserves the original subdivision spacing when an explicitly shorter duration truncates a pattern; partial grids' playheads use the same pattern span. Existing Heartbeat source-phase and Sequence activation rules remain in force.
+`prepareFreePlayDrawGridState` normalizes saved Free Play partial endings to zero.
+`restoreDrawgridDuration` also clears those legacy endings when raw shared state
+is applied to an editor or linked view. `linked-toy-views` uses this same restore
+helper. Existing notes, inactive columns, cuts, paint and strokes are preserved.
 
-4. **Partial ending versus empty space.** Conversion writes zero for full grids and the explicit remaining tick count for the final partial grid. A 2.5-bar gesture therefore yields `384 + 384 + 192 = 960`, not 1152. Deleting or disabling notes never changes that duration. Legacy saves import an intentional partial endpoint into normal DrawGrid state once; an explicit normal-duration value wins over old provenance. Original gesture duration fields remain geometry data, not runtime duration authority. Frozen strokes and canonical pitches remain unchanged.
+The previous partial-chain source-phase adjustment has been removed. Generated
+grids use the ordinary Heartbeat phase, Sequence turns and column scheduler;
+there is no Free Play event provider or shorter phrase playback period.
 
-5. **Equivalent manual grid.** Automated tests compare generated grids against ordinary grids with identical notes and authored-duration state through the same scheduler. They cover four first-half notes in a full bar, a single first-step note, explicit partial endings, newly enabled notes beyond an old visual endpoint, late activation and normal Sequence composition. In the browser, the generated four-note grid and ordinary twin produced identical ticks **and audio times**: columns 0–3 at offsets 0/48/96/144, then silence through the full bar and restart at offset 384. A sparse one-note generated grid repeatedly produced only column 0, 384 ticks apart.
-
-6. **Browser transport and persistence QA.** An actual 2.5-bar gesture created three grids with natural durations 384/384/192; the final grid's four notes remained 48 ticks apart, with successive occurrences 960 ticks apart. All generated panels reported no custom event provider. Pause held tick 7793 and line phase 0.2942708333; changing BPM 120→200 retained both. Return to Start reset both lines and the shared transport to zero. The half-bar final grid retained its 192-tick ending, normal pattern spacing and unchanged notes/stroke after reload. No application errors were captured.
-
-**127 targeted tests passed**, including existing source-phase, transport, linked-state, folded-pitch and static-stroke regressions. New coverage also checks tempo, Pause/Resume, Return to Start, Sequence duration, partial playhead positions and legacy migration. No Advanced-note UI changes were made.
-
-Implementation: `dg-pattern-length.js` owns duration; `dg-authored-notes.js`, `dg-set-state.js`, `dg-state-io.js` and `linked-toy-views.js` persist/apply it; `drawgrid-player.js`, `note-scheduler.js`, `playback-instances.js` and `chain-sequence.js` use ordinary scheduling and matching playhead spacing; `free-play-drawgrid.js` supplies geometry/provenance without a playback subtype; `main.js` derives the line phase from normal grid durations.
-
-Local diagnostic evidence: [identical grid timing](../resources/debug-output/free-play/normal-duration-pair.json), [partial Sequence](../resources/debug-output/free-play/normal-duration-partial.json), [sparse grid](../resources/debug-output/free-play/normal-duration-sparse.json), [transport controls](../resources/debug-output/free-play/normal-duration-controls.json), [reload](../resources/debug-output/free-play/normal-duration-reload.json). These capture ordinary sampler scheduling events; they are not microphone recordings. Temporary QA controls and observers were removed.
+Automated coverage in `free-play-full-loop.test.mjs` checks normal, generated and
+migrated grids over twelve repeats, including short standalone drawings,
+multi-grid contours, a 2.5-bar drawing and the four-bar maximum. It checks note
+identity, pitch, event ticks, visible columns, trailing rests, highlight hold and
+loop boundaries through the actual chain adapter and scheduler. Related tests
+cover legacy migration, linked views, source phase, transport, silence tools and
+persistence. This pass has not been checked with live browser audio.

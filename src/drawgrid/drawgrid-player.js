@@ -126,7 +126,8 @@ export function connectDrawGridToPlayer(panel) {
           dueTick: transport.audioTimeToTick(admission.when),
           occurrence, col: options.col, row: options.row, when: admission.when, note: admission.note,
         });
-        if(panel.__freePlayDrawGrid){
+        panel.dispatchEvent(new CustomEvent('drawgrid:note-admitted',{bubbles:true,detail:{toyId:owner,col:options.col,sourceMidi:options.sourceMidi,note:admission.note,when:admission.when,eventTick:occurrence?.eventTick,context:occurrence?.context,occurrenceId:occurrence?.occurrenceId}}));
+        if(panel.__freePlayDrawGrid&&!panel.__freePlayDrawGrid.containerManaged){
           const meta=panel.__freePlayDrawGrid,nodeIndex=Math.round(meta.startTick/LINE_STEP_TICKS)+options.col;
           admittedToyVisual(panel,{nodeIndex},admission,audioTimeToTick);
           panel.dispatchEvent(new CustomEvent('freeplay-line:admitted',{bubbles:true,detail:{toyId:owner,nodeIndex,note:admission.note,when:admission.when,eventTick:occurrence?.eventTick}}));
@@ -457,6 +458,7 @@ export function connectDrawGridToPlayer(panel) {
         index: col,
         row,
         source: 'drawgrid:sequencer',
+        sourceMidi:midiNote,
       });
     }
   };

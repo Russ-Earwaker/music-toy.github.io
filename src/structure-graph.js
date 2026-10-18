@@ -1,7 +1,7 @@
 import { isModifier } from './modifier-types.js';
 // Compile shared Connection topology into the same Structure runtime. Implicit
 // chains stay flattened; explicit branch children may themselves be chains.
-export function compileStructureGraph({ panels, structures, connections, runtime, currentTick, getDuration, poweredRoots = new Set(), getTransportId = () => undefined, getCurrentTick = () => currentTick }) {
+export function compileStructureGraph({ panels, structures, connections, runtime, currentTick, getDuration, poweredRoots = new Set(), transparentObjects = new Set(), getTransportId = () => undefined, getCurrentTick = () => currentTick }) {
   const toys = new Map(panels.map(p => [p.id, p]));
   const explicit = new Map(structures.map(s => [s.id, s]));
   const incoming = new Map(connections.filter(c=>c.to.portId!=='pattern').map(c => [c.to.objectId, c]));
@@ -10,6 +10,7 @@ export function compileStructureGraph({ panels, structures, connections, runtime
   const defined = new Set(), resolving = new Set();
   const leaf = id => ({ toyId: id, durationTicks: getDuration(id) });
   function expression(id) {
+    if(transparentObjects.has(id)){const next=outgoing(id)[0];return next?expression(next.to.objectId):null;}
     if (explicit.has(id)) return structure(id);
     if (!toys.has(id)) return null;
     const next = outgoing(id)[0];
@@ -45,7 +46,7 @@ export function compileStructureGraph({ panels, structures, connections, runtime
       reference: { structureId: s.definitionId }, preferredId: s.definitionId };
   }
   const roots = [];
-  for (const id of [...toys.keys(), ...explicit.keys()]) {
+  for (const id of [...toys.keys(), ...explicit.keys(), ...transparentObjects]) {
     if (incoming.has(id)) continue;
     if (!explicit.has(id) && !outgoing(id).length && !poweredRoots.has(id)) continue;
     const node = expression(id);

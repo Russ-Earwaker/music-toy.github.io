@@ -1,7 +1,7 @@
 import {sourceMidiToRow,normalizeAuthoredState} from './drawgrid/dg-authored-notes.js';
 import {DRAWGRID_VISIBLE_RANGE} from './drawgrid/dg-pitch-presentation.js';
 import {makeAuthoredStroke} from './drawgrid/dg-authored-stroke.js';
-import {LINE_DURATION_TICKS,LINE_STEP_COUNT,LINE_STEP_TICKS,linePointAt,clamp01,createLineSource,FREE_PLAY_PITCH_CLASSES} from './free-play-line.js';
+import {LINE_DURATION_TICKS,LINE_STEP_COUNT,LINE_STEP_TICKS,linePointAt,clamp01,createLineSource,lineDurationTicks,FREE_PLAY_PITCH_CLASSES} from './free-play-line.js';
 import {drawgridLoopLengthTicks,DEFAULT_DRAWGRID_STEPS} from './drawgrid/dg-pattern-length.js';
 import {midiToName} from './note-helpers.js';
 
@@ -13,7 +13,7 @@ export function lineDrawGridStates(source,strokeId){
   const authoredNotes=events.map((event,i)=>({id:`${strokeId}:note:${bar*LINE_STEP_COUNT+i}`,col:(event.offsetTick-start)/LINE_STEP_TICKS,sourceMidi:event.midi,...(event.scissorMuted?{scissorMuted:true}:{}),...(event.paintCovered?{paintCovered:true}:{})}));
   const list=Array.from({length:LINE_STEP_COUNT},()=>[]);for(const note of authoredNotes)list[note.col]=[sourceMidiToRow(note.sourceMidi,DRAWGRID_VISIBLE_RANGE)];
   return {steps:LINE_STEP_COUNT,instrument:source.instrument,autotune:true,pitchRange:{...DRAWGRID_VISIBLE_RANGE},pitchPresentation:'folded-octave-v1',suggestedPitchClasses:[...FREE_PLAY_PITCH_CLASSES],preserveSourceRegister:true,authoredNotes,authoredProjectionKey:JSON.stringify(list),
-   authoredDurationTicks:durationTicks<drawgridLoopLengthTicks(LINE_STEP_COUNT)?durationTicks:0,
+   authoredDurationTicks:0,
    meta:{preserveNodesOverStrokes:true},strokes:[makeAuthoredStroke(source.events,source.durationTicks,{startTick:start,durationTicks,range:DRAWGRID_VISIBLE_RANGE})],
    nodes:{list,active:list.map(n=>!!n.length),disabled:list.map(()=>[]),groups:list.map(()=>[])},
    freePlay:{strokeId,bar,startTick:start,durationTicks,phraseDurationTicks:source.durationTicks,
@@ -24,8 +24,9 @@ export function lineDrawGridStates(source,strokeId){
 export function prepareFreePlayDrawGridState(state){
  const st=normalizeAuthoredState(state);
  if(st.freePlay){
-  // Import old provenance-only partial endings into ordinary DrawGrid state.
-  if(st.authoredDurationTicks==null&&st.freePlay.durationTicks>0&&st.freePlay.durationTicks<drawgridLoopLengthTicks(st.steps))st.authoredDurationTicks=st.freePlay.durationTicks;
+  // Old prototypes shortened the last grid to the drawing endpoint. Restore
+  // normal toy duration; unused columns stay inactive and provide trailing rests.
+  st.authoredDurationTicks=0;
   st.suggestedPitchClasses||=[...FREE_PLAY_PITCH_CLASSES];
   // Migrate the old absolute-height drawing once. Read its frozen ink, not the
   // edited notes, so source edits never reshape the original generated stroke.
@@ -47,8 +48,8 @@ export function prepareFreePlayDrawGridState(state){
  }
  return st;
 }
-export function drawGridLineSource(panels){
- const ordered=[...panels].sort((a,b)=>a.__freePlayDrawGrid.bar-b.__freePlayDrawGrid.bar),first=ordered[0]?.__freePlayDrawGrid;
+export function drawGridLineSource(panels,history){
+ const ordered=[...panels].sort((a,b)=>a.__freePlayDrawGrid.bar-b.__freePlayDrawGrid.bar),first=history?.path?{...history,phraseDurationTicks:lineDurationTicks(history.path.totalLength)}:ordered[0]?.__freePlayDrawGrid;
  if(!first?.path)return null;
  const events=[];
  for(const panel of ordered){

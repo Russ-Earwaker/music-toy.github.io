@@ -3,6 +3,7 @@ import {ensureMasterName} from './toy-instances.js';
 import {getCurrentPlaybackOccurrence,withPlaybackOccurrence} from './playback-context.js';
 import {linkToyAudioBus,getToyVolumeRaw,isToyMuted,setToyVolume,setToyMuted} from './audio-core.js';
 import {drawgridPatternFromState} from './drawgrid/dg-authored-notes.js';
+import {restoreDrawgridDuration} from './drawgrid/dg-pattern-length.js';
 
 // Definitions own authored data, numbering and audio. Live editors supply the
 // existing toy-specific renderer/scheduler, never the shared data identity.
@@ -77,7 +78,7 @@ export function createLinkedToyViewController({getPanels,getMaster,createView,ca
   p.dataset.sharedDefinitionId=m.id;p.dataset.linkedView='1';
   for(const key of ['instrument','musicalRole','localTranspose','registerOctaves','instrumentPitchShift','instrumentNote','instrumentOctave'])if(m.state[key]!=null)p.dataset[key]=String(m.state[key]);
   if(p.dataset.toy==='drawgrid'&&m.state.steps)p.dataset.steps=String(m.state.steps);
-  if(p.dataset.toy==='drawgrid'){if(m.state.authoredDurationTicks>0)p.dataset.authoredDurationTicks=String(m.state.authoredDurationTicks);else delete p.dataset.authoredDurationTicks;}
+  if(p.dataset.toy==='drawgrid')restoreDrawgridDuration(p,m.state);
   if(p.dataset.instanceNumber&&!p.dataset.linkedCopyNumber)p.dataset.linkedCopyNumber=p.dataset.instanceNumber;
   if(label)label.textContent=text;
   if(!linked)header?.querySelector('.linked-copy-marker')?.remove();

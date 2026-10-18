@@ -5,7 +5,8 @@ import {collectScenePaint,evaluateScenePaint,topPaintAt,paintOwnerAt} from './fr
 import {planSilenceChaos} from './free-play-chaos.js';
 import {healLineCuts,wipeLinePaint} from './free-play-silence-reset.js';
 
-export function installSilenceTools({scene,canvas,api,morphValue,status}){
+export function installSilenceTools({scene,canvas,api,morphValue,status,paintStore,sceneEvents=true,getGeometry=()=>({x:0,y:0,width:canvas.clientWidth,height:canvas.clientHeight})}){
+ const readPaint=paintStore?.get||surfacePaint,writePaint=paintStore?.set||restoreSurfacePaint;
  let tool='Draw',gesture=null,hover=null,serial=0,signature=null,lastPlan=null,flight=null;
  const motion=new Map(),fading=[],births=new Map(),toolbar=scene.querySelector('.free-play-tools');
  const randomButton=document.createElement('button');randomButton.textContent='⚄';randomButton.hidden=true;randomButton.className='free-play-random';
@@ -18,19 +19,19 @@ export function installSilenceTools({scene,canvas,api,morphValue,status}){
  }
  toolbar.insertBefore(randomButton,scene.querySelector('[data-reset]'));
  toolbar.insertBefore(emptyWipe,scene.querySelector('[data-reset]'));
- const rect=()=>canvas.getBoundingClientRect();
- const position=e=>{const r=rect();return {x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};};
+ const rect=getGeometry;
+ const position=e=>{const r=canvas.getBoundingClientRect(),g=rect();return {x:((e.clientX-r.left)/r.width*canvas.clientWidth-g.x)/g.width,y:((e.clientY-r.top)/r.height*canvas.clientHeight-g.y)/g.height};};
  const views=()=>{const r=rect();return api.lines().map(line=>({...line,width:r.width,height:r.height,morph:morphValue(line.id,performance.now())}));};
  const nodes=line=>linePresentation(line.source,line.morph).events;
- const allPaint=()=>collectScenePaint(api.lines(),surfacePaint());
+ const allPaint=()=>collectScenePaint(api.lines(),readPaint());
  function commitPaint(stamps){
   const lines=api.lines(),result=evaluateScenePaint(lines,stamps);
-  restoreSurfacePaint(result.paint.filter(s=>!s.owner));
+  writePaint(result.paint.filter(s=>!s.owner));
   for(const line of lines)api.setSilence(line.id,{paint:result.paint.filter(s=>s.owner===line.id),coveredIds:result.coveredIds});
   window.Persistence?.markDirty?.();return result;
  }
  function syncCoverage(){
-  const lines=api.lines(),paint=collectScenePaint(lines,surfacePaint());
+  const lines=api.lines(),paint=collectScenePaint(lines,readPaint());
   const key=JSON.stringify([lines.map(l=>[l.id,l.straightened,l.source.events.map(n=>[n.id,n.x,n.y,n.offsetTick])]),paint.map(({notes,...s})=>s)]);
   if(key!==signature){signature=key;commitPaint(paint);}
  }
@@ -73,8 +74,8 @@ export function installSilenceTools({scene,canvas,api,morphValue,status}){
  function inheritPaint(source){
   const stamps=allPaint();
   source.events.forEach(event=>{event.paintCovered=stamps.some(s=>paintShapes(s).some(shape=>paintShapeContains(shape,event)));});
-  source.paint=surfacePaint().map(s=>({...s,owner:undefined,notes:[],eventIndices:source.events.flatMap((e,i)=>paintShapes(s).some(shape=>paintShapeContains(shape,e))?[i]:[])}));
-  restoreSurfacePaint([]);signature=null;
+  source.paint=(paintStore?stamps:readPaint()).map(s=>({...s,owner:undefined,notes:[],eventIndices:source.events.flatMap((e,i)=>paintShapes(s).some(shape=>paintShapeContains(shape,e))?[i]:[])}));
+  writePaint([]);signature=null;
  }
  function nearCut(p){let best=null;for(const line of views())for(const node of line.source.events)if(node.scissorMuted){
   const ends=cutEnds(line.source,node,line.morph,line.width,line.height,motion,performance.now());
@@ -114,9 +115,9 @@ export function installSilenceTools({scene,canvas,api,morphValue,status}){
  });
  for(const name of ['pointercancel','lostpointercapture'])canvas.addEventListener(name,()=>{gesture=null;});
  canvas.addEventListener('pointerleave',()=>{hover=null;});
- function reset(){restoreSurfacePaint([]);motion.clear();fading.length=0;births.clear();signature=null;flight=null;lastPlan=null;}
- window.addEventListener('scene:new',reset);window.addEventListener('scene:load',()=>{motion.clear();fading.length=0;signature=null;flight=null;});
- return {get tool(){return tool;},get hasSurfacePaint(){return !!surfacePaint().length;},motion,syncCoverage,inheritPaint,addLineActions,clearPaint:reset,cancel(){gesture=null;},prepareFrame(now){syncCoverage();syncMotion(now);randomButton.disabled=!api.lines().length;showBulkActions();emptyWipe.disabled=!surfacePaint().length;},getProof(){return {tool,lastPlan,paint:evaluateScenePaint(api.lines(),allPaint()),motion:[...motion]};},draw(ctx){
+ function reset(){writePaint([]);motion.clear();fading.length=0;births.clear();signature=null;flight=null;lastPlan=null;}
+ if(sceneEvents){window.addEventListener('scene:new',reset);window.addEventListener('scene:load',()=>{motion.clear();fading.length=0;signature=null;flight=null;});}
+ return {get tool(){return tool;},get hasSurfacePaint(){return !!readPaint().length;},motion,syncCoverage,inheritPaint,addLineActions,clearPaint:reset,cancel(){gesture=null;},prepareFrame(now){syncCoverage();syncMotion(now);randomButton.disabled=!api.lines().length;showBulkActions();emptyWipe.disabled=!readPaint().length;},getProof(){return {tool,lastPlan,paint:evaluateScenePaint(api.lines(),allPaint()),motion:[...motion]};},draw(ctx){
   const r=rect(),now=performance.now(),lines=views(),transitioning=lines.some(l=>l.morph>1e-5&&l.morph<1-1e-5);
   // Paint uses settled authored layout, never transient morph/sag positions.
   // During a morph the ink lifts briefly, then lands on the new layout.

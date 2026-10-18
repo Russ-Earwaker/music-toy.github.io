@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createLineSource} from '../src/free-play-line.js';
 import {lineDrawGridStates,applyFreePlayDrawGrid,strokePhase,prepareFreePlayDrawGridState} from '../src/free-play-drawgrid.js';
-import {drawgridLoopLengthTicks,toyLoopLengthTicks} from '../src/drawgrid/dg-pattern-length.js';
+import {drawgridLoopLengthTicks,toyLoopLengthTicks,restoreDrawgridDuration} from '../src/drawgrid/dg-pattern-length.js';
 import {createSequencerScheduler} from '../src/note-scheduler.js';
 import {createStructureRuntime} from '../src/structure-runtime.js';
 import {createTickTransport} from '../src/tick-transport.js';
@@ -41,17 +41,19 @@ test('four notes in an eight-step grid leave trailing silence and restart only a
  assert.deepEqual(generated.map(c=>c.tick),[0,48,96,144,384,432,480,528,768,816,864,912]);
 });
 
-test('multi-grid phrase keeps its last partial drawing but uses its explicit authored ending like a normal chain',()=>{
+test('multi-grid phrase keeps its last partial drawing and leaves silence until the full toy ends',()=>{
  const s=createLineSource([{x:0,y:.5},{x:1,y:.5},{x:.5,y:.5}]),states=lineDrawGridStates(s,'chain');
  assert.equal(s.durationTicks,576);assert.equal(states[1].freePlay.durationTicks,192);
  const before=structuredClone(states),generated=schedule(states,{loops:8});
  assert.deepEqual(generated,schedule(states,{generated:false,loops:8}));
- assert.deepEqual(generated.map(c=>c.tick),Array.from({length:8},(_,loop)=>Array.from({length:12},(_,i)=>loop*576+i*48)).flat());
+ assert.deepEqual(states.map(st=>st.authoredDurationTicks),[0,0]);
+ assert.deepEqual(states[1].nodes.active,[true,true,true,true,false,false,false,false]);
+ assert.deepEqual(generated.map(c=>c.tick),Array.from({length:8},(_,loop)=>Array.from({length:12},(_,i)=>loop*768+i*48)).flat());
  assert.deepEqual(states,before);
 });
 
 test('ordinary scheduling plays newly authored tail notes past the old stroke endpoint',()=>{
- const states=lineDrawGridStates(sourceFor(.25),'tail');states[0].authoredDurationTicks=0;
+ const states=lineDrawGridStates(sourceFor(.25),'tail');
  const calls=schedule(states,{addedTailNote:true,loops:2});
  assert.deepEqual(calls.map(c=>c.tick),[0,48,336,384,432,720]);
 });
@@ -80,13 +82,16 @@ test('one-note full grid still lasts 384 ticks and matches a manual grid',()=>{
  const states=fullWithNotes(1);assert.deepEqual(schedule(states),schedule(states,{generated:false}));assert.deepEqual(schedule(states).map(n=>n.tick),[0,384,768]);
 });
 
-test('2.5-bar source uses normal Sequence composition: 384 + 384 + 192 = 960',()=>{
+test('2.5-bar source uses three full normal DrawGrids with a final half-bar of silence',()=>{
  const source=createLineSource([{x:0,y:.5},{x:1,y:.5},{x:0,y:.5},{x:.5,y:.5}]),states=lineDrawGridStates(source,'partial');
- const lengths=states.map(st=>toyLoopLengthTicks({dataset:{toy:'drawgrid',steps:8,authoredDurationTicks:st.authoredDurationTicks}}));assert.deepEqual(lengths,[384,384,192]);
+ const lengths=states.map(st=>toyLoopLengthTicks({dataset:{toy:'drawgrid',steps:8,authoredDurationTicks:st.authoredDurationTicks}}));assert.deepEqual(lengths,[384,384,384]);
  const runtime=createStructureRuntime();runtime.defineSequence('S',lengths.map((durationTicks,i)=>({toyId:'g'+i,durationTicks})));runtime.startSequence('S',0,{quantize:false,loop:true});
- const turns=runtime.turnsInWindow('S',0,1920);assert.deepEqual(turns.map(t=>[t.toyId,t.startTick,t.endTick]),[['g0',0,384],['g1',384,768],['g2',768,960],['g0',960,1344],['g1',1344,1728],['g2',1728,1920]]);
- const last=createPlaybackInstanceForStructureTurn(turns[2]);last.patternLengthTicks=384;assert.deepEqual(getPlaybackStepEvents(last,768,960,8).map(e=>e.eventTick),[768,816,864,912]);assert.equal(getPlaybackColumn(last,864,8),2);
- assert.equal(strokePhase(source,960,960),0);assert.ok(strokePhase(source,959,960)>.99);
+ const turns=runtime.turnsInWindow('S',0,2304);assert.deepEqual(turns.map(t=>[t.toyId,t.startTick,t.endTick]),[['g0',0,384],['g1',384,768],['g2',768,1152],['g0',1152,1536],['g1',1536,1920],['g2',1920,2304]]);
+ const last=createPlaybackInstanceForStructureTurn(turns[2]);assert.deepEqual(getPlaybackStepEvents(last,768,1152,8).map(e=>e.eventTick),[768,816,864,912,960,1008,1056,1104]);assert.equal(getPlaybackColumn(last,864,8),2);
+ assert.deepEqual(states[2].nodes.active,[true,true,true,true,false,false,false,false]);
+ assert.deepEqual(schedule(states,{loops:2}).map(c=>c.tick),Array.from({length:2},(_,loop)=>Array.from({length:20},(_,i)=>loop*1152+i*48)).flat());
+ for(const tick of [960,1008,1104,1151])assert.equal(strokePhase(source,tick,1152),1);
+ assert.equal(strokePhase(source,1152,1152),0);
 });
 
 test('tempo, Pause/Resume and Return to Start preserve one transport and one phrase phase',async()=>{
@@ -96,8 +101,13 @@ test('tempo, Pause/Resume and Return to Start preserve one transport and one phr
  ctx.currentTime=21;assert.equal(t.currentTick,384);t.pause();t.returnToStart();assert.equal(t.currentTick,0);assert.equal(strokePhase(source,t.currentTick,960),0);
 });
 
-test('legacy partial endings migrate once; explicit normal full duration wins over provenance',()=>{
- const old=lineDrawGridStates(sourceFor(.5),'legacy')[0];delete old.authoredDurationTicks;const migrated=prepareFreePlayDrawGridState(old);assert.equal(migrated.authoredDurationTicks,192);
- const full=prepareFreePlayDrawGridState({...migrated,authoredDurationTicks:0});assert.equal(full.authoredDurationTicks,0);const p={dataset:{toy:'drawgrid',steps:8}};applyFreePlayDrawGrid(p,full.freePlay);assert.equal(toyLoopLengthTicks(p),384);
- assert.deepEqual(prepareFreePlayDrawGridState(JSON.parse(JSON.stringify(full))),full);
+test('legacy Free Play partial endings become full loops without changing authored or visual content',()=>{
+ for(const duration of [undefined,192,0]){
+  const old=lineDrawGridStates(sourceFor(.5),'legacy')[0];old.authoredDurationTicks=duration;
+  const migrated=prepareFreePlayDrawGridState(old);assert.equal(migrated.authoredDurationTicks,0);
+  for(const key of ['authoredNotes','nodes','strokes','freePlay'])assert.deepEqual(migrated[key],old[key]);
+  const p={dataset:{toy:'drawgrid',steps:8,authoredDurationTicks:'192'}};
+  restoreDrawgridDuration(p,old);applyFreePlayDrawGrid(p,migrated.freePlay);assert.equal(p.dataset.authoredDurationTicks,undefined);assert.equal(toyLoopLengthTicks(p),384);
+  assert.deepEqual(prepareFreePlayDrawGridState(JSON.parse(JSON.stringify(migrated))),migrated);
+ }
 });

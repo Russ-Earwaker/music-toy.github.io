@@ -21,6 +21,7 @@ function svgNode(tag, attrs = {}) {
 }
 
 export function createConnectionView({ model, getContext, getPanels, getToyPoint, getHeartbeatPoint,
+  getConnections = () => model.list(null,{includeSuspended:true}), presentEndpoint = p => p, canEditConnection = () => true, canCopyStructure = () => true,
   onConnectionDrag = () => {}, getPulse = () => null, getStructurePulse = () => 0, onFrame = () => {}, getRenderedStructure = s => s, onStructureDrag = () => {},
   onStructureMove = null, onStructureDragUpdate = () => {}, onStructureDragEnd = () => {}, isBranchDragging = () => false, structureToys = null, structureInstances = null, onLinkedCopy = () => {}, onSeeStructure = () => {}, onQuickAdd = () => {} }) {
   const svg = svgNode('svg', { class: 'connection-layer', 'aria-label': 'Musical connections' });
@@ -104,7 +105,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   let menuReturnFocus = null;
   let worldMode = false;
   const socketIntent=(point,kind)=>model.socketDragIntent(point,kind);
-  const linkedEdge=()=>false;
+  const linkedEdge=c=>c&&!canEditConnection(c);
   function quickAdd(point){onQuickAdd(point);}
   function pointerPoint(event) {
     const rect=svg.getBoundingClientRect(), scale=worldMode?(getContext().transform?.scale||1):1;
@@ -198,7 +199,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
         else structureToys.promote(connectionId, type);
       }, currentType === type);
     }
-    if(s?.type==='sequence'&&structureInstances){
+    if(s?.type==='sequence'&&structureInstances&&canCopyStructure(s.id)){
       const linkedCopy=()=>{try{const copy=structureInstances.create(s.id);onLinkedCopy(copy);}catch(error){notify(error.message);}};
       button('Advanced >',()=>{
         menu.replaceChildren();menuOwner={structureId:s.id};menu.setAttribute('aria-label','Advanced Sequence');
@@ -335,11 +336,11 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       }
     }
     const visibleStructures = new Set();
-    const phraseProjection = horizontalPhraseProjection(model, model.list(null,{includeSuspended:true}));
+    const phraseProjection = horizontalPhraseProjection(model, getConnections());
     for (const logical of structureToys?.list() || []) {
       if (phraseProjection.hidden.has(logical.id)) continue;
       const s=getRenderedStructure(structureToys.get(logical.id));
-      if (context.visible && !context.visible({ dataset: { artOwnerId: s.artOwnerId } })) continue;
+      if (context.visible && !context.visible({ id:s.id, dataset: { artOwnerId: s.artOwnerId } })) continue;
       visibleStructures.add(s.id);
       let card = cards.get(s.id);
       if (!card) { card = makeCard(s); cards.set(s.id, card); }
@@ -534,7 +535,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     set(looseEndpoint,'display',editing&&pointer&&gestureMoved?'inline':'none');
     if(editing&&pointer&&gestureMoved){position(looseEndpoint,pointerPoint({clientX:pointer.x,clientY:pointer.y}));set(looseEndpoint,'r',10*(geometryTransform?.scale||1));}
     if (editing && !editing.connectionId && pointer) {
-      const fixed = points.get(key(editing.fixed));
+      const fixed = points.get(key(presentEndpoint(editing.fixed)));
       const loose = pointerPoint({clientX:pointer.x,clientY:pointer.y});
       if (fixed) {
         set(previewPath, 'display', 'inline');
