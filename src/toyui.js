@@ -1,3 +1,4 @@
+import {createClearControl,createRandomControl} from './circular-control.js';
 // src/toyui.js — panel chrome + events (<=300 lines)
 import { zoomInPanel, zoomOutPanel } from './zoom-overlay.js';
 import { getInstrumentNames } from './audio-samples.js';
@@ -149,7 +150,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.dataset.action = 'random';
       // Title and icon are set dynamically based on view mode.
       randomBtn.style.setProperty('--c-btn-size', '65px');
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
+      createRandomControl({button:randomBtn,label:randomBtn.getAttribute('aria-label')||randomBtn.title||'Random',size:parseFloat(randomBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -166,7 +167,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', '65px');
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px'; // Add a small margin to nudge it to the right.
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
+      createClearControl({button:clearBtn,label:clearBtn.getAttribute('aria-label')||'Clear',size:parseFloat(clearBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(clearBtn);
     }
 
@@ -211,7 +212,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
         clearBtn.title = 'Clear';
         clearBtn.style.setProperty('--c-btn-size', '38px');
         clearBtn.style.setProperty('--accent', '#f87171'); // Red accent for a destructive action
-        clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
+        createClearControl({button:clearBtn,label:clearBtn.getAttribute('aria-label')||'Clear',size:parseFloat(clearBtn.style.getPropertyValue('--c-btn-size'))||50});
         right.appendChild(clearBtn);
       }
     }
@@ -238,7 +239,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.dataset.action = 'random';
       randomBtn.title = 'Random';
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
+      createRandomControl({button:randomBtn,label:randomBtn.getAttribute('aria-label')||randomBtn.title||'Random',size:parseFloat(randomBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -277,7 +278,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px';
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
+      createClearControl({button:clearBtn,label:clearBtn.getAttribute('aria-label')||'Clear',size:parseFloat(clearBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(clearBtn);
     }
 
@@ -353,7 +354,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.className = 'c-btn';
       randomBtn.dataset.action = 'random';
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
+      createRandomControl({button:randomBtn,label:randomBtn.getAttribute('aria-label')||randomBtn.title||'Random',size:parseFloat(randomBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -368,7 +369,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px';
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
+      createClearControl({button:clearBtn,label:clearBtn.getAttribute('aria-label')||'Clear',size:parseFloat(clearBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(clearBtn);
     }
 
@@ -414,7 +415,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.title = 'Randomize';
       randomBtn.dataset.action = 'random';
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
+      createRandomControl({button:randomBtn,label:randomBtn.getAttribute('aria-label')||randomBtn.title||'Random',size:parseFloat(randomBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -454,7 +455,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px';
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
+      createClearControl({button:clearBtn,label:clearBtn.getAttribute('aria-label')||'Clear',size:parseFloat(clearBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(clearBtn);
     }
 
@@ -530,7 +531,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       randomBtn.dataset.action = 'random';
       randomBtn.title = 'New Ball';
       randomBtn.style.setProperty('--c-btn-size', BTN_SIZE);
-      randomBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonRandom.png');"></div>`;
+      createRandomControl({button:randomBtn,label:randomBtn.getAttribute('aria-label')||randomBtn.title||'Random',size:parseFloat(randomBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(randomBtn);
       wireScopedRandom(randomBtn, panel);
     }
@@ -569,7 +570,7 @@ export function initToyUI(panel, { toyName, defaultInstrument }={}){
       clearBtn.style.setProperty('--c-btn-size', BTN_SIZE);
       clearBtn.style.setProperty('--accent', '#f87171');
       clearBtn.style.marginLeft = '10px';
-      clearBtn.innerHTML = `<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core" style="--c-btn-icon-url: url('./assets/UI/T_ButtonClear.png');"></div>`;
+      createClearControl({button:clearBtn,label:clearBtn.getAttribute('aria-label')||'Clear',size:parseFloat(clearBtn.style.getPropertyValue('--c-btn-size'))||50});
       left.appendChild(clearBtn);
     }
 

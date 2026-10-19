@@ -14,8 +14,11 @@ export function createSimpleDrawController({containers,model,getToy,createGrid,r
  function clear(id){pending.delete(id);const result=containers.clear(id,{interactionData:empty()});onChanged();return result;}
  function create(options={}){const c=containers.create({...options,presentationType:'simple-draw',interactionData:empty(),width:options.width||1100,height:options.height||760});onChanged();return c;}
  async function draw(id,source){
-  const token={},c=containers.get(id);if(!c)throw new Error('Simple Draw was deleted.');pending.set(id,token);
+  const token={},c=containers.get(id);if(!c)throw new Error('Simple Draw was deleted.');
+  if(pending.has(id)||c.interactionData?.gesture||c.internalObjectIds.length){const error=new Error('Clear this toy before drawing a new line.');error.code='LINE_EXISTS';throw error;}
+
   const strokeId=`simple-draw:${id}:${++serial}:${Date.now()}`,states=lineDrawGridStates(source,strokeId),initialPaint=structuredClone(states[0]?.freePlay.paint||[]),created=[];
+  pending.set(id,token);
   try{
    for(let i=0;i<states.length;i++){
     const st=states[i];st.freePlay={strokeId,bar:i,startTick:st.freePlay.startTick,durationTicks:st.freePlay.durationTicks,phraseDurationTicks:source.durationTicks,containerManaged:true};
@@ -25,7 +28,6 @@ export function createSimpleDrawController({containers,model,getToy,createGrid,r
    const interactionData={...empty(),contentSpace:data(id).contentSpace,gesture:{path:structuredClone(source.path)},paint:initialPaint};
    model.transaction(()=>{
     for(let i=1;i<created.length;i++){const result=model.connect('sequence',{objectId:created[i-1].id,portId:'output'},{objectId:created[i].id,portId:'input'});if(!result.ok)throw new Error(result.reason);}
-    if(containers.get(id).internalObjectIds.length){const result=containers.clear(id);if(!result.ok)throw new Error(result.reason);}
     const result=containers.attach(id,created.map(p=>p.id),{interactionData});if(!result.ok)throw new Error(result.reason);
    });
    pending.delete(id);created.forEach(p=>{p.classList?.remove('container-pending');publish(p,'simple-draw-created');});onChanged();

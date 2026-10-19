@@ -1,0 +1,15 @@
+/* Shared slots: expressive toys own state; these classes only arrange UI. */
+.expressive-layout{position:relative;height:100%}
+.expressive-surface{position:absolute;inset:var(--expressive-surface-top,0) 0 var(--expressive-surface-bottom,0);border-radius:18px;overflow:hidden;background:transparent}
+.expressive-palette{position:absolute;inset:0 0 auto;display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;z-index:3;pointer-events:none}
+.expressive-primary,.expressive-context{display:flex;align-items:center;gap:8px;flex-wrap:var(--expressive-wrap,wrap)}
+.expressive-palette>.expressive-primary,.expressive-palette>.expressive-context{pointer-events:auto}
+.expressive-palette>.expressive-context{padding-top:12px}
+.expressive-container .c-btn{margin:0;padding:0;border:0;background:transparent;flex:0 0 var(--c-btn-size)}
+.expressive-container .c-btn[hidden]{display:none!important}
+.expressive-container .c-btn:disabled{opacity:.35;cursor:default}
+:where(.expressive-container) .expressive-handle{position:absolute;left:var(--expressive-handle-left,14px);top:var(--expressive-handle-top,8px);z-index:4}
+:where(.expressive-container)>.expressive-handle{left:var(--expressive-handle-left,-18px);top:var(--expressive-handle-top,-8px)}
+.expressive-container>.expressive-structure{position:absolute;top:8px;right:14px;display:flex;gap:8px;z-index:4}
+.expressive-container>.expressive-structure[hidden],.expressive-container .expressive-handle[hidden]{display:none!important}
+.expressive-container[data-open="true"]>.expressive-structure{top:70px;left:14px;right:auto}

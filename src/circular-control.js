@@ -14,3 +14,15 @@ export function decorateCircularControl(button,{label,asset,icon,size=48}={}){
  const svg=drawings[icon],url=asset?`./assets/UI/${asset}.png`:'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svg||drawings.draw}</svg>`);
  button.querySelector('.c-btn-core').style.setProperty('--c-btn-icon-url',`url("${url}")`);return button;
 }
+
+// Presets decorate existing buttons too, preserving classes, data and listeners.
+const presets={clear:{label:'Clear',asset:'T_ButtonClear'},enter:{label:'Enter Board',asset:'T_ButtonEnter'},random:{label:'Random',asset:'T_ButtonRandom'},move:{label:'Move',asset:'T_ButtonDrag'},trash:{label:'Delete',asset:'T_ButtonTrash'}};
+export function createControl(preset,{button=document.createElement('button'),...options}={}){
+ const result=decorateCircularControl(button,{...presets[preset],...options});
+ if(preset==='clear'&&!button.style.getPropertyValue('--accent'))button.style.setProperty('--accent','#f87171');
+ return result;
+}
+export const createClearControl=options=>createControl('clear',options);
+export const createEnterBoardControl=options=>createControl('enter',options);
+export const createRandomControl=options=>createControl('random',options);
+export const createMoveControl=options=>createControl('move',options);

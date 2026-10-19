@@ -1,4 +1,4 @@
-import {decorateCircularControl} from './circular-control.js';
+import {createControl,createMoveControl,decorateCircularControl} from './circular-control.js';
 // Minimal foundation UI: choose a connected selection, Open (non-destructive),
 // Expand (remove wrapper), and Delete (remove owned graph). No musical behavior.
 export function installContainerBoard({containers,getWorld,getCandidates,onRender,onDirty,onOpenChange=()=>{},onExpand=()=>{},renderSurface=()=>{},disposeSurface=()=>{},handleInteraction=()=>{},getScale=()=>1}){
@@ -18,12 +18,12 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
   for(const c of records){let card=cards.get(c.id);
    if(!card){card=document.createElement('section');card.id=c.id;card.className='container-toy';card.dataset.containerToy='';card.setAttribute('aria-label','Container Toy');
     const header=document.createElement('header'),title=document.createElement('span');title.className='container-title';header.append(title);
-    const handle=decorateCircularControl(document.createElement('button'),{label:'Simple Draw controls',asset:'T_ButtonDrag',size:44});handle.classList.add('simple-container-handle','art-toy-drag-btn');handle.setAttribute('aria-expanded','false');header.append(handle);card.append(header);
+    const handle=createMoveControl({label:'Move / Container controls',size:44});handle.classList.add('simple-container-handle','expressive-handle');handle.setAttribute('aria-expanded','false');header.append(handle);card.append(header);
     const summary=document.createElement('div');summary.className='container-summary';card.append(summary);
     const surface=document.createElement('div');surface.className='container-surface';card.append(surface);
     for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])surface.addEventListener(type,event=>handleInteraction(c.id,event));
-    const actions=document.createElement('div');actions.className='container-actions';actions.setAttribute('role','group');actions.setAttribute('aria-label','Container actions');actions.id=c.id+'-actions';handle.setAttribute('aria-controls',actions.id);card.append(actions);
-    for(const [action,label]of [['open','Open'],['expand','Expand onto Board'],['delete','Delete Container']]){const b=decorateCircularControl(document.createElement('button'),{label,asset:action==='open'?'T_ButtonEnter':action==='delete'?'T_ButtonTrash':undefined,icon:'expand',size:44});b.dataset.containerAction=action;actions.append(b);}
+    const actions=document.createElement('div');actions.className='container-actions expressive-structure';actions.setAttribute('role','group');actions.setAttribute('aria-label','Container actions');actions.id=c.id+'-actions';handle.setAttribute('aria-controls',actions.id);card.append(actions);
+    for(const [action,label]of [['open','Enter Board'],['expand','Expand onto Board'],['delete','Delete Container']]){const b=action==='expand'?decorateCircularControl(document.createElement('button'),{label,icon:'expand',size:44}):createControl(action==='open'?'enter':'trash',{label,size:44});b.dataset.containerAction=action;actions.append(b);}
     const toggle=()=>{if(card.dataset.presentation!=='simple-draw')return;const visible=card.dataset.controlsVisible!=='1';card.dataset.controlsVisible=visible?'1':'0';handle.setAttribute('aria-expanded',String(visible));handle.setAttribute('aria-pressed',String(visible));actions.hidden=!visible;};
     handle.addEventListener('click',e=>{e.stopPropagation();if(e.detail===0)toggle();});
     card.addEventListener('keydown',e=>{if(e.key==='Escape'){card.dataset.controlsVisible='0';handle.setAttribute('aria-expanded','false');handle.setAttribute('aria-pressed','false');actions.hidden=card.dataset.presentation==='simple-draw';}});
@@ -43,11 +43,11 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
    const open=c.presentation.state.open;
    Object.assign(card.style,{left:c.bounds.x+'px',top:c.bounds.y+'px',width:(open?280:c.bounds.width)+'px',minHeight:(open?140:c.bounds.height)+'px'});card.dataset.open=String(open);
    card.style.setProperty('--simple-draw-height',c.bounds.height+'px');
-   card.dataset.presentation=c.presentation.type;card.querySelector('.container-title').textContent=c.presentation.type==='simple-draw'?'Simple Draw':'Container';card.setAttribute('aria-label',c.presentation.type==='simple-draw'?'Simple Draw':'Container Toy');
+   card.classList.toggle('expressive-container',c.presentation.type==='simple-draw');card.dataset.presentation=c.presentation.type;card.querySelector('.container-title').textContent=c.presentation.type==='simple-draw'?'Simple Draw':'Container';card.setAttribute('aria-label',c.presentation.type==='simple-draw'?'Simple Draw':'Container Toy');
    card.querySelector('.simple-container-handle').hidden=c.presentation.type!=='simple-draw';card.querySelector('.container-actions').hidden=c.presentation.type==='simple-draw'&&card.dataset.controlsVisible!=='1';
    card.querySelector('.container-surface').hidden=open;
    card.querySelector('[data-container-action="expand"]').disabled=!c.internalObjectIds.length;
-   const openButton=card.querySelector('[data-container-action="open"]');openButton.setAttribute('aria-label',open?'Close':'Open');openButton.title=open?'Close — return to the drawing':'Open — inspect the contained graph';card.querySelector('[data-container-action="expand"]').title='Expand onto Board — remove the wrapper and reveal its toys';
+   const openButton=card.querySelector('[data-container-action="open"]');openButton.setAttribute('aria-label',open?'Close':'Enter Board');openButton.title=open?'Close — return to the drawing':'Enter Board';card.querySelector('[data-container-action="expand"]').title='Expand onto Board — remove the wrapper and reveal its toys';
    card.querySelector('.container-summary').textContent=`${c.internalObjectIds.length} objects · ${containers.durationOf(c.id)} ticks`;
    renderSurface(c.id,card.querySelector('.container-surface'));
   }

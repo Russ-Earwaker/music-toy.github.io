@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>Existing model regressions in browser</title><pre id="results">Running</pre><script>
+const results=[],pending=[];
+const fail=message=>{throw Error(message||'Assertion failed')};
+const same=(a,b)=>Object.is(a,b)||(a&&b&&typeof a==='object'&&typeof b==='object'&&Object.getPrototypeOf(a)===Object.getPrototypeOf(b)&&Reflect.ownKeys(a).length===Reflect.ownKeys(b).length&&Reflect.ownKeys(a).every(k=>Object.hasOwn(b,k)&&same(a[k],b[k])));
+window.__browserAssert={equal:(a,b,m)=>{if(!Object.is(a,b))fail(m||`${a} !== ${b}`)},strictEqual:(a,b,m)=>{if(!Object.is(a,b))fail(m)},deepEqual:(a,b,m)=>{if(!same(a,b))fail(m||'deep equality')},notDeepEqual:(a,b,m)=>{if(same(a,b))fail(m||'not deep equality')},ok:(a,m)=>{if(!a)fail(m)},fail,throws:(fn,expected)=>{try{fn()}catch(e){if(expected instanceof RegExp&&!expected.test(e.message))fail('wrong exception');return}fail('expected exception')}};
+window.__browserTest=(name,fn)=>{pending.push(Promise.resolve().then(fn).then(()=>results.push('PASS '+name),e=>results.push('FAIL '+name+': '+e.stack)))};
+window.__results=results;window.__pending=pending;</script><script type='module'>
+import './.tmp-model/free-play-line.mjs';
+import './.tmp-model/free-play-curve.mjs';
+import './.tmp-model/free-play-scissors.mjs';
+import './.tmp-model/free-play-silence.mjs';
+import './.tmp-model/free-play-silence-polish.mjs';
+import './.tmp-model/free-play-silence-sync.mjs';
+import './.tmp-model/free-play-normal-playback.mjs';
+import './.tmp-model/free-play-full-loop.mjs';
+import './.tmp-model/container-fit.mjs';
+import './.tmp-model/container-toys.mjs';
+import './.tmp-model/simple-paint-interaction.mjs';
+await Promise.all(window.__pending);const results=window.__results;document.querySelector('#results').textContent=results.filter(r=>r.startsWith('PASS')).length+' passed, '+results.filter(r=>r.startsWith('FAIL')).length+' failed (browser adapter)'+String.fromCharCode(10)+results.join(String.fromCharCode(10));</script>

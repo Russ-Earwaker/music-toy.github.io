@@ -76,13 +76,14 @@ test('independent gaps sag locally in both views and mending restores exact base
  assert.deepEqual(s.path,saved.path);
 });
 
-test('muted stars never flash or draw; no octave labels enter Free Play',()=>{
- const s=source();s.events.forEach(e=>e.scissorMuted=true);let arcs=0,text=0;
- const ctx=new Proxy({arc(){arcs++;},fillText(){text++;}},{get:(o,k)=>o[k]??(()=>{})});
+test('muted points remain identifiable without an active flash or octave labels',()=>{
+ const s=source();s.events.forEach(e=>e.scissorMuted=true);const calls=[];let text=0;
+ const ctx=new Proxy({arc(...args){calls.push(args);},fillText(){text++;}},{get:(o,k)=>o[k]??(()=>{})});
  drawMusicalLine(ctx,s,{width:800,height:600,phase:.6,morph:1,flashes:new Map([[0,100]]),now:100});
- assert.equal(arcs,0);assert.equal(text,0);
+ const flashed=structuredClone(calls);assert.ok(calls.length>0);calls.length=0;
+ drawMusicalLine(ctx,s,{width:800,height:600,phase:.6,morph:1,now:100});
+ assert.deepEqual(calls,flashed);assert.equal(text,0);
 });
-
 test('silence keeps later scheduler ticks, full bars and trailing rests; mid-play edits do not duplicate events',()=>{
  const st=lineDrawGridStates(createLineSource([{x:0,y:.5},{x:1,y:.5}]),'timing')[0];
  st.authoredNotes[1].scissorMuted=true;st.authoredNotes[7].paintCovered=true;

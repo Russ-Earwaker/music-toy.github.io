@@ -1,7 +1,7 @@
-import {linePresentation,cutEnds} from './free-play-line-visual.js';
+import {linePresentation,cutEnds,stringSegments} from './free-play-line-visual.js';
 import {paintShapes,paintShapeContains,drawPaintShapes} from './free-play-silence.js';
 import {createScissorsStroke,nearestCutGap} from './free-play-scissors.js';
-import {decorateCircularControl} from './circular-control.js';
+import {createClearControl,createRandomControl,decorateCircularControl} from './circular-control.js';
 import {contentPointer} from './surface-coordinates.js';
 import {surfacePaint,restoreSurfacePaint} from './free-play-surface-paint.js';
 import {collectScenePaint,evaluateScenePaint,topPaintAt,paintOwnerAt} from './free-play-paint.js';
@@ -12,16 +12,16 @@ export function installSilenceTools({scene,canvas,api,morphValue,status,paintSto
  const readPaint=paintStore?.get||surfacePaint,writePaint=paintStore?.set||restoreSurfacePaint;
  let tool='Draw',gesture=null,hover=null,serial=0,signature=null,lastPlan=null,flight=null;
  const motion=new Map(),fading=[],births=new Map(),toolbar=scene.querySelector('.free-play-tools');
- const randomButton=decorateCircularControl(document.createElement('button'),{label:'Randomise',asset:'T_ButtonRandom'});randomButton.hidden=true;randomButton.classList.add('free-play-random');
- const emptyWipe=decorateCircularControl(document.createElement('button'),{label:'Wipe all paint',asset:'T_ButtonClear'});emptyWipe.hidden=true;
+ const randomButton=createRandomControl({label:'Randomise'});randomButton.hidden=true;randomButton.classList.add('free-play-random');
+ const emptyWipe=createClearControl({label:'Wipe all paint'});emptyWipe.hidden=true;
  function showBulkActions(){for(const button of scene.querySelectorAll('[data-silence-action]'))button.hidden=button.dataset.silenceAction!==tool;emptyWipe.hidden=tool!=='Black Paint'||!!api.lines().length;}
  for(const name of ['Draw','Scissors','Black Paint']){
   const button=decorateCircularControl(document.createElement('button'),{label:name,icon:{Draw:'draw',Scissors:'scissors','Black Paint':'paint'}[name]});button.dataset.tool=name;button.setAttribute('aria-pressed',String(name===tool));
   button.onclick=()=>{tool=name;gesture=null;canvas.dataset.tool=name;for(const b of toolbar.querySelectorAll('[data-tool]'))b.setAttribute('aria-pressed',String(b===button));randomButton.hidden=name==='Draw';randomButton.setAttribute('aria-label',`Randomise ${name}`);randomButton.title=name==='Scissors'?'Random Cuts':'Random Paint';showBulkActions();status.textContent={Draw:'Draw a line and let go.',Scissors:'Swipe across notes to snip. Tap near a cut to heal.','Black Paint':'Splat to hush. Tap a blot to remove it.'}[name];onToolChange(name);};
-  toolbar.insertBefore(button,scene.querySelector('[data-reset]'));
+  toolbar.append(button);
  }
- toolbar.insertBefore(randomButton,scene.querySelector('[data-reset]'));
- toolbar.insertBefore(emptyWipe,scene.querySelector('[data-reset]'));
+ toolbar.append(randomButton);
+ toolbar.append(emptyWipe);
  const rect=getGeometry;
  const position=e=>contentPointer(e,canvas,rect());
  const views=()=>{const r=rect();return api.lines().map(line=>({...line,width:r.width,height:r.height,morph:morphValue(line.id,performance.now())}));};
@@ -46,10 +46,17 @@ export function installSilenceTools({scene,canvas,api,morphValue,status,paintSto
   }
  }
  const logical=p=>{const r=rect();return {x:p.x*r.width,y:p.y*r.height};};
- function snip(p){const candidates=views().flatMap(line=>nodes(line).map(n=>({...n,lineId:line.id,x:n.x*line.width,y:n.y*line.height}))),hits=gesture.stroke.add(logical(p),candidates);
+ function cutHits(hits){
   const changes=new Map();for(const hit of hits){if(!changes.has(hit.lineId))changes.set(hit.lineId,{});changes.get(hit.lineId)[hit.id]=true;}
   for(const [id,cuts]of changes)api.setSilence(id,{cuts});syncMotion(performance.now());
   hits.forEach((hit,i)=>{const state=motion.get(hit.id);if(state)state.cutAt=performance.now()+Math.min(i*18,90);});
+ }
+ const cutNodes=lines=>lines.flatMap(line=>nodes(line).map(n=>({...n,lineId:line.id,progress:n.pathDistance/line.source.path.totalLength,x:n.x*line.width,y:n.y*line.height})));
+ function snip(p){cutHits(gesture.stroke.add(logical(p),cutNodes(views())));}
+ function finishSnip(){
+  if(!gesture.stroke.isSwipe||gesture.stroke.hasDirectHits)return;
+  const lines=views(),now=performance.now(),paths=lines.map(line=>({lineId:line.id,segments:stringSegments(line.source,line.morph,line.height,1,motion,now).map(segment=>segment.map(p=>({...p,x:p.x*line.width,y:p.y*line.height})))}));
+  cutHits(gesture.stroke.finish(cutNodes(lines),paths));
  }
  function paint(p){
   const lines=api.lines(),stamp={id:`paint-${Date.now()}-${++serial}`,seed:(Date.now()+serial)>>>0,x:p.x,y:p.y,radius:.065,order:Date.now()+serial/1000,space:'surface-v2',owner:paintOwnerAt(lines,p)};
@@ -110,7 +117,7 @@ export function installSilenceTools({scene,canvas,api,morphValue,status,paintSto
  });
  canvas.addEventListener('pointerup',e=>{
   if(!gesture||e.pointerId!==gesture.pointer)return;const p=position(e);
-  if(tool==='Scissors'){snip(p);if(!gesture.stroke.isSwipe){const m=nearCut(p);if(m){api.setSilence(m.lineId,{cuts:{[m.id]:false}});syncMotion(performance.now());status.textContent='Mended. The music returns on its next beat.';}}}gesture=null;
+  if(tool==='Scissors'){snip(p);finishSnip();if(!gesture.stroke.isSwipe){const m=nearCut(p);if(m){api.setSilence(m.lineId,{cuts:{[m.id]:false}});syncMotion(performance.now());status.textContent='Mended. The music returns on its next beat.';}}}gesture=null;
  });
  for(const name of ['pointercancel','lostpointercapture'])canvas.addEventListener(name,()=>{gesture=null;});
  canvas.addEventListener('pointerleave',()=>{hover=null;});

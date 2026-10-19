@@ -1,0 +1,2 @@
+PASS 52 UI assertions
+Comparison fixture: live Simple Draw + Flash Circle + classic Loopgrid chrome

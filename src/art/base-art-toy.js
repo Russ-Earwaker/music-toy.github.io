@@ -1,4 +1,4 @@
-import {CIRCULAR_BUTTON_HTML} from '../circular-control.js';
+import {createMoveControl} from '../circular-control.js';
 // src/art/base-art-toy.js
 // Shared base for Art Toys.
 // This file owns the common container behaviors:
@@ -14,7 +14,7 @@ export function createBaseArtToyPanel({
   idPrefix = 'art',
 } = {}) {
   const panel = document.createElement('section');
-  panel.className = 'art-toy-panel';
+  panel.className = 'art-toy-panel expressive-container';
   panel.dataset.artToy = String(kind || '');
   panel.dataset.controlsVisible = '0';
 
@@ -88,19 +88,14 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
   if (!panel) return null;
   if (panel.querySelector('.art-toy-drag-btn')) return panel;
 
-  const dragButton = document.createElement('button');
-  dragButton.type = 'button';
-  dragButton.className = 'art-toy-drag-btn c-btn';
-  dragButton.setAttribute('aria-label', 'Drag art toy');
-  dragButton.title = 'Drag / Show Controls';
+  const dragButton = createMoveControl({label:'Drag / Show Controls'});
+  dragButton.classList.add('art-toy-drag-btn','expressive-handle');
+  dragButton.style.removeProperty('--c-btn-size');
   dragButton.setAttribute('aria-pressed', 'false');
-  dragButton.innerHTML = CIRCULAR_BUTTON_HTML;
-  const dragCore = dragButton.querySelector('.c-btn-core');
-  if (dragCore) dragCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonDrag.png')");
   panel.appendChild(dragButton);
 
   const controls = document.createElement('div');
-  controls.className = 'art-toy-controls';
+  controls.className = 'art-toy-controls expressive-context';
   controls.style.display = 'none';
   panel.appendChild(controls);
 

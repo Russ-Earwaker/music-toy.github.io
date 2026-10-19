@@ -1,37 +1,24 @@
-.simple-draw-surface{font:14px system-ui;color:#d9fff6}
-.simple-draw-surface .free-play-tools,.simple-draw-surface .free-play-lines{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:8px 0}
-.simple-draw-surface button:not(.c-btn){border:1px solid #72b9b8;background:#213f49;color:#e4fff7;border-radius:16px;padding:8px 13px;cursor:pointer}
-.simple-draw-surface .c-btn[aria-pressed=true]{filter:brightness(1.5) saturate(1.3);--c-btn-glow-strength:.9}
-.simple-draw-surface .free-play-surface{position:relative;height:520px;border-radius:18px;background:radial-gradient(ellipse at 50% 50%,#132a38e8,#081422bb);overflow:hidden}
+.simple-draw-surface{--expressive-surface-top:76px;--expressive-surface-bottom:58px;font:14px system-ui;color:#d9fff6}
 .simple-draw-surface canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
 .simple-draw-surface .free-play-hint{position:absolute;inset:38% 10% auto;text-align:center;color:#a3c7cb;font-size:24px;pointer-events:none}
 .simple-draw-surface [role=status]{font-size:12px;color:#a4c9ce;margin:7px}
 .simple-draw-surface canvas[data-tool="Black Paint"]{cursor:none}
 .container-surface[hidden]{display:none!important}
-.container-toy[data-presentation="simple-draw"]{background:#0d202b99;border-color:#91c4e035;box-shadow:0 6px 18px #0002}
+.container-toy[data-presentation="simple-draw"]{background:transparent;border-color:#91c4e025;box-shadow:none}
 .container-toy[data-presentation="simple-draw"]:focus-within,.container-toy[data-presentation="simple-draw"]:hover{border-color:#91c4e080}
 .container-toy[data-presentation="simple-draw"][data-open="false"]>.container-summary{display:none}
 .container-pending{visibility:hidden!important;pointer-events:none!important}
 .container-toy[data-presentation="simple-draw"][data-open="false"]{height:var(--simple-draw-height);min-height:0!important}
 .container-toy[data-presentation="simple-draw"]>header{height:22px;box-sizing:border-box;padding-left:62px;color:#bad3dd;font-size:12px;font-weight:500}
-.container-toy .c-btn{margin:0;padding:0;border:0;background:transparent;flex:0 0 var(--c-btn-size)}
-.container-toy .simple-container-handle{position:absolute;left:14px;top:8px;width:44px;height:44px;--art-drag-size:44px}
-.container-toy[data-presentation="simple-draw"]>.container-actions{position:absolute;top:8px;right:14px;display:flex;gap:8px;z-index:4}
-.container-toy .container-actions[hidden],.container-toy .simple-container-handle[hidden]{display:none!important}
-.container-toy[data-presentation="simple-draw"][data-open="true"]>.container-actions{top:70px;left:14px;right:auto}
 .container-toy[data-presentation="simple-draw"]>.container-surface{position:absolute;inset:48px 14px 64px}
 .container-toy[data-presentation="simple-draw"] .simple-draw-surface{position:relative;height:100%}
-.container-toy[data-presentation="simple-draw"] .free-play-tools{position:absolute;top:0;left:0;right:0;height:76px;margin:0;align-content:center}
-.container-toy[data-presentation="simple-draw"] .free-play-surface{position:absolute;inset:76px 0 58px;height:auto}
-.container-toy[data-presentation="simple-draw"] .free-play-lines{position:absolute;bottom:18px;left:0;right:0;height:40px;margin:0}
 .container-toy[data-presentation="simple-draw"] [role=status]{position:absolute;bottom:0;height:18px;margin:0}
-.simple-draw-surface .free-play-lines{gap:8px}
 .simple-draw-surface [role=status]{opacity:0;transition:opacity .15s}
 .simple-draw-surface:hover [role=status],.simple-draw-surface:focus-within [role=status]{opacity:1}
-.simple-draw-surface .c-btn:disabled,.container-actions .c-btn:disabled{opacity:.35;cursor:default}
 .simple-draw-creation-stroke{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none;z-index:120}
 .simple-draw-creation-hint{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:20000;background:#18384a;color:#e4fff7;border-radius:20px;padding:12px 20px;pointer-events:none;font:14px system-ui}
 body.simple-draw-creating #board{cursor:crosshair}
 .simple-draw-materializing{animation:simple-draw-materialize 200ms ease-out}
 @keyframes simple-draw-materialize{from{border-color:transparent;box-shadow:none;background:transparent}to{border-color:#91c4e0}}
 @media(prefers-reduced-motion:reduce){.simple-draw-materializing{animation:none}}
+.simple-draw-surface canvas[data-line-complete="true"]:not([data-tool="Scissors"]):not([data-tool="Black Paint"]){cursor:default}

@@ -1,0 +1,121 @@
+120 passed, 0 failed (browser adapter)
+PASS canonical DrawGrid constants define all timing
+PASS minimum threshold rejects taps, accepted lengths map continuously to ticks
+PASS logical metric ignores viewport aspect and DPR
+PASS cumulative path travel, not horizontal displacement, sets duration
+PASS 1.5 bars preserves twelve actual steps and exact half-bar ending
+PASS 3.3 bars creates four grids with only events preceding the partial end
+PASS short phrase has one partial grid and no invented ending note
+PASS capture clamps the crossing segment exactly and ignores later points until release
+PASS cap interpolates within a segment without discarding visible points
+PASS silent drawing emits a source only on release; cancel emits none
+PASS arc length ordering handles backwards and vertical paths with safe pitch
+PASS DrawGrid nodes/registers round trip to the same canonical line events
+PASS editing a DrawGrid node changes the line view, with no private note copy
+PASS provenance stores one immutable original path and stable stroke IDs
+PASS no historical burst when a generated phrase joins a running clock
+PASS straightening has time on X and safe pitch on Y without padding partial bars
+PASS repeated morphs restore exact original geometry and leave music unchanged
+PASS morph preserves node identity/order/ticks and the transport-derived progress
+PASS main Heartbeat is the only transport authority
+PASS rising: smooth time curve passes through authoritative notes without overshoot or music changes
+PASS zigzag: smooth time curve passes through authoritative notes without overshoot or music changes
+PASS circle: smooth time curve passes through authoritative notes without overshoot or music changes
+PASS spiral: smooth time curve passes through authoritative notes without overshoot or music changes
+PASS maximum: smooth time curve passes through authoritative notes without overshoot or music changes
+PASS geometric curve rounds zigzag corners
+PASS Uncoil geometry ignores edited MIDI and frozen DrawGrid pitch metadata
+PASS one forgiving swipe cuts a node; a tap does not cut
+PASS small touch jitter stays a tap regardless of the number of samples
+PASS coarse fast and finely sampled slow swipes cut the same nodes in crossing order
+PASS backtracking and crossing the same node twice emit one cut per gesture
+PASS near misses respect the logical thick-path radius and already-cut nodes are ignored
+PASS bent polylines follow their segments rather than the start/end chord
+PASS zoom, DPR and content offsets affect only pointer conversion, not cuts or heal radius
+PASS healing is generous near resting gaps and loose ends, and far taps do nothing
+PASS overlapping gaps choose a deterministic nearest target independent of enumeration order
+PASS one heal preserves all other cuts, paint mute, pitches and JSON persistence
+PASS the physical mend transition returns to the exact original curve
+PASS cuts and paint independently preserve stable authored notes, pitches, ticks and normal duration through JSON reload
+PASS wash removes paint reasons without mending any independent scissor cut
+PASS forgiving scissors hit the entire swipe segment, not just pointer samples
+PASS paint droplets are deterministic, cover nearby notes and leave distant neighbors active
+PASS empty-page paint is serializable and inherited coverage resolves to newly generated stable note IDs
+PASS editing silence removes canceled future visual events only for the edited toy
+PASS independent gaps sag locally in both views and mending restores exact base geometry without drift
+PASS muted points remain identifiable without an active flash or octave labels
+PASS silence keeps later scheduler ticks, full bars and trailing rests; mid-play edits do not duplicate events
+PASS the shared DrawGrid silence policy retains a whole source column with polyphonic nodes
+PASS the exact rendered ellipses define center, edge and droplet coverage at all canvas sizes
+PASS coverage includes other lines and recomputes on coiled/uncoiled layout without cached IDs
+PASS topmost removal preserves overlapping paint and independent scissor reasons
+PASS scissors: seeded 1-note selection is repeatable, bounded and agrees with canonical coverage
+PASS paint: seeded 1-note selection is repeatable, bounded and agrees with canonical coverage
+PASS scissors: seeded 4-note selection is repeatable, bounded and agrees with canonical coverage
+PASS paint: seeded 4-note selection is repeatable, bounded and agrees with canonical coverage
+PASS scissors: seeded 8-note selection is repeatable, bounded and agrees with canonical coverage
+PASS paint: seeded 8-note selection is repeatable, bounded and agrees with canonical coverage
+PASS scissors: seeded 32-note selection is repeatable, bounded and agrees with canonical coverage
+PASS paint: seeded 32-note selection is repeatable, bounded and agrees with canonical coverage
+PASS new seeds vary selection and Randomise Again replaces owned cuts/paint while preserving manual edits
+PASS loose ends start with motion, overshoot, damp and settle downward; mend restores exact geometry
+PASS random cuts are canonical immediately but their physical reaction starts when the scissors visit
+PASS Heal all is line-local, clears manual/random cuts, and leaves paint/source/geometry intact
+PASS Wipe all removes a line’s overlapping manual/random paint and preserves other owners and cuts
+PASS manual paint belongs to its nearest line so local wiping preserves an unrelated line’s paint
+PASS canonical rests survive board round-trip/JSON and bulk resets retain IDs, MIDI, ticks, stroke and durations
+PASS board uses the existing dim-cell state, including cache-safe changes and co-located active voices
+PASS generated grid metadata never overrides normal 8/16/32-step natural duration
+PASS four notes in an eight-step grid leave trailing silence and restart only at the bar boundary
+PASS multi-grid phrase keeps its last partial drawing and leaves silence until the full toy ends
+PASS ordinary scheduling plays newly authored tail notes past the old stroke endpoint
+PASS joining a running transport does not backfill old notes or restart early
+PASS saved visual duration stays visual after reload and does not install a phrase provider
+PASS Free Play illumination holds through normal trailing rests instead of looping on the endpoint
+PASS one-note full grid still lasts 384 ticks and matches a manual grid
+PASS 2.5-bar source uses three full normal DrawGrids with a final half-bar of silence
+PASS legacy Free Play partial endings become full loops without changing authored or visual content
+PASS 192-tick drawing respects full toy loops and trailing rests over 12 repeats
+PASS 576-tick drawing respects full toy loops and trailing rests over 12 repeats
+PASS 900-tick drawing respects full toy loops and trailing rests over 12 repeats
+PASS 960-tick drawing respects full toy loops and trailing rests over 12 repeats
+PASS 1536-tick drawing respects full toy loops and trailing rests over 12 repeats
+PASS board gesture fitting preserves every world point with minimum size, regardless of presentation scale
+PASS invalid gestures produce no materialization data; tiny valid gestures get usable frames
+PASS four-bar cap fits only the interpreted authored path
+PASS growth is authored-only, active-only, conservative and idempotent, with one tidy on commit
+PASS deleting during growth cannot tidy a missing anchor or leak a pending bounds commit
+PASS moving authored geometry and rebasing a growing frame preserves shape and never edits musical source
+PASS repair between real containers preserves each owned local layout and committed dimensions
+PASS collapse/Open/Expand preserve exact scheduling, occurrence context and duration under Heartbeat
+PASS collapse/Open/Expand preserve exact scheduling, occurrence context and duration under sequence
+PASS collapse/Open/Expand preserve exact scheduling, occurrence context and duration under together
+PASS collapse/Open/Expand preserve exact scheduling, occurrence context and duration under repeat
+PASS collapse/Open/Expand preserve exact scheduling, occurrence context and duration under transpose
+PASS collapse/Open/Expand preserve exact scheduling, occurrence context and duration under chord-progression
+PASS collapse/Open/Expand preserve exact scheduling, occurrence context and duration under chord-progression/transpose/repeat/together
+PASS one IN/OUT projects outer wires and supports normal endpoint reconnection without changing internal IDs
+PASS layout and presentation survive JSON save/reload; move and Expand preserve relative layout
+PASS fresh scene reload retains one copy of each internal toy, canonical wires and playback
+PASS internal modifiers remain internal and outer Together derives its max duration through the normal runtime
+PASS delete removes owned objects/connections with no hidden orphans and leaves outside toys alone
+PASS unsupported selections and invalid saves fail before changing graph or ownership
+PASS branching selections, cross-boundary inputs/outputs, cycles, linked internals and unsafe deletion are rejected
+PASS duration comes from canonical internal Structure semantics, never wrapper presentation
+PASS presentation adapters edit only canonical owned toys and store no second musical pattern
+PASS scissors crossing sparse string chooses one nearest note by path distance
+PASS direct note hits suppress fallback for the entire swipe
+PASS fast and slow missed crossings choose the same fallback, only once
+PASS already-cut nearest neighbor yields the other valid adjacent note
+PASS distant near misses, empty tails, parallel drags and taps never cause fallback
+PASS fallback uses path order rather than Euclidean proximity at folded sections
+PASS cut string gaps do not create invisible fallback intersections
+PASS revisiting the same missed crossing cannot cut both neighbors
+PASS disconnect while playing stops future scheduling and reconnect uses ordinary Heartbeat phase without catch-up
+PASS repeated playing reconnects remain on the ordinary root timeline without historical bursts
+PASS disconnect paused, Return to Start, and reconnect obey the same root/phase rules as an ordinary chain
+PASS save/reload while disconnected preserves the missing wire and schedules no events
+PASS moving the container preserves line geometry and moves all owned grids by the same displacement
+PASS pending creation also blocks a second stroke and Clear cancels pending ownership
+PASS one-line ownership rejects replacement; Clear allows one fresh line without changing source semantics
+PASS tempo, Pause/Resume and Return to Start preserve one transport and one phrase phase

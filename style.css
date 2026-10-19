@@ -2558,9 +2558,9 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   top: calc(-18px - var(--art-drag-size) - 44px);
   left: calc(-18px + var(--art-drag-size) + 10px);
   transform: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  --expressive-wrap: nowrap;
+
+
   z-index: 3;
 }
 

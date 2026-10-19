@@ -7129,10 +7129,9 @@ g_containerPresentations.register('simple-draw',{
   if(!surface){const api={lines:()=>{const line=g_simpleDraw.line(c.id);return line?[line]:[];},
    unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},
    addLine:source=>({id:c.id,started:g_simpleDraw.draw(c.id,source)}),clear:()=>g_simpleDraw.clear(c.id),
-   setSilence:g_simpleDraw.setSilence,setStraightened:(id,value)=>{const s=ensureSimpleDrawSpace(id);g_simpleDraw.setStraightened(id,value);const current=containerToyModel.get(id);if(s){moveSimpleDrawContent(id,{...s,x:current.bounds.x+s.x,y:current.bounds.y+s.y},0,0);containerToyModel.commitContainerBounds(id);}},onNote:listener=>g_simpleDraw.onNote(c.id,listener),
+   setSilence:g_simpleDraw.setSilence,setStraightened:(id,value)=>{const s=ensureSimpleDrawSpace(id);g_simpleDraw.setStraightened(id,value);const current=containerToyModel.get(id);if(s){fitSimpleDrawPresentation(id,{...s,x:current.bounds.x+s.x,y:current.bounds.y+s.y});containerToyModel.commitContainerBounds(id);}},onNote:listener=>g_simpleDraw.onNote(c.id,listener),
    getGeometry:()=>{const space=g_simpleDraw.data(c.id).contentSpace;return space?{...space,x:space.x-SIMPLE_DRAW_INSETS.left,y:space.y-SIMPLE_DRAW_INSETS.top}:null;},
-   beginContentMove:()=>{const current=containerToyModel.get(c.id),space=ensureSimpleDrawSpace(c.id);if(!space)return null;return {x:current.bounds.x+space.x,y:current.bounds.y+space.y,width:space.width,height:space.height};},
-   moveAuthoredContent:(base,dx,dy)=>moveSimpleDrawContent(c.id,base,dx,dy),commitContainerBounds:()=>containerToyModel.commitContainerBounds(c.id)};
+   };
    surface=installSimpleDrawSurface(host,api,g_simpleDraw.paintStore(c.id));g_simpleDrawSurfaces.set(c.id,surface);
   }surface.setActive(!c.presentation.state.open);
  },
@@ -7145,11 +7144,11 @@ function ensureSimpleDrawSpace(id){
  if(!space){space={x:SIMPLE_DRAW_INSETS.left,y:SIMPLE_DRAW_INSETS.top,width:current.bounds.width-SIMPLE_DRAW_INSETS.left-SIMPLE_DRAW_INSETS.right,height:current.bounds.height-SIMPLE_DRAW_INSETS.top-SIMPLE_DRAW_INSETS.bottom};g_simpleDraw.setData(id,{contentSpace:space});}
  return space;
 }
-function moveSimpleDrawContent(id,base,dx,dy){
+function fitSimpleDrawPresentation(id,base){
  if(!base)return;const current=containerToyModel.get(id),line=g_simpleDraw.line(id);if(!line)return;
- const space={...base,x:base.x+dx-current.bounds.x,y:base.y+dy-current.bounds.y},path=linePresentation(line.source,line.straightened?1:0).path;
+ const space={...base,x:base.x-current.bounds.x,y:base.y-current.bounds.y},path=linePresentation(line.source,line.straightened?1:0).path;
  const content=drawingAuthoredBounds(path,space,current.bounds),next=containerToyModel.requestContainerGrowth(id,content,{active:true,insets:SIMPLE_DRAW_INSETS});
- g_simpleDraw.setData(id,{contentSpace:{...base,x:base.x+dx-next.bounds.x,y:base.y+dy-next.bounds.y}});
+ g_simpleDraw.setData(id,{contentSpace:{...base,x:base.x-next.bounds.x,y:base.y-next.bounds.y}});
 }
 function tidySimpleContainer(id){const result=g_layoutAnimation.batch(()=>g_graphPlacement.repairAround(id));g_connectionView.render();window.Persistence?.markDirty?.();if(result.unresolved.length){const notice=document.createElement('p');notice.className='simple-draw-creation-hint';notice.setAttribute('role','status');notice.textContent='This space is crowded. Your drawing stayed in place; move a nearby toy to make more room.';document.body.append(notice);setTimeout(()=>notice.remove(),6000);}return result;}
 const g_simpleDrawCreation=installSimpleDrawCreation({getViewport:getViewportElement,getWorld:()=>document.getElementById('board'),screenToWorld,

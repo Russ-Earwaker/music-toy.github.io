@@ -1,0 +1,2 @@
+PASS 64 UI assertions
+Point-state render checks across 4 backgrounds and both views

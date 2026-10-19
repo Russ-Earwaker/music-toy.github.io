@@ -1,4 +1,4 @@
-import {CIRCULAR_BUTTON_HTML} from '../circular-control.js';
+import {createClearControl,createEnterBoardControl,createRandomControl,CIRCULAR_BUTTON_HTML} from '../circular-control.js';
 // src/art/art-toy-factory.js
 // Art toy factory (flash circle + fireworks + laser trails).
 
@@ -149,43 +149,25 @@ function installArtToyControls(panel) {
   const controlsHost = getBaseArtToyControlsHost(panel);
   if (!controlsHost) return;
 
-  const clearBtn = document.createElement('button');
-  clearBtn.className = 'art-toy-btn art-toy-clear-btn c-btn';
-  clearBtn.type = 'button';
-  clearBtn.setAttribute('aria-label', 'Reset this Art Toy');
+  const clearBtn = createClearControl({label:'Reset this Art Toy',size:62});
   clearBtn.title = 'Clear';
-  clearBtn.innerHTML = BUTTON_ICON_HTML;
-  const clearCore = clearBtn.querySelector('.c-btn-core');
-  if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
-  clearBtn.style.setProperty('--c-btn-size', '62px');
+  clearBtn.className = 'art-toy-btn art-toy-clear-btn c-btn';
   clearBtn.style.setProperty('--accent', '#f87171');
   clearBtn.style.order = '99';
   clearBtn.dataset.action = 'artToy:clear';
   clearBtn.dataset.artToyId = panel.id;
   controlsHost.appendChild(clearBtn);
 
-  const enterBtn = document.createElement('button');
+  const enterBtn = createEnterBoardControl({label:'Enter this Art Toy',size:62});
+  enterBtn.title = 'Enter Board';
   enterBtn.className = 'art-toy-btn art-toy-enter-btn c-btn';
-  enterBtn.type = 'button';
-  enterBtn.setAttribute('aria-label', 'Enter this Art Toy');
-  enterBtn.title = 'Enter';
-  enterBtn.innerHTML = BUTTON_ICON_HTML;
-  const enterCore = enterBtn.querySelector('.c-btn-core');
-  if (enterCore) enterCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonEnter.png')");
-  enterBtn.style.setProperty('--c-btn-size', '62px');
   enterBtn.dataset.action = 'artToy:music';
   enterBtn.dataset.artToyId = panel.id;
   controlsHost.appendChild(enterBtn);
 
-  const randAllBtn = document.createElement('button');
-  randAllBtn.className = 'art-toy-btn art-toy-rand-all-btn c-btn';
-  randAllBtn.type = 'button';
-  randAllBtn.setAttribute('aria-label', 'Randomize this Art Toy');
+  const randAllBtn = createRandomControl({label:'Randomize this Art Toy',size:62});
   randAllBtn.title = 'Random';
-  randAllBtn.innerHTML = BUTTON_ICON_HTML;
-  const randAllCore = randAllBtn.querySelector('.c-btn-core');
-  if (randAllCore) randAllCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonRandom.png')");
-  randAllBtn.style.setProperty('--c-btn-size', '62px');
+  randAllBtn.className = 'art-toy-btn art-toy-rand-all-btn c-btn';
   randAllBtn.dataset.action = 'artToy:randomAll';
   randAllBtn.dataset.artToyId = panel.id;
   controlsHost.appendChild(randAllBtn);

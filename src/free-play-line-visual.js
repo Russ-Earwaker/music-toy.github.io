@@ -101,8 +101,7 @@ export function paintCenter(source,splat,morph,width,height){
 export function drawLinePaint(ctx,source,morph,width,height){
  for(const splat of source.paint||[]){const center=paintCenter(source,splat,morph,1,1);drawPaintShapes(ctx,paintShapes(splat,center),width,height);}
 }
-export function drawMusicalLine(ctx,original,{width:w,height:h,phase=null,age=Infinity,flashes=new Map(),now=0,color=drawGridLineColor(0),morph=0,motion}={}){
- const source=linePresentation(original,morph);
+export function drawMusicalLine(ctx,original,{width:w,height:h,phase=null,age=Infinity,flashes=new Map(),now=0,color=drawGridLineColor(0),morph=0,motion,points=true}={}){
  const paintSegments=progress=>{for(const points of stringSegments(original,morph,h,progress,motion,now))paintLinePath(ctx,points,w,h);};
  ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=6;ctx.strokeStyle=color;ctx.globalAlpha=.28;ctx.shadowColor=color;ctx.shadowBlur=8;
  paintSegments(1);ctx.globalAlpha=1;
@@ -111,14 +110,28 @@ export function drawMusicalLine(ctx,original,{width:w,height:h,phase=null,age=In
   ctx.globalAlpha=.65+.12*Math.sin(now/170);paintSegments(phase);ctx.globalAlpha=1;
   ctx.lineWidth=2;ctx.strokeStyle='#e8fff8';ctx.shadowBlur=20;ctx.globalAlpha=.6;paintSegments(phase);ctx.globalAlpha=1;
  }
+ ctx.restore();
+ if(points)drawMusicalPoints(ctx,original,{width:w,height:h,age,flashes,now,color,morph});
+}
+// Kept separate so surface paint cannot obscure the playable/cuttable markers.
+export function drawMusicalPoints(ctx,original,{width:w,height:h,age=Infinity,flashes=new Map(),now=0,color=drawGridLineColor(0),morph=0}={}){
+ const source=linePresentation(original,morph);ctx.save();
  for(let i=0;i<source.events.length;i++){
-  const node=source.events[i],bloom=clamp01((age-i*22)/160),flash=clamp01(1-(now-(flashes.get(i)??-Infinity))/260);
-  if(!bloom)continue;
-  if(eventMuted(node))continue;
-  const r=(3.7+flash*4)*bloom,x=node.x*w,y=node.y*h;
-  ctx.shadowColor=color;ctx.shadowBlur=12+flash*22;ctx.fillStyle=flash?'#fff8d0':color;
-  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
-  if(flash>.15){ctx.strokeStyle='#fff8d0';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(x-r*2,y);ctx.lineTo(x+r*2,y);ctx.moveTo(x,y-r*2);ctx.lineTo(x,y+r*2);ctx.stroke();}
+  const node=source.events[i],bloom=clamp01((age-i*22)/160);if(!bloom)continue;
+  const muted=eventMuted(node),flash=muted?0:clamp01(1-(now-(flashes.get(i)??-Infinity))/320);
+  const r=(muted?4.5:4.8+flash*5.3)*bloom,x=node.x*w,y=node.y*h;
+  ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='#0b1624';
+  ctx.beginPath();ctx.arc(x,y,r+2,0,Math.PI*2);ctx.fill();
+  ctx.shadowColor=muted?'#d9e9f5':color;ctx.shadowBlur=muted?5:17+flash*24;
+  ctx.strokeStyle=node.scissorMuted?'#f6b6a8':node.paintCovered?'#d9e9f5':'#e8f7ff';ctx.lineWidth=1.4;
+  ctx.fillStyle=muted?'#172332':flash?'#fff8d0':color;
+  ctx.beginPath();
+  if(node.paintCovered){ctx.moveTo(x,y-r-1);ctx.lineTo(x+r+1,y);ctx.lineTo(x,y+r+1);ctx.lineTo(x-r-1,y);ctx.closePath();}
+  else ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fill();ctx.stroke();
+  if(node.scissorMuted){ctx.shadowBlur=0;ctx.beginPath();ctx.moveTo(x-r*.65,y+r*.65);ctx.lineTo(x+r*.65,y-r*.65);ctx.stroke();}
+  else if(!muted){ctx.fillStyle='#f2fcff';ctx.beginPath();ctx.arc(x,y,Math.max(1.6,r*.36),0,Math.PI*2);ctx.fill();}
+  if(flash>.15){ctx.strokeStyle='#fff8d0';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x-r*1.8,y);ctx.lineTo(x+r*1.8,y);ctx.moveTo(x,y-r*1.8);ctx.lineTo(x,y+r*1.8);ctx.stroke();}
  }
  ctx.restore();
 }

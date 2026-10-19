@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><title>Simple Paint point visibility</title>
+<style>body{margin:20px;background:#12202d;color:#e9f4ff;font:16px system-ui}#grid{display:grid;grid-template-columns:repeat(4,450px);gap:12px}canvas{width:450px;height:250px;border:1px solid #91c4e045;border-radius:12px}pre{height:44px}h2{font-size:16px;font-weight:400;margin:6px}p{color:#bed1df;font-size:14px}</style>
+<pre id="results">Running</pre><p>Each tile: playable circle / cut ring with slash / paint-covered diamond / triggered star. Top: coiled. Bottom: uncoiled.</p><main id="grid"></main>
+<script type="module">
+import {createLineSource} from '../src/free-play-line.js';
+import {drawMusicalLine,drawMusicalPoints,linePresentation} from '../src/free-play-line-visual.js';
+let passed=0;const check=(v,m)=>{if(!v)throw Error(m);passed++};
+try{
+for(const morph of [0,1])for(const background of ['empty board','bright nearby toy','black paint','active line glow']){
+ const tile=document.createElement('section');tile.innerHTML='<h2>'+background+' / '+(morph?'uncoiled':'coiled')+'</h2>';const canvas=document.createElement('canvas');canvas.width=450;canvas.height=250;tile.append(canvas);document.querySelector('#grid').append(tile);const ctx=canvas.getContext('2d');
+ const source=createLineSource([{x:.08,y:.65},{x:.4,y:.25},{x:.65,y:.8},{x:.94,y:.35}]);source.events=[source.events[0],source.events[3],source.events[6],source.events[9]];
+ source.events[1].scissorMuted=true;source.events[2].paintCovered=true;const before=JSON.stringify(source),presented=linePresentation(source,morph);
+ ctx.fillStyle='#12202d';ctx.fillRect(0,0,450,250);
+ if(background==='bright nearby toy'){ctx.fillStyle='#e6f58c';ctx.fillRect(10,30,430,200);ctx.fillStyle='#7deaff';ctx.fillRect(20,60,410,120);}
+ drawMusicalLine(ctx,source,{width:450,height:250,morph,phase:background==='active line glow'?.9:null,points:false});
+ if(background==='black paint'){ctx.fillStyle='#020306';ctx.fillRect(0,30,450,200);}
+ drawMusicalPoints(ctx,source,{width:450,height:250,morph,flashes:new Map([[3,100],[1,100],[2,100]]),now:100});
+ check(JSON.stringify(source)===before,'rendering must preserve canonical source');
+ for(const [i,node]of presented.events.entries()){
+  const pixel=ctx.getImageData(Math.round(node.x*450),Math.round(node.y*250),1,1).data;
+  if(i===0||i===3)check(pixel[0]+pixel[1]+pixel[2]>550,'playable and triggered cores remain bright');
+  else {if(i===2)check(pixel[0]+pixel[1]+pixel[2]<300,'paint diamond stays hollow/dark');else check(pixel[0]+pixel[1]+pixel[2]>300,'cut slash remains visible');const ring=ctx.getImageData(Math.round(node.x*450),Math.round(node.y*250-5),1,1).data;check(ring[0]+ring[1]+ring[2]>120,'silent marker boundary remains visible');}
+ }
+ const probe=document.createElement('canvas');probe.width=450;probe.height=250;const pc=probe.getContext('2d');drawMusicalPoints(pc,source,{width:450,height:250,morph,now:100});const node=presented.events[3],x=Math.round(node.x*450+8),y=Math.round(node.y*250);const rest=pc.getImageData(x,y,1,1).data;const active=ctx.getImageData(x,y,1,1).data;check(active[0]+active[1]+active[2]>rest[0]+rest[1]+rest[2],'trigger pulse extends visibly beyond resting core');
+}
+document.querySelector('#results').textContent='PASS '+passed+' UI assertions\nPoint-state render checks across 4 backgrounds and both views';
+}catch(e){document.querySelector('#results').textContent='FAIL '+e.stack;}
+</script>
