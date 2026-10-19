@@ -1,4 +1,5 @@
 import {CIRCULAR_BUTTON_HTML} from '../circular-control.js';
+import {expressiveControl} from '../expressive-toy-chrome.js';
 // src/art/art-toy-factory.js
 // Art toy factory (flash circle + fireworks + laser trails).
 
@@ -154,10 +155,7 @@ function installArtToyControls(panel) {
   clearBtn.type = 'button';
   clearBtn.setAttribute('aria-label', 'Reset this Art Toy');
   clearBtn.title = 'Clear';
-  clearBtn.innerHTML = BUTTON_ICON_HTML;
-  const clearCore = clearBtn.querySelector('.c-btn-core');
-  if (clearCore) clearCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonClear.png')");
-  clearBtn.style.setProperty('--c-btn-size', '62px');
+  expressiveControl(clearBtn,{kind:'clear',label:'Reset this Art Toy'});
   clearBtn.style.setProperty('--accent', '#f87171');
   clearBtn.style.order = '99';
   clearBtn.dataset.action = 'artToy:clear';
@@ -169,10 +167,7 @@ function installArtToyControls(panel) {
   enterBtn.type = 'button';
   enterBtn.setAttribute('aria-label', 'Enter this Art Toy');
   enterBtn.title = 'Enter';
-  enterBtn.innerHTML = BUTTON_ICON_HTML;
-  const enterCore = enterBtn.querySelector('.c-btn-core');
-  if (enterCore) enterCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonEnter.png')");
-  enterBtn.style.setProperty('--c-btn-size', '62px');
+  expressiveControl(enterBtn,{kind:'enter',label:'Enter this Art Toy'});
   enterBtn.dataset.action = 'artToy:music';
   enterBtn.dataset.artToyId = panel.id;
   controlsHost.appendChild(enterBtn);
@@ -403,7 +398,7 @@ function setupFireworks(panel) {
   viewportRoot.appendChild(activeGlowLayer);
 
   const dragAreaEl = document.createElement('div');
-  dragAreaEl.className = 'art-fireworks-drag-area';
+  dragAreaEl.className = 'art-fireworks-drag-area expressive-toy-canvas';
   viewportRoot.appendChild(dragAreaEl);
 
   const handlesLayer = document.createElement('div');
@@ -2130,7 +2125,7 @@ function setupLaserTrails(panel) {
   layer.appendChild(beamsLayer);
 
   const dragAreaEl = document.createElement('div');
-  dragAreaEl.className = 'art-lasers-drag-area';
+  dragAreaEl.className = 'art-lasers-drag-area expressive-toy-canvas';
   viewportRoot.appendChild(dragAreaEl);
 
   const handlesLayer = document.createElement('div');
@@ -4246,7 +4241,7 @@ function setupSticker(panel) {
   const INITIAL_DRAG_W = dragArea.w;
   const INITIAL_DRAG_H = dragArea.h;
   const drawAreaEl = document.createElement('div');
-  drawAreaEl.className = 'art-sticker-draw-area';
+  drawAreaEl.className = 'art-sticker-draw-area expressive-toy-canvas';
   // Use explicit geometry (not inset) so no upstream style can collapse this area.
   drawAreaEl.style.inset = 'auto';
   drawAreaEl.style.left = `${dragArea.x}px`;

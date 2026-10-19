@@ -1,4 +1,4 @@
-import {CIRCULAR_BUTTON_HTML} from '../circular-control.js';
+import {expressiveControl} from '../expressive-toy-chrome.js';
 // src/art/base-art-toy.js
 // Shared base for Art Toys.
 // This file owns the common container behaviors:
@@ -14,7 +14,7 @@ export function createBaseArtToyPanel({
   idPrefix = 'art',
 } = {}) {
   const panel = document.createElement('section');
-  panel.className = 'art-toy-panel';
+  panel.className = 'art-toy-panel expressive-toy';
   panel.dataset.artToy = String(kind || '');
   panel.dataset.controlsVisible = '0';
 
@@ -94,20 +94,18 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
   dragButton.setAttribute('aria-label', 'Drag art toy');
   dragButton.title = 'Drag / Show Controls';
   dragButton.setAttribute('aria-pressed', 'false');
-  dragButton.innerHTML = CIRCULAR_BUTTON_HTML;
-  const dragCore = dragButton.querySelector('.c-btn-core');
-  if (dragCore) dragCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonDrag.png')");
+  expressiveControl(dragButton,{kind:'drag',label:'Drag art toy'});
   panel.appendChild(dragButton);
 
   const controls = document.createElement('div');
-  controls.className = 'art-toy-controls';
+  controls.className = 'art-toy-controls expressive-toy-controls';
   controls.style.display = 'none';
   panel.appendChild(controls);
 
   const volume = document.createElement('div');
   volume.className = 'art-toy-volume';
   volume.style.display = 'none';
-  panel.appendChild(volume);
+  controls.appendChild(volume);
 
   // Store the "public" id used by internal-board entry handlers.
   if (artToyId) panel.dataset.artToyId = String(artToyId);

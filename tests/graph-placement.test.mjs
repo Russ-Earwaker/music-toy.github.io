@@ -5,6 +5,14 @@ import {createStructureToyModel,structureToyWidth,structureToyHeight} from '../s
 import {createGraphPlacement,rectanglesOverlap,clearVerticalSlot,MIN_NODE_GAP_X,MIN_SIBLING_GAP_Y} from '../src/graph-placement.js';
 const out=(objectId,portId='output')=>({objectId,portId}),input=objectId=>({objectId,portId:'input'});
 
+test('local repair uses a manually moved Art panel current coordinates as its anchor',()=>{
+ const h=harness(new Set(['art']));h.add('art',100,100,220,220);h.add('neighbour',800,700,220,220);
+ Object.assign(h.rects.get('art'),{x:780,y:680});const placed={...h.rects.get('art')};
+ h.layout.repairAround('art');assert.deepEqual(h.rects.get('art'),placed);
+ assert.ok(!rectanglesOverlap(h.rects.get('art'),h.rects.get('neighbour')));
+ h.layout.repairAround('art');assert.deepEqual(h.rects.get('art'),placed);
+});
+
 test('local size repair anchors authored content and moves only conflicting branches without topology drift',()=>{
  const h=harness(new Set(['anchor','manual','distant']));h.add('anchor',500,200,900,600);h.add('manual',1100,250,700,500);h.add('structure',1850,450,224,200,true);h.add('art',2400,550,680,480);h.add('distant',10000,10000);h.connect('manual','structure');h.connect('structure','art','child:0');
  const anchor={...h.rects.get('anchor')},distant={...h.rects.get('distant')},wires=h.model.snapshot().connections,relative={x:h.rects.get('art').x-h.rects.get('manual').x,y:h.rects.get('art').y-h.rects.get('manual').y};

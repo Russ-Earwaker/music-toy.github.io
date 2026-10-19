@@ -8,20 +8,20 @@ import {collectScenePaint,evaluateScenePaint,topPaintAt,paintOwnerAt} from './fr
 import {planSilenceChaos} from './free-play-chaos.js';
 import {healLineCuts,wipeLinePaint} from './free-play-silence-reset.js';
 
-export function installSilenceTools({scene,canvas,api,morphValue,status,paintStore,sceneEvents=true,onToolChange=()=>{},getGeometry=()=>({x:0,y:0,width:canvas.clientWidth,height:canvas.clientHeight})}){
+export function installSilenceTools({scene,controlsRoot=scene,canvas,api,morphValue,status,paintStore,sceneEvents=true,allowPaint=true,onToolChange=()=>{},getGeometry=()=>({x:0,y:0,width:canvas.clientWidth,height:canvas.clientHeight})}){
  const readPaint=paintStore?.get||surfacePaint,writePaint=paintStore?.set||restoreSurfacePaint;
  let tool='Draw',gesture=null,hover=null,serial=0,signature=null,lastPlan=null,flight=null;
- const motion=new Map(),fading=[],births=new Map(),toolbar=scene.querySelector('.free-play-tools');
+ const motion=new Map(),fading=[],births=new Map(),toolbar=controlsRoot.querySelector('.free-play-tools');
  const randomButton=decorateCircularControl(document.createElement('button'),{label:'Randomise',asset:'T_ButtonRandom'});randomButton.hidden=true;randomButton.classList.add('free-play-random');
  const emptyWipe=decorateCircularControl(document.createElement('button'),{label:'Wipe all paint',asset:'T_ButtonClear'});emptyWipe.hidden=true;
- function showBulkActions(){for(const button of scene.querySelectorAll('[data-silence-action]'))button.hidden=button.dataset.silenceAction!==tool;emptyWipe.hidden=tool!=='Black Paint'||!!api.lines().length;}
- for(const name of ['Draw','Scissors','Black Paint']){
+ function showBulkActions(){for(const button of controlsRoot.querySelectorAll('[data-silence-action]'))button.hidden=button.dataset.silenceAction!==tool;emptyWipe.hidden=tool!=='Black Paint'||!!api.lines().length;}
+ for(const name of allowPaint?['Draw','Scissors','Black Paint']:['Draw','Scissors']){
   const button=decorateCircularControl(document.createElement('button'),{label:name,icon:{Draw:'draw',Scissors:'scissors','Black Paint':'paint'}[name]});button.dataset.tool=name;button.setAttribute('aria-pressed',String(name===tool));
-  button.onclick=()=>{tool=name;gesture=null;canvas.dataset.tool=name;for(const b of toolbar.querySelectorAll('[data-tool]'))b.setAttribute('aria-pressed',String(b===button));randomButton.hidden=name==='Draw';randomButton.setAttribute('aria-label',`Randomise ${name}`);randomButton.title=name==='Scissors'?'Random Cuts':'Random Paint';showBulkActions();status.textContent={Draw:'Draw a line and let go.',Scissors:'Swipe across notes to snip. Tap near a cut to heal.','Black Paint':'Splat to hush. Tap a blot to remove it.'}[name];onToolChange(name);};
-  toolbar.insertBefore(button,scene.querySelector('[data-reset]'));
+  button.onclick=()=>{const next=!allowPaint&&name==='Scissors'&&tool==='Scissors'?'Draw':name;tool=next;gesture=null;canvas.dataset.tool=next;for(const b of toolbar.querySelectorAll('[data-tool]'))b.setAttribute('aria-pressed',String(b.dataset.tool===next));randomButton.hidden=next==='Draw';randomButton.setAttribute('aria-label',`Randomise ${next}`);randomButton.title=next==='Scissors'?'Random Cuts':'Random Paint';showBulkActions();status.textContent={Draw:'Line controls.',Scissors:'Swipe to snip. Tap near a cut to heal. Tap Scissors again for line controls.','Black Paint':'Splat to hush. Tap a blot to remove it.'}[next];onToolChange(next);};
+  toolbar.insertBefore(button,controlsRoot.querySelector('[data-reset]'));
  }
- toolbar.insertBefore(randomButton,scene.querySelector('[data-reset]'));
- toolbar.insertBefore(emptyWipe,scene.querySelector('[data-reset]'));
+ toolbar.insertBefore(randomButton,controlsRoot.querySelector('[data-reset]'));
+ if(allowPaint)toolbar.insertBefore(emptyWipe,controlsRoot.querySelector('[data-reset]'));
  const rect=getGeometry;
  const position=e=>contentPointer(e,canvas,rect());
  const views=()=>{const r=rect();return api.lines().map(line=>({...line,width:r.width,height:r.height,morph:morphValue(line.id,performance.now())}));};
@@ -72,6 +72,7 @@ export function installSilenceTools({scene,canvas,api,morphValue,status,paintSto
  emptyWipe.onclick=()=>wipeAll(null);
  function addLineActions(group,lineId,number){
   for(const [name,action,selected] of [['Heal all cuts',healAll,'Scissors'],['Wipe all paint',wipeAll,'Black Paint']]){
+   if(!allowPaint&&selected==='Black Paint')continue;
    const button=decorateCircularControl(document.createElement('button'),{label:`${name} in line ${number}`,icon:'heal',asset:selected==='Black Paint'?'T_ButtonClear':undefined});button.title=selected==='Scissors'?'Heal All':'Wipe All';button.dataset.silenceAction=selected;button.dataset.lineId=lineId;button.hidden=tool!==selected;
    button.onclick=()=>action(lineId);group.append(button);
   }
@@ -84,6 +85,7 @@ export function installSilenceTools({scene,canvas,api,morphValue,status,paintSto
  }
  function nearCut(p){const gaps=views().flatMap(line=>nodes(line).filter(n=>n.scissorMuted).map(node=>({id:node.id,lineId:line.id,anchors:[{x:node.x*line.width,y:node.y*line.height},...cutEnds(line.source,node,line.morph,line.width,line.height,motion,performance.now())]})));return nearestCutGap(logical(p),gaps);}
  randomButton.onclick=()=>{
+  if(!allowPaint&&tool!=='Scissors')return;
   syncCoverage();const lines=api.lines();if(!lines.length)return;
   const seed=(Date.now()+ ++serial)>>>0,kind=tool==='Scissors'?'scissors':'paint',plan=planSilenceChaos(lines,kind,seed,allPaint());
   lastPlan=plan;
@@ -116,7 +118,7 @@ export function installSilenceTools({scene,canvas,api,morphValue,status,paintSto
  canvas.addEventListener('pointerleave',()=>{hover=null;});
  function reset(){writePaint([]);motion.clear();fading.length=0;births.clear();signature=null;flight=null;lastPlan=null;}
  if(sceneEvents){window.addEventListener('scene:new',reset);window.addEventListener('scene:load',()=>{motion.clear();fading.length=0;signature=null;flight=null;});}
- return {get tool(){return tool;},get hasSurfacePaint(){return !!readPaint().length;},motion,syncCoverage,inheritPaint,addLineActions,addContextActions(group,line){group.append(randomButton,emptyWipe);if(line)addLineActions(group,line.id,1);showBulkActions();},clearPaint:reset,cancel(){gesture=null;},prepareFrame(now){syncCoverage();syncMotion(now);randomButton.disabled=!api.lines().length;showBulkActions();emptyWipe.disabled=!readPaint().length;},getProof(){return {tool,lastPlan,paint:evaluateScenePaint(api.lines(),allPaint()),motion:[...motion]};},draw(ctx){
+ return {selectDraw(){tool='Draw';gesture=null;canvas.dataset.tool=tool;for(const b of toolbar.querySelectorAll('[data-tool]'))b.setAttribute('aria-pressed',String(b.dataset.tool===tool));randomButton.hidden=true;showBulkActions();},get tool(){return tool;},get hasSurfacePaint(){return !!readPaint().length;},motion,syncCoverage,inheritPaint,addLineActions,addContextActions(group,line){group.append(randomButton);if(allowPaint)group.append(emptyWipe);if(line)addLineActions(group,line.id,1);showBulkActions();},clearPaint:reset,cancel(){gesture=null;},prepareFrame(now){syncCoverage();syncMotion(now);randomButton.disabled=!api.lines().length;showBulkActions();emptyWipe.disabled=!readPaint().length;},getProof(){return {tool,lastPlan,paint:evaluateScenePaint(api.lines(),allPaint()),motion:[...motion]};},draw(ctx){
   const r=rect(),now=performance.now(),lines=views(),transitioning=lines.some(l=>l.morph>1e-5&&l.morph<1-1e-5);
   // Paint uses settled authored layout, never transient morph/sag positions.
   // During a morph the ink lifts briefly, then lands on the new layout.
