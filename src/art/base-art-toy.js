@@ -1,3 +1,4 @@
+import {CIRCULAR_BUTTON_HTML} from '../circular-control.js';
 // src/art/base-art-toy.js
 // Shared base for Art Toys.
 // This file owns the common container behaviors:
@@ -93,7 +94,7 @@ export function ensureBaseArtToyUI(panel, { artToyId } = {}) {
   dragButton.setAttribute('aria-label', 'Drag art toy');
   dragButton.title = 'Drag / Show Controls';
   dragButton.setAttribute('aria-pressed', 'false');
-  dragButton.innerHTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+  dragButton.innerHTML = CIRCULAR_BUTTON_HTML;
   const dragCore = dragButton.querySelector('.c-btn-core');
   if (dragCore) dragCore.style.setProperty('--c-btn-icon-url', "url('./assets/UI/T_ButtonDrag.png')");
   panel.appendChild(dragButton);

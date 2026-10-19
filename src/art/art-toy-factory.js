@@ -1,3 +1,4 @@
+import {CIRCULAR_BUTTON_HTML} from '../circular-control.js';
 // src/art/art-toy-factory.js
 // Art toy factory (flash circle + fireworks + laser trails).
 
@@ -29,7 +30,7 @@ const ART_TYPES = Object.freeze({
 const ART_SLOT_COUNT = 8;
 
 // Match the custom circular button structure used by music toys / toy spawner.
-const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
+const BUTTON_ICON_HTML = CIRCULAR_BUTTON_HTML;
 
 function artFlashDebugEnabled() {
   try { if (window.__MT_DEBUG_ART_FLASH === true) return true; } catch {}

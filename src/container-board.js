@@ -1,3 +1,4 @@
+import {decorateCircularControl} from './circular-control.js';
 // Minimal foundation UI: choose a connected selection, Open (non-destructive),
 // Expand (remove wrapper), and Delete (remove owned graph). No musical behavior.
 export function installContainerBoard({containers,getWorld,getCandidates,onRender,onDirty,onOpenChange=()=>{},onExpand=()=>{},renderSurface=()=>{},disposeSurface=()=>{},handleInteraction=()=>{},getScale=()=>1}){
@@ -16,31 +17,37 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
   for(const [id,card]of cards)if(!present.has(id)){disposeSurface(id);card.remove();cards.delete(id);}
   for(const c of records){let card=cards.get(c.id);
    if(!card){card=document.createElement('section');card.id=c.id;card.className='container-toy';card.dataset.containerToy='';card.setAttribute('aria-label','Container Toy');
-    const header=document.createElement('header');header.textContent='Container';card.append(header);
+    const header=document.createElement('header'),title=document.createElement('span');title.className='container-title';header.append(title);
+    const handle=decorateCircularControl(document.createElement('button'),{label:'Simple Draw controls',asset:'T_ButtonDrag',size:44});handle.classList.add('simple-container-handle','art-toy-drag-btn');handle.setAttribute('aria-expanded','false');header.append(handle);card.append(header);
     const summary=document.createElement('div');summary.className='container-summary';card.append(summary);
     const surface=document.createElement('div');surface.className='container-surface';card.append(surface);
     for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])surface.addEventListener(type,event=>handleInteraction(c.id,event));
-    for(const [action,label]of [['open','Open'],['expand','Expand onto Board'],['delete','Delete Container']]){const b=document.createElement('button');b.type='button';b.dataset.containerAction=action;b.textContent=label;card.append(b);}
+    const actions=document.createElement('div');actions.className='container-actions';actions.setAttribute('role','group');actions.setAttribute('aria-label','Container actions');actions.id=c.id+'-actions';handle.setAttribute('aria-controls',actions.id);card.append(actions);
+    for(const [action,label]of [['open','Open'],['expand','Expand onto Board'],['delete','Delete Container']]){const b=decorateCircularControl(document.createElement('button'),{label,asset:action==='open'?'T_ButtonEnter':action==='delete'?'T_ButtonTrash':undefined,icon:'expand',size:44});b.dataset.containerAction=action;actions.append(b);}
+    const toggle=()=>{if(card.dataset.presentation!=='simple-draw')return;const visible=card.dataset.controlsVisible!=='1';card.dataset.controlsVisible=visible?'1':'0';handle.setAttribute('aria-expanded',String(visible));handle.setAttribute('aria-pressed',String(visible));actions.hidden=!visible;};
+    handle.addEventListener('click',e=>{e.stopPropagation();if(e.detail===0)toggle();});
+    card.addEventListener('keydown',e=>{if(e.key==='Escape'){card.dataset.controlsVisible='0';handle.setAttribute('aria-expanded','false');handle.setAttribute('aria-pressed','false');actions.hidden=card.dataset.presentation==='simple-draw';}});
     card.addEventListener('click',e=>{const action=e.target.closest('button')?.dataset.containerAction;if(!action)return;
      const before=containers.get(c.id);
      const result=action==='open'?containers.open(c.id,!containers.get(c.id).presentation.state.open):action==='expand'?containers.expand(c.id):containers.remove(c.id);
      if(result?.ok===false)showStatus(result.reason);
      else if(action==='open')onOpenChange(result);else if(action==='expand')onExpand(before);
     });
-    header.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.stopPropagation();e.preventDefault();containers.captureLayout(c.id);const start=containers.get(c.id).bounds,scale=getScale()||1;header.setPointerCapture(e.pointerId);
-     const move=ev=>containers.move(c.id,start.x+(ev.clientX-e.clientX)/scale,start.y+(ev.clientY-e.clientY)/scale);
-     const end=()=>{header.removeEventListener('pointermove',move);header.removeEventListener('pointerup',end);header.removeEventListener('pointercancel',end);};
-     header.addEventListener('pointermove',move);header.addEventListener('pointerup',end);header.addEventListener('pointercancel',end);
+    header.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.stopPropagation();e.preventDefault();const start=containers.get(c.id).bounds,scale=getScale()||1;let moved=false;header.setPointerCapture(e.pointerId);
+     const move=ev=>{if(ev.pointerId!==e.pointerId)return;const rawX=ev.clientX-e.clientX,rawY=ev.clientY-e.clientY;if(!moved&&Math.hypot(rawX,rawY)<6)return;if(!moved){containers.captureLayout(c.id);moved=true;}containers.move(c.id,start.x+rawX/scale,start.y+rawY/scale);};
+     const end=ev=>{if(ev.pointerId!==e.pointerId)return;header.removeEventListener('pointermove',move);header.removeEventListener('pointerup',end);header.removeEventListener('pointercancel',end);header.removeEventListener('lostpointercapture',end);if(ev.type==='pointerup'&&!moved)toggle();};
+     header.addEventListener('pointermove',move);header.addEventListener('pointerup',end);header.addEventListener('pointercancel',end);header.addEventListener('lostpointercapture',end);
     });cards.set(c.id,card);
    }
    if(card.parentElement!==world)world.append(card);
    const open=c.presentation.state.open;
    Object.assign(card.style,{left:c.bounds.x+'px',top:c.bounds.y+'px',width:(open?280:c.bounds.width)+'px',minHeight:(open?140:c.bounds.height)+'px'});card.dataset.open=String(open);
    card.style.setProperty('--simple-draw-height',c.bounds.height+'px');
-   card.dataset.presentation=c.presentation.type;card.querySelector('header').textContent=c.presentation.type==='simple-draw'?'Simple Draw':'Container';card.setAttribute('aria-label',c.presentation.type==='simple-draw'?'Simple Draw':'Container Toy');
+   card.dataset.presentation=c.presentation.type;card.querySelector('.container-title').textContent=c.presentation.type==='simple-draw'?'Simple Draw':'Container';card.setAttribute('aria-label',c.presentation.type==='simple-draw'?'Simple Draw':'Container Toy');
+   card.querySelector('.simple-container-handle').hidden=c.presentation.type!=='simple-draw';card.querySelector('.container-actions').hidden=c.presentation.type==='simple-draw'&&card.dataset.controlsVisible!=='1';
    card.querySelector('.container-surface').hidden=open;
    card.querySelector('[data-container-action="expand"]').disabled=!c.internalObjectIds.length;
-   card.querySelector('[data-container-action="open"]').textContent=c.presentation.state.open?'Close':'Open';
+   const openButton=card.querySelector('[data-container-action="open"]');openButton.setAttribute('aria-label',open?'Close':'Open');openButton.title=open?'Close — return to the drawing':'Open — inspect the contained graph';card.querySelector('[data-container-action="expand"]').title='Expand onto Board — remove the wrapper and reveal its toys';
    card.querySelector('.container-summary').textContent=`${c.internalObjectIds.length} objects · ${containers.durationOf(c.id)} ticks`;
    renderSurface(c.id,card.querySelector('.container-surface'));
   }
