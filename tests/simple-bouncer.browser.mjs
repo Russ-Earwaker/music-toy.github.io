@@ -85,19 +85,22 @@ try {
   await mouse('mousePressed',source,1);await mouse('mouseMoved',destination,1);await sleep(30);
   await mouse('mouseReleased',destination);await sleep(100);
  }
- const outside={x:cube.x-260,y:cube.y+240};await paletteDrop('physical-cube',outside);
- cubes=await objects('cube');assert.equal(cubes.length,4);const extra=cubes.find(c=>!first.interactionData.cubeIds.includes(c.id)&&Math.abs(c.x-outside.x)<1);
- assert.ok(extra,JSON.stringify({message:'Cube palette drop preserves authored board coordinates',outside,cubes}));
- const ballPosition={x:extra.x-200,y:extra.y};await paletteDrop('physical-ball',ballPosition);
- let balls=await objects('ball');assert.equal(balls.length,2);assert.equal((await containers()).length,1,'Ball drop is stationary and independent of a wrapper');
- const secondBall=balls.find(b=>Math.abs(b.x-ballPosition.x)<1);assert.ok(secondBall);assert.equal(secondBall.captureId,null);
+ const outside={x:cube.x-260,y:cube.y+240};
+ await run("document.querySelector('[data-toy-type=physical-cube]').click()");assert.equal((await objects('cube')).length,3,'Cube button only selects mode');
+ const tap=async p=>{const screen=await worldToScreen(p);await mouse('mousePressed',screen,1);await mouse('mouseReleased',screen);};
+ await tap(outside);await tap({x:outside.x+100,y:outside.y+100});assert.equal((await objects('cube')).length,5,'Repeated empty taps place cubes');
+ const discard=(await objects('cube')).find(c=>Math.abs(c.x-outside.x-100)<1);await run('window.SimpleBouncer.objects.remove('+JSON.stringify(discard.id)+')');
+ cubes=await objects('cube');const extra=cubes.find(c=>Math.abs(c.x-outside.x)<1);assert.ok(extra);
+ const ballPosition={x:extra.x-200,y:extra.y};
+ await run("document.querySelector('[data-toy-type=physical-ball]').click()");assert.equal((await objects('ball')).length,1,'Ball button only selects mode');
  await throwAt(ballPosition,{x:ballPosition.x+150,y:ballPosition.y});
  for(let i=0;i<60;i++){captures=await containers();if(captures.length===2&&captures.every(c=>c.interactionData.capture))break;await sleep(50);}
  assert.equal(captures.length,2);let second=captures.find(c=>c.id!==first.id);assert.ok(second.interactionData.cubeIds.includes(extra.id));
  assert.ok(extra.x<second.bounds.x,'Capture strikes the newly placed cube outside its chrome');
  await releaseLock();
- await run(`(()=>{const c=document.getElementById(${JSON.stringify(second.id)}),s=c.querySelector('select');s.value='4';s.dispatchEvent(new Event('change'));c.querySelector('[aria-label="Record Throw"]').click()})()`);
- await throwAt({x:cube.x-260,y:cube.y+5},{x:cube.x-100,y:cube.y+5});await sleep(200);
+ await run('window.SimpleBouncer.editHandle('+JSON.stringify(second.id)+',"start",'+JSON.stringify({x:cube.x-260,y:cube.y+5})+')');
+ await run('window.SimpleBouncer.editHandle('+JSON.stringify(second.id)+',"target",'+JSON.stringify({x:cube.x-100,y:cube.y+5})+')');
+ await run(`(()=>{const c=document.getElementById(${JSON.stringify(second.id)}),s=c.querySelector('select');s.value='4';s.dispatchEvent(new Event('change'));c.querySelector('[aria-label="Record Throw"]').click()})()`);await sleep(200);
  captures=await containers();second=captures.find(c=>c.id===second.id);
  assert.equal(second.interactionData.capture.durationTicks,1536);
  assert.ok(Math.abs(second.interactionData.capture.trajectory.at(-1).x-second.interactionData.launch.x)>1500,'Long throws can leave the viewport, and stop at four bars');
@@ -107,6 +110,9 @@ try {
  const physicalBefore=await objects('cube');
  await run(`window.ContainerToys.move(${JSON.stringify(first.id)},${first.bounds.x+80},${first.bounds.y+100})`);
  assert.deepEqual(await objects('cube'),physicalBefore,'Moving chrome does not move reusable physical objects');
+ const movedOrigin=await run(`window.SimpleBouncer.data(${JSON.stringify(first.id)}).startPosition`);
+ await run(`(()=>{const d=window.SimpleBouncer.data(${JSON.stringify(first.id)}),t=window.Heartbeats.transport();t.pause();t.seekTick((d.capture.phaseOffsetTick||0)+d.capture.durationTicks*2);})()`);
+ assert.deepEqual(await run(`window.SimpleBouncer.ballView(window.SimpleBouncer.objects.get(${JSON.stringify(first.interactionData.ballId)})).position`),movedOrigin,'Later replay loops start at the moved origin');
  await drag(await worldToScreen({x:cube.x,y:cube.y}),await worldToScreen({x:cube.x+40,y:cube.y+15}));
  assert.ok((await containers()).every(c=>c.interactionData.stale));
  assert.deepEqual(await run('window.ContainerToys.list().map(c=>window.SimpleBouncer.panels(c.id)[0].__dgAuthoredNotes)'),beforeNotes);
@@ -129,8 +135,38 @@ try {
  const restoredCaptures=await containers(),id=restoredCaptures[0].id;
  await run(`window.ContainerToys.open(${JSON.stringify(id)},true)`);assert.deepEqual(await run('window.SimpleBouncer.objects.snapshot()'),saved.physical);
  await run(`window.ContainerToys.open(${JSON.stringify(id)},false);window.SimpleBouncer.clear(${JSON.stringify(id)})`);assert.deepEqual(await run('window.SimpleBouncer.objects.snapshot().map(o=>[o.id,o.x,o.y])'),saved.physical.map(o=>[o.id,o.x,o.y]));
+ // Exercise real audio after edits, including a silent loop becoming audible.
+ await run(`(async()=>{const s=window.SimpleBouncer;for(const cube of s.objects.list('cube'))s.objects.remove(cube.id);s.objects.addCube(300,0,{sourceMidi:77,instrument:'PIANO'});s.objects.addCube(-100,0,{sourceMidi:74,instrument:'KALIMBA'});s.editHandle(${JSON.stringify(id)},'start',{x:0,y:0});s.editHandle(${JSON.stringify(id)},'target',{x:200,y:0});await s.throwBall(${JSON.stringify(id)});})()`);
+ await releaseLock();
+ const livePanelId=await run(`window.SimpleBouncer.panels(${JSON.stringify(id)})[0].id`);
+ await run(`window.__liveImpactNotes=[];window.addEventListener('drawgrid:note-admitted',e=>{if(e.detail.toyId===${JSON.stringify(livePanelId)})window.__liveImpactNotes.push(e.detail)});window.SimpleBouncer.editHandle(${JSON.stringify(id)},'start',{x:0,y:200});`);
+ await run(`(async()=>{const d=window.SimpleBouncer.data(${JSON.stringify(id)}),t=window.Heartbeats.transport();t.seekTick((d.capture.phaseOffsetTick||0)+384*10);await t.play();})()`);
+ await sleep(650);
+ assert.deepEqual(await run('window.__liveImpactNotes'),[],'Moved source misses cubes: no old impact audio');
+ assert.equal(await run(`window.SimpleBouncer.panels(${JSON.stringify(id)})[0].__dgAuthoredNotes.length`),0,'Silent flight replaces canonical music');
+ await run(`window.SimpleBouncer.editHandle(${JSON.stringify(id)},'start',{x:0,y:0})`);
+ for(let i=0;i<70;i++){if(await run(`window.__liveImpactNotes.some(n=>n.sourceMidi===77)&&window.__liveImpactNotes.some(n=>n.sourceMidi===74)&&window.SimpleBouncer.panels(${JSON.stringify(id)})[0].__dgAuthoredNotes.some(n=>n.sourceMidi===77)`))break;await sleep(70);}
+ assert.equal(await run('window.__liveImpactNotes.some(n=>n.sourceMidi===77)&&window.__liveImpactNotes.some(n=>n.sourceMidi===74)'),true,'Next flight admits current cube pitches through the real audio path');
+ // A drag generates many edits inside one lookahead window. Only one
+ // un-cancelled voice may remain at each scheduled onset for this Bouncer.
+ await run(`(async()=>{const {ensureAudioContext}=await import('./src/audio-core.js'),{getCurrentPlaybackOccurrence}=await import('./src/playback-context.js'),ctx=ensureAudioContext(),create=ctx.createBufferSource.bind(ctx);window.__editSources=[];ctx.createBufferSource=()=>{const src=create(),owner=getCurrentPlaybackOccurrence()?.instanceToyId;if(owner===${JSON.stringify(livePanelId)}){const rec={start:null,cancelled:false};window.__editSources.push(rec);const start=src.start.bind(src),stop=src.stop.bind(src);src.start=(when,...rest)=>{rec.start=when;return start(when,...rest)};src.stop=(when,...rest)=>{if(when===undefined||when<=rec.start)rec.cancelled=true;return stop(when,...rest)};}return src;};for(let i=0;i<40;i++)window.SimpleBouncer.editHandle(${JSON.stringify(id)},'target',{x:200+i,y:0});})()`);
+ const voices=await run(`(async()=>{const {ensureAudioContext}=await import('./src/audio-core.js'),now=ensureAudioContext().currentTime,groups={};for(const s of window.__editSources)if(!s.cancelled&&s.start>now+.01){const key=s.start.toFixed(4);groups[key]=(groups[key]||0)+1;}return{created:window.__editSources.length,groups};})()`);
+ assert.ok(voices.created>1,'Stress test must exercise repeated audio rescheduling');
+ assert.ok(Object.keys(voices.groups).length,'Stress test must retain a future impact');
+ assert.ok(Object.values(voices.groups).every(count=>count===1),JSON.stringify({message:'Repeated dragging must not stack impact voices',...voices}));
+ await run(`window.__editSources=[];(()=>{const s=window.SimpleBouncer,cube=s.objects.list('cube').find(c=>c.sourceMidi===77);for(let i=0;i<40;i++)s.objects.update(cube.id,{x:300+i*.1});})()`);
+ const cubeVoices=await run(`(async()=>{const {ensureAudioContext}=await import('./src/audio-core.js'),now=ensureAudioContext().currentTime,groups={};for(const s of window.__editSources)if(!s.cancelled&&s.start>now+.01){const key=s.start.toFixed(4);groups[key]=(groups[key]||0)+1;}return{created:window.__editSources.length,groups};})()`);
+ assert.ok(cubeVoices.created>1,'Cube drag must exercise repeated rescheduling');
+ assert.ok(Object.keys(cubeVoices.groups).length,'Cube drag must retain a future impact');
+ assert.ok(Object.values(cubeVoices.groups).every(count=>count===1),JSON.stringify({message:'Repeated cube dragging must not stack impact voices',...cubeVoices}));
+ await run('window.Heartbeats.transport().pause()');
+ const liveSaved=await run(`({notes:window.SimpleBouncer.panels(${JSON.stringify(id)})[0].__drawToy.getState().authoredNotes,data:window.SimpleBouncer.data(${JSON.stringify(id)})})`);
+ assert.ok(liveSaved.notes.some(n=>n.sourceMidi===77),'DrawGrid owns regenerated canonical notes');
+ await run('window.Persistence.markDirty();window.Persistence.flushAutosaveNow()');await send('Page.reload');await sleep(400);
+ for(let i=0;i<100;i++){if(await run(`!!window.SimpleBouncer?.panels(${JSON.stringify(id)})[0]?.__drawToy`))break;await sleep(100);}
+ assert.deepEqual(await run(`({notes:window.SimpleBouncer.panels(${JSON.stringify(id)})[0].__drawToy.getState().authoredNotes,data:window.SimpleBouncer.data(${JSON.stringify(id)})})`),liveSaved,'Automatically updated impacts and music survive reload');
  if(process.env.RHYTHMAKE_UI_QA_SCREENSHOTS){const shot=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(os.tmpdir(),'rhythmake-board-bouncer.png'),Buffer.from(shot.data,'base64'));}
- console.log('PASS: no empty wrapper; visible/reused scatter; aimed board throw; canonical collision notes beyond chrome; draggable Cube/Ball palette; two captures share a cube; edit/delete stale references; no camera follow; zoom/DPR invariance; complete scene reload; Clear keeps physical objects');
+ console.log('PASS: board gestures; shared cubes; live impact audio; source/cube drag rescheduling keeps one voice per impact; zoom/DPR invariance; complete scene reload; Clear keeps physical objects');
 } finally {
  clearTimeout(deadline);ws?.close();browser.kill();server.closeAllConnections();server.close();
  // Chrome may still hold its profile briefly; leave the OS temp directory to OS cleanup.

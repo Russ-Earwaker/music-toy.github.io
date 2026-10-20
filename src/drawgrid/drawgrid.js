@@ -1,4 +1,4 @@
-import {syncAuthoredNotes} from './dg-authored-notes.js';
+import {syncAuthoredNotes,restoreAuthoredNotes} from './dg-authored-notes.js';
 import { panelTransportBindings } from '../panel-transport.js';
 import {DEFAULT_DRAWGRID_STEPS} from './dg-pattern-length.js';
 import { drawGridPlaybackLoopInfo } from './dg-playback-phase.js';
@@ -7111,6 +7111,14 @@ export function createDrawGrid(panel, { cols: initialCols = DEFAULT_DRAWGRID_STE
     __inboundNonEmpty: () => inboundWasNonEmpty(),
     clear: clearDrawgridInternal,
     getState: captureState,
+    // Replace generated music synchronously at a flight boundary. Rendering
+    // can follow later; scheduler lookahead must see the new authored map now.
+    setAuthoredState: (st) => {
+      if(st.steps!==cols)throw new Error('Authored update must preserve grid resolution');
+      restoreAuthoredNotes(panel,st);configurePitchRange(st.pitchRange);
+      currentMap={...currentMap,active:[...st.nodes.active],nodes:st.nodes.list.map(rows=>new Set(rows)),disabled:st.nodes.disabled.map(rows=>new Set(rows))};
+      persistentDisabled=currentMap.disabled;strokes=[];__dgPreserveNodesOverStrokes=true;
+    },
     publishAuthoredChange: (reason='authored-edit') => {
       currentMap.__dgRev=(currentMap.__dgRev||0)+1;
       emitDrawgridUpdate({activityOnly:false});

@@ -2154,8 +2154,8 @@ const UNFINISHED_TOY_LOCK_ENABLED = false;
 const toyCatalog = [
     { type: 'simple-draw', name: 'Paint', description: 'Draw on the board. Release to make a Simple Draw toy.', size: { width: 640, height: 440 }, action:()=>{g_bouncerBoard.cancel();g_simpleDrawCreation.arm();return true;} },
     { type: 'simple-bouncer', name: 'Simple Bouncer', description: 'Scatter cubes, then drag across the board to throw a ball.', action:()=>{activateBoardBouncer();return true;} },
-    { type: 'physical-cube', name: 'Cube', description: 'Drag onto the board. Shared by any Bouncer throw.', size:{width:58,height:58} },
-    { type: 'physical-ball', name: 'Ball', description: 'Drag onto the board, then drag the ball to throw it.', size:{width:26,height:26} },
+    { type: 'physical-cube', name: 'Cube', description: 'Tap empty board space to place shared cubes.', size:{width:58,height:58} },
+    { type: 'physical-ball', name: 'Ball', description: 'Draw a throw on empty board space.', size:{width:26,height:26} },
     { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 800, height: 760 } },
     { type: 'loopgrid', name: 'Simple Rhythm', description: 'Make a simple one-note percussion pattern.', size: { width: 420, height: 420 } },
     { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 }, disabled: true },
@@ -5188,6 +5188,7 @@ function panelHasNotesAtColumn(panel, col){
 
 function panelHasAnyNotes(panel) {
   if (!panel) return false;
+  if(panel.__simpleBouncerLive)return true;
   if(panel.dataset.masterToyId)return panelHasAnyNotes(document.getElementById(panel.dataset.masterToyId));
   const type = panel.dataset?.toy;
   if(type==='freeplay-line')return !!panel.__freePlayLineState?.events?.length;
@@ -5959,9 +5960,9 @@ function createToyPanelAt(toyType, {
     if(type==='simple-bouncer'){if(artOwnerId||g_artInternal.active)return null;activateBoardBouncer();return null;}
     if(type==='physical-cube'||type==='physical-ball'){
       if(artOwnerId||g_artInternal.active)return null;
-      const object=type==='physical-cube'?boardPhysicalObjects.addCube(centerX,centerY):boardPhysicalObjects.addBall(centerX,centerY);
-      return document.getElementById(object.id);
+      g_simpleDrawCreation.cancel();g_bouncerBoard.arm({mode:type==='physical-cube'?'cube':'ball',seed:false});return null;
     }
+    g_bouncerBoard.cancel();
     if (!type || !toyInitializers[type]) {
         console.warn('[createToyPanelAt] unknown toy type', toyType);
         return null;
@@ -7128,6 +7129,11 @@ const g_containerPresentations=createContainerPresentations({
  readInternal:id=>{const p=document.getElementById(id);return p?captureLinkedToyState(p):structureToyModel.get(id);},
  applyInternalEdit:(id,state)=>{const p=document.getElementById(id);if(!p)throw new Error('Use the normal Structure editor for logic changes.');return Promise.resolve(applyLinkedToyState(p,state)).then(()=>g_toyInstances.edit(p));},
 });
+function cancelSimpleToySources(panel){
+ // Linked playback owns sources by the visible toy ID; auditions and legacy
+ // playback can still use the dedicated audio ID. Cancel both before requeuing.
+ for(const id of new Set([panel.id,panel.__audioToyId].filter(Boolean)))cancelScheduledToySources(id);
+}
 const g_simpleToyMusic={
  containers:containerToyModel,model:connectionModel,getToy:id=>document.getElementById(id),
  createGrid:async(state,position)=>{
@@ -7142,13 +7148,13 @@ const g_simpleToyMusic={
  },
  removeGrid:p=>destroyToyPanel(p,{allowOffBoard:true,structureCleanup:true,confirmed:true}),
  publish:(p,reason)=>{p.__drawToy?.publishAuthoredChange?.(reason);g_toyInstances.adopt(p);g_toyInstances.edit(p);},
- cancelScheduled:(p,tick)=>{cancelScheduledToySources(p.__audioToyId||p.id);playbackVisualEvents.clearToy(p.id);drawGridPlaybackVisuals.clearToy(p.id);g_sequencerScheduler?.resetToyTimeline(p.id,tick,{includeBoundary:false});},
+ cancelScheduled:(p,tick)=>{cancelSimpleToySources(p);playbackVisualEvents.clearToy(p.id);drawGridPlaybackVisuals.clearToy(p.id);g_sequencerScheduler?.resetToyTimeline(p.id,tick,{includeBoundary:false});},
  getTransport:id=>transportRegistry.get(connectionModel.getTransportId(id)),
  onChanged:()=>{g_chainStructureVersion++;updateChains();window.Persistence?.markDirty?.();},onPlay:()=>tickAudioScheduler(),
 };
 const g_simpleDraw=createSimpleDrawController(g_simpleToyMusic);
 const g_simpleBouncer=createSimpleBouncerController({...g_simpleToyMusic,
- applyGrid:async(panel,state)=>{cancelScheduledToySources(panel.__audioToyId||panel.id);g_sequencerScheduler?.resetToyTimeline(panel.id,transportRegistry.get(connectionModel.getTransportId(panel.id))?.currentTick||0,{includeBoundary:false});await panel.__drawToy.setState(state);},
+ applyGrid:async(panel,state)=>{cancelSimpleToySources(panel);g_sequencerScheduler?.resetToyTimeline(panel.id,transportRegistry.get(connectionModel.getTransportId(panel.id))?.currentTick||0,{includeBoundary:false});await panel.__drawToy.setState(state);},
 });
 window.SimpleBouncer=g_simpleBouncer;
 window.addEventListener('scene:load',()=>g_simpleBouncer.resetSessions());
@@ -7176,11 +7182,12 @@ const g_bouncerBoard=installBoardBouncer({objects:boardPhysicalObjects,controlle
    if(!result.ok){containerToyModel.remove(c.id);throw Error(result.reason);}
    const card=document.getElementById(c.id);if(card)card.dataset.controlsVisible='1';
   }
-  try{await g_simpleBouncer.throwBall(c.id,{ballId,launch});if(created)tidySimpleContainer(c.id);}
+  try{await g_simpleBouncer.throwBall(c.id,{ballId,launch,targetPosition:release});}
   catch(error){if(created)containerToyModel.remove(c.id);throw error;}
  },
 });
 window.BouncerBoard=g_bouncerBoard;
+uiMode.subscribe(()=>g_bouncerBoard.cancel());
 boardPhysicalObjects.subscribe(()=>window.Persistence?.markDirty?.());
 function activateBoardBouncer(){g_simpleDrawCreation.cancel();return g_bouncerBoard.arm();}
 const g_simpleDrawSurfaces=new Map();

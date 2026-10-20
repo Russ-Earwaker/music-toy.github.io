@@ -13,11 +13,11 @@ export function installSimpleBouncerSurface(host,{controller,id,arm,remove}){
  const trash=createTrashControl();trash.setAttribute('aria-label','Delete Simple Bouncer');controls.append(trash);
  const title=document.createElement('strong');title.textContent='Board throw';const status=document.createElement('p');status.setAttribute('role','status');scene.append(controls,title,status);host.append(scene);
  let active=false,disposed=false,frame;
- record.onclick=()=>arm({containerId:id,ballId:controller.data(id).ballId});bars.onchange=()=>controller.setBars(id,Number(bars.value));clear.onclick=()=>controller.clear(id);trash.onclick=remove;
+ record.onclick=()=>controller.throwBall(id);bars.onchange=()=>controller.setBars(id,Number(bars.value));clear.onclick=()=>controller.clear(id);trash.onclick=remove;
  controls.addEventListener('keydown',e=>e.stopPropagation());
  function draw(){if(!active||disposed||!controller.data(id))return;const v=controller.view(id),d=v.data;record.disabled=bars.disabled=v.recording;bars.value=String(d.bars);
   const hits=controller.panels(id)[0]?.__dgAuthoredNotes?.length||0;
-  const text=d.brokenReferences?.length?'A referenced object was deleted. Captured music still plays.':d.stale?'Shared cubes changed. Previous music still plays; record a new throw.':v.recording?'Recording a board throw. Objects are locked for this phrase.':d.capture?`${hits} hits · ${d.bars} ${d.bars===1?'bar':'bars'}. Physics belongs to the whole board.`:'Drag a Ball or choose Record Throw. Cubes remain shared board objects.';
+  const text=d.brokenReferences?.length?'A referenced object was deleted. Captured music still plays.':d.stale?'Launch setup changed. Impacts and notes update on the next flight.':v.recording?'Recording a board throw. Objects are locked for this phrase.':d.capture?`${hits} hits · ${d.bars} ${d.bars===1?'bar':'bars'}. Physics belongs to the whole board.`:'Edit Start or Target, then record again.';
   if(status.textContent!==text)status.textContent=text;frame=requestAnimationFrame(draw);
  }
  return {setActive(value){if(active===value)return;active=value;if(active)draw();else cancelAnimationFrame(frame);},dispose(){disposed=true;active=false;cancelAnimationFrame(frame);controls.remove();scene.remove();}};

@@ -7,6 +7,7 @@ export const CONTAINER_PORTS=Object.freeze({input:TOY_PORTS.input,output:TOY_POR
 // Organization only: no notes, patterns, musical definitions or transport here.
 // Wires remain canonical. Board projection substitutes the wrapper endpoints.
 export function createContainerToyModel(model,options={}){
+ const moveListeners=new Set();
  const records=new Map(),listeners=new Set(),restoreShells=new Set(),boundsEdits=new Set();let serial=1;
  const config={getRect:()=>({x:0,y:0,width:680,height:480}),setPosition:()=>{},getDuration:()=>384,canContain:()=>true,canDelete:()=>true,removeInternal:id=>model.removeObject(id),...options};
  const clone=value=>structuredClone(value);
@@ -80,7 +81,8 @@ export function createContainerToyModel(model,options={}){
  function captureLayout(id){const c=records.get(id);if(c)c.layout=Object.fromEntries(c.internalObjectIds.map(child=>{const r=config.getRect(child);return [child,{x:r.x-c.bounds.x,y:r.y-c.bounds.y}];}));}
  function move(id,x,y){
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
-  return update(id,c=>{c.bounds.x=x;c.bounds.y=y;for(const child of c.internalObjectIds){const r=c.layout[child];config.setPosition(child,x+r.x,y+r.y);}});
+  const previous=get(id);const result=update(id,c=>{c.bounds.x=x;c.bounds.y=y;for(const child of c.internalObjectIds){const r=c.layout[child];config.setPosition(child,x+r.x,y+r.y);}});
+  if(previous&&result)for(const fn of moveListeners)fn({id,dx:x-previous.bounds.x,dy:y-previous.bounds.y});return result;
  }
  function forget(id){boundsEdits.delete(id);records.delete(id);model.removeObject(id);}
  function expand(id){
@@ -149,6 +151,7 @@ export function createContainerToyModel(model,options={}){
   isVisible:id=>!owner(id)||!!records.get(owner(id)).presentation.state.open,
   connections,
   presentedEndpoint,canEditConnection:e=>!(owner(e.from.objectId)&&owner(e.from.objectId)===owner(e.to.objectId)),
+  subscribeMoves:fn=>{moveListeners.add(fn);return ()=>moveListeners.delete(fn);},
   subscribe:fn=>{listeners.add(fn);return ()=>listeners.delete(fn);},dispose(){unsubscribe();unsubscribeRemoval();}};
 }
 

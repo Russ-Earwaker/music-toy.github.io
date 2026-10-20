@@ -24,3 +24,12 @@ html[data-ui-mode="advanced"] .container-toy[data-presentation="simple-bouncer"]
 .physical-ball-trail { fill:none; stroke:#96e5ff66; stroke-width:7; stroke-linecap:round; }
 .bouncer-board-hint { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); z-index:20000; max-width:calc(100vw - 40px); box-sizing:border-box; padding:12px 18px; border:1px solid #679db5; border-radius:16px; background:#112a3eee; color:#e8faff; font:14px/1.5 system-ui; pointer-events:none; }
 body.bouncer-board-armed .board-viewport { cursor:crosshair; }
+
+.physical-start { border-radius:50%; background:#65e5bf; box-shadow:0 0 0 5px #65e5bf33; }
+.physical-target { border-radius:50%; background:#f8c66a; border:4px solid #fff5; box-shadow:0 0 0 5px #f8c66a33; }
+.physical-start::after { content:'S'; } .physical-target::after { content:'+'; }
+
+.toy-spawner-item.bouncer-mode-button { width:64px; height:64px; min-height:64px; padding:0; margin:8px 12px 24px; overflow:visible; }
+.bouncer-mode-button .toy-spawner-name { position:absolute; top:100%; left:50%; transform:translateX(-50%); font:600 12px system-ui; }
+.bouncer-mode-button.is-active { --c-btn-bg:#277c95; outline:2px solid #a0edff; outline-offset:5px; }
+.physical-start,.physical-target { z-index:2; color:#153442; font:bold 16px system-ui; }

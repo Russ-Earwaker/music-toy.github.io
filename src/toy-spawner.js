@@ -1,3 +1,4 @@
+import {decorateCircularControl} from './circular-control.js';
 import {uiMode} from './ui-mode.js';
 // src/toy-spawner.js
 // Provides the "Create Toy" palette dock and drag-to-spawn affordance.
@@ -398,7 +399,8 @@ function renderCatalog() {
     descEl.className = 'toy-spawner-description';
     descEl.textContent = entry.description || '';
 
-    card.append(nameEl, descEl);
+    const isBouncerMode=['physical-ball','physical-cube'].includes(entry.type);
+    if(isBouncerMode){decorateCircularControl(card,{label:entry.name,icon:entry.type==='physical-cube'?'cube':'throw'});card.classList.add('bouncer-mode-button');card.append(nameEl);}else card.append(nameEl,descEl);
 
     const isDisabled = !!entry.disabled;
     const isActionOnly = typeof entry.action === 'function';
@@ -408,7 +410,7 @@ function renderCatalog() {
       card.setAttribute('aria-disabled', 'true');
       card.tabIndex = -1;
     } else {
-      if (!isActionOnly) {
+      if (!isActionOnly && !isBouncerMode) {
         card.addEventListener('pointerdown', (event) => startDrag(event, entry, card));
       }
       card.addEventListener('click', (event) => {

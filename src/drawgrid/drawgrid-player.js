@@ -279,14 +279,14 @@ export function connectDrawGridToPlayer(panel) {
     if (!isNoteSchedulerEnabled()) panel.__sequencerSchedule(col, ensureAudioContext().currentTime);
   };
 
-  panel.__sequencerSchedule = (col, when) => {
+  panel.__sequencerSchedule = (col, when, metadata) => {
     // Debug tripwire: if step is also firing audio, you'll still hear doubles even though scheduler calls once.
     // Keep this for now.
     // console.log('[drawgrid schedule]', panel.id, col, when);
     
     // Always use panel's current pattern (set by drawgrid:update events or initial seed).
     // This ensures we pick up the latest state even if scheduler's copy is stale.
-    let pat = panel.__seqPatternActive;
+    let pat = panel.__sequencerPatternAtTick?.(metadata?.eventTick,metadata) || panel.__seqPatternActive;
     if (!pat) {
       pat = panel.__seqPattern || null;
     }
