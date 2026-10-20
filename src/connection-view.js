@@ -11,6 +11,7 @@ import { STRUCTURE_TYPES, MAX_REPEAT_COUNT, structureTypeLabel } from './structu
 import { BASIC_LOGIC_TYPES, openAdvancedLogic, closeAdvancedLogic } from './logic-creation-menu.js';
 import {createRelationshipReveal} from './toy-relationship-reveal.js';
 import { horizontalPhraseProjection } from './horizontal-phrases.js';
+import {uiMode} from './ui-mode.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const set = (node, key, value) => { if (node.getAttribute(key) !== String(value)) node.setAttribute(key, value); };
@@ -25,6 +26,11 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
   onConnectionDrag = () => {}, getPulse = () => null, getStructurePulse = () => 0, onFrame = () => {}, getRenderedStructure = s => s, onStructureDrag = () => {},
   onStructureMove = null, onStructureDragUpdate = () => {}, onStructureDragEnd = () => {}, isBranchDragging = () => false, structureToys = null, structureInstances = null, onLinkedCopy = () => {}, onSeeStructure = () => {}, onQuickAdd = () => {} }) {
   const svg = svgNode('svg', { class: 'connection-layer', 'aria-label': 'Musical connections' });
+  const guardSimpleEditing = event => {
+    if (!uiMode.isSimple() || event.key === 'Tab') return;
+    event.preventDefault(); event.stopImmediatePropagation();
+  };
+  for (const type of ['pointerdown','click','dblclick','keydown']) svg.addEventListener(type,guardSimpleEditing,true);
   Object.assign(svg.style, { position: 'absolute', inset: '0', width: '100%', height: '100%',
     // The board viewport clips this overlay. Clipping the SVG again would hide
     // sockets on visible toys when native focus scrolling offsets the layer.
@@ -133,6 +139,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     render();
   }
   function start(event, point, options) {
+    if (uiMode.isSimple()) return;
     if (event.button != null && event.button !== 0) return;
     event.preventDefault(); event.stopPropagation();
     closeMenu();
@@ -171,6 +178,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     return { group, hit, circle, label, point, kind, extendObject, extendButton, overlay };
   }
   function openMenu(connectionId = null, structureId = null, anchorElement = null) {
+    if (uiMode.isSimple()) return;
     if (!structureToys) return;
     menu.replaceChildren();
     const c = model.get(connectionId);
@@ -602,6 +610,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     if(selectedStructure&&!moving&&!isBranchDragging()&&!model.getEditing()&&!editingEntry){if(!structureToys?.get(selectedStructure)?.sharedDefinitionId)structureToys?.setCollapsed(selectedStructure,true);selectedStructure=null;}render();
   };
   const keyboard = e => {
+    if (uiMode.isSimple()) return;
     if (e.key === 'Escape') { reset(); select(null); }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selected && !/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName) && !e.target?.isContentEditable) {
       e.preventDefault();if(linkedEdge(model.get(selected)))notify('Edit a linked Sequence to change its children.');else {model.disconnect(selected);select(null);}
@@ -627,10 +636,17 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
     if (event.type === 'promotion-required') notify('This junction needs a Structure toy. Existing connection kept.');
     globalThis.__CONNECTION_DEBUG = model.snapshot(); render();
   });
+  const unsubscribeMode = uiMode.subscribe(mode => {
+    if (mode !== 'simple') return;
+    closeAdvancedLogic({restoreFocus:false}); closeMenu();
+    selected = selectedStructure = null;
+    if (model.getEditing() || moving || editingEntry) cancel();
+    status.hidden = true;
+  });
   function frame() { if (disposed) return; onFrame(); render(); frameId = requestAnimationFrame(frame); }
   frameId = requestAnimationFrame(frame);
   return { render, select, focusStructure:selectStructure, reset, dispose() {
-    relationship.dispose();
+    relationship.dispose(); unsubscribeMode();
     closeAdvancedLogic({restoreFocus:false}); disposed = true; cancelAnimationFrame(frameId); clearTimeout(statusTimer); unsubscribe();
     document.removeEventListener('keydown', keyboard); window.removeEventListener('blur', cancel);
     document.removeEventListener('pointerdown', outside, true);

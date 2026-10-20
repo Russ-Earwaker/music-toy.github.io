@@ -1,6 +1,8 @@
 // Shared presentation only: no transport, scheduling or authored-state changes.
 export const ADVANCED_TOYS = Object.freeze(['drawgrid', 'bouncer', 'rippler', 'chordwheel', 'loopgrid', 'loopgrid-drum']);
+import {uiMode} from './ui-mode.js';
 let openPanel = null;
+uiMode.subscribe(mode => { if (mode === 'simple') zoomOutPanel({restoreFocus:false}); });
 export function zoomOutPanel({restoreFocus = true} = {}) {
   const panel = openPanel;
   if (!panel) return;
@@ -12,6 +14,7 @@ export function zoomOutPanel({restoreFocus = true} = {}) {
   if (restoreFocus && panel.isConnected) panel.querySelector('.toy-advanced-toggle')?.focus();
 }
 export function zoomInPanel(panel) {
+  if (uiMode.isSimple()) return;
   if (!panel || !ADVANCED_TOYS.includes(panel.dataset.toy) || !panel.querySelector('.toy-advanced-panel')) return;
   if (openPanel === panel) return;
   zoomOutPanel({restoreFocus:false});

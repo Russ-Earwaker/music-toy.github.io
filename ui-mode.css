@@ -1,0 +1,40 @@
+/* Header-only flow; no viewport, canvas, board scale or graph dimensions change. */
+#topbar.app-topbar { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-rows:var(--topbar-height) auto; align-items:start; }
+#topbar .topbar-controls { grid-column:2; grid-row:1; }
+.ui-mode-chrome { grid-column:1; grid-row:1; justify-self:start; align-self:center; margin-left:calc(2 * var(--top-btn-offset) + var(--top-btn-size)); display:flex; align-items:center; gap:10px; color:var(--text); font:600 12px/1.2 system-ui; pointer-events:auto; }
+.ui-mode-heading { white-space:nowrap; color:var(--muted); }
+.ui-mode-segments { display:flex; gap:4px; padding:4px; border:1px solid var(--border); border-radius:12px; background:var(--panel); box-shadow:0 8px 16px #0005; }
+.ui-mode-button { min-width:94px; min-height:44px; padding:10px 12px; border:2px solid transparent; border-radius:8px; background:transparent; color:var(--text); font:600 13px/1.2 system-ui; cursor:pointer; touch-action:manipulation; }
+.ui-mode-button[aria-pressed="true"] { background:var(--accent); color:var(--surface); border-color:var(--text); box-shadow:0 2px 6px #0006; font-weight:800; }
+.ui-mode-button:hover { border-color:var(--accent); }
+.ui-mode-button:focus-visible { outline:3px solid var(--text); outline-offset:3px; }
+@media(max-width:1200px) {
+  /* Reserve a global first row, then offset the existing pinned chrome together.
+     Keep --topbar-height unchanged: the board never moves or resizes. */
+  :root { --ui-mode-row-space:72px; }
+  #topbar.app-topbar { grid-template-rows:var(--ui-mode-row-space) auto; }
+  .ui-mode-chrome { grid-column:1 / -1; grid-row:1; justify-self:center; margin:0; }
+  #topbar .topbar-controls { grid-row:2; }
+  #topbar .topbar-menu-wrap,
+  #topbar [data-action="toggle-play"],
+  #topbar [data-action="bpm"],
+  #topbar [data-action="sound-theme"],
+  #topbar #topbar-master-volume:not(.is-in-setup) { top:calc(var(--top-btn-offset) + var(--ui-mode-row-space))!important; }
+  #topbar .transport-return-start { top:calc(var(--top-btn-offset) + var(--ui-mode-row-space) + var(--top-btn-size) + 4px); }
+  #topbar .topbar-menu { top:calc(var(--top-btn-offset) + var(--ui-mode-row-space) + var(--top-btn-size) + 8px); }
+  #topbar .topbar-bpm-panel { top:calc(var(--top-btn-offset) + var(--ui-mode-row-space) + var(--topbar-side-btn-size) + 10px); }
+  #topbar .topbar-feedback-btn { top:calc(var(--ui-mode-row-space) + var(--topbar-height) / 2); }
+  .guide-launcher { top:calc(var(--top-btn-offset) + var(--ui-mode-row-space) + var(--top-btn-size) + var(--top-btn-gap)); }
+}
+.simple-palette-label { display:none; }
+html[data-ui-mode="simple"] :is(.toy-spawner-arrange,.toy-spawner-logic,.toy-spawner-game,.container-select-button,.container-selection,.advanced-logic-popup,.connection-menu,.arrangement-result,.toy-advanced-toggle,.toy-advanced-panel,.art-toy-enter-btn,.art-line-empty-enter-btn,[data-container-action="open"],[data-container-action="expand"]) { display:none!important; }
+/* Connections remain readable; their authoring targets and keyboards are disabled. */
+html[data-ui-mode="simple"] .connection-layer { pointer-events:none!important; }
+html[data-ui-mode="simple"] .connection-layer * { pointer-events:none!important; }
+html[data-ui-mode="simple"] :is(.connection-endpoint,.connection-midpoint,.connection-midpoint-hit,.connection-delete,.connection-hit,.connection-label,.graph-extend-object,.modifier-step,.structure-type) { display:none!important; }
+html[data-ui-mode="simple"] .simple-palette-label { display:block; position:absolute; right:100%; margin-right:6px; padding:4px 7px; border-radius:7px; white-space:nowrap; color:#fff; background:#182638; font:600 12px system-ui; }
+html[data-ui-mode="simple"] .toy-spawner-menu { width:min(280px,calc(100vw - var(--toy-spawner-button-size) - 40px)); max-height:calc(100dvh - 170px); }
+@media(max-width:480px) {
+  html[data-ui-mode="simple"] .toy-spawner-dock { gap:6px; }
+  html[data-ui-mode="simple"] .toy-spawner-menu { top:calc(2 * var(--toy-spawner-button-size) + 16px); padding:8px; box-sizing:border-box; }
+}

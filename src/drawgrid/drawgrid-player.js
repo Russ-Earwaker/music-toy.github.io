@@ -208,7 +208,7 @@ export function connectDrawGridToPlayer(panel) {
     if (midiNote === undefined) return;
     try { resumeAudioContextIfNeeded?.().catch?.(() => {}); } catch {}
     const when = (ensureAudioContext()?.currentTime ?? 0) + 0.01;
-    playNote(instrument, midiToName(midiNote), when, {
+    playNote(note.instrument || instrument, midiToName(midiNote), when, {
       ...authoredPerformanceOptions(panel,note),
       slotIndex: col,
       col,
@@ -241,7 +241,7 @@ export function connectDrawGridToPlayer(panel) {
     const midiNote = note.sourceMidi;
     if (midiNote === undefined) return;
     try { await resumeAudioContextIfNeeded(); } catch {}
-    playNote(instrument, midiToName(midiNote), undefined, {
+    playNote(note.instrument || instrument, midiToName(midiNote), undefined, {
       ...authoredPerformanceOptions(panel,note),
       slotIndex: col,
       col,
@@ -450,7 +450,7 @@ export function connectDrawGridToPlayer(panel) {
         }
       } catch {}
 
-      playNote(pat.instrument || instrument, midiToName(midiNote), when, {
+      playNote(note.instrument || pat.instrument || instrument, midiToName(midiNote), when, {
         ...authoredPerformanceOptions(panel,note),
         slotIndex: col,
         col,

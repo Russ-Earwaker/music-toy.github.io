@@ -1,3 +1,4 @@
+import {uiMode} from './ui-mode.js';
 // src/toy-spawner.js
 // Provides the "Create Toy" palette dock and drag-to-spawn affordance.
 import { openAdvancedLogic, logicCreationEntry } from './logic-creation-menu.js';
@@ -114,7 +115,7 @@ function updatePaletteToggleUI() {
 }
 
 function togglePalette(palette) {
-  const open = !state.open || state.activePalette !== palette;
+  const open = uiMode.isSimple() || !state.open || state.activePalette !== palette;
   setActivePalette(palette);setMenuOpen(open);
 }
 function setActivePalette(palette) {
@@ -123,6 +124,7 @@ function setActivePalette(palette) {
     : (palette === 'game' ? 'game' : palette === 'logic' ? 'logic' : 'music');
   if (state.activePalette === next && state.config) return;
   state.activePalette = next;
+  document.dispatchEvent(new CustomEvent('toy-spawner:palette-change',{detail:{palette:next}}));
   state.config = next === 'art'
     ? state.configArt
     : (next === 'game' ? state.configGame : next === 'logic' ? state.configLogic : state.configMusic);
@@ -288,6 +290,18 @@ function ensureDock() {
   state.artToggle = artToggle;
   state.gameToggle = gameToggle;
   state.logicToggle=logicToggle;
+  const syncMode = () => {
+    cleanupDrag();
+    for (const [button, label] of [[toggle, uiMode.isSimple() ? 'Simple Music' : 'Create Toy'], [artToggle, uiMode.isSimple() ? 'Art' : 'Create Art']]) {
+      button.title = label; button.setAttribute('aria-label', label);
+      let caption = button.querySelector('.simple-palette-label');
+      if (!caption) { caption = document.createElement('span'); caption.className = 'simple-palette-label'; button.append(caption); }
+      caption.textContent = label;
+    }
+    if (uiMode.isSimple() && !['music','art'].includes(state.activePalette)) setActivePalette('music');
+    if (state.open) renderCatalog();
+  };
+  syncMode(); uiMode.subscribe(syncMode);
   state.menu = menu;
   state.listHost = list;
   state.trash = trash;
@@ -331,7 +345,7 @@ function ensureDock() {
     (event) => {
       if (!state.open) return;
       if (state.dock?.contains(event.target)) return;
-      if (state.drag) return;
+      if (state.drag || uiMode.isSimple()) return;
       setMenuOpen(false);
     },
     true,
@@ -406,7 +420,7 @@ function renderCatalog() {
         event.preventDefault();
         const created = isActionOnly ? invokeEntryAction(entry) : spawnAtDefault(entry);
         state.justSpawned = false;
-        if (created) setMenuOpen(false);
+        if (created && !uiMode.isSimple()) setMenuOpen(false);
       });
     }
     state.listHost.appendChild(card);
@@ -425,7 +439,7 @@ function safeCatalog() {
   try {
     const items = state.config.getCatalog?.() || [];
     if (!Array.isArray(items)) return [];
-    const filtered = items.filter((item) => item && item.name && (item.type || typeof item.action === 'function'));
+    const filtered = items.filter((item) => item && item.name && (item.type || typeof item.action === 'function') && (!uiMode.isSimple() || state.activePalette === 'art' || (state.activePalette === 'music' && ['simple-draw','simple-bouncer','physical-cube','physical-ball'].includes(item.type))));
     if (!filtered.length) {
       dbg('catalog empty', state.activePalette, { rawCount: items.length });
     }
@@ -504,7 +518,7 @@ function onPointerUp(event) {
   state.justSpawned = dropped;
 
   cleanupDrag();
-  if (dropped) setMenuOpen(false);
+  if (dropped && !uiMode.isSimple()) setMenuOpen(false);
 }
 
 function spawnAtDefault(entry) {
@@ -649,12 +663,14 @@ function clientPointToBoard(clientX, clientY) {
 
   const metrics = getBoardMetrics();
   if (!metrics) return null;
-  const { rect, scaleX, scaleY } = metrics;
+  // The world is an unbounded absolute-positioned stage and may have a zero
+  // layout box. Palette drops are valid anywhere in its visible viewport.
+  const rect = metrics.board.closest?.('.board-viewport')?.getBoundingClientRect() || metrics.rect;
   const localX = clientX - rect.left;
   const localY = clientY - rect.top;
   const inside = localX >= 0 && localY >= 0 && localX <= rect.width && localY <= rect.height;
   // Use shared screen->world conversion so internal-board pan/zoom maps correctly.
-  // Keep the "inside" test in screen-space so we still reject drops outside the board rect.
+  // Keep the "inside" test in screen-space, independently of world zoom/DPR.
   const w = screenToWorld({ x: clientX, y: clientY }) || { x: 0, y: 0 };
   const x = w.x;
   const y = w.y;

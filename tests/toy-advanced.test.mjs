@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {uiMode} from '../src/ui-mode.js';
+uiMode.set('advanced');
 class Element extends EventTarget {
  constructor(tag='div'){super();this.tagName=tag;this.children=[];this.dataset={};this.attrs=new Map();this.style={};this.className='';this.id='';this.isConnected=true;this.classList={contains:c=>this.className.split(' ').includes(c),add:c=>{if(!this.classList.contains(c))this.className+=' '+c;},remove:c=>{this.className=this.className.split(' ').filter(x=>x!==c).join(' ');}};}
  setAttribute(k,v){this.attrs.set(k,String(v));}getAttribute(k){return this.attrs.get(k)??null;}removeAttribute(k){this.attrs.delete(k);}
@@ -33,6 +35,15 @@ test('opening another toy closes the previous one and Escape returns to Basic',(
  const a=panel('bouncer'),b=panel('rippler');zoomInPanel(a);zoomInPanel(b);assert.equal(a.classList.contains('toy-zoomed'),false);
  const escape=new Event('keydown');Object.defineProperty(escape,'key',{value:'Escape'});document.dispatchEvent(escape);assert.equal(b.classList.contains('toy-zoomed'),false);assert.equal(b.querySelector('.toy-advanced-panel').hidden,true);
  zoomInPanel(panel('loopgrid'));zoomOutPanel();
+});
+test('entering Simple closes the open Advanced shelf, blocks reopening and retains every toy value',()=>{
+ const a=panel('drawgrid'),b=panel('rippler'),before=[a,b].map(p=>structuredClone(p.source));
+ zoomInPanel(a);uiMode.set('simple');
+ assert.equal(a.querySelector('.toy-advanced-panel').hidden,true);
+ zoomInPanel(a);zoomInPanel(b);
+ assert.ok([a,b].every(p=>p.querySelector('.toy-advanced-panel').hidden));
+ assert.deepEqual([a,b].map(p=>p.source),before);
+ uiMode.set('advanced');zoomInPanel(b);assert.equal(b.querySelector('.toy-advanced-panel').hidden,false);zoomOutPanel();
 });
 
 test('repeated initialization leaves one Advanced toggle and one Chord Wheel instruction',()=>{

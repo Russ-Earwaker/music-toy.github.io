@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {uiMode} from '../src/ui-mode.js';
+uiMode.set('advanced');
 import { createConnectionModel, HEARTBEAT_PORTS } from '../src/connections.js';
 import { createConnectionView } from '../src/connection-view.js';
 import { MAIN_TRANSPORT_ID } from '../src/transport-registry.js';

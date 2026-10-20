@@ -1,6 +1,8 @@
 // The same three layers used by Art Toys and the rest of Rhythmake.
 export const CIRCULAR_BUTTON_HTML='<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
 const drawings={
+ cube:'<path d="m12 2 9 5v10l-9 5-9-5V7l9-5Zm-9 5 9 5 9-5M12 12v10"/>',
+ throw:'<circle cx="17" cy="7" r="4"/><path d="M3 21c0-8 4-13 9-14M6 12l6-5-7-2"/>',
  draw:'<path d="m5 19 2-6L17 3l4 4-10 10-6 2Zm3-6 3 3M15 5l4 4"/>',
  scissors:'<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8 8 13 13M8 16 21 3"/>',
  paint:'<path d="m5 5 9 9 6-6-9-5-6 2Zm-2 10c-4 6 4 9 4 4 0-2-2-3-4-4Z"/><path d="m4 7-2 3 8 8 4-4"/>',
@@ -26,3 +28,4 @@ export const createClearControl=options=>createControl('clear',options);
 export const createEnterBoardControl=options=>createControl('enter',options);
 export const createRandomControl=options=>createControl('random',options);
 export const createMoveControl=options=>createControl('move',options);
+export const createTrashControl=options=>createControl('trash',options);

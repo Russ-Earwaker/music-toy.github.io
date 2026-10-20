@@ -21,6 +21,8 @@ function safeStartTime(ctx, when){
 }
 
 const entries = new Map();
+// Accept older authored IDs without adding duplicate names to the catalogue.
+const canonicalInstrumentIds = new Map();
 // id -> AudioBuffer
 const buffers = new Map();
 
@@ -110,7 +112,7 @@ const timingProbeState = {
 function normId(s){
   const x = String(s||'').trim();
   if (!x) return '';
-  return x;
+  return canonicalInstrumentIds.get(x.toLowerCase()) || x;
 }
 
 function getEntryVolumeMultiplier(entry){
@@ -345,6 +347,7 @@ export async function initAudioAssets(csvUrl='./samples.csv'){
     // Register the entry under all its names.
     for (const name of allNames) {
       entries.set(name, data);
+      canonicalInstrumentIds.set(name.toLowerCase(), name);
     }
 
     if (url){

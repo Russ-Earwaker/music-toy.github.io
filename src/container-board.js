@@ -1,5 +1,6 @@
 import {decorateCircularControl} from './circular-control.js';
-import {expressiveControl,setExpressiveControlsVisible} from './expressive-toy-chrome.js';
+import {uiMode} from './ui-mode.js';
+import {expressiveControl,setExpressiveControlsVisible,isExpressiveContainer} from './expressive-toy-chrome.js';
 // Minimal foundation UI: choose a connected selection, Open (non-destructive),
 // Expand (remove wrapper), and Delete (remove owned graph). No musical behavior.
 export function installContainerBoard({containers,getWorld,getCandidates,onRender,onDirty,onOpenChange=()=>{},onExpand=()=>{},renderSurface=()=>{},disposeSurface=()=>{},handleInteraction=()=>{},mountVolume=()=>null,getScale=()=>1}){
@@ -15,6 +16,7 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
  function render(){
   const world=getWorld();if(!world)return;
   const records=containers.list(),present=new Set(records.map(c=>c.id));
+  if(uiMode.isSimple()) { const opened=records.find(c=>c.presentation.state.open); if(opened){containers.open(opened.id,false);return;} }
   for(const [id,card]of cards)if(!present.has(id)){card.__containerVolume?.dispose();disposeSurface(id);card.remove();cards.delete(id);}
   for(const c of records){let card=cards.get(c.id);
    if(!card){card=document.createElement('section');card.id=c.id;card.className='container-toy';card.dataset.containerToy='';card.setAttribute('aria-label','Container Toy');
@@ -26,10 +28,11 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
     for(const type of ['pointerdown','pointermove','pointerup','pointercancel'])surface.addEventListener(type,event=>handleInteraction(c.id,event));
     const actions=document.createElement('div');actions.className='container-actions';actions.setAttribute('role','group');actions.setAttribute('aria-label','Container actions');actions.id=c.id+'-actions';handle.setAttribute('aria-controls',actions.id);chrome.append(actions);
     for(const [action,label]of [['open','Open'],['expand','Expand onto Board'],['delete','Delete Container']]){const b=action==='open'?expressiveControl(document.createElement('button'),{kind:'enter',label}):decorateCircularControl(document.createElement('button'),{label,asset:action==='delete'?'T_ButtonTrash':undefined,icon:'expand',size:62});b.dataset.containerAction=action;actions.append(b);}
-    const toggle=()=>{if(card.dataset.presentation!=='simple-draw')return;setExpressiveControlsVisible(card,card.dataset.controlsVisible!=='1');};
+    const toggle=()=>{if(!isExpressiveContainer(card.dataset.presentation))return;setExpressiveControlsVisible(card,card.dataset.controlsVisible!=='1');};
     handle.addEventListener('click',e=>{e.stopPropagation();if(e.detail===0)toggle();});
     card.addEventListener('keydown',e=>{if(e.key==='Escape')setExpressiveControlsVisible(card,false);});
     card.addEventListener('click',e=>{const action=e.target.closest('button')?.dataset.containerAction;if(!action)return;
+     if(uiMode.isSimple() && action!=='delete')return;
      const before=containers.get(c.id);
      const result=action==='open'?containers.open(c.id,!containers.get(c.id).presentation.state.open):action==='expand'?containers.expand(c.id):containers.remove(c.id);
      if(result?.ok===false)showStatus(result.reason);
@@ -45,16 +48,17 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
    const open=c.presentation.state.open;
    Object.assign(card.style,{left:c.bounds.x+'px',top:c.bounds.y+'px',width:(open?280:c.bounds.width)+'px',minHeight:(open?140:c.bounds.height)+'px'});card.dataset.open=String(open);
    card.style.setProperty('--simple-draw-height',c.bounds.height+'px');
-   card.dataset.presentation=c.presentation.type;card.classList.toggle('expressive-toy',c.presentation.type==='simple-draw');card.querySelector('.container-title').textContent=c.presentation.type==='simple-draw'?'Simple Draw':'Container';card.setAttribute('aria-label',c.presentation.type==='simple-draw'?'Simple Draw':'Container Toy');
-   card.querySelector('.simple-container-handle').hidden=c.presentation.type!=='simple-draw';
-   card.querySelector('[data-container-action="delete"]').hidden=c.presentation.type==='simple-draw';
+   const expressive=isExpressiveContainer(c.presentation.type),label=c.presentation.type==='simple-bouncer'?'Simple Bouncer':c.presentation.type==='simple-draw'?'Simple Draw':'Container';
+   card.dataset.presentation=c.presentation.type;card.classList.toggle('expressive-toy',expressive);card.querySelector('.container-title').textContent=label;card.setAttribute('aria-label',label);
+   const handle=card.querySelector('.simple-container-handle');handle.hidden=!expressive;handle.setAttribute('aria-label',label+' controls');
+   card.querySelector('[data-container-action="delete"]').hidden=expressive;
    card.querySelector('.container-surface').hidden=open;
    card.querySelector('[data-container-action="expand"]').disabled=!c.internalObjectIds.length;
    const openButton=card.querySelector('[data-container-action="open"]');openButton.setAttribute('aria-label',open?'Close':'Open');openButton.title=open?'Close — return to the drawing':'Open — inspect the contained graph';card.querySelector('[data-container-action="expand"]').title='Expand onto Board — remove the wrapper and reveal its toys';
    card.querySelector('.container-summary').textContent=`${c.internalObjectIds.length} objects · ${containers.durationOf(c.id)} ticks`;
    renderSurface(c.id,card.querySelector('.container-surface'));
-   if(c.presentation.type==='simple-draw'){
-    const strip=card.querySelector('.expressive-toy-controls'),tools=card.querySelector('.simple-draw-controls');
+   if(expressive){
+    const strip=card.querySelector('.expressive-toy-controls'),tools=card.querySelector('.simple-draw-controls,.simple-bouncer-controls');
     if(tools&&tools.parentElement!==strip)strip.prepend(tools);
     if(!card.__containerVolume){const volume=document.createElement('div');volume.className='art-toy-volume';strip.insertBefore(volume,card.querySelector('.container-actions'));card.__containerVolume=mountVolume(volume,card);}
     card.__containerVolume?.sync();

@@ -81,6 +81,11 @@ import {confirmFinalLinkedCopy} from './linked-copy-delete.js';
 import {prepareDrawgridPhrase,hasDrawgridPhraseMaterial,singleGeneratedDrawgridLine} from './drawgrid/dg-phrase-chunks.js';
 import {installAutoArrangeUI} from './auto-arrange-ui.js';
 import {createSimpleDrawController} from './simple-draw.js';
+import {createSimpleBouncerController} from './simple-bouncer.js';
+import {installSimpleBouncerSurface} from './simple-bouncer-surface.js';
+import {boardPhysicalObjects} from './board-physical-objects.js';
+import {installBoardBouncer} from './board-bouncer.js';
+import {uiMode} from './ui-mode.js';
 import {installSimpleDrawSurface} from './simple-draw-surface.js';
 import {installSimpleDrawCreation} from './simple-draw-creation.js';
 import {drawingAuthoredBounds} from './simple-draw-placement.js';
@@ -2147,7 +2152,10 @@ const EXPERIMENTAL_PREF_KEY = 'prefs:enable-experimental-toys';
 const UNFINISHED_TOY_LOCK_ENABLED = false;
 
 const toyCatalog = [
-    { type: 'simple-draw', name: 'Paint', description: 'Draw on the board. Release to make a Simple Draw toy.', size: { width: 640, height: 440 }, action:()=>{g_simpleDrawCreation.arm();return true;} },
+    { type: 'simple-draw', name: 'Paint', description: 'Draw on the board. Release to make a Simple Draw toy.', size: { width: 640, height: 440 }, action:()=>{g_bouncerBoard.cancel();g_simpleDrawCreation.arm();return true;} },
+    { type: 'simple-bouncer', name: 'Simple Bouncer', description: 'Scatter cubes, then drag across the board to throw a ball.', action:()=>{activateBoardBouncer();return true;} },
+    { type: 'physical-cube', name: 'Cube', description: 'Drag onto the board. Shared by any Bouncer throw.', size:{width:58,height:58} },
+    { type: 'physical-ball', name: 'Ball', description: 'Drag onto the board, then drag the ball to throw it.', size:{width:26,height:26} },
     { type: 'drawgrid', name: 'Draw Line', description: 'Sketch out freehand lines that become notes.', size: { width: 800, height: 760 } },
     { type: 'loopgrid', name: 'Simple Rhythm', description: 'Make a simple one-note percussion pattern.', size: { width: 420, height: 420 } },
     { type: 'bouncer', name: 'Bouncer', description: 'Bounce melodic balls inside a square arena.', size: { width: 420, height: 420 }, disabled: true },
@@ -2181,7 +2189,8 @@ function setExperimentalEnabled(enabled) {
 
 function getToyCatalog() {
     const experimentalOn = isExperimentalEnabled();
-    return toyCatalog.filter(entry=>entry.type!=='simple-draw'||!g_artInternal.active).map((entry) => {
+    return toyCatalog.filter(entry=>!['simple-draw','simple-bouncer','physical-cube','physical-ball'].includes(entry.type)||!g_artInternal.active)
+    .filter(entry=>!entry.type.startsWith('physical-')||window.BouncerBoard?.isRelevant?.()).map((entry) => {
         if (EXPERIMENTAL_TOYS.includes(entry.type)) {
             return { ...entry, disabled: entry.disabled && !experimentalOn };
         }
@@ -4568,6 +4577,7 @@ function revertBoardIdentityAfterInternalMode() {
 }
 
 function enterInternalBoard(artToyId) {
+  if (uiMode.isSimple()) return;
   if (!artToyId) return;
   // Defensive: if a previous internal session failed to revert cleanly,
   // we may still have swapped IDs/classes which breaks input + dot background.
@@ -4623,6 +4633,7 @@ function enterInternalBoard(artToyId) {
   try { window.__cancelWheelZoomLerp?.(); } catch {}
   try { window.__setBoardViewportNow?.(internalCam.scale, internalCam.tx, internalCam.ty); } catch {}
   requestAnimationFrame(() => {
+    if (!g_artInternal.active || g_artInternal.artToyId !== artToyId) return;
     try { window.__setBoardViewportNow?.(internalCam.scale, internalCam.tx, internalCam.ty); } catch {}
   });
 
@@ -4650,6 +4661,7 @@ function enterInternalBoard(artToyId) {
   try {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        if (!g_artInternal.active || g_artInternal.artToyId !== artToyId) return;
         try {
           const panelsNow = getInternalPanelsForArtToy(artToyId);
           for (const p of panelsNow) {
@@ -5943,7 +5955,13 @@ function createToyPanelAt(toyType, {
     artOwnerId = null,
 } = {}) {
     const type = String(toyType || '').toLowerCase();
-    if(type==='simple-draw'){if(artOwnerId||g_artInternal.active)return null;g_simpleDrawCreation.arm({heartbeatId});return null;}
+    if(type==='simple-draw'){if(artOwnerId||g_artInternal.active)return null;g_bouncerBoard.cancel();g_simpleDrawCreation.arm({heartbeatId});return null;}
+    if(type==='simple-bouncer'){if(artOwnerId||g_artInternal.active)return null;activateBoardBouncer();return null;}
+    if(type==='physical-cube'||type==='physical-ball'){
+      if(artOwnerId||g_artInternal.active)return null;
+      const object=type==='physical-cube'?boardPhysicalObjects.addCube(centerX,centerY):boardPhysicalObjects.addBall(centerX,centerY);
+      return document.getElementById(object.id);
+    }
     if (!type || !toyInitializers[type]) {
         console.warn('[createToyPanelAt] unknown toy type', toyType);
         return null;
@@ -6928,6 +6946,7 @@ window.restoreConnections = (saved, structures = [], containers = []) => {
     g_connections.restore(saved, g_connectionPanels);
     containerToyModel.restore(containers);
     g_simpleDraw.migrateLegacy();
+    g_simpleBouncer.migrateLegacy();
   });
   g_structureInstances.sync();
   for(const s of structureToyModel.list())g_layoutSizes.set(s.id,`${s.type}|${s.outputCount}|${s.chords?.length ?? ''}`);
@@ -6975,6 +6994,7 @@ const g_connections = createConnectionAdapter(connectionModel, {
 });
 window.clearCreationGraph = () => {
   containerToyModel.restore([]);
+  boardPhysicalObjects.clear();
   g_toyInstances.pause();g_structureInstances.pause();
   window.ToySpawner?.close?.();
   closeInstrumentPicker();
@@ -7108,7 +7128,7 @@ const g_containerPresentations=createContainerPresentations({
  readInternal:id=>{const p=document.getElementById(id);return p?captureLinkedToyState(p):structureToyModel.get(id);},
  applyInternalEdit:(id,state)=>{const p=document.getElementById(id);if(!p)throw new Error('Use the normal Structure editor for logic changes.');return Promise.resolve(applyLinkedToyState(p,state)).then(()=>g_toyInstances.edit(p));},
 });
-const g_simpleDraw=createSimpleDrawController({
+const g_simpleToyMusic={
  containers:containerToyModel,model:connectionModel,getToy:id=>document.getElementById(id),
  createGrid:async(state,position)=>{
   let panel;const previous=g_layoutRestoring;g_layoutRestoring=true;
@@ -7125,7 +7145,44 @@ const g_simpleDraw=createSimpleDrawController({
  cancelScheduled:(p,tick)=>{cancelScheduledToySources(p.__audioToyId||p.id);playbackVisualEvents.clearToy(p.id);drawGridPlaybackVisuals.clearToy(p.id);g_sequencerScheduler?.resetToyTimeline(p.id,tick,{includeBoundary:false});},
  getTransport:id=>transportRegistry.get(connectionModel.getTransportId(id)),
  onChanged:()=>{g_chainStructureVersion++;updateChains();window.Persistence?.markDirty?.();},onPlay:()=>tickAudioScheduler(),
+};
+const g_simpleDraw=createSimpleDrawController(g_simpleToyMusic);
+const g_simpleBouncer=createSimpleBouncerController({...g_simpleToyMusic,
+ applyGrid:async(panel,state)=>{cancelScheduledToySources(panel.__audioToyId||panel.id);g_sequencerScheduler?.resetToyTimeline(panel.id,transportRegistry.get(connectionModel.getTransportId(panel.id))?.currentTick||0,{includeBoundary:false});await panel.__drawToy.setState(state);},
 });
+window.SimpleBouncer=g_simpleBouncer;
+window.addEventListener('scene:load',()=>g_simpleBouncer.resetSessions());
+const g_simpleBouncerSurfaces=new Map();
+g_containerPresentations.register('simple-bouncer',{
+ renderSurface:(host,{container:c})=>{
+  let surface=g_simpleBouncerSurfaces.get(c.id);
+  if(!surface){surface=installSimpleBouncerSurface(host,{controller:g_simpleBouncer,id:c.id,
+   arm:options=>g_bouncerBoard.arm(options),remove:()=>containerToyModel.remove(c.id)});g_simpleBouncerSurfaces.set(c.id,surface);}
+  surface.setActive(!c.presentation.state.open);
+ },
+ disposeSurface:id=>{g_simpleBouncerSurfaces.get(id)?.dispose();g_simpleBouncerSurfaces.delete(id);g_simpleBouncer.dispose(id);},
+});
+const g_bouncerBoard=installBoardBouncer({objects:boardPhysicalObjects,controller:g_simpleBouncer,
+ getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
+ canInteract:()=>!g_artInternal.active,
+ unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},
+ onRelevant:()=>window.ToySpawner?.configure?.({getCatalog:()=>getToyCatalog()}),
+ createCapture:async({containerId,ballId,launch,release})=>{
+  let c=containerToyModel.get(containerId),created=false;
+  if(!c){
+   const obstacles=connectionModel.getObjectIds().filter(id=>!containerToyModel.owner(id)).map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
+   const slot=clearVerticalSlot({x:release.x+80,y:release.y+80,width:520,height:360},obstacles,72);c=g_simpleBouncer.create(slot);created=true;
+   const result=connectionModel.connect('transport',{objectId:heartbeatModel.target().id,portId:'output'},{objectId:c.id,portId:'input'});
+   if(!result.ok){containerToyModel.remove(c.id);throw Error(result.reason);}
+   const card=document.getElementById(c.id);if(card)card.dataset.controlsVisible='1';
+  }
+  try{await g_simpleBouncer.throwBall(c.id,{ballId,launch});if(created)tidySimpleContainer(c.id);}
+  catch(error){if(created)containerToyModel.remove(c.id);throw error;}
+ },
+});
+window.BouncerBoard=g_bouncerBoard;
+boardPhysicalObjects.subscribe(()=>window.Persistence?.markDirty?.());
+function activateBoardBouncer(){g_simpleDrawCreation.cancel();return g_bouncerBoard.arm();}
 const g_simpleDrawSurfaces=new Map();
 g_containerPresentations.register('simple-draw',{
  renderSurface:(host,{container:c})=>{
@@ -7173,9 +7230,17 @@ const g_containerBoard=installContainerBoard({
  onOpenChange:c=>focusSimpleDraw(c,c.presentation.state.open,true),onExpand:c=>focusSimpleDraw(c,true,false),
  renderSurface:g_containerPresentations.renderSurface,disposeSurface:g_containerPresentations.disposeSurface,handleInteraction:g_containerPresentations.handleInteraction,
 });
+uiMode.subscribe(mode=>{
+ g_simpleDrawCreation.cancel();g_bouncerBoard.cancel();
+ if(mode!=='simple')return;
+ if(g_artInternal.active)exitInternalBoardImmediate();
+ for(const c of containerToyModel.list())if(c.presentation.state.open)containerToyModel.open(c.id,false);
+});
+document.addEventListener('toy-spawner:palette-change',()=>{g_simpleDrawCreation.cancel();g_bouncerBoard.cancel();});
 function focusSimpleDraw(c,internals,includeHeader){
- if(c?.presentation.type!=='simple-draw')return;
+ if(!['simple-draw','simple-bouncer'].includes(c?.presentation.type))return;
  const rects=internals?c.internalObjectIds.map(id=>g_graphPlacement.getRect(id)).filter(Boolean):[c.bounds];
+ 
  if(internals&&includeHeader)rects.push({x:c.bounds.x,y:c.bounds.y-170,width:280,height:140});if(!rects.length)return;
  const x=Math.min(...rects.map(r=>r.x)),y=Math.min(...rects.map(r=>r.y)),width=Math.max(...rects.map(r=>r.x+r.width))-x,height=Math.max(...rects.map(r=>r.y+r.height))-y;
  window.centerBoardOnWorldPoint?.(x+width/2,y+height/2,Math.max(.15,Math.min(.9,(window.innerWidth-240)/(width+120),(window.innerHeight-180)/(height+100))),{duration:350});

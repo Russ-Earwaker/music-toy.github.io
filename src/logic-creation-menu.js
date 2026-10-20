@@ -1,4 +1,5 @@
 import { logicNodeLabel } from './modifier-types.js';
+import {uiMode} from './ui-mode.js';
 
 export const BASIC_LOGIC_TYPES = Object.freeze(['sequence', 'together', 'repeat']);
 export const ADVANCED_LOGIC_GROUPS = Object.freeze([
@@ -16,12 +17,14 @@ export function logicCreationEntry(type) {
 }
 
 let activePopup = null;
+uiMode.subscribe(mode=>{if(mode==='simple')closeAdvancedLogic({restoreFocus:false});});
 export function closeAdvancedLogic({restoreFocus=true}={}) {
   activePopup?.close(restoreFocus);
 }
 // Shared presentation for empty-space creation and connection insertion.
 // Choosing delegates to the caller's existing factory/promotion path.
 export function openAdvancedLogic({anchor, returnFocus=anchor, onChoose, onHeartbeat}={}) {
+  if(uiMode.isSimple())return;
   closeAdvancedLogic({restoreFocus:false});
   const popup=document.createElement('section');popup.className='advanced-logic-popup';
   popup.setAttribute('role','dialog');popup.setAttribute('aria-label','Advanced Logic');

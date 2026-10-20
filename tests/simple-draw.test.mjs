@@ -15,6 +15,7 @@ import {ensurePlaybackInstance,getPlaybackInstance,clearPlaybackInstancesForTest
 import {MAIN_TRANSPORT_ID} from '../src/transport-registry.js';
 import {resolveMusicalPitch} from '../src/harmonic-adaptation.js';
 import {midiToName} from '../src/note-helpers.js';
+import {uiMode} from '../src/ui-mode.js';
 
 const short=()=>createLineSource([{x:.1,y:.8},{x:.6,y:.2}]);
 const maximum=()=>createLineSource([{x:0,y:.9},{x:1,y:.1},{x:0,y:.9},{x:1,y:.1},{x:0,y:.9}]);
@@ -40,6 +41,25 @@ function fixture({afterCreate=async()=>{}}={}){
  function poll(from,to){transport.currentTick=from;const turns=adapter.turnsForLookahead(from,to);scheduler.tick({transportId:MAIN_TRANSPORT_ID,playbackTurns:turns,getToy,currentTick:from,lookaheadEndTick:to,tickToAudioTime:t=>t});}
  return {model,containers,service,structures,toys,positions,calls,slots,cancelled,transport,createGrid,publish,wire,create,sync,poll,adapter,scheduler,dispose(){scheduler.dispose();adapter.reset();structures.dispose();containers.dispose();clearPlaybackInstancesForTests();}};
 }
+
+test('repeated interface switches during playback preserve topology, ownership, phase and scheduled voices',async()=>{
+ const f=fixture();try{
+  const a=f.create(['repeat','transpose']),b=f.create(['chord-progression']);
+  await f.service.draw(a.id,short());await f.service.draw(b.id,short());
+  await f.transport.play();
+  const graph=structuredClone(f.model.snapshot()),containers=f.containers.snapshot();
+  f.poll(0,120);
+  const transport={state:f.transport.state,currentTick:f.transport.currentTick},voices=structuredClone(f.calls);
+  const phases=[...f.toys.values()].map(p=>getPlaybackInstance(p.id).sourcePhaseOriginTick);
+  let events=0;const off=f.model.subscribe(()=>events++);
+  for(let i=0;i<20;i++)uiMode.set(i%2?'simple':'advanced');
+  assert.equal(events,0);off();
+  assert.deepEqual(f.model.snapshot(),graph);assert.deepEqual(f.containers.snapshot(),containers);
+  assert.equal(f.transport.state,transport.state);assert.equal(f.transport.currentTick,transport.currentTick);
+  assert.deepEqual([...f.toys.values()].map(p=>getPlaybackInstance(p.id).sourcePhaseOriginTick),phases);
+  assert.deepEqual(f.calls,voices);f.poll(0,120);assert.deepEqual(f.calls,voices);
+ }finally{uiMode.set('simple');f.dispose();}
+});
 
 for(const types of [[],['repeat'],['chord-progression'],['transpose'],['chord-progression','transpose','repeat']])test(`closed/Open/Close/Expand preserve every voice, rest, tick and performed pitch under ${types.join('/')||'Heartbeat'}`,async()=>{
  const f=fixture();try{

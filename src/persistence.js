@@ -10,6 +10,7 @@ import { syncVolumeUI } from './baseToy/volume-ui.js';
 import { connectionModel } from './connections.js';
 import { structureToyModel } from './structure-toys.js';
 import { containerToyModel } from './container-toys.js';
+import {boardPhysicalObjects} from './board-physical-objects.js';
 import { heartbeatModel } from './heartbeats.js';
 import { applyToyInstrument } from './instrument-state.js';
 import { normalizeMusicalRole, restoreToyMusicalRole } from './musical-role.js';
@@ -940,6 +941,7 @@ export function getSnapshot(){
     connections: connectionModel.snapshot().connections,
     structureToys: structureToyModel.list(),
     containers: containerToyModel.snapshot(),
+    physicalObjects: boardPhysicalObjects.snapshot(),
     ...(surfacePaint().length?{freePlaySurfacePaint:structuredClone(surfacePaint())}:{}),
     camera,
   },panels.map(p=>p.__sharedToyDefinition).filter(Boolean));
@@ -955,6 +957,7 @@ export function applySceneSnapshot(snap){
   try{snap=validateStructureInstanceLinks(validateInstanceLinks(migrateSourceUses(projectLinkedDefinitions(snap))));}catch(error){console.warn('[persistence] invalid linked toy scene',error);return false;}
   if (!snap || typeof snap !== 'object') return false;
   restoreSurfacePaint(snap.freePlaySurfacePaint);
+  try { boardPhysicalObjects.restore(snap.physicalObjects || []); } catch(error) { console.warn('[persistence] invalid physical objects',error);return false; }
   window.beginCreationGraphRestore?.();
   try{
     // Always pause transport when applying a scene so it doesn't auto-play after load.

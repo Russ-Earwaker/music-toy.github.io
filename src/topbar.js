@@ -1081,9 +1081,9 @@ const LEAD_IN_TOGGLE_DEFAULT_BARS = 4;
   function hasSceneToys() {
     try {
       const snap = window.Persistence?.getSnapshot?.();
-      if (snap && Array.isArray(snap.toys)) return snap.toys.length > 0;
+      if (snap && Array.isArray(snap.toys)) return snap.toys.length > 0 || (snap.physicalObjects?.length || 0) > 0;
     } catch {}
-    return document.querySelectorAll('#board > .toy-panel').length > 0;
+    return document.querySelectorAll('#board > .toy-panel, #board .physical-object').length > 0;
   }
 
 function ensureTopbar(){

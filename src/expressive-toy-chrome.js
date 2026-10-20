@@ -1,4 +1,5 @@
 import {decorateCircularControl} from './circular-control.js';
+export const isExpressiveContainer=type=>['simple-draw','simple-bouncer'].includes(type);
 
 // Art and content-sized containers share chrome; geometry remains owned by each toy.
 export function expressiveControl(button,{kind,label}={}){

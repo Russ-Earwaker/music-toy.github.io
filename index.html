@@ -16,6 +16,7 @@
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
   <link rel="stylesheet" href="./paint-palette.css">
   <link rel="stylesheet" href="./free-play.css">
+  <link rel="stylesheet" href="./simple-bouncer.css">
   <link rel="stylesheet" href="./expressive-layout.css">
   <!-- Shared toy surfaces live in style.css; dedicated styles cover other toy controls. -->
   <link rel="stylesheet" href="./src/chordwheel.css"
@@ -23,6 +24,7 @@
   <link rel="stylesheet" href="./src/drawgrid/drawgrid.css" />
   <link rel="stylesheet" href="./style.css?v=2026-09-05-laser-lock-trace-v1"
   />
+  <link rel="stylesheet" href="./ui-mode.css">
   <script type="module" src="./src/ios-flag.js"></script>
   <script type="module" src="./src/spa-history-guard.js"></script>
   <script type="module" src="./src/ui-scale.js" defer></script>
@@ -39,6 +41,13 @@
         <button class="menu-item" data-action="new-scene" type="button">New Creation</button>
         <button class="menu-item" data-action="open-creations" type="button">Save / Load / Share</button>
         <button class="menu-item" data-action="open-preferences" type="button">Preferences</button>
+      </div>
+    </div>
+    <div class="ui-mode-chrome">
+      <span class="ui-mode-heading" id="ui-mode-heading">Interface mode</span>
+      <div id="ui-mode" class="ui-mode-segments" role="group" aria-labelledby="ui-mode-heading">
+        <button type="button" class="ui-mode-button" data-ui-mode="simple" aria-pressed="false">Simple</button>
+        <button type="button" class="ui-mode-button" data-ui-mode="advanced" aria-pressed="false">Advanced</button>
       </div>
     </div>
     <div class="topbar-controls">
@@ -113,6 +122,7 @@
   <script type="module" src="./src/board-gestures.js" defer></script>
   <script type="module" src="./src/board-tap-dots.js" defer></script>
   <script type="module" src="./src/topbar.js" defer></script>
+  <script type="module" src="./src/ui-mode-header.js"></script>
   <script type="module" src="./src/feedback-support.js" defer></script>
   <script type="module" src="./src/guide.js" defer></script>
   <script type="module" src="./src/intro-overlay.js" defer></script>
