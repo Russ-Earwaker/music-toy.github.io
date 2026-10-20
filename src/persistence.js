@@ -365,6 +365,7 @@ function readUI(panel){
 function readArtToyUI(panel){
   const cs = getComputedStyle(panel);
   return {
+    positionSource: panel.dataset.positionSource || 'manual',
     left: cs.left || panel.style.left || '0px',
     top: cs.top || panel.style.top || '0px',
     width: cs.width || panel.style.width || '',
@@ -409,6 +410,7 @@ function applyUI(panel, ui){
 
 function applyArtToyUI(panel, ui){
   if (!panel || !ui) return;
+  panel.dataset.positionSource=ui.positionSource==='auto'?'auto':'manual';
   panel.style.position = 'absolute';
   if (ui.left) panel.style.left = String(ui.left);
   if (ui.top) panel.style.top = String(ui.top);

@@ -104,19 +104,31 @@ test('narrow legacy Free Play migration transfers history to ownership and never
  }finally{f.dispose();}
 });
 
-for(const action of ['clear','delete','replace'])test(`pending drawing ${action} removes detached grids without orphaning music`,async()=>{
+for(const action of ['clear','delete'])test(`pending drawing ${action} removes detached grids without orphaning music`,async()=>{
  let release;const gate=new Promise(resolve=>release=resolve);let count=0;
  const f=fixture({afterCreate:()=>++count===1?gate:Promise.resolve()});try{
   const c=f.create(),first=f.service.draw(c.id,maximum());
   const rejected=assert.rejects(first,/cancelled/);
   if(action==='clear')f.service.clear(c.id);
   if(action==='delete')f.containers.remove(c.id);
-  if(action==='replace')await f.service.draw(c.id,short());
   release();await rejected;
-  assert.equal(f.toys.size,action==='replace'?1:0);
+  assert.equal(f.toys.size,0);
   assert.equal(f.model.getObjectIds().filter(id=>id.startsWith('grid')).length,f.toys.size);
-  if(action==='replace')assert.deepEqual(f.service.data(c.id).gesture.path,short().path);
-  else assert.equal(f.containers.list().length,action==='clear'?1:0);
+  assert.equal(f.containers.list().length,action==='clear'?1:0);
+ }finally{release();f.dispose();}
+});
+
+test('completed and pending Simple Draw reject replacement without clearing contents; explicit Clear allows drawing',async()=>{
+ let release;const gate=new Promise(resolve=>release=resolve);let count=0;
+ const f=fixture({afterCreate:()=>++count===1?gate:Promise.resolve()});try{
+  const c=f.create(),first=f.service.draw(c.id,short());
+  await assert.rejects(f.service.draw(c.id,maximum()),{code:'DRAWING_EXISTS'});
+  release();await first;
+  const snapshot=f.containers.snapshot(),notes=structuredClone([...f.toys.values()].map(p=>p.__dgAuthoredNotes));
+  await assert.rejects(f.service.draw(c.id,maximum()),{code:'DRAWING_EXISTS'});
+  assert.deepEqual(f.containers.snapshot(),snapshot);assert.deepEqual([...f.toys.values()].map(p=>p.__dgAuthoredNotes),notes);
+  f.service.clear(c.id);assert.equal(f.service.line(c.id),null);await f.service.draw(c.id,maximum());
+  assert.deepEqual(f.service.data(c.id).gesture.path,maximum().path);
  }finally{release();f.dispose();}
 });
 

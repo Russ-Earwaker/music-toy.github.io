@@ -692,7 +692,7 @@ function beginPanelDrag({ panel, pointerId, remove = null } = {}) {
   ensureDock();
   let chainPanels = [panel];
   try {
-    const list = !remove && window.__mtArtToys?.collectChainPanelsForMove?.(panel);
+    const list = !remove && panel.classList?.contains('toy-panel') && window.__mtArtToys?.collectChainPanelsForMove?.(panel);
     if (Array.isArray(list) && list.length) chainPanels = list;
   } catch {}
   const startPositions = chainPanels.map((p) => ({
@@ -717,7 +717,7 @@ function updatePanelDrag({ clientX, clientY } = {}) {
     setTrashHover(hovering);
   }
   // Update art-toy drop highlight while dragging a music toy.
-  try { if (!state.panelDrag.remove) window.__mtArtToys?.probeDropForPanel?.(state.panelDrag.panel, clientX, clientY); } catch {}
+  try { if (!state.panelDrag.remove && state.panelDrag.panel.classList?.contains('toy-panel')) window.__mtArtToys?.probeDropForPanel?.(state.panelDrag.panel, clientX, clientY); } catch {}
 }
 
 function resolveRemoveHandler(panel) {
@@ -757,8 +757,10 @@ function endPanelDrag({ clientX, clientY, pointerId, canceled } = {}) {
     return false;
   }
 
+  // Only music panels can enter an Art Toy. Testing an outer Art panel here can
+  // hit itself, reject the music drop, and roll back an otherwise valid move.
   // Priority 2: drop onto an Art Toy (moves the entire chain into the art toy's internal container)
-  if (hasPoint && !objectRemove) {
+  if (hasPoint && !objectRemove && panel.classList?.contains('toy-panel')) {
     try {
       const result = window.__mtArtToys?.tryPlaceChainFromPanel?.(panel, clientX, clientY);
       const placed = !!(result && (result.placed === true || result === true));

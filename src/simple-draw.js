@@ -15,10 +15,10 @@ export function createSimpleDrawController({containers,model,getToy,createGrid,r
  function create(options={}){const c=containers.create({...options,presentationType:'simple-draw',interactionData:empty(),width:options.width||1100,height:options.height||760});onChanged();return c;}
  async function draw(id,source){
   const token={},c=containers.get(id);if(!c)throw new Error('Simple Draw was deleted.');
-  if(pending.has(id)||c.interactionData?.gesture||c.internalObjectIds.length){const error=new Error('Clear this toy before drawing a new line.');error.code='LINE_EXISTS';throw error;}
-
-  const strokeId=`simple-draw:${id}:${++serial}:${Date.now()}`,states=lineDrawGridStates(source,strokeId),initialPaint=structuredClone(states[0]?.freePlay.paint||[]),created=[];
+  // Only explicit Clear permits another stroke, including while grids initialize.
+  if(pending.has(id)||c.internalObjectIds.length||data(id).gesture){const error=new Error('Clear this Simple Draw before drawing a new line.');error.code='DRAWING_EXISTS';throw error;}
   pending.set(id,token);
+  const strokeId=`simple-draw:${id}:${++serial}:${Date.now()}`,states=lineDrawGridStates(source,strokeId),initialPaint=structuredClone(states[0]?.freePlay.paint||[]),created=[];
   try{
    for(let i=0;i<states.length;i++){
     const st=states[i];st.freePlay={strokeId,bar:i,startTick:st.freePlay.startTick,durationTicks:st.freePlay.durationTicks,phraseDurationTicks:source.durationTicks,containerManaged:true};

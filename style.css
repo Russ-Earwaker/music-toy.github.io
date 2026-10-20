@@ -1574,11 +1574,14 @@ body.advanced-controls-disabled [data-adv] {
   border-radius: inherit;
 }
 
-.art-fireworks-drag-area {
-  position: absolute;
+.expressive-toy-canvas {
   border: 2px dashed rgba(122, 176, 255, 0.44);
   background: rgba(70, 120, 255, 0.05);
   border-radius: 14px;
+}
+
+.art-fireworks-drag-area {
+  position: absolute;
   opacity: 0;
   transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
   pointer-events: none;
@@ -1598,9 +1601,6 @@ body.advanced-controls-disabled [data-adv] {
 
 .art-lasers-drag-area {
   position: absolute;
-  border: 2px dashed rgba(122, 176, 255, 0.44);
-  background: rgba(70, 120, 255, 0.05);
-  border-radius: 14px;
   opacity: 0;
   transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
   pointer-events: none;
@@ -1783,9 +1783,6 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 .art-sticker-draw-area {
   position: absolute;
   inset: 0;
-  border: 2px dashed rgba(122, 176, 255, 0.44);
-  background: rgba(70, 120, 255, 0.05);
-  border-radius: 14px;
   opacity: 0;
   transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
   pointer-events: none;
@@ -2095,7 +2092,7 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 }
 
 /* Base Art Toy: drag button + contextual controls */
-.art-toy-panel {
+.expressive-toy {
   --art-control-size: 62px;
   --art-drag-size: 124px; /* 2x the regular art toy control buttons */
 }
@@ -2553,24 +2550,30 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   box-shadow: 0 0 0 1px rgba(10, 14, 24, 0.9);
 }
 
-.art-toy-controls {
+.expressive-toy > .expressive-toy-controls {
   position: absolute;
-  top: calc(-18px - var(--art-drag-size) - 44px);
-  left: calc(-18px + var(--art-drag-size) + 10px);
+  bottom: calc(100% + 18px);
+  left: 0;
+  width: max(320px, 100%);
+  flex-wrap: wrap;
   transform: none;
-  --expressive-wrap: nowrap;
-
-
-  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 5;
 }
 
+.expressive-toy:not([data-controls-visible='1']) > .expressive-toy-controls { display: none !important; }
+.expressive-toy-controls [hidden] { display: none !important; }
+
 .art-toy-volume {
-  position: absolute;
-  top: calc(-18px - var(--art-drag-size) + var(--art-control-size) + 30px);
-  left: calc(-18px + var(--art-drag-size) + 10px);
+  order: 90;
+  position: relative;
   transform: none;
   z-index: 3;
-  width: min(320px, calc(100% + 76px));
+  width: 240px;
+  max-width: 100%;
+  flex: 0 1 240px;
 }
 
 .art-toy-volume .toy-volwrap {
@@ -2578,10 +2581,12 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
 }
 
 /* Art toy controls should use the same circular buttons as the music toys. */
-.art-toy-controls .c-btn {
-  --c-btn-size: var(--art-control-size);
+.expressive-toy-controls .c-btn { flex-shrink: 0; }
+.expressive-toy-controls [data-tool][aria-pressed='true'] { filter: brightness(1.5) saturate(1.3); --c-btn-glow-strength: .9; }
+.expressive-toy-controls .c-btn:not(.toy-mute-btn) {
+  --c-btn-size: var(--art-control-size) !important;
 }
-.art-toy-controls .c-btn .c-btn-core {
+.expressive-toy-controls .c-btn .c-btn-core {
   background-size: 62%;
 }
 
@@ -2598,7 +2603,7 @@ body:has(.toy-panel.toy-playing) .art-toy-panel[data-controls-visible='1'] .art-
   white-space: nowrap;
 }
 .art-toy-btn:hover { filter: brightness(1.1); }
-.art-toy-panel[data-controls-visible='1'] .art-toy-btn:hover {
+.expressive-toy[data-controls-visible='1'] .art-toy-btn:hover {
   filter: brightness(1.86) saturate(1.55);
 }
 .art-toy-btn:active { transform: translateY(1px) scale(0.98); }

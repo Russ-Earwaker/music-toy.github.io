@@ -1,0 +1,66 @@
+<!doctype html><meta charset="utf-8"><title>Shared expressive toy chrome regression</title>
+<link rel="stylesheet" href="../free-play.css"><link rel="stylesheet" href="../circular-button.css"><link rel="stylesheet" href="../style.css">
+<style>body{overflow:auto!important}#run,#results{position:relative;z-index:30000}#results{position:fixed;bottom:10px;left:10px;max-height:160px;max-width:600px;overflow:auto;background:#142438;white-space:pre-wrap;color:white}#world{position:relative;width:2600px;height:1600px;margin:250px 0 0 180px;transform-origin:0 0;--bv-scale:1}.toy-panel.test-grid{display:none}</style>
+<button id="run">Run chrome regressions</button><pre id="results">Ready</pre><div id="world" class="board-viewport"></div>
+<script type="module">
+import {createConnectionModel} from '../src/connections.js';
+import {createContainerToyModel} from '../src/container-toys.js';
+import {installContainerBoard} from '../src/container-board.js';
+import {installSimpleDrawSurface} from '../src/simple-draw-surface.js';
+import {createLineSource} from '../src/free-play-line.js';
+import {createBaseArtToyPanel,ensureBaseArtToyUI,setBaseArtToyControlsVisible} from '../src/art/base-art-toy.js';
+import {expressiveControl} from '../src/expressive-toy-chrome.js';
+import {installContainerVolumeUI} from '../src/container-volume.js';
+import {getToyVolumeRaw,isToyMuted,setToyVolume,setToyMuted} from '../src/audio-core.js';
+import {installVolumeUI} from '../src/baseToy/volume-ui.js';
+import '../src/toy-audio.js';
+const world=document.querySelector('#world'),result=document.querySelector('#results'),surfaces=new Map();
+const graph=createConnectionModel(),toys=new Map(),source=createLineSource([{x:.1,y:.8},{x:.8,y:.2}]);
+for(const id of ['chrome-grid-1','chrome-grid-2']){const p=document.createElement('section');p.id=id;p.className='toy-panel test-grid';p.dataset.toy='drawgrid';world.append(p);toys.set(id,p);graph.registerObject(id);setToyVolume(id,.65);}
+const containers=createContainerToyModel(graph,{getRect:()=>({x:0,y:0,width:700,height:700}),getDuration:()=>384});
+const first=containers.create({x:240,y:300,width:800,height:700,presentationType:'simple-draw'});containers.attach(first.id,['chrome-grid-1']);
+const second=containers.create({x:1200,y:900,width:400,height:600,presentationType:'simple-draw'});containers.attach(second.id,['chrome-grid-2']);
+let renders=0;
+const board=installContainerBoard({containers,getWorld:()=>world,getCandidates:()=>[],getScale:()=>Number(world.style.getPropertyValue('--bv-scale'))||1,onRender:()=>renders++,
+ mountVolume:(host,panel)=>installContainerVolumeUI(host,panel,{containers,getToy:id=>toys.get(id)}),
+ renderSurface:(id,host)=>{let surface=surfaces.get(id);if(!surface){surface=installSimpleDrawSurface(host,{lines:()=>[{id,source,straightened:false}],onNote:()=>()=>{},unlock(){},setSilence(){},setStraightened(){},clear(){},addLine(){throw Error('Unexpected creation');}}, {get:()=>[],set(){}});surfaces.set(id,surface);}surface.setActive(!containers.get(id).presentation.state.open);}});
+const art=createBaseArtToyPanel({kind:'sticker',left:1300,top:300,size:700});ensureBaseArtToyUI(art);world.append(art);
+const artCanvas=document.createElement('div');artCanvas.className='expressive-toy-canvas';artCanvas.style.cssText='position:absolute;inset:0';art.append(artCanvas);
+const artControls=art.querySelector('.art-toy-controls');for(const kind of ['clear','enter'])artControls.append(expressiveControl(document.createElement('button'),{kind,label:kind+' Art'}));installVolumeUI(art.querySelector('.art-toy-volume'),{panel:art});
+document.querySelector('#run').onclick=async()=>{const passed=[];const check=(v,m)=>{if(!v)throw Error(m);passed.push(m);};try{
+ const card=document.getElementById(first.id),other=document.getElementById(second.id),handle=card.querySelector('.art-toy-drag-btn'),header=card.querySelector('header');header.setPointerCapture=()=>{};
+ const rect=el=>{const r=el.getBoundingClientRect();return [r.x,r.y,r.width,r.height];};const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+ const canvas=card.querySelector('canvas'),initialCanvas=rect(canvas),initialBounds=JSON.stringify(containers.get(first.id).bounds),initialGraph=JSON.stringify(graph.snapshot()),initialRenders=renders;
+ const event=(type,x=100,y=100)=>handle.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:1,button:0,clientX:x,clientY:y}));const tap=()=>{event('pointerdown');event('pointerup');};
+ const hs=getComputedStyle(handle),as=getComputedStyle(art.querySelector('.art-toy-drag-btn'));
+ check(['width','height','left','top','filter','padding','backgroundSize'].every(k=>hs[k]===as[k]),'Simple and Art handles share dimensions, spacing and style');
+ check(hs.width==='124px','Shared handle is the canonical 124px');
+ check(Array.from(card.querySelectorAll('button,input')).filter(b=>b.getClientRects().length).length===1,'Closed toy exposes only handle');
+ tap();check(card.dataset.controlsVisible==='1','Pointer tap reveals controls');
+ check(same(rect(canvas),initialCanvas)&&JSON.stringify(containers.get(first.id).bounds)===initialBounds,'Reveal leaves canvas and content bounds unchanged');
+ check(renders===initialRenders&&JSON.stringify(graph.snapshot())===initialGraph,'Reveal does not publish layout or graph changes');
+ check(!other.dataset.controlsVisible,'Other Simple toy remains independently closed');
+ setBaseArtToyControlsVisible(art,true);check(card.dataset.controlsVisible==='1','Opening Art keeps Simple controls open');
+ const topButtons=Array.from(card.querySelectorAll('.expressive-toy-controls button,.expressive-toy-controls input')).filter(b=>b.getClientRects().length);
+ check(topButtons.every(b=>b.getBoundingClientRect().bottom<=card.getBoundingClientRect().top),'All revealed controls remain in shared top region');
+ const clear=card.querySelector('[data-reset]'),enter=card.querySelector('[data-container-action="open"]');
+ check(clear.classList.contains('art-toy-clear-btn')&&enter.classList.contains('art-toy-enter-btn'),'Clear and Enter use shared Art components');
+ check(clear.querySelector('.c-btn-core').style.getPropertyValue('--c-btn-icon-url')===art.querySelector('.art-toy-clear-btn .c-btn-core').style.getPropertyValue('--c-btn-icon-url'),'Clear asset matches Art exactly');
+ check(['width','height','padding','border','background','boxShadow'].every(k=>getComputedStyle(clear)[k]===getComputedStyle(art.querySelector('.art-toy-clear-btn'))[k]),'Clear dimensions, border, background and shadow match Art exactly');
+ const range=card.querySelector('input[type=range]');range.value='37';range.dispatchEvent(new Event('input',{bubbles:true}));
+ check(Math.abs(getToyVolumeRaw('chrome-grid-1')-.37)<1e-9,'Shared slider updates canonical internal audio bus');
+ const snapshot=JSON.parse(JSON.stringify({volume:getToyVolumeRaw('chrome-grid-1'),muted:isToyMuted('chrome-grid-1')}));
+ setToyVolume('chrome-grid-1',.1);setToyVolume('chrome-grid-1',snapshot.volume);setToyMuted('chrome-grid-1',snapshot.muted);board.render();
+ check(card.querySelector('input[type=range]').value==='37','UI reconstructs volume from persisted child audio state');
+ card.querySelector('.toy-mute-btn').click();check(isToyMuted('chrome-grid-1'),'Shared mute updates canonical internal audio bus');
+ card.querySelector('.toy-mute-btn').click();check(!isToyMuted('chrome-grid-1')&&Math.abs(getToyVolumeRaw('chrome-grid-1')-.37)<1e-9,'Shared unmute restores previous volume');
+ tap();check(card.dataset.controlsVisible==='0'&&art.dataset.controlsVisible==='1','Second tap hides only this toy controls');
+ event('pointerdown');event('pointercancel');check(card.dataset.controlsVisible==='0','Cancelled handle gesture does not toggle UI');
+ check(same(rect(canvas),initialCanvas)&&Math.abs(getToyVolumeRaw('chrome-grid-1')-.37)<1e-9,'Hide preserves canvas and canonical audio state');
+ event('pointerdown');event('pointermove',180,140);event('pointerup',180,140);check(card.dataset.controlsVisible==='0','Handle drag does not reveal controls');
+ check(containers.get(first.id).bounds.x===320&&containers.get(first.id).bounds.y===340,'Handle drag commits normal container movement');
+ for(const [width,scale]of [[400,1],[1200,.35],[320,.625]]){containers.resize(first.id,width,700);world.style.transform=`scale(${scale})`;world.style.setProperty('--bv-scale',scale);const before=rect(canvas),bounds=JSON.stringify(containers.get(first.id).bounds);tap();check(same(rect(canvas),before)&&JSON.stringify(containers.get(first.id).bounds)===bounds,`Chrome toggle preserves content at width ${width}, zoom ${scale}`);check(Array.from(card.querySelectorAll('.expressive-toy-controls button')).filter(b=>b.getClientRects().length).every(b=>b.getBoundingClientRect().bottom<=card.getBoundingClientRect().top),`Shared wrapping stays above canvas at width ${width}, zoom ${scale}`);tap();}
+ world.style.transform='scale(.55)';world.style.setProperty('--bv-scale','.55');containers.resize(first.id,800,700);tap();
+ result.textContent=`PASS ${passed.length}\n`+passed.join('\n');
+ }catch(error){result.textContent='FAIL '+error.stack;}};
+</script>

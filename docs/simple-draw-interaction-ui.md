@@ -1,5 +1,7 @@
 # Simple Draw interaction and container UI pass
 
+Chrome sections below describe the earlier UI pass. The current shared handle, top controls, volume and canvas implementation is documented in [Simple Paint UI alignment](simple-paint-ui-alignment.md).
+
 This pass changes input and presentation only. Canonical DrawGrid generation, sourceMidi, ticks, transport, Container ownership, content-first creation, fitting, overlap repair and persisted cut/paint fields are unchanged.
 
 ## 1. Scissors swipe hit testing
@@ -42,15 +44,15 @@ New Draw/Scissors/Paint/Heal/Uncoil/Expand glyphs are small inline SVG icons wit
 
 ## 6. Control hierarchy
 
-The surface keeps three primary circular modes: **Draw, Scissors, Black Paint**, each with an accessible name, tooltip and visible pressed state. Contextual secondary controls occupy the existing reserved action area:
+The surface exposes Draw only while empty, plus Scissors. A completed line has no Draw or Move line affordance. Black Paint, Random Paint and Wipe All are disabled in Simple Draw UI; legacy paint data remains supported and continues to render and mute notes. Contextual secondary controls occupy the existing reserved action area:
 
 | Mode | Secondary actions |
 | --- | --- |
-| Draw | Straighten/Re-coil, Clear, Move line |
-| Scissors | Random Cuts, Heal All |
-| Black Paint | Random Paint, Wipe All |
+| Empty Draw | Clear |
+| Completed line | Straighten/Re-coil, Clear |
+| Scissors | Straighten/Re-coil, Clear, Random Cuts, Heal All |
 
-Open, Expand onto Board and Delete Container are behind the compact header handle. Tooltips distinguish Open (inspect the owned graph) from Expand (remove the wrapper and reveal its toys). Random actions retain their accessible `Randomise Scissors` / `Randomise Black Paint` names and use the shared dice icon.
+Open, Expand onto Board and Delete Container are behind the compact header handle. Tooltips distinguish Open (inspect the owned graph) from Expand (remove the wrapper and reveal its toys). Random Cuts retains its accessible `Randomise Scissors` name and shared dice icon. Clear returns to empty Draw mode, including when Scissors was selected.
 
 ## 7. Contextual behavior and movement
 

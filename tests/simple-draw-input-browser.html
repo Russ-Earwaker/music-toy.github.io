@@ -1,0 +1,46 @@
+<!doctype html><meta charset="utf-8"><title>Simple Draw input regression</title>
+<link rel="stylesheet" href="../free-play.css"><link rel="stylesheet" href="../circular-button.css">
+<button id="run">Run input regressions</button><pre id="results">Ready</pre><div id="host" style="width:800px;height:760px"></div>
+<script type="module">
+import {installSimpleDrawSurface} from '../src/simple-draw-surface.js';
+import {createLineSource} from '../src/free-play-line.js';
+import {createBaseArtToyPanel,ensureBaseArtToyUI,setBaseArtToyControlsVisible} from '../src/art/base-art-toy.js';
+const results=document.querySelector('#results'),host=document.querySelector('#host');
+document.querySelector('#run').onclick=async()=>{
+ const passed=[];let surface;
+ const check=(value,message)=>{if(!value)throw new Error(message);passed.push(message);};
+ try{
+  let lines=[{id:'line',source:createLineSource([{x:.1,y:.8},{x:.8,y:.2}]),straightened:false}],adds=0,moves=0,clears=0;
+  const api={lines:()=>lines,unlock(){},onNote:()=>()=>{},setSilence(){},setStraightened(id,value){lines[0].straightened=value;},clear(){clears++;lines=[];},addLine(source){adds++;lines=[{id:'line',source}];return {started:Promise.resolve()};},beginContentMove(){moves++;},moveAuthoredContent(){moves++;}};
+  let paint=[];surface=installSimpleDrawSurface(host,api,{get:()=>paint,set:v=>paint=v});surface.setActive(true);
+  const scene=host.querySelector('section'),canvas=scene.querySelector('canvas');
+  // Synthetic pointers exercise installed handlers; capture needs a native active
+  // pointer, so stub only capture in this isolated test surface.
+  canvas.setPointerCapture=()=>{};
+  const stroke=()=>{const r=canvas.getBoundingClientRect();for(const [type,x,y]of [['pointerdown',.1,.8],['pointermove',.4,.2],['pointermove',.8,.7],['pointerup',.9,.3]])canvas.dispatchEvent(new PointerEvent(type,{pointerId:1,button:0,bubbles:true,clientX:r.left+r.width*x,clientY:r.top+r.height*y}));};
+  check(!scene.querySelector('[data-tool="Black Paint"]')&&!scene.querySelector('[data-silence-action="Black Paint"]'),'Black Paint and Wipe All absent');
+  check(!scene.querySelector('[aria-label="Move line"]'),'Move line absent');
+  check(scene.querySelector('[data-tool="Draw"]').hidden,'Draw affordance hidden for completed line');
+  const before=JSON.stringify(lines);stroke();check(adds===0&&moves===0&&JSON.stringify(lines)===before,'Completed canvas stroke cannot move, clear or replace content');
+  scene.querySelector('[data-tool="Scissors"]').click();
+  check(!scene.querySelector('[aria-label="Straighten"]')&&!scene.querySelector('[data-reset]'),'Scissors shows only contextual actions');
+  check(scene.querySelector('.free-play-random').title==='Random Cuts','Random action is cuts only');
+  scene.querySelector('[data-tool="Scissors"]').click();
+  scene.querySelector('[data-reset]').click();
+  check(clears===1&&!lines.length&&!scene.querySelector('[data-tool="Draw"]').hidden,'Clear restores empty drawable state');
+  stroke();await Promise.resolve();check(adds===1&&lines.length===1,'Empty toy accepts one valid stroke');
+  stroke();check(adds===1&&lines.length===1,'Subsequent pointer path cannot replace the new line');
+  surface.setActive(false);surface.setActive(true);check(scene.querySelector('[data-tool="Draw"]').hidden,'Reopen retains one-line restriction');
+  for(const scale of [.35,.625,1,1.8]){
+   const viewport=document.createElement('div');viewport.className='board-viewport';viewport.style.setProperty('--bv-scale',scale);host.append(viewport);
+   const panel=createBaseArtToyPanel({kind:'flashCircle',left:120,top:240});ensureBaseArtToyUI(panel);viewport.append(panel);setBaseArtToyControlsVisible(panel,true);
+   const button=panel.querySelector('.art-toy-drag-btn');
+   const drag=()=>{for(const [type,x,y]of [['pointerdown',100,100],['pointermove',160,130],['pointerup',160,130]])button.dispatchEvent(new PointerEvent(type,{pointerId:2,button:0,bubbles:true,clientX:x,clientY:y}));};
+   drag();check(Math.abs(parseFloat(panel.style.left)-(120+60/scale))<.001&&Math.abs(parseFloat(panel.style.top)-(240+30/scale))<.001,`Art outer coordinates commit at scale ${scale}`);
+   check(panel.dataset.controlsVisible==='1',`Art drag preserves open controls at scale ${scale}`);
+   const placed=[panel.style.left,panel.style.top];panel.dataset.dragDisabled='1';drag();check(panel.style.left===placed[0]&&panel.style.top===placed[1],`Internal Art mirror cannot move outer position at scale ${scale}`);viewport.remove();
+  }
+  results.textContent=`PASS ${passed.length}\n`+passed.join('\n');
+ }catch(error){results.textContent='FAIL '+error.stack;}finally{surface?.dispose();}
+};
+</script>
