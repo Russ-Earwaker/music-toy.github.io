@@ -39,8 +39,8 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
      else if(action==='open')onOpenChange(result);else if(action==='expand')onExpand(before);
     });
     header.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button')&& !handle.contains(e.target))return;e.stopPropagation();e.preventDefault();const start=containers.get(c.id).bounds,scale=getScale()||1;let moved=false;header.setPointerCapture(e.pointerId);
-     const move=ev=>{if(ev.pointerId!==e.pointerId)return;const rawX=ev.clientX-e.clientX,rawY=ev.clientY-e.clientY;if(!moved&&Math.abs(rawX)<6&&Math.abs(rawY)<6)return;if(!moved){containers.captureLayout(c.id);moved=true;}containers.move(c.id,start.x+rawX/scale,start.y+rawY/scale);};
-     const end=ev=>{if(ev.pointerId!==e.pointerId)return;header.removeEventListener('pointermove',move);header.removeEventListener('pointerup',end);header.removeEventListener('pointercancel',end);header.removeEventListener('lostpointercapture',end);if(ev.type==='pointerup'&&!moved)toggle();};
+     const move=ev=>{if(ev.pointerId!==e.pointerId)return;const rawX=ev.clientX-e.clientX,rawY=ev.clientY-e.clientY;if(!moved&&Math.abs(rawX)<6&&Math.abs(rawY)<6)return;if(!moved){containers.captureLayout(c.id);moved=true;window.ToySpawner?.beginPanelDrag?.({panel:card,pointerId:e.pointerId,remove:()=>containers.remove(c.id).ok});}window.ToySpawner?.updatePanelDrag?.({clientX:ev.clientX,clientY:ev.clientY});containers.move(c.id,start.x+rawX/scale,start.y+rawY/scale);};
+     const end=ev=>{if(ev.pointerId!==e.pointerId)return;header.removeEventListener('pointermove',move);header.removeEventListener('pointerup',end);header.removeEventListener('pointercancel',end);header.removeEventListener('lostpointercapture',end);if(moved)window.ToySpawner?.endPanelDrag?.({clientX:ev.clientX,clientY:ev.clientY,pointerId:ev.pointerId,canceled:ev.type!=='pointerup'});else if(ev.type==='pointerup')toggle();};
      header.addEventListener('pointermove',move);header.addEventListener('pointerup',end);header.addEventListener('pointercancel',end);header.addEventListener('lostpointercapture',end);
     });cards.set(c.id,card);
    }

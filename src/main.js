@@ -7162,8 +7162,7 @@ const g_simpleBouncerSurfaces=new Map();
 g_containerPresentations.register('simple-bouncer',{
  renderSurface:(host,{container:c})=>{
   let surface=g_simpleBouncerSurfaces.get(c.id);
-  if(!surface){surface=installSimpleBouncerSurface(host,{controller:g_simpleBouncer,id:c.id,
-   arm:options=>g_bouncerBoard.arm(options),remove:()=>containerToyModel.remove(c.id)});g_simpleBouncerSurfaces.set(c.id,surface);}
+  if(!surface){surface=installSimpleBouncerSurface(host,{controller:g_simpleBouncer,id:c.id,arm:options=>g_bouncerBoard.arm(options),screenToWorld});g_simpleBouncerSurfaces.set(c.id,surface);}
   surface.setActive(!c.presentation.state.open);
  },
  disposeSurface:id=>{g_simpleBouncerSurfaces.get(id)?.dispose();g_simpleBouncerSurfaces.delete(id);g_simpleBouncer.dispose(id);},
@@ -7176,11 +7175,9 @@ const g_bouncerBoard=installBoardBouncer({objects:boardPhysicalObjects,controlle
  createCapture:async({containerId,ballId,launch,release})=>{
   let c=containerToyModel.get(containerId),created=false;
   if(!c){
-   const obstacles=connectionModel.getObjectIds().filter(id=>!containerToyModel.owner(id)).map(id=>g_graphPlacement.getRect(id)).filter(Boolean);
-   const slot=clearVerticalSlot({x:release.x+80,y:release.y+80,width:520,height:360},obstacles,72);c=g_simpleBouncer.create(slot);created=true;
+   c=g_simpleBouncer.create({x:launch.x,y:launch.y});created=true;
    const result=connectionModel.connect('transport',{objectId:heartbeatModel.target().id,portId:'output'},{objectId:c.id,portId:'input'});
    if(!result.ok){containerToyModel.remove(c.id);throw Error(result.reason);}
-   const card=document.getElementById(c.id);if(card)card.dataset.controlsVisible='1';
   }
   try{await g_simpleBouncer.throwBall(c.id,{ballId,launch,targetPosition:release});}
   catch(error){if(created)containerToyModel.remove(c.id);throw error;}

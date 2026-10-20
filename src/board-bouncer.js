@@ -1,3 +1,4 @@
+import {BOUNCER_BASE_ORANGE,BOUNCER_IMPACT_ORANGE} from './bouncer-response-style.js';
 import {boardLaunch} from './simple-bouncer-physics.js';
 
 // Board DOM/SVG is presentation only. Physical positions are logical world units;
@@ -6,34 +7,36 @@ export function installBoardBouncer({objects,controller,getWorld,getViewport,scr
  const world=getWorld(),root=document.createElement('div');root.className='board-physical-objects';world.append(root);
  const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.classList.add('physical-motion-layer');root.append(svg);
  const aim=document.createElementNS(ns,'path');aim.classList.add('physical-launch-preview');svg.append(aim);
- const nodes=new Map(),trails=new Map();let armed=null,gesture=null,frame,lastRelevant=null;
+ const nodes=new Map(),trails=new Map(),predictions=new Map();let armed=null,gesture=null,frame,lastRelevant=null;
  const hint=document.createElement('p');hint.className='bouncer-board-hint';hint.hidden=true;hint.setAttribute('role','status');document.body.append(hint);
  const show=text=>{hint.textContent=text;hint.hidden=false;};
  const relevant=()=>!!armed||objects.list().length>0;
  function render(){
   updateModes();
-  const all=[...objects.list(),...(controller.handles?.()||[])],present=new Set(all.map(o=>o.id));
+  const all=objects.list(),present=new Set(all.map(o=>o.id));
   for(const [id,node]of nodes)if(!present.has(id)){node.remove();nodes.delete(id);trails.get(id)?.remove();trails.delete(id);}
   for(const o of all){let node=nodes.get(o.id);
    if(!node){node=document.createElement('button');node.type='button';node.id=o.id;node.dataset.physicalId=o.id;node.className=`physical-object physical-${o.kind}`;
-    node.addEventListener('keydown',e=>{e.stopPropagation();if(['cube','ball'].includes(o.kind)&&['Delete','Backspace'].includes(e.key)&&!controller.busy()){e.preventDefault();cancel();objects.remove(o.id);}if(e.key==='Enter'&&o.kind==='ball')arm({ballId:o.id});});
+    node.addEventListener('keydown',e=>{e.stopPropagation();if(['cube','ball'].includes(o.kind)&&['Delete','Backspace'].includes(e.key)){e.preventDefault();cancel();objects.remove(o.id);}if(e.key==='Enter'&&o.kind==='ball')arm({ballId:o.id});});
     if(o.kind!=='ball')node.addEventListener('pointerdown',e=>startCube(e,o.id));root.append(node);nodes.set(o.id,node);
    }
-   node.setAttribute('aria-label',['start','target'].includes(o.kind)?`Ball ${o.kind==='start'?'Start':'Target'}`:o.kind==='cube'?`Cube · ${o.instrument}. Drag to move; Delete to remove.`:'Ball. Drag to throw; Delete to remove.');node.title=node.getAttribute('aria-label');
+   node.setAttribute('aria-label',o.kind==='cube'?`Cube, note ${o.sourceMidi}. Drag to move; Delete to remove.`:'Ball. Drag to throw; Delete to remove.');node.title=node.getAttribute('aria-label');
    const width=o.kind==='cube'?o.width:(o.radius||12)*2,height=o.kind==='cube'?o.height:(o.radius||12)*2;
-   Object.assign(node.style,{left:o.x+'px',top:o.y+'px',width:width+'px',height:height+'px'});if(o.kind==='cube')node.style.setProperty('--cube-color',o.color);
+   Object.assign(node.style,{left:o.x+'px',top:o.y+'px',width:width+'px',height:height+'px'});if(o.kind==='cube')node.style.setProperty('--cube-color',BOUNCER_BASE_ORANGE);
   }
   const next=relevant();if(next!==lastRelevant){lastRelevant=next;onRelevant(next);}
  }
  function startCube(e,id){
-  e.stopPropagation();if(e.button>0||controller.busy())return;e.preventDefault();
-  const cube=objects.get(id)||controller.handles().find(h=>h.id===id),p=screenToWorld(e),node=nodes.get(id),offset={x:p.x-cube.x,y:p.y-cube.y};node.focus({preventScroll:true});node.setPointerCapture(e.pointerId);
-  const move=ev=>{if(ev.pointerId!==e.pointerId)return;const point=screenToWorld(ev);const next={x:point.x-offset.x,y:point.y-offset.y};if(cube.containerId)controller.editHandle(cube.containerId,cube.kind,next);else objects.update(id,next);render();};
+  e.stopPropagation();if(e.button>0)return;e.preventDefault();
+  const cube=objects.get(id),p=screenToWorld(e),node=nodes.get(id),offset={x:p.x-cube.x,y:p.y-cube.y};node.focus({preventScroll:true});node.setPointerCapture(e.pointerId);
+  const move=ev=>{if(ev.pointerId!==e.pointerId)return;const point=screenToWorld(ev);const next={x:point.x-offset.x,y:point.y-offset.y};objects.update(id,next);render();};
   const end=ev=>{if(ev.pointerId!==e.pointerId)return;for(const t of ['pointerup','pointercancel','lostpointercapture'])node.removeEventListener(t,end);node.removeEventListener('pointermove',move);};
   node.addEventListener('pointermove',move);for(const t of ['pointerup','pointercancel','lostpointercapture'])node.addEventListener(t,end);
  }
  function arm(options={}){
-  if(!canInteract())return false;cancel();armed=options;
+  if(!canInteract())return false;
+  if(options.mode&&armed&&(armed.mode||'ball')===options.mode){cancel();return true;}
+  cancel();armed=options;
   const rect=getViewport().getBoundingClientRect(),point=screenToWorld({clientX:rect.left+rect.width*.47,clientY:rect.top+rect.height*.52,x:rect.left+rect.width*.47,y:rect.top+rect.height*.52});
   if(options.seed!==false&&!objects.near(point).length){for(const [dx,dy]of [[-110,-50],[110,15],[0,170]])objects.addCube(point.x+dx,point.y+dy,{scatter:true});}
   updateModes();document.body.classList.add('bouncer-board-armed');hint.hidden=true;onRelevant(true);updateModes();return true;
@@ -44,10 +47,9 @@ export function installBoardBouncer({objects,controller,getWorld,getViewport,scr
  function down(e){
   if(e.target.closest?.('.toy-spawner-art,.toy-spawner-logic,.toy-spawner-game,.palette-handle')){cancel();return;}
   if(!canInteract()||e.button>0||gesture||!getViewport()?.contains(e.target))return;
-  const ball=e.target.closest?.('.physical-ball'),cube=e.target.closest?.('.physical-cube');if(cube||e.target.closest?.('.physical-start,.physical-target'))return;
+  const ball=e.target.closest?.('.physical-ball'),cube=e.target.closest?.('.physical-cube');if(cube||e.target.closest?.('.cannon-aim,.cannon-barrel'))return;
   if(!ball&&!armed)return;
   if(!ball&&e.target.closest?.('button,input,select,a,.toy-panel,.art-toy-panel,.heartbeat-toy,.container-toy'))return;
-  if(controller.busy()){swallow(e);show('This throw is recording. Wait for the phrase to finish, or clear its capture.');return;}
   swallow(e);unlock();ball?.focus({preventScroll:true});const point=screenToWorld(e),ballId=ball?.dataset.physicalId||armed?.ballId||null;
   gesture={pointer:e.pointerId,start:point,current:point,ballId,containerId:armed?.containerId||null,mode:ball?'ball':armed?.mode||'ball'};getViewport().setPointerCapture?.(e.pointerId);
  }
@@ -60,7 +62,8 @@ export function installBoardBouncer({objects,controller,getWorld,getViewport,scr
   if(Math.hypot(release.x-g.start.x,release.y-g.start.y)<6)return;
   const ball=objects.get(g.ballId)||objects.addBall(g.start.x,g.start.y);
   const containerId=g.containerId||(controller.data(ball.captureId)?ball.captureId:null);
-  try{await createCapture({containerId,ballId:ball.id,launch:boardLaunch(g.start,release),release});hint.hidden=true;}
+  const cannon=containerId&&controller.cannon?.(containerId);
+  try{await createCapture({containerId,ballId:ball.id,launch:boardLaunch(cannon||g.start,cannon?.endpoint||release),release:cannon?.endpoint||release});hint.hidden=true;}
   catch(error){show(error.message);}
  }
  const unsubscribe=objects.subscribe(event=>{render();if(event.type==='add'&&event.scatter){nodes.get(event.object.id)?.animate?.([
@@ -70,6 +73,20 @@ export function installBoardBouncer({objects,controller,getWorld,getViewport,scr
  ],{duration:650,easing:'cubic-bezier(.2,.7,.35,1)'});}});
  const unsubscribeContainers=controller.subscribe?.(render)||(()=>{});
  function animate(){
+  const present=new Set();
+  for(const ball of objects.list('ball')){
+   if(!ball.captureId||!controller.prediction)continue;present.add(ball.id);
+   let line=predictions.get(ball.id);if(!line){line=document.createElementNS(ns,'polyline');line.classList.add('physical-path-prediction');line.setAttribute('data-capture-id',ball.captureId);svg.prepend(line);predictions.set(ball.id,line);}
+   line.setAttribute('points',controller.prediction(ball.captureId).map(p=>p.x+','+p.y).join(' '));
+  }
+  for(const [id,line]of predictions)if(!present.has(id)){line.remove();predictions.delete(id);}
+  const responses=controller.cubeResponses?.();
+  for(const [id,node]of nodes)if(objects.get(id)?.kind==='cube'){
+   const response=responses?.get(id)||{pending:false,flash:0},f=response.flash;
+   node.style.setProperty('--cube-color',response.pending?BOUNCER_IMPACT_ORANGE:BOUNCER_BASE_ORANGE);
+   node.style.setProperty('--cube-flash',String(f>0?.25+.55*f:0));
+   node.style.transform='translate(-50%,-50%) scale('+(1+Math.sin((1-f)*Math.PI)*.1)+')';
+  }
   for(const ball of objects.list('ball')){
    const node=nodes.get(ball.id),view=controller.ballView(ball);if(!node)continue;
    if(gesture?.ballId!==ball.id)Object.assign(node.style,{left:view.position.x+'px',top:view.position.y+'px'});

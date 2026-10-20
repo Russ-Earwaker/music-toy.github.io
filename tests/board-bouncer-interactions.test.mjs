@@ -30,22 +30,43 @@ function fixture(){
  const event=(target,x,y)=>({target,clientX:x,clientY:y,pointerId:1,button:0,preventDefault(){},stopPropagation(){},stopImmediatePropagation(){this.stopped=true;}});
  async function dispatch(type,target,x,y){const e=event(target,x,y);await win.dispatch(type,e);if(!e.stopped)await target.dispatch(type,e);}
  const drag=async(target,a,b)=>{await dispatch('pointerdown',target,...a);await dispatch('pointermove',target,...b);await dispatch('pointerup',target,...b);};
- return {board,objects,calls,handles,nodes,world,drag,dispatch,dispose(){board.dispose();Object.assign(globalThis,old);}};
+ return {controller,board,objects,calls,handles,nodes,world,drag,dispatch,dispose(){board.dispose();Object.assign(globalThis,old);}};
 }
 test('Ball mode only arms; valid release fires one ball, retains mode and board logical endpoints',async()=>{
  const f=fixture();try{f.board.arm({mode:'ball',seed:false});assert.equal(f.objects.list().length,0);
+ f.board.arm({mode:'ball',seed:false});assert.equal(f.board.active,false);await f.drag(f.world,[100,200],[300,200]);assert.equal(f.calls.length,0);
+ f.board.arm({mode:'ball',seed:false});assert.equal(f.board.active,true);
  await f.drag(f.world,[100,200],[300,200]);assert.equal(f.objects.list('ball').length,1);assert.equal(f.calls.length,1);assert.deepEqual(f.calls[0].launch,{x:50,y:100,vx:840,vy:0});assert.deepEqual(f.calls[0].release,{x:150,y:100});assert.ok(f.board.active);
  await f.drag(f.world,[500,400],[501,401]);assert.equal(f.objects.list('ball').length,1);
  }finally{f.dispose();}
 });
-test('Cube mode places repeatedly on empty taps and prioritizes dragging cubes and both launch handles',async()=>{
+test('Cube mode places repeatedly on empty taps and prioritizes dragging cubes and cannon controls',async()=>{
  const f=fixture();try{
  f.board.arm({mode:'ball',seed:false});await f.drag(f.world,[100,200],[300,200]);f.board.arm({mode:'cube',seed:false});assert.equal(f.objects.list('cube').length,0);
+ f.board.arm({mode:'cube',seed:false});assert.equal(f.board.active,false);await f.drag(f.world,[500,400],[500,400]);assert.equal(f.objects.list('cube').length,0);
+ f.board.arm({mode:'cube',seed:false});assert.equal(f.board.active,true);
  await f.drag(f.world,[500,400],[500,400]);await f.drag(f.world,[600,400],[600,400]);assert.equal(f.objects.list('cube').length,2);
  const cube=f.objects.list('cube')[0],node=f.nodes().find(n=>n.id===cube.id);await f.drag(node,[500,400],[540,460]);assert.equal(f.objects.get(cube.id).x,270);assert.equal(f.objects.get(cube.id).y,230);
- for(const kind of ['start','target']){const handle=f.handles.find(h=>h.kind===kind),node=f.nodes().find(n=>n.id===handle.id),a=[handle.x*2,handle.y*2];await f.drag(node,a,[a[0]+40,a[1]+60]);assert.equal(handle.x,a[0]/2+20);assert.equal(handle.y,a[1]/2+30);}
+ for(const kind of ['cannon-aim','simple-container-handle']){const control=new Node('button');control.className=kind;await f.drag(control,[100,200],[140,260]);}assert.ok(!f.nodes().some(n=>n.className.includes('physical-start')||n.className.includes('physical-target')));
  const control=new Node('button');await f.drag(control,[800,400],[800,400]);assert.equal(f.objects.list('cube').length,2);assert.ok(f.board.active);
  }finally{f.dispose();}
 });
 
 test('selecting another palette cancels creation mode',async()=>{const f=fixture();try{f.board.arm({mode:'cube',seed:false});const palette=new Node('button');palette.className='palette-handle';await f.dispatch('pointerdown',palette,0,0);assert.equal(f.board.active,false);await f.drag(f.world,[100,100],[100,100]);assert.equal(f.objects.list().length,0);}finally{f.dispose();}});
+
+
+test('cubes remain draggable while a cannon is recording',async()=>{
+ const f=fixture();try{
+  const cube=f.objects.addCube(100,100),node=f.nodes().find(n=>n.id===cube.id);f.controller.busy=()=>true;
+  await f.drag(node,[200,200],[260,240]);assert.equal(f.objects.get(cube.id).x,130);assert.equal(f.objects.get(cube.id).y,120);
+ }finally{f.dispose();}
+});
+
+
+test('recording never blocks cube placement, new throws, or physical object deletion',async()=>{
+ const f=fixture();try{
+  f.controller.busy=()=>true;f.board.arm({mode:'cube',seed:false});await f.drag(f.world,[300,300],[300,300]);assert.equal(f.objects.list('cube').length,1);
+  const cube=f.objects.list('cube')[0],node=f.nodes().find(n=>n.id===cube.id);await node.dispatch('keydown',{key:'Delete',stopPropagation(){},preventDefault(){}});assert.equal(f.objects.list('cube').length,0);
+  f.board.arm({mode:'ball',seed:false});await f.drag(f.world,[100,200],[300,200]);assert.equal(f.calls.length,1);
+ }finally{f.dispose();}
+});

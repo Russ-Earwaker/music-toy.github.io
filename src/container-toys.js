@@ -7,7 +7,7 @@ export const CONTAINER_PORTS=Object.freeze({input:TOY_PORTS.input,output:TOY_POR
 // Organization only: no notes, patterns, musical definitions or transport here.
 // Wires remain canonical. Board projection substitutes the wrapper endpoints.
 export function createContainerToyModel(model,options={}){
- const moveListeners=new Set();
+ const moveListeners=new Set(),lifecycleListeners=new Set();
  const records=new Map(),listeners=new Set(),restoreShells=new Set(),boundsEdits=new Set();let serial=1;
  const config={getRect:()=>({x:0,y:0,width:680,height:480}),setPosition:()=>{},getDuration:()=>384,canContain:()=>true,canDelete:()=>true,removeInternal:id=>model.removeObject(id),...options};
  const clone=value=>structuredClone(value);
@@ -88,13 +88,13 @@ export function createContainerToyModel(model,options={}){
  function expand(id){
   if(!records.has(id))return fail('Container not found.');
   // The exact same graph is already on the board; only ownership/visibility go.
-  forget(id);changed();return {ok:true};
+  const container=get(id);forget(id);changed();for(const fn of lifecycleListeners)fn({type:'expand',container});return {ok:true};
  }
  function remove(id){
   const c=records.get(id);if(!c)return fail('Container not found.');
   if(c.internalObjectIds.some(child=>!config.canDelete(child)))return fail('An owned object cannot safely be deleted. Expand the container first.');
   model.transaction(()=>{forget(id);for(const child of [...c.internalObjectIds].reverse())config.removeInternal(child);});
-  changed();return {ok:true};
+  changed();for(const fn of lifecycleListeners)fn({type:'remove',container:clone(c)});return {ok:true};
  }
  function snapshot(){return [...records.values()].map(c=>({...clone(c),layout:Object.fromEntries(c.internalObjectIds.map(id=>{const r=config.getRect(id);return [id,{x:r.x-c.bounds.x,y:r.y-c.bounds.y}];}))}));}
  function durationOf(id){
@@ -151,6 +151,7 @@ export function createContainerToyModel(model,options={}){
   isVisible:id=>!owner(id)||!!records.get(owner(id)).presentation.state.open,
   connections,
   presentedEndpoint,canEditConnection:e=>!(owner(e.from.objectId)&&owner(e.from.objectId)===owner(e.to.objectId)),
+  subscribeLifecycle:fn=>{lifecycleListeners.add(fn);return ()=>lifecycleListeners.delete(fn);},
   subscribeMoves:fn=>{moveListeners.add(fn);return ()=>moveListeners.delete(fn);},
   subscribe:fn=>{listeners.add(fn);return ()=>listeners.delete(fn);},dispose(){unsubscribe();unsubscribeRemoval();}};
 }
