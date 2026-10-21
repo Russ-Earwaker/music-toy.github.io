@@ -43,7 +43,7 @@ export function simulateThrow({cubes,launch,bars=1,bpm=120,startTick=0,priorColl
    const snapped=quantizeBouncerOffsetTick(rawTick,0,2,{loopLengthTicks:durationTicks});
    const tick=snapped===durationTicks-1?durationTicks:snapped;
    lastHit.set(cube.id,tick);
-   collisions.push({tick,timeSeconds:time+elapsed,cubeId:cube.id,sourceMidi:cube.sourceMidi});
+   collisions.push({tick,timeSeconds:time+elapsed,cubeId:cube.id,sourceMidi:cube.sourceMidi,receiverCapabilities:structuredClone(cube.boardObject?.capabilities||{triggerReceiver:{},pitchSource:{midi:cube.sourceMidi}})});
   }
   time+=step;const rawTick=time*bpm*96/60;
   if(rawTick-trajectory.at(-1).tick>=4||time>=seconds)trajectory.push({tick:Math.min(durationTicks,rawTick),x:ball.x,y:ball.y,vx:ball.vx,vy:ball.vy});

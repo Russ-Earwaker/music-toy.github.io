@@ -80,9 +80,9 @@ export function installBoardBouncer({objects,controller,getWorld,getViewport,scr
    line.setAttribute('points',controller.prediction(ball.captureId).map(p=>p.x+','+p.y).join(' '));
   }
   for(const [id,line]of predictions)if(!present.has(id)){line.remove();predictions.delete(id);}
-  const responses=controller.cubeResponses?.();
+  const responses=controller.cubeResponses?.(),shared=controller.receiverResponses?.();
   for(const [id,node]of nodes)if(objects.get(id)?.kind==='cube'){
-   const response=responses?.get(id)||{pending:false,flash:0},f=response.flash;
+   const own=responses?.get(id),other=shared?.get(id),response={pending:own?.pending||other?.pending,flash:Math.max(own?.flash||0,other?.flash||0)},f=response.flash;
    node.style.setProperty('--cube-color',response.pending?BOUNCER_IMPACT_ORANGE:BOUNCER_BASE_ORANGE);
    node.style.setProperty('--cube-flash',String(f>0?.25+.55*f:0));
    node.style.transform='translate(-50%,-50%) scale('+(1+Math.sin((1-f)*Math.PI)*.1)+')';
@@ -100,5 +100,5 @@ export function installBoardBouncer({objects,controller,getWorld,getViewport,scr
  window.addEventListener('pointercancel',cancel);window.addEventListener('blur',cancel);window.addEventListener('keydown',escape,true);
  window.addEventListener('scene:new',cancel);window.addEventListener('scene:load',cancel);
  render();animate();
- return {arm,cancel,isRelevant:relevant,get active(){return !!armed;},dispose(){unsubscribe();unsubscribeContainers();cancelAnimationFrame(frame);root.remove();hint.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',cancel);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',escape,true);window.removeEventListener('scene:new',cancel);window.removeEventListener('scene:load',cancel);}};
+ return {arm,cancel,isRelevant:relevant,get active(){return !!armed;},get activeMode(){return armed?(armed.mode||'ball'):null;},dispose(){unsubscribe();unsubscribeContainers();cancelAnimationFrame(frame);root.remove();hint.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointermove',move,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',cancel);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',escape,true);window.removeEventListener('scene:new',cancel);window.removeEventListener('scene:load',cancel);}};
 }

@@ -1,3 +1,5 @@
+import {migrateRippleConnections} from './simple-ripple-connections.js';
+import {MAIN_TRANSPORT_ID} from './transport-registry.js';
 // src/persistence.js
 // Lightweight scene save/load with versioning and localStorage backend.
 import {storeLinkedDefinitions,projectLinkedDefinitions} from './linked-definitions.js';
@@ -11,6 +13,8 @@ import { connectionModel } from './connections.js';
 import { structureToyModel } from './structure-toys.js';
 import { containerToyModel } from './container-toys.js';
 import {boardPhysicalObjects} from './board-physical-objects.js';
+import {rippleObjects} from './simple-ripple.js';
+import {drumObjects} from './simple-drum.js';
 import { heartbeatModel } from './heartbeats.js';
 import { applyToyInstrument } from './instrument-state.js';
 import { normalizeMusicalRole, restoreToyMusicalRole } from './musical-role.js';
@@ -142,7 +146,7 @@ function __shouldVetoEmptyOverwrite(prevPayload, nextPayload, meta) {
   return (prev.nonEmpty && !next.nonEmpty && !userCleared);
 }
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const AUTOSAVE_KEY = 'scene:autosave';
 const LAST_SCENE_KEY = 'prefs:lastScene';
 
@@ -941,7 +945,9 @@ export function getSnapshot(){
     connections: connectionModel.snapshot().connections,
     structureToys: structureToyModel.list(),
     containers: containerToyModel.snapshot(),
-    physicalObjects: boardPhysicalObjects.snapshot(),
+    physicalObjects: boardPhysicalObjects.authoredSnapshot(),
+    rippleObjects: rippleObjects.snapshot(),
+    drumObjects: drumObjects.snapshot(),
     ...(surfacePaint().length?{freePlaySurfacePaint:structuredClone(surfacePaint())}:{}),
     camera,
   },panels.map(p=>p.__sharedToyDefinition).filter(Boolean));
@@ -957,6 +963,8 @@ export function applySceneSnapshot(snap){
   try{snap=validateStructureInstanceLinks(validateInstanceLinks(migrateSourceUses(projectLinkedDefinitions(snap))));}catch(error){console.warn('[persistence] invalid linked toy scene',error);return false;}
   if (!snap || typeof snap !== 'object') return false;
   restoreSurfacePaint(snap.freePlaySurfacePaint);
+  try { drumObjects.restore(snap.drumObjects || []); } catch(error) { console.warn('[persistence] invalid Drum objects',error);return false; }
+  try { rippleObjects.restore(snap.rippleObjects || []); } catch(error) { console.warn('[persistence] invalid Ripple objects',error);return false; }
   try { boardPhysicalObjects.restore(snap.physicalObjects || []); } catch(error) { console.warn('[persistence] invalid physical objects',error);return false; }
   window.beginCreationGraphRestore?.();
   try{
@@ -1257,7 +1265,7 @@ export function applySceneSnapshot(snap){
         const raf = window.requestAnimationFrame?.bind(window) ?? (fn => setTimeout(fn, 16));
         raf(() => {
           try {
-            window.restoreConnections?.(snap.connections, snap.structureToys || [], snap.containers || []);
+            window.restoreConnections?.(migrateRippleConnections(snap.connections,snap.rippleObjects,MAIN_TRANSPORT_ID), snap.structureToys || [], snap.containers || []);
             window.updateChains?.();
           } catch {} finally {window.endCreationGraphRestore?.();}
           if(migratedUses)for(const root of (snap.structureToys||[]).filter(s=>!snap.connections.some(c=>c.kind==='sequence'&&c.to.objectId===s.id)))window.arrangeSubgraph?.(root.id);

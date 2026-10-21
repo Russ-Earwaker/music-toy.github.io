@@ -74,7 +74,7 @@ test('moving chrome translates launch handles while shared cubes stay independen
 });
 test('physical positions, assignments, balls, references, stale state and trajectory round trip independently',async()=>{
  const f=fixture();try{const c=f.create();f.service.setBars(c.id,4);await f.capture(c.id);f.objects.addBall(3000,1000);f.objects.update(f.objects.list('cube')[0].id,{x:500});const saved=JSON.parse(JSON.stringify({containers:f.containers.snapshot(),physicalObjects:f.objects.snapshot(),notes:f.service.panels(c.id)[0].__dgAuthoredNotes}));
- f.objects.restore(saved.physicalObjects);f.containers.restore(saved.containers);assert.deepEqual(f.objects.snapshot(),saved.physicalObjects);assert.deepEqual(f.containers.snapshot(),saved.containers);assert.deepEqual(f.service.panels(c.id)[0].__dgAuthoredNotes,saved.notes);assert.equal(f.objects.list('ball').length,2);
+ f.objects.restore(saved.physicalObjects);f.containers.restore(saved.containers);assert.deepEqual(f.objects.authoredSnapshot(),saved.physicalObjects.map(({motion,captureId,captureToyId,instrument,...o})=>o));assert.ok(f.objects.list('ball').every(b=>b.motion.vx===0&&b.motion.vy===0));assert.deepEqual(f.containers.snapshot(),saved.containers);assert.deepEqual(f.service.panels(c.id)[0].__dgAuthoredNotes,saved.notes);assert.equal(f.objects.list('ball').length,2);
  const edge=f.model.getParent(f.service.panels(c.id)[0].id);f.model.disconnect(edge.id);f.sync();assert.equal(f.model.getTransportId(c.id),null);f.wire(MAIN_TRANSPORT_ID,c.id,'output','transport');f.sync();assert.equal(f.model.getTransportId(c.id),MAIN_TRANSPORT_ID);
  }finally{f.dispose();}
 });

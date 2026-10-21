@@ -204,6 +204,12 @@ export function getToyGain(id='master'){
   return g;
 }
 
+// Remove one standalone object's bus/settings without touching other toys.
+export function releaseToyAudioBus(id){
+ const key=String(id||'').toLowerCase();if(!key||key==='master')return;
+ __buses.get(key)?.disconnect();__buses.delete(key);__vol.delete(key);__mute.delete(key);__toyBusAliases.delete(key);
+}
+
 export function setToyVolume(id='master', v=1){
   const key = toyBusKey(id);
   const ctx = ensureAudioContext();

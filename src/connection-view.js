@@ -338,6 +338,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       if (context.visible && !context.visible(panel)) continue;
       for (const portId of ['input', 'output']) {
         const point = { objectId: panel.id, portId };
+        if(!model.getPort(point))continue;
         const anchor = getToyPoint(panel, portId !== 'output' ? 'left' : 'right');
         const world=anchor;
         if (world && Number.isFinite(world.x) && Number.isFinite(world.y)) desired.set(key(point), { point, world, kind: 'sequence' });

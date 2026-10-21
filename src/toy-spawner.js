@@ -1,5 +1,6 @@
 import {decorateCircularControl} from './circular-control.js';
 import {uiMode} from './ui-mode.js';
+import {simpleCreationGroups} from './simple-creation-palette.js';
 // src/toy-spawner.js
 // Provides the "Create Toy" palette dock and drag-to-spawn affordance.
 import { openAdvancedLogic, logicCreationEntry } from './logic-creation-menu.js';
@@ -48,6 +49,7 @@ const state = {
   trashFeedbackTimer: null,
   trashHelpTimer: null,
   trashHint: null,
+  creationButtons: [],
 };
 
 const BUTTON_ICON_HTML = '<div class="c-btn-outer"></div><div class="c-btn-glow"></div><div class="c-btn-core"></div>';
@@ -308,6 +310,8 @@ function ensureDock() {
   state.trash = trash;
   state.helpButton = help;
   state.overviewButton = overview;
+  // Observe existing UI mode flags; categories never become runtime state.
+  if(typeof MutationObserver!=='undefined')new MutationObserver(syncCreationModeUI).observe(document.body,{attributes:true,attributeFilter:['class']});
   updateHelpToggleUI(isHelpActive());
   updateOverviewToggleUI(overviewMode?.isActive?.());
   updatePaletteToggleUI();
@@ -384,8 +388,20 @@ function renderCatalog() {
   const catalog = safeCatalog();
   dbg('renderCatalog', state.activePalette, { count: catalog.length });
   state.listHost.innerHTML = '';
+  state.creationButtons=[];
+  const grouped=uiMode.isSimple()&&state.activePalette==='music',hosts=new Map();
+  state.menu?.classList.toggle('simple-music-grouped',grouped);
+  state.listHost.classList.toggle('is-simple-grouped',grouped);
+  if(grouped)for(const group of simpleCreationGroups(catalog)){
+    const section=document.createElement('section');section.className='simple-creation-group';section.dataset.simpleCategory=group.id;section.setAttribute('role','group');
+    const heading=document.createElement('h3');heading.id=`simple-creation-${group.id}`;heading.textContent=group.label;section.setAttribute('aria-labelledby',heading.id);section.append(heading);
+    const contents=document.createElement('div');contents.className='simple-creation-items';section.append(contents);hosts.set(group.id,contents);
+    if(!group.entries.length){const empty=document.createElement('p');empty.className='simple-creation-empty';empty.textContent='Coming later';contents.append(empty);}
+    state.listHost.append(section);
+  }
   if(state.activePalette==='logic'){const title=document.createElement('strong');title.className='logic-palette-title';title.textContent='STRUCTURE';state.listHost.append(title);}
-  catalog.forEach((entry) => {
+  const entries=grouped?simpleCreationGroups(catalog).flatMap(group=>group.entries):catalog;
+  entries.forEach((entry) => {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'toy-spawner-item';
@@ -401,6 +417,7 @@ function renderCatalog() {
 
     const isBouncerMode=['physical-ball','physical-cube'].includes(entry.type);
     if(isBouncerMode){decorateCircularControl(card,{label:entry.name,icon:entry.type==='physical-cube'?'cube':'throw'});card.classList.add('bouncer-mode-button');card.append(nameEl);}else card.append(nameEl,descEl);
+    if(grouped){card.setAttribute('aria-label',entry.name);card.title=entry.description||entry.name;state.creationButtons.push({card,entry});}
 
     const isDisabled = !!entry.disabled;
     const isActionOnly = typeof entry.action === 'function';
@@ -421,12 +438,18 @@ function renderCatalog() {
         }
         event.preventDefault();
         const created = isActionOnly ? invokeEntryAction(entry) : spawnAtDefault(entry);
+        syncCreationModeUI();
         state.justSpawned = false;
         if (created && !uiMode.isSimple()) setMenuOpen(false);
       });
     }
-    state.listHost.appendChild(card);
+    (grouped?hosts.get(entry.simpleCategory):state.listHost).appendChild(card);
   });
+  syncCreationModeUI();
+}
+
+function syncCreationModeUI(){
+  for(const {card,entry}of state.creationButtons){const active=!!entry.isCreationActive?.();card.classList.toggle('is-active',active);card.setAttribute('aria-pressed',String(active));}
 }
 
 function openAdvancedPalette() {
@@ -441,7 +464,7 @@ function safeCatalog() {
   try {
     const items = state.config.getCatalog?.() || [];
     if (!Array.isArray(items)) return [];
-    const filtered = items.filter((item) => item && item.name && (item.type || typeof item.action === 'function') && (!uiMode.isSimple() || state.activePalette === 'art' || (state.activePalette === 'music' && ['simple-draw','simple-bouncer','physical-cube','physical-ball'].includes(item.type))));
+    const filtered = items.filter((item) => item && item.name && (item.type || typeof item.action === 'function') && (!uiMode.isSimple() || state.activePalette === 'art' || (state.activePalette === 'music' && item.simpleCategory)));
     if (!filtered.length) {
       dbg('catalog empty', state.activePalette, { rawCount: items.length });
     }

@@ -1,3 +1,4 @@
+import {containerBoardObject} from './board-object.js';
 import {connectionModel,TOY_PORTS} from './connections.js';
 import {compileStructureGraph} from './structure-graph.js';
 import {createStructureRuntime} from './structure-runtime.js';
@@ -13,7 +14,7 @@ export function createContainerToyModel(model,options={}){
  const clone=value=>structuredClone(value);
  const samePoint=(a,b)=>a?.objectId===b?.objectId&&a?.portId===b?.portId;
  const owner=id=>[...records.values()].find(c=>c.internalObjectIds.includes(id))?.id||null;
- const get=id=>records.has(id)?clone(records.get(id)):null;
+ const get=id=>records.has(id)?{...clone(records.get(id)),boardObject:containerBoardObject(records.get(id))}:null;
  const changed=()=>{for(const listener of listeners)listener();};
  const fail=reason=>({ok:false,reason});
  function inspect(ids){
@@ -96,7 +97,7 @@ export function createContainerToyModel(model,options={}){
   model.transaction(()=>{forget(id);for(const child of [...c.internalObjectIds].reverse())config.removeInternal(child);});
   changed();for(const fn of lifecycleListeners)fn({type:'remove',container:clone(c)});return {ok:true};
  }
- function snapshot(){return [...records.values()].map(c=>({...clone(c),layout:Object.fromEntries(c.internalObjectIds.map(id=>{const r=config.getRect(id);return [id,{x:r.x-c.bounds.x,y:r.y-c.bounds.y}];}))}));}
+ function snapshot(){return [...records.values()].map(c=>({...clone(c),boardObject:containerBoardObject(c),layout:Object.fromEntries(c.internalObjectIds.map(id=>{const r=config.getRect(id);return [id,{x:r.x-c.bounds.x,y:r.y-c.bounds.y}];}))}));}
  function durationOf(id){
   const c=records.get(id);if(!c)return null;
   if(!c.internalObjectIds.length)return 0;

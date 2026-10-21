@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Simple Ripple loop QA</title>
+<style>html,body,iframe{margin:0;width:100%;height:100%;border:0;display:block}</style>
+<iframe title="Rhythmake Ripple loop QA" src="../index.html"></iframe>
+<script>
+document.querySelector('iframe').addEventListener('load',event=>{
+ const script=event.target.contentDocument.createElement('script');script.type='module';
+ script.src=new URL('./simple-ripple-loop-browser-observer.js',location.href).href;
+ event.target.contentDocument.body.append(script);
+});
+</script></html>

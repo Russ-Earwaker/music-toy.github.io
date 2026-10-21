@@ -1,0 +1,13 @@
+.simple-ripple-layer{position:absolute;inset:0;pointer-events:none;overflow:visible}
+.simple-ripple-object{position:absolute;pointer-events:auto;transform:translate(-50%,-50%);z-index:75}
+.simple-ripple-trigger{width:76px;height:76px;border:4px solid #68b5d9;border-radius:50%;background:#132c45;color:#a7e5ff;font-size:55px;line-height:1;cursor:pointer;box-shadow:0 0 18px #68b5d955}
+.simple-ripple-trigger:active{background:#24506a}
+.simple-ripple-object>.art-toy-drag-btn{position:absolute;left:-78px;top:7px;width:62px;height:62px;--c-btn-size:62px;--art-drag-size:62px;touch-action:none}
+.simple-ripple-controls{position:absolute;left:0;top:90px;display:none;gap:12px;align-items:center;min-width:100px}
+.simple-ripple-object[data-controls-visible="1"]>.simple-ripple-controls{display:flex}
+.ripple-instrument-name{position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:13px;color:#e3f5ff}
+.simple-ripple-waves{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none;z-index:74}
+.simple-ripple-wave{fill:none;stroke:#8bdcff;stroke-width:3;pointer-events:none}
+.simple-ripple-armed .board-viewport{cursor:crosshair}
+
+.ripple-length{display:flex;flex-direction:column;gap:5px;color:#e3f5ff;font-size:13px;white-space:nowrap}.ripple-length select{min-height:44px;min-width:90px;border:1px solid #68b5d9;border-radius:8px;background:#132c45;color:#e3f5ff;padding:8px;font:inherit}

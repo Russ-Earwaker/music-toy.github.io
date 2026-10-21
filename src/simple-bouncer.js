@@ -1,3 +1,5 @@
+import {receiverTriggerResponse} from './board-receiver-response.js';
+import {createBoardObject,resolveBoardInteraction} from './board-object.js';
 import {simulateThrow,trajectoryPoint,trajectoryState,clampBars,boardLaunch,aimDirection,CANNON_SIZE,CANNON_BARREL_LENGTH,DEFAULT_CANNON_INSTRUMENT} from './simple-bouncer-physics.js';
 import {normalizeAuthoredState,restoreAuthoredNotes,drawgridPatternFromState} from './drawgrid/dg-authored-notes.js';
 import {getPlaybackInstance,getPlaybackLocalTick,getPlaybackOccurrence} from './playback-instances.js';
@@ -7,9 +9,17 @@ import {patternOriginTick} from './source-phase.js';
 
 export function bouncerGridState(capture,id,instrument=DEFAULT_CANNON_INSTRUMENT){
  const steps=capture.durationTicks>384?32:8;
+ const emitter=createBoardObject('cannon',{id,authoredState:{instrument}});
+ const authoredNotes=capture.collisions.flatMap((contact,index)=>{
+  // Pre-foundation saves have only pitch; migrate that receiver snapshot here.
+  const receiver={id:contact.cubeId,capabilities:contact.receiverCapabilities??{triggerReceiver:{},pitchSource:{midi:contact.sourceMidi}}};
+  const event=resolveBoardInteraction(emitter,receiver,contact.timeSeconds);
+  if(!event)return [];
+  return [{id:`${id}:hit:${index}`,col:((contact.tick+(capture.phaseOffsetTick||0))%capture.durationTicks)/48,
+   sourceMidi:event.sourceMidi,cubeId:event.receiverId,collisionTimeSeconds:event.timeSeconds}];
+ });
  return normalizeAuthoredState({steps,instrument,preserveSourceRegister:true,authoredDurationTicks:capture.durationTicks,
-  authoredNotes:capture.collisions.map((e,i)=>({id:`${id}:hit:${i}`,col:((e.tick+(capture.phaseOffsetTick||0))%capture.durationTicks)/48,sourceMidi:e.sourceMidi,cubeId:e.cubeId,collisionTimeSeconds:e.timeSeconds})),
-  nodes:{active:Array(steps).fill(true)},strokes:[],meta:{preserveNodesOverStrokes:true}});
+  authoredNotes,nodes:{active:Array(steps).fill(true)},strokes:[],meta:{preserveNodesOverStrokes:true}});
 }
 // Captures own ordinary musical toys, and reference independent physical IDs.
 export function createSimpleBouncerController({containers,objects=boardPhysicalObjects,getToy,createGrid,applyGrid,removeGrid,publish,getTransport,cancelScheduled=()=>{},onChanged=()=>{},onPlay=()=>{}}){
@@ -206,7 +216,7 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
    const cycle=currentCycle(c.id,d,t),tick=t.currentTick-cycle;
    for(const hit of flightAt(c.id,d,cycle).capture.collisions){
     const impact=hit.timeSeconds*d.capture.bpm*96/60;
-    const pending=tick>=impact&&tick<hit.tick,flash=tick>=hit.tick?Math.max(0,1-(tick-hit.tick)/40):0;
+    const {pending,flash}=receiverTriggerResponse({tick,intendedTick:impact,eventTick:hit.tick});
     const previous=responses.get(hit.cubeId)||{pending:false,flash:0};
     responses.set(hit.cubeId,{pending:previous.pending||pending,flash:Math.max(previous.flash,flash)});
    }
@@ -267,6 +277,14 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
    d.direction={x:1,y:0};d.instrument=ps[0]?.dataset.instrument||DEFAULT_CANNON_INSTRUMENT;containers.move(c.id,first.x,first.y);setData(c.id,d);objects.update(ball.id,{captureId:c.id,captureToyId:ps[0]?.id||null,instrument:d.instrument});containers.resize(c.id,CANNON_SIZE,CANNON_SIZE);
    for(const p of ps){const steps=Number(p.dataset.steps)||8,notes=(p.__dgAuthoredNotes||[]).map(({instrument:legacy,...note})=>note);
     writeMusic(p,normalizeAuthoredState({steps,instrument:d.instrument,preserveSourceRegister:true,authoredDurationTicks:d.capture?.durationTicks||d.bars*384,authoredNotes:notes,nodes:{active:Array(steps).fill(true)},strokes:[],meta:{preserveNodesOverStrokes:true}}));publish(p,'simple-bouncer-cannon-migration');}
+  }
+  // Rebuild runtime ball links and validate references after every load.
+  for(const c of containers.list().filter(c=>c.presentation.type==='simple-bouncer')){
+   const d=c.interactionData;if(!d)continue;
+   d.brokenReferences=[...(d.cubeIds||[]),d.ballId].filter(id=>id&&!objects.get(id));
+   if(d.brokenReferences.length)d.stale=true;
+   setData(c.id,d);
+   if(objects.get(d.ballId))objects.update(d.ballId,{captureId:c.id,captureToyId:c.internalToyIds[0]||null,motion:{vx:0,vy:0}});
   }
  }
  return {subscribe:fn=>containers.subscribe(fn),prediction,cubeResponses,handles,cannon,setAim,setInstrument,editHandle,create,data,panels,objects,recording,busy,setBars,clear,throwBall,view,ballView,migrateLegacy,resetSessions:()=>{pending.clear();throws.clear();previews.clear();flights.clear();syncHooks();},dispose:id=>{pending.delete(id);throws.delete(id);previews.delete(id);flights.delete(id);},destroy:()=>{unsubscribe();unsubscribeContainers();unsubscribeLifecycle();unsubscribeHooks();for(const h of hooks.values()){if(h.panel.__sequencerPatternAtTick===h.provider)h.panel.__sequencerPatternAtTick=h.original;delete h.panel.__simpleBouncerLive;}hooks.clear();}};

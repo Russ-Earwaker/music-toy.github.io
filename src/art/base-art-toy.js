@@ -1,3 +1,4 @@
+import {artBoardObject} from '../board-object.js';
 import {expressiveControl} from '../expressive-toy-chrome.js';
 // src/art/base-art-toy.js
 // Shared base for Art Toys.
@@ -31,6 +32,7 @@ export function createBaseArtToyPanel({
   // (UI overlays like the spawner/topbar are separate layers, so this is safe.)
   panel.style.zIndex = '70';
 
+  Object.defineProperty(panel, 'boardObject', {configurable:true,get:()=>artBoardObject(panel)});
   return panel;
 }
 

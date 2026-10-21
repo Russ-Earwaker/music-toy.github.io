@@ -1,0 +1,10 @@
+.simple-drum-layer{position:absolute;inset:0;pointer-events:none;overflow:visible}
+.simple-drum-object{position:absolute;pointer-events:auto;transform:translate(-50%,-50%);z-index:125}
+.simple-drum-pad{box-sizing:border-box;width:104px;height:104px;border:7px solid #729fb7;border-radius:50%;background:radial-gradient(circle at 40% 30%,#3c6681,#173044 75%);box-shadow:inset 0 0 0 3px #a7d7e466,0 7px 0 #102030,0 10px 18px #0006;color:#e9f7ff;font:700 14px system-ui;letter-spacing:.1em;cursor:pointer;touch-action:none;user-select:none}
+.simple-drum-pad:active{background:#446f87}
+.simple-drum-pad:focus-visible{outline:3px solid #fff;outline-offset:4px}
+.simple-drum-object>.art-toy-drag-btn{position:absolute;left:-78px;top:21px;width:62px;height:62px;--c-btn-size:62px;--art-drag-size:62px;touch-action:none}
+.simple-drum-controls{position:absolute;left:0;top:118px;display:none;gap:12px;align-items:center;min-width:100px}
+.simple-drum-object[data-controls-visible="1"]>.simple-drum-controls{display:flex}
+.drum-instrument-name{position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:12px;color:#e3f5ff}
+.simple-drum-armed .board-viewport{cursor:crosshair}
