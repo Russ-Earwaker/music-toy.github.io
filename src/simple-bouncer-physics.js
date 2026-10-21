@@ -53,6 +53,8 @@ export function simulateThrow({cubes,launch,bars=1,bpm=120,startTick=0,priorColl
 // Match normal Bouncer: drag direction supplies the launch direction. A fixed
 // logical speed avoids viewport/DPR-dependent impulses or unbounded drag speeds.
 export function boardLaunch(start,end){const dx=end.x-start.x,dy=end.y-start.y,length=Math.hypot(dx,dy);return {x:start.x,y:start.y,vx:length<3?0:dx/length*BALL_LAUNCH_SPEED,vy:length<3?-BALL_LAUNCH_SPEED:dy/length*BALL_LAUNCH_SPEED};}
+// Both initial creation and authored Cannon aiming use the real swept flight.
+export function predictCannonTrajectory(options){return simulateThrow(options).trajectory;}
 export function trajectoryPoint(trajectory,tick){
  if(!trajectory?.length)return null;
  const end=trajectory.at(-1).tick,local=((tick%end)+end)%end;

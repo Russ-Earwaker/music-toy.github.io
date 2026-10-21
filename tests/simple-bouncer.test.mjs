@@ -315,3 +315,10 @@ test('recording never locks first-loop aim, position, phrase length, or other ca
   assert.equal(f.service.setBars(c.id,3),true);assert.equal(f.service.data(c.id).bars,3);
  }finally{f.dispose();}
 });
+import {seedTriggerCubes} from '../src/trigger-starter-cubes.js';
+test('deleting committed Cannon leaves canonical starter Cubes available to other Triggers',async()=>{
+ const f=fixture();try{const cubes=seedTriggerCubes({objects:f.objects,center:{x:0,y:0}}),c=f.create();await f.capture(c.id,boardLaunch({x:-300,y:-50},{x:100,y:-50}));f.containers.remove(c.id);assert.deepEqual(f.objects.list('cube').map(o=>o.id),cubes.map(o=>o.id));}finally{f.dispose();}
+});
+test('authored Cannon prediction uses current tempo and length through shared simulation',async()=>{
+ const f=fixture();try{const c=f.create();await f.capture(c.id,boardLaunch({x:0,y:0},{x:100,y:0}));f.transport.bpm=60;f.service.setBars(c.id,2);assert.deepEqual(f.service.prediction(c.id),simulateThrow({launch:boardLaunch({x:0,y:0},{x:100,y:0}),cubes:f.objects.list('cube'),bpm:60,bars:2}).trajectory);}finally{f.dispose();}
+});

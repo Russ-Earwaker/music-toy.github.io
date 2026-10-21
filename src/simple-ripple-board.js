@@ -7,13 +7,13 @@ import {installVolumeUI,syncVolumeUI} from './baseToy/volume-ui.js';
 import {setToyVolume,setToyMuted} from './audio-core.js';
 
 // Only input/presentation lives here. Wave animation never schedules a note.
-export function installSimpleRippleBoard({objects,controller,getWorld,getViewport,screenToWorld,now,unlock,canInteract=()=>true,onArm=()=>{},onDirty=()=>{}}){
+export function installSimpleRippleBoard({objects,controller,getWorld,getViewport,screenToWorld,now,unlock,canInteract=()=>true,onArm=()=>{},seedCubes=()=>{},onDirty=()=>{}}){
  const world=getWorld(),root=document.createElement('div');root.className='simple-ripple-layer';world.append(root);
  const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.classList.add('simple-ripple-waves');root.append(svg);
  const cards=new Map(),rings=new Map();let armed=false,placement=null,frame;
  async function emit(id){await unlock();if(objects.get(id))controller.emit(id);}
  function cancel(){armed=false;placement=null;document.body.classList.remove('simple-ripple-armed');}
- function arm(){if(!canInteract())return false;onArm();armed=!armed;document.body.classList.toggle('simple-ripple-armed',armed);return armed;}
+ function arm(){if(!canInteract())return false;onArm();armed=!armed;if(armed)seedCubes();document.body.classList.toggle('simple-ripple-armed',armed);return armed;}
  function render(){
   const present=new Set();
   for(const o of objects.list()){

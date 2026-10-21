@@ -1,3 +1,4 @@
+import {simulateThrow} from '../src/simple-bouncer-physics.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {installBoardBouncer} from '../src/board-bouncer.js';
@@ -68,5 +69,49 @@ test('recording never blocks cube placement, new throws, or physical object dele
   f.controller.busy=()=>true;f.board.arm({mode:'cube',seed:false});await f.drag(f.world,[300,300],[300,300]);assert.equal(f.objects.list('cube').length,1);
   const cube=f.objects.list('cube')[0],node=f.nodes().find(n=>n.id===cube.id);await node.dispatch('keydown',{key:'Delete',stopPropagation(){},preventDefault(){}});assert.equal(f.objects.list('cube').length,0);
   f.board.arm({mode:'ball',seed:false});await f.drag(f.world,[100,200],[300,200]);assert.equal(f.calls.length,1);
+ }finally{f.dispose();}
+});
+test('Cube drag state is live during pointer movement, ends on release/cancel, and is never authored',async()=>{
+ const f=fixture();try{
+  const cube=f.objects.addCube(100,100),node=f.nodes().find(n=>n.id===cube.id);
+  for(const ending of ['pointerup','pointercancel','lostpointercapture']){
+   await f.dispatch('pointerdown',node,200,200);assert.equal(f.objects.get(cube.id).drag,true);
+   await f.dispatch('pointermove',node,220,220);assert.equal(f.objects.get(cube.id).drag,true);
+   assert.equal(f.objects.authoredSnapshot()[0].drag,undefined);
+   await f.dispatch(ending,node,220,220);assert.equal(f.objects.get(cube.id).drag,false);
+  }
+ }finally{f.dispose();}
+});
+
+test('Ball selection seeds once, Cube selection does not, and cancelling preserves independent starters',()=>{
+ const f=fixture();try{
+  f.board.arm({mode:'cube'});assert.equal(f.objects.list().length,0);f.board.cancel();
+  f.board.arm({mode:'ball'});assert.equal(f.objects.list('cube').length,3);assert.equal(f.objects.list('ball').length,0);assert.equal(f.calls.length,0);
+  const ids=f.objects.list().map(o=>o.id);f.board.cancel();f.board.arm({mode:'ball'});assert.deepEqual(f.objects.list().map(o=>o.id),ids);
+ }finally{f.dispose();}
+});
+
+test('initial Ball drag previews swept bounces, updates direction, keeps fixed speed, and commits identical launch',async()=>{
+ const f=fixture();try{
+  const cube=f.objects.addCube(300,0),line=f.nodes()[0].children.find(n=>n.className.includes('physical-creation-prediction'));
+  f.board.arm({mode:'ball',seed:false});await f.dispatch('pointerdown',f.world,0,0);assert.equal(line.getAttribute('points')||'','');
+  await f.dispatch('pointermove',f.world,200,0);const first=line.getAttribute('points');assert.ok(first.split(' ').some(p=>Math.abs(Number(p.split(',')[0])-258)<1e-5),'Exact swept-contact corner is rendered');assert.equal(f.calls.length,0);assert.equal(f.objects.list('ball').length,0);
+  await f.dispatch('pointermove',f.world,0,200);assert.notEqual(line.getAttribute('points'),first);
+  await f.dispatch('pointermove',f.world,400,0);assert.equal(line.getAttribute('points'),first,'Longer drag does not increase speed');
+  f.objects.update(cube.id,{x:400});assert.notEqual(line.getAttribute('points'),first);assert.ok(line.getAttribute('points').split(' ').some(p=>Math.abs(Number(p.split(',')[0])-358)<1e-5));
+  const preview=line.getAttribute('points');await f.dispatch('pointerup',f.world,400,0);assert.equal(f.calls.length,1);assert.deepEqual(f.calls[0].launch,{x:0,y:0,vx:840,vy:0});
+  assert.equal(simulateThrow({launch:f.calls[0].launch,cubes:f.objects.list('cube')}).trajectory.map(p=>p.x+','+p.y).join(' '),preview);
+  assert.equal(line.getAttribute('points'),'');
+ }finally{f.dispose();}
+});
+
+test('cancelling initial Ball drag clears preview without creating Ball or Cannon',async()=>{
+ const f=fixture();try{
+  for(const type of ['pointercancel','lostpointercapture','blur']){
+  f.board.arm({mode:'ball'});const line=f.nodes()[0].children.find(n=>n.className.includes('physical-creation-prediction'));
+  await f.dispatch('pointerdown',f.world,0,0);await f.dispatch('pointermove',f.world,200,0);assert.ok(line.getAttribute('points'));
+  await f.dispatch(type,f.world,200,0);assert.equal(line.getAttribute('points'),'');assert.equal(f.calls.length,0);assert.equal(f.objects.list('ball').length,0);assert.equal(f.objects.list('cube').length,3);
+  await f.dispatch('pointerup',f.world,200,0);assert.equal(f.calls.length,0);
+  }
  }finally{f.dispose();}
 });

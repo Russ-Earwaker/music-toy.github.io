@@ -10,6 +10,7 @@ const output=document.createElement('output');output.setAttribute('aria-label','
 let notes=[],flashes=[],peak=0,analyser,samples,lastFlash=new Map();
 function button(name,fn){const b=document.createElement('button');b.textContent=name;b.onclick=fn;box.append(b);}
 button('Radial Cube fixtures',()=>{for(const [i,x]of [800,950,1100].entries())window.BoardObjects.create('cube',{x,y:440,sourceMidi:[60,64,67][i]});});
+button('Twin note fixtures',()=>{for(const y of [380,500])window.BoardObjects.create('cube',{x:1200,y,sourceMidi:72});});
 button('Observe loop audio',async()=>{await resumeAudioContextIfNeeded();if(!analyser){analyser=ensureAudioContext().createAnalyser();analyser.fftSize=2048;samples=new Float32Array(2048);getToyGain('master').connect(analyser);}});
 button('Reset loop observations',()=>{notes=[];flashes=[];peak=0;lastFlash.clear();});
 button('Disconnect Ripple',()=>{for(const o of rippleObjects.list()){const p=connectionModel.getParent(o.id);if(p)connectionModel.disconnect(p.id);}});

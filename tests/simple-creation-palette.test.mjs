@@ -48,7 +48,7 @@ test('actual registry metadata groups Cube, Ball/Ripple, Paint and Drum under Pl
 test('selecting entries invokes existing main creation/arming paths without constructing replacement toys',()=>{
  const f=fixture();f.open();
  f.click('physical-cube');assert.deepEqual(f.calls,[['create','physical-cube'],['bouncer.arm',{mode:'cube',seed:false}]]);
- f.calls.length=0;f.click('physical-ball');assert.deepEqual(f.calls,[['create','physical-ball'],['bouncer.arm',{mode:'ball',seed:false}]]);
+ f.calls.length=0;f.click('physical-ball');assert.deepEqual(f.calls,[['create','physical-ball'],['bouncer.arm',{mode:'ball',seed:true}]]);
  f.calls.length=0;f.click('simple-ripple');assert.deepEqual(f.calls,[['ripple.arm']]);
  f.calls.length=0;f.click('simple-draw');assert.deepEqual(f.calls,[['paint.arm']]);
  f.calls.length=0;f.click('simple-drum');assert.deepEqual(f.calls,[['drum.arm']]);

@@ -1,3 +1,4 @@
+import {seedTriggerCubes,triggerCreationPoint} from './trigger-starter-cubes.js';
 import {installRippleConnections} from './simple-ripple-connections.js';
 import {createLoopingRippleController} from './simple-ripple-loop.js';
 import {createReceiverResponses} from './board-receiver-response.js';
@@ -5974,7 +5975,7 @@ function createToyPanelAt(toyType, {
     if(type==='simple-bouncer'){if(artOwnerId||g_artInternal.active)return null;activateBoardBouncer();return null;}
     if(type==='physical-cube'||type==='physical-ball'){
       if(artOwnerId||g_artInternal.active)return null;
-      g_drumBoard.cancel();g_rippleBoard.cancel();g_simpleDrawCreation.cancel();g_bouncerBoard.arm({mode:type==='physical-cube'?'cube':'ball',seed:false});return null;
+      g_drumBoard.cancel();g_rippleBoard.cancel();g_simpleDrawCreation.cancel();g_bouncerBoard.arm({mode:type==='physical-cube'?'cube':'ball',seed:type==='physical-ball'});return null;
     }
     g_bouncerBoard.cancel();
     if (!type || !toyInitializers[type]) {
@@ -7189,6 +7190,7 @@ const g_receiverResponses=createReceiverResponses();
 g_simpleBouncer.receiverResponses=()=>g_receiverResponses.responses();
 const g_bouncerBoard=installBoardBouncer({objects:boardPhysicalObjects,controller:g_simpleBouncer,
  getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
+ getBpm:id=>transportRegistry.get(id?connectionModel.getTransportId(id):heartbeatModel.target().transportId)?.bpm||120,
  canInteract:()=>!g_artInternal.active,
  unlock:()=>{const context=ensureAudioContext();if(context.state==='suspended')void context.resume();},
  onRelevant:()=>window.ToySpawner?.configure?.({getCatalog:()=>getToyCatalog()}),
@@ -7211,15 +7213,18 @@ window.BouncerBoard=g_bouncerBoard;
 uiMode.subscribe(()=>g_bouncerBoard.cancel());
 boardPhysicalObjects.subscribe(()=>window.Persistence?.markDirty?.());
 const g_simpleRipple=createLoopingRippleController({objects:rippleObjects,getReceivers:()=>window.BoardObjects.list(),
+ isReceiverDragging:id=>!!boardPhysicalObjects.get(id)?.drag,
  getTransport:id=>transportRegistry.get(connectionModel.getTransportId(id)),
  schedule:event=>{setToyVolume(event.emitterId,event.volume);setToyMuted(event.emitterId,event.muted);triggerInstrument(event.instrument,transposeNote('C4',event.sourceMidi-60),event.when,event.emitterId,{eventTick:event.eventTick,pitched:true,pitchShift:true});},
  respond:(event,transport)=>g_receiverResponses.enqueue(event,transport),
  cancel:id=>{cancelScheduledToySources(id);bumpToyAudioGen(id,'board-interaction-reset');g_receiverResponses.clear(id);},
 });
 installRippleConnections({objects:rippleObjects,model:connectionModel,getHeartbeat:()=>heartbeatModel.target()});
+boardPhysicalObjects.subscribe(event=>{if(event.type==='add'||event.type==='update')g_simpleRipple.tick();});
 connectionModel.subscribe(()=>g_simpleRipple.tick());
 const g_rippleBoard=installSimpleRippleBoard({objects:rippleObjects,controller:g_simpleRipple,
  getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
+ seedCubes:()=>seedTriggerCubes({objects:boardPhysicalObjects,center:triggerCreationPoint({viewport:getViewportElement(),screenToWorld})}),
  now:()=>ensureAudioContext().currentTime,unlock:resumeAudioContextIfNeeded,canInteract:()=>!g_artInternal.active,
  onArm:()=>{g_drumBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();},onDirty:()=>window.Persistence?.markDirty?.(),
 });

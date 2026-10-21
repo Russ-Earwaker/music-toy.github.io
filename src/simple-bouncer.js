@@ -1,6 +1,6 @@
 import {receiverTriggerResponse} from './board-receiver-response.js';
 import {createBoardObject,resolveBoardInteraction} from './board-object.js';
-import {simulateThrow,trajectoryPoint,trajectoryState,clampBars,boardLaunch,aimDirection,CANNON_SIZE,CANNON_BARREL_LENGTH,DEFAULT_CANNON_INSTRUMENT} from './simple-bouncer-physics.js';
+import {predictCannonTrajectory,simulateThrow,trajectoryPoint,trajectoryState,clampBars,boardLaunch,aimDirection,CANNON_SIZE,CANNON_BARREL_LENGTH,DEFAULT_CANNON_INSTRUMENT} from './simple-bouncer-physics.js';
 import {normalizeAuthoredState,restoreAuthoredNotes,drawgridPatternFromState} from './drawgrid/dg-authored-notes.js';
 import {getPlaybackInstance,getPlaybackLocalTick,getPlaybackOccurrence} from './playback-instances.js';
 import {boardPhysicalObjects} from './board-physical-objects.js';
@@ -204,8 +204,8 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
  }
  function prediction(id){
   const d=data(id);if(!d?.capture)return [];
-  const launch=authoredLaunch(id,d),cubes=objects.list('cube'),key=geometryKey(d,launch,cubes);
-  let cached=previews.get(id);if(cached?.key!==key){cached={key,trajectory:simulateThrow({launch,cubes,bars:d.bars,bpm:getTransport(id)?.bpm||120}).trajectory};previews.set(id,cached);}
+  const launch=authoredLaunch(id,d),cubes=objects.list('cube'),bpm=getTransport(id)?.bpm||120,key=JSON.stringify([geometryKey(d,launch,cubes),d.bars,bpm]);
+  let cached=previews.get(id);if(cached?.key!==key){cached={key,trajectory:predictCannonTrajectory({launch,cubes,bars:d.bars,bpm})};previews.set(id,cached);}
   return cached.trajectory;
  }
  function cubeResponses(){
