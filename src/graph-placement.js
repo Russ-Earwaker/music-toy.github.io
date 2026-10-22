@@ -15,6 +15,14 @@ export function clearVerticalSlot(desired,obstacles,gap=MIN_SIBLING_GAP_Y,minY=-
   const ys=[Math.max(minY,desired.y),...rs.flatMap(r=>[r.y-desired.height-gap,r.y+r.height+gap])].filter(y=>y>=minY).sort((a,b)=>Math.abs(a-desired.y)-Math.abs(b-desired.y)||b-a);
   return {...desired,y:ys.find(y=>!rs.some(r=>rectanglesOverlap({...desired,y},r,gap)))??desired.y};
 }
+// Nearest unobstructed rectangle using logical board bounds. Candidate columns
+// are obstacle edges; the existing vertical solver finds each column's best row.
+export function nearbyFreeRect(desired,obstacles,gap=24){
+ const xs=new Set([desired.x,...obstacles.flatMap(r=>[r.x-desired.width-gap,r.x+r.width+gap])]);
+ return [...xs].map(x=>clearVerticalSlot({...desired,x},obstacles,gap))
+  .filter(r=>!obstacles.some(o=>rectanglesOverlap(r,o,gap)))
+  .sort((a,b)=>(a.x-desired.x)**2+(a.y-desired.y)**2-((b.x-desired.x)**2+(b.y-desired.y)**2)||a.y-b.y||a.x-b.x)[0];
+}
 // Weighted isotonic packing: minimum movement subject to socket order. Manual
 // branches have stronger resistance, but can move to resolve inaccessible UI.
 function orderedStarts(items,gap){

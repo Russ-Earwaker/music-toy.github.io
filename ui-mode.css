@@ -49,3 +49,7 @@ html[data-ui-mode="simple"] .toy-spawner-menu { width:min(280px,calc(100vw - var
   html[data-ui-mode="simple"] .toy-spawner-dock { gap:6px; }
   html[data-ui-mode="simple"] .toy-spawner-menu { top:calc(2 * var(--toy-spawner-button-size) + 16px); padding:8px; box-sizing:border-box; }
 }
+
+/* Simple keeps connectivity readable while the instruments take visual priority. */
+html[data-ui-mode="simple"] .connection-layer .connection-path { opacity:.25; }
+html[data-ui-mode="simple"] .connection-layer [data-active="1"] .connection-path { opacity:.8; }

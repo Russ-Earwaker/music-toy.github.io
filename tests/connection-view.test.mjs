@@ -480,3 +480,13 @@ test('created Structure protects its own sockets and popup, and deletion/reset c
   view.reset();clearCreationGraph({model,structures:toys,sequence:{reset(){}},adapter:{sync(){}}});assert.equal(walk(svg,n=>n.getAttribute('class')?.includes('structure-card')).length,0);assert.equal(menu.hidden,true);
  }finally{view?.dispose();toys?.dispose();for(const[k,v]of Object.entries(saved)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}}
 });
+
+test('connection activity is exposed for mode CSS without changing topology when modes switch',()=>{
+ const original=Object.fromEntries(['document','window','requestAnimationFrame','cancelAnimationFrame'].map(k=>[k,globalThis[k]]));
+ const document=new Node(),window=new Node();document.head=new Node('head');document.createElementNS=(ns,tag)=>new Node(tag);document.createElement=tag=>new Node(tag);
+ Object.assign(globalThis,{document,window,requestAnimationFrame:()=>1,cancelAnimationFrame(){}});let view;
+ try{const model=createConnectionModel(),viewport=new Node(),panels=[{id:'pad',x:500}];model.registerObject(MAIN_TRANSPORT_ID,{ports:HEARTBEAT_PORTS,transportId:MAIN_TRANSPORT_ID});model.registerObject('pad');model.connect('transport',{objectId:MAIN_TRANSPORT_ID,portId:'output'},{objectId:'pad',portId:'input'});let active=false;
+ view=createConnectionView({model,getPanels:()=>panels,getContext:()=>({viewportEl:viewport,transform:{scale:1,tx:0,ty:0}}),getToyPoint:()=>({x:500,y:200}),getHeartbeatPoint:()=>({x:0,y:0}),getPulse:()=>active});
+ const saved=model.snapshot();for(const mode of ['simple','advanced','simple']){uiMode.set(mode);view.render();const path=walk(viewport,n=>n.getAttribute('class')==='connection-path')[0];assert.equal(path.parentNode.getAttribute('data-active'),'0');active=true;view.render();assert.equal(path.parentNode.getAttribute('data-active'),'1');active=false;assert.deepEqual(model.snapshot(),saved);}
+ }finally{view?.dispose();uiMode.set('advanced');for(const[k,v]of Object.entries(original)){if(v===undefined)delete globalThis[k];else globalThis[k]=v;}}
+});

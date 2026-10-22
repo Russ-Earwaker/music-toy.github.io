@@ -10,7 +10,7 @@ import {DRUM_SIZE} from './simple-drum.js';
 import {createDrumSet} from './simple-drum-set.js';
 import {triggerCreationPoint} from './trigger-starter-cubes.js';
 
-export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,screenToWorld,unlock,canInteract=()=>true,onArm=()=>{},onDirty=()=>{}}){
+export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,screenToWorld,unlock,getPlacementBounds,canInteract=()=>true,onArm=()=>{},onDirty=()=>{}}){
  const root=document.createElement('div');root.className='simple-drum-layer';getWorld().append(root);
  const cards=new Map();let armed=false,placement=null,frame;
  function positionControls(card){
@@ -93,5 +93,5 @@ export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,
  function animate(){for(const [id,entry]of cards){const phase=controller.phase(id),o=objects.get(id),p=drumRingPoint(phase.tick,o.authoredState.periodLoops);entry.playhead.setAttribute('cx',p.x);entry.playhead.setAttribute('cy',p.y);entry.playhead.dataset.tick=String(phase.tick);}frame=requestAnimationFrame(animate);}
  window.addEventListener('pointerdown',down,true);window.addEventListener('pointerup',up,true);window.addEventListener('pointercancel',interrupted);window.addEventListener('blur',cancel);window.addEventListener('keydown',escape);window.addEventListener('scene:new',cancel);window.addEventListener('scene:load',cancel);window.addEventListener('toy-volume',volumeChanged);window.addEventListener('toy-mute',volumeChanged);
  render();if(controller.phase)animate();
- return {arm,cancel,createSet(){if(!canInteract())return [];onArm();cancel();return createDrumSet(objects,triggerCreationPoint({viewport:getViewport(),screenToWorld}));},get active(){return armed;},dispose(){cancel();off();offHits();if(frame)cancelAnimationFrame(frame);for(const entry of cards.values())entry.dispose();root.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',interrupted);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',escape);window.removeEventListener('scene:new',cancel);window.removeEventListener('scene:load',cancel);window.removeEventListener('toy-volume',volumeChanged);window.removeEventListener('toy-mute',volumeChanged);}};
+ return {arm,cancel,createSet(){if(!canInteract())return [];onArm();cancel();return createDrumSet(objects,triggerCreationPoint({viewport:getViewport(),screenToWorld}),getPlacementBounds?.());},get active(){return armed;},dispose(){cancel();off();offHits();if(frame)cancelAnimationFrame(frame);for(const entry of cards.values())entry.dispose();root.remove();window.removeEventListener('pointerdown',down,true);window.removeEventListener('pointerup',up,true);window.removeEventListener('pointercancel',interrupted);window.removeEventListener('blur',cancel);window.removeEventListener('keydown',escape);window.removeEventListener('scene:new',cancel);window.removeEventListener('scene:load',cancel);window.removeEventListener('toy-volume',volumeChanged);window.removeEventListener('toy-mute',volumeChanged);}};
 }

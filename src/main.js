@@ -7251,7 +7251,23 @@ const g_drumLoop=createDrumLoopController({objects:drumObjects,getTransport:id=>
 });
 installRippleConnections({objects:drumObjects,model:connectionModel,getHeartbeat:()=>heartbeatModel.target()});
 connectionModel.subscribe(()=>g_drumLoop.tick());
-const g_drumBoard=installSimpleDrumBoard({objects:drumObjects,controller:{...g_drumLoop,activate:g_simplePlayable.activate},getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
+// Canonical board geometry plus normal panel bounds; no screen-pixel conversion.
+function drumSetPlacementBounds(){
+ const bounds=[];
+ for(const o of window.BoardObjects.list()){
+  if(!containerToyModel.isVisible(o.id))continue;
+  const {x,y}=o.transform,b=o.bounds;
+  if(o.kind==='drum')bounds.push({x:x-130,y:y-64,width:194,height:128});
+  else if(Number.isFinite(b.radius))bounds.push({x:x-b.radius,y:y-b.radius,width:b.radius*2,height:b.radius*2});
+  else if(b.width>0&&b.height>0)bounds.push({x:x-(o.kind==='cube'?b.width/2:0),y:y-(o.kind==='cube'?b.height/2:0),width:b.width,height:b.height});
+ }
+ for(const panel of document.querySelectorAll('.toy-panel,.art-toy-panel')){
+  if(panel.dataset.artOwnerId||!containerToyModel.isVisible(panel.id))continue;
+  const rect=g_graphPlacement.getRect(panel.id);if(rect)bounds.push(rect);
+ }
+ return bounds;
+}
+const g_drumBoard=installSimpleDrumBoard({objects:drumObjects,controller:{...g_drumLoop,activate:g_simplePlayable.activate},getPlacementBounds:drumSetPlacementBounds,getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
  unlock:resumeAudioContextIfNeeded,canInteract:()=>!g_artInternal.active,onArm:()=>{g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();},onDirty:()=>window.Persistence?.markDirty?.(),
 });
 uiMode.subscribe(()=>g_drumBoard.cancel());

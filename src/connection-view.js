@@ -532,6 +532,7 @@ export function createConnectionView({ model, getContext, getPanels, getToyPoint
       set(visual.cross, 'x', middle.x); set(visual.cross, 'y', middle.y - 36*controlScale);
       for (const node of [visual.remove, visual.cross]) set(node, 'display', selected === c.id&&!linkedEdge(c) ? 'inline' : 'none');
       const pulsing = getPulse(c);
+      set(visual.group,'data-active',pulsing?'1':'0');
       set(visual.path, 'stroke-width', pulsing ? 10 : 6);
       set(visual.path, 'stroke', pulsing ? '#f5fbff' : '#99b9ff');
       set(visual.path,'stroke-dasharray','none');

@@ -52,7 +52,7 @@ test('generic receiver policy selects Drum sound without kind checks; Cube keeps
  assert.equal(resolveBoardInteraction(emitter,createBoardObject('cube',{authoredState:{pitch:67}}),.5).instrument,'KALIMBA');assert.equal(resolveBoardInteraction(emitter,createBoardObject('decorative-art'),.5),null);
 });
 test('Ripple through kit leaves patterns unchanged and uses its own sound with shared hit feedback',async()=>{
- const f=fixture(),kit=createDrumSet(f.objects,{x:250,y:0}),ripples=createRippleObjects();f.objects.remove(f.drum.id);const r=ripples.create({x:0,y:0,instrument:'PIANO'});await f.t.play();
+ const f=fixture();f.objects.remove(f.drum.id);const kit=createDrumSet(f.objects,{x:250,y:0}),ripples=createRippleObjects();const r=ripples.create({x:0,y:0,instrument:'PIANO'});await f.t.play();
  const ripple=createLoopingRippleController({objects:ripples,getReceivers:()=>f.objects.list(),getTransport:()=>f.t,schedule:e=>f.controller.trigger(e)});
  for(let tick=0;tick<384;tick+=6){f.context.currentTime=f.t.tickToAudioTime(tick);ripple.tick();f.controller.tick();}
  for(const o of kit){const current=f.objects.get(o.id);assert.equal(current.authoredState.pattern.authoredNotes.length,0);assert.ok(f.events.some(e=>e.sourceId===o.id&&e.instrument===o.authoredState.instrument));assert.ok(f.hits.some(e=>e.sourceId===o.id));}
