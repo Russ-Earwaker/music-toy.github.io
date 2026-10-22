@@ -21,7 +21,7 @@ test('LAN HTTP without randomUUID can create, emit and reload unique Ripple IDs'
    assert.equal(new Set([a.id,b.id,c.id]).size,3);assert.match(a.id,/^ripple-[a-z0-9-]+$/i);
    assert.ok(createBoardObject('decorative-art').id);
    const controller=createSimpleRippleController({objects,getReceivers:()=>[receiver('shared',100,30)],getClock:()=>({audioTime:0,currentTick:0,bpm:120}),schedule:event=>events.push(event)});
-   controller.emit(a.id);assert.equal(events.length,1);assert.equal(events[0].instrument,'PIANO');
+   controller.emit(a.id);assert.equal(events.length,1);assert.equal(events[0].instrument,'ACOUSTIC GUITAR');
    const saved=JSON.parse(JSON.stringify(objects.snapshot()));objects.restore(saved);assert.deepEqual(objects.snapshot(),saved);
    assert.notEqual(objects.create().id,a.id);controller.destroy();
   }
@@ -37,7 +37,7 @@ function fixture(receivers=[receiver('shared',300)]){
 test('Ripple is a canonical authored emitter and shares the board registry',()=>{
  const f=fixture(),layer=createBoardObjectLayer({objects:createBoardPhysicalObjects(),containers:{list:()=>[],get:()=>null},ripples:f.objects});
  const ripple=layer.create('ripple',{x:12,y:-40});assert.equal(ripple.kind,'ripple');
- assert.deepEqual(Object.keys(ripple.capabilities),['draggable','triggerEmitter','instrumentSource']);assert.equal(ripple.capabilities.instrumentSource.instrumentId,'PIANO');
+ assert.deepEqual(Object.keys(ripple.capabilities),['draggable','triggerEmitter','instrumentSource']);assert.equal(ripple.capabilities.instrumentSource.instrumentId,'ACOUSTIC GUITAR');
  layer.move(ripple.id,200,300);assert.deepEqual(layer.get(ripple.id).transform,{x:200,y:300,rotation:0});f.destroy();
 });
 
@@ -88,7 +88,7 @@ test('Cannon and Ripple resolve the same Cube pitch using their own instrument',
 test('movement affects next wave; current wave geometry and timbre stay latched',()=>{
  const f=fixture(),r=f.objects.create();const first=f.controller.emit(r.id).events[0];
  f.objects.update(r.id,{x:200,instrument:'KALIMBA'});const second=f.controller.emit(r.id).events[0];
- assert.ok(second.timeSeconds<first.timeSeconds);assert.equal(first.instrument,'PIANO');assert.equal(second.instrument,'KALIMBA');assert.equal(f.controller.visibleWaves()[0].origin.x,0);f.destroy();
+ assert.ok(second.timeSeconds<first.timeSeconds);assert.equal(first.instrument,'ACOUSTIC GUITAR');assert.equal(second.instrument,'KALIMBA');assert.equal(f.controller.visibleWaves()[0].origin.x,0);f.destroy();
 });
 
 test('range limits apply to bounds and deleting emitter preserves receivers and cancels future audio',()=>{

@@ -2,13 +2,14 @@ import {createBoardObject,createBoardObjectId} from './board-object.js';
 import {crossedWaveReceivers,boardInteractionPerformance} from './board-wave.js';
 
 export const RIPPLE_SPEED=360,RIPPLE_RANGE=720,RIPPLE_SIZE=76;
+export const DEFAULT_RIPPLE_INSTRUMENT='ACOUSTIC GUITAR';
 export function createRippleObjects(){
  const records=new Map(),listeners=new Set();
  const notify=event=>{for(const fn of listeners)fn(event);};
  const get=id=>records.has(id)?structuredClone(records.get(id)):null;
  function authored({id,transform,authoredState}={}){
   if(!transform||![transform.x,transform.y].every(Number.isFinite))throw Error('Invalid Ripple position');
-  const instrument=authoredState?.instrument??'PIANO';
+  const instrument=authoredState?.instrument??DEFAULT_RIPPLE_INSTRUMENT;
   if(typeof instrument!=='string'||!instrument.trim())throw Error('Invalid Ripple instrument');
   const periodLoops=authoredState?.periodLoops??1;
   if(!Number.isInteger(periodLoops)||periodLoops<1||periodLoops>4)throw Error('Invalid Ripple period');
@@ -16,7 +17,7 @@ export function createRippleObjects(){
   if(!Number.isFinite(volume)||volume<0||volume>1||typeof muted!=='boolean')throw Error('Invalid Ripple volume');
   return createBoardObject('ripple',{id,transform:{x:transform.x,y:transform.y,rotation:0},bounds:{radius:RIPPLE_SIZE/2},authoredState:{instrument,volume,muted,periodLoops,maxRadius:RIPPLE_RANGE}});
  }
- function create({x=0,y=0,instrument='PIANO',periodLoops=1}={}){const o=authored({id:createBoardObjectId('ripple-'),transform:{x,y},authoredState:{instrument,periodLoops}});records.set(o.id,o);notify({type:'add',object:get(o.id)});return get(o.id);}
+ function create({x=0,y=0,instrument=DEFAULT_RIPPLE_INSTRUMENT,periodLoops=1}={}){const o=authored({id:createBoardObjectId('ripple-'),transform:{x,y},authoredState:{instrument,periodLoops}});records.set(o.id,o);notify({type:'add',object:get(o.id)});return get(o.id);}
  function update(id,{x,y,instrument,volume,muted,periodLoops}={}){const old=get(id);if(!old)return null;const o=authored({id,transform:{x:x??old.transform.x,y:y??old.transform.y},authoredState:{...old.authoredState,instrument:instrument??old.authoredState.instrument,volume:volume??old.authoredState.volume,muted:muted??old.authoredState.muted,periodLoops:periodLoops??old.authoredState.periodLoops}});records.set(id,o);notify({type:'update',object:get(id)});return get(id);}
  function remove(id){const o=get(id);if(!o)return false;records.delete(id);notify({type:'remove',object:o});return true;}
  const snapshot=()=>[...records.values()].map(o=>structuredClone(o));

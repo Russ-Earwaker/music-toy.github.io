@@ -4,7 +4,7 @@ import {seedTriggerCubes,triggerCreationPoint} from './trigger-starter-cubes.js'
 
 // Board DOM/SVG is presentation only. Physical positions are logical world units;
 // playback positions are sampled from canonical transport phase, never simulated.
-export function installBoardBouncer({objects,controller,getWorld,getViewport,screenToWorld,createCapture,unlock,getBpm=()=>120,canInteract=()=>true,onRelevant=()=>{}}){
+export function installBoardBouncer({objects,controller,getCollisionObjects=()=>objects.list('cube'),getWorld,getViewport,screenToWorld,createCapture,unlock,getBpm=()=>120,canInteract=()=>true,onRelevant=()=>{}}){
  const world=getWorld(),root=document.createElement('div');root.className='board-physical-objects';world.append(root);
  const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.classList.add('physical-motion-layer');root.append(svg);
  const aim=document.createElementNS(ns,'path');aim.classList.add('physical-launch-preview');svg.append(aim);
@@ -17,8 +17,8 @@ export function installBoardBouncer({objects,controller,getWorld,getViewport,scr
  }
  function updateCreationPreview(){
   if(!gesture||gesture.mode==='cube'||Math.hypot(gesture.current.x-gesture.start.x,gesture.current.y-gesture.start.y)<6){creationPath.setAttribute('points','');aim.setAttribute('d','');previewKey=null;return;}
-  const {launch,containerId}=launchFor(gesture,gesture.current),cubes=objects.list('cube'),bars=controller.data(containerId)?.bars||1,bpm=getBpm(containerId);
-  const key=JSON.stringify([launch,bars,bpm,cubes.map(c=>[c.id,c.x,c.y,c.width,c.height,c.sourceMidi])]);
+  const {launch,containerId}=launchFor(gesture,gesture.current),cubes=getCollisionObjects(),bars=controller.data(containerId)?.bars||1,bpm=getBpm(containerId);
+  const key=JSON.stringify([launch,bars,bpm,cubes.map(c=>[c.id,c.x,c.y,c.width,c.height,c.radius,c.sourceMidi])]);
   if(key===previewKey)return;previewKey=key;
   drawTrajectory(creationPath,predictCannonTrajectory({launch,cubes,bars,bpm}));
   const ux=launch.vx/BALL_LAUNCH_SPEED,uy=launch.vy/BALL_LAUNCH_SPEED,x=launch.x+ux*CANNON_BARREL_LENGTH,y=launch.y+uy*CANNON_BARREL_LENGTH;
@@ -55,7 +55,7 @@ export function installBoardBouncer({objects,controller,getWorld,getViewport,scr
   if(!canInteract())return false;
   if(options.mode&&armed&&(armed.mode||'ball')===options.mode){cancel();return true;}
   cancel();armed=options;
-  if((options.mode||'ball')==='ball'&&options.seed!==false)seedTriggerCubes({objects,center:triggerCreationPoint({viewport:getViewport(),screenToWorld})});
+  if((options.mode||'ball')==='ball'&&options.seed!==false)seedTriggerCubes({objects,center:triggerCreationPoint({viewport:getViewport(),screenToWorld}),otherReceivers:getCollisionObjects().map(o=>o.boardObject)});
   updateModes();document.body.classList.add('bouncer-board-armed');hint.hidden=true;onRelevant(true);updateModes();return true;
  }
  function updateModes(){for(const type of ['ball','cube'])for(const button of document.querySelectorAll('[data-toy-type="physical-'+type+'"]')){const active=!!armed&&(armed.mode||'ball')===type;button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));}}

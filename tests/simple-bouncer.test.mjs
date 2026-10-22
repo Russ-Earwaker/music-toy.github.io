@@ -14,7 +14,7 @@ import {MAIN_TRANSPORT_ID} from '../src/transport-registry.js';
 import {ensurePlaybackInstance,clearPlaybackInstancesForTests,getPlaybackInstance} from '../src/playback-instances.js';
 import {SAFE_LINE_MIDI} from '../src/free-play-line.js';
 
-function fixture({afterCreate=async()=>{}}={}){
+function fixture({afterCreate=async()=>{},extraReceivers=()=>[],onReceiverTrigger=()=>{}}={}){
  clearPlaybackInstancesForTests();const model=createConnectionModel(),toys=new Map(),positions=new Map(),calls=[],commits=[];let serial=0,sync=()=>{};
  const objects=createBoardPhysicalObjects();
  const transport={state:'stopped',currentTick:0,bpm:120,async play(){this.state='playing';}};
@@ -22,7 +22,7 @@ function fixture({afterCreate=async()=>{}}={}){
  const containers=createContainerToyModel(model,{getRect:id=>positions.get(id),getDuration:id=>toyLoopLengthTicks(toys.get(id)),setPosition:(id,x,y)=>positions.set(id,{...positions.get(id),x,y}),onBoundsCommit:id=>commits.push(id),removeInternal:id=>{model.removeObject(id);toys.delete(id);positions.delete(id);}});
  async function applyGrid(p,state){p.state=normalizeAuthoredState(state);p.dataset.steps=String(state.steps);p.dataset.instrument=state.instrument;restoreAuthoredNotes(p,p.state);p.__seqPattern=drawgridPatternFromState(p.state);p.__seqRev++;ensurePlaybackInstance(p.id,{loopLengthTicks:toyLoopLengthTicks(p)});}
  async function createGrid(state,pos){const p={id:`grid${++serial}`,dataset:{toy:'drawgrid'},__seqRev:0,__sequencerSchedule(col,time,meta){for(const note of (this.__sequencerPatternAtTick?.(meta.eventTick,meta)||this.__seqPatternActive||this.__seqPattern).cols[col]?.notes||[])calls.push({id:this.id,tick:meta.eventTick,col,midi:note.sourceMidi,instrument:note.instrument||this.dataset.instrument,context:meta.context});}};await applyGrid(p,state);toys.set(p.id,p);positions.set(p.id,{...pos,width:800,height:760});model.registerObject(p.id);await afterCreate(p);return p;}
- const service=createSimpleBouncerController({containers,objects,model,getToy:id=>toys.get(id),createGrid,applyGrid,removeGrid:p=>{model.removeObject(p.id);toys.delete(p.id);},cancelScheduled:(p,tick)=>scheduler.resetToyTimeline(p.id,tick,{includeBoundary:false}),publish:()=>sync(),getTransport:id=>model.getTransportId(id)?transport:null,onChanged:()=>sync()});
+ const service=createSimpleBouncerController({containers,objects,getCollisionObjects:()=>[...objects.list('cube'),...extraReceivers()],onReceiverTrigger,model,getToy:id=>toys.get(id),createGrid,applyGrid,removeGrid:p=>{model.removeObject(p.id);toys.delete(p.id);},cancelScheduled:(p,tick)=>scheduler.resetToyTimeline(p.id,tick,{includeBoundary:false}),publish:()=>sync(),getTransport:id=>model.getTransportId(id)?transport:null,onChanged:()=>sync()});
  const structures=createStructureToyModel(model,{getDuration:id=>toyLoopLengthTicks(toys.get(id))}),adapter=createChainSequenceAdapter({getToy:id=>toys.get(id),chainState:new Map(),connectionModel:model}),scheduler=createSequencerScheduler();
  sync=()=>adapter.sync([...toys.values()],{currentTick:transport.currentTick,state:'stopped'},{connections:model.list('sequence'),structures:structures.list()});
  const wire=(from,to,port='output',kind='sequence')=>{const r=model.connect(kind,{objectId:from,portId:port},{objectId:to,portId:'input'});assert.ok(r.ok,r.reason);return r.connection;};
@@ -321,4 +321,17 @@ test('deleting committed Cannon leaves canonical starter Cubes available to othe
 });
 test('authored Cannon prediction uses current tempo and length through shared simulation',async()=>{
  const f=fixture();try{const c=f.create();await f.capture(c.id,boardLaunch({x:0,y:0},{x:100,y:0}));f.transport.bpm=60;f.service.setBars(c.id,2);assert.deepEqual(f.service.prediction(c.id),simulateThrow({launch:boardLaunch({x:0,y:0},{x:100,y:0}),cubes:f.objects.list('cube'),bpm:60,bars:2}).trajectory);}finally{f.dispose();}
+});
+import {createDrumObjects} from '../src/simple-drum.js';
+import {createDrumLoopController} from '../src/simple-drum-loop.js';
+import {boardCollisionBody} from '../src/board-collision-body.js';
+test('normal Cannon capture bounces from Drum and routes a transient receiver-owned hit without recording or Kalimba notes',async()=>{
+ const drums=createDrumObjects(),drum=drums.create({x:200,y:0,instrument:'DRUM SNARE 1'}),events=[];let loop;
+ const f=fixture({extraReceivers:()=>drums.list().map(boardCollisionBody),onReceiverTrigger:e=>loop.trigger(e)});
+ f.transport.tickToAudioTime=t=>t/192;f.transport.audioTimeToTick=s=>Math.round(s*192);
+ loop=createDrumLoopController({objects:drums,getTransport:()=>f.transport,schedule:e=>events.push(e)});
+ try{const c=f.create();await f.capture(c.id,boardLaunch({x:0,y:0},{x:100,y:0}));assert.ok(f.service.data(c.id).capture.collisions.some(e=>e.cubeId===drum.id));
+  assert.equal(f.service.panels(c.id)[0].__dgAuthoredNotes.length,0);
+  f.transport.currentTick=24;f.service.scheduleReceiverHits();assert.equal(events.length,0,'Do not sound a predicted collision before physical contact');f.transport.currentTick=36;f.service.scheduleReceiverHits();f.service.scheduleReceiverHits();assert.equal(events.length,1);assert.equal(events[0].instrument,'DRUM SNARE 1');assert.equal(events[0].sourceId,drum.id);assert.equal(drums.get(drum.id).authoredState.pattern.authoredNotes.length,0);
+ }finally{loop.destroy();f.dispose();}
 });

@@ -160,7 +160,8 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
-  overflow: hidden; /* Prevent body scrollbars */
+  overflow: hidden; /* Fallback for browsers without overflow: clip. */
+  overflow: clip; /* Instrument focus must not scroll the page or shift the board. */
 }
 
 /* ----------------- */

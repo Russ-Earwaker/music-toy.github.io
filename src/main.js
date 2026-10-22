@@ -6,6 +6,8 @@ import {createBoardObjectLayer} from './board-object-layer.js';
 import {rippleObjects} from './simple-ripple.js';
 import {installSimpleRippleBoard} from './simple-ripple-board.js';
 import {drumObjects} from './simple-drum.js';
+import {createDrumLoopController} from './simple-drum-loop.js';
+import {boardCollisionBody} from './board-collision-body.js';
 import {createBoardPlayableController} from './board-playable.js';
 import {installSimpleDrumBoard} from './simple-drum-board.js';
 import {transposeNote} from './note-transpose.js';
@@ -2164,7 +2166,8 @@ const UNFINISHED_TOY_LOCK_ENABLED = false;
 
 const toyCatalog = [
     { type: 'simple-draw', name: 'Paint', simpleCategory:'loop', isCreationActive:()=>document.body.classList.contains('simple-draw-creating'), description: 'Draw on the board. Release to make a Simple Draw toy.', size: { width: 640, height: 440 }, action:()=>{g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.arm();return true;} },
-    { type: 'simple-drum', name: 'Drum', simpleCategory:'play', isCreationActive:()=>document.body.classList.contains('simple-drum-armed'), description:'Tap the board to place drums. Tap a drum to play it; drag to move.', size:{width:104,height:104}, action:()=>{g_drumBoard.arm();return true;} },
+    { type: 'simple-drum', name: 'Drum', simpleCategory:'play', isCreationActive:()=>document.body.classList.contains('simple-drum-armed'), description:'Tap the board to place drums. Tap a drum to record a looping hit; drag to move.', size:{width:104,height:104}, action:()=>{g_drumBoard.arm();return true;} },
+    { type: 'simple-drum-set', name: 'Drum Set', simpleCategory:'play', simpleOrder:1, description:'Create six independent drums in a compact kit.', action:()=>{g_drumBoard.createSet();return true;} },
     { type: 'simple-ripple', name: 'Ripple', simpleCategory:'trigger', simpleOrder:1, isCreationActive:()=>document.body.classList.contains('simple-ripple-armed'), description: 'Tap the board to send a musical wave.', size:{width:76,height:76}, action:()=>{g_rippleBoard.arm();return true;} },
     { type: 'simple-bouncer', name: 'Simple Bouncer', description: 'Scatter cubes, then drag across the board to throw a ball.', action:()=>{activateBoardBouncer();return true;} },
     { type: 'physical-cube', name: 'Cube', simpleCategory:'place', isCreationActive:()=>window.BouncerBoard?.activeMode==='cube', description: 'Tap empty board space to place shared cubes.', size:{width:58,height:58} },
@@ -2202,7 +2205,7 @@ function setExperimentalEnabled(enabled) {
 
 function getToyCatalog() {
     const experimentalOn = isExperimentalEnabled();
-    return toyCatalog.filter(entry=>!['simple-draw','simple-bouncer','simple-ripple','simple-drum','physical-cube','physical-ball'].includes(entry.type)||!g_artInternal.active)
+    return toyCatalog.filter(entry=>!['simple-draw','simple-bouncer','simple-ripple','simple-drum','simple-drum-set','physical-cube','physical-ball'].includes(entry.type)||!g_artInternal.active)
     .filter(entry=>!entry.type.startsWith('physical-')||uiMode.isSimple()||window.BouncerBoard?.isRelevant?.()).map((entry) => {
         if (EXPERIMENTAL_TOYS.includes(entry.type)) {
             return { ...entry, disabled: entry.disabled && !experimentalOn };
@@ -5970,6 +5973,7 @@ function createToyPanelAt(toyType, {
 } = {}) {
     const type = String(toyType || '').toLowerCase();
     if(type==='simple-drum'){if(artOwnerId||g_artInternal.active)return null;g_drumBoard.arm();return null;}
+    if(type==='simple-drum-set'){if(artOwnerId||g_artInternal.active)return null;g_drumBoard.createSet();return null;}
     if(type==='simple-ripple'){if(artOwnerId||g_artInternal.active)return null;g_rippleBoard.arm();return null;}
     if(type==='simple-draw'){if(artOwnerId||g_artInternal.active)return null;g_drumBoard.cancel();g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.arm({heartbeatId});return null;}
     if(type==='simple-bouncer'){if(artOwnerId||g_artInternal.active)return null;activateBoardBouncer();return null;}
@@ -6816,6 +6820,8 @@ const g_graphPlacement = createGraphPlacement({
       width:panel.offsetWidth||fallback.width,height:panel.offsetHeight||fallback.height};
   },
   setPosition: (id,x,y) => {
+    // Free board instruments retain their authored physical placement.
+    if(drumObjects.get(id)||rippleObjects.get(id))return;
     if(containerToyModel.get(id)){const c=containerToyModel.get(id);g_layoutAnimation.move(id,c.bounds,{x,y});containerToyModel.move(id,x,y);return;}
     const s=structureToyModel.get(id);
     if(s){g_layoutAnimation.move(id,s,{x,y});structureToyModel.move(id,x,y,{manual:false});return;}
@@ -6853,6 +6859,7 @@ let g_layoutQueued=false,g_layoutRestoring=false,g_layoutManualDrag=null;
 function requestGraphLayout(id,connectionId=null){
   if(g_layoutRestoring||connectionModel.getEditing()?.suspended||!id)return;
   const target=connectionId?connectionModel.get(connectionId)?.to.objectId:id,owner=containerToyModel.owner(target)||target;
+  if(drumObjects.get(target)||rippleObjects.get(target))return;
   if(containerToyModel.get(owner)?.interactionData?.contentSpace)return;
   if(!containerToyModel.isVisible(id))id=containerToyModel.owner(id);
   // Balance the connected branch up to its stable/manual anchor, never another
@@ -7063,12 +7070,13 @@ const g_connectionView = createConnectionView({
       window.ToySpawner?.open?.();
     },
   }),
-  getPanels: () => [...g_connectionPanels,...document.querySelectorAll('.container-toy[data-open="false"],.simple-ripple-object')],
+  getPanels: () => [...g_connectionPanels,...document.querySelectorAll('.container-toy[data-open="false"],.simple-ripple-object,.simple-drum-object')],
   getConnections: () => containerToyModel.connections(),
   presentEndpoint: containerToyModel.presentedEndpoint,
   canEditConnection: containerToyModel.canEditConnection,
   canCopyStructure: id=>!containerToyModel.owner(id),
   getToyPoint: (panel,side) => {
+    const drum=drumObjects.get(panel.id);if(drum)return {x:drum.transform.x-52,y:drum.transform.y};
     const ripple=rippleObjects.get(panel.id);
     if(ripple)return {x:ripple.transform.x-38,y:ripple.transform.y};
     const c=containerToyModel.get(panel.id);
@@ -7172,7 +7180,11 @@ const g_simpleToyMusic={
  onChanged:()=>{g_chainStructureVersion++;updateChains();window.Persistence?.markDirty?.();},onPlay:()=>tickAudioScheduler(),
 };
 const g_simpleDraw=createSimpleDrawController(g_simpleToyMusic);
+const getBoardCollisionObjects=()=>[...boardPhysicalObjects.list('cube'),...drumObjects.list().map(boardCollisionBody).filter(Boolean)];
 const g_simpleBouncer=createSimpleBouncerController({...g_simpleToyMusic,
+ getCollisionObjects:getBoardCollisionObjects,
+ subscribeReceivers:fn=>drumObjects.subscribe(e=>fn(e.type==='restore'?e:{...e,object:boardCollisionBody(e.object),previous:e.previous&&boardCollisionBody(e.previous)})),
+ onReceiverTrigger:event=>g_drumLoop.trigger(event),
  applyGrid:async(panel,state)=>{cancelSimpleToySources(panel);g_sequencerScheduler?.resetToyTimeline(panel.id,transportRegistry.get(connectionModel.getTransportId(panel.id))?.currentTick||0,{includeBoundary:false});await panel.__drawToy.setState(state);},
 });
 window.SimpleBouncer=g_simpleBouncer;
@@ -7189,6 +7201,7 @@ g_containerPresentations.register('simple-bouncer',{
 const g_receiverResponses=createReceiverResponses();
 g_simpleBouncer.receiverResponses=()=>g_receiverResponses.responses();
 const g_bouncerBoard=installBoardBouncer({objects:boardPhysicalObjects,controller:g_simpleBouncer,
+ getCollisionObjects:getBoardCollisionObjects,
  getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
  getBpm:id=>transportRegistry.get(id?connectionModel.getTransportId(id):heartbeatModel.target().transportId)?.bpm||120,
  canInteract:()=>!g_artInternal.active,
@@ -7215,7 +7228,7 @@ boardPhysicalObjects.subscribe(()=>window.Persistence?.markDirty?.());
 const g_simpleRipple=createLoopingRippleController({objects:rippleObjects,getReceivers:()=>window.BoardObjects.list(),
  isReceiverDragging:id=>!!boardPhysicalObjects.get(id)?.drag,
  getTransport:id=>transportRegistry.get(connectionModel.getTransportId(id)),
- schedule:event=>{setToyVolume(event.emitterId,event.volume);setToyMuted(event.emitterId,event.muted);triggerInstrument(event.instrument,transposeNote('C4',event.sourceMidi-60),event.when,event.emitterId,{eventTick:event.eventTick,pitched:true,pitchShift:true});},
+ schedule:event=>{if(event.soundSource==='receiver'){g_drumLoop.trigger(event);return;}setToyVolume(event.emitterId,event.volume);setToyMuted(event.emitterId,event.muted);triggerInstrument(event.instrument,transposeNote('C4',event.sourceMidi-60),event.when,event.emitterId,{eventTick:event.eventTick,pitched:true,pitchShift:true});},
  respond:(event,transport)=>g_receiverResponses.enqueue(event,transport),
  cancel:id=>{cancelScheduledToySources(id);bumpToyAudioGen(id,'board-interaction-reset');g_receiverResponses.clear(id);},
 });
@@ -7224,16 +7237,21 @@ boardPhysicalObjects.subscribe(event=>{if(event.type==='add'||event.type==='upda
 connectionModel.subscribe(()=>g_simpleRipple.tick());
 const g_rippleBoard=installSimpleRippleBoard({objects:rippleObjects,controller:g_simpleRipple,
  getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
- seedCubes:()=>seedTriggerCubes({objects:boardPhysicalObjects,center:triggerCreationPoint({viewport:getViewportElement(),screenToWorld})}),
+ seedCubes:()=>seedTriggerCubes({objects:boardPhysicalObjects,center:triggerCreationPoint({viewport:getViewportElement(),screenToWorld}),otherReceivers:drumObjects.list()}),
  now:()=>ensureAudioContext().currentTime,unlock:resumeAudioContextIfNeeded,canInteract:()=>!g_artInternal.active,
  onArm:()=>{g_drumBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();},onDirty:()=>window.Persistence?.markDirty?.(),
 });
 uiMode.subscribe(()=>g_rippleBoard.cancel());
 const g_simplePlayable=createBoardPlayableController({objects:drumObjects,getTime:()=>ensureAudioContext().currentTime,
- perform:event=>{setToyVolume(event.sourceId,event.volume);setToyMuted(event.sourceId,event.muted);triggerInstrument(event.instrument,transposeNote('C4',event.sourceMidi-60),event.timeSeconds,event.sourceId,{pitchShift:true,musicalRole:'percussion'});},
- release:id=>{cancelScheduledToySources(id);bumpToyAudioGen(id,'playable-delete');releaseToyAudioBus(id);},
+ perform:event=>{void g_drumLoop.activate(event.sourceId);},
 });
-const g_drumBoard=installSimpleDrumBoard({objects:drumObjects,controller:g_simplePlayable,getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
+const g_drumLoop=createDrumLoopController({objects:drumObjects,getTransport:id=>transportRegistry.get(connectionModel.getTransportId(id)),
+ schedule:event=>{setToyVolume(event.sourceId,event.volume);setToyMuted(event.sourceId,event.muted);triggerInstrument(event.instrument,transposeNote('C4',event.sourceMidi-60),event.when,event.sourceId,{eventTick:event.eventTick,pitchShift:true,musicalRole:'percussion'});},
+ cancel:id=>{cancelScheduledToySources(id);bumpToyAudioGen(id,'drum-loop-invalidate');},release:releaseToyAudioBus,
+});
+installRippleConnections({objects:drumObjects,model:connectionModel,getHeartbeat:()=>heartbeatModel.target()});
+connectionModel.subscribe(()=>g_drumLoop.tick());
+const g_drumBoard=installSimpleDrumBoard({objects:drumObjects,controller:{...g_drumLoop,activate:g_simplePlayable.activate},getWorld:()=>document.getElementById('board'),getViewport:getViewportElement,screenToWorld,
  unlock:resumeAudioContextIfNeeded,canInteract:()=>!g_artInternal.active,onArm:()=>{g_rippleBoard.cancel();g_bouncerBoard.cancel();g_simpleDrawCreation.cancel();},onDirty:()=>window.Persistence?.markDirty?.(),
 });
 uiMode.subscribe(()=>g_drumBoard.cancel());
@@ -7591,6 +7609,7 @@ try {
       const tick = Number(detail.positionTick ?? detail.toTick ?? detail.tick) || 0;
       const scheduler = ensureSequencerScheduler();
       g_simpleRipple.transportChanged(id,detail.type);
+      g_drumLoop.transportChanged(id,detail.type,detail.fromState);g_simpleBouncer.resetReceiverAdmissions();
       // Deliver already-sounding notes before invalidating future lookahead.
       // A seek has already rebased the clock, so use its captured outgoing tick.
       if (['pause', 'seek', 'tempo'].includes(detail.type))
@@ -7651,7 +7670,7 @@ function tickAudioScheduler() {
   g_audioTickBusy = true;
   try {
     if (!CHAIN_FEATURE_ENABLE_SCHEDULER || !CHAIN_FEATURE_ENABLE_SEQUENCER) return;
-    g_simpleRipple.tick();
+    g_simpleBouncer.scheduleReceiverHits();g_simpleRipple.tick();g_drumLoop.tick();
     if (!transportRegistry.list().some(({transport}) => transport.state === 'playing')) return;
     refreshSimpleDrawSilence();
     const nowMs = performance.now();

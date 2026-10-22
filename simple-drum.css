@@ -8,3 +8,14 @@
 .simple-drum-object[data-controls-visible="1"]>.simple-drum-controls{display:flex}
 .drum-instrument-name{position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:12px;color:#e3f5ff}
 .simple-drum-armed .board-viewport{cursor:crosshair}
+.simple-drum-object[data-controls-visible="1"]{z-index:127}
+.simple-drum-object>.simple-drum-controls{bottom:auto;height:auto;width:min(340px,calc(100vw - 32px));box-sizing:border-box}
+.simple-drum-controls>.art-toy-volume{order:0;width:190px;flex:0 1 190px}
+.simple-drum-controls>.c-btn{margin-bottom:14px}
+
+.simple-drum-controls{flex-wrap:wrap;width:340px;padding:12px;border-radius:12px;background:#102638f2}.drum-period{display:flex;flex-direction:column;color:#e3f5ff;font:13px system-ui;gap:6px}.drum-period select{min-height:44px;background:#173044;color:white;border:1px solid #729fb7;border-radius:8px;padding:6px}.simple-drum-pad{letter-spacing:0;font-size:13px}
+
+.drum-ring{position:absolute;left:-12px;top:-12px;width:128px;height:128px;overflow:visible;pointer-events:none}
+.drum-slot{fill:#a7d7e4;opacity:.35}.drum-slot.bar-start{opacity:.65;stroke:#a7d7e4;stroke-width:2}
+.drum-slot.has-hit{fill:#e4f8ff;opacity:.95;stroke:#729fb7;stroke-width:1}
+.drum-playhead{fill:#ffda75;stroke:#173044;stroke-width:1}

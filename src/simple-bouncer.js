@@ -14,7 +14,7 @@ export function bouncerGridState(capture,id,instrument=DEFAULT_CANNON_INSTRUMENT
   // Pre-foundation saves have only pitch; migrate that receiver snapshot here.
   const receiver={id:contact.cubeId,capabilities:contact.receiverCapabilities??{triggerReceiver:{},pitchSource:{midi:contact.sourceMidi}}};
   const event=resolveBoardInteraction(emitter,receiver,contact.timeSeconds);
-  if(!event)return [];
+  if(!event||event.soundSource==='receiver')return [];
   return [{id:`${id}:hit:${index}`,col:((contact.tick+(capture.phaseOffsetTick||0))%capture.durationTicks)/48,
    sourceMidi:event.sourceMidi,cubeId:event.receiverId,collisionTimeSeconds:event.timeSeconds}];
  });
@@ -22,8 +22,28 @@ export function bouncerGridState(capture,id,instrument=DEFAULT_CANNON_INSTRUMENT
   authoredNotes,nodes:{active:Array(steps).fill(true)},strokes:[],meta:{preserveNodesOverStrokes:true}});
 }
 // Captures own ordinary musical toys, and reference independent physical IDs.
-export function createSimpleBouncerController({containers,objects=boardPhysicalObjects,getToy,createGrid,applyGrid,removeGrid,publish,getTransport,cancelScheduled=()=>{},onChanged=()=>{},onPlay=()=>{}}){
+export function createSimpleBouncerController({containers,objects=boardPhysicalObjects,getCollisionObjects=()=>objects.list('cube'),subscribeReceivers=()=>()=>{},onReceiverTrigger=()=>{},getToy,createGrid,applyGrid,removeGrid,publish,getTransport,cancelScheduled=()=>{},onChanged=()=>{},onPlay=()=>{}}){
  const throws=new Map(),pending=new Map();
+ const receiverAdmissions=new Map();
+ function scheduleReceiverHits(){
+  for(const c of containers.list().filter(c=>c.presentation.type==='simple-bouncer')){
+   const d=c.interactionData,t=getTransport(c.id);if(!d?.capture||t?.state!=='playing')continue;
+   const from=t.currentTick,to=t.audioTimeToTick(t.tickToAudioTime(from)+.15),duration=d.capture.durationTicks;
+   for(let cycle=currentCycle(c.id,d,t);cycle<to;cycle+=duration){
+    for(const hit of flightAt(c.id,d,cycle).capture.collisions){
+     const eventTick=cycle+hit.tick;if(eventTick<from-6||eventTick>=to||eventTick<(throws.get(c.id)?.start||0))continue;
+     // Admit receiver-owned rhythm only after physical contact, so editing an
+     // untravelled flight cannot record a collision that never happened.
+     if(from<cycle+hit.timeSeconds*d.capture.bpm*96/60)continue;
+     const receiver={id:hit.cubeId,capabilities:hit.receiverCapabilities},emitter=createBoardObject('cannon',{id:c.id,authoredState:{instrument:d.instrument}});
+     const event=resolveBoardInteraction(emitter,receiver,hit.timeSeconds);if(event?.soundSource!=='receiver')continue;
+     const key=c.id+':'+hit.cubeId+':'+eventTick;if(receiverAdmissions.has(key))continue;
+     receiverAdmissions.set(key,{eventTick,transport:t});onReceiverTrigger({...event,eventTick,when:t.tickToAudioTime(eventTick),transportId:t.id},t);
+    }
+   }
+  }
+  for(const [key,e]of receiverAdmissions)if(e.transport.currentTick>e.eventTick+1536)receiverAdmissions.delete(key);
+ }
  const empty=()=>({version:3,bars:1,instrument:DEFAULT_CANNON_INSTRUMENT,direction:{x:1,y:0},cubeIds:[],ballId:null,launch:null,capture:null,stale:false,brokenReferences:[]});
  const data=id=>containers.get(id)?.interactionData;
  const panels=id=>(containers.get(id)?.internalToyIds||[]).map(getToy).filter(Boolean);
@@ -61,7 +81,7 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
   if(!objects.get(ballId)||!launch)return false;
   if(![launch.x,launch.y,launch.vx,launch.vy].every(Number.isFinite))throw Error('Invalid throw');
   const token={};pending.set(id,token);
-  const transport=getTransport(id),capture=simulateThrow({cubes:objects.list('cube'),launch,bars:d.bars,bpm:transport?.bpm||120});
+  const transport=getTransport(id),capture=simulateThrow({cubes:getCollisionObjects(),launch,bars:d.bars,bpm:transport?.bpm||120});
   // Rotate authored columns onto the shared clock rather than resetting source
   // phase. A running transport gets one slot of preparation time before launch.
   const createdTick=transport?.currentTick||0,startTick=Math.ceil(createdTick/48)*48+(transport?.state==='playing'?48:0);
@@ -92,11 +112,11 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
  // cube edits replace only its remaining path and unsounded impact notes.
  // An edited flight remains live; publish its settled replacement next loop.
  const previews=new Map(),flights=new Map(),hooks=new Map();
- function geometryKey(d,launch,cubes){return JSON.stringify([launch,d.capture.durationTicks,d.capture.bpm,cubes.map(c=>[c.id,c.x,c.y,c.width,c.height,c.size,c.sourceMidi])]);}
+ function geometryKey(d,launch,cubes){return JSON.stringify([launch,d.capture.durationTicks,d.capture.bpm,cubes.map(c=>[c.id,c.x,c.y,c.width,c.height,c.radius,c.size,c.sourceMidi])]);}
  function flightAt(id,d,cycle){
   let cycles=flights.get(id);if(!cycles){cycles=new Map();flights.set(id,cycles);}
   if(cycles.has(cycle))return cycles.get(cycle);
-  const cubes=objects.list('cube'),launch=d.stale?authoredLaunch(id,d):d.launch;
+  const cubes=getCollisionObjects(),launch=d.stale?authoredLaunch(id,d):d.launch;
   const key=geometryKey(d,launch,cubes),phase=d.capture.phaseOffsetTick||0;
   const capture=d.stale?{...simulateThrow({launch,cubes,bars:d.capture.durationTicks/384,bpm:d.capture.bpm}),phaseOffsetTick:phase}:{...d.capture,collisions:d.capture.collisions||(panels(id)[0]?.__dgAuthoredNotes||[]).map(n=>({tick:((n.col*48-phase)%d.capture.durationTicks+d.capture.durationTicks)%d.capture.durationTicks,timeSeconds:n.collisionTimeSeconds,cubeId:n.cubeId,sourceMidi:n.sourceMidi}))};
   // End-cell hits sound on the following launch, never before their impact.
@@ -115,7 +135,7 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
   d.capture={durationTicks:flight.capture.durationTicks,phaseOffsetTick:flight.capture.phaseOffsetTick,bpm:flight.capture.bpm,trajectory:flight.capture.trajectory,collisions:flight.capture.collisions,firstLaunchTick:d.capture.firstLaunchTick};
   d.cubeIds=[...new Set(flight.capture.collisions.map(e=>e.cubeId))];
   const authored=authoredLaunch(id,d);
-  d.stale=!!flight.liveEdited||geometryKey(d,authored,objects.list('cube'))!==flight.key;d.brokenReferences=[];
+  d.stale=!!flight.liveEdited||geometryKey(d,authored,getCollisionObjects())!==flight.key;d.brokenReferences=[];
   setData(id,d);publish(panel,'simple-bouncer-flight');onChanged();
  }
  function syncHooks(){
@@ -137,7 +157,7 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
   if(!d?.capture)return null;
   if(playing){const flight=flightAt(id,d,cycle);if(cycle!==null)commitFlight(id,d,flight);return flight.capture.trajectory;}
   if(!d.stale||!d.direction)return d.capture.trajectory;
-  const launch=authoredLaunch(id,d),cubes=objects.list('cube'),key=geometryKey(d,launch,cubes);
+  const launch=authoredLaunch(id,d),cubes=getCollisionObjects(),key=geometryKey(d,launch,cubes);
   let preview=previews.get(id);
   if(preview?.key!==key){preview={key,trajectory:simulateThrow({launch,cubes,bars:d.capture.durationTicks/384,bpm:d.capture.bpm}).trajectory};previews.set(id,preview);}
   return preview.trajectory;
@@ -158,20 +178,21 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
   const v=view(ball.captureId),tick=v.tick;
   return {position:v.ball||{x:ball.x,y:ball.y},trail:tick===null?[]:v.trajectory.filter(p=>p.tick<=tick&&p.tick>tick-72)};
  }
- const unsubscribe=objects.subscribe(event=>{
+ const receiversChanged=event=>{
   if(event.type==='restore'){previews.clear();flights.clear();return;}
   for(const c of containers.list().filter(c=>c.presentation.type==='simple-bouncer')){
    const d=c.interactionData;if(!d?.capture||d.version!==3)continue;
    const geometryChange=event.type!=='update'||['x','y','width','height'].some(k=>event.object[k]!==event.previous[k]);
-   const cubeChange=event.object.kind==='cube'&&(geometryChange||d.cubeIds?.includes(event.object.id)),ballDeleted=event.object.kind==='ball'&&event.type==='remove'&&d.ballId===event.object.id;
+   const cubeChange=!!event.object.boardObject?.capabilities.triggerReceiver&&(geometryChange||d.cubeIds?.includes(event.object.id)),ballDeleted=event.object.kind==='ball'&&event.type==='remove'&&d.ballId===event.object.id;
    if(!cubeChange&&!ballDeleted)continue;
    if(event.type==='update'&&['x','y','width','height','sourceMidi'].every(k=>event.object[k]===event.previous[k]))continue;
    const transport=getTransport(c.id);
    if(cubeChange&&transport?.state==='playing')reviseFlight(c.id,d,transport,event);
-   d.stale=true;d.brokenReferences=[...(d.cubeIds||[]),d.ballId].filter(id=>id&&!objects.get(id));setData(c.id,d);
+   d.stale=true;d.brokenReferences=[...(d.cubeIds||[]),d.ballId].filter(id=>id&&!objects.get(id)&&!getCollisionObjects().some(o=>o.id===id));setData(c.id,d);
    if(cubeChange)invalidateUpcoming(c.id);
   }
- });
+ };
+ const unsubscribe=objects.subscribe(receiversChanged),offReceivers=subscribeReceivers(receiversChanged);
  // Cube edits affect only the untravelled part; cannon edits remain latched.
  function reviseFlight(id,d,transport,event){
   if(throws.get(id)?.start>transport.currentTick)return;
@@ -196,15 +217,15 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
     const velocity=axis==='x'?'vx':'vy';launch[velocity]=Math.sign(cube[axis]-old[axis])*Math.abs(launch[velocity]);
    }
   }
-  const remainder=simulateThrow({launch,cubes:objects.list('cube'),bars:capture.durationTicks/384,bpm:capture.bpm,startTick:tick,priorCollisions:prior});
+  const remainder=simulateThrow({launch,cubes:getCollisionObjects(),bars:capture.durationTicks/384,bpm:capture.bpm,startTick:tick,priorCollisions:prior});
   flight.capture={...capture,trajectory:[...capture.trajectory.filter(p=>p.tick<tick),...remainder.trajectory],collisions:[...prior,...remainder.collisions]};
-  flight.key=geometryKey(d,flight.launch,objects.list('cube'));
+  flight.key=geometryKey(d,flight.launch,getCollisionObjects());
   flight.state=bouncerGridState({...flight.capture,collisions:flight.capture.collisions.filter(e=>e.tick<flight.capture.durationTicks)},id,d.instrument);flight.pattern=drawgridPatternFromState(flight.state);
   flight.changed=true;flight.liveEdited=true;flight.committed=false;
  }
  function prediction(id){
   const d=data(id);if(!d?.capture)return [];
-  const launch=authoredLaunch(id,d),cubes=objects.list('cube'),bpm=getTransport(id)?.bpm||120,key=JSON.stringify([geometryKey(d,launch,cubes),d.bars,bpm]);
+  const launch=authoredLaunch(id,d),cubes=getCollisionObjects(),bpm=getTransport(id)?.bpm||120,key=JSON.stringify([geometryKey(d,launch,cubes),d.bars,bpm]);
   let cached=previews.get(id);if(cached?.key!==key){cached={key,trajectory:predictCannonTrajectory({launch,cubes,bars:d.bars,bpm})};previews.set(id,cached);}
   return cached.trajectory;
  }
@@ -281,11 +302,11 @@ export function createSimpleBouncerController({containers,objects=boardPhysicalO
   // Rebuild runtime ball links and validate references after every load.
   for(const c of containers.list().filter(c=>c.presentation.type==='simple-bouncer')){
    const d=c.interactionData;if(!d)continue;
-   d.brokenReferences=[...(d.cubeIds||[]),d.ballId].filter(id=>id&&!objects.get(id));
+   d.brokenReferences=[...(d.cubeIds||[]),d.ballId].filter(id=>id&&!objects.get(id)&&!getCollisionObjects().some(o=>o.id===id));
    if(d.brokenReferences.length)d.stale=true;
    setData(c.id,d);
    if(objects.get(d.ballId))objects.update(d.ballId,{captureId:c.id,captureToyId:c.internalToyIds[0]||null,motion:{vx:0,vy:0}});
   }
  }
- return {subscribe:fn=>containers.subscribe(fn),prediction,cubeResponses,handles,cannon,setAim,setInstrument,editHandle,create,data,panels,objects,recording,busy,setBars,clear,throwBall,view,ballView,migrateLegacy,resetSessions:()=>{pending.clear();throws.clear();previews.clear();flights.clear();syncHooks();},dispose:id=>{pending.delete(id);throws.delete(id);previews.delete(id);flights.delete(id);},destroy:()=>{unsubscribe();unsubscribeContainers();unsubscribeLifecycle();unsubscribeHooks();for(const h of hooks.values()){if(h.panel.__sequencerPatternAtTick===h.provider)h.panel.__sequencerPatternAtTick=h.original;delete h.panel.__simpleBouncerLive;}hooks.clear();}};
+ return {scheduleReceiverHits,resetReceiverAdmissions:()=>receiverAdmissions.clear(),subscribe:fn=>containers.subscribe(fn),prediction,cubeResponses,handles,cannon,setAim,setInstrument,editHandle,create,data,panels,objects,recording,busy,setBars,clear,throwBall,view,ballView,migrateLegacy,resetSessions:()=>{pending.clear();throws.clear();previews.clear();flights.clear();syncHooks();},dispose:id=>{pending.delete(id);throws.delete(id);previews.delete(id);flights.delete(id);},destroy:()=>{offReceivers();unsubscribe();unsubscribeContainers();unsubscribeLifecycle();unsubscribeHooks();for(const h of hooks.values()){if(h.panel.__sequencerPatternAtTick===h.provider)h.panel.__sequencerPatternAtTick=h.original;delete h.panel.__simpleBouncerLive;}hooks.clear();}};
 }

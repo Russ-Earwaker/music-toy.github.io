@@ -1265,7 +1265,7 @@ export function applySceneSnapshot(snap){
         const raf = window.requestAnimationFrame?.bind(window) ?? (fn => setTimeout(fn, 16));
         raf(() => {
           try {
-            window.restoreConnections?.(migrateRippleConnections(snap.connections,snap.rippleObjects,MAIN_TRANSPORT_ID), snap.structureToys || [], snap.containers || []);
+            window.restoreConnections?.(migrateRippleConnections(migrateRippleConnections(snap.connections,snap.rippleObjects,MAIN_TRANSPORT_ID),snap.drumObjects,MAIN_TRANSPORT_ID), snap.structureToys || [], snap.containers || []);
             window.updateChains?.();
           } catch {} finally {window.endCreationGraphRestore?.();}
           if(migratedUses)for(const root of (snap.structureToys||[]).filter(s=>!snap.connections.some(c=>c.kind==='sequence'&&c.to.objectId===s.id)))window.arrangeSubgraph?.(root.id);

@@ -7,9 +7,9 @@ The Simple Music palette now reads:
 | PLACE | Cube |
 | TRIGGER | Ball, Ripple |
 | LOOP | Paint |
-| PLAY | Drum |
+| PLAY | Drum, Drum Set |
 
-Art remains a separate, mutually exclusive sibling chooser. Play now contains Drum; see [the Drum prototype report](simple-drum-prototype.md) for its placement and performance behavior. Headings are persistent labels, not expandable menus or runtime modes.
+Art remains a separate, mutually exclusive sibling chooser. Play now contains Drum and Drum Set; see [the Drum looping report](simple-drum-loops.md) for its placement and performance behavior. Headings are persistent labels, not expandable menus or runtime modes.
 
 Grouping comes from `simpleCategory` metadata on the existing creation registry entries in `main.js`, with `simpleOrder` keeping Ball before Ripple. `simple-creation-palette.js` projects those entries into four ordered groups. The renderer uses the original entries and callbacks; it does not maintain duplicate creation buttons or object implementations. The legacy “Simple Bouncer” shortcut remains available in Advanced but is omitted from the curated Simple view. Cube and Ball are available immediately in Simple, without requiring a Bouncer to exist first.
 

@@ -107,9 +107,11 @@ export function createLoopingRippleController({objects,getReceivers,getTransport
     // Timbre/volume remain live until this short lookahead commits the event.
     const event={...e,instrument:o.capabilities.instrumentSource.instrumentId,volume:o.authoredState.volume,muted:o.authoredState.muted,
      emitterId:o.id,cycleStart:c.start,transportId:t.id,when:t.tickToAudioTime(e.eventTick)};
+    if(e.soundSource==='receiver')Object.assign(event,{instrument:e.instrument,volume:e.volume,muted:e.muted});
     if(e.eventTick<now-12)continue;
     const key=soundKey(event);
-    if(!event.muted&&event.volume>0&&!sounds.has(key)){sounds.set(key,{ownerId:o.id,transport:t,eventTick:event.eventTick});schedule(event);}
+    if(event.soundSource==='receiver')schedule(event);
+    else if(!event.muted&&event.volume>0&&!sounds.has(key)){sounds.set(key,{ownerId:o.id,transport:t,eventTick:event.eventTick});schedule(event);}
     respond(event,t);
    }
   }

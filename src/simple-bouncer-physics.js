@@ -19,6 +19,15 @@ export function simulateThrow({cubes,launch,bars=1,bpm=120,startTick=0,priorColl
   for(let contacts=0;remaining>1e-10&&contacts<32;contacts++){
    let hit=null;
    for(const cube of cubes){
+    if(Number.isFinite(cube.radius)){
+     const dx=ball.x-cube.x,dy=ball.y-cube.y,r=cube.radius+BALL_RADIUS,a=ball.vx**2+ball.vy**2,b=dx*ball.vx+dy*ball.vy,c=dx*dx+dy*dy-r*r;
+     const disc=b*b-a*c,time=c<0?0:a&&disc>=0?(-b-Math.sqrt(disc))/a:Infinity;
+     if(time>=-1e-10&&time<=remaining&&(!hit||time<hit.time)){
+      const x=dx+ball.vx*Math.max(0,time),y=dy+ball.vy*Math.max(0,time),length=Math.hypot(x,y);
+      if(c<0||b<0)hit={cube,time:Math.max(0,time),circle:true,nx:length?x/length:-(ball.vx/Math.sqrt(a)||1),ny:length?y/length:-(ball.vy/Math.sqrt(a)||0),overlap:Math.max(0,r-Math.hypot(dx,dy))};
+     }
+     continue;
+    }
     const hx=(cube.width||cube.size)/2+BALL_RADIUS,hy=(cube.height||cube.size)/2+BALL_RADIUS;
     let enter=-Infinity,exit=Infinity,axis=null,normal=0;
     if(Math.abs(ball.x-cube.x)<hx-1e-8&&Math.abs(ball.y-cube.y)<hy-1e-8){
@@ -36,7 +45,8 @@ export function simulateThrow({cubes,launch,bars=1,bpm=120,startTick=0,priorColl
    }
    const travel=hit?hit.time:remaining;ball.x+=ball.vx*travel;ball.y+=ball.vy*travel;elapsed+=travel;remaining-=travel;
    if(!hit)break;
-   const velocity=hit.axis==='x'?'vx':'vy';ball[velocity]=hit.normal*Math.abs(ball[velocity]);ball[hit.axis]+=hit.normal*((hit.overlap||0)+1e-7);
+   if(hit.circle){const dot=ball.vx*hit.nx+ball.vy*hit.ny;ball.vx-=2*dot*hit.nx;ball.vy-=2*dot*hit.ny;ball.x+=hit.nx*((hit.overlap||0)+1e-7);ball.y+=hit.ny*((hit.overlap||0)+1e-7);}
+   else{const velocity=hit.axis==='x'?'vx':'vy';ball[velocity]=hit.normal*Math.abs(ball[velocity]);ball[hit.axis]+=hit.normal*((hit.overlap||0)+1e-7);}
    const rawTick=(time+elapsed)*bpm*96/60,cube=hit.cube;
    trajectory.push({tick:rawTick,x:ball.x,y:ball.y,vx:ball.vx,vy:ball.vy});
    if(rawTick<(lastHit.get(cube.id)??-Infinity))continue;

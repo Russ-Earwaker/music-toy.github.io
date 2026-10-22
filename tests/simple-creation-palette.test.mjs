@@ -17,7 +17,7 @@ function fixture(){
  const g_rippleBoard={arm:()=>{clear();document.body.classList.add('simple-ripple-armed');calls.push(['ripple.arm']);return true;},cancel:()=>document.body.classList.remove('simple-ripple-armed')};
  const g_simpleDrawCreation={arm:()=>{clear();document.body.classList.add('simple-draw-creating');calls.push(['paint.arm']);},cancel:()=>document.body.classList.remove('simple-draw-creating')};
  window.BouncerBoard={activeMode:null,isRelevant:()=>false};
- const g_drumBoard={arm:()=>{clear();document.body.classList.add('simple-drum-armed');calls.push(['drum.arm']);return true;},cancel:()=>document.body.classList.remove('simple-drum-armed')};
+ const g_drumBoard={createSet:()=>{calls.push(['drum.set']);return [];},arm:()=>{clear();document.body.classList.add('simple-drum-armed');calls.push(['drum.arm']);return true;},cancel:()=>document.body.classList.remove('simple-drum-armed')};
  const context={document,window,CustomEvent,console,uiMode,decorateCircularControl,simpleCreationGroups,g_drumBoard,g_bouncerBoard,g_rippleBoard,g_simpleDrawCreation,g_artInternal:{active:false},g_creationHeartbeatId:null,MAIN_TRANSPORT_ID:'main',
   activateBoardBouncer:()=>g_bouncerBoard.arm({}),isExperimentalEnabled:()=>true,EXPERIMENTAL_TOYS:[],
   screenToWorld:p=>p,toggleHelp:()=>false,isHelpActive:()=>false,overviewMode:{isActive:()=>false},setTimeout,clearTimeout,
@@ -38,11 +38,11 @@ function fixture(){
 
 test('actual registry metadata groups Cube, Ball/Ripple, Paint and Drum under Play, without legacy Bouncer duplication',()=>{
  const f=fixture(),groups=simpleCreationGroups(f.context.entries);
- assert.deepEqual(groups.map(g=>[g.label,Array.from(g.entries,e=>e.name)]),[['PLACE',['Cube']],['TRIGGER',['Ball','Ripple']],['LOOP',['Paint']],['PLAY',['Drum']]]);
+ assert.deepEqual(groups.map(g=>[g.label,Array.from(g.entries,e=>e.name)]),[['PLACE',['Cube']],['TRIGGER',['Ball','Ripple']],['LOOP',['Paint']],['PLAY',['Drum','Drum Set']]]);
  f.open();assert.deepEqual(walk(f.menu,n=>n.tagName==='h3').map(n=>n.textContent),['PLACE','TRIGGER','LOOP','PLAY']);
- assert.deepEqual(f.cards().map(c=>c.getAttribute('aria-label')),['Cube','Ball','Ripple','Paint','Drum']);assert.equal(f.calls.length,0);
+ assert.deepEqual(f.cards().map(c=>c.getAttribute('aria-label')),['Cube','Ball','Ripple','Paint','Drum','Drum Set']);assert.equal(f.calls.length,0);
  for(const heading of walk(f.menu,n=>n.tagName==='h3'))heading.dispatchEvent(event('click'));assert.equal(f.calls.length,0);
- const play=walk(f.menu,n=>n.dataset.simpleCategory==='play')[0];assert.equal(walk(play,n=>n.tagName==='button').length,1);assert.equal(walk(play,n=>n.className==='simple-creation-empty').length,0);
+ const play=walk(f.menu,n=>n.dataset.simpleCategory==='play')[0];assert.equal(walk(play,n=>n.tagName==='button').length,2);assert.equal(walk(play,n=>n.className==='simple-creation-empty').length,0);
 });
 
 test('selecting entries invokes existing main creation/arming paths without constructing replacement toys',()=>{
@@ -52,6 +52,7 @@ test('selecting entries invokes existing main creation/arming paths without cons
  f.calls.length=0;f.click('simple-ripple');assert.deepEqual(f.calls,[['ripple.arm']]);
  f.calls.length=0;f.click('simple-draw');assert.deepEqual(f.calls,[['paint.arm']]);
  f.calls.length=0;f.click('simple-drum');assert.deepEqual(f.calls,[['drum.arm']]);
+ f.calls.length=0;f.click('simple-drum-set');assert.deepEqual(f.calls,[['drum.set']]);
 });
 
 test('active creation mode is derived from existing state and survives rendering and Simple/Art switching',()=>{
@@ -71,6 +72,6 @@ test('Advanced preserves its flat registry view and its existing contextual avai
  assert.deepEqual(f.cards().map(c=>c.querySelector('.toy-spawner-name').textContent),expected);
  assert.ok(expected.includes('Simple Bouncer'));assert.ok(expected.includes('Draw Line'));assert.ok(expected.includes('Drum Kit'));
  assert.ok(!expected.includes('Cube'));assert.ok(!expected.includes('Ball'));
- f.uiMode.set('simple');assert.deepEqual(f.cards().map(c=>c.getAttribute('aria-label')),['Cube','Ball','Ripple','Paint','Drum']);
+ f.uiMode.set('simple');assert.deepEqual(f.cards().map(c=>c.getAttribute('aria-label')),['Cube','Ball','Ripple','Paint','Drum','Drum Set']);
 });
 

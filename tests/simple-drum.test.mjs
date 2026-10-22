@@ -11,9 +11,9 @@ import {createBoardObjectLayer} from '../src/board-object-layer.js';
 import {createBoardPhysicalObjects} from '../src/board-physical-objects.js';
 import {setToyVolume,getToyVolumeRaw,getToyGain,releaseToyAudioBus} from '../src/audio-core.js';
 
-test('Drum registers as a standalone playable BoardObject without trigger or loop capabilities',()=>{
+test('Drum registers as a playable receiver and loop source without becoming an emitter',()=>{
  const drums=createDrumObjects(),objects=createBoardPhysicalObjects(),layer=createBoardObjectLayer({objects,drums,containers:{get:()=>null,list:()=>[]}});
- const drum=layer.create('drum',{x:120,y:80});assert.equal(drum.kind,'drum');assert.deepEqual(Object.keys(drum.capabilities),['draggable','playable','instrumentSource']);
+ const drum=layer.create('drum',{x:120,y:80});assert.equal(drum.kind,'drum');assert.deepEqual(Object.keys(drum.capabilities),['draggable','playable','instrumentSource','triggerReceiver','loopSource']);
  assert.equal(drum.capabilities.instrumentSource.instrumentId,'DRUM KICK');assert.equal(drum.capabilities.playable.midi,60);assert.deepEqual(drum.owns,[]);
  assert.equal(resolveBoardInteraction(drum,objects.addCube(0,0).boardObject,0),null);
  layer.move(drum.id,180,200);assert.equal(layer.get(drum.id).transform.x,180);layer.remove(drum.id);assert.equal(drums.get(drum.id),null);assert.equal(objects.list().length,1);

@@ -1,5 +1,7 @@
 # Simple Drum prototype
 
+Historical first-pass report. Current recording, kit creation, timeline and receiver behavior are documented in [Drum loops and Trigger receivers](simple-drum-loops.md).
+
 1. **BoardObject schema.** Drum is a version 1 BoardObject with `kind: drum`, stable ID, position, circular bounds (radius 52), and `appearance.variant: pad`. Its only capabilities are `draggable`, `playable`, and `instrumentSource`. Authored sound state contains instrument, volume, mute, and an internal fixed MIDI pitch of 60. It has no trigger or loop capability.
 
 2. **Playable dispatch.** The performance surface calls `createBoardPlayableController.activate(id)`. `resolvePlayableActivation` checks `playable` plus `instrumentSource`, then resolves source ID, instrument, MIDI pitch, volume, mute, and current audio time. The injected performer uses the existing audio engine. The resolver and controller contain no Drum kind checks. Decorative objects without these capabilities do not resolve musical events.

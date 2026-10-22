@@ -11,7 +11,7 @@ const kinds={
  cube:s=>({draggable:{},physicsBody:{shape:'box'},triggerReceiver:{},pitchSource:{midi:s.pitch}}),
  cannon:s=>({draggable:{},triggerEmitter:{},instrumentSource:{instrumentId:s.instrument}}),
  ripple:s=>({draggable:{},triggerEmitter:{},instrumentSource:{instrumentId:s.instrument}}),
- drum:s=>({draggable:{},playable:{midi:s.pitch??60},instrumentSource:{instrumentId:s.instrument}}),
+ drum:s=>({draggable:{},playable:{midi:s.pitch??60},instrumentSource:{instrumentId:s.instrument},triggerReceiver:{soundSource:'receiver'},loopSource:{}}),
  'simple-paint':()=>({draggable:{},loopSource:{}}),
  'decorative-art':()=>({draggable:{},decorative:{}}),
  ball:()=>({draggable:{},physicsBody:{shape:'circle'}}),
@@ -41,6 +41,10 @@ export function referenceIntegrity(object,get){
 // No kind checks: timing belongs to contact, pitch to receiver, timbre to emitter.
 export function resolveBoardInteraction(emitter,receiver,timeSeconds){
  const e=emitter?.capabilities,r=receiver?.capabilities;
+ if(e?.triggerEmitter&&r?.triggerReceiver?.soundSource==='receiver'){
+  const direct=resolvePlayableActivation(receiver,timeSeconds);if(!direct)return null;
+  return {timeSeconds,sourceMidi:direct.sourceMidi,instrument:direct.instrument,emitterId:emitter.id,receiverId:receiver.id,soundSource:'receiver',sourceId:receiver.id,volume:direct.volume,muted:direct.muted};
+ }
  if(!e?.triggerEmitter||!r?.triggerReceiver||!Number.isFinite(r.pitchSource?.midi)||typeof e.instrumentSource?.instrumentId!=='string'||!e.instrumentSource.instrumentId.trim()||!Number.isFinite(timeSeconds))return null;
  return {timeSeconds,sourceMidi:r.pitchSource.midi,instrument:e.instrumentSource.instrumentId,emitterId:emitter.id,receiverId:receiver.id};
 }

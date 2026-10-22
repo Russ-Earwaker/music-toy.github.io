@@ -18,11 +18,16 @@ export function quantizeRipplerOffsetTick(hitTick, startTick, quantDiv, {
   ticksPerBeat = 96,
   loopLengthTicks = RIPPLER_LOOP_TICKS,
 } = {}) {
+  return quantizeForwardTick(hitTick,startTick,quantDiv,{ticksPerBeat}) % loopLengthTicks;
+}
+
+// Canonical forward grid admission, also used by performed loop sources.
+export function quantizeForwardTick(hitTick,startTick=0,quantDiv=2,{ticksPerBeat=96,strict=true}={}){
   const relative = Math.max(0, Math.round(Number(hitTick) || 0) - Math.round(Number(startTick) || 0));
   const div = Number(quantDiv);
-  if (!Number.isFinite(div) || div <= 0) return relative % loopLengthTicks;
+  if (!Number.isFinite(div) || div <= 0) return relative;
   const gridTicks = Math.max(1, Math.round(ticksPerBeat / div));
-  return (Math.ceil((relative + 1e-6) / gridTicks) * gridTicks) % loopLengthTicks;
+  return Math.ceil((relative + (strict?1e-6:0)) / gridTicks) * gridTicks;
 }
 
 export function ripplerEventsInWindow({
