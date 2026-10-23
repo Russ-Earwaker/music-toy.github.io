@@ -1,6 +1,6 @@
 import {decorateCircularControl} from './circular-control.js';
 import {uiMode} from './ui-mode.js';
-import {expressiveControl,setExpressiveControlsVisible,isExpressiveContainer} from './expressive-toy-chrome.js';
+import {expressiveControl,setExpressiveControlsVisible,isExpressiveContainer,arrangeExpressiveSecondaryControls} from './expressive-toy-chrome.js';
 // Minimal foundation UI: choose a connected selection, Open (non-destructive),
 // Expand (remove wrapper), and Delete (remove owned graph). No musical behavior.
 export function installContainerBoard({containers,getWorld,getCandidates,onRender,onDirty,onOpenChange=()=>{},onExpand=()=>{},renderSurface=()=>{},disposeSurface=()=>{},handleInteraction=()=>{},mountVolume=()=>null,getScale=()=>1}){
@@ -62,6 +62,7 @@ export function installContainerBoard({containers,getWorld,getCandidates,onRende
     if(tools&&tools.parentElement!==strip)strip.prepend(tools);
     if(!card.__containerVolume){const volume=document.createElement('div');volume.className='art-toy-volume';strip.insertBefore(volume,card.querySelector('.container-actions'));card.__containerVolume=mountVolume(volume,card);}
     card.__containerVolume?.sync();
+    if(c.presentation.type==='simple-draw')arrangeExpressiveSecondaryControls(strip);
    }
   }
   for(const {id}of getCandidates()){const node=document.getElementById(id);if(node)node.classList.toggle('container-internal-hidden',!containers.isVisible(id));}

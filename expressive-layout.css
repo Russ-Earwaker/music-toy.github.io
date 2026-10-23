@@ -1,4 +1,6 @@
 /* Shared slots: expressive toys own state; these classes only arrange UI. */
+.expressive-secondary{display:flex;align-items:center;gap:8px;flex:1 0 100%;order:90;min-width:0}
+.expressive-secondary .art-toy-volume{min-width:0;flex:0 1 240px}
 .expressive-layout{position:relative;height:100%}
 .expressive-surface{position:absolute;inset:var(--expressive-surface-top,0) 0 var(--expressive-surface-bottom,0);border-radius:18px;overflow:hidden;background:transparent}
 .expressive-palette{position:absolute;inset:0 0 auto;display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;z-index:3;pointer-events:none}

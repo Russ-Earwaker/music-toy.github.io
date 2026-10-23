@@ -1,4 +1,4 @@
-import {linePresentation,cutEnds} from './free-play-line-visual.js';
+import {linePresentation,cutEnds,stringSegments} from './free-play-line-visual.js';
 import {paintShapes,paintShapeContains,drawPaintShapes} from './free-play-silence.js';
 import {createScissorsStroke,nearestCutGap} from './free-play-scissors.js';
 import {decorateCircularControl} from './circular-control.js';
@@ -46,11 +46,14 @@ export function installSilenceTools({scene,controlsRoot=scene,canvas,api,morphVa
   }
  }
  const logical=p=>{const r=rect();return {x:p.x*r.width,y:p.y*r.height};};
- function snip(p){const candidates=views().flatMap(line=>nodes(line).map(n=>({...n,lineId:line.id,x:n.x*line.width,y:n.y*line.height}))),hits=gesture.stroke.add(logical(p),candidates);
+ const candidates=()=>views().flatMap(line=>nodes(line).map(n=>({...n,lineId:line.id,progress:n.pathDistance/line.source.path.totalLength,x:n.x*line.width,y:n.y*line.height})));
+ const paths=()=>views().map(line=>({lineId:line.id,segments:stringSegments(line.source,line.morph,line.height,1,motion,performance.now()).map(segment=>segment.map(p=>({...p,x:p.x*line.width,y:p.y*line.height})))}));
+ function applyCuts(hits){
   const changes=new Map();for(const hit of hits){if(!changes.has(hit.lineId))changes.set(hit.lineId,{});changes.get(hit.lineId)[hit.id]=true;}
   for(const [id,cuts]of changes)api.setSilence(id,{cuts});syncMotion(performance.now());
   hits.forEach((hit,i)=>{const state=motion.get(hit.id);if(state)state.cutAt=performance.now()+Math.min(i*18,90);});
  }
+ function snip(p){applyCuts(gesture.stroke.add(logical(p),candidates()));}
  function paint(p){
   const lines=api.lines(),stamp={id:`paint-${Date.now()}-${++serial}`,seed:(Date.now()+serial)>>>0,x:p.x,y:p.y,radius:.065,order:Date.now()+serial/1000,space:'surface-v2',owner:paintOwnerAt(lines,p)};
   births.set(stamp.id,performance.now());commitPaint([...allPaint(),stamp]);
@@ -112,7 +115,12 @@ export function installSilenceTools({scene,controlsRoot=scene,canvas,api,morphVa
  });
  canvas.addEventListener('pointerup',e=>{
   if(!gesture||e.pointerId!==gesture.pointer)return;const p=position(e);
-  if(tool==='Scissors'){snip(p);if(!gesture.stroke.isSwipe){const m=nearCut(p);if(m){api.setSilence(m.lineId,{cuts:{[m.id]:false}});syncMotion(performance.now());status.textContent='Mended. The music returns on its next beat.';}}}gesture=null;
+  if(tool==='Scissors'){
+   snip(p);
+   const gap=!gesture.stroke.isSwipe?nearCut(p):null;
+   if(gap){api.setSilence(gap.lineId,{cuts:{[gap.id]:false}});syncMotion(performance.now());status.textContent='Mended. The music returns on its next beat.';}
+   else applyCuts(gesture.stroke.finish(candidates(),paths()));
+  }gesture=null;
  });
  for(const name of ['pointercancel','lostpointercapture'])canvas.addEventListener(name,()=>{gesture=null;});
  canvas.addEventListener('pointerleave',()=>{hover=null;});

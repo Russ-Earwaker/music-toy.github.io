@@ -17,15 +17,16 @@ export function installSimpleDrawSurface(host,api,paintStore){
  let active=false,frame=null,pointerId=null,revision=0,birth=-Infinity,morph=null,disposed=false,creating=false;
  const controlsRoot=scene.querySelector('.simple-draw-controls'),group=controlsRoot.querySelector('.free-play-lines');
  const clearButton=expressiveControl(scene.querySelector('[data-reset]'),{kind:'clear',label:'Clear'});
+ const coilChrome=document.createElement('div');coilChrome.className='simple-draw-canvas-controls';scene.querySelector('.free-play-surface').append(coilChrome);
+ group.classList.add('simple-draw-scissors-menu');
  const geometry=()=>api.getGeometry?.()||{x:0,y:0,width:canvas.clientWidth,height:canvas.clientHeight};
  const morphValue=()=>{if(!morph)return api.lines()[0]?.straightened?1:0;const t=clamp01((performance.now()-morph.at)/650),e=t*t*(3-2*t);return morph.from+(morph.to-morph.from)*e;};
  const tools=installSilenceTools({scene,controlsRoot,canvas,api,morphValue,status,paintStore,sceneEvents:false,allowPaint:false,getGeometry:geometry,onToolChange:()=>controls()});
- function controls(){group.replaceChildren();const line=api.lines()[0];
+ function controls(){group.replaceChildren();coilChrome.replaceChildren();const line=api.lines()[0];
+  const scissors=controlsRoot.querySelector('[data-tool="Scissors"]');
+  if(scissors&&!scissors.parentElement.classList.contains('simple-draw-scissors-anchor')){const anchor=document.createElement('div');anchor.className='simple-draw-scissors-anchor';scissors.before(anchor);anchor.append(scissors,group);}
   const drawButton=controlsRoot.querySelector('[data-tool="Draw"]');drawButton.hidden=!!line||creating;drawButton.disabled=!!line||creating;
-  if(tools.tool==='Draw'){
-   if(line){const b=decorateCircularControl(document.createElement('button'),{label:line.straightened?'Re-coil':'Straighten',icon:line.straightened?'coil':'straighten'});b.onclick=()=>{const from=morphValue();api.setStraightened(line.id,!line.straightened);morph={from,to:line.straightened?0:1,at:performance.now()};tools.syncCoverage();controls();};group.append(b);}
-   group.append(clearButton);
-  }
+   if(line){const b=decorateCircularControl(document.createElement('button'),{label:line.straightened?'Coil':'Uncoil',icon:line.straightened?'coil':'straighten'});b.classList.add('art-toy-btn');b.onclick=()=>{const from=morphValue();api.setStraightened(line.id,!line.straightened);morph={from,to:line.straightened?0:1,at:performance.now()};tools.syncCoverage();controls();};coilChrome.append(b);}
   tools.addContextActions(group,line);
  }
  const drawing=createLineDrawing({change:stroke=>{if(stroke?.capped){status.textContent='Let go';hint.hidden=false;hint.textContent='Let go';}},complete:source=>{

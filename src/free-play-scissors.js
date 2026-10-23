@@ -10,7 +10,7 @@ function intersection(a,b,c,d){
 }
 // Segment progress retains authored path order, including coiled/self-crossing lines.
 // Arc lengths are measured on the visible string; gaps never invent a crossing.
-export function scissorsFallback(points,nodes,paths){
+export function scissorsFallback(points,nodes,paths,{tap=false}={}){
  const hits=[],seen=new Set(),crossings=new Set();
  for(const {lineId,segments} of paths){
   let distance=0;const edges=[];
@@ -21,6 +21,15 @@ export function scissorsFallback(points,nodes,paths){
   const at=progress=>{const edge=edges.find(e=>progress>=e.a.progress-1e-9&&progress<=e.b.progress+1e-9);return edge?edge.distance+edge.length*(progress-edge.a.progress)/(edge.b.progress-edge.a.progress||1):null;};
   const ordered=nodes.filter(n=>n.lineId===lineId).sort((a,b)=>a.progress-b.progress);
   const crossed=[];
+  if(tap){
+   const point=points.at(-1);let nearest=null;
+   for(const edge of edges){
+    const dx=edge.b.x-edge.a.x,dy=edge.b.y-edge.a.y,u=Math.max(0,Math.min(1,((point.x-edge.a.x)*dx+(point.y-edge.a.y)*dy)/(edge.length**2||1)));
+    const separation=Math.hypot(point.x-edge.a.x-dx*u,point.y-edge.a.y-dy*u);
+    if(separation<=SCISSORS_RADIUS&&(!nearest||separation<nearest.separation))nearest={progress:edge.a.progress+(edge.b.progress-edge.a.progress)*u,distance:edge.distance+edge.length*u,order:0,separation};
+   }
+   if(nearest)crossed.push(nearest);
+  }
   for(let i=1;i<points.length;i++)for(const edge of edges){
    const hit=intersection(points[i-1],points[i],edge.a,edge.b);if(!hit)continue;
    if(hit.t<1e-9||hit.t>1-1e-9){
@@ -35,9 +44,9 @@ export function scissorsFallback(points,nodes,paths){
   crossed.sort((a,b)=>a.order-b.order);
   for(const crossing of crossed){
    const crossingKey=lineId+':'+Math.round(crossing.progress*1e6);if(crossings.has(crossingKey))continue;crossings.add(crossingKey);
-   const before=ordered.findLast(n=>n.progress<=crossing.progress),after=ordered.find(n=>n.progress>=crossing.progress);
-   if(!before||!after)continue; // No fallback on an empty tail beyond musical content.
-   const candidates=[...new Set([before,after])].filter(n=>!n.scissorMuted&&!seen.has(key(n)))
+   if(!ordered.length||crossing.progress<ordered[0].progress||crossing.progress>ordered.at(-1).progress)continue;
+   const before=ordered.findLast(n=>!n.scissorMuted&&n.progress<=crossing.progress),after=ordered.find(n=>!n.scissorMuted&&n.progress>=crossing.progress);
+   const candidates=[...new Set([before,after])].filter(n=>n&&!seen.has(key(n)))
     .map(node=>({node,distance:at(node.progress)})).filter(n=>n.distance!==null)
     .sort((a,b)=>Math.abs(a.distance-crossing.distance)-Math.abs(b.distance-crossing.distance)||key(a.node).localeCompare(key(b.node)));
    if(candidates.length){const node=candidates[0].node;hits.push(node);seen.add(key(node));}
@@ -59,7 +68,14 @@ export function createScissorsStroke(start){
     for(const node of crossed){seen.add(key(node));hits.push(node);}
    }processed=points.length-1;return hits;
   },
-  finish(nodes,paths=[]){if(excursion<SCISSORS_SWIPE_SLOP||seen.size)return [];const hits=scissorsFallback(points,nodes,paths);for(const node of hits)seen.add(key(node));return hits;},
+  finish(nodes,paths=[]){
+   if(seen.size)return [];
+   if(excursion<SCISSORS_SWIPE_SLOP){
+    const point=points.at(-1),direct=nodes.filter(n=>!n.scissorMuted&&Math.hypot(n.x-point.x,n.y-point.y)<=SCISSORS_RADIUS).sort((a,b)=>Math.hypot(a.x-point.x,a.y-point.y)-Math.hypot(b.x-point.x,b.y-point.y));
+    if(direct.length){seen.add(key(direct[0]));return [direct[0]];}
+   }
+   const hits=scissorsFallback(points,nodes,paths,{tap:excursion<SCISSORS_SWIPE_SLOP});for(const node of hits)seen.add(key(node));return hits;
+  },
  };
 }
 export function nearestCutGap(point,gaps,radius=HEAL_RADIUS){

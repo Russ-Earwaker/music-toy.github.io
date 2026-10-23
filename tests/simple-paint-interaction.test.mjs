@@ -26,11 +26,11 @@ test('fast and slow missed crossings choose the same fallback, only once',()=>{
  const slow=swipe(170,{points:Array.from({length:71},(_,i)=>({x:170,y:30+2*i}))});assert.deepEqual(slow,swipe(170));assert.equal(slow.fallback.length,1);
 });
 test('already-cut nearest neighbor yields the other valid adjacent note',()=>{const ns=notes();ns[0].scissorMuted=true;assert.deepEqual(swipe(170,{nodes:ns}).fallback.map(n=>n.id),['right']);ns[1].scissorMuted=true;assert.deepEqual(swipe(170,{nodes:ns}).fallback,[]);});
-test('distant near misses, empty tails, parallel drags and taps never cause fallback',()=>{
+test('distant near misses, empty tails and parallel drags never cause fallback',()=>{
  assert.deepEqual(swipe(170,{points:[{x:170,y:30},{x:170,y:100},{x:170,y:30}]}).fallback,[]);
  assert.deepEqual(swipe(450).fallback,[]);assert.deepEqual(swipe(170,{points:[{x:170,y:30},{x:170,y:80}]}).fallback,[]);
  assert.deepEqual(swipe(170,{points:[{x:100,y:100},{x:300,y:100}]}).fallback,[]);
- assert.deepEqual(swipe(170,{points:[{x:170,y:99},{x:170,y:101}]}).fallback,[]);
+ assert.deepEqual(swipe(170,{points:[{x:170,y:99},{x:170,y:101}]}).fallback.map(n=>n.id),['left']);
  assert.deepEqual(swipe(350,{nodes:[{...notes()[0],progress:.1,x:40},{...notes()[1],progress:.5,x:200}]}).fallback,[]);
 });
 test('fallback uses path order rather than Euclidean proximity at folded sections',()=>{

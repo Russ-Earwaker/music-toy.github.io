@@ -1,0 +1,69 @@
+<!doctype html><meta charset="utf-8"><title>Simple Paint scissors regression</title>
+<link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../expressive-layout.css"><link rel="stylesheet" href="../free-play.css">
+<pre id="results">Running</pre>
+<script type="module">
+import {createScissorsStroke,nearestCutGap} from '../src/free-play-scissors.js';
+import {contentPointer} from '../src/surface-coordinates.js';
+import {createLineSource} from '../src/free-play-line.js';
+import {stringSegments,linePresentation} from '../src/free-play-line-visual.js';
+import {installSimpleDrawSurface} from '../src/simple-draw-surface.js';
+import {arrangeExpressiveSecondaryControls} from '../src/expressive-toy-chrome.js';
+let count=0;const check=(v,m)=>{if(!v)throw Error(m);count++;};
+try{
+ const nodes=[{lineId:'a',id:'left',x:0,y:100,progress:0},{lineId:'a',id:'right',x:400,y:100,progress:1}];
+ const paths=[{lineId:'a',segments:[[{x:0,y:100,progress:0},{x:400,y:100,progress:1}]]}];
+ const cut=(points,ns=nodes,ps=paths)=>{const s=createScissorsStroke(points[0]),hits=[];for(const p of points.slice(1))hits.push(...s.add(p,ns));return [...hits,...s.finish(ns,ps)];};
+ check(cut([{x:170,y:110}])[0]?.id==='left','tap near line');
+ check(cut([{x:1,y:100}])[0]?.id==='left','direct tap');
+ for(const points of [[{x:170,y:0},{x:170,y:200}],[{x:140,y:0},{x:200,y:200}],[{x:100,y:99},{x:250,y:101}]])check(cut(points).length===1,'swept/diagonal/tangent crossing');
+ check(cut([{x:10,y:0},{x:10,y:200}]).length===1,'direct priority');
+ check(cut([{x:170,y:110}],[{...nodes[0],scissorMuted:true},nodes[1]])[0]?.id==='right','already-cut neighbor');
+ check(cut([{x:170,y:140}]).length===0,'distant tap');
+ check(nearestCutGap({x:10,y:110},[{id:'cut',anchors:[{x:0,y:100}]}])?.id==='cut','heal gap');
+ const source=createLineSource([{x:.1,y:.5},{x:.4,y:.2},{x:.7,y:.8},{x:.9,y:.5}]),before=JSON.stringify(source);
+ for(const morph of [0,1]){
+  const ns=linePresentation(source,morph).events.map(n=>({...n,lineId:'a',x:n.x*600,y:n.y*300,progress:n.pathDistance/source.path.totalLength}));
+  const ps=[{lineId:'a',segments:stringSegments(source,morph,300).map(s=>s.map(p=>({...p,x:p.x*600,y:p.y*300})))}];
+  const n=ns[3];check(cut([{x:n.x,y:n.y}],ns,ps)[0]?.id===source.events[3].id,'canonical node in both views');
+ }
+ check(JSON.stringify(source)===before,'canonical state unchanged');
+ // Sparse musical nodes expose curve crossings that cannot hit either marker.
+ for(const morph of [0,1]){
+  const segments=stringSegments(source,morph,300).map(s=>s.map(p=>({...p,x:p.x*600,y:p.y*300})));
+  const segment=segments[0],target=segment[Math.floor(segment.length/2)];
+  const ns=linePresentation(source,morph).events.filter((_,i,a)=>i===0||i===a.length-1).map(n=>({...n,lineId:'a',x:n.x*600,y:n.y*300,progress:n.pathDistance/source.path.totalLength}));
+  const hit=cut([{x:target.x,y:target.y-60},{x:target.x,y:target.y+60}],ns,[{lineId:'a',segments}]);
+  check(hit.length>0,'visible curve crossing with sparse nodes');
+ }
+ const card=document.createElement('section');card.className='container-toy expressive-toy';card.dataset.presentation='simple-draw';card.style.cssText='position:relative;width:600px;height:500px';document.body.append(card);
+ const host=document.createElement('div');host.className='container-surface';card.append(host);
+ const line={id:'a',source,straightened:false};let cuts={};
+ const api={lines:()=>[line],getGeometry:()=>({x:0,y:0,width:500,height:300}),setSilence:(id,change)=>{Object.assign(cuts,change.cuts);for(const n of source.events)if(n.id in cuts)n.scissorMuted=cuts[n.id];},unlock(){},onNote(){},setStraightened(){},clear(){}};
+ const surface=installSimpleDrawSurface(host,api,{get:()=>[],set(){}});
+ const strip=document.createElement('div');strip.className='expressive-toy-controls';card.append(strip);strip.append(card.querySelector('.simple-draw-controls'));
+ const volume=document.createElement('div');volume.className='art-toy-volume';strip.append(volume);arrangeExpressiveSecondaryControls(strip);
+ check(volume.parentElement===card.querySelector('[data-reset]').parentElement,'shared lower row');
+ const coil=card.querySelector('.simple-draw-canvas-controls'),box=coil.parentElement;
+ const rect=()=>box.getBoundingClientRect();const initial=rect();
+ card.querySelector('[data-tool="Scissors"]').click();
+ const menu=card.querySelector('.simple-draw-scissors-menu'),anchor=menu.parentElement;
+ check(menu.getBoundingClientRect().bottom<=anchor.getBoundingClientRect().top,'menu upward');
+ check(rect().top===initial.top&&rect().width===initial.width,'menu preserves canvas bounds');
+ check(getComputedStyle(coil).position==='absolute'&&coil.parentElement===box,'canvas anchored coil');
+ for(const width of [220,600]){
+  card.style.width=width+'px';const b=rect(),c=coil.getBoundingClientRect();
+  check(c.right<=b.right&&c.left>=b.left,'coil fits narrow canvas');
+  card.dataset.controlsVisible='0';const hidden=rect();card.dataset.controlsVisible='1';check(rect().top===hidden.top&&rect().height===hidden.height,'controls preserve canvas geometry');
+ }
+ for(const zoom of [.5,1,1.7])for(const dpr of [1,2]){
+  card.style.transform=`scale(${zoom})`;const canvas=card.querySelector('canvas');canvas.width=canvas.clientWidth*dpr;const r=canvas.getBoundingClientRect(),g=api.getGeometry();
+  const p=contentPointer({clientX:r.left+r.width*.4,clientY:r.top+r.height*.6},canvas,g);
+  check(Math.abs(p.x-.4*canvas.clientWidth/g.width)<1e-8,'zoom/DPR x');
+  check(Math.abs(p.y-.6*canvas.clientHeight/g.height)<1e-8,'zoom/DPR y');
+ }
+ card.style.transform='';const canvas=card.querySelector('canvas'),n=source.events[3],g=api.getGeometry(),r=canvas.getBoundingClientRect();
+ const pointer=(type)=>canvas.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:1,clientX:r.left+n.x*g.width/canvas.clientWidth*r.width,clientY:r.top+n.y*g.height/canvas.clientHeight*r.height}));
+ canvas.setPointerCapture=()=>{};const canonical={id:n.id,sourceMidi:n.sourceMidi,tick:n.offsetTick};n.paintCovered=true;pointer('pointerdown');pointer('pointerup');check(cuts[n.id]===true,'integrated tap cut');check(n.paintCovered&&n.id===canonical.id&&n.sourceMidi===canonical.sourceMidi&&n.offsetTick===canonical.tick,'independent mute and canonical fields');pointer('pointerdown');pointer('pointerup');check(cuts[n.id]===false,'integrated tap heal');check(n.paintCovered,'heal preserves independent mute');
+ surface.dispose();document.querySelector('#results').textContent=`PASS ${count} assertions`;
+}catch(e){document.querySelector('#results').textContent='FAIL '+e.stack;}
+</script>

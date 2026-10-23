@@ -31,3 +31,7 @@ body.simple-draw-creating #board{cursor:crosshair}
 .simple-draw-materializing{animation:simple-draw-materialize 200ms ease-out}
 @keyframes simple-draw-materialize{from{border-color:transparent;box-shadow:none;background:transparent}to{border-color:#91c4e0}}
 @media(prefers-reduced-motion:reduce){.simple-draw-materializing{animation:none}}
+.container-toy[data-presentation="simple-draw"] .simple-draw-scissors-anchor{position:relative;display:flex}
+.container-toy[data-presentation="simple-draw"] .simple-draw-scissors-menu{position:absolute;display:flex;bottom:calc(100% + 8px);left:0;flex-direction:column;flex-wrap:nowrap;margin:0;gap:8px;z-index:10}
+.simple-draw-canvas-controls{position:absolute;top:8px;right:8px;z-index:4;display:flex;max-width:calc(100% - 16px)}
+.simple-draw-canvas-controls .c-btn{--c-btn-size:48px!important;flex-shrink:1}

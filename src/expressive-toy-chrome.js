@@ -1,6 +1,13 @@
 import {decorateCircularControl} from './circular-control.js';
 export const isExpressiveContainer=type=>['simple-draw','simple-bouncer'].includes(type);
 
+export function arrangeExpressiveSecondaryControls(controls){
+ let row=controls.querySelector('.expressive-secondary');
+ if(!row){row=document.createElement('div');row.className='expressive-secondary';controls.append(row);}
+ for(const node of controls.querySelectorAll('.art-toy-volume,.art-toy-clear-btn'))if(node.parentElement!==row)row.append(node);
+ return row;
+}
+
 // Art and content-sized containers share chrome; geometry remains owned by each toy.
 export function expressiveControl(button,{kind,label}={}){
  const asset={drag:'T_ButtonDrag',clear:'T_ButtonClear',enter:'T_ButtonEnter'}[kind];

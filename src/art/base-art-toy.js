@@ -1,5 +1,5 @@
 import {artBoardObject} from '../board-object.js';
-import {expressiveControl} from '../expressive-toy-chrome.js';
+import {expressiveControl,arrangeExpressiveSecondaryControls} from '../expressive-toy-chrome.js';
 // src/art/base-art-toy.js
 // Shared base for Art Toys.
 // This file owns the common container behaviors:
@@ -70,6 +70,7 @@ function showControls(panel) {
   if (!panel) return;
   if (g_openControlsPanel && g_openControlsPanel !== panel) hideControls(g_openControlsPanel);
   const controlsHost = panel.querySelector('.art-toy-controls');
+  if(controlsHost)arrangeExpressiveSecondaryControls(controlsHost);
   const volumeHost = panel.querySelector('.art-toy-volume');
   if (controlsHost) controlsHost.style.display = '';
   if (volumeHost) volumeHost.style.display = '';
