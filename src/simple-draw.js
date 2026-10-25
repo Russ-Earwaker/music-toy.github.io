@@ -3,6 +3,7 @@ import {updateSilence} from './free-play-silence.js';
 import {getPlaybackInstance,getPlaybackLocalTick} from './playback-instances.js';
 import {clamp01} from './free-play-line.js';
 import {ensureTransportPlayingForSimpleAuthoring} from './simple-authoring-playback.js';
+import {applyToyInstrument} from './instrument-state.js';
 
 // Each Container owns only drawing history. All playable notes/rests are read
 // and edited on the same ordinary DrawGrid instances used by the board.
@@ -79,7 +80,13 @@ export function createSimpleDrawController({containers,model,getToy,createGrid,r
    results.push(result);
   }return results;
  }
- return {create,draw,drawPrepared,clear,line,panels,setSilence,setData,data,onNote,notify,migrateLegacy,isPending:id=>pending.has(id),
+ function setInstrument(id,instrument){
+  if(typeof instrument!=='string'||!instrument.trim())return false;
+  const owned=panels(id);if(!owned.length)return false;
+  for(const panel of owned){applyToyInstrument(panel,instrument);publish(panel,'simple-draw-instrument');}
+  onChanged();return true;
+ }
+ return {create,draw,drawPrepared,clear,line,panels,setInstrument,setSilence,setData,data,onNote,notify,migrateLegacy,isPending:id=>pending.has(id),
   setStraightened:(id,value)=>setData(id,{straightened:!!value}),
   paintStore:id=>({get:()=>data(id).surfacePaint||[],set:value=>setData(id,{surfacePaint:structuredClone(value)})}),
   dispose:id=>{pending.delete(id);listeners.delete(id);},

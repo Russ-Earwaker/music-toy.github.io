@@ -7232,6 +7232,7 @@ const g_bouncerBoard=installBoardBouncer({objects:boardPhysicalObjects,controlle
  },
 });
 window.BoardObjects=createBoardObjectLayer({objects:boardPhysicalObjects,containers:containerToyModel,ripples:rippleObjects,drums:drumObjects,strings:stringSurfaces,
+ cannonController:g_simpleBouncer,paintController:g_simpleDraw,
  artPanels:()=>Array.from(document.querySelectorAll('.art-toy-panel:not(.internal-art-anchor-ghost)')),
  createCannon:options=>g_simpleBouncer.create(options),createPaint:options=>g_simpleDraw.create(options),
  createArt:options=>window.ArtToyFactory.create('flashCircle',options),removeArt:panel=>panel&&destroyArtToyPanel(panel)});

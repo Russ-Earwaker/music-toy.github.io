@@ -1,6 +1,6 @@
 // One board-facing API over existing canonical stores. No second graph or music store.
 import {referenceIntegrity} from './board-object.js';
-export function createBoardObjectLayer({objects,containers,ripples,drums,strings,artPanels=()=>[],createCannon,createPaint,createArt,removeArt=()=>false}){
+export function createBoardObjectLayer({objects,containers,ripples,drums,strings,cannonController,paintController,artPanels=()=>[],createCannon,createPaint,createArt,removeArt=()=>false}){
  const list=()=>[...objects.list().map(o=>o.boardObject),...containers.list().map(c=>c.boardObject).filter(Boolean),...artPanels().map(p=>p.boardObject).filter(Boolean),...(ripples?.list()||[]),...(drums?.list()||[]),...(strings?.list()||[])];
  const get=id=>list().find(o=>o.id===id)||null;
  const factories={cube:({x=0,y=0,...options})=>objects.addCube(x,y,options),cannon:createCannon,ripple:ripples?.create,drum:drums?.create,string:options=>strings?.create({...options,kind:'string'}),strum:options=>strings?.create({...options,kind:'strum'}),'simple-paint':createPaint,'decorative-art':createArt};
@@ -16,5 +16,24 @@ export function createBoardObjectLayer({objects,containers,ripples,drums,strings
   return get(id);
  }
  function remove(id){if(strings?.get(id))return strings.remove(id);if(drums?.get(id))return drums.remove(id);if(ripples?.get(id))return ripples.remove(id);if(objects.get(id))return objects.remove(id);if(containers.get(id))return containers.remove(id);return removeArt(artPanels().find(p=>p.id===id));}
- return {get,list,create,move,remove,references:id=>{const o=get(id);return o?referenceIntegrity(o,get):[];},snapshot:list};
+ // Resolve physical proxies to the musical owner; Cube has no instrument capability.
+ function instrumentOwner(id){
+  const physical=objects.get(id);if(physical?.kind==='ball')id=physical.captureId;
+  const o=get(id);if(!o)return null;
+  if(o.kind==='simple-paint'){
+   if(!paintController)return null;
+   return {id,getInstrument:()=>paintController.panels(id)[0]?.dataset.instrument,
+    setInstrument:instrument=>paintController.setInstrument(id,instrument),
+    randomise:()=>{const panels=paintController.panels(id);for(const p of panels)p.__toyRandomMusic?.();return panels.length>0;}};
+  }
+  if(!o.capabilities?.instrumentSource)return null;
+  const store=strings?.get(id)?strings:drums?.get(id)?drums:ripples?.get(id)?ripples:null;
+  return {id,getInstrument:()=>get(id)?.capabilities.instrumentSource.instrumentId,
+   setInstrument:instrument=>{
+    if(typeof instrument!=='string'||!instrument.trim())return false;
+    if(store)return !!store.update(id,{instrument});
+    return !!cannonController?.setInstrument(id,instrument);
+   },randomise:()=>false};
+ }
+ return {get,list,create,move,remove,instrumentOwner,references:id=>{const o=get(id);return o?referenceIntegrity(o,get):[];},snapshot:list};
 }

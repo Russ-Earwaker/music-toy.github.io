@@ -1,3 +1,4 @@
+import {applyInstrumentColour} from './instrument-colours.js';
 import {drumRingPoint} from './simple-drum-ring.js';
 import {decorateCircularControl} from './circular-control.js';
 import {expressiveControl,setExpressiveControlsVisible} from './expressive-toy-chrome.js';
@@ -60,7 +61,7 @@ export function installSimpleDrumBoard({objects,controller,getWorld,getViewport,
     card.onkeydown=e=>{e.stopPropagation();if(e.key==='Escape')setExpressiveControlsVisible(card,false);};
     root.append(card);entry={card,pad,dispose(){offPad();offHandle();closeInstrumentPicker(card);entry.animation?.cancel();card.remove();}};cards.set(o.id,entry);
    }
-   const {card}=entry;Object.assign(card.style,{left:o.transform.x+'px',top:o.transform.y+'px',width:DRUM_SIZE+'px',height:DRUM_SIZE+'px'});card.dataset.instrument=o.authoredState.instrument;entry.pad.textContent=o.authoredState.label;
+   const {card}=entry;Object.assign(card.style,{left:o.transform.x+'px',top:o.transform.y+'px',width:DRUM_SIZE+'px',height:DRUM_SIZE+'px'});applyInstrumentColour(card,o.authoredState.instrument);entry.pad.textContent=o.authoredState.label;
    card.querySelector('select').value=String(o.authoredState.periodLoops);
    const ring=card.querySelector('.drum-ring'),key=JSON.stringify([o.authoredState.periodLoops,o.authoredState.pattern.authoredNotes]);
    if(ring.dataset.pattern!==key){

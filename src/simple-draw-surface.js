@@ -1,5 +1,5 @@
 import {drawMusicalLine} from './free-play-line-visual.js';
-import {DRAWGRID_LINE_COLORS as colors} from './drawgrid/dg-line-style.js';
+import {applyInstrumentColour} from './instrument-colours.js';
 import {installSilenceTools} from './free-play-tools.js';
 import {decorateCircularControl} from './circular-control.js';
 import {expressiveControl} from './expressive-toy-chrome.js';
@@ -45,7 +45,7 @@ export function installSimpleDrawSurface(host,api,paintStore){
   if(!active||disposed||!host.isConnected)return;
   if(lastState!==state().state)controls();
   if(state().canvas){const r=geometry(),now=performance.now();ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);tools.prepareFrame(now);ctx.save();ctx.translate(r.x,r.y);
-   const line=api.lines()[0];drawMusicalLine(ctx,line.source,{width:r.width,height:r.height,phase:line.phase,morph:morphValue(),age:Infinity,flashes,now,color:colors[0],motion:tools.motion});tools.draw(ctx);ctx.restore();
+   const line=api.lines()[0];drawMusicalLine(ctx,line.source,{width:r.width,height:r.height,phase:line.phase,morph:morphValue(),age:Infinity,flashes,now,color:applyInstrumentColour(scene,line.source.instrument||host.closest('[data-instrument]')?.dataset.instrument||'tone'),instrumentTint:true,motion:tools.motion});tools.draw(ctx);ctx.restore();
   }
   frame=requestAnimationFrame(draw);
  }

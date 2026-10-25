@@ -30,3 +30,10 @@
 .surface-runway{fill:#8edcff;fill-opacity:0;stroke:#99dfff;stroke-opacity:0;stroke-width:1;stroke-dasharray:6 12;pointer-events:none;transition:fill-opacity 160ms,stroke-opacity 160ms}
 .string-surface-object:is([data-runway-new="1"],[data-runway-hover="1"],[data-performing="1"],[data-controls-visible="1"],:focus-within) .surface-runway{fill-opacity:.035;stroke-opacity:.28}
 @media(prefers-reduced-motion:reduce){.surface-runway{transition:none}}
+
+/* Shared Paint instrument identity; selection keeps its existing outlines. */
+.surface-string{stroke:var(--instrument-colour);filter:drop-shadow(0 0 4px var(--instrument-colour))}
+.surface-support,.surface-body,.surface-memory-group{stroke:var(--instrument-colour)}
+.string-surface-object .surface-memory-hit,.surface-memory-head,.surface-cell,.surface-cell.is-sounding{fill:var(--instrument-colour)}
+.surface-cell.is-sounding{filter:brightness(1.4)}
+.string-surface-object[data-mode="chord"] .surface-fret{stroke:#90bdcb}

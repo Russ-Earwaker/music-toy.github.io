@@ -1,3 +1,4 @@
+import {applyInstrumentColour} from './instrument-colours.js';
 ﻿import {decorateCircularControl} from './circular-control.js';
 import {openInstrumentPicker} from './instrument-picker.js';
 import {getDisplayNameForId} from './instrument-catalog.js';
@@ -30,7 +31,7 @@ export function installSimpleBouncerSurface(host,{controller,id,arm,screenToWorl
  function draw(){if(disposed||!controller.data(id))return;const d=controller.data(id),c=controller.cannon(id);if(!c)return;
   card.dataset.ballMode=d.ballMode||'normal';if(d.ballMode==='gravity'){card.setAttribute('aria-label','Gravity Cannon');card.querySelector('.simple-container-handle')?.setAttribute('aria-label','Gravity Cannon controls');}const ballLabel=d.ballMode==='gravity'?'Gravity Ball':'Ball';ball.setAttribute('aria-label',ballLabel);ball.title=ballLabel;ball.querySelector('.cannon-tool-label').textContent=ballLabel;ball.dataset.toyType=d.ballMode==='gravity'?'physical-gravity-ball':'physical-ball';ball.classList.toggle('gravity-ball-tool',d.ballMode==='gravity');muzzle.setAttribute('aria-label',d.ballMode==='gravity'?'Aim gravity cannon':'Aim cannon');
   barrel.style.transform=`rotate(${Math.atan2(c.direction.y,c.direction.x)}rad)`;barrel.style.setProperty('--barrel-length',CANNON_BARREL_LENGTH+'px');
-  bars.value=String(d.bars);const name=getDisplayNameForId(d.instrument)||d.instrument;instrument.title=`Choose Instrument: ${name}`;instrumentName.textContent=name;card.dataset.instrument=d.instrument;
+  bars.value=String(d.bars);const name=getDisplayNameForId(d.instrument)||d.instrument;instrument.title=`Choose Instrument: ${name}`;instrumentName.textContent=name;applyInstrumentColour(card,d.instrument);
  }
  function animate(){if(!active||disposed)return;draw();frame=requestAnimationFrame(animate);}
  const unsubscribe=controller.subscribe(draw);draw();

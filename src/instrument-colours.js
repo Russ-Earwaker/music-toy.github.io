@@ -103,9 +103,8 @@ export function setInstrumentColour(id, colour) {
  overrides[colourKey(id)] = colour;
  try { globalThis.localStorage?.setItem(COLOUR_KEY, JSON.stringify(overrides)); } catch {}
  // Refresh all existing owners; future owners read the same mapping on install.
- for (const panel of globalThis.document?.querySelectorAll?.('.toy-panel[data-instrument]') || []) {
-  panel.style.setProperty('--instrument-colour', instrumentColour(panel.dataset.instrument));
-  panel.dataset.instrumentColour = instrumentColour(panel.dataset.instrument);
+ for (const panel of globalThis.document?.querySelectorAll?.('[data-instrument]') || []) {
+  if (colourKey(panel.dataset.instrument) === colourKey(id)) applyInstrumentColour(panel, panel.dataset.instrument);
  }
  globalThis.window?.dispatchEvent(new CustomEvent('instrument-colour:change', { detail: { id: colourKey(id), colour } }));
  return true;
@@ -116,4 +115,10 @@ export function instrumentColour(id='tone') {
  if(INSTRUMENT_COLOURS[key])return INSTRUMENT_COLOURS[key];
  let hash=2166136261;for(const c of key)hash=Math.imul(hash^c.charCodeAt(0),16777619)>>>0;
  return 'oklch(76% 0.14 '+(hash/4294967296*360).toFixed(4)+')';
+}
+
+// Presentation only; colour remains in the shared palette, outside toy state.
+export function applyInstrumentColour(element,id){
+ const colour=instrumentColour(id);element.dataset.instrument=id;
+ element.style.setProperty('--instrument-colour',colour);element.dataset.instrumentColour=colour;return colour;
 }

@@ -1,3 +1,4 @@
+import {applyInstrumentColour} from './instrument-colours.js';
 import {BOUNCER_BASE_ORANGE,BOUNCER_IMPACT_ORANGE} from './bouncer-response-style.js';
 import {boardLaunch,predictCannonTrajectory,CANNON_BARREL_LENGTH,BALL_LAUNCH_SPEED} from './simple-bouncer-physics.js';
 import {seedTriggerCubes,triggerCreationPoint} from './trigger-starter-cubes.js';
@@ -20,6 +21,7 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
  function updateCreationPreview(){
   if(!gesture||gesture.mode==='cube'||Math.hypot(gesture.current.x-gesture.start.x,gesture.current.y-gesture.start.y)<6){creationPath.setAttribute('points','');aim.setAttribute('d','');previewKey=null;return;}
   const {launch,containerId,ballMode}=launchFor(gesture,gesture.current),cubes=getCollisionObjects(),bars=controller.data(containerId)?.bars||1,bpm=getBpm(containerId);
+  const instrument=controller.data(containerId)?.instrument||objects.get(gesture.ballId)?.instrument||'tone';applyInstrumentColour(aim,instrument);applyInstrumentColour(creationPath,instrument);
   const key=JSON.stringify([ballMode,launch,bars,bpm,cubes.map(c=>[c.id,c.x,c.y,c.width,c.height,c.radius,c.sourceMidi,c.segments,c.surfaceRadius])]);
   if(key===previewKey)return;previewKey=key;
   drawTrajectory(creationPath,predictCannonTrajectory({launch,cubes,bars,bpm,ballMode}));
@@ -98,7 +100,7 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
   for(const ball of objects.list('ball')){
    if(!ball.captureId||!controller.prediction)continue;present.add(ball.id);
    let line=predictions.get(ball.id);if(!line){line=document.createElementNS(ns,'polyline');line.classList.add('physical-path-prediction');line.setAttribute('data-capture-id',ball.captureId);svg.prepend(line);predictions.set(ball.id,line);}
-   drawTrajectory(line,controller.prediction(ball.captureId));
+   applyInstrumentColour(line,controller.data(ball.captureId)?.instrument||ball.instrument||'tone');drawTrajectory(line,controller.prediction(ball.captureId));
   }
   for(const [id,line]of predictions)if(!present.has(id)){line.remove();predictions.delete(id);}
   const responses=controller.cubeResponses?.(),shared=controller.receiverResponses?.();
@@ -112,6 +114,7 @@ export function installBoardBouncer({objects,controller,getCollisionObjects=()=>
    const node=nodes.get(ball.id),view=controller.ballView(ball);if(!node)continue;node.hidden=!!view.hidden;
    if(gesture?.ballId!==ball.id)Object.assign(node.style,{left:view.position.x+'px',top:view.position.y+'px'});
    let trail=trails.get(ball.id);if(!trail){trail=document.createElementNS(ns,'polyline');trail.classList.add('physical-ball-trail');svg.prepend(trail);trails.set(ball.id,trail);}
+   const instrument=controller.data(ball.captureId)?.instrument||ball.instrument||'tone';applyInstrumentColour(node,instrument);applyInstrumentColour(trail,instrument);
    trail.setAttribute('points',(view.hidden?[]:[...view.trail,view.position]).map(p=>`${p.x},${p.y}`).join(' '));
   }
   frame=requestAnimationFrame(animate);

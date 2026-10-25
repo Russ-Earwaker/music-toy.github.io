@@ -101,20 +101,20 @@ export function paintCenter(source,splat,morph,width,height){
 export function drawLinePaint(ctx,source,morph,width,height){
  for(const splat of source.paint||[]){const center=paintCenter(source,splat,morph,1,1);drawPaintShapes(ctx,paintShapes(splat,center),width,height);}
 }
-export function drawMusicalLine(ctx,original,{width:w,height:h,phase=null,age=Infinity,flashes=new Map(),now=0,color=drawGridLineColor(0),morph=0,motion,points=true}={}){
+export function drawMusicalLine(ctx,original,{width:w,height:h,phase=null,age=Infinity,flashes=new Map(),now=0,color=drawGridLineColor(0),morph=0,motion,points=true,instrumentTint=false}={}){
  const paintSegments=progress=>{for(const points of stringSegments(original,morph,h,progress,motion,now))paintLinePath(ctx,points,w,h);};
  ctx.save();ctx.lineCap='round';ctx.lineJoin='round';ctx.lineWidth=6;ctx.strokeStyle=color;ctx.globalAlpha=.28;ctx.shadowColor=color;ctx.shadowBlur=8;
  paintSegments(1);ctx.globalAlpha=1;
  if(phase!==null){
   ctx.shadowColor=color;ctx.shadowBlur=14;ctx.strokeStyle=color;ctx.lineWidth=5;
   ctx.globalAlpha=.65+.12*Math.sin(now/170);paintSegments(phase);ctx.globalAlpha=1;
-  ctx.lineWidth=2;ctx.strokeStyle='#e8fff8';ctx.shadowBlur=20;ctx.globalAlpha=.6;paintSegments(phase);ctx.globalAlpha=1;
+  ctx.lineWidth=2;ctx.strokeStyle=instrumentTint?color:'#e8fff8';ctx.shadowBlur=20;ctx.globalAlpha=.6;paintSegments(phase);ctx.globalAlpha=1;
  }
  ctx.restore();
- if(points)drawMusicalPoints(ctx,original,{width:w,height:h,age,flashes,now,color,morph});
+ if(points)drawMusicalPoints(ctx,original,{width:w,height:h,age,flashes,now,color,morph,instrumentTint});
 }
 // Kept separate so surface paint cannot obscure the playable/cuttable markers.
-export function drawMusicalPoints(ctx,original,{width:w,height:h,age=Infinity,flashes=new Map(),now=0,color=drawGridLineColor(0),morph=0}={}){
+export function drawMusicalPoints(ctx,original,{width:w,height:h,age=Infinity,flashes=new Map(),now=0,color=drawGridLineColor(0),morph=0,instrumentTint=false}={}){
  const source=linePresentation(original,morph);ctx.save();
  for(let i=0;i<source.events.length;i++){
   const node=source.events[i],bloom=clamp01((age-i*22)/160);if(!bloom)continue;
@@ -124,14 +124,14 @@ export function drawMusicalPoints(ctx,original,{width:w,height:h,age=Infinity,fl
   ctx.beginPath();ctx.arc(x,y,r+2,0,Math.PI*2);ctx.fill();
   ctx.shadowColor=muted?'#d9e9f5':color;ctx.shadowBlur=muted?5:17+flash*24;
   ctx.strokeStyle=node.scissorMuted?'#f6b6a8':node.paintCovered?'#d9e9f5':'#e8f7ff';ctx.lineWidth=1.4;
-  ctx.fillStyle=muted?'#172332':flash?'#fff8d0':color;
+  ctx.fillStyle=muted?'#172332':flash&&!instrumentTint?'#fff8d0':color;
   ctx.beginPath();
   if(node.paintCovered){ctx.moveTo(x,y-r-1);ctx.lineTo(x+r+1,y);ctx.lineTo(x,y+r+1);ctx.lineTo(x-r-1,y);ctx.closePath();}
   else ctx.arc(x,y,r,0,Math.PI*2);
   ctx.fill();ctx.stroke();
   if(node.scissorMuted){ctx.shadowBlur=0;ctx.beginPath();ctx.moveTo(x-r*.65,y+r*.65);ctx.lineTo(x+r*.65,y-r*.65);ctx.stroke();}
   else if(!muted){ctx.fillStyle='#f2fcff';ctx.beginPath();ctx.arc(x,y,Math.max(1.6,r*.36),0,Math.PI*2);ctx.fill();}
-  if(flash>.15){ctx.strokeStyle='#fff8d0';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x-r*1.8,y);ctx.lineTo(x+r*1.8,y);ctx.moveTo(x,y-r*1.8);ctx.lineTo(x,y+r*1.8);ctx.stroke();}
+  if(flash>.15){ctx.strokeStyle=instrumentTint?color:'#fff8d0';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x-r*1.8,y);ctx.lineTo(x+r*1.8,y);ctx.moveTo(x,y-r*1.8);ctx.lineTo(x,y+r*1.8);ctx.stroke();}
  }
  ctx.restore();
 }

@@ -1,4 +1,5 @@
-import { supportsToyInstrument, applyToyInstrument } from './instrument-state.js';
+import { supportsToyInstrument } from './instrument-state.js';
+import {supportsPaintTarget,paintInstrument,assignPaintInstrument} from './paint-target.js';
 
 export const PALETTE_KEY = 'rhythmake:paint-slots';
 // Store exact catalogue/audio IDs. The colour mapping normalizes independently.
@@ -12,13 +13,14 @@ export const canonicalInstrument = id => String(id || '').trim().toLowerCase().r
 // Use the existing musical-content API where offered, otherwise the same event
 // as the toy's main Randomise button. None of these paths chooses instruments.
 export function randomisePaintToy(panel) {
+ if(panel?.paintOwner)return panel.paintOwner.randomise?.()??false;
  if (!supportsToyInstrument(panel?.dataset?.toy)) return false;
  if (typeof panel.__toyRandomMusic === 'function') panel.__toyRandomMusic();
  else panel.dispatchEvent(new CustomEvent('toy-random', { bubbles: true, composed: true }));
  return true;
 }
 
-export function createPaletteState({ storage = globalThis.localStorage, assign = applyToyInstrument, randomise = randomisePaintToy, onChange = () => {} } = {}) {
+export function createPaletteState({ storage = globalThis.localStorage, assign = assignPaintInstrument, randomise = randomisePaintToy, onChange = () => {} } = {}) {
  let slots = [...DEFAULT_PAINT_SLOTS];
  try {
   const saved = JSON.parse(storage?.getItem(PALETTE_KEY) || 'null');
@@ -46,13 +48,27 @@ export function createPaletteState({ storage = globalThis.localStorage, assign =
   if (state.activePaintSlot === index && !slots[index]) clear();
   persist(); onChange();
  };
+ const shuffle = (entries,theme='',random=Math.random) => {
+  const pool=[...new Set(entries.filter(e=>e?.id&&(!theme||e.themes?.includes(theme))).map(e=>e.id))];
+  if(!pool.length)return false;
+  for(let i=pool.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+  const next=Array.from({length:6},(_,i)=>pool[i%pool.length]);
+  // Avoid leaving the same instrument in a well when a useful swap is available.
+  for(let i=0;i<6;i++)if(next[i]===slots[i]){
+   const j=next.findIndex((id,j)=>id!==slots[i]&&next[i]!==slots[j]);
+   if(j>=0)[next[i],next[j]]=[next[j],next[i]];
+  }
+  slots=next;state.slots=slots;
+  state.activePaletteTool=null;state.activePaintSlot=null;state.strokeVisitedToyIds.clear();
+  persist();onChange();return true;
+ };
  const paint = panel => {
-  if (!state.activePaletteTool || !supportsToyInstrument(panel?.dataset?.toy)) return false;
+  if (!state.activePaletteTool || !supportsPaintTarget(panel)) return false;
   const key = panel.id || panel.dataset.toyid || panel;
   if (state.strokeVisitedToyIds.has(key)) return false;
   state.strokeVisitedToyIds.add(key);
   if (state.activePaletteTool === 'eyedropper') {
-   const instrument = panel.dataset.instrument;
+   const instrument = paintInstrument(panel);
    if (!instrument) return false;
    let index = slots.findIndex(id => id && canonicalInstrument(id) === canonicalInstrument(instrument));
    if (index < 0) {
@@ -66,7 +82,7 @@ export function createPaletteState({ storage = globalThis.localStorage, assign =
   if (state.activePaletteTool === 'randomise') return randomise(panel);
   return assign(panel, slots[state.activePaintSlot]);
  };
- return { state, clear, selectSlot, selectTool, configure, paint, beginStroke: () => state.strokeVisitedToyIds.clear(), endStroke: () => state.strokeVisitedToyIds.clear() };
+ return { state, clear, selectSlot, selectTool, configure, shuffle, paint, beginStroke: () => state.strokeVisitedToyIds.clear(), endStroke: () => state.strokeVisitedToyIds.clear() };
 }
 
 // Exact segment/rectangle intersection catches small toys between pointer samples.

@@ -1,3 +1,4 @@
+import {applyInstrumentColour} from '../src/instrument-colours.js';
 import test from 'node:test';
 import {drumRingPoint} from '../src/simple-drum-ring.js';
 import assert from 'node:assert/strict';
@@ -80,7 +81,7 @@ import {Node,dom,walk} from './graph-ui-dom.mjs';
 test('real circular ring projects canonical slots, playhead, Clear, and hit feedback',async()=>{
  const f=fixture(2),environment=dom(),world=new Node(),viewport=new Node();viewport.append(world);environment.document.body.append(viewport);let frame,animations=0;
  const oldQuery=Node.prototype.querySelectorAll,oldAnimate=Node.prototype.animate;Node.prototype.querySelectorAll=function(selector){return walk(this,n=>n!==this&&n.matches(selector));};Node.prototype.animate=()=>{animations++;return {cancel(){}};};
- const context={...environment,drumRingPoint,DRUM_SIZE:104,requestAnimationFrame:fn=>{frame=fn;return 1;},cancelAnimationFrame(){},setToyVolume(){},setToyMuted(){},syncVolumeUI(){},installVolumeUI(){},decorateCircularControl:n=>n,expressiveControl:n=>n,installTapOrDrag:()=>()=>{},getDisplayNameForId:i=>i,closeInstrumentPicker(){},setExpressiveControlsVisible(){}};vm.createContext(context);
+ const context={...environment,applyInstrumentColour,drumRingPoint,DRUM_SIZE:104,requestAnimationFrame:fn=>{frame=fn;return 1;},cancelAnimationFrame(){},setToyVolume(){},setToyMuted(){},syncVolumeUI(){},installVolumeUI(){},decorateCircularControl:n=>n,expressiveControl:n=>n,installTapOrDrag:()=>()=>{},getDisplayNameForId:i=>i,closeInstrumentPicker(){},setExpressiveControlsVisible(){}};vm.createContext(context);
  const source=readFileSync(new URL('../src/simple-drum-board.js',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace('export function installSimpleDrumBoard','function installSimpleDrumBoard');const install=vm.runInContext(source+';installSimpleDrumBoard',context);
  let board;try{
   board=install({objects:f.objects,controller:f.controller,getWorld:()=>world,getViewport:()=>viewport,screenToWorld:p=>p,unlock(){}});

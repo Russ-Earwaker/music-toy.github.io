@@ -1,3 +1,4 @@
+import {applyInstrumentColour} from './instrument-colours.js';
 import {decorateCircularControl} from './circular-control.js';
 import {expressiveControl,setExpressiveControlsVisible} from './expressive-toy-chrome.js';
 import {openInstrumentPicker,closeInstrumentPicker} from './instrument-picker.js';
@@ -52,7 +53,7 @@ export function installSimpleRippleBoard({objects,controller,getWorld,getViewpor
     card.onkeydown=e=>{e.stopPropagation();if(e.key==='Escape')setExpressiveControlsVisible(card,false);};
     root.append(card);cards.set(o.id,card);
    }
-   Object.assign(card.style,{left:o.transform.x+'px',top:o.transform.y+'px',width:RIPPLE_SIZE+'px',height:RIPPLE_SIZE+'px'});card.dataset.instrument=o.authoredState.instrument;
+   Object.assign(card.style,{left:o.transform.x+'px',top:o.transform.y+'px',width:RIPPLE_SIZE+'px',height:RIPPLE_SIZE+'px'});applyInstrumentColour(card,o.authoredState.instrument);
    card.querySelector('select').value=String(o.authoredState.periodLoops);
    card.querySelector('.ripple-instrument-name').textContent=getDisplayNameForId(o.authoredState.instrument)||o.authoredState.instrument;
    setToyVolume(o.id,o.authoredState.volume);setToyMuted(o.id,o.authoredState.muted);syncVolumeUI(card,{volume:o.authoredState.volume,muted:o.authoredState.muted});
@@ -63,7 +64,7 @@ export function installSimpleRippleBoard({objects,controller,getWorld,getViewpor
  function animate(){
   const present=new Set();for(const wave of controller.visibleWaves(now())){
    present.add(wave.id);let ring=rings.get(wave.id);if(!ring){ring=document.createElementNS(ns,'circle');ring.classList.add('simple-ripple-wave');svg.append(ring);rings.set(wave.id,ring);}
-   ring.setAttribute('cx',wave.origin.x);ring.setAttribute('cy',wave.origin.y);ring.setAttribute('r',wave.radius);ring.style.opacity=String(1-wave.radius/wave.maxRadius);
+   applyInstrumentColour(ring,objects.get(wave.emitterId)?.authoredState.instrument||'tone');ring.setAttribute('cx',wave.origin.x);ring.setAttribute('cy',wave.origin.y);ring.setAttribute('r',wave.radius);ring.style.opacity=String(1-wave.radius/wave.maxRadius);
   }
   for(const [id,ring]of rings)if(!present.has(id)){ring.remove();rings.delete(id);}frame=requestAnimationFrame(animate);
  }

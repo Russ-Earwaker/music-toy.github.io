@@ -49,3 +49,10 @@ body.bouncer-board-armed .board-viewport { cursor:crosshair; }
 .gravity-ball-tool .toy-spawner-name{width:78px;white-space:normal;text-align:center;line-height:1.1}
 
 .gravity-ball-tool .cannon-tool-label{width:70px;white-space:normal;text-align:center}
+
+/* Shared Paint instrument identity; selection keeps its existing outlines. */
+.cannon-barrel::before,.cannon-aim{border-color:var(--instrument-colour)}
+.container-toy[data-presentation="simple-bouncer"] .simple-container-handle .c-btn-glow{background:var(--instrument-colour)}
+.physical-ball,.physical-ball[data-ball-mode="gravity"]{background:var(--instrument-colour);border-color:var(--instrument-colour);box-shadow:0 0 22px var(--instrument-colour)}
+.physical-launch-preview,.physical-path-prediction,.physical-ball-trail{stroke:var(--instrument-colour,#a0edff)}
+.physical-ball-trail{opacity:.45}

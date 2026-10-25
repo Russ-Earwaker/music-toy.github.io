@@ -1,3 +1,4 @@
+import {applyInstrumentColour} from './instrument-colours.js';
 import {stringRunways,stringLocalPoint,chooseStringSurface} from './string-surface-input.js';
 import {stringSegments,stringTap,stringCrossings} from './string-surface.js';
 import {createBoardInteractionHint} from './simple-interaction-hint.js';
@@ -41,7 +42,7 @@ export function installStringSurfaceBoard({objects,controller,getWorld,getViewpo
     const offMove=installTapOrDrag(handle,{getPosition:()=>objects.get(o.id).transform,screenToWorld,canInteract,move:(x,y)=>objects.update(o.id,{x,y}),onTap:()=>setExpressiveControlsVisible(card,card.dataset.controlsVisible!=='1'),onDragStart:e=>window.ToySpawner?.beginPanelDrag?.({panel:card,pointerId:e.pointerId,remove:()=>objects.remove(o.id)}),onDragMove:e=>window.ToySpawner?.updatePanelDrag?.({clientX:e.clientX,clientY:e.clientY}),onDragEnd:(e,canceled)=>window.ToySpawner?.endPanelDrag?.({clientX:e.clientX,clientY:e.clientY,pointerId:e.pointerId,canceled})});
     card.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Escape')setExpressiveControlsVisible(card,false);});root.append(card);entry={card,group,paths,body,cells,frets,runways,memory,offMove};cards.set(o.id,entry);
    }
-   const {card,group,paths,body,cells,frets,runways,memory}=entry,length=o.bounds.length;stringRunways(o).forEach((r,i)=>{for(const k of ['x','y','width','height'])runways[i].setAttribute(k,r[k]);});card.dataset.instrument=o.authoredState.instrument;card.dataset.mode=o.authoredState.mode;
+   const {card,group,paths,body,cells,frets,runways,memory}=entry,length=o.bounds.length;stringRunways(o).forEach((r,i)=>{for(const k of ['x','y','width','height'])runways[i].setAttribute(k,r[k]);});applyInstrumentColour(card,o.authoredState.instrument);card.dataset.mode=o.authoredState.mode;
    const local=o.capabilities.playable.surface,top=local.segments[0].a.y-16,bottom=local.segments.at(-1).a.y+16;
    for(const [k,v]of Object.entries({x:-length/2-16,y:top,width:length+32,height:bottom-top}))body.setAttribute(k,v);
    cells.forEach(({cell,lane,region})=>{for(const [k,v]of Object.entries({x:-length/2+length*region.start,y:local.segments[lane].a.y-11,width:length*(region.end-region.start),height:22}))cell.setAttribute(k,v);});

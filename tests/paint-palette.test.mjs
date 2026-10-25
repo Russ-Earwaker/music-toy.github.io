@@ -112,7 +112,7 @@ test('instrument overrides update every shared owner, allow identical colours, a
 test('integration wires screen-space UI, long press, empty-board clear, and scene reset',()=>{
  const ui=readFileSync(new URL('../src/paint-palette.js',import.meta.url),'utf8');
  const css=readFileSync(new URL('../paint-palette.css',import.meta.url),'utf8');
- assert.match(css,/#paint-palette\s*\{ position:fixed/);assert.match(ui,/document.body.appendChild\(root\)/);
+ assert.match(css,/#paint-palette\s*\{\s*position:fixed/);assert.match(ui,/document.body.appendChild\(root\)/);
  assert.match(ui,/setTimeout\(.*configure\(i\).*550/);assert.match(ui,/openInstrumentPicker\(\{ panel: dialog/);
  assert.match(ui,/stroke.empty && !stroke.moved && !stroke.painted/);assert.match(ui,/if \(clear\) palette.clear\(\)/);
  assert.match(ui,/window.addEventListener\('scene:new',reset\)/);

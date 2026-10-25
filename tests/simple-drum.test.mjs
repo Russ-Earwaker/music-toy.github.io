@@ -72,7 +72,7 @@ test('placement arms without creating, persists for repeated empty-space taps, a
  try{
   const viewport=new Node(),world=new Node();viewport.append(world);environment.document.body.append(viewport);const created=[];
   const objects={list:()=>[],get:()=>null,subscribe:()=>()=>{},create:p=>created.push(p)};
-  const context={...environment,DRUM_SIZE:104};vm.createContext(context);
+  const context={...environment,DRUM_SIZE:104,createBoardInteractionHint:()=>({dispose(){}}),SIMPLE_PLACE_HINT_DELAY:0};vm.createContext(context);
   const source=readFileSync(new URL('../src/simple-drum-board.js',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace('export function installSimpleDrumBoard','function installSimpleDrumBoard');
   const install=vm.runInContext(source+';installSimpleDrumBoard',context);
   const board=install({objects,controller:{activate:()=>{}},getWorld:()=>world,getViewport:()=>viewport,screenToWorld:p=>({x:p.x/2,y:p.y/2}),unlock:()=>{}});

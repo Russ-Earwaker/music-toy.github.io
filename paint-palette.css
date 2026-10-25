@@ -1,23 +1,40 @@
-#paint-palette { position:fixed; bottom:max(18px,env(safe-area-inset-bottom)); left:max(18px,env(safe-area-inset-left)); z-index:950; padding:12px 16px; max-width:calc(100vw - 36px); box-sizing:border-box; border-radius:46% 38% 34% 32% / 30px 38px 30px 26px; background:linear-gradient(145deg,#b88b5d,#7b5438); border:3px solid #d4ae7c; box-shadow:0 7px 0 #493322,0 12px 26px #0008,inset 0 2px 6px #ffe8ba66; color:#fff7e6; touch-action:none; }
-#paint-palette button { cursor:pointer; color:inherit; font:inherit; border:0; }
-.palette-handle { display:flex; align-items:center; gap:8px; background:transparent; font-size:25px!important; }
-.palette-handle span { font-size:14px; }
-.palette-wells { display:grid; grid-template-columns:repeat(3,62px); gap:10px; padding:10px 0; }
-.palette-well { width:62px; height:62px; border-radius:48% 52% 44% 56%; background:var(--paint); color:#18222c!important; font-size:10px!important; font-weight:700!important; padding:7px; overflow-wrap:anywhere; box-shadow:inset 0 -5px 8px #0004,inset 0 3px 3px #fff8,0 3px 1px #372516; transition:transform .12s; }
-#paint-palette [aria-pressed=true] { outline:3px solid white; outline-offset:3px; transform:rotate(-6deg) scale(1.04); box-shadow:0 0 18px #fff8; }
-.palette-tools { display:flex; justify-content:space-around; gap:12px; padding:6px 0; }
-.palette-tools button { border-radius:16px; background:#503a33; padding:8px; font-size:22px!important; }
-.palette-tools span { display:block; font-size:11px; }
-.palette-hint { max-width:206px; font-size:11px; line-height:1.4; margin:9px 0 0; }
-#paint-palette [hidden] { display:none; }
-.palette-equipped .board-viewport { touch-action:none; cursor:crosshair; }
-.palette-effects { position:fixed; inset:0; pointer-events:none; z-index:940; }
-.palette-config { z-index:10000; border:2px solid #d4ae7c; border-radius:24px; background:#382b28; color:#fff7e6; padding:24px; width:min(330px,80vw); box-shadow:0 12px 40px #0009; }
-.palette-config::backdrop { background:#0009; }
-.palette-config h2 { margin-top:0; }
-.palette-config button { padding:12px; border-radius:12px; border:1px solid #ab8768; background:#614737; color:inherit; margin:6px 6px 12px 0; }
-.palette-config label { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.palette-config input { width:58px; height:44px; }
-.palette-config p { font-size:13px; }
-@media(max-height:500px) { .palette-wells { grid-template-columns:repeat(6,44px); } .palette-well { width:44px;height:44px; } .palette-hint { max-width:320px; } }
-@media(prefers-reduced-motion:reduce) { .palette-well { transition:none; } }
+﻿#paint-palette{position:fixed;bottom:max(18px,env(safe-area-inset-bottom));left:max(18px,env(safe-area-inset-left));z-index:950;padding:12px 16px;max-width:calc(100vw - 36px);max-height:calc(100dvh - 36px);overflow-y:auto;box-sizing:border-box;border-radius:22px;background:linear-gradient(145deg,#182b40f5,#0b131ff2);border:1px solid #527ca5;box-shadow:0 0 18px #428bc62b,0 12px 28px #0008,inset 0 1px #c1e4ff18;color:#e7f3ff;font-family:system-ui,sans-serif;touch-action:none;backdrop-filter:blur(14px)}
+#paint-palette button{cursor:pointer;color:inherit;font:inherit}
+.palette-handle{display:flex;align-items:center;gap:9px;width:100%;padding:2px 0 8px;background:transparent;border:0;font-size:23px!important}
+.palette-handle span{font-size:13px;font-weight:750;letter-spacing:.12em}
+.palette-handle[aria-expanded=true]{border-bottom:1px solid #7cafd433}
+.palette-wells{display:grid;grid-template-columns:repeat(3,62px);gap:12px;padding:14px 0}
+.palette-well{width:62px;height:62px;border-radius:50%;border:2px solid var(--paint);background:radial-gradient(circle at 35% 25%,color-mix(in srgb,var(--paint) 25%,#15263a),#101925 85%);color:#f0f7ff;font-size:10px!important;font-weight:700!important;line-height:1.18;padding:6px;overflow-wrap:anywhere;box-shadow:0 0 9px color-mix(in srgb,var(--paint) 22%,transparent),inset 0 1px #ffffff24;transition:transform .12s,box-shadow .12s}
+#paint-palette [aria-pressed=true]{outline:3px solid #e5f5ff;outline-offset:3px;transform:translateY(-2px);box-shadow:0 0 14px #8acfff66}
+.palette-well:hover{transform:translateY(-2px);box-shadow:0 0 14px color-mix(in srgb,var(--paint) 40%,transparent)}
+.palette-well:active{transform:scale(.95)}
+.palette-well.is-holding{animation:palette-hold .55s ease-out forwards}
+@keyframes palette-hold{to{outline:2px solid #d7efff;outline-offset:4px;transform:scale(.96)}}
+.palette-tools{display:flex;gap:12px;padding:8px 0;border-top:1px solid #7cafd433}
+.palette-tools button{flex:1;min-height:62px;border-radius:13px;border:1px solid #527697;background:linear-gradient(#20354a,#122133);padding:8px;font-size:22px!important;box-shadow:inset 0 1px #ffffff16,0 0 8px #409de718}
+.palette-tools button:hover,.palette-config button:hover{border-color:#a0d8ff;background:#26415a}
+.palette-tools button:active,.palette-config button:active{transform:scale(.97)}
+.palette-tools span{display:block;font-size:11px;line-height:1.5}
+.palette-hint{max-width:210px;font-size:10px;line-height:1.5;color:#a6bbcf;margin:8px 0 0}
+#paint-palette [hidden]{display:none}
+#paint-palette button:focus-visible,.palette-config :focus-visible{outline:3px solid #e5f5ff;outline-offset:4px}
+.palette-equipped .board-viewport{touch-action:none;cursor:crosshair}
+.palette-effects{position:fixed;inset:0;pointer-events:none;z-index:940}
+.palette-config{z-index:10000;box-sizing:border-box;border:1px solid #648db5;border-radius:22px;background:linear-gradient(145deg,#1b2c40fa,#0b1420fa);color:#e7f3ff;padding:24px;width:min(380px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;box-shadow:0 0 24px #4c9ed633,0 16px 48px #000b;font-family:system-ui,sans-serif}
+.palette-config::backdrop{background:#030914a6;backdrop-filter:blur(4px)}
+.palette-config h2{margin:0 0 16px;font-size:17px;letter-spacing:.04em}
+.palette-config button{min-height:44px;padding:12px;border-radius:12px;border:1px solid #527697;background:linear-gradient(#20354a,#122133);color:inherit;margin:6px 6px 12px 0;font:600 13px system-ui;cursor:pointer}
+.palette-config label{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px}
+.palette-config input{width:58px;height:44px;background:#101e30;border:1px solid #6d90b1;border-radius:8px;padding:3px;cursor:pointer}
+.palette-config p{font-size:12px;line-height:1.5;color:#a6bbcf}
+@media(max-height:500px){#paint-palette{padding:8px 12px}.palette-wells{gap:8px;padding:10px 0}.palette-well{width:54px;height:54px}.palette-wells{grid-template-columns:repeat(3,54px)}.palette-tools button{min-height:44px;padding:4px}.palette-hint{margin-top:4px}}
+@media(prefers-reduced-motion:reduce){.palette-well{transition:none}.palette-well.is-holding{animation:none;outline:2px solid #d7efff;outline-offset:3px}}
+
+/* Let the visible barrel resolve to its owner while an equipped tool is active. */
+.palette-equipped .cannon-barrel::before{pointer-events:auto}
+
+.palette-shuffle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:44px;margin:4px 0 0;padding:8px;border:1px solid #527697;border-radius:12px;background:linear-gradient(#20354a,#122133);box-shadow:inset 0 1px #ffffff16,0 0 8px #409de718;font-size:19px!important}
+.palette-shuffle span{font-size:12px;font-weight:600}.palette-shuffle:hover{border-color:#a0d8ff;background:#26415a}.palette-shuffle:active{transform:scale(.98)}.palette-shuffle:disabled{opacity:.6;cursor:wait!important}
+.palette-wells.is-shuffling .palette-well{animation:palette-shuffle .28s ease-out}
+@keyframes palette-shuffle{from{transform:scale(.9) rotate(-8deg);filter:brightness(1.5)}to{transform:none;filter:brightness(1)}}
+@media(prefers-reduced-motion:reduce){.palette-wells.is-shuffling .palette-well{animation:palette-shuffle-fade .2s ease-out}@keyframes palette-shuffle-fade{from{filter:brightness(1.4)}to{filter:brightness(1)}}}

@@ -1,16 +1,20 @@
+import {PAINT_TARGET_SELECTOR,resolvePaintTarget,paintInstrument} from './paint-target.js';
 import { createPaletteState, segmentHitsRect } from './paint-palette-state.js';
 import { instrumentColour, setInstrumentColour } from './instrument-colours.js';
 import { openInstrumentPicker, closeInstrumentPicker } from './instrument-picker.js';
-import { getDisplayNameForId } from './instrument-catalog.js';
+import { getDisplayNameForId,getInstrumentEntries,loadInstrumentEntries } from './instrument-catalog.js';
+import {getSoundThemeKey} from './sound-theme.js';
+import {auditionInstrument} from './instrument-audition.js';
 
 export function installPaintPalette() {
  if (document.getElementById('paint-palette')) return;
  const root = document.createElement('aside');
  root.id = 'paint-palette'; root.setAttribute('aria-label', 'Painter’s palette');
- root.innerHTML = `<button class="palette-handle" type="button" aria-expanded="false" title="Open painter’s palette">🎨<span>Paint</span></button>
+ root.innerHTML = `<button class="palette-handle" type="button" aria-expanded="false" title="Open painter’s palette">🎨<span>PAINT</span></button>
   <div class="palette-wells" hidden></div><div class="palette-tools" hidden>
   <button type="button" data-tool="randomise" title="Randomise musical content">✧<span>Randomise</span></button>
   <button type="button" data-tool="eyedropper" title="Sample an instrument">◉<span>Eyedropper</span></button></div>
+  <button type="button" class="palette-shuffle" title="Shuffle instruments" aria-label="Shuffle all six instruments" hidden>🎲<span>Shuffle</span></button>
   <p class="palette-hint" hidden>Hold a well to configure · Tap empty board to put down</p>`;
  document.body.appendChild(root);
  const wells = root.querySelector('.palette-wells');
@@ -35,27 +39,45 @@ export function installPaintPalette() {
  function toggle() {
   const expanded = handle.getAttribute('aria-expanded') !== 'true';
   handle.setAttribute('aria-expanded', String(expanded));
-  root.querySelectorAll('.palette-wells,.palette-tools,.palette-hint').forEach(el => el.hidden = !expanded);
+  root.querySelectorAll('.palette-wells,.palette-tools,.palette-shuffle,.palette-hint').forEach(el => el.hidden = !expanded);
  }
  handle.addEventListener('click', toggle);
- function cancelHold() { if (hold) clearTimeout(hold.timer); hold = null; }
+ function cancelHold() { if (hold) { clearTimeout(hold.timer); hold.button?.classList.remove('is-holding'); } hold = null; }
  for (let i=0; i<6; i++) {
   const button = document.createElement('button'); button.type = 'button'; button.className = 'palette-well';
+  let cancelledTap=false;
   wells.appendChild(button); buttons.push(button);
   button.addEventListener('pointerdown', event => {
    if (event.button !== 0) return;
+   cancelledTap=false;swallowClickUntil=0;
    cancelHold();
-   hold = { x: event.clientX, y: event.clientY, timer: setTimeout(() => { hold = null; swallowClickUntil = performance.now()+900; configure(i); }, 550) };
+   button.classList.add('is-holding');
+   hold = { button, x: event.clientX, y: event.clientY, timer: setTimeout(() => { cancelledTap=true;button.classList.remove('is-holding'); hold = null; swallowClickUntil = performance.now()+900; configure(i); }, 550) };
   });
-  button.addEventListener('pointermove', event => { if (hold && Math.hypot(event.clientX-hold.x,event.clientY-hold.y)>10) cancelHold(); });
+  button.addEventListener('pointermove', event => { if (hold && Math.hypot(event.clientX-hold.x,event.clientY-hold.y)>10) {cancelledTap=true;cancelHold();} });
+  for(const event of ['pointercancel','pointerleave'])button.addEventListener(event,()=>{cancelledTap=true;});
   for (const event of ['pointerup','pointercancel','pointerleave']) button.addEventListener(event, cancelHold);
   button.addEventListener('contextmenu', event => { event.preventDefault(); });
   button.addEventListener('click', () => {
-   if (performance.now()<swallowClickUntil) { swallowClickUntil = 0; return; }
-   if (!palette.state.slots[i]) configure(i); else palette.selectSlot(i);
+   if (cancelledTap||performance.now()<swallowClickUntil) { cancelledTap=false;swallowClickUntil = 0; return; }
+   if (!palette.state.slots[i]) configure(i); else {
+    const id=palette.state.slots[i];palette.selectSlot(i);
+    void auditionInstrument(id).catch(error=>console.warn('[palette] Audition failed',error));
+   }
   });
  }
  root.querySelectorAll('[data-tool]').forEach(button => button.addEventListener('click', () => palette.selectTool(button.dataset.tool)));
+ const shuffle=root.querySelector('.palette-shuffle');
+ shuffle.addEventListener('click',async()=>{
+  if(shuffle.disabled)return;shuffle.disabled=true;cancelHold();releaseStroke();palette.clear();
+  try{
+   const entries=getInstrumentEntries();
+   if(palette.shuffle(entries.length?entries:await loadInstrumentEntries(),getSoundThemeKey())){
+    wells.classList.remove('is-shuffling');void wells.offsetWidth;wells.classList.add('is-shuffling');
+   }
+  }catch(error){console.warn('[palette] Shuffle failed',error);}
+  finally{shuffle.disabled=false;}
+ });
  function colourHex(id) {
   const ctx = document.createElement('canvas').getContext('2d');
   ctx.fillStyle = instrumentColour(id); ctx.fillRect(0,0,1,1);
@@ -137,31 +159,39 @@ export function installPaintPalette() {
  function applyAt(a,b) {
   if (stroke.sampled) return;
   const tool = palette.state.activePaletteTool;
-  for (const panel of document.querySelectorAll('.board-viewport .toy-panel[data-toy]')) {
-   if (!panel.isConnected || !panel.getClientRects().length) continue;
-   const rect=panel.getBoundingClientRect();
-   if (!segmentHitsRect(a,b,rect)) continue;
-   // Do not paint through an overlapping panel or a visible overlay.
-   const x=Math.max(rect.left+0.5,Math.min(rect.right-0.5,b.x));
-   const y=Math.max(rect.top+0.5,Math.min(rect.bottom-0.5,b.y));
-   if (document.elementFromPoint(x,y)?.closest('.toy-panel') !== panel) continue;
-   if (palette.paint(panel)) {
-    stroke.painted=true;
-    effect(x,y,tool,tool==='randomise'?'#f5d9ff':instrumentColour(panel.dataset.instrument),panel);
-    if (tool==='eyedropper') { stroke.sampled=true; break; }
+  const direct=resolvePaintTarget(document.elementFromPoint(b.x,b.y));
+  if(direct&&palette.paint(direct)){
+   stroke.painted=true;effect(b.x,b.y,tool,tool==='randomise'?'#f5d9ff':instrumentColour(paintInstrument(direct)),direct.element||direct);
+   if(tool==='eyedropper'){stroke.sampled=true;return;}
+  }
+  for (const panel of document.querySelectorAll(PAINT_TARGET_SELECTOR)) {
+   if (!panel.isConnected) continue;
+   // Handles and playable SVG surfaces can extend outside their owner's bounds.
+   const footprints=[panel,...panel.querySelectorAll('button,canvas,.surface-body,.surface-hit,.cannon-barrel')];
+   for(const footprint of footprints){
+    if(!footprint.getClientRects().length)continue;
+    const rect=footprint.getBoundingClientRect();if(!rect.width||!rect.height||!segmentHitsRect(a,b,rect))continue;
+    const x=Math.max(rect.left+0.5,Math.min(rect.right-0.5,b.x)),y=Math.max(rect.top+0.5,Math.min(rect.bottom-0.5,b.y));
+    const target=resolvePaintTarget(document.elementFromPoint(x,y));
+    if(!target||(target.element||target)!==panel)continue;
+    if(palette.paint(target)){
+     stroke.painted=true;
+     effect(x,y,tool,tool==='randomise'?'#f5d9ff':instrumentColour(paintInstrument(target)),panel);
+     if(tool==='eyedropper'){stroke.sampled=true;return;}
+    }
    }
   }
  }
- document.addEventListener('pointerdown', event => {
+ window.addEventListener('pointerdown', event => {
   if (!palette.state.activePaletteTool || overlayTarget(event.target) || !boardTarget(event.target) || event.button!==0) return;
   stop(event);
   if (stroke) return;
   const point={x:event.clientX,y:event.clientY};
-  palette.beginStroke(); stroke={id:event.pointerId,start:point,last:point,moved:false,painted:false,sampled:false,empty:!event.target.closest('.toy-panel')};
+  palette.beginStroke(); stroke={id:event.pointerId,start:point,last:point,moved:false,painted:false,sampled:false,empty:!resolvePaintTarget(event.target)};
   try { stroke.capture=boardTarget(event.target); stroke.capture.setPointerCapture(event.pointerId); } catch {}
   applyAt(point,point);
  },true);
- document.addEventListener('pointermove', event => {
+ window.addEventListener('pointermove', event => {
   if (!stroke || stroke.id!==event.pointerId) return;
   stop(event);
   const point={x:event.clientX,y:event.clientY};
@@ -186,13 +216,13 @@ export function installPaintPalette() {
   stroke=null; palette.endStroke();
   if (previous) { try { previous.capture?.releasePointerCapture(previous.id); } catch {} }
  }
- document.addEventListener('pointerup',finish,true); document.addEventListener('pointercancel',finish,true);
- document.addEventListener('lostpointercapture',event => { if (stroke?.id===event.pointerId) releaseStroke(); },true);
+ window.addEventListener('pointerup',finish,true); window.addEventListener('pointercancel',finish,true);
+ window.addEventListener('lostpointercapture',event => { if (stroke?.id===event.pointerId) releaseStroke(); },true);
  // Prevent a synthetic click after painting from activating a toy's controls.
- document.addEventListener('click', event => {
+ window.addEventListener('click', event => {
   if (boardTarget(event.target) && (palette.state.activePaletteTool || performance.now()<suppressBoardClickUntil) && !overlayTarget(event.target)) stop(event);
  },true);
- document.addEventListener('wheel',event => {
+ window.addEventListener('wheel',event => {
   if (palette.state.activePaletteTool && boardTarget(event.target) && !overlayTarget(event.target)) stop(event);
  },{capture:true,passive:false});
  document.addEventListener('keydown',event => { if (event.key==='Escape' && !config) { releaseStroke(); palette.clear(); } });

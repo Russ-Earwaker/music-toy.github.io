@@ -11,3 +11,7 @@
 .simple-ripple-armed .board-viewport{cursor:crosshair}
 
 .ripple-length{display:flex;flex-direction:column;gap:5px;color:#e3f5ff;font-size:13px;white-space:nowrap}.ripple-length select{min-height:44px;min-width:90px;border:1px solid #68b5d9;border-radius:8px;background:#132c45;color:#e3f5ff;padding:8px;font:inherit}
+
+/* Shared Paint instrument identity; selection keeps its existing outlines. */
+.simple-ripple-trigger{border-color:var(--instrument-colour);color:var(--instrument-colour);box-shadow:0 0 18px color-mix(in srgb,var(--instrument-colour) 35%,transparent)}
+.simple-ripple-wave{stroke:var(--instrument-colour)}
